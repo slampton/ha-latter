@@ -94,7 +94,9 @@ In **Latter > Configure**, select your home's primary `alarm_control_panel.*` en
 
 ## Support the Project
 
-If **Latter** and **Pocket Assistant** have been useful in your smart home, consider supporting ongoing open-source development:
+Pocket Assistant and Latter for Home Assistant are built and maintained by Sean Lampton (**Lampton Labs**). If this project is useful in your home and you'd like to support ongoing development and test hardware:
 
-[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-slampton-FFDD00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://www.buymeacoffee.com/slampton)
-[![GitHub Sponsors](https://img.shields.io/badge/Sponsor-slampton-EA4AAA?style=for-the-badge&logo=github-sponsors&logoColor=white)](https://github.com/sponsors/slampton)
+* ☕ **[Buy Me a Coffee](https://www.buymeacoffee.com/slampton)**
+* ❤️ **[Sponsor on GitHub](https://github.com/sponsors/slampton)**
+
+---
