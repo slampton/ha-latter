@@ -3,13 +3,16 @@
     "step": {
       "user": {
         "title": "Latter (ESPHome Companion & Entity Middleware)",
-        "description": "Bind Home Assistant entities, media players, weather, and services to your Pocket Assistant or ESPHome device without YAML substitutions or reflashing.",
+        "description": "Bind Home Assistant entities, areas, media players, weather, and calendars to your Pocket Assistant or ESPHome device without YAML substitutions or reflashing.",
         "data": {
           "device_slug": "ESPHome Device Name / Slug",
           "default_speaker": "Default Active Speaker",
           "local_speaker": "On-Device Speaker (Optional)",
+          "default_area": "Default Room / Area Context",
+          "area_handoff": "Unified Area Context Handoff (Auto-link Room Speaker & Remote)",
           "weather_entity": "Weather Provider Entity",
           "calendar_entities": "Calendars (Agenda Serialization)",
+          "custom_entities": "Pinned Custom Entities (Dynamic Entity Mapper)",
           "art_size": "Image Proxy Resolution",
           "enable_v20_compat": "Enable Pocket Assistant v2.0 Compatibility Bridge"
         }
@@ -23,13 +26,16 @@
     "step": {
       "init": {
         "title": "Latter Device Mapping & Middleware Options",
-        "description": "Dynamically remap Home Assistant entities and middleware services for this ESPHome device.",
+        "description": "Dynamically remap Home Assistant entities, rooms, and middleware services for this ESPHome device.",
         "data": {
           "device_slug": "ESPHome Device Name / Slug",
           "default_speaker": "Default Active Speaker",
           "local_speaker": "On-Device Speaker (Optional)",
+          "default_area": "Default Room / Area Context",
+          "area_handoff": "Unified Area Context Handoff (Auto-link Room Speaker & Remote)",
           "weather_entity": "Weather Provider Entity",
           "calendar_entities": "Calendars (Agenda Serialization)",
+          "custom_entities": "Pinned Custom Entities (Dynamic Entity Mapper)",
           "art_size": "Image Proxy Resolution",
           "enable_v20_compat": "Enable Pocket Assistant v2.0 Compatibility Bridge"
         }

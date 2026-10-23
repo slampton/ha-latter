@@ -1,4 +1,4 @@
-"""State coordinator and v2.0 compatibility bridge for Latter."""
+"""State coordinator and v2.0/v2.1 middleware bridge for Latter."""
 
 from __future__ import annotations
 
@@ -19,6 +19,7 @@ from homeassistant.const import (
     STATE_PLAYING,
 )
 from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
+from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers.event import (
     async_track_state_change_event,
     async_track_time_interval,
@@ -26,14 +27,20 @@ from homeassistant.helpers.event import (
 from homeassistant.helpers.network import get_url
 from homeassistant.util import dt as dt_util
 
+from .calendar_engine import async_fetch_calendar_agenda
 from .const import (
+    CALENDAR_REFRESH_INTERVAL_MINUTES,
+    CONF_AREA_HANDOFF,
     CONF_ART_SIZE,
     CONF_CALENDAR_ENTITIES,
+    CONF_CUSTOM_ENTITIES,
+    CONF_DEFAULT_AREA,
     CONF_DEFAULT_SPEAKER,
     CONF_DEVICE_SLUG,
     CONF_ENABLE_V20_COMPAT,
     CONF_LOCAL_SPEAKER,
     CONF_WEATHER_ENTITY,
+    DEFAULT_AREA_HANDOFF,
     DEFAULT_ART_SIZE,
     DEFAULT_DEVICE_SLUG,
     DEFAULT_ENABLE_V20_COMPAT,
@@ -44,6 +51,11 @@ from .const import (
     V20_ACTIVE_SPEAKER_ENTITY,
     V20_MUSIC_BROWSE_SCRIPT,
 )
+from .room_engine import (
+    find_area_media_entities,
+    get_area_entities,
+    get_areas_summary,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -51,7 +63,7 @@ DAY_ABBR: tuple[str, ...] = ("MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN")
 
 
 class LatterCoordinator:
-    """Manages active speaker state, idle-guarded media tracking, and weather."""
+    """Manages active speaker, room context, calendar agenda, and weather."""
 
     def __init__(
         self,
@@ -69,12 +81,15 @@ class LatterCoordinator:
         self._unsub_weather_state: callable | None = None
         self._unsub_position_timer: callable | None = None
         self._unsub_forecast_timer: callable | None = None
+        self._unsub_calendar_timer: callable | None = None
         self._unsub_service_interceptor: callable | None = None
 
         self.active_speaker: str = self.get_opt(
             CONF_DEFAULT_SPEAKER, DEFAULT_LOCAL_SPEAKER
         )
         self.last_speaker: str = self.active_speaker
+        self.active_area_id: str | None = self.get_opt(CONF_DEFAULT_AREA)
+        self.active_remote: str = ""
 
         # Cached weather forecast state & attributes
         self.forecast_string: str = "NONE"
@@ -87,6 +102,10 @@ class LatterCoordinator:
             "high": 0.0,
             "low": 0.0,
         }
+
+        # Cached calendar agenda state & attributes
+        self.calendar_agenda_string: str = "NONE"
+        self.calendar_events: list[dict[str, Any]] = []
 
     def get_opt(self, key: str, default: Any = None) -> Any:
         """Retrieve a value from entry.options with fallback to entry.data."""
@@ -116,6 +135,17 @@ class LatterCoordinator:
         """Return configured calendar entity_ids."""
         val = self.get_opt(CONF_CALENDAR_ENTITIES, [])
         return list(val) if isinstance(val, (list, tuple)) else []
+
+    @property
+    def custom_entities(self) -> list[str]:
+        """Return user-pinned custom entities for this device."""
+        val = self.get_opt(CONF_CUSTOM_ENTITIES, [])
+        return list(val) if isinstance(val, (list, tuple)) else []
+
+    @property
+    def area_handoff_enabled(self) -> bool:
+        """Return True if switching rooms should hand off active speaker/remote context."""
+        return bool(self.get_opt(CONF_AREA_HANDOFF, DEFAULT_AREA_HANDOFF))
 
     @property
     def art_size(self) -> int:
@@ -156,6 +186,11 @@ class LatterCoordinator:
 
     async def async_setup(self) -> None:
         """Set up state subscriptions, timers, and v2.0 compatibility hooks."""
+        if not self.active_area_id:
+            areas = get_areas_summary(self.hass)
+            if areas:
+                self.active_area_id = str(areas[0]["id"])
+
         if self.v20_compat_enabled:
             existing = self.hass.states.get(V20_ACTIVE_SPEAKER_ENTITY)
             if existing and existing.state not in ("unknown", "unavailable", ""):
@@ -170,11 +205,17 @@ class LatterCoordinator:
         self._bind_speaker_listener()
         self._bind_weather_listener()
         await self.async_refresh_weather_forecast()
+        await self.async_refresh_calendar_agenda()
 
         self._unsub_forecast_timer = async_track_time_interval(
             self.hass,
             self._async_periodic_weather_refresh,
             timedelta(minutes=FORECAST_REFRESH_INTERVAL_MINUTES),
+        )
+        self._unsub_calendar_timer = async_track_time_interval(
+            self.hass,
+            self._async_periodic_calendar_refresh,
+            timedelta(minutes=CALENDAR_REFRESH_INTERVAL_MINUTES),
         )
 
     async def async_shutdown(self) -> None:
@@ -184,6 +225,7 @@ class LatterCoordinator:
             self._unsub_weather_state,
             self._unsub_position_timer,
             self._unsub_forecast_timer,
+            self._unsub_calendar_timer,
             self._unsub_service_interceptor,
         ):
             if unsub is not None:
@@ -192,6 +234,7 @@ class LatterCoordinator:
         self._unsub_weather_state = None
         self._unsub_position_timer = None
         self._unsub_forecast_timer = None
+        self._unsub_calendar_timer = None
         self._unsub_service_interceptor = None
         self._listeners.clear()
 
@@ -247,13 +290,80 @@ class LatterCoordinator:
         self._notify_listeners()
 
     @callback
+    def async_set_active_area(
+        self, area_id: str, handoff_media: bool | None = None
+    ) -> None:
+        """Switch active room area and optionally hand off speaker & TV remote context."""
+        area_id = area_id.strip()
+        if not area_id:
+            return
+        self.active_area_id = area_id
+        media_map = find_area_media_entities(
+            self.hass, area_id, self.local_speaker
+        )
+        if media_map["remote"]:
+            self.active_remote = media_map["remote"]
+
+        do_handoff = (
+            self.area_handoff_enabled
+            if handoff_media is None
+            else bool(handoff_media)
+        )
+        if do_handoff and media_map["speaker"]:
+            self.async_set_active_speaker(media_map["speaker"])
+        else:
+            self._notify_listeners()
+
+    def get_room_context_payload(self) -> tuple[str, dict[str, Any]]:
+        """Compute state and attributes for sensor.pocket_assistant_room_context."""
+        area_reg = ar.async_get(self.hass)
+        area_entry = (
+            area_reg.async_get_area(self.active_area_id)
+            if self.active_area_id
+            else None
+        )
+        area_name = area_entry.name if area_entry else "Home"
+
+        entities = get_area_entities(
+            self.hass,
+            area_id=self.active_area_id,
+            domain_filter="all",
+            custom_entities=self.custom_entities,
+        )
+        lights_on = sum(
+            1 for e in entities if e["type"] == "light" and e["active"]
+        )
+        covers_open = sum(
+            1 for e in entities if e["type"] == "cover" and e["active"]
+        )
+        media_map = find_area_media_entities(
+            self.hass, self.active_area_id, self.local_speaker
+        )
+
+        summary_items = [
+            f"{e['id']}:{e['name']}:{int(e['active'])}:{e['level']}"
+            for e in entities[:8]
+        ]
+
+        return area_name, {
+            "area_id": self.active_area_id or "",
+            "area_name": area_name,
+            "entity_count": len(entities),
+            "lights_on": lights_on,
+            "covers_open": covers_open,
+            "area_speaker": media_map["speaker"] or self.active_speaker,
+            "area_remote": media_map["remote"] or self.active_remote,
+            "entities_summary": ";".join(summary_items) if summary_items else "NONE",
+            "custom_entities": self.custom_entities,
+        }
+
+    @callback
     def _async_handle_service_event(self, event: Event) -> None:
         """Intercept v2.0 firmware calls to input_text.set_value and script.pocket_assistant_music_browse."""
         domain = event.data.get("domain")
         service = event.data.get("service")
         service_data = event.data.get("service_data") or {}
 
-        # 1. Intercept input_text.set_value for input_text.pocket_assistant_active_speaker
         if domain == "input_text" and service == "set_value":
             target_entities = service_data.get(ATTR_ENTITY_ID)
             if isinstance(target_entities, str):
@@ -266,7 +376,6 @@ class LatterCoordinator:
                 if new_value:
                     self.async_set_active_speaker(new_value)
 
-        # 2. Intercept script.pocket_assistant_music_browse or script.turn_on
         elif domain == "script":
             if service == V20_MUSIC_BROWSE_SCRIPT:
                 self.hass.async_create_task(
@@ -373,7 +482,6 @@ class LatterCoordinator:
         base_position = float(attrs.get("media_position") or 0)
         updated_at = attrs.get("media_position_updated_at")
 
-        # Live position interpolation when playing
         position = base_position
         if state == STATE_PLAYING and isinstance(updated_at, datetime):
             elapsed = (dt_util.utcnow() - updated_at).total_seconds()
@@ -397,7 +505,6 @@ class LatterCoordinator:
 
         supported_features = int(attrs.get("supported_features") or 0)
 
-        # Suppress HTTP artwork download when local Sendspin DAC is active
         raw_pic = attrs.get("entity_picture_local") or attrs.get("entity_picture")
         if (
             self.active_speaker == self.local_speaker
@@ -449,6 +556,19 @@ class LatterCoordinator:
     async def _async_periodic_weather_refresh(self, _now: datetime) -> None:
         """Refresh 5-day weather forecast every 30 minutes."""
         await self.async_refresh_weather_forecast()
+
+    async def _async_periodic_calendar_refresh(self, _now: datetime) -> None:
+        """Refresh family calendar agenda every 15 minutes."""
+        await self.async_refresh_calendar_agenda()
+
+    async def async_refresh_calendar_agenda(self) -> None:
+        """Fetch upcoming calendar events and update sensor state."""
+        agenda_str, events = await async_fetch_calendar_agenda(
+            self.hass, self.calendar_entities
+        )
+        self.calendar_agenda_string = agenda_str
+        self.calendar_events = events
+        self._notify_listeners()
 
     async def async_refresh_weather_forecast(self) -> None:
         """Fetch daily weather forecast via weather.get_forecasts and format v2.0 string."""

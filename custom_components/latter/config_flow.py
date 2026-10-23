@@ -15,13 +15,17 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import selector
 
 from .const import (
+    CONF_AREA_HANDOFF,
     CONF_ART_SIZE,
     CONF_CALENDAR_ENTITIES,
+    CONF_CUSTOM_ENTITIES,
+    CONF_DEFAULT_AREA,
     CONF_DEFAULT_SPEAKER,
     CONF_DEVICE_SLUG,
     CONF_ENABLE_V20_COMPAT,
     CONF_LOCAL_SPEAKER,
     CONF_WEATHER_ENTITY,
+    DEFAULT_AREA_HANDOFF,
     DEFAULT_ART_SIZE,
     DEFAULT_DEVICE_SLUG,
     DEFAULT_ENABLE_V20_COMPAT,
@@ -65,7 +69,10 @@ def _build_schema(
     default_weather = current.get(CONF_WEATHER_ENTITY) or _discover_default_weather(hass)
     default_speaker = current.get(CONF_DEFAULT_SPEAKER) or _discover_default_speaker(hass)
     local_speaker = current.get(CONF_LOCAL_SPEAKER) or DEFAULT_LOCAL_SPEAKER
+    default_area = current.get(CONF_DEFAULT_AREA)
+    area_handoff = current.get(CONF_AREA_HANDOFF, DEFAULT_AREA_HANDOFF)
     calendars = current.get(CONF_CALENDAR_ENTITIES, [])
+    custom_entities = current.get(CONF_CUSTOM_ENTITIES, [])
     art_size = str(current.get(CONF_ART_SIZE, DEFAULT_ART_SIZE))
     v20_compat = current.get(CONF_ENABLE_V20_COMPAT, DEFAULT_ENABLE_V20_COMPAT)
 
@@ -83,6 +90,17 @@ def _build_schema(
         ),
     }
 
+    if default_area:
+        schema_dict[
+            vol.Optional(CONF_DEFAULT_AREA, default=default_area)
+        ] = selector.AreaSelector()
+    else:
+        schema_dict[vol.Optional(CONF_DEFAULT_AREA)] = selector.AreaSelector()
+
+    schema_dict[
+        vol.Required(CONF_AREA_HANDOFF, default=area_handoff)
+    ] = selector.BooleanSelector()
+
     if default_weather:
         schema_dict[
             vol.Optional(CONF_WEATHER_ENTITY, default=default_weather)
@@ -96,6 +114,15 @@ def _build_schema(
         vol.Optional(CONF_CALENDAR_ENTITIES, default=calendars)
     ] = selector.EntitySelector(
         selector.EntitySelectorConfig(domain="calendar", multiple=True)
+    )
+
+    schema_dict[
+        vol.Optional(CONF_CUSTOM_ENTITIES, default=custom_entities)
+    ] = selector.EntitySelector(
+        selector.EntitySelectorConfig(
+            domain=["light", "cover", "climate", "fan", "switch", "scene", "sensor"],
+            multiple=True,
+        )
     )
 
     schema_dict[
