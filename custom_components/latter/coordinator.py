@@ -46,8 +46,10 @@ from .const import (
 )
 from .room_engine import (
     find_area_media_entities,
+    get_area_climate_telemetry,
     get_area_entities,
     get_areas_summary,
+    get_home_alarm_summary,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -179,7 +181,9 @@ class LatterCoordinator:
     async def async_setup(self) -> None:
         """Set up state subscriptions and periodic refresh timers."""
         if not self.active_area_id:
-            areas = get_areas_summary(self.hass)
+            areas = get_areas_summary(
+                self.hass, local_speaker=self.local_speaker
+            )
             if areas:
                 self.active_area_id = str(areas[0]["id"])
 
@@ -292,6 +296,7 @@ class LatterCoordinator:
             area_id=self.active_area_id,
             domain_filter="all",
             custom_entities=self.custom_entities,
+            local_speaker=self.local_speaker,
         )
         lights_on = sum(
             1 for e in entities if e["type"] == "light" and e["active"]
@@ -302,6 +307,10 @@ class LatterCoordinator:
         media_map = find_area_media_entities(
             self.hass, self.active_area_id, self.local_speaker
         )
+        climate_telemetry = get_area_climate_telemetry(
+            self.hass, self.active_area_id
+        )
+        alarm_info = get_home_alarm_summary(self.hass)
 
         summary_items = [
             f"{e['id']}:{e['name']}:{int(e['active'])}:{e['level']}"
@@ -314,8 +323,12 @@ class LatterCoordinator:
             "entity_count": len(entities),
             "lights_on": lights_on,
             "covers_open": covers_open,
+            "room_temp": climate_telemetry["temperature"],
+            "room_humidity": climate_telemetry["humidity"],
             "area_speaker": media_map["speaker"] or self.active_speaker,
             "area_remote": media_map["remote"] or self.active_remote,
+            "alarm_entity": alarm_info["entity_id"],
+            "alarm_state": alarm_info["state"],
             "entities_summary": ";".join(summary_items) if summary_items else "NONE",
             "custom_entities": self.custom_entities,
         }
@@ -433,7 +446,6 @@ class LatterCoordinator:
 
         supported_features = int(attrs.get("supported_features") or 0)
 
-        # Sticky artwork resolution: keep artwork visible while paused or during speaker transfer
         raw_pic = str(
             attrs.get("entity_picture_local")
             or attrs.get("entity_picture")
