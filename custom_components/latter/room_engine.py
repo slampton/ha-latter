@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 from homeassistant.const import (
@@ -45,6 +46,174 @@ WINDOW_COVER_CLASSES: set[str] = {
     "window",
     "",
 }
+
+# Ordered semantic categories for the ESPHome Device Manager Studio
+ESPHOME_SECTION_META: tuple[tuple[str, str, str], ...] = (
+    ("display", "Display & UI", "Brightness, sleep timeout, themes, boot animations, and screen controls."),
+    ("audio", "Audio, Voice & Wake Word", "Speaker volume, microphone, wake word models, chimes, and voice settings."),
+    ("music", "Music & Media Options", "Library sort orders, podcast sorting, and active media player controls."),
+    ("room_ble", "Room, BLE & Remotes", "BLE room beacon, presence telemetry, and remote control slots."),
+    ("power", "Power, Battery & Thermal", "Battery level, charging status, PMIC voltage, and internal temperature."),
+    ("system", "System, Actions & Network", "Restart, safe mode, firmware updates, Wi-Fi signal, and diagnostics."),
+    ("other", "General & Custom Entities", "Additional sensors, switches, and custom project entities (spillover)."),
+)
+
+
+def classify_esphome_entity_section(
+    entity_id: str,
+    friendly_name: str,
+    domain: str,
+    device_class: str,
+    entity_category: EntityCategory | None,
+) -> str:
+    """Classify an ESPHome entity into a logical functional section by naming convention or class."""
+    text = f"{entity_id} {friendly_name}".lower()
+    dev_cls = device_class.lower()
+
+    # 1. Power, Battery & Thermal
+    if dev_cls in ("battery", "voltage", "current", "power", "energy", "temperature") or any(
+        k in text
+        for k in (
+            "battery",
+            "charging",
+            "charger",
+            "vbus",
+            "axp2101",
+            "pmic",
+            "voltage",
+            "thermal",
+            "internal_temp",
+            "die_temp",
+        )
+    ):
+        return "power"
+
+    # 2. Display & UI
+    if any(
+        k in text
+        for k in (
+            "display",
+            "screen",
+            "brightness",
+            "backlight",
+            "amoled",
+            "theme",
+            "wallpaper",
+            "clock",
+            "dock",
+            "boot",
+            "sleep",
+            "timeout",
+            "dim",
+            "nightstand",
+            "page",
+            "ui_",
+            "color",
+            "sky",
+        )
+    ):
+        return "display"
+
+    # 3. Audio, Voice & Wake Word
+    if any(
+        k in text
+        for k in (
+            "voice",
+            "wake",
+            "mic",
+            "microphone",
+            "mute",
+            "sound",
+            "audio",
+            "chime",
+            "beep",
+            "ringtone",
+            "timer_sound",
+            "dac",
+            "es8311",
+            "es7210",
+            "sendspin",
+            "intercom",
+            "tts",
+            "assist",
+        )
+    ):
+        return "audio"
+
+    # 4. Music & Media Options
+    if domain == "media_player" or any(
+        k in text
+        for k in (
+            "music",
+            "album",
+            "artist",
+            "podcast",
+            "queue",
+            "playlist",
+            "sort",
+            "track",
+            "media",
+            "speaker",
+        )
+    ):
+        return "music"
+
+    # 5. Room, BLE & Remotes
+    if any(
+        k in text
+        for k in (
+            "ble",
+            "beacon",
+            "ibeacon",
+            "bluetooth",
+            "presence",
+            "room",
+            "area",
+            "remote",
+            "tv_",
+        )
+    ):
+        return "room_ble"
+
+    # 6. System, Actions & Network
+    if (
+        domain in ("update",)
+        or entity_category == EntityCategory.DIAGNOSTIC
+        or dev_cls in ("signal_strength", "timestamp", "duration", "restart", "identify")
+        or any(
+            k in text
+            for k in (
+                "restart",
+                "reboot",
+                "reset",
+                "safe_mode",
+                "factory",
+                "wifi",
+                "wi-fi",
+                "rssi",
+                "ip_address",
+                "mac_address",
+                "uptime",
+                "free_heap",
+                "psram",
+                "memory",
+                "Cpu",
+                "firmware",
+                "version",
+                "status",
+                "online",
+                "improv",
+            )
+        )
+    ):
+        return "system"
+
+    # 7. Buttons without a specific prefix go to System & Actions
+    if domain == "button":
+        return "system"
+
+    # 8. Spillover bucket for any custom ESPHome entity
+    return "other"
 
 
 def resolve_entity_area_id(
@@ -150,7 +319,7 @@ def inject_esphome_visit_link(
 def get_esphome_device_entities(
     hass: HomeAssistant, device_slug: str
 ) -> dict[str, Any]:
-    """Inspect all entities belonging to the ESPHome device for the Web Companion Device Manager tab."""
+    """Inspect and semantically group all entities belonging to the ESPHome device."""
     target_device_id = find_esphome_device_id(hass, device_slug)
     dev_reg = dr.async_get(hass)
     ent_reg = er.async_get(hass)
@@ -174,11 +343,8 @@ def get_esphome_device_entities(
                 dev_meta["mac"] = str(cval)
                 break
 
-    groups: dict[str, list[dict[str, Any]]] = {
-        "controls": [],
-        "sensors": [],
-        "config": [],
-        "diagnostics": [],
+    sections_map: dict[str, list[dict[str, Any]]] = {
+        sec_id: [] for sec_id, _title, _desc in ESPHOME_SECTION_META
     }
 
     entries: list[er.RegistryEntry] = []
@@ -194,44 +360,82 @@ def get_esphome_device_entities(
             if e.platform == "esphome" and slug_norm in e.entity_id and not e.disabled_by
         ]
 
-    for entry in sorted(entries, key=lambda e: e.entity_id):
+    dev_prefix = dev_meta["name"].strip()
+
+    # Priority order inside each section: interactive controls first, sensors second
+    domain_sort_order = {
+        "switch": 1,
+        "select": 2,
+        "number": 3,
+        "light": 4,
+        "button": 5,
+        "media_player": 6,
+        "binary_sensor": 7,
+        "sensor": 8,
+        "update": 9,
+    }
+
+    for entry in entries:
         state_obj = hass.states.get(entry.entity_id)
         state_val = state_obj.state if state_obj else "unavailable"
         attrs = state_obj.attributes if state_obj else {}
-        friendly = str(
+        raw_friendly = str(
             attrs.get("friendly_name")
             or entry.name
             or entry.original_name
             or entry.entity_id
         )
+        # Strip redundant device name prefix (e.g. "Pocket Assistant Display Brightness" -> "Display Brightness")
+        clean_name = raw_friendly
+        if dev_prefix and clean_name.lower().startswith(dev_prefix.lower() + " "):
+            clean_name = clean_name[len(dev_prefix) + 1 :].strip() or raw_friendly
+        clean_name = re.sub(r"^pocket[\s_-]*assistant[\s_-]*", "", clean_name, flags=re.IGNORECASE).strip() or raw_friendly
+
         unit = str(attrs.get("unit_of_measurement") or "")
+        dev_class = str(attrs.get("device_class") or entry.original_device_class or "")
         cat = entry.entity_category
+
+        sec_id = classify_esphome_entity_section(
+            entry.entity_id, clean_name, entry.domain, dev_class, cat
+        )
 
         item: dict[str, Any] = {
             "entity_id": entry.entity_id,
-            "name": friendly,
+            "name": clean_name,
             "domain": entry.domain,
             "state": state_val,
             "unit": unit,
-            "device_class": str(attrs.get("device_class") or entry.original_device_class or ""),
+            "device_class": dev_class,
+            "category": str(cat.value if cat else "primary"),
             "options": list(attrs.get("options") or []),
             "min": attrs.get("min"),
             "max": attrs.get("max"),
             "step": attrs.get("step"),
+            "_sort": (domain_sort_order.get(entry.domain, 50), clean_name.lower()),
         }
+        sections_map[sec_id].append(item)
 
-        if cat == EntityCategory.DIAGNOSTIC:
-            groups["diagnostics"].append(item)
-        elif cat == EntityCategory.CONFIG:
-            groups["config"].append(item)
-        elif entry.domain in ("sensor", "binary_sensor"):
-            groups["sensors"].append(item)
-        else:
-            groups["controls"].append(item)
+    sections_list: list[dict[str, Any]] = []
+    for sec_id, sec_title, sec_desc in ESPHOME_SECTION_META:
+        sec_items = sections_map[sec_id]
+        if not sec_items:
+            continue
+        sec_items.sort(key=lambda x: x["_sort"])
+        for it in sec_items:
+            it.pop("_sort", None)
+        sections_list.append(
+            {
+                "id": sec_id,
+                "title": sec_title,
+                "description": sec_desc,
+                "count": len(sec_items),
+                "items": sec_items,
+            }
+        )
 
     return {
         "device": dev_meta,
-        "groups": groups,
+        "sections": sections_list,
     }
 
 
