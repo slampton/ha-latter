@@ -60,7 +60,6 @@ from .const import (
     DEFAULT_BLE_AUTO_SWITCH,
     DEFAULT_BLE_BEACON_UUID,
     DEFAULT_DEVICE_SLUG,
-    DEFAULT_LOCAL_SPEAKER,
     DEFAULT_NATIVE_BLE_TRACKING,
     DEFAULT_SYNC_DEVICE_AREA,
     FORECAST_REFRESH_INTERVAL_MINUTES,
@@ -94,13 +93,11 @@ def _resolve_esphome_local_speaker(
     ent_reg = er.async_get(hass)
     dev_reg = dr.async_get(hass)
 
-    # 1. Check ESPHome entities whose entity_id starts with or contains the device_slug
     for entry in ent_reg.entities.values():
         if entry.domain == "media_player" and entry.platform == "esphome":
             if slug_norm in entry.entity_id and not entry.disabled_by:
                 return entry.entity_id
 
-    # 2. Match ESPHome device by name in Device Registry and find its media_player entity
     for dev in dev_reg.devices.values():
         dev_name = str(dev.name_by_user or dev.name or "").lower().replace("-", "_").replace(" ", "_")
         if slug_norm and slug_norm in dev_name:
@@ -109,6 +106,19 @@ def _resolve_esphome_local_speaker(
                     return entry.entity_id
 
     return direct_candidate
+
+
+def _get_esphome_device_current_area(
+    hass: HomeAssistant, device_slug: str
+) -> str | None:
+    """Return the current area_id assigned to the Pocket Assistant device in HA Device Registry."""
+    dev_reg = dr.async_get(hass)
+    slug_norm = device_slug.strip().lower().replace("-", "_")
+    for dev in dev_reg.devices.values():
+        dev_name = str(dev.name_by_user or dev.name or "").lower().replace("-", "_").replace(" ", "_")
+        if slug_norm and slug_norm in dev_name and dev.area_id:
+            return dev.area_id
+    return None
 
 
 class LatterCoordinator:
@@ -301,6 +311,7 @@ class LatterCoordinator:
 
     async def async_setup(self) -> None:
         """Set up state subscriptions, native BLE proxy tracker, and periodic timers."""
+        # 1. Check external BLE presence entity first
         pres_ent = self.presence_entity
         if pres_ent and self.ble_auto_switch_enabled:
             pres_state = self.hass.states.get(pres_ent)
@@ -309,17 +320,21 @@ class LatterCoordinator:
                 if matched:
                     self.active_area_id = matched
 
+        # 2. Otherwise check the ESPHome device's existing Area in HA Device Registry (avoiding random alphabetical "Bathroom" fallback!)
+        if not self.active_area_id:
+            dev_area = _get_esphome_device_current_area(
+                self.hass, self.device_slug
+            )
+            if dev_area:
+                self.active_area_id = dev_area
+
+        # 3. Last resort fallback if device has no area assigned yet
         if not self.active_area_id:
             areas = get_areas_summary(
                 self.hass, local_speaker=self.local_speaker
             )
             if areas:
                 self.active_area_id = str(areas[0]["id"])
-
-        if self.active_area_id and self.sync_device_area_enabled:
-            sync_esphome_device_area(
-                self.hass, self.device_slug, self.active_area_id
-            )
 
         self._bind_speaker_listener()
         self._bind_weather_listener()
@@ -384,6 +399,7 @@ class LatterCoordinator:
     ) -> None:
         """Handle room transition detected by Latter's native ESPHome BLE proxy tracker."""
         if not self.ble_auto_switch_enabled:
+            self._notify_listeners()
             return
         if area_id and area_id != self.active_area_id:
             _LOGGER.info(
@@ -392,6 +408,8 @@ class LatterCoordinator:
                 area_id,
             )
             self.async_set_active_area(area_id)
+        else:
+            self._notify_listeners()
 
     @callback
     def async_add_listener(self, update_callback: callable) -> callable:
@@ -559,6 +577,9 @@ class LatterCoordinator:
             "alarm_code_required": alarm_info["code_arm_required"],
             "native_ble_tracking": self.native_ble_tracking_enabled,
             "ble_beacon_uuid": self.ble_beacon_uuid,
+            "ble_closest_proxy": self._ble_tracker.closest_scanner if self._ble_tracker else "",
+            "ble_packets_seen": self._ble_tracker.packets_seen if self._ble_tracker else 0,
+            "ble_rssi_by_room": self._ble_tracker.get_live_rssi_summary() if self._ble_tracker else {},
             "presence_entity": pres_ent or "",
             "presence_state": pres_state,
             "ble_auto_switch": self.ble_auto_switch_enabled,
