@@ -493,3 +493,53 @@ intercom_broadcast:
       selector:
         entity:
           domain: tts
+
+media_command:
+  name: Unified Media Command (With Post-Reboot Queue Resumption)
+  description: Execute playback controls (play, pause, toggle, next, previous, stop, seek, play_media, clear_queue) on the active speaker, automatically re-streaming the Music Assistant queue if the local ESPHome Sendspin buffer was emptied by a reboot or hibernate.
+  fields:
+    target_device:
+      name: Target ESPHome Device
+      description: Optional ESPHome device slug (defaults to pocket-assistant).
+      required: false
+      default: "pocket-assistant"
+      selector:
+        text:
+    command:
+      name: Playback Command
+      description: Media transport command to execute.
+      required: true
+      default: "toggle"
+      selector:
+        select:
+          options:
+            - "play"
+            - "pause"
+            - "toggle"
+            - "next"
+            - "previous"
+            - "stop"
+            - "seek"
+            - "play_media"
+            - "clear_queue"
+    seek_position:
+      name: Seek Position (Seconds)
+      description: Target playback position in seconds when command is seek.
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 36000
+          mode: box
+    media_id:
+      name: Media URI / ID
+      description: Optional Music Assistant URI or media_content_id when command is play_media.
+      required: false
+      selector:
+        text:
+    media_type:
+      name: Media Type
+      description: Optional media type (music, podcast, audiobook, radio, playlist, album, track).
+      required: false
+      selector:
+        text:

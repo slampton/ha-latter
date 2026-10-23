@@ -20,6 +20,7 @@ from .const import (
     SERVICE_CALENDAR_CREATE_EVENT,
     SERVICE_CALENDAR_FETCH,
     SERVICE_INTERCOM_BROADCAST,
+    SERVICE_MEDIA_COMMAND,
     SERVICE_MEDIA_VOLUME,
     SERVICE_MUSIC_BROWSE,
     SERVICE_REMOTE_ACTION,
@@ -725,6 +726,9 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
     hass.services.async_register(
         DOMAIN, SERVICE_SET_ACTIVE_SPEAKER, _handle_set_active_speaker
+    )
+    hass.services.async_register(
+        DOMAIN, SERVICE_MEDIA_COMMAND, _handle_media_command
     )
     hass.services.async_register(
         DOMAIN, SERVICE_TRIGGER_BINDING, _handle_trigger_binding

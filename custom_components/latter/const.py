@@ -61,6 +61,7 @@ DEFAULT_ART_SIZE: Final = 466
 # Native Latter Services
 SERVICE_MUSIC_BROWSE: Final = "music_browse"
 SERVICE_SET_ACTIVE_SPEAKER: Final = "set_active_speaker"
+SERVICE_MEDIA_COMMAND: Final = "media_command"
 SERVICE_MEDIA_VOLUME: Final = "media_volume"
 SERVICE_ROOM_BROWSE: Final = "room_browse"
 SERVICE_ROOM_ACTION: Final = "room_action"

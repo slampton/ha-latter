@@ -13,11 +13,14 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     ATTR_ENTITY_ID,
+    EVENT_CALL_SERVICE,
     STATE_BUFFERING,
     STATE_IDLE,
     STATE_OFF,
     STATE_PAUSED,
     STATE_PLAYING,
+    STATE_UNAVAILABLE,
+    STATE_UNKNOWN,
 )
 from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
 from homeassistant.helpers import (
@@ -34,7 +37,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .ble_engine import LatterNativeBleTracker, get_ble_proxy_area_ids
-from .browse_engine import is_music_assistant_player
+from .browse_engine import _get_mass_client, is_music_assistant_player
 from .calendar_engine import async_fetch_calendar_agenda
 from .const import (
     CALENDAR_REFRESH_INTERVAL_MINUTES,
@@ -127,6 +130,30 @@ def _resolve_esphome_local_speaker(
     return direct_candidate
 
 
+def _resolve_ma_counterpart_entity(
+    hass: HomeAssistant, speaker_entity_id: str, device_slug: str
+) -> str | None:
+    """Find the Music Assistant media_player entity corresponding to an ESPHome speaker (if wrapped by MA)."""
+    state_obj = hass.states.get(speaker_entity_id)
+    if state_obj and is_music_assistant_player(hass, state_obj):
+        return speaker_entity_id
+
+    slug_norm = device_slug.strip().lower().replace("-", "_")
+    spk_short = speaker_entity_id.replace("media_player.", "").lower()
+
+    for candidate in hass.states.async_all("media_player"):
+        if candidate.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+            continue
+        if not is_music_assistant_player(hass, candidate):
+            continue
+        cid_low = candidate.entity_id.lower()
+        friendly_low = str(candidate.attributes.get("friendly_name") or "").lower().replace("-", "_").replace(" ", "_")
+        if slug_norm in cid_low or spk_short in cid_low or slug_norm in friendly_low:
+            return candidate.entity_id
+
+    return None
+
+
 def _get_esphome_device_current_area(
     hass: HomeAssistant, device_slug: str
 ) -> str | None:
@@ -177,6 +204,8 @@ class LatterCoordinator:
 
         self._listeners: list[callable] = []
         self._unsub_speaker_state: callable | None = None
+        self._unsub_local_reconnect: callable | None = None
+        self._unsub_play_interceptor: callable | None = None
         self._unsub_weather_state: callable | None = None
         self._unsub_alarm_state: callable | None = None
         self._unsub_presence_state: callable | None = None
@@ -194,6 +223,19 @@ class LatterCoordinator:
         self.active_area_id: str | None = self.get_opt(CONF_DEFAULT_AREA)
         self.active_remote: str = ""
         self.active_remote_slot: int = 1
+        self.last_room_filter: str = "all"
+        self.last_room_page: int = 1
+        self.on_area_changed_push_slots: callable | None = None
+
+        # Persisted track metadata & URI for post-reboot Sendspin queue resumption
+        self.last_media_uri: str = ""
+        self.last_media_type: str = "music"
+        self.last_media_title: str = ""
+        self.last_media_artist: str = ""
+        self.last_media_album: str = ""
+        self.last_media_duration: float = 0.0
+        self.last_media_position: float = 0.0
+        self._resuming_guard_until: float = 0.0
 
         # Sticky artwork and transfer position handoff cache (for MA 2.10.8 transfer window)
         self.last_valid_raw_pic: str = ""
@@ -423,20 +465,26 @@ class LatterCoordinator:
 
     @callback
     def _schedule_persist_runtime_state(self) -> None:
-        """Persist active_speaker, last_speaker, active_area_id, and active_remote_slot to HA Store."""
+        """Persist runtime speaker, area, remote slot, and last active track metadata to HA Store."""
         self._store.async_delay_save(
             lambda: {
                 "active_speaker": self.active_speaker,
                 "last_speaker": self.last_speaker,
                 "active_area_id": self.active_area_id or "",
                 "active_remote_slot": self.active_remote_slot,
+                "last_media_uri": self.last_media_uri,
+                "last_media_type": self.last_media_type,
+                "last_media_title": self.last_media_title,
+                "last_media_artist": self.last_media_artist,
+                "last_media_album": self.last_media_album,
+                "last_media_duration": self.last_media_duration,
+                "last_media_position": round(self.last_media_position, 1),
             },
-            delay=1.0,
+            delay=1.5,
         )
 
     async def async_setup(self) -> None:
         """Restore persisted state, set up subscriptions, start BLE tracker, and sync initial states."""
-        # 1. Restore last runtime state from .storage/latter.runtime.<entry_id> for instant deterministic boot sync
         try:
             stored = await self._store.async_load()
             if isinstance(stored, dict):
@@ -452,6 +500,13 @@ class LatterCoordinator:
                 saved_slot = stored.get("active_remote_slot")
                 if isinstance(saved_slot, int) and 1 <= saved_slot <= 4:
                     self.active_remote_slot = saved_slot
+                self.last_media_uri = str(stored.get("last_media_uri") or "")
+                self.last_media_type = str(stored.get("last_media_type") or "music")
+                self.last_media_title = str(stored.get("last_media_title") or "")
+                self.last_media_artist = str(stored.get("last_media_artist") or "")
+                self.last_media_album = str(stored.get("last_media_album") or "")
+                self.last_media_duration = float(stored.get("last_media_duration") or 0.0)
+                self.last_media_position = float(stored.get("last_media_position") or 0.0)
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("Failed loading Latter runtime store: %s", err)
 
@@ -496,10 +551,16 @@ class LatterCoordinator:
                 self.active_area_id = str(areas[0]["id"])
 
         self._bind_speaker_listener()
+        self._bind_local_reconnect_listener()
         self._bind_weather_listener()
         self._bind_alarm_listener()
         self._bind_presence_listener()
         self._bind_remotes_listener()
+
+        # Intercept direct media_player.media_play / media_play_pause calls on an idle local speaker after reboot
+        self._unsub_play_interceptor = self.hass.bus.async_listen(
+            EVENT_CALL_SERVICE, self._async_on_service_call_event
+        )
 
         if self.native_ble_tracking_enabled:
             self._ble_tracker = LatterNativeBleTracker(
@@ -532,6 +593,8 @@ class LatterCoordinator:
 
         for unsub in (
             self._unsub_speaker_state,
+            self._unsub_local_reconnect,
+            self._unsub_play_interceptor,
             self._unsub_weather_state,
             self._unsub_alarm_state,
             self._unsub_presence_state,
@@ -543,6 +606,8 @@ class LatterCoordinator:
             if unsub is not None:
                 unsub()
         self._unsub_speaker_state = None
+        self._unsub_local_reconnect = None
+        self._unsub_play_interceptor = None
         self._unsub_weather_state = None
         self._unsub_alarm_state = None
         self._unsub_presence_state = None
@@ -551,6 +616,372 @@ class LatterCoordinator:
         self._unsub_forecast_timer = None
         self._unsub_calendar_timer = None
         self._listeners.clear()
+
+    @callback
+    def _bind_local_reconnect_listener(self) -> None:
+        """Watch the ESPHome device's local media_player for unavailable -> online transitions (OTA / Hibernate wake)."""
+        if self._unsub_local_reconnect is not None:
+            self._unsub_local_reconnect()
+            self._unsub_local_reconnect = None
+
+        local_spk = self.local_speaker
+        if not local_spk:
+            return
+
+        self._unsub_local_reconnect = async_track_state_change_event(
+            self.hass,
+            [local_spk],
+            self._async_on_local_device_state_change,
+        )
+
+    @callback
+    def _async_on_local_device_state_change(
+        self, event: Event[EventStateChangedData]
+    ) -> None:
+        """Trigger automatic full state resync when the ESPHome device reconnects from unavailable."""
+        old_state = event.data.get("old_state")
+        new_state = event.data.get("new_state")
+        if new_state is None:
+            return
+
+        was_offline = old_state is None or old_state.state in (
+            STATE_UNAVAILABLE,
+            STATE_UNKNOWN,
+        )
+        is_now_online = new_state.state not in (
+            STATE_UNAVAILABLE,
+            STATE_UNKNOWN,
+        )
+        if was_offline and is_now_online:
+            _LOGGER.info(
+                "ESPHome device '%s' (%s) reconnected (%s -> %s); scheduling full state & slot resync",
+                self.device_slug,
+                event.data.get("entity_id"),
+                old_state.state if old_state else "none",
+                new_state.state,
+            )
+            self.hass.async_create_task(self._async_handle_device_reconnect())
+
+    async def _async_handle_device_reconnect(self) -> None:
+        """Refresh all sensors and push active room slots 1.5s after ESPHome OTA/Hibernate reconnect."""
+        self._notify_listeners()
+        await asyncio.sleep(1.5)
+        self._notify_listeners()
+        if self.on_area_changed_push_slots is not None:
+            await self.on_area_changed_push_slots(self)
+
+    @callback
+    def _async_on_service_call_event(self, event: Event) -> None:
+        """Intercept direct media_player.media_play / media_play_pause on an idle local Sendspin speaker to auto-resume MA queue."""
+        if time.monotonic() < self._resuming_guard_until:
+            return
+        if event.data.get("domain") != "media_player":
+            return
+        service = event.data.get("service")
+        if service not in ("media_play", "media_play_pause"):
+            return
+
+        sdata = event.data.get("service_data") or {}
+        targets = sdata.get(ATTR_ENTITY_ID)
+        if isinstance(targets, str):
+            targets = [targets]
+        elif not isinstance(targets, list):
+            return
+
+        local_spk = self.local_speaker
+        if local_spk not in targets and f"media_player.{self.device_slug}" not in targets:
+            return
+
+        target_spk = local_spk if local_spk in targets else f"media_player.{self.device_slug}"
+        state_obj = self.hass.states.get(target_spk)
+        if state_obj is not None and state_obj.state in (STATE_IDLE, STATE_OFF):
+            self._resuming_guard_until = time.monotonic() + 3.0
+            self.hass.async_create_task(
+                self._async_resume_idle_speaker_queue(target_spk)
+            )
+
+    async def _async_find_queue_resume_item(
+        self, speaker_entity_id: str
+    ) -> tuple[str, float]:
+        """Query Music Assistant (controller or get_queue) for the current queue item URI and position, falling back to persisted store."""
+        ma_entity = (
+            _resolve_ma_counterpart_entity(
+                self.hass, speaker_entity_id, self.device_slug
+            )
+            or speaker_entity_id
+        )
+
+        # 1. Check in-process Music Assistant player_queues controller
+        mass = _get_mass_client(self.hass)
+        if mass is not None and hasattr(mass, "player_queues"):
+            try:
+                for q in mass.player_queues.all() if callable(getattr(mass.player_queues, "all", None)) else []:
+                    q_dict = q.to_dict() if hasattr(q, "to_dict") else {}
+                    q_name = str(q_dict.get("display_name") or "").lower().replace("-", "_")
+                    if self.device_slug in q_name or q_dict.get("queue_id") in ma_entity:
+                        cur_item = q_dict.get("current_item") or {}
+                        media_item = cur_item.get("media_item") or {}
+                        uri = str(media_item.get("uri") or cur_item.get("uri") or "")
+                        pos = float(q_dict.get("elapsed_time") or self.last_media_position or 0.0)
+                        if uri:
+                            return uri, pos
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.debug("Direct mass.player_queues resume lookup failed: %s", err)
+
+        # 2. Check music_assistant.get_queue service
+        if self.hass.services.has_service("music_assistant", "get_queue"):
+            try:
+                resp = await self.hass.services.async_call(
+                    "music_assistant",
+                    "get_queue",
+                    {ATTR_ENTITY_ID: ma_entity},
+                    blocking=True,
+                    return_response=True,
+                )
+                if isinstance(resp, dict):
+                    q_data = resp.get(ma_entity) or resp
+                    if isinstance(q_data, dict):
+                        cur_item = q_data.get("current_item") or q_data.get("next_item") or {}
+                        if isinstance(cur_item, dict):
+                            media_item = cur_item.get("media_item") or {}
+                            uri = str(
+                                (media_item.get("uri") if isinstance(media_item, dict) else "")
+                                or cur_item.get("uri")
+                                or cur_item.get("media_content_id")
+                                or ""
+                            )
+                            pos = float(
+                                q_data.get("elapsed_time")
+                                or self.last_media_position
+                                or 0.0
+                            )
+                            if uri:
+                                return uri, pos
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.debug("music_assistant.get_queue resume lookup failed: %s", err)
+
+        return self.last_media_uri, self.last_media_position
+
+    async def _async_resume_idle_speaker_queue(
+        self, speaker_entity_id: str
+    ) -> None:
+        """Resume playback on an idle speaker (e.g. local Sendspin player after ESP32 reboot/hibernate)."""
+        self._resuming_guard_until = time.monotonic() + 3.5
+
+        # Wait 0.8s first in case standard media_player.media_play already woke the stream
+        await asyncio.sleep(0.8)
+        cur_state = self.hass.states.get(speaker_entity_id)
+        if cur_state is not None and cur_state.state in (STATE_PLAYING, STATE_BUFFERING):
+            return
+
+        ma_entity = _resolve_ma_counterpart_entity(
+            self.hass, speaker_entity_id, self.device_slug
+        )
+
+        # Step 1: If there is a distinct Music Assistant wrapper entity for this speaker, try media_play on it
+        if ma_entity and ma_entity != speaker_entity_id:
+            try:
+                await self.hass.services.async_call(
+                    "media_player",
+                    "media_play",
+                    {ATTR_ENTITY_ID: ma_entity},
+                    blocking=True,
+                )
+                await asyncio.sleep(0.8)
+                cur_state = self.hass.states.get(speaker_entity_id)
+                if cur_state is not None and cur_state.state in (STATE_PLAYING, STATE_BUFFERING):
+                    return
+            except Exception:  # noqa: BLE001
+                pass
+
+        # Step 2: Fetch queue current_item URI (or persisted pre-reboot URI) and re-stream via Music Assistant
+        resume_uri, resume_pos = await self._async_find_queue_resume_item(
+            speaker_entity_id
+        )
+        if not resume_uri:
+            _LOGGER.debug(
+                "No resumable queue URI found for idle speaker '%s'",
+                speaker_entity_id,
+            )
+            return
+
+        play_target = ma_entity or speaker_entity_id
+        _LOGGER.info(
+            "Re-streaming post-reboot queue URI '%s' (pos=%.1fs) to '%s'",
+            resume_uri,
+            resume_pos,
+            play_target,
+        )
+
+        try:
+            if self.hass.services.has_service("music_assistant", "play_media") and (
+                ma_entity or is_music_assistant_player(self.hass, cur_state) if cur_state else False
+            ):
+                await self.hass.services.async_call(
+                    "music_assistant",
+                    "play_media",
+                    {
+                        ATTR_ENTITY_ID: play_target,
+                        "media_id": resume_uri,
+                    },
+                    blocking=True,
+                )
+            else:
+                await self.hass.services.async_call(
+                    "media_player",
+                    "play_media",
+                    {
+                        ATTR_ENTITY_ID: play_target,
+                        "media_content_id": resume_uri,
+                        "media_content_type": self.last_media_type or "music",
+                    },
+                    blocking=True,
+                )
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("Post-reboot play_media failed on %s: %s", play_target, err)
+            return
+
+        if resume_pos > 5.0:
+            await asyncio.sleep(1.2)
+            try:
+                await self.hass.services.async_call(
+                    "media_player",
+                    "media_seek",
+                    {
+                        ATTR_ENTITY_ID: speaker_entity_id,
+                        "seek_position": round(resume_pos, 1),
+                    },
+                    blocking=False,
+                )
+            except Exception:  # noqa: BLE001
+                pass
+
+        self._notify_listeners()
+
+    async def async_execute_media_command(
+        self,
+        command: str,
+        speaker: str | None = None,
+        seek_position: float | None = None,
+        media_id: str | None = None,
+        media_type: str | None = None,
+        enqueue: str | None = None,
+    ) -> None:
+        """Execute a unified media playback command with automatic post-reboot Sendspin queue resumption."""
+        target_spk = (speaker or self.active_speaker or self.local_speaker).strip()
+        if not target_spk:
+            return
+
+        cmd = command.strip().lower()
+        state_obj = self.hass.states.get(target_spk)
+        cur_state = state_obj.state if state_obj else STATE_IDLE
+
+        if cmd == "toggle":
+            cmd = (
+                "pause"
+                if cur_state in (STATE_PLAYING, STATE_BUFFERING)
+                else "play"
+            )
+
+        if cmd == "play_media" and media_id:
+            ma_target = _resolve_ma_counterpart_entity(
+                self.hass, target_spk, self.device_slug
+            )
+            if (
+                ma_target
+                and self.hass.services.has_service("music_assistant", "play_media")
+            ):
+                payload: dict[str, Any] = {
+                    ATTR_ENTITY_ID: ma_target,
+                    "media_id": media_id,
+                }
+                if media_type:
+                    payload["media_type"] = media_type
+                if enqueue:
+                    payload["enqueue"] = enqueue
+                await self.hass.services.async_call(
+                    "music_assistant", "play_media", payload, blocking=False
+                )
+            else:
+                await self.hass.services.async_call(
+                    "media_player",
+                    "play_media",
+                    {
+                        ATTR_ENTITY_ID: target_spk,
+                        "media_content_id": media_id,
+                        "media_content_type": media_type or "music",
+                    },
+                    blocking=False,
+                )
+            return
+
+        if cmd == "play":
+            self._resuming_guard_until = time.monotonic() + 3.5
+            await self.hass.services.async_call(
+                "media_player",
+                "media_play",
+                {ATTR_ENTITY_ID: target_spk},
+                blocking=False,
+            )
+            if cur_state in (STATE_IDLE, STATE_OFF, "stopped"):
+                await self._async_resume_idle_speaker_queue(target_spk)
+            return
+
+        if cmd == "pause":
+            await self.hass.services.async_call(
+                "media_player",
+                "media_pause",
+                {ATTR_ENTITY_ID: target_spk},
+                blocking=False,
+            )
+            return
+
+        if cmd in ("next", "next_track", "media_next_track"):
+            await self.hass.services.async_call(
+                "media_player",
+                "media_next_track",
+                {ATTR_ENTITY_ID: target_spk},
+                blocking=False,
+            )
+            return
+
+        if cmd in ("previous", "previous_track", "media_previous_track"):
+            await self.hass.services.async_call(
+                "media_player",
+                "media_previous_track",
+                {ATTR_ENTITY_ID: target_spk},
+                blocking=False,
+            )
+            return
+
+        if cmd == "stop":
+            await self.hass.services.async_call(
+                "media_player",
+                "media_stop",
+                {ATTR_ENTITY_ID: target_spk},
+                blocking=False,
+            )
+            return
+
+        if cmd == "clear_queue":
+            await self.hass.services.async_call(
+                "media_player",
+                "clear_playlist",
+                {ATTR_ENTITY_ID: target_spk},
+                blocking=False,
+            )
+            return
+
+        if cmd == "seek" and seek_position is not None:
+            await self.hass.services.async_call(
+                "media_player",
+                "media_seek",
+                {
+                    ATTR_ENTITY_ID: target_spk,
+                    "seek_position": round(float(seek_position), 1),
+                },
+                blocking=False,
+            )
 
     @callback
     def _async_on_native_ble_area_detected(
@@ -625,7 +1056,6 @@ class LatterCoordinator:
             except Exception as err:  # noqa: BLE001
                 _LOGGER.debug("music_assistant.transfer_queue failed: %s", err)
 
-        # Immediately quiesce the on-device speaker after transfer_queue so ESP32 Sendspin FLAC stream frees Wi-Fi/DMA
         if is_from_local and source_speaker != target_speaker:
             try:
                 await self.hass.services.async_call(
@@ -637,7 +1067,6 @@ class LatterCoordinator:
             except Exception as err:  # noqa: BLE001
                 _LOGGER.debug("Failed quiescing local speaker %s: %s", source_speaker, err)
 
-        # Fallback if one of the players is non-MA or transfer_queue failed
         if not transferred_via_ma and media_content_id:
             try:
                 if not is_from_local:
@@ -672,7 +1101,6 @@ class LatterCoordinator:
             except Exception as err:  # noqa: BLE001
                 _LOGGER.debug("Fallback play_media handoff failed: %s", err)
 
-        # Wait briefly for MA 2.10.8 stream spin-up
         await asyncio.sleep(1.2)
         updated_tgt = self.hass.states.get(target_speaker)
         if updated_tgt is None:
@@ -741,8 +1169,8 @@ class LatterCoordinator:
                 self._transfer_hold_duration = float(p_attrs.get("media_duration") or 0.0)
 
                 if transfer_queue:
-                    media_cid = str(p_attrs.get("media_content_id") or "")
-                    media_ctype = str(p_attrs.get("media_content_type") or "music")
+                    media_cid = str(p_attrs.get("media_content_id") or self.last_media_uri or "")
+                    media_ctype = str(p_attrs.get("media_content_type") or self.last_media_type or "music")
                     self.hass.async_create_task(
                         self._async_execute_ma_queue_transfer(
                             source_speaker=prev_speaker,
@@ -820,6 +1248,11 @@ class LatterCoordinator:
             )
         else:
             self._notify_listeners()
+
+        if self.on_area_changed_push_slots is not None:
+            self.hass.async_create_task(
+                self.on_area_changed_push_slots(self)
+            )
 
     def get_remote_slots(self) -> list[dict[str, str]]:
         """Return the 4 resolved TV/Media Remote slot dictionaries."""
@@ -1105,15 +1538,15 @@ class LatterCoordinator:
         state_obj = self.hass.states.get(self.active_speaker)
         vol_target = self.get_volume_target_entity(self.active_speaker)
 
-        if state_obj is None or state_obj.state in ("unavailable", "unknown"):
+        if state_obj is None or state_obj.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
             return STATE_OFF, {
-                "title": "Idle",
-                "artist": "None",
-                "album": "None",
-                "duration": 0,
-                "position": 0,
+                "title": self.last_media_title or "Idle",
+                "artist": self.last_media_artist or "None",
+                "album": self.last_media_album or "None",
+                "duration": round(self.last_media_duration, 1),
+                "position": round(self.last_media_position, 1),
                 "volume": 0.7,
-                "media_type": "music",
+                "media_type": self.last_media_type or "music",
                 "supported_features": 0,
                 "art_url": "none",
                 "active_speaker": self.active_speaker,
@@ -1144,6 +1577,29 @@ class LatterCoordinator:
         duration = float(attrs.get("media_duration") or 0)
         position = _interpolate_speaker_position(state_obj)
 
+        raw_type = str(attrs.get("media_content_type") or "music").lower()
+        if "podcast" in raw_type:
+            media_type = "podcast"
+        elif "audiobook" in raw_type or "book" in raw_type:
+            media_type = "audiobook"
+        else:
+            media_type = "music"
+
+        # Persist active track info so post-reboot local Sendspin speaker can resume seamlessly
+        if title != "Idle" and state in (STATE_PLAYING, STATE_PAUSED, STATE_BUFFERING):
+            cid = str(attrs.get("media_content_id") or "")
+            if cid:
+                self.last_media_uri = cid
+            self.last_media_type = media_type
+            self.last_media_title = title
+            self.last_media_artist = artist
+            self.last_media_album = album
+            if duration > 0:
+                self.last_media_duration = duration
+            if position > 0:
+                self.last_media_position = position
+            self._schedule_persist_runtime_state()
+
         in_transfer_window = time.monotonic() < self._transfer_hold_until
         if in_transfer_window:
             if title == "Idle" and self._transfer_hold_title:
@@ -1153,17 +1609,21 @@ class LatterCoordinator:
                 duration = self._transfer_hold_duration or duration
             if position < 1.0 and self._transfer_hold_position > 1.0:
                 position = self._transfer_hold_position
+        elif (
+            title == "Idle"
+            and state == STATE_IDLE
+            and self.last_media_title
+            and self.active_speaker == self.local_speaker
+        ):
+            # Keep pre-reboot track metadata visible when local speaker is idle after reboot
+            title = self.last_media_title
+            artist = self.last_media_artist or "None"
+            album = self.last_media_album or "None"
+            duration = self.last_media_duration
+            position = self.last_media_position
+            media_type = self.last_media_type or "music"
 
         volume = self._read_volume_from_target(vol_target, attrs)
-
-        raw_type = str(attrs.get("media_content_type") or "music").lower()
-        if "podcast" in raw_type:
-            media_type = "podcast"
-        elif "audiobook" in raw_type or "book" in raw_type:
-            media_type = "audiobook"
-        else:
-            media_type = "music"
-
         supported_features = int(attrs.get("supported_features") or 0)
 
         raw_pic = str(
