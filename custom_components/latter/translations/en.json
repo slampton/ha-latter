@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Latter (ESPHome Companion & Entity Middleware)",
-        "description": "Bind Home Assistant entities, areas, media players, weather, and calendars to your Pocket Assistant or ESPHome device without YAML substitutions or reflashing.",
+        "description": "Bind Home Assistant entities, areas, media players, weather, and calendars to your Pocket Assistant (v2.1+) or ESPHome device without YAML substitutions or reflashing.",
         "data": {
           "device_slug": "ESPHome Device Name / Slug",
           "default_speaker": "Default Active Speaker",
@@ -13,8 +13,7 @@
           "weather_entity": "Weather Provider Entity",
           "calendar_entities": "Calendars (Agenda Serialization)",
           "custom_entities": "Pinned Custom Entities (Dynamic Entity Mapper)",
-          "art_size": "Image Proxy Resolution",
-          "enable_v20_compat": "Enable Pocket Assistant v2.0 Compatibility Bridge"
+          "art_size": "Image Proxy Resolution"
         }
       }
     },
@@ -36,8 +35,7 @@
           "weather_entity": "Weather Provider Entity",
           "calendar_entities": "Calendars (Agenda Serialization)",
           "custom_entities": "Pinned Custom Entities (Dynamic Entity Mapper)",
-          "art_size": "Image Proxy Resolution",
-          "enable_v20_compat": "Enable Pocket Assistant v2.0 Compatibility Bridge"
+          "art_size": "Image Proxy Resolution"
         }
       }
     }

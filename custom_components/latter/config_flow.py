@@ -22,13 +22,11 @@ from .const import (
     CONF_DEFAULT_AREA,
     CONF_DEFAULT_SPEAKER,
     CONF_DEVICE_SLUG,
-    CONF_ENABLE_V20_COMPAT,
     CONF_LOCAL_SPEAKER,
     CONF_WEATHER_ENTITY,
     DEFAULT_AREA_HANDOFF,
     DEFAULT_ART_SIZE,
     DEFAULT_DEVICE_SLUG,
-    DEFAULT_ENABLE_V20_COMPAT,
     DEFAULT_LOCAL_SPEAKER,
     DOMAIN,
 )
@@ -74,7 +72,6 @@ def _build_schema(
     calendars = current.get(CONF_CALENDAR_ENTITIES, [])
     custom_entities = current.get(CONF_CUSTOM_ENTITIES, [])
     art_size = str(current.get(CONF_ART_SIZE, DEFAULT_ART_SIZE))
-    v20_compat = current.get(CONF_ENABLE_V20_COMPAT, DEFAULT_ENABLE_V20_COMPAT)
 
     schema_dict: dict[Any, Any] = {
         vol.Required(CONF_DEVICE_SLUG, default=default_slug): selector.TextSelector(),
@@ -140,10 +137,6 @@ def _build_schema(
             mode=selector.SelectSelectorMode.DROPDOWN,
         )
     )
-
-    schema_dict[
-        vol.Required(CONF_ENABLE_V20_COMPAT, default=v20_compat)
-    ] = selector.BooleanSelector()
 
     return vol.Schema(schema_dict)
 

@@ -1,4 +1,4 @@
-"""Sensor platform for Latter exposing v2.0 and v2.1 Pocket Assistant / ESPHome entities."""
+"""Sensor platform for Latter exposing Pocket Assistant v2.1+ / ESPHome entities."""
 
 from __future__ import annotations
 
@@ -11,10 +11,10 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import (
     DOMAIN,
-    V20_ACTIVE_MEDIA_ENTITY,
-    V20_WEATHER_FORECAST_ENTITY,
-    V21_CALENDAR_AGENDA_ENTITY,
-    V21_ROOM_CONTEXT_ENTITY,
+    ENTITY_ACTIVE_MEDIA,
+    ENTITY_CALENDAR_AGENDA,
+    ENTITY_ROOM_CONTEXT,
+    ENTITY_WEATHER_FORECAST,
 )
 from .coordinator import LatterCoordinator
 
@@ -64,10 +64,10 @@ class PocketAssistantActiveMediaSensor(_BaseLatterSensor):
     _attr_icon = "mdi:music-circle"
 
     def __init__(self, coordinator: LatterCoordinator) -> None:
-        """Initialize active media sensor with exact v2.0 entity_id."""
+        """Initialize active media sensor."""
         super().__init__(coordinator)
         self._attr_unique_id = f"{coordinator.entry.entry_id}_active_media"
-        self.entity_id = V20_ACTIVE_MEDIA_ENTITY
+        self.entity_id = ENTITY_ACTIVE_MEDIA
 
     @property
     def native_value(self) -> str:
@@ -77,7 +77,7 @@ class PocketAssistantActiveMediaSensor(_BaseLatterSensor):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return v2.0 media attributes (title, artist, album, duration, position, art_url)."""
+        """Return media attributes (title, artist, album, duration, position, art_url, active_speaker)."""
         _, attrs = self.coordinator.get_active_media_payload()
         return attrs
 
@@ -89,10 +89,10 @@ class PocketAssistantWeatherForecastSensor(_BaseLatterSensor):
     _attr_icon = "mdi:weather-partly-cloudy"
 
     def __init__(self, coordinator: LatterCoordinator) -> None:
-        """Initialize weather forecast sensor with exact v2.0 entity_id."""
+        """Initialize weather forecast sensor."""
         super().__init__(coordinator)
         self._attr_unique_id = f"{coordinator.entry.entry_id}_weather_forecast"
-        self.entity_id = V20_WEATHER_FORECAST_ENTITY
+        self.entity_id = ENTITY_WEATHER_FORECAST
 
     @property
     def native_value(self) -> str:
@@ -115,7 +115,7 @@ class PocketAssistantRoomContextSensor(_BaseLatterSensor):
         """Initialize room context sensor."""
         super().__init__(coordinator)
         self._attr_unique_id = f"{coordinator.entry.entry_id}_room_context"
-        self.entity_id = V21_ROOM_CONTEXT_ENTITY
+        self.entity_id = ENTITY_ROOM_CONTEXT
 
     @property
     def native_value(self) -> str:
@@ -140,7 +140,7 @@ class PocketAssistantCalendarAgendaSensor(_BaseLatterSensor):
         """Initialize calendar agenda sensor."""
         super().__init__(coordinator)
         self._attr_unique_id = f"{coordinator.entry.entry_id}_calendar_agenda"
-        self.entity_id = V21_CALENDAR_AGENDA_ENTITY
+        self.entity_id = ENTITY_CALENDAR_AGENDA
 
     @property
     def native_value(self) -> str:
