@@ -150,7 +150,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             coord.async_set_active_speaker(speaker)
 
     async def _handle_media_volume(call: ServiceCall) -> None:
-        """Control volume on the active speaker OR its mapped AVR volume override entity."""
+        """Control volume on the active speaker OR its mapped AVR/number volume override entity."""
         data = call.data
         target_device = data.get("target_device")
         coord = _get_primary_coordinator(hass, target_device)
@@ -161,8 +161,38 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         vol_target = (
             coord.get_volume_target_entity(speaker) if coord else speaker
         )
-
+        state_obj = hass.states.get(vol_target)
+        target_domain = (
+            state_obj.domain if state_obj else vol_target.split(".")[0]
+        )
         action = str(data.get("action") or "set").strip().lower()
+
+        if target_domain in ("number", "input_number"):
+            cur_val = float(state_obj.state) if (state_obj and state_obj.state not in ("unavailable", "unknown")) else 50.0
+            min_v = float(state_obj.attributes.get("min", 0.0)) if state_obj else 0.0
+            max_v = float(state_obj.attributes.get("max", 100.0)) if state_obj else 100.0
+            step = (max_v - min_v) * 0.05
+
+            if action == "up":
+                new_val = min(max_v, cur_val + step)
+            elif action == "down":
+                new_val = max(min_v, cur_val - step)
+            elif data.get("volume_level") is not None:
+                lvl = float(data["volume_level"])
+                if lvl > 1.0:
+                    lvl = lvl / 100.0
+                new_val = min_v + max(0.0, min(1.0, lvl)) * (max_v - min_v)
+            else:
+                return
+
+            await hass.services.async_call(
+                target_domain,
+                "set_value",
+                {ATTR_ENTITY_ID: vol_target, "value": round(new_val, 1)},
+                blocking=False,
+            )
+            return
+
         if action == "up":
             await hass.services.async_call(
                 "media_player",
@@ -178,7 +208,6 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 blocking=False,
             )
         elif action == "mute":
-            state_obj = hass.states.get(vol_target)
             is_muted = bool(
                 state_obj.attributes.get("is_volume_muted", False)
             ) if state_obj else False

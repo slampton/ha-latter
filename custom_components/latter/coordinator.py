@@ -25,6 +25,7 @@ from homeassistant.helpers.event import (
 from homeassistant.helpers.network import get_url
 from homeassistant.util import dt as dt_util
 
+from .ble_engine import LatterNativeBleTracker
 from .calendar_engine import async_fetch_calendar_agenda
 from .const import (
     CALENDAR_REFRESH_INTERVAL_MINUTES,
@@ -32,25 +33,33 @@ from .const import (
     CONF_AREA_HANDOFF,
     CONF_ART_SIZE,
     CONF_BLE_AUTO_SWITCH,
+    CONF_BLE_BEACON_UUID,
     CONF_CALENDAR_ENTITIES,
     CONF_CUSTOM_ENTITIES,
     CONF_DEFAULT_AREA,
     CONF_DEFAULT_SPEAKER,
     CONF_DEVICE_SLUG,
     CONF_LOCAL_SPEAKER,
+    CONF_NATIVE_BLE_TRACKING,
     CONF_PRESENCE_ENTITY,
     CONF_REMOTE_1,
     CONF_REMOTE_2,
     CONF_REMOTE_3,
     CONF_REMOTE_4,
     CONF_SYNC_DEVICE_AREA,
+    CONF_VOL_SPEAKER_1,
+    CONF_VOL_SPEAKER_2,
+    CONF_VOL_TARGET_1,
+    CONF_VOL_TARGET_2,
     CONF_VOLUME_OVERRIDES,
     CONF_WEATHER_ENTITY,
     DEFAULT_AREA_HANDOFF,
     DEFAULT_ART_SIZE,
     DEFAULT_BLE_AUTO_SWITCH,
+    DEFAULT_BLE_BEACON_UUID,
     DEFAULT_DEVICE_SLUG,
     DEFAULT_LOCAL_SPEAKER,
+    DEFAULT_NATIVE_BLE_TRACKING,
     DEFAULT_SYNC_DEVICE_AREA,
     FORECAST_REFRESH_INTERVAL_MINUTES,
     POSITION_UPDATE_INTERVAL_SECONDS,
@@ -94,6 +103,7 @@ class LatterCoordinator:
         self._unsub_position_timer: callable | None = None
         self._unsub_forecast_timer: callable | None = None
         self._unsub_calendar_timer: callable | None = None
+        self._ble_tracker: LatterNativeBleTracker | None = None
 
         self.active_speaker: str = self.get_opt(
             CONF_DEFAULT_SPEAKER, DEFAULT_LOCAL_SPEAKER
@@ -157,14 +167,28 @@ class LatterCoordinator:
         return info["entity_id"] or None
 
     @property
+    def native_ble_tracking_enabled(self) -> bool:
+        """Return True if native ESPHome BLE proxy tracking is enabled."""
+        return bool(
+            self.get_opt(CONF_NATIVE_BLE_TRACKING, DEFAULT_NATIVE_BLE_TRACKING)
+        )
+
+    @property
+    def ble_beacon_uuid(self) -> str:
+        """Return the iBeacon UUID broadcast by the Pocket Assistant device."""
+        return str(
+            self.get_opt(CONF_BLE_BEACON_UUID, DEFAULT_BLE_BEACON_UUID)
+        ).strip()
+
+    @property
     def presence_entity(self) -> str | None:
-        """Return configured BLE trilateration / room presence entity_id."""
+        """Return configured external BLE room presence entity_id (e.g. Bermuda)."""
         val = self.get_opt(CONF_PRESENCE_ENTITY)
         return str(val) if val else None
 
     @property
     def ble_auto_switch_enabled(self) -> bool:
-        """Return True if BLE presence sensor changes should auto-switch active room."""
+        """Return True if BLE presence changes should auto-switch active room."""
         return bool(self.get_opt(CONF_BLE_AUTO_SWITCH, DEFAULT_BLE_AUTO_SWITCH))
 
     @property
@@ -174,9 +198,19 @@ class LatterCoordinator:
 
     @property
     def volume_overrides(self) -> dict[str, str]:
-        """Parse speaker=avr_volume_entity pairs from CONF_VOLUME_OVERRIDES."""
-        raw = str(self.get_opt(CONF_VOLUME_OVERRIDES, "") or "")
+        """Combine visual override dropdown pairs (1 & 2) with optional text overrides."""
         mapping: dict[str, str] = {}
+        s1 = self.get_opt(CONF_VOL_SPEAKER_1)
+        t1 = self.get_opt(CONF_VOL_TARGET_1)
+        if s1 and t1:
+            mapping[str(s1).strip()] = str(t1).strip()
+
+        s2 = self.get_opt(CONF_VOL_SPEAKER_2)
+        t2 = self.get_opt(CONF_VOL_TARGET_2)
+        if s2 and t2:
+            mapping[str(s2).strip()] = str(t2).strip()
+
+        raw = str(self.get_opt(CONF_VOLUME_OVERRIDES, "") or "")
         for part in raw.replace("\n", ",").split(","):
             if "=" in part:
                 k, v = part.split("=", 1)
@@ -187,7 +221,7 @@ class LatterCoordinator:
         return mapping
 
     def get_volume_target_entity(self, speaker_entity_id: str | None = None) -> str:
-        """Return the volume control target entity (AVR override if mapped, else active speaker)."""
+        """Return the volume control target entity (AVR/number override if mapped, else active speaker)."""
         spk = speaker_entity_id or self.active_speaker
         return self.volume_overrides.get(spk, spk)
 
@@ -241,8 +275,7 @@ class LatterCoordinator:
         )
 
     async def async_setup(self) -> None:
-        """Set up state subscriptions and periodic refresh timers."""
-        # Check initial BLE presence state first if configured
+        """Set up state subscriptions, native BLE proxy tracker, and periodic timers."""
         pres_ent = self.presence_entity
         if pres_ent and self.ble_auto_switch_enabled:
             pres_state = self.hass.states.get(pres_ent)
@@ -268,6 +301,17 @@ class LatterCoordinator:
         self._bind_alarm_listener()
         self._bind_presence_listener()
         self._bind_remotes_listener()
+
+        # Start native zero-config ESPHome BLE Proxy tracker if enabled
+        if self.native_ble_tracking_enabled:
+            self._ble_tracker = LatterNativeBleTracker(
+                hass=self.hass,
+                beacon_uuid=self.ble_beacon_uuid,
+                device_slug=self.device_slug,
+                on_area_detected=self._async_on_native_ble_area_detected,
+            )
+            self._ble_tracker.async_start()
+
         await self.async_refresh_weather_forecast()
         await self.async_refresh_calendar_agenda()
 
@@ -284,6 +328,10 @@ class LatterCoordinator:
 
     async def async_shutdown(self) -> None:
         """Clean up all subscriptions and timers."""
+        if self._ble_tracker is not None:
+            self._ble_tracker.async_stop()
+            self._ble_tracker = None
+
         for unsub in (
             self._unsub_speaker_state,
             self._unsub_weather_state,
@@ -305,6 +353,21 @@ class LatterCoordinator:
         self._unsub_forecast_timer = None
         self._unsub_calendar_timer = None
         self._listeners.clear()
+
+    @callback
+    def _async_on_native_ble_area_detected(
+        self, area_id: str, scanner_source: str
+    ) -> None:
+        """Handle room transition detected by Latter's native ESPHome BLE proxy tracker."""
+        if not self.ble_auto_switch_enabled:
+            return
+        if area_id and area_id != self.active_area_id:
+            _LOGGER.info(
+                "Native BLE Proxy ('%s') detected Pocket Assistant in area '%s'",
+                scanner_source,
+                area_id,
+            )
+            self.async_set_active_area(area_id)
 
     @callback
     def async_add_listener(self, update_callback: callable) -> callable:
@@ -360,7 +423,6 @@ class LatterCoordinator:
         if media_map["remote"]:
             self.active_remote = media_map["remote"]
 
-        # Also check if one of our 4 configured remote slots belongs to this room
         for slot_idx, slot_info in enumerate(self.get_remote_slots(), start=1):
             if slot_info["area_id"] == matched_id:
                 self.active_remote_slot = slot_idx
@@ -449,11 +511,12 @@ class LatterCoordinator:
         ]
 
         pres_ent = self.presence_entity
-        pres_state = (
-            self.hass.states.get(pres_ent).state
-            if (pres_ent and self.hass.states.get(pres_ent))
-            else "none"
-        )
+        if pres_ent and self.hass.states.get(pres_ent):
+            pres_state = self.hass.states.get(pres_ent).state
+        elif self._ble_tracker and self._ble_tracker.current_area_id:
+            pres_state = f"native_ble:{self._ble_tracker.current_area_id}"
+        else:
+            pres_state = "none"
 
         return area_name, {
             "area_id": self.active_area_id or "",
@@ -469,6 +532,8 @@ class LatterCoordinator:
             "alarm_state": alarm_info["state"],
             "alarm_name": alarm_info["name"],
             "alarm_code_required": alarm_info["code_arm_required"],
+            "native_ble_tracking": self.native_ble_tracking_enabled,
+            "ble_beacon_uuid": self.ble_beacon_uuid,
             "presence_entity": pres_ent or "",
             "presence_state": pres_state,
             "ble_auto_switch": self.ble_auto_switch_enabled,
@@ -518,7 +583,7 @@ class LatterCoordinator:
 
     @callback
     def _bind_presence_listener(self) -> None:
-        """Subscribe to BLE trilateration room presence entity changes."""
+        """Subscribe to external BLE trilateration room presence entity changes."""
         if self._unsub_presence_state is not None:
             self._unsub_presence_state()
             self._unsub_presence_state = None
@@ -567,7 +632,7 @@ class LatterCoordinator:
     def _async_on_presence_state_change(
         self, event: Event[EventStateChangedData]
     ) -> None:
-        """Auto-switch active room when BLE trilateration reports a new area."""
+        """Auto-switch active room when external BLE presence sensor reports a new area."""
         new_state = event.data.get("new_state")
         if new_state is None or not self.ble_auto_switch_enabled:
             self._notify_listeners()
@@ -617,11 +682,32 @@ class LatterCoordinator:
         """Tick media position while actively playing."""
         self._notify_listeners()
 
+    def _read_volume_from_target(self, vol_target: str, fallback_attrs: dict[str, Any]) -> float:
+        """Read normalized 0.0..1.0 volume from media_player, number, or input_number."""
+        vol_state = self.hass.states.get(vol_target)
+        if vol_state is not None and vol_state.state not in ("unavailable", "unknown"):
+            if vol_state.domain in ("number", "input_number"):
+                try:
+                    val = float(vol_state.state)
+                    min_v = float(vol_state.attributes.get("min", 0.0))
+                    max_v = float(vol_state.attributes.get("max", 100.0))
+                    if max_v > min_v:
+                        return max(0.0, min(1.0, (val - min_v) / (max_v - min_v)))
+                except ValueError:
+                    pass
+            else:
+                v_lvl = vol_state.attributes.get("volume_level")
+                if v_lvl is not None:
+                    return float(v_lvl)
+
+        if fallback_attrs.get("volume_level") is not None:
+            return float(fallback_attrs["volume_level"])
+        return 0.7
+
     def get_active_media_payload(self) -> tuple[str, dict[str, Any]]:
         """Compute state and attributes for sensor.pocket_assistant_active_media."""
         state_obj = self.hass.states.get(self.active_speaker)
         vol_target = self.get_volume_target_entity(self.active_speaker)
-        vol_state_obj = self.hass.states.get(vol_target) or state_obj
 
         if state_obj is None or state_obj.state in ("unavailable", "unknown"):
             return STATE_OFF, {
@@ -670,16 +756,8 @@ class LatterCoordinator:
                 if duration > 0:
                     position = min(position, duration)
 
-        vol_attrs = vol_state_obj.attributes if vol_state_obj else attrs
-        volume = float(
-            vol_attrs.get("volume_level")
-            if vol_attrs.get("volume_level") is not None
-            else (
-                attrs.get("volume_level")
-                if attrs.get("volume_level") is not None
-                else 0.7
-            )
-        )
+        volume = self._read_volume_from_target(vol_target, attrs)
+
         raw_type = str(attrs.get("media_content_type") or "music").lower()
         if "podcast" in raw_type:
             media_type = "podcast"

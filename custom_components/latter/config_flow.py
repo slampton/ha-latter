@@ -19,25 +19,33 @@ from .const import (
     CONF_AREA_HANDOFF,
     CONF_ART_SIZE,
     CONF_BLE_AUTO_SWITCH,
+    CONF_BLE_BEACON_UUID,
     CONF_CALENDAR_ENTITIES,
     CONF_CUSTOM_ENTITIES,
     CONF_DEFAULT_AREA,
     CONF_DEFAULT_SPEAKER,
     CONF_DEVICE_SLUG,
     CONF_LOCAL_SPEAKER,
+    CONF_NATIVE_BLE_TRACKING,
     CONF_PRESENCE_ENTITY,
     CONF_REMOTE_1,
     CONF_REMOTE_2,
     CONF_REMOTE_3,
     CONF_REMOTE_4,
     CONF_SYNC_DEVICE_AREA,
+    CONF_VOL_SPEAKER_1,
+    CONF_VOL_SPEAKER_2,
+    CONF_VOL_TARGET_1,
+    CONF_VOL_TARGET_2,
     CONF_VOLUME_OVERRIDES,
     CONF_WEATHER_ENTITY,
     DEFAULT_AREA_HANDOFF,
     DEFAULT_ART_SIZE,
     DEFAULT_BLE_AUTO_SWITCH,
+    DEFAULT_BLE_BEACON_UUID,
     DEFAULT_DEVICE_SLUG,
     DEFAULT_LOCAL_SPEAKER,
+    DEFAULT_NATIVE_BLE_TRACKING,
     DEFAULT_SYNC_DEVICE_AREA,
     DOMAIN,
 )
@@ -103,6 +111,8 @@ def _build_schema(
     local_speaker = current.get(CONF_LOCAL_SPEAKER) or DEFAULT_LOCAL_SPEAKER
     vol_overrides = current.get(CONF_VOLUME_OVERRIDES, "")
     default_area = current.get(CONF_DEFAULT_AREA)
+    native_ble = current.get(CONF_NATIVE_BLE_TRACKING, DEFAULT_NATIVE_BLE_TRACKING)
+    beacon_uuid = current.get(CONF_BLE_BEACON_UUID, DEFAULT_BLE_BEACON_UUID)
     presence_entity = current.get(CONF_PRESENCE_ENTITY)
     ble_auto = current.get(CONF_BLE_AUTO_SWITCH, DEFAULT_BLE_AUTO_SWITCH)
     sync_dev_area = current.get(CONF_SYNC_DEVICE_AREA, DEFAULT_SYNC_DEVICE_AREA)
@@ -123,13 +133,38 @@ def _build_schema(
         ): selector.EntitySelector(
             selector.EntitySelectorConfig(domain="media_player")
         ),
-        vol.Optional(
-            CONF_VOLUME_OVERRIDES, default=vol_overrides
-        ): selector.TextSelector(
-            selector.TextSelectorConfig(multiline=False)
-        ),
     }
 
+    # Visual Speaker -> Volume Entity Override Pair 1 & Pair 2
+    _add_optional_entity(
+        schema_dict,
+        CONF_VOL_SPEAKER_1,
+        current.get(CONF_VOL_SPEAKER_1),
+        "media_player",
+    )
+    _add_optional_entity(
+        schema_dict,
+        CONF_VOL_TARGET_1,
+        current.get(CONF_VOL_TARGET_1),
+        ["media_player", "number", "input_number"],
+    )
+    _add_optional_entity(
+        schema_dict,
+        CONF_VOL_SPEAKER_2,
+        current.get(CONF_VOL_SPEAKER_2),
+        "media_player",
+    )
+    _add_optional_entity(
+        schema_dict,
+        CONF_VOL_TARGET_2,
+        current.get(CONF_VOL_TARGET_2),
+        ["media_player", "number", "input_number"],
+    )
+    schema_dict[
+        vol.Optional(CONF_VOLUME_OVERRIDES, default=vol_overrides)
+    ] = selector.TextSelector(selector.TextSelectorConfig(multiline=False))
+
+    # Room Context & BLE Presence Settings
     if default_area:
         schema_dict[
             vol.Optional(CONF_DEFAULT_AREA, default=default_area)
@@ -137,7 +172,14 @@ def _build_schema(
     else:
         schema_dict[vol.Optional(CONF_DEFAULT_AREA)] = selector.AreaSelector()
 
-    # BLE Trilateration / Room Presence Sensor (Bermuda, ESPresense, etc.)
+    schema_dict[
+        vol.Required(CONF_NATIVE_BLE_TRACKING, default=native_ble)
+    ] = selector.BooleanSelector()
+
+    schema_dict[
+        vol.Optional(CONF_BLE_BEACON_UUID, default=beacon_uuid)
+    ] = selector.TextSelector()
+
     _add_optional_entity(
         schema_dict,
         CONF_PRESENCE_ENTITY,
@@ -165,7 +207,7 @@ def _build_schema(
         "alarm_control_panel",
     )
 
-    # 4-Slot TV / Media Remote Entities (Replaces YAML Substitutions!)
+    # 4-Slot TV / Media Remote Entities
     for slot_key in (CONF_REMOTE_1, CONF_REMOTE_2, CONF_REMOTE_3, CONF_REMOTE_4):
         _add_optional_entity(
             schema_dict,
