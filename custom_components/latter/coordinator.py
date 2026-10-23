@@ -39,10 +39,13 @@ from .const import (
     CONF_BLE_AUTO_SWITCH,
     CONF_BLE_BEACON_UUID,
     CONF_CALENDAR_ENTITIES,
+    CONF_CUSTOM_BINDINGS,
     CONF_CUSTOM_ENTITIES,
     CONF_DEFAULT_AREA,
     CONF_DEFAULT_SPEAKER,
+    CONF_DEVICE_PROFILE,
     CONF_DEVICE_SLUG,
+    CONF_DOCK_APPS,
     CONF_NATIVE_BLE_TRACKING,
     CONF_PRESENCE_ENTITY,
     CONF_REMOTE_1,
@@ -59,7 +62,9 @@ from .const import (
     DEFAULT_ART_SIZE,
     DEFAULT_BLE_AUTO_SWITCH,
     DEFAULT_BLE_BEACON_UUID,
+    DEFAULT_DEVICE_PROFILE,
     DEFAULT_DEVICE_SLUG,
+    DEFAULT_DOCK_APPS,
     DEFAULT_NATIVE_BLE_TRACKING,
     DEFAULT_SYNC_DEVICE_AREA,
     FORECAST_REFRESH_INTERVAL_MINUTES,
@@ -123,7 +128,7 @@ def _get_esphome_device_current_area(
 
 
 class LatterCoordinator:
-    """Manages active speaker, BLE room context, 4-slot remotes, alarm, calendar, and weather."""
+    """Manages active speaker, BLE room context, 4-slot remotes, custom bindings, alarm, calendar, and weather."""
 
     def __init__(
         self,
@@ -189,6 +194,24 @@ class LatterCoordinator:
         """Return normalized ESPHome device slug (underscores)."""
         raw = str(self.get_opt(CONF_DEVICE_SLUG, DEFAULT_DEVICE_SLUG))
         return raw.strip().lower().replace("-", "_")
+
+    @property
+    def device_profile(self) -> str:
+        """Return device archetype (mobile_display, stationary_display, headless_node)."""
+        return str(
+            self.get_opt(CONF_DEVICE_PROFILE, DEFAULT_DEVICE_PROFILE)
+        ).strip()
+
+    @property
+    def dock_apps_csv(self) -> str:
+        """Return comma-separated Home Dock app order."""
+        return str(self.get_opt(CONF_DOCK_APPS, DEFAULT_DOCK_APPS)).strip()
+
+    @property
+    def custom_bindings(self) -> list[dict[str, str]]:
+        """Return universal hardware trigger / slot bindings configured in the Web Companion."""
+        val = self.get_opt(CONF_CUSTOM_BINDINGS, [])
+        return list(val) if isinstance(val, list) else []
 
     @property
     def local_speaker(self) -> str:
@@ -284,7 +307,7 @@ class LatterCoordinator:
         return int(self.get_opt(CONF_ART_SIZE, DEFAULT_ART_SIZE))
 
     def get_signed_token(self) -> str:
-        """Generate an HMAC-SHA256 token for this config entry's image proxy."""
+        """Generate an HMAC-SHA256 token for this config entry's image proxy and companion UI."""
         return hmac.new(
             self._hmac_secret,
             self.entry.entry_id.encode("utf-8"),
@@ -296,6 +319,15 @@ class LatterCoordinator:
         if not token:
             return False
         return hmac.compare_digest(token, self.get_signed_token())
+
+    def build_companion_url(self) -> str:
+        """Build the authenticated Server-Side Web Companion Studio URL."""
+        try:
+            base_url = get_url(self.hass, allow_internal=True, prefer_external=False)
+        except Exception:  # noqa: BLE001
+            base_url = "http://homeassistant.local:8123"
+        token = self.get_signed_token()
+        return f"{base_url}/api/latter/companion/{self.entry.entry_id}?token={token}"
 
     def build_proxy_art_url(self, cache_bust: str) -> str:
         """Build the full external/internal HTTP URL for the ESP32-S3 online_image."""
@@ -312,14 +344,12 @@ class LatterCoordinator:
 
     async def async_setup(self) -> None:
         """Set up state subscriptions, native BLE proxy tracker, and periodic timers."""
-        # Always mark the handheld's own temperature/humidity sensors as DIAGNOSTIC so they never pollute room dashboards!
         protect_handheld_sensors_from_area_dashboards(
             self.hass, self.device_slug
         )
 
         proxy_areas = get_ble_proxy_area_ids(self.hass)
 
-        # 1. Check external BLE presence entity first
         pres_ent = self.presence_entity
         if pres_ent and self.ble_auto_switch_enabled:
             pres_state = self.hass.states.get(pres_ent)
@@ -328,7 +358,6 @@ class LatterCoordinator:
                 if matched:
                     self.active_area_id = matched
 
-        # 2. Check the ESPHome device's existing Area in HA Device Registry (only if it has a BLE proxy or no proxies exist)
         if not self.active_area_id:
             dev_area = _get_esphome_device_current_area(
                 self.hass, self.device_slug
@@ -336,7 +365,6 @@ class LatterCoordinator:
             if dev_area and (not proxy_areas or dev_area in proxy_areas):
                 self.active_area_id = dev_area
 
-        # 3. Fallback: pick the first room that actually has a BLE proxy (never pick a proxy-less room like Bathroom!)
         if not self.active_area_id:
             areas = get_areas_summary(
                 self.hass,
@@ -474,7 +502,6 @@ class LatterCoordinator:
             return
         self.active_area_id = matched_id
 
-        # Only move the physical ESPHome device in HA's Device Registry when triggered by BLE presence (or explicit set_active_area)
         if sync_device_registry and self.sync_device_area_enabled:
             sync_esphome_device_area(
                 self.hass,
@@ -587,6 +614,9 @@ class LatterCoordinator:
         return area_name, {
             "area_id": self.active_area_id or "",
             "area_name": area_name,
+            "device_profile": self.device_profile,
+            "dock_apps": self.dock_apps_csv,
+            "companion_url": self.build_companion_url(),
             "entity_count": len(entities),
             "lights_on": lights_on,
             "covers_open": covers_open,
@@ -609,6 +639,7 @@ class LatterCoordinator:
             "voice_area_synced": self.sync_device_area_enabled,
             "entities_summary": ";".join(summary_items) if summary_items else "NONE",
             "custom_entities": self.custom_entities,
+            "custom_bindings": self.custom_bindings,
         }
 
     @callback

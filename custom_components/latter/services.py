@@ -1,4 +1,4 @@
-"""Service registration for Latter (Music, Room Control, BLE Area Sync, TV Remote, Calendar, Intercom)."""
+"""Service registration for Latter (Music, Room Control, BLE Area Sync, TV Remote, Trigger Bindings, Calendar, Intercom)."""
 
 from __future__ import annotations
 
@@ -25,6 +25,7 @@ from .const import (
     SERVICE_ROOM_BROWSE,
     SERVICE_SET_ACTIVE_AREA,
     SERVICE_SET_ACTIVE_SPEAKER,
+    SERVICE_TRIGGER_BINDING,
 )
 from .coordinator import LatterCoordinator
 from .room_engine import (
@@ -149,6 +150,40 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         if coord and speaker:
             coord.async_set_active_speaker(speaker)
 
+    async def _handle_trigger_binding(call: ServiceCall) -> None:
+        """Execute a user-mapped hardware button/sensor trigger slot configured in the Web Companion."""
+        data = call.data
+        target_device = data.get("target_device")
+        coord = _get_primary_coordinator(hass, target_device)
+        if not coord:
+            return
+
+        slot_key = str(data.get("slot") or "").strip().lower()
+        if not slot_key:
+            return
+
+        for binding in coord.custom_bindings:
+            b_slot = str(binding.get("slot") or "").strip().lower()
+            if b_slot == slot_key:
+                ent_id = str(binding.get("entity_id") or "").strip()
+                action = str(
+                    data.get("action") or binding.get("action") or "toggle"
+                ).strip()
+                raw_lvl = data.get("level")
+                lvl = int(raw_lvl) if raw_lvl is not None else None
+                if ent_id:
+                    await async_execute_room_action(
+                        hass, entity_id=ent_id, action=action, level=lvl
+                    )
+                    coord._notify_listeners()
+                return
+
+        _LOGGER.debug(
+            "No custom binding found for slot '%s' on device '%s'",
+            slot_key,
+            coord.device_slug,
+        )
+
     async def _handle_media_volume(call: ServiceCall) -> None:
         """Control volume on the active speaker OR its mapped AVR/number volume override entity."""
         data = call.data
@@ -237,7 +272,9 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         area_val = str(data.get("area") or data.get("area_id") or "").strip()
         if coord and area_val:
             coord.async_set_active_area(
-                area_val, handoff_media=data.get("handoff_media")
+                area_val,
+                handoff_media=data.get("handoff_media"),
+                sync_device_registry=True,
             )
 
     async def _handle_remote_action(call: ServiceCall) -> None:
@@ -358,13 +395,16 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         local_speaker = coord.local_speaker if coord else DEFAULT_LOCAL_SPEAKER
 
         if coord and area_id and area_id != coord.active_area_id:
-            coord.async_set_active_area(area_id, handoff_media=handoff_media)
+            coord.async_set_active_area(
+                area_id, handoff_media=handoff_media, sync_device_registry=False
+            )
 
         if mode == "areas":
             items = get_areas_summary(
                 hass,
                 active_area_id=coord.active_area_id if coord else area_id,
                 local_speaker=local_speaker,
+                device_slug=device_slug,
             )
             slot_mode = "room_areas"
         elif mode == "home":
@@ -402,7 +442,9 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         area_id = data.get("area_id")
         if coord and area_id:
             coord.async_set_active_area(
-                str(area_id), handoff_media=data.get("handoff_media")
+                str(area_id),
+                handoff_media=data.get("handoff_media"),
+                sync_device_registry=False,
             )
 
         entity_id = str(data.get("entity_id") or "").strip()
@@ -554,6 +596,9 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
     hass.services.async_register(
         DOMAIN, SERVICE_SET_ACTIVE_SPEAKER, _handle_set_active_speaker
+    )
+    hass.services.async_register(
+        DOMAIN, SERVICE_TRIGGER_BINDING, _handle_trigger_binding
     )
     hass.services.async_register(
         DOMAIN, SERVICE_MEDIA_VOLUME, _handle_media_volume

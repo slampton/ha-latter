@@ -10,6 +10,7 @@ from homeassistant.core import HomeAssistant
 
 from .const import DATA_HMAC_SECRET, DOMAIN, PLATFORMS
 from .coordinator import LatterCoordinator
+from .dashboard import LatterCompanionApiView, LatterCompanionDashboardView
 from .http import LatterImageProxyView
 from .services import async_setup_services
 
@@ -23,6 +24,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if DATA_HMAC_SECRET not in domain_data:
         domain_data[DATA_HMAC_SECRET] = secrets.token_bytes(32)
         hass.http.register_view(LatterImageProxyView(hass))
+        hass.http.register_view(LatterCompanionDashboardView(hass))
+        hass.http.register_view(LatterCompanionApiView(hass))
 
     coordinator = LatterCoordinator(
         hass=hass,
@@ -37,9 +40,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     _LOGGER.info(
-        "Latter initialized for ESPHome device '%s' (active speaker: %s)",
+        "Latter initialized for ESPHome device '%s' (companion_url: %s)",
         coordinator.device_slug,
-        coordinator.active_speaker,
+        coordinator.build_companion_url(),
     )
     return True
 
