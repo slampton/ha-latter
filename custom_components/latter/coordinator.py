@@ -30,6 +30,7 @@ from homeassistant.helpers.event import (
     async_track_time_interval,
 )
 from homeassistant.helpers.network import get_url
+from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .ble_engine import LatterNativeBleTracker, get_ble_proxy_area_ids
@@ -78,6 +79,8 @@ from .const import (
     DEFAULT_SYNC_DEVICE_AREA,
     FORECAST_REFRESH_INTERVAL_MINUTES,
     POSITION_UPDATE_INTERVAL_SECONDS,
+    STORAGE_KEY_PREFIX,
+    STORAGE_VERSION,
 )
 from .room_engine import (
     find_area_media_entities,
@@ -168,6 +171,9 @@ class LatterCoordinator:
         self.hass = hass
         self.entry = entry
         self._hmac_secret = hmac_secret
+        self._store: Store[dict[str, Any]] = Store(
+            hass, STORAGE_VERSION, f"{STORAGE_KEY_PREFIX}.{entry.entry_id}"
+        )
 
         self._listeners: list[callable] = []
         self._unsub_speaker_state: callable | None = None
@@ -180,8 +186,9 @@ class LatterCoordinator:
         self._unsub_calendar_timer: callable | None = None
         self._ble_tracker: LatterNativeBleTracker | None = None
 
-        self.active_speaker: str = self.get_opt(
-            CONF_DEFAULT_SPEAKER, self.local_speaker
+        self.active_speaker: str = (
+            str(self.get_opt(CONF_DEFAULT_SPEAKER) or "").strip()
+            or self.local_speaker
         )
         self.last_speaker: str = self.active_speaker
         self.active_area_id: str | None = self.get_opt(CONF_DEFAULT_AREA)
@@ -392,29 +399,67 @@ class LatterCoordinator:
         except Exception:  # noqa: BLE001
             base_url = "http://homeassistant.local:8123"
         token = self.get_signed_token()
+        size = self.art_size
         digest = hashlib.md5(
-            f"{self.wallpaper_source}|{self.display_shape}|{self.art_size}".encode("utf-8")
+            f"{self.wallpaper_source}|{self.display_shape}|{size}".encode("utf-8")
         ).hexdigest()[:10]
         return (
             f"{base_url}/api/latter/wallpaper/{self.entry.entry_id}"
-            f"?token={token}&v={digest}"
+            f"?w={size}&h={size}&token={token}&v={digest}"
         )
 
     def build_proxy_art_url(self, cache_bust: str) -> str:
-        """Build the full external/internal HTTP URL for the ESPHome online_image."""
+        """Build the universal Baseline-JPEG artwork URL (/api/latter/artwork/<device_slug>?w=...&h=...&v=...)."""
         try:
             base_url = get_url(self.hass, allow_internal=True, prefer_external=False)
         except Exception:  # noqa: BLE001
             base_url = "http://homeassistant.local:8123"
-        token = self.get_signed_token()
+        size = self.art_size
         digest = hashlib.md5(cache_bust.encode("utf-8")).hexdigest()[:10]
         return (
-            f"{base_url}/api/latter/image_proxy/{self.entry.entry_id}"
-            f"?token={token}&v={digest}"
+            f"{base_url}/api/latter/artwork/{self.device_slug}"
+            f"?w={size}&h={size}&v={digest}"
+        )
+
+    @callback
+    def _schedule_persist_runtime_state(self) -> None:
+        """Persist active_speaker, last_speaker, active_area_id, and active_remote_slot to HA Store."""
+        self._store.async_delay_save(
+            lambda: {
+                "active_speaker": self.active_speaker,
+                "last_speaker": self.last_speaker,
+                "active_area_id": self.active_area_id or "",
+                "active_remote_slot": self.active_remote_slot,
+            },
+            delay=1.0,
         )
 
     async def async_setup(self) -> None:
-        """Set up state subscriptions, native BLE proxy tracker, and periodic timers."""
+        """Restore persisted state, set up subscriptions, start BLE tracker, and sync initial states."""
+        # 1. Restore last runtime state from .storage/latter.runtime.<entry_id> for instant deterministic boot sync
+        try:
+            stored = await self._store.async_load()
+            if isinstance(stored, dict):
+                saved_spk = str(stored.get("active_speaker") or "").strip()
+                if saved_spk:
+                    self.active_speaker = saved_spk
+                saved_last = str(stored.get("last_speaker") or "").strip()
+                if saved_last:
+                    self.last_speaker = saved_last
+                saved_area = str(stored.get("active_area_id") or "").strip()
+                if saved_area and not self.active_area_id:
+                    self.active_area_id = saved_area
+                saved_slot = stored.get("active_remote_slot")
+                if isinstance(saved_slot, int) and 1 <= saved_slot <= 4:
+                    self.active_remote_slot = saved_slot
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("Failed loading Latter runtime store: %s", err)
+
+        if not self.active_speaker:
+            self.active_speaker = self.local_speaker
+        if not self.last_speaker:
+            self.last_speaker = self.active_speaker
+
         if self.device_profile == "mobile_display":
             protect_handheld_sensors_from_area_dashboards(
                 self.hass, self.device_slug
@@ -553,11 +598,15 @@ class LatterCoordinator:
         media_content_id: str,
         media_content_type: str,
     ) -> None:
-        """Execute Music Assistant 2.10.8+ queue transfer with auto-play and position handoff verification."""
+        """Execute Music Assistant 2.10.8+ queue transfer, quiesce local Sendspin speaker, and verify position handoff."""
         src_state = self.hass.states.get(source_speaker)
         tgt_state = self.hass.states.get(target_speaker)
         src_is_ma = bool(src_state and is_music_assistant_player(self.hass, src_state))
         tgt_is_ma = bool(tgt_state and is_music_assistant_player(self.hass, tgt_state))
+        is_from_local = source_speaker in (
+            self.local_speaker,
+            f"media_player.{self.device_slug}",
+        )
 
         transferred_via_ma = False
         if src_is_ma and tgt_is_ma and self.hass.services.has_service("music_assistant", "transfer_queue"):
@@ -576,8 +625,8 @@ class LatterCoordinator:
             except Exception as err:  # noqa: BLE001
                 _LOGGER.debug("music_assistant.transfer_queue failed: %s", err)
 
-        # Fallback if one of the players is non-MA or transfer_queue failed
-        if not transferred_via_ma and media_content_id:
+        # Immediately quiesce the on-device speaker after transfer_queue so ESP32 Sendspin FLAC stream frees Wi-Fi/DMA
+        if is_from_local and source_speaker != target_speaker:
             try:
                 await self.hass.services.async_call(
                     "media_player",
@@ -585,6 +634,19 @@ class LatterCoordinator:
                     {ATTR_ENTITY_ID: source_speaker},
                     blocking=False,
                 )
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.debug("Failed quiescing local speaker %s: %s", source_speaker, err)
+
+        # Fallback if one of the players is non-MA or transfer_queue failed
+        if not transferred_via_ma and media_content_id:
+            try:
+                if not is_from_local:
+                    await self.hass.services.async_call(
+                        "media_player",
+                        "media_pause",
+                        {ATTR_ENTITY_ID: source_speaker},
+                        blocking=False,
+                    )
                 if tgt_is_ma and self.hass.services.has_service("music_assistant", "play_media"):
                     await self.hass.services.async_call(
                         "music_assistant",
@@ -610,13 +672,12 @@ class LatterCoordinator:
             except Exception as err:  # noqa: BLE001
                 _LOGGER.debug("Fallback play_media handoff failed: %s", err)
 
-        # Wait briefly for MA 2.10.8 stream spin-up (e.g. Sendspin / AirPlay universal player init)
+        # Wait briefly for MA 2.10.8 stream spin-up
         await asyncio.sleep(1.2)
         updated_tgt = self.hass.states.get(target_speaker)
         if updated_tgt is None:
             return
 
-        # Ensure auto-play resumed if source was playing
         if was_playing and updated_tgt.state in (STATE_PAUSED, STATE_IDLE):
             try:
                 await self.hass.services.async_call(
@@ -628,7 +689,6 @@ class LatterCoordinator:
             except Exception:  # noqa: BLE001
                 pass
 
-        # Verify position handoff: if target reset to 0 while source was >5s into the track, seek to handoff_position
         tgt_pos = float(updated_tgt.attributes.get("media_position") or 0.0)
         if handoff_position > 5.0 and abs(tgt_pos - handoff_position) > 4.0:
             try:
@@ -650,7 +710,7 @@ class LatterCoordinator:
     def async_set_active_speaker(
         self, speaker_entity_id: str, transfer_queue: bool = True
     ) -> None:
-        """Switch the active target speaker, cache transfer position hold, and optionally transfer active queue."""
+        """Switch the active target speaker, persist to Store, and optionally transfer active queue."""
         speaker_entity_id = speaker_entity_id.strip()
         if not speaker_entity_id:
             return
@@ -666,7 +726,6 @@ class LatterCoordinator:
             )
             handoff_pos = _interpolate_speaker_position(prev_state)
 
-            # Hold current track metadata & position for 4.5s so display doesn't flash 0:00 during MA 2.10.8 transfer
             if was_active and prev_state is not None:
                 p_attrs = prev_state.attributes
                 self._transfer_hold_until = time.monotonic() + TRANSFER_HOLD_WINDOW_SECONDS
@@ -697,6 +756,7 @@ class LatterCoordinator:
 
             self.last_speaker = prev_speaker
             self.active_speaker = speaker_entity_id
+            self._schedule_persist_runtime_state()
             _LOGGER.debug(
                 "Latter active speaker changed: %s -> %s (transfer_queue=%s, pos=%.1fs)",
                 self.last_speaker,
@@ -715,7 +775,7 @@ class LatterCoordinator:
         handoff_media: bool | None = None,
         sync_device_registry: bool = False,
     ) -> None:
-        """Switch active room area, optionally sync ESPHome device area for Voice Assistant, and hand off media."""
+        """Switch active room area, persist to Store, sync ESPHome device area, and hand off media."""
         matched_id = match_area_by_name_or_id(self.hass, area_id_or_name)
         if not matched_id:
             return
@@ -740,13 +800,14 @@ class LatterCoordinator:
                 self.active_remote_slot = slot_idx
                 break
 
+        self._schedule_persist_runtime_state()
+
         do_handoff = (
             self.area_handoff_enabled
             if handoff_media is None
             else bool(handoff_media)
         )
         if do_handoff and media_map["speaker"]:
-            # Only auto-transfer queue on physical BLE room transition if previous room speaker was actively playing
             prev_state = self.hass.states.get(self.active_speaker)
             auto_transfer = bool(
                 sync_device_registry
@@ -1083,7 +1144,6 @@ class LatterCoordinator:
         duration = float(attrs.get("media_duration") or 0)
         position = _interpolate_speaker_position(state_obj)
 
-        # Apply MA 2.10.8 transfer hold guard if target speaker is spinning up (buffering/idle with 0s position)
         in_transfer_window = time.monotonic() < self._transfer_hold_until
         if in_transfer_window:
             if title == "Idle" and self._transfer_hold_title:
@@ -1109,6 +1169,7 @@ class LatterCoordinator:
         raw_pic = str(
             attrs.get("entity_picture_local")
             or attrs.get("entity_picture")
+            or attrs.get("media_image_url")
             or ""
         )
         track_key = f"{title}|{artist}|{album}"
