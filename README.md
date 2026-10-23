@@ -100,9 +100,5 @@ Pocket Assistant and Latter for Home Assistant are built and maintained by Sean 
 
 * ☕ **[Buy Me a Coffee](https://www.buymeacoffee.com/slampton)**
 * ❤️ **[Sponsor on GitHub](https://github.com/sponsors/slampton)**
-
-<<<<<<< HEAD
+  
 ---
-=======
----
->>>>>>> dev
