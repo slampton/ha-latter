@@ -166,7 +166,7 @@ def _build_companion_state_payload(
     return {
         "entry_id": coordinator.entry.entry_id,
         "title": coordinator.entry.title,
-        "version": "1.2.0",
+        "version": "1.2.1",
         "config": config_data,
         "esphome": esphome_inspector,
         "live": {
@@ -401,11 +401,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     flex-wrap: wrap;
     gap: 12px;
   }
-  .brand {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
+  .brand { display: flex; align-items: center; gap: 12px; }
   .brand-badge {
     width: 38px;
     height: 38px;
@@ -430,6 +426,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     font-weight: 700;
     cursor: pointer;
     font-size: 13px;
+    white-space: nowrap;
   }
   button.secondary {
     background: rgba(255,255,255,0.06);
@@ -442,7 +439,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     border: 1px solid rgba(239, 68, 68, 0.35);
     padding: 6px 10px;
   }
-  .container { max-width: 1160px; margin: 24px auto; padding: 0 16px 64px; }
+  .container { max-width: 1180px; margin: 24px auto; padding: 0 16px 64px; }
   .tabs { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
   .tab {
     padding: 10px 16px;
@@ -460,7 +457,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
   }
   .grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
     gap: 18px;
   }
   .card {
@@ -468,6 +465,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     border: 1px solid var(--card-border);
     border-radius: 14px;
     padding: 20px;
+    min-width: 0;
   }
   .card h2 { margin: 0 0 6px; font-size: 16px; color: var(--text); }
   .card p.desc { margin: 0 0 16px; font-size: 12.5px; color: var(--muted); line-height: 1.45; }
@@ -489,6 +487,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     padding: 9px 0;
     border-bottom: 1px solid rgba(255,255,255,0.05);
     font-size: 13px;
+    gap: 12px;
   }
   .stat-pills { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
   .pill {
@@ -497,9 +496,10 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     border-radius: 10px;
     padding: 10px 14px;
     flex: 1 1 130px;
+    min-width: 0;
   }
   .pill span { display: block; font-size: 11px; color: var(--muted); }
-  .pill strong { font-size: 15px; color: var(--accent); }
+  .pill strong { font-size: 15px; color: var(--accent); word-break: break-word; }
   .rssi-bar { margin-bottom: 10px; }
   .rssi-header { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
   .rssi-track { height: 8px; background: var(--bg); border-radius: 99px; overflow: hidden; }
@@ -520,22 +520,121 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     border-radius: 10px;
     border: 1px solid var(--card-border);
   }
-  .entity-row {
+  /* ESPHome Device Manager Layout (Sidebar Sub-Pages + Overflow-Proof Rows) */
+  .esp-layout {
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    gap: 18px;
+    align-items: start;
+  }
+  @media (max-width: 840px) {
+    .esp-layout { grid-template-columns: 1fr; }
+    .binding-row { grid-template-columns: 1fr; }
+  }
+  .esp-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .esp-nav-btn {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 10px;
-    padding: 9px 12px;
+    padding: 11px 14px;
+    border-radius: 10px;
     background: var(--bg);
     border: 1px solid var(--card-border);
-    border-radius: 9px;
-    margin-bottom: 8px;
+    color: var(--text);
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    text-align: left;
+  }
+  .esp-nav-btn.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(0, 210, 255, 0.08);
+  }
+  .esp-nav-btn .cnt {
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    padding: 2px 8px;
+    border-radius: 99px;
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .entity-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .entity-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 14px;
+    align-items: center;
+    padding: 12px 14px;
+    background: var(--bg);
+    border: 1px solid var(--card-border);
+    border-radius: 10px;
     font-size: 13px;
   }
-  .entity-row .meta { display: flex; flex-direction: column; }
-  .entity-row .meta small { color: var(--muted); font-size: 11px; }
-  .entity-row .val { font-weight: 700; color: var(--accent); display: flex; align-items: center; gap: 8px; }
-  @media (max-width: 720px) { .binding-row { grid-template-columns: 1fr; } }
+  .entity-row.wide-val {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .entity-row .meta {
+    min-width: 0;
+  }
+  .entity-row .meta strong {
+    display: block;
+    font-size: 13.5px;
+    color: var(--text);
+    overflow-wrap: anywhere;
+  }
+  .entity-row .meta small {
+    display: block;
+    color: var(--muted);
+    font-size: 11px;
+    margin-top: 2px;
+    overflow-wrap: anywhere;
+  }
+  .entity-row .ctrl {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    min-width: 110px;
+  }
+  .entity-row.wide-val .ctrl {
+    justify-content: flex-start;
+  }
+  .state-badge {
+    display: inline-block;
+    padding: 6px 12px;
+    border-radius: 8px;
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    color: var(--accent);
+    font-weight: 700;
+    font-size: 12.5px;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  .ctrl select {
+    width: auto;
+    min-width: 150px;
+    max-width: 240px;
+  }
+  .ctrl input[type="number"] {
+    width: 100px;
+    text-align: right;
+  }
+  .ctrl button {
+    min-width: 84px;
+    padding: 8px 14px;
+  }
   .toast {
     position: fixed;
     bottom: 20px;
@@ -656,27 +755,31 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     </div>
   </div>
 
-  <!-- TAB 2: ESPHOME DEVICE MANAGER -->
-  <div id="tab-esphome" class="grid hidden">
-    <div class="card" style="grid-column: 1 / -1;">
-      <h2 id="esp-dev-title">ESPHome Device Inspector</h2>
-      <p class="desc" id="esp-dev-meta">Live view and interactive control of all native ESPHome entities, buttons, switches, options, and diagnostics—zero on-device web_server required.</p>
+  <!-- TAB 2: ESPHOME DEVICE MANAGER (Sub-Page Sidebar + Search + Clean Grid) -->
+  <div id="tab-esphome" class="hidden">
+    <div class="card" style="margin-bottom:18px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+        <div>
+          <h2 id="esp-dev-title">ESPHome Device Inspector</h2>
+          <p class="desc" id="esp-dev-meta" style="margin-bottom:0;">Automatically groups device controls, options, and sensors by semantic category with a spillover bucket for custom entities.</p>
+        </div>
+        <div style="min-width:240px;">
+          <input type="text" id="esp-search" placeholder="Filter entities by name or ID..." oninput="renderActiveEspSection()">
+        </div>
+      </div>
     </div>
-    <div class="card">
-      <h2>Controls, Switches & Buttons</h2>
-      <div id="esp-controls"></div>
-    </div>
-    <div class="card">
-      <h2>Configuration & Options</h2>
-      <div id="esp-config"></div>
-    </div>
-    <div class="card">
-      <h2>Live Sensors</h2>
-      <div id="esp-sensors"></div>
-    </div>
-    <div class="card">
-      <h2>Diagnostics & Telemetry</h2>
-      <div id="esp-diagnostics"></div>
+
+    <div class="esp-layout">
+      <div class="card" style="padding:14px;">
+        <h2 style="font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:10px;">Device Categories</h2>
+        <div id="esp-nav-list" class="esp-nav"></div>
+      </div>
+
+      <div class="card">
+        <h2 id="esp-sec-title">Category</h2>
+        <p class="desc" id="esp-sec-desc"></p>
+        <div id="esp-sec-items" class="entity-list"></div>
+      </div>
     </div>
   </div>
 
@@ -788,6 +891,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
 const API_URL = window.location.pathname + "/api" + window.location.search;
 let STATE = null;
 let PINNED = [];
+let ACTIVE_ESP_SEC = null;
 
 function showToast(msg) {
   const t = document.getElementById("toast");
@@ -844,28 +948,101 @@ function renderRssiBars(rssiMap, packetsSeen) {
   }).join("");
 }
 
-function renderEsphomeGroup(containerId, items) {
-  const box = document.getElementById(containerId);
-  if (!items || !items.length) {
-    box.innerHTML = `<p class="desc">No entities in this category.</p>`;
+function selectEspSection(secId) {
+  ACTIVE_ESP_SEC = secId;
+  renderEspInspector();
+}
+
+function renderEspInspector() {
+  const esp = STATE?.esphome;
+  if (!esp) return;
+  const sections = esp.sections || [];
+  if (!sections.length) {
+    document.getElementById("esp-nav-list").innerHTML = "";
+    document.getElementById("esp-sec-title").textContent = "No ESPHome Entities Found";
+    document.getElementById("esp-sec-desc").textContent = "Check that your ESPHome device slug matches your node in Home Assistant.";
+    document.getElementById("esp-sec-items").innerHTML = "";
     return;
   }
-  box.innerHTML = items.map(item => {
-    let controlHtml = `<span>${item.state}${item.unit ? ' ' + item.unit : ''}</span>`;
+
+  if (!ACTIVE_ESP_SEC || !sections.some(s => s.id === ACTIVE_ESP_SEC)) {
+    ACTIVE_ESP_SEC = sections[0].id;
+  }
+
+  const navBox = document.getElementById("esp-nav-list");
+  navBox.innerHTML = [
+    `<div class="esp-nav-btn ${ACTIVE_ESP_SEC === '__all__' ? 'active' : ''}" onclick="selectEspSection('__all__')">
+      <span>All Entities</span>
+      <span class="cnt">${sections.reduce((acc, s) => acc + s.count, 0)}</span>
+    </div>`
+  ].concat(sections.map(s => `
+    <div class="esp-nav-btn ${s.id === ACTIVE_ESP_SEC ? 'active' : ''}" onclick="selectEspSection('${s.id}')">
+      <span>${s.title}</span>
+      <span class="cnt">${s.count}</span>
+    </div>
+  `)).join("");
+
+  renderActiveEspSection();
+}
+
+function renderActiveEspSection() {
+  const esp = STATE?.esphome;
+  if (!esp || !esp.sections) return;
+  const query = (document.getElementById("esp-search")?.value || "").trim().toLowerCase();
+
+  let activeTitle = "All Device Entities";
+  let activeDesc = "Showing all controls, options, sensors, and diagnostic entities.";
+  let rawItems = [];
+
+  if (ACTIVE_ESP_SEC === "__all__" || query.length > 0) {
+    esp.sections.forEach(s => { rawItems = rawItems.concat(s.items); });
+    if (query.length > 0) {
+      activeTitle = `Filtered Entities ("${query}")`;
+      rawItems = rawItems.filter(it =>
+        it.name.toLowerCase().includes(query) || it.entity_id.toLowerCase().includes(query)
+      );
+    }
+  } else {
+    const sec = esp.sections.find(s => s.id === ACTIVE_ESP_SEC) || esp.sections[0];
+    if (sec) {
+      activeTitle = sec.title;
+      activeDesc = sec.description;
+      rawItems = sec.items;
+    }
+  }
+
+  document.getElementById("esp-sec-title").textContent = activeTitle;
+  document.getElementById("esp-sec-desc").textContent = activeDesc;
+
+  const box = document.getElementById("esp-sec-items");
+  if (!rawItems.length) {
+    box.innerHTML = `<p class="desc">No matching entities in this view.</p>`;
+    return;
+  }
+
+  box.innerHTML = rawItems.map(item => {
+    const stateText = `${item.state}${item.unit ? ' ' + item.unit : ''}`;
+    const isLongState = stateText.length > 36 && !["button", "switch", "select", "number"].includes(item.domain);
+    let controlHtml = `<span class="state-badge">${stateText}</span>`;
+
     if (item.domain === "button") {
-      controlHtml = `<button class="secondary" onclick="espAction('${item.entity_id}', 'press')">Press</button>`;
+      controlHtml = `<button class="secondary" onclick="espAction('${item.entity_id}', 'press')">Trigger</button>`;
     } else if (item.domain === "switch" || item.domain === "light" || item.domain === "fan") {
       const isOn = item.state === "on";
       controlHtml = `<button class="${isOn ? '' : 'secondary'}" onclick="espAction('${item.entity_id}', 'toggle')">${isOn ? 'ON' : 'OFF'}</button>`;
     } else if (item.domain === "select" && item.options && item.options.length) {
       const opts = item.options.map(o => `<option value="${o}" ${o===item.state?'selected':''}>${o}</option>`).join("");
-      controlHtml = `<select style="width:auto;" onchange="espSelect('${item.entity_id}', this.value)">${opts}</select>`;
+      controlHtml = `<select onchange="espSelect('${item.entity_id}', this.value)">${opts}</select>`;
     } else if (item.domain === "number") {
-      controlHtml = `<input type="number" style="width:90px;" value="${item.state}" min="${item.min ?? 0}" max="${item.max ?? 100}" step="${item.step ?? 1}" onchange="espNumber('${item.entity_id}', this.value)">`;
+      controlHtml = `<input type="number" value="${item.state}" min="${item.min ?? 0}" max="${item.max ?? 100}" step="${item.step ?? 1}" onchange="espNumber('${item.entity_id}', this.value)">${item.unit ? `<span style="font-size:12px;color:var(--muted);">${item.unit}</span>` : ''}`;
     }
-    return `<div class="entity-row">
-      <div class="meta"><strong>${item.name}</strong><small>${item.entity_id}</small></div>
-      <div class="val">${controlHtml}</div>
+
+    return `<div class="entity-row ${isLongState ? 'wide-val' : ''}">
+      <div class="meta">
+        <strong>${item.name}</strong>
+        <small>${item.entity_id} • ${item.domain}</small>
+      </div>
+      <div class="ctrl">${controlHtml}</div>
     </div>`;
   }).join("");
 }
@@ -1018,10 +1195,7 @@ function applyStateToDom(data) {
   if (esp && esp.device) {
     document.getElementById("esp-dev-title").textContent = `${esp.device.name} (${esp.device.model})`;
     document.getElementById("esp-dev-meta").textContent = `Manufacturer: ${esp.device.manufacturer} • Firmware: ${esp.device.sw_version || 'ESPHome'} • MAC: ${esp.device.mac || 'N/A'}`;
-    renderEsphomeGroup("esp-controls", esp.groups.controls);
-    renderEsphomeGroup("esp-config", esp.groups.config);
-    renderEsphomeGroup("esp-sensors", esp.groups.sensors);
-    renderEsphomeGroup("esp-diagnostics", esp.groups.diagnostics);
+    renderEspInspector();
   }
 }
 
