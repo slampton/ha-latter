@@ -11,7 +11,7 @@ from homeassistant.helpers import device_registry as dr, entity_registry as er
 
 _LOGGER = logging.getLogger(__name__)
 
- APPLE_COMPANY_ID = 0x004C
+APPLE_COMPANY_ID = 0x004C
 IBEACON_PREFIX = b"\x02\x15"
 EMA_ALPHA = 0.35
 HYSTERESIS_DB = 6.0
@@ -177,7 +177,6 @@ class LatterNativeBleTracker:
             ema = (EMA_ALPHA * rssi_f) + ((1.0 - EMA_ALPHA) * prev[0])
         self._area_rssi[area_id] = (ema, now)
 
-        # Prune stale proxies
         stale_keys = [
             k
             for k, (_val, ts) in self._area_rssi.items()
@@ -189,7 +188,6 @@ class LatterNativeBleTracker:
         if not self._area_rssi:
             return
 
-        # Find strongest room area
         best_area, (best_ema, _) = max(
             self._area_rssi.items(), key=lambda item: item[1][0]
         )
@@ -205,7 +203,6 @@ class LatterNativeBleTracker:
             self.closest_scanner = source
             return
 
-        # Enforce minimum hold time and hysteresis dB margin before switching rooms
         if (now - self._last_switch_monotonic) < MIN_HOLD_SECONDS:
             return
 
