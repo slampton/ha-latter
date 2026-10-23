@@ -23,7 +23,11 @@ from .const import (
 )
 from .coordinator import LatterCoordinator
 from .dashboard import LatterCompanionApiView, LatterCompanionDashboardView
-from .http import LatterImageProxyView, LatterWallpaperProxyView
+from .http import (
+    LatterArtworkTranscoderView,
+    LatterImageProxyView,
+    LatterWallpaperProxyView,
+)
 from .room_engine import inject_esphome_visit_link
 from .services import async_setup_services
 
@@ -81,6 +85,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     if DATA_HMAC_SECRET not in domain_data:
         domain_data[DATA_HMAC_SECRET] = secrets.token_bytes(32)
+        hass.http.register_view(LatterArtworkTranscoderView(hass))
         hass.http.register_view(LatterImageProxyView(hass))
         hass.http.register_view(LatterWallpaperProxyView(hass))
         hass.http.register_view(LatterCompanionDashboardView(hass))
@@ -118,10 +123,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     await async_setup_services(hass)
 
+    # Trigger immediate initial state notification after sensors are added
+    coordinator._notify_listeners()
+
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     _LOGGER.info(
-        "Latter v1.2.2 initialized for ESPHome device '%s' (companion_url: %s)",
+        "Latter v1.3.3 initialized for ESPHome device '%s' (active_speaker: %s, companion_url: %s)",
         coordinator.device_slug,
+        coordinator.active_speaker,
         coordinator.build_companion_url(),
     )
     return True

@@ -9,6 +9,9 @@ from homeassistant.const import Platform
 DOMAIN: Final = "latter"
 PLATFORMS: Final[list[Platform]] = [Platform.SENSOR]
 
+STORAGE_VERSION: Final = 1
+STORAGE_KEY_PREFIX: Final = "latter.runtime"
+
 # Config & Options keys
 CONF_DEVICE_SLUG: Final = "device_slug"
 CONF_DEVICE_PROFILE: Final = "device_profile"
@@ -68,7 +71,8 @@ SERVICE_CALENDAR_FETCH: Final = "calendar_fetch"
 SERVICE_CALENDAR_CREATE_EVENT: Final = "calendar_create_event"
 SERVICE_INTERCOM_BROADCAST: Final = "intercom_broadcast"
 
-# HTTP Endpoints (Image Proxy, Wallpaper Proxy & Web Companion Studio)
+# HTTP Endpoints (Universal Artwork Transcoder, Image Proxy, Wallpaper Proxy & Web Companion Studio)
+API_ARTWORK_PROXY_PATH: Final = "/api/latter/artwork/{target_device}"
 API_IMAGE_PROXY_PATH: Final = "/api/latter/image_proxy/{entry_id}"
 API_WALLPAPER_PROXY_PATH: Final = "/api/latter/wallpaper/{entry_id}"
 API_COMPANION_UI_PATH: Final = "/api/latter/companion/{entry_id}"
