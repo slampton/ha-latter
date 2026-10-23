@@ -17,10 +17,11 @@ _LOGGER = logging.getLogger(__name__)
 
 APPLE_COMPANY_ID = 0x004C
 IBEACON_PREFIX = b"\x02\x15"
-EMA_ALPHA = 0.40
+EMA_ALPHA = 0.45
 HYSTERESIS_DB = 5.0
-STALE_PROXY_SECONDS = 25.0
-MIN_HOLD_SECONDS = 6.0
+STALE_PROXY_SECONDS = 20.0
+WAKE_GAP_SECONDS = 10.0
+MIN_HOLD_SECONDS = 5.0
 
 
 def _normalize_uuid_hex(uuid_str: str) -> str:
@@ -42,7 +43,7 @@ def _mac_to_int(mac_str: str) -> int | None:
 def _discover_target_device_macs(
     hass: HomeAssistant, device_slug: str
 ) -> set[int]:
-    """Find known Wi-Fi/BLE MAC address integers for the target Pocket Assistant ESPHome device."""
+    """Find known Wi-Fi/BLE MAC address integers for the target ESPHome device."""
     dev_reg = dr.async_get(hass)
     ent_reg = er.async_get(hass)
     slug_norm = device_slug.strip().lower().replace("-", "_")
@@ -168,7 +169,7 @@ def get_ble_proxy_area_ids(hass: HomeAssistant) -> set[str]:
 
 
 class LatterNativeBleTracker:
-    """Tracks a Pocket Assistant BLE iBeacon across ESPHome BLE Proxies to auto-detect the room."""
+    """Tracks a mobile ESPHome BLE iBeacon across ESPHome BLE Proxies to auto-detect the room."""
 
     def __init__(
         self,
@@ -192,6 +193,7 @@ class LatterNativeBleTracker:
         self.current_area_id: str | None = None
         self.closest_scanner: str = ""
         self.packets_seen: int = 0
+        self._last_packet_monotonic: float = 0.0
         self._last_switch_monotonic: float = 0.0
 
     @callback
@@ -244,7 +246,7 @@ class LatterNativeBleTracker:
         return out
 
     def _matches_target_device(self, service_info: object) -> bool:
-        """Return True if advertisement matches Pocket Assistant iBeacon UUID, MAC, or local name."""
+        """Return True if advertisement matches iBeacon UUID, MAC, or local name."""
         mfg_data: dict[int, bytes] = getattr(
             service_info, "manufacturer_data", {}
         )
@@ -282,6 +284,13 @@ class LatterNativeBleTracker:
         if rssi is None or not source or int(rssi) <= -100:
             return
 
+        now = time.monotonic()
+        # Detect wake from Tier 2 Screen-Off Standby (beacon was paused >= 10s)
+        just_woke_from_standby = (
+            self._last_packet_monotonic > 0.0
+            and (now - self._last_packet_monotonic) >= WAKE_GAP_SECONDS
+        )
+        self._last_packet_monotonic = now
         self.packets_seen += 1
 
         if not self._target_mac_ints and self.packets_seen == 1:
@@ -303,7 +312,10 @@ class LatterNativeBleTracker:
         if not area_id:
             return
 
-        now = time.monotonic()
+        # If the device just woke from standby after moving rooms, clear stale pre-sleep RSSIs for instant lock!
+        if just_woke_from_standby:
+            self._area_rssi.clear()
+
         rssi_f = float(rssi)
         prev = self._area_rssi.get(area_id)
         if prev is None or (now - prev[1]) > STALE_PROXY_SECONDS:
@@ -327,7 +339,8 @@ class LatterNativeBleTracker:
             self._area_rssi.items(), key=lambda item: item[1][0]
         )
 
-        if self.current_area_id is None:
+        # Fast-path acquisition on first boot or right after waking from Screen-Off Standby
+        if self.current_area_id is None or (just_woke_from_standby and rssi_f >= -82.0):
             self.current_area_id = best_area
             self.closest_scanner = source
             self._last_switch_monotonic = now

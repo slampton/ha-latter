@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import math
 from typing import Any
@@ -37,6 +38,22 @@ from .room_engine import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _parse_bool(val: Any, default: bool = False) -> bool:
+    """Safely parse booleans or YAML string booleans ('true', 'false', '1', '0') from ESPHome service calls."""
+    if val is None:
+        return default
+    if isinstance(val, bool):
+        return val
+    if isinstance(val, (int, float)):
+        return bool(val)
+    s = str(val).strip().lower()
+    if s in ("true", "1", "yes", "on"):
+        return True
+    if s in ("false", "0", "no", "off", ""):
+        return False
+    return default
 
 
 def _get_primary_coordinator(
@@ -164,15 +181,43 @@ async def async_push_browse_slots(
     )
 
 
+async def async_push_active_room_entities(
+    hass: HomeAssistant, coord: LatterCoordinator
+) -> None:
+    """Push the active room's entity slots to esphome.<slug>_set_room_slots when room context or entity state updates."""
+    items = get_area_entities(
+        hass,
+        area_id=coord.active_area_id,
+        domain_filter=coord.last_room_filter or "all",
+        custom_entities=coord.custom_entities,
+        local_speaker=coord.local_speaker,
+    )
+    await async_push_browse_slots(
+        hass=hass,
+        device_slug=coord.device_slug,
+        mode=f"room_{coord.last_room_filter or 'all'}",
+        page=coord.last_room_page or 1,
+        page_size=coord.default_page_size,
+        items=items,
+        preferred_suffix="set_room_slots",
+    )
+
+
 async def async_setup_services(hass: HomeAssistant) -> None:
     """Register Latter domain services."""
+    # Attach auto-push callback to all loaded coordinators
+    domain_data = hass.data.get(DOMAIN, {})
+    for val in domain_data.values():
+        if isinstance(val, LatterCoordinator):
+            val.on_area_changed_push_slots = lambda c: async_push_active_room_entities(hass, c)
+
     if hass.services.has_service(DOMAIN, SERVICE_MUSIC_BROWSE):
         return
 
     async def _handle_set_active_speaker(call: ServiceCall) -> None:
         speaker = str(call.data.get("entity_id") or call.data.get("speaker") or "")
         target_device = call.data.get("target_device")
-        transfer_queue = bool(call.data.get("transfer_queue", True))
+        transfer_queue = _parse_bool(call.data.get("transfer_queue"), default=True)
         coord = _get_primary_coordinator(hass, target_device)
         if coord and speaker:
             coord.async_set_active_speaker(speaker, transfer_queue=transfer_queue)
@@ -197,7 +242,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                     data.get("action") or binding.get("action") or "toggle"
                 ).strip()
                 raw_lvl = data.get("level")
-                lvl = int(raw_lvl) if raw_lvl is not None else None
+                lvl = int(float(raw_lvl)) if raw_lvl is not None else None
                 if ent_id:
                     await async_execute_room_action(
                         hass, entity_id=ent_id, action=action, level=lvl
@@ -297,10 +342,12 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         target_device = data.get("target_device")
         coord = _get_primary_coordinator(hass, target_device)
         area_val = str(data.get("area") or data.get("area_id") or "").strip()
+        raw_handoff = data.get("handoff_media")
+        handoff_media = _parse_bool(raw_handoff) if raw_handoff is not None else None
         if coord and area_val:
             coord.async_set_active_area(
                 area_val,
-                handoff_media=data.get("handoff_media"),
+                handoff_media=handoff_media,
                 sync_device_registry=True,
             )
 
@@ -316,9 +363,11 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         slot_num = max(1, min(4, slot_num))
         if slot_num != coord.active_remote_slot:
             coord.active_remote_slot = slot_num
+            coord._schedule_persist_runtime_state()
             coord._notify_listeners()
 
         action = str(data.get("action") or "").strip().lower()
+        cmd = str(data.get("command") or action).strip().lower()
         if action in ("select_slot", ""):
             return
 
@@ -327,18 +376,37 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         remote_ent = slot_info["remote_entity"]
         mp_ent = slot_info["media_player_entity"]
 
-        if action == "toggle" and (remote_ent or mp_ent):
+        # Handle power toggle whether passed via action="toggle" or action="command", command="toggle"
+        if action == "toggle" or cmd in ("toggle", "power"):
             target = remote_ent or mp_ent
-            domain = target.split(".")[0]
-            await hass.services.async_call(
-                domain, "toggle", {ATTR_ENTITY_ID: target}, blocking=False
-            )
-        elif action in ("volume_up", "volume_down", "volume_mute", "media_play_pause") and mp_ent:
-            await hass.services.async_call(
-                "media_player", action, {ATTR_ENTITY_ID: mp_ent}, blocking=False
-            )
-        elif remote_ent and remote_ent.startswith("remote."):
-            cmd = str(data.get("command") or action)
+            if target:
+                domain = target.split(".")[0]
+                await hass.services.async_call(
+                    domain, "toggle", {ATTR_ENTITY_ID: target}, blocking=False
+                )
+            return
+
+        # Handle volume & play/pause whether passed via action or command
+        effective_media_cmd = cmd if action == "command" else action
+        if effective_media_cmd in ("volume_up", "volume_down", "volume_mute", "media_play_pause"):
+            if mp_ent and mp_ent.startswith("media_player."):
+                await hass.services.async_call(
+                    "media_player",
+                    effective_media_cmd,
+                    {ATTR_ENTITY_ID: mp_ent},
+                    blocking=False,
+                )
+                return
+            if remote_ent and remote_ent.startswith("remote."):
+                await hass.services.async_call(
+                    "remote",
+                    "send_command",
+                    {ATTR_ENTITY_ID: remote_ent, "command": effective_media_cmd},
+                    blocking=False,
+                )
+                return
+
+        if remote_ent and remote_ent.startswith("remote.") and cmd:
             await hass.services.async_call(
                 "remote",
                 "send_command",
@@ -420,13 +488,20 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             or ""
         )
         domain_filter = str(data.get("domain_filter") or "all")
-        handoff_media = data.get("handoff_media")
+        raw_handoff = data.get("handoff_media")
+        handoff_media = _parse_bool(raw_handoff) if raw_handoff is not None else None
         local_speaker = coord.local_speaker if coord else DEFAULT_LOCAL_SPEAKER
 
-        if coord and area_id and area_id != coord.active_area_id:
-            coord.async_set_active_area(
-                area_id, handoff_media=handoff_media, sync_device_registry=False
-            )
+        if coord:
+            if mode == "entities":
+                coord.last_room_filter = domain_filter
+                coord.last_room_page = page
+            if area_id and area_id != coord.active_area_id:
+                coord.on_area_changed_push_slots = None
+                coord.async_set_active_area(
+                    area_id, handoff_media=handoff_media, sync_device_registry=False
+                )
+                coord.on_area_changed_push_slots = lambda c: async_push_active_room_entities(hass, c)
 
         if mode == "areas":
             items = get_areas_summary(
@@ -469,10 +544,12 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         coord = _get_primary_coordinator(hass, target_device)
 
         area_id = data.get("area_id")
-        if coord and area_id:
+        raw_handoff = data.get("handoff_media")
+        handoff_media = _parse_bool(raw_handoff) if raw_handoff is not None else None
+        if coord and area_id and str(area_id) != coord.active_area_id:
             coord.async_set_active_area(
                 str(area_id),
-                handoff_media=data.get("handoff_media"),
+                handoff_media=handoff_media,
                 sync_device_registry=False,
             )
 
@@ -489,7 +566,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
         if entity_id:
             raw_level = data.get("level")
-            level = int(raw_level) if raw_level is not None else None
+            level = int(float(raw_level)) if raw_level is not None and str(raw_level).strip() != "" else None
             code = str(data.get("code")) if data.get("code") is not None else None
             await async_execute_room_action(
                 hass,
@@ -499,7 +576,9 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 code=code,
             )
             if coord:
+                await asyncio.sleep(0.15)
                 coord._notify_listeners()
+                await async_push_active_room_entities(hass, coord)
 
     async def _handle_calendar_fetch(call: ServiceCall) -> None:
         data = call.data
@@ -585,7 +664,6 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             return
 
         if media_url:
-            # Prefer Music Assistant's native play_announcement when available so active music ducks/resumes cleanly
             ma_speakers = [
                 s for s in speakers
                 if hass.states.get(s) and is_music_assistant_player(hass, hass.states.get(s))
