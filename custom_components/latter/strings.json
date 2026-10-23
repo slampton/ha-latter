@@ -2,17 +2,15 @@
   "config": {
     "step": {
       "user": {
-        "title": "Latter (ESPHome Companion & Entity Middleware)",
+        "title": "Latter",
         "description": "Bind Home Assistant entities, BLE room presence, 4-slot TV remotes, alarm, media players, weather, and calendars to your Pocket Assistant (v2.1+) or ESPHome device with zero YAML substitutions.",
         "data": {
           "device_slug": "ESPHome Device Name / Slug",
           "default_speaker": "Default Active Speaker (Music Assistant)",
-          "local_speaker": "On-Device Speaker (Optional)",
           "vol_speaker_1": "Volume Override 1: When Streaming to Speaker...",
           "vol_target_1": "Volume Override 1: Control Volume on Entity (AVR / Number)...",
           "vol_speaker_2": "Volume Override 2: When Streaming to Speaker...",
           "vol_target_2": "Volume Override 2: Control Volume on Entity (AVR / Number)...",
-          "volume_overrides": "Additional Volume Overrides (speaker=target, comma-separated)",
           "default_area": "Default Room / Area Context",
           "native_ble_tracking": "Enable Built-In ESPHome BLE Proxy Room Tracking (Zero-Config)",
           "ble_beacon_uuid": "Device BLE iBeacon UUID (for Built-In or Bermuda Tracking)",
@@ -44,12 +42,10 @@
         "data": {
           "device_slug": "ESPHome Device Name / Slug",
           "default_speaker": "Default Active Speaker (Music Assistant)",
-          "local_speaker": "On-Device Speaker (Optional)",
           "vol_speaker_1": "Volume Override 1: When Streaming to Speaker...",
           "vol_target_1": "Volume Override 1: Control Volume on Entity (AVR / Number)...",
           "vol_speaker_2": "Volume Override 2: When Streaming to Speaker...",
           "vol_target_2": "Volume Override 2: Control Volume on Entity (AVR / Number)...",
-          "volume_overrides": "Additional Volume Overrides (speaker=target, comma-separated)",
           "default_area": "Default Room / Area Context",
           "native_ble_tracking": "Enable Built-In ESPHome BLE Proxy Room Tracking (Zero-Config)",
           "ble_beacon_uuid": "Device BLE iBeacon UUID (for Built-In or Bermuda Tracking)",

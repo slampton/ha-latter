@@ -1,4 +1,4 @@
-"""Config flow and Options flow for Latter (ESPHome Companion & Entity Middleware)."""
+"""Config flow and Options flow for Latter."""
 
 from __future__ import annotations
 
@@ -25,7 +25,6 @@ from .const import (
     CONF_DEFAULT_AREA,
     CONF_DEFAULT_SPEAKER,
     CONF_DEVICE_SLUG,
-    CONF_LOCAL_SPEAKER,
     CONF_NATIVE_BLE_TRACKING,
     CONF_PRESENCE_ENTITY,
     CONF_REMOTE_1,
@@ -37,7 +36,6 @@ from .const import (
     CONF_VOL_SPEAKER_2,
     CONF_VOL_TARGET_1,
     CONF_VOL_TARGET_2,
-    CONF_VOLUME_OVERRIDES,
     CONF_WEATHER_ENTITY,
     DEFAULT_AREA_HANDOFF,
     DEFAULT_ART_SIZE,
@@ -92,10 +90,12 @@ def _add_optional_entity(
     current_val: Any,
     domains: str | list[str],
 ) -> None:
-    """Add an optional EntitySelector field with a clean default if set."""
+    """Add an optional EntitySelector field using suggested_value so saving/clearing works reliably."""
     cfg = selector.EntitySelectorConfig(domain=domains)
     if current_val:
-        schema_dict[vol.Optional(key, default=current_val)] = selector.EntitySelector(cfg)
+        schema_dict[
+            vol.Optional(key, description={"suggested_value": current_val})
+        ] = selector.EntitySelector(cfg)
     else:
         schema_dict[vol.Optional(key)] = selector.EntitySelector(cfg)
 
@@ -105,11 +105,17 @@ def _build_schema(
 ) -> vol.Schema:
     """Build the shared Voluptuous schema for ConfigFlow and OptionsFlow."""
     default_slug = current.get(CONF_DEVICE_SLUG) or _discover_esphome_slug(hass)
-    default_weather = current.get(CONF_WEATHER_ENTITY) or _discover_default_weather(hass)
-    default_alarm = current.get(CONF_ALARM_ENTITY) or _discover_default_alarm(hass)
+    default_weather = (
+        current.get(CONF_WEATHER_ENTITY)
+        if CONF_WEATHER_ENTITY in current
+        else _discover_default_weather(hass)
+    )
+    default_alarm = (
+        current.get(CONF_ALARM_ENTITY)
+        if CONF_ALARM_ENTITY in current
+        else _discover_default_alarm(hass)
+    )
     default_speaker = current.get(CONF_DEFAULT_SPEAKER) or _discover_default_speaker(hass)
-    local_speaker = current.get(CONF_LOCAL_SPEAKER) or DEFAULT_LOCAL_SPEAKER
-    vol_overrides = current.get(CONF_VOLUME_OVERRIDES, "")
     default_area = current.get(CONF_DEFAULT_AREA)
     native_ble = current.get(CONF_NATIVE_BLE_TRACKING, DEFAULT_NATIVE_BLE_TRACKING)
     beacon_uuid = current.get(CONF_BLE_BEACON_UUID, DEFAULT_BLE_BEACON_UUID)
@@ -125,11 +131,6 @@ def _build_schema(
         vol.Required(CONF_DEVICE_SLUG, default=default_slug): selector.TextSelector(),
         vol.Required(
             CONF_DEFAULT_SPEAKER, default=default_speaker
-        ): selector.EntitySelector(
-            selector.EntitySelectorConfig(domain="media_player")
-        ),
-        vol.Optional(
-            CONF_LOCAL_SPEAKER, default=local_speaker
         ): selector.EntitySelector(
             selector.EntitySelectorConfig(domain="media_player")
         ),
@@ -160,14 +161,13 @@ def _build_schema(
         current.get(CONF_VOL_TARGET_2),
         ["media_player", "number", "input_number"],
     )
-    schema_dict[
-        vol.Optional(CONF_VOLUME_OVERRIDES, default=vol_overrides)
-    ] = selector.TextSelector(selector.TextSelectorConfig(multiline=False))
 
     # Room Context & BLE Presence Settings
     if default_area:
         schema_dict[
-            vol.Optional(CONF_DEFAULT_AREA, default=default_area)
+            vol.Optional(
+                CONF_DEFAULT_AREA, description={"suggested_value": default_area}
+            )
         ] = selector.AreaSelector()
     else:
         schema_dict[vol.Optional(CONF_DEFAULT_AREA)] = selector.AreaSelector()
@@ -268,7 +268,7 @@ def _build_schema(
 
 
 class LatterConfigFlow(ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for Latter (ESPHome Companion & Entity Middleware)."""
+    """Handle a config flow for Latter."""
 
     VERSION = 1
 
@@ -325,10 +325,18 @@ class LatterOptionsFlowHandler(OptionsFlow):
                 .replace("-", "_")
             )
             user_input[CONF_ART_SIZE] = int(user_input.get(CONF_ART_SIZE, DEFAULT_ART_SIZE))
+            # Persist user_input directly into both data and options so cleared optional fields stay cleared
+            self.hass.config_entries.async_update_entry(
+                self._config_entry, data=user_input
+            )
             return self.async_create_entry(title="", data=user_input)
 
-        merged = {**self._config_entry.data, **self._config_entry.options}
+        current = (
+            dict(self._config_entry.options)
+            if self._config_entry.options
+            else dict(self._config_entry.data)
+        )
         return self.async_show_form(
             step_id="init",
-            data_schema=_build_schema(self.hass, merged),
+            data_schema=_build_schema(self.hass, current),
         )
