@@ -11,6 +11,7 @@ PLATFORMS: Final[list[Platform]] = [Platform.SENSOR]
 
 # Config & Options keys
 CONF_DEVICE_SLUG: Final = "device_slug"
+CONF_DEVICE_PROFILE: Final = "device_profile"
 CONF_WEATHER_ENTITY: Final = "weather_entity"
 CONF_ALARM_ENTITY: Final = "alarm_entity"
 CONF_DEFAULT_SPEAKER: Final = "default_speaker"
@@ -31,16 +32,20 @@ CONF_REMOTE_3: Final = "remote_3"
 CONF_REMOTE_4: Final = "remote_4"
 CONF_CALENDAR_ENTITIES: Final = "calendar_entities"
 CONF_CUSTOM_ENTITIES: Final = "custom_entities"
+CONF_CUSTOM_BINDINGS: Final = "custom_bindings"
+CONF_DOCK_APPS: Final = "dock_apps"
 CONF_ART_SIZE: Final = "art_size"
 
 # Defaults
 DEFAULT_DEVICE_SLUG: Final = "pocket_assistant"
+DEFAULT_DEVICE_PROFILE: Final = "mobile_display"
 DEFAULT_LOCAL_SPEAKER: Final = "media_player.pocket_assistant"
 DEFAULT_NATIVE_BLE_TRACKING: Final = True
 DEFAULT_BLE_BEACON_UUID: Final = "504F434B-4554-4153-5354-000000000210"
 DEFAULT_BLE_AUTO_SWITCH: Final = True
 DEFAULT_SYNC_DEVICE_AREA: Final = True
 DEFAULT_AREA_HANDOFF: Final = True
+DEFAULT_DOCK_APPS: Final = "music,room,weather,remote,calendar,games,tools"
 DEFAULT_ART_SIZE: Final = 466
 
 # Native Latter Entity Contract (Pocket Assistant v2.1.0+)
@@ -58,12 +63,15 @@ SERVICE_ROOM_BROWSE: Final = "room_browse"
 SERVICE_ROOM_ACTION: Final = "room_action"
 SERVICE_SET_ACTIVE_AREA: Final = "set_active_area"
 SERVICE_REMOTE_ACTION: Final = "remote_action"
+SERVICE_TRIGGER_BINDING: Final = "trigger_binding"
 SERVICE_CALENDAR_FETCH: Final = "calendar_fetch"
 SERVICE_CALENDAR_CREATE_EVENT: Final = "calendar_create_event"
 SERVICE_INTERCOM_BROADCAST: Final = "intercom_broadcast"
 
-# HTTP Image Proxy Endpoint
+# HTTP Endpoints (Image Proxy & Server-Side Web Companion Dashboard)
 API_IMAGE_PROXY_PATH: Final = "/api/latter/image_proxy/{entry_id}"
+API_COMPANION_UI_PATH: Final = "/api/latter/companion/{entry_id}"
+API_COMPANION_API_PATH: Final = "/api/latter/companion/{entry_id}/api"
 DATA_HMAC_SECRET: Final = "hmac_secret"
 
 # Timing & Recorder Idle-Guard

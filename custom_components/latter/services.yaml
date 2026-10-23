@@ -122,6 +122,45 @@ set_active_speaker:
       selector:
         text:
 
+trigger_binding:
+  name: Trigger Universal Hardware / Slot Binding
+  description: Execute a user-mapped entity action bound to a hardware button, sensor, or UI slot ID in the Latter Web Companion Studio.
+  fields:
+    slot:
+      name: Slot / Trigger ID
+      description: Identifier sent by the ESPHome device (e.g., button_1, pir_occupied, macro_1).
+      required: true
+      selector:
+        text:
+    action:
+      name: Action Override
+      description: Optional override for the configured binding action.
+      required: false
+      selector:
+        select:
+          options:
+            - "toggle"
+            - "turn_on"
+            - "turn_off"
+            - "step_up"
+            - "step_down"
+            - "set_level"
+    level:
+      name: Level (0-100)
+      description: Optional level percentage when action is set_level.
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 100
+          mode: slider
+    target_device:
+      name: Target ESPHome Device
+      description: Optional ESPHome device slug.
+      required: false
+      selector:
+        text:
+
 media_volume:
   name: Media Volume Control (With AVR Override Support)
   description: Adjust or set volume on the active speaker (automatically routing to a mapped AV Receiver volume entity if configured).

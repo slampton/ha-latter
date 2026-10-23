@@ -7,6 +7,7 @@ from typing import Any
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import (
@@ -47,6 +48,18 @@ class _BaseLatterSensor(SensorEntity):
         """Initialize base sensor."""
         self.coordinator = coordinator
 
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return DeviceInfo with a 1-click 'Visit' link to the Latter Web Companion Studio."""
+        return DeviceInfo(
+            identifiers={(DOMAIN, self.coordinator.entry.entry_id)},
+            name=f"Latter ({self.coordinator.device_slug})",
+            manufacturer="Lampton Labs",
+            model="Latter ESPHome Companion Middleware",
+            sw_version="1.1.0",
+            configuration_url=self.coordinator.build_companion_url(),
+        )
+
     async def async_added_to_hass(self) -> None:
         """Subscribe to coordinator updates."""
         self.async_on_remove(
@@ -79,7 +92,7 @@ class PocketAssistantActiveMediaSensor(_BaseLatterSensor):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return media attributes (title, artist, album, duration, position, art_url, active_speaker, volume_entity)."""
+        """Return media attributes."""
         _, attrs = self.coordinator.get_active_media_payload()
         return attrs
 
@@ -103,7 +116,7 @@ class PocketAssistantWeatherForecastSensor(_BaseLatterSensor):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return current weather attributes (condition, temperature, humidity, wind, high, low)."""
+        """Return current weather attributes."""
         return self.coordinator.weather_attributes
 
 
@@ -127,7 +140,7 @@ class PocketAssistantRoomContextSensor(_BaseLatterSensor):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return room entity summary, telemetry, alarm state, and handoff targets."""
+        """Return room entity summary, telemetry, alarm state, and companion_url."""
         _, attrs = self.coordinator.get_room_context_payload()
         return attrs
 
