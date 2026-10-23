@@ -27,6 +27,7 @@ from .room_engine import (
     async_execute_room_action,
     get_area_entities,
     get_areas_summary,
+    get_home_wide_entities,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -59,12 +60,10 @@ def _resolve_esphome_action(
     if exact in esphome_services:
         return exact
 
-    # Check prefix/substring match first (e.g. pocket_assistant_1_75c_set_browse_slots)
     for svc_name in esphome_services:
         if svc_name.endswith(f"_{suffix}") and device_slug in svc_name:
             return svc_name
 
-    # Fallback to any ESPHome node exposing _<suffix>
     for svc_name in esphome_services:
         if svc_name.endswith(f"_{suffix}"):
             return svc_name
@@ -219,21 +218,31 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         )
         domain_filter = str(data.get("domain_filter") or "all")
         handoff_media = data.get("handoff_media")
+        local_speaker = coord.local_speaker if coord else DEFAULT_LOCAL_SPEAKER
 
         if coord and area_id and area_id != coord.active_area_id:
             coord.async_set_active_area(area_id, handoff_media=handoff_media)
 
         if mode == "areas":
             items = get_areas_summary(
-                hass, active_area_id=coord.active_area_id if coord else area_id
+                hass,
+                active_area_id=coord.active_area_id if coord else area_id,
+                local_speaker=local_speaker,
             )
             slot_mode = "room_areas"
+        elif mode == "home":
+            items = get_home_wide_entities(
+                hass,
+                custom_entities=coord.custom_entities if coord else None,
+            )
+            slot_mode = "room_home"
         else:
             items = get_area_entities(
                 hass,
                 area_id=area_id or (coord.active_area_id if coord else None),
                 domain_filter=domain_filter,
                 custom_entities=coord.custom_entities if coord else None,
+                local_speaker=local_speaker,
             )
             slot_mode = f"room_{domain_filter}"
 
@@ -263,8 +272,13 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             action = str(data.get("action") or "toggle")
             raw_level = data.get("level")
             level = int(raw_level) if raw_level is not None else None
+            code = str(data.get("code")) if data.get("code") is not None else None
             await async_execute_room_action(
-                hass, entity_id=entity_id, action=action, level=level
+                hass,
+                entity_id=entity_id,
+                action=action,
+                level=level,
+                code=code,
             )
             if coord:
                 coord._notify_listeners()
