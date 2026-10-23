@@ -8,7 +8,9 @@ from typing import Any
 
 from homeassistant.core import HomeAssistant, ServiceCall
 
+from .browse_engine import async_browse_media_items
 from .const import (
+    DEFAULT_LOCAL_SPEAKER,
     DOMAIN,
     SERVICE_MUSIC_BROWSE,
     SERVICE_SET_ACTIVE_SPEAKER,
@@ -75,7 +77,7 @@ async def async_push_browse_slots(
     esphome_action = f"{device_slug}_set_browse_slots"
     if not hass.services.has_service("esphome", esphome_action):
         _LOGGER.warning(
-            "ESPHome service esphome.%s not found; is the Pocket Assistant online?",
+            "ESPHome service esphome.%s not found; is the ESPHome device online?",
             esphome_action,
         )
         return
@@ -112,31 +114,37 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         page_size = int(data.get("page_size") or 5)
         speaker = str(
             data.get("speaker")
-            or (coord.active_speaker if coord else "media_player.pocket_assistant")
+            or (coord.active_speaker if coord else DEFAULT_LOCAL_SPEAKER)
+        )
+        last_speaker = str(
+            data.get("last_speaker")
+            or (coord.last_speaker if coord else speaker)
+        )
+        local_speaker = (
+            coord.local_speaker if coord else DEFAULT_LOCAL_SPEAKER
+        )
+        search = str(data.get("search") or "")
+        album_sort = str(data.get("album_sort") or "name")
+        artist_album_sort = str(data.get("artist_album_sort") or "year")
+        podcast_sort = str(data.get("podcast_sort") or "newest")
+
+        if coord and speaker and speaker != coord.active_speaker:
+            coord.async_set_active_speaker(speaker)
+
+        items = await async_browse_media_items(
+            hass=hass,
+            mode=mode,
+            speaker=speaker,
+            last_speaker=last_speaker,
+            local_speaker=local_speaker,
+            search=search,
+            album_sort=album_sort,
+            artist_album_sort=artist_album_sort,
+            podcast_sort=podcast_sort,
         )
 
-        items: list[dict[str, Any]] = []
-
-        # Built-in Mode 1: Speakers discovery
-        if mode == "speakers":
-            for state_obj in hass.states.async_all("media_player"):
-                if state_obj.state == "unavailable":
-                    continue
-                friendly = state_obj.attributes.get(
-                    "friendly_name", state_obj.entity_id
-                )
-                items.append(
-                    {
-                        "name": str(friendly),
-                        "id": state_obj.entity_id,
-                        "type": "speaker",
-                        "active": state_obj.entity_id == speaker,
-                    }
-                )
-            items.sort(key=lambda x: (not x["active"], x["name"].lower()))
-
         await async_push_browse_slots(
-            hass,
+            hass=hass,
             device_slug=device_slug,
             mode=mode,
             page=page,

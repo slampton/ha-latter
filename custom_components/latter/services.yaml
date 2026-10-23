@@ -64,6 +64,45 @@ music_browse:
       selector:
         entity:
           domain: media_player
+    last_speaker:
+      name: Previous Speaker
+      description: Previously active media_player entity_id for priority sorting.
+      required: false
+      selector:
+        entity:
+          domain: media_player
+    album_sort:
+      name: Album Sort Order
+      description: Sort order when browsing library albums.
+      required: false
+      default: "name"
+      selector:
+        select:
+          options:
+            - "name"
+            - "year_desc"
+            - "year"
+    artist_album_sort:
+      name: Artist Album Sort Order
+      description: Sort order when drilling into an artist's albums.
+      required: false
+      default: "year"
+      selector:
+        select:
+          options:
+            - "year"
+            - "year_desc"
+            - "name"
+    podcast_sort:
+      name: Podcast Episode Sort Order
+      description: Sort order when browsing podcast episodes.
+      required: false
+      default: "newest"
+      selector:
+        select:
+          options:
+            - "newest"
+            - "oldest"
 
 set_active_speaker:
   name: Set Active Speaker
