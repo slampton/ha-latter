@@ -1,4 +1,4 @@
-"""Constants for the Latter (ESPHome Companion & Entity Middleware) integration."""
+"""Constants for the Latter integration."""
 
 from __future__ import annotations
 
@@ -14,12 +14,10 @@ CONF_DEVICE_SLUG: Final = "device_slug"
 CONF_WEATHER_ENTITY: Final = "weather_entity"
 CONF_ALARM_ENTITY: Final = "alarm_entity"
 CONF_DEFAULT_SPEAKER: Final = "default_speaker"
-CONF_LOCAL_SPEAKER: Final = "local_speaker"
 CONF_VOL_SPEAKER_1: Final = "vol_speaker_1"
 CONF_VOL_TARGET_1: Final = "vol_target_1"
 CONF_VOL_SPEAKER_2: Final = "vol_speaker_2"
 CONF_VOL_TARGET_2: Final = "vol_target_2"
-CONF_VOLUME_OVERRIDES: Final = "volume_overrides"
 CONF_DEFAULT_AREA: Final = "default_area"
 CONF_NATIVE_BLE_TRACKING: Final = "native_ble_tracking"
 CONF_BLE_BEACON_UUID: Final = "ble_beacon_uuid"

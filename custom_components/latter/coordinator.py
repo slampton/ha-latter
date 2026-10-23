@@ -17,7 +17,11 @@ from homeassistant.const import (
     STATE_PLAYING,
 )
 from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
-from homeassistant.helpers import area_registry as ar
+from homeassistant.helpers import (
+    area_registry as ar,
+    device_registry as dr,
+    entity_registry as er,
+)
 from homeassistant.helpers.event import (
     async_track_state_change_event,
     async_track_time_interval,
@@ -39,7 +43,6 @@ from .const import (
     CONF_DEFAULT_AREA,
     CONF_DEFAULT_SPEAKER,
     CONF_DEVICE_SLUG,
-    CONF_LOCAL_SPEAKER,
     CONF_NATIVE_BLE_TRACKING,
     CONF_PRESENCE_ENTITY,
     CONF_REMOTE_1,
@@ -51,7 +54,6 @@ from .const import (
     CONF_VOL_SPEAKER_2,
     CONF_VOL_TARGET_1,
     CONF_VOL_TARGET_2,
-    CONF_VOLUME_OVERRIDES,
     CONF_WEATHER_ENTITY,
     DEFAULT_AREA_HANDOFF,
     DEFAULT_ART_SIZE,
@@ -80,6 +82,35 @@ _LOGGER = logging.getLogger(__name__)
 DAY_ABBR: tuple[str, ...] = ("MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN")
 
 
+def _resolve_esphome_local_speaker(
+    hass: HomeAssistant, device_slug: str
+) -> str:
+    """Automatically resolve the on-device media_player entity for the configured ESPHome node."""
+    slug_norm = device_slug.strip().lower().replace("-", "_")
+    direct_candidate = f"media_player.{slug_norm}"
+    if hass.states.get(direct_candidate) is not None:
+        return direct_candidate
+
+    ent_reg = er.async_get(hass)
+    dev_reg = dr.async_get(hass)
+
+    # 1. Check ESPHome entities whose entity_id starts with or contains the device_slug
+    for entry in ent_reg.entities.values():
+        if entry.domain == "media_player" and entry.platform == "esphome":
+            if slug_norm in entry.entity_id and not entry.disabled_by:
+                return entry.entity_id
+
+    # 2. Match ESPHome device by name in Device Registry and find its media_player entity
+    for dev in dev_reg.devices.values():
+        dev_name = str(dev.name_by_user or dev.name or "").lower().replace("-", "_").replace(" ", "_")
+        if slug_norm and slug_norm in dev_name:
+            for entry in er.async_entries_for_device(ent_reg, dev.id):
+                if entry.domain == "media_player" and not entry.disabled_by:
+                    return entry.entity_id
+
+    return direct_candidate
+
+
 class LatterCoordinator:
     """Manages active speaker, BLE room context, 4-slot remotes, alarm, calendar, and weather."""
 
@@ -106,7 +137,7 @@ class LatterCoordinator:
         self._ble_tracker: LatterNativeBleTracker | None = None
 
         self.active_speaker: str = self.get_opt(
-            CONF_DEFAULT_SPEAKER, DEFAULT_LOCAL_SPEAKER
+            CONF_DEFAULT_SPEAKER, self.local_speaker
         )
         self.last_speaker: str = self.active_speaker
         self.active_area_id: str | None = self.get_opt(CONF_DEFAULT_AREA)
@@ -136,9 +167,11 @@ class LatterCoordinator:
 
     def get_opt(self, key: str, default: Any = None) -> Any:
         """Retrieve a value from entry.options with fallback to entry.data."""
-        if key in self.entry.options:
+        if self.entry.options and key in self.entry.options:
             return self.entry.options[key]
-        return self.entry.data.get(key, default)
+        if key in self.entry.data:
+            return self.entry.data[key]
+        return default
 
     @property
     def device_slug(self) -> str:
@@ -148,8 +181,8 @@ class LatterCoordinator:
 
     @property
     def local_speaker(self) -> str:
-        """Return the on-device Sendspin media_player entity_id."""
-        return str(self.get_opt(CONF_LOCAL_SPEAKER, DEFAULT_LOCAL_SPEAKER))
+        """Automatically resolve the on-device Sendspin media_player entity from device_slug."""
+        return _resolve_esphome_local_speaker(self.hass, self.device_slug)
 
     @property
     def weather_entity(self) -> str | None:
@@ -198,7 +231,7 @@ class LatterCoordinator:
 
     @property
     def volume_overrides(self) -> dict[str, str]:
-        """Combine visual override dropdown pairs (1 & 2) with optional text overrides."""
+        """Build speaker -> volume target dictionary from visual override selectors 1 & 2."""
         mapping: dict[str, str] = {}
         s1 = self.get_opt(CONF_VOL_SPEAKER_1)
         t1 = self.get_opt(CONF_VOL_TARGET_1)
@@ -210,14 +243,6 @@ class LatterCoordinator:
         if s2 and t2:
             mapping[str(s2).strip()] = str(t2).strip()
 
-        raw = str(self.get_opt(CONF_VOLUME_OVERRIDES, "") or "")
-        for part in raw.replace("\n", ",").split(","):
-            if "=" in part:
-                k, v = part.split("=", 1)
-                k_clean = k.strip()
-                v_clean = v.strip()
-                if k_clean and v_clean:
-                    mapping[k_clean] = v_clean
         return mapping
 
     def get_volume_target_entity(self, speaker_entity_id: str | None = None) -> str:
@@ -302,7 +327,6 @@ class LatterCoordinator:
         self._bind_presence_listener()
         self._bind_remotes_listener()
 
-        # Start native zero-config ESPHome BLE Proxy tracker if enabled
         if self.native_ble_tracking_enabled:
             self._ble_tracker = LatterNativeBleTracker(
                 hass=self.hass,
@@ -397,9 +421,10 @@ class LatterCoordinator:
             self.last_speaker = self.active_speaker
             self.active_speaker = speaker_entity_id
             _LOGGER.debug(
-                "Latter active speaker changed: %s -> %s",
+                "Latter active speaker changed: %s -> %s (volume_target=%s)",
                 self.last_speaker,
                 self.active_speaker,
+                self.get_volume_target_entity(self.active_speaker),
             )
         self._bind_speaker_listener()
         self._notify_listeners()
@@ -722,6 +747,7 @@ class LatterCoordinator:
                 "art_url": "none",
                 "active_speaker": self.active_speaker,
                 "last_speaker": self.last_speaker,
+                "local_speaker": self.local_speaker,
                 "volume_entity": vol_target,
             }
 
@@ -801,6 +827,7 @@ class LatterCoordinator:
             "art_url": art_url,
             "active_speaker": self.active_speaker,
             "last_speaker": self.last_speaker,
+            "local_speaker": self.local_speaker,
             "volume_entity": vol_target,
         }
 
