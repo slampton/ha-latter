@@ -58,13 +58,15 @@ class LatterImageProxyView(HomeAssistantView):
             return web.Response(status=HTTPStatus.FORBIDDEN, text="Invalid signature")
 
         state_obj = self.hass.states.get(coordinator.active_speaker)
-        if state_obj is None:
-            return web.Response(status=HTTPStatus.NOT_FOUND, text="Speaker unavailable")
+        pic_path = None
+        if state_obj is not None:
+            pic_path = (
+                state_obj.attributes.get("entity_picture_local")
+                or state_obj.attributes.get("entity_picture")
+            )
+        if not pic_path and coordinator.last_valid_raw_pic:
+            pic_path = coordinator.last_valid_raw_pic
 
-        pic_path = (
-            state_obj.attributes.get("entity_picture_local")
-            or state_obj.attributes.get("entity_picture")
-        )
         if not pic_path:
             return web.Response(status=HTTPStatus.NOT_FOUND, text="No artwork")
 
