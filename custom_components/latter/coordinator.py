@@ -29,7 +29,7 @@ from homeassistant.helpers.event import (
 from homeassistant.helpers.network import get_url
 from homeassistant.util import dt as dt_util
 
-from .ble_engine import LatterNativeBleTracker
+from .ble_engine import LatterNativeBleTracker, get_ble_proxy_area_ids
 from .calendar_engine import async_fetch_calendar_agenda
 from .const import (
     CALENDAR_REFRESH_INTERVAL_MINUTES,
@@ -72,6 +72,7 @@ from .room_engine import (
     get_areas_summary,
     get_home_alarm_summary,
     match_area_by_name_or_id,
+    protect_handheld_sensors_from_area_dashboards,
     resolve_remote_slot_pair,
     sync_esphome_device_area,
 )
@@ -311,6 +312,13 @@ class LatterCoordinator:
 
     async def async_setup(self) -> None:
         """Set up state subscriptions, native BLE proxy tracker, and periodic timers."""
+        # Always mark the handheld's own temperature/humidity sensors as DIAGNOSTIC so they never pollute room dashboards!
+        protect_handheld_sensors_from_area_dashboards(
+            self.hass, self.device_slug
+        )
+
+        proxy_areas = get_ble_proxy_area_ids(self.hass)
+
         # 1. Check external BLE presence entity first
         pres_ent = self.presence_entity
         if pres_ent and self.ble_auto_switch_enabled:
@@ -320,20 +328,26 @@ class LatterCoordinator:
                 if matched:
                     self.active_area_id = matched
 
-        # 2. Otherwise check the ESPHome device's existing Area in HA Device Registry (avoiding random alphabetical "Bathroom" fallback!)
+        # 2. Check the ESPHome device's existing Area in HA Device Registry (only if it has a BLE proxy or no proxies exist)
         if not self.active_area_id:
             dev_area = _get_esphome_device_current_area(
                 self.hass, self.device_slug
             )
-            if dev_area:
+            if dev_area and (not proxy_areas or dev_area in proxy_areas):
                 self.active_area_id = dev_area
 
-        # 3. Last resort fallback if device has no area assigned yet
+        # 3. Fallback: pick the first room that actually has a BLE proxy (never pick a proxy-less room like Bathroom!)
         if not self.active_area_id:
             areas = get_areas_summary(
-                self.hass, local_speaker=self.local_speaker
+                self.hass,
+                local_speaker=self.local_speaker,
+                device_slug=self.device_slug,
             )
-            if areas:
+            for area_item in areas:
+                if not proxy_areas or str(area_item["id"]) in proxy_areas:
+                    self.active_area_id = str(area_item["id"])
+                    break
+            if not self.active_area_id and areas:
                 self.active_area_id = str(areas[0]["id"])
 
         self._bind_speaker_listener()
@@ -407,7 +421,7 @@ class LatterCoordinator:
                 scanner_source,
                 area_id,
             )
-            self.async_set_active_area(area_id)
+            self.async_set_active_area(area_id, sync_device_registry=True)
         else:
             self._notify_listeners()
 
@@ -449,16 +463,25 @@ class LatterCoordinator:
 
     @callback
     def async_set_active_area(
-        self, area_id_or_name: str, handoff_media: bool | None = None
+        self,
+        area_id_or_name: str,
+        handoff_media: bool | None = None,
+        sync_device_registry: bool = False,
     ) -> None:
-        """Switch active room area, sync ESPHome device area for Voice Assistant, and hand off media."""
+        """Switch active room area, optionally sync ESPHome device area for Voice Assistant, and hand off media."""
         matched_id = match_area_by_name_or_id(self.hass, area_id_or_name)
         if not matched_id:
             return
         self.active_area_id = matched_id
 
-        if self.sync_device_area_enabled:
-            sync_esphome_device_area(self.hass, self.device_slug, matched_id)
+        # Only move the physical ESPHome device in HA's Device Registry when triggered by BLE presence (or explicit set_active_area)
+        if sync_device_registry and self.sync_device_area_enabled:
+            sync_esphome_device_area(
+                self.hass,
+                self.device_slug,
+                matched_id,
+                require_ble_proxy_area=True,
+            )
 
         media_map = find_area_media_entities(
             self.hass, matched_id, self.local_speaker
@@ -542,7 +565,7 @@ class LatterCoordinator:
             self.hass, self.active_area_id, self.local_speaker
         )
         climate_telemetry = get_area_climate_telemetry(
-            self.hass, self.active_area_id
+            self.hass, self.active_area_id, self.device_slug
         )
         alarm_info = get_home_alarm_summary(
             self.hass, self.get_opt(CONF_ALARM_ENTITY)
@@ -692,7 +715,9 @@ class LatterCoordinator:
                 new_state.state,
                 matched_area,
             )
-            self.async_set_active_area(matched_area)
+            self.async_set_active_area(
+                matched_area, sync_device_registry=True
+            )
         else:
             self._notify_listeners()
 
