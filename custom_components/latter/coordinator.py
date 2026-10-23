@@ -83,6 +83,11 @@ class LatterCoordinator:
         self.active_area_id: str | None = self.get_opt(CONF_DEFAULT_AREA)
         self.active_remote: str = ""
 
+        # Sticky artwork cache so pausing/transferring speakers never drops album art
+        self.last_valid_raw_pic: str = ""
+        self._last_art_track_key: str = ""
+        self._last_art_proxy_url: str = "none"
+
         # Cached weather forecast state & attributes
         self.forecast_string: str = "NONE"
         self.weather_attributes: dict[str, Any] = {
@@ -428,16 +433,27 @@ class LatterCoordinator:
 
         supported_features = int(attrs.get("supported_features") or 0)
 
-        raw_pic = attrs.get("entity_picture_local") or attrs.get("entity_picture")
-        if (
-            self.active_speaker == self.local_speaker
-            or not raw_pic
-            or state in (STATE_IDLE, STATE_OFF)
-        ):
+        # Sticky artwork resolution: keep artwork visible while paused or during speaker transfer
+        raw_pic = str(
+            attrs.get("entity_picture_local")
+            or attrs.get("entity_picture")
+            or ""
+        )
+        track_key = f"{title}|{artist}|{album}"
+
+        if self.active_speaker == self.local_speaker or state == STATE_OFF or title == "Idle":
             art_url = "none"
+        elif raw_pic:
+            self.last_valid_raw_pic = raw_pic
+            self._last_art_track_key = track_key
+            self._last_art_proxy_url = self.build_proxy_art_url(
+                f"{track_key}|{raw_pic}"
+            )
+            art_url = self._last_art_proxy_url
+        elif track_key == self._last_art_track_key and self._last_art_proxy_url != "none":
+            art_url = self._last_art_proxy_url
         else:
-            cache_key = f"{self.active_speaker}|{title}|{album}|{raw_pic}"
-            art_url = self.build_proxy_art_url(cache_key)
+            art_url = "none"
 
         return state, {
             "title": title,
