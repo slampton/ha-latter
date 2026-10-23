@@ -648,7 +648,7 @@ class LatterCoordinator:
 
     @callback
     def async_set_active_speaker(
-        self, speaker_entity_id: str, transfer_queue: bool = False
+        self, speaker_entity_id: str, transfer_queue: bool = True
     ) -> None:
         """Switch the active target speaker, cache transfer position hold, and optionally transfer active queue."""
         speaker_entity_id = speaker_entity_id.strip()
