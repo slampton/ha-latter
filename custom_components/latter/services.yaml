@@ -64,6 +64,45 @@ music_browse:
       selector:
         entity:
           domain: media_player
+    last_speaker:
+      name: Previous Speaker
+      description: Previously active media_player entity_id for priority sorting.
+      required: false
+      selector:
+        entity:
+          domain: media_player
+    album_sort:
+      name: Album Sort Order
+      description: Sort order when browsing library albums.
+      required: false
+      default: "name"
+      selector:
+        select:
+          options:
+            - "name"
+            - "year_desc"
+            - "year"
+    artist_album_sort:
+      name: Artist Album Sort Order
+      description: Sort order when drilling into an artist's albums.
+      required: false
+      default: "year"
+      selector:
+        select:
+          options:
+            - "year"
+            - "year_desc"
+            - "name"
+    podcast_sort:
+      name: Podcast Episode Sort Order
+      description: Sort order when browsing podcast episodes.
+      required: false
+      default: "newest"
+      selector:
+        select:
+          options:
+            - "newest"
+            - "oldest"
 
 set_active_speaker:
   name: Set Active Speaker
@@ -82,3 +121,226 @@ set_active_speaker:
       required: false
       selector:
         text:
+
+room_browse:
+  name: Room Browse
+  description: Browse Home Assistant areas or controllable room entities (lights, covers, climate, fans, switches, scenes) and push a 5-slot page to the ESPHome device.
+  fields:
+    target_device:
+      name: Target ESPHome Device
+      description: ESPHome device name (e.g., pocket-assistant).
+      required: false
+      default: "pocket-assistant"
+      selector:
+        text:
+    mode:
+      name: Browse Mode
+      description: Browse areas list or entities inside an area.
+      required: false
+      default: "entities"
+      selector:
+        select:
+          options:
+            - "areas"
+            - "entities"
+    area_id:
+      name: Area ID
+      description: Target Home Assistant area_id (defaults to the device's active area).
+      required: false
+      selector:
+        area:
+    domain_filter:
+      name: Domain Filter
+      description: Filter room entities by domain.
+      required: false
+      default: "all"
+      selector:
+        select:
+          options:
+            - "all"
+            - "light"
+            - "cover"
+            - "climate"
+            - "fan"
+            - "switch"
+            - "scene"
+    page:
+      name: Page Number
+      description: 1-based page index.
+      required: false
+      default: 1
+      selector:
+        number:
+          min: 1
+          max: 100
+          mode: box
+    page_size:
+      name: Page Size
+      description: Items per page (default 5).
+      required: false
+      default: 5
+      selector:
+        number:
+          min: 1
+          max: 5
+          mode: box
+    handoff_media:
+      name: Handoff Area Media Context
+      description: Automatically switch active speaker and TV remote to the selected room.
+      required: false
+      selector:
+        boolean:
+
+room_action:
+  name: Room Action
+  description: Execute a normalized room control action (toggle, turn_on, turn_off, set_level, step_up, step_down) or switch active room area.
+  fields:
+    target_device:
+      name: Target ESPHome Device
+      description: ESPHome device name (e.g., pocket-assistant).
+      required: false
+      default: "pocket-assistant"
+      selector:
+        text:
+    entity_id:
+      name: Target Entity
+      description: Light, cover, climate, fan, switch, or scene entity_id to control.
+      required: false
+      selector:
+        entity:
+    area_id:
+      name: Switch Active Area ID
+      description: Optional area_id to set as the active room context.
+      required: false
+      selector:
+        area:
+    action:
+      name: Action
+      description: Normalized command to execute on the entity.
+      required: false
+      default: "toggle"
+      selector:
+        select:
+          options:
+            - "toggle"
+            - "turn_on"
+            - "turn_off"
+            - "set_level"
+            - "step_up"
+            - "step_down"
+    level:
+      name: Level / Temperature (0-100)
+      description: Brightness %, cover position %, fan speed %, or target temperature.
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 100
+          mode: slider
+
+calendar_fetch:
+  name: Calendar Fetch Agenda
+  description: Refresh upcoming family calendar events and push a 5-slot agenda page to the ESPHome device.
+  fields:
+    target_device:
+      name: Target ESPHome Device
+      description: ESPHome device name (e.g., pocket-assistant).
+      required: false
+      default: "pocket-assistant"
+      selector:
+        text:
+    days:
+      name: Lookahead Days
+      description: Number of days ahead to query (default 7).
+      required: false
+      default: 7
+      selector:
+        number:
+          min: 1
+          max: 30
+          mode: box
+    page:
+      name: Page Number
+      description: 1-based page index.
+      required: false
+      default: 1
+      selector:
+        number:
+          min: 1
+          max: 20
+          mode: box
+
+calendar_create_event:
+  name: Calendar Create Event
+  description: Create a new event on the primary family calendar and refresh the agenda sensor.
+  fields:
+    target_device:
+      name: Target ESPHome Device
+      description: ESPHome device name (e.g., pocket-assistant).
+      required: false
+      default: "pocket-assistant"
+      selector:
+        text:
+    calendar_entity:
+      name: Calendar Entity
+      description: Target calendar.* entity (defaults to primary configured calendar).
+      required: false
+      selector:
+        entity:
+          domain: calendar
+    summary:
+      name: Event Summary / Title
+      description: Title of the calendar event.
+      required: true
+      selector:
+        text:
+    start_date_time:
+      name: Start Date & Time
+      description: ISO 8601 start datetime string.
+      required: true
+      selector:
+        text:
+    end_date_time:
+      name: End Date & Time
+      description: ISO 8601 end datetime string.
+      required: true
+      selector:
+        text:
+    description:
+      name: Description
+      description: Optional event notes or description.
+      required: false
+      selector:
+        text:
+
+intercom_broadcast:
+  name: Household Intercom Broadcast
+  description: Broadcast a TTS announcement or recorded audio clip to one or all household media_player speakers.
+  fields:
+    message:
+      name: Announcement Message (TTS)
+      description: Text message to announce via Home Assistant TTS.
+      required: false
+      selector:
+        text:
+    media_url:
+      name: Audio Clip URL
+      description: Optional HTTP URL to an audio clip to play with announce=true.
+      required: false
+      selector:
+        text:
+    target_speakers:
+      name: Target Speakers
+      description: Specific media_player entities to broadcast to (defaults to all active speakers).
+      required: false
+      selector:
+        entity:
+          domain: media_player
+          multiple: true
+    tts_entity:
+      name: TTS Engine Entity
+      description: Optional tts.* entity (auto-discovered if omitted).
+      required: false
+      selector:
+        entity:
+          domain: tts

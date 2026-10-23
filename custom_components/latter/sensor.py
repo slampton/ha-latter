@@ -1,4 +1,4 @@
-"""Sensor platform for Latter exposing v2.0-compatible Pocket Assistant entities."""
+"""Sensor platform for Latter exposing v2.0 and v2.1 Pocket Assistant / ESPHome entities."""
 
 from __future__ import annotations
 
@@ -13,6 +13,8 @@ from .const import (
     DOMAIN,
     V20_ACTIVE_MEDIA_ENTITY,
     V20_WEATHER_FORECAST_ENTITY,
+    V21_CALENDAR_AGENDA_ENTITY,
+    V21_ROOM_CONTEXT_ENTITY,
 )
 from .coordinator import LatterCoordinator
 
@@ -28,6 +30,8 @@ async def async_setup_entry(
         [
             PocketAssistantActiveMediaSensor(coordinator),
             PocketAssistantWeatherForecastSensor(coordinator),
+            PocketAssistantRoomContextSensor(coordinator),
+            PocketAssistantCalendarAgendaSensor(coordinator),
         ]
     )
 
@@ -99,3 +103,55 @@ class PocketAssistantWeatherForecastSensor(_BaseLatterSensor):
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return current weather attributes (condition, temperature, humidity, wind, high, low)."""
         return self.coordinator.weather_attributes
+
+
+class PocketAssistantRoomContextSensor(_BaseLatterSensor):
+    """Exposes sensor.pocket_assistant_room_context for Area-Aware Room Control & Handoff."""
+
+    _attr_name = "Pocket Assistant Room Context"
+    _attr_icon = "mdi:floor-plan"
+
+    def __init__(self, coordinator: LatterCoordinator) -> None:
+        """Initialize room context sensor."""
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{coordinator.entry.entry_id}_room_context"
+        self.entity_id = V21_ROOM_CONTEXT_ENTITY
+
+    @property
+    def native_value(self) -> str:
+        """Return active room area name."""
+        state, _ = self.coordinator.get_room_context_payload()
+        return state
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return room entity summary, counts, and handoff targets."""
+        _, attrs = self.coordinator.get_room_context_payload()
+        return attrs
+
+
+class PocketAssistantCalendarAgendaSensor(_BaseLatterSensor):
+    """Exposes sensor.pocket_assistant_calendar_agenda with upcoming family events."""
+
+    _attr_name = "Pocket Assistant Calendar Agenda"
+    _attr_icon = "mdi:calendar-clock"
+
+    def __init__(self, coordinator: LatterCoordinator) -> None:
+        """Initialize calendar agenda sensor."""
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{coordinator.entry.entry_id}_calendar_agenda"
+        self.entity_id = V21_CALENDAR_AGENDA_ENTITY
+
+    @property
+    def native_value(self) -> str:
+        """Return semicolon-delimited upcoming agenda string."""
+        return self.coordinator.calendar_agenda_string
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return structured upcoming event list."""
+        return {
+            "event_count": len(self.coordinator.calendar_events),
+            "events": self.coordinator.calendar_events,
+            "calendars": self.coordinator.calendar_entities,
+        }
