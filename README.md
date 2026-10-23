@@ -90,3 +90,11 @@ In **Latter > Configure**, select up to 4 TVs, Apple TVs, Rokus, Android TVs, or
 In **Latter > Configure**, select your home's primary `alarm_control_panel.*` entity under **Home Security Alarm Entity** (Latter also auto-selects your first alarm panel by default).
 - Exposes real-time `alarm_state` (`disarmed`, `armed_home`, `armed_away`, `armed_night`, `triggered`), `alarm_name`, and `alarm_code_required` on `sensor.pocket_assistant_room_context`.
 - Supports arming and disarming directly via `latter.room_action` (`action: "arm_home" | "arm_away" | "arm_night" | "disarm"`).
+---
+
+## Support the Project
+
+If **Latter** and **Pocket Assistant** have been useful in your smart home, consider supporting ongoing open-source development:
+
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-slampton-FFDD00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://www.buymeacoffee.com/slampton)
+[![GitHub Sponsors](https://img.shields.io/badge/Sponsor-slampton-EA4AAA?style=for-the-badge&logo=github-sponsors&logoColor=white)](https://github.com/sponsors/slampton)
