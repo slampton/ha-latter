@@ -15,19 +15,30 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import selector
 
 from .const import (
+    CONF_ALARM_ENTITY,
     CONF_AREA_HANDOFF,
     CONF_ART_SIZE,
+    CONF_BLE_AUTO_SWITCH,
     CONF_CALENDAR_ENTITIES,
     CONF_CUSTOM_ENTITIES,
     CONF_DEFAULT_AREA,
     CONF_DEFAULT_SPEAKER,
     CONF_DEVICE_SLUG,
     CONF_LOCAL_SPEAKER,
+    CONF_PRESENCE_ENTITY,
+    CONF_REMOTE_1,
+    CONF_REMOTE_2,
+    CONF_REMOTE_3,
+    CONF_REMOTE_4,
+    CONF_SYNC_DEVICE_AREA,
+    CONF_VOLUME_OVERRIDES,
     CONF_WEATHER_ENTITY,
     DEFAULT_AREA_HANDOFF,
     DEFAULT_ART_SIZE,
+    DEFAULT_BLE_AUTO_SWITCH,
     DEFAULT_DEVICE_SLUG,
     DEFAULT_LOCAL_SPEAKER,
+    DEFAULT_SYNC_DEVICE_AREA,
     DOMAIN,
 )
 
@@ -49,6 +60,14 @@ def _discover_default_weather(hass: HomeAssistant) -> str | None:
     return None
 
 
+def _discover_default_alarm(hass: HomeAssistant) -> str | None:
+    """Return the first available alarm_control_panel.* entity in Home Assistant."""
+    states = hass.states.async_all("alarm_control_panel")
+    if states:
+        return states[0].entity_id
+    return None
+
+
 def _discover_default_speaker(hass: HomeAssistant) -> str:
     """Return a sensible default media_player entity."""
     if hass.states.get(DEFAULT_LOCAL_SPEAKER) is not None:
@@ -59,15 +78,34 @@ def _discover_default_speaker(hass: HomeAssistant) -> str:
     return DEFAULT_LOCAL_SPEAKER
 
 
+def _add_optional_entity(
+    schema_dict: dict[Any, Any],
+    key: str,
+    current_val: Any,
+    domains: str | list[str],
+) -> None:
+    """Add an optional EntitySelector field with a clean default if set."""
+    cfg = selector.EntitySelectorConfig(domain=domains)
+    if current_val:
+        schema_dict[vol.Optional(key, default=current_val)] = selector.EntitySelector(cfg)
+    else:
+        schema_dict[vol.Optional(key)] = selector.EntitySelector(cfg)
+
+
 def _build_schema(
     hass: HomeAssistant, current: dict[str, Any]
 ) -> vol.Schema:
     """Build the shared Voluptuous schema for ConfigFlow and OptionsFlow."""
     default_slug = current.get(CONF_DEVICE_SLUG) or _discover_esphome_slug(hass)
     default_weather = current.get(CONF_WEATHER_ENTITY) or _discover_default_weather(hass)
+    default_alarm = current.get(CONF_ALARM_ENTITY) or _discover_default_alarm(hass)
     default_speaker = current.get(CONF_DEFAULT_SPEAKER) or _discover_default_speaker(hass)
     local_speaker = current.get(CONF_LOCAL_SPEAKER) or DEFAULT_LOCAL_SPEAKER
+    vol_overrides = current.get(CONF_VOLUME_OVERRIDES, "")
     default_area = current.get(CONF_DEFAULT_AREA)
+    presence_entity = current.get(CONF_PRESENCE_ENTITY)
+    ble_auto = current.get(CONF_BLE_AUTO_SWITCH, DEFAULT_BLE_AUTO_SWITCH)
+    sync_dev_area = current.get(CONF_SYNC_DEVICE_AREA, DEFAULT_SYNC_DEVICE_AREA)
     area_handoff = current.get(CONF_AREA_HANDOFF, DEFAULT_AREA_HANDOFF)
     calendars = current.get(CONF_CALENDAR_ENTITIES, [])
     custom_entities = current.get(CONF_CUSTOM_ENTITIES, [])
@@ -85,6 +123,11 @@ def _build_schema(
         ): selector.EntitySelector(
             selector.EntitySelectorConfig(domain="media_player")
         ),
+        vol.Optional(
+            CONF_VOLUME_OVERRIDES, default=vol_overrides
+        ): selector.TextSelector(
+            selector.TextSelectorConfig(multiline=False)
+        ),
     }
 
     if default_area:
@@ -94,18 +137,50 @@ def _build_schema(
     else:
         schema_dict[vol.Optional(CONF_DEFAULT_AREA)] = selector.AreaSelector()
 
+    # BLE Trilateration / Room Presence Sensor (Bermuda, ESPresense, etc.)
+    _add_optional_entity(
+        schema_dict,
+        CONF_PRESENCE_ENTITY,
+        presence_entity,
+        ["sensor", "device_tracker", "input_text"],
+    )
+
+    schema_dict[
+        vol.Required(CONF_BLE_AUTO_SWITCH, default=ble_auto)
+    ] = selector.BooleanSelector()
+
+    schema_dict[
+        vol.Required(CONF_SYNC_DEVICE_AREA, default=sync_dev_area)
+    ] = selector.BooleanSelector()
+
     schema_dict[
         vol.Required(CONF_AREA_HANDOFF, default=area_handoff)
     ] = selector.BooleanSelector()
 
-    if default_weather:
-        schema_dict[
-            vol.Optional(CONF_WEATHER_ENTITY, default=default_weather)
-        ] = selector.EntitySelector(selector.EntitySelectorConfig(domain="weather"))
-    else:
-        schema_dict[vol.Optional(CONF_WEATHER_ENTITY)] = selector.EntitySelector(
-            selector.EntitySelectorConfig(domain="weather")
+    # Home Security Alarm Entity Override
+    _add_optional_entity(
+        schema_dict,
+        CONF_ALARM_ENTITY,
+        default_alarm,
+        "alarm_control_panel",
+    )
+
+    # 4-Slot TV / Media Remote Entities (Replaces YAML Substitutions!)
+    for slot_key in (CONF_REMOTE_1, CONF_REMOTE_2, CONF_REMOTE_3, CONF_REMOTE_4):
+        _add_optional_entity(
+            schema_dict,
+            slot_key,
+            current.get(slot_key),
+            ["remote", "media_player"],
         )
+
+    # Weather Provider
+    _add_optional_entity(
+        schema_dict,
+        CONF_WEATHER_ENTITY,
+        default_weather,
+        "weather",
+    )
 
     schema_dict[
         vol.Optional(CONF_CALENDAR_ENTITIES, default=calendars)
@@ -117,7 +192,16 @@ def _build_schema(
         vol.Optional(CONF_CUSTOM_ENTITIES, default=custom_entities)
     ] = selector.EntitySelector(
         selector.EntitySelectorConfig(
-            domain=["light", "cover", "climate", "fan", "switch", "scene", "sensor"],
+            domain=[
+                "light",
+                "cover",
+                "climate",
+                "fan",
+                "switch",
+                "scene",
+                "sensor",
+                "alarm_control_panel",
+            ],
             multiple=True,
         )
     )

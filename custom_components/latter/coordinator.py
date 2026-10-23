@@ -28,19 +28,30 @@ from homeassistant.util import dt as dt_util
 from .calendar_engine import async_fetch_calendar_agenda
 from .const import (
     CALENDAR_REFRESH_INTERVAL_MINUTES,
+    CONF_ALARM_ENTITY,
     CONF_AREA_HANDOFF,
     CONF_ART_SIZE,
+    CONF_BLE_AUTO_SWITCH,
     CONF_CALENDAR_ENTITIES,
     CONF_CUSTOM_ENTITIES,
     CONF_DEFAULT_AREA,
     CONF_DEFAULT_SPEAKER,
     CONF_DEVICE_SLUG,
     CONF_LOCAL_SPEAKER,
+    CONF_PRESENCE_ENTITY,
+    CONF_REMOTE_1,
+    CONF_REMOTE_2,
+    CONF_REMOTE_3,
+    CONF_REMOTE_4,
+    CONF_SYNC_DEVICE_AREA,
+    CONF_VOLUME_OVERRIDES,
     CONF_WEATHER_ENTITY,
     DEFAULT_AREA_HANDOFF,
     DEFAULT_ART_SIZE,
+    DEFAULT_BLE_AUTO_SWITCH,
     DEFAULT_DEVICE_SLUG,
     DEFAULT_LOCAL_SPEAKER,
+    DEFAULT_SYNC_DEVICE_AREA,
     FORECAST_REFRESH_INTERVAL_MINUTES,
     POSITION_UPDATE_INTERVAL_SECONDS,
 )
@@ -50,6 +61,9 @@ from .room_engine import (
     get_area_entities,
     get_areas_summary,
     get_home_alarm_summary,
+    match_area_by_name_or_id,
+    resolve_remote_slot_pair,
+    sync_esphome_device_area,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -58,7 +72,7 @@ DAY_ABBR: tuple[str, ...] = ("MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN")
 
 
 class LatterCoordinator:
-    """Manages active speaker, room context, calendar agenda, and weather."""
+    """Manages active speaker, BLE room context, 4-slot remotes, alarm, calendar, and weather."""
 
     def __init__(
         self,
@@ -74,6 +88,9 @@ class LatterCoordinator:
         self._listeners: list[callable] = []
         self._unsub_speaker_state: callable | None = None
         self._unsub_weather_state: callable | None = None
+        self._unsub_alarm_state: callable | None = None
+        self._unsub_presence_state: callable | None = None
+        self._unsub_remotes_state: callable | None = None
         self._unsub_position_timer: callable | None = None
         self._unsub_forecast_timer: callable | None = None
         self._unsub_calendar_timer: callable | None = None
@@ -84,8 +101,9 @@ class LatterCoordinator:
         self.last_speaker: str = self.active_speaker
         self.active_area_id: str | None = self.get_opt(CONF_DEFAULT_AREA)
         self.active_remote: str = ""
+        self.active_remote_slot: int = 1
 
-        # Sticky artwork cache so pausing/transferring speakers never drops album art
+        # Sticky artwork cache
         self.last_valid_raw_pic: str = ""
         self._last_art_track_key: str = ""
         self._last_art_proxy_url: str = "none"
@@ -128,6 +146,50 @@ class LatterCoordinator:
         """Return configured weather entity_id."""
         val = self.get_opt(CONF_WEATHER_ENTITY)
         return str(val) if val else None
+
+    @property
+    def alarm_entity(self) -> str | None:
+        """Return configured alarm_control_panel entity_id (or auto-discovered)."""
+        val = self.get_opt(CONF_ALARM_ENTITY)
+        if val:
+            return str(val)
+        info = get_home_alarm_summary(self.hass)
+        return info["entity_id"] or None
+
+    @property
+    def presence_entity(self) -> str | None:
+        """Return configured BLE trilateration / room presence entity_id."""
+        val = self.get_opt(CONF_PRESENCE_ENTITY)
+        return str(val) if val else None
+
+    @property
+    def ble_auto_switch_enabled(self) -> bool:
+        """Return True if BLE presence sensor changes should auto-switch active room."""
+        return bool(self.get_opt(CONF_BLE_AUTO_SWITCH, DEFAULT_BLE_AUTO_SWITCH))
+
+    @property
+    def sync_device_area_enabled(self) -> bool:
+        """Return True if active room should sync to ESPHome Device Registry for Voice Assistant."""
+        return bool(self.get_opt(CONF_SYNC_DEVICE_AREA, DEFAULT_SYNC_DEVICE_AREA))
+
+    @property
+    def volume_overrides(self) -> dict[str, str]:
+        """Parse speaker=avr_volume_entity pairs from CONF_VOLUME_OVERRIDES."""
+        raw = str(self.get_opt(CONF_VOLUME_OVERRIDES, "") or "")
+        mapping: dict[str, str] = {}
+        for part in raw.replace("\n", ",").split(","):
+            if "=" in part:
+                k, v = part.split("=", 1)
+                k_clean = k.strip()
+                v_clean = v.strip()
+                if k_clean and v_clean:
+                    mapping[k_clean] = v_clean
+        return mapping
+
+    def get_volume_target_entity(self, speaker_entity_id: str | None = None) -> str:
+        """Return the volume control target entity (AVR override if mapped, else active speaker)."""
+        spk = speaker_entity_id or self.active_speaker
+        return self.volume_overrides.get(spk, spk)
 
     @property
     def calendar_entities(self) -> list[str]:
@@ -180,6 +242,15 @@ class LatterCoordinator:
 
     async def async_setup(self) -> None:
         """Set up state subscriptions and periodic refresh timers."""
+        # Check initial BLE presence state first if configured
+        pres_ent = self.presence_entity
+        if pres_ent and self.ble_auto_switch_enabled:
+            pres_state = self.hass.states.get(pres_ent)
+            if pres_state is not None:
+                matched = match_area_by_name_or_id(self.hass, pres_state.state)
+                if matched:
+                    self.active_area_id = matched
+
         if not self.active_area_id:
             areas = get_areas_summary(
                 self.hass, local_speaker=self.local_speaker
@@ -187,8 +258,16 @@ class LatterCoordinator:
             if areas:
                 self.active_area_id = str(areas[0]["id"])
 
+        if self.active_area_id and self.sync_device_area_enabled:
+            sync_esphome_device_area(
+                self.hass, self.device_slug, self.active_area_id
+            )
+
         self._bind_speaker_listener()
         self._bind_weather_listener()
+        self._bind_alarm_listener()
+        self._bind_presence_listener()
+        self._bind_remotes_listener()
         await self.async_refresh_weather_forecast()
         await self.async_refresh_calendar_agenda()
 
@@ -208,6 +287,9 @@ class LatterCoordinator:
         for unsub in (
             self._unsub_speaker_state,
             self._unsub_weather_state,
+            self._unsub_alarm_state,
+            self._unsub_presence_state,
+            self._unsub_remotes_state,
             self._unsub_position_timer,
             self._unsub_forecast_timer,
             self._unsub_calendar_timer,
@@ -216,6 +298,9 @@ class LatterCoordinator:
                 unsub()
         self._unsub_speaker_state = None
         self._unsub_weather_state = None
+        self._unsub_alarm_state = None
+        self._unsub_presence_state = None
+        self._unsub_remotes_state = None
         self._unsub_position_timer = None
         self._unsub_forecast_timer = None
         self._unsub_calendar_timer = None
@@ -258,18 +343,28 @@ class LatterCoordinator:
 
     @callback
     def async_set_active_area(
-        self, area_id: str, handoff_media: bool | None = None
+        self, area_id_or_name: str, handoff_media: bool | None = None
     ) -> None:
-        """Switch active room area and optionally hand off speaker & TV remote context."""
-        area_id = area_id.strip()
-        if not area_id:
+        """Switch active room area, sync ESPHome device area for Voice Assistant, and hand off media."""
+        matched_id = match_area_by_name_or_id(self.hass, area_id_or_name)
+        if not matched_id:
             return
-        self.active_area_id = area_id
+        self.active_area_id = matched_id
+
+        if self.sync_device_area_enabled:
+            sync_esphome_device_area(self.hass, self.device_slug, matched_id)
+
         media_map = find_area_media_entities(
-            self.hass, area_id, self.local_speaker
+            self.hass, matched_id, self.local_speaker
         )
         if media_map["remote"]:
             self.active_remote = media_map["remote"]
+
+        # Also check if one of our 4 configured remote slots belongs to this room
+        for slot_idx, slot_info in enumerate(self.get_remote_slots(), start=1):
+            if slot_info["area_id"] == matched_id:
+                self.active_remote_slot = slot_idx
+                break
 
         do_handoff = (
             self.area_handoff_enabled
@@ -280,6 +375,40 @@ class LatterCoordinator:
             self.async_set_active_speaker(media_map["speaker"])
         else:
             self._notify_listeners()
+
+    def get_remote_slots(self) -> list[dict[str, str]]:
+        """Return the 4 resolved TV/Media Remote slot dictionaries."""
+        keys = (CONF_REMOTE_1, CONF_REMOTE_2, CONF_REMOTE_3, CONF_REMOTE_4)
+        return [
+            resolve_remote_slot_pair(self.hass, self.get_opt(k))
+            for k in keys
+        ]
+
+    def get_remote_config_payload(self) -> tuple[str, dict[str, Any]]:
+        """Compute state and attributes for sensor.pocket_assistant_remote_config."""
+        slots = self.get_remote_slots()
+        populated_count = sum(
+            1 for s in slots if s["remote_entity"] or s["media_player_entity"]
+        )
+        attrs: dict[str, Any] = {
+            "active_slot": self.active_remote_slot,
+            "configured_count": populated_count,
+        }
+        summary_parts: list[str] = []
+        for idx, slot in enumerate(slots, start=1):
+            attrs[f"slot_{idx}_name"] = slot["name"]
+            attrs[f"slot_{idx}_remote"] = slot["remote_entity"]
+            attrs[f"slot_{idx}_media_player"] = slot["media_player_entity"]
+            attrs[f"slot_{idx}_area_id"] = slot["area_id"]
+            attrs[f"slot_{idx}_state"] = slot["state"]
+            summary_parts.append(
+                f"{idx}:{slot['name']}:{slot['remote_entity']}:{slot['media_player_entity']}:{slot['state']}"
+            )
+
+        active_slot_data = slots[max(0, min(3, self.active_remote_slot - 1))]
+        state_str = active_slot_data["name"] if populated_count > 0 else "None"
+        attrs["slots_summary"] = ";".join(summary_parts)
+        return state_str, attrs
 
     def get_room_context_payload(self) -> tuple[str, dict[str, Any]]:
         """Compute state and attributes for sensor.pocket_assistant_room_context."""
@@ -310,12 +439,21 @@ class LatterCoordinator:
         climate_telemetry = get_area_climate_telemetry(
             self.hass, self.active_area_id
         )
-        alarm_info = get_home_alarm_summary(self.hass)
+        alarm_info = get_home_alarm_summary(
+            self.hass, self.get_opt(CONF_ALARM_ENTITY)
+        )
 
         summary_items = [
             f"{e['id']}:{e['name']}:{int(e['active'])}:{e['level']}"
             for e in entities[:8]
         ]
+
+        pres_ent = self.presence_entity
+        pres_state = (
+            self.hass.states.get(pres_ent).state
+            if (pres_ent and self.hass.states.get(pres_ent))
+            else "none"
+        )
 
         return area_name, {
             "area_id": self.active_area_id or "",
@@ -329,13 +467,19 @@ class LatterCoordinator:
             "area_remote": media_map["remote"] or self.active_remote,
             "alarm_entity": alarm_info["entity_id"],
             "alarm_state": alarm_info["state"],
+            "alarm_name": alarm_info["name"],
+            "alarm_code_required": alarm_info["code_arm_required"],
+            "presence_entity": pres_ent or "",
+            "presence_state": pres_state,
+            "ble_auto_switch": self.ble_auto_switch_enabled,
+            "voice_area_synced": self.sync_device_area_enabled,
             "entities_summary": ";".join(summary_items) if summary_items else "NONE",
             "custom_entities": self.custom_entities,
         }
 
     @callback
     def _bind_speaker_listener(self) -> None:
-        """Subscribe to state changes on the currently selected media_player."""
+        """Subscribe to state changes on the active media_player (and its volume override entity)."""
         if self._unsub_speaker_state is not None:
             self._unsub_speaker_state()
             self._unsub_speaker_state = None
@@ -343,12 +487,103 @@ class LatterCoordinator:
         if not self.active_speaker:
             return
 
+        tracked = [self.active_speaker]
+        vol_target = self.get_volume_target_entity(self.active_speaker)
+        if vol_target and vol_target != self.active_speaker:
+            tracked.append(vol_target)
+
         self._unsub_speaker_state = async_track_state_change_event(
             self.hass,
-            [self.active_speaker],
+            tracked,
             self._async_on_speaker_state_change,
         )
         self._update_position_timer_state()
+
+    @callback
+    def _bind_alarm_listener(self) -> None:
+        """Subscribe to state changes on the home security alarm_control_panel entity."""
+        if self._unsub_alarm_state is not None:
+            self._unsub_alarm_state()
+            self._unsub_alarm_state = None
+
+        alarm_ent = self.alarm_entity
+        if not alarm_ent:
+            return
+
+        self._unsub_alarm_state = async_track_state_change_event(
+            self.hass,
+            [alarm_ent],
+            self._async_on_generic_state_change,
+        )
+
+    @callback
+    def _bind_presence_listener(self) -> None:
+        """Subscribe to BLE trilateration room presence entity changes."""
+        if self._unsub_presence_state is not None:
+            self._unsub_presence_state()
+            self._unsub_presence_state = None
+
+        pres_ent = self.presence_entity
+        if not pres_ent:
+            return
+
+        self._unsub_presence_state = async_track_state_change_event(
+            self.hass,
+            [pres_ent],
+            self._async_on_presence_state_change,
+        )
+
+    @callback
+    def _bind_remotes_listener(self) -> None:
+        """Subscribe to state changes on the 4 configured TV remote slots."""
+        if self._unsub_remotes_state is not None:
+            self._unsub_remotes_state()
+            self._unsub_remotes_state = None
+
+        tracked: list[str] = []
+        for slot in self.get_remote_slots():
+            for key in ("remote_entity", "media_player_entity"):
+                ent = slot.get(key)
+                if ent and ent not in tracked:
+                    tracked.append(ent)
+
+        if not tracked:
+            return
+
+        self._unsub_remotes_state = async_track_state_change_event(
+            self.hass,
+            tracked,
+            self._async_on_generic_state_change,
+        )
+
+    @callback
+    def _async_on_generic_state_change(
+        self, event: Event[EventStateChangedData]
+    ) -> None:
+        """Notify sensors when alarm or remote entities change state."""
+        self._notify_listeners()
+
+    @callback
+    def _async_on_presence_state_change(
+        self, event: Event[EventStateChangedData]
+    ) -> None:
+        """Auto-switch active room when BLE trilateration reports a new area."""
+        new_state = event.data.get("new_state")
+        if new_state is None or not self.ble_auto_switch_enabled:
+            self._notify_listeners()
+            return
+
+        matched_area = match_area_by_name_or_id(self.hass, new_state.state)
+        if matched_area and matched_area != self.active_area_id:
+            _LOGGER.info(
+                "BLE Presence ('%s' -> '%s') auto-switching Pocket Assistant to area '%s'",
+                event.data.get("entity_id"),
+                new_state.state,
+                matched_area,
+            )
+            self.async_set_active_area(matched_area)
+        else:
+            self._notify_listeners()
 
     @callback
     def _async_on_speaker_state_change(
@@ -385,6 +620,9 @@ class LatterCoordinator:
     def get_active_media_payload(self) -> tuple[str, dict[str, Any]]:
         """Compute state and attributes for sensor.pocket_assistant_active_media."""
         state_obj = self.hass.states.get(self.active_speaker)
+        vol_target = self.get_volume_target_entity(self.active_speaker)
+        vol_state_obj = self.hass.states.get(vol_target) or state_obj
+
         if state_obj is None or state_obj.state in ("unavailable", "unknown"):
             return STATE_OFF, {
                 "title": "Idle",
@@ -398,6 +636,7 @@ class LatterCoordinator:
                 "art_url": "none",
                 "active_speaker": self.active_speaker,
                 "last_speaker": self.last_speaker,
+                "volume_entity": vol_target,
             }
 
         state = state_obj.state
@@ -431,10 +670,15 @@ class LatterCoordinator:
                 if duration > 0:
                     position = min(position, duration)
 
+        vol_attrs = vol_state_obj.attributes if vol_state_obj else attrs
         volume = float(
-            attrs.get("volume_level")
-            if attrs.get("volume_level") is not None
-            else 0.7
+            vol_attrs.get("volume_level")
+            if vol_attrs.get("volume_level") is not None
+            else (
+                attrs.get("volume_level")
+                if attrs.get("volume_level") is not None
+                else 0.7
+            )
         )
         raw_type = str(attrs.get("media_content_type") or "music").lower()
         if "podcast" in raw_type:
@@ -479,6 +723,7 @@ class LatterCoordinator:
             "art_url": art_url,
             "active_speaker": self.active_speaker,
             "last_speaker": self.last_speaker,
+            "volume_entity": vol_target,
         }
 
     @callback

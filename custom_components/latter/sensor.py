@@ -13,6 +13,7 @@ from .const import (
     DOMAIN,
     ENTITY_ACTIVE_MEDIA,
     ENTITY_CALENDAR_AGENDA,
+    ENTITY_REMOTE_CONFIG,
     ENTITY_ROOM_CONTEXT,
     ENTITY_WEATHER_FORECAST,
 )
@@ -32,6 +33,7 @@ async def async_setup_entry(
             PocketAssistantWeatherForecastSensor(coordinator),
             PocketAssistantRoomContextSensor(coordinator),
             PocketAssistantCalendarAgendaSensor(coordinator),
+            PocketAssistantRemoteConfigSensor(coordinator),
         ]
     )
 
@@ -77,7 +79,7 @@ class PocketAssistantActiveMediaSensor(_BaseLatterSensor):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return media attributes (title, artist, album, duration, position, art_url, active_speaker)."""
+        """Return media attributes (title, artist, album, duration, position, art_url, active_speaker, volume_entity)."""
         _, attrs = self.coordinator.get_active_media_payload()
         return attrs
 
@@ -106,7 +108,7 @@ class PocketAssistantWeatherForecastSensor(_BaseLatterSensor):
 
 
 class PocketAssistantRoomContextSensor(_BaseLatterSensor):
-    """Exposes sensor.pocket_assistant_room_context for Area-Aware Room Control & Handoff."""
+    """Exposes sensor.pocket_assistant_room_context for BLE Area-Aware Room Control, Telemetry & Alarm."""
 
     _attr_name = "Pocket Assistant Room Context"
     _attr_icon = "mdi:floor-plan"
@@ -125,7 +127,7 @@ class PocketAssistantRoomContextSensor(_BaseLatterSensor):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return room entity summary, counts, and handoff targets."""
+        """Return room entity summary, telemetry, alarm state, and handoff targets."""
         _, attrs = self.coordinator.get_room_context_payload()
         return attrs
 
@@ -155,3 +157,28 @@ class PocketAssistantCalendarAgendaSensor(_BaseLatterSensor):
             "events": self.coordinator.calendar_events,
             "calendars": self.coordinator.calendar_entities,
         }
+
+
+class PocketAssistantRemoteConfigSensor(_BaseLatterSensor):
+    """Exposes sensor.pocket_assistant_remote_config replacing the 4 YAML remote substitutions."""
+
+    _attr_name = "Pocket Assistant Remote Config"
+    _attr_icon = "mdi:remote-tv"
+
+    def __init__(self, coordinator: LatterCoordinator) -> None:
+        """Initialize 4-slot remote config sensor."""
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{coordinator.entry.entry_id}_remote_config"
+        self.entity_id = ENTITY_REMOTE_CONFIG
+
+    @property
+    def native_value(self) -> str:
+        """Return active remote slot name."""
+        state, _ = self.coordinator.get_remote_config_payload()
+        return state
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return slot_1..4 names, remote_entity, media_player_entity, and states."""
+        _, attrs = self.coordinator.get_remote_config_payload()
+        return attrs

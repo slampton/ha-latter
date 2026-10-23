@@ -1,4 +1,4 @@
-"""Service registration for Latter (Music, Room Control, Calendar, and Intercom)."""
+"""Service registration for Latter (Music, Room Control, BLE Area Sync, TV Remote, Calendar, Intercom)."""
 
 from __future__ import annotations
 
@@ -12,14 +12,18 @@ from homeassistant.core import HomeAssistant, ServiceCall
 from .browse_engine import async_browse_media_items
 from .calendar_engine import async_fetch_calendar_agenda
 from .const import (
+    CONF_ALARM_ENTITY,
     DEFAULT_LOCAL_SPEAKER,
     DOMAIN,
     SERVICE_CALENDAR_CREATE_EVENT,
     SERVICE_CALENDAR_FETCH,
     SERVICE_INTERCOM_BROADCAST,
+    SERVICE_MEDIA_VOLUME,
     SERVICE_MUSIC_BROWSE,
+    SERVICE_REMOTE_ACTION,
     SERVICE_ROOM_ACTION,
     SERVICE_ROOM_BROWSE,
+    SERVICE_SET_ACTIVE_AREA,
     SERVICE_SET_ACTIVE_SPEAKER,
 )
 from .coordinator import LatterCoordinator
@@ -145,6 +149,110 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         if coord and speaker:
             coord.async_set_active_speaker(speaker)
 
+    async def _handle_media_volume(call: ServiceCall) -> None:
+        """Control volume on the active speaker OR its mapped AVR volume override entity."""
+        data = call.data
+        target_device = data.get("target_device")
+        coord = _get_primary_coordinator(hass, target_device)
+        speaker = str(
+            data.get("speaker")
+            or (coord.active_speaker if coord else DEFAULT_LOCAL_SPEAKER)
+        )
+        vol_target = (
+            coord.get_volume_target_entity(speaker) if coord else speaker
+        )
+
+        action = str(data.get("action") or "set").strip().lower()
+        if action == "up":
+            await hass.services.async_call(
+                "media_player",
+                "volume_up",
+                {ATTR_ENTITY_ID: vol_target},
+                blocking=False,
+            )
+        elif action == "down":
+            await hass.services.async_call(
+                "media_player",
+                "volume_down",
+                {ATTR_ENTITY_ID: vol_target},
+                blocking=False,
+            )
+        elif action == "mute":
+            state_obj = hass.states.get(vol_target)
+            is_muted = bool(
+                state_obj.attributes.get("is_volume_muted", False)
+            ) if state_obj else False
+            await hass.services.async_call(
+                "media_player",
+                "volume_mute",
+                {ATTR_ENTITY_ID: vol_target, "is_volume_muted": not is_muted},
+                blocking=False,
+            )
+        elif data.get("volume_level") is not None:
+            lvl = float(data["volume_level"])
+            if lvl > 1.0:
+                lvl = lvl / 100.0
+            lvl = max(0.0, min(1.0, lvl))
+            await hass.services.async_call(
+                "media_player",
+                "volume_set",
+                {ATTR_ENTITY_ID: vol_target, "volume_level": round(lvl, 2)},
+                blocking=False,
+            )
+
+    async def _handle_set_active_area(call: ServiceCall) -> None:
+        """Directly set active room by area_id or room name (from BLE or UI)."""
+        data = call.data
+        target_device = data.get("target_device")
+        coord = _get_primary_coordinator(hass, target_device)
+        area_val = str(data.get("area") or data.get("area_id") or "").strip()
+        if coord and area_val:
+            coord.async_set_active_area(
+                area_val, handoff_media=data.get("handoff_media")
+            )
+
+    async def _handle_remote_action(call: ServiceCall) -> None:
+        """Execute a TV / Media Remote command on one of the 4 configured remote slots."""
+        data = call.data
+        target_device = data.get("target_device")
+        coord = _get_primary_coordinator(hass, target_device)
+        if not coord:
+            return
+
+        slot_num = int(data.get("slot") or coord.active_remote_slot or 1)
+        slot_num = max(1, min(4, slot_num))
+        if slot_num != coord.active_remote_slot:
+            coord.active_remote_slot = slot_num
+            coord._notify_listeners()
+
+        action = str(data.get("action") or "").strip().lower()
+        if action in ("select_slot", ""):
+            return
+
+        slots = coord.get_remote_slots()
+        slot_info = slots[slot_num - 1]
+        remote_ent = slot_info["remote_entity"]
+        mp_ent = slot_info["media_player_entity"]
+
+        if action == "toggle" and (remote_ent or mp_ent):
+            target = remote_ent or mp_ent
+            domain = target.split(".")[0]
+            await hass.services.async_call(
+                domain, "toggle", {ATTR_ENTITY_ID: target}, blocking=False
+            )
+        elif action in ("volume_up", "volume_down", "volume_mute", "media_play_pause") and mp_ent:
+            await hass.services.async_call(
+                "media_player", action, {ATTR_ENTITY_ID: mp_ent}, blocking=False
+            )
+        elif remote_ent and remote_ent.startswith("remote."):
+            cmd = str(data.get("command") or action)
+            await hass.services.async_call(
+                "remote",
+                "send_command",
+                {ATTR_ENTITY_ID: remote_ent, "command": cmd},
+                blocking=False,
+            )
+
     async def _handle_music_browse(call: ServiceCall) -> None:
         data = call.data
         target_device = str(data.get("target_device") or "pocket-assistant")
@@ -233,6 +341,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         elif mode == "home":
             items = get_home_wide_entities(
                 hass,
+                configured_alarm_entity=coord.get_opt(CONF_ALARM_ENTITY) if coord else None,
                 custom_entities=coord.custom_entities if coord else None,
             )
             slot_mode = "room_home"
@@ -268,8 +377,17 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             )
 
         entity_id = str(data.get("entity_id") or "").strip()
+        action = str(data.get("action") or "toggle").strip().lower()
+        if not entity_id and coord and action in (
+            "arm_home",
+            "arm_away",
+            "arm_night",
+            "arm_vacation",
+            "disarm",
+        ):
+            entity_id = coord.alarm_entity or ""
+
         if entity_id:
-            action = str(data.get("action") or "toggle")
             raw_level = data.get("level")
             level = int(raw_level) if raw_level is not None else None
             code = str(data.get("code")) if data.get("code") is not None else None
@@ -407,6 +525,15 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
     hass.services.async_register(
         DOMAIN, SERVICE_SET_ACTIVE_SPEAKER, _handle_set_active_speaker
+    )
+    hass.services.async_register(
+        DOMAIN, SERVICE_MEDIA_VOLUME, _handle_media_volume
+    )
+    hass.services.async_register(
+        DOMAIN, SERVICE_SET_ACTIVE_AREA, _handle_set_active_area
+    )
+    hass.services.async_register(
+        DOMAIN, SERVICE_REMOTE_ACTION, _handle_remote_action
     )
     hass.services.async_register(
         DOMAIN, SERVICE_MUSIC_BROWSE, _handle_music_browse

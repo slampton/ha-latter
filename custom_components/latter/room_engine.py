@@ -1,4 +1,4 @@
-"""Area-Aware Room Discovery, Curated Entity Filtering, Telemetry & Alarm Engine for Latter."""
+"""Area-Aware Room Discovery, Curated Entity Filtering, Telemetry, Alarm & Remote Engine for Latter."""
 
 from __future__ import annotations
 
@@ -64,6 +64,133 @@ def resolve_entity_area_id(
     return None
 
 
+def match_area_by_name_or_id(
+    hass: HomeAssistant, raw_value: str
+) -> str | None:
+    """Match a BLE presence sensor state (room name, slug, or area_id) to a valid HA area_id."""
+    val = raw_value.strip()
+    if not val or val.lower() in (
+        "unknown",
+        "unavailable",
+        "not_home",
+        "away",
+        "none",
+        "",
+    ):
+        return None
+
+    area_reg = ar.async_get(hass)
+    # 1. Exact area_id match
+    if area_reg.async_get_area(val) is not None:
+        return val
+
+    val_low = val.lower()
+    val_norm = val_low.replace("_", " ").replace("-", " ").strip()
+
+    # 2. Exact name or normalized slug match
+    for area in area_reg.async_list_areas():
+        a_low = area.name.lower()
+        a_norm = a_low.replace("_", " ").replace("-", " ").strip()
+        if val_low == a_low or val_norm == a_norm or val_low == area.id.lower():
+            return area.id
+
+    # 3. Substring match (e.g., "living_room_ble" -> "Living Room")
+    for area in area_reg.async_list_areas():
+        a_norm = area.name.lower().replace("_", " ").replace("-", " ").strip()
+        if a_norm and (a_norm in val_norm or val_norm in a_norm):
+            return area.id
+
+    return None
+
+
+def sync_esphome_device_area(
+    hass: HomeAssistant, device_slug: str, area_id: str
+) -> None:
+    """Update the Pocket Assistant ESPHome device's area_id in HA Device Registry so Voice Assistant is room-aware."""
+    dev_reg = dr.async_get(hass)
+    ent_reg = er.async_get(hass)
+    slug_norm = device_slug.strip().lower().replace("-", "_")
+
+    target_device_id: str | None = None
+
+    # 1. Find device via any entity matching device_slug
+    for entry in ent_reg.entities.values():
+        if entry.platform == "esphome" and slug_norm in entry.entity_id:
+            if entry.device_id:
+                target_device_id = entry.device_id
+                break
+
+    # 2. Fallback: match by device name in device registry
+    if not target_device_id:
+        for dev in dev_reg.devices.values():
+            dev_name = str(dev.name_by_user or dev.name or "").lower().replace("-", "_")
+            if slug_norm in dev_name:
+                target_device_id = dev.id
+                break
+
+    if target_device_id:
+        dev = dev_reg.async_get(target_device_id)
+        if dev and dev.area_id != area_id:
+            dev_reg.async_update_device(target_device_id, area_id=area_id)
+            _LOGGER.debug(
+                "Synced ESPHome device '%s' (id=%s) to area_id='%s' for room-aware Voice Assistant",
+                device_slug,
+                target_device_id,
+                area_id,
+            )
+
+
+def resolve_remote_slot_pair(
+    hass: HomeAssistant, configured_entity_id: str | None
+) -> dict[str, str]:
+    """Given a remote.* or media_player.* entity, auto-resolve its sibling on the same HA device."""
+    empty = {
+        "name": "Unassigned",
+        "remote_entity": "",
+        "media_player_entity": "",
+        "area_id": "",
+        "state": "off",
+    }
+    if not configured_entity_id:
+        return empty
+
+    ent_id = configured_entity_id.strip()
+    state_obj = hass.states.get(ent_id)
+    if state_obj is None:
+        return empty
+
+    ent_reg = er.async_get(hass)
+    entry = ent_reg.async_get(ent_id)
+
+    remote_ent = ent_id if state_obj.domain == "remote" else ""
+    mp_ent = ent_id if state_obj.domain == "media_player" else ""
+
+    if entry and entry.device_id:
+        for sib in er.async_entries_for_device(ent_reg, entry.device_id):
+            if sib.disabled_by:
+                continue
+            if sib.domain == "remote" and not remote_ent:
+                remote_ent = sib.entity_id
+            elif sib.domain == "media_player" and not mp_ent:
+                mp_ent = sib.entity_id
+
+    primary_state = hass.states.get(mp_ent) or state_obj
+    friendly = str(
+        primary_state.attributes.get("friendly_name")
+        or state_obj.attributes.get("friendly_name")
+        or ent_id
+    )
+    area_id = resolve_entity_area_id(hass, ent_id) or ""
+
+    return {
+        "name": friendly[:32],
+        "remote_entity": remote_ent or mp_ent,
+        "media_player_entity": mp_ent or remote_ent,
+        "area_id": area_id,
+        "state": primary_state.state,
+    }
+
+
 def _is_curated_room_entity(
     hass: HomeAssistant, state_obj: State, local_speaker: str = ""
 ) -> bool:
@@ -73,7 +200,6 @@ def _is_curated_room_entity(
     if entry is not None:
         if entry.disabled_by or entry.hidden_by:
             return False
-        # Exclude CONFIG and DIAGNOSTIC entities (child locks, LED toggles, firmware switches)
         if entry.entity_category is not None:
             return False
 
@@ -88,7 +214,6 @@ def _is_curated_room_entity(
         return dev_class in WINDOW_COVER_CLASSES
 
     if domain == "switch":
-        # Only include actual power outlets / smart plugs
         if dev_class == "outlet":
             return True
         name_low = str(attrs.get("friendly_name") or state_obj.entity_id).lower()
@@ -199,7 +324,6 @@ def get_area_climate_telemetry(
 
     ent_reg = er.async_get(hass)
 
-    # 1. Check dedicated temperature & humidity sensors in the area
     for state_obj in hass.states.async_all("sensor"):
         if state_obj.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
             continue
@@ -224,7 +348,6 @@ def get_area_climate_telemetry(
             except ValueError:
                 pass
 
-    # 2. Fallback to climate entity current_temperature / current_humidity in the area
     if result["temperature"] is None or result["humidity"] is None:
         for state_obj in hass.states.async_all("climate"):
             if state_obj.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
@@ -246,8 +369,27 @@ def get_area_climate_telemetry(
     return result
 
 
-def get_home_alarm_summary(hass: HomeAssistant) -> dict[str, str]:
-    """Discover the primary home security alarm_control_panel entity."""
+def get_home_alarm_summary(
+    hass: HomeAssistant, configured_alarm_entity: str | None = None
+) -> dict[str, Any]:
+    """Return the configured (or auto-discovered) home security alarm_control_panel summary."""
+    if configured_alarm_entity:
+        state_obj = hass.states.get(configured_alarm_entity)
+        if state_obj is not None:
+            return {
+                "entity_id": state_obj.entity_id,
+                "state": state_obj.state,
+                "name": str(
+                    state_obj.attributes.get("friendly_name") or "Home Alarm"
+                ),
+                "supported_features": int(
+                    state_obj.attributes.get("supported_features") or 0
+                ),
+                "code_arm_required": bool(
+                    state_obj.attributes.get("code_arm_required", False)
+                ),
+            }
+
     for state_obj in hass.states.async_all("alarm_control_panel"):
         if state_obj.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
             continue
@@ -257,34 +399,50 @@ def get_home_alarm_summary(hass: HomeAssistant) -> dict[str, str]:
             "name": str(
                 state_obj.attributes.get("friendly_name") or "Home Alarm"
             ),
+            "supported_features": int(
+                state_obj.attributes.get("supported_features") or 0
+            ),
+            "code_arm_required": bool(
+                state_obj.attributes.get("code_arm_required", False)
+            ),
         }
-    return {"entity_id": "", "state": "none", "name": ""}
+    return {
+        "entity_id": "",
+        "state": "none",
+        "name": "",
+        "supported_features": 0,
+        "code_arm_required": False,
+    }
 
 
 def get_home_wide_entities(
     hass: HomeAssistant,
+    configured_alarm_entity: str | None = None,
     custom_entities: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Return home-wide security alarm, scenes, and user-pinned entities (`mode='home'`)."""
     items: list[dict[str, Any]] = []
+    seen_ids: set[str] = set()
 
-    # 1. Home Security Alarm (alarm_control_panel.*)
-    for state_obj in hass.states.async_all("alarm_control_panel"):
-        if state_obj.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
-            continue
-        is_armed = state_obj.state != "disarmed"
-        items.append(
-            {
-                "name": format_entity_slot_name(state_obj),
-                "id": state_obj.entity_id,
-                "type": "alarm_control_panel",
-                "active": is_armed,
-                "level": 100 if is_armed else 0,
-            }
-        )
+    alarm_info = get_home_alarm_summary(hass, configured_alarm_entity)
+    if alarm_info["entity_id"]:
+        state_obj = hass.states.get(alarm_info["entity_id"])
+        if state_obj is not None:
+            is_armed = state_obj.state != "disarmed"
+            items.append(
+                {
+                    "name": format_entity_slot_name(state_obj),
+                    "id": state_obj.entity_id,
+                    "type": "alarm_control_panel",
+                    "active": is_armed,
+                    "level": 100 if is_armed else 0,
+                }
+            )
+            seen_ids.add(state_obj.entity_id)
 
-    # 2. User-pinned custom entities from Latter OptionsFlow
     for ent_id in custom_entities or []:
+        if ent_id in seen_ids:
+            continue
         state_obj = hass.states.get(ent_id)
         if state_obj is None or state_obj.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
             continue
@@ -298,6 +456,7 @@ def get_home_wide_entities(
                 "level": get_entity_level(state_obj),
             }
         )
+        seen_ids.add(ent_id)
 
     return items
 
@@ -370,7 +529,7 @@ def get_area_entities(
     custom_entities: list[str] | None = None,
     local_speaker: str = "",
 ) -> list[dict[str, Any]]:
-    """Return curated controllable entities for a specific area (lights, scenes, covers, outlets, fans, MA speaker)."""
+    """Return curated controllable entities for a specific area."""
     area_reg = ar.async_get(hass)
     area_entry = area_reg.async_get_area(area_id) if area_id else None
     area_name = area_entry.name if area_entry else ""
@@ -489,6 +648,7 @@ async def async_execute_room_action(
             "arm_home": "alarm_arm_home",
             "arm_away": "alarm_arm_away",
             "arm_night": "alarm_arm_night",
+            "arm_vacation": "alarm_arm_vacation",
             "disarm": "alarm_disarm",
             "turn_on": "alarm_arm_home",
             "turn_off": "alarm_disarm",
@@ -584,8 +744,7 @@ async def async_execute_room_action(
             domain, svc, {ATTR_ENTITY_ID: entity_id}, blocking=False
         )
     else:
-        svc = " media_play_pause" if domain == "media_player" else "toggle"
-        svc = svc.strip()
+        svc = "media_play_pause" if domain == "media_player" else "toggle"
         if domain == "cover":
             svc = (
                 "close_cover"
