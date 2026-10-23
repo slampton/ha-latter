@@ -1,4 +1,4 @@
-"""Area-Aware Room Discovery, Curated Entity Filtering, Telemetry, Alarm & ESPHome Inspector for Latter."""
+"""Universal Area-Aware Room Discovery, Curated Entity Filtering, Telemetry, Alarm & ESPHome Inspector for Latter."""
 
 from __future__ import annotations
 
@@ -37,23 +37,30 @@ ROOM_CONTROL_DOMAINS: tuple[str, ...] = (
     "media_player",
 )
 
+SLIDER_CAPABLE_DOMAINS: set[str] = {
+    "light",
+    "cover",
+    "fan",
+}
+
 WINDOW_COVER_CLASSES: set[str] = {
     "awning",
     "blind",
     "curtain",
+    "drape",
     "shade",
     "shutter",
     "window",
     "",
 }
 
-# Ordered semantic categories for the ESPHome Device Manager Studio
-ESPHOME_SECTION_META: tuple[tuple[str, str, str], ...] = (
-    ("display", "Display & UI", "Brightness, sleep timeout, themes, boot animations, and screen controls."),
-    ("audio", "Audio, Voice & Wake Word", "Speaker volume, microphone, wake word models, chimes, and voice settings."),
-    ("music", "Music & Media Options", "Library sort orders, podcast sorting, and active media player controls."),
-    ("room_ble", "Room, BLE & Remotes", "BLE room beacon, presence telemetry, and remote control slots."),
-    ("power", "Power, Battery & Thermal", "Battery level, charging status, PMIC voltage, and internal temperature."),
+# Universal semantic fallback categories when an entity does not use an explicit "Category: Name" prefix
+UNIVERSAL_SECTION_META: tuple[tuple[str, str, str], ...] = (
+    ("display", "Display, Home & UI", "Screen controls, themes, brightness, clock faces, and home shortcuts."),
+    ("sleep_power", "Sleep, Wake & Battery", "Sleep/wake behavior, timeouts, screensavers, battery, and thermal telemetry."),
+    ("audio", "Audio, Voice & Sound", "Wake word models, microphone, sensitivity, chimes, and volume settings."),
+    ("room_ble", "Room, BLE & Remotes", "BLE presence beacon, area handoff, and remote control slots."),
+    ("music", "Music & Media", "Media player controls and library/podcast sorting options."),
     ("system", "System, Actions & Network", "Restart, safe mode, firmware updates, Wi-Fi signal, and diagnostics."),
     ("other", "General & Custom Entities", "Additional sensors, switches, and custom project entities (spillover)."),
 )
@@ -65,15 +72,45 @@ def classify_esphome_entity_section(
     domain: str,
     device_class: str,
     entity_category: EntityCategory | None,
-) -> str:
-    """Classify an ESPHome entity into a logical functional section by naming convention or class."""
-    text = f"{entity_id} {friendly_name}".lower()
+) -> tuple[str, str | None]:
+    """Classify an ESPHome entity into a section; returns (section_id, custom_section_title_or_None)."""
+    name_clean = friendly_name.strip()
+    name_low = name_clean.lower()
+    text = f"{entity_id} {name_clean}".lower()
     dev_cls = device_class.lower()
 
-    # 1. Power, Battery & Thermal
+    # 1. Check if entity uses a "Category: Entity Name" convention
+    if ":" in name_clean:
+        prefix_raw = name_clean.split(":", 1)[0].strip()
+        prefix_low = prefix_raw.lower()
+        if prefix_low in ("display", "home", "ui", "screen", "theme"):
+            return "display", None
+        if prefix_low in ("sleep & wake", "sleep", "wake", "power", "battery"):
+            return "sleep_power", None
+        if prefix_low in ("voice", "sound", "audio", "mic", "wake word"):
+            return "audio", None
+        if prefix_low in ("room", "remote", "ble", "area", "presence"):
+            return "room_ble", None
+        if prefix_low in ("music", "media", "player"):
+            return "music", None
+        if prefix_low in ("system", "network", "wifi", "diagnostics", "action", "actions"):
+            return "system", None
+        # Any third-party project using its own "CustomPrefix: Name" gets a dynamic section!
+        if 2 <= len(prefix_raw) <= 24:
+            sec_slug = "custom_" + re.sub(r"[^a-z0-9]+", "_", prefix_low).strip("_")
+            return sec_slug, prefix_raw
+
+    # 2. Universal Keyword & Device Class Classification
     if dev_cls in ("battery", "voltage", "current", "power", "energy", "temperature") or any(
         k in text
         for k in (
+            "sleep",
+            "wake_on",
+            "pickup_to_wake",
+            "tap_to_wake",
+            "screensaver",
+            "hibernate",
+            "stay_awake",
             "battery",
             "charging",
             "charger",
@@ -86,9 +123,8 @@ def classify_esphome_entity_section(
             "die_temp",
         )
     ):
-        return "power"
+        return "sleep_power", None
 
-    # 2. Display & UI
     if any(
         k in text
         for k in (
@@ -102,19 +138,18 @@ def classify_esphome_entity_section(
             "clock",
             "dock",
             "boot",
-            "sleep",
             "timeout",
             "dim",
             "nightstand",
             "page",
             "ui_",
-            "color",
-            "sky",
+            "color_profile",
+            "weather_background",
+            "shortcut_",
         )
     ):
-        return "display"
+        return "display", None
 
-    # 3. Audio, Voice & Wake Word
     if any(
         k in text
         for k in (
@@ -128,7 +163,8 @@ def classify_esphome_entity_section(
             "chime",
             "beep",
             "ringtone",
-            "timer_sound",
+            "alert_volume",
+            "volume_step",
             "dac",
             "es8311",
             "es7210",
@@ -138,9 +174,27 @@ def classify_esphome_entity_section(
             "assist",
         )
     ):
-        return "audio"
+        return "audio", None
 
-    # 4. Music & Media Options
+    if any(
+        k in text
+        for k in (
+            "ble",
+            "beacon",
+            "ibeacon",
+            "bluetooth",
+            "presence",
+            "room",
+            "area",
+            "remote",
+            "slot_1",
+            "slot_2",
+            "slot_3",
+            "slot_4",
+        )
+    ):
+        return "room_ble", None
+
     if domain == "media_player" or any(
         k in text
         for k in (
@@ -156,28 +210,10 @@ def classify_esphome_entity_section(
             "speaker",
         )
     ):
-        return "music"
+        return "music", None
 
-    # 5. Room, BLE & Remotes
-    if any(
-        k in text
-        for k in (
-            "ble",
-            "beacon",
-            "ibeacon",
-            "bluetooth",
-            "presence",
-            "room",
-            "area",
-            "remote",
-            "tv_",
-        )
-    ):
-        return "room_ble"
-
-    # 6. System, Actions & Network
     if (
-        domain in ("update",)
+        domain in ("update", "button")
         or entity_category == EntityCategory.DIAGNOSTIC
         or dev_cls in ("signal_strength", "timestamp", "duration", "restart", "identify")
         or any(
@@ -197,7 +233,7 @@ def classify_esphome_entity_section(
                 "free_heap",
                 "psram",
                 "memory",
-                "Cpu",
+                "cpu",
                 "firmware",
                 "version",
                 "status",
@@ -206,14 +242,9 @@ def classify_esphome_entity_section(
             )
         )
     ):
-        return "system"
+        return "system", None
 
-    # 7. Buttons without a specific prefix go to System & Actions
-    if domain == "button":
-        return "system"
-
-    # 8. Spillover bucket for any custom ESPHome entity
-    return "other"
+    return "other", None
 
 
 def resolve_entity_area_id(
@@ -319,7 +350,7 @@ def inject_esphome_visit_link(
 def get_esphome_device_entities(
     hass: HomeAssistant, device_slug: str
 ) -> dict[str, Any]:
-    """Inspect and semantically group all entities belonging to the ESPHome device."""
+    """Inspect and semantically group all entities belonging to any ESPHome device."""
     target_device_id = find_esphome_device_id(hass, device_slug)
     dev_reg = dr.async_get(hass)
     ent_reg = er.async_get(hass)
@@ -344,8 +375,9 @@ def get_esphome_device_entities(
                 break
 
     sections_map: dict[str, list[dict[str, Any]]] = {
-        sec_id: [] for sec_id, _title, _desc in ESPHOME_SECTION_META
+        sec_id: [] for sec_id, _title, _desc in UNIVERSAL_SECTION_META
     }
+    custom_sec_titles: dict[str, str] = {}
 
     entries: list[er.RegistryEntry] = []
     if target_device_id:
@@ -360,9 +392,10 @@ def get_esphome_device_entities(
             if e.platform == "esphome" and slug_norm in e.entity_id and not e.disabled_by
         ]
 
+    # Dynamically strip the device's own friendly name or slug prefix (never hardcoding a single product name)
     dev_prefix = dev_meta["name"].strip()
+    slug_words = device_slug.strip().replace("_", " ").replace("-", " ")
 
-    # Priority order inside each section: interactive controls first, sensors second
     domain_sort_order = {
         "switch": 1,
         "select": 2,
@@ -385,19 +418,23 @@ def get_esphome_device_entities(
             or entry.original_name
             or entry.entity_id
         )
-        # Strip redundant device name prefix (e.g. "Pocket Assistant Display Brightness" -> "Display Brightness")
         clean_name = raw_friendly
-        if dev_prefix and clean_name.lower().startswith(dev_prefix.lower() + " "):
-            clean_name = clean_name[len(dev_prefix) + 1 :].strip() or raw_friendly
-        clean_name = re.sub(r"^pocket[\s_-]*assistant[\s_-]*", "", clean_name, flags=re.IGNORECASE).strip() or raw_friendly
+        for candidate_prefix in (dev_prefix, slug_words):
+            if candidate_prefix and clean_name.lower().startswith(candidate_prefix.lower() + " "):
+                clean_name = clean_name[len(candidate_prefix) + 1 :].strip() or raw_friendly
 
         unit = str(attrs.get("unit_of_measurement") or "")
-        dev_class = str(attrs.get("device_class") or entry.original_device_class or "")
+        dev_class = str(
+            attrs.get("device_class") or entry.original_device_class or ""
+        )
         cat = entry.entity_category
 
-        sec_id = classify_esphome_entity_section(
+        sec_id, custom_title = classify_esphome_entity_section(
             entry.entity_id, clean_name, entry.domain, dev_class, cat
         )
+        if custom_title and sec_id not in sections_map:
+            sections_map[sec_id] = []
+            custom_sec_titles[sec_id] = custom_title
 
         item: dict[str, Any] = {
             "entity_id": entry.entity_id,
@@ -411,13 +448,19 @@ def get_esphome_device_entities(
             "min": attrs.get("min"),
             "max": attrs.get("max"),
             "step": attrs.get("step"),
-            "_sort": (domain_sort_order.get(entry.domain, 50), clean_name.lower()),
+            "_sort": (
+                domain_sort_order.get(entry.domain, 50),
+                clean_name.lower(),
+            ),
         }
         sections_map[sec_id].append(item)
 
     sections_list: list[dict[str, Any]] = []
-    for sec_id, sec_title, sec_desc in ESPHOME_SECTION_META:
-        sec_items = sections_map[sec_id]
+    # 1. Standard semantic sections
+    for sec_id, sec_title, sec_desc in UNIVERSAL_SECTION_META:
+        if sec_id == "other":
+            continue
+        sec_items = sections_map.get(sec_id, [])
         if not sec_items:
             continue
         sec_items.sort(key=lambda x: x["_sort"])
@@ -433,6 +476,40 @@ def get_esphome_device_entities(
             }
         )
 
+    # 2. Any dynamically discovered "CustomCategory: Name" sections from third-party ESPHome projects
+    for sec_id, sec_title in sorted(custom_sec_titles.items(), key=lambda x: x[1].lower()):
+        sec_items = sections_map.get(sec_id, [])
+        if not sec_items:
+            continue
+        sec_items.sort(key=lambda x: x["_sort"])
+        for it in sec_items:
+            it.pop("_sort", None)
+        sections_list.append(
+            {
+                "id": sec_id,
+                "title": sec_title,
+                "description": f"Entities grouped under the '{sec_title}:' prefix.",
+                "count": len(sec_items),
+                "items": sec_items,
+            }
+        )
+
+    # 3. Spillover ("General & Custom Entities")
+    other_items = sections_map.get("other", [])
+    if other_items:
+        other_items.sort(key=lambda x: x["_sort"])
+        for it in other_items:
+            it.pop("_sort", None)
+        sections_list.append(
+            {
+                "id": "other",
+                "title": "General & Custom Entities",
+                "description": "Additional sensors, switches, and custom project entities (spillover).",
+                "count": len(other_items),
+                "items": other_items,
+            }
+        )
+
     return {
         "device": dev_meta,
         "sections": sections_list,
@@ -442,7 +519,7 @@ def get_esphome_device_entities(
 def protect_handheld_sensors_from_area_dashboards(
     hass: HomeAssistant, device_slug: str
 ) -> None:
-    """Mark on-device temperature/humidity sensors on the handheld as DIAGNOSTIC so they never pollute room dashboards."""
+    """Mark on-device temperature/humidity sensors on a mobile device as DIAGNOSTIC so they never pollute room dashboards."""
     target_device_id = find_esphome_device_id(hass, device_slug)
     if not target_device_id:
         return
@@ -463,7 +540,7 @@ def protect_handheld_sensors_from_area_dashboards(
                 entity_category=EntityCategory.DIAGNOSTIC,
             )
             _LOGGER.info(
-                "Marked handheld sensor '%s' as DIAGNOSTIC so it will not override room Area temperatures",
+                "Marked mobile device sensor '%s' as DIAGNOSTIC so it will not override room Area temperatures",
                 entry.entity_id,
             )
 
@@ -474,7 +551,7 @@ def sync_esphome_device_area(
     area_id: str,
     require_ble_proxy_area: bool = True,
 ) -> None:
-    """Update the Pocket Assistant ESPHome device's area_id in HA Device Registry ONLY for valid rooms."""
+    """Update the ESPHome device's area_id in HA Device Registry ONLY for valid rooms."""
     if not area_id:
         return
 
@@ -574,6 +651,9 @@ def _is_curated_room_entity(
         return True
 
     if domain == "cover":
+        name_low = str(attrs.get("friendly_name") or state_obj.entity_id).lower()
+        if any(k in name_low for k in ("curtain", "drape", "sheer", "blind", "shade", "shutter", "window")):
+            return True
         return dev_class in WINDOW_COVER_CLASSES
 
     if domain == "switch":
@@ -591,21 +671,13 @@ def _is_curated_room_entity(
 
 
 def get_entity_level(state_obj: State) -> int:
-    """Compute a normalized 0..100 level for horizontal fill-slider UI cards."""
+    """Return 0..100 for slider-capable domains (light, cover, fan) or -1 for non-slider domains."""
     domain = state_obj.domain
+    if domain not in SLIDER_CAPABLE_DOMAINS:
+        return -1
+
     attrs = state_obj.attributes
-    is_active = state_obj.state in (
-        STATE_ON,
-        STATE_OPEN,
-        STATE_PLAYING,
-        "heat",
-        "cool",
-        "heat_cool",
-        "auto",
-        "armed_home",
-        "armed_away",
-        "armed_night",
-    )
+    is_active = state_obj.state in (STATE_ON, STATE_OPEN)
 
     if domain == "light":
         if not is_active:
@@ -629,19 +701,7 @@ def get_entity_level(state_obj: State) -> int:
             return max(0, min(100, int(round(float(pct)))))
         return 100
 
-    if domain == "climate":
-        temp = attrs.get("temperature") or attrs.get("current_temperature")
-        if temp is not None:
-            return max(0, min(100, int(round(float(temp)))))
-        return 0
-
-    if domain == "media_player":
-        vol = attrs.get("volume_level")
-        if vol is not None:
-            return max(0, min(100, int(round(float(vol) * 100))))
-        return 50 if is_active else 0
-
-    return 100 if is_active else 0
+    return -1
 
 
 def format_entity_slot_name(state_obj: State, area_name: str = "") -> str:
@@ -653,9 +713,9 @@ def format_entity_slot_name(state_obj: State, area_name: str = "") -> str:
     domain = state_obj.domain
     level = get_entity_level(state_obj)
 
-    if domain == "light" and state_obj.state == STATE_ON:
+    if domain == "light" and state_obj.state == STATE_ON and level >= 0:
         return f"{friendly} ({level}%)"
-    if domain == "cover":
+    if domain == "cover" and level >= 0:
         return f"{friendly} ({level}%)"
     if domain == "climate":
         cur = state_obj.attributes.get("current_temperature")
@@ -664,7 +724,7 @@ def format_entity_slot_name(state_obj: State, area_name: str = "") -> str:
             return f"{friendly} ({int(round(float(tgt)))}°)"
         if cur is not None:
             return f"{friendly} ({int(round(float(cur)))}°)"
-    if domain == "fan" and state_obj.state == STATE_ON:
+    if domain == "fan" and state_obj.state == STATE_ON and level >= 0:
         return f"{friendly} ({level}%)"
     if domain == "media_player":
         return f"Speaker: {friendly}"
@@ -676,7 +736,7 @@ def format_entity_slot_name(state_obj: State, area_name: str = "") -> str:
 def get_area_climate_telemetry(
     hass: HomeAssistant, area_id: str | None, device_slug: str = "pocket_assistant"
 ) -> dict[str, Any]:
-    """Discover ambient room temperature and humidity assigned to an area (excluding the handheld itself!)."""
+    """Discover ambient room temperature and humidity assigned to an area."""
     result: dict[str, Any] = {
         "temperature": None,
         "temperature_unit": "",
@@ -809,7 +869,7 @@ def get_home_wide_entities(
                     "id": state_obj.entity_id,
                     "type": "alarm_control_panel",
                     "active": is_armed,
-                    "level": 100 if is_armed else 0,
+                    "level": -1,
                 }
             )
             seen_ids.add(state_obj.entity_id)
@@ -888,13 +948,33 @@ def get_areas_summary(
                 "id": area.id,
                 "type": "area",
                 "active": area.id == active_area_id,
-                "level": min(100, lights_on * 25),
+                "level": -1,
                 "_raw_name": area.name,
             }
         )
 
     items.sort(key=lambda x: (not x["active"], x["_raw_name"].lower()))
     return items
+
+
+def _parse_domain_filter(domain_filter: str) -> tuple[str, ...]:
+    """Parse a single domain, comma-separated domain list ('cover,fan'), or alias into allowed domains."""
+    raw = domain_filter.strip().lower()
+    if not raw or raw == "all":
+        return ROOM_CONTROL_DOMAINS
+    if raw in ("cover", "shades", "shades_fans"):
+        return ("cover", "fan")
+    if "," in raw:
+        parts = [
+            p.strip()
+            for p in raw.split(",")
+            if p.strip() in ROOM_CONTROL_DOMAINS
+        ]
+        if parts:
+            return tuple(parts)
+    if raw in ROOM_CONTROL_DOMAINS:
+        return (raw,)
+    return ROOM_CONTROL_DOMAINS
 
 
 def get_area_entities(
@@ -904,26 +984,22 @@ def get_area_entities(
     custom_entities: list[str] | None = None,
     local_speaker: str = "",
 ) -> list[dict[str, Any]]:
-    """Return curated controllable entities for a specific area."""
+    """Return curated controllable entities for a specific area (supports single or comma-separated domain_filter)."""
     area_reg = ar.async_get(hass)
     area_entry = area_reg.async_get_area(area_id) if area_id else None
     area_name = area_entry.name if area_entry else ""
 
-    domain_filter = domain_filter.strip().lower()
-    allowed_domains = (
-        (domain_filter,)
-        if domain_filter in ROOM_CONTROL_DOMAINS
-        else ROOM_CONTROL_DOMAINS
-    )
+    allowed_domains = _parse_domain_filter(domain_filter)
+    is_all_filter = domain_filter.strip().lower() in ("", "all")
 
     pinned_set = set(custom_entities or [])
     items: list[dict[str, Any]] = []
 
     domain_priority = {
         "light": 1,
-        "scene": 2,
-        "cover": 3,
-        "fan": 4,
+        "cover": 2,
+        "fan": 3,
+        "scene": 4,
         "climate": 5,
         "switch": 6,
         "media_player": 7,
@@ -945,6 +1021,8 @@ def get_area_entities(
                 continue
             if not _is_curated_room_entity(hass, state_obj, local_speaker):
                 continue
+        elif not is_all_filter and state_obj.domain not in allowed_domains:
+            continue
 
         is_active = state_obj.state in (
             STATE_ON,
@@ -1017,7 +1095,7 @@ async def async_execute_room_action(
 
     domain = state_obj.domain
     action = action.strip().lower()
-    cur_level = get_entity_level(state_obj)
+    cur_level = max(0, get_entity_level(state_obj))
 
     if domain == "button":
         await hass.services.async_call(
@@ -1074,9 +1152,9 @@ async def async_execute_room_action(
         level = max(0, min(100, cur_level + (step if action == "step_up" else -step)))
         action = "set_level"
 
-    if domain == "scene":
+    if domain in ("scene", "script"):
         await hass.services.async_call(
-            "scene", "turn_on", {ATTR_ENTITY_ID: entity_id}, blocking=False
+            domain, "turn_on", {ATTR_ENTITY_ID: entity_id}, blocking=False
         )
         return
 

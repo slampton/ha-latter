@@ -1,4 +1,4 @@
-"""Service registration for Latter (Music, Room Control, BLE Area Sync, TV Remote, Trigger Bindings, Calendar, Intercom)."""
+"""Service registration for Latter (Universal ESPHome Pagination, Room Control, BLE Area Sync, TV Remote, Trigger Bindings, Calendar, Intercom)."""
 
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ from .calendar_engine import async_fetch_calendar_agenda
 from .const import (
     CONF_ALARM_ENTITY,
     DEFAULT_LOCAL_SPEAKER,
+    DEFAULT_PAGE_SIZE,
     DOMAIN,
     SERVICE_CALENDAR_CREATE_EVENT,
     SERVICE_CALENDAR_FETCH,
@@ -76,6 +77,29 @@ def _resolve_esphome_action(
     return None
 
 
+def _detect_esphome_slot_capacity(
+    hass: HomeAssistant, esphome_action: str | None, default_slots: int = 5
+) -> int:
+    """Inspect the ESPHome service schema to see how many sN_name slots the firmware action accepts (supports 1..20)."""
+    if not esphome_action:
+        return default_slots
+    try:
+        esphome_services = hass.services.async_services().get("esphome", {})
+        svc_obj = esphome_services.get(esphome_action)
+        schema = getattr(svc_obj, "schema", None)
+        if schema is not None and hasattr(schema, "schema") and isinstance(schema.schema, dict):
+            keys = {str(k) for k in schema.schema}
+            max_slot = 0
+            for idx in range(1, 21):
+                if f"s{idx}_name" in keys:
+                    max_slot = idx
+            if max_slot > 0:
+                return max_slot
+    except Exception:  # noqa: BLE001
+        pass
+    return default_slots
+
+
 async def async_push_browse_slots(
     hass: HomeAssistant,
     device_slug: str,
@@ -85,12 +109,22 @@ async def async_push_browse_slots(
     items: list[dict[str, Any]],
     preferred_suffix: str = "set_browse_slots",
 ) -> None:
-    """Paginate items into 5 slots and call esphome.<device_slug>_<preferred_suffix>."""
+    """Paginate items for any GUI page_size (1..20) and push to esphome.<slug>_<suffix>."""
+    esphome_action = _resolve_esphome_action(hass, device_slug, preferred_suffix)
+    include_levels = preferred_suffix == "set_room_slots" and esphome_action is not None
+
+    if esphome_action is None and preferred_suffix != "set_browse_slots":
+        esphome_action = _resolve_esphome_action(
+            hass, device_slug, "set_browse_slots"
+        )
+
+    slot_capacity = _detect_esphome_slot_capacity(hass, esphome_action, default_slots=5)
+    eff_page_size = max(1, min(slot_capacity, int(page_size)))
     total_items = len(items)
-    total_pages = max(1, math.ceil(total_items / page_size))
-    page = max(1, min(page, total_pages))
-    start_idx = (page - 1) * page_size
-    page_slice = items[start_idx : start_idx + 5]
+    total_pages = max(1, math.ceil(total_items / eff_page_size))
+    page = max(1, min(int(page), total_pages))
+    start_idx = (page - 1) * eff_page_size
+    page_slice = items[start_idx : start_idx + eff_page_size]
 
     payload: dict[str, Any] = {
         "mode": str(mode),
@@ -100,15 +134,7 @@ async def async_push_browse_slots(
         "has_next": bool(page < total_pages),
     }
 
-    esphome_action = _resolve_esphome_action(hass, device_slug, preferred_suffix)
-    include_levels = preferred_suffix == "set_room_slots" and esphome_action is not None
-
-    if esphome_action is None and preferred_suffix != "set_browse_slots":
-        esphome_action = _resolve_esphome_action(
-            hass, device_slug, "set_browse_slots"
-        )
-
-    for idx in range(1, 6):
+    for idx in range(1, slot_capacity + 1):
         if idx <= len(page_slice):
             slot = page_slice[idx - 1]
             payload[f"s{idx}_name"] = str(slot.get("name", ""))[:64]
@@ -116,14 +142,14 @@ async def async_push_browse_slots(
             payload[f"s{idx}_type"] = str(slot.get("type", mode))[:32]
             payload[f"s{idx}_active"] = bool(slot.get("active", False))
             if include_levels:
-                payload[f"s{idx}_level"] = int(slot.get("level", 0))
+                payload[f"s{idx}_level"] = int(slot.get("level", -1))
         else:
             payload[f"s{idx}_name"] = ""
             payload[f"s{idx}_id"] = ""
             payload[f"s{idx}_type"] = ""
             payload[f"s{idx}_active"] = False
             if include_levels:
-                payload[f"s{idx}_level"] = 0
+                payload[f"s{idx}_level"] = -1
 
     if esphome_action is None:
         _LOGGER.warning(
@@ -384,7 +410,9 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
         mode = str(data.get("mode") or "entities").strip().lower()
         page = int(data.get("page") or 1)
-        page_size = int(data.get("page_size") or 5)
+        configured_ps = coord.default_page_size if coord else DEFAULT_PAGE_SIZE
+        default_ps = 5 if mode == "areas" else configured_ps
+        page_size = int(data.get("page_size") or default_ps)
         area_id = str(
             data.get("area_id")
             or (coord.active_area_id if coord else "")
