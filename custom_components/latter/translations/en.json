@@ -1,0 +1,39 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Latter (ESPHome Companion & Entity Middleware)",
+        "description": "Bind Home Assistant entities, media players, weather, and services to your Pocket Assistant or ESPHome device without YAML substitutions or reflashing.",
+        "data": {
+          "device_slug": "ESPHome Device Name / Slug",
+          "default_speaker": "Default Active Speaker",
+          "local_speaker": "On-Device Speaker (Optional)",
+          "weather_entity": "Weather Provider Entity",
+          "calendar_entities": "Calendars (Agenda Serialization)",
+          "art_size": "Image Proxy Resolution",
+          "enable_v20_compat": "Enable Pocket Assistant v2.0 Compatibility Bridge"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "This ESPHome device is already configured in Latter."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Latter Device Mapping & Middleware Options",
+        "description": "Dynamically remap Home Assistant entities and middleware services for this ESPHome device.",
+        "data": {
+          "device_slug": "ESPHome Device Name / Slug",
+          "default_speaker": "Default Active Speaker",
+          "local_speaker": "On-Device Speaker (Optional)",
+          "weather_entity": "Weather Provider Entity",
+          "calendar_entities": "Calendars (Agenda Serialization)",
+          "art_size": "Image Proxy Resolution",
+          "enable_v20_compat": "Enable Pocket Assistant v2.0 Compatibility Bridge"
+        }
+      }
+    }
+  }
+}

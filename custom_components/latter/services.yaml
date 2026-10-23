@@ -1,0 +1,84 @@
+music_browse:
+  name: Music Browse
+  description: Browse speakers, Music Assistant library, podcasts, and queues and push a 5-slot page to the ESPHome device.
+  fields:
+    target_device:
+      name: Target ESPHome Device
+      description: ESPHome device name (e.g., pocket-assistant).
+      required: false
+      default: "pocket-assistant"
+      selector:
+        text:
+    mode:
+      name: Browse Mode
+      description: Category or drill-down mode to browse.
+      required: true
+      default: "speakers"
+      selector:
+        select:
+          options:
+            - "speakers"
+            - "favorites"
+            - "playlist"
+            - "artist"
+            - "album"
+            - "radio"
+            - "podcast"
+            - "audiobook"
+            - "track"
+            - "artist_albums"
+            - "album_tracks"
+            - "current_album_tracks"
+            - "active_queue"
+            - "podcast_episodes"
+    page:
+      name: Page Number
+      description: 1-based page index.
+      required: false
+      default: 1
+      selector:
+        number:
+          min: 1
+          max: 500
+          mode: box
+    page_size:
+      name: Page Size
+      description: Items per page (default 5).
+      required: false
+      default: 5
+      selector:
+        number:
+          min: 1
+          max: 5
+          mode: box
+    search:
+      name: Search / Filter Context
+      description: Artist name, Album URI/name, or Podcast URI for drill-down modes.
+      required: false
+      selector:
+        text:
+    speaker:
+      name: Active Speaker
+      description: Currently selected media_player entity_id.
+      required: false
+      selector:
+        entity:
+          domain: media_player
+
+set_active_speaker:
+  name: Set Active Speaker
+  description: Change the active target media_player for the Pocket Assistant or ESPHome device.
+  fields:
+    entity_id:
+      name: Speaker Entity
+      description: Target media_player entity_id.
+      required: true
+      selector:
+        entity:
+          domain: media_player
+    target_device:
+      name: Target ESPHome Device
+      description: Optional ESPHome device slug when running multiple devices.
+      required: false
+      selector:
+        text:
