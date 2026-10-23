@@ -1,6 +1,6 @@
 music_browse:
   name: Music Browse
-  description: Browse speakers, Music Assistant library, podcasts, and queues and push a 5-slot page to the ESPHome device.
+  description: Browse Music Assistant speakers, library, podcasts, and queues and push a 5-slot page to the ESPHome device.
   fields:
     target_device:
       name: Target ESPHome Device
@@ -122,9 +122,106 @@ set_active_speaker:
       selector:
         text:
 
+media_volume:
+  name: Media Volume Control (With AVR Override Support)
+  description: Adjust or set volume on the active speaker (automatically routing to a mapped AV Receiver volume entity if configured).
+  fields:
+    target_device:
+      name: Target ESPHome Device
+      description: Optional ESPHome device slug.
+      required: false
+      selector:
+        text:
+    action:
+      name: Volume Action
+      description: Set level, step up/down, or toggle mute.
+      required: false
+      default: "set"
+      selector:
+        select:
+          options:
+            - "set"
+            - "up"
+            - "down"
+            - "mute"
+    volume_level:
+      name: Volume Level (0.0-1.0 or 0-100)
+      description: Target volume level.
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 100
+          mode: slider
+
+set_active_area:
+  name: Set Active Room / Area (BLE Presence & Voice Sync)
+  description: Switch the active room context by area_id or room name, sync the ESPHome device's HA area for room-aware Voice Assistant, and optionally hand off speaker/remote.
+  fields:
+    area:
+      name: Area ID or Room Name
+      description: Target Home Assistant area_id or friendly room name.
+      required: true
+      selector:
+        text:
+    handoff_media:
+      name: Handoff Media Context
+      description: Optional override for automatic room speaker & remote handoff.
+      required: false
+      selector:
+        boolean:
+    target_device:
+      name: Target ESPHome Device
+      description: Optional ESPHome device slug.
+      required: false
+      selector:
+        text:
+
+remote_action:
+  name: TV / Media Remote Slot Action
+  description: Select one of the 4 configured TV remote slots or send a remote command.
+  fields:
+    slot:
+      name: Remote Slot (1-4)
+      description: Target remote slot index (1 to 4).
+      required: false
+      default: 1
+      selector:
+        number:
+          min: 1
+          max: 4
+          mode: box
+    action:
+      name: Action
+      description: Command or slot selection action.
+      required: true
+      default: "select_slot"
+      selector:
+        select:
+          options:
+            - "select_slot"
+            - "toggle"
+            - "command"
+            - "volume_up"
+            - "volume_down"
+            - "volume_mute"
+            - "media_play_pause"
+    command:
+      name: Remote Command Key
+      description: Key name for remote.send_command (e.g., up, down, left, right, select, back, home, menu).
+      required: false
+      selector:
+        text:
+    target_device:
+      name: Target ESPHome Device
+      description: Optional ESPHome device slug.
+      required: false
+      selector:
+        text:
+
 room_browse:
   name: Room Browse
-  description: Browse Home Assistant areas or controllable room entities (lights, covers, climate, fans, switches, scenes) and push a 5-slot page to the ESPHome device.
+  description: Browse Home Assistant areas, curated room entities, or home-wide alarm/pinned entities and push a 5-slot page to the ESPHome device.
   fields:
     target_device:
       name: Target ESPHome Device
@@ -135,7 +232,7 @@ room_browse:
         text:
     mode:
       name: Browse Mode
-      description: Browse areas list or entities inside an area.
+      description: Browse areas list, entities inside an area, or home-wide alarm/entities.
       required: false
       default: "entities"
       selector:
@@ -143,6 +240,7 @@ room_browse:
           options:
             - "areas"
             - "entities"
+            - "home"
     area_id:
       name: Area ID
       description: Target Home Assistant area_id (defaults to the device's active area).
@@ -159,11 +257,12 @@ room_browse:
           options:
             - "all"
             - "light"
+            - "scene"
             - "cover"
-            - "climate"
             - "fan"
             - "switch"
-            - "scene"
+            - "climate"
+            - "media_player"
     page:
       name: Page Number
       description: 1-based page index.
@@ -192,8 +291,8 @@ room_browse:
         boolean:
 
 room_action:
-  name: Room Action
-  description: Execute a normalized room control action (toggle, turn_on, turn_off, set_level, step_up, step_down) or switch active room area.
+  name: Room & Alarm Action
+  description: Execute a normalized room control or home alarm action (toggle, turn_on, turn_off, set_level, arm_home, arm_away, arm_night, disarm).
   fields:
     target_device:
       name: Target ESPHome Device
@@ -204,7 +303,7 @@ room_action:
         text:
     entity_id:
       name: Target Entity
-      description: Light, cover, climate, fan, switch, or scene entity_id to control.
+      description: Light, cover, climate, fan, switch, scene, or alarm_control_panel entity_id (if omitted for alarm actions, uses configured Home Alarm).
       required: false
       selector:
         entity:
@@ -228,6 +327,11 @@ room_action:
             - "set_level"
             - "step_up"
             - "step_down"
+            - "arm_home"
+            - "arm_away"
+            - "arm_night"
+            - "arm_vacation"
+            - "disarm"
     level:
       name: Level / Temperature (0-100)
       description: Brightness %, cover position %, fan speed %, or target temperature.
@@ -237,6 +341,12 @@ room_action:
           min: 0
           max: 100
           mode: slider
+    code:
+      name: Alarm PIN Code
+      description: Optional PIN code when arming or disarming an alarm_control_panel.
+      required: false
+      selector:
+        text:
 
 calendar_fetch:
   name: Calendar Fetch Agenda
