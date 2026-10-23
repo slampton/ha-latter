@@ -1,4 +1,4 @@
-"""State coordinator for Latter (Pocket Assistant v2.1+ & ESPHome Middleware)."""
+"""State coordinator for Latter (Universal ESPHome Companion & Entity Middleware)."""
 
 from __future__ import annotations
 
@@ -42,9 +42,11 @@ from .const import (
     CONF_CUSTOM_BINDINGS,
     CONF_CUSTOM_ENTITIES,
     CONF_DEFAULT_AREA,
+    CONF_DEFAULT_PAGE_SIZE,
     CONF_DEFAULT_SPEAKER,
     CONF_DEVICE_PROFILE,
     CONF_DEVICE_SLUG,
+    CONF_DISPLAY_SHAPE,
     CONF_DOCK_APPS,
     CONF_NATIVE_BLE_TRACKING,
     CONF_PRESENCE_ENTITY,
@@ -65,8 +67,10 @@ from .const import (
     DEFAULT_BLE_BEACON_UUID,
     DEFAULT_DEVICE_PROFILE,
     DEFAULT_DEVICE_SLUG,
+    DEFAULT_DISPLAY_SHAPE,
     DEFAULT_DOCK_APPS,
     DEFAULT_NATIVE_BLE_TRACKING,
+    DEFAULT_PAGE_SIZE,
     DEFAULT_SYNC_DEVICE_AREA,
     FORECAST_REFRESH_INTERVAL_MINUTES,
     POSITION_UPDATE_INTERVAL_SECONDS,
@@ -118,7 +122,7 @@ def _resolve_esphome_local_speaker(
 def _get_esphome_device_current_area(
     hass: HomeAssistant, device_slug: str
 ) -> str | None:
-    """Return the current area_id assigned to the Pocket Assistant device in HA Device Registry."""
+    """Return the current area_id assigned to the ESPHome device in HA Device Registry."""
     dev_reg = dr.async_get(hass)
     slug_norm = device_slug.strip().lower().replace("-", "_")
     for dev in dev_reg.devices.values():
@@ -204,6 +208,21 @@ class LatterCoordinator:
         ).strip()
 
     @property
+    def display_shape(self) -> str:
+        """Return display geometry ('circle' or 'square')."""
+        return str(
+            self.get_opt(CONF_DISPLAY_SHAPE, DEFAULT_DISPLAY_SHAPE)
+        ).strip().lower()
+
+    @property
+    def default_page_size(self) -> int:
+        """Return default room/entity pagination page size for this device's GUI."""
+        return max(
+            1,
+            min(20, int(self.get_opt(CONF_DEFAULT_PAGE_SIZE, DEFAULT_PAGE_SIZE))),
+        )
+
+    @property
     def dock_apps_csv(self) -> str:
         """Return comma-separated Home Dock app order."""
         return str(self.get_opt(CONF_DOCK_APPS, DEFAULT_DOCK_APPS)).strip()
@@ -221,7 +240,7 @@ class LatterCoordinator:
 
     @property
     def local_speaker(self) -> str:
-        """Automatically resolve the on-device Sendspin media_player entity from device_slug."""
+        """Automatically resolve the on-device media_player entity from device_slug."""
         return _resolve_esphome_local_speaker(self.hass, self.device_slug)
 
     @property
@@ -248,7 +267,7 @@ class LatterCoordinator:
 
     @property
     def ble_beacon_uuid(self) -> str:
-        """Return the iBeacon UUID broadcast by the Pocket Assistant device."""
+        """Return the iBeacon UUID broadcast by the device."""
         return str(
             self.get_opt(CONF_BLE_BEACON_UUID, DEFAULT_BLE_BEACON_UUID)
         ).strip()
@@ -336,7 +355,7 @@ class LatterCoordinator:
         return f"{base_url}/api/latter/companion/{self.entry.entry_id}?token={token}"
 
     def build_wallpaper_url(self) -> str:
-        """Build the authenticated 466x466 circular-masked photo wallpaper URL."""
+        """Build the authenticated photo wallpaper URL."""
         if not self.wallpaper_source:
             return "none"
         try:
@@ -344,14 +363,16 @@ class LatterCoordinator:
         except Exception:  # noqa: BLE001
             base_url = "http://homeassistant.local:8123"
         token = self.get_signed_token()
-        digest = hashlib.md5(self.wallpaper_source.encode("utf-8")).hexdigest()[:10]
+        digest = hashlib.md5(
+            f"{self.wallpaper_source}|{self.display_shape}|{self.art_size}".encode("utf-8")
+        ).hexdigest()[:10]
         return (
             f"{base_url}/api/latter/wallpaper/{self.entry.entry_id}"
             f"?token={token}&v={digest}"
         )
 
     def build_proxy_art_url(self, cache_bust: str) -> str:
-        """Build the full external/internal HTTP URL for the ESP32-S3 online_image."""
+        """Build the full external/internal HTTP URL for the ESPHome online_image."""
         try:
             base_url = get_url(self.hass, allow_internal=True, prefer_external=False)
         except Exception:  # noqa: BLE001
@@ -365,9 +386,10 @@ class LatterCoordinator:
 
     async def async_setup(self) -> None:
         """Set up state subscriptions, native BLE proxy tracker, and periodic timers."""
-        protect_handheld_sensors_from_area_dashboards(
-            self.hass, self.device_slug
-        )
+        if self.device_profile == "mobile_display":
+            protect_handheld_sensors_from_area_dashboards(
+                self.hass, self.device_slug
+            )
 
         proxy_areas = get_ble_proxy_area_ids(self.hass)
 
@@ -466,8 +488,9 @@ class LatterCoordinator:
             return
         if area_id and area_id != self.active_area_id:
             _LOGGER.info(
-                "Native BLE Proxy ('%s') detected Pocket Assistant in area '%s'",
+                "Native BLE Proxy ('%s') detected '%s' in area '%s'",
                 scanner_source,
+                self.device_slug,
                 area_id,
             )
             self.async_set_active_area(area_id, sync_device_registry=True)
@@ -561,7 +584,7 @@ class LatterCoordinator:
         ]
 
     def get_remote_config_payload(self) -> tuple[str, dict[str, Any]]:
-        """Compute state and attributes for sensor.pocket_assistant_remote_config."""
+        """Compute state and attributes for sensor.<device_slug>_remote_config."""
         slots = self.get_remote_slots()
         populated_count = sum(
             1 for s in slots if s["remote_entity"] or s["media_player_entity"]
@@ -587,7 +610,7 @@ class LatterCoordinator:
         return state_str, attrs
 
     def get_room_context_payload(self) -> tuple[str, dict[str, Any]]:
-        """Compute state and attributes for sensor.pocket_assistant_room_context."""
+        """Compute state and attributes for sensor.<device_slug>_room_context."""
         area_reg = ar.async_get(self.hass)
         area_entry = (
             area_reg.async_get_area(self.active_area_id)
@@ -636,6 +659,8 @@ class LatterCoordinator:
             "area_id": self.active_area_id or "",
             "area_name": area_name,
             "device_profile": self.device_profile,
+            "display_shape": self.display_shape,
+            "default_page_size": self.default_page_size,
             "dock_apps": self.dock_apps_csv,
             "wallpaper_url": self.build_wallpaper_url(),
             "companion_url": self.build_companion_url(),
@@ -763,9 +788,10 @@ class LatterCoordinator:
         matched_area = match_area_by_name_or_id(self.hass, new_state.state)
         if matched_area and matched_area != self.active_area_id:
             _LOGGER.info(
-                "BLE Presence ('%s' -> '%s') auto-switching Pocket Assistant to area '%s'",
+                "BLE Presence ('%s' -> '%s') auto-switching '%s' to area '%s'",
                 event.data.get("entity_id"),
                 new_state.state,
+                self.device_slug,
                 matched_area,
             )
             self.async_set_active_area(
@@ -829,7 +855,7 @@ class LatterCoordinator:
         return 0.7
 
     def get_active_media_payload(self) -> tuple[str, dict[str, Any]]:
-        """Compute state and attributes for sensor.pocket_assistant_active_media."""
+        """Compute state and attributes for sensor.<device_slug>_active_media."""
         state_obj = self.hass.states.get(self.active_speaker)
         vol_target = self.get_volume_target_entity(self.active_speaker)
 

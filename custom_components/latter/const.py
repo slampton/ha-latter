@@ -1,4 +1,4 @@
-"""Constants for the Latter integration."""
+"""Constants for the Latter universal ESPHome middleware integration."""
 
 from __future__ import annotations
 
@@ -12,6 +12,8 @@ PLATFORMS: Final[list[Platform]] = [Platform.SENSOR]
 # Config & Options keys
 CONF_DEVICE_SLUG: Final = "device_slug"
 CONF_DEVICE_PROFILE: Final = "device_profile"
+CONF_DISPLAY_SHAPE: Final = "display_shape"
+CONF_DEFAULT_PAGE_SIZE: Final = "default_page_size"
 CONF_WEB_THEME: Final = "web_theme"
 CONF_WEATHER_ENTITY: Final = "weather_entity"
 CONF_ALARM_ENTITY: Final = "alarm_entity"
@@ -41,6 +43,8 @@ CONF_ART_SIZE: Final = "art_size"
 # Defaults
 DEFAULT_DEVICE_SLUG: Final = "pocket_assistant"
 DEFAULT_DEVICE_PROFILE: Final = "mobile_display"
+DEFAULT_DISPLAY_SHAPE: Final = "circle"
+DEFAULT_PAGE_SIZE: Final = 3
 DEFAULT_WEB_THEME: Final = "cyber_cyan"
 DEFAULT_LOCAL_SPEAKER: Final = "media_player.pocket_assistant"
 DEFAULT_NATIVE_BLE_TRACKING: Final = True
@@ -50,13 +54,6 @@ DEFAULT_SYNC_DEVICE_AREA: Final = True
 DEFAULT_AREA_HANDOFF: Final = True
 DEFAULT_DOCK_APPS: Final = "music,room,remote,games,tools"
 DEFAULT_ART_SIZE: Final = 466
-
-# Native Latter Entity Contract (Pocket Assistant v2.1.0+)
-ENTITY_ACTIVE_MEDIA: Final = "sensor.pocket_assistant_active_media"
-ENTITY_WEATHER_FORECAST: Final = "sensor.pocket_assistant_weather_forecast"
-ENTITY_ROOM_CONTEXT: Final = "sensor.pocket_assistant_room_context"
-ENTITY_CALENDAR_AGENDA: Final = "sensor.pocket_assistant_calendar_agenda"
-ENTITY_REMOTE_CONFIG: Final = "sensor.pocket_assistant_remote_config"
 
 # Native Latter Services
 SERVICE_MUSIC_BROWSE: Final = "music_browse"
@@ -71,7 +68,7 @@ SERVICE_CALENDAR_FETCH: Final = "calendar_fetch"
 SERVICE_CALENDAR_CREATE_EVENT: Final = "calendar_create_event"
 SERVICE_INTERCOM_BROADCAST: Final = "intercom_broadcast"
 
-# HTTP Endpoints (Image Proxy, Circular Wallpaper Proxy & Web Companion Studio)
+# HTTP Endpoints (Image Proxy, Wallpaper Proxy & Web Companion Studio)
 API_IMAGE_PROXY_PATH: Final = "/api/latter/image_proxy/{entry_id}"
 API_WALLPAPER_PROXY_PATH: Final = "/api/latter/wallpaper/{entry_id}"
 API_COMPANION_UI_PATH: Final = "/api/latter/companion/{entry_id}"
@@ -83,3 +80,9 @@ DATA_DISCOVERY_UNSUB: Final = "discovery_unsub"
 POSITION_UPDATE_INTERVAL_SECONDS: Final = 2
 FORECAST_REFRESH_INTERVAL_MINUTES: Final = 30
 CALENDAR_REFRESH_INTERVAL_MINUTES: Final = 15
+
+
+def build_device_entity_id(device_slug: str, suffix: str) -> str:
+    """Build a device-scoped sensor entity_id (`sensor.<device_slug>_<suffix>`)."""
+    norm = device_slug.strip().lower().replace("-", "_") or DEFAULT_DEVICE_SLUG
+    return f"sensor.{norm}_{suffix}"

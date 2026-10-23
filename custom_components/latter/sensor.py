@@ -1,4 +1,4 @@
-"""Sensor platform for Latter exposing Pocket Assistant v2.1+ / ESPHome entities."""
+"""Sensor platform for Latter exposing device-scoped (`sensor.<device_slug>_*`) entities."""
 
 from __future__ import annotations
 
@@ -10,14 +10,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import (
-    DOMAIN,
-    ENTITY_ACTIVE_MEDIA,
-    ENTITY_CALENDAR_AGENDA,
-    ENTITY_REMOTE_CONFIG,
-    ENTITY_ROOM_CONTEXT,
-    ENTITY_WEATHER_FORECAST,
-)
+from .const import DOMAIN, build_device_entity_id
 from .coordinator import LatterCoordinator
 
 
@@ -30,11 +23,11 @@ async def async_setup_entry(
     coordinator: LatterCoordinator = hass.data[DOMAIN][entry.entry_id]
     async_add_entities(
         [
-            PocketAssistantActiveMediaSensor(coordinator),
-            PocketAssistantWeatherForecastSensor(coordinator),
-            PocketAssistantRoomContextSensor(coordinator),
-            PocketAssistantCalendarAgendaSensor(coordinator),
-            PocketAssistantRemoteConfigSensor(coordinator),
+            LatterActiveMediaSensor(coordinator),
+            LatterWeatherForecastSensor(coordinator),
+            LatterRoomContextSensor(coordinator),
+            LatterCalendarAgendaSensor(coordinator),
+            LatterRemoteConfigSensor(coordinator),
         ]
     )
 
@@ -44,9 +37,14 @@ class _BaseLatterSensor(SensorEntity):
 
     _attr_should_poll = False
 
-    def __init__(self, coordinator: LatterCoordinator) -> None:
-        """Initialize base sensor."""
+    def __init__(self, coordinator: LatterCoordinator, suffix: str, label: str) -> None:
+        """Initialize base sensor with a device-scoped entity_id."""
         self.coordinator = coordinator
+        slug = coordinator.device_slug
+        pretty_device = slug.replace("_", " ").title()
+        self._attr_name = f"{pretty_device} {label}"
+        self._attr_unique_id = f"{coordinator.entry.entry_id}_{suffix}"
+        self.entity_id = build_device_entity_id(slug, suffix)
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -56,7 +54,7 @@ class _BaseLatterSensor(SensorEntity):
             name=f"Latter ({self.coordinator.device_slug})",
             manufacturer="Lampton Labs",
             model="Latter ESPHome Companion Middleware",
-            sw_version="1.1.0",
+            sw_version="1.3.0",
             configuration_url=self.coordinator.build_companion_url(),
         )
 
@@ -72,17 +70,14 @@ class _BaseLatterSensor(SensorEntity):
         self.async_write_ha_state()
 
 
-class PocketAssistantActiveMediaSensor(_BaseLatterSensor):
-    """Exposes sensor.pocket_assistant_active_media with idle-guarded 2s position updates."""
+class LatterActiveMediaSensor(_BaseLatterSensor):
+    """Exposes sensor.<device_slug>_active_media with idle-guarded 2s position updates."""
 
-    _attr_name = "Pocket Assistant Active Media"
     _attr_icon = "mdi:music-circle"
 
     def __init__(self, coordinator: LatterCoordinator) -> None:
         """Initialize active media sensor."""
-        super().__init__(coordinator)
-        self._attr_unique_id = f"{coordinator.entry.entry_id}_active_media"
-        self.entity_id = ENTITY_ACTIVE_MEDIA
+        super().__init__(coordinator, "active_media", "Active Media")
 
     @property
     def native_value(self) -> str:
@@ -97,17 +92,14 @@ class PocketAssistantActiveMediaSensor(_BaseLatterSensor):
         return attrs
 
 
-class PocketAssistantWeatherForecastSensor(_BaseLatterSensor):
-    """Exposes sensor.pocket_assistant_weather_forecast with 5-day semicolon string."""
+class LatterWeatherForecastSensor(_BaseLatterSensor):
+    """Exposes sensor.<device_slug>_weather_forecast with 5-day semicolon string."""
 
-    _attr_name = "Pocket Assistant Weather Forecast"
     _attr_icon = "mdi:weather-partly-cloudy"
 
     def __init__(self, coordinator: LatterCoordinator) -> None:
         """Initialize weather forecast sensor."""
-        super().__init__(coordinator)
-        self._attr_unique_id = f"{coordinator.entry.entry_id}_weather_forecast"
-        self.entity_id = ENTITY_WEATHER_FORECAST
+        super().__init__(coordinator, "weather_forecast", "Weather Forecast")
 
     @property
     def native_value(self) -> str:
@@ -120,17 +112,14 @@ class PocketAssistantWeatherForecastSensor(_BaseLatterSensor):
         return self.coordinator.weather_attributes
 
 
-class PocketAssistantRoomContextSensor(_BaseLatterSensor):
-    """Exposes sensor.pocket_assistant_room_context for BLE Area-Aware Room Control, Telemetry & Alarm."""
+class LatterRoomContextSensor(_BaseLatterSensor):
+    """Exposes sensor.<device_slug>_room_context for Area-Aware Room Control, Telemetry & Alarm."""
 
-    _attr_name = "Pocket Assistant Room Context"
     _attr_icon = "mdi:floor-plan"
 
     def __init__(self, coordinator: LatterCoordinator) -> None:
         """Initialize room context sensor."""
-        super().__init__(coordinator)
-        self._attr_unique_id = f"{coordinator.entry.entry_id}_room_context"
-        self.entity_id = ENTITY_ROOM_CONTEXT
+        super().__init__(coordinator, "room_context", "Room Context")
 
     @property
     def native_value(self) -> str:
@@ -145,17 +134,14 @@ class PocketAssistantRoomContextSensor(_BaseLatterSensor):
         return attrs
 
 
-class PocketAssistantCalendarAgendaSensor(_BaseLatterSensor):
-    """Exposes sensor.pocket_assistant_calendar_agenda with upcoming family events."""
+class LatterCalendarAgendaSensor(_BaseLatterSensor):
+    """Exposes sensor.<device_slug>_calendar_agenda with upcoming family events."""
 
-    _attr_name = "Pocket Assistant Calendar Agenda"
     _attr_icon = "mdi:calendar-clock"
 
     def __init__(self, coordinator: LatterCoordinator) -> None:
         """Initialize calendar agenda sensor."""
-        super().__init__(coordinator)
-        self._attr_unique_id = f"{coordinator.entry.entry_id}_calendar_agenda"
-        self.entity_id = ENTITY_CALENDAR_AGENDA
+        super().__init__(coordinator, "calendar_agenda", "Calendar Agenda")
 
     @property
     def native_value(self) -> str:
@@ -172,17 +158,14 @@ class PocketAssistantCalendarAgendaSensor(_BaseLatterSensor):
         }
 
 
-class PocketAssistantRemoteConfigSensor(_BaseLatterSensor):
-    """Exposes sensor.pocket_assistant_remote_config replacing the 4 YAML remote substitutions."""
+class LatterRemoteConfigSensor(_BaseLatterSensor):
+    """Exposes sensor.<device_slug>_remote_config replacing hardcoded YAML remote substitutions."""
 
-    _attr_name = "Pocket Assistant Remote Config"
     _attr_icon = "mdi:remote-tv"
 
     def __init__(self, coordinator: LatterCoordinator) -> None:
         """Initialize 4-slot remote config sensor."""
-        super().__init__(coordinator)
-        self._attr_unique_id = f"{coordinator.entry.entry_id}_remote_config"
-        self.entity_id = ENTITY_REMOTE_CONFIG
+        super().__init__(coordinator, "remote_config", "Remote Config")
 
     @property
     def native_value(self) -> str:

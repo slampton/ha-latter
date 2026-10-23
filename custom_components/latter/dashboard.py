@@ -25,9 +25,11 @@ from .const import (
     CONF_CUSTOM_BINDINGS,
     CONF_CUSTOM_ENTITIES,
     CONF_DEFAULT_AREA,
+    CONF_DEFAULT_PAGE_SIZE,
     CONF_DEFAULT_SPEAKER,
     CONF_DEVICE_PROFILE,
     CONF_DEVICE_SLUG,
+    CONF_DISPLAY_SHAPE,
     CONF_DOCK_APPS,
     CONF_NATIVE_BLE_TRACKING,
     CONF_PRESENCE_ENTITY,
@@ -40,10 +42,13 @@ from .const import (
     CONF_VOL_SPEAKER_2,
     CONF_VOL_TARGET_1,
     CONF_VOL_TARGET_2,
+    CONF_WALLPAPER_SOURCE,
     CONF_WEATHER_ENTITY,
     CONF_WEB_THEME,
     DEFAULT_ART_SIZE,
     DEFAULT_DEVICE_PROFILE,
+    DEFAULT_DISPLAY_SHAPE,
+    DEFAULT_PAGE_SIZE,
     DEFAULT_WEB_THEME,
     DOMAIN,
 )
@@ -131,6 +136,8 @@ def _build_companion_state_payload(
         CONF_DEVICE_PROFILE: coordinator.get_opt(
             CONF_DEVICE_PROFILE, DEFAULT_DEVICE_PROFILE
         ),
+        CONF_DISPLAY_SHAPE: coordinator.display_shape,
+        CONF_DEFAULT_PAGE_SIZE: coordinator.default_page_size,
         CONF_WEB_THEME: coordinator.get_opt(
             CONF_WEB_THEME, DEFAULT_WEB_THEME
         ),
@@ -160,13 +167,14 @@ def _build_companion_state_payload(
         CONF_CUSTOM_ENTITIES: coordinator.custom_entities,
         CONF_CUSTOM_BINDINGS: coordinator.custom_bindings,
         CONF_DOCK_APPS: coordinator.dock_apps_csv,
+        CONF_WALLPAPER_SOURCE: coordinator.wallpaper_source,
         CONF_ART_SIZE: coordinator.art_size,
     }
 
     return {
         "entry_id": coordinator.entry.entry_id,
         "title": coordinator.entry.title,
-        "version": "1.2.1",
+        "version": "1.3.0",
         "config": config_data,
         "esphome": esphome_inspector,
         "live": {
@@ -185,6 +193,7 @@ def _build_companion_state_payload(
             "media_title": media_attrs.get("title", "Idle"),
             "media_artist": media_attrs.get("artist", "None"),
             "alarm_state": room_attrs.get("alarm_state", "none"),
+            "wallpaper_url": room_attrs.get("wallpaper_url", "none"),
         },
         "catalog": {
             "areas": areas_list,
@@ -289,6 +298,8 @@ class LatterCompanionApiView(HomeAssistantView):
             for k in (
                 CONF_DEVICE_SLUG,
                 CONF_DEVICE_PROFILE,
+                CONF_DISPLAY_SHAPE,
+                CONF_DEFAULT_PAGE_SIZE,
                 CONF_WEB_THEME,
                 CONF_DEFAULT_SPEAKER,
                 CONF_VOL_SPEAKER_1,
@@ -312,12 +323,15 @@ class LatterCompanionApiView(HomeAssistantView):
                 CONF_CUSTOM_ENTITIES,
                 CONF_CUSTOM_BINDINGS,
                 CONF_DOCK_APPS,
+                CONF_WALLPAPER_SOURCE,
                 CONF_ART_SIZE,
             ):
                 if k in incoming_cfg:
                     val = incoming_cfg[k]
                     if k == CONF_ART_SIZE:
                         val = int(val or DEFAULT_ART_SIZE)
+                    elif k == CONF_DEFAULT_PAGE_SIZE:
+                        val = max(1, min(20, int(val or DEFAULT_PAGE_SIZE)))
                     merged[k] = val
 
             self.hass.config_entries.async_update_entry(
@@ -520,7 +534,6 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     border-radius: 10px;
     border: 1px solid var(--card-border);
   }
-  /* ESPHome Device Manager Layout (Sidebar Sub-Pages + Overflow-Proof Rows) */
   .esp-layout {
     display: grid;
     grid-template-columns: 260px 1fr;
@@ -531,11 +544,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     .esp-layout { grid-template-columns: 1fr; }
     .binding-row { grid-template-columns: 1fr; }
   }
-  .esp-nav {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
+  .esp-nav { display: flex; flex-direction: column; gap: 6px; }
   .esp-nav-btn {
     display: flex;
     align-items: center;
@@ -563,11 +572,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     font-size: 11px;
     color: var(--muted);
   }
-  .entity-list {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
+  .entity-list { display: flex; flex-direction: column; gap: 10px; }
   .entity-row {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
@@ -579,13 +584,8 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     border-radius: 10px;
     font-size: 13px;
   }
-  .entity-row.wide-val {
-    grid-template-columns: 1fr;
-    gap: 8px;
-  }
-  .entity-row .meta {
-    min-width: 0;
-  }
+  .entity-row.wide-val { grid-template-columns: 1fr; gap: 8px; }
+  .entity-row .meta { min-width: 0; }
   .entity-row .meta strong {
     display: block;
     font-size: 13.5px;
@@ -606,9 +606,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     gap: 8px;
     min-width: 110px;
   }
-  .entity-row.wide-val .ctrl {
-    justify-content: flex-start;
-  }
+  .entity-row.wide-val .ctrl { justify-content: flex-start; }
   .state-badge {
     display: inline-block;
     padding: 6px 12px;
@@ -622,19 +620,9 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     overflow-wrap: anywhere;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
-  .ctrl select {
-    width: auto;
-    min-width: 150px;
-    max-width: 240px;
-  }
-  .ctrl input[type="number"] {
-    width: 100px;
-    text-align: right;
-  }
-  .ctrl button {
-    min-width: 84px;
-    padding: 8px 14px;
-  }
+  .ctrl select { width: auto; min-width: 150px; max-width: 240px; }
+  .ctrl input[type="number"] { width: 100px; text-align: right; }
+  .ctrl button { min-width: 84px; padding: 8px 14px; }
   .toast {
     position: fixed;
     bottom: 20px;
@@ -691,7 +679,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     <div class="tab" onclick="switchTab('esphome', this)">2. ESPHome Device Manager</div>
     <div class="tab" onclick="switchTab('media', this)">3. Media, Remotes & Alarm</div>
     <div class="tab" onclick="switchTab('mapper', this)">4. Universal Trigger Mapper</div>
-    <div class="tab" onclick="switchTab('display', this)">5. UI, Dock & Display</div>
+    <div class="tab" onclick="switchTab('display', this)">5. Display, Pagination & Wallpaper</div>
   </div>
 
   <!-- TAB 1: OVERVIEW & BLE RADAR -->
@@ -706,13 +694,13 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
         <div class="pill"><span>Home Alarm</span><strong id="st-alarm">--</strong></div>
       </div>
       <div class="field">
-        <label>ESPHome Device Slug</label>
+        <label>ESPHome Device Slug (Creates sensor.&lt;slug&gt;_* Entities)</label>
         <input type="text" id="cfg-device_slug">
       </div>
       <div class="field">
         <label>Device Archetype / Profile</label>
         <select id="cfg-device_profile">
-          <option value="mobile_display">Mobile Smart Display (Pocket Assistant)</option>
+          <option value="mobile_display">Mobile Smart Display (e.g. Pocket Assistant)</option>
           <option value="stationary_display">Stationary Room Display / Wall Panel</option>
           <option value="headless_node">Headless Sensor / Button / Audio Node</option>
         </select>
@@ -755,13 +743,13 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     </div>
   </div>
 
-  <!-- TAB 2: ESPHOME DEVICE MANAGER (Sub-Page Sidebar + Search + Clean Grid) -->
+  <!-- TAB 2: ESPHOME DEVICE MANAGER -->
   <div id="tab-esphome" class="hidden">
     <div class="card" style="margin-bottom:18px;">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
         <div>
           <h2 id="esp-dev-title">ESPHome Device Inspector</h2>
-          <p class="desc" id="esp-dev-meta" style="margin-bottom:0;">Automatically groups device controls, options, and sensors by semantic category with a spillover bucket for custom entities.</p>
+          <p class="desc" id="esp-dev-meta" style="margin-bottom:0;">Automatically groups device controls, options, and sensors by prefix ("Category: Name") or semantic domain with a spillover bucket for custom projects.</p>
         </div>
         <div style="min-width:240px;">
           <input type="text" id="esp-search" placeholder="Filter entities by name or ID..." oninput="renderActiveEspSection()">
@@ -861,25 +849,48 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     </div>
   </div>
 
-  <!-- TAB 5: UI, DOCK & DISPLAY -->
+  <!-- TAB 5: DISPLAY, PAGINATION & WALLPAPER -->
   <div id="tab-display" class="grid hidden">
     <div class="card">
-      <h2>Home Dock & Display Settings</h2>
-      <p class="desc">Customize the comma-separated order of apps shown in the sliding Home Dock on display devices and configure Pillow JPEG artwork scaling.</p>
+      <h2>Display Geometry & GUI Pagination</h2>
+      <p class="desc">Adapt Latter's image proxy and slot pagination to match any circular or rectangular ESPHome display and GUI layout.</p>
       <div class="field">
-        <label>Home Dock App Order (comma-separated)</label>
-        <input type="text" id="cfg-dock_apps" placeholder="music,room,weather,remote,calendar,games,tools">
+        <label>Display Geometry / Bezel Mask</label>
+        <select id="cfg-display_shape">
+          <option value="circle">Circular Display (Bezel-Masked Corners)</option>
+          <option value="square">Square / Rectangular Display (Unmasked)</option>
+        </select>
       </div>
       <div class="field">
-        <label>Album Art & Wallpaper Proxy Resolution</label>
+        <label>Album Art & Wallpaper Proxy Resolution (Pixels)</label>
         <select id="cfg-art_size">
-          <option value="466">466x466 (Full Native AMOLED)</option>
+          <option value="466">466x466 (1.75" Round AMOLED)</option>
+          <option value="360">360x360 (Round LCD/AMOLED)</option>
+          <option value="240">240x240 (Compact Round/Square)</option>
           <option value="233">233x233 (Fast Low-Bandwidth Thumbnail)</option>
+          <option value="480">480x480 (Large Wall Panel)</option>
         </select>
+      </div>
+      <div class="field">
+        <label>Default Room Entity Page Size (Cards Per Page, 1–20)</label>
+        <input type="number" id="cfg-default_page_size" min="1" max="20" value="3">
       </div>
       <div class="field">
         <label>Default Room / Startup Area Fallback</label>
         <select id="cfg-default_area"></select>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Home Dock & Photo Wallpaper Source</h2>
+      <p class="desc">Customize the comma-separated app tokens for your GUI dock and configure an optional local file (<code>/local/...</code>) or HTTP URL for pre-masked photo wallpapers.</p>
+      <div class="field">
+        <label>Home Dock App Tokens (comma-separated)</label>
+        <input type="text" id="cfg-dock_apps" placeholder="music,room,remote,games,tools">
+      </div>
+      <div class="field">
+        <label>Photo Wallpaper Source (e.g. /local/wallpaper.jpg or https://...)</label>
+        <input type="text" id="cfg-wallpaper_source" placeholder="/local/wallpaper.jpg">
       </div>
     </div>
   </div>
@@ -965,7 +976,7 @@ function renderEspInspector() {
     return;
   }
 
-  if (!ACTIVE_ESP_SEC || !sections.some(s => s.id === ACTIVE_ESP_SEC)) {
+  if (!ACTIVE_ESP_SEC || (ACTIVE_ESP_SEC !== "__all__" && !sections.some(s => s.id === ACTIVE_ESP_SEC))) {
     ACTIVE_ESP_SEC = sections[0].id;
   }
 
@@ -1159,12 +1170,15 @@ function applyStateToDom(data) {
 
   document.getElementById("cfg-device_slug").value = cfg.device_slug || "";
   document.getElementById("cfg-device_profile").value = cfg.device_profile || "mobile_display";
+  document.getElementById("cfg-display_shape").value = cfg.display_shape || "circle";
+  document.getElementById("cfg-default_page_size").value = cfg.default_page_size ?? 3;
   document.getElementById("cfg-native_ble_tracking").checked = !!cfg.native_ble_tracking;
   document.getElementById("cfg-ble_auto_switch").checked = !!cfg.ble_auto_switch;
   document.getElementById("cfg-sync_device_area").checked = !!cfg.sync_device_area;
   document.getElementById("cfg-area_handoff").checked = !!cfg.area_handoff;
   document.getElementById("cfg-ble_beacon_uuid").value = cfg.ble_beacon_uuid || "";
   document.getElementById("cfg-dock_apps").value = cfg.dock_apps || "";
+  document.getElementById("cfg-wallpaper_source").value = cfg.wallpaper_source || "";
   document.getElementById("cfg-art_size").value = String(cfg.art_size || 466);
 
   populateSelect("quick-area", cat.areas, live.active_area_id, false);
@@ -1231,6 +1245,8 @@ async function saveAllConfig() {
   const config = {
     device_slug: document.getElementById("cfg-device_slug").value.trim(),
     device_profile: document.getElementById("cfg-device_profile").value,
+    display_shape: document.getElementById("cfg-display_shape").value,
+    default_page_size: parseInt(document.getElementById("cfg-default_page_size").value, 10) || 3,
     web_theme: document.getElementById("cfg-web_theme").value,
     native_ble_tracking: document.getElementById("cfg-native_ble_tracking").checked,
     ble_auto_switch: document.getElementById("cfg-ble_auto_switch").checked,
@@ -1251,6 +1267,7 @@ async function saveAllConfig() {
     weather_entity: document.getElementById("cfg-weather_entity").value,
     default_area: document.getElementById("cfg-default_area").value,
     dock_apps: document.getElementById("cfg-dock_apps").value.trim(),
+    wallpaper_source: document.getElementById("cfg-wallpaper_source").value.trim(),
     art_size: parseInt(document.getElementById("cfg-art_size").value, 10),
     custom_entities: PINNED,
     custom_bindings: bindings,

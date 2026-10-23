@@ -1,4 +1,4 @@
-"""Authenticated HTTP Image & Circular Wallpaper Proxy Views for Latter."""
+"""Authenticated HTTP Image & Wallpaper Proxy Views for Latter (Supports Circular or Square/Rectangular Displays)."""
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ _LOGGER = logging.getLogger(__name__)
 def _center_crop_and_encode_jpeg(
     raw_bytes: bytes, target_size: int, circular_mask: bool = False, darken: float = 1.0
 ) -> bytes:
-    """Decode image bytes, center-crop to square, optionally apply circular bezel mask, and encode baseline JPEG."""
+    """Decode image bytes, center-crop, optionally apply circular bezel mask, and encode baseline JPEG."""
     with Image.open(io.BytesIO(raw_bytes)) as img:
         img_rgb = img.convert("RGB")
         fitted = ImageOps.fit(
@@ -49,7 +49,7 @@ def _center_crop_and_encode_jpeg(
 
 
 class LatterImageProxyView(HomeAssistantView):
-    """Serves resized 466x466 baseline JPEGs to ESP32-S3 online_image over signed URL."""
+    """Serves resized baseline JPEGs to ESPHome online_image over signed URL."""
 
     requires_auth = False
     url = API_IMAGE_PROXY_PATH
@@ -129,14 +129,14 @@ class LatterImageProxyView(HomeAssistantView):
 
 
 class LatterWallpaperProxyView(HomeAssistantView):
-    """Serves pre-masked 466x466 circular baseline JPEG photo wallpapers to ESP32-S3 online_image."""
+    """Serves baseline JPEG photo wallpapers (circularly masked or square based on display_shape)."""
 
     requires_auth = False
     url = API_WALLPAPER_PROXY_PATH
     name = "api:latter:wallpaper_proxy"
 
     def __init__(self, hass: HomeAssistant) -> None:
-        """Initialize the circular wallpaper proxy view."""
+        """Initialize the wallpaper proxy view."""
         self.hass = hass
 
     async def get(self, request: web.Request, entry_id: str) -> web.Response:
@@ -156,7 +156,6 @@ class LatterWallpaperProxyView(HomeAssistantView):
 
         raw_bytes: bytes | None = None
 
-        # Support local /config/www/... or /local/... files or HTTP(S) URLs
         if wp_source.startswith(("/local/", "/config/www/")):
             rel = wp_source.replace("/local/", "").replace("/config/www/", "").lstrip("/")
             local_file = Path(self.hass.config.path("www")) / rel
@@ -185,12 +184,16 @@ class LatterWallpaperProxyView(HomeAssistantView):
         if not raw_bytes:
             return web.Response(status=HTTPStatus.NOT_FOUND, text="Wallpaper source unreadable")
 
+        is_circle = coordinator.display_shape == "circle"
+        if request.query.get("shape") in ("circle", "square"):
+            is_circle = request.query.get("shape") == "circle"
+
         try:
             jpeg_bytes = await self.hass.async_add_executor_job(
                 _center_crop_and_encode_jpeg,
                 raw_bytes,
                 coordinator.art_size,
-                True,
+                is_circle,
                 0.78,
             )
         except Exception as err:  # noqa: BLE001
