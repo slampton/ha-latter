@@ -6,6 +6,7 @@ import logging
 import re
 from typing import Any
 
+from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import HomeAssistant, State
 from homeassistant.helpers import entity_registry as er
 
@@ -240,7 +241,7 @@ async def _browse_speakers(
     last_speaker: str,
     local_speaker: str,
 ) -> list[dict[str, Any]]:
-    """Build sorted speaker list restricted strictly to Music Assistant players (+ local Sendspin)."""
+    """Build sorted speaker list restricted strictly to Music Assistant players (+ local speaker)."""
     items: list[dict[str, Any]] = []
     for state_obj in hass.states.async_all("media_player"):
         if state_obj.state in ("unavailable", "unknown"):
@@ -248,7 +249,6 @@ async def _browse_speakers(
         ent_id = state_obj.entity_id
         is_local = ent_id == local_speaker
 
-        # Strictly require Music Assistant player (or the configured on-device speaker)
         if not is_local and not is_music_assistant_player(hass, state_obj):
             continue
 
@@ -589,9 +589,10 @@ async def _browse_active_queue(
     speaker: str,
     current_track_title: str,
 ) -> list[dict[str, Any]]:
-    """Fetch upcoming queue items natively from Music Assistant."""
+    """Fetch upcoming queue items natively from Music Assistant 2.10.8+."""
     raw_queue_items: list[dict[str, Any]] = []
 
+    # 1. Try in-process Music Assistant player_queues controller
     mass = _get_mass_client(hass)
     state_obj = hass.states.get(speaker)
     if mass is not None and hasattr(mass, "player_queues"):
@@ -624,6 +625,39 @@ async def _browse_active_queue(
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("Direct mass.player_queues failed: %s", err)
 
+    # 2. Try official Home Assistant music_assistant.get_queue service
+    if not raw_queue_items and hass.services.has_service("music_assistant", "get_queue"):
+        ma_target = _find_ma_media_player_entity(hass, speaker) or speaker
+        try:
+            resp = await hass.services.async_call(
+                "music_assistant",
+                "get_queue",
+                {ATTR_ENTITY_ID: ma_target},
+                blocking=True,
+                return_response=True,
+            )
+            if isinstance(resp, dict):
+                q_data = resp.get(ma_target) or resp
+                if isinstance(q_data, dict):
+                    items_candidate = (
+                        q_data.get("items")
+                        or q_data.get("queue_items")
+                        or q_data.get("next_item")
+                    )
+                    if isinstance(items_candidate, list):
+                        raw_queue_items = [
+                            _extract_item_dict(x) for x in items_candidate
+                        ]
+                    elif isinstance(items_candidate, dict):
+                        raw_queue_items = [_extract_item_dict(items_candidate)]
+                        if isinstance(q_data.get("current_item"), dict):
+                            raw_queue_items.insert(
+                                0, _extract_item_dict(q_data["current_item"])
+                            )
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("music_assistant.get_queue failed: %s", err)
+
+    # 3. Fallback: mass_queue.get_queue_items if installed
     if not raw_queue_items and hass.services.has_service("mass_queue", "get_queue_items"):
         try:
             resp = await hass.services.async_call(
@@ -650,11 +684,12 @@ async def _browse_active_queue(
             or media_item.get("name")
             or ""
         )
+        # Prefer playable URI from media_item so tapping a queue slot works with play_media
         uri = str(
-            item.get("queue_item_id")
+            media_item.get("uri")
             or item.get("media_content_id")
-            or media_item.get("uri")
             or item.get("uri")
+            or item.get("queue_item_id")
             or ""
         )
         artist = (

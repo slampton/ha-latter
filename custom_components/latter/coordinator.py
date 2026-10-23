@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta
 import hashlib
 import hmac
 import logging
+import time
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
+    ATTR_ENTITY_ID,
     STATE_BUFFERING,
     STATE_IDLE,
     STATE_OFF,
@@ -30,6 +33,7 @@ from homeassistant.helpers.network import get_url
 from homeassistant.util import dt as dt_util
 
 from .ble_engine import LatterNativeBleTracker, get_ble_proxy_area_ids
+from .browse_engine import is_music_assistant_player
 from .calendar_engine import async_fetch_calendar_agenda
 from .const import (
     CALENDAR_REFRESH_INTERVAL_MINUTES,
@@ -90,6 +94,7 @@ from .room_engine import (
 _LOGGER = logging.getLogger(__name__)
 
 DAY_ABBR: tuple[str, ...] = ("MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN")
+TRANSFER_HOLD_WINDOW_SECONDS = 4.5
 
 
 def _resolve_esphome_local_speaker(
@@ -132,6 +137,24 @@ def _get_esphome_device_current_area(
     return None
 
 
+def _interpolate_speaker_position(state_obj: Any) -> float:
+    """Calculate the live interpolated playback position in seconds for a media_player state."""
+    if state_obj is None:
+        return 0.0
+    attrs = state_obj.attributes
+    duration = float(attrs.get("media_duration") or 0.0)
+    base_pos = float(attrs.get("media_position") or 0.0)
+    updated_at = attrs.get("media_position_updated_at")
+    pos = base_pos
+    if state_obj.state == STATE_PLAYING and isinstance(updated_at, datetime):
+        elapsed = (dt_util.utcnow() - updated_at).total_seconds()
+        if elapsed > 0:
+            pos = base_pos + elapsed
+            if duration > 0:
+                pos = min(pos, duration)
+    return max(0.0, pos)
+
+
 class LatterCoordinator:
     """Manages active speaker, BLE room context, 4-slot remotes, custom bindings, alarm, calendar, and weather."""
 
@@ -165,10 +188,16 @@ class LatterCoordinator:
         self.active_remote: str = ""
         self.active_remote_slot: int = 1
 
-        # Sticky artwork cache
+        # Sticky artwork and transfer position handoff cache (for MA 2.10.8 transfer window)
         self.last_valid_raw_pic: str = ""
         self._last_art_track_key: str = ""
         self._last_art_proxy_url: str = "none"
+        self._transfer_hold_until: float = 0.0
+        self._transfer_hold_position: float = 0.0
+        self._transfer_hold_title: str = ""
+        self._transfer_hold_artist: str = ""
+        self._transfer_hold_album: str = ""
+        self._transfer_hold_duration: float = 0.0
 
         # Cached weather forecast state & attributes
         self.forecast_string: str = "NONE"
@@ -515,21 +544,167 @@ class LatterCoordinator:
         for update_callback in list(self._listeners):
             update_callback()
 
+    async def _async_execute_ma_queue_transfer(
+        self,
+        source_speaker: str,
+        target_speaker: str,
+        was_playing: bool,
+        handoff_position: float,
+        media_content_id: str,
+        media_content_type: str,
+    ) -> None:
+        """Execute Music Assistant 2.10.8+ queue transfer with auto-play and position handoff verification."""
+        src_state = self.hass.states.get(source_speaker)
+        tgt_state = self.hass.states.get(target_speaker)
+        src_is_ma = bool(src_state and is_music_assistant_player(self.hass, src_state))
+        tgt_is_ma = bool(tgt_state and is_music_assistant_player(self.hass, tgt_state))
+
+        transferred_via_ma = False
+        if src_is_ma and tgt_is_ma and self.hass.services.has_service("music_assistant", "transfer_queue"):
+            try:
+                await self.hass.services.async_call(
+                    "music_assistant",
+                    "transfer_queue",
+                    {
+                        ATTR_ENTITY_ID: target_speaker,
+                        "source_player": source_speaker,
+                        "auto_play": bool(was_playing),
+                    },
+                    blocking=True,
+                )
+                transferred_via_ma = True
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.debug("music_assistant.transfer_queue failed: %s", err)
+
+        # Fallback if one of the players is non-MA or transfer_queue failed
+        if not transferred_via_ma and media_content_id:
+            try:
+                await self.hass.services.async_call(
+                    "media_player",
+                    "media_pause",
+                    {ATTR_ENTITY_ID: source_speaker},
+                    blocking=False,
+                )
+                if tgt_is_ma and self.hass.services.has_service("music_assistant", "play_media"):
+                    await self.hass.services.async_call(
+                        "music_assistant",
+                        "play_media",
+                        {
+                            ATTR_ENTITY_ID: target_speaker,
+                            "media_id": media_content_id,
+                            "enqueue": "replace",
+                        },
+                        blocking=True,
+                    )
+                else:
+                    await self.hass.services.async_call(
+                        "media_player",
+                        "play_media",
+                        {
+                            ATTR_ENTITY_ID: target_speaker,
+                            "media_content_id": media_content_id,
+                            "media_content_type": media_content_type or "music",
+                        },
+                        blocking=True,
+                    )
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.debug("Fallback play_media handoff failed: %s", err)
+
+        # Wait briefly for MA 2.10.8 stream spin-up (e.g. Sendspin / AirPlay universal player init)
+        await asyncio.sleep(1.2)
+        updated_tgt = self.hass.states.get(target_speaker)
+        if updated_tgt is None:
+            return
+
+        # Ensure auto-play resumed if source was playing
+        if was_playing and updated_tgt.state in (STATE_PAUSED, STATE_IDLE):
+            try:
+                await self.hass.services.async_call(
+                    "media_player",
+                    "media_play",
+                    {ATTR_ENTITY_ID: target_speaker},
+                    blocking=False,
+                )
+            except Exception:  # noqa: BLE001
+                pass
+
+        # Verify position handoff: if target reset to 0 while source was >5s into the track, seek to handoff_position
+        tgt_pos = float(updated_tgt.attributes.get("media_position") or 0.0)
+        if handoff_position > 5.0 and abs(tgt_pos - handoff_position) > 4.0:
+            try:
+                await self.hass.services.async_call(
+                    "media_player",
+                    "media_seek",
+                    {
+                        ATTR_ENTITY_ID: target_speaker,
+                        "seek_position": round(handoff_position, 1),
+                    },
+                    blocking=False,
+                )
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.debug("Position handoff media_seek failed: %s", err)
+
+        self._notify_listeners()
+
     @callback
-    def async_set_active_speaker(self, speaker_entity_id: str) -> None:
-        """Switch the active target speaker and rebind state listeners."""
+    def async_set_active_speaker(
+        self, speaker_entity_id: str, transfer_queue: bool = False
+    ) -> None:
+        """Switch the active target speaker, cache transfer position hold, and optionally transfer active queue."""
         speaker_entity_id = speaker_entity_id.strip()
         if not speaker_entity_id:
             return
-        if speaker_entity_id != self.active_speaker:
-            self.last_speaker = self.active_speaker
+
+        prev_speaker = self.active_speaker
+        if speaker_entity_id != prev_speaker:
+            prev_state = self.hass.states.get(prev_speaker)
+            was_playing = bool(
+                prev_state and prev_state.state in (STATE_PLAYING, STATE_BUFFERING)
+            )
+            was_active = bool(
+                prev_state and prev_state.state in (STATE_PLAYING, STATE_PAUSED, STATE_BUFFERING)
+            )
+            handoff_pos = _interpolate_speaker_position(prev_state)
+
+            # Hold current track metadata & position for 4.5s so display doesn't flash 0:00 during MA 2.10.8 transfer
+            if was_active and prev_state is not None:
+                p_attrs = prev_state.attributes
+                self._transfer_hold_until = time.monotonic() + TRANSFER_HOLD_WINDOW_SECONDS
+                self._transfer_hold_position = handoff_pos
+                self._transfer_hold_title = str(p_attrs.get("media_title") or "")
+                self._transfer_hold_artist = str(
+                    p_attrs.get("media_artist")
+                    or p_attrs.get("media_series_title")
+                    or p_attrs.get("media_album_artist")
+                    or ""
+                )
+                self._transfer_hold_album = str(p_attrs.get("media_album_name") or "")
+                self._transfer_hold_duration = float(p_attrs.get("media_duration") or 0.0)
+
+                if transfer_queue:
+                    media_cid = str(p_attrs.get("media_content_id") or "")
+                    media_ctype = str(p_attrs.get("media_content_type") or "music")
+                    self.hass.async_create_task(
+                        self._async_execute_ma_queue_transfer(
+                            source_speaker=prev_speaker,
+                            target_speaker=speaker_entity_id,
+                            was_playing=was_playing,
+                            handoff_position=handoff_pos,
+                            media_content_id=media_cid,
+                            media_content_type=media_ctype,
+                        )
+                    )
+
+            self.last_speaker = prev_speaker
             self.active_speaker = speaker_entity_id
             _LOGGER.debug(
-                "Latter active speaker changed: %s -> %s (volume_target=%s)",
+                "Latter active speaker changed: %s -> %s (transfer_queue=%s, pos=%.1fs)",
                 self.last_speaker,
                 self.active_speaker,
-                self.get_volume_target_entity(self.active_speaker),
+                transfer_queue,
+                handoff_pos,
             )
+
         self._bind_speaker_listener()
         self._notify_listeners()
 
@@ -571,7 +746,17 @@ class LatterCoordinator:
             else bool(handoff_media)
         )
         if do_handoff and media_map["speaker"]:
-            self.async_set_active_speaker(media_map["speaker"])
+            # Only auto-transfer queue on physical BLE room transition if previous room speaker was actively playing
+            prev_state = self.hass.states.get(self.active_speaker)
+            auto_transfer = bool(
+                sync_device_registry
+                and prev_state
+                and prev_state.state == STATE_PLAYING
+                and self.active_speaker != self.local_speaker
+            )
+            self.async_set_active_speaker(
+                media_map["speaker"], transfer_queue=auto_transfer
+            )
         else:
             self._notify_listeners()
 
@@ -896,16 +1081,18 @@ class LatterCoordinator:
         )
         album = str(attrs.get("media_album_name") or "None")
         duration = float(attrs.get("media_duration") or 0)
-        base_position = float(attrs.get("media_position") or 0)
-        updated_at = attrs.get("media_position_updated_at")
+        position = _interpolate_speaker_position(state_obj)
 
-        position = base_position
-        if state == STATE_PLAYING and isinstance(updated_at, datetime):
-            elapsed = (dt_util.utcnow() - updated_at).total_seconds()
-            if elapsed > 0:
-                position = base_position + elapsed
-                if duration > 0:
-                    position = min(position, duration)
+        # Apply MA 2.10.8 transfer hold guard if target speaker is spinning up (buffering/idle with 0s position)
+        in_transfer_window = time.monotonic() < self._transfer_hold_until
+        if in_transfer_window:
+            if title == "Idle" and self._transfer_hold_title:
+                title = self._transfer_hold_title
+                artist = self._transfer_hold_artist or artist
+                album = self._transfer_hold_album or album
+                duration = self._transfer_hold_duration or duration
+            if position < 1.0 and self._transfer_hold_position > 1.0:
+                position = self._transfer_hold_position
 
         volume = self._read_volume_from_target(vol_target, attrs)
 
@@ -935,7 +1122,7 @@ class LatterCoordinator:
                 f"{track_key}|{raw_pic}"
             )
             art_url = self._last_art_proxy_url
-        elif track_key == self._last_art_track_key and self._last_art_proxy_url != "none":
+        elif (track_key == self._last_art_track_key or in_transfer_window) and self._last_art_proxy_url != "none":
             art_url = self._last_art_proxy_url
         else:
             art_url = "none"

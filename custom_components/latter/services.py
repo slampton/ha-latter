@@ -9,7 +9,7 @@ from typing import Any
 from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import HomeAssistant, ServiceCall
 
-from .browse_engine import async_browse_media_items
+from .browse_engine import async_browse_media_items, is_music_assistant_player
 from .calendar_engine import async_fetch_calendar_agenda
 from .const import (
     CONF_ALARM_ENTITY,
@@ -172,9 +172,10 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     async def _handle_set_active_speaker(call: ServiceCall) -> None:
         speaker = str(call.data.get("entity_id") or call.data.get("speaker") or "")
         target_device = call.data.get("target_device")
+        transfer_queue = bool(call.data.get("transfer_queue", False))
         coord = _get_primary_coordinator(hass, target_device)
         if coord and speaker:
-            coord.async_set_active_speaker(speaker)
+            coord.async_set_active_speaker(speaker, transfer_queue=transfer_queue)
 
     async def _handle_trigger_binding(call: ServiceCall) -> None:
         """Execute a user-mapped hardware button/sensor trigger slot configured in the Web Companion."""
@@ -577,23 +578,45 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 s.entity_id
                 for s in hass.states.async_all("media_player")
                 if s.state not in ("unavailable", "unknown")
+                and is_music_assistant_player(hass, s)
             ]
 
         if not speakers:
             return
 
         if media_url:
-            await hass.services.async_call(
-                "media_player",
-                "play_media",
-                {
-                    ATTR_ENTITY_ID: speakers,
-                    "media_content_id": media_url,
-                    "media_content_type": "music",
-                    "announce": True,
-                },
-                blocking=False,
-            )
+            # Prefer Music Assistant's native play_announcement when available so active music ducks/resumes cleanly
+            ma_speakers = [
+                s for s in speakers
+                if hass.states.get(s) and is_music_assistant_player(hass, hass.states.get(s))
+            ]
+            other_speakers = [s for s in speakers if s not in ma_speakers]
+
+            if ma_speakers and hass.services.has_service("music_assistant", "play_announcement"):
+                await hass.services.async_call(
+                    "music_assistant",
+                    "play_announcement",
+                    {
+                        ATTR_ENTITY_ID: ma_speakers,
+                        "url": media_url,
+                    },
+                    blocking=False,
+                )
+            else:
+                other_speakers = speakers
+
+            if other_speakers:
+                await hass.services.async_call(
+                    "media_player",
+                    "play_media",
+                    {
+                        ATTR_ENTITY_ID: other_speakers,
+                        "media_content_id": media_url,
+                        "media_content_type": "music",
+                        "announce": True,
+                    },
+                    blocking=False,
+                )
             return
 
         if message:
