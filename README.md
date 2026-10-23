@@ -92,6 +92,8 @@ In **Latter > Configure**, select your home's primary `alarm_control_panel.*` en
 - Supports arming and disarming directly via `latter.room_action` (`action: "arm_home" | "arm_away" | "arm_night" | "disarm"`).
 ---
 
+---
+
 ## Support the Project
 
 Pocket Assistant and Latter for Home Assistant are built and maintained by Sean Lampton (**Lampton Labs**). If this project is useful in your home and you'd like to support ongoing development and test hardware:
@@ -99,4 +101,8 @@ Pocket Assistant and Latter for Home Assistant are built and maintained by Sean 
 * ☕ **[Buy Me a Coffee](https://www.buymeacoffee.com/slampton)**
 * ❤️ **[Sponsor on GitHub](https://github.com/sponsors/slampton)**
 
+<<<<<<< HEAD
 ---
+=======
+---
+>>>>>>> dev
