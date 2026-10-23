@@ -85,12 +85,13 @@ async def async_push_browse_slots(
     items: list[dict[str, Any]],
     preferred_suffix: str = "set_browse_slots",
 ) -> None:
-    """Paginate items into 5 slots and call esphome.<device_slug>_<preferred_suffix>."""
+    """Paginate items using exact page_size (e.g. 3 for room entities, 5 for areas/music) and call esphome.<slug>_<suffix>."""
+    eff_page_size = max(1, min(5, int(page_size)))
     total_items = len(items)
-    total_pages = max(1, math.ceil(total_items / page_size))
-    page = max(1, min(page, total_pages))
-    start_idx = (page - 1) * page_size
-    page_slice = items[start_idx : start_idx + 5]
+    total_pages = max(1, math.ceil(total_items / eff_page_size))
+    page = max(1, min(int(page), total_pages))
+    start_idx = (page - 1) * eff_page_size
+    page_slice = items[start_idx : start_idx + eff_page_size]
 
     payload: dict[str, Any] = {
         "mode": str(mode),
@@ -116,14 +117,14 @@ async def async_push_browse_slots(
             payload[f"s{idx}_type"] = str(slot.get("type", mode))[:32]
             payload[f"s{idx}_active"] = bool(slot.get("active", False))
             if include_levels:
-                payload[f"s{idx}_level"] = int(slot.get("level", 0))
+                payload[f"s{idx}_level"] = int(slot.get("level", -1))
         else:
             payload[f"s{idx}_name"] = ""
             payload[f"s{idx}_id"] = ""
             payload[f"s{idx}_type"] = ""
             payload[f"s{idx}_active"] = False
             if include_levels:
-                payload[f"s{idx}_level"] = 0
+                payload[f"s{idx}_level"] = -1
 
     if esphome_action is None:
         _LOGGER.warning(
@@ -384,7 +385,9 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
         mode = str(data.get("mode") or "entities").strip().lower()
         page = int(data.get("page") or 1)
-        page_size = int(data.get("page_size") or 5)
+        # Default page_size is 3 for entities (3 tall slider cards) and 5 for areas
+        default_ps = 5 if mode == "areas" else 3
+        page_size = int(data.get("page_size") or default_ps)
         area_id = str(
             data.get("area_id")
             or (coord.active_area_id if coord else "")

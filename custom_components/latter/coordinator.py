@@ -57,6 +57,7 @@ from .const import (
     CONF_VOL_SPEAKER_2,
     CONF_VOL_TARGET_1,
     CONF_VOL_TARGET_2,
+    CONF_WALLPAPER_SOURCE,
     CONF_WEATHER_ENTITY,
     DEFAULT_AREA_HANDOFF,
     DEFAULT_ART_SIZE,
@@ -208,6 +209,11 @@ class LatterCoordinator:
         return str(self.get_opt(CONF_DOCK_APPS, DEFAULT_DOCK_APPS)).strip()
 
     @property
+    def wallpaper_source(self) -> str:
+        """Return configured photo wallpaper URL or /local/ path."""
+        return str(self.get_opt(CONF_WALLPAPER_SOURCE, "") or "").strip()
+
+    @property
     def custom_bindings(self) -> list[dict[str, str]]:
         """Return universal hardware trigger / slot bindings configured in the Web Companion."""
         val = self.get_opt(CONF_CUSTOM_BINDINGS, [])
@@ -328,6 +334,21 @@ class LatterCoordinator:
             base_url = "http://homeassistant.local:8123"
         token = self.get_signed_token()
         return f"{base_url}/api/latter/companion/{self.entry.entry_id}?token={token}"
+
+    def build_wallpaper_url(self) -> str:
+        """Build the authenticated 466x466 circular-masked photo wallpaper URL."""
+        if not self.wallpaper_source:
+            return "none"
+        try:
+            base_url = get_url(self.hass, allow_internal=True, prefer_external=False)
+        except Exception:  # noqa: BLE001
+            base_url = "http://homeassistant.local:8123"
+        token = self.get_signed_token()
+        digest = hashlib.md5(self.wallpaper_source.encode("utf-8")).hexdigest()[:10]
+        return (
+            f"{base_url}/api/latter/wallpaper/{self.entry.entry_id}"
+            f"?token={token}&v={digest}"
+        )
 
     def build_proxy_art_url(self, cache_bust: str) -> str:
         """Build the full external/internal HTTP URL for the ESP32-S3 online_image."""
@@ -616,6 +637,7 @@ class LatterCoordinator:
             "area_name": area_name,
             "device_profile": self.device_profile,
             "dock_apps": self.dock_apps_csv,
+            "wallpaper_url": self.build_wallpaper_url(),
             "companion_url": self.build_companion_url(),
             "entity_count": len(entities),
             "lights_on": lights_on,

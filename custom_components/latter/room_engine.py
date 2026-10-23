@@ -37,24 +37,31 @@ ROOM_CONTROL_DOMAINS: tuple[str, ...] = (
     "media_player",
 )
 
+SLIDER_CAPABLE_DOMAINS: set[str] = {
+    "light",
+    "cover",
+    "fan",
+}
+
 WINDOW_COVER_CLASSES: set[str] = {
     "awning",
     "blind",
     "curtain",
+    "drape",
     "shade",
     "shutter",
     "window",
     "",
 }
 
-# Ordered semantic categories for the ESPHome Device Manager Studio
+# Ordered semantic categories for the ESPHome Device Manager Studio (aligned with Pocket Assistant v2.1.0 prefixes)
 ESPHOME_SECTION_META: tuple[tuple[str, str, str], ...] = (
-    ("display", "Display & UI", "Brightness, sleep timeout, themes, boot animations, and screen controls."),
-    ("audio", "Audio, Voice & Wake Word", "Speaker volume, microphone, wake word models, chimes, and voice settings."),
-    ("music", "Music & Media Options", "Library sort orders, podcast sorting, and active media player controls."),
-    ("room_ble", "Room, BLE & Remotes", "BLE room beacon, presence telemetry, and remote control slots."),
-    ("power", "Power, Battery & Thermal", "Battery level, charging status, PMIC voltage, and internal temperature."),
-    ("system", "System, Actions & Network", "Restart, safe mode, firmware updates, Wi-Fi signal, and diagnostics."),
+    ("display", "Display, Home & UI", "Display:, Home: — Start screen, clock face, color profile, brightness, weather background, and dock shortcuts."),
+    ("sleep_power", "Sleep, Wake & Battery", "Sleep & Wake:, Battery — Pickup/tap to wake, screen/dock/hibernate timeouts, screensaver, and PMIC battery telemetry."),
+    ("audio", "Audio, Voice & Sound", "Voice:, Sound: — Wake word models, sensitivity, visual profile, volume step size, alert volume, and sound effects."),
+    ("room_ble", "Room, BLE & Remotes", "Room:, Remote: — BLE Presence Beacon, Area Media Handoff, and TV Remote Slot 1–4 profiles."),
+    ("music", "Music & Media", "Active media player, library sort preferences, and podcast sorting."),
+    ("system", "System, Actions & Network", "Restart, safe mode, factory reset, Wi-Fi signal, uptime, and firmware diagnostics."),
     ("other", "General & Custom Entities", "Additional sensors, switches, and custom project entities (spillover)."),
 )
 
@@ -66,14 +73,34 @@ def classify_esphome_entity_section(
     device_class: str,
     entity_category: EntityCategory | None,
 ) -> str:
-    """Classify an ESPHome entity into a logical functional section by naming convention or class."""
+    """Classify an ESPHome entity into a logical functional section by explicit prefix or keyword."""
+    name_low = friendly_name.strip().lower()
     text = f"{entity_id} {friendly_name}".lower()
     dev_cls = device_class.lower()
 
-    # 1. Power, Battery & Thermal
+    # 1. Explicit Pocket Assistant v2.1.0 Colon Prefixes (Highest Priority)
+    if name_low.startswith(("display:", "home:")):
+        return "display"
+    if name_low.startswith("sleep & wake:"):
+        return "sleep_power"
+    if name_low.startswith(("voice:", "sound:")):
+        return "audio"
+    if name_low.startswith(("room:", "remote:")):
+        return "room_ble"
+    if name_low.startswith("music:"):
+        return "music"
+
+    # 2. Sleep, Wake & Battery
     if dev_cls in ("battery", "voltage", "current", "power", "energy", "temperature") or any(
         k in text
         for k in (
+            "sleep",
+            "wake_on",
+            "pickup_to_wake",
+            "tap_to_wake",
+            "screensaver",
+            "hibernate",
+            "stay_awake",
             "battery",
             "charging",
             "charger",
@@ -86,9 +113,9 @@ def classify_esphome_entity_section(
             "die_temp",
         )
     ):
-        return "power"
+        return "sleep_power"
 
-    # 2. Display & UI
+    # 3. Display, Home & UI
     if any(
         k in text
         for k in (
@@ -102,19 +129,19 @@ def classify_esphome_entity_section(
             "clock",
             "dock",
             "boot",
-            "sleep",
             "timeout",
             "dim",
             "nightstand",
             "page",
             "ui_",
-            "color",
-            "sky",
+            "color_profile",
+            "weather_background",
+            "shortcut_",
         )
     ):
         return "display"
 
-    # 3. Audio, Voice & Wake Word
+    # 4. Audio, Voice & Sound
     if any(
         k in text
         for k in (
@@ -128,7 +155,8 @@ def classify_esphome_entity_section(
             "chime",
             "beep",
             "ringtone",
-            "timer_sound",
+            "alert_volume",
+            "volume_step",
             "dac",
             "es8311",
             "es7210",
@@ -140,7 +168,27 @@ def classify_esphome_entity_section(
     ):
         return "audio"
 
-    # 4. Music & Media Options
+    # 5. Room, BLE & Remotes
+    if any(
+        k in text
+        for k in (
+            "ble",
+            "beacon",
+            "ibeacon",
+            "bluetooth",
+            "presence",
+            "room",
+            "area",
+            "remote",
+            "slot_1",
+            "slot_2",
+            "slot_3",
+            "slot_4",
+        )
+    ):
+        return "room_ble"
+
+    # 6. Music & Media
     if domain == "media_player" or any(
         k in text
         for k in (
@@ -158,26 +206,9 @@ def classify_esphome_entity_section(
     ):
         return "music"
 
-    # 5. Room, BLE & Remotes
-    if any(
-        k in text
-        for k in (
-            "ble",
-            "beacon",
-            "ibeacon",
-            "bluetooth",
-            "presence",
-            "room",
-            "area",
-            "remote",
-            "tv_",
-        )
-    ):
-        return "room_ble"
-
-    # 6. System, Actions & Network
+    # 7. System, Actions & Network
     if (
-        domain in ("update",)
+        domain in ("update", "button")
         or entity_category == EntityCategory.DIAGNOSTIC
         or dev_cls in ("signal_strength", "timestamp", "duration", "restart", "identify")
         or any(
@@ -197,7 +228,7 @@ def classify_esphome_entity_section(
                 "free_heap",
                 "psram",
                 "memory",
-                "Cpu",
+                "cpu",
                 "firmware",
                 "version",
                 "status",
@@ -208,11 +239,6 @@ def classify_esphome_entity_section(
     ):
         return "system"
 
-    # 7. Buttons without a specific prefix go to System & Actions
-    if domain == "button":
-        return "system"
-
-    # 8. Spillover bucket for any custom ESPHome entity
     return "other"
 
 
@@ -362,7 +388,6 @@ def get_esphome_device_entities(
 
     dev_prefix = dev_meta["name"].strip()
 
-    # Priority order inside each section: interactive controls first, sensors second
     domain_sort_order = {
         "switch": 1,
         "select": 2,
@@ -385,14 +410,23 @@ def get_esphome_device_entities(
             or entry.original_name
             or entry.entity_id
         )
-        # Strip redundant device name prefix (e.g. "Pocket Assistant Display Brightness" -> "Display Brightness")
         clean_name = raw_friendly
         if dev_prefix and clean_name.lower().startswith(dev_prefix.lower() + " "):
             clean_name = clean_name[len(dev_prefix) + 1 :].strip() or raw_friendly
-        clean_name = re.sub(r"^pocket[\s_-]*assistant[\s_-]*", "", clean_name, flags=re.IGNORECASE).strip() or raw_friendly
+        clean_name = (
+            re.sub(
+                r"^pocket[\s_-]*assistant[\s_-]*",
+                "",
+                clean_name,
+                flags=re.IGNORECASE,
+            ).strip()
+            or raw_friendly
+        )
 
         unit = str(attrs.get("unit_of_measurement") or "")
-        dev_class = str(attrs.get("device_class") or entry.original_device_class or "")
+        dev_class = str(
+            attrs.get("device_class") or entry.original_device_class or ""
+        )
         cat = entry.entity_category
 
         sec_id = classify_esphome_entity_section(
@@ -411,7 +445,10 @@ def get_esphome_device_entities(
             "min": attrs.get("min"),
             "max": attrs.get("max"),
             "step": attrs.get("step"),
-            "_sort": (domain_sort_order.get(entry.domain, 50), clean_name.lower()),
+            "_sort": (
+                domain_sort_order.get(entry.domain, 50),
+                clean_name.lower(),
+            ),
         }
         sections_map[sec_id].append(item)
 
@@ -574,6 +611,9 @@ def _is_curated_room_entity(
         return True
 
     if domain == "cover":
+        name_low = str(attrs.get("friendly_name") or state_obj.entity_id).lower()
+        if any(k in name_low for k in ("curtain", "drape", "sheer", "blind", "shade", "shutter", "window")):
+            return True
         return dev_class in WINDOW_COVER_CLASSES
 
     if domain == "switch":
@@ -591,21 +631,13 @@ def _is_curated_room_entity(
 
 
 def get_entity_level(state_obj: State) -> int:
-    """Compute a normalized 0..100 level for horizontal fill-slider UI cards."""
+    """Return 0..100 for slider-capable domains (light, cover, fan) or -1 for non-slider domains."""
     domain = state_obj.domain
+    if domain not in SLIDER_CAPABLE_DOMAINS:
+        return -1
+
     attrs = state_obj.attributes
-    is_active = state_obj.state in (
-        STATE_ON,
-        STATE_OPEN,
-        STATE_PLAYING,
-        "heat",
-        "cool",
-        "heat_cool",
-        "auto",
-        "armed_home",
-        "armed_away",
-        "armed_night",
-    )
+    is_active = state_obj.state in (STATE_ON, STATE_OPEN)
 
     if domain == "light":
         if not is_active:
@@ -629,19 +661,7 @@ def get_entity_level(state_obj: State) -> int:
             return max(0, min(100, int(round(float(pct)))))
         return 100
 
-    if domain == "climate":
-        temp = attrs.get("temperature") or attrs.get("current_temperature")
-        if temp is not None:
-            return max(0, min(100, int(round(float(temp)))))
-        return 0
-
-    if domain == "media_player":
-        vol = attrs.get("volume_level")
-        if vol is not None:
-            return max(0, min(100, int(round(float(vol) * 100))))
-        return 50 if is_active else 0
-
-    return 100 if is_active else 0
+    return -1
 
 
 def format_entity_slot_name(state_obj: State, area_name: str = "") -> str:
@@ -653,9 +673,9 @@ def format_entity_slot_name(state_obj: State, area_name: str = "") -> str:
     domain = state_obj.domain
     level = get_entity_level(state_obj)
 
-    if domain == "light" and state_obj.state == STATE_ON:
+    if domain == "light" and state_obj.state == STATE_ON and level >= 0:
         return f"{friendly} ({level}%)"
-    if domain == "cover":
+    if domain == "cover" and level >= 0:
         return f"{friendly} ({level}%)"
     if domain == "climate":
         cur = state_obj.attributes.get("current_temperature")
@@ -664,7 +684,7 @@ def format_entity_slot_name(state_obj: State, area_name: str = "") -> str:
             return f"{friendly} ({int(round(float(tgt)))}°)"
         if cur is not None:
             return f"{friendly} ({int(round(float(cur)))}°)"
-    if domain == "fan" and state_obj.state == STATE_ON:
+    if domain == "fan" and state_obj.state == STATE_ON and level >= 0:
         return f"{friendly} ({level}%)"
     if domain == "media_player":
         return f"Speaker: {friendly}"
@@ -809,7 +829,7 @@ def get_home_wide_entities(
                     "id": state_obj.entity_id,
                     "type": "alarm_control_panel",
                     "active": is_armed,
-                    "level": 100 if is_armed else 0,
+                    "level": -1,
                 }
             )
             seen_ids.add(state_obj.entity_id)
@@ -888,7 +908,7 @@ def get_areas_summary(
                 "id": area.id,
                 "type": "area",
                 "active": area.id == active_area_id,
-                "level": min(100, lights_on * 25),
+                "level": -1,
                 "_raw_name": area.name,
             }
         )
@@ -904,26 +924,27 @@ def get_area_entities(
     custom_entities: list[str] | None = None,
     local_speaker: str = "",
 ) -> list[dict[str, Any]]:
-    """Return curated controllable entities for a specific area."""
+    """Return curated controllable entities for a specific area (`domain_filter='cover'` includes both covers and fans)."""
     area_reg = ar.async_get(hass)
     area_entry = area_reg.async_get_area(area_id) if area_id else None
     area_name = area_entry.name if area_entry else ""
 
     domain_filter = domain_filter.strip().lower()
-    allowed_domains = (
-        (domain_filter,)
-        if domain_filter in ROOM_CONTROL_DOMAINS
-        else ROOM_CONTROL_DOMAINS
-    )
+    if domain_filter in ("cover", "shades", "shades_fans"):
+        allowed_domains: tuple[str, ...] = ("cover", "fan")
+    elif domain_filter in ROOM_CONTROL_DOMAINS:
+        allowed_domains = (domain_filter,)
+    else:
+        allowed_domains = ROOM_CONTROL_DOMAINS
 
     pinned_set = set(custom_entities or [])
     items: list[dict[str, Any]] = []
 
     domain_priority = {
         "light": 1,
-        "scene": 2,
-        "cover": 3,
-        "fan": 4,
+        "cover": 2,
+        "fan": 3,
+        "scene": 4,
         "climate": 5,
         "switch": 6,
         "media_player": 7,
@@ -945,6 +966,8 @@ def get_area_entities(
                 continue
             if not _is_curated_room_entity(hass, state_obj, local_speaker):
                 continue
+        elif domain_filter != "all" and state_obj.domain not in allowed_domains:
+            continue
 
         is_active = state_obj.state in (
             STATE_ON,
@@ -1017,7 +1040,7 @@ async def async_execute_room_action(
 
     domain = state_obj.domain
     action = action.strip().lower()
-    cur_level = get_entity_level(state_obj)
+    cur_level = max(0, get_entity_level(state_obj))
 
     if domain == "button":
         await hass.services.async_call(
@@ -1074,9 +1097,9 @@ async def async_execute_room_action(
         level = max(0, min(100, cur_level + (step if action == "step_up" else -step)))
         action = "set_level"
 
-    if domain == "scene":
+    if domain in ("scene", "script"):
         await hass.services.async_call(
-            "scene", "turn_on", {ATTR_ENTITY_ID: entity_id}, blocking=False
+            domain, "turn_on", {ATTR_ENTITY_ID: entity_id}, blocking=False
         )
         return
 

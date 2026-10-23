@@ -35,6 +35,7 @@ CONF_CALENDAR_ENTITIES: Final = "calendar_entities"
 CONF_CUSTOM_ENTITIES: Final = "custom_entities"
 CONF_CUSTOM_BINDINGS: Final = "custom_bindings"
 CONF_DOCK_APPS: Final = "dock_apps"
+CONF_WALLPAPER_SOURCE: Final = "wallpaper_source"
 CONF_ART_SIZE: Final = "art_size"
 
 # Defaults
@@ -47,7 +48,7 @@ DEFAULT_BLE_BEACON_UUID: Final = "504F434B-4554-4153-5354-000000000210"
 DEFAULT_BLE_AUTO_SWITCH: Final = True
 DEFAULT_SYNC_DEVICE_AREA: Final = True
 DEFAULT_AREA_HANDOFF: Final = True
-DEFAULT_DOCK_APPS: Final = "music,room,weather,remote,calendar,games,tools"
+DEFAULT_DOCK_APPS: Final = "music,room,remote,games,tools"
 DEFAULT_ART_SIZE: Final = 466
 
 # Native Latter Entity Contract (Pocket Assistant v2.1.0+)
@@ -70,8 +71,9 @@ SERVICE_CALENDAR_FETCH: Final = "calendar_fetch"
 SERVICE_CALENDAR_CREATE_EVENT: Final = "calendar_create_event"
 SERVICE_INTERCOM_BROADCAST: Final = "intercom_broadcast"
 
-# HTTP Endpoints (Image Proxy & Server-Side Web Companion Dashboard)
+# HTTP Endpoints (Image Proxy, Circular Wallpaper Proxy & Web Companion Studio)
 API_IMAGE_PROXY_PATH: Final = "/api/latter/image_proxy/{entry_id}"
+API_WALLPAPER_PROXY_PATH: Final = "/api/latter/wallpaper/{entry_id}"
 API_COMPANION_UI_PATH: Final = "/api/latter/companion/{entry_id}"
 API_COMPANION_API_PATH: Final = "/api/latter/companion/{entry_id}/api"
 DATA_HMAC_SECRET: Final = "hmac_secret"

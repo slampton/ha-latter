@@ -23,7 +23,7 @@ from .const import (
 )
 from .coordinator import LatterCoordinator
 from .dashboard import LatterCompanionApiView, LatterCompanionDashboardView
-from .http import LatterImageProxyView
+from .http import LatterImageProxyView, LatterWallpaperProxyView
 from .room_engine import inject_esphome_visit_link
 from .services import async_setup_services
 
@@ -50,7 +50,6 @@ def _async_check_esphome_device_for_discovery(
     if not dev_name:
         return
 
-    # Skip bare BLE proxy nodes unless they have interactive controls/media/display entities
     if "proxy" in dev_name.lower() and not any(
         e.domain in ("media_player", "light", "switch", "button", "select", "number")
         and e.entity_category is None
@@ -62,7 +61,6 @@ def _async_check_esphome_device_for_discovery(
     if not slug:
         return
 
-    # Check if already configured or ignored
     for entry in hass.config_entries.async_entries(DOMAIN):
         if entry.unique_id == f"{DOMAIN}_{slug}":
             return
@@ -84,6 +82,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if DATA_HMAC_SECRET not in domain_data:
         domain_data[DATA_HMAC_SECRET] = secrets.token_bytes(32)
         hass.http.register_view(LatterImageProxyView(hass))
+        hass.http.register_view(LatterWallpaperProxyView(hass))
         hass.http.register_view(LatterCompanionDashboardView(hass))
         hass.http.register_view(LatterCompanionApiView(hass))
 
@@ -95,12 +94,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await coordinator.async_setup()
     domain_data[entry.entry_id] = coordinator
 
-    # Inject Latter Web Companion URL directly onto the ESPHome device's "Visit" link!
     inject_esphome_visit_link(
         hass, coordinator.device_slug, coordinator.build_companion_url()
     )
 
-    # Watch Device Registry so newly added ESPHome devices are automatically discovered
     if DATA_DISCOVERY_UNSUB not in domain_data:
         @callback
         def _on_device_registry_updated(event: Event) -> None:
@@ -123,7 +120,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     _LOGGER.info(
-        "Latter v1.2.0 initialized for ESPHome device '%s' (companion_url: %s)",
+        "Latter v1.2.2 initialized for ESPHome device '%s' (companion_url: %s)",
         coordinator.device_slug,
         coordinator.build_companion_url(),
     )
