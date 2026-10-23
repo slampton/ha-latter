@@ -1,4 +1,4 @@
-"""Area-Aware Room Discovery, Curated Entity Filtering, Telemetry, Alarm & Remote Engine for Latter."""
+"""Area-Aware Room Discovery, Curated Entity Filtering, Telemetry, Alarm & ESPHome Inspector for Latter."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from typing import Any
 
 from homeassistant.const import (
     ATTR_ENTITY_ID,
-     EntityCategory,
+    EntityCategory,
     STATE_ON,
     STATE_OPEN,
     STATE_PLAYING,
@@ -105,7 +105,7 @@ def match_area_by_name_or_id(
 def find_esphome_device_id(
     hass: HomeAssistant, device_slug: str
 ) -> str | None:
-    """Find the Home Assistant device_id for the target Pocket Assistant ESPHome node."""
+    """Find the Home Assistant device_id for the target ESPHome node."""
     dev_reg = dr.async_get(hass)
     ent_reg = er.async_get(hass)
     slug_norm = device_slug.strip().lower().replace("-", "_")
@@ -116,11 +116,123 @@ def find_esphome_device_id(
                 return entry.device_id
 
     for dev in dev_reg.devices.values():
-        dev_name = str(dev.name_by_user or dev.name or "").lower().replace("-", "_")
+        dev_name = (
+            str(dev.name_by_user or dev.name or "")
+            .lower()
+            .replace("-", "_")
+            .replace(" ", "_")
+        )
         if slug_norm and slug_norm in dev_name:
             return dev.id
 
     return None
+
+
+def inject_esphome_visit_link(
+    hass: HomeAssistant, device_slug: str, companion_url: str
+) -> None:
+    """Set configuration_url on the native ESPHome device entry so its 'Visit' button opens Latter Studio!"""
+    target_device_id = find_esphome_device_id(hass, device_slug)
+    if not target_device_id:
+        return
+    dev_reg = dr.async_get(hass)
+    dev = dev_reg.async_get(target_device_id)
+    if dev and dev.configuration_url != companion_url:
+        dev_reg.async_update_device(
+            target_device_id, configuration_url=companion_url
+        )
+        _LOGGER.info(
+            "Linked ESPHome device '%s' 'Visit' button to Latter Web Companion Studio",
+            device_slug,
+        )
+
+
+def get_esphome_device_entities(
+    hass: HomeAssistant, device_slug: str
+) -> dict[str, Any]:
+    """Inspect all entities belonging to the ESPHome device for the Web Companion Device Manager tab."""
+    target_device_id = find_esphome_device_id(hass, device_slug)
+    dev_reg = dr.async_get(hass)
+    ent_reg = er.async_get(hass)
+
+    dev_meta: dict[str, str] = {
+        "device_id": target_device_id or "",
+        "name": device_slug,
+        "model": "ESPHome Node",
+        "manufacturer": "ESPHome",
+        "sw_version": "",
+        "mac": "",
+    }
+    if target_device_id:
+        dev = dev_reg.async_get(target_device_id)
+        if dev:
+            dev_meta["name"] = str(dev.name_by_user or dev.name or device_slug)
+            dev_meta["model"] = str(dev.model or "ESPHome Node")
+            dev_meta["manufacturer"] = str(dev.manufacturer or "ESPHome")
+            dev_meta["sw_version"] = str(dev.sw_version or "")
+            for _ctype, cval in dev.connections:
+                dev_meta["mac"] = str(cval)
+                break
+
+    groups: dict[str, list[dict[str, Any]]] = {
+        "controls": [],
+        "sensors": [],
+        "config": [],
+        "diagnostics": [],
+    }
+
+    entries: list[er.RegistryEntry] = []
+    if target_device_id:
+        entries = er.async_entries_for_device(
+            ent_reg, target_device_id, include_disabled_entities=False
+        )
+    else:
+        slug_norm = device_slug.strip().lower().replace("-", "_")
+        entries = [
+            e
+            for e in ent_reg.entities.values()
+            if e.platform == "esphome" and slug_norm in e.entity_id and not e.disabled_by
+        ]
+
+    for entry in sorted(entries, key=lambda e: e.entity_id):
+        state_obj = hass.states.get(entry.entity_id)
+        state_val = state_obj.state if state_obj else "unavailable"
+        attrs = state_obj.attributes if state_obj else {}
+        friendly = str(
+            attrs.get("friendly_name")
+            or entry.name
+            or entry.original_name
+            or entry.entity_id
+        )
+        unit = str(attrs.get("unit_of_measurement") or "")
+        cat = entry.entity_category
+
+        item: dict[str, Any] = {
+            "entity_id": entry.entity_id,
+            "name": friendly,
+            "domain": entry.domain,
+            "state": state_val,
+            "unit": unit,
+            "device_class": str(attrs.get("device_class") or entry.original_device_class or ""),
+            "options": list(attrs.get("options") or []),
+            "min": attrs.get("min"),
+            "max": attrs.get("max"),
+            "step": attrs.get("step"),
+        }
+
+        if cat == EntityCategory.DIAGNOSTIC:
+            groups["diagnostics"].append(item)
+        elif cat == EntityCategory.CONFIG:
+            groups["config"].append(item)
+        elif entry.domain in ("sensor", "binary_sensor"):
+            groups["sensors"].append(item)
+        else:
+            groups["controls"].append(item)
+
+    return {
+        "device": dev_meta,
+        "groups": groups,
+    }
 
 
 def protect_handheld_sensors_from_area_dashboards(
@@ -162,7 +274,6 @@ def sync_esphome_device_area(
     if not area_id:
         return
 
-    # Safeguard: If require_ble_proxy_area is True and BLE proxies exist, never assign the device to a room with no BLE proxy!
     if require_ble_proxy_area:
         proxy_areas = get_ble_proxy_area_ids(hass)
         if proxy_areas and area_id not in proxy_areas:
@@ -377,7 +488,6 @@ def get_area_climate_telemetry(
     for state_obj in hass.states.async_all("sensor"):
         if state_obj.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
             continue
-        # Never use the handheld's own internal battery/die temperature sensor as room temperature!
         if slug_norm and slug_norm in state_obj.entity_id:
             continue
 
@@ -693,16 +803,41 @@ async def async_execute_room_action(
     action: str = "toggle",
     level: int | None = None,
     code: str | None = None,
+    option: str | None = None,
 ) -> None:
-    """Execute a normalized room or home-alarm action."""
+    """Execute a normalized room, home-alarm, or ESPHome device entity action."""
     state_obj = hass.states.get(entity_id)
     if state_obj is None:
-        _LOGGER.warning("Room action target entity not found: %s", entity_id)
+        _LOGGER.warning("Action target entity not found: %s", entity_id)
         return
 
     domain = state_obj.domain
     action = action.strip().lower()
     cur_level = get_entity_level(state_obj)
+
+    if domain == "button":
+        await hass.services.async_call(
+            "button", "press", {ATTR_ENTITY_ID: entity_id}, blocking=False
+        )
+        return
+
+    if domain in ("select", "input_select") and option is not None:
+        await hass.services.async_call(
+            domain,
+            "select_option",
+            {ATTR_ENTITY_ID: entity_id, "option": str(option)},
+            blocking=False,
+        )
+        return
+
+    if domain in ("number", "input_number") and level is not None:
+        await hass.services.async_call(
+            domain,
+            "set_value",
+            {ATTR_ENTITY_ID: entity_id, "value": float(level)},
+            blocking=False,
+        )
+        return
 
     if domain == "alarm_control_panel":
         svc_map = {

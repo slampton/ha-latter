@@ -41,14 +41,14 @@ from .const import (
     CONF_VOL_TARGET_1,
     CONF_VOL_TARGET_2,
     CONF_WEATHER_ENTITY,
+    CONF_WEB_THEME,
     DEFAULT_ART_SIZE,
-    DEFAULT_BLE_BEACON_UUID,
     DEFAULT_DEVICE_PROFILE,
-    DEFAULT_DOCK_APPS,
+    DEFAULT_WEB_THEME,
     DOMAIN,
 )
 from .coordinator import LatterCoordinator
-from .room_engine import async_execute_room_action
+from .room_engine import async_execute_room_action, get_esphome_device_entities
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -64,7 +64,6 @@ def _build_companion_state_payload(
     ]
 
     ma_speakers: list[dict[str, str]] = []
-    all_media_players: list[dict[str, str]] = []
     remotes_list: list[dict[str, str]] = []
     volume_targets: list[dict[str, str]] = []
     alarms_list: list[dict[str, str]] = []
@@ -84,7 +83,6 @@ def _build_companion_state_payload(
         item = {"id": ent_id, "name": f"{friendly} ({ent_id})", "domain": domain}
 
         if domain == "media_player":
-            all_media_players.append(item)
             remotes_list.append(item)
             volume_targets.append(item)
             if (
@@ -124,11 +122,17 @@ def _build_companion_state_payload(
 
     _, room_attrs = coordinator.get_room_context_payload()
     _, media_attrs = coordinator.get_active_media_payload()
+    esphome_inspector = get_esphome_device_entities(
+        hass, coordinator.device_slug
+    )
 
     config_data = {
         CONF_DEVICE_SLUG: coordinator.device_slug,
         CONF_DEVICE_PROFILE: coordinator.get_opt(
             CONF_DEVICE_PROFILE, DEFAULT_DEVICE_PROFILE
+        ),
+        CONF_WEB_THEME: coordinator.get_opt(
+            CONF_WEB_THEME, DEFAULT_WEB_THEME
         ),
         CONF_DEFAULT_SPEAKER: coordinator.get_opt(
             CONF_DEFAULT_SPEAKER, coordinator.active_speaker
@@ -162,8 +166,9 @@ def _build_companion_state_payload(
     return {
         "entry_id": coordinator.entry.entry_id,
         "title": coordinator.entry.title,
-        "version": "1.1.0",
+        "version": "1.2.0",
         "config": config_data,
+        "esphome": esphome_inspector,
         "live": {
             "active_area_id": coordinator.active_area_id or "",
             "active_area_name": room_attrs.get("area_name", "Home"),
@@ -219,7 +224,7 @@ class LatterCompanionApiView(HomeAssistantView):
         return coordinator
 
     async def get(self, request: web.Request, entry_id: str) -> web.Response:
-        """Return live state, configuration, and entity catalog."""
+        """Return live state, configuration, ESPHome device inspector, and entity catalog."""
         coordinator = self._resolve_coordinator(request, entry_id)
         if coordinator is None:
             return web.json_response(
@@ -230,7 +235,7 @@ class LatterCompanionApiView(HomeAssistantView):
         return web.json_response(payload)
 
     async def post(self, request: web.Request, entry_id: str) -> web.Response:
-        """Save updated configuration or execute a live test action."""
+        """Save updated configuration or execute a live entity/device action."""
         coordinator = self._resolve_coordinator(request, entry_id)
         if coordinator is None:
             return web.json_response(
@@ -251,24 +256,28 @@ class LatterCompanionApiView(HomeAssistantView):
             area_id = str(body.get("area_id") or "")
             if area_id:
                 coordinator.async_set_active_area(
-                    area_id, sync_device_registry= bool(body.get("sync_device", False))
+                    area_id, sync_device_registry=bool(body.get("sync_device", False))
                 )
             return web.json_response(
                 _build_companion_state_payload(self.hass, coordinator)
             )
 
-        if cmd == "test_binding":
+        if cmd in ("test_binding", "esphome_entity_action"):
             entity_id = str(body.get("entity_id") or "").strip()
             action = str(body.get("action") or "toggle").strip()
             level = body.get("level")
+            option = body.get("option")
             if entity_id:
                 await async_execute_room_action(
                     self.hass,
                     entity_id=entity_id,
                     action=action,
-                    level=int(level) if level is not None else None,
+                    level=int(float(level)) if level is not None else None,
+                    option=str(option) if option is not None else None,
                 )
-            return web.json_response({"ok": True})
+            return web.json_response(
+                _build_companion_state_payload(self.hass, coordinator)
+            )
 
         if cmd == "save_config":
             incoming_cfg = body.get("config") or {}
@@ -280,6 +289,7 @@ class LatterCompanionApiView(HomeAssistantView):
             for k in (
                 CONF_DEVICE_SLUG,
                 CONF_DEVICE_PROFILE,
+                CONF_WEB_THEME,
                 CONF_DEFAULT_SPEAKER,
                 CONF_VOL_SPEAKER_1,
                 CONF_VOL_TARGET_1,
@@ -329,7 +339,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Latter Companion Studio</title>
 <style>
-  :root {
+  :root, [data-theme="cyber_cyan"] {
     --bg: #0b111e;
     --card: #131c2e;
     --card-border: #1e293b;
@@ -338,28 +348,58 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     --accent: #00d2ff;
     --accent-2: #6366f1;
     --success: #10b981;
-    --warn: #f59e0b;
-    --danger: #ef4444;
+  }
+  [data-theme="amoled_midnight"] {
+    --bg: #000000;
+    --card: #0a0d14;
+    --card-border: #1e2430;
+    --text: #f8fafc;
+    --muted: #64748b;
+    --accent: #38bdf8;
+    --accent-2: #a855f7;
+    --success: #22c55e;
+  }
+  [data-theme="emerald_matrix"] {
+    --bg: #04130e;
+    --card: #09221a;
+    --card-border: #143d2f;
+    --text: #ecfdf5;
+    --muted: #6ee7b7;
+    --accent: #10b981;
+    --accent-2: #059669;
+    --success: #34d399;
+  }
+  [data-theme="warm_minimal"] {
+    --bg: #181411;
+    --card: #241e1a;
+    --card-border: #382e28;
+    --text: #fafaf9;
+    --muted: #a8a29e;
+    --accent: #f59e0b;
+    --accent-2: #ea580c;
+    --success: #10b981;
   }
   * { box-sizing: border-box; }
   body {
     margin: 0;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    background: radial-gradient(circle at top right, #162238, var(--bg) 60%);
+    background: var(--bg);
     color: var(--text);
     min-height: 100vh;
+    transition: background 0.2s;
   }
   header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 16px 24px;
-    background: rgba(19, 28, 46, 0.85);
-    backdrop-filter: blur(12px);
+    padding: 14px 24px;
+    background: var(--card);
     border-bottom: 1px solid var(--card-border);
     position: sticky;
     top: 0;
     z-index: 20;
+    flex-wrap: wrap;
+    gap: 12px;
   }
   .brand {
     display: flex;
@@ -377,40 +417,24 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     font-weight: 800;
     color: #0b111e;
     font-size: 18px;
-    box-shadow: 0 0 16px rgba(0, 210, 255, 0.35);
   }
-  .brand h1 {
-    margin: 0;
-    font-size: 18px;
-    letter-spacing: 0.4px;
-  }
-  .brand small {
-    color: var(--muted);
-    font-size: 12px;
-    display: block;
-  }
-  .actions {
-    display: flex;
-    gap: 10px;
-    align-items: center;
-  }
+  .brand h1 { margin: 0; font-size: 18px; }
+  .brand small { color: var(--muted); font-size: 12px; display: block; }
+  .actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
   button {
-    background: linear-gradient(135deg, var(--accent), #0284c7);
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
     color: #08101d;
     border: none;
-    padding: 9px 18px;
+    padding: 9px 16px;
     border-radius: 8px;
     font-weight: 700;
     cursor: pointer;
     font-size: 13px;
-    transition: transform 0.12s, opacity 0.15s;
   }
-  button:hover { opacity: 0.92; }
-  button:active { transform: scale(0.98); }
   button.secondary {
-    background: #1e293b;
+    background: rgba(255,255,255,0.06);
     color: var(--text);
-    border: 1px solid #334155;
+    border: 1px solid var(--card-border);
   }
   button.danger {
     background: rgba(239, 68, 68, 0.18);
@@ -418,19 +442,10 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     border: 1px solid rgba(239, 68, 68, 0.35);
     padding: 6px 10px;
   }
-  .container {
-    max-width: 1120px;
-    margin: 24px auto;
-    padding: 0 16px 64px;
-  }
-  .tabs {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 20px;
-    flex-wrap: wrap;
-  }
+  .container { max-width: 1160px; margin: 24px auto; padding: 0 16px 64px; }
+  .tabs { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
   .tab {
-    padding: 10px 18px;
+    padding: 10px 16px;
     border-radius: 10px;
     background: var(--card);
     border: 1px solid var(--card-border);
@@ -442,7 +457,6 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
   .tab.active {
     color: var(--accent);
     border-color: var(--accent);
-    background: rgba(0, 210, 255, 0.08);
   }
   .grid {
     display: grid;
@@ -454,35 +468,17 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     border: 1px solid var(--card-border);
     border-radius: 14px;
     padding: 20px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
   }
-  .card h2 {
-    margin: 0 0 6px;
-    font-size: 16px;
-    color: var(--text);
-  }
-  .card p.desc {
-    margin: 0 0 16px;
-    font-size: 12.5px;
-    color: var(--muted);
-    line-height: 1.45;
-  }
-  .field {
-    margin-bottom: 14px;
-  }
-  .field label {
-    display: block;
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--muted);
-    margin-bottom: 6px;
-  }
-  select, input[type="text"] {
+  .card h2 { margin: 0 0 6px; font-size: 16px; color: var(--text); }
+  .card p.desc { margin: 0 0 16px; font-size: 12.5px; color: var(--muted); line-height: 1.45; }
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
+  select, input[type="text"], input[type="number"] {
     width: 100%;
     padding: 9px 12px;
     border-radius: 8px;
-    border: 1px solid #334155;
-    background: #0f172a;
+    border: 1px solid var(--card-border);
+    background: var(--bg);
     color: var(--text);
     font-size: 13px;
   }
@@ -494,43 +490,19 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     border-bottom: 1px solid rgba(255,255,255,0.05);
     font-size: 13px;
   }
-  .stat-pills {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    margin-bottom: 16px;
-  }
+  .stat-pills { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
   .pill {
-    background: #0f172a;
-    border: 1px solid #1e293b;
+    background: var(--bg);
+    border: 1px solid var(--card-border);
     border-radius: 10px;
     padding: 10px 14px;
     flex: 1 1 130px;
   }
-  .pill span {
-    display: block;
-    font-size: 11px;
-    color: var(--muted);
-  }
-  .pill strong {
-    font-size: 15px;
-    color: var(--accent);
-  }
-  .rssi-bar {
-    margin-bottom: 10px;
-  }
-  .rssi-header {
-    display: flex;
-    justify-content: space-between;
-    font-size: 12px;
-    margin-bottom: 4px;
-  }
-  .rssi-track {
-    height: 8px;
-    background: #0f172a;
-    border-radius: 99px;
-    overflow: hidden;
-  }
+  .pill span { display: block; font-size: 11px; color: var(--muted); }
+  .pill strong { font-size: 15px; color: var(--accent); }
+  .rssi-bar { margin-bottom: 10px; }
+  .rssi-header { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+  .rssi-track { height: 8px; background: var(--bg); border-radius: 99px; overflow: hidden; }
   .rssi-fill {
     height: 100%;
     background: linear-gradient(90deg, var(--accent-2), var(--accent));
@@ -543,14 +515,27 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     gap: 8px;
     align-items: center;
     margin-bottom: 10px;
-    background: #0f172a;
+    background: var(--bg);
     padding: 10px;
     border-radius: 10px;
-    border: 1px solid #1e293b;
+    border: 1px solid var(--card-border);
   }
-  @media (max-width: 720px) {
-    .binding-row { grid-template-columns: 1fr; }
+  .entity-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 9px 12px;
+    background: var(--bg);
+    border: 1px solid var(--card-border);
+    border-radius: 9px;
+    margin-bottom: 8px;
+    font-size: 13px;
   }
+  .entity-row .meta { display: flex; flex-direction: column; }
+  .entity-row .meta small { color: var(--muted); font-size: 11px; }
+  .entity-row .val { font-weight: 700; color: var(--accent); display: flex; align-items: center; gap: 8px; }
+  @media (max-width: 720px) { .binding-row { grid-template-columns: 1fr; } }
   .toast {
     position: fixed;
     bottom: 20px;
@@ -562,18 +547,13 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     font-weight: 700;
     font-size: 13px;
     display: none;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    z-index: 50;
   }
   .hidden { display: none !important; }
-  .chip-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-top: 8px;
-  }
+  .chip-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
   .chip {
     background: rgba(0, 210, 255, 0.12);
-    border: 1px solid rgba(0, 210, 255, 0.35);
+    border: 1px solid var(--accent);
     color: var(--text);
     padding: 5px 10px;
     border-radius: 99px;
@@ -582,22 +562,25 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     align-items: center;
     gap: 6px;
   }
-  .chip b {
-    cursor: pointer;
-    color: #fca5a5;
-  }
+  .chip b { cursor: pointer; color: #fca5a5; }
 </style>
 </head>
-<body>
+<body data-theme="cyber_cyan">
 <header>
   <div class="brand">
     <div class="brand-badge">L</div>
     <div>
       <h1 id="hdr-title">Latter Companion Studio</h1>
-      <small id="hdr-sub">Universal ESPHome Entity & Room Middleware</small>
+      <small id="hdr-sub">Universal ESPHome Entity & Device Manager</small>
     </div>
   </div>
   <div class="actions">
+    <select id="cfg-web_theme" style="width:auto;" onchange="applyTheme(this.value)">
+      <option value="cyber_cyan">Theme: Cyber Cyan</option>
+      <option value="amoled_midnight">Theme: AMOLED Midnight</option>
+      <option value="emerald_matrix">Theme: Emerald Matrix</option>
+      <option value="warm_minimal">Theme: Warm Minimal</option>
+    </select>
     <button class="secondary" onclick="refreshState()">Refresh</button>
     <button onclick="saveAllConfig()">Save Changes</button>
   </div>
@@ -606,9 +589,10 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
 <div class="container">
   <div class="tabs">
     <div class="tab active" onclick="switchTab('overview', this)">1. Overview & BLE Radar</div>
-    <div class="tab" onclick="switchTab('media', this)">2. Media, Remotes & Alarm</div>
-    <div class="tab" onclick="switchTab('mapper', this)">3. Universal Entity & Trigger Mapper</div>
-    <div class="tab" onclick="switchTab('display', this)">4. UI, Dock & Display</div>
+    <div class="tab" onclick="switchTab('esphome', this)">2. ESPHome Device Manager</div>
+    <div class="tab" onclick="switchTab('media', this)">3. Media, Remotes & Alarm</div>
+    <div class="tab" onclick="switchTab('mapper', this)">4. Universal Trigger Mapper</div>
+    <div class="tab" onclick="switchTab('display', this)">5. UI, Dock & Display</div>
   </div>
 
   <!-- TAB 1: OVERVIEW & BLE RADAR -->
@@ -672,7 +656,31 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     </div>
   </div>
 
-  <!-- TAB 2: MEDIA, REMOTES & ALARM -->
+  <!-- TAB 2: ESPHOME DEVICE MANAGER -->
+  <div id="tab-esphome" class="grid hidden">
+    <div class="card" style="grid-column: 1 / -1;">
+      <h2 id="esp-dev-title">ESPHome Device Inspector</h2>
+      <p class="desc" id="esp-dev-meta">Live view and interactive control of all native ESPHome entities, buttons, switches, options, and diagnostics—zero on-device web_server required.</p>
+    </div>
+    <div class="card">
+      <h2>Controls, Switches & Buttons</h2>
+      <div id="esp-controls"></div>
+    </div>
+    <div class="card">
+      <h2>Configuration & Options</h2>
+      <div id="esp-config"></div>
+    </div>
+    <div class="card">
+      <h2>Live Sensors</h2>
+      <div id="esp-sensors"></div>
+    </div>
+    <div class="card">
+      <h2>Diagnostics & Telemetry</h2>
+      <div id="esp-diagnostics"></div>
+    </div>
+  </div>
+
+  <!-- TAB 3: MEDIA, REMOTES & ALARM -->
   <div id="tab-media" class="grid hidden">
     <div class="card">
       <h2>Music Assistant & AVR Volume Overrides</h2>
@@ -718,7 +726,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
         <label>TV / Media Remote Slot 4</label>
         <select id="cfg-remote_4"></select>
       </div>
-      <hr style="border:0;border-top:1px solid #1e293b;margin:16px 0;">
+      <hr style="border:0;border-top:1px solid var(--card-border);margin:16px 0;">
       <div class="field">
         <label>Home Security Alarm Entity (alarm_control_panel)</label>
         <select id="cfg-alarm_entity"></select>
@@ -730,7 +738,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     </div>
   </div>
 
-  <!-- TAB 3: UNIVERSAL ENTITY & TRIGGER MAPPER -->
+  <!-- TAB 4: UNIVERSAL ENTITY & TRIGGER MAPPER -->
   <div id="tab-mapper" class="grid hidden">
     <div class="card" style="grid-column: 1 / -1;">
       <h2>Universal Hardware Trigger & Slot Bindings (Headless or Display Nodes)</h2>
@@ -750,7 +758,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     </div>
   </div>
 
-  <!-- TAB 4: UI, DOCK & DISPLAY -->
+  <!-- TAB 5: UI, DOCK & DISPLAY -->
   <div id="tab-display" class="grid hidden">
     <div class="card">
       <h2>Home Dock & Display Settings</h2>
@@ -788,10 +796,14 @@ function showToast(msg) {
   setTimeout(() => { t.style.display = "none"; }, 2600);
 }
 
+function applyTheme(themeName) {
+  document.body.setAttribute("data-theme", themeName || "cyber_cyan");
+}
+
 function switchTab(tabId, el) {
   document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
   el.classList.add("active");
-  ["overview", "media", "mapper", "display"].forEach(id => {
+  ["overview", "esphome", "media", "mapper", "display"].forEach(id => {
     document.getElementById("tab-" + id).classList.toggle("hidden", id !== tabId);
   });
 }
@@ -830,6 +842,68 @@ function renderRssiBars(rssiMap, packetsSeen) {
       <div class="rssi-track"><div class="rssi-fill" style="width:${pct}%"></div></div>
     </div>`;
   }).join("");
+}
+
+function renderEsphomeGroup(containerId, items) {
+  const box = document.getElementById(containerId);
+  if (!items || !items.length) {
+    box.innerHTML = `<p class="desc">No entities in this category.</p>`;
+    return;
+  }
+  box.innerHTML = items.map(item => {
+    let controlHtml = `<span>${item.state}${item.unit ? ' ' + item.unit : ''}</span>`;
+    if (item.domain === "button") {
+      controlHtml = `<button class="secondary" onclick="espAction('${item.entity_id}', 'press')">Press</button>`;
+    } else if (item.domain === "switch" || item.domain === "light" || item.domain === "fan") {
+      const isOn = item.state === "on";
+      controlHtml = `<button class="${isOn ? '' : 'secondary'}" onclick="espAction('${item.entity_id}', 'toggle')">${isOn ? 'ON' : 'OFF'}</button>`;
+    } else if (item.domain === "select" && item.options && item.options.length) {
+      const opts = item.options.map(o => `<option value="${o}" ${o===item.state?'selected':''}>${o}</option>`).join("");
+      controlHtml = `<select style="width:auto;" onchange="espSelect('${item.entity_id}', this.value)">${opts}</select>`;
+    } else if (item.domain === "number") {
+      controlHtml = `<input type="number" style="width:90px;" value="${item.state}" min="${item.min ?? 0}" max="${item.max ?? 100}" step="${item.step ?? 1}" onchange="espNumber('${item.entity_id}', this.value)">`;
+    }
+    return `<div class="entity-row">
+      <div class="meta"><strong>${item.name}</strong><small>${item.entity_id}</small></div>
+      <div class="val">${controlHtml}</div>
+    </div>`;
+  }).join("");
+}
+
+async function espAction(entity_id, action) {
+  const resp = await fetch(API_URL, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({command: "esphome_entity_action", entity_id, action})
+  });
+  if (resp.ok) {
+    applyStateToDom(await resp.json());
+    showToast(`${action.toUpperCase()}: ${entity_id}`);
+  }
+}
+
+async function espSelect(entity_id, option) {
+  const resp = await fetch(API_URL, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({command: "esphome_entity_action", entity_id, option})
+  });
+  if (resp.ok) {
+    applyStateToDom(await resp.json());
+    showToast(`Selected ${option}`);
+  }
+}
+
+async function espNumber(entity_id, level) {
+  const resp = await fetch(API_URL, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({command: "esphome_entity_action", entity_id, level})
+  });
+  if (resp.ok) {
+    applyStateToDom(await resp.json());
+    showToast(`Set ${entity_id} = ${level}`);
+  }
 }
 
 function renderPinnedChips() {
@@ -893,6 +967,10 @@ function applyStateToDom(data) {
   const cfg = data.config;
   const live = data.live;
   const cat = data.catalog;
+  const esp = data.esphome;
+
+  applyTheme(cfg.web_theme || "cyber_cyan");
+  document.getElementById("cfg-web_theme").value = cfg.web_theme || "cyber_cyan";
 
   document.getElementById("hdr-title").textContent = `${data.title} — Web Companion`;
   document.getElementById("st-room").textContent = live.active_area_name || "Home";
@@ -936,6 +1014,15 @@ function applyStateToDom(data) {
   (cfg.custom_bindings || []).forEach(b => addBindingRow(b.slot, b.entity_id, b.action));
 
   renderRssiBars(live.ble_rssi_by_room, live.ble_packets_seen);
+
+  if (esp && esp.device) {
+    document.getElementById("esp-dev-title").textContent = `${esp.device.name} (${esp.device.model})`;
+    document.getElementById("esp-dev-meta").textContent = `Manufacturer: ${esp.device.manufacturer} • Firmware: ${esp.device.sw_version || 'ESPHome'} • MAC: ${esp.device.mac || 'N/A'}`;
+    renderEsphomeGroup("esp-controls", esp.groups.controls);
+    renderEsphomeGroup("esp-config", esp.groups.config);
+    renderEsphomeGroup("esp-sensors", esp.groups.sensors);
+    renderEsphomeGroup("esp-diagnostics", esp.groups.diagnostics);
+  }
 }
 
 async function refreshState() {
@@ -970,6 +1057,7 @@ async function saveAllConfig() {
   const config = {
     device_slug: document.getElementById("cfg-device_slug").value.trim(),
     device_profile: document.getElementById("cfg-device_profile").value,
+    web_theme: document.getElementById("cfg-web_theme").value,
     native_ble_tracking: document.getElementById("cfg-native_ble_tracking").checked,
     ble_auto_switch: document.getElementById("cfg-ble_auto_switch").checked,
     sync_device_area: document.getElementById("cfg-sync_device_area").checked,
@@ -1035,7 +1123,7 @@ class LatterCompanionDashboardView(HomeAssistantView):
         if not coordinator.verify_token(token):
             return web.Response(
                 status=HTTPStatus.FORBIDDEN,
-                text="Invalid or missing Latter companion token. Open via the 'Visit' link on the Latter device page in Home Assistant.",
+                text="Invalid or missing Latter companion token. Open via the 'Visit' link on the Latter or ESPHome device page in Home Assistant.",
             )
 
         return web.Response(

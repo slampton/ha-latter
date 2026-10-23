@@ -12,6 +12,7 @@ PLATFORMS: Final[list[Platform]] = [Platform.SENSOR]
 # Config & Options keys
 CONF_DEVICE_SLUG: Final = "device_slug"
 CONF_DEVICE_PROFILE: Final = "device_profile"
+CONF_WEB_THEME: Final = "web_theme"
 CONF_WEATHER_ENTITY: Final = "weather_entity"
 CONF_ALARM_ENTITY: Final = "alarm_entity"
 CONF_DEFAULT_SPEAKER: Final = "default_speaker"
@@ -39,6 +40,7 @@ CONF_ART_SIZE: Final = "art_size"
 # Defaults
 DEFAULT_DEVICE_SLUG: Final = "pocket_assistant"
 DEFAULT_DEVICE_PROFILE: Final = "mobile_display"
+DEFAULT_WEB_THEME: Final = "cyber_cyan"
 DEFAULT_LOCAL_SPEAKER: Final = "media_player.pocket_assistant"
 DEFAULT_NATIVE_BLE_TRACKING: Final = True
 DEFAULT_BLE_BEACON_UUID: Final = "504F434B-4554-4153-5354-000000000210"
@@ -73,6 +75,7 @@ API_IMAGE_PROXY_PATH: Final = "/api/latter/image_proxy/{entry_id}"
 API_COMPANION_UI_PATH: Final = "/api/latter/companion/{entry_id}"
 API_COMPANION_API_PATH: Final = "/api/latter/companion/{entry_id}/api"
 DATA_HMAC_SECRET: Final = "hmac_secret"
+DATA_DISCOVERY_UNSUB: Final = "discovery_unsub"
 
 # Timing & Recorder Idle-Guard
 POSITION_UPDATE_INTERVAL_SECONDS: Final = 2

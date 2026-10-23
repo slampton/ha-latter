@@ -1,4 +1,4 @@
-"""Config flow and Options flow for Latter."""
+"""Config flow, Options flow, and ESPHome Auto-Discovery for Latter."""
 
 from __future__ import annotations
 
@@ -136,7 +136,6 @@ def _build_schema(
         ),
     }
 
-    # Visual Speaker -> Volume Entity Override Pair 1 & Pair 2
     _add_optional_entity(
         schema_dict,
         CONF_VOL_SPEAKER_1,
@@ -162,7 +161,6 @@ def _build_schema(
         ["media_player", "number", "input_number"],
     )
 
-    # Room Context & BLE Presence Settings
     if default_area:
         schema_dict[
             vol.Optional(
@@ -199,7 +197,6 @@ def _build_schema(
         vol.Required(CONF_AREA_HANDOFF, default=area_handoff)
     ] = selector.BooleanSelector()
 
-    # Home Security Alarm Entity Override
     _add_optional_entity(
         schema_dict,
         CONF_ALARM_ENTITY,
@@ -207,7 +204,6 @@ def _build_schema(
         "alarm_control_panel",
     )
 
-    # 4-Slot TV / Media Remote Entities
     for slot_key in (CONF_REMOTE_1, CONF_REMOTE_2, CONF_REMOTE_3, CONF_REMOTE_4):
         _add_optional_entity(
             schema_dict,
@@ -216,7 +212,6 @@ def _build_schema(
             ["remote", "media_player"],
         )
 
-    # Weather Provider
     _add_optional_entity(
         schema_dict,
         CONF_WEATHER_ENTITY,
@@ -268,14 +263,40 @@ def _build_schema(
 
 
 class LatterConfigFlow(ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for Latter."""
+    """Handle a config flow and automatic ESPHome device discovery for Latter."""
 
     VERSION = 1
+
+    def __init__(self) -> None:
+        """Initialize config flow."""
+        self._discovered_slug: str = ""
+        self._discovered_name: str = ""
+
+    async def async_step_integration_discovery(
+        self, discovery_info: dict[str, Any]
+    ) -> ConfigFlowResult:
+        """Handle auto-discovery of a new ESPHome device."""
+        slug = (
+            str(discovery_info.get(CONF_DEVICE_SLUG) or "")
+            .strip()
+            .lower()
+            .replace("-", "_")
+        )
+        if not slug:
+            return self.async_abort(reason="already_configured")
+
+        await self.async_set_unique_id(f"{DOMAIN}_{slug}")
+        self._abort_if_unique_id_configured()
+
+        self._discovered_slug = slug
+        self._discovered_name = str(discovery_info.get("name") or slug)
+        self.context["title_placeholders"] = {"name": self._discovered_name}
+        return await self.async_step_user()
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Handle the initial setup step."""
+        """Handle the initial setup step (manual or pre-filled from ESPHome auto-discovery)."""
         if user_input is not None:
             slug = (
                 str(user_input[CONF_DEVICE_SLUG])
@@ -294,9 +315,13 @@ class LatterConfigFlow(ConfigFlow, domain=DOMAIN):
                 data=user_input,
             )
 
+        initial: dict[str, Any] = {}
+        if self._discovered_slug:
+            initial[CONF_DEVICE_SLUG] = self._discovered_slug
+
         return self.async_show_form(
             step_id="user",
-            data_schema=_build_schema(self.hass, {}),
+            data_schema=_build_schema(self.hass, initial),
         )
 
     @staticmethod
@@ -325,7 +350,6 @@ class LatterOptionsFlowHandler(OptionsFlow):
                 .replace("-", "_")
             )
             user_input[CONF_ART_SIZE] = int(user_input.get(CONF_ART_SIZE, DEFAULT_ART_SIZE))
-            # Persist user_input directly into both data and options so cleared optional fields stay cleared
             self.hass.config_entries.async_update_entry(
                 self._config_entry, data=user_input
             )
