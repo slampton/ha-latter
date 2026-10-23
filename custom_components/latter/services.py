@@ -172,7 +172,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     async def _handle_set_active_speaker(call: ServiceCall) -> None:
         speaker = str(call.data.get("entity_id") or call.data.get("speaker") or "")
         target_device = call.data.get("target_device")
-        transfer_queue = bool(call.data.get("transfer_queue", False))
+        transfer_queue = bool(call.data.get("transfer_queue", True))
         coord = _get_primary_coordinator(hass, target_device)
         if coord and speaker:
             coord.async_set_active_speaker(speaker, transfer_queue=transfer_queue)
@@ -376,7 +376,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         podcast_sort = str(data.get("podcast_sort") or "newest")
 
         if coord and speaker and speaker != coord.active_speaker:
-            coord.async_set_active_speaker(speaker)
+            coord.async_set_active_speaker(speaker, transfer_queue=False)
 
         items = await async_browse_media_items(
             hass=hass,
