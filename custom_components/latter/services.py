@@ -50,6 +50,28 @@ def _get_primary_coordinator(
     return coordinators[0]
 
 
+def _resolve_esphome_action(
+    hass: HomeAssistant, device_slug: str, suffix: str
+) -> str | None:
+    """Resolve the registered esphome.<node>_<suffix> service name with smart fallback."""
+    esphome_services = hass.services.async_services().get("esphome", {})
+    exact = f"{device_slug}_{suffix}"
+    if exact in esphome_services:
+        return exact
+
+    # Check prefix/substring match first (e.g. pocket_assistant_1_75c_set_browse_slots)
+    for svc_name in esphome_services:
+        if svc_name.endswith(f"_{suffix}") and device_slug in svc_name:
+            return svc_name
+
+    # Fallback to any ESPHome node exposing _<suffix>
+    for svc_name in esphome_services:
+        if svc_name.endswith(f"_{suffix}"):
+            return svc_name
+
+    return None
+
+
 async def async_push_browse_slots(
     hass: HomeAssistant,
     device_slug: str,
@@ -74,9 +96,13 @@ async def async_push_browse_slots(
         "has_next": bool(page < total_pages),
     }
 
-    include_levels = preferred_suffix == "set_room_slots" and hass.services.has_service(
-        "esphome", f"{device_slug}_set_room_slots"
-    )
+    esphome_action = _resolve_esphome_action(hass, device_slug, preferred_suffix)
+    include_levels = preferred_suffix == "set_room_slots" and esphome_action is not None
+
+    if esphome_action is None and preferred_suffix != "set_browse_slots":
+        esphome_action = _resolve_esphome_action(
+            hass, device_slug, "set_browse_slots"
+        )
 
     for idx in range(1, 6):
         if idx <= len(page_slice):
@@ -95,14 +121,11 @@ async def async_push_browse_slots(
             if include_levels:
                 payload[f"s{idx}_level"] = 0
 
-    esphome_action = f"{device_slug}_{preferred_suffix}"
-    if not hass.services.has_service("esphome", esphome_action):
-        esphome_action = f"{device_slug}_set_browse_slots"
-
-    if not hass.services.has_service("esphome", esphome_action):
+    if esphome_action is None:
         _LOGGER.warning(
-            "ESPHome service esphome.%s not found; is the ESPHome device online?",
-            esphome_action,
+            "No ESPHome service matching *_%s found (target slug '%s'); is the device online?",
+            preferred_suffix,
+            device_slug,
         )
         return
 

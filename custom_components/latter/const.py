@@ -19,23 +19,18 @@ CONF_AREA_HANDOFF: Final = "area_handoff"
 CONF_CALENDAR_ENTITIES: Final = "calendar_entities"
 CONF_CUSTOM_ENTITIES: Final = "custom_entities"
 CONF_ART_SIZE: Final = "art_size"
-CONF_ENABLE_V20_COMPAT: Final = "enable_v20_compat"
 
 # Defaults
 DEFAULT_DEVICE_SLUG: Final = "pocket_assistant"
 DEFAULT_LOCAL_SPEAKER: Final = "media_player.pocket_assistant"
 DEFAULT_AREA_HANDOFF: Final = True
 DEFAULT_ART_SIZE: Final = 466
-DEFAULT_ENABLE_V20_COMPAT: Final = True
 
-# v2.0 & v2.1 Entity Contract
-V20_ACTIVE_MEDIA_ENTITY: Final = "sensor.pocket_assistant_active_media"
-V20_WEATHER_FORECAST_ENTITY: Final = "sensor.pocket_assistant_weather_forecast"
-V20_ACTIVE_SPEAKER_ENTITY: Final = "input_text.pocket_assistant_active_speaker"
-V20_MUSIC_BROWSE_SCRIPT: Final = "pocket_assistant_music_browse"
-
-V21_ROOM_CONTEXT_ENTITY: Final = "sensor.pocket_assistant_room_context"
-V21_CALENDAR_AGENDA_ENTITY: Final = "sensor.pocket_assistant_calendar_agenda"
+# Native Latter Entity Contract (Pocket Assistant v2.1.0+)
+ENTITY_ACTIVE_MEDIA: Final = "sensor.pocket_assistant_active_media"
+ENTITY_WEATHER_FORECAST: Final = "sensor.pocket_assistant_weather_forecast"
+ENTITY_ROOM_CONTEXT: Final = "sensor.pocket_assistant_room_context"
+ENTITY_CALENDAR_AGENDA: Final = "sensor.pocket_assistant_calendar_agenda"
 
 # Native Latter Services
 SERVICE_MUSIC_BROWSE: Final = "music_browse"

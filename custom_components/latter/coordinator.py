@@ -1,4 +1,4 @@
-"""State coordinator and v2.0/v2.1 middleware bridge for Latter."""
+"""State coordinator for Latter (Pocket Assistant v2.1+ & ESPHome Middleware)."""
 
 from __future__ import annotations
 
@@ -10,8 +10,6 @@ from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
-    ATTR_ENTITY_ID,
-    EVENT_CALL_SERVICE,
     STATE_BUFFERING,
     STATE_IDLE,
     STATE_OFF,
@@ -37,19 +35,14 @@ from .const import (
     CONF_DEFAULT_AREA,
     CONF_DEFAULT_SPEAKER,
     CONF_DEVICE_SLUG,
-    CONF_ENABLE_V20_COMPAT,
     CONF_LOCAL_SPEAKER,
     CONF_WEATHER_ENTITY,
     DEFAULT_AREA_HANDOFF,
     DEFAULT_ART_SIZE,
     DEFAULT_DEVICE_SLUG,
-    DEFAULT_ENABLE_V20_COMPAT,
     DEFAULT_LOCAL_SPEAKER,
-    DOMAIN,
     FORECAST_REFRESH_INTERVAL_MINUTES,
     POSITION_UPDATE_INTERVAL_SECONDS,
-    V20_ACTIVE_SPEAKER_ENTITY,
-    V20_MUSIC_BROWSE_SCRIPT,
 )
 from .room_engine import (
     find_area_media_entities,
@@ -82,7 +75,6 @@ class LatterCoordinator:
         self._unsub_position_timer: callable | None = None
         self._unsub_forecast_timer: callable | None = None
         self._unsub_calendar_timer: callable | None = None
-        self._unsub_service_interceptor: callable | None = None
 
         self.active_speaker: str = self.get_opt(
             CONF_DEFAULT_SPEAKER, DEFAULT_LOCAL_SPEAKER
@@ -152,11 +144,6 @@ class LatterCoordinator:
         """Return target square artwork dimension in pixels."""
         return int(self.get_opt(CONF_ART_SIZE, DEFAULT_ART_SIZE))
 
-    @property
-    def v20_compat_enabled(self) -> bool:
-        """Return True if v2.0 entity & script compatibility is active."""
-        return bool(self.get_opt(CONF_ENABLE_V20_COMPAT, DEFAULT_ENABLE_V20_COMPAT))
-
     def get_signed_token(self) -> str:
         """Generate an HMAC-SHA256 token for this config entry's image proxy."""
         return hmac.new(
@@ -185,22 +172,11 @@ class LatterCoordinator:
         )
 
     async def async_setup(self) -> None:
-        """Set up state subscriptions, timers, and v2.0 compatibility hooks."""
+        """Set up state subscriptions and periodic refresh timers."""
         if not self.active_area_id:
             areas = get_areas_summary(self.hass)
             if areas:
                 self.active_area_id = str(areas[0]["id"])
-
-        if self.v20_compat_enabled:
-            existing = self.hass.states.get(V20_ACTIVE_SPEAKER_ENTITY)
-            if existing and existing.state not in ("unknown", "unavailable", ""):
-                self.active_speaker = existing.state
-            else:
-                self._sync_v20_speaker_state()
-
-            self._unsub_service_interceptor = self.hass.bus.async_listen(
-                EVENT_CALL_SERVICE, self._async_handle_service_event
-            )
 
         self._bind_speaker_listener()
         self._bind_weather_listener()
@@ -226,7 +202,6 @@ class LatterCoordinator:
             self._unsub_position_timer,
             self._unsub_forecast_timer,
             self._unsub_calendar_timer,
-            self._unsub_service_interceptor,
         ):
             if unsub is not None:
                 unsub()
@@ -235,7 +210,6 @@ class LatterCoordinator:
         self._unsub_position_timer = None
         self._unsub_forecast_timer = None
         self._unsub_calendar_timer = None
-        self._unsub_service_interceptor = None
         self._listeners.clear()
 
     @callback
@@ -257,21 +231,6 @@ class LatterCoordinator:
             update_callback()
 
     @callback
-    def _sync_v20_speaker_state(self) -> None:
-        """Mirror active speaker into input_text.pocket_assistant_active_speaker."""
-        if not self.v20_compat_enabled:
-            return
-        self.hass.states.async_set(
-            V20_ACTIVE_SPEAKER_ENTITY,
-            self.active_speaker,
-            {
-                "friendly_name": "Pocket Assistant Active Speaker",
-                "icon": "mdi:speaker-wireless",
-                "managed_by": DOMAIN,
-            },
-        )
-
-    @callback
     def async_set_active_speaker(self, speaker_entity_id: str) -> None:
         """Switch the active target speaker and rebind state listeners."""
         speaker_entity_id = speaker_entity_id.strip()
@@ -285,7 +244,6 @@ class LatterCoordinator:
                 self.last_speaker,
                 self.active_speaker,
             )
-        self._sync_v20_speaker_state()
         self._bind_speaker_listener()
         self._notify_listeners()
 
@@ -358,42 +316,6 @@ class LatterCoordinator:
         }
 
     @callback
-    def _async_handle_service_event(self, event: Event) -> None:
-        """Intercept v2.0 firmware calls to input_text.set_value and script.pocket_assistant_music_browse."""
-        domain = event.data.get("domain")
-        service = event.data.get("service")
-        service_data = event.data.get("service_data") or {}
-
-        if domain == "input_text" and service == "set_value":
-            target_entities = service_data.get(ATTR_ENTITY_ID)
-            if isinstance(target_entities, str):
-                target_entities = [target_entities]
-            elif not isinstance(target_entities, list):
-                target_entities = []
-
-            if V20_ACTIVE_SPEAKER_ENTITY in target_entities:
-                new_value = str(service_data.get("value", "")).strip()
-                if new_value:
-                    self.async_set_active_speaker(new_value)
-
-        elif domain == "script":
-            if service == V20_MUSIC_BROWSE_SCRIPT:
-                self.hass.async_create_task(
-                    self.hass.services.async_call(
-                        DOMAIN, "music_browse", dict(service_data), blocking=False
-                    )
-                )
-            elif service == "turn_on":
-                target_entities = service_data.get(ATTR_ENTITY_ID, "")
-                if f"script.{V20_MUSIC_BROWSE_SCRIPT}" in str(target_entities):
-                    variables = service_data.get("variables") or {}
-                    self.hass.async_create_task(
-                        self.hass.services.async_call(
-                            DOMAIN, "music_browse", dict(variables), blocking=False
-                        )
-                    )
-
-    @callback
     def _bind_speaker_listener(self) -> None:
         """Subscribe to state changes on the currently selected media_player."""
         if self._unsub_speaker_state is not None:
@@ -443,7 +365,7 @@ class LatterCoordinator:
         self._notify_listeners()
 
     def get_active_media_payload(self) -> tuple[str, dict[str, Any]]:
-        """Compute exact v2.0 state and attributes for sensor.pocket_assistant_active_media."""
+        """Compute state and attributes for sensor.pocket_assistant_active_media."""
         state_obj = self.hass.states.get(self.active_speaker)
         if state_obj is None or state_obj.state in ("unavailable", "unknown"):
             return STATE_OFF, {
@@ -457,6 +379,7 @@ class LatterCoordinator:
                 "supported_features": 0,
                 "art_url": "none",
                 "active_speaker": self.active_speaker,
+                "last_speaker": self.last_speaker,
             }
 
         state = state_obj.state
@@ -527,6 +450,7 @@ class LatterCoordinator:
             "supported_features": supported_features,
             "art_url": art_url,
             "active_speaker": self.active_speaker,
+            "last_speaker": self.last_speaker,
         }
 
     @callback
@@ -571,7 +495,7 @@ class LatterCoordinator:
         self._notify_listeners()
 
     async def async_refresh_weather_forecast(self) -> None:
-        """Fetch daily weather forecast via weather.get_forecasts and format v2.0 string."""
+        """Fetch daily weather forecast via weather.get_forecasts and format semicolon string."""
         weather_ent = self.weather_entity
         if not weather_ent:
             return
