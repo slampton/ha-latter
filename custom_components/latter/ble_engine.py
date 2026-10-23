@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any, Callable
+from typing import Callable
 
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import (
@@ -61,7 +61,6 @@ def _discover_target_device_macs(
             for _conn_type, conn_val in dev.connections:
                 m_int = _mac_to_int(str(conn_val))
                 if m_int is not None:
-                    # ESP32 BLE MAC is typically base Wi-Fi MAC +1 or +2
                     for offset in (-2, -1, 0, 1, 2):
                         mac_ints.add(m_int + offset)
             for _domain, ident_val in dev.identifiers:
@@ -85,7 +84,6 @@ def _resolve_scanner_area_id(
     src_low = scanner_source.strip().lower()
     src_int = _mac_to_int(src_low)
 
-    # 1. Query Home Assistant's bluetooth manager for the scanner object (gives scanner.name / details)
     scanner_name = ""
     try:
         from homeassistant.components import bluetooth
@@ -101,7 +99,6 @@ def _resolve_scanner_area_id(
     except Exception:  # noqa: BLE001
         pass
 
-    # 2. Match in Device Registry by exact MAC, ESP32 Wi-Fi/BLE +/-2 MAC offset, or scanner name
     for device in dev_reg.devices.values():
         if not device.area_id:
             continue
@@ -133,7 +130,6 @@ def _resolve_scanner_area_id(
                 if d_low == target_n or d_slug == t_slug or (len(d_slug) > 4 and d_slug in t_slug):
                     return device.area_id
 
-    # 3. Check if scanner_name contains an area name directly (e.g. "kitchen-ble-proxy" -> "Kitchen")
     if scanner_name:
         scan_norm = scanner_name.replace("-", " ").replace("_", " ")
         for area in area_reg.async_list_areas():
@@ -141,7 +137,6 @@ def _resolve_scanner_area_id(
             if a_norm and a_norm in scan_norm:
                 return area.id
 
-    # 4. Check Entity Registry for scanner entities matching source
     for entry in ent_reg.entities.values():
         if src_low in entry.entity_id or (scanner_name and scanner_name.replace("-", "_") in entry.entity_id):
             if entry.area_id:
@@ -152,6 +147,24 @@ def _resolve_scanner_area_id(
                     return dev.area_id
 
     return None
+
+
+def get_ble_proxy_area_ids(hass: HomeAssistant) -> set[str]:
+    """Return the set of Home Assistant area_ids that actually have a Bluetooth proxy/scanner."""
+    proxy_areas: set[str] = set()
+    try:
+        from homeassistant.components import bluetooth
+
+        scanners = bluetooth.async_current_scanners(hass)
+        for scanner in scanners:
+            source = str(getattr(scanner, "source", "") or "")
+            if source:
+                a_id = _resolve_scanner_area_id(hass, source)
+                if a_id:
+                    proxy_areas.add(a_id)
+    except Exception:  # noqa: BLE001
+        pass
+    return proxy_areas
 
 
 class LatterNativeBleTracker:
@@ -192,7 +205,6 @@ class LatterNativeBleTracker:
         try:
             from homeassistant.components import bluetooth
 
-            # Use empty matcher {} so BOTH connectable and non-connectable iBeacon frames are received!
             self._unsub_ble = bluetooth.async_register_callback(
                 self.hass,
                 self._async_on_ble_advertisement,
@@ -233,13 +245,11 @@ class LatterNativeBleTracker:
 
     def _matches_target_device(self, service_info: object) -> bool:
         """Return True if advertisement matches Pocket Assistant iBeacon UUID, MAC, or local name."""
-        # 1. Check iBeacon Manufacturer Data (0x004C)
         mfg_data: dict[int, bytes] = getattr(
             service_info, "manufacturer_data", {}
         )
         apple_bytes = mfg_data.get(APPLE_COMPANY_ID)
         if apple_bytes and len(apple_bytes) >= 18:
-            # Standard iBeacon prefix is 0x02 0x15 followed by 16-byte UUID
             if len(apple_bytes) >= 20 and apple_bytes[:2] == IBEACON_PREFIX:
                 uuid_hex = apple_bytes[2:18].hex().lower()
                 if uuid_hex == self._target_uuid_hex:
@@ -247,14 +257,12 @@ class LatterNativeBleTracker:
             elif self._target_uuid_hex in apple_bytes.hex().lower():
                 return True
 
-        # 2. Check BLE advertiser MAC against known Pocket Assistant ESP32 MAC (+/-2)
         adv_address = str(getattr(service_info, "address", "") or "")
         if adv_address and self._target_mac_ints:
             adv_int = _mac_to_int(adv_address)
             if adv_int is not None and adv_int in self._target_mac_ints:
                 return True
 
-        # 3. Check BLE local name
         adv_name = str(getattr(service_info, "name", "") or "").lower().replace("_", "-")
         if adv_name and self._device_slug in adv_name:
             return True
@@ -276,7 +284,6 @@ class LatterNativeBleTracker:
 
         self.packets_seen += 1
 
-        # Refresh known MACs once if empty on startup
         if not self._target_mac_ints and self.packets_seen == 1:
             self._target_mac_ints = _discover_target_device_macs(
                 self.hass, self._raw_slug

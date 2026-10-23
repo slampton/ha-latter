@@ -7,6 +7,7 @@ from typing import Any
 
 from homeassistant.const import (
     ATTR_ENTITY_ID,
+     EntityCategory,
     STATE_ON,
     STATE_OPEN,
     STATE_PLAYING,
@@ -20,6 +21,7 @@ from homeassistant.helpers import (
     entity_registry as er,
 )
 
+from .ble_engine import get_ble_proxy_area_ids
 from .browse_engine import is_music_assistant_player
 
 _LOGGER = logging.getLogger(__name__)
@@ -80,21 +82,18 @@ def match_area_by_name_or_id(
         return None
 
     area_reg = ar.async_get(hass)
-    # 1. Exact area_id match
     if area_reg.async_get_area(val) is not None:
         return val
 
     val_low = val.lower()
     val_norm = val_low.replace("_", " ").replace("-", " ").strip()
 
-    # 2. Exact name or normalized slug match
     for area in area_reg.async_list_areas():
         a_low = area.name.lower()
         a_norm = a_low.replace("_", " ").replace("-", " ").strip()
         if val_low == a_low or val_norm == a_norm or val_low == area.id.lower():
             return area.id
 
-    # 3. Substring match (e.g., "living_room_ble" -> "Living Room")
     for area in area_reg.async_list_areas():
         a_norm = area.name.lower().replace("_", " ").replace("-", " ").strip()
         if a_norm and (a_norm in val_norm or val_norm in a_norm):
@@ -103,32 +102,81 @@ def match_area_by_name_or_id(
     return None
 
 
-def sync_esphome_device_area(
-    hass: HomeAssistant, device_slug: str, area_id: str
-) -> None:
-    """Update the Pocket Assistant ESPHome device's area_id in HA Device Registry so Voice Assistant is room-aware."""
+def find_esphome_device_id(
+    hass: HomeAssistant, device_slug: str
+) -> str | None:
+    """Find the Home Assistant device_id for the target Pocket Assistant ESPHome node."""
     dev_reg = dr.async_get(hass)
     ent_reg = er.async_get(hass)
     slug_norm = device_slug.strip().lower().replace("-", "_")
 
-    target_device_id: str | None = None
-
-    # 1. Find device via any entity matching device_slug
     for entry in ent_reg.entities.values():
         if entry.platform == "esphome" and slug_norm in entry.entity_id:
             if entry.device_id:
-                target_device_id = entry.device_id
-                break
+                return entry.device_id
 
-    # 2. Fallback: match by device name in device registry
+    for dev in dev_reg.devices.values():
+        dev_name = str(dev.name_by_user or dev.name or "").lower().replace("-", "_")
+        if slug_norm and slug_norm in dev_name:
+            return dev.id
+
+    return None
+
+
+def protect_handheld_sensors_from_area_dashboards(
+    hass: HomeAssistant, device_slug: str
+) -> None:
+    """Mark on-device temperature/humidity sensors on the handheld as DIAGNOSTIC so they never pollute room dashboards."""
+    target_device_id = find_esphome_device_id(hass, device_slug)
     if not target_device_id:
-        for dev in dev_reg.devices.values():
-            dev_name = str(dev.name_by_user or dev.name or "").lower().replace("-", "_")
-            if slug_norm in dev_name:
-                target_device_id = dev.id
-                break
+        return
 
+    ent_reg = er.async_get(hass)
+    for entry in er.async_entries_for_device(ent_reg, target_device_id):
+        if entry.domain != "sensor":
+            continue
+        state_obj = hass.states.get(entry.entity_id)
+        dev_class = (
+            str(state_obj.attributes.get("device_class") or "").lower()
+            if state_obj
+            else str(entry.original_device_class or "").lower()
+        )
+        if dev_class in ("temperature", "humidity") and entry.entity_category is None:
+            ent_reg.async_update_entity(
+                entry.entity_id,
+                entity_category=EntityCategory.DIAGNOSTIC,
+            )
+            _LOGGER.info(
+                "Marked handheld sensor '%s' as DIAGNOSTIC so it will not override room Area temperatures",
+                entry.entity_id,
+            )
+
+
+def sync_esphome_device_area(
+    hass: HomeAssistant,
+    device_slug: str,
+    area_id: str,
+    require_ble_proxy_area: bool = True,
+) -> None:
+    """Update the Pocket Assistant ESPHome device's area_id in HA Device Registry ONLY for valid rooms."""
+    if not area_id:
+        return
+
+    # Safeguard: If require_ble_proxy_area is True and BLE proxies exist, never assign the device to a room with no BLE proxy!
+    if require_ble_proxy_area:
+        proxy_areas = get_ble_proxy_area_ids(hass)
+        if proxy_areas and area_id not in proxy_areas:
+            _LOGGER.debug(
+                "Skipping Device Registry area sync to '%s' because that area has no BLE proxy.",
+                area_id,
+            )
+            return
+
+    protect_handheld_sensors_from_area_dashboards(hass, device_slug)
+
+    target_device_id = find_esphome_device_id(hass, device_slug)
     if target_device_id:
+        dev_reg = dr.async_get(hass)
         dev = dev_reg.async_get(target_device_id)
         if dev and dev.area_id != area_id:
             dev_reg.async_update_device(target_device_id, area_id=area_id)
@@ -311,9 +359,9 @@ def format_entity_slot_name(state_obj: State, area_name: str = "") -> str:
 
 
 def get_area_climate_telemetry(
-    hass: HomeAssistant, area_id: str | None
+    hass: HomeAssistant, area_id: str | None, device_slug: str = "pocket_assistant"
 ) -> dict[str, Any]:
-    """Discover temperature and humidity readings assigned to an area."""
+    """Discover ambient room temperature and humidity assigned to an area (excluding the handheld itself!)."""
     result: dict[str, Any] = {
         "temperature": None,
         "temperature_unit": "",
@@ -323,13 +371,25 @@ def get_area_climate_telemetry(
         return result
 
     ent_reg = er.async_get(hass)
+    handheld_dev_id = find_esphome_device_id(hass, device_slug)
+    slug_norm = device_slug.strip().lower().replace("-", "_")
 
     for state_obj in hass.states.async_all("sensor"):
         if state_obj.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
             continue
-        entry = ent_reg.async_get(state_obj.entity_id)
-        if entry and (entry.disabled_by or entry.hidden_by):
+        # Never use the handheld's own internal battery/die temperature sensor as room temperature!
+        if slug_norm and slug_norm in state_obj.entity_id:
             continue
+
+        entry = ent_reg.async_get(state_obj.entity_id)
+        if entry is not None:
+            if entry.disabled_by or entry.hidden_by:
+                continue
+            if entry.entity_category is not None:
+                continue
+            if handheld_dev_id and entry.device_id == handheld_dev_id:
+                continue
+
         if resolve_entity_area_id(hass, state_obj.entity_id) != area_id:
             continue
 
@@ -465,6 +525,7 @@ def get_areas_summary(
     hass: HomeAssistant,
     active_area_id: str | None = None,
     local_speaker: str = "",
+    device_slug: str = "pocket_assistant",
 ) -> list[dict[str, Any]]:
     """Return a sorted list of Home Assistant areas that contain curated controllable entities."""
     area_reg = ar.async_get(hass)
@@ -493,7 +554,7 @@ def get_areas_summary(
         if not counts or counts["total"] == 0:
             continue
         lights_on = counts["lights_on"]
-        climate_info = get_area_climate_telemetry(hass, area.id)
+        climate_info = get_area_climate_telemetry(hass, area.id, device_slug)
         temp_val = climate_info.get("temperature")
 
         suffix_parts: list[str] = []
