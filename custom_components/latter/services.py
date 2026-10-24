@@ -656,6 +656,15 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             artist_album_sort=artist_album_sort,
             podcast_sort=podcast_sort,
         )
+        if not items and mode != "speakers":
+            items = [
+                {
+                    "name": "No items found",
+                    "id": "",
+                    "type": "text",
+                    "active": False,
+                }
+            ]
 
         await async_push_browse_slots(
             hass=hass,

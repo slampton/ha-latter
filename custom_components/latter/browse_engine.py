@@ -203,35 +203,80 @@ async def _call_ma_get_library(
     limit: int = 500,
     order_by: str | None = None,
 ) -> list[dict[str, Any]]:
-    """Call music_assistant.get_library and return normalized item dicts."""
-    if not hass.services.has_service("music_assistant", "get_library"):
-        return []
+    """Call music_assistant.get_library with automatic schema fallback and in-process MASS controller fallback."""
+    if hass.services.has_service("music_assistant", "get_library"):
+        base_payload: dict[str, Any] = {
+            "config_entry_id": config_entry_id,
+            "media_type": media_type,
+            "limit": limit,
+        }
+        if favorite is not None:
+            base_payload["favorite"] = favorite
+        if search:
+            base_payload["search"] = search
 
-    payload: dict[str, Any] = {
-        "config_entry_id": config_entry_id,
-        "media_type": media_type,
-        "limit": limit,
-    }
-    if favorite is not None:
-        payload["favorite"] = favorite
-    if search:
-        payload["search"] = search
-    if order_by:
-        payload["order_by"] = order_by
+        attempts: list[dict[str, Any]] = []
+        if order_by:
+            attempts.append({**base_payload, "order_by": order_by})
+        attempts.append(base_payload)
 
-    try:
-        resp = await hass.services.async_call(
-            "music_assistant",
-            "get_library",
-            payload,
-            blocking=True,
-            return_response=True,
-        )
-        if isinstance(resp, dict):
-            raw_items = resp.get("items") or []
-            return [_extract_item_dict(x) for x in raw_items]
-    except Exception as err:  # noqa: BLE001
-        _LOGGER.debug("music_assistant.get_library(%s) failed: %s", media_type, err)
+        for payload in attempts:
+            try:
+                resp = await hass.services.async_call(
+                    "music_assistant",
+                    "get_library",
+                    payload,
+                    blocking=True,
+                    return_response=True,
+                )
+                if isinstance(resp, dict):
+                    raw_items = resp.get("items")
+                    if raw_items is None and len(resp) == 1:
+                        first_val = next(iter(resp.values()))
+                        if isinstance(first_val, dict):
+                            raw_items = first_val.get("items")
+                    if isinstance(raw_items, list):
+                        return [_extract_item_dict(x) for x in raw_items]
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.debug(
+                    "music_assistant.get_library(%s, order_by=%s) attempt failed: %s",
+                    media_type,
+                    payload.get("order_by"),
+                    err,
+                )
+
+    # Fallback: Query in-process MusicAssistantClient controller directly
+    mass = _get_mass_client(hass)
+    if mass is not None and hasattr(mass, "music"):
+        ctrl_map = {
+            "playlist": "playlists",
+            "artist": "artists",
+            "album": "albums",
+            "track": "tracks",
+            "radio": "radio",
+            "podcast": "podcasts",
+            "audiobook": "audiobooks",
+        }
+        ctrl_name = ctrl_map.get(media_type)
+        ctrl = getattr(mass.music, ctrl_name, None) if ctrl_name else None
+        if ctrl is not None and hasattr(ctrl, "library_items"):
+            try:
+                kwargs: dict[str, Any] = {"limit": limit}
+                if favorite is not None:
+                    kwargs["favorite"] = favorite
+                if search:
+                    kwargs["search"] = search
+                res = await ctrl.library_items(**kwargs)
+                raw_list = getattr(res, "items", res) if res is not None else []
+                if isinstance(raw_list, list):
+                    return [_extract_item_dict(x) for x in raw_list]
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.warning(
+                    "In-process MASS library_items(%s) fallback failed: %s",
+                    media_type,
+                    err,
+                )
+
     return []
 
 
