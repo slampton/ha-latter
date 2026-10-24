@@ -154,6 +154,7 @@ def _build_companion_state_payload(
 
     _, room_attrs = coordinator.get_room_context_payload()
     media_state, media_attrs = coordinator.get_active_media_payload()
+    _, remote_attrs = coordinator.get_remote_config_payload()
     esphome_inspector = get_esphome_device_entities(
         hass, coordinator.device_slug
     )
@@ -244,6 +245,8 @@ def _build_companion_state_payload(
             "media_art_url": media_attrs.get("art_url", "none"),
             "alarm_state": room_attrs.get("alarm_state", "none"),
             "wallpaper_url": room_attrs.get("wallpaper_url", "none"),
+            "active_remote_slot": coordinator.active_remote_slot,
+            "remote_slots_meta": remote_attrs,
         },
         "catalog": {
             "areas": areas_list,
@@ -321,6 +324,15 @@ class LatterCompanionApiView(HomeAssistantView):
             self.hass.config_entries.async_update_entry(
                 coordinator.entry, data=merged_theme, options=merged_theme
             )
+            return web.json_response(
+                _build_companion_state_payload(self.hass, coordinator)
+            )
+
+        if cmd == "activate_remote_slot":
+            slot_num = max(1, min(4, int(body.get("slot") or 1)))
+            coordinator.active_remote_slot = slot_num
+            coordinator._schedule_persist_runtime_state()
+            coordinator._notify_listeners()
             return web.json_response(
                 _build_companion_state_payload(self.hass, coordinator)
             )
@@ -583,7 +595,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
   }
   .app-shell {
     display: grid;
-    grid-template-columns: 236px minmax(0, 1fr);
+    grid-template-columns: 242px minmax(0, 1fr);
     min-height: 100vh;
   }
   aside.sidebar {
@@ -792,6 +804,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
     gap: 16px;
+    margin-bottom: 16px;
   }
   .card {
     background: var(--card);
@@ -921,52 +934,85 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     color: var(--muted);
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
-  .esp-layout {
-    display: grid;
-    grid-template-columns: 220px minmax(0, 1fr);
-    gap: 16px;
-    align-items: start;
+  /* Cohesive Native Control Rows for Embedded ESPHome Entities */
+  .native-controls-box {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
   }
-  .esp-nav { display: flex; flex-direction: column; gap: 4px; }
-  .esp-nav-btn {
+  .native-ctrl-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 9px 11px;
-    border-radius: 6px;
-    background: var(--input-bg);
-    border: 1px solid var(--border);
-    color: var(--text);
-    cursor: pointer;
-    font-size: 12.5px;
-    font-weight: 600;
-    white-space: nowrap;
-  }
-  .esp-nav-btn.active {
-    border-color: var(--accent);
-    color: var(--accent);
-    background: var(--accent-subtle);
-  }
-  .entity-list { display: flex; flex-direction: column; gap: 7px; }
-  .entity-row {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
     gap: 12px;
-    align-items: center;
-    padding: 10px 12px;
+    padding: 9px 12px;
     background: var(--input-bg);
     border: 1px solid var(--border);
     border-radius: 7px;
-    font-size: 13px;
   }
-  .entity-row.wide-val { grid-template-columns: 1fr; gap: 8px; }
-  .entity-row .meta strong { display: block; font-size: 13px; color: var(--text-strong); }
-  .entity-row .meta small {
-    color: var(--muted);
+  .native-ctrl-row .lbl {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-strong);
+    min-width: 0;
+  }
+  .native-ctrl-row .lbl small {
+    display: block;
+    font-weight: 400;
     font-size: 11px;
+    color: var(--muted);
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
-  .entity-row .ctrl { display: flex; align-items: center; gap: 8px; }
+  .native-ctrl-row .widget {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  .native-ctrl-row select {
+    width: auto;
+    min-width: 150px;
+    max-width: 220px;
+    padding: 7px 10px;
+  }
+  .native-ctrl-row input[type="range"] {
+    width: 120px;
+    accent-color: var(--accent-solid);
+  }
+  .native-ctrl-row input[type="number"] {
+    width: 78px;
+    padding: 6px 8px;
+    text-align: right;
+  }
+  /* Unified Remote Slot Card */
+  .remote-slot-card {
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .remote-slot-card.active-slot {
+    border-color: var(--accent);
+    background: var(--accent-subtle);
+  }
+  .remote-slot-hdr {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .remote-slot-hdr strong {
+    font-size: 13.5px;
+    color: var(--text-strong);
+  }
+  .action-btn-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 8px;
+  }
   .state-badge {
     display: inline-block;
     padding: 4px 8px;
@@ -980,7 +1026,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
   }
   .wp-gallery {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(185px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
     gap: 12px;
     margin-top: 12px;
   }
@@ -1000,8 +1046,8 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     background: var(--accent-subtle);
   }
   .wp-thumb {
-    width: 120px;
-    height: 120px;
+    width: 112px;
+    height: 112px;
     object-fit: cover;
     border: 1px solid var(--border);
     background: #000;
@@ -1062,7 +1108,6 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
   }
   .hidden { display: none !important; }
 
-  /* MOBILE & PHONE COMPANION APP OPTIMIZATION */
   @media (max-width: 860px) {
     .app-shell { grid-template-columns: 1fr; }
     aside.sidebar {
@@ -1102,32 +1147,27 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     .content-wrap { padding: 16px 14px 72px; }
     .grid-2 { grid-template-columns: 1fr; }
     .hero-stats { grid-template-columns: repeat(2, 1fr); }
-    .esp-layout { grid-template-columns: 1fr; }
-    .esp-nav {
-      flex-direction: row;
-      overflow-x: auto;
-      padding-bottom: 4px;
-      gap: 6px;
-    }
     .binding-row { grid-template-columns: 1fr; }
-    .entity-row {
-      grid-template-columns: 1fr;
+    .native-ctrl-row {
+      flex-direction: column;
+      align-items: stretch;
       gap: 8px;
     }
-    .entity-row .ctrl { justify-content: flex-start; }
+    .native-ctrl-row .widget { justify-content: space-between; }
+    .native-ctrl-row select { max-width: 100%; width: 100%; }
   }
 </style>
 </head>
 <body data-theme="dark">
 <div class="app-shell">
-  <!-- FLAT, CLEAN NAVIGATION SIDEBAR (SWIPEABLE TOP BAR ON MOBILE) -->
+  <!-- UNIFIED DOMAIN-FIRST SIDEBAR -->
   <aside class="sidebar">
     <div class="brand">
       <div style="display:flex;align-items:center;gap:10px;min-width:0;">
         <div class="brand-badge">L</div>
         <div class="brand-text">
           <h1 id="hdr-title">Latter Studio</h1>
-          <small id="hdr-sub">v1.5.0</small>
+          <small id="hdr-sub">v1.5.2</small>
         </div>
       </div>
     </div>
@@ -1137,21 +1177,24 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
         <span>Dashboard & Radar</span>
         <span class="nav-badge" id="nav-room-badge">--</span>
       </button>
-      <button class="nav-btn" onclick="switchView('esphome', this)">
-        <span>Device Controls</span>
-        <span class="nav-badge" id="nav-esp-badge">0</span>
+      <button class="nav-btn" onclick="switchView('home_display', this)">
+        <span>Home & Display</span>
       </button>
-      <button class="nav-btn" onclick="switchView('wallpapers', this)">
-        <span>Wallpapers</span>
+      <button class="nav-btn" onclick="switchView('voice', this)">
+        <span>Voice Assistant</span>
       </button>
       <button class="nav-btn" onclick="switchView('audio', this)">
-        <span>Audio & Speakers</span>
+        <span>Audio, Music & Sound</span>
       </button>
       <button class="nav-btn" onclick="switchView('remotes', this)">
         <span>TV Remotes & Home</span>
       </button>
-      <button class="nav-btn" onclick="switchView('mapper', this)">
-        <span>Buttons & System</span>
+      <button class="nav-btn" onclick="switchView('system', this)">
+        <span>System & Triggers</span>
+      </button>
+      <button class="nav-btn" onclick="switchView('raw', this)">
+        <span>All Entities</span>
+        <span class="nav-badge" id="nav-esp-badge">0</span>
       </button>
     </div>
 
@@ -1183,7 +1226,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     </header>
 
     <div class="content-wrap">
-      <!-- VIEW 1: DASHBOARD & RADAR -->
+      <!-- 1. DASHBOARD & BLE ROOM RADAR -->
       <section id="view-dashboard">
         <div class="page-header">
           <h2>Dashboard & BLE Room Radar</h2>
@@ -1214,9 +1257,11 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
           </div>
 
           <div class="card">
-            <h3>BLE Proxy Signal Telemetry (EMA RSSI)</h3>
+            <h3>BLE Room Presence Radar</h3>
             <p class="desc">Smoothed signal strength (dBm) reported by each room's ESPHome Bluetooth proxy.</p>
             <div id="rssi-container" style="margin-bottom:14px;"></div>
+
+            <div id="embedded-room-ble" class="native-controls-box" style="margin-bottom:12px;"></div>
 
             <div class="toggle-row">
               <span>Built-In ESPHome BLE Proxy Tracking</span>
@@ -1226,66 +1271,58 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
               <span>Auto-Switch Active Room on Movement</span>
               <input type="checkbox" id="cfg-ble_auto_switch" onchange="markDirty()">
             </div>
-            <div class="toggle-row">
-              <span>Sync Active Room to HA Device Area (Assist Voice Context)</span>
-              <input type="checkbox" id="cfg-sync_device_area" onchange="markDirty()">
+          </div>
+        </div>
+      </section>
+
+      <!-- 2. HOME, DISPLAY, SLEEP & WALLPAPERS -->
+      <section id="view-home_display" class="hidden">
+        <div class="page-header">
+          <h2>Home Screen, Display, Sleep & Wallpapers</h2>
+          <p>Cohesive control over your device's clock face, brightness, themes, sleep/wake behavior, and wallpapers.</p>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <h3>Home Screen & Dock Layout</h3>
+            <p class="desc">Configure your device's clock style, home shortcuts, weather backdrop, and dock app order.</p>
+            <div id="embedded-home" class="native-controls-box" style="margin-bottom:14px;"></div>
+            <div class="field" style="margin-bottom:0;">
+              <label>Home Dock App Order (comma-separated tokens)</label>
+              <input type="text" id="cfg-dock_apps" placeholder="music,room,remote,games,tools" oninput="markDirty()">
             </div>
           </div>
-        </div>
-      </section>
 
-      <!-- VIEW 2: ESPHOME DEVICE CONTROLS -->
-      <section id="view-esphome" class="hidden">
-        <div class="page-header">
-          <h2 id="esp-dev-title">Device Controls</h2>
-          <p id="esp-dev-meta">Organized by function (Home Screen, Display, Sleep & Wake, Voice, Sound, Music, Room, Remote, Battery, Actions, Network).</p>
-        </div>
-
-        <div class="card" style="margin-bottom:14px;padding:11px 14px;">
-          <input type="text" id="esp-search" placeholder="Search settings or sensors by name..." oninput="renderActiveEspSection()">
-        </div>
-
-        <div class="esp-layout">
-          <div class="card" style="padding:10px;">
-            <div id="esp-nav-list" class="esp-nav"></div>
-          </div>
           <div class="card">
-            <h3 id="esp-sec-title">Category</h3>
-            <p class="desc" id="esp-sec-desc"></p>
-            <div id="esp-sec-items" class="entity-list"></div>
+            <h3>Display & Sleep / Wake Behavior</h3>
+            <p class="desc">Adjust screen brightness, UI color profile, inactivity timeouts, and wake gestures.</p>
+            <div id="embedded-display" class="native-controls-box" style="margin-bottom:10px;"></div>
+            <div id="embedded-sleep" class="native-controls-box"></div>
           </div>
         </div>
-      </section>
 
-      <!-- VIEW 3: WALLPAPER STUDIO -->
-      <section id="view-wallpapers" class="hidden">
-        <div class="page-header">
-          <h2>Wallpaper Studio & AMOLED Battery-Saver Presets</h2>
-          <p>Upload photos from your phone or PC, preview circular/square bezel masks, and optionally cycle through favorite wallpapers.</p>
-        </div>
-
-        <div class="grid-2" style="margin-bottom:16px;">
+        <div class="grid-2">
           <div class="card">
-            <h3>Upload New Wallpaper</h3>
-            <p class="desc">Images are automatically center-cropped, darkened slightly for UI legibility, and transcoded to Baseline JPEG on the Home Assistant server.</p>
+            <h3>Upload New Photo Wallpaper</h3>
+            <p class="desc">Photos are automatically center-cropped, darkened for legibility, and transcoded to Baseline JPEG.</p>
             <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
               <input type="file" id="wp-file-input" accept="image/*" style="flex:1;">
-              <button class="btn-primary" onclick="uploadWallpaperFile()">Upload & Activate</button>
+              <button class="btn-primary" onclick="uploadWallpaperFile()">Upload & Use</button>
             </div>
             <div class="field" style="margin-top:14px;margin-bottom:0;">
-              <label>Or Manual Wallpaper Path / URL (/local/... or preset:...)</label>
+              <label>Active Wallpaper Source (/local/... or preset:...)</label>
               <div style="display:flex;gap:8px;">
                 <input type="text" id="cfg-wallpaper_source" placeholder="preset:amoled_rings or /local/wallpaper.jpg" oninput="markDirty()">
-                <button class="btn-secondary" onclick="selectWallpaperSource('')">Disable</button>
+                <button class="btn-secondary" onclick="selectWallpaperSource('')">Clear</button>
               </div>
             </div>
           </div>
 
           <div class="card">
-            <h3>Favorite Rotation & Display Geometry</h3>
-            <p class="desc">Star multiple wallpapers below to rotate through your favorites automatically.</p>
+            <h3>Wallpaper Rotation & Screen Geometry</h3>
+            <p class="desc">Star multiple wallpapers below to rotate through favorites automatically.</p>
             <div class="field">
-              <label>Cycle Favorite Wallpapers Every...</label>
+              <label>Rotate Favorite Wallpapers</label>
               <select id="cfg-wallpaper_cycle_minutes" onchange="markDirty()">
                 <option value="0">Off (Keep Selected Wallpaper)</option>
                 <option value="15">Every 15 Minutes</option>
@@ -1295,10 +1332,10 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
               </select>
             </div>
             <div class="field" style="margin-bottom:0;">
-              <label>Display Geometry & Resolution</label>
+              <label>Screen Bezel Mask & Resolution</label>
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
                 <select id="cfg-display_shape" onchange="markDirty()">
-                  <option value="circle">Circular Mask</option>
+                  <option value="circle">Circular Display</option>
                   <option value="square">Square / Rectangular</option>
                 </select>
                 <select id="cfg-art_size" onchange="markDirty()">
@@ -1313,169 +1350,256 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
         </div>
 
         <div class="card">
-          <h3>Wallpaper Gallery (Built-In AMOLED Presets & Uploaded Photos)</h3>
-          <p class="desc">Built-in AMOLED presets use &gt;80% pure black pixels to minimize display power draw.</p>
+          <h3>Wallpaper Gallery (AMOLED Low-Power Presets & Uploaded Photos)</h3>
+          <p class="desc">AMOLED presets use &gt;80% pure black pixels to maximize battery life.</p>
           <div id="wp-gallery-grid" class="wp-gallery"></div>
         </div>
       </section>
 
-      <!-- VIEW 4: AUDIO & SPEAKERS -->
-      <section id="view-audio" class="hidden">
+      <!-- 3. VOICE ASSISTANT (FIRST-CLASS CATEGORY) -->
+      <section id="view-voice" class="hidden">
         <div class="page-header">
-          <h2>Audio Routing & AVR Volume Overrides</h2>
-          <p>Configure default Music Assistant playback targets and external AV Receiver volume mappings.</p>
+          <h2>Voice Assistant & Room-Aware Context</h2>
+          <p>Configure on-device wake words, microphone hardware controls, and automatic room context synchronization for Home Assistant Assist.</p>
         </div>
 
         <div class="grid-2">
           <div class="card">
-            <h3>Default Speaker & Room Handoff</h3>
-            <p class="desc">Resets to the device's local speaker on boot/wake unless a remote speaker is actively playing.</p>
-            <div class="field">
-              <label>Default Speaker Entity</label>
-              <select id="cfg-default_speaker" onchange="markDirty()"></select>
-            </div>
+            <h3>Wake Word, Microphone & Sensitivity</h3>
+            <p class="desc">Live hardware controls exposed by your ESPHome device's voice pipeline.</p>
+            <div id="embedded-voice" class="native-controls-box"></div>
+          </div>
+
+          <div class="card">
+            <h3>Room-Aware Voice Assistant Sync</h3>
+            <p class="desc">When enabled, Latter automatically updates your ESPHome device's Home Assistant Area assignment as you walk between rooms—so saying <em>"Turn on the lights"</em> targets the room you are currently standing in.</p>
             <div class="toggle-row">
-              <span>Unified Area Handoff (Link Room Speaker & Remote)</span>
-              <input type="checkbox" id="cfg-area_handoff" onchange="markDirty()">
+              <span>Sync Active Room to HA Device Area (Room-Aware Assist)</span>
+              <input type="checkbox" id="cfg-sync_device_area" onchange="markDirty()">
             </div>
-          </div>
-
-          <div class="card">
-            <h3>Streamer &rarr; AV Receiver Volume Overrides</h3>
-            <p class="desc">Route volume commands to an external AVR or amplifier entity when streaming to a mapped player.</p>
-            <div class="field">
-              <label>Override 1: Source Speaker</label>
-              <select id="cfg-vol_speaker_1" onchange="markDirty()"></select>
-            </div>
-            <div class="field">
-              <label>Override 1: Volume Target Entity (media_player / number)</label>
-              <select id="cfg-vol_target_1" onchange="markDirty()"></select>
-            </div>
-            <hr style="border:0;border-top:1px solid var(--border);margin:12px 0;">
-            <div class="field">
-              <label>Override 2: Source Speaker</label>
-              <select id="cfg-vol_speaker_2" onchange="markDirty()"></select>
-            </div>
-            <div class="field">
-              <label>Override 2: Volume Target Entity (media_player / number)</label>
-              <select id="cfg-vol_target_2" onchange="markDirty()"></select>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- VIEW 5: TV REMOTES & HOME -->
-      <section id="view-remotes" class="hidden">
-        <div class="page-header">
-          <h2>TV Remotes, Security Alarm & Weather</h2>
-          <p>Bind up to 4 TV/media remotes, home security alarm panel, and weather forecast provider.</p>
-        </div>
-
-        <div class="grid-2">
-          <div class="card">
-            <h3>4-Slot Hybrid TV / Media Remotes</h3>
-            <p class="desc">Select either <code>remote.*</code> or <code>media_player.*</code>; sibling entities on the same device are paired automatically.</p>
-            <div class="field">
-              <label>Remote Slot 1</label>
-              <select id="cfg-remote_1" onchange="markDirty()"></select>
-            </div>
-            <div class="field">
-              <label>Remote Slot 2</label>
-              <select id="cfg-remote_2" onchange="markDirty()"></select>
-            </div>
-            <div class="field">
-              <label>Remote Slot 3</label>
-              <select id="cfg-remote_3" onchange="markDirty()"></select>
-            </div>
-            <div class="field">
-              <label>Remote Slot 4</label>
-              <select id="cfg-remote_4" onchange="markDirty()"></select>
-            </div>
-          </div>
-
-          <div class="card">
-            <h3>Security Alarm & Weather Provider</h3>
-            <p class="desc">Entities used by the Home Security control view and 5-day weather serializer.</p>
-            <div class="field">
-              <label>Home Security Alarm (alarm_control_panel)</label>
-              <select id="cfg-alarm_entity" onchange="markDirty()"></select>
-            </div>
-            <div class="field">
-              <label>Weather Provider Entity</label>
-              <select id="cfg-weather_entity" onchange="markDirty()"></select>
-            </div>
-            <div class="field">
-              <label>Default Startup Room Fallback</label>
+            <div class="field" style="margin-top:14px;margin-bottom:0;">
+              <label>Default Fallback Room (When BLE Tracking Is Off)</label>
               <select id="cfg-default_area" onchange="markDirty()"></select>
             </div>
           </div>
         </div>
       </section>
 
-      <!-- VIEW 6: BUTTONS, PINNED & SYSTEM -->
-      <section id="view-mapper" class="hidden">
+      <!-- 4. AUDIO, MUSIC & SOUND -->
+      <section id="view-audio" class="hidden">
         <div class="page-header">
-          <h2>Buttons, Pinned Entities & System Settings</h2>
-          <p>Map custom firmware trigger slots, pin favorite entities, and configure reverse-proxy / hardware parameters.</p>
-        </div>
-
-        <div class="card" style="margin-bottom:16px;">
-          <h3>Hardware Trigger & Slot Bindings</h3>
-          <p class="desc">Bind any slot identifier (e.g. <code>button_1_single</code>, <code>macro_goodnight</code>) to a target Home Assistant entity and action.</p>
-          <div id="bindings-list"></div>
-          <button class="btn-secondary" onclick="addBindingRow('', '', 'toggle'); markDirty();">+ Add Trigger Binding</button>
+          <h2>Audio, Music Assistant & On-Device Sound</h2>
+          <p>Unified control over Music Assistant speakers, AVR volume overrides, library sorting, and onboard speaker chimes.</p>
         </div>
 
         <div class="grid-2">
           <div class="card">
-            <h3>Pinned Room / Home Entities</h3>
-            <p class="desc">Pinned entities appear at the top of Room Control across all areas.</p>
-            <div style="display:flex;gap:8px;">
-              <select id="pin-entity-picker"></select>
-              <button class="btn-secondary" onclick="addPinnedEntity()">Pin Entity</button>
-            </div>
-            <div id="pinned-chips" class="chip-list"></div>
+            <h3>On-Device Sound & Music Sorting</h3>
+            <p class="desc">Adjust onboard alert volume, chimes, volume step increments, and Music Assistant browse sort order.</p>
+            <div id="embedded-sound" class="native-controls-box" style="margin-bottom:10px;"></div>
+            <div id="embedded-music" class="native-controls-box"></div>
           </div>
 
           <div class="card">
-            <h3>System, Reverse Proxy & Hardware Profile</h3>
+            <h3>Default Speaker & AVR Volume Overrides</h3>
+            <p class="desc">Route volume commands to an external AV Receiver or amplifier when streaming to a mapped Music Assistant player.</p>
             <div class="field">
-              <label>Appearance (Dark / Light / System)</label>
-              <select id="cfg-web_theme_mobile" onchange="onThemeChanged(this.value)">
-                <option value="dark">Dark</option>
-                <option value="light">Light</option>
-                <option value="system">System</option>
-              </select>
+              <label>Default Speaker Entity</label>
+              <select id="cfg-default_speaker" onchange="markDirty()"></select>
+            </div>
+            <div class="toggle-row" style="margin-bottom:12px;">
+              <span>Unified Area Handoff (Auto-link Room Speaker & Remote)</span>
+              <input type="checkbox" id="cfg-area_handoff" onchange="markDirty()">
             </div>
             <div class="field">
-              <label>Companion HTTPS Base URL Override (e.g. https://home.lamptons.com)</label>
-              <input type="text" id="cfg-companion_base_url" placeholder="Auto-detected from Home Assistant Network settings" oninput="markDirty()">
-            </div>
-            <div class="field">
-              <label>ESPHome Device Slug (sensor.&lt;slug&gt;_*)</label>
-              <input type="text" id="cfg-device_slug" oninput="markDirty()">
-            </div>
-            <div class="field">
-              <label>Device Archetype & Room Cards Per Page</label>
-              <div style="display:grid;grid-template-columns:2fr 1fr;gap:8px;">
-                <select id="cfg-device_profile" onchange="markDirty()">
-                  <option value="mobile_display">Mobile Smart Display</option>
-                  <option value="stationary_display">Stationary Wall / Desk Display</option>
-                  <option value="headless_node">Headless Sensor / Button Node</option>
-                </select>
-                <input type="number" id="cfg-default_page_size" min="1" max="20" value="3" oninput="markDirty()">
+              <label>Override 1: When Streaming to Speaker &rarr; Control Volume On</label>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                <select id="cfg-vol_speaker_1" onchange="markDirty()"></select>
+                <select id="cfg-vol_target_1" onchange="markDirty()"></select>
               </div>
             </div>
-            <div class="field">
-              <label>Home Dock App Tokens</label>
-              <input type="text" id="cfg-dock_apps" placeholder="music,room,remote,games,tools" oninput="markDirty()">
-            </div>
-            <div class="field">
-              <label>BLE iBeacon UUID & External Sensor Override</label>
-              <input type="text" id="cfg-ble_beacon_uuid" style="margin-bottom:6px;" oninput="markDirty()">
-              <select id="cfg-presence_entity" onchange="markDirty()"></select>
+            <div class="field" style="margin-bottom:0;">
+              <label>Override 2: When Streaming to Speaker &rarr; Control Volume On</label>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                <select id="cfg-vol_speaker_2" onchange="markDirty()"></select>
+                <select id="cfg-vol_target_2" onchange="markDirty()"></select>
+              </div>
             </div>
           </div>
+        </div>
+      </section>
+
+      <!-- 5. TV REMOTES, SECURITY & HOME -->
+      <section id="view-remotes" class="hidden">
+        <div class="page-header">
+          <h2>4-Slot TV Remotes, Security Alarm & Weather</h2>
+          <p>Assign each remote slot's Home Assistant entity and protocol profile in one place, plus configure your home alarm, weather, and pinned room entities.</p>
+        </div>
+
+        <div class="card" style="margin-bottom:16px;">
+          <h3>Unified 4-Slot TV / Media Remotes</h3>
+          <p class="desc">Pick either the <code>remote.*</code> or <code>media_player.*</code> entity for each slot—Latter automatically pairs sibling entities and adapts navigation commands (Android TV, Apple TV, Roku, LG webOS, Denon/Marantz).</p>
+          <div class="grid-2" style="margin-bottom:0;">
+            <div class="remote-slot-card" id="rslot-card-1">
+              <div class="remote-slot-hdr">
+                <strong>Remote Slot 1</strong>
+                <button class="btn-secondary" id="rslot-btn-1" onclick="activateRemoteSlot(1)">Set Active</button>
+              </div>
+              <div class="field" style="margin-bottom:0;">
+                <label>Target TV / Media Player Entity</label>
+                <select id="cfg-remote_1" onchange="markDirty()"></select>
+              </div>
+              <div id="embedded-remote-slot-1" class="native-controls-box"></div>
+            </div>
+
+            <div class="remote-slot-card" id="rslot-card-2">
+              <div class="remote-slot-hdr">
+                <strong>Remote Slot 2</strong>
+                <button class="btn-secondary" id="rslot-btn-2" onclick="activateRemoteSlot(2)">Set Active</button>
+              </div>
+              <div class="field" style="margin-bottom:0;">
+                <label>Target TV / Media Player Entity</label>
+                <select id="cfg-remote_2" onchange="markDirty()"></select>
+              </div>
+              <div id="embedded-remote-slot-2" class="native-controls-box"></div>
+            </div>
+
+            <div class="remote-slot-card" id="rslot-card-3">
+              <div class="remote-slot-hdr">
+                <strong>Remote Slot 3</strong>
+                <button class="btn-secondary" id="rslot-btn-3" onclick="activateRemoteSlot(3)">Set Active</button>
+              </div>
+              <div class="field" style="margin-bottom:0;">
+                <label>Target TV / Media Player Entity</label>
+                <select id="cfg-remote_3" onchange="markDirty()"></select>
+              </div>
+              <div id="embedded-remote-slot-3" class="native-controls-box"></div>
+            </div>
+
+            <div class="remote-slot-card" id="rslot-card-4">
+              <div class="remote-slot-hdr">
+                <strong>Remote Slot 4</strong>
+                <button class="btn-secondary" id="rslot-btn-4" onclick="activateRemoteSlot(4)">Set Active</button>
+              </div>
+              <div class="field" style="margin-bottom:0;">
+                <label>Target TV / Media Player Entity</label>
+                <select id="cfg-remote_4" onchange="markDirty()"></select>
+              </div>
+              <div id="embedded-remote-slot-4" class="native-controls-box"></div>
+            </div>
+          </div>
+          <div id="embedded-remote-general" class="native-controls-box" style="margin-top:12px;"></div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <h3>Home Security Alarm & Weather Provider</h3>
+            <div class="field">
+              <label>Home Security Alarm (alarm_control_panel)</label>
+              <select id="cfg-alarm_entity" onchange="markDirty()"></select>
+            </div>
+            <div class="field" style="margin-bottom:0;">
+              <label>Weather Forecast Provider</label>
+              <select id="cfg-weather_entity" onchange="markDirty()"></select>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>Pinned Room / Home Entities</h3>
+            <p class="desc">Pinned entities always appear first in Room Control across all rooms.</p>
+            <div style="display:flex;gap:8px;">
+              <select id="pin-entity-picker"></select>
+              <button class="btn-secondary" onclick="addPinnedEntity()">Pin</button>
+            </div>
+            <div id="pinned-chips" class="chip-list"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 6. SYSTEM, BATTERY, DIAGNOSTICS & HARDWARE TRIGGERS -->
+      <section id="view-system" class="hidden">
+        <div class="page-header">
+          <h2>System Diagnostics, Power & Hardware Triggers</h2>
+          <p>Execute maintenance actions, monitor battery/network health, map custom hardware triggers, and configure studio settings.</p>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <h3>Device Actions & Maintenance</h3>
+            <p class="desc">One-tap hardware actions exposed by your ESPHome device.</p>
+            <div id="embedded-actions" class="action-btn-grid" style="margin-bottom:14px;"></div>
+            <h3>Battery & Power Telemetry</h3>
+            <div id="embedded-battery" class="native-controls-box"></div>
+          </div>
+
+          <div class="card">
+            <h3>Network & System Diagnostics</h3>
+            <p class="desc">Live Wi-Fi signal, IP/MAC address, uptime, and firmware status.</p>
+            <div id="embedded-network" class="native-controls-box"></div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom:16px;">
+          <h3>Universal Hardware Trigger & Macro Bindings</h3>
+          <p class="desc">Map any custom slot ID sent by your firmware (<code>latter.trigger_binding</code>) to any Home Assistant entity.</p>
+          <div id="bindings-list"></div>
+          <button class="btn-secondary" onclick="addBindingRow('', '', 'toggle'); markDirty();">+ Add Trigger Binding</button>
+        </div>
+
+        <div class="card">
+          <h3>Studio Appearance, Reverse Proxy & Device Profile</h3>
+          <div class="grid-2" style="margin-bottom:0;">
+            <div>
+              <div class="field">
+                <label>Studio Appearance (Dark / Light / System)</label>
+                <select id="cfg-web_theme_mobile" onchange="onThemeChanged(this.value)">
+                  <option value="dark">Dark</option>
+                  <option value="light">Light</option>
+                  <option value="system">System</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Companion HTTPS Base URL Override (e.g. https://home.lamptons.com)</label>
+                <input type="text" id="cfg-companion_base_url" placeholder="Auto-detected from Home Assistant Network settings" oninput="markDirty()">
+              </div>
+              <div class="field" style="margin-bottom:0;">
+                <label>ESPHome Device Slug (sensor.&lt;slug&gt;_*)</label>
+                <input type="text" id="cfg-device_slug" oninput="markDirty()">
+              </div>
+            </div>
+            <div>
+              <div class="field">
+                <label>Device Archetype & Room Cards Per Page</label>
+                <div style="display:grid;grid-template-columns:2fr 1fr;gap:8px;">
+                  <select id="cfg-device_profile" onchange="markDirty()">
+                    <option value="mobile_display">Mobile Smart Display</option>
+                    <option value="stationary_display">Stationary Wall / Desk Display</option>
+                    <option value="headless_node">Headless Sensor / Button Node</option>
+                  </select>
+                  <input type="number" id="cfg-default_page_size" min="1" max="20" value="3" oninput="markDirty()">
+                </div>
+              </div>
+              <div class="field" style="margin-bottom:0;">
+                <label>BLE iBeacon UUID & External Sensor Override</label>
+                <input type="text" id="cfg-ble_beacon_uuid" style="margin-bottom:6px;" oninput="markDirty()">
+                <select id="cfg-presence_entity" onchange="markDirty()"></select>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 7. ALL ENTITIES (RAW POWER-USER INSPECTOR) -->
+      <section id="view-raw" class="hidden">
+        <div class="page-header">
+          <h2>All Device Entities (Raw Inspector)</h2>
+          <p>Search and inspect every raw entity registered to this ESPHome device in Home Assistant.</p>
+        </div>
+        <div class="card" style="margin-bottom:14px;padding:11px 14px;">
+          <input type="text" id="esp-search" placeholder="Filter all device entities by name or entity_id..." oninput="renderRawEntityList()">
+        </div>
+        <div class="card">
+          <div id="raw-entity-items" class="native-controls-box"></div>
         </div>
       </section>
     </div>
@@ -1488,30 +1612,24 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
 const API_URL = window.location.pathname + "/api" + window.location.search;
 let STATE = null;
 let PINNED = [];
-let ACTIVE_ESP_SEC = null;
 let IS_DIRTY = false;
 let INITIAL_FORM_LOADED = false;
 let CURRENT_THEME_PREF = localStorage.getItem("latter_web_theme") || "dark";
 
 const sysMedia = window.matchMedia("(prefers-color-scheme: dark)");
 sysMedia.addEventListener("change", () => {
-  if (CURRENT_THEME_PREF === "system") {
-    applyTheme("system");
-  }
+  if (CURRENT_THEME_PREF === "system") applyTheme("system");
 });
 
 function resolveEffectiveTheme(pref) {
-  if (pref === "system") {
-    return sysMedia.matches ? "dark" : "light";
-  }
+  if (pref === "system") return sysMedia.matches ? "dark" : "light";
   return pref === "light" ? "light" : "dark";
 }
 
 function applyTheme(pref) {
   const valid = ["dark", "light", "system"];
   CURRENT_THEME_PREF = valid.includes(pref) ? pref : "dark";
-  const effective = resolveEffectiveTheme(CURRENT_THEME_PREF);
-  document.body.setAttribute("data-theme", effective);
+  document.body.setAttribute("data-theme", resolveEffectiveTheme(CURRENT_THEME_PREF));
   localStorage.setItem("latter_web_theme", CURRENT_THEME_PREF);
   ["cfg-web_theme", "cfg-web_theme_mobile"].forEach(id => {
     const sel = document.getElementById(id);
@@ -1545,15 +1663,13 @@ async function onThemeChanged(themePref) {
     headers: {"Content-Type": "application/json"},
     body: JSON.stringify({command: "set_theme", web_theme: themePref})
   });
-  if (resp.ok) {
-    showToast(`Appearance set to ${themePref}`);
-  }
+  if (resp.ok) showToast(`Appearance set to ${themePref}`);
 }
 
 function switchView(viewId, btnEl) {
   document.querySelectorAll("aside .nav-btn").forEach(b => b.classList.remove("active"));
   btnEl.classList.add("active");
-  ["dashboard", "esphome", "wallpapers", "audio", "remotes", "mapper"].forEach(id => {
+  ["dashboard", "home_display", "voice", "audio", "remotes", "system", "raw"].forEach(id => {
     document.getElementById("view-" + id).classList.toggle("hidden", id !== viewId);
   });
 }
@@ -1581,7 +1697,7 @@ function renderRssiBars(rssiMap, packetsSeen) {
   const box = document.getElementById("rssi-container");
   const entries = Object.entries(rssiMap || {});
   if (!entries.length) {
-    box.innerHTML = `<p class="desc">No recent BLE iBeacon packets (Seen: ${packetsSeen || 0}). Ensure BLE Presence Beacon is ON.</p>`;
+    box.innerHTML = `<p class="desc">No recent BLE iBeacon packets (Seen: ${packetsSeen || 0}). Ensure the BLE Presence Beacon switch below is ON.</p>`;
     return;
   }
   entries.sort((a, b) => b[1] - a[1]);
@@ -1621,6 +1737,140 @@ async function toggleRoomCard(entity_id) {
   if (resp.ok) {
     applyStateToDom(await resp.json(), false);
     showToast(`Toggled ${entity_id}`);
+  }
+}
+
+function renderNativeControlRow(item, showEntityId=false) {
+  const stateText = `${item.state}${item.unit ? ' ' + item.unit : ''}`;
+  let widgetHtml = `<span class="state-badge">${stateText}</span>`;
+
+  if (item.domain === "button") {
+    widgetHtml = `<button class="btn-secondary" onclick="espAction('${item.entity_id}', 'press')">Run</button>`;
+  } else if (item.domain === "switch" || item.domain === "light" || item.domain === "fan") {
+    const isOn = item.state === "on";
+    widgetHtml = `<button class="${isOn ? 'btn-primary' : 'btn-secondary'}" onclick="espAction('${item.entity_id}', 'toggle')">${isOn ? 'ON' : 'OFF'}</button>`;
+  } else if (item.domain === "select" && item.options && item.options.length) {
+    const opts = item.options.map(o => `<option value="${o}" ${o===item.state?'selected':''}>${o}</option>`).join("");
+    widgetHtml = `<select onchange="espSelect('${item.entity_id}', this.value)">${opts}</select>`;
+  } else if (item.domain === "number") {
+    const minV = item.min ?? 0;
+    const maxV = item.max ?? 100;
+    const stepV = item.step ?? 1;
+    const numVal = parseFloat(item.state) || 0;
+    widgetHtml = `
+      <input type="range" min="${minV}" max="${maxV}" step="${stepV}" value="${numVal}" onchange="espNumber('${item.entity_id}', this.value)">
+      <span class="state-badge">${stateText}</span>
+    `;
+  }
+
+  return `<div class="native-ctrl-row">
+    <div class="lbl">
+      ${item.name}
+      ${showEntityId ? `<small>${item.entity_id}</small>` : ''}
+    </div>
+    <div class="widget">${widgetHtml}</div>
+  </div>`;
+}
+
+function getSectionItems(secId) {
+  const sections = STATE?.esphome?.sections || [];
+  const found = sections.find(s => s.id === secId);
+  return found ? (found.items || []) : [];
+}
+
+function renderCohesiveDeviceSections() {
+  const esp = STATE?.esphome;
+  if (!esp) return;
+  const sections = esp.sections || [];
+  const totalCount = sections.reduce((acc, s) => acc + s.count, 0);
+  document.getElementById("nav-esp-badge").textContent = totalCount;
+
+  // 1. Dashboard BLE Beacon controls
+  const roomItems = getSectionItems("room");
+  document.getElementById("embedded-room-ble").innerHTML = roomItems.map(it => renderNativeControlRow(it)).join("");
+
+  // 2. Home & Display & Sleep
+  const homeItems = getSectionItems("home");
+  document.getElementById("embedded-home").innerHTML = homeItems.length
+    ? homeItems.map(it => renderNativeControlRow(it)).join("")
+    : `<p class="desc">No on-device Home Screen entities exposed.</p>`;
+
+  const dispItems = getSectionItems("display");
+  document.getElementById("embedded-display").innerHTML = dispItems.map(it => renderNativeControlRow(it)).join("");
+
+  const sleepItems = getSectionItems("sleep");
+  document.getElementById("embedded-sleep").innerHTML = sleepItems.map(it => renderNativeControlRow(it)).join("");
+
+  // 3. Voice Assistant
+  const voiceItems = getSectionItems("voice");
+  document.getElementById("embedded-voice").innerHTML = voiceItems.length
+    ? voiceItems.map(it => renderNativeControlRow(it)).join("")
+    : `<p class="desc">No on-device Voice Assistant entities exposed by this firmware.</p>`;
+
+  // 4. Sound & Music
+  const soundItems = getSectionItems("sound");
+  document.getElementById("embedded-sound").innerHTML = soundItems.map(it => renderNativeControlRow(it)).join("");
+  const musicItems = getSectionItems("music");
+  document.getElementById("embedded-music").innerHTML = musicItems.map(it => renderNativeControlRow(it)).join("");
+
+  // 5. TV Remotes: Embed slot-specific ESPHome entities (e.g. "Slot 1 Profile") directly into Slot 1..4 cards!
+  const remoteItems = getSectionItems("remote");
+  const slotBuckets = {1: [], 2: [], 3: [], 4: [], general: []};
+  remoteItems.forEach(it => {
+    const txt = `${it.name} ${it.entity_id}`.toLowerCase();
+    if (txt.includes("slot 1") || txt.includes("slot_1") || txt.includes("remote 1") || txt.includes("remote_1")) slotBuckets[1].push(it);
+    else if (txt.includes("slot 2") || txt.includes("slot_2") || txt.includes("remote 2") || txt.includes("remote_2")) slotBuckets[2].push(it);
+    else if (txt.includes("slot 3") || txt.includes("slot_3") || txt.includes("remote 3") || txt.includes("remote_3")) slotBuckets[3].push(it);
+    else if (txt.includes("slot 4") || txt.includes("slot_4") || txt.includes("remote 4") || txt.includes("remote_4")) slotBuckets[4].push(it);
+    else slotBuckets.general.push(it);
+  });
+  [1, 2, 3, 4].forEach(idx => {
+    const box = document.getElementById(`embedded-remote-slot-${idx}`);
+    if (box) box.innerHTML = slotBuckets[idx].map(it => renderNativeControlRow(it)).join("");
+  });
+  document.getElementById("embedded-remote-general").innerHTML = slotBuckets.general.map(it => renderNativeControlRow(it)).join("");
+
+  // 6. System Actions, Battery & Network
+  const actionItems = getSectionItems("actions");
+  document.getElementById("embedded-actions").innerHTML = actionItems.map(it =>
+    `<button class="btn-secondary" onclick="espAction('${it.entity_id}', 'press')">${it.name}</button>`
+  ).join("");
+
+  const batItems = getSectionItems("battery");
+  document.getElementById("embedded-battery").innerHTML = batItems.map(it => renderNativeControlRow(it)).join("");
+
+  const netItems = getSectionItems("network");
+  document.getElementById("embedded-network").innerHTML = netItems.map(it => renderNativeControlRow(it)).join("");
+
+  renderRawEntityList();
+}
+
+function renderRawEntityList() {
+  const esp = STATE?.esphome;
+  if (!esp || !esp.sections) return;
+  const query = (document.getElementById("esp-search")?.value || "").trim().toLowerCase();
+  let allItems = [];
+  esp.sections.forEach(s => { allItems = allItems.concat(s.items || []); });
+  if (query) {
+    allItems = allItems.filter(it =>
+      it.name.toLowerCase().includes(query) || it.entity_id.toLowerCase().includes(query)
+    );
+  }
+  const box = document.getElementById("raw-entity-items");
+  if (box) {
+    box.innerHTML = allItems.map(it => renderNativeControlRow(it, true)).join("");
+  }
+}
+
+async function activateRemoteSlot(slotNum) {
+  const resp = await fetch(API_URL, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({command: "activate_remote_slot", slot: slotNum})
+  });
+  if (resp.ok) {
+    applyStateToDom(await resp.json(), false);
+    showToast(`Active remote set to Slot ${slotNum}`);
   }
 }
 
@@ -1711,108 +1961,6 @@ async function deleteWallpaper(sourceId) {
   }
 }
 
-function selectEspSection(secId) {
-  ACTIVE_ESP_SEC = secId;
-  renderEspInspector();
-}
-
-function renderEspInspector() {
-  const esp = STATE?.esphome;
-  if (!esp) return;
-  const sections = esp.sections || [];
-  const totalCount = sections.reduce((acc, s) => acc + s.count, 0);
-  document.getElementById("nav-esp-badge").textContent = totalCount;
-
-  if (!sections.length) {
-    document.getElementById("esp-nav-list").innerHTML = "";
-    document.getElementById("esp-sec-title").textContent = "No ESPHome Entities Found";
-    document.getElementById("esp-sec-desc").textContent = "Verify that the device slug matches your ESPHome node.";
-    document.getElementById("esp-sec-items").innerHTML = "";
-    return;
-  }
-
-  if (!ACTIVE_ESP_SEC || (ACTIVE_ESP_SEC !== "__all__" && !sections.some(s => s.id === ACTIVE_ESP_SEC))) {
-    ACTIVE_ESP_SEC = sections[0].id;
-  }
-
-  const navBox = document.getElementById("esp-nav-list");
-  navBox.innerHTML = sections.map(s => `
-    <div class="esp-nav-btn ${s.id === ACTIVE_ESP_SEC ? 'active' : ''}" onclick="selectEspSection('${s.id}')">
-      <span>${s.title}</span>
-      <span class="nav-badge">${s.count}</span>
-    </div>
-  `).concat([
-    `<div class="esp-nav-btn ${ACTIVE_ESP_SEC === '__all__' ? 'active' : ''}" onclick="selectEspSection('__all__')">
-      <span>All Entities</span>
-      <span class="nav-badge">${totalCount}</span>
-    </div>`
-  ]).join("");
-
-  renderActiveEspSection();
-}
-
-function renderActiveEspSection() {
-  const esp = STATE?.esphome;
-  if (!esp || !esp.sections) return;
-  const query = (document.getElementById("esp-search")?.value || "").trim().toLowerCase();
-
-  let activeTitle = "All Device Entities";
-  let activeDesc = "Showing all controls, options, sensors, and diagnostic entities.";
-  let rawItems = [];
-
-  if (ACTIVE_ESP_SEC === "__all__" || query.length > 0) {
-    esp.sections.forEach(s => { rawItems = rawItems.concat(s.items); });
-    if (query.length > 0) {
-      activeTitle = `Filtered Entities ("${query}")`;
-      rawItems = rawItems.filter(it =>
-        it.name.toLowerCase().includes(query) || it.entity_id.toLowerCase().includes(query)
-      );
-    }
-  } else {
-    const sec = esp.sections.find(s => s.id === ACTIVE_ESP_SEC) || esp.sections[0];
-    if (sec) {
-      activeTitle = sec.title;
-      activeDesc = sec.description;
-      rawItems = sec.items;
-    }
-  }
-
-  document.getElementById("esp-sec-title").textContent = activeTitle;
-  document.getElementById("esp-sec-desc").textContent = activeDesc;
-
-  const box = document.getElementById("esp-sec-items");
-  if (!rawItems.length) {
-    box.innerHTML = `<p class="desc">No matching entities in this view.</p>`;
-    return;
-  }
-
-  box.innerHTML = rawItems.map(item => {
-    const stateText = `${item.state}${item.unit ? ' ' + item.unit : ''}`;
-    const isLongState = stateText.length > 36 && !["button", "switch", "select", "number"].includes(item.domain);
-    let controlHtml = `<span class="state-badge">${stateText}</span>`;
-
-    if (item.domain === "button") {
-      controlHtml = `<button class="btn-secondary" onclick="espAction('${item.entity_id}', 'press')">Run</button>`;
-    } else if (item.domain === "switch" || item.domain === "light" || item.domain === "fan") {
-      const isOn = item.state === "on";
-      controlHtml = `<button class="${isOn ? 'btn-primary' : 'btn-secondary'}" onclick="espAction('${item.entity_id}', 'toggle')">${isOn ? 'ON' : 'OFF'}</button>`;
-    } else if (item.domain === "select" && item.options && item.options.length) {
-      const opts = item.options.map(o => `<option value="${o}" ${o===item.state?'selected':''}>${o}</option>`).join("");
-      controlHtml = `<select style="width:auto;min-width:155px;" onchange="espSelect('${item.entity_id}', this.value)">${opts}</select>`;
-    } else if (item.domain === "number") {
-      controlHtml = `<input type="number" style="width:95px;text-align:right;" value="${item.state}" min="${item.min ?? 0}" max="${item.max ?? 100}" step="${item.step ?? 1}" onchange="espNumber('${item.entity_id}', this.value)">${item.unit ? `<span style="font-size:12px;color:var(--muted);">${item.unit}</span>` : ''}`;
-    }
-
-    return `<div class="entity-row ${isLongState ? 'wide-val' : ''}">
-      <div class="meta">
-        <strong>${item.name}</strong>
-        <small>${item.entity_id}</small>
-      </div>
-      <div class="ctrl">${controlHtml}</div>
-    </div>`;
-  }).join("");
-}
-
 async function espAction(entity_id, action) {
   const resp = await fetch(API_URL, {
     method: "POST",
@@ -1845,7 +1993,7 @@ async function espNumber(entity_id, level) {
   });
   if (resp.ok) {
     applyStateToDom(await resp.json(), false);
-    showToast(`Set ${entity_id} = ${level}`);
+    showToast(`Updated ${entity_id} = ${level}`);
   }
 }
 
@@ -1920,7 +2068,7 @@ function applyStateToDom(data, forceFormUpdate=false) {
   const humStr = live.room_humidity != null ? ` • ${live.room_humidity}%` : "";
 
   document.getElementById("hdr-title").textContent = esp?.device?.name || data.title;
-  document.getElementById("hdr-sub").textContent = `Latter v${data.version || '1.5.0'}`;
+  document.getElementById("hdr-sub").textContent = `Latter v${data.version || '1.5.2'}`;
   document.getElementById("nav-room-badge").textContent = roomName;
   document.getElementById("top-room").textContent = `Room: ${roomName}`;
   document.getElementById("top-speaker").textContent = `Speaker: ${spkShort}`;
@@ -1933,24 +2081,32 @@ function applyStateToDom(data, forceFormUpdate=false) {
   document.getElementById("st-speaker").textContent = spkShort;
   document.getElementById("st-alarm").textContent = (live.alarm_state || "none").toUpperCase();
 
+  [1, 2, 3, 4].forEach(idx => {
+    const isAct = (live.active_remote_slot || 1) === idx;
+    const card = document.getElementById(`rslot-card-${idx}`);
+    const btn = document.getElementById(`rslot-btn-${idx}`);
+    if (card) card.classList.toggle("active-slot", isAct);
+    if (btn) {
+      btn.textContent = isAct ? "Active on Device" : "Set Active";
+      btn.className = isAct ? "btn-primary" : "btn-secondary";
+    }
+  });
+
   populateSelect("quick-area", cat.areas, live.active_area_id, false);
   populateSelect("quick-speaker", cat.ma_speakers, live.active_speaker, false);
   renderLiveRoomCards(live.room_cards);
   renderRssiBars(live.ble_rssi_by_room, live.ble_packets_seen);
   renderWallpaperGallery(data.wallpapers, cfg.device_slug, cfg.display_shape);
 
-  if (esp && esp.device) {
-    document.getElementById("esp-dev-title").textContent = `${esp.device.name} (${esp.device.model})`;
-    document.getElementById("esp-dev-meta").textContent = `Manufacturer: ${esp.device.manufacturer} • Firmware: ${esp.device.sw_version || 'ESPHome'} • MAC: ${esp.device.mac || 'N/A'}`;
-    const activeEl = document.activeElement;
-    if (!activeEl || !document.getElementById("esp-sec-items")?.contains(activeEl)) {
-      renderEspInspector();
-    }
+  const activeEl = document.activeElement;
+  if (!activeEl || !["SELECT", "INPUT"].includes(activeEl.tagName)) {
+    renderCohesiveDeviceSections();
   }
 
   if (!INITIAL_FORM_LOADED || forceFormUpdate) {
     INITIAL_FORM_LOADED = true;
     applyTheme(cfg.web_theme || "dark");
+    renderCohesiveDeviceSections();
 
     document.getElementById("cfg-device_slug").value = cfg.device_slug || "";
     document.getElementById("cfg-companion_base_url").value = cfg.companion_base_url || "";
