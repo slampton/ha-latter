@@ -236,6 +236,7 @@ class LatterCoordinator:
         self.last_media_duration: float = 0.0
         self.last_media_position: float = 0.0
         self._resuming_guard_until: float = 0.0
+        self._local_needs_cold_resume: bool = True
 
         # Sticky artwork and transfer position handoff cache (for MA 2.10.8 transfer window)
         self.last_valid_raw_pic: str = ""
