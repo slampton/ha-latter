@@ -727,6 +727,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             )
             slot_mode = f"room_{domain_filter}"
 
+        target_suffix = "set_browse_slots" if mode == "areas" else "set_room_slots"
         await async_push_browse_slots(
             hass=hass,
             device_slug=device_slug,
@@ -734,7 +735,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             page=page,
             page_size=page_size,
             items=items,
-            preferred_suffix="set_room_slots",
+            preferred_suffix=target_suffix,
         )
 
     async def _handle_room_action(call: ServiceCall) -> None:

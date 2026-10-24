@@ -2,103 +2,145 @@
 
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=slampton&repository=ha-latter&category=integration)
 
-**Universal Home Assistant companion middleware and dynamic entity-mapping layer for [Pocket Assistant](https://github.com/slampton/esphome-pocket-assistant) (`v2.1.0+`) and ESPHome devices.**
+**Universal Home Assistant companion middleware and dynamic entity-mapping platform for ESPHome devices.**
 
-Lightweight and battery-powered ESPHome devices shouldn't have to waste RAM, flash, and battery running an on-device `web_server`, nor should users have to edit YAML `substitutions:` and recompile firmware just to remap a weather provider, media player, TV remote, alarm panel, or room area.
-
-**Latter** provides a server-side companion tier inside Home Assistant that dynamically maps entities, normalizes complex backend APIs, tracks room presence over BLE, and proxies heavy payloads into compact, MCU-friendly contracts over ESPHome's native Noise-encrypted API.
+Flagship reference hardware: **[Pocket Assistant](https://github.com/slampton/esphome-pocket-assistant)** (Waveshare ESP32-S3-Touch-AMOLED-1.75C).
 
 ---
 
-## Key Capabilities
+## Why Latter Exists
 
-1. **Zero-YAML Dynamic Entity Mapping (`ConfigFlow` + `OptionsFlow`)**
-   - Map and remap your **Weather Provider**, **Home Security Alarm (`alarm_control_panel`)**, **4 TV/Media Remote Slots**, **Music Assistant Speakers**, **Speaker Volume Overrides**, and **Family Calendars** directly in **Settings > Devices & Services > Latter > Configure**—never recompile ESPHome YAML again.
-2. **BLE Room Presence & Room-Aware Voice Assistant**
-   - Automatically detects which room your portable ESPHome device is in and switches your on-device Room Controls, active room speaker/remote, **and** your ESPHome device's Home Assistant Area assignment—so saying *"Turn on the lights"* or *"Close the blinds"* to the Voice Assistant automatically controls the room you are standing in!
-3. **Curated Room Control & Environmental Telemetry**
-   - Automatically discovers lights, scenes, window coverings (blinds/curtains/shades), fans, climate, smart outlets, and the room's Music Assistant speaker—filtering out diagnostic/config switch clutter—while exposing live room temperature and humidity (`room_temp`, `room_humidity`).
-4. **Native Music Assistant Library, Queue & Podcast Engine**
-   - Filters speaker selection strictly to Music Assistant players and paginates favorites, playlists, artists, albums, tracks, live queues, and podcast episodes into 5-slot pages with zero `mass_queue` dependency.
-5. **Authenticated 466×466 JPEG Artwork Proxy (`/api/latter/image_proxy/...`)**
-   - Center-crops and downscales high-resolution album artwork into lightweight baseline JPEGs (`~20 KB`) using Pillow and HMAC-SHA256 signed URLs, with a sticky pause/transfer cache so artwork never disappears when paused.
+ESPHome devices—whether portable battery-powered smart displays, stationary wall panels, rotary knob controllers, or headless button/sensor nodes—should do as much as possible locally on the MCU. However, three limitations always hit complex ESPHome projects:
+
+1. **The YAML Recompile Trap**: Users shouldn't have to edit YAML `substitutions:` and recompile C++ firmware for 10 minutes just to change a weather provider, swap a TV remote entity, map a hardware button, or add a speaker volume override.
+2. **MCU RAM & Flash Limits**: Running an on-device `web_server`, decoding 2000×2000 progressive PNG/WebP album art, or sorting 500 Music Assistant library items on an ESP32 wastes precious PSRAM, flash, and battery.
+3. **Cross-Integration Context**: A portable ESPHome device moving from room to room needs Home Assistant to track its BLE signal across room proxies, switch its active room controls, and update its Home Assistant Area assignment so saying *"Turn on the lights"* to the Voice Assistant controls the room you are standing in.
+
+**Latter** solves all three on the Home Assistant server while exposing a clean, hardware-agnostic **ESPHome Wire Specification** over ESPHome's native Noise-encrypted API.
+
+---
+
+## Core Capabilities
+
+- **Server-Side Web Companion Studio (`/api/latter/companion/<entry_id>`)**: Click **Visit** on your ESPHome device in Home Assistant to open a full Device Manager, Live BLE Signal Radar, 4-Slot Remote Mapper, AVR Volume Override Mapper, and Universal Hardware Trigger Mapper—zero on-device `web_server` overhead.
+- **Native ESPHome BLE Proxy Room Tracking (`ble_engine.py`)**: Tracks your portable device's BLE iBeacon across fixed ESPHome `bluetooth_proxy` nodes (EMA RSSI smoothing, 5 dB hysteresis, instant wake lock after standby) with optional Bermuda BLE Trilateration override.
+- **Live Two-Way Room Control & Environmental Telemetry (`room_engine.py`)**: Automatically discovers lights, window coverings, fans, climate, scenes, and smart outlets per room, subscribes to live state changes (`250ms` debounced push), and exposes ambient `room_temp` and `room_humidity`.
+- **Music Assistant 2.10+ Library, Queue & Handoff Engine (`browse_engine.py`)**: Paginates speakers, favorites, playlists, artists, albums, tracks, active queues, and podcast episodes, and performs single-call `music_assistant.transfer_queue` handoffs with position verification.
+- **Universal Baseline-JPEG Transcoder (`/api/latter/artwork/<device_slug>`)**: Converts any upstream image format (PNG, WebP, Progressive JPEG, GIF) into non-progressive Baseline JPEG sized to your screen (`?w=466&h=466&shape=circle`), backed by a 16-entry RAM LRU cache.
+- **4-Slot Hybrid TV / Media Remote Adapter**: Automatically pairs sibling `remote.*` and `media_player.*` entities on the same device and translates navigation intents across Android TV (`DPAD_*`), Apple TV, Roku, LG webOS (`webostv.button`), and Denon/Marantz AVRs (`denonavr.get_command`).
 
 ---
 
 ## Installation
 
-1. Click the **Open HACS Repository** badge above, or open **Settings > Marketplace** (or **HACS > Integrations**) in Home Assistant and add `https://github.com/slampton/ha-latter` as a Custom Repository (Category: **Integration**).
+1. Click the **Open HACS Repository** badge above, or add `https://github.com/slampton/ha-latter` as a Custom Repository (Category: **Integration**) in HACS / Home Assistant Marketplace.
 2. Download **Latter** and restart Home Assistant.
-3. Go to **Settings > Devices & Services > Add Integration** and search for **Latter**.
+3. Go to **Settings > Devices & Services > Add Integration** and search for **Latter** (or accept the automatic discovery card when your ESPHome device connects).
+4. Click **Visit** on the Latter or ESPHome device page to open the **Latter Companion Studio**, or use **Configure** in Home Assistant.
 
 ---
 
-## Configuration & Feature Guides
+## Public ESPHome Developer Wire Specification (`v1.4+`)
 
-You can adjust any setting at any time under **Settings > Devices & Services > Latter > Configure**.
+Any ESPHome project (custom C++ display, LVGL touchscreen, e-paper dashboard, or headless button/sensor node) can adopt Latter modularly. You only subscribe to the sensors or services your hardware needs.
 
-### 1. Automatic BLE Room Presence (Two Easy Ways)
+### 1. Device-Scoped Sensors (`sensor.<device_slug>_*`)
 
-To track a portable battery-powered ESPHome device (like Pocket Assistant) across rooms without draining its battery, the device broadcasts a lightweight **BLE iBeacon** (`UUID: 504F434B-4554-4153-5354-000000000210`) when its **BLE Room Beacon** switch is turned ON, while fixed ESPHome `bluetooth_proxy` nodes in your rooms listen for it.
+When you configure Latter for an ESPHome device named `kitchen-panel` (slug `kitchen_panel`) or `pocket-assistant` (slug `pocket_assistant`), Latter creates 5 push-updated sensors:
 
- Make sure each of your room ESPHome BLE proxy devices is assigned to its proper **Area (Room)** in Home Assistant!
+| Entity ID | State | Key Attributes |
+| :--- | :--- | :--- |
+| `sensor.<slug>_active_media` | `playing` \| `paused` \| `idle` \| `buffering` \| `off` | `title`, `artist`, `album`, `duration`, `position` (2s idle-guarded only while playing), `volume` (`0.0..1.0`), `media_type`, `supported_features`, `art_url`, `active_speaker`, `last_speaker`, `local_speaker`, `volume_entity` |
+| `sensor.<slug>_room_context` | Active Room Name (e.g. `Living Room`) | `area_id`, `area_name`, `room_temp`, `room_humidity`, `lights_on`, `covers_open`, `entity_count`, `area_speaker`, `area_remote`, `alarm_entity`, `alarm_state`, `alarm_code_required`, `dock_apps`, `wallpaper_url`, `companion_url`, `entities_summary` |
+| `sensor.<slug>_weather_forecast` | `MON:72:55:sunny;TUE:68:52:cloudy;...` (5 days) | `condition`, `temperature`, `humidity`, `wind_speed`, `wind_bearing`, `high`, `low`, `weather_entity` |
+| `sensor.<slug>_remote_config` | Active Remote Name | `active_slot` (`1..4`), `configured_count`, `slot_1..4_name`, `slot_1..4_remote`, `slot_1..4_media_player`, `slot_1..4_state`, `slots_summary` |
+| `sensor.<slug>_calendar_agenda` | `TODAY 14:30\|Dentist;TOM 09:00\|Standup;...` | `event_count`, `events`, `calendars` |
 
-#### Option A: Built-In Native BLE Proxy Tracking (Recommended — Zero Extra Integrations!)
-Latter includes a built-in Bluetooth advertisement engine (`ble_engine.py`) that listens directly to Home Assistant's internal Bluetooth manager:
-1. Turn ON the **BLE Room Beacon** toggle on your Pocket Assistant device.
-2. In **Latter > Configure**, keep **Enable Built-In ESPHome BLE Proxy Room Tracking** checked (`ON`).
-3. Leave **External BLE Room Sensor Override** blank.
-4. As you walk from room to room, Latter measures the smoothed signal strength (EMA RSSI with 6 dB hysteresis and an 8-second hold guard) reported by each room's ESPHome BLE Proxy and automatically switches your active room!
+### 2. Baseline-JPEG HTTP Endpoints (For `online_image`)
 
-#### Option B: Using Bermuda BLE Trilateration (Optional)
-If you already run the **Bermuda BLE Trilateration** integration and prefer to use Bermuda's distance solver:
-1. Turn ON the **BLE Room Beacon** toggle on your Pocket Assistant device.
-2. Open **Settings > Devices & Services > Bermuda BLE Trilateration > Configure > Select Devices** and check the iBeacon **`504f434b-4554-4153-5354-000000000210`** (Major `1`, Minor `1`).
-3. Bermuda will create an Area sensor for the device (e.g., `sensor.pocket_assistant_area`).
-4. Open **Settings > Devices & Services > Latter > Configure** and select that `sensor.*_area` entity under **External BLE Room Sensor Override**.
+ESPHome's `online_image` JPEG decoder requires non-progressive Baseline JPEGs. Latter provides two fast LAN endpoints (cached in RAM):
 
-#### How Room-Aware Voice Assistant Works
-When **Sync Active Room to ESPHome Device Area** is enabled in Latter, every time your active room changes, Latter updates the Pocket Assistant device's `area_id` in Home Assistant's Device Registry. When you trigger the Voice Assistant and say *"Turn on the lights"*, Home Assistant's Assist pipeline automatically targets the lights in your current room!
+- **Album / Podcast Artwork**:
+  `http://<ha_ip>:8123/api/latter/artwork/<device_slug>?w=466&h=466&shape=circle&v=<hash>`
+  *(Automatically published in the `art_url` attribute of `sensor.<slug>_active_media`)*
+- **Pre-Masked Photo Wallpaper**:
+  `http://<ha_ip>:8123/api/latter/wallpaper/<device_slug>?w=466&h=466&shape=circle&v=<hash>`
+  *(Automatically published in the `wallpaper_url` attribute of `sensor.<slug>_room_context`)*
+
+### 3. ESPHome Inbound Pagination Callbacks (`api.services`)
+
+To display paginated lists or room controls without storing large arrays in MCU RAM, expose one or both of these services in your ESPHome YAML under `api: services:`. Latter automatically inspects your service schema to detect how many slots (`s1` .. `sN`, from `1` to `20`) your GUI supports!
+
+#### A. `set_browse_slots` (5-Slot Compact List Callback — Music, Room Picker `room_areas`, Calendar)
+```yaml
+api:
+  services:
+    - service: set_browse_slots
+      variables:
+        mode: string
+        page: int
+        total_pages: int
+        has_prev: bool
+        has_next: bool
+        s1_name: string
+        s1_id: string
+        s1_type: string
+        s1_active: bool
+        # Repeat s2_* through s5_* (or up to s20_* for large wall panels)
+```
+
+#### B. `set_room_slots` (3-Slot Interactive Control Card Callback — Room Entities & Home Alarm)
+Includes `sX_level` (`0..100` for slider-capable domains `light`, `cover`, `fan`; `-1` for toggle/button domains `scene`, `switch`, `climate`, `media_player`, `alarm_control_panel`):
+```yaml
+api:
+  services:
+    - service: set_room_slots
+      variables:
+        mode: string
+        page: int
+        total_pages: int
+        has_prev: bool
+        has_next: bool
+        s1_name: string
+        s1_id: string
+        s1_type: string
+        s1_active: bool
+        s1_level: int
+        # Repeat s2_* through s3_* (or up to s20_*; falls back to set_browse_slots if omitted)
+```
+
+### 4. Outbound Actions (`homeassistant.action` -> `latter.*`)
+
+Call any of Latter's 12 services from ESPHome using `homeassistant.action:`:
+
+| Service | Purpose & Parameters |
+| :--- | :--- |
+| `latter.room_browse` | Browse rooms or room entities. `mode`: `"areas"` (pushes 5-row page to `set_browse_slots`), `"entities"` (pushes 3-card page with `level` to `set_room_slots`), or `"home"` (alarm + pinned entities). `domain_filter`: `"all"`, `"light"`, `"cover,fan"`, `"scene"`, `"climate"`. `page`: `1..N`. |
+| `latter.room_action` | Control any room entity or home alarm. `entity_id`, `action`: `"toggle"`, `"turn_on"`, `"turn_off"`, `"set_level"`, `"step_up"`, `"step_down"`, `"arm_home"`, `"arm_away"`, `"arm_night"`, `"disarm"`. Optional `level` (`0..100`), `code`. |
+| `latter.set_active_area` | Switch the device's active room by `area_id` or room name (`area`) and sync the ESPHome device's Home Assistant Area for room-aware Voice Assistant. |
+| `latter.music_browse` | Browse Music Assistant (`mode`: `"speakers"`, `"favorites"`, `"playlist"`, `"artist"`, `"album"`, `"radio"`, `"podcast"`, `"audiobook"`, `"track"`, `"artist_albums"`, `"album_tracks"`, `"current_album_tracks"`, `"active_queue"`, `"podcast_episodes"`). Pushes 5-row page to `set_browse_slots`. |
+| `latter.set_active_speaker` | Switch `active_speaker` (`entity_id`) and automatically transfer the active Music Assistant queue (`transfer_queue: true`). |
+| `latter.media_command` | Transport control (`command`: `"play"`, `"pause"`, `"toggle"`, `"next"`, `"previous"`, `"stop"`, `"seek"`, `"play_media"`, `"clear_queue"`). Includes post-reboot local Sendspin queue resumption. |
+| `latter.media_volume` | Adjust volume (`action`: `"set"`, `"up"`, `"down"`, `"mute"`, `volume_level`: `0..100`), routing automatically to mapped AVR / `number.*` volume overrides. |
+| `latter.remote_action` | Control 4-slot TV/Media remotes (`slot`: `1..4`, `action`: `"select_slot"`, `"toggle"`, `"volume_up"`, `"volume_down"`, `"volume_mute"`, `"command"`, `command`: `"up"`, `"down"`, `"left"`, `"right"`, `"select"`, `"back"`, `"home"`, `"menu"`). |
+| `latter.trigger_binding` | For headless buttons, rotary encoders, or custom touch macros: send `slot: "button_1_single"` and Latter executes whatever entity + action the user mapped in the Web Companion Studio. |
+| `latter.calendar_fetch` | Refresh upcoming calendar events (`days`: `7`, `page`: `1`) and push a 5-row page to `set_browse_slots`. |
+| `latter.calendar_create_event` | Create a new event (`summary`, `start_date_time`, `end_date_time`) on the primary family calendar. |
+| `latter.intercom_broadcast` | Broadcast a TTS `message` or `media_url` announcement across household speakers. |
 
 ---
 
-### 2. Speaker Volume Overrides (Music Streamer + AV Receiver)
+## Convention-Over-Configuration for ESPHome Device Controls
 
-Many setups stream music to a Music Assistant player (e.g., a WiiM, Chromecast, or network streamer) whose output is plugged into a separate Home Theater AV Receiver (`media_player.*`) or amplifier (`number.*` / `input_number.*`) that actually controls the room's volume.
-
-In **Latter > Configure**:
-1. Under **Volume Override 1: When Streaming to Speaker...**, select your Music Assistant streamer from the dropdown (e.g., `media_player.living_room_streamer`).
-2. Under **Volume Override 1: Control Volume on Entity...**, select the AV Receiver or volume entity that controls the physical volume (e.g., `media_player.denon_avr` or `number.amp_volume`).
-3. *(Optional)* Use **Volume Override 2** for a second room, or add more pairs in **Additional Volume Overrides** using `media_player.streamer=media_player.receiver` format.
-
-Whenever that Music Assistant speaker is selected on Pocket Assistant:
-- The volume bar on Pocket Assistant automatically displays the AV Receiver's current volume.
-- Volume Up, Volume Down, Mute, and slider adjustments (`latter.media_volume`) automatically route to the AV Receiver!
-
----
-
-### 3. 4-Slot TV / Media Remotes (Zero YAML Substitutions)
-
-In **Latter > Configure**, select up to 4 TVs, Apple TVs, Rokus, Android TVs, or Media Players under **TV / Media Remote Slot 1–4**:
-- You can pick either the `remote.*` entity or the `media_player.*` entity—Latter automatically looks up the device in Home Assistant's Device Registry and binds both its `remote.*` and `media_player.*` sibling entities!
-- When you walk into a room that matches one of your 4 remote slots, Latter automatically highlights that room's remote slot.
-
----
-
-### 4. Home Security Alarm (`alarm_control_panel`)
-
-In **Latter > Configure**, select your home's primary `alarm_control_panel.*` entity under **Home Security Alarm Entity** (Latter also auto-selects your first alarm panel by default).
-- Exposes real-time `alarm_state` (`disarmed`, `armed_home`, `armed_away`, `armed_night`, `triggered`), `alarm_name`, and `alarm_code_required` on `sensor.pocket_assistant_room_context`.
-- Supports arming and disarming directly via `latter.room_action` (`action: "arm_home" | "arm_away" | "arm_night" | "disarm"`).
----
+When you open the **ESPHome Device Manager** tab in the Latter Web Companion Studio, Latter automatically organizes all entities exposed by your ESPHome firmware:
+- Prefix any ESPHome entity name with `"Category: Name"` (e.g., `"Display: Brightness"`, `"Sleep & Wake: Timeout"`, `"Voice: Wake Word"`, or your own custom `"Hydroponics: Pump Mode"`) and Latter dynamically creates a dedicated navigation category for it!
+- Entities without a prefix are semantically grouped by domain/device_class, with a `"General & Custom Entities"` spillover bucket so custom project entities are always accessible.
 
 ---
 
 ## Support the Project
 
-Pocket Assistant and Latter for Home Assistant are built and maintained by Sean Lampton (**Lampton Labs**). If this project is useful in your home and you'd like to support ongoing development and test hardware:
+Latter and Pocket Assistant are built and maintained by Sean Lampton (**Lampton Labs**). If this project is useful in your home and you'd like to support ongoing development:
 
 * ☕ **[Buy Me a Coffee](https://www.buymeacoffee.com/slampton)**
 * ❤️ **[Sponsor on GitHub](https://github.com/sponsors/slampton)**
-  
----
