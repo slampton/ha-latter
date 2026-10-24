@@ -97,6 +97,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hmac_secret=domain_data[DATA_HMAC_SECRET],
     )
     await coordinator.async_setup()
+    entry.runtime_data = coordinator
     domain_data[entry.entry_id] = coordinator
 
     inject_esphome_visit_link(
