@@ -22,7 +22,7 @@ from homeassistant.helpers import (
     entity_registry as er,
 )
 
-from .ble_engine import get_ble_proxy_area_ids
+from .ble_engine import _iter_devices, _iter_entities, get_ble_proxy_area_ids
 from .browse_engine import is_music_assistant_player
 
 _LOGGER = logging.getLogger(__name__)
@@ -310,12 +310,12 @@ def find_esphome_device_id(
     ent_reg = er.async_get(hass)
     slug_norm = device_slug.strip().lower().replace("-", "_")
 
-    for entry in ent_reg.entities:
+    for entry in _iter_entities(ent_reg):
         if entry.platform == "esphome" and slug_norm in entry.entity_id:
             if entry.device_id:
                 return entry.device_id
 
-    for dev in dev_reg.devices:
+    for dev in _iter_devices(dev_reg):
         dev_name = (
             str(dev.name_by_user or dev.name or "")
             .lower()
@@ -388,7 +388,7 @@ def get_esphome_device_entities(
         slug_norm = device_slug.strip().lower().replace("-", "_")
         entries = [
             e
-            for e in ent_reg.entities
+            for e in _iter_entities(ent_reg)
             if e.platform == "esphome" and slug_norm in e.entity_id and not e.disabled_by
         ]
 

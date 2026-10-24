@@ -36,7 +36,7 @@ from homeassistant.helpers.network import get_url
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
-from .ble_engine import LatterNativeBleTracker, get_ble_proxy_area_ids
+from .ble_engine import LatterNativeBleTracker, _iter_devices, _iter_entities, get_ble_proxy_area_ids
 from .browse_engine import _get_mass_client, is_music_assistant_player
 from .calendar_engine import async_fetch_calendar_agenda
 from .const import (
@@ -115,12 +115,12 @@ def _resolve_esphome_local_speaker(
     ent_reg = er.async_get(hass)
     dev_reg = dr.async_get(hass)
 
-    for entry in ent_reg.entities:
+    for entry in _iter_entities(ent_reg):
         if entry.domain == "media_player" and entry.platform == "esphome":
             if slug_norm in entry.entity_id and not entry.disabled_by:
                 return entry.entity_id
 
-    for dev in dev_reg.devices:
+    for dev in _iter_devices(dev_reg):
         dev_name = str(dev.name_by_user or dev.name or "").lower().replace("-", "_").replace(" ", "_")
         if slug_norm and slug_norm in dev_name:
             for entry in er.async_entries_for_device(ent_reg, dev.id):
@@ -160,7 +160,7 @@ def _get_esphome_device_current_area(
     """Return the current area_id assigned to the ESPHome device in HA Device Registry."""
     dev_reg = dr.async_get(hass)
     slug_norm = device_slug.strip().lower().replace("-", "_")
-    for dev in dev_reg.devices:
+    for dev in _iter_devices(dev_reg):
         dev_name = str(dev.name_by_user or dev.name or "").lower().replace("-", "_").replace(" ", "_")
         if slug_norm and slug_norm in dev_name and dev.area_id:
             return dev.area_id
