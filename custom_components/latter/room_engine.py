@@ -56,13 +56,18 @@ WINDOW_COVER_CLASSES: set[str] = {
 }
 
 UNIVERSAL_SECTION_META: tuple[tuple[str, str, str], ...] = (
-    ("display", "Display, Home & UI", "Screen controls, themes, brightness, clock faces, and home shortcuts."),
-    ("sleep_power", "Sleep, Wake & Battery", "Sleep/wake behavior, timeouts, screensavers, battery, and thermal telemetry."),
-    ("audio", "Audio, Voice & Sound", "Wake word models, microphone, sensitivity, chimes, and volume settings."),
-    ("room_ble", "Room, BLE & Remotes", "BLE presence beacon, area handoff, and remote control slots."),
-    ("music", "Music & Media", "Media player controls and library/podcast sorting options."),
-    ("system", "System, Actions & Network", "Restart, safe mode, firmware updates, Wi-Fi signal, and diagnostics."),
-    ("other", "General & Custom Entities", "Additional sensors, switches, and custom project entities (spillover)."),
+    ("home", "Home Screen", "Clock face, weather background, home dock shortcuts, and home screen behavior."),
+    ("display", "Display & Appearance", "Screen brightness, color profile, UI theme, and boot animations."),
+    ("sleep", "Sleep & Wake", "Inactivity timeouts, screensaver, pickup-to-wake, tap-to-wake, and hibernate schedule."),
+    ("voice", "Voice Assistant", "Wake word models, microphone mute, and voice detection sensitivity."),
+    ("sound", "Sound & Alerts", "Onboard speaker chimes, alert volume, and volume step increments."),
+    ("music", "Music & Media", "Media player entity and library, artist, album, and podcast sorting options."),
+    ("room", "Room & BLE Presence", "BLE presence beacon toggle and automatic room handoff settings."),
+    ("remote", "TV & Media Remote", "Active remote slot selection and on-device remote behavior."),
+    ("battery", "Battery & Power", "Battery charge level, charging status, PMIC voltage, and internal temperature."),
+    ("actions", "Device Actions", "One-tap restart, hibernate, refresh, and maintenance triggers."),
+    ("network", "Network & Diagnostics", "Wi-Fi signal strength, IP/MAC address, uptime, memory, and firmware updates."),
+    ("other", "General & Custom Entities", "Additional sensors, switches, and custom project entities."),
 )
 
 
@@ -73,172 +78,81 @@ def classify_esphome_entity_section(
     device_class: str,
     entity_category: EntityCategory | None,
 ) -> tuple[str, str | None]:
-    """Classify an ESPHome entity into a section; returns (section_id, custom_section_title_or_None)."""
+    """Classify an ESPHome entity into a focused section; returns (section_id, custom_section_title_or_None)."""
     name_clean = friendly_name.strip()
     text = f"{entity_id} {name_clean}".lower()
     dev_cls = device_class.lower()
 
+    # 1. Explicit "Prefix: Name" Convention (Highest Priority)
     if ":" in name_clean:
         prefix_raw = name_clean.split(":", 1)[0].strip()
         prefix_low = prefix_raw.lower()
-        if prefix_low in ("display", "home", "ui", "screen", "theme"):
+        if prefix_low in ("home", "home screen", "clock"):
+            return "home", None
+        if prefix_low in ("display", "ui", "screen", "theme", "appearance"):
             return "display", None
-        if prefix_low in ("sleep & wake", "sleep", "wake", "power", "battery"):
-            return "sleep_power", None
-        if prefix_low in ("voice", "sound", "audio", "mic", "wake word"):
-            return "audio", None
-        if prefix_low in ("room", "remote", "ble", "area", "presence"):
-            return "room_ble", None
+        if prefix_low in ("sleep & wake", "sleep", "wake"):
+            return "sleep", None
+        if prefix_low in ("voice", "wake word", "assist", "mic", "microphone"):
+            return "voice", None
+        if prefix_low in ("sound", "audio", "chime", "alerts"):
+            return "sound", None
         if prefix_low in ("music", "media", "player"):
             return "music", None
-        if prefix_low in ("system", "network", "wifi", "diagnostics", "action", "actions"):
-            return "system", None
+        if prefix_low in ("room", "ble", "area", "presence"):
+            return "room", None
+        if prefix_low in ("remote", "tv"):
+            return "remote", None
+        if prefix_low in ("battery", "power", "pmic"):
+            return "battery", None
+        if prefix_low in ("action", "actions"):
+            return "actions", None
+        if prefix_low in ("system", "network", "wifi", "diagnostics"):
+            return "network", None
         if 2 <= len(prefix_raw) <= 24:
             sec_slug = "custom_" + re.sub(r"[^a-z0-9]+", "_", prefix_low).strip("_")
             return sec_slug, prefix_raw
 
-    if dev_cls in ("battery", "voltage", "current", "power", "energy", "temperature") or any(
-        k in text
-        for k in (
-            "sleep",
-            "wake_on",
-            "pickup_to_wake",
-            "tap_to_wake",
-            "screensaver",
-            "hibernate",
-            "stay_awake",
-            "battery",
-            "charging",
-            "charger",
-            "vbus",
-            "axp2101",
-            "pmic",
-            "voltage",
-            "thermal",
-            "internal_temp",
-            "die_temp",
-        )
-    ):
-        return "sleep_power", None
+    # 2. Semantic fallback classification for non-prefixed entities
+    if domain == "button" or dev_cls in ("restart", "identify"):
+        return "actions", None
 
-    if any(
-        k in text
-        for k in (
-            "display",
-            "screen",
-            "brightness",
-            "backlight",
-            "amoled",
-            "theme",
-            "wallpaper",
-            "clock",
-            "dock",
-            "boot",
-            "timeout",
-            "dim",
-            "nightstand",
-            "page",
-            "ui_",
-            "color_profile",
-            "weather_background",
-            "shortcut_",
-        )
+    if dev_cls in ("battery", "voltage", "current", "power", "energy") or any(
+        k in text for k in ("battery", "charging", "charger", "vbus", "axp2101", "pmic", "voltage", "internal_temp", "die_temp")
     ):
+        return "battery", None
+
+    if any(k in text for k in ("clock", "weather_background", "shortcut_", "dock", "home_")):
+        return "home", None
+
+    if any(k in text for k in ("sleep", "wake_on", "pickup_to_wake", "tap_to_wake", "screensaver", "hibernate", "stay_awake", "timeout")):
+        return "sleep", None
+
+    if any(k in text for k in ("display", "screen", "brightness", "backlight", "amoled", "theme", "color_profile", "boot")):
         return "display", None
 
-    if any(
-        k in text
-        for k in (
-            "voice",
-            "wake",
-            "mic",
-            "microphone",
-            "mute",
-            "sound",
-            "audio",
-            "chime",
-            "beep",
-            "ringtone",
-            "alert_volume",
-            "volume_step",
-            "dac",
-            "es8311",
-            "es7210",
-            "sendspin",
-            "intercom",
-            "tts",
-            "assist",
-        )
-    ):
-        return "audio", None
+    if any(k in text for k in ("voice", "wake_word", "micro_wake", "mic", "microphone", "sensitivity", "assist")):
+        return "voice", None
 
-    if any(
-        k in text
-        for k in (
-            "ble",
-            "beacon",
-            "ibeacon",
-            "bluetooth",
-            "presence",
-            "room",
-            "area",
-            "remote",
-            "slot_1",
-            "slot_2",
-            "slot_3",
-            "slot_4",
-        )
-    ):
-        return "room_ble", None
+    if any(k in text for k in ("sound", "chime", "beep", "ringtone", "alert_volume", "volume_step", "dac", "es8311")):
+        return "sound", None
 
-    if domain == "media_player" or any(
-        k in text
-        for k in (
-            "music",
-            "album",
-            "artist",
-            "podcast",
-            "queue",
-            "playlist",
-            "sort",
-            "track",
-            "media",
-            "speaker",
-        )
-    ):
+    if any(k in text for k in ("ble", "beacon", "ibeacon", "presence", "room", "area")):
+        return "room", None
+
+    if any(k in text for k in ("remote", "slot_1", "slot_2", "slot_3", "slot_4")):
+        return "remote", None
+
+    if domain == "media_player" or any(k in text for k in ("music", "album", "artist", "podcast", "queue", "playlist", "sort", "track", "speaker")):
         return "music", None
 
     if (
-        domain in ("update", "button")
+        domain == "update"
         or entity_category == EntityCategory.DIAGNOSTIC
-        or dev_cls in ("signal_strength", "timestamp", "duration", "restart", "identify")
-        or any(
-            k in text
-            for k in (
-                "restart",
-                "reboot",
-                "reset",
-                "safe_mode",
-                "factory",
-                "wifi",
-                "wi-fi",
-                "rssi",
-                "ip_address",
-                "mac_address",
-                "uptime",
-                "free_heap",
-                "psram",
-                "memory",
-                "cpu",
-                "firmware",
-                "version",
-                "status",
-                "online",
-                "improv",
-            )
-        )
+        or dev_cls in ("signal_strength", "timestamp", "duration")
+        or any(k in text for k in ("wifi", "wi-fi", "rssi", "ip_address", "mac_address", "uptime", "free_heap", "psram", "memory", "cpu", "firmware", "version", "status", "online"))
     ):
-        return "system", None
+        return "network", None
 
     return "other", None
 
@@ -377,6 +291,12 @@ def get_esphome_device_entities(
 
     entries: list[er.RegistryEntry] = []
     if target_device_id:
+        all_dev_entries = er.async_entries_for_device(
+            ent_reg, target_device_id, include_disabled_entities=True
+        )
+        for e in all_dev_entries:
+            if e.disabled_by == er.RegistryEntryDisabler.INTEGRATION and e.entity_category == EntityCategory.DIAGNOSTIC:
+                ent_reg.async_update_entity(e.entity_id, disabled_by=None)
         entries = er.async_entries_for_device(
             ent_reg, target_device_id, include_disabled_entities=False
         )
@@ -431,9 +351,15 @@ def get_esphome_device_entities(
             sections_map[sec_id] = []
             custom_sec_titles[sec_id] = custom_title
 
+        display_label = (
+            clean_name.split(":", 1)[1].strip()
+            if ":" in clean_name and clean_name.split(":", 1)[1].strip()
+            else clean_name
+        )
+
         item: dict[str, Any] = {
             "entity_id": entry.entity_id,
-            "name": clean_name,
+            "name": display_label,
             "domain": entry.domain,
             "state": state_val,
             "unit": unit,

@@ -23,10 +23,11 @@ from .const import (
     normalize_device_slug,
 )
 from .coordinator import LatterCoordinator
+from .wallpaper_engine import render_builtin_preset_bytes
 
 _LOGGER = logging.getLogger(__name__)
 
-MAX_ART_CACHE_ENTRIES = 16
+MAX_ART_CACHE_ENTRIES = 24
 # (pic_url, width, height, circular_mask, darken) -> encoded_baseline_jpeg_bytes
 _ARTWORK_LRU_CACHE: OrderedDict[tuple[str, int, int, bool, float], bytes] = OrderedDict()
 
@@ -200,7 +201,7 @@ class LatterArtworkTranscoderView(HomeAssistantView):
 
 
 class LatterWallpaperProxyView(HomeAssistantView):
-    """Serves baseline JPEG photo wallpapers (/api/latter/wallpaper/{target_device}?w=...&h=...)."""
+    """Serves baseline JPEG photo or procedural AMOLED wallpapers (/api/latter/wallpaper/{target_device}?w=...&h=...)."""
 
     requires_auth = False
     url = API_WALLPAPER_PROXY_PATH
@@ -211,7 +212,7 @@ class LatterWallpaperProxyView(HomeAssistantView):
         self.hass = hass
 
     async def get(self, request: web.Request, target_device: str) -> web.Response:
-        """Handle GET /api/latter/wallpaper/{target_device}?w=...&h=..."""
+        """Handle GET /api/latter/wallpaper/{target_device}?w=...&h=...&src=..."""
         coordinator = _resolve_coordinator_by_target(self.hass, target_device)
         if coordinator is None:
             return web.Response(status=HTTPStatus.NOT_FOUND, text="Unknown target device")
@@ -220,7 +221,7 @@ class LatterWallpaperProxyView(HomeAssistantView):
         if token and not coordinator.verify_token(token):
             return web.Response(status=HTTPStatus.FORBIDDEN, text="Invalid signature")
 
-        wp_source = coordinator.wallpaper_source
+        wp_source = str(request.query.get("src") or coordinator.wallpaper_source).strip()
         if not wp_source:
             return web.Response(status=HTTPStatus.NOT_FOUND, text="No wallpaper configured")
 
@@ -235,7 +236,8 @@ class LatterWallpaperProxyView(HomeAssistantView):
         if request.query.get("shape") in ("circle", "square"):
             is_circle = request.query.get("shape") == "circle"
 
-        cache_key = (f"wp:{wp_source}", width, height, is_circle, 0.78)
+        darken_factor = 1.0 if wp_source.startswith("preset:") else 0.78
+        cache_key = (f"wp:{wp_source}", width, height, is_circle, darken_factor)
         cached_bytes = _ARTWORK_LRU_CACHE.get(cache_key)
         if cached_bytes is not None:
             _ARTWORK_LRU_CACHE.move_to_end(cache_key)
@@ -247,7 +249,11 @@ class LatterWallpaperProxyView(HomeAssistantView):
 
         raw_bytes: bytes | None = None
 
-        if wp_source.startswith(("/local/", "/config/www/")):
+        if wp_source.startswith("preset:"):
+            raw_bytes = await self.hass.async_add_executor_job(
+                render_builtin_preset_bytes, wp_source, width, height
+            )
+        elif wp_source.startswith(("/local/", "/config/www/")):
             rel = wp_source.replace("/local/", "").replace("/config/www/", "").lstrip("/")
             local_file = Path(self.hass.config.path("www")) / rel
             if local_file.is_file():
@@ -282,7 +288,7 @@ class LatterWallpaperProxyView(HomeAssistantView):
                 width,
                 height,
                 is_circle,
-                0.78,
+                darken_factor,
             )
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("Wallpaper Pillow processing failed: %s", err)

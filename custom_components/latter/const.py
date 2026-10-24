@@ -7,7 +7,7 @@ from typing import Final
 from homeassistant.const import Platform
 
 DOMAIN: Final = "latter"
-INTEGRATION_VERSION: Final = "1.4.6"
+INTEGRATION_VERSION: Final = "1.5.0"
 PLATFORMS: Final[list[Platform]] = [Platform.SENSOR]
 
 STORAGE_VERSION: Final = 1
@@ -19,6 +19,7 @@ CONF_DEVICE_PROFILE: Final = "device_profile"
 CONF_DISPLAY_SHAPE: Final = "display_shape"
 CONF_DEFAULT_PAGE_SIZE: Final = "default_page_size"
 CONF_WEB_THEME: Final = "web_theme"
+CONF_COMPANION_BASE_URL: Final = "companion_base_url"
 CONF_WEATHER_ENTITY: Final = "weather_entity"
 CONF_ALARM_ENTITY: Final = "alarm_entity"
 CONF_DEFAULT_SPEAKER: Final = "default_speaker"
@@ -42,6 +43,8 @@ CONF_CUSTOM_ENTITIES: Final = "custom_entities"
 CONF_CUSTOM_BINDINGS: Final = "custom_bindings"
 CONF_DOCK_APPS: Final = "dock_apps"
 CONF_WALLPAPER_SOURCE: Final = "wallpaper_source"
+CONF_WALLPAPER_FAVORITES: Final = "wallpaper_favorites"
+CONF_WALLPAPER_CYCLE_MINUTES: Final = "wallpaper_cycle_minutes"
 CONF_ART_SIZE: Final = "art_size"
 
 # Defaults
@@ -55,6 +58,7 @@ DEFAULT_BLE_AUTO_SWITCH: Final = True
 DEFAULT_SYNC_DEVICE_AREA: Final = True
 DEFAULT_AREA_HANDOFF: Final = False
 DEFAULT_DOCK_APPS: Final = "music,room,remote,games,tools"
+DEFAULT_WALLPAPER_CYCLE_MINUTES: Final = 0
 DEFAULT_ART_SIZE: Final = 466
 
 # Native Latter Services

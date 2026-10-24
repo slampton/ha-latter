@@ -22,6 +22,7 @@ from .const import (
     CONF_BLE_AUTO_SWITCH,
     CONF_BLE_BEACON_UUID,
     CONF_CALENDAR_ENTITIES,
+    CONF_COMPANION_BASE_URL,
     CONF_CUSTOM_BINDINGS,
     CONF_CUSTOM_ENTITIES,
     CONF_DEFAULT_AREA,
@@ -42,6 +43,8 @@ from .const import (
     CONF_VOL_SPEAKER_2,
     CONF_VOL_TARGET_1,
     CONF_VOL_TARGET_2,
+    CONF_WALLPAPER_CYCLE_MINUTES,
+    CONF_WALLPAPER_FAVORITES,
     CONF_WALLPAPER_SOURCE,
     CONF_WEATHER_ENTITY,
     CONF_WEB_THEME,
@@ -49,6 +52,7 @@ from .const import (
     DEFAULT_DEVICE_PROFILE,
     DEFAULT_DISPLAY_SHAPE,
     DEFAULT_PAGE_SIZE,
+    DEFAULT_WALLPAPER_CYCLE_MINUTES,
     DEFAULT_WEB_THEME,
     DOMAIN,
     INTEGRATION_VERSION,
@@ -58,6 +62,12 @@ from .room_engine import (
     async_execute_room_action,
     get_area_entities,
     get_esphome_device_entities,
+    inject_esphome_visit_link,
+)
+from .wallpaper_engine import (
+    delete_uploaded_wallpaper,
+    list_wallpaper_catalog,
+    save_uploaded_wallpaper,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -154,6 +164,12 @@ def _build_companion_state_payload(
         custom_entities=coordinator.custom_entities,
         local_speaker=coordinator.local_speaker,
     )
+    wallpapers_catalog = list_wallpaper_catalog(
+        hass,
+        coordinator.device_slug,
+        coordinator.wallpaper_source,
+        coordinator.wallpaper_favorites,
+    )
 
     saved_theme = _normalize_web_theme(
         coordinator.get_opt(CONF_WEB_THEME, DEFAULT_WEB_THEME)
@@ -167,6 +183,7 @@ def _build_companion_state_payload(
         CONF_DISPLAY_SHAPE: coordinator.display_shape,
         CONF_DEFAULT_PAGE_SIZE: coordinator.default_page_size,
         CONF_WEB_THEME: saved_theme,
+        CONF_COMPANION_BASE_URL: coordinator.companion_base_url,
         CONF_DEFAULT_SPEAKER: coordinator.get_opt(
             CONF_DEFAULT_SPEAKER, coordinator.active_speaker
         ),
@@ -194,6 +211,8 @@ def _build_companion_state_payload(
         CONF_CUSTOM_BINDINGS: coordinator.custom_bindings,
         CONF_DOCK_APPS: coordinator.dock_apps_csv,
         CONF_WALLPAPER_SOURCE: coordinator.wallpaper_source,
+        CONF_WALLPAPER_FAVORITES: coordinator.wallpaper_favorites,
+        CONF_WALLPAPER_CYCLE_MINUTES: coordinator.wallpaper_cycle_minutes,
         CONF_ART_SIZE: coordinator.art_size,
     }
 
@@ -203,6 +222,7 @@ def _build_companion_state_payload(
         "version": INTEGRATION_VERSION,
         "config": config_data,
         "esphome": esphome_inspector,
+        "wallpapers": wallpapers_catalog,
         "live": {
             "active_area_id": coordinator.active_area_id or "",
             "active_area_name": room_attrs.get("area_name", "Home"),
@@ -274,7 +294,7 @@ class LatterCompanionApiView(HomeAssistantView):
         return web.json_response(payload)
 
     async def post(self, request: web.Request, entry_id: str) -> web.Response:
-        """Save updated configuration or execute a live entity/device action."""
+        """Save updated configuration, manage wallpapers, or execute a live entity/device action."""
         coordinator = self._resolve_coordinator(request, entry_id)
         if coordinator is None:
             return web.json_response(
@@ -301,6 +321,98 @@ class LatterCompanionApiView(HomeAssistantView):
             self.hass.config_entries.async_update_entry(
                 coordinator.entry, data=merged_theme, options=merged_theme
             )
+            return web.json_response(
+                _build_companion_state_payload(self.hass, coordinator)
+            )
+
+        if cmd == "upload_wallpaper":
+            filename = str(body.get("filename") or "wallpaper.jpg")
+            data_b64 = str(body.get("data_b64") or "")
+            if data_b64:
+                new_source = await self.hass.async_add_executor_job(
+                    save_uploaded_wallpaper,
+                    self.hass,
+                    coordinator.device_slug,
+                    filename,
+                    data_b64,
+                )
+                favs = list(coordinator.wallpaper_favorites)
+                if new_source not in favs:
+                    favs.append(new_source)
+                merged_wp: dict[str, Any] = {
+                    **coordinator.entry.data,
+                    **(coordinator.entry.options or {}),
+                    CONF_WALLPAPER_SOURCE: new_source,
+                    CONF_WALLPAPER_FAVORITES: favs,
+                }
+                self.hass.config_entries.async_update_entry(
+                    coordinator.entry, data=merged_wp, options=merged_wp
+                )
+                coordinator._notify_listeners()
+            return web.json_response(
+                _build_companion_state_payload(self.hass, coordinator)
+            )
+
+        if cmd == "select_wallpaper":
+            source_id = str(body.get("source_id") or "").strip()
+            merged_sel: dict[str, Any] = {
+                **coordinator.entry.data,
+                **(coordinator.entry.options or {}),
+                CONF_WALLPAPER_SOURCE: source_id,
+            }
+            self.hass.config_entries.async_update_entry(
+                coordinator.entry, data=merged_sel, options=merged_sel
+            )
+            coordinator._notify_listeners()
+            return web.json_response(
+                _build_companion_state_payload(self.hass, coordinator)
+            )
+
+        if cmd == "toggle_wallpaper_favorite":
+            source_id = str(body.get("source_id") or "").strip()
+            favs = list(coordinator.wallpaper_favorites)
+            if source_id in favs:
+                favs.remove(source_id)
+            elif source_id:
+                favs.append(source_id)
+            merged_fav: dict[str, Any] = {
+                **coordinator.entry.data,
+                **(coordinator.entry.options or {}),
+                CONF_WALLPAPER_FAVORITES: favs,
+            }
+            self.hass.config_entries.async_update_entry(
+                coordinator.entry, data=merged_fav, options=merged_fav
+            )
+            coordinator._bind_wallpaper_cycle_timer()
+            return web.json_response(
+                _build_companion_state_payload(self.hass, coordinator)
+            )
+
+        if cmd == "delete_wallpaper":
+            source_id = str(body.get("source_id") or "").strip()
+            if source_id:
+                await self.hass.async_add_executor_job(
+                    delete_uploaded_wallpaper,
+                    self.hass,
+                    coordinator.device_slug,
+                    source_id,
+                )
+                favs = [f for f in coordinator.wallpaper_favorites if f != source_id]
+                new_active = (
+                    ""
+                    if coordinator.wallpaper_source == source_id
+                    else coordinator.wallpaper_source
+                )
+                merged_del: dict[str, Any] = {
+                    **coordinator.entry.data,
+                    **(coordinator.entry.options or {}),
+                    CONF_WALLPAPER_SOURCE: new_active,
+                    CONF_WALLPAPER_FAVORITES: favs,
+                }
+                self.hass.config_entries.async_update_entry(
+                    coordinator.entry, data=merged_del, options=merged_del
+                )
+                coordinator._notify_listeners()
             return web.json_response(
                 _build_companion_state_payload(self.hass, coordinator)
             )
@@ -355,6 +467,7 @@ class LatterCompanionApiView(HomeAssistantView):
                 CONF_DISPLAY_SHAPE,
                 CONF_DEFAULT_PAGE_SIZE,
                 CONF_WEB_THEME,
+                CONF_COMPANION_BASE_URL,
                 CONF_DEFAULT_SPEAKER,
                 CONF_VOL_SPEAKER_1,
                 CONF_VOL_TARGET_1,
@@ -378,6 +491,7 @@ class LatterCompanionApiView(HomeAssistantView):
                 CONF_CUSTOM_BINDINGS,
                 CONF_DOCK_APPS,
                 CONF_WALLPAPER_SOURCE,
+                CONF_WALLPAPER_CYCLE_MINUTES,
                 CONF_ART_SIZE,
             ):
                 if k in incoming_cfg:
@@ -386,6 +500,8 @@ class LatterCompanionApiView(HomeAssistantView):
                         val = int(val or DEFAULT_ART_SIZE)
                     elif k == CONF_DEFAULT_PAGE_SIZE:
                         val = max(1, min(20, int(val or DEFAULT_PAGE_SIZE)))
+                    elif k == CONF_WALLPAPER_CYCLE_MINUTES:
+                        val = max(0, int(val or DEFAULT_WALLPAPER_CYCLE_MINUTES))
                     elif k == CONF_WEB_THEME:
                         val = _normalize_web_theme(val)
                     merged[k] = val
@@ -393,6 +509,12 @@ class LatterCompanionApiView(HomeAssistantView):
             self.hass.config_entries.async_update_entry(
                 coordinator.entry, data=merged, options=merged
             )
+            inject_esphome_visit_link(
+                self.hass,
+                coordinator.device_slug,
+                coordinator.build_companion_url(),
+            )
+            coordinator._bind_wallpaper_cycle_timer()
             return web.json_response(
                 _build_companion_state_payload(self.hass, coordinator)
             )
@@ -406,7 +528,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>Latter Companion Studio</title>
 <style>
   :root, [data-theme="dark"] {
@@ -421,7 +543,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     --muted: #8b9bb4;
     --accent: #38bdf8;
     --accent-solid: #0284c7;
-    --accent-subtle: rgba(56, 189, 248, 0.10);
+    --accent-subtle: rgba(56, 189, 248, 0.12);
     --success: #10b981;
     --warning: #f59e0b;
     --danger: #ef4444;
@@ -438,7 +560,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     --muted: #475569;
     --accent: #0369a1;
     --accent-solid: #0284c7;
-    --accent-subtle: rgba(2, 132, 199, 0.10);
+    --accent-subtle: rgba(2, 132, 199, 0.12);
     --success: #059669;
     --warning: #d97706;
     --danger: #dc2626;
@@ -453,6 +575,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     display: flex;
     flex-direction: column;
     font-size: 13.5px;
+    -webkit-tap-highlight-color: transparent;
   }
   code, .mono {
     font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
@@ -460,7 +583,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
   }
   .app-shell {
     display: grid;
-    grid-template-columns: 248px minmax(0, 1fr);
+    grid-template-columns: 236px minmax(0, 1fr);
     min-height: 100vh;
   }
   aside.sidebar {
@@ -480,7 +603,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     gap: 11px;
     padding: 4px 8px 16px;
     border-bottom: 1px solid var(--border);
-    margin-bottom: 12px;
+    margin-bottom: 14px;
   }
   .brand-badge {
     width: 32px;
@@ -494,7 +617,6 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     color: #ffffff;
     font-size: 15px;
     flex-shrink: 0;
-    letter-spacing: -0.5px;
   }
   .brand-text { min-width: 0; }
   .brand-text h1 {
@@ -513,13 +635,10 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     margin-top: 2px;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
-  .nav-group-label {
-    font-size: 10.5px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.7px;
-    color: var(--muted);
-    padding: 12px 10px 5px;
+  .nav-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
   }
   .nav-btn {
     display: flex;
@@ -527,8 +646,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     justify-content: space-between;
     gap: 8px;
     width: 100%;
-    padding: 9px 11px;
-    margin-bottom: 2px;
+    padding: 10px 12px;
     border-radius: 7px;
     border: 1px solid transparent;
     background: transparent;
@@ -537,6 +655,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     font-size: 13px;
     cursor: pointer;
     text-align: left;
+    white-space: nowrap;
     transition: background 0.12s ease, color 0.12s ease;
   }
   .nav-btn:hover {
@@ -546,7 +665,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
   .nav-btn.active {
     background: var(--accent-subtle);
     color: var(--accent);
-    border-color: var(--border);
+    border-color: var(--accent);
   }
   .nav-badge {
     font-size: 11px;
@@ -583,13 +702,13 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
   .topbar-status {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     flex-wrap: wrap;
   }
   .status-chip {
     display: inline-flex;
     align-items: center;
-    gap: 7px;
+    gap: 6px;
     padding: 5px 10px;
     border-radius: 6px;
     background: var(--card);
@@ -625,24 +744,22 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     background: var(--accent-solid);
     color: #ffffff;
     border: 1px solid transparent;
-    padding: 7px 14px;
+    padding: 8px 14px;
     border-radius: 6px;
     font-weight: 600;
     cursor: pointer;
     font-size: 12.5px;
   }
-  button.btn-primary:hover { opacity: 0.92; }
   button.btn-secondary {
     background: var(--card);
     color: var(--text-strong);
     border: 1px solid var(--border);
-    padding: 7px 13px;
+    padding: 8px 13px;
     border-radius: 6px;
     font-weight: 600;
     cursor: pointer;
     font-size: 12.5px;
   }
-  button.btn-secondary:hover { background: var(--card-hover); }
   button.btn-danger {
     background: rgba(239, 68, 68, 0.12);
     color: var(--danger);
@@ -658,9 +775,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     margin: 0 auto;
     padding: 22px 24px 64px;
   }
-  .page-header {
-    margin-bottom: 18px;
-  }
+  .page-header { margin-bottom: 18px; }
   .page-header h2 {
     margin: 0 0 4px;
     font-size: 18px;
@@ -675,7 +790,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
   }
   .grid-2 {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
     gap: 16px;
   }
   .card {
@@ -699,27 +814,27 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
   }
   .hero-stats {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 12px;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
     margin-bottom: 16px;
   }
   .stat-box {
     background: var(--card);
     border: 1px solid var(--border);
     border-radius: 8px;
-    padding: 12px 14px;
+    padding: 11px 13px;
   }
   .stat-box span {
     display: block;
-    font-size: 11px;
+    font-size: 10.5px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     color: var(--muted);
-    margin-bottom: 4px;
+    margin-bottom: 3px;
   }
   .stat-box strong {
-    font-size: 15.5px;
+    font-size: 15px;
     font-weight: 700;
     color: var(--text-strong);
     display: block;
@@ -738,22 +853,18 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
   }
   select, input[type="text"], input[type="number"] {
     width: 100%;
-    padding: 8px 10px;
+    padding: 9px 11px;
     border-radius: 6px;
     border: 1px solid var(--border);
     background: var(--input-bg);
     color: var(--text-strong);
-    font-size: 13px;
-  }
-  select:focus, input:focus {
-    outline: 1px solid var(--accent);
-    border-color: var(--accent);
+    font-size: 13.5px;
   }
   .toggle-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 9px 0;
+    padding: 10px 0;
     border-bottom: 1px solid var(--border);
     font-size: 13px;
     gap: 12px;
@@ -782,7 +893,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
   }
   .room-cards-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
     gap: 8px;
     margin-top: 10px;
   }
@@ -790,14 +901,12 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 9px 12px;
+    padding: 10px 12px;
     border-radius: 7px;
     background: var(--input-bg);
     border: 1px solid var(--border);
     cursor: pointer;
-    transition: background 0.12s ease;
   }
-  .room-mini-card:hover { background: var(--card-hover); }
   .room-mini-card.on {
     border-color: var(--accent);
     background: var(--accent-subtle);
@@ -814,7 +923,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
   }
   .esp-layout {
     display: grid;
-    grid-template-columns: 230px minmax(0, 1fr);
+    grid-template-columns: 220px minmax(0, 1fr);
     gap: 16px;
     align-items: start;
   }
@@ -823,7 +932,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 8px 11px;
+    padding: 9px 11px;
     border-radius: 6px;
     background: var(--input-bg);
     border: 1px solid var(--border);
@@ -831,6 +940,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     cursor: pointer;
     font-size: 12.5px;
     font-weight: 600;
+    white-space: nowrap;
   }
   .esp-nav-btn.active {
     border-color: var(--accent);
@@ -856,11 +966,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     font-size: 11px;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
-  .entity-row .ctrl {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
+  .entity-row .ctrl { display: flex; align-items: center; gap: 8px; }
   .state-badge {
     display: inline-block;
     padding: 4px 8px;
@@ -871,6 +977,49 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     font-weight: 600;
     font-size: 11.5px;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  .wp-gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(185px, 1fr));
+    gap: 12px;
+    margin-top: 12px;
+  }
+  .wp-card {
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    text-align: center;
+  }
+  .wp-card.active {
+    border-color: var(--accent);
+    background: var(--accent-subtle);
+  }
+  .wp-thumb {
+    width: 120px;
+    height: 120px;
+    object-fit: cover;
+    border: 1px solid var(--border);
+    background: #000;
+  }
+  .wp-thumb.circle { border-radius: 50%; }
+  .wp-thumb.square { border-radius: 8px; }
+  .wp-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-strong);
+    line-height: 1.3;
+  }
+  .wp-actions {
+    display: flex;
+    gap: 6px;
+    width: 100%;
+    justify-content: center;
+    margin-top: auto;
   }
   .binding-row {
     display: grid;
@@ -912,56 +1061,99 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     z-index: 50;
   }
   .hidden { display: none !important; }
-  @media (max-width: 900px) {
+
+  /* MOBILE & PHONE COMPANION APP OPTIMIZATION */
+  @media (max-width: 860px) {
     .app-shell { grid-template-columns: 1fr; }
     aside.sidebar {
-      position: static;
+      position: sticky;
+      top: 0;
+      z-index: 25;
       height: auto;
+      padding: 10px 12px;
       border-right: none;
       border-bottom: 1px solid var(--border);
     }
+    .brand {
+      padding: 0 0 8px;
+      margin-bottom: 8px;
+      justify-content: space-between;
+    }
+    .nav-list {
+      flex-direction: row;
+      overflow-x: auto;
+      padding-bottom: 4px;
+      gap: 6px;
+      scrollbar-width: none;
+    }
+    .nav-list::-webkit-scrollbar { display: none; }
+    .nav-btn {
+      width: auto;
+      padding: 8px 12px;
+      font-size: 12.5px;
+      background: var(--card);
+      border-color: var(--border);
+    }
+    .sidebar-footer { display: none; }
+    header.topbar {
+      position: static;
+      padding: 10px 14px;
+    }
+    .content-wrap { padding: 16px 14px 72px; }
+    .grid-2 { grid-template-columns: 1fr; }
+    .hero-stats { grid-template-columns: repeat(2, 1fr); }
     .esp-layout { grid-template-columns: 1fr; }
+    .esp-nav {
+      flex-direction: row;
+      overflow-x: auto;
+      padding-bottom: 4px;
+      gap: 6px;
+    }
     .binding-row { grid-template-columns: 1fr; }
+    .entity-row {
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+    .entity-row .ctrl { justify-content: flex-start; }
   }
 </style>
 </head>
 <body data-theme="dark">
 <div class="app-shell">
-  <!-- LEFT SIDEBAR NAVIGATION -->
+  <!-- FLAT, CLEAN NAVIGATION SIDEBAR (SWIPEABLE TOP BAR ON MOBILE) -->
   <aside class="sidebar">
     <div class="brand">
-      <div class="brand-badge">L</div>
-      <div class="brand-text">
-        <h1 id="hdr-title">Latter Studio</h1>
-        <small id="hdr-sub">v1.4.6</small>
+      <div style="display:flex;align-items:center;gap:10px;min-width:0;">
+        <div class="brand-badge">L</div>
+        <div class="brand-text">
+          <h1 id="hdr-title">Latter Studio</h1>
+          <small id="hdr-sub">v1.5.0</small>
+        </div>
       </div>
     </div>
 
-    <div class="nav-group-label">Live & Everyday</div>
-    <button class="nav-btn active" onclick="switchView('dashboard', this)">
-      <span>Dashboard & Radar</span>
-      <span class="nav-badge" id="nav-room-badge">--</span>
-    </button>
-    <button class="nav-btn" onclick="switchView('esphome', this)">
-      <span>Device Controls</span>
-      <span class="nav-badge" id="nav-esp-badge">0</span>
-    </button>
-
-    <div class="nav-group-label">Entity Mapping</div>
-    <button class="nav-btn" onclick="switchView('audio', this)">
-      <span>Audio & Speakers</span>
-    </button>
-    <button class="nav-btn" onclick="switchView('remotes', this)">
-      <span>TV Remotes & Home</span>
-    </button>
-    <button class="nav-btn" onclick="switchView('mapper', this)">
-      <span>Buttons & Pinned</span>
-    </button>
-
-    <div class="nav-group-label">System</div>
-    <button class="nav-btn" onclick="switchView('display', this)">
-      <span>Display & Advanced</span>
-    </button>
+    <div class="nav-list">
+      <button class="nav-btn active" onclick="switchView('dashboard', this)">
+        <span>Dashboard & Radar</span>
+        <span class="nav-badge" id="nav-room-badge">--</span>
+      </button>
+      <button class="nav-btn" onclick="switchView('esphome', this)">
+        <span>Device Controls</span>
+        <span class="nav-badge" id="nav-esp-badge">0</span>
+      </button>
+      <button class="nav-btn" onclick="switchView('wallpapers', this)">
+        <span>Wallpapers</span>
+      </button>
+      <button class="nav-btn" onclick="switchView('audio', this)">
+        <span>Audio & Speakers</span>
+      </button>
+      <button class="nav-btn" onclick="switchView('remotes', this)">
+        <span>TV Remotes & Home</span>
+      </button>
+      <button class="nav-btn" onclick="switchView('mapper', this)">
+        <span>Buttons & System</span>
+      </button>
+    </div>
 
     <div class="sidebar-footer">
       <div class="field" style="margin-bottom:0;">
@@ -984,31 +1176,31 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
         <div class="status-chip"><span id="top-media">Media: Idle</span></div>
       </div>
       <div class="topbar-actions">
-        <div id="dirty-indicator" class="dirty-banner">Unsaved Changes</div>
+        <div id="dirty-indicator" class="dirty-banner">Unsaved</div>
         <button class="btn-secondary" onclick="refreshState(true)">Sync</button>
         <button class="btn-primary" onclick="saveAllConfig()">Save Changes</button>
       </div>
     </header>
 
     <div class="content-wrap">
-      <!-- VIEW 1: DASHBOARD & ROOM RADAR -->
+      <!-- VIEW 1: DASHBOARD & RADAR -->
       <section id="view-dashboard">
         <div class="page-header">
-          <h2>Overview & BLE Room Presence</h2>
+          <h2>Dashboard & BLE Room Radar</h2>
           <p>Live device telemetry, active room controls, and multi-proxy Bluetooth RSSI triangulation.</p>
         </div>
 
         <div class="hero-stats">
           <div class="stat-box"><span>Active Room</span><strong id="st-room">--</strong></div>
-          <div class="stat-box"><span>Ambient Climate</span><strong id="st-climate">--</strong></div>
+          <div class="stat-box"><span>Room Climate</span><strong id="st-climate">--</strong></div>
           <div class="stat-box"><span>Active Speaker</span><strong id="st-speaker">--</strong></div>
           <div class="stat-box"><span>Home Security</span><strong id="st-alarm">--</strong></div>
         </div>
 
         <div class="grid-2">
           <div class="card">
-            <h3>Active Context & Curated Room Entities</h3>
-            <p class="desc">Override the active room or speaker, or click any curated entity below to toggle it directly.</p>
+            <h3>Active Room & Speaker Context</h3>
+            <p class="desc">Switch the active room or speaker, or tap any curated room entity below to toggle it.</p>
             <div class="field">
               <label>Active Room</label>
               <select id="quick-area" onchange="quickSwitchArea(this.value)"></select>
@@ -1045,16 +1237,16 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
       <!-- VIEW 2: ESPHOME DEVICE CONTROLS -->
       <section id="view-esphome" class="hidden">
         <div class="page-header">
-          <h2 id="esp-dev-title">ESPHome Device Controls</h2>
-          <p id="esp-dev-meta">Inspect and control all entities exposed by the ESPHome node.</p>
+          <h2 id="esp-dev-title">Device Controls</h2>
+          <p id="esp-dev-meta">Organized by function (Home Screen, Display, Sleep & Wake, Voice, Sound, Music, Room, Remote, Battery, Actions, Network).</p>
         </div>
 
-        <div class="card" style="margin-bottom:16px;padding:12px 14px;">
-          <input type="text" id="esp-search" placeholder="Filter entities by name or entity_id..." oninput="renderActiveEspSection()">
+        <div class="card" style="margin-bottom:14px;padding:11px 14px;">
+          <input type="text" id="esp-search" placeholder="Search settings or sensors by name..." oninput="renderActiveEspSection()">
         </div>
 
         <div class="esp-layout">
-          <div class="card" style="padding:12px;">
+          <div class="card" style="padding:10px;">
             <div id="esp-nav-list" class="esp-nav"></div>
           </div>
           <div class="card">
@@ -1065,7 +1257,69 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
         </div>
       </section>
 
-      <!-- VIEW 3: AUDIO & SPEAKERS -->
+      <!-- VIEW 3: WALLPAPER STUDIO -->
+      <section id="view-wallpapers" class="hidden">
+        <div class="page-header">
+          <h2>Wallpaper Studio & AMOLED Battery-Saver Presets</h2>
+          <p>Upload photos from your phone or PC, preview circular/square bezel masks, and optionally cycle through favorite wallpapers.</p>
+        </div>
+
+        <div class="grid-2" style="margin-bottom:16px;">
+          <div class="card">
+            <h3>Upload New Wallpaper</h3>
+            <p class="desc">Images are automatically center-cropped, darkened slightly for UI legibility, and transcoded to Baseline JPEG on the Home Assistant server.</p>
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+              <input type="file" id="wp-file-input" accept="image/*" style="flex:1;">
+              <button class="btn-primary" onclick="uploadWallpaperFile()">Upload & Activate</button>
+            </div>
+            <div class="field" style="margin-top:14px;margin-bottom:0;">
+              <label>Or Manual Wallpaper Path / URL (/local/... or preset:...)</label>
+              <div style="display:flex;gap:8px;">
+                <input type="text" id="cfg-wallpaper_source" placeholder="preset:amoled_rings or /local/wallpaper.jpg" oninput="markDirty()">
+                <button class="btn-secondary" onclick="selectWallpaperSource('')">Disable</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>Favorite Rotation & Display Geometry</h3>
+            <p class="desc">Star multiple wallpapers below to rotate through your favorites automatically.</p>
+            <div class="field">
+              <label>Cycle Favorite Wallpapers Every...</label>
+              <select id="cfg-wallpaper_cycle_minutes" onchange="markDirty()">
+                <option value="0">Off (Keep Selected Wallpaper)</option>
+                <option value="15">Every 15 Minutes</option>
+                <option value="60">Every Hour</option>
+                <option value="360">Every 6 Hours</option>
+                <option value="1440">Every 24 Hours</option>
+              </select>
+            </div>
+            <div class="field" style="margin-bottom:0;">
+              <label>Display Geometry & Resolution</label>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                <select id="cfg-display_shape" onchange="markDirty()">
+                  <option value="circle">Circular Mask</option>
+                  <option value="square">Square / Rectangular</option>
+                </select>
+                <select id="cfg-art_size" onchange="markDirty()">
+                  <option value="466">466x466 px</option>
+                  <option value="360">360x360 px</option>
+                  <option value="240">240x240 px</option>
+                  <option value="480">480x480 px</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Wallpaper Gallery (Built-In AMOLED Presets & Uploaded Photos)</h3>
+          <p class="desc">Built-in AMOLED presets use &gt;80% pure black pixels to minimize display power draw.</p>
+          <div id="wp-gallery-grid" class="wp-gallery"></div>
+        </div>
+      </section>
+
+      <!-- VIEW 4: AUDIO & SPEAKERS -->
       <section id="view-audio" class="hidden">
         <div class="page-header">
           <h2>Audio Routing & AVR Volume Overrides</h2>
@@ -1110,7 +1364,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
         </div>
       </section>
 
-      <!-- VIEW 4: TV REMOTES & HOME -->
+      <!-- VIEW 5: TV REMOTES & HOME -->
       <section id="view-remotes" class="hidden">
         <div class="page-header">
           <h2>TV Remotes, Security Alarm & Weather</h2>
@@ -1158,11 +1412,11 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
         </div>
       </section>
 
-      <!-- VIEW 5: BUTTONS & PINNED ENTITIES -->
+      <!-- VIEW 6: BUTTONS, PINNED & SYSTEM -->
       <section id="view-mapper" class="hidden">
         <div class="page-header">
-          <h2>Hardware Trigger Bindings & Pinned Entities</h2>
-          <p>Map custom firmware trigger slots (<code>latter.trigger_binding</code>) and pin global entities to Room Control.</p>
+          <h2>Buttons, Pinned Entities & System Settings</h2>
+          <p>Map custom firmware trigger slots, pin favorite entities, and configure reverse-proxy / hardware parameters.</p>
         </div>
 
         <div class="card" style="margin-bottom:16px;">
@@ -1172,79 +1426,53 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
           <button class="btn-secondary" onclick="addBindingRow('', '', 'toggle'); markDirty();">+ Add Trigger Binding</button>
         </div>
 
-        <div class="card">
-          <h3>Pinned Room / Home Entities</h3>
-          <p class="desc">Pinned entities appear at the top of Room Control across all areas.</p>
-          <div style="display:flex;gap:8px;">
-            <select id="pin-entity-picker"></select>
-            <button class="btn-secondary" onclick="addPinnedEntity()">Pin Entity</button>
-          </div>
-          <div id="pinned-chips" class="chip-list"></div>
-        </div>
-      </section>
-
-      <!-- VIEW 6: DISPLAY & ADVANCED -->
-      <section id="view-display" class="hidden">
-        <div class="page-header">
-          <h2>Display Geometry, Wallpaper & BLE Tuning</h2>
-          <p>Configure hardware profile, image transcoder dimensions, slot pagination, and BLE beacon settings.</p>
-        </div>
-
         <div class="grid-2">
           <div class="card">
-            <h3>Hardware Profile & Pagination</h3>
+            <h3>Pinned Room / Home Entities</h3>
+            <p class="desc">Pinned entities appear at the top of Room Control across all areas.</p>
+            <div style="display:flex;gap:8px;">
+              <select id="pin-entity-picker"></select>
+              <button class="btn-secondary" onclick="addPinnedEntity()">Pin Entity</button>
+            </div>
+            <div id="pinned-chips" class="chip-list"></div>
+          </div>
+
+          <div class="card">
+            <h3>System, Reverse Proxy & Hardware Profile</h3>
+            <div class="field">
+              <label>Appearance (Dark / Light / System)</label>
+              <select id="cfg-web_theme_mobile" onchange="onThemeChanged(this.value)">
+                <option value="dark">Dark</option>
+                <option value="light">Light</option>
+                <option value="system">System</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Companion HTTPS Base URL Override (e.g. https://home.lamptons.com)</label>
+              <input type="text" id="cfg-companion_base_url" placeholder="Auto-detected from Home Assistant Network settings" oninput="markDirty()">
+            </div>
             <div class="field">
               <label>ESPHome Device Slug (sensor.&lt;slug&gt;_*)</label>
               <input type="text" id="cfg-device_slug" oninput="markDirty()">
             </div>
             <div class="field">
-              <label>Device Archetype</label>
-              <select id="cfg-device_profile" onchange="markDirty()">
-                <option value="mobile_display">Mobile Smart Display</option>
-                <option value="stationary_display">Stationary Wall / Desk Display</option>
-                <option value="headless_node">Headless Sensor / Button / Audio Node</option>
-              </select>
+              <label>Device Archetype & Room Cards Per Page</label>
+              <div style="display:grid;grid-template-columns:2fr 1fr;gap:8px;">
+                <select id="cfg-device_profile" onchange="markDirty()">
+                  <option value="mobile_display">Mobile Smart Display</option>
+                  <option value="stationary_display">Stationary Wall / Desk Display</option>
+                  <option value="headless_node">Headless Sensor / Button Node</option>
+                </select>
+                <input type="number" id="cfg-default_page_size" min="1" max="20" value="3" oninput="markDirty()">
+              </div>
             </div>
             <div class="field">
-              <label>Display Geometry</label>
-              <select id="cfg-display_shape" onchange="markDirty()">
-                <option value="circle">Circular (Bezel-Masked Corners)</option>
-                <option value="square">Square / Rectangular</option>
-              </select>
-            </div>
-            <div class="field">
-              <label>Artwork & Wallpaper Transcoder Resolution</label>
-              <select id="cfg-art_size" onchange="markDirty()">
-                <option value="466">466x466 (1.75" Round AMOLED)</option>
-                <option value="360">360x360 (Round LCD / AMOLED)</option>
-                <option value="240">240x240 (Compact Display)</option>
-                <option value="233">233x233 (Low-Bandwidth Thumbnail)</option>
-                <option value="480">480x480 (Large Wall Panel)</option>
-              </select>
-            </div>
-            <div class="field">
-              <label>Room Control Cards Per Page (1–20)</label>
-              <input type="number" id="cfg-default_page_size" min="1" max="20" value="3" oninput="markDirty()">
-            </div>
-          </div>
-
-          <div class="card">
-            <h3>Home Dock, Wallpaper & BLE Override</h3>
-            <div class="field">
-              <label>Home Dock App Tokens (comma-separated)</label>
+              <label>Home Dock App Tokens</label>
               <input type="text" id="cfg-dock_apps" placeholder="music,room,remote,games,tools" oninput="markDirty()">
             </div>
             <div class="field">
-              <label>Photo Wallpaper Source (/local/... or https://...)</label>
-              <input type="text" id="cfg-wallpaper_source" placeholder="/local/wallpaper.jpg" oninput="markDirty()">
-            </div>
-            <hr style="border:0;border-top:1px solid var(--border);margin:12px 0;">
-            <div class="field">
-              <label>BLE iBeacon UUID</label>
-              <input type="text" id="cfg-ble_beacon_uuid" oninput="markDirty()">
-            </div>
-            <div class="field">
-              <label>External BLE Room Sensor Override (Optional)</label>
+              <label>BLE iBeacon UUID & External Sensor Override</label>
+              <input type="text" id="cfg-ble_beacon_uuid" style="margin-bottom:6px;" oninput="markDirty()">
               <select id="cfg-presence_entity" onchange="markDirty()"></select>
             </div>
           </div>
@@ -1285,10 +1513,10 @@ function applyTheme(pref) {
   const effective = resolveEffectiveTheme(CURRENT_THEME_PREF);
   document.body.setAttribute("data-theme", effective);
   localStorage.setItem("latter_web_theme", CURRENT_THEME_PREF);
-  const sel = document.getElementById("cfg-web_theme");
-  if (sel && sel.value !== CURRENT_THEME_PREF) {
-    sel.value = CURRENT_THEME_PREF;
-  }
+  ["cfg-web_theme", "cfg-web_theme_mobile"].forEach(id => {
+    const sel = document.getElementById(id);
+    if (sel && sel.value !== CURRENT_THEME_PREF) sel.value = CURRENT_THEME_PREF;
+  });
 }
 
 applyTheme(CURRENT_THEME_PREF);
@@ -1325,7 +1553,7 @@ async function onThemeChanged(themePref) {
 function switchView(viewId, btnEl) {
   document.querySelectorAll("aside .nav-btn").forEach(b => b.classList.remove("active"));
   btnEl.classList.add("active");
-  ["dashboard", "esphome", "audio", "remotes", "mapper", "display"].forEach(id => {
+  ["dashboard", "esphome", "wallpapers", "audio", "remotes", "mapper"].forEach(id => {
     document.getElementById("view-" + id).classList.toggle("hidden", id !== viewId);
   });
 }
@@ -1396,6 +1624,93 @@ async function toggleRoomCard(entity_id) {
   }
 }
 
+function renderWallpaperGallery(wallpapers, slug, shape) {
+  const box = document.getElementById("wp-gallery-grid");
+  if (!box) return;
+  const shapeClass = shape === "square" ? "square" : "circle";
+  box.innerHTML = (wallpapers || []).map(wp => {
+    const encSrc = encodeURIComponent(wp.id);
+    const thumbUrl = `/api/latter/wallpaper/${slug}?w=240&h=240&shape=${shapeClass}&src=${encSrc}`;
+    const starLabel = wp.favorite ? "★ Fav" : "☆ Fav";
+    const delBtn = wp.deletable
+      ? `<button class="btn-danger" onclick="deleteWallpaper('${wp.id}')">✕</button>`
+      : "";
+    return `<div class="wp-card ${wp.active ? 'active' : ''}">
+      <img class="wp-thumb ${shapeClass}" src="${thumbUrl}" loading="lazy" alt="${wp.name}">
+      <div class="wp-title">${wp.name}</div>
+      <div class="wp-actions">
+        <button class="${wp.active ? 'btn-primary' : 'btn-secondary'}" onclick="selectWallpaperSource('${wp.id}')">${wp.active ? 'Active' : 'Use'}</button>
+        <button class="${wp.favorite ? 'btn-primary' : 'btn-secondary'}" onclick="toggleWallpaperFav('${wp.id}')">${starLabel}</button>
+        ${delBtn}
+      </div>
+    </div>`;
+  }).join("");
+}
+
+async function uploadWallpaperFile() {
+  const input = document.getElementById("wp-file-input");
+  if (!input.files || !input.files.length) {
+    showToast("Select an image file first");
+    return;
+  }
+  const file = input.files[0];
+  const reader = new FileReader();
+  reader.onload = async () => {
+    const resp = await fetch(API_URL, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        command: "upload_wallpaper",
+        filename: file.name,
+        data_b64: reader.result
+      })
+    });
+    if (resp.ok) {
+      input.value = "";
+      applyStateToDom(await resp.json(), true);
+      showToast("Wallpaper uploaded & activated");
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
+async function selectWallpaperSource(sourceId) {
+  document.getElementById("cfg-wallpaper_source").value = sourceId;
+  const resp = await fetch(API_URL, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({command: "select_wallpaper", source_id: sourceId})
+  });
+  if (resp.ok) {
+    applyStateToDom(await resp.json(), false);
+    showToast(sourceId ? "Wallpaper activated" : "Wallpaper disabled");
+  }
+}
+
+async function toggleWallpaperFav(sourceId) {
+  const resp = await fetch(API_URL, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({command: "toggle_wallpaper_favorite", source_id: sourceId})
+  });
+  if (resp.ok) {
+    applyStateToDom(await resp.json(), false);
+    showToast("Updated wallpaper favorites");
+  }
+}
+
+async function deleteWallpaper(sourceId) {
+  const resp = await fetch(API_URL, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({command: "delete_wallpaper", source_id: sourceId})
+  });
+  if (resp.ok) {
+    applyStateToDom(await resp.json(), false);
+    showToast("Deleted wallpaper");
+  }
+}
+
 function selectEspSection(secId) {
   ACTIVE_ESP_SEC = secId;
   renderEspInspector();
@@ -1421,17 +1736,17 @@ function renderEspInspector() {
   }
 
   const navBox = document.getElementById("esp-nav-list");
-  navBox.innerHTML = [
-    `<div class="esp-nav-btn ${ACTIVE_ESP_SEC === '__all__' ? 'active' : ''}" onclick="selectEspSection('__all__')">
-      <span>All Controls</span>
-      <span class="nav-badge">${totalCount}</span>
-    </div>`
-  ].concat(sections.map(s => `
+  navBox.innerHTML = sections.map(s => `
     <div class="esp-nav-btn ${s.id === ACTIVE_ESP_SEC ? 'active' : ''}" onclick="selectEspSection('${s.id}')">
       <span>${s.title}</span>
       <span class="nav-badge">${s.count}</span>
     </div>
-  `)).join("");
+  `).concat([
+    `<div class="esp-nav-btn ${ACTIVE_ESP_SEC === '__all__' ? 'active' : ''}" onclick="selectEspSection('__all__')">
+      <span>All Entities</span>
+      <span class="nav-badge">${totalCount}</span>
+    </div>`
+  ]).join("");
 
   renderActiveEspSection();
 }
@@ -1477,13 +1792,13 @@ function renderActiveEspSection() {
     let controlHtml = `<span class="state-badge">${stateText}</span>`;
 
     if (item.domain === "button") {
-      controlHtml = `<button class="btn-secondary" onclick="espAction('${item.entity_id}', 'press')">Trigger</button>`;
+      controlHtml = `<button class="btn-secondary" onclick="espAction('${item.entity_id}', 'press')">Run</button>`;
     } else if (item.domain === "switch" || item.domain === "light" || item.domain === "fan") {
       const isOn = item.state === "on";
       controlHtml = `<button class="${isOn ? 'btn-primary' : 'btn-secondary'}" onclick="espAction('${item.entity_id}', 'toggle')">${isOn ? 'ON' : 'OFF'}</button>`;
     } else if (item.domain === "select" && item.options && item.options.length) {
       const opts = item.options.map(o => `<option value="${o}" ${o===item.state?'selected':''}>${o}</option>`).join("");
-      controlHtml = `<select style="width:auto;min-width:150px;" onchange="espSelect('${item.entity_id}', this.value)">${opts}</select>`;
+      controlHtml = `<select style="width:auto;min-width:155px;" onchange="espSelect('${item.entity_id}', this.value)">${opts}</select>`;
     } else if (item.domain === "number") {
       controlHtml = `<input type="number" style="width:95px;text-align:right;" value="${item.state}" min="${item.min ?? 0}" max="${item.max ?? 100}" step="${item.step ?? 1}" onchange="espNumber('${item.entity_id}', this.value)">${item.unit ? `<span style="font-size:12px;color:var(--muted);">${item.unit}</span>` : ''}`;
     }
@@ -1491,7 +1806,7 @@ function renderActiveEspSection() {
     return `<div class="entity-row ${isLongState ? 'wide-val' : ''}">
       <div class="meta">
         <strong>${item.name}</strong>
-        <small>${item.entity_id} • ${item.domain}</small>
+        <small>${item.entity_id}</small>
       </div>
       <div class="ctrl">${controlHtml}</div>
     </div>`;
@@ -1605,7 +1920,7 @@ function applyStateToDom(data, forceFormUpdate=false) {
   const humStr = live.room_humidity != null ? ` • ${live.room_humidity}%` : "";
 
   document.getElementById("hdr-title").textContent = esp?.device?.name || data.title;
-  document.getElementById("hdr-sub").textContent = `Latter v${data.version || '1.4.6'}`;
+  document.getElementById("hdr-sub").textContent = `Latter v${data.version || '1.5.0'}`;
   document.getElementById("nav-room-badge").textContent = roomName;
   document.getElementById("top-room").textContent = `Room: ${roomName}`;
   document.getElementById("top-speaker").textContent = `Speaker: ${spkShort}`;
@@ -1622,6 +1937,7 @@ function applyStateToDom(data, forceFormUpdate=false) {
   populateSelect("quick-speaker", cat.ma_speakers, live.active_speaker, false);
   renderLiveRoomCards(live.room_cards);
   renderRssiBars(live.ble_rssi_by_room, live.ble_packets_seen);
+  renderWallpaperGallery(data.wallpapers, cfg.device_slug, cfg.display_shape);
 
   if (esp && esp.device) {
     document.getElementById("esp-dev-title").textContent = `${esp.device.name} (${esp.device.model})`;
@@ -1637,6 +1953,7 @@ function applyStateToDom(data, forceFormUpdate=false) {
     applyTheme(cfg.web_theme || "dark");
 
     document.getElementById("cfg-device_slug").value = cfg.device_slug || "";
+    document.getElementById("cfg-companion_base_url").value = cfg.companion_base_url || "";
     document.getElementById("cfg-device_profile").value = cfg.device_profile || "mobile_display";
     document.getElementById("cfg-display_shape").value = cfg.display_shape || "circle";
     document.getElementById("cfg-default_page_size").value = cfg.default_page_size ?? 3;
@@ -1647,6 +1964,7 @@ function applyStateToDom(data, forceFormUpdate=false) {
     document.getElementById("cfg-ble_beacon_uuid").value = cfg.ble_beacon_uuid || "";
     document.getElementById("cfg-dock_apps").value = cfg.dock_apps || "";
     document.getElementById("cfg-wallpaper_source").value = cfg.wallpaper_source || "";
+    document.getElementById("cfg-wallpaper_cycle_minutes").value = String(cfg.wallpaper_cycle_minutes || 0);
     document.getElementById("cfg-art_size").value = String(cfg.art_size || 466);
 
     populateSelect("cfg-default_area", cat.areas, cfg.default_area);
@@ -1717,6 +2035,7 @@ async function saveAllConfig() {
 
   const config = {
     device_slug: document.getElementById("cfg-device_slug").value.trim(),
+    companion_base_url: document.getElementById("cfg-companion_base_url").value.trim(),
     device_profile: document.getElementById("cfg-device_profile").value,
     display_shape: document.getElementById("cfg-display_shape").value,
     default_page_size: parseInt(document.getElementById("cfg-default_page_size").value, 10) || 3,
@@ -1741,6 +2060,7 @@ async function saveAllConfig() {
     default_area: document.getElementById("cfg-default_area").value,
     dock_apps: document.getElementById("cfg-dock_apps").value.trim(),
     wallpaper_source: document.getElementById("cfg-wallpaper_source").value.trim(),
+    wallpaper_cycle_minutes: parseInt(document.getElementById("cfg-wallpaper_cycle_minutes").value, 10) || 0,
     art_size: parseInt(document.getElementById("cfg-art_size").value, 10),
     custom_entities: PINNED,
     custom_bindings: bindings,

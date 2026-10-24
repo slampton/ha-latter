@@ -74,6 +74,9 @@ from .const import (
     CONF_VOL_SPEAKER_2,
     CONF_VOL_TARGET_1,
     CONF_VOL_TARGET_2,
+    CONF_COMPANION_BASE_URL,
+    CONF_WALLPAPER_CYCLE_MINUTES,
+    CONF_WALLPAPER_FAVORITES,
     CONF_WALLPAPER_SOURCE,
     CONF_WEATHER_ENTITY,
     DEFAULT_AREA_HANDOFF,
@@ -86,6 +89,7 @@ from .const import (
     DEFAULT_NATIVE_BLE_TRACKING,
     DEFAULT_PAGE_SIZE,
     DEFAULT_SYNC_DEVICE_AREA,
+    DEFAULT_WALLPAPER_CYCLE_MINUTES,
     FORECAST_REFRESH_INTERVAL_MINUTES,
     POSITION_UPDATE_INTERVAL_SECONDS,
     STORAGE_KEY_PREFIX,
@@ -238,6 +242,8 @@ class LatterCoordinator:
         self._unsub_position_timer: callable | None = None
         self._unsub_forecast_timer: callable | None = None
         self._unsub_calendar_timer: callable | None = None
+        self._unsub_wallpaper_timer: callable | None = None
+        self._unsub_wallpaper_timer: callable | None = None
         self._ble_tracker: LatterNativeBleTracker | None = None
 
         self.active_speaker: str = (
@@ -450,13 +456,18 @@ class LatterCoordinator:
         return hmac.compare_digest(token, self.get_signed_token())
 
     def build_companion_url(self) -> str:
-        """Build the authenticated Server-Side Web Companion Studio URL."""
-        try:
-            base_url = get_url(self.hass, allow_internal=True, prefer_external=False)
-        except Exception:  # noqa: BLE001
-            base_url = "http://homeassistant.local:8123"
+        """Build the authenticated Web Companion Studio URL, preferring HTTPS/external reverse-proxy URLs when configured."""
+        base_url = self.companion_base_url
+        if not base_url:
+            try:
+                base_url = get_url(self.hass, allow_internal=True, prefer_external=True)
+            except Exception:  # noqa: BLE001
+                try:
+                    base_url = get_url(self.hass, allow_internal=True, prefer_external=False)
+                except Exception:  # noqa: BLE001
+                    base_url = "http://homeassistant.local:8123"
         token = self.get_signed_token()
-        return f"{base_url}/api/latter/companion/{self.entry.entry_id}?token={token}"
+        return f"{base_url.rstrip('/')}/api/latter/companion/{self.entry.entry_id}?token={token}"
 
     def build_wallpaper_url(self) -> str:
         """Build the device-scoped baseline-JPEG photo wallpaper URL."""
@@ -612,6 +623,8 @@ class LatterCoordinator:
             self._async_periodic_calendar_refresh,
             timedelta(minutes=CALENDAR_REFRESH_INTERVAL_MINUTES),
         )
+        self._bind_wallpaper_cycle_timer()
+        self._bind_wallpaper_cycle_timer()
 
     async def async_shutdown(self) -> None:
         """Clean up all subscriptions and timers."""
@@ -632,6 +645,7 @@ class LatterCoordinator:
             self._unsub_position_timer,
             self._unsub_forecast_timer,
             self._unsub_calendar_timer,
+            self._unsub_wallpaper_timer,
         ):
             if unsub is not None:
                 unsub()
@@ -1847,6 +1861,80 @@ class LatterCoordinator:
     async def _async_periodic_weather_refresh(self, _now: datetime) -> None:
         """Refresh 5-day weather forecast every 30 minutes."""
         await self.async_refresh_weather_forecast()
+
+    @callback
+    def _bind_wallpaper_cycle_timer(self) -> None:
+        """Start or stop the automatic favorite wallpaper rotation timer."""
+        if self._unsub_wallpaper_timer is not None:
+            self._unsub_wallpaper_timer()
+            self._unsub_wallpaper_timer = None
+
+        mins = self.wallpaper_cycle_minutes
+        if mins > 0 and len(self.wallpaper_favorites) >= 2:
+            self._unsub_wallpaper_timer = async_track_time_interval(
+                self.hass,
+                self._async_on_wallpaper_cycle_tick,
+                timedelta(minutes=mins),
+            )
+
+    @callback
+    def _async_on_wallpaper_cycle_tick(self, _now: datetime) -> None:
+        """Advance to the next favorite wallpaper and notify listeners."""
+        favs = self.wallpaper_favorites
+        if len(favs) < 2:
+            return
+        cur = self.wallpaper_source
+        try:
+            idx = (favs.index(cur) + 1) % len(favs)
+        except ValueError:
+            idx = 0
+        next_wp = favs[idx]
+        merged = {
+            **self.entry.data,
+            **(self.entry.options or {}),
+            CONF_WALLPAPER_SOURCE: next_wp,
+        }
+        self.hass.config_entries.async_update_entry(
+            self.entry, data=merged, options=merged
+        )
+        self._notify_listeners()
+
+    @callback
+    def _bind_wallpaper_cycle_timer(self) -> None:
+        """Start or stop the automatic favorite wallpaper rotation timer."""
+        if self._unsub_wallpaper_timer is not None:
+            self._unsub_wallpaper_timer()
+            self._unsub_wallpaper_timer = None
+
+        mins = self.wallpaper_cycle_minutes
+        if mins > 0 and len(self.wallpaper_favorites) >= 2:
+            self._unsub_wallpaper_timer = async_track_time_interval(
+                self.hass,
+                self._async_on_wallpaper_cycle_tick,
+                timedelta(minutes=mins),
+            )
+
+    @callback
+    def _async_on_wallpaper_cycle_tick(self, _now: datetime) -> None:
+        """Advance to the next favorite wallpaper and notify listeners."""
+        favs = self.wallpaper_favorites
+        if len(favs) < 2:
+            return
+        cur = self.wallpaper_source
+        try:
+            idx = (favs.index(cur) + 1) % len(favs)
+        except ValueError:
+            idx = 0
+        next_wp = favs[idx]
+        merged = {
+            **self.entry.data,
+            **(self.entry.options or {}),
+            CONF_WALLPAPER_SOURCE: next_wp,
+        }
+        self.hass.config_entries.async_update_entry(
+            self.entry, data=merged, options=merged
+        )
+        self._notify_listeners()
 
     async def _async_periodic_calendar_refresh(self, _now: datetime) -> None:
         """Refresh family calendar agenda every 15 minutes."""
