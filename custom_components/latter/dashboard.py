@@ -710,7 +710,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
   }
   .app-shell {
     display: grid;
-    grid-template-columns: 242px minmax(0, 1fr);
+    grid-template-columns: 236px minmax(0, 1fr);
     min-height: 100vh;
   }
   aside.sidebar {
@@ -728,9 +728,9 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     display: flex;
     align-items: center;
     gap: 11px;
-    padding: 4px 8px 16px;
+    padding: 4px 8px 14px;
     border-bottom: 1px solid var(--border);
-    margin-bottom: 14px;
+    margin-bottom: 10px;
   }
   .brand-text { min-width: 0; }
   .brand-text h1 {
@@ -749,10 +749,18 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     margin-top: 2px;
     font-variant-numeric: tabular-nums;
   }
+  .nav-group-label {
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--muted);
+    padding: 10px 10px 4px;
+  }
   .nav-list {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 2px;
   }
   .nav-btn {
     display: flex;
@@ -760,7 +768,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     justify-content: space-between;
     gap: 8px;
     width: 100%;
-    padding: 10px 12px;
+    padding: 8px 11px;
     border-radius: 7px;
     border: 1px solid transparent;
     background: transparent;
@@ -863,6 +871,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     font-weight: 600;
     cursor: pointer;
     font-size: 12.5px;
+    white-space: nowrap;
   }
   button.btn-secondary {
     background: var(--card);
@@ -873,17 +882,24 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     font-weight: 600;
     cursor: pointer;
     font-size: 12.5px;
+    white-space: nowrap;
   }
   button.btn-action {
     background: var(--accent-subtle);
     color: var(--text-strong);
     border: 1px solid var(--accent);
-    padding: 10px 14px;
+    height: 38px;
+    padding: 0 12px;
     border-radius: 7px;
-    font-weight: 700;
+    font-weight: 600;
     cursor: pointer;
-    font-size: 13px;
-    text-align: center;
+    font-size: 12.5px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
     transition: background 0.15s ease;
   }
   button.btn-action:hover {
@@ -898,9 +914,10 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     border-radius: 6px;
     font-weight: 600;
     cursor: pointer;
+    white-space: nowrap;
   }
   .content-wrap {
-    max-width: 1200px;
+    max-width: 1180px;
     width: 100%;
     margin: 0 auto;
     padding: 22px 24px 64px;
@@ -1001,14 +1018,18 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     gap: 12px;
   }
   .toggle-row:last-child { border-bottom: none; }
-  .rssi-bar { margin-bottom: 10px; }
-  .rssi-header {
+  .summary-row {
     display: flex;
+    align-items: center;
     justify-content: space-between;
-    font-size: 12.5px;
-    margin-bottom: 4px;
-    font-variant-numeric: tabular-nums;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    gap: 10px;
   }
+  .summary-row:last-child { border-bottom: none; }
+  .summary-row span { color: var(--muted); }
+  .summary-row strong { color: var(--text-strong); font-weight: 600; }
   .rssi-track {
     height: 7px;
     background: var(--input-bg);
@@ -1124,7 +1145,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
   }
   .action-btn-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(195px, 1fr));
     gap: 8px;
   }
   .state-badge {
@@ -1137,6 +1158,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     font-weight: 600;
     font-size: 11.5px;
     font-variant-numeric: tabular-nums;
+    white-space: nowrap;
   }
   .wp-gallery {
     display: grid;
@@ -1238,6 +1260,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
       margin-bottom: 8px;
       justify-content: space-between;
     }
+    .nav-group-label { display: none; }
     .nav-list {
       flex-direction: row;
       overflow-x: auto;
@@ -1274,40 +1297,56 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
 </head>
 <body data-theme="dark">
 <div class="app-shell">
-  <!-- UNIFIED DOMAIN-FIRST SIDEBAR -->
+  <!-- STRUCTURED SINGLE-RESPONSIBILITY SIDEBAR -->
   <aside class="sidebar">
     <div class="brand">
       <div style="display:flex;align-items:center;gap:10px;min-width:0;">
         <img src="/api/latter/brand/icon.png" alt="Latter" style="width:34px;height:34px;border-radius:8px;object-fit:contain;flex-shrink:0;" onerror="this.style.display='none'">
         <div class="brand-text">
           <h1 id="hdr-title">Latter Studio</h1>
-          <small id="hdr-sub">v1.6.0</small>
+          <small id="hdr-sub">v1.6.4</small>
         </div>
       </div>
     </div>
 
     <div class="nav-list">
-      <button class="nav-btn active" onclick="switchView('dashboard', this)">
-        <span>Dashboard & Radar</span>
+      <div class="nav-group-label">Overview</div>
+      <button class="nav-btn active" data-view="dashboard" onclick="switchView('dashboard', this)">
+        <span>Dashboard</span>
         <span class="nav-badge" id="nav-room-badge">--</span>
       </button>
-      <button class="nav-btn" onclick="switchView('home_display', this)">
+
+      <div class="nav-group-label">Device</div>
+      <button class="nav-btn" data-view="home_display" onclick="switchView('home_display', this)">
         <span>Home & Display</span>
       </button>
-      <button class="nav-btn" onclick="switchView('voice', this)">
+      <button class="nav-btn" data-view="power" onclick="switchView('power', this)">
+        <span>Power</span>
+      </button>
+      <button class="nav-btn" data-view="room_tracking" onclick="switchView('room_tracking', this)">
+        <span>Room Tracking</span>
+      </button>
+      <button class="nav-btn" data-view="voice" onclick="switchView('voice', this)">
         <span>Voice Assistant</span>
       </button>
-      <button class="nav-btn" onclick="switchView('audio', this)">
-        <span>Audio, Music & Sound</span>
+      <button class="nav-btn" data-view="audio" onclick="switchView('audio', this)">
+        <span>Audio & Media</span>
       </button>
-      <button class="nav-btn" onclick="switchView('remotes', this)">
-        <span>TV Remotes & Home</span>
+
+      <div class="nav-group-label">Integrations</div>
+      <button class="nav-btn" data-view="remotes" onclick="switchView('remotes', this)">
+        <span>Remote Controls</span>
       </button>
-      <button class="nav-btn" onclick="switchView('system', this)">
-        <span>System & Triggers</span>
+      <button class="nav-btn" data-view="household" onclick="switchView('household', this)">
+        <span>Household Entities</span>
       </button>
-      <button class="nav-btn" onclick="switchView('raw', this)">
-        <span>All Entities</span>
+      <button class="nav-btn" data-view="macros" onclick="switchView('macros', this)">
+        <span>Macros & YAML</span>
+      </button>
+
+      <div class="nav-group-label">Administration</div>
+      <button class="nav-btn" data-view="system" onclick="switchView('system', this)">
+        <span>System</span>
         <span class="nav-badge" id="nav-esp-badge">0</span>
       </button>
     </div>
@@ -1340,24 +1379,24 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     </header>
 
     <div class="content-wrap">
-      <!-- 1. DASHBOARD & BLE ROOM RADAR -->
+      <!-- 1. DASHBOARD (PURE LIVE STATUS & QUICK CONTEXT) -->
       <section id="view-dashboard">
         <div class="page-header">
-          <h2>Dashboard & BLE Room Radar</h2>
-          <p>Live device telemetry, active room controls, and multi-proxy Bluetooth RSSI triangulation.</p>
+          <h2>Dashboard</h2>
+          <p>Current device status, active room controls, and media context.</p>
         </div>
 
         <div class="hero-stats">
           <div class="stat-box"><span>Active Room</span><strong id="st-room">--</strong></div>
           <div class="stat-box"><span>Room Climate</span><strong id="st-climate">--</strong></div>
           <div class="stat-box"><span>Active Speaker</span><strong id="st-speaker">--</strong></div>
-          <div class="stat-box"><span>Home Security</span><strong id="st-alarm">--</strong></div>
+          <div class="stat-box"><span>Security Alarm</span><strong id="st-alarm">--</strong></div>
         </div>
 
         <div class="grid-2">
           <div class="card">
             <h3>Active Room & Speaker Context</h3>
-            <p class="desc">Switch the active room or speaker, or tap any curated room entity below to toggle it.</p>
+            <p class="desc">Switch the active room or speaker, or tap any room entity below to toggle it.</p>
             <div class="field">
               <label>Active Room</label>
               <select id="quick-area" onchange="quickSwitchArea(this.value)"></select>
@@ -1371,41 +1410,48 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
           </div>
 
           <div class="card">
-            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:4px;">
-              <h3 style="margin:0;">BLE Site Survey & Room Calibration</h3>
-              <label style="font-size:12px;font-weight:600;color:var(--accent);display:inline-flex;align-items:center;gap:6px;cursor:pointer;">
-                <input type="checkbox" id="survey-fast-mode" onchange="toggleSurveyFastMode(this.checked)"> Live Walk-Around Mode (1.5s)
-              </label>
+            <h3>Device & Tracking Status</h3>
+            <p class="desc">Live summary of room presence tracking, media playback, and active remote control.</p>
+            <div class="summary-row">
+              <span>BLE Room Tracking</span>
+              <strong id="dash-ble-mode">--</strong>
             </div>
-            <p class="desc">Walk from room to room with your device to compare live <strong>Raw dBm</strong> vs. <strong>Calibrated Effective dBm</strong>. Tap <strong>Prioritize Here</strong> while standing in a room to auto-calculate the exact dB bias needed to win over competing proxies, or fine-tune with <code>-1</code> / <code>+1</code> dB.</p>
-
-            <div id="rssi-container" style="margin-bottom:14px;"></div>
-
-            <div id="embedded-room-ble" class="native-controls-box" style="margin-bottom:12px;"></div>
-
-            <div class="toggle-row">
-              <span>Built-In ESPHome BLE Proxy Tracking</span>
-              <input type="checkbox" id="cfg-native_ble_tracking" onchange="markDirty()">
+            <div class="summary-row">
+              <span>Nearest BLE Proxy</span>
+              <strong id="dash-ble-proxy">--</strong>
             </div>
-            <div class="toggle-row">
-              <span>Auto-Switch Active Room on Movement</span>
-              <input type="checkbox" id="cfg-ble_auto_switch" onchange="markDirty()">
+            <div class="summary-row">
+              <span>BLE Packets Observed</span>
+              <strong id="dash-ble-packets">0</strong>
+            </div>
+            <div class="summary-row">
+              <span>Now Playing</span>
+              <strong id="dash-media-summary">Idle</strong>
+            </div>
+            <div class="summary-row">
+              <span>Active Remote Slot</span>
+              <strong id="dash-remote-summary">Slot 1</strong>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px;">
+              <button class="btn-secondary" onclick="navigateToView('room_tracking')">Configure Room Tracking</button>
+              <button class="btn-secondary" onclick="navigateToView('power')">Power Settings</button>
+              <button class="btn-secondary" onclick="navigateToView('remotes')">Remote Controls</button>
             </div>
           </div>
         </div>
       </section>
 
-      <!-- 2. HOME, DISPLAY, SLEEP & WALLPAPERS -->
+      <!-- 2. HOME & DISPLAY -->
       <section id="view-home_display" class="hidden">
         <div class="page-header">
-          <h2>Home Screen, Display, Sleep & Wallpapers</h2>
-          <p>Cohesive control over your device's clock face, brightness, themes, sleep/wake behavior, and wallpapers.</p>
+          <h2>Home & Display</h2>
+          <p>Configure the home screen layout, clock face, display brightness, color profile, and wallpapers.</p>
         </div>
 
         <div class="grid-2">
           <div class="card">
-            <h3>Home Screen & Dock Layout</h3>
-            <p class="desc">Configure your device's clock style, home shortcuts, weather backdrop, and dock app order.</p>
+            <h3>Home Screen</h3>
+            <p class="desc">Configure your device's clock style, home shortcuts, weather background, and dock order.</p>
             <div id="embedded-home" class="native-controls-box" style="margin-bottom:14px;"></div>
             <div class="field" style="margin-bottom:0;">
               <label>Home Dock App Order (comma-separated tokens)</label>
@@ -1414,43 +1460,9 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
           </div>
 
           <div class="card">
-            <h3>Display & Sleep / Wake Behavior</h3>
-            <p class="desc">Adjust screen brightness, UI color profile, inactivity timeouts, and wake gestures.</p>
-            <div id="embedded-display" class="native-controls-box" style="margin-bottom:10px;"></div>
-            <div id="embedded-sleep" class="native-controls-box"></div>
-          </div>
-        </div>
-
-        <div class="grid-2">
-          <div class="card">
-            <h3>Upload New Photo Wallpaper</h3>
-            <p class="desc">Photos are automatically center-cropped, darkened for legibility, and transcoded to Baseline JPEG.</p>
-            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-              <input type="file" id="wp-file-input" accept="image/*" style="flex:1;">
-              <button class="btn-primary" onclick="uploadWallpaperFile()">Upload & Use</button>
-            </div>
-            <div class="field" style="margin-top:14px;margin-bottom:0;">
-              <label>Active Wallpaper Source (/local/... or preset:...)</label>
-              <div style="display:flex;gap:8px;">
-                <input type="text" id="cfg-wallpaper_source" placeholder="preset:amoled_rings or /local/wallpaper.jpg" oninput="markDirty()">
-                <button class="btn-secondary" onclick="selectWallpaperSource('')">Clear</button>
-              </div>
-            </div>
-          </div>
-
-          <div class="card">
-            <h3>Wallpaper Rotation & Screen Geometry</h3>
-            <p class="desc">Star multiple wallpapers below to rotate through favorites automatically.</p>
-            <div class="field">
-              <label>Rotate Favorite Wallpapers</label>
-              <select id="cfg-wallpaper_cycle_minutes" onchange="markDirty()">
-                <option value="0">Off (Keep Selected Wallpaper)</option>
-                <option value="15">Every 15 Minutes</option>
-                <option value="60">Every Hour</option>
-                <option value="360">Every 6 Hours</option>
-                <option value="1440">Every 24 Hours</option>
-              </select>
-            </div>
+            <h3>Display Settings</h3>
+            <p class="desc">Adjust screen brightness, UI color profile, auto-brightness schedule, and screen geometry.</p>
+            <div id="embedded-display" class="native-controls-box" style="margin-bottom:14px;"></div>
             <div class="field" style="margin-bottom:0;">
               <label>Screen Bezel Mask & Resolution</label>
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
@@ -1469,77 +1481,175 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
           </div>
         </div>
 
+        <div class="grid-2">
+          <div class="card">
+            <h3>Upload Wallpaper</h3>
+            <p class="desc">Photos are automatically center-cropped, darkened for legibility, and transcoded to Baseline JPEG.</p>
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+              <input type="file" id="wp-file-input" accept="image/*" style="flex:1;">
+              <button class="btn-primary" onclick="uploadWallpaperFile()">Upload & Use</button>
+            </div>
+            <div class="field" style="margin-top:14px;margin-bottom:0;">
+              <label>Active Wallpaper Source (/local/... or preset:...)</label>
+              <div style="display:flex;gap:8px;">
+                <input type="text" id="cfg-wallpaper_source" placeholder="preset:amoled_rings or /local/wallpaper.jpg" oninput="markDirty()">
+                <button class="btn-secondary" onclick="selectWallpaperSource('')">Clear</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>Wallpaper Rotation</h3>
+            <p class="desc">Star multiple wallpapers in the gallery below to rotate through favorites automatically.</p>
+            <div class="field" style="margin-bottom:0;">
+              <label>Rotation Interval</label>
+              <select id="cfg-wallpaper_cycle_minutes" onchange="markDirty()">
+                <option value="0">Off (Keep Selected Wallpaper)</option>
+                <option value="15">Every 15 Minutes</option>
+                <option value="60">Every Hour</option>
+                <option value="360">Every 6 Hours</option>
+                <option value="1440">Every 24 Hours</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
         <div class="card">
-          <h3>Wallpaper Gallery (AMOLED Low-Power Presets & Uploaded Photos)</h3>
-          <p class="desc">AMOLED presets use &gt;80% pure black pixels to maximize battery life.</p>
+          <h3>Wallpaper Gallery</h3>
+          <p class="desc">Low-power AMOLED presets and uploaded custom wallpapers.</p>
           <div id="wp-gallery-grid" class="wp-gallery"></div>
         </div>
       </section>
 
-      <!-- 3. VOICE ASSISTANT -->
-      <section id="view-voice" class="hidden">
+      <!-- 3. POWER MANAGEMENT -->
+      <section id="view-power" class="hidden">
         <div class="page-header">
-          <h2>Voice Assistant & Room-Aware Context</h2>
-          <p>Configure on-device wake words, microphone hardware controls, and automatic room context synchronization for Home Assistant Assist.</p>
+          <h2>Power Management</h2>
+          <p>Configure sleep timeouts, wake gestures, docked screensaver behavior, and monitor battery health.</p>
         </div>
 
         <div class="grid-2">
           <div class="card">
-            <h3>Wake Word, Microphone & Sensitivity</h3>
-            <p class="desc">Live hardware controls exposed by your ESPHome device's voice pipeline.</p>
+            <h3>Sleep & Wake Behavior</h3>
+            <p class="desc">Control inactivity timeouts, pickup-to-wake, tap-to-wake, docked screensaver, and hardware hibernate.</p>
+            <div id="embedded-sleep" class="native-controls-box"></div>
+          </div>
+
+          <div class="card">
+            <h3>Battery & Power Telemetry</h3>
+            <p class="desc">Live battery charge level, charging status, PMIC voltage, and internal temperature.</p>
+            <div id="embedded-battery" class="native-controls-box"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 4. ROOM TRACKING -->
+      <section id="view-room_tracking" class="hidden">
+        <div class="page-header">
+          <h2>Room Tracking</h2>
+          <p>Configure Bluetooth room presence detection and calibrate per-room signal offsets.</p>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <h3>Tracking Settings</h3>
+            <p class="desc">Configure how Latter determines which room your device is currently in.</p>
+            <div class="toggle-row">
+              <span>Enable ESPHome BLE Proxy Room Tracking</span>
+              <input type="checkbox" id="cfg-native_ble_tracking" onchange="markDirty()">
+            </div>
+            <div class="toggle-row" style="margin-bottom:12px;">
+              <span>Auto-Switch Active Room on Movement</span>
+              <input type="checkbox" id="cfg-ble_auto_switch" onchange="markDirty()">
+            </div>
+            <div id="embedded-room-ble" class="native-controls-box" style="margin-bottom:12px;"></div>
+            <div class="field">
+              <label>Default Fallback Room (When BLE Tracking Is Off)</label>
+              <select id="cfg-default_area" onchange="markDirty()"></select>
+            </div>
+            <div class="field">
+              <label>BLE iBeacon UUID</label>
+              <input type="text" id="cfg-ble_beacon_uuid" oninput="markDirty(); renderYamlGenerator();">
+            </div>
+            <div class="field" style="margin-bottom:0;">
+              <label>External Room Sensor Override (Optional Bermuda / ESPresense)</label>
+              <select id="cfg-presence_entity" onchange="markDirty()"></select>
+            </div>
+          </div>
+
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:4px;">
+              <h3 style="margin:0;">Site Survey & Calibration</h3>
+              <label style="font-size:12px;font-weight:600;color:var(--accent);display:inline-flex;align-items:center;gap:6px;cursor:pointer;">
+                <input type="checkbox" id="survey-fast-mode" onchange="toggleSurveyFastMode(this.checked)"> Fast Refresh (1.5s)
+              </label>
+            </div>
+            <p class="desc">Compare live <strong>Raw dBm</strong> vs. <strong>Effective dBm</strong> across your Bluetooth proxies. Use <strong>Prioritize Here</strong> while standing in a room to calculate the offset needed to win over adjacent rooms, or adjust in 1 dB steps.</p>
+            <div id="rssi-container"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 5. VOICE ASSISTANT -->
+      <section id="view-voice" class="hidden">
+        <div class="page-header">
+          <h2>Voice Assistant</h2>
+          <p>Configure on-device wake words, detection sensitivity, and room context synchronization for Assist.</p>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <h3>Wake Word & Microphone</h3>
+            <p class="desc">Hardware controls exposed by your ESPHome device's voice pipeline.</p>
             <div id="embedded-voice" class="native-controls-box"></div>
           </div>
 
           <div class="card">
-            <h3>Room-Aware Voice Assistant Sync</h3>
-            <p class="desc">When enabled, Latter automatically updates your ESPHome device's Home Assistant Area assignment as you walk between rooms—so saying <em>"Turn on the lights"</em> targets the room you are currently standing in.</p>
+            <h3>Room Context Sync</h3>
+            <p class="desc">Automatically update your ESPHome device's Home Assistant Area assignment when your active room changes so room-aware voice commands target your current room.</p>
             <div class="toggle-row">
-              <span>Sync Active Room to HA Device Area (Room-Aware Assist)</span>
+              <span>Sync Active Room to Home Assistant Device Area</span>
               <input type="checkbox" id="cfg-sync_device_area" onchange="markDirty()">
-            </div>
-            <div class="field" style="margin-top:14px;margin-bottom:0;">
-              <label>Default Fallback Room (When BLE Tracking Is Off)</label>
-              <select id="cfg-default_area" onchange="markDirty()"></select>
             </div>
           </div>
         </div>
       </section>
 
-      <!-- 4. AUDIO, MUSIC & SOUND -->
+      <!-- 6. AUDIO & MEDIA -->
       <section id="view-audio" class="hidden">
         <div class="page-header">
-          <h2>Audio, Music Assistant & On-Device Sound</h2>
-          <p>Unified control over Music Assistant speakers, AVR volume overrides, library sorting, and onboard speaker chimes.</p>
+          <h2>Audio & Media</h2>
+          <p>Configure Music Assistant speaker routing, external volume overrides, library sorting, and onboard chimes.</p>
         </div>
 
         <div class="grid-2">
           <div class="card">
-            <h3>On-Device Sound & Music Sorting</h3>
-            <p class="desc">Adjust onboard alert volume, chimes, volume step increments, and Music Assistant browse sort order.</p>
+            <h3>Sound & Library Sorting</h3>
+            <p class="desc">Adjust onboard alert volume, chimes, volume step size, and Music Assistant browse sort order.</p>
             <div id="embedded-sound" class="native-controls-box" style="margin-bottom:10px;"></div>
             <div id="embedded-music" class="native-controls-box"></div>
           </div>
 
           <div class="card">
-            <h3>Default Speaker & AVR Volume Overrides</h3>
-            <p class="desc">Route volume commands to an external AV Receiver or amplifier when streaming to a mapped Music Assistant player.</p>
+            <h3>Speaker & Volume Routing</h3>
+            <p class="desc">Select the default speaker and optionally route volume commands to an external AV Receiver or amplifier.</p>
             <div class="field">
               <label>Default Speaker Entity</label>
               <select id="cfg-default_speaker" onchange="markDirty()"></select>
             </div>
             <div class="toggle-row" style="margin-bottom:12px;">
-              <span>Unified Area Handoff (Auto-link Room Speaker & Remote)</span>
+              <span>Auto-Link Room Speaker & Remote on Room Change</span>
               <input type="checkbox" id="cfg-area_handoff" onchange="markDirty()">
             </div>
             <div class="field">
-              <label>Override 1: When Streaming to Speaker &rarr; Control Volume On</label>
+              <label>Volume Override 1 (Speaker &rarr; Volume Target)</label>
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
                 <select id="cfg-vol_speaker_1" onchange="markDirty()"></select>
                 <select id="cfg-vol_target_1" onchange="markDirty()"></select>
               </div>
             </div>
             <div class="field" style="margin-bottom:0;">
-              <label>Override 2: When Streaming to Speaker &rarr; Control Volume On</label>
+              <label>Volume Override 2 (Speaker &rarr; Volume Target)</label>
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
                 <select id="cfg-vol_speaker_2" onchange="markDirty()"></select>
                 <select id="cfg-vol_target_2" onchange="markDirty()"></select>
@@ -1549,24 +1659,24 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
         </div>
       </section>
 
-      <!-- 5. TV REMOTES, SECURITY & HOME -->
+      <!-- 7. REMOTE CONTROLS -->
       <section id="view-remotes" class="hidden">
         <div class="page-header">
-          <h2>4-Slot TV Remotes, Security, Doorbell Camera & Alerts</h2>
-          <p>Assign each remote slot's Home Assistant entity and protocol profile in one place, plus configure your home alarm, doorbell camera peephole, weather, and notifications.</p>
+          <h2>Remote Controls</h2>
+          <p>Assign up to four media players, AV receivers, or TVs and select the command protocol for each slot.</p>
         </div>
 
-        <div class="card" style="margin-bottom:16px;">
-          <h3>Unified 4-Slot TV / Media Remotes</h3>
-          <p class="desc">Pick either the <code>remote.*</code> or <code>media_player.*</code> entity for each slot—Latter automatically pairs sibling entities and adapts navigation commands (Android TV, Apple TV, Roku, LG webOS, Denon/Marantz).</p>
+        <div class="card">
+          <h3>Remote Control Slots</h3>
+          <p class="desc">Select either a <code>remote.*</code> or <code>media_player.*</code> entity for each slot. Latter automatically pairs sibling entities on the same device.</p>
           <div class="grid-2" style="margin-bottom:0;">
             <div class="remote-slot-card" id="rslot-card-1">
               <div class="remote-slot-hdr">
-                <strong>Remote Slot 1</strong>
+                <strong>Slot 1</strong>
                 <button class="btn-secondary" id="rslot-btn-1" onclick="activateRemoteSlot(1)">Set Active</button>
               </div>
               <div class="field" style="margin-bottom:0;">
-                <label>Target TV / Media Player Entity</label>
+                <label>Target Entity</label>
                 <select id="cfg-remote_1" onchange="markDirty()"></select>
               </div>
               <div id="embedded-remote-slot-1" class="native-controls-box"></div>
@@ -1574,11 +1684,11 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
 
             <div class="remote-slot-card" id="rslot-card-2">
               <div class="remote-slot-hdr">
-                <strong>Remote Slot 2</strong>
+                <strong>Slot 2</strong>
                 <button class="btn-secondary" id="rslot-btn-2" onclick="activateRemoteSlot(2)">Set Active</button>
               </div>
               <div class="field" style="margin-bottom:0;">
-                <label>Target TV / Media Player Entity</label>
+                <label>Target Entity</label>
                 <select id="cfg-remote_2" onchange="markDirty()"></select>
               </div>
               <div id="embedded-remote-slot-2" class="native-controls-box"></div>
@@ -1586,11 +1696,11 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
 
             <div class="remote-slot-card" id="rslot-card-3">
               <div class="remote-slot-hdr">
-                <strong>Remote Slot 3</strong>
+                <strong>Slot 3</strong>
                 <button class="btn-secondary" id="rslot-btn-3" onclick="activateRemoteSlot(3)">Set Active</button>
               </div>
               <div class="field" style="margin-bottom:0;">
-                <label>Target TV / Media Player Entity</label>
+                <label>Target Entity</label>
                 <select id="cfg-remote_3" onchange="markDirty()"></select>
               </div>
               <div id="embedded-remote-slot-3" class="native-controls-box"></div>
@@ -1598,11 +1708,11 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
 
             <div class="remote-slot-card" id="rslot-card-4">
               <div class="remote-slot-hdr">
-                <strong>Remote Slot 4</strong>
+                <strong>Slot 4</strong>
                 <button class="btn-secondary" id="rslot-btn-4" onclick="activateRemoteSlot(4)">Set Active</button>
               </div>
               <div class="field" style="margin-bottom:0;">
-                <label>Target TV / Media Player Entity</label>
+                <label>Target Entity</label>
                 <select id="cfg-remote_4" onchange="markDirty()"></select>
               </div>
               <div id="embedded-remote-slot-4" class="native-controls-box"></div>
@@ -1610,24 +1720,33 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
           </div>
           <div id="embedded-remote-general" class="native-controls-box" style="margin-top:12px;"></div>
         </div>
+      </section>
+
+      <!-- 8. HOUSEHOLD ENTITIES & NOTIFICATIONS -->
+      <section id="view-household" class="hidden">
+        <div class="page-header">
+          <h2>Household Entities</h2>
+          <p>Configure household-wide security alarm, camera, weather provider, pinned entities, and notifications.</p>
+        </div>
 
         <div class="grid-2">
           <div class="card">
-            <h3>Security Alarm, Doorbell Camera & Weather</h3>
+            <h3>Global Entities</h3>
+            <p class="desc">Primary household entities shared across all rooms on your device.</p>
             <div class="field">
-              <label>Home Security Alarm (alarm_control_panel)</label>
+              <label>Security Alarm (alarm_control_panel)</label>
               <select id="cfg-alarm_entity" onchange="markDirty()"></select>
             </div>
             <div class="field">
-              <label>Primary Doorbell / Peephole Camera (camera.*)</label>
+              <label>Primary Camera (camera.*)</label>
               <select id="cfg-camera_entity" onchange="markDirty(); renderCameraPreview(this.value);"></select>
             </div>
             <div id="cam-preview-box" style="display:none;align-items:center;gap:12px;margin-bottom:13px;padding:10px;background:var(--input-bg);border:1px solid var(--border);border-radius:8px;">
               <img id="cam-preview-img" class="wp-thumb circle" style="width:76px;height:76px;" alt="Camera Snapshot">
               <div style="flex:1;min-width:0;">
-                <strong style="font-size:12.5px;color:var(--text-strong);display:block;">Live Baseline-JPEG Transcoder Preview</strong>
+                <strong style="font-size:12.5px;color:var(--text-strong);display:block;">Camera Snapshot Preview</strong>
                 <small style="color:var(--muted);display:block;margin:2px 0 6px;">Served via <code>/api/latter/camera/&lt;slug&gt;</code></small>
-                <button class="btn-secondary" style="padding:5px 10px;font-size:11.5px;" onclick="renderCameraPreview(document.getElementById('cfg-camera_entity').value)">Refresh Snapshot</button>
+                <button class="btn-secondary" style="padding:5px 10px;font-size:11.5px;" onclick="renderCameraPreview(document.getElementById('cfg-camera_entity').value)">Refresh</button>
               </div>
             </div>
             <div class="field" style="margin-bottom:0;">
@@ -1637,16 +1756,16 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
           </div>
 
           <div class="card">
-            <h3>Pinned Entities & Smart Notification Dispatcher</h3>
-            <p class="desc">Pin entities to the top of Room Control, or test dispatching an on-screen toast / doorbell peephole alert (<code>latter.notify_device</code>).</p>
+            <h3>Pinned Entities & Notification Test</h3>
+            <p class="desc">Pin entities to the top of Room Control, or test sending an on-screen alert (<code>latter.notify_device</code>).</p>
             <div style="display:flex;gap:8px;margin-bottom:10px;">
               <select id="pin-entity-picker"></select>
-              <button class="btn-secondary" onclick="addPinnedEntity()">Pin</button>
+              <button class="btn-secondary" onclick="addPinnedEntity()">Pin Entity</button>
             </div>
             <div id="pinned-chips" class="chip-list" style="margin-bottom:14px;"></div>
 
             <div style="padding-top:12px;border-top:1px solid var(--border);">
-              <label style="font-size:12px;font-weight:700;color:var(--text-strong);display:block;margin-bottom:6px;">Test Device Alert / Doorbell Popup (<code>latter.notify_device</code>)</label>
+              <label style="font-size:12px;font-weight:700;color:var(--text-strong);display:block;margin-bottom:6px;">Send Test Notification</label>
               <div style="display:grid;grid-template-columns:1fr 1.4fr auto;gap:8px;margin-bottom:8px;">
                 <input type="text" id="test-alert-title" value="Front Door">
                 <input type="text" id="test-alert-msg" value="Person detected at Front Door">
@@ -1658,94 +1777,36 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
               </div>
               <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
                 <label style="font-size:12px;color:var(--muted);display:inline-flex;align-items:center;gap:6px;cursor:pointer;">
-                  <input type="checkbox" id="test-alert-cam" checked> Include Camera Peephole Snapshot
+                  <input type="checkbox" id="test-alert-cam" checked> Include Camera Snapshot
                 </label>
-                <button class="btn-action" style="padding:7px 14px;font-size:12px;" onclick="sendTestNotification()">Send Alert to Device</button>
+                <button class="btn-primary" onclick="sendTestNotification()">Send Notification</button>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      <!-- 6. SYSTEM, BATTERY, DIAGNOSTICS & HARDWARE TRIGGERS -->
-      <section id="view-system" class="hidden">
+      <!-- 9. MACROS & YAML -->
+      <section id="view-macros" class="hidden">
         <div class="page-header">
-          <h2>System Diagnostics, Power & Hardware Triggers</h2>
-          <p>Execute device actions, monitor battery/network health, map custom hardware triggers, and export ESPHome YAML snippets.</p>
-        </div>
-
-        <div class="grid-2">
-          <div class="card">
-            <h3>Device Actions</h3>
-            <p class="desc">One-tap hardware actions exposed by your ESPHome device.</p>
-            <div id="embedded-actions" class="action-btn-grid" style="margin-bottom:14px;"></div>
-            <h3>Battery & Power Telemetry</h3>
-            <div id="embedded-battery" class="native-controls-box"></div>
-          </div>
-
-          <div class="card">
-            <h3>Network & System Diagnostics</h3>
-            <p class="desc">Live Wi-Fi signal, IP/MAC address, uptime, and firmware status.</p>
-            <div id="embedded-network" class="native-controls-box"></div>
-          </div>
+          <h2>Macros & YAML</h2>
+          <p>Bind on-device macro slots or hardware triggers to Home Assistant entities and export ESPHome YAML snippets.</p>
         </div>
 
         <div class="card" style="margin-bottom:16px;">
-          <h3>Universal Hardware Trigger & Macro Bindings</h3>
-          <p class="desc">Map any custom slot ID sent by your firmware (<code>latter.trigger_binding</code>) to any Home Assistant entity.</p>
+          <h3>Macro & Trigger Bindings</h3>
+          <p class="desc">Map slot IDs (such as <code>macro_1</code>..<code>macro_5</code> in the Pocket Assistant Macros tool or custom hardware buttons) to any Home Assistant entity via <code>latter.trigger_binding</code>.</p>
           <div id="bindings-list"></div>
-          <button class="btn-secondary" onclick="addBindingRow('', '', 'toggle'); markDirty();">+ Add Trigger Binding</button>
+          <button class="btn-secondary" onclick="addBindingRow('', '', 'toggle'); markDirty();">+ Add Binding</button>
         </div>
 
         <div class="card">
-          <h3>Studio Appearance, Reverse Proxy & Device Profile</h3>
-          <div class="grid-2" style="margin-bottom:0;">
-            <div>
-              <div class="field">
-                <label>Studio Appearance (Dark / Light / System)</label>
-                <select id="cfg-web_theme_mobile" onchange="onThemeChanged(this.value)">
-                  <option value="dark">Dark</option>
-                  <option value="light">Light</option>
-                  <option value="system">System</option>
-                </select>
-              </div>
-              <div class="field">
-                <label>Companion HTTPS Base URL Override (e.g. https://ha.example.com)</label>
-                <input type="text" id="cfg-companion_base_url" placeholder="Auto-detected from Home Assistant Network settings" oninput="markDirty()">
-              </div>
-              <div class="field" style="margin-bottom:0;">
-                <label>ESPHome Device Slug (sensor.&lt;slug&gt;_*)</label>
-                <input type="text" id="cfg-device_slug" oninput="markDirty(); renderYamlGenerator();">
-              </div>
-            </div>
-            <div>
-              <div class="field">
-                <label>Device Archetype & Room Cards Per Page</label>
-                <div style="display:grid;grid-template-columns:2fr 1fr;gap:8px;">
-                  <select id="cfg-device_profile" onchange="markDirty()">
-                    <option value="mobile_display">Mobile Smart Display</option>
-                    <option value="stationary_display">Stationary Wall / Desk Display</option>
-                    <option value="headless_node">Headless Sensor / Button Node</option>
-                  </select>
-                  <input type="number" id="cfg-default_page_size" min="1" max="20" value="3" oninput="markDirty(); renderYamlGenerator();">
-                </div>
-              </div>
-              <div class="field" style="margin-bottom:0;">
-                <label>BLE iBeacon UUID & External Sensor Override</label>
-                <input type="text" id="cfg-ble_beacon_uuid" style="margin-bottom:6px;" oninput="markDirty(); renderYamlGenerator();">
-                <select id="cfg-presence_entity" onchange="markDirty()"></select>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="card" style="margin-top:16px;">
           <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:8px;">
             <div>
-              <h3 style="margin:0;">ESPHome YAML Integration Generator</h3>
-              <p class="desc" style="margin:4px 0 0;">Generate a modular, copy-pasteable ESPHome YAML contract tailored to this device's slug and slot capacity.</p>
+              <h3 style="margin:0;">ESPHome YAML Generator</h3>
+              <p class="desc" style="margin:4px 0 0;">Generate a copy-pasteable ESPHome YAML contract for custom devices.</p>
             </div>
-            <button class="btn-action" onclick="copyGeneratedYaml()">Copy YAML Snippet</button>
+            <button class="btn-secondary" onclick="copyGeneratedYaml()">Copy YAML</button>
           </div>
           <div style="display:flex;flex-wrap:wrap;gap:14px;margin-bottom:12px;padding:10px 12px;background:var(--input-bg);border:1px solid var(--border);border-radius:7px;font-size:12.5px;">
             <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="yg-sensors" checked onchange="renderYamlGenerator()"> Push Sensors (<code>sensor.&lt;slug&gt;_*</code>)</label>
@@ -1758,16 +1819,67 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
         </div>
       </section>
 
-      <!-- 7. ALL ENTITIES (RAW POWER-USER INSPECTOR) -->
-      <section id="view-raw" class="hidden">
+      <!-- 10. SYSTEM -->
+      <section id="view-system" class="hidden">
         <div class="page-header">
-          <h2>All Device Entities (Raw Inspector)</h2>
-          <p>Search and inspect every raw entity registered to this ESPHome device in Home Assistant.</p>
+          <h2>System</h2>
+          <p>Execute device actions, view network diagnostics, and configure studio preferences.</p>
         </div>
-        <div class="card" style="margin-bottom:14px;padding:11px 14px;">
-          <input type="text" id="esp-search" placeholder="Filter all device entities by name or entity_id..." oninput="renderRawEntityList()">
+
+        <div class="card" style="margin-bottom:16px;">
+          <h3>Device Actions</h3>
+          <p class="desc">One-tap actions exposed by your ESPHome device.</p>
+          <div id="embedded-actions" class="action-btn-grid"></div>
         </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <h3>Network & Diagnostics</h3>
+            <p class="desc">Wi-Fi signal, IP address, uptime, memory, and firmware status.</p>
+            <div id="embedded-network" class="native-controls-box"></div>
+          </div>
+
+          <div class="card">
+            <h3>Studio & Device Profile</h3>
+            <p class="desc">Configure web interface appearance, reverse proxy URL, and device profile.</p>
+            <div class="field">
+              <label>Studio Appearance</label>
+              <select id="cfg-web_theme_mobile" onchange="onThemeChanged(this.value)">
+                <option value="dark">Dark</option>
+                <option value="light">Light</option>
+                <option value="system">System</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Companion HTTPS Base URL Override (e.g. https://ha.example.com)</label>
+              <input type="text" id="cfg-companion_base_url" placeholder="Auto-detected from Home Assistant Network settings" oninput="markDirty()">
+            </div>
+            <div class="field">
+              <label>ESPHome Device Slug (sensor.&lt;slug&gt;_*)</label>
+              <input type="text" id="cfg-device_slug" oninput="markDirty(); renderYamlGenerator();">
+            </div>
+            <div class="field" style="margin-bottom:0;">
+              <label>Device Archetype & Room Cards Per Page</label>
+              <div style="display:grid;grid-template-columns:2fr 1fr;gap:8px;">
+                <select id="cfg-device_profile" onchange="markDirty()">
+                  <option value="mobile_display">Mobile Smart Display</option>
+                  <option value="stationary_display">Stationary Wall / Desk Display</option>
+                  <option value="headless_node">Headless Sensor / Button Node</option>
+                </select>
+                <input type="number" id="cfg-default_page_size" min="1" max="20" value="3" oninput="markDirty(); renderYamlGenerator();">
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
+            <div>
+              <h3 style="margin:0;">Entity Inspector</h3>
+              <p class="desc" style="margin:4px 0 0;">Search and inspect all raw entities registered to this ESPHome device.</p>
+            </div>
+            <input type="text" id="esp-search" style="max-width:300px;" placeholder="Filter by name or entity_id..." oninput="renderRawEntityList()">
+          </div>
           <div id="raw-entity-items" class="native-controls-box"></div>
         </div>
       </section>
@@ -1785,6 +1897,19 @@ let IS_DIRTY = false;
 let INITIAL_FORM_LOADED = false;
 let CURRENT_THEME_PREF = localStorage.getItem("latter_web_theme") || "dark";
 let POLL_TIMER = null;
+
+const ALL_VIEWS = [
+  "dashboard",
+  "home_display",
+  "power",
+  "room_tracking",
+  "voice",
+  "audio",
+  "remotes",
+  "household",
+  "macros",
+  "system"
+];
 
 const sysMedia = window.matchMedia("(prefers-color-scheme: dark)");
 sysMedia.addEventListener("change", () => {
@@ -1838,11 +1963,21 @@ async function onThemeChanged(themePref) {
 
 function switchView(viewId, btnEl) {
   document.querySelectorAll("aside .nav-btn").forEach(b => b.classList.remove("active"));
-  btnEl.classList.add("active");
-  ["dashboard", "home_display", "voice", "audio", "remotes", "system", "raw"].forEach(id => {
+  if (btnEl) {
+    btnEl.classList.add("active");
+  } else {
+    const matchBtn = document.querySelector(`aside .nav-btn[data-view="${viewId}"]`);
+    if (matchBtn) matchBtn.classList.add("active");
+  }
+  ALL_VIEWS.forEach(id => {
     const el = document.getElementById("view-" + id);
     if (el) el.classList.toggle("hidden", id !== viewId);
   });
+}
+
+function navigateToView(viewId) {
+  switchView(viewId, null);
+  window.scrollTo({top: 0, behavior: "smooth"});
 }
 
 function populateSelect(selId, items, selectedVal, allowEmpty=true) {
@@ -1886,10 +2021,10 @@ function renderRssiBars(surveyRows, packetsSeen) {
     const offSign = r.offset_db > 0 ? `+${r.offset_db}` : `${r.offset_db}`;
     const ageText = hasSignal ? `${r.age_seconds}s ago` : "No signal yet";
     const sigText = hasSignal
-      ? `Raw: <strong>${r.raw_rssi} dBm</strong> &bull; Bias: <strong>${offSign} dB</strong> &rarr; Effective: <strong style="color:var(--accent);">${r.effective_rssi} dBm</strong>`
-      : `Bias: <strong>${offSign} dB</strong> &bull; Waiting for beacon packet...`;
+      ? `Raw: <strong>${r.raw_rssi} dBm</strong> &bull; Offset: <strong>${offSign} dB</strong> &rarr; Effective: <strong style="color:var(--accent);">${r.effective_rssi} dBm</strong>`
+      : `Offset: <strong>${offSign} dB</strong> &bull; Waiting for beacon packet...`;
     const winBadge = r.is_winner
-      ? `<span class="state-badge" style="border-color:var(--success);color:var(--success);margin-left:6px;">ACTIVE WINNER</span>`
+      ? `<span class="state-badge" style="border-color:var(--success);color:var(--success);margin-left:6px;">ACTIVE</span>`
       : "";
 
     return `<div style="background:var(--input-bg);border:1px solid ${r.is_winner ? 'var(--accent)' : 'var(--border)'};border-radius:8px;padding:10px 12px;margin-bottom:8px;">
@@ -1904,7 +2039,7 @@ function renderRssiBars(surveyRows, packetsSeen) {
           <span class="state-badge" style="min-width:52px;text-align:center;">${offSign} dB</span>
           <button class="btn-secondary" style="padding:4px 8px;font-size:11.5px;" onclick="setBleOffset('${r.area_id}', ${Number(r.offset_db) + 1})">+1 dB</button>
           ${r.offset_db !== 0 ? `<button class="btn-danger" style="padding:4px 7px;font-size:11px;" title="Reset to 0 dB" onclick="setBleOffset('${r.area_id}', 0)">0</button>` : ''}
-          <button class="btn-action" style="padding:4px 10px;font-size:11.5px;margin-left:4px;" title="Auto-calculate dB offset so this room wins at your current spot" onclick="autoCalibrateHere('${r.area_id}')">Prioritize Here</button>
+          <button class="btn-secondary" style="padding:4px 10px;font-size:11.5px;margin-left:4px;border-color:var(--accent);color:var(--accent);" title="Auto-calculate dB offset so this room wins at your current spot" onclick="autoCalibrateHere('${r.area_id}')">Prioritize Here</button>
         </div>
       </div>
       <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">${sigText}</div>
@@ -1933,7 +2068,7 @@ async function autoCalibrateHere(areaId) {
   });
   if (resp.ok) {
     applyStateToDom(await resp.json(), false);
-    showToast("Calibrated & prioritized current room!");
+    showToast("Calibrated & prioritized current room");
   }
 }
 
@@ -1970,7 +2105,7 @@ async function sendTestNotification() {
   });
   if (resp.ok) {
     applyStateToDom(await resp.json(), false);
-    showToast("Dispatched notification to device");
+    showToast("Sent notification to device");
   }
 }
 
@@ -2061,7 +2196,9 @@ function renderCohesiveDeviceSections() {
   document.getElementById("embedded-display").innerHTML = dispItems.map(it => renderNativeControlRow(it)).join("");
 
   const sleepItems = getSectionItems("sleep");
-  document.getElementById("embedded-sleep").innerHTML = sleepItems.map(it => renderNativeControlRow(it)).join("");
+  document.getElementById("embedded-sleep").innerHTML = sleepItems.length
+    ? sleepItems.map(it => renderNativeControlRow(it)).join("")
+    : `<p class="desc">No on-device Sleep & Wake entities exposed.</p>`;
 
   const voiceItems = getSectionItems("voice");
   document.getElementById("embedded-voice").innerHTML = voiceItems.length
@@ -2091,11 +2228,13 @@ function renderCohesiveDeviceSections() {
 
   const actionItems = getSectionItems("actions");
   document.getElementById("embedded-actions").innerHTML = actionItems.map(it =>
-    `<button class="btn-action" onclick="espAction('${it.entity_id}', 'press')">${it.name}</button>`
+    `<button class="btn-action" title="${it.name}" onclick="espAction('${it.entity_id}', 'press')">${it.name}</button>`
   ).join("");
 
   const batItems = getSectionItems("battery");
-  document.getElementById("embedded-battery").innerHTML = batItems.map(it => renderNativeControlRow(it)).join("");
+  document.getElementById("embedded-battery").innerHTML = batItems.length
+    ? batItems.map(it => renderNativeControlRow(it)).join("")
+    : `<p class="desc">No battery telemetry entities reported.</p>`;
 
   const netItems = getSectionItems("network").concat(getSectionItems("other"));
   document.getElementById("embedded-network").innerHTML = netItems.length
@@ -2287,7 +2426,7 @@ function addBindingRow(slot="", entity_id="", action="toggle") {
     `<option value="${e.id}" ${e.id === entity_id ? 'selected' : ''}>${e.name}</option>`
   ).join("");
   row.innerHTML = `
-    <input type="text" class="b-slot" placeholder="Slot ID (e.g. button_1)" value="${slot}" oninput="markDirty()">
+    <input type="text" class="b-slot" placeholder="Slot ID (e.g. macro_1)" value="${slot}" oninput="markDirty()">
     <select class="b-ent" onchange="markDirty()"><option value="">— Target Entity —</option>${entOptions}</select>
     <select class="b-act" onchange="markDirty()">
       <option value="toggle" ${action==='toggle'?'selected':''}>Toggle</option>
@@ -2419,7 +2558,7 @@ function renderYamlGenerator() {
     lines.push(`#     action: latter.trigger_binding`);
     lines.push(`#     data:`);
     lines.push(`#       device_slug: "${slug}"`);
-    lines.push(`#       slot: "button_1_single"`);
+    lines.push(`#       slot: "macro_1"`);
   }
 
   box.textContent = lines.join("\\n");
@@ -2444,23 +2583,34 @@ function applyStateToDom(data, forceFormUpdate=false) {
   const spkShort = (live.active_speaker || "").replace("media_player.", "");
   const tempStr = live.room_temp != null ? `${live.room_temp}°` : "--";
   const humStr = live.room_humidity != null ? ` • ${live.room_humidity}%` : "";
+  const mediaSummary = live.media_title && live.media_title !== "Idle"
+    ? `${live.media_title} (${live.media_artist})`
+    : `${live.media_state || 'idle'}`;
 
   document.getElementById("hdr-title").textContent = esp?.device?.name || data.title;
-  document.getElementById("hdr-sub").textContent = `Latter v${data.version || '1.6.0'}`;
+  document.getElementById("hdr-sub").textContent = `Latter v${data.version || '1.6.4'}`;
   document.getElementById("nav-room-badge").textContent = roomName;
   document.getElementById("top-room").textContent = `Room: ${roomName}`;
   document.getElementById("top-speaker").textContent = `Speaker: ${spkShort}`;
-  document.getElementById("top-media").textContent = live.media_title && live.media_title !== "Idle"
-    ? `${live.media_title} (${live.media_artist})`
-    : `Media: ${live.media_state || 'idle'}`;
+  document.getElementById("top-media").textContent = `Media: ${mediaSummary}`;
 
   document.getElementById("st-room").textContent = roomName;
   document.getElementById("st-climate").textContent = tempStr + humStr;
   document.getElementById("st-speaker").textContent = spkShort;
   document.getElementById("st-alarm").textContent = (live.alarm_state || "none").toUpperCase();
 
+  document.getElementById("dash-ble-mode").textContent = cfg.native_ble_tracking
+    ? (cfg.ble_auto_switch ? "Enabled (Auto-Switch)" : "Enabled (Manual Switch)")
+    : "Disabled";
+  document.getElementById("dash-ble-proxy").textContent = live.ble_closest_proxy || "None";
+  document.getElementById("dash-ble-packets").textContent = String(live.ble_packets_seen || 0);
+  document.getElementById("dash-media-summary").textContent = mediaSummary;
+  const actSlotIdx = live.active_remote_slot || 1;
+  const actSlotName = live.remote_slots_meta?.[`slot_${actSlotIdx}_name`] || `Slot ${actSlotIdx}`;
+  document.getElementById("dash-remote-summary").textContent = `Slot ${actSlotIdx} (${actSlotName})`;
+
   [1, 2, 3, 4].forEach(idx => {
-    const isAct = (live.active_remote_slot || 1) === idx;
+    const isAct = actSlotIdx === idx;
     const card = document.getElementById(`rslot-card-${idx}`);
     const btn = document.getElementById(`rslot-btn-${idx}`);
     if (card) card.classList.toggle("active-slot", isAct);
@@ -2621,7 +2771,6 @@ toggleSurveyFastMode(false);
 </body>
 </html>
 """
-
 
 class LatterCompanionDashboardView(HomeAssistantView):
     """Serves the Latter Server-Side Web Companion Studio HTML."""
