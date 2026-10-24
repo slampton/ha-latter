@@ -40,6 +40,67 @@ from .room_engine import (
 
 _LOGGER = logging.getLogger(__name__)
 
+# Canonical intent normalization (maps both generic names and DPAD_* / KEY_* tokens to a canonical intent)
+CANONICAL_NAV_INTENT: dict[str, str] = {
+    "up": "up",
+    "dpad_up": "up",
+    "cursor_up": "up",
+    "down": "down",
+    "dpad_down": "down",
+    "cursor_down": "down",
+    "left": "left",
+    "dpad_left": "left",
+    "cursor_left": "left",
+    "right": "right",
+    "dpad_right": "right",
+    "cursor_right": "right",
+    "select": "select",
+    "enter": "select",
+    "ok": "select",
+    "dpad_center": "select",
+    "key_enter": "select",
+    "back": "back",
+    "return": "back",
+    "key_return": "back",
+    "home": "home",
+    "top_menu": "home",
+    "key_home": "home",
+    "menu": "menu",
+    "info": "info",
+    "option": "option",
+    "exit": "exit",
+    "play": "play",
+    "pause": "pause",
+}
+
+# Android TV / Shield TV / Google TV / Fire TV / Sony Bravia (androidtv_remote) strict DPAD_* command map
+ANDROIDTV_COMMAND_MAP: dict[str, str] = {
+    "up": "DPAD_UP",
+    "down": "DPAD_DOWN",
+    "left": "DPAD_LEFT",
+    "right": "DPAD_RIGHT",
+    "select": "DPAD_CENTER",
+    "back": "BACK",
+    "home": "HOME",
+    "menu": "MENU",
+    "info": "INFO",
+    "play": "MEDIA_PLAY",
+    "pause": "MEDIA_PAUSE",
+}
+
+# Apple TV / Roku / Generic remote.send_command lowercase command map
+STANDARD_REMOTE_COMMAND_MAP: dict[str, str] = {
+    "up": "up",
+    "down": "down",
+    "left": "left",
+    "right": "right",
+    "select": "select",
+    "back": "back",
+    "home": "home",
+    "menu": "menu",
+    "info": "info",
+}
+
 # Denon / Marantz AVR HTTP AppDirect command map for denonavr.get_command
 DENONAVR_COMMAND_MAP: dict[str, str] = {
     "up": "/goform/formiPhoneAppDirect.xml?MNCUP",
@@ -47,9 +108,7 @@ DENONAVR_COMMAND_MAP: dict[str, str] = {
     "left": "/goform/formiPhoneAppDirect.xml?MNCLT",
     "right": "/goform/formiPhoneAppDirect.xml?MNCRT",
     "select": "/goform/formiPhoneAppDirect.xml?MNENT",
-    "enter": "/goform/formiPhoneAppDirect.xml?MNENT",
     "back": "/goform/formiPhoneAppDirect.xml?MNRTN",
-    "return": "/goform/formiPhoneAppDirect.xml?MNRTN",
     "home": "/goform/formiPhoneAppDirect.xml?MNMEN%20ON",
     "menu": "/goform/formiPhoneAppDirect.xml?MNMEN%20ON",
     "info": "/goform/formiPhoneAppDirect.xml?MNINF",
@@ -63,9 +122,7 @@ WEBOSTV_BUTTON_MAP: dict[str, str] = {
     "left": "LEFT",
     "right": "RIGHT",
     "select": "ENTER",
-    "enter": "ENTER",
     "back": "BACK",
-    "return": "BACK",
     "home": "HOME",
     "menu": "MENU",
     "info": "INFO",
@@ -249,6 +306,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         return
 
     async def _handle_set_active_speaker(call: ServiceCall) -> None:
+        """The ONLY service allowed to change active_speaker."""
         speaker = str(call.data.get("entity_id") or call.data.get("speaker") or "")
         target_device = call.data.get("target_device")
         transfer_queue = _parse_bool(call.data.get("transfer_queue"), default=True)
@@ -401,22 +459,20 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             )
 
     async def _handle_set_active_area(call: ServiceCall) -> None:
-        """Directly set active room by area_id or room name (from BLE or UI)."""
+        """Directly set active room by area_id or room name (never modifies active_speaker)."""
         data = call.data
         target_device = data.get("target_device")
         coord = _get_primary_coordinator(hass, target_device)
         area_val = str(data.get("area") or data.get("area_id") or "").strip()
-        raw_handoff = data.get("handoff_media")
-        handoff_media = _parse_bool(raw_handoff) if raw_handoff is not None else None
         if coord and area_val:
             coord.async_set_active_area(
                 area_val,
-                handoff_media=handoff_media,
+                handoff_media=False,
                 sync_device_registry=True,
             )
 
     async def _handle_remote_action(call: ServiceCall) -> None:
-        """Execute a TV / Media Remote command on one of the 4 configured slots (with Denon/Marantz & LG webOS protocol adapters)."""
+        """Execute a TV / Media Remote command on one of the 4 configured slots (with Android TV DPAD_*, Denon/Marantz & LG webOS protocol adapters)."""
         data = call.data
         target_device = data.get("target_device")
         coord = _get_primary_coordinator(hass, target_device)
@@ -431,7 +487,8 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             coord._notify_listeners()
 
         action = str(data.get("action") or "").strip().lower()
-        cmd = str(data.get("command") or action).strip().lower()
+        raw_cmd = str(data.get("command") or action).strip()
+        cmd_low = raw_cmd.lower()
         if action in ("select_slot", ""):
             return
 
@@ -440,9 +497,10 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         remote_ent = slot_info["remote_entity"]
         mp_ent = slot_info["media_player_entity"]
         platform = str(slot_info.get("platform") or "").lower()
+        combined_ident = f"{platform} {mp_ent} {remote_ent} {slot_info.get('name', '')}".lower()
 
         # 1. Power Toggle
-        if action == "toggle" or cmd in ("toggle", "power"):
+        if action == "toggle" or cmd_low in ("toggle", "power"):
             target = mp_ent or remote_ent
             if target:
                 domain = target.split(".")[0]
@@ -452,7 +510,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             return
 
         # 2. Volume & Play/Pause
-        effective_media_cmd = cmd if action == "command" else action
+        effective_media_cmd = cmd_low if action == "command" else action
         if effective_media_cmd in ("volume_up", "volume_down", "volume_mute", "media_play_pause"):
             if mp_ent and mp_ent.startswith("media_player."):
                 await hass.services.async_call(
@@ -466,23 +524,24 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 await hass.services.async_call(
                     "remote",
                     "send_command",
-                    {ATTR_ENTITY_ID: remote_ent, "command": effective_media_cmd},
+                    {ATTR_ENTITY_ID: remote_ent, "command": effective_media_cmd.upper() if "android" in combined_ident else effective_media_cmd},
                     blocking=False,
                 )
                 return
 
-        if not cmd:
+        if not raw_cmd:
             return
+
+        intent = CANONICAL_NAV_INTENT.get(cmd_low)
 
         # 3. Protocol Adapter A: Denon / Marantz AVR (denonavr.get_command)
         is_denon = platform == "denonavr" or any(
-            k in f"{mp_ent} {remote_ent} {slot_info.get('name', '')}".lower()
-            for k in ("denon", "marantz")
+            k in combined_ident for k in ("denon", "marantz")
         )
         if is_denon and mp_ent and hass.services.has_service("denonavr", "get_command"):
-            denon_path = DENONAVR_COMMAND_MAP.get(cmd)
-            if not denon_path and cmd.startswith("/goform/"):
-                denon_path = cmd
+            denon_path = DENONAVR_COMMAND_MAP.get(intent or cmd_low)
+            if not denon_path and raw_cmd.startswith("/goform/"):
+                denon_path = raw_cmd
             if denon_path:
                 await hass.services.async_call(
                     "denonavr",
@@ -494,11 +553,10 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
         # 4. Protocol Adapter B: LG webOS TV (webostv.button)
         is_webos = platform == "webostv" or any(
-            k in f"{mp_ent} {remote_ent} {slot_info.get('name', '')}".lower()
-            for k in ("webos", "lg_tv", "lg_oled", "lg webos")
+            k in combined_ident for k in ("webos", "lg_tv", "lg_oled", "lg webos")
         )
         if is_webos and mp_ent and hass.services.has_service("webostv", "button"):
-            webos_btn = WEBOSTV_BUTTON_MAP.get(cmd, cmd.upper())
+            webos_btn = WEBOSTV_BUTTON_MAP.get(intent or cmd_low, raw_cmd.upper())
             await hass.services.async_call(
                 "webostv",
                 "button",
@@ -507,12 +565,28 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             )
             return
 
-        # 5. Standard Home Assistant remote.send_command (Apple TV, Roku, Android TV, Broadlink, etc.)
+        # 5. Protocol Adapter C: Android TV / Shield TV / Google TV / Fire TV / Sony Bravia (androidtv_remote)
+        is_android_tv = platform in ("androidtv_remote", "androidtv", "braviatv", "firetv") or any(
+            k in combined_ident
+            for k in ("shield", "android", "google_tv", "chromecast", "bravia", "fire_tv", "onn")
+        )
         if remote_ent and remote_ent.startswith("remote."):
+            if is_android_tv:
+                out_cmd = ANDROIDTV_COMMAND_MAP.get(intent or cmd_low, raw_cmd.upper())
+            elif intent is not None:
+                # Apple TV, Roku, Broadlink, etc.: normalize DPAD_UP/DPAD_CENTER or generic intent to standard command
+                if platform == "apple_tv" and intent == "back":
+                    out_cmd = "menu"
+                else:
+                    out_cmd = STANDARD_REMOTE_COMMAND_MAP.get(intent, raw_cmd)
+            else:
+                # Pass through explicit platform commands untouched (preserving original case)
+                out_cmd = raw_cmd
+
             await hass.services.async_call(
                 "remote",
                 "send_command",
-                {ATTR_ENTITY_ID: remote_ent, "command": cmd},
+                {ATTR_ENTITY_ID: remote_ent, "command": out_cmd},
                 blocking=False,
             )
 
@@ -544,9 +618,6 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         album_sort = str(data.get("album_sort") or "name")
         artist_album_sort = str(data.get("artist_album_sort") or "year")
         podcast_sort = str(data.get("podcast_sort") or "newest")
-
-        if coord and speaker and speaker != coord.active_speaker:
-            coord.async_set_active_speaker(speaker, transfer_queue=False)
 
         items = await async_browse_media_items(
             hass=hass,
@@ -590,8 +661,6 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             or ""
         )
         domain_filter = str(data.get("domain_filter") or "all")
-        raw_handoff = data.get("handoff_media")
-        handoff_media = _parse_bool(raw_handoff) if raw_handoff is not None else None
         local_speaker = coord.local_speaker if coord else DEFAULT_LOCAL_SPEAKER
 
         if coord:
@@ -601,7 +670,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             if area_id and area_id != coord.active_area_id:
                 coord.on_area_changed_push_slots = None
                 coord.async_set_active_area(
-                    area_id, handoff_media=handoff_media, sync_device_registry=False
+                    area_id, handoff_media=False, sync_device_registry=False
                 )
                 coord.on_area_changed_push_slots = lambda c: async_push_active_room_entities(hass, c)
 
@@ -646,12 +715,10 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         coord = _get_primary_coordinator(hass, target_device)
 
         area_id = data.get("area_id")
-        raw_handoff = data.get("handoff_media")
-        handoff_media = _parse_bool(raw_handoff) if raw_handoff is not None else None
         if coord and area_id and str(area_id) != coord.active_area_id:
             coord.async_set_active_area(
                 str(area_id),
-                handoff_media=handoff_media,
+                handoff_media=False,
                 sync_device_registry=False,
             )
 
