@@ -1013,7 +1013,6 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN,
         SERVICE_MUSIC_BROWSE,
-    SERVICE_NOTIFY_DEVICE,
         _handle_music_browse,
         schema=vol.Schema(
             {
