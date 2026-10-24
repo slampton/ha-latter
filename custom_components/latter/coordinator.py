@@ -539,6 +539,9 @@ class LatterCoordinator:
         if not self.last_speaker:
             self.last_speaker = self.active_speaker
 
+        # Enforce Strict Boot Rule: Never restore an idle/off remote speaker on startup
+        self._enforce_local_speaker_if_remote_idle("ha_startup")
+
         if self.device_profile == "mobile_display":
             protect_handheld_sensors_from_area_dashboards(
                 self.hass, self.device_slug
@@ -740,10 +743,38 @@ class LatterCoordinator:
             )
             self.hass.async_create_task(self._async_handle_device_reconnect())
 
+    @callback
+    def _enforce_local_speaker_if_remote_idle(self, reason: str) -> None:
+        """Reset active_speaker to local_speaker on boot/wake unless the remote speaker is actively playing."""
+        local_spk = self.local_speaker
+        if not local_spk or self.active_speaker == local_spk:
+            return
+
+        remote_state = self.hass.states.get(self.active_speaker)
+        is_remote_playing = bool(
+            remote_state and remote_state.state in (STATE_PLAYING, STATE_BUFFERING)
+        )
+        if not is_remote_playing:
+            _LOGGER.info(
+                "Resetting active_speaker from idle remote '%s' (state=%s) to local_speaker '%s' (%s)",
+                self.active_speaker,
+                remote_state.state if remote_state else "none",
+                local_spk,
+                reason,
+            )
+            self.last_speaker = self.active_speaker
+            self.active_speaker = local_spk
+            self._bind_speaker_listener()
+            self._schedule_persist_runtime_state()
+
     async def _async_handle_device_reconnect(self) -> None:
-        """Refresh all sensors and push active room slots 1.5s after ESPHome OTA/Hibernate reconnect."""
+        """Reset idle remote speaker, clear stale BLE room lock, and push active room slots after ESPHome boot/wake."""
+        self._enforce_local_speaker_if_remote_idle("device_reconnect")
+        if self._ble_tracker is not None:
+            self._ble_tracker.reset_for_device_wake()
         self._notify_listeners()
         await asyncio.sleep(1.5)
+        self._enforce_local_speaker_if_remote_idle("device_reconnect_post_delay")
         self._notify_listeners()
         if self.on_area_changed_push_slots is not None:
             await self.on_area_changed_push_slots(self)
@@ -1083,12 +1114,15 @@ class LatterCoordinator:
             return
         if area_id and area_id != self.active_area_id:
             _LOGGER.info(
-                "Native BLE Proxy ('%s') detected '%s' in area '%s'",
+                "Native BLE Proxy ('%s') detected '%s' in area '%s' (was '%s')",
                 scanner_source,
                 self.device_slug,
                 area_id,
+                self.active_area_id,
             )
-            self.async_set_active_area(area_id, sync_device_registry=True)
+            self.async_set_active_area(
+                area_id, handoff_media=False, sync_device_registry=True
+            )
         else:
             self._notify_listeners()
 

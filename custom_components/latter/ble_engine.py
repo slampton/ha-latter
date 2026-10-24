@@ -20,8 +20,8 @@ IBEACON_PREFIX = b"\x02\x15"
 EMA_ALPHA = 0.45
 HYSTERESIS_DB = 5.0
 STALE_PROXY_SECONDS = 20.0
-WAKE_GAP_SECONDS = 10.0
-MIN_HOLD_SECONDS = 5.0
+WAKE_GAP_SECONDS = 8.0
+MIN_HOLD_SECONDS = 4.0
 
 
 def _iter_devices(dev_reg: dr.DeviceRegistry) -> list[dr.DeviceEntry]:
@@ -56,7 +56,7 @@ def _normalize_uuid_hex(uuid_str: str) -> str:
 
 
 def _mac_to_int(mac_str: str) -> int | None:
-    """Convert a 12-hex-char MAC address into an integer for ESP32 Wi-Fi/BLE +/-2 comparison."""
+    """Convert a 12-hex-char MAC address into an integer for ESP32 Wi-Fi/BLE +/-3 comparison."""
     clean = mac_str.strip().lower().replace(":", "").replace("-", "").replace("_", "")
     if len(clean) != 12:
         return None
@@ -83,19 +83,47 @@ def _discover_target_device_macs(
 
     mac_ints: set[int] = set()
     for dev in _iter_devices(dev_reg):
-        dev_name = str(dev.name_by_user or dev.name or "").lower().replace("-", "_").replace(" ", "_")
+        dev_name = (
+            str(dev.name_by_user or dev.name or "")
+            .lower()
+            .replace("-", "_")
+            .replace(" ", "_")
+        )
         if dev.id == target_dev_id or (slug_norm and slug_norm in dev_name):
             for _conn_type, conn_val in dev.connections:
                 m_int = _mac_to_int(str(conn_val))
                 if m_int is not None:
-                    for offset in (-2, -1, 0, 1, 2):
+                    for offset in (-3, -2, -1, 0, 1, 2, 3):
                         mac_ints.add(m_int + offset)
             for _domain, ident_val in dev.identifiers:
                 m_int = _mac_to_int(str(ident_val))
                 if m_int is not None:
-                    for offset in (-2, -1, 0, 1, 2):
+                    for offset in (-3, -2, -1, 0, 1, 2, 3):
                         mac_ints.add(m_int + offset)
     return mac_ints
+
+
+def _resolve_device_area_or_entity_area(
+    dev: dr.DeviceEntry,
+    ent_reg: er.EntityRegistry,
+    area_reg: ar.AreaRegistry,
+) -> str | None:
+    """Return a device's area_id, or fallback to any entity's area_id on that device, or match area name in the device name."""
+    if dev.area_id:
+        return dev.area_id
+
+    for entry in er.async_entries_for_device(ent_reg, dev.id):
+        if entry.area_id:
+            return entry.area_id
+
+    dev_label = str(dev.name_by_user or dev.name or "").lower().replace("-", " ").replace("_", " ")
+    if dev_label:
+        for area in area_reg.async_list_areas():
+            a_norm = area.name.lower().replace("-", " ").replace("_", " ").strip()
+            if a_norm and a_norm in dev_label:
+                return area.id
+
+    return None
 
 
 def _resolve_scanner_area_id(
@@ -126,52 +154,82 @@ def _resolve_scanner_area_id(
     except Exception:  # noqa: BLE001
         pass
 
+    # Pass 1: Match scanner MAC/identifier/name to an HA DeviceEntry (checking device.area_id, entity.area_id, and device name)
     for device in _iter_devices(dev_reg):
-        if not device.area_id:
-            continue
+        matched_device = False
         for _conn_type, conn_val in device.connections:
             c_low = str(conn_val).lower()
             if c_low == src_low:
-                return device.area_id
+                matched_device = True
+                break
             c_int = _mac_to_int(c_low)
-            if src_int is not None and c_int is not None and abs(src_int - c_int) <= 2:
-                return device.area_id
+            if src_int is not None and c_int is not None and abs(src_int - c_int) <= 3:
+                matched_device = True
+                break
 
-        for _domain, ident_val in device.identifiers:
-            i_low = str(ident_val).lower()
-            if i_low == src_low:
-                return device.area_id
-            i_int = _mac_to_int(i_low)
-            if src_int is not None and i_int is not None and abs(src_int - i_int) <= 2:
-                return device.area_id
+        if not matched_device:
+            for _domain, ident_val in device.identifiers:
+                i_low = str(ident_val).lower()
+                if i_low == src_low:
+                    matched_device = True
+                    break
+                i_int = _mac_to_int(i_low)
+                if src_int is not None and i_int is not None and abs(src_int - i_int) <= 3:
+                    matched_device = True
+                    break
 
-        for candidate_name in (device.name_by_user, device.name):
-            if not candidate_name:
-                continue
-            d_low = str(candidate_name).strip().lower()
-            d_slug = d_low.replace(" ", "-").replace("_", "-")
-            for target_n in (src_low, scanner_name):
-                if not target_n:
+        if not matched_device:
+            for candidate_name in (device.name_by_user, device.name):
+                if not candidate_name:
                     continue
-                t_slug = target_n.replace(" ", "-").replace("_", "-")
-                if d_low == target_n or d_slug == t_slug or (len(d_slug) > 4 and d_slug in t_slug):
-                    return device.area_id
+                d_low = str(candidate_name).strip().lower()
+                d_slug = d_low.replace(" ", "-").replace("_", "-")
+                for target_n in (src_low, scanner_name):
+                    if not target_n:
+                        continue
+                    t_slug = target_n.replace(" ", "-").replace("_", "-")
+                    if (
+                        d_low == target_n
+                        or d_slug == t_slug
+                        or (len(d_slug) > 4 and (d_slug in t_slug or t_slug in d_slug))
+                    ):
+                        matched_device = True
+                        break
+                if matched_device:
+                    break
 
-    if scanner_name:
-        scan_norm = scanner_name.replace("-", " ").replace("_", " ")
+        if matched_device:
+            resolved = _resolve_device_area_or_entity_area(
+                device, ent_reg, area_reg
+            )
+            if resolved:
+                return resolved
+
+    # Pass 2: Match scanner_name or scanner_source directly against Home Assistant Area names
+    for raw_text in (scanner_name, src_low):
+        if not raw_text:
+            continue
+        scan_norm = raw_text.replace("-", " ").replace("_", " ")
         for area in area_reg.async_list_areas():
             a_norm = area.name.lower().replace("-", " ").replace("_", " ").strip()
             if a_norm and a_norm in scan_norm:
                 return area.id
 
+    # Pass 3: Match entity_id containing scanner source or scanner name
     for entry in _iter_entities(ent_reg):
-        if src_low in entry.entity_id or (scanner_name and scanner_name.replace("-", "_") in entry.entity_id):
+        if src_low in entry.entity_id or (
+            scanner_name and scanner_name.replace("-", "_").replace(" ", "_") in entry.entity_id
+        ):
             if entry.area_id:
                 return entry.area_id
             if entry.device_id:
                 dev = dev_reg.async_get(entry.device_id)
-                if dev and dev.area_id:
-                    return dev.area_id
+                if dev:
+                    resolved = _resolve_device_area_or_entity_area(
+                        dev, ent_reg, area_reg
+                    )
+                    if resolved:
+                        return resolved
 
     return None
 
@@ -214,6 +272,8 @@ class LatterNativeBleTracker:
         self._unsub_ble: Callable[[], None] | None = None
         # area_id -> (ema_rssi, last_seen_monotonic)
         self._area_rssi: dict[str, tuple[float, float]] = {}
+        # raw_source -> (rssi, last_seen_monotonic) for unmapped proxy diagnostics
+        self._unmapped_rssi: dict[str, tuple[int, float]] = {}
         self._scanner_area_cache: dict[str, str | None] = {}
         self._target_mac_ints: set[int] = set()
         self.current_area_id: str | None = None
@@ -221,6 +281,18 @@ class LatterNativeBleTracker:
         self.packets_seen: int = 0
         self._last_packet_monotonic: float = 0.0
         self._last_switch_monotonic: float = 0.0
+
+    @callback
+    def reset_for_device_wake(self) -> None:
+        """Clear stale RSSI history and scanner cache when the portable ESPHome device boots or wakes from standby."""
+        self._area_rssi.clear()
+        self._unmapped_rssi.clear()
+        self._scanner_area_cache.clear()
+        self.current_area_id = None
+        self._last_switch_monotonic = 0.0
+        self._target_mac_ints = _discover_target_device_macs(
+            self.hass, self._raw_slug
+        )
 
     @callback
     def async_start(self) -> None:
@@ -257,6 +329,7 @@ class LatterNativeBleTracker:
             self._unsub_ble()
             self._unsub_ble = None
         self._area_rssi.clear()
+        self._unmapped_rssi.clear()
         self._scanner_area_cache.clear()
 
     def get_live_rssi_summary(self) -> dict[str, int]:
@@ -269,6 +342,9 @@ class LatterNativeBleTracker:
                 area_obj = area_reg.async_get_area(area_id)
                 label = area_obj.name if area_obj else area_id
                 out[label] = int(round(ema))
+        for raw_src, (raw_rssi, ts) in self._unmapped_rssi.items():
+            if (now - ts) <= STALE_PROXY_SECONDS:
+                out[f"unmapped:{raw_src}"] = int(raw_rssi)
         return out
 
     def _matches_target_device(self, service_info: object) -> bool:
@@ -291,7 +367,11 @@ class LatterNativeBleTracker:
             if adv_int is not None and adv_int in self._target_mac_ints:
                 return True
 
-        adv_name = str(getattr(service_info, "name", "") or "").lower().replace("_", "-")
+        adv_name = (
+            str(getattr(service_info, "name", "") or "")
+            .lower()
+            .replace("_", "-")
+        )
         if adv_name and self._device_slug in adv_name:
             return True
 
@@ -311,7 +391,6 @@ class LatterNativeBleTracker:
             return
 
         now = time.monotonic()
-        # Detect wake from Tier 2 Screen-Off Standby (beacon was paused >= 10s)
         just_woke_from_standby = (
             self._last_packet_monotonic > 0.0
             and (now - self._last_packet_monotonic) >= WAKE_GAP_SECONDS
@@ -319,12 +398,13 @@ class LatterNativeBleTracker:
         self._last_packet_monotonic = now
         self.packets_seen += 1
 
-        if not self._target_mac_ints and self.packets_seen == 1:
+        if not self._target_mac_ints and self.packets_seen <= 3:
             self._target_mac_ints = _discover_target_device_macs(
                 self.hass, self._raw_slug
             )
 
-        if source not in self._scanner_area_cache:
+        # Re-resolve scanner if not cached or previously None (in case user just assigned an Area in HA)
+        if self._scanner_area_cache.get(source) is None:
             resolved_area = _resolve_scanner_area_id(self.hass, source)
             self._scanner_area_cache[source] = resolved_area
             _LOGGER.debug(
@@ -334,11 +414,13 @@ class LatterNativeBleTracker:
                 rssi,
             )
 
-        area_id = self._scanner_area_cache[source]
+        area_id = self._scanner_area_cache.get(source)
         if not area_id:
+            self._unmapped_rssi[source] = (int(rssi), now)
             return
 
-        # If the device just woke from standby after moving rooms, clear stale pre-sleep RSSIs for instant lock!
+        self._unmapped_rssi.pop(source, None)
+
         if just_woke_from_standby:
             self._area_rssi.clear()
 
@@ -365,8 +447,8 @@ class LatterNativeBleTracker:
             self._area_rssi.items(), key=lambda item: item[1][0]
         )
 
-        # Fast-path acquisition on first boot or right after waking from Screen-Off Standby
-        if self.current_area_id is None or (just_woke_from_standby and rssi_f >= -82.0):
+        # Fast-path acquisition on first boot, device reconnect, or right after waking from Screen-Off Standby
+        if self.current_area_id is None or (just_woke_from_standby and rssi_f >= -88.0):
             self.current_area_id = best_area
             self.closest_scanner = source
             self._last_switch_monotonic = now

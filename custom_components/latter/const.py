@@ -7,7 +7,7 @@ from typing import Final
 from homeassistant.const import Platform
 
 DOMAIN: Final = "latter"
-INTEGRATION_VERSION: Final = "1.4.1"
+INTEGRATION_VERSION: Final = "1.4.2"
 PLATFORMS: Final[list[Platform]] = [Platform.SENSOR]
 
 STORAGE_VERSION: Final = 1
