@@ -226,6 +226,12 @@ def _build_companion_state_payload(
     except Exception:  # noqa: BLE001
         health_warnings = []
 
+    ble_survey_rows: list[dict[str, Any]] = []
+    if coordinator._ble_tracker is not None and hasattr(
+        coordinator._ble_tracker, "get_room_calibration_telemetry"
+    ):
+        ble_survey_rows = coordinator._ble_tracker.get_room_calibration_telemetry()
+
     return {
         "entry_id": coordinator.entry.entry_id,
         "title": coordinator.entry.title,
@@ -246,6 +252,7 @@ def _build_companion_state_payload(
             "ble_closest_proxy": room_attrs.get("ble_closest_proxy", ""),
             "ble_packets_seen": room_attrs.get("ble_packets_seen", 0),
             "ble_rssi_by_room": room_attrs.get("ble_rssi_by_room", {}),
+            "ble_survey_rows": ble_survey_rows,
             "ble_scanners_map": room_attrs.get("ble_scanners_map", {}),
             "active_speaker": coordinator.active_speaker,
             "local_speaker": coordinator.local_speaker,
@@ -343,6 +350,50 @@ class LatterCompanionApiView(HomeAssistantView):
             )
             if coordinator._ble_tracker is not None:
                 coordinator._ble_tracker.set_room_offsets(offsets)
+            return web.json_response(
+                _build_companion_state_payload(self.hass, coordinator)
+            )
+
+        if cmd == "auto_calibrate_here":
+            target_area_id = str(body.get("area_id") or "").strip()
+            if target_area_id and coordinator._ble_tracker is not None:
+                rows = coordinator._ble_tracker.get_room_calibration_telemetry()
+                target_row = next(
+                    (r for r in rows if r["area_id"] == target_area_id), None
+                )
+                competing = [
+                    r["effective_rssi"]
+                    for r in rows
+                    if r["area_id"] != target_area_id
+                    and r["effective_rssi"] is not None
+                ]
+                offsets = dict(coordinator.ble_room_offsets)
+                if target_row and target_row["raw_rssi"] is not None and competing:
+                    best_competing_eff = max(competing)
+                    needed_offset = (best_competing_eff - target_row["raw_rssi"]) + 6.0
+                    offsets[target_area_id] = round(
+                        max(-25.0, min(25.0, needed_offset)), 1
+                    )
+                elif target_row:
+                    offsets[target_area_id] = round(
+                        max(
+                            -25.0,
+                            min(25.0, float(offsets.get(target_area_id, 0.0)) + 5.0),
+                        ),
+                        1,
+                    )
+                merged_cal: dict[str, Any] = {
+                    **coordinator.entry.data,
+                    **(coordinator.entry.options or {}),
+                    CONF_BLE_ROOM_OFFSETS: offsets,
+                }
+                self.hass.config_entries.async_update_entry(
+                    coordinator.entry, data=merged_cal, options=merged_cal
+                )
+                coordinator._ble_tracker.set_room_offsets(offsets)
+                coordinator.async_set_active_area(
+                    target_area_id, handoff_media=False, sync_device_registry=True
+                )
             return web.json_response(
                 _build_companion_state_payload(self.hass, coordinator)
             )
@@ -1200,7 +1251,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
         <img src="/api/latter/brand/icon.png" alt="Latter" style="width:34px;height:34px;border-radius:8px;object-fit:contain;flex-shrink:0;" onerror="this.style.display='none'">
         <div class="brand-text">
           <h1 id="hdr-title">Latter Studio</h1>
-          <small id="hdr-sub">v1.5.7</small>
+          <small id="hdr-sub">v1.5.8</small>
         </div>
       </div>
     </div>
@@ -1290,8 +1341,14 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
           </div>
 
           <div class="card">
-            <h3>BLE Room Presence Radar</h3>
-            <p class="desc">Live smoothed signal strength (dBm) reported by each room's ESPHome Bluetooth proxy.</p>
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:4px;">
+              <h3 style="margin:0;">BLE Site Survey & Room Calibration</h3>
+              <label style="font-size:12px;font-weight:600;color:var(--accent);display:inline-flex;align-items:center;gap:6px;cursor:pointer;">
+                <input type="checkbox" id="survey-fast-mode" onchange="toggleSurveyFastMode(this.checked)"> Live Walk-Around Mode (1.5s)
+              </label>
+            </div>
+            <p class="desc">Walk from room to room with your device to compare live <strong>Raw dBm</strong> vs. <strong>Calibrated Effective dBm</strong>. Tap <strong>Prioritize Here</strong> while standing in a room to auto-calculate the exact dB bias needed to win over competing proxies, or fine-tune with <code>-1</code> / <code>+1</code> dB.</p>
+
             <div id="rssi-container" style="margin-bottom:14px;"></div>
 
             <div id="embedded-room-ble" class="native-controls-box" style="margin-bottom:12px;"></div>
@@ -1303,17 +1360,6 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
             <div class="toggle-row">
               <span>Auto-Switch Active Room on Movement</span>
               <input type="checkbox" id="cfg-ble_auto_switch" onchange="markDirty()">
-            </div>
-
-            <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);">
-              <label style="font-size:12px;font-weight:700;color:var(--text-strong);display:block;margin-bottom:4px;">Room Signal Calibration (dB Bias / Weight)</label>
-              <p class="desc" style="margin-bottom:10px;">Add a positive dB bias (e.g. <code>+5 dB</code>) to favor a room when standing between two proxies, or a negative dB offset (e.g. <code>-5 dB</code>) to dampen an overpowering proxy.</p>
-              <div style="display:grid;grid-template-columns:1.3fr 1fr auto;gap:8px;align-items:center;">
-                <select id="ble-offset-area"></select>
-                <input type="number" id="ble-offset-val" min="-25" max="25" step="1" value="0" placeholder="dB (e.g. +5)">
-                <button class="btn-secondary" onclick="applyBleRoomOffset()">Apply dB</button>
-              </div>
-              <div id="ble-offsets-chips" class="chip-list"></div>
             </div>
           </div>
         </div>
@@ -1677,6 +1723,7 @@ let PINNED = [];
 let IS_DIRTY = false;
 let INITIAL_FORM_LOADED = false;
 let CURRENT_THEME_PREF = localStorage.getItem("latter_web_theme") || "dark";
+let POLL_TIMER = null;
 
 const sysMedia = window.matchMedia("(prefers-color-scheme: dark)");
 sysMedia.addEventListener("change", () => {
@@ -1756,46 +1803,53 @@ function populateSelect(selId, items, selectedVal, allowEmpty=true) {
   });
 }
 
-function renderRssiBars(rssiMap, packetsSeen) {
+function toggleSurveyFastMode(enabled) {
+  if (POLL_TIMER) clearInterval(POLL_TIMER);
+  const intervalMs = enabled ? 1500 : 5000;
+  POLL_TIMER = setInterval(() => refreshState(false), intervalMs);
+  if (enabled) refreshState(false);
+}
+
+function renderRssiBars(surveyRows, packetsSeen) {
   const box = document.getElementById("rssi-container");
   if (!box) return;
-  const entries = Object.entries(rssiMap || {});
-  if (!entries.length) {
-    box.innerHTML = `<p class="desc">No recent BLE iBeacon packets (Seen: ${packetsSeen || 0}). Ensure the BLE Presence Beacon switch below is ON.</p>`;
+  const rows = surveyRows || [];
+  if (!rows.length) {
+    box.innerHTML = `<p class="desc">No Bluetooth proxies discovered yet (Packets seen: ${packetsSeen || 0}).</p>`;
     return;
   }
-  entries.sort((a, b) => b[1] - a[1]);
-  box.innerHTML = entries.map(([room, dbm]) => {
-    const pct = Math.max(8, Math.min(100, Math.round(((dbm + 100) / 55) * 100)));
-    return `<div class="rssi-bar">
-      <div class="rssi-header"><strong>${room}</strong><span>${dbm} dBm</span></div>
-      <div class="rssi-track"><div class="rssi-fill" style="width:${pct}%"></div></div>
+  box.innerHTML = rows.map(r => {
+    const hasSignal = r.raw_rssi !== null && r.raw_rssi !== undefined;
+    const eff = hasSignal ? r.effective_rssi : -100;
+    const pct = hasSignal ? Math.max(6, Math.min(100, Math.round(((eff + 100) / 55) * 100))) : 0;
+    const offSign = r.offset_db > 0 ? `+${r.offset_db}` : `${r.offset_db}`;
+    const ageText = hasSignal ? `${r.age_seconds}s ago` : "No signal yet";
+    const sigText = hasSignal
+      ? `Raw: <strong>${r.raw_rssi} dBm</strong> &bull; Bias: <strong>${offSign} dB</strong> &rarr; Effective: <strong style="color:var(--accent);">${r.effective_rssi} dBm</strong>`
+      : `Bias: <strong>${offSign} dB</strong> &bull; Waiting for beacon packet...`;
+    const winBadge = r.is_winner
+      ? `<span class="state-badge" style="border-color:var(--success);color:var(--success);margin-left:6px;">ACTIVE WINNER</span>`
+      : "";
+
+    return `<div style="background:var(--input-bg);border:1px solid ${r.is_winner ? 'var(--accent)' : 'var(--border)'};border-radius:8px;padding:10px 12px;margin-bottom:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:5px;">
+        <div>
+          <strong style="color:var(--text-strong);font-size:13.5px;">${r.area_name}</strong>
+          <small style="color:var(--muted);margin-left:6px;">(${r.scanner} &bull; ${ageText})</small>
+          ${winBadge}
+        </div>
+        <div style="display:flex;align-items:center;gap:4px;">
+          <button class="btn-secondary" style="padding:4px 8px;font-size:11.5px;" onclick="setBleOffset('${r.area_id}', ${Number(r.offset_db) - 1})">-1 dB</button>
+          <span class="state-badge" style="min-width:52px;text-align:center;">${offSign} dB</span>
+          <button class="btn-secondary" style="padding:4px 8px;font-size:11.5px;" onclick="setBleOffset('${r.area_id}', ${Number(r.offset_db) + 1})">+1 dB</button>
+          ${r.offset_db !== 0 ? `<button class="btn-danger" style="padding:4px 7px;font-size:11px;" title="Reset to 0 dB" onclick="setBleOffset('${r.area_id}', 0)">0</button>` : ''}
+          <button class="btn-action" style="padding:4px 10px;font-size:11.5px;margin-left:4px;" title="Auto-calculate dB offset so this room wins at your current spot" onclick="autoCalibrateHere('${r.area_id}')">Prioritize Here</button>
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">${sigText}</div>
+      <div class="rssi-track"><div class="rssi-fill" style="width:${pct}%;opacity:${hasSignal ? 1 : 0.2};"></div></div>
     </div>`;
   }).join("");
-}
-
-function renderBleOffsetsChips(offsetsMap, areasCatalog) {
-  const box = document.getElementById("ble-offsets-chips");
-  if (!box) return;
-  const entries = Object.entries(offsetsMap || {});
-  if (!entries.length) {
-    box.innerHTML = `<span style="font-size:11.5px;color:var(--muted);">No room dB offsets active (all proxies weighted 0 dB).</span>`;
-    return;
-  }
-  const areaNames = {};
-  (areasCatalog || []).forEach(a => { areaNames[a.id] = a.name; });
-  box.innerHTML = entries.map(([areaId, db]) => {
-    const sign = db > 0 ? `+${db}` : `${db}`;
-    const label = areaNames[areaId] || areaId;
-    return `<div class="chip"><span>${label}: <strong>${sign} dB</strong></span><b onclick="setBleOffset('${areaId}', 0)">✕</b></div>`;
-  }).join("");
-}
-
-async function applyBleRoomOffset() {
-  const areaId = document.getElementById("ble-offset-area").value;
-  const val = parseFloat(document.getElementById("ble-offset-val").value || "0");
-  if (!areaId) return;
-  await setBleOffset(areaId, val);
 }
 
 async function setBleOffset(areaId, offsetDb) {
@@ -1807,6 +1861,18 @@ async function setBleOffset(areaId, offsetDb) {
   if (resp.ok) {
     applyStateToDom(await resp.json(), false);
     showToast("BLE calibration updated");
+  }
+}
+
+async function autoCalibrateHere(areaId) {
+  const resp = await fetch(API_URL, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({command: "auto_calibrate_here", area_id: areaId})
+  });
+  if (resp.ok) {
+    applyStateToDom(await resp.json(), false);
+    showToast("Calibrated & prioritized current room!");
   }
 }
 
@@ -2282,7 +2348,7 @@ function applyStateToDom(data, forceFormUpdate=false) {
   const humStr = live.room_humidity != null ? ` • ${live.room_humidity}%` : "";
 
   document.getElementById("hdr-title").textContent = esp?.device?.name || data.title;
-  document.getElementById("hdr-sub").textContent = `Latter v${data.version || '1.5.7'}`;
+  document.getElementById("hdr-sub").textContent = `Latter v${data.version || '1.5.8'}`;
   document.getElementById("nav-room-badge").textContent = roomName;
   document.getElementById("top-room").textContent = `Room: ${roomName}`;
   document.getElementById("top-speaker").textContent = `Speaker: ${spkShort}`;
@@ -2309,8 +2375,7 @@ function applyStateToDom(data, forceFormUpdate=false) {
   populateSelect("quick-area", cat.areas, live.active_area_id, false);
   populateSelect("quick-speaker", cat.ma_speakers, live.active_speaker, false);
   renderLiveRoomCards(live.room_cards);
-  renderRssiBars(live.ble_rssi_by_room, live.ble_packets_seen);
-  renderBleOffsetsChips(cfg.ble_room_offsets, cat.areas);
+  renderRssiBars(live.ble_survey_rows, live.ble_packets_seen);
   renderWallpaperGallery(data.wallpapers, cfg.device_slug, cfg.display_shape);
 
   const activeEl = document.activeElement;
@@ -2339,7 +2404,6 @@ function applyStateToDom(data, forceFormUpdate=false) {
     document.getElementById("cfg-art_size").value = String(cfg.art_size || 466);
 
     populateSelect("cfg-default_area", cat.areas, cfg.default_area);
-    populateSelect("ble-offset-area", cat.areas, live.active_area_id, false);
     populateSelect("cfg-presence_entity", cat.presence_sensors, cfg.presence_entity);
     populateSelect("cfg-default_speaker", cat.ma_speakers, cfg.default_speaker, false);
     populateSelect("cfg-vol_speaker_1", cat.ma_speakers, cfg.vol_speaker_1);
@@ -2451,7 +2515,7 @@ async function saveAllConfig() {
 }
 
 refreshState(true);
-setInterval(() => refreshState(false), 5000);
+toggleSurveyFastMode(false);
 </script>
 </body>
 </html>
