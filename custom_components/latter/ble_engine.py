@@ -287,6 +287,7 @@ class LatterNativeBleTracker:
         beacon_uuid: str,
         device_slug: str,
         on_area_detected: Callable[[str, str], None],
+        room_offsets: dict[str, float] | None = None,
     ) -> None:
         """Initialize the native BLE proxy room tracker."""
         self.hass = hass
@@ -294,6 +295,9 @@ class LatterNativeBleTracker:
         self._device_slug = device_slug.lower().replace("_", "-")
         self._raw_slug = device_slug
         self._on_area_detected = on_area_detected
+        self._room_offsets: dict[str, float] = {
+            str(k): float(v) for k, v in (room_offsets or {}).items()
+        }
 
         self._unsub_ble: Callable[[], None] | None = None
         self._unsub_poll: Callable[[], None] | None = None
@@ -314,6 +318,22 @@ class LatterNativeBleTracker:
     def target_macs_formatted(self) -> list[str]:
         """Return the list of candidate Wi-Fi/BLE MAC addresses for the target ESPHome device."""
         return sorted(_int_to_mac(m) for m in self._target_mac_ints)
+
+    @callback
+    def set_room_offsets(self, offsets: dict[str, float] | None) -> None:
+        """Update per-room RSSI calibration offsets (dB bias) in real time."""
+        self._room_offsets = {
+            str(k): max(-25.0, min(25.0, float(v)))
+            for k, v in (offsets or {}).items()
+        }
+
+    @callback
+    def set_room_offsets(self, offsets: dict[str, float] | None) -> None:
+        """Update per-room RSSI calibration offsets (dB bias) in real time."""
+        self._room_offsets = {
+            str(k): max(-25.0, min(25.0, float(v)))
+            for k, v in (offsets or {}).items()
+        }
 
     @callback
     def reset_for_device_wake(self) -> None:
@@ -542,7 +562,8 @@ class LatterNativeBleTracker:
             self._area_rssi.clear()
             self.current_area_id = None
 
-        rssi_f = float(rssi)
+        offset_db = float(self._room_offsets.get(area_id, 0.0))
+        rssi_f = float(rssi) + offset_db
         prev = self._area_rssi.get(area_id)
         if prev is None or (now - prev[1]) > STALE_PROXY_SECONDS:
             ema = rssi_f

@@ -53,6 +53,7 @@ from .const import (
     CONF_ART_SIZE,
     CONF_BLE_AUTO_SWITCH,
     CONF_BLE_BEACON_UUID,
+    CONF_BLE_ROOM_OFFSETS,
     CONF_CALENDAR_ENTITIES,
     CONF_COMPANION_BASE_URL,
     CONF_CUSTOM_BINDINGS,
@@ -409,6 +410,38 @@ class LatterCoordinator:
         ).strip()
 
     @property
+    def ble_room_offsets(self) -> dict[str, float]:
+        """Return per-room BLE RSSI calibration offsets (area_id -> dB bias)."""
+        raw = self.get_opt(CONF_BLE_ROOM_OFFSETS, {})
+        if not isinstance(raw, dict):
+            return {}
+        out: dict[str, float] = {}
+        for k, v in raw.items():
+            try:
+                val = round(max(-25.0, min(25.0, float(v))), 1)
+                if val != 0.0:
+                    out[str(k)] = val
+            except (ValueError, TypeError):
+                pass
+        return out
+
+    @property
+    def ble_room_offsets(self) -> dict[str, float]:
+        """Return per-room BLE RSSI calibration offsets (area_id -> dB bias)."""
+        raw = self.get_opt(CONF_BLE_ROOM_OFFSETS, {})
+        if not isinstance(raw, dict):
+            return {}
+        out: dict[str, float] = {}
+        for k, v in raw.items():
+            try:
+                val = round(max(-25.0, min(25.0, float(v))), 1)
+                if val != 0.0:
+                    out[str(k)] = val
+            except (ValueError, TypeError):
+                pass
+        return out
+
+    @property
     def presence_entity(self) -> str | None:
         """Return configured external BLE room presence entity_id (e.g. Bermuda)."""
         val = self.get_opt(CONF_PRESENCE_ENTITY)
@@ -633,6 +666,7 @@ class LatterCoordinator:
                 beacon_uuid=self.ble_beacon_uuid,
                 device_slug=self.device_slug,
                 on_area_detected=self._async_on_native_ble_area_detected,
+                room_offsets=self.ble_room_offsets,
             )
             self._ble_tracker.async_start()
 
@@ -1547,6 +1581,8 @@ class LatterCoordinator:
             "ble_closest_proxy": self._ble_tracker.closest_scanner if self._ble_tracker else "",
             "ble_packets_seen": self._ble_tracker.packets_seen if self._ble_tracker else 0,
             "ble_rssi_by_room": self._ble_tracker.get_live_rssi_summary() if self._ble_tracker else {},
+            "ble_room_offsets": self.ble_room_offsets,
+            "ble_room_offsets": self.ble_room_offsets,
             "ble_scanners_map": get_all_scanners_diagnostic_map(self.hass),
             "ble_target_macs": self._ble_tracker.target_macs_formatted if self._ble_tracker else [],
             "presence_entity": pres_ent or "",

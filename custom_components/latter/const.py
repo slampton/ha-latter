@@ -7,7 +7,7 @@ from typing import Final
 from homeassistant.const import Platform
 
 DOMAIN: Final = "latter"
-INTEGRATION_VERSION: Final = "1.5.2"
+INTEGRATION_VERSION: Final = "1.5.3"
 PLATFORMS: Final[list[Platform]] = [Platform.SENSOR]
 
 STORAGE_VERSION: Final = 1
@@ -30,6 +30,7 @@ CONF_VOL_TARGET_2: Final = "vol_target_2"
 CONF_DEFAULT_AREA: Final = "default_area"
 CONF_NATIVE_BLE_TRACKING: Final = "native_ble_tracking"
 CONF_BLE_BEACON_UUID: Final = "ble_beacon_uuid"
+CONF_BLE_ROOM_OFFSETS: Final = "ble_room_offsets"
 CONF_PRESENCE_ENTITY: Final = "presence_entity"
 CONF_BLE_AUTO_SWITCH: Final = "ble_auto_switch"
 CONF_SYNC_DEVICE_AREA: Final = "sync_device_area"

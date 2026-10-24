@@ -21,6 +21,7 @@ from .const import (
     CONF_ART_SIZE,
     CONF_BLE_AUTO_SWITCH,
     CONF_BLE_BEACON_UUID,
+    CONF_BLE_ROOM_OFFSETS,
     CONF_CALENDAR_ENTITIES,
     CONF_COMPANION_BASE_URL,
     CONF_CUSTOM_BINDINGS,
@@ -107,12 +108,11 @@ def _build_companion_state_payload(
     for state_obj in sorted(
         hass.states.async_all(), key=lambda s: s.entity_id
     ):
-        if state_obj.state in ("unavailable",):
-            continue
         ent_id = state_obj.entity_id
         domain = state_obj.domain
         friendly = str(state_obj.attributes.get("friendly_name") or ent_id)
-        item = {"id": ent_id, "name": f"{friendly} ({ent_id})", "domain": domain}
+        suffix_state = " [Off/Unavailable]" if state_obj.state == "unavailable" else ""
+        item = {"id": ent_id, "name": f"{friendly} ({ent_id}){suffix_state}", "domain": domain}
 
         if domain == "media_player":
             remotes_list.append(item)
@@ -195,6 +195,8 @@ def _build_companion_state_payload(
         CONF_DEFAULT_AREA: coordinator.get_opt(CONF_DEFAULT_AREA, ""),
         CONF_NATIVE_BLE_TRACKING: coordinator.native_ble_tracking_enabled,
         CONF_BLE_BEACON_UUID: coordinator.ble_beacon_uuid,
+        CONF_BLE_ROOM_OFFSETS: coordinator.ble_room_offsets,
+        CONF_BLE_ROOM_OFFSETS: coordinator.ble_room_offsets,
         CONF_PRESENCE_ENTITY: coordinator.presence_entity or "",
         CONF_BLE_AUTO_SWITCH: coordinator.ble_auto_switch_enabled,
         CONF_SYNC_DEVICE_AREA: coordinator.sync_device_area_enabled,
@@ -313,6 +315,50 @@ class LatterCompanionApiView(HomeAssistantView):
             )
 
         cmd = str(body.get("command") or "save_config")
+
+        if cmd == "set_ble_room_offset":
+            area_id = str(body.get("area_id") or "").strip()
+            offset_val = float(body.get("offset_db") or 0.0)
+            offsets = dict(coordinator.ble_room_offsets)
+            if abs(offset_val) < 0.1:
+                offsets.pop(area_id, None)
+            elif area_id:
+                offsets[area_id] = round(max(-25.0, min(25.0, offset_val)), 1)
+            merged_off: dict[str, Any] = {
+                **coordinator.entry.data,
+                **(coordinator.entry.options or {}),
+                CONF_BLE_ROOM_OFFSETS: offsets,
+            }
+            self.hass.config_entries.async_update_entry(
+                coordinator.entry, data=merged_off, options=merged_off
+            )
+            if coordinator._ble_tracker is not None:
+                coordinator._ble_tracker.set_room_offsets(offsets)
+            return web.json_response(
+                _build_companion_state_payload(self.hass, coordinator)
+            )
+
+        if cmd == "set_ble_room_offset":
+            area_id = str(body.get("area_id") or "").strip()
+            offset_val = float(body.get("offset_db") or 0.0)
+            offsets = dict(coordinator.ble_room_offsets)
+            if abs(offset_val) < 0.1:
+                offsets.pop(area_id, None)
+            elif area_id:
+                offsets[area_id] = round(max(-25.0, min(25.0, offset_val)), 1)
+            merged_off: dict[str, Any] = {
+                **coordinator.entry.data,
+                **(coordinator.entry.options or {}),
+                CONF_BLE_ROOM_OFFSETS: offsets,
+            }
+            self.hass.config_entries.async_update_entry(
+                coordinator.entry, data=merged_off, options=merged_off
+            )
+            if coordinator._ble_tracker is not None:
+                coordinator._ble_tracker.set_room_offsets(offsets)
+            return web.json_response(
+                _build_companion_state_payload(self.hass, coordinator)
+            )
 
         if cmd == "set_theme":
             theme_val = _normalize_web_theme(body.get("web_theme"))
@@ -488,6 +534,7 @@ class LatterCompanionApiView(HomeAssistantView):
                 CONF_DEFAULT_AREA,
                 CONF_NATIVE_BLE_TRACKING,
                 CONF_BLE_BEACON_UUID,
+    CONF_BLE_ROOM_OFFSETS,
                 CONF_PRESENCE_ENTITY,
                 CONF_BLE_AUTO_SWITCH,
                 CONF_SYNC_DEVICE_AREA,
@@ -771,6 +818,38 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     font-weight: 600;
     cursor: pointer;
     font-size: 12.5px;
+  }
+  button.btn-action {
+    background: var(--accent-subtle);
+    color: var(--text-strong);
+    border: 1px solid var(--accent);
+    padding: 10px 14px;
+    border-radius: 7px;
+    font-weight: 700;
+    cursor: pointer;
+    font-size: 13px;
+    text-align: center;
+    transition: background 0.15s ease, transform 0.1s ease;
+  }
+  button.btn-action:hover {
+    background: var(--accent-solid);
+    color: #ffffff;
+  }
+  button.btn-action {
+    background: var(--accent-subtle);
+    color: var(--text-strong);
+    border: 1px solid var(--accent);
+    padding: 10px 14px;
+    border-radius: 7px;
+    font-weight: 700;
+    cursor: pointer;
+    font-size: 13px;
+    text-align: center;
+    transition: background 0.15s ease, transform 0.1s ease;
+  }
+  button.btn-action:hover {
+    background: var(--accent-solid);
+    color: #ffffff;
   }
   button.btn-danger {
     background: rgba(239, 68, 68, 0.12);
@@ -1167,7 +1246,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
         <div class="brand-badge">L</div>
         <div class="brand-text">
           <h1 id="hdr-title">Latter Studio</h1>
-          <small id="hdr-sub">v1.5.2</small>
+          <small id="hdr-sub">v1.5.3</small>
         </div>
       </div>
     </div>
@@ -1270,6 +1349,17 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
             <div class="toggle-row">
               <span>Auto-Switch Active Room on Movement</span>
               <input type="checkbox" id="cfg-ble_auto_switch" onchange="markDirty()">
+            </div>
+
+            <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);">
+              <label style="font-size:12px;font-weight:700;color:var(--text-strong);display:block;margin-bottom:4px;">Room Signal Calibration (dB Bias / Weight)</label>
+              <p class="desc" style="margin-bottom:10px;">Add a positive dB bias (e.g. <code>+5 dB</code>) to favor a room when standing between two proxies, or a negative dB offset (e.g. <code>-5 dB</code>) to dampen an overpowering proxy.</p>
+              <div style="display:grid;grid-template-columns:1.3fr 1fr auto;gap:8px;align-items:center;">
+                <select id="ble-offset-area"></select>
+                <input type="number" id="ble-offset-val" min="-25" max="25" step="1" value="0" placeholder="dB (e.g. +5)">
+                <button class="btn-secondary" onclick="applyBleRoomOffset()">Apply dB</button>
+              </div>
+              <div id="ble-offsets-chips" class="chip-list"></div>
             </div>
           </div>
         </div>
@@ -1525,7 +1615,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
 
         <div class="grid-2">
           <div class="card">
-            <h3>Device Actions & Maintenance</h3>
+            <h3>Device Actions</h3>
             <p class="desc">One-tap hardware actions exposed by your ESPHome device.</p>
             <div id="embedded-actions" class="action-btn-grid" style="margin-bottom:14px;"></div>
             <h3>Battery & Power Telemetry</h3>
@@ -1830,17 +1920,19 @@ function renderCohesiveDeviceSections() {
   });
   document.getElementById("embedded-remote-general").innerHTML = slotBuckets.general.map(it => renderNativeControlRow(it)).join("");
 
-  // 6. System Actions, Battery & Network
+  // 6. System Actions, Battery & Network (+ any spillover sensors)
   const actionItems = getSectionItems("actions");
   document.getElementById("embedded-actions").innerHTML = actionItems.map(it =>
-    `<button class="btn-secondary" onclick="espAction('${it.entity_id}', 'press')">${it.name}</button>`
+    `<button class="btn-action" onclick="espAction('${it.entity_id}', 'press')">${it.name}</button>`
   ).join("");
 
   const batItems = getSectionItems("battery");
   document.getElementById("embedded-battery").innerHTML = batItems.map(it => renderNativeControlRow(it)).join("");
 
-  const netItems = getSectionItems("network");
-  document.getElementById("embedded-network").innerHTML = netItems.map(it => renderNativeControlRow(it)).join("");
+  const netItems = getSectionItems("network").concat(getSectionItems("other"));
+  document.getElementById("embedded-network").innerHTML = netItems.length
+    ? netItems.map(it => renderNativeControlRow(it)).join("")
+    : `<p class="desc">No network or diagnostic entities reported.</p>`;
 
   renderRawEntityList();
 }
@@ -2096,6 +2188,8 @@ function applyStateToDom(data, forceFormUpdate=false) {
   populateSelect("quick-speaker", cat.ma_speakers, live.active_speaker, false);
   renderLiveRoomCards(live.room_cards);
   renderRssiBars(live.ble_rssi_by_room, live.ble_packets_seen);
+  renderBleOffsetsChips(cfg.ble_room_offsets, cat.areas);
+  renderBleOffsetsChips(cfg.ble_room_offsets, cat.areas);
   renderWallpaperGallery(data.wallpapers, cfg.device_slug, cfg.display_shape);
 
   const activeEl = document.activeElement;
@@ -2124,6 +2218,8 @@ function applyStateToDom(data, forceFormUpdate=false) {
     document.getElementById("cfg-art_size").value = String(cfg.art_size || 466);
 
     populateSelect("cfg-default_area", cat.areas, cfg.default_area);
+    populateSelect("ble-offset-area", cat.areas, live.active_area_id, false);
+    populateSelect("ble-offset-area", cat.areas, live.active_area_id, false);
     populateSelect("cfg-presence_entity", cat.presence_sensors, cfg.presence_entity);
     populateSelect("cfg-default_speaker", cat.ma_speakers, cfg.default_speaker, false);
     populateSelect("cfg-vol_speaker_1", cat.ma_speakers, cfg.vol_speaker_1);
@@ -2153,6 +2249,78 @@ async function refreshState(forceForm=false) {
   if (resp.ok) {
     const data = await resp.json();
     applyStateToDom(data, forceForm);
+  }
+}
+
+function renderBleOffsetsChips(offsetsMap, areasCatalog) {
+  const box = document.getElementById("ble-offsets-chips");
+  if (!box) return;
+  const entries = Object.entries(offsetsMap || {});
+  if (!entries.length) {
+    box.innerHTML = `<span style="font-size:11.5px;color:var(--muted);">No room dB offsets active (all proxies weighted 0 dB).</span>`;
+    return;
+  }
+  const areaNames = {};
+  (areasCatalog || []).forEach(a => { areaNames[a.id] = a.name; });
+  box.innerHTML = entries.map(([areaId, db]) => {
+    const sign = db > 0 ? `+${db}` : `${db}`;
+    const label = areaNames[areaId] || areaId;
+    return `<div class="chip"><span>${label}: <strong>${sign} dB</strong></span><b onclick="setBleOffset('${areaId}', 0)">✕</b></div>`;
+  }).join("");
+}
+
+async function applyBleRoomOffset() {
+  const areaId = document.getElementById("ble-offset-area").value;
+  const val = parseFloat(document.getElementById("ble-offset-val").value || "0");
+  if (!areaId) return;
+  await setBleOffset(areaId, val);
+}
+
+async function setBleOffset(areaId, offsetDb) {
+  const resp = await fetch(API_URL, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({command: "set_ble_room_offset", area_id: areaId, offset_db: offsetDb})
+  });
+  if (resp.ok) {
+    applyStateToDom(await resp.json(), false);
+    showToast(`BLE calibration updated`);
+  }
+}
+
+function renderBleOffsetsChips(offsetsMap, areasCatalog) {
+  const box = document.getElementById("ble-offsets-chips");
+  if (!box) return;
+  const entries = Object.entries(offsetsMap || {});
+  if (!entries.length) {
+    box.innerHTML = `<span style="font-size:11.5px;color:var(--muted);">No room dB offsets active (all proxies weighted 0 dB).</span>`;
+    return;
+  }
+  const areaNames = {};
+  (areasCatalog || []).forEach(a => { areaNames[a.id] = a.name; });
+  box.innerHTML = entries.map(([areaId, db]) => {
+    const sign = db > 0 ? `+${db}` : `${db}`;
+    const label = areaNames[areaId] || areaId;
+    return `<div class="chip"><span>${label}: <strong>${sign} dB</strong></span><b onclick="setBleOffset('${areaId}', 0)">✕</b></div>`;
+  }).join("");
+}
+
+async function applyBleRoomOffset() {
+  const areaId = document.getElementById("ble-offset-area").value;
+  const val = parseFloat(document.getElementById("ble-offset-val").value || "0");
+  if (!areaId) return;
+  await setBleOffset(areaId, val);
+}
+
+async function setBleOffset(areaId, offsetDb) {
+  const resp = await fetch(API_URL, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({command: "set_ble_room_offset", area_id: areaId, offset_db: offsetDb})
+  });
+  if (resp.ok) {
+    applyStateToDom(await resp.json(), false);
+    showToast(`BLE calibration updated`);
   }
 }
 

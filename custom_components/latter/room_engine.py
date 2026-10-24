@@ -113,45 +113,81 @@ def classify_esphome_entity_section(
             sec_slug = "custom_" + re.sub(r"[^a-z0-9]+", "_", prefix_low).strip("_")
             return sec_slug, prefix_raw
 
-    # 2. Semantic fallback classification for non-prefixed entities
+    # 2. Semantic fallback classification (check clean friendly_name + entity suffix so device_slug words don't false-match)
+    ent_suffix = entity_id.split(".", 1)[-1].lower()
+    clean_low = name_clean.lower()
+
     if domain == "button" or dev_cls in ("restart", "identify"):
         return "actions", None
 
     if dev_cls in ("battery", "voltage", "current", "power", "energy") or any(
-        k in text for k in ("battery", "charging", "charger", "vbus", "axp2101", "pmic", "voltage", "internal_temp", "die_temp")
+        k in clean_low or k in ent_suffix
+        for k in ("battery", "charging", "charger", "vbus", "axp2101", "pmic", "voltage", "internal_temp", "die_temp")
     ):
         return "battery", None
 
-    if any(k in text for k in ("clock", "weather_background", "shortcut_", "dock", "home_")):
-        return "home", None
-
-    if any(k in text for k in ("sleep", "wake_on", "pickup_to_wake", "tap_to_wake", "screensaver", "hibernate", "stay_awake", "timeout")):
-        return "sleep", None
-
-    if any(k in text for k in ("display", "screen", "brightness", "backlight", "amoled", "theme", "color_profile", "boot")):
-        return "display", None
-
-    if any(k in text for k in ("voice", "wake_word", "micro_wake", "mic", "microphone", "sensitivity", "assist")):
-        return "voice", None
-
-    if any(k in text for k in ("sound", "chime", "beep", "ringtone", "alert_volume", "volume_step", "dac", "es8311")):
-        return "sound", None
-
-    if any(k in text for k in ("ble", "beacon", "ibeacon", "presence", "room", "area")):
-        return "room", None
-
-    if any(k in text for k in ("remote", "slot_1", "slot_2", "slot_3", "slot_4")):
-        return "remote", None
-
-    if domain == "media_player" or any(k in text for k in ("music", "album", "artist", "podcast", "queue", "playlist", "sort", "track", "speaker")):
-        return "music", None
-
+    # Check Network & System Diagnostics BEFORE generic words so Wi-Fi/IP/MAC/Uptime/Version/Diagnostic entities always land in "network"
     if (
         domain == "update"
-        or entity_category == EntityCategory.DIAGNOSTIC
         or dev_cls in ("signal_strength", "timestamp", "duration")
-        or any(k in text for k in ("wifi", "wi-fi", "rssi", "ip_address", "mac_address", "uptime", "free_heap", "psram", "memory", "cpu", "firmware", "version", "status", "online"))
+        or any(
+            k in clean_low or k in ent_suffix
+            for k in (
+                "wifi",
+                "wi-fi",
+                "wi_fi",
+                "rssi",
+                "signal",
+                "ip_address",
+                "ip address",
+                "mac_address",
+                "mac address",
+                "ssid",
+                "bssid",
+                "uptime",
+                "free_heap",
+                "heap",
+                "psram",
+                "memory",
+                "cpu",
+                "firmware",
+                "version",
+                "esphome",
+                "status",
+                "online",
+                "connected",
+                "safe_mode",
+            )
+        )
+        or (entity_category == EntityCategory.DIAGNOSTIC and domain in ("sensor", "binary_sensor", "text_sensor"))
     ):
+        return "network", None
+
+    if any(k in clean_low or k in ent_suffix for k in ("clock", "weather_background", "shortcut_", "dock", "home_")):
+        return "home", None
+
+    if any(k in clean_low or k in ent_suffix for k in ("sleep", "wake_on", "pickup_to_wake", "tap_to_wake", "screensaver", "hibernate", "stay_awake", "timeout")):
+        return "sleep", None
+
+    if any(k in clean_low or k in ent_suffix for k in ("display", "screen", "brightness", "backlight", "amoled", "theme", "color_profile", "boot")):
+        return "display", None
+
+    if any(k in clean_low or k in ent_suffix for k in ("voice", "wake_word", "micro_wake", "mic", "microphone", "sensitivity", "assist")):
+        return "voice", None
+
+    if any(k in clean_low or k in ent_suffix for k in ("sound", "chime", "beep", "ringtone", "alert_volume", "volume_step", "dac", "es8311")):
+        return "sound", None
+
+    if any(k in clean_low or k in ent_suffix for k in ("ble", "beacon", "ibeacon", "presence", "room", "area")):
+        return "room", None
+
+    if any(k in clean_low or k in ent_suffix for k in ("remote", "slot_1", "slot_2", "slot_3", "slot_4")):
+        return "remote", None
+
+    if domain == "media_player" or any(k in clean_low or k in ent_suffix for k in ("music", "album", "artist", "podcast", "queue", "playlist", "sort", "track", "speaker")):
+        return "music", None
+
+    if entity_category == EntityCategory.DIAGNOSTIC:
         return "network", None
 
     return "other", None
@@ -514,15 +550,16 @@ def resolve_remote_slot_pair(
         return empty
 
     ent_id = configured_entity_id.strip()
+    ent_reg = er.async_get(hass)
+    dev_reg = dr.async_get(hass)
+    entry = ent_reg.async_get(ent_id)
     state_obj = hass.states.get(ent_id)
-    if state_obj is None:
+    if state_obj is None and entry is None:
         return empty
 
-    ent_reg = er.async_get(hass)
-    entry = ent_reg.async_get(ent_id)
-
-    remote_ent = ent_id if state_obj.domain == "remote" else ""
-    mp_ent = ent_id if state_obj.domain == "media_player" else ""
+    ent_domain = state_obj.domain if state_obj else ent_id.split(".", 1)[0]
+    remote_ent = ent_id if ent_domain == "remote" else ""
+    mp_ent = ent_id if ent_domain == "media_player" else ""
     platform = str(entry.platform or "") if entry else ""
 
     if entry and entry.device_id:
@@ -539,9 +576,17 @@ def resolve_remote_slot_pair(
                     platform = str(sib.platform or "")
 
     primary_state = hass.states.get(mp_ent) or state_obj
+    dev_name = ""
+    if entry and entry.device_id:
+        dev = dev_reg.async_get(entry.device_id)
+        if dev:
+            dev_name = str(dev.name_by_user or dev.name or "")
     friendly = str(
-        primary_state.attributes.get("friendly_name")
-        or state_obj.attributes.get("friendly_name")
+        (primary_state.attributes.get("friendly_name") if primary_state else None)
+        or (state_obj.attributes.get("friendly_name") if state_obj else None)
+        or (entry.name if entry else None)
+        or (entry.original_name if entry else None)
+        or dev_name
         or ent_id
     )
     area_id = resolve_entity_area_id(hass, ent_id) or ""
@@ -551,7 +596,7 @@ def resolve_remote_slot_pair(
         "remote_entity": remote_ent or mp_ent,
         "media_player_entity": mp_ent or remote_ent,
         "area_id": area_id,
-        "state": primary_state.state,
+        "state": primary_state.state if primary_state else "off",
         "platform": platform,
     }
 
