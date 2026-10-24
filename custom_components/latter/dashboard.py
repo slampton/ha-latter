@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from http import HTTPStatus
+from pathlib import Path
 import logging
 from typing import Any
 
@@ -14,6 +15,7 @@ from homeassistant.helpers import area_registry as ar
 
 from .browse_engine import is_music_assistant_player
 from .const import (
+    API_BRAND_ICON_PATH,
     API_COMPANION_API_PATH,
     API_COMPANION_UI_PATH,
     CONF_ALARM_ENTITY,
@@ -588,21 +590,22 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<link rel="icon" type="image/png" href="/api/latter/brand/icon.png">
 <title>Latter Companion Studio</title>
 <style>
   :root, [data-theme="dark"] {
-    --bg: #07090e;
-    --sidebar: #0c1017;
-    --card: #111722;
-    --card-hover: #172030;
-    --border: #1e293b;
-    --input-bg: #090d14;
-    --text: #e2e8f0;
-    --text-strong: #f8fafc;
-    --muted: #8b9bb4;
-    --accent: #38bdf8;
-    --accent-solid: #0284c7;
-    --accent-subtle: rgba(56, 189, 248, 0.12);
+    --bg: #080a0f;
+    --sidebar: #0d1118;
+    --card: #121822;
+    --card-hover: #18202e;
+    --border: #1e2736;
+    --input-bg: #0a0e15;
+    --text: #dce3ec;
+    --text-strong: #f1f5f9;
+    --muted: #8492a6;
+    --accent: #6899d3;
+    --accent-solid: #2b5b94;
+    --accent-subtle: rgba(104, 153, 211, 0.11);
     --success: #10b981;
     --warning: #f59e0b;
     --danger: #ef4444;
@@ -617,9 +620,9 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     --text: #1e293b;
     --text-strong: #0f172a;
     --muted: #475569;
-    --accent: #0369a1;
-    --accent-solid: #0284c7;
-    --accent-subtle: rgba(2, 132, 199, 0.12);
+    --accent: #2b5b94;
+    --accent-solid: #2b5b94;
+    --accent-subtle: rgba(43, 91, 148, 0.10);
     --success: #059669;
     --warning: #d97706;
     --danger: #dc2626;
@@ -692,7 +695,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     font-size: 11px;
     display: block;
     margin-top: 2px;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-variant-numeric: tabular-nums;
   }
   .nav-list {
     display: flex;
@@ -733,7 +736,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     background: var(--card);
     border: 1px solid var(--border);
     color: var(--muted);
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-variant-numeric: tabular-nums;
   }
   .sidebar-footer {
     margin-top: auto;
@@ -774,7 +777,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     border: 1px solid var(--border);
     font-size: 12px;
     font-weight: 600;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-variant-numeric: tabular-nums;
   }
   .dot-live {
     width: 7px;
@@ -933,7 +936,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-variant-numeric: tabular-nums;
   }
   .field { margin-bottom: 13px; }
   .field label {
@@ -968,7 +971,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     justify-content: space-between;
     font-size: 12px;
     margin-bottom: 4px;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-variant-numeric: tabular-nums;
   }
   .rssi-track {
     height: 7px;
@@ -1011,7 +1014,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
   .room-mini-card small {
     font-size: 11px;
     color: var(--muted);
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-variant-numeric: tabular-nums;
   }
   /* Cohesive Native Control Rows for Embedded ESPHome Entities */
   .native-controls-box {
@@ -1040,7 +1043,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     font-weight: 400;
     font-size: 11px;
     color: var(--muted);
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-variant-numeric: tabular-nums;
   }
   .native-ctrl-row .widget {
     display: flex;
@@ -1101,7 +1104,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     color: var(--accent);
     font-weight: 600;
     font-size: 11.5px;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-variant-numeric: tabular-nums;
   }
   .wp-gallery {
     display: grid;
@@ -1165,7 +1168,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     padding: 4px 10px;
     border-radius: 6px;
     font-size: 12px;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-variant-numeric: tabular-nums;
     display: flex;
     align-items: center;
     gap: 7px;
@@ -1243,10 +1246,10 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
   <aside class="sidebar">
     <div class="brand">
       <div style="display:flex;align-items:center;gap:10px;min-width:0;">
-        <div class="brand-badge">L</div>
+        <img src="/api/latter/brand/icon.png" alt="Latter" style="width:34px;height:34px;border-radius:8px;object-fit:contain;flex-shrink:0;" onerror="this.style.display='none'">
         <div class="brand-text">
           <h1 id="hdr-title">Latter Studio</h1>
-          <small id="hdr-sub">v1.5.3</small>
+          <small id="hdr-sub">v1.5.4</small>
         </div>
       </div>
     </div>
@@ -2438,4 +2441,29 @@ class LatterCompanionDashboardView(HomeAssistantView):
             body=COMPANION_HTML_TEMPLATE,
             content_type="text/html",
             charset="utf-8",
+        )
+
+class LatterBrandIconView(HomeAssistantView):
+    """Serves the Latter brand icon (`custom_components/latter/brand/icon.png`) for the Web Companion Studio."""
+
+    requires_auth = False
+    url = API_BRAND_ICON_PATH
+    name = "api:latter:brand_icon"
+
+    def __init__(self, hass: HomeAssistant) -> None:
+        """Initialize the brand icon view."""
+        self.hass = hass
+        self._icon_path = Path(__file__).parent / "brand" / "icon.png"
+
+    async def get(self, request: web.Request) -> web.Response:
+        """Serve icon.png with caching headers."""
+        if not self._icon_path.is_file():
+            return web.Response(status=HTTPStatus.NOT_FOUND)
+        raw_bytes = await self.hass.async_add_executor_job(
+            self._icon_path.read_bytes
+        )
+        return web.Response(
+            body=raw_bytes,
+            content_type="image/png",
+            headers={"Cache-Control": "public, max-age=86400"},
         )
