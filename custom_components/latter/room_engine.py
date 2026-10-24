@@ -293,6 +293,23 @@ def inject_esphome_visit_link(
         )
 
 
+def inject_hacs_update_brand_icon(hass: HomeAssistant) -> None:
+    """Replace broken brands.home-assistant.io placeholder on HACS update.*latter* entities with local /api/latter/brand/icon.png."""
+    for state_obj in hass.states.async_all("update"):
+        ent_id = state_obj.entity_id.lower()
+        if "latter" not in ent_id:
+            continue
+        pic = str(state_obj.attributes.get("entity_picture") or "")
+        if "brands.home-assistant.io/_/latter/" in pic or not pic:
+            new_attrs = dict(state_obj.attributes)
+            new_attrs["entity_picture"] = "/api/latter/brand/icon.png"
+            hass.states.async_set(
+                state_obj.entity_id,
+                state_obj.state,
+                new_attrs,
+            )
+
+
 def get_esphome_device_entities(
     hass: HomeAssistant, device_slug: str
 ) -> dict[str, Any]:

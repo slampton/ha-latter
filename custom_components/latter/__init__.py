@@ -7,12 +7,15 @@ import re
 import secrets
 
 from homeassistant.config_entries import ConfigEntry, SOURCE_INTEGRATION_DISCOVERY
+from homeassistant.const import EVENT_STATE_CHANGED
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers import (
+    config_validation as cv,
     device_registry as dr,
     discovery_flow,
     entity_registry as er,
 )
+from homeassistant.helpers.typing import ConfigType
 
 from .const import (
     CONF_DEVICE_SLUG,
@@ -33,10 +36,12 @@ from .http import (
     LatterCameraSnapshotView,
     LatterWallpaperProxyView,
 )
-from .room_engine import inject_esphome_visit_link
+from .room_engine import inject_esphome_visit_link, inject_hacs_update_brand_icon
 from .services import async_setup_services
 
 _LOGGER = logging.getLogger(__name__)
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 type LatterConfigEntry = ConfigEntry[LatterCoordinator]
 
@@ -85,6 +90,13 @@ def _async_check_esphome_device_for_discovery(
     )
 
 
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Set up the Latter domain and register domain-level services (Platinum action-setup)."""
+    hass.data.setdefault(DOMAIN, {})
+    await async_setup_services(hass)
+    return True
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bool:
     """Set up Latter from a config entry."""
     domain_data = hass.data.setdefault(DOMAIN, {})
@@ -110,6 +122,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
     inject_esphome_visit_link(
         hass, coordinator.device_slug, coordinator.build_companion_url()
     )
+    inject_hacs_update_brand_icon(hass)
 
     if DATA_DISCOVERY_UNSUB not in domain_data:
         @callback
@@ -124,9 +137,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
             if dev is not None:
                 _async_check_esphome_device_for_discovery(hass, dev)
 
-        domain_data[DATA_DISCOVERY_UNSUB] = hass.bus.async_listen(
+        @callback
+        def _on_update_entity_state_changed(event: Event) -> None:
+            ent_id = str(event.data.get("entity_id") or "")
+            if ent_id.startswith("update.") and "latter" in ent_id.lower():
+                new_st = event.data.get("new_state")
+                if new_st is not None:
+                    pic = str(new_st.attributes.get("entity_picture") or "")
+                    if "brands.home-assistant.io/_/latter/" in pic:
+                        inject_hacs_update_brand_icon(hass)
+
+        unsub_dev = hass.bus.async_listen(
             dr.EVENT_DEVICE_REGISTRY_UPDATED, _on_device_registry_updated
         )
+        unsub_upd = hass.bus.async_listen(
+            EVENT_STATE_CHANGED, _on_update_entity_state_changed
+        )
+        domain_data[DATA_DISCOVERY_UNSUB] = (unsub_dev, unsub_upd)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     await async_setup_services(hass)
