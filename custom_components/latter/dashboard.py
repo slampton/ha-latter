@@ -51,6 +51,7 @@ from .const import (
     DEFAULT_PAGE_SIZE,
     DEFAULT_WEB_THEME,
     DOMAIN,
+    INTEGRATION_VERSION,
 )
 from .coordinator import LatterCoordinator
 from .room_engine import async_execute_room_action, get_esphome_device_entities
@@ -174,7 +175,7 @@ def _build_companion_state_payload(
     return {
         "entry_id": coordinator.entry.entry_id,
         "title": coordinator.entry.title,
-        "version": "1.3.0",
+        "version": INTEGRATION_VERSION,
         "config": config_data,
         "esphome": esphome_inspector,
         "live": {

@@ -29,6 +29,7 @@ from homeassistant.helpers import (
     entity_registry as er,
 )
 from homeassistant.helpers.event import (
+    async_call_later,
     async_track_state_change_event,
     async_track_time_interval,
 )
@@ -36,7 +37,12 @@ from homeassistant.helpers.network import get_url
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
-from .ble_engine import LatterNativeBleTracker, _iter_devices, _iter_entities, get_ble_proxy_area_ids
+from .ble_engine import (
+    LatterNativeBleTracker,
+    _iter_devices,
+    _iter_entities,
+    get_ble_proxy_area_ids,
+)
 from .browse_engine import _get_mass_client, is_music_assistant_player
 from .calendar_engine import async_fetch_calendar_agenda
 from .const import (
@@ -74,7 +80,6 @@ from .const import (
     DEFAULT_BLE_AUTO_SWITCH,
     DEFAULT_BLE_BEACON_UUID,
     DEFAULT_DEVICE_PROFILE,
-    DEFAULT_DEVICE_SLUG,
     DEFAULT_DISPLAY_SHAPE,
     DEFAULT_DOCK_APPS,
     DEFAULT_NATIVE_BLE_TRACKING,
@@ -84,6 +89,7 @@ from .const import (
     POSITION_UPDATE_INTERVAL_SECONDS,
     STORAGE_KEY_PREFIX,
     STORAGE_VERSION,
+    normalize_device_slug,
 )
 from .room_engine import (
     find_area_media_entities,
@@ -101,13 +107,14 @@ _LOGGER = logging.getLogger(__name__)
 
 DAY_ABBR: tuple[str, ...] = ("MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN")
 TRANSFER_HOLD_WINDOW_SECONDS = 4.5
+VOLUME_FEATURE_FLAGS = 4 | 8 | 1024  # VOLUME_SET | VOLUME_MUTE | VOLUME_STEP
 
 
 def _resolve_esphome_local_speaker(
     hass: HomeAssistant, device_slug: str
 ) -> str:
     """Automatically resolve the on-device media_player entity for the configured ESPHome node."""
-    slug_norm = device_slug.strip().lower().replace("-", "_")
+    slug_norm = normalize_device_slug(device_slug)
     direct_candidate = f"media_player.{slug_norm}"
     if hass.states.get(direct_candidate) is not None:
         return direct_candidate
@@ -121,7 +128,12 @@ def _resolve_esphome_local_speaker(
                 return entry.entity_id
 
     for dev in _iter_devices(dev_reg):
-        dev_name = str(dev.name_by_user or dev.name or "").lower().replace("-", "_").replace(" ", "_")
+        dev_name = (
+            str(dev.name_by_user or dev.name or "")
+            .lower()
+            .replace("-", "_")
+            .replace(" ", "_")
+        )
         if slug_norm and slug_norm in dev_name:
             for entry in er.async_entries_for_device(ent_reg, dev.id):
                 if entry.domain == "media_player" and not entry.disabled_by:
@@ -138,7 +150,7 @@ def _resolve_ma_counterpart_entity(
     if state_obj and is_music_assistant_player(hass, state_obj):
         return speaker_entity_id
 
-    slug_norm = device_slug.strip().lower().replace("-", "_")
+    slug_norm = normalize_device_slug(device_slug)
     spk_short = speaker_entity_id.replace("media_player.", "").lower()
 
     for candidate in hass.states.async_all("media_player"):
@@ -147,7 +159,12 @@ def _resolve_ma_counterpart_entity(
         if not is_music_assistant_player(hass, candidate):
             continue
         cid_low = candidate.entity_id.lower()
-        friendly_low = str(candidate.attributes.get("friendly_name") or "").lower().replace("-", "_").replace(" ", "_")
+        friendly_low = (
+            str(candidate.attributes.get("friendly_name") or "")
+            .lower()
+            .replace("-", "_")
+            .replace(" ", "_")
+        )
         if slug_norm in cid_low or spk_short in cid_low or slug_norm in friendly_low:
             return candidate.entity_id
 
@@ -159,9 +176,14 @@ def _get_esphome_device_current_area(
 ) -> str | None:
     """Return the current area_id assigned to the ESPHome device in HA Device Registry."""
     dev_reg = dr.async_get(hass)
-    slug_norm = device_slug.strip().lower().replace("-", "_")
+    slug_norm = normalize_device_slug(device_slug)
     for dev in _iter_devices(dev_reg):
-        dev_name = str(dev.name_by_user or dev.name or "").lower().replace("-", "_").replace(" ", "_")
+        dev_name = (
+            str(dev.name_by_user or dev.name or "")
+            .lower()
+            .replace("-", "_")
+            .replace(" ", "_")
+        )
         if slug_norm and slug_norm in dev_name and dev.area_id:
             return dev.area_id
     return None
@@ -210,6 +232,8 @@ class LatterCoordinator:
         self._unsub_alarm_state: callable | None = None
         self._unsub_presence_state: callable | None = None
         self._unsub_remotes_state: callable | None = None
+        self._unsub_room_entities_state: callable | None = None
+        self._unsub_room_debounce: callable | None = None
         self._unsub_position_timer: callable | None = None
         self._unsub_forecast_timer: callable | None = None
         self._unsub_calendar_timer: callable | None = None
@@ -276,8 +300,8 @@ class LatterCoordinator:
     @property
     def device_slug(self) -> str:
         """Return normalized ESPHome device slug (underscores)."""
-        raw = str(self.get_opt(CONF_DEVICE_SLUG, DEFAULT_DEVICE_SLUG))
-        return raw.strip().lower().replace("-", "_")
+        raw = str(self.get_opt(CONF_DEVICE_SLUG, "esphome_device"))
+        return normalize_device_slug(raw)
 
     @property
     def device_profile(self) -> str:
@@ -411,7 +435,7 @@ class LatterCoordinator:
         return int(self.get_opt(CONF_ART_SIZE, DEFAULT_ART_SIZE))
 
     def get_signed_token(self) -> str:
-        """Generate an HMAC-SHA256 token for this config entry's image proxy and companion UI."""
+        """Generate an HMAC-SHA256 token for this config entry's companion UI."""
         return hmac.new(
             self._hmac_secret,
             self.entry.entry_id.encode("utf-8"),
@@ -434,21 +458,20 @@ class LatterCoordinator:
         return f"{base_url}/api/latter/companion/{self.entry.entry_id}?token={token}"
 
     def build_wallpaper_url(self) -> str:
-        """Build the authenticated photo wallpaper URL."""
+        """Build the device-scoped baseline-JPEG photo wallpaper URL."""
         if not self.wallpaper_source:
             return "none"
         try:
             base_url = get_url(self.hass, allow_internal=True, prefer_external=False)
         except Exception:  # noqa: BLE001
             base_url = "http://homeassistant.local:8123"
-        token = self.get_signed_token()
         size = self.art_size
         digest = hashlib.md5(
             f"{self.wallpaper_source}|{self.display_shape}|{size}".encode("utf-8")
         ).hexdigest()[:10]
         return (
-            f"{base_url}/api/latter/wallpaper/{self.entry.entry_id}"
-            f"?w={size}&h={size}&token={token}&v={digest}"
+            f"{base_url}/api/latter/wallpaper/{self.device_slug}"
+            f"?w={size}&h={size}&shape={self.display_shape}&v={digest}"
         )
 
     def build_proxy_art_url(self, cache_bust: str) -> str:
@@ -557,8 +580,8 @@ class LatterCoordinator:
         self._bind_alarm_listener()
         self._bind_presence_listener()
         self._bind_remotes_listener()
+        self._bind_room_entities_listener()
 
-        # Intercept direct media_player.media_play / media_play_pause calls on an idle local speaker after reboot
         self._unsub_play_interceptor = self.hass.bus.async_listen(
             EVENT_CALL_SERVICE, self._async_on_service_call_event
         )
@@ -600,6 +623,8 @@ class LatterCoordinator:
             self._unsub_alarm_state,
             self._unsub_presence_state,
             self._unsub_remotes_state,
+            self._unsub_room_entities_state,
+            self._unsub_room_debounce,
             self._unsub_position_timer,
             self._unsub_forecast_timer,
             self._unsub_calendar_timer,
@@ -613,10 +638,58 @@ class LatterCoordinator:
         self._unsub_alarm_state = None
         self._unsub_presence_state = None
         self._unsub_remotes_state = None
+        self._unsub_room_entities_state = None
+        self._unsub_room_debounce = None
         self._unsub_position_timer = None
         self._unsub_forecast_timer = None
         self._unsub_calendar_timer = None
         self._listeners.clear()
+
+    @callback
+    def _bind_room_entities_listener(self) -> None:
+        """Subscribe to state changes on all curated entities in the active room for live two-way sync."""
+        if self._unsub_room_entities_state is not None:
+            self._unsub_room_entities_state()
+            self._unsub_room_entities_state = None
+
+        room_items = get_area_entities(
+            self.hass,
+            area_id=self.active_area_id,
+            domain_filter="all",
+            custom_entities=self.custom_entities,
+            local_speaker=self.local_speaker,
+        )
+        tracked_ids = [str(it["id"]) for it in room_items if it.get("id")]
+        if not tracked_ids:
+            return
+
+        self._unsub_room_entities_state = async_track_state_change_event(
+            self.hass,
+            tracked_ids,
+            self._async_on_room_entity_state_change,
+        )
+
+    @callback
+    def _async_on_room_entity_state_change(
+        self, event: Event[EventStateChangedData]
+    ) -> None:
+        """Debounce active room entity state changes (250ms) and push updated room slots to ESPHome."""
+        self._notify_listeners()
+        if self._unsub_room_debounce is not None:
+            self._unsub_room_debounce()
+            self._unsub_room_debounce = None
+
+        @callback
+        def _push_room_update(_now: datetime) -> None:
+            self._unsub_room_debounce = None
+            if self.on_area_changed_push_slots is not None:
+                self.hass.async_create_task(
+                    self.on_area_changed_push_slots(self)
+                )
+
+        self._unsub_room_debounce = async_call_later(
+            self.hass, 0.25, _push_room_update
+        )
 
     @callback
     def _bind_local_reconnect_listener(self) -> None:
@@ -645,6 +718,9 @@ class LatterCoordinator:
         if new_state is None:
             return
 
+        if new_state.state in (STATE_PLAYING, STATE_BUFFERING):
+            self._local_needs_cold_resume = False
+
         was_offline = old_state is None or old_state.state in (
             STATE_UNAVAILABLE,
             STATE_UNKNOWN,
@@ -654,6 +730,7 @@ class LatterCoordinator:
             STATE_UNKNOWN,
         )
         if was_offline and is_now_online:
+            self._local_needs_cold_resume = True
             _LOGGER.info(
                 "ESPHome device '%s' (%s) reconnected (%s -> %s); scheduling full state & slot resync",
                 self.device_slug,
@@ -673,7 +750,9 @@ class LatterCoordinator:
 
     @callback
     def _async_on_service_call_event(self, event: Event) -> None:
-        """Intercept direct media_player.media_play / media_play_pause on an idle local Sendspin speaker to auto-resume MA queue."""
+        """Intercept direct media_player.media_play / media_play_pause on an idle local Sendspin speaker after cold boot."""
+        if not self._local_needs_cold_resume:
+            return
         if time.monotonic() < self._resuming_guard_until:
             return
         if event.data.get("domain") != "media_player":
@@ -712,7 +791,6 @@ class LatterCoordinator:
             or speaker_entity_id
         )
 
-        # 1. Check in-process Music Assistant player_queues controller
         mass = _get_mass_client(self.hass)
         if mass is not None and hasattr(mass, "player_queues"):
             try:
@@ -729,7 +807,6 @@ class LatterCoordinator:
             except Exception as err:  # noqa: BLE001
                 _LOGGER.debug("Direct mass.player_queues resume lookup failed: %s", err)
 
-        # 2. Check music_assistant.get_queue service
         if self.hass.services.has_service("music_assistant", "get_queue"):
             try:
                 resp = await self.hass.services.async_call(
@@ -766,20 +843,19 @@ class LatterCoordinator:
     async def _async_resume_idle_speaker_queue(
         self, speaker_entity_id: str
     ) -> None:
-        """Resume playback on an idle speaker (e.g. local Sendspin player after ESP32 reboot/hibernate)."""
+        """Resume playback on an idle speaker only if native media_play does not start within 2.2s after cold boot."""
         self._resuming_guard_until = time.monotonic() + 3.5
 
-        # Wait 0.8s first in case standard media_player.media_play already woke the stream
-        await asyncio.sleep(0.8)
+        await asyncio.sleep(2.2)
         cur_state = self.hass.states.get(speaker_entity_id)
         if cur_state is not None and cur_state.state in (STATE_PLAYING, STATE_BUFFERING):
+            self._local_needs_cold_resume = False
             return
 
         ma_entity = _resolve_ma_counterpart_entity(
             self.hass, speaker_entity_id, self.device_slug
         )
 
-        # Step 1: If there is a distinct Music Assistant wrapper entity for this speaker, try media_play on it
         if ma_entity and ma_entity != speaker_entity_id:
             try:
                 await self.hass.services.async_call(
@@ -788,14 +864,14 @@ class LatterCoordinator:
                     {ATTR_ENTITY_ID: ma_entity},
                     blocking=True,
                 )
-                await asyncio.sleep(0.8)
+                await asyncio.sleep(1.0)
                 cur_state = self.hass.states.get(speaker_entity_id)
                 if cur_state is not None and cur_state.state in (STATE_PLAYING, STATE_BUFFERING):
+                    self._local_needs_cold_resume = False
                     return
             except Exception:  # noqa: BLE001
                 pass
 
-        # Step 2: Fetch queue current_item URI (or persisted pre-reboot URI) and re-stream via Music Assistant
         resume_uri, resume_pos = await self._async_find_queue_resume_item(
             speaker_entity_id
         )
@@ -807,6 +883,7 @@ class LatterCoordinator:
             return
 
         play_target = ma_entity or speaker_entity_id
+        self._local_needs_cold_resume = False
         _LOGGER.info(
             "Re-streaming post-reboot queue URI '%s' (pos=%.1fs) to '%s'",
             resume_uri,
@@ -816,7 +893,7 @@ class LatterCoordinator:
 
         try:
             if self.hass.services.has_service("music_assistant", "play_media") and (
-                ma_entity or is_music_assistant_player(self.hass, cur_state) if cur_state else False
+                ma_entity or (is_music_assistant_player(self.hass, cur_state) if cur_state else False)
             ):
                 await self.hass.services.async_call(
                     "music_assistant",
@@ -868,7 +945,7 @@ class LatterCoordinator:
         media_type: str | None = None,
         enqueue: str | None = None,
     ) -> None:
-        """Execute a unified media playback command with automatic post-reboot Sendspin queue resumption."""
+        """Execute a unified media playback command with 2.5s play debounce and post-reboot Sendspin queue recovery."""
         target_spk = (speaker or self.active_speaker or self.local_speaker).strip()
         if not target_spk:
             return
@@ -885,6 +962,7 @@ class LatterCoordinator:
             )
 
         if cmd == "play_media" and media_id:
+            self._local_needs_cold_resume = False
             ma_target = _resolve_ma_counterpart_entity(
                 self.hass, target_spk, self.device_slug
             )
@@ -917,14 +995,25 @@ class LatterCoordinator:
             return
 
         if cmd == "play":
-            self._resuming_guard_until = time.monotonic() + 3.5
+            now = time.monotonic()
+            if now < self._resuming_guard_until:
+                return
+            self._resuming_guard_until = now + 2.5
             await self.hass.services.async_call(
                 "media_player",
                 "media_play",
                 {ATTR_ENTITY_ID: target_spk},
                 blocking=False,
             )
-            if cur_state in (STATE_IDLE, STATE_OFF, "stopped"):
+            is_local = target_spk in (
+                self.local_speaker,
+                f"media_player.{self.device_slug}",
+            )
+            if is_local and self._local_needs_cold_resume and cur_state in (
+                STATE_IDLE,
+                STATE_OFF,
+                "stopped",
+            ):
                 await self._async_resume_idle_speaker_queue(target_spk)
             return
 
@@ -1209,6 +1298,7 @@ class LatterCoordinator:
         if not matched_id:
             return
         self.active_area_id = matched_id
+        self._bind_room_entities_listener()
 
         if sync_device_registry and self.sync_device_area_enabled:
             sync_esphome_device_area(
@@ -1586,7 +1676,6 @@ class LatterCoordinator:
         else:
             media_type = "music"
 
-        # Persist active track info so post-reboot local Sendspin speaker can resume seamlessly
         if title != "Idle" and state in (STATE_PLAYING, STATE_PAUSED, STATE_BUFFERING):
             cid = str(attrs.get("media_content_id") or "")
             if cid:
@@ -1616,7 +1705,6 @@ class LatterCoordinator:
             and self.last_media_title
             and self.active_speaker == self.local_speaker
         ):
-            # Keep pre-reboot track metadata visible when local speaker is idle after reboot
             title = self.last_media_title
             artist = self.last_media_artist or "None"
             album = self.last_media_album or "None"
@@ -1626,6 +1714,14 @@ class LatterCoordinator:
 
         volume = self._read_volume_from_target(vol_target, attrs)
         supported_features = int(attrs.get("supported_features") or 0)
+        if vol_target != self.active_speaker:
+            vol_state = self.hass.states.get(vol_target)
+            if vol_state is not None:
+                if vol_state.domain in ("number", "input_number"):
+                    supported_features |= VOLUME_FEATURE_FLAGS
+                else:
+                    vol_feat = int(vol_state.attributes.get("supported_features") or 0)
+                    supported_features |= vol_feat & VOLUME_FEATURE_FLAGS
 
         raw_pic = str(
             attrs.get("entity_picture_local")

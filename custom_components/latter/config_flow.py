@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 import voluptuous as vol
 
@@ -12,8 +13,9 @@ from homeassistant.config_entries import (
     OptionsFlow,
 )
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers import selector
+from homeassistant.helpers import device_registry as dr, entity_registry as er, selector
 
+from .ble_engine import _iter_devices, _iter_entities
 from .const import (
     CONF_ALARM_ENTITY,
     CONF_AREA_HANDOFF,
@@ -41,21 +43,34 @@ from .const import (
     DEFAULT_ART_SIZE,
     DEFAULT_BLE_AUTO_SWITCH,
     DEFAULT_BLE_BEACON_UUID,
-    DEFAULT_DEVICE_SLUG,
-    DEFAULT_LOCAL_SPEAKER,
     DEFAULT_NATIVE_BLE_TRACKING,
     DEFAULT_SYNC_DEVICE_AREA,
     DOMAIN,
+    normalize_device_slug,
 )
 
 
 def _discover_esphome_slug(hass: HomeAssistant) -> str:
-    """Auto-discover an ESPHome node exposing *_set_browse_slots."""
+    """Auto-discover an ESPHome node exposing slot services or media/display entities."""
     esphome_services = hass.services.async_services().get("esphome", {})
-    for service_name in esphome_services:
-        if service_name.endswith("_set_browse_slots"):
-            return service_name[: -len("_set_browse_slots")]
-    return DEFAULT_DEVICE_SLUG
+    for suffix in ("_set_browse_slots", "_set_room_slots"):
+        for service_name in esphome_services:
+            if service_name.endswith(suffix):
+                return service_name[: -len(suffix)]
+
+    dev_reg = dr.async_get(hass)
+    ent_reg = er.async_get(hass)
+    for dev in _iter_devices(dev_reg):
+        entries = er.async_entries_for_device(ent_reg, dev.id)
+        if not any(e.platform == "esphome" for e in entries):
+            continue
+        dev_name = str(dev.name_by_user or dev.name or "").strip()
+        if dev_name and "proxy" not in dev_name.lower():
+            slug = re.sub(r"[^a-z0-9]+", "_", dev_name.lower()).strip("_")
+            if slug:
+                return slug
+
+    return "esphome_device"
 
 
 def _discover_default_weather(hass: HomeAssistant) -> str | None:
@@ -74,14 +89,20 @@ def _discover_default_alarm(hass: HomeAssistant) -> str | None:
     return None
 
 
-def _discover_default_speaker(hass: HomeAssistant) -> str:
-    """Return a sensible default media_player entity."""
-    if hass.states.get(DEFAULT_LOCAL_SPEAKER) is not None:
-        return DEFAULT_LOCAL_SPEAKER
+def _discover_default_speaker(hass: HomeAssistant, device_slug: str) -> str:
+    """Return the device's own media_player if present, or the first available media_player."""
+    local_candidate = f"media_player.{normalize_device_slug(device_slug)}"
+    if hass.states.get(local_candidate) is not None:
+        return local_candidate
+    ent_reg = er.async_get(hass)
+    for entry in _iter_entities(ent_reg):
+        if entry.domain == "media_player" and entry.platform == "esphome":
+            if normalize_device_slug(device_slug) in entry.entity_id:
+                return entry.entity_id
     states = hass.states.async_all("media_player")
     if states:
         return states[0].entity_id
-    return DEFAULT_LOCAL_SPEAKER
+    return local_candidate
 
 
 def _add_optional_entity(
@@ -115,7 +136,9 @@ def _build_schema(
         if CONF_ALARM_ENTITY in current
         else _discover_default_alarm(hass)
     )
-    default_speaker = current.get(CONF_DEFAULT_SPEAKER) or _discover_default_speaker(hass)
+    default_speaker = current.get(CONF_DEFAULT_SPEAKER) or _discover_default_speaker(
+        hass, str(default_slug)
+    )
     default_area = current.get(CONF_DEFAULT_AREA)
     native_ble = current.get(CONF_NATIVE_BLE_TRACKING, DEFAULT_NATIVE_BLE_TRACKING)
     beacon_uuid = current.get(CONF_BLE_BEACON_UUID, DEFAULT_BLE_BEACON_UUID)
@@ -252,7 +275,16 @@ def _build_schema(
                     value="466", label="466x466 (Full Native AMOLED)"
                 ),
                 selector.SelectOptionDict(
+                    value="360", label="360x360 (Round LCD / AMOLED)"
+                ),
+                selector.SelectOptionDict(
+                    value="240", label="240x240 (Compact Display)"
+                ),
+                selector.SelectOptionDict(
                     value="233", label="233x233 (Fast Low-Bandwidth Thumbnail)"
+                ),
+                selector.SelectOptionDict(
+                    value="480", label="480x480 (Large Wall Panel)"
                 ),
             ],
             mode=selector.SelectSelectorMode.DROPDOWN,
@@ -276,12 +308,7 @@ class LatterConfigFlow(ConfigFlow, domain=DOMAIN):
         self, discovery_info: dict[str, Any]
     ) -> ConfigFlowResult:
         """Handle auto-discovery of a new ESPHome device."""
-        slug = (
-            str(discovery_info.get(CONF_DEVICE_SLUG) or "")
-            .strip()
-            .lower()
-            .replace("-", "_")
-        )
+        slug = normalize_device_slug(str(discovery_info.get(CONF_DEVICE_SLUG) or ""))
         if not slug:
             return self.async_abort(reason="already_configured")
 
@@ -298,12 +325,7 @@ class LatterConfigFlow(ConfigFlow, domain=DOMAIN):
     ) -> ConfigFlowResult:
         """Handle the initial setup step (manual or pre-filled from ESPHome auto-discovery)."""
         if user_input is not None:
-            slug = (
-                str(user_input[CONF_DEVICE_SLUG])
-                .strip()
-                .lower()
-                .replace("-", "_")
-            )
+            slug = normalize_device_slug(str(user_input[CONF_DEVICE_SLUG]))
             user_input[CONF_DEVICE_SLUG] = slug
             user_input[CONF_ART_SIZE] = int(user_input.get(CONF_ART_SIZE, DEFAULT_ART_SIZE))
 
@@ -328,37 +350,30 @@ class LatterConfigFlow(ConfigFlow, domain=DOMAIN):
     @callback
     def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
         """Return the options flow handler."""
-        return LatterOptionsFlowHandler(config_entry)
+        return LatterOptionsFlowHandler()
 
 
 class LatterOptionsFlowHandler(OptionsFlow):
     """Handle options flow updates for Latter."""
-
-    def __init__(self, config_entry: ConfigEntry) -> None:
-        """Initialize options flow."""
-        self._config_entry = config_entry
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Manage the options."""
         if user_input is not None:
-            user_input[CONF_DEVICE_SLUG] = (
+            user_input[CONF_DEVICE_SLUG] = normalize_device_slug(
                 str(user_input[CONF_DEVICE_SLUG])
-                .strip()
-                .lower()
-                .replace("-", "_")
             )
             user_input[CONF_ART_SIZE] = int(user_input.get(CONF_ART_SIZE, DEFAULT_ART_SIZE))
             self.hass.config_entries.async_update_entry(
-                self._config_entry, data=user_input
+                self.config_entry, data=user_input
             )
             return self.async_create_entry(title="", data=user_input)
 
         current = (
-            dict(self._config_entry.options)
-            if self._config_entry.options
-            else dict(self._config_entry.data)
+            dict(self.config_entry.options)
+            if self.config_entry.options
+            else dict(self.config_entry.data)
         )
         return self.async_show_form(
             step_id="init",

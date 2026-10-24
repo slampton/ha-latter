@@ -1,4 +1,4 @@
-"""Constants for the Latter universal ESPHome middleware integration."""
+"""Constants for the Latter universal ESPHome companion middleware integration."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ from typing import Final
 from homeassistant.const import Platform
 
 DOMAIN: Final = "latter"
+INTEGRATION_VERSION: Final = "1.4.0"
 PLATFORMS: Final[list[Platform]] = [Platform.SENSOR]
 
 STORAGE_VERSION: Final = 1
@@ -44,12 +45,10 @@ CONF_WALLPAPER_SOURCE: Final = "wallpaper_source"
 CONF_ART_SIZE: Final = "art_size"
 
 # Defaults
-DEFAULT_DEVICE_SLUG: Final = "pocket_assistant"
 DEFAULT_DEVICE_PROFILE: Final = "mobile_display"
 DEFAULT_DISPLAY_SHAPE: Final = "circle"
 DEFAULT_PAGE_SIZE: Final = 3
 DEFAULT_WEB_THEME: Final = "cyber_cyan"
-DEFAULT_LOCAL_SPEAKER: Final = "media_player.pocket_assistant"
 DEFAULT_NATIVE_BLE_TRACKING: Final = True
 DEFAULT_BLE_BEACON_UUID: Final = "504F434B-4554-4153-5354-000000000210"
 DEFAULT_BLE_AUTO_SWITCH: Final = True
@@ -72,10 +71,9 @@ SERVICE_CALENDAR_FETCH: Final = "calendar_fetch"
 SERVICE_CALENDAR_CREATE_EVENT: Final = "calendar_create_event"
 SERVICE_INTERCOM_BROADCAST: Final = "intercom_broadcast"
 
-# HTTP Endpoints (Universal Artwork Transcoder, Image Proxy, Wallpaper Proxy & Web Companion Studio)
+# HTTP Endpoints (Universal Artwork Transcoder, Wallpaper Proxy & Web Companion Studio)
 API_ARTWORK_PROXY_PATH: Final = "/api/latter/artwork/{target_device}"
-API_IMAGE_PROXY_PATH: Final = "/api/latter/image_proxy/{entry_id}"
-API_WALLPAPER_PROXY_PATH: Final = "/api/latter/wallpaper/{entry_id}"
+API_WALLPAPER_PROXY_PATH: Final = "/api/latter/wallpaper/{target_device}"
 API_COMPANION_UI_PATH: Final = "/api/latter/companion/{entry_id}"
 API_COMPANION_API_PATH: Final = "/api/latter/companion/{entry_id}/api"
 DATA_HMAC_SECRET: Final = "hmac_secret"
@@ -87,7 +85,13 @@ FORECAST_REFRESH_INTERVAL_MINUTES: Final = 30
 CALENDAR_REFRESH_INTERVAL_MINUTES: Final = 15
 
 
+def normalize_device_slug(raw_slug: str) -> str:
+    """Normalize an ESPHome device name or slug to lowercase underscore format."""
+    norm = raw_slug.strip().lower().replace("-", "_").replace(" ", "_")
+    return norm or "esphome_device"
+
+
 def build_device_entity_id(device_slug: str, suffix: str) -> str:
     """Build a device-scoped sensor entity_id (`sensor.<device_slug>_<suffix>`)."""
-    norm = device_slug.strip().lower().replace("-", "_") or DEFAULT_DEVICE_SLUG
+    norm = normalize_device_slug(device_slug)
     return f"sensor.{norm}_{suffix}"

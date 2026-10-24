@@ -10,7 +10,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .const import DOMAIN, build_device_entity_id
+from .const import DOMAIN, INTEGRATION_VERSION, build_device_entity_id
 from .coordinator import LatterCoordinator
 
 
@@ -20,7 +20,9 @@ async def async_setup_entry(
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up Latter sensors from a config entry."""
-    coordinator: LatterCoordinator = getattr(entry, 'runtime_data', None) or hass.data[DOMAIN][entry.entry_id]
+    coordinator: LatterCoordinator = (
+        getattr(entry, "runtime_data", None) or hass.data[DOMAIN][entry.entry_id]
+    )
     async_add_entities(
         [
             LatterActiveMediaSensor(coordinator),
@@ -54,7 +56,7 @@ class _BaseLatterSensor(SensorEntity):
             name=f"Latter ({self.coordinator.device_slug})",
             manufacturer="Lampton Labs",
             model="Latter ESPHome Companion Middleware",
-            sw_version="1.3.0",
+            sw_version=INTEGRATION_VERSION,
             configuration_url=self.coordinator.build_companion_url(),
         )
 

@@ -18,9 +18,9 @@ from homeassistant.helpers.network import get_url
 
 from .const import (
     API_ARTWORK_PROXY_PATH,
-    API_IMAGE_PROXY_PATH,
     API_WALLPAPER_PROXY_PATH,
     DOMAIN,
+    normalize_device_slug,
 )
 from .coordinator import LatterCoordinator
 
@@ -77,25 +77,24 @@ def _resolve_coordinator_by_target(
     if isinstance(direct, LatterCoordinator):
         return direct
 
-    norm_slug = target_id_or_slug.strip().lower().replace("-", "_")
+    norm_slug = normalize_device_slug(target_id_or_slug)
     coordinators = [
         v for v in domain_data.values() if isinstance(v, LatterCoordinator)
     ]
     for coord in coordinators:
         if coord.device_slug == norm_slug:
             return coord
-    return coordinators[0] if coordinators else None
+    return coordinators[0] if len(coordinators) == 1 else None
 
 
 async def _async_serve_speaker_artwork(
     hass: HomeAssistant,
     request: web.Request,
     coordinator: LatterCoordinator,
-    require_token: bool = False,
 ) -> web.Response:
     """Fetch active speaker artwork, transcode to Baseline JPEG (with RAM LRU cache), and serve over HTTP."""
     token = request.query.get("token")
-    if require_token and not coordinator.verify_token(token):
+    if token and not coordinator.verify_token(token):
         return web.Response(status=HTTPStatus.FORBIDDEN, text="Invalid signature")
 
     default_dim = coordinator.art_size
@@ -197,34 +196,11 @@ class LatterArtworkTranscoderView(HomeAssistantView):
         coordinator = _resolve_coordinator_by_target(self.hass, target_device)
         if coordinator is None:
             return web.Response(status=HTTPStatus.NOT_FOUND, text="Unknown target device")
-        return await _async_serve_speaker_artwork(
-            self.hass, request, coordinator, require_token=False
-        )
-
-
-class LatterImageProxyView(HomeAssistantView):
-    """Backward-compatible signed image proxy view (/api/latter/image_proxy/{entry_id}?token=...)."""
-
-    requires_auth = False
-    url = API_IMAGE_PROXY_PATH
-    name = "api:latter:image_proxy"
-
-    def __init__(self, hass: HomeAssistant) -> None:
-        """Initialize the image proxy view."""
-        self.hass = hass
-
-    async def get(self, request: web.Request, entry_id: str) -> web.Response:
-        """Handle GET /api/latter/image_proxy/{entry_id}?token=..."""
-        coordinator = _resolve_coordinator_by_target(self.hass, entry_id)
-        if coordinator is None:
-            return web.Response(status=HTTPStatus.NOT_FOUND, text="Unknown entry")
-        return await _async_serve_speaker_artwork(
-            self.hass, request, coordinator, require_token=True
-        )
+        return await _async_serve_speaker_artwork(self.hass, request, coordinator)
 
 
 class LatterWallpaperProxyView(HomeAssistantView):
-    """Serves baseline JPEG photo wallpapers (circularly masked or square based on display_shape)."""
+    """Serves baseline JPEG photo wallpapers (/api/latter/wallpaper/{target_device}?w=...&h=...)."""
 
     requires_auth = False
     url = API_WALLPAPER_PROXY_PATH
@@ -234,11 +210,11 @@ class LatterWallpaperProxyView(HomeAssistantView):
         """Initialize the wallpaper proxy view."""
         self.hass = hass
 
-    async def get(self, request: web.Request, entry_id: str) -> web.Response:
-        """Handle GET /api/latter/wallpaper/{entry_id}?token=..."""
-        coordinator = _resolve_coordinator_by_target(self.hass, entry_id)
+    async def get(self, request: web.Request, target_device: str) -> web.Response:
+        """Handle GET /api/latter/wallpaper/{target_device}?w=...&h=..."""
+        coordinator = _resolve_coordinator_by_target(self.hass, target_device)
         if coordinator is None:
-            return web.Response(status=HTTPStatus.NOT_FOUND, text="Unknown entry")
+            return web.Response(status=HTTPStatus.NOT_FOUND, text="Unknown target device")
 
         token = request.query.get("token")
         if token and not coordinator.verify_token(token):

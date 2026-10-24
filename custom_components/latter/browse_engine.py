@@ -6,14 +6,13 @@ import logging
 import re
 from typing import Any
 
-from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.config_entries import ConfigEntryState
+from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import HomeAssistant, State
-from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 
 _LOGGER = logging.getLogger(__name__)
 
-# Direct library categories supported by music_assistant.get_library
 LIBRARY_MEDIA_TYPES: set[str] = {
     "playlist",
     "artist",
@@ -236,6 +235,21 @@ async def _call_ma_get_library(
     return []
 
 
+def _format_local_speaker_name(hass: HomeAssistant, state_obj: State) -> str:
+    """Format the friendly display name for the on-device ESPHome speaker."""
+    friendly = str(state_obj.attributes.get("friendly_name") or state_obj.entity_id)
+    ent_reg = er.async_get(hass)
+    dev_reg = dr.async_get(hass)
+    entry = ent_reg.async_get(state_obj.entity_id)
+    if entry and entry.device_id:
+        dev = dev_reg.async_get(entry.device_id)
+        if dev:
+            dev_name = str(dev.name_by_user or dev.name or "").strip()
+            if dev_name and dev_name.lower() not in friendly.lower():
+                return f"{dev_name} ({friendly})"
+    return friendly
+
+
 async def _browse_speakers(
     hass: HomeAssistant,
     active_speaker: str,
@@ -253,9 +267,11 @@ async def _browse_speakers(
         if not is_local and not is_music_assistant_player(hass, state_obj):
             continue
 
-        friendly = str(state_obj.attributes.get("friendly_name") or ent_id)
-        if is_local and "pocket assistant" not in friendly.lower():
-            friendly = f"Pocket Assistant ({friendly})"
+        friendly = (
+            _format_local_speaker_name(hass, state_obj)
+            if is_local
+            else str(state_obj.attributes.get("friendly_name") or ent_id)
+        )
 
         items.append(
             {
@@ -593,7 +609,6 @@ async def _browse_active_queue(
     """Fetch upcoming queue items natively from Music Assistant 2.10.8+."""
     raw_queue_items: list[dict[str, Any]] = []
 
-    # 1. Try in-process Music Assistant player_queues controller
     mass = _get_mass_client(hass)
     state_obj = hass.states.get(speaker)
     if mass is not None and hasattr(mass, "player_queues"):
@@ -626,7 +641,6 @@ async def _browse_active_queue(
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("Direct mass.player_queues failed: %s", err)
 
-    # 2. Try official Home Assistant music_assistant.get_queue service
     if not raw_queue_items and hass.services.has_service("music_assistant", "get_queue"):
         ma_target = _find_ma_media_player_entity(hass, speaker) or speaker
         try:
@@ -658,23 +672,6 @@ async def _browse_active_queue(
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("music_assistant.get_queue failed: %s", err)
 
-    # 3. Fallback: mass_queue.get_queue_items if installed
-    if not raw_queue_items and hass.services.has_service("mass_queue", "get_queue_items"):
-        try:
-            resp = await hass.services.async_call(
-                "mass_queue",
-                "get_queue_items",
-                {"entity": speaker, "limit": 100},
-                blocking=True,
-                return_response=True,
-            )
-            if isinstance(resp, dict) and speaker in resp:
-                raw_queue_items = [
-                    _extract_item_dict(x) for x in (resp[speaker] or [])
-                ]
-        except Exception as err:  # noqa: BLE001
-            _LOGGER.debug("Fallback mass_queue.get_queue_items failed: %s", err)
-
     cur_lower = current_track_title.strip().lower()
     results: list[dict[str, Any]] = []
     for item in raw_queue_items:
@@ -685,7 +682,6 @@ async def _browse_active_queue(
             or media_item.get("name")
             or ""
         )
-        # Prefer playable URI from media_item so tapping a queue slot works with play_media
         uri = str(
             media_item.get("uri")
             or item.get("media_content_id")
@@ -765,23 +761,6 @@ async def _browse_podcast_episodes(
         raw_episodes = await _browse_ma_media_children(
             hass, speaker, "podcast", podcast_uri
         )
-
-    if not raw_episodes and hass.services.has_service(
-        "mass_queue", "get_podcast_episodes"
-    ):
-        try:
-            resp = await hass.services.async_call(
-                "mass_queue",
-                "get_podcast_episodes",
-                {"podcast_id": podcast_uri},
-                blocking=True,
-                return_response=True,
-            )
-            if isinstance(resp, dict):
-                eps = resp.get("episodes") or resp.get("items") or []
-                raw_episodes = [_extract_item_dict(e) for e in eps]
-        except Exception as err:  # noqa: BLE001
-            _LOGGER.debug("Fallback mass_queue.get_podcast_episodes failed: %s", err)
 
     has_positions = any(
         x.get("position") is not None or x.get("track_number") is not None

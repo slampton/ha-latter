@@ -24,6 +24,7 @@ from homeassistant.helpers import (
 
 from .ble_engine import _iter_devices, _iter_entities, get_ble_proxy_area_ids
 from .browse_engine import is_music_assistant_player
+from .const import normalize_device_slug
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -54,7 +55,6 @@ WINDOW_COVER_CLASSES: set[str] = {
     "",
 }
 
-# Universal semantic fallback categories when an entity does not use an explicit "Category: Name" prefix
 UNIVERSAL_SECTION_META: tuple[tuple[str, str, str], ...] = (
     ("display", "Display, Home & UI", "Screen controls, themes, brightness, clock faces, and home shortcuts."),
     ("sleep_power", "Sleep, Wake & Battery", "Sleep/wake behavior, timeouts, screensavers, battery, and thermal telemetry."),
@@ -75,11 +75,9 @@ def classify_esphome_entity_section(
 ) -> tuple[str, str | None]:
     """Classify an ESPHome entity into a section; returns (section_id, custom_section_title_or_None)."""
     name_clean = friendly_name.strip()
-    name_low = name_clean.lower()
     text = f"{entity_id} {name_clean}".lower()
     dev_cls = device_class.lower()
 
-    # 1. Check if entity uses a "Category: Entity Name" convention
     if ":" in name_clean:
         prefix_raw = name_clean.split(":", 1)[0].strip()
         prefix_low = prefix_raw.lower()
@@ -95,12 +93,10 @@ def classify_esphome_entity_section(
             return "music", None
         if prefix_low in ("system", "network", "wifi", "diagnostics", "action", "actions"):
             return "system", None
-        # Any third-party project using its own "CustomPrefix: Name" gets a dynamic section!
         if 2 <= len(prefix_raw) <= 24:
             sec_slug = "custom_" + re.sub(r"[^a-z0-9]+", "_", prefix_low).strip("_")
             return sec_slug, prefix_raw
 
-    # 2. Universal Keyword & Device Class Classification
     if dev_cls in ("battery", "voltage", "current", "power", "energy", "temperature") or any(
         k in text
         for k in (
@@ -308,7 +304,7 @@ def find_esphome_device_id(
     """Find the Home Assistant device_id for the target ESPHome node."""
     dev_reg = dr.async_get(hass)
     ent_reg = er.async_get(hass)
-    slug_norm = device_slug.strip().lower().replace("-", "_")
+    slug_norm = normalize_device_slug(device_slug)
 
     for entry in _iter_entities(ent_reg):
         if entry.platform == "esphome" and slug_norm in entry.entity_id:
@@ -331,7 +327,7 @@ def find_esphome_device_id(
 def inject_esphome_visit_link(
     hass: HomeAssistant, device_slug: str, companion_url: str
 ) -> None:
-    """Set configuration_url on the native ESPHome device entry so its 'Visit' button opens Latter Studio!"""
+    """Set configuration_url on the native ESPHome device entry so its 'Visit' button opens Latter Studio."""
     target_device_id = find_esphome_device_id(hass, device_slug)
     if not target_device_id:
         return
@@ -385,14 +381,13 @@ def get_esphome_device_entities(
             ent_reg, target_device_id, include_disabled_entities=False
         )
     else:
-        slug_norm = device_slug.strip().lower().replace("-", "_")
+        slug_norm = normalize_device_slug(device_slug)
         entries = [
             e
             for e in _iter_entities(ent_reg)
             if e.platform == "esphome" and slug_norm in e.entity_id and not e.disabled_by
         ]
 
-    # Dynamically strip the device's own friendly name or slug prefix (never hardcoding a single product name)
     dev_prefix = dev_meta["name"].strip()
     slug_words = device_slug.strip().replace("_", " ").replace("-", " ")
 
@@ -456,7 +451,6 @@ def get_esphome_device_entities(
         sections_map[sec_id].append(item)
 
     sections_list: list[dict[str, Any]] = []
-    # 1. Standard semantic sections
     for sec_id, sec_title, sec_desc in UNIVERSAL_SECTION_META:
         if sec_id == "other":
             continue
@@ -476,7 +470,6 @@ def get_esphome_device_entities(
             }
         )
 
-    # 2. Any dynamically discovered "CustomCategory: Name" sections from third-party ESPHome projects
     for sec_id, sec_title in sorted(custom_sec_titles.items(), key=lambda x: x[1].lower()):
         sec_items = sections_map.get(sec_id, [])
         if not sec_items:
@@ -494,7 +487,6 @@ def get_esphome_device_entities(
             }
         )
 
-    # 3. Spillover ("General & Custom Entities")
     other_items = sections_map.get("other", [])
     if other_items:
         other_items.sort(key=lambda x: x["_sort"])
@@ -590,6 +582,7 @@ def resolve_remote_slot_pair(
         "media_player_entity": "",
         "area_id": "",
         "state": "off",
+        "platform": "",
     }
     if not configured_entity_id:
         return empty
@@ -604,6 +597,7 @@ def resolve_remote_slot_pair(
 
     remote_ent = ent_id if state_obj.domain == "remote" else ""
     mp_ent = ent_id if state_obj.domain == "media_player" else ""
+    platform = str(entry.platform or "") if entry else ""
 
     if entry and entry.device_id:
         for sib in er.async_entries_for_device(ent_reg, entry.device_id):
@@ -611,8 +605,12 @@ def resolve_remote_slot_pair(
                 continue
             if sib.domain == "remote" and not remote_ent:
                 remote_ent = sib.entity_id
+                if not platform:
+                    platform = str(sib.platform or "")
             elif sib.domain == "media_player" and not mp_ent:
                 mp_ent = sib.entity_id
+                if not platform:
+                    platform = str(sib.platform or "")
 
     primary_state = hass.states.get(mp_ent) or state_obj
     friendly = str(
@@ -628,6 +626,7 @@ def resolve_remote_slot_pair(
         "media_player_entity": mp_ent or remote_ent,
         "area_id": area_id,
         "state": primary_state.state,
+        "platform": platform,
     }
 
 
@@ -734,7 +733,7 @@ def format_entity_slot_name(state_obj: State, area_name: str = "") -> str:
 
 
 def get_area_climate_telemetry(
-    hass: HomeAssistant, area_id: str | None, device_slug: str = "pocket_assistant"
+    hass: HomeAssistant, area_id: str | None, device_slug: str = ""
 ) -> dict[str, Any]:
     """Discover ambient room temperature and humidity assigned to an area."""
     result: dict[str, Any] = {
@@ -746,8 +745,10 @@ def get_area_climate_telemetry(
         return result
 
     ent_reg = er.async_get(hass)
-    handheld_dev_id = find_esphome_device_id(hass, device_slug)
-    slug_norm = device_slug.strip().lower().replace("-", "_")
+    handheld_dev_id = (
+        find_esphome_device_id(hass, device_slug) if device_slug else None
+    )
+    slug_norm = normalize_device_slug(device_slug) if device_slug else ""
 
     for state_obj in hass.states.async_all("sensor"):
         if state_obj.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
@@ -899,7 +900,7 @@ def get_areas_summary(
     hass: HomeAssistant,
     active_area_id: str | None = None,
     local_speaker: str = "",
-    device_slug: str = "pocket_assistant",
+    device_slug: str = "",
 ) -> list[dict[str, Any]]:
     """Return a sorted list of Home Assistant areas that contain curated controllable entities."""
     area_reg = ar.async_get(hass)

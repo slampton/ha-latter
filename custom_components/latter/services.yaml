@@ -4,9 +4,8 @@ music_browse:
   fields:
     target_device:
       name: Target ESPHome Device
-      description: ESPHome device name (e.g., pocket-assistant).
+      description: Optional ESPHome device slug (auto-resolved when running a single Latter device).
       required: false
-      default: "pocket-assistant"
       selector:
         text:
     mode:
@@ -264,9 +263,8 @@ room_browse:
   fields:
     target_device:
       name: Target ESPHome Device
-      description: ESPHome device name (e.g., pocket-assistant).
+      description: Optional ESPHome device slug (auto-resolved when running a single Latter device).
       required: false
-      default: "pocket-assistant"
       selector:
         text:
     mode:
@@ -335,9 +333,8 @@ room_action:
   fields:
     target_device:
       name: Target ESPHome Device
-      description: ESPHome device name (e.g., pocket-assistant).
+      description: Optional ESPHome device slug (auto-resolved when running a single Latter device).
       required: false
-      default: "pocket-assistant"
       selector:
         text:
     entity_id:
@@ -393,9 +390,8 @@ calendar_fetch:
   fields:
     target_device:
       name: Target ESPHome Device
-      description: ESPHome device name (e.g., pocket-assistant).
+      description: Optional ESPHome device slug (auto-resolved when running a single Latter device).
       required: false
-      default: "pocket-assistant"
       selector:
         text:
     days:
@@ -425,9 +421,8 @@ calendar_create_event:
   fields:
     target_device:
       name: Target ESPHome Device
-      description: ESPHome device name (e.g., pocket-assistant).
+      description: Optional ESPHome device slug (auto-resolved when running a single Latter device).
       required: false
-      default: "pocket-assistant"
       selector:
         text:
     calendar_entity:
@@ -502,7 +497,6 @@ media_command:
       name: Target ESPHome Device
       description: Optional ESPHome device slug (defaults to pocket-assistant).
       required: false
-      default: "pocket-assistant"
       selector:
         text:
     command:

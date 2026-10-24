@@ -1,4 +1,4 @@
-"""The Latter (ESPHome Companion & Entity Middleware) integration."""
+"""The Latter (Universal ESPHome Companion & Entity Middleware) integration."""
 
 from __future__ import annotations
 
@@ -19,25 +19,23 @@ from .const import (
     DATA_DISCOVERY_UNSUB,
     DATA_HMAC_SECRET,
     DOMAIN,
+    INTEGRATION_VERSION,
     PLATFORMS,
 )
 from .coordinator import LatterCoordinator
 from .dashboard import LatterCompanionApiView, LatterCompanionDashboardView
-from .http import (
-    LatterArtworkTranscoderView,
-    LatterImageProxyView,
-    LatterWallpaperProxyView,
-)
+from .http import LatterArtworkTranscoderView, LatterWallpaperProxyView
 from .room_engine import inject_esphome_visit_link
 from .services import async_setup_services
 
 _LOGGER = logging.getLogger(__name__)
 
+type LatterConfigEntry = ConfigEntry[LatterCoordinator]
+
 
 def _slugify_device_name(name: str) -> str:
     """Convert an ESPHome device name into a normalized slug."""
-    s = re.sub(r"[^a-z0-9]+", "_", name.strip().lower()).strip("_")
-    return s
+    return re.sub(r"[^a-z0-9]+", "_", name.strip().lower()).strip("_")
 
 
 @callback
@@ -79,14 +77,13 @@ def _async_check_esphome_device_for_discovery(
     )
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bool:
     """Set up Latter from a config entry."""
     domain_data = hass.data.setdefault(DOMAIN, {})
 
     if DATA_HMAC_SECRET not in domain_data:
         domain_data[DATA_HMAC_SECRET] = secrets.token_bytes(32)
         hass.http.register_view(LatterArtworkTranscoderView(hass))
-        hass.http.register_view(LatterImageProxyView(hass))
         hass.http.register_view(LatterWallpaperProxyView(hass))
         hass.http.register_view(LatterCompanionDashboardView(hass))
         hass.http.register_view(LatterCompanionApiView(hass))
@@ -124,12 +121,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     await async_setup_services(hass)
 
-    # Trigger immediate initial state notification after sensors are added
     coordinator._notify_listeners()
 
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     _LOGGER.info(
-        "Latter v1.3.3 initialized for ESPHome device '%s' (active_speaker: %s, companion_url: %s)",
+        "Latter v%s initialized for ESPHome device '%s' (active_speaker: %s, companion_url: %s)",
+        INTEGRATION_VERSION,
         coordinator.device_slug,
         coordinator.active_speaker,
         coordinator.build_companion_url(),
@@ -137,12 +134,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
-async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
+async def _async_update_listener(hass: HomeAssistant, entry: LatterConfigEntry) -> None:
     """Reload config entry when options are updated."""
     await hass.config_entries.async_reload(entry.entry_id)
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_unload_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bool:
     """Unload a Latter config entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:

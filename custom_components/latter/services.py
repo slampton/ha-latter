@@ -6,15 +6,16 @@ import asyncio
 import logging
 import math
 from typing import Any
+import voluptuous as vol
 
 from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.helpers import config_validation as cv, device_registry as dr
 
 from .browse_engine import async_browse_media_items, is_music_assistant_player
 from .calendar_engine import async_fetch_calendar_agenda
 from .const import (
     CONF_ALARM_ENTITY,
-    DEFAULT_LOCAL_SPEAKER,
     DEFAULT_PAGE_SIZE,
     DOMAIN,
     SERVICE_CALENDAR_CREATE_EVENT,
@@ -29,6 +30,7 @@ from .const import (
     SERVICE_SET_ACTIVE_AREA,
     SERVICE_SET_ACTIVE_SPEAKER,
     SERVICE_TRIGGER_BINDING,
+    normalize_device_slug,
 )
 from .coordinator import LatterCoordinator
 from .room_engine import (
@@ -40,7 +42,6 @@ from .room_engine import (
 
 _LOGGER = logging.getLogger(__name__)
 
-# Canonical intent normalization (maps both generic names and DPAD_* / KEY_* tokens to a canonical intent)
 CANONICAL_NAV_INTENT: dict[str, str] = {
     "up": "up",
     "dpad_up": "up",
@@ -73,7 +74,6 @@ CANONICAL_NAV_INTENT: dict[str, str] = {
     "pause": "pause",
 }
 
-# Android TV / Shield TV / Google TV / Fire TV / Sony Bravia (androidtv_remote) strict DPAD_* command map
 ANDROIDTV_COMMAND_MAP: dict[str, str] = {
     "up": "DPAD_UP",
     "down": "DPAD_DOWN",
@@ -88,7 +88,6 @@ ANDROIDTV_COMMAND_MAP: dict[str, str] = {
     "pause": "MEDIA_PAUSE",
 }
 
-# Apple TV / Roku / Generic remote.send_command lowercase command map
 STANDARD_REMOTE_COMMAND_MAP: dict[str, str] = {
     "up": "up",
     "down": "down",
@@ -101,7 +100,6 @@ STANDARD_REMOTE_COMMAND_MAP: dict[str, str] = {
     "info": "info",
 }
 
-# Denon / Marantz AVR HTTP AppDirect command map for denonavr.get_command
 DENONAVR_COMMAND_MAP: dict[str, str] = {
     "up": "/goform/formiPhoneAppDirect.xml?MNCUP",
     "down": "/goform/formiPhoneAppDirect.xml?MNCDN",
@@ -115,7 +113,6 @@ DENONAVR_COMMAND_MAP: dict[str, str] = {
     "option": "/goform/formiPhoneAppDirect.xml?MNOPT",
 }
 
-# LG webOS TV button map for webostv.button
 WEBOSTV_BUTTON_MAP: dict[str, str] = {
     "up": "UP",
     "down": "DOWN",
@@ -129,6 +126,12 @@ WEBOSTV_BUTTON_MAP: dict[str, str] = {
     "exit": "EXIT",
     "play": "PLAY",
     "pause": "PAUSE",
+}
+
+BASE_TARGET_FIELDS: dict[Any, Any] = {
+    vol.Optional("target_device"): cv.string,
+    vol.Optional("device_slug"): cv.string,
+    vol.Optional("device_id"): vol.Any(cv.string, [cv.string]),
 }
 
 
@@ -148,21 +151,38 @@ def _parse_bool(val: Any, default: bool = False) -> bool:
     return default
 
 
-def _get_primary_coordinator(
-    hass: HomeAssistant, target_device: str | None = None
+def _resolve_coordinator_from_call(
+    hass: HomeAssistant, call: ServiceCall
 ) -> LatterCoordinator | None:
-    """Resolve the matching LatterCoordinator for a service call."""
+    """Resolve the target LatterCoordinator by target_device, device_slug, HA device_id, or single-instance fallback."""
     domain_data = hass.data.get(DOMAIN, {})
     coordinators = [
         v for v in domain_data.values() if isinstance(v, LatterCoordinator)
     ]
     if not coordinators:
         return None
-    if target_device:
-        norm = target_device.strip().lower().replace("-", "_")
+
+    raw_slug = call.data.get("device_slug") or call.data.get("target_device")
+    if raw_slug:
+        norm = normalize_device_slug(str(raw_slug))
         for coord in coordinators:
             if coord.device_slug == norm:
                 return coord
+
+    raw_dev_id = call.data.get("device_id")
+    if raw_dev_id:
+        dev_id = raw_dev_id[0] if isinstance(raw_dev_id, list) else str(raw_dev_id)
+        dev_reg = dr.async_get(hass)
+        dev = dev_reg.async_get(dev_id)
+        if dev:
+            for _dom, ident in dev.identifiers:
+                if ident in domain_data and isinstance(domain_data[ident], LatterCoordinator):
+                    return domain_data[ident]
+            dev_slug = normalize_device_slug(str(dev.name_by_user or dev.name or ""))
+            for coord in coordinators:
+                if coord.device_slug == dev_slug:
+                    return coord
+
     return coordinators[0]
 
 
@@ -227,7 +247,10 @@ async def async_push_browse_slots(
             hass, device_slug, "set_browse_slots"
         )
 
-    slot_capacity = _detect_esphome_slot_capacity(hass, esphome_action, default_slots=5)
+    default_cap = 3 if include_levels else 5
+    slot_capacity = _detect_esphome_slot_capacity(
+        hass, esphome_action, default_slots=default_cap
+    )
     eff_page_size = max(1, min(slot_capacity, int(page_size)))
     total_items = len(items)
     total_pages = max(1, math.ceil(total_items / eff_page_size))
@@ -296,7 +319,7 @@ async def async_push_active_room_entities(
 
 
 async def async_setup_services(hass: HomeAssistant) -> None:
-    """Register Latter domain services."""
+    """Register Latter domain services with Voluptuous schema validation."""
     domain_data = hass.data.get(DOMAIN, {})
     for val in domain_data.values():
         if isinstance(val, LatterCoordinator):
@@ -306,22 +329,18 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         return
 
     async def _handle_set_active_speaker(call: ServiceCall) -> None:
-        """The ONLY service allowed to change active_speaker."""
         speaker = str(call.data.get("entity_id") or call.data.get("speaker") or "")
-        target_device = call.data.get("target_device")
         transfer_queue = _parse_bool(call.data.get("transfer_queue"), default=True)
-        coord = _get_primary_coordinator(hass, target_device)
+        coord = _resolve_coordinator_from_call(hass, call)
         if coord and speaker:
             coord.async_set_active_speaker(speaker, transfer_queue=transfer_queue)
 
     async def _handle_media_command(call: ServiceCall) -> None:
-        """Execute unified media playback command (play, pause, toggle, next, previous, stop, seek, play_media, clear_queue)."""
-        data = call.data
-        target_device = data.get("target_device")
-        coord = _get_primary_coordinator(hass, target_device)
+        coord = _resolve_coordinator_from_call(hass, call)
         if not coord:
             return
 
+        data = call.data
         command = str(data.get("command") or data.get("action") or "toggle")
         speaker = data.get("speaker") or data.get("entity_id")
         raw_seek = data.get("seek_position")
@@ -340,13 +359,11 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         )
 
     async def _handle_trigger_binding(call: ServiceCall) -> None:
-        """Execute a user-mapped hardware button/sensor trigger slot configured in the Web Companion."""
-        data = call.data
-        target_device = data.get("target_device")
-        coord = _get_primary_coordinator(hass, target_device)
+        coord = _resolve_coordinator_from_call(hass, call)
         if not coord:
             return
 
+        data = call.data
         slot_key = str(data.get("slot") or "").strip().lower()
         if not slot_key:
             return
@@ -374,15 +391,16 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         )
 
     async def _handle_media_volume(call: ServiceCall) -> None:
-        """Control volume on the active speaker (accepting entity_id or speaker) OR its mapped AVR/number volume override entity."""
+        coord = _resolve_coordinator_from_call(hass, call)
         data = call.data
-        target_device = data.get("target_device")
-        coord = _get_primary_coordinator(hass, target_device)
         speaker = str(
             data.get("entity_id")
             or data.get("speaker")
-            or (coord.active_speaker if coord else DEFAULT_LOCAL_SPEAKER)
+            or (coord.active_speaker if coord else "")
         ).strip()
+        if not speaker:
+            return
+
         vol_target = (
             coord.get_volume_target_entity(speaker) if coord else speaker
         )
@@ -404,7 +422,8 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             cur_val = float(state_obj.state) if (state_obj and state_obj.state not in ("unavailable", "unknown")) else 50.0
             min_v = float(state_obj.attributes.get("min", 0.0)) if state_obj else 0.0
             max_v = float(state_obj.attributes.get("max", 100.0)) if state_obj else 100.0
-            step = (max_v - min_v) * 0.05
+            native_step = state_obj.attributes.get("step") if state_obj else None
+            step = float(native_step) if native_step else max(1.0, (max_v - min_v) * 0.05)
 
             if action == "up":
                 new_val = min(max_v, cur_val + step)
@@ -419,7 +438,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             await hass.services.async_call(
                 target_domain,
                 "set_value",
-                {ATTR_ENTITY_ID: vol_target, "value": round(new_val, 1)},
+                {ATTR_ENTITY_ID: vol_target, "value": round(new_val, 2)},
                 blocking=False,
             )
             return
@@ -459,11 +478,8 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             )
 
     async def _handle_set_active_area(call: ServiceCall) -> None:
-        """Directly set active room by area_id or room name (never modifies active_speaker)."""
-        data = call.data
-        target_device = data.get("target_device")
-        coord = _get_primary_coordinator(hass, target_device)
-        area_val = str(data.get("area") or data.get("area_id") or "").strip()
+        coord = _resolve_coordinator_from_call(hass, call)
+        area_val = str(call.data.get("area") or call.data.get("area_id") or "").strip()
         if coord and area_val:
             coord.async_set_active_area(
                 area_val,
@@ -472,13 +488,11 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             )
 
     async def _handle_remote_action(call: ServiceCall) -> None:
-        """Execute a TV / Media Remote command on one of the 4 configured slots (with Android TV DPAD_*, Denon/Marantz & LG webOS protocol adapters)."""
-        data = call.data
-        target_device = data.get("target_device")
-        coord = _get_primary_coordinator(hass, target_device)
+        coord = _resolve_coordinator_from_call(hass, call)
         if not coord:
             return
 
+        data = call.data
         slot_num = int(data.get("slot") or coord.active_remote_slot or 1)
         slot_num = max(1, min(4, slot_num))
         if slot_num != coord.active_remote_slot:
@@ -499,7 +513,6 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         platform = str(slot_info.get("platform") or "").lower()
         combined_ident = f"{platform} {mp_ent} {remote_ent} {slot_info.get('name', '')}".lower()
 
-        # 1. Power Toggle
         if action == "toggle" or cmd_low in ("toggle", "power"):
             target = mp_ent or remote_ent
             if target:
@@ -509,22 +522,39 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 )
             return
 
-        # 2. Volume & Play/Pause
         effective_media_cmd = cmd_low if action == "command" else action
         if effective_media_cmd in ("volume_up", "volume_down", "volume_mute", "media_play_pause"):
-            if mp_ent and mp_ent.startswith("media_player."):
-                await hass.services.async_call(
-                    "media_player",
-                    effective_media_cmd,
-                    {ATTR_ENTITY_ID: mp_ent},
-                    blocking=False,
-                )
+            vol_override = (
+                coord.volume_overrides.get(mp_ent)
+                or coord.volume_overrides.get(remote_ent)
+            )
+            eff_mp = vol_override or mp_ent
+            if eff_mp and eff_mp.startswith("media_player."):
+                if effective_media_cmd == "volume_mute":
+                    st = hass.states.get(eff_mp)
+                    muted = bool(st.attributes.get("is_volume_muted", False)) if st else False
+                    await hass.services.async_call(
+                        "media_player",
+                        "volume_mute",
+                        {ATTR_ENTITY_ID: eff_mp, "is_volume_muted": not muted},
+                        blocking=False,
+                    )
+                else:
+                    await hass.services.async_call(
+                        "media_player",
+                        effective_media_cmd,
+                        {ATTR_ENTITY_ID: eff_mp},
+                        blocking=False,
+                    )
                 return
             if remote_ent and remote_ent.startswith("remote."):
                 await hass.services.async_call(
                     "remote",
                     "send_command",
-                    {ATTR_ENTITY_ID: remote_ent, "command": effective_media_cmd.upper() if "android" in combined_ident else effective_media_cmd},
+                    {
+                        ATTR_ENTITY_ID: remote_ent,
+                        "command": effective_media_cmd.upper() if "android" in combined_ident else effective_media_cmd,
+                    },
                     blocking=False,
                 )
                 return
@@ -534,7 +564,6 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
         intent = CANONICAL_NAV_INTENT.get(cmd_low)
 
-        # 3. Protocol Adapter A: Denon / Marantz AVR (denonavr.get_command)
         is_denon = platform == "denonavr" or any(
             k in combined_ident for k in ("denon", "marantz")
         )
@@ -551,7 +580,6 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 )
                 return
 
-        # 4. Protocol Adapter B: LG webOS TV (webostv.button)
         is_webos = platform == "webostv" or any(
             k in combined_ident for k in ("webos", "lg_tv", "lg_oled", "lg webos")
         )
@@ -565,7 +593,6 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             )
             return
 
-        # 5. Protocol Adapter C: Android TV / Shield TV / Google TV / Fire TV / Sony Bravia (androidtv_remote)
         is_android_tv = platform in ("androidtv_remote", "androidtv", "braviatv", "firetv") or any(
             k in combined_ident
             for k in ("shield", "android", "google_tv", "chromecast", "bravia", "fire_tv", "onn")
@@ -574,13 +601,11 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             if is_android_tv:
                 out_cmd = ANDROIDTV_COMMAND_MAP.get(intent or cmd_low, raw_cmd.upper())
             elif intent is not None:
-                # Apple TV, Roku, Broadlink, etc.: normalize DPAD_UP/DPAD_CENTER or generic intent to standard command
                 if platform == "apple_tv" and intent == "back":
                     out_cmd = "menu"
                 else:
                     out_cmd = STANDARD_REMOTE_COMMAND_MAP.get(intent, raw_cmd)
             else:
-                # Pass through explicit platform commands untouched (preserving original case)
                 out_cmd = raw_cmd
 
             await hass.services.async_call(
@@ -591,28 +616,28 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             )
 
     async def _handle_music_browse(call: ServiceCall) -> None:
+        coord = _resolve_coordinator_from_call(hass, call)
         data = call.data
-        target_device = str(data.get("target_device") or "pocket-assistant")
-        coord = _get_primary_coordinator(hass, target_device)
+        raw_target = data.get("device_slug") or data.get("target_device")
         device_slug = (
             coord.device_slug
             if coord
-            else target_device.strip().lower().replace("-", "_")
+            else normalize_device_slug(str(raw_target or "esphome_device"))
         )
 
         mode = str(data.get("mode") or "speakers")
         page = int(data.get("page") or 1)
         page_size = int(data.get("page_size") or 5)
+        local_speaker = (
+            coord.local_speaker if coord else f"media_player.{device_slug}"
+        )
         speaker = str(
             data.get("speaker")
-            or (coord.active_speaker if coord else DEFAULT_LOCAL_SPEAKER)
+            or (coord.active_speaker if coord else local_speaker)
         )
         last_speaker = str(
             data.get("last_speaker")
             or (coord.last_speaker if coord else speaker)
-        )
-        local_speaker = (
-            coord.local_speaker if coord else DEFAULT_LOCAL_SPEAKER
         )
         search = str(data.get("search") or "")
         album_sort = str(data.get("album_sort") or "name")
@@ -638,16 +663,17 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             page=page,
             page_size=page_size,
             items=items,
+            preferred_suffix="set_browse_slots",
         )
 
     async def _handle_room_browse(call: ServiceCall) -> None:
+        coord = _resolve_coordinator_from_call(hass, call)
         data = call.data
-        target_device = str(data.get("target_device") or "pocket-assistant")
-        coord = _get_primary_coordinator(hass, target_device)
+        raw_target = data.get("device_slug") or data.get("target_device")
         device_slug = (
             coord.device_slug
             if coord
-            else target_device.strip().lower().replace("-", "_")
+            else normalize_device_slug(str(raw_target or "esphome_device"))
         )
 
         mode = str(data.get("mode") or "entities").strip().lower()
@@ -661,7 +687,9 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             or ""
         )
         domain_filter = str(data.get("domain_filter") or "all")
-        local_speaker = coord.local_speaker if coord else DEFAULT_LOCAL_SPEAKER
+        local_speaker = (
+            coord.local_speaker if coord else f"media_player.{device_slug}"
+        )
 
         if coord:
             if mode == "entities":
@@ -710,9 +738,8 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         )
 
     async def _handle_room_action(call: ServiceCall) -> None:
+        coord = _resolve_coordinator_from_call(hass, call)
         data = call.data
-        target_device = str(data.get("target_device") or "pocket-assistant")
-        coord = _get_primary_coordinator(hass, target_device)
 
         area_id = data.get("area_id")
         if coord and area_id and str(area_id) != coord.active_area_id:
@@ -750,13 +777,13 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 await async_push_active_room_entities(hass, coord)
 
     async def _handle_calendar_fetch(call: ServiceCall) -> None:
+        coord = _resolve_coordinator_from_call(hass, call)
         data = call.data
-        target_device = str(data.get("target_device") or "pocket-assistant")
-        coord = _get_primary_coordinator(hass, target_device)
+        raw_target = data.get("device_slug") or data.get("target_device")
         device_slug = (
             coord.device_slug
             if coord
-            else target_device.strip().lower().replace("-", "_")
+            else normalize_device_slug(str(raw_target or "esphome_device"))
         )
 
         days = int(data.get("days") or 7)
@@ -779,9 +806,8 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         )
 
     async def _handle_calendar_create_event(call: ServiceCall) -> None:
+        coord = _resolve_coordinator_from_call(hass, call)
         data = call.data
-        target_device = str(data.get("target_device") or "pocket-assistant")
-        coord = _get_primary_coordinator(hass, target_device)
 
         cal_entity = str(data.get("calendar_entity") or "").strip()
         if not cal_entity and coord and coord.calendar_entities:
@@ -893,38 +919,189 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 )
 
     hass.services.async_register(
-        DOMAIN, SERVICE_SET_ACTIVE_SPEAKER, _handle_set_active_speaker
+        DOMAIN,
+        SERVICE_SET_ACTIVE_SPEAKER,
+        _handle_set_active_speaker,
+        schema=vol.Schema(
+            {
+                **BASE_TARGET_FIELDS,
+                vol.Optional("entity_id"): cv.string,
+                vol.Optional("speaker"): cv.string,
+                vol.Optional("transfer_queue", default=True): vol.Any(bool, cv.string),
+            },
+            extra=vol.ALLOW_EXTRA,
+        ),
     )
     hass.services.async_register(
-        DOMAIN, SERVICE_MEDIA_COMMAND, _handle_media_command
+        DOMAIN,
+        SERVICE_MEDIA_COMMAND,
+        _handle_media_command,
+        schema=vol.Schema(
+            {
+                **BASE_TARGET_FIELDS,
+                vol.Optional("command", default="toggle"): cv.string,
+                vol.Optional("action"): cv.string,
+                vol.Optional("speaker"): cv.string,
+                vol.Optional("entity_id"): cv.string,
+                vol.Optional("seek_position"): vol.Any(vol.Coerce(float), cv.string),
+                vol.Optional("media_id"): cv.string,
+                vol.Optional("media_type"): cv.string,
+                vol.Optional("enqueue"): cv.string,
+            },
+            extra=vol.ALLOW_EXTRA,
+        ),
     )
     hass.services.async_register(
-        DOMAIN, SERVICE_TRIGGER_BINDING, _handle_trigger_binding
+        DOMAIN,
+        SERVICE_TRIGGER_BINDING,
+        _handle_trigger_binding,
+        schema=vol.Schema(
+            {
+                **BASE_TARGET_FIELDS,
+                vol.Required("slot"): cv.string,
+                vol.Optional("action"): cv.string,
+                vol.Optional("level"): vol.Any(vol.Coerce(float), cv.string),
+            },
+            extra=vol.ALLOW_EXTRA,
+        ),
     )
     hass.services.async_register(
-        DOMAIN, SERVICE_MEDIA_VOLUME, _handle_media_volume
+        DOMAIN,
+        SERVICE_MEDIA_VOLUME,
+        _handle_media_volume,
+        schema=vol.Schema(
+            {
+                **BASE_TARGET_FIELDS,
+                vol.Optional("entity_id"): cv.string,
+                vol.Optional("speaker"): cv.string,
+                vol.Optional("action", default="set"): cv.string,
+                vol.Optional("volume_level"): vol.Any(vol.Coerce(float), cv.string),
+            },
+            extra=vol.ALLOW_EXTRA,
+        ),
     )
     hass.services.async_register(
-        DOMAIN, SERVICE_SET_ACTIVE_AREA, _handle_set_active_area
+        DOMAIN,
+        SERVICE_SET_ACTIVE_AREA,
+        _handle_set_active_area,
+        schema=vol.Schema(
+            {
+                **BASE_TARGET_FIELDS,
+                vol.Optional("area"): cv.string,
+                vol.Optional("area_id"): cv.string,
+                vol.Optional("handoff_media"): vol.Any(bool, cv.string),
+            },
+            extra=vol.ALLOW_EXTRA,
+        ),
     )
     hass.services.async_register(
-        DOMAIN, SERVICE_REMOTE_ACTION, _handle_remote_action
+        DOMAIN,
+        SERVICE_REMOTE_ACTION,
+        _handle_remote_action,
+        schema=vol.Schema(
+            {
+                **BASE_TARGET_FIELDS,
+                vol.Optional("slot", default=1): vol.Coerce(int),
+                vol.Optional("action", default="select_slot"): cv.string,
+                vol.Optional("command"): cv.string,
+            },
+            extra=vol.ALLOW_EXTRA,
+        ),
     )
     hass.services.async_register(
-        DOMAIN, SERVICE_MUSIC_BROWSE, _handle_music_browse
+        DOMAIN,
+        SERVICE_MUSIC_BROWSE,
+        _handle_music_browse,
+        schema=vol.Schema(
+            {
+                **BASE_TARGET_FIELDS,
+                vol.Optional("mode", default="speakers"): cv.string,
+                vol.Optional("page", default=1): vol.Coerce(int),
+                vol.Optional("page_size", default=5): vol.Coerce(int),
+                vol.Optional("search", default=""): cv.string,
+                vol.Optional("speaker"): cv.string,
+                vol.Optional("last_speaker"): cv.string,
+                vol.Optional("album_sort", default="name"): cv.string,
+                vol.Optional("artist_album_sort", default="year"): cv.string,
+                vol.Optional("podcast_sort", default="newest"): cv.string,
+            },
+            extra=vol.ALLOW_EXTRA,
+        ),
     )
     hass.services.async_register(
-        DOMAIN, SERVICE_ROOM_BROWSE, _handle_room_browse
+        DOMAIN,
+        SERVICE_ROOM_BROWSE,
+        _handle_room_browse,
+        schema=vol.Schema(
+            {
+                **BASE_TARGET_FIELDS,
+                vol.Optional("mode", default="entities"): cv.string,
+                vol.Optional("area_id"): cv.string,
+                vol.Optional("domain_filter", default="all"): cv.string,
+                vol.Optional("page", default=1): vol.Coerce(int),
+                vol.Optional("page_size"): vol.Coerce(int),
+                vol.Optional("handoff_media"): vol.Any(bool, cv.string),
+            },
+            extra=vol.ALLOW_EXTRA,
+        ),
     )
     hass.services.async_register(
-        DOMAIN, SERVICE_ROOM_ACTION, _handle_room_action
+        DOMAIN,
+        SERVICE_ROOM_ACTION,
+        _handle_room_action,
+        schema=vol.Schema(
+            {
+                **BASE_TARGET_FIELDS,
+                vol.Optional("entity_id"): cv.string,
+                vol.Optional("area_id"): cv.string,
+                vol.Optional("action", default="toggle"): cv.string,
+                vol.Optional("level"): vol.Any(vol.Coerce(float), cv.string),
+                vol.Optional("code"): cv.string,
+            },
+            extra=vol.ALLOW_EXTRA,
+        ),
     )
     hass.services.async_register(
-        DOMAIN, SERVICE_CALENDAR_FETCH, _handle_calendar_fetch
+        DOMAIN,
+        SERVICE_CALENDAR_FETCH,
+        _handle_calendar_fetch,
+        schema=vol.Schema(
+            {
+                **BASE_TARGET_FIELDS,
+                vol.Optional("days", default=7): vol.Coerce(int),
+                vol.Optional("page", default=1): vol.Coerce(int),
+                vol.Optional("page_size", default=5): vol.Coerce(int),
+            },
+            extra=vol.ALLOW_EXTRA,
+        ),
     )
     hass.services.async_register(
-        DOMAIN, SERVICE_CALENDAR_CREATE_EVENT, _handle_calendar_create_event
+        DOMAIN,
+        SERVICE_CALENDAR_CREATE_EVENT,
+        _handle_calendar_create_event,
+        schema=vol.Schema(
+            {
+                **BASE_TARGET_FIELDS,
+                vol.Optional("calendar_entity"): cv.string,
+                vol.Required("summary"): cv.string,
+                vol.Required("start_date_time"): cv.string,
+                vol.Required("end_date_time"): cv.string,
+                vol.Optional("description"): cv.string,
+            },
+            extra=vol.ALLOW_EXTRA,
+        ),
     )
     hass.services.async_register(
-        DOMAIN, SERVICE_INTERCOM_BROADCAST, _handle_intercom_broadcast
+        DOMAIN,
+        SERVICE_INTERCOM_BROADCAST,
+        _handle_intercom_broadcast,
+        schema=vol.Schema(
+            {
+                vol.Optional("message"): cv.string,
+                vol.Optional("media_url"): cv.string,
+                vol.Optional("target_speakers"): vol.Any(cv.string, [cv.string]),
+                vol.Optional("tts_entity"): cv.string,
+            },
+            extra=vol.ALLOW_EXTRA,
+        ),
     )
