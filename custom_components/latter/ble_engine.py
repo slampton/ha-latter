@@ -22,7 +22,8 @@ IBEACON_PREFIX = b"\x02\x15"
 EMA_ALPHA = 0.50
 HYSTERESIS_DB = 5.0
 FAST_OVERRIDE_DB = 8.0
-STALE_PROXY_SECONDS = 15.0
+STALE_PROXY_SECONDS = 25.0
+SURVEY_RETENTION_SECONDS = 180.0
 WAKE_GAP_SECONDS = 8.0
 MIN_HOLD_SECONDS = 4.0
 SCANNER_POLL_INTERVAL_SECONDS = 2.0
@@ -301,8 +302,10 @@ class LatterNativeBleTracker:
 
         self._unsub_ble: Callable[[], None] | None = None
         self._unsub_poll: Callable[[], None] | None = None
-        # area_id -> (ema_rssi, last_seen_monotonic)
+        # area_id -> (ema_effective_rssi, last_seen_monotonic)
         self._area_rssi: dict[str, tuple[float, float]] = {}
+        # area_id -> (ema_raw_rssi, last_seen_monotonic, scanner_name)
+        self._area_raw_rssi: dict[str, tuple[float, float, str]] = {}
         # raw_source -> (rssi, last_seen_monotonic) for unmapped proxy diagnostics
         self._unmapped_rssi: dict[str, tuple[int, float]] = {}
         self._scanner_area_cache: dict[str, str | None] = {}
@@ -321,19 +324,16 @@ class LatterNativeBleTracker:
 
     @callback
     def set_room_offsets(self, offsets: dict[str, float] | None) -> None:
-        """Update per-room RSSI calibration offsets (dB bias) in real time."""
+        """Update per-room RSSI calibration offsets (dB bias) in real time and recompute effective RSSI."""
         self._room_offsets = {
             str(k): max(-25.0, min(25.0, float(v)))
             for k, v in (offsets or {}).items()
         }
-
-    @callback
-    def set_room_offsets(self, offsets: dict[str, float] | None) -> None:
-        """Update per-room RSSI calibration offsets (dB bias) in real time."""
-        self._room_offsets = {
-            str(k): max(-25.0, min(25.0, float(v)))
-            for k, v in (offsets or {}).items()
-        }
+        now = time.monotonic()
+        for area_id, (raw_ema, ts, _scanner) in list(self._area_raw_rssi.items()):
+            offset_db = float(self._room_offsets.get(area_id, 0.0))
+            self._area_rssi[area_id] = (raw_ema + offset_db, ts)
+        self._evaluate_best_room(now)
 
     @callback
     def reset_for_device_wake(self) -> None:
@@ -372,7 +372,6 @@ class LatterNativeBleTracker:
                 self._async_poll_scanner_tables,
                 timedelta(seconds=SCANNER_POLL_INTERVAL_SECONDS),
             )
-            # Run an immediate initial poll of all scanners
             self._async_poll_scanner_tables(datetime.now())
             _LOGGER.info(
                 "Latter Native BLE Room Tracker active (UUID=%s, candidate_macs=%s)",
@@ -395,23 +394,99 @@ class LatterNativeBleTracker:
             self._unsub_poll()
             self._unsub_poll = None
         self._area_rssi.clear()
+        self._area_raw_rssi.clear()
         self._unmapped_rssi.clear()
         self._scanner_area_cache.clear()
 
     def get_live_rssi_summary(self) -> dict[str, int]:
-        """Return a snapshot of area_name -> smoothed RSSI (dBm) for diagnostics."""
+        """Return a snapshot of area_name -> smoothed effective RSSI (dBm) for sensor attributes."""
         area_reg = ar.async_get(self.hass)
         now = time.monotonic()
         out: dict[str, int] = {}
         for area_id, (ema, ts) in self._area_rssi.items():
-            if (now - ts) <= STALE_PROXY_SECONDS:
+            if (now - ts) <= SURVEY_RETENTION_SECONDS:
                 area_obj = area_reg.async_get_area(area_id)
                 label = area_obj.name if area_obj else area_id
                 out[label] = int(round(ema))
         for raw_src, (raw_rssi, ts) in self._unmapped_rssi.items():
-            if (now - ts) <= STALE_PROXY_SECONDS:
+            if (now - ts) <= SURVEY_RETENTION_SECONDS:
                 out[f"unmapped:{raw_src}"] = int(raw_rssi)
         return out
+
+    def get_room_calibration_telemetry(self) -> list[dict[str, Any]]:
+        """Return rich per-room BLE site survey telemetry (all proxy rooms, raw dBm, offset dB, effective dBm, age, winner)."""
+        area_reg = ar.async_get(self.hass)
+        now = time.monotonic()
+
+        # Discover all areas that have at least one registered Bluetooth scanner
+        area_scanners: dict[str, list[str]] = {}
+        try:
+            from homeassistant.components import bluetooth
+
+            for scanner in bluetooth.async_current_scanners(self.hass):
+                source = str(getattr(scanner, "source", "") or "")
+                name = str(getattr(scanner, "name", "") or source)
+                if not source:
+                    continue
+                a_id = _resolve_scanner_area_id(self.hass, source)
+                if a_id:
+                    area_scanners.setdefault(a_id, []).append(name)
+        except Exception:  # noqa: BLE001
+            pass
+
+        # Union of proxy areas, areas with recent RSSI, and areas with configured offsets
+        all_area_ids = (
+            set(area_scanners.keys())
+            | set(self._area_raw_rssi.keys())
+            | set(self._room_offsets.keys())
+        )
+
+        rows: list[dict[str, Any]] = []
+        for area_id in all_area_ids:
+            area_obj = area_reg.async_get_area(area_id)
+            area_name = area_obj.name if area_obj else area_id
+            offset_db = round(float(self._room_offsets.get(area_id, 0.0)), 1)
+            raw_tuple = self._area_raw_rssi.get(area_id)
+
+            raw_dbm: int | None = None
+            effective_dbm: int | None = None
+            age_s: int | None = None
+            is_fresh = False
+            scanner_label = ", ".join(area_scanners.get(area_id, []))
+
+            if raw_tuple is not None:
+                raw_ema, ts, last_scan = raw_tuple
+                elapsed = max(0.0, now - ts)
+                if elapsed <= SURVEY_RETENTION_SECONDS:
+                    raw_dbm = int(round(raw_ema))
+                    effective_dbm = int(round(raw_ema + offset_db))
+                    age_s = int(round(elapsed))
+                    is_fresh = elapsed <= STALE_PROXY_SECONDS
+                    if last_scan and not scanner_label:
+                        scanner_label = last_scan
+
+            rows.append(
+                {
+                    "area_id": area_id,
+                    "area_name": area_name,
+                    "scanner": scanner_label or "BLE Proxy",
+                    "raw_rssi": raw_dbm,
+                    "offset_db": offset_db,
+                    "effective_rssi": effective_dbm,
+                    "age_seconds": age_s,
+                    "is_fresh": is_fresh,
+                    "is_winner": area_id == self.current_area_id,
+                }
+            )
+
+        rows.sort(
+            key=lambda r: (
+                r["effective_rssi"] is None,
+                -(r["effective_rssi"] if r["effective_rssi"] is not None else -999),
+                r["area_name"].lower(),
+            )
+        )
+        return rows
 
     def _matches_raw_adv(
         self,
@@ -470,10 +545,10 @@ class LatterNativeBleTracker:
             scanners = bluetooth.async_current_scanners(self.hass)
             for scanner in scanners:
                 source = str(getattr(scanner, "source", "") or "")
+                scanner_name = str(getattr(scanner, "name", "") or source)
                 if not source:
                     continue
 
-                # Check timestamps dict if exposed by HaBluetoothScanner
                 timestamps: dict[str, float] = getattr(
                     scanner, "_previous_seen_timestamps", {}
                 ) or getattr(scanner, "timestamps", {}) or {}
@@ -486,9 +561,9 @@ class LatterNativeBleTracker:
                     if not isinstance(pair, tuple) or len(pair) != 2:
                         continue
                     ble_dev, adv_data = pair
-                    # Skip if scanner has a timestamp for this address and it is older than STALE_PROXY_SECONDS
                     last_ts = timestamps.get(addr)
-                    if last_ts is not None and (now_mono - float(last_ts)) > STALE_PROXY_SECONDS:
+                    obs_mono = float(last_ts) if last_ts is not None else now_mono
+                    if last_ts is not None and (now_mono - obs_mono) > SURVEY_RETENTION_SECONDS:
                         continue
 
                     mfg_data = getattr(adv_data, "manufacturer_data", {}) or {}
@@ -505,7 +580,9 @@ class LatterNativeBleTracker:
                     if rssi is None:
                         rssi = getattr(ble_dev, "rssi", None)
                     if rssi is not None and int(rssi) > -100:
-                        self._ingest_proxy_observation(source, int(rssi), now_mono)
+                        self._ingest_proxy_observation(
+                            source, int(rssi), obs_mono, scanner_name
+                        )
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("BLE scanner table poll error: %s", err)
 
@@ -522,13 +599,14 @@ class LatterNativeBleTracker:
         if rssi is None or not source or int(rssi) <= -100:
             return
 
-        self._ingest_proxy_observation(source, int(rssi), time.monotonic())
+        self._ingest_proxy_observation(source, int(rssi), time.monotonic(), source)
 
     @callback
     def _ingest_proxy_observation(
-        self, source: str, rssi: int, now: float
+        self, source: str, rssi: int, obs_time: float, scanner_name: str = ""
     ) -> None:
         """Ingest a (scanner_source, rssi) observation and evaluate room transitions."""
+        now = time.monotonic()
         just_woke_from_standby = (
             self.last_packet_monotonic > 0.0
             and (now - self.last_packet_monotonic) >= WAKE_GAP_SECONDS
@@ -544,69 +622,73 @@ class LatterNativeBleTracker:
         if self._scanner_area_cache.get(source) is None:
             resolved_area = _resolve_scanner_area_id(self.hass, source)
             self._scanner_area_cache[source] = resolved_area
-            _LOGGER.debug(
-                "BLE Proxy source '%s' resolved to area_id='%s' (RSSI=%s)",
-                source,
-                resolved_area,
-                rssi,
-            )
 
         area_id = self._scanner_area_cache.get(source)
         if not area_id:
-            self._unmapped_rssi[source] = (int(rssi), now)
+            self._unmapped_rssi[source] = (int(rssi), obs_time)
             return
 
         self._unmapped_rssi.pop(source, None)
 
         if just_woke_from_standby:
             self._area_rssi.clear()
+            self._area_raw_rssi.clear()
             self.current_area_id = None
 
-        offset_db = float(self._room_offsets.get(area_id, 0.0))
-        rssi_f = float(rssi) + offset_db
-        prev = self._area_rssi.get(area_id)
-        if prev is None or (now - prev[1]) > STALE_PROXY_SECONDS:
-            ema = rssi_f
+        raw_f = float(rssi)
+        prev_raw = self._area_raw_rssi.get(area_id)
+        if prev_raw is None or (now - prev_raw[1]) > STALE_PROXY_SECONDS:
+            raw_ema = raw_f
         else:
-            ema = (EMA_ALPHA * rssi_f) + ((1.0 - EMA_ALPHA) * prev[0])
-        self._area_rssi[area_id] = (ema, now)
+            raw_ema = (EMA_ALPHA * raw_f) + ((1.0 - EMA_ALPHA) * prev_raw[0])
+        self._area_raw_rssi[area_id] = (raw_ema, obs_time, scanner_name or source)
 
-        stale_keys = [
-            k
-            for k, (_val, ts) in self._area_rssi.items()
-            if (now - ts) > STALE_PROXY_SECONDS
-        ]
-        for k in stale_keys:
-            self._area_rssi.pop(k, None)
+        offset_db = float(self._room_offsets.get(area_id, 0.0))
+        eff_ema = raw_ema + offset_db
+        self._area_rssi[area_id] = (eff_ema, obs_time)
 
-        if not self._area_rssi:
+        if (now - obs_time) <= STALE_PROXY_SECONDS:
+            self._evaluate_best_room(now, source)
+
+    @callback
+    def _evaluate_best_room(self, now: float, latest_source: str = "") -> None:
+        """Evaluate fresh effective RSSI scores across all rooms and trigger room switch if needed."""
+        fresh_areas = {
+            k: (val, ts)
+            for k, (val, ts) in self._area_rssi.items()
+            if (now - ts) <= STALE_PROXY_SECONDS
+        }
+        if not fresh_areas:
             return
 
         best_area, (best_ema, _) = max(
-            self._area_rssi.items(), key=lambda item: item[1][0]
+            fresh_areas.items(), key=lambda item: item[1][0]
         )
 
         if self.current_area_id is None:
-            if best_ema >= -78.0 or len(self._area_rssi) >= 2:
+            if best_ema >= -82.0 or len(fresh_areas) >= 2:
                 self.current_area_id = best_area
-                self.closest_scanner = source
+                if latest_source:
+                    self.closest_scanner = latest_source
                 self._last_switch_monotonic = now
-                self._on_area_detected(best_area, source)
+                self._on_area_detected(best_area, self.closest_scanner)
             return
 
         if best_area == self.current_area_id:
-            self.closest_scanner = source
+            if latest_source:
+                self.closest_scanner = latest_source
             return
 
-        cur_entry = self._area_rssi.get(self.current_area_id)
+        cur_entry = fresh_areas.get(self.current_area_id)
         cur_ema = cur_entry[0] if cur_entry is not None else -100.0
         delta_db = best_ema - cur_ema
 
         if delta_db >= FAST_OVERRIDE_DB:
             self.current_area_id = best_area
-            self.closest_scanner = source
+            if latest_source:
+                self.closest_scanner = latest_source
             self._last_switch_monotonic = now
-            self._on_area_detected(best_area, source)
+            self._on_area_detected(best_area, self.closest_scanner)
             return
 
         if (now - self._last_switch_monotonic) < MIN_HOLD_SECONDS:
@@ -614,6 +696,7 @@ class LatterNativeBleTracker:
 
         if delta_db >= HYSTERESIS_DB:
             self.current_area_id = best_area
-            self.closest_scanner = source
+            if latest_source:
+                self.closest_scanner = latest_source
             self._last_switch_monotonic = now
-            self._on_area_detected(best_area, source)
+            self._on_area_detected(best_area, self.closest_scanner)
