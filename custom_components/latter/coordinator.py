@@ -421,12 +421,6 @@ class LatterCoordinator:
         return str(val).strip() if val else None
 
     @property
-    def camera_entity(self) -> str | None:
-        """Return configured primary doorbell/security camera entity_id."""
-        val = self.get_opt(CONF_CAMERA_ENTITY)
-        return str(val).strip() if val else None
-
-    @property
     def native_ble_tracking_enabled(self) -> bool:
         """Return True if native ESPHome BLE proxy tracking is enabled."""
         return bool(
@@ -439,22 +433,6 @@ class LatterCoordinator:
         return str(
             self.get_opt(CONF_BLE_BEACON_UUID, DEFAULT_BLE_BEACON_UUID)
         ).strip()
-
-    @property
-    def ble_room_offsets(self) -> dict[str, float]:
-        """Return per-room BLE RSSI calibration offsets (area_id -> dB bias)."""
-        raw = self.get_opt(CONF_BLE_ROOM_OFFSETS, {})
-        if not isinstance(raw, dict):
-            return {}
-        out: dict[str, float] = {}
-        for k, v in raw.items():
-            try:
-                val = round(max(-25.0, min(25.0, float(v))), 1)
-                if val != 0.0:
-                    out[str(k)] = val
-            except (ValueError, TypeError):
-                pass
-        return out
 
     @property
     def ble_room_offsets(self) -> dict[str, float]:
@@ -558,49 +536,6 @@ class LatterCoordinator:
                     base_url = "http://homeassistant.local:8123"
         token = self.get_signed_token()
         return f"{base_url.rstrip('/')}/api/latter/companion/{self.entry.entry_id}?token={token}"
-
-    def build_camera_snapshot_url(
-        self, camera_entity_id: str | None = None, cache_bust: str = ""
-    ) -> str:
-        """Build the local LAN HTTP Baseline-JPEG camera snapshot URL for ESP32 online_image."""
-        cam_ent = (camera_entity_id or self.camera_entity or "").strip()
-        if not cam_ent:
-            return "none"
-        try:
-            base_url = get_url(self.hass, allow_internal=True, prefer_external=False)
-        except Exception:  # noqa: BLE001
-            base_url = "http://homeassistant.local:8123"
-        size = self.art_size
-        v_tag = cache_bust or str(int(time.time()))
-        return (
-            f"{base_url}/api/latter/camera/{self.device_slug}"
-            f"?entity_id={cam_ent}&w={size}&h={size}&shape={self.display_shape}&v={v_tag}"
-        )
-
-    @callback
-    def async_dispatch_notification(
-        self,
-        title: str,
-        message: str,
-        priority: str = "normal",
-        duration: int = 8,
-        chime: bool = True,
-        camera_entity: str | None = None,
-    ) -> None:
-        """Update device alert state & camera snapshot URL and notify listeners."""
-        self.alert_id += 1
-        self.alert_title = title.strip() or "Notification"
-        self.alert_message = message.strip()
-        self.alert_priority = priority.strip().lower() or "normal"
-        self.alert_duration = max(2, min(60, int(duration)))
-        self.alert_chime = bool(chime)
-        if camera_entity:
-            self.alert_camera_url = self.build_camera_snapshot_url(
-                camera_entity, cache_bust=f"{self.alert_id}_{int(time.time())}"
-            )
-        else:
-            self.alert_camera_url = "none"
-        self._notify_listeners()
 
     def build_camera_snapshot_url(
         self, camera_entity_id: str | None = None, cache_bust: str = ""
