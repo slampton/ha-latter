@@ -316,12 +316,33 @@ class LatterCoordinator:
         self.alert_camera_url: str = "none"
 
     def get_opt(self, key: str, default: Any = None) -> Any:
-        """Retrieve a value from entry.options with fallback to entry.data."""
+        """Retrieve a setting, prioritizing Global Household config for shared keys and entry options/data for device keys."""
+        domain_data = self.hass.data.get(DOMAIN, {})
+        global_cfg = domain_data.get(DATA_GLOBAL_CONFIG)
+        if key in GLOBAL_CONFIG_KEYS and isinstance(global_cfg, dict) and key in global_cfg:
+            val = global_cfg[key]
+            if val is not None and val != "":
+                return val
         if self.entry.options and key in self.entry.options:
             return self.entry.options[key]
         if key in self.entry.data:
             return self.entry.data[key]
+        if isinstance(global_cfg, dict) and key in global_cfg:
+            return global_cfg[key]
         return default
+
+    async def async_on_global_config_updated(self) -> None:
+        """Refresh listeners, BLE offsets, weather, and calendar when Global Household config changes."""
+        if self._ble_tracker is not None:
+            self._ble_tracker.set_room_offsets(self.ble_room_offsets)
+        self._bind_speaker_listener()
+        self._bind_weather_listener()
+        self._bind_alarm_listener()
+        self._bind_remotes_listener()
+        self._bind_room_entities_listener()
+        await self.async_refresh_weather_forecast()
+        await self.async_refresh_calendar_agenda()
+        self._notify_listeners()
 
     @property
     def device_slug(self) -> str:

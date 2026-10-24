@@ -7,7 +7,7 @@ from typing import Final
 from homeassistant.const import Platform
 
 DOMAIN: Final = "latter"
-INTEGRATION_VERSION: Final = "1.6.5"
+INTEGRATION_VERSION: Final = "1.7.0"
 PLATFORMS: Final[list[Platform]] = [Platform.SENSOR]
 
 STORAGE_VERSION: Final = 1
@@ -92,6 +92,31 @@ DATA_DISCOVERY_UNSUB: Final = "discovery_unsub"
 POSITION_UPDATE_INTERVAL_SECONDS: Final = 2
 FORECAST_REFRESH_INTERVAL_MINUTES: Final = 30
 CALENDAR_REFRESH_INTERVAL_MINUTES: Final = 15
+
+
+GLOBAL_STORAGE_KEY: Final = "latter.household"
+DATA_GLOBAL_CONFIG: Final = "global_config"
+DATA_GLOBAL_STORE: Final = "global_store"
+
+GLOBAL_CONFIG_KEYS: Final[tuple[str, ...]] = (
+    CONF_WEB_THEME,
+    CONF_COMPANION_BASE_URL,
+    CONF_WEATHER_ENTITY,
+    CONF_ALARM_ENTITY,
+    CONF_CAMERA_ENTITY,
+    CONF_VOL_SPEAKER_1,
+    CONF_VOL_TARGET_1,
+    CONF_VOL_SPEAKER_2,
+    CONF_VOL_TARGET_2,
+    CONF_BLE_ROOM_OFFSETS,
+    CONF_REMOTE_1,
+    CONF_REMOTE_2,
+    CONF_REMOTE_3,
+    CONF_REMOTE_4,
+    CONF_CALENDAR_ENTITIES,
+    CONF_CUSTOM_ENTITIES,
+    CONF_CUSTOM_BINDINGS,
+)
 
 
 def normalize_device_slug(raw_slug: str) -> str:

@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import re
 import secrets
+from typing import Any
 
 from homeassistant.config_entries import ConfigEntry, SOURCE_INTEGRATION_DISCOVERY
 from homeassistant.const import EVENT_STATE_CHANGED
@@ -15,15 +16,21 @@ from homeassistant.helpers import (
     discovery_flow,
     entity_registry as er,
 )
+from homeassistant.helpers.storage import Store
 from homeassistant.helpers.typing import ConfigType
 
 from .const import (
     CONF_DEVICE_SLUG,
     DATA_DISCOVERY_UNSUB,
+    DATA_GLOBAL_CONFIG,
+    DATA_GLOBAL_STORE,
     DATA_HMAC_SECRET,
     DOMAIN,
+    GLOBAL_CONFIG_KEYS,
+    GLOBAL_STORAGE_KEY,
     INTEGRATION_VERSION,
     PLATFORMS,
+    STORAGE_VERSION,
 )
 from .coordinator import LatterCoordinator
 from .dashboard import (
@@ -49,6 +56,33 @@ type LatterConfigEntry = ConfigEntry[LatterCoordinator]
 def _slugify_device_name(name: str) -> str:
     """Convert an ESPHome device name into a normalized slug."""
     return re.sub(r"[^a-z0-9]+", "_", name.strip().lower()).strip("_")
+
+
+async def _async_ensure_global_store(
+    hass: HomeAssistant, seed_entry: ConfigEntry | None = None
+) -> dict[str, Any]:
+    """Load or initialize the shared Global Household configuration store (`.storage/latter.household`)."""
+    domain_data = hass.data.setdefault(DOMAIN, {})
+    if DATA_GLOBAL_STORE not in domain_data:
+        store: Store[dict[str, Any]] = Store(
+            hass, STORAGE_VERSION, GLOBAL_STORAGE_KEY
+        )
+        domain_data[DATA_GLOBAL_STORE] = store
+        loaded = await store.async_load()
+        domain_data[DATA_GLOBAL_CONFIG] = dict(loaded) if isinstance(loaded, dict) else {}
+
+    global_cfg: dict[str, Any] = domain_data[DATA_GLOBAL_CONFIG]
+    if seed_entry is not None:
+        merged_entry = {**seed_entry.data, **(seed_entry.options or {})}
+        changed = False
+        for k in GLOBAL_CONFIG_KEYS:
+            if k not in global_cfg and k in merged_entry and merged_entry[k] not in (None, "", [], {}):
+                global_cfg[k] = merged_entry[k]
+                changed = True
+        if changed:
+            await domain_data[DATA_GLOBAL_STORE].async_save(global_cfg)
+
+    return global_cfg
 
 
 @callback
@@ -93,6 +127,7 @@ def _async_check_esphome_device_for_discovery(
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up the Latter domain and register domain-level services (Platinum action-setup)."""
     hass.data.setdefault(DOMAIN, {})
+    await _async_ensure_global_store(hass)
     await async_setup_services(hass)
     return True
 
@@ -100,6 +135,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bool:
     """Set up Latter from a config entry."""
     domain_data = hass.data.setdefault(DOMAIN, {})
+    await _async_ensure_global_store(hass, seed_entry=entry)
 
     if DATA_HMAC_SECRET not in domain_data:
         domain_data[DATA_HMAC_SECRET] = secrets.token_bytes(32)
