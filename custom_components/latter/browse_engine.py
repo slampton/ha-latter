@@ -7,6 +7,7 @@ import re
 from typing import Any
 
 from homeassistant.const import ATTR_ENTITY_ID
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant, State
 from homeassistant.helpers import entity_registry as er
 
@@ -40,7 +41,7 @@ def _get_ma_config_entry_id(hass: HomeAssistant) -> str | None:
     """Auto-discover the loaded Music Assistant config_entry_id."""
     entries = hass.config_entries.async_entries("music_assistant")
     for entry in entries:
-        if entry.state.name == "LOADED":
+        if entry.state is ConfigEntryState.LOADED:
             return entry.entry_id
     if entries:
         return entries[0].entry_id

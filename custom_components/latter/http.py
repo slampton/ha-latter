@@ -8,7 +8,7 @@ import io
 import logging
 from pathlib import Path
 
-from aiohttp import web
+from aiohttp import ClientTimeout, web
 from PIL import Image, ImageDraw, ImageEnhance, ImageOps
 
 from homeassistant.components.http import HomeAssistantView
@@ -144,7 +144,7 @@ async def _async_serve_speaker_artwork(
 
     session = async_get_clientsession(hass)
     try:
-        async with session.get(pic_url, timeout=8, allow_redirects=True) as resp:
+        async with session.get(pic_url, timeout=ClientTimeout(total=8), allow_redirects=True) as resp:
             if resp.status != HTTPStatus.OK:
                 return web.Response(
                     status=HTTPStatus.BAD_GATEWAY,
@@ -290,7 +290,7 @@ class LatterWallpaperProxyView(HomeAssistantView):
                 url = f"{base_url}{url}"
             session = async_get_clientsession(self.hass)
             try:
-                async with session.get(url, timeout=8, allow_redirects=True) as resp:
+                async with session.get(url, timeout=ClientTimeout(total=8), allow_redirects=True) as resp:
                     if resp.status == HTTPStatus.OK:
                         raw_bytes = await resp.read()
             except Exception as err:  # noqa: BLE001
