@@ -465,6 +465,13 @@ class LatterNativeBleTracker:
                     if last_scan and not scanner_label:
                         scanner_label = last_scan
 
+            dist_m: float | None = None
+            dist_ft: float | None = None
+            if effective_dbm is not None:
+                # Log-distance path-loss model (TxPower = -59 dBm @ 1m, indoor n = 2.2)
+                dist_m = round(max(0.2, min(50.0, 10.0 ** ((-59.0 - effective_dbm) / (10.0 * 2.2)))), 1)
+                dist_ft = round(dist_m * 3.28084, 1)
+
             rows.append(
                 {
                     "area_id": area_id,
@@ -473,6 +480,8 @@ class LatterNativeBleTracker:
                     "raw_rssi": raw_dbm,
                     "offset_db": offset_db,
                     "effective_rssi": effective_dbm,
+                    "distance_m": dist_m,
+                    "distance_ft": dist_ft,
                     "age_seconds": age_s,
                     "is_fresh": is_fresh,
                     "is_winner": area_id == self.current_area_id,

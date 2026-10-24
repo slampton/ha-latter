@@ -750,12 +750,28 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     font-variant-numeric: tabular-nums;
   }
   .nav-group-label {
-    font-size: 10.5px;
-    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 11px;
+    font-weight: 800;
     text-transform: uppercase;
-    letter-spacing: 0.6px;
-    color: var(--muted);
-    padding: 10px 10px 4px;
+    letter-spacing: 0.9px;
+    color: var(--text-strong);
+    margin: 14px 4px 5px;
+    padding: 0 6px 5px;
+    border-bottom: 1px solid var(--border);
+  }
+  .nav-group-label:first-child {
+    margin-top: 2px;
+  }
+  .nav-group-label::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 2px;
+    background: var(--accent);
+    flex-shrink: 0;
   }
   .nav-list {
     display: flex;
@@ -767,27 +783,32 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     align-items: center;
     justify-content: space-between;
     gap: 8px;
-    width: 100%;
-    padding: 8px 11px;
-    border-radius: 7px;
+    width: calc(100% - 12px);
+    margin-left: 12px;
+    padding: 8px 12px 8px 14px;
+    border-radius: 0 7px 7px 0;
     border: 1px solid transparent;
+    border-left: 2px solid var(--border);
     background: transparent;
     color: var(--muted);
-    font-weight: 600;
+    font-weight: 500;
     font-size: 13px;
     cursor: pointer;
     text-align: left;
     white-space: nowrap;
-    transition: background 0.12s ease, color 0.12s ease;
+    transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
   }
   .nav-btn:hover {
     background: var(--card-hover);
     color: var(--text-strong);
+    border-left-color: var(--muted);
   }
   .nav-btn.active {
     background: var(--accent-subtle);
-    color: var(--accent);
-    border-color: var(--accent);
+    color: var(--text-strong);
+    font-weight: 700;
+    border-color: rgba(104, 153, 211, 0.28);
+    border-left: 3px solid var(--accent);
   }
   .nav-badge {
     font-size: 11px;
@@ -1271,10 +1292,12 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     .nav-list::-webkit-scrollbar { display: none; }
     .nav-btn {
       width: auto;
+      margin-left: 0;
+      border-radius: 7px;
       padding: 8px 12px;
       font-size: 12.5px;
       background: var(--card);
-      border-color: var(--border);
+      border: 1px solid var(--border);
     }
     .sidebar-footer { display: none; }
     header.topbar {
@@ -1304,7 +1327,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
         <img src="/api/latter/brand/icon.png" alt="Latter" style="width:34px;height:34px;border-radius:8px;object-fit:contain;flex-shrink:0;" onerror="this.style.display='none'">
         <div class="brand-text">
           <h1 id="hdr-title">Latter Studio</h1>
-          <small id="hdr-sub">v1.6.4</small>
+          <small id="hdr-sub">v1.6.5</small>
         </div>
       </div>
     </div>
@@ -2020,8 +2043,11 @@ function renderRssiBars(surveyRows, packetsSeen) {
     const pct = hasSignal ? Math.max(6, Math.min(100, Math.round(((eff + 100) / 55) * 100))) : 0;
     const offSign = r.offset_db > 0 ? `+${r.offset_db}` : `${r.offset_db}`;
     const ageText = hasSignal ? `${r.age_seconds}s ago` : "No signal yet";
+    const distText = (hasSignal && r.distance_m != null)
+      ? ` &bull; Est. Distance: <strong style="color:var(--text-strong);">~${r.distance_m}m (${r.distance_ft}ft)</strong>`
+      : "";
     const sigText = hasSignal
-      ? `Raw: <strong>${r.raw_rssi} dBm</strong> &bull; Offset: <strong>${offSign} dB</strong> &rarr; Effective: <strong style="color:var(--accent);">${r.effective_rssi} dBm</strong>`
+      ? `Raw: <strong>${r.raw_rssi} dBm</strong> &bull; Offset: <strong>${offSign} dB</strong> &rarr; Effective: <strong style="color:var(--accent);">${r.effective_rssi} dBm</strong>${distText}`
       : `Offset: <strong>${offSign} dB</strong> &bull; Waiting for beacon packet...`;
     const winBadge = r.is_winner
       ? `<span class="state-badge" style="border-color:var(--success);color:var(--success);margin-left:6px;">ACTIVE</span>`
@@ -2602,7 +2628,9 @@ function applyStateToDom(data, forceFormUpdate=false) {
   document.getElementById("dash-ble-mode").textContent = cfg.native_ble_tracking
     ? (cfg.ble_auto_switch ? "Enabled (Auto-Switch)" : "Enabled (Manual Switch)")
     : "Disabled";
-  document.getElementById("dash-ble-proxy").textContent = live.ble_closest_proxy || "None";
+  const winRow = (live.ble_survey_rows || []).find(r => r.is_winner);
+  const distSuffix = (winRow && winRow.distance_m != null) ? ` (~${winRow.distance_m}m / ${winRow.distance_ft}ft)` : "";
+  document.getElementById("dash-ble-proxy").textContent = (live.ble_closest_proxy || "None") + distSuffix;
   document.getElementById("dash-ble-packets").textContent = String(live.ble_packets_seen || 0);
   document.getElementById("dash-media-summary").textContent = mediaSummary;
   const actSlotIdx = live.active_remote_slot || 1;
