@@ -206,7 +206,6 @@ async def async_push_active_room_entities(
 
 async def async_setup_services(hass: HomeAssistant) -> None:
     """Register Latter domain services."""
-    # Attach auto-push callback to all loaded coordinators
     domain_data = hass.data.get(DOMAIN, {})
     for val in domain_data.values():
         if isinstance(val, LatterCoordinator):
@@ -222,6 +221,31 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         coord = _get_primary_coordinator(hass, target_device)
         if coord and speaker:
             coord.async_set_active_speaker(speaker, transfer_queue=transfer_queue)
+
+    async def _handle_media_command(call: ServiceCall) -> None:
+        """Execute unified media playback command (play, pause, toggle, next, previous, stop, seek, play_media, clear_queue)."""
+        data = call.data
+        target_device = data.get("target_device")
+        coord = _get_primary_coordinator(hass, target_device)
+        if not coord:
+            return
+
+        command = str(data.get("command") or data.get("action") or "toggle")
+        speaker = data.get("speaker") or data.get("entity_id")
+        raw_seek = data.get("seek_position")
+        seek_pos = float(raw_seek) if raw_seek is not None and str(raw_seek).strip() != "" else None
+        media_id = str(data.get("media_id") or "").strip() or None
+        media_type = str(data.get("media_type") or "").strip() or None
+        enqueue = str(data.get("enqueue") or "").strip() or None
+
+        await coord.async_execute_media_command(
+            command=command,
+            speaker=str(speaker) if speaker else None,
+            seek_position=seek_pos,
+            media_id=media_id,
+            media_type=media_type,
+            enqueue=enqueue,
+        )
 
     async def _handle_trigger_binding(call: ServiceCall) -> None:
         """Execute a user-mapped hardware button/sensor trigger slot configured in the Web Companion."""
@@ -377,7 +401,6 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         remote_ent = slot_info["remote_entity"]
         mp_ent = slot_info["media_player_entity"]
 
-        # Handle power toggle whether passed via action="toggle" or action="command", command="toggle"
         if action == "toggle" or cmd in ("toggle", "power"):
             target = remote_ent or mp_ent
             if target:
@@ -387,7 +410,6 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 )
             return
 
-        # Handle volume & play/pause whether passed via action or command
         effective_media_cmd = cmd if action == "command" else action
         if effective_media_cmd in ("volume_up", "volume_down", "volume_mute", "media_play_pause"):
             if mp_ent and mp_ent.startswith("media_player."):
