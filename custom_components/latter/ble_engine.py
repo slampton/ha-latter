@@ -49,14 +49,14 @@ def _discover_target_device_macs(
     slug_norm = device_slug.strip().lower().replace("-", "_")
 
     target_dev_id: str | None = None
-    for entry in ent_reg.entities.values():
+    for entry in ent_reg.entities:
         if entry.platform == "esphome" and slug_norm in entry.entity_id:
             if entry.device_id:
                 target_dev_id = entry.device_id
                 break
 
     mac_ints: set[int] = set()
-    for dev in dev_reg.devices.values():
+    for dev in dev_reg.devices:
         dev_name = str(dev.name_by_user or dev.name or "").lower().replace("-", "_").replace(" ", "_")
         if dev.id == target_dev_id or (slug_norm and slug_norm in dev_name):
             for _conn_type, conn_val in dev.connections:
@@ -100,7 +100,7 @@ def _resolve_scanner_area_id(
     except Exception:  # noqa: BLE001
         pass
 
-    for device in dev_reg.devices.values():
+    for device in dev_reg.devices:
         if not device.area_id:
             continue
         for _conn_type, conn_val in device.connections:
@@ -138,7 +138,7 @@ def _resolve_scanner_area_id(
             if a_norm and a_norm in scan_norm:
                 return area.id
 
-    for entry in ent_reg.entities.values():
+    for entry in ent_reg.entities:
         if src_low in entry.entity_id or (scanner_name and scanner_name.replace("-", "_") in entry.entity_id):
             if entry.area_id:
                 return entry.area_id

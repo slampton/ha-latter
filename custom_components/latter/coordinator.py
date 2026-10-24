@@ -115,12 +115,12 @@ def _resolve_esphome_local_speaker(
     ent_reg = er.async_get(hass)
     dev_reg = dr.async_get(hass)
 
-    for entry in ent_reg.entities.values():
+    for entry in ent_reg.entities:
         if entry.domain == "media_player" and entry.platform == "esphome":
             if slug_norm in entry.entity_id and not entry.disabled_by:
                 return entry.entity_id
 
-    for dev in dev_reg.devices.values():
+    for dev in dev_reg.devices:
         dev_name = str(dev.name_by_user or dev.name or "").lower().replace("-", "_").replace(" ", "_")
         if slug_norm and slug_norm in dev_name:
             for entry in er.async_entries_for_device(ent_reg, dev.id):
@@ -160,7 +160,7 @@ def _get_esphome_device_current_area(
     """Return the current area_id assigned to the ESPHome device in HA Device Registry."""
     dev_reg = dr.async_get(hass)
     slug_norm = device_slug.strip().lower().replace("-", "_")
-    for dev in dev_reg.devices.values():
+    for dev in dev_reg.devices:
         dev_name = str(dev.name_by_user or dev.name or "").lower().replace("-", "_").replace(" ", "_")
         if slug_norm and slug_norm in dev_name and dev.area_id:
             return dev.area_id
