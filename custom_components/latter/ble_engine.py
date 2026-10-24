@@ -17,9 +17,10 @@ _LOGGER = logging.getLogger(__name__)
 
 APPLE_COMPANY_ID = 0x004C
 IBEACON_PREFIX = b"\x02\x15"
-EMA_ALPHA = 0.45
+EMA_ALPHA = 0.50
 HYSTERESIS_DB = 5.0
-STALE_PROXY_SECONDS = 20.0
+FAST_OVERRIDE_DB = 8.0
+STALE_PROXY_SECONDS = 15.0
 WAKE_GAP_SECONDS = 8.0
 MIN_HOLD_SECONDS = 4.0
 
@@ -56,7 +57,7 @@ def _normalize_uuid_hex(uuid_str: str) -> str:
 
 
 def _mac_to_int(mac_str: str) -> int | None:
-    """Convert a 12-hex-char MAC address into an integer for ESP32 Wi-Fi/BLE +/-3 comparison."""
+    """Convert a 12-hex-char MAC address into an integer for ESP32 Wi-Fi/BLE +/-2 comparison."""
     clean = mac_str.strip().lower().replace(":", "").replace("-", "").replace("_", "")
     if len(clean) != 12:
         return None
@@ -93,12 +94,12 @@ def _discover_target_device_macs(
             for _conn_type, conn_val in dev.connections:
                 m_int = _mac_to_int(str(conn_val))
                 if m_int is not None:
-                    for offset in (-3, -2, -1, 0, 1, 2, 3):
+                    for offset in (-2, -1, 0, 1, 2):
                         mac_ints.add(m_int + offset)
             for _domain, ident_val in dev.identifiers:
                 m_int = _mac_to_int(str(ident_val))
                 if m_int is not None:
-                    for offset in (-3, -2, -1, 0, 1, 2, 3):
+                    for offset in (-2, -1, 0, 1, 2):
                         mac_ints.add(m_int + offset)
     return mac_ints
 
@@ -116,9 +117,17 @@ def _resolve_device_area_or_entity_area(
         if entry.area_id:
             return entry.area_id
 
-    dev_label = str(dev.name_by_user or dev.name or "").lower().replace("-", " ").replace("_", " ")
-    if dev_label:
-        for area in area_reg.async_list_areas():
+    # Check if the device's user name or default name contains a known Area name (longest area name first)
+    for raw_label in (dev.name_by_user, dev.name):
+        if not raw_label:
+            continue
+        dev_label = str(raw_label).lower().replace("-", " ").replace("_", " ")
+        areas_sorted = sorted(
+            area_reg.async_list_areas(),
+            key=lambda a: len(a.name),
+            reverse=True,
+        )
+        for area in areas_sorted:
             a_norm = area.name.lower().replace("-", " ").replace("_", " ").strip()
             if a_norm and a_norm in dev_label:
                 return area.id
@@ -129,7 +138,7 @@ def _resolve_device_area_or_entity_area(
 def _resolve_scanner_area_id(
     hass: HomeAssistant, scanner_source: str
 ) -> str | None:
-    """Resolve an ESPHome BLE Proxy source (MAC or name) to its Home Assistant area_id."""
+    """Resolve an ESPHome BLE Proxy source (MAC or name) to its Home Assistant area_id with strict priority."""
     if not scanner_source:
         return None
 
@@ -154,82 +163,71 @@ def _resolve_scanner_area_id(
     except Exception:  # noqa: BLE001
         pass
 
-    # Pass 1: Match scanner MAC/identifier/name to an HA DeviceEntry (checking device.area_id, entity.area_id, and device name)
-    for device in _iter_devices(dev_reg):
-        matched_device = False
+    all_devices = _iter_devices(dev_reg)
+
+    # Tier 1: Exact MAC / connection / identifier match (offset == 0)
+    for device in all_devices:
         for _conn_type, conn_val in device.connections:
             c_low = str(conn_val).lower()
-            if c_low == src_low:
-                matched_device = True
-                break
             c_int = _mac_to_int(c_low)
-            if src_int is not None and c_int is not None and abs(src_int - c_int) <= 3:
-                matched_device = True
-                break
+            if c_low == src_low or (src_int is not None and c_int is not None and src_int == c_int):
+                resolved = _resolve_device_area_or_entity_area(device, ent_reg, area_reg)
+                if resolved:
+                    return resolved
+        for _domain, ident_val in device.identifiers:
+            i_low = str(ident_val).lower()
+            i_int = _mac_to_int(i_low)
+            if i_low == src_low or (src_int is not None and i_int is not None and src_int == i_int):
+                resolved = _resolve_device_area_or_entity_area(device, ent_reg, area_reg)
+                if resolved:
+                    return resolved
 
-        if not matched_device:
+    # Tier 2: ESP32 base-MAC +/-2 offset match
+    if src_int is not None:
+        for device in all_devices:
+            for _conn_type, conn_val in device.connections:
+                c_int = _mac_to_int(str(conn_val))
+                if c_int is not None and 0 < abs(src_int - c_int) <= 2:
+                    resolved = _resolve_device_area_or_entity_area(device, ent_reg, area_reg)
+                    if resolved:
+                        return resolved
             for _domain, ident_val in device.identifiers:
-                i_low = str(ident_val).lower()
-                if i_low == src_low:
-                    matched_device = True
-                    break
-                i_int = _mac_to_int(i_low)
-                if src_int is not None and i_int is not None and abs(src_int - i_int) <= 3:
-                    matched_device = True
-                    break
+                i_int = _mac_to_int(str(ident_val))
+                if i_int is not None and 0 < abs(src_int - i_int) <= 2:
+                    resolved = _resolve_device_area_or_entity_area(device, ent_reg, area_reg)
+                    if resolved:
+                        return resolved
 
-        if not matched_device:
-            for candidate_name in (device.name_by_user, device.name):
-                if not candidate_name:
+    # Tier 3: Exact device name match (never substring-matching generic "esp32" or "proxy")
+    for device in all_devices:
+        for candidate_name in (device.name_by_user, device.name):
+            if not candidate_name:
+                continue
+            d_low = str(candidate_name).strip().lower()
+            d_slug = d_low.replace(" ", "-").replace("_", "-")
+            for target_n in (src_low, scanner_name):
+                if not target_n:
                     continue
-                d_low = str(candidate_name).strip().lower()
-                d_slug = d_low.replace(" ", "-").replace("_", "-")
-                for target_n in (src_low, scanner_name):
-                    if not target_n:
-                        continue
-                    t_slug = target_n.replace(" ", "-").replace("_", "-")
-                    if (
-                        d_low == target_n
-                        or d_slug == t_slug
-                        or (len(d_slug) > 4 and (d_slug in t_slug or t_slug in d_slug))
-                    ):
-                        matched_device = True
-                        break
-                if matched_device:
-                    break
+                t_slug = target_n.replace(" ", "-").replace("_", "-")
+                if d_low == target_n or d_slug == t_slug:
+                    resolved = _resolve_device_area_or_entity_area(device, ent_reg, area_reg)
+                    if resolved:
+                        return resolved
 
-        if matched_device:
-            resolved = _resolve_device_area_or_entity_area(
-                device, ent_reg, area_reg
-            )
-            if resolved:
-                return resolved
-
-    # Pass 2: Match scanner_name or scanner_source directly against Home Assistant Area names
+    # Tier 4: Match scanner_name directly against Home Assistant Area names (longest area name first)
+    areas_sorted = sorted(
+        area_reg.async_list_areas(),
+        key=lambda a: len(a.name),
+        reverse=True,
+    )
     for raw_text in (scanner_name, src_low):
         if not raw_text:
             continue
         scan_norm = raw_text.replace("-", " ").replace("_", " ")
-        for area in area_reg.async_list_areas():
+        for area in areas_sorted:
             a_norm = area.name.lower().replace("-", " ").replace("_", " ").strip()
             if a_norm and a_norm in scan_norm:
                 return area.id
-
-    # Pass 3: Match entity_id containing scanner source or scanner name
-    for entry in _iter_entities(ent_reg):
-        if src_low in entry.entity_id or (
-            scanner_name and scanner_name.replace("-", "_").replace(" ", "_") in entry.entity_id
-        ):
-            if entry.area_id:
-                return entry.area_id
-            if entry.device_id:
-                dev = dev_reg.async_get(entry.device_id)
-                if dev:
-                    resolved = _resolve_device_area_or_entity_area(
-                        dev, ent_reg, area_reg
-                    )
-                    if resolved:
-                        return resolved
 
     return None
 
@@ -250,6 +248,26 @@ def get_ble_proxy_area_ids(hass: HomeAssistant) -> set[str]:
     except Exception:  # noqa: BLE001
         pass
     return proxy_areas
+
+
+def get_all_scanners_diagnostic_map(hass: HomeAssistant) -> dict[str, str]:
+    """Return a diagnostic dictionary of all registered HA Bluetooth scanners -> resolved Area name."""
+    out: dict[str, str] = {}
+    area_reg = ar.async_get(hass)
+    try:
+        from homeassistant.components import bluetooth
+
+        scanners = bluetooth.async_current_scanners(hass)
+        for scanner in scanners:
+            source = str(getattr(scanner, "source", "") or "")
+            name = str(getattr(scanner, "name", "") or source)
+            a_id = _resolve_scanner_area_id(hass, source) if source else None
+            area_obj = area_reg.async_get_area(a_id) if a_id else None
+            area_label = f"{area_obj.name} ({a_id})" if area_obj else "UNMAPPED"
+            out[f"{name} [{source}]"] = area_label
+    except Exception:  # noqa: BLE001
+        pass
+    return out
 
 
 class LatterNativeBleTracker:
@@ -279,12 +297,16 @@ class LatterNativeBleTracker:
         self.current_area_id: str | None = None
         self.closest_scanner: str = ""
         self.packets_seen: int = 0
-        self._last_packet_monotonic: float = 0.0
+        self.last_packet_monotonic: float = 0.0
         self._last_switch_monotonic: float = 0.0
 
     @callback
     def reset_for_device_wake(self) -> None:
-        """Clear stale RSSI history and scanner cache when the portable ESPHome device boots or wakes from standby."""
+        """Clear stale RSSI history only if no packet was received in the last 6 seconds."""
+        now = time.monotonic()
+        if self.last_packet_monotonic > 0.0 and (now - self.last_packet_monotonic) < 6.0:
+            # Device has already been broadcasting during boot; keep fresh RSSI data!
+            return
         self._area_rssi.clear()
         self._unmapped_rssi.clear()
         self._scanner_area_cache.clear()
@@ -312,9 +334,10 @@ class LatterNativeBleTracker:
                 bluetooth.BluetoothScanningMode.ACTIVE,
             )
             _LOGGER.info(
-                "Latter Native BLE Room Tracker active (UUID=%s, known_macs=%d)",
+                "Latter Native BLE Room Tracker active (UUID=%s, known_macs=%d, scanners=%s)",
                 self._target_uuid_hex,
                 len(self._target_mac_ints),
+                get_all_scanners_diagnostic_map(self.hass),
             )
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug(
@@ -392,10 +415,10 @@ class LatterNativeBleTracker:
 
         now = time.monotonic()
         just_woke_from_standby = (
-            self._last_packet_monotonic > 0.0
-            and (now - self._last_packet_monotonic) >= WAKE_GAP_SECONDS
+            self.last_packet_monotonic > 0.0
+            and (now - self.last_packet_monotonic) >= WAKE_GAP_SECONDS
         )
-        self._last_packet_monotonic = now
+        self.last_packet_monotonic = now
         self.packets_seen += 1
 
         if not self._target_mac_ints and self.packets_seen <= 3:
@@ -403,7 +426,6 @@ class LatterNativeBleTracker:
                 self.hass, self._raw_slug
             )
 
-        # Re-resolve scanner if not cached or previously None (in case user just assigned an Area in HA)
         if self._scanner_area_cache.get(source) is None:
             resolved_area = _resolve_scanner_area_id(self.hass, source)
             self._scanner_area_cache[source] = resolved_area
@@ -423,6 +445,7 @@ class LatterNativeBleTracker:
 
         if just_woke_from_standby:
             self._area_rssi.clear()
+            self.current_area_id = None
 
         rssi_f = float(rssi)
         prev = self._area_rssi.get(area_id)
@@ -447,24 +470,37 @@ class LatterNativeBleTracker:
             self._area_rssi.items(), key=lambda item: item[1][0]
         )
 
-        # Fast-path acquisition on first boot, device reconnect, or right after waking from Screen-Off Standby
-        if self.current_area_id is None or (just_woke_from_standby and rssi_f >= -88.0):
-            self.current_area_id = best_area
-            self.closest_scanner = source
-            self._last_switch_monotonic = now
-            self._on_area_detected(best_area, source)
+        # If we have no current room yet, only lock immediately if signal is reasonably strong (>= -76 dBm)
+        # OR if we've heard at least 2 proxies.
+        if self.current_area_id is None:
+            if best_ema >= -76.0 or len(self._area_rssi) >= 2:
+                self.current_area_id = best_area
+                self.closest_scanner = source
+                self._last_switch_monotonic = now
+                self._on_area_detected(best_area, source)
             return
 
         if best_area == self.current_area_id:
             self.closest_scanner = source
             return
 
+        cur_entry = self._area_rssi.get(self.current_area_id)
+        cur_ema = cur_entry[0] if cur_entry is not None else -100.0
+        delta_db = best_ema - cur_ema
+
+        # Fast Override: If a proxy is >= 8 dB stronger than the initial/current room (e.g. Garage vs distant Living Room),
+        # switch IMMEDIATELY without waiting for MIN_HOLD_SECONDS!
+        if delta_db >= FAST_OVERRIDE_DB:
+            self.current_area_id = best_area
+            self.closest_scanner = source
+            self._last_switch_monotonic = now
+            self._on_area_detected(best_area, source)
+            return
+
         if (now - self._last_switch_monotonic) < MIN_HOLD_SECONDS:
             return
 
-        cur_entry = self._area_rssi.get(self.current_area_id)
-        cur_ema = cur_entry[0] if cur_entry is not None else -100.0
-        if (best_ema - cur_ema) >= HYSTERESIS_DB:
+        if delta_db >= HYSTERESIS_DB:
             self.current_area_id = best_area
             self.closest_scanner = source
             self._last_switch_monotonic = now

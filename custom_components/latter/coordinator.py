@@ -41,6 +41,7 @@ from .ble_engine import (
     LatterNativeBleTracker,
     _iter_devices,
     _iter_entities,
+    get_all_scanners_diagnostic_map,
     get_ble_proxy_area_ids,
 )
 from .browse_engine import _get_mass_client, is_music_assistant_player
@@ -768,14 +769,36 @@ class LatterCoordinator:
             self._schedule_persist_runtime_state()
 
     async def _async_handle_device_reconnect(self) -> None:
-        """Reset idle remote speaker, clear stale BLE room lock, and push active room slots after ESPHome boot/wake."""
+        """Reset idle remote speaker, sync BLE room lock, and push active room slots after ESPHome boot/wake."""
         self._enforce_local_speaker_if_remote_idle("device_reconnect")
         if self._ble_tracker is not None:
             self._ble_tracker.reset_for_device_wake()
+            if (
+                self._ble_tracker.current_area_id
+                and self._ble_tracker.current_area_id != self.active_area_id
+            ):
+                self.async_set_active_area(
+                    self._ble_tracker.current_area_id,
+                    handoff_media=False,
+                    sync_device_registry=True,
+                )
         self._notify_listeners()
         await asyncio.sleep(1.5)
         self._enforce_local_speaker_if_remote_idle("device_reconnect_post_delay")
+        if (
+            self._ble_tracker is not None
+            and self._ble_tracker.current_area_id
+            and self._ble_tracker.current_area_id != self.active_area_id
+        ):
+            self.async_set_active_area(
+                self._ble_tracker.current_area_id,
+                handoff_media=False,
+                sync_device_registry=True,
+            )
         self._notify_listeners()
+        if self.on_area_changed_push_slots is not None:
+            await self.on_area_changed_push_slots(self)
+        await asyncio.sleep(2.0)
         if self.on_area_changed_push_slots is not None:
             await self.on_area_changed_push_slots(self)
 
@@ -1484,6 +1507,7 @@ class LatterCoordinator:
             "ble_closest_proxy": self._ble_tracker.closest_scanner if self._ble_tracker else "",
             "ble_packets_seen": self._ble_tracker.packets_seen if self._ble_tracker else 0,
             "ble_rssi_by_room": self._ble_tracker.get_live_rssi_summary() if self._ble_tracker else {},
+            "ble_scanners_map": get_all_scanners_diagnostic_map(self.hass),
             "presence_entity": pres_ent or "",
             "presence_state": pres_state,
             "ble_auto_switch": self.ble_auto_switch_enabled,
