@@ -62,7 +62,17 @@ from .room_engine import (
 
 _LOGGER = logging.getLogger(__name__)
 
-VALID_WEB_THEMES: set[str] = {"amoled_midnight", "daylight_clean", "cyber_cyan"}
+VALID_WEB_THEMES: set[str] = {"dark", "light", "system"}
+
+
+def _normalize_web_theme(raw_theme: Any) -> str:
+    """Normalize legacy or custom theme strings to 'dark', 'light', or 'system'."""
+    val = str(raw_theme or DEFAULT_WEB_THEME).strip().lower()
+    if val in VALID_WEB_THEMES:
+        return val
+    if "light" in val or "day" in val or "warm" in val:
+        return "light"
+    return "dark"
 
 
 def _build_companion_state_payload(
@@ -145,11 +155,9 @@ def _build_companion_state_payload(
         local_speaker=coordinator.local_speaker,
     )
 
-    saved_theme = str(
+    saved_theme = _normalize_web_theme(
         coordinator.get_opt(CONF_WEB_THEME, DEFAULT_WEB_THEME)
-    ).strip()
-    if saved_theme not in VALID_WEB_THEMES:
-        saved_theme = DEFAULT_WEB_THEME
+    )
 
     config_data = {
         CONF_DEVICE_SLUG: coordinator.device_slug,
@@ -284,9 +292,7 @@ class LatterCompanionApiView(HomeAssistantView):
         cmd = str(body.get("command") or "save_config")
 
         if cmd == "set_theme":
-            theme_val = str(body.get("web_theme") or DEFAULT_WEB_THEME).strip()
-            if theme_val not in VALID_WEB_THEMES:
-                theme_val = DEFAULT_WEB_THEME
+            theme_val = _normalize_web_theme(body.get("web_theme"))
             merged_theme: dict[str, Any] = {
                 **coordinator.entry.data,
                 **(coordinator.entry.options or {}),
@@ -380,6 +386,8 @@ class LatterCompanionApiView(HomeAssistantView):
                         val = int(val or DEFAULT_ART_SIZE)
                     elif k == CONF_DEFAULT_PAGE_SIZE:
                         val = max(1, min(20, int(val or DEFAULT_PAGE_SIZE)))
+                    elif k == CONF_WEB_THEME:
+                        val = _normalize_web_theme(val)
                     merged[k] = val
 
             self.hass.config_entries.async_update_entry(
@@ -401,56 +409,39 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Latter Companion Studio</title>
 <style>
-  :root, [data-theme="amoled_midnight"] {
-    --bg: #05070b;
-    --sidebar: #0b0f17;
-    --card: #101622;
-    --card-hover: #161e2e;
+  :root, [data-theme="dark"] {
+    --bg: #07090e;
+    --sidebar: #0c1017;
+    --card: #111722;
+    --card-hover: #172030;
     --border: #1e293b;
     --input-bg: #090d14;
-    --text: #f8fafc;
-    --muted: #94a3b8;
+    --text: #e2e8f0;
+    --text-strong: #f8fafc;
+    --muted: #8b9bb4;
     --accent: #38bdf8;
-    --accent-2: #818cf8;
-    --accent-glow: rgba(56, 189, 248, 0.14);
+    --accent-solid: #0284c7;
+    --accent-subtle: rgba(56, 189, 248, 0.10);
     --success: #10b981;
     --warning: #f59e0b;
     --danger: #ef4444;
-    --shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
   }
-  [data-theme="daylight_clean"] {
-    --bg: #f1f5f9;
-    --sidebar: #ffffff;
-    --card: #ffffff;
-    --card-hover: #f8fafc;
-    --border: #e2e8f0;
-    --input-bg: #f8fafc;
-    --text: #0f172a;
-    --muted: #64748b;
-    --accent: #0284c7;
-    --accent-2: #4f46e5;
-    --accent-glow: rgba(2, 132, 199, 0.10);
+  [data-theme="light"] {
+    --bg: #dde3ea;
+    --sidebar: #e6ebf1;
+    --card: #eef2f6;
+    --card-hover: #e2e8f0;
+    --border: #cbd5e1;
+    --input-bg: #e2e8f0;
+    --text: #1e293b;
+    --text-strong: #0f172a;
+    --muted: #475569;
+    --accent: #0369a1;
+    --accent-solid: #0284c7;
+    --accent-subtle: rgba(2, 132, 199, 0.10);
     --success: #059669;
     --warning: #d97706;
     --danger: #dc2626;
-    --shadow: 0 4px 16px rgba(15, 23, 42, 0.06);
-  }
-  [data-theme="cyber_cyan"] {
-    --bg: #0b111e;
-    --sidebar: #0f172a;
-    --card: #152036;
-    --card-hover: #1c2b47;
-    --border: #233554;
-    --input-bg: #0b111e;
-    --text: #f1f5f9;
-    --muted: #94a3b8;
-    --accent: #00d2ff;
-    --accent-2: #6366f1;
-    --accent-glow: rgba(0, 210, 255, 0.14);
-    --success: #10b981;
-    --warning: #f59e0b;
-    --danger: #ef4444;
-    --shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
   }
   * { box-sizing: border-box; }
   body {
@@ -461,10 +452,15 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     min-height: 100vh;
     display: flex;
     flex-direction: column;
+    font-size: 13.5px;
+  }
+  code, .mono {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 12px;
   }
   .app-shell {
     display: grid;
-    grid-template-columns: 260px minmax(0, 1fr);
+    grid-template-columns: 248px minmax(0, 1fr);
     min-height: 100vh;
   }
   aside.sidebar {
@@ -472,7 +468,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     border-right: 1px solid var(--border);
     display: flex;
     flex-direction: column;
-    padding: 20px 14px;
+    padding: 16px 12px;
     position: sticky;
     top: 0;
     height: 100vh;
@@ -481,94 +477,90 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
   .brand {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 4px 8px 18px;
+    gap: 11px;
+    padding: 4px 8px 16px;
     border-bottom: 1px solid var(--border);
-    margin-bottom: 16px;
+    margin-bottom: 12px;
   }
   .brand-badge {
-    width: 38px;
-    height: 38px;
-    border-radius: 11px;
-    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    width: 32px;
+    height: 32px;
+    border-radius: 7px;
+    background: var(--accent-solid);
     display: flex;
     align-items: center;
     justify-content: center;
     font-weight: 800;
-    color: #fff;
-    font-size: 18px;
+    color: #ffffff;
+    font-size: 15px;
     flex-shrink: 0;
+    letter-spacing: -0.5px;
   }
   .brand-text { min-width: 0; }
   .brand-text h1 {
     margin: 0;
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 700;
+    color: var(--text-strong);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
   .brand-text small {
     color: var(--muted);
-    font-size: 11.5px;
+    font-size: 11px;
     display: block;
     margin-top: 2px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
   .nav-group-label {
     font-size: 10.5px;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.8px;
+    letter-spacing: 0.7px;
     color: var(--muted);
-    padding: 10px 10px 6px;
+    padding: 12px 10px 5px;
   }
   .nav-btn {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 10px;
+    gap: 8px;
     width: 100%;
-    padding: 10px 12px;
-    margin-bottom: 4px;
-    border-radius: 10px;
+    padding: 9px 11px;
+    margin-bottom: 2px;
+    border-radius: 7px;
     border: 1px solid transparent;
     background: transparent;
     color: var(--muted);
     font-weight: 600;
-    font-size: 13.5px;
+    font-size: 13px;
     cursor: pointer;
     text-align: left;
-    transition: all 0.15s ease;
+    transition: background 0.12s ease, color 0.12s ease;
   }
   .nav-btn:hover {
     background: var(--card-hover);
-    color: var(--text);
+    color: var(--text-strong);
   }
   .nav-btn.active {
-    background: var(--accent-glow);
+    background: var(--accent-subtle);
     color: var(--accent);
-    border-color: rgba(56, 189, 248, 0.3);
-  }
-  .nav-btn .nav-left {
-    display: flex;
-    align-items: center;
-    gap: 10px;
+    border-color: var(--border);
   }
   .nav-badge {
     font-size: 11px;
-    padding: 2px 7px;
-    border-radius: 99px;
+    padding: 1px 7px;
+    border-radius: 5px;
     background: var(--card);
     border: 1px solid var(--border);
     color: var(--muted);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
   .sidebar-footer {
     margin-top: auto;
-    padding-top: 16px;
+    padding-top: 14px;
     border-top: 1px solid var(--border);
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
   }
   .main-area {
     display: flex;
@@ -579,128 +571,128 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 14px 28px;
+    padding: 12px 24px;
     background: var(--sidebar);
     border-bottom: 1px solid var(--border);
     position: sticky;
     top: 0;
     z-index: 15;
     flex-wrap: wrap;
-    gap: 12px;
+    gap: 10px;
   }
   .topbar-status {
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: 10px;
     flex-wrap: wrap;
   }
   .status-chip {
     display: inline-flex;
     align-items: center;
     gap: 7px;
-    padding: 6px 12px;
-    border-radius: 99px;
+    padding: 5px 10px;
+    border-radius: 6px;
     background: var(--card);
     border: 1px solid var(--border);
-    font-size: 12.5px;
+    font-size: 12px;
     font-weight: 600;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
   .dot-live {
-    width: 8px;
-    height: 8px;
+    width: 7px;
+    height: 7px;
     border-radius: 50%;
     background: var(--success);
-    box-shadow: 0 0 8px var(--success);
   }
   .topbar-actions {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
   }
   .dirty-banner {
     display: none;
     align-items: center;
-    gap: 8px;
-    font-size: 12px;
+    font-size: 11.5px;
     font-weight: 700;
     color: var(--warning);
     background: rgba(245, 158, 11, 0.12);
     border: 1px solid rgba(245, 158, 11, 0.35);
-    padding: 6px 12px;
-    border-radius: 8px;
+    padding: 5px 10px;
+    border-radius: 6px;
   }
   .dirty-banner.visible { display: inline-flex; }
   button.btn-primary {
-    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    background: var(--accent-solid);
     color: #ffffff;
-    border: none;
-    padding: 9px 18px;
-    border-radius: 9px;
-    font-weight: 700;
-    cursor: pointer;
-    font-size: 13px;
-    box-shadow: 0 2px 10px var(--accent-glow);
-  }
-  button.btn-secondary {
-    background: var(--card);
-    color: var(--text);
-    border: 1px solid var(--border);
-    padding: 8px 14px;
-    border-radius: 9px;
+    border: 1px solid transparent;
+    padding: 7px 14px;
+    border-radius: 6px;
     font-weight: 600;
     cursor: pointer;
-    font-size: 13px;
+    font-size: 12.5px;
+  }
+  button.btn-primary:hover { opacity: 0.92; }
+  button.btn-secondary {
+    background: var(--card);
+    color: var(--text-strong);
+    border: 1px solid var(--border);
+    padding: 7px 13px;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 12.5px;
   }
   button.btn-secondary:hover { background: var(--card-hover); }
   button.btn-danger {
-    background: rgba(239, 68, 68, 0.14);
+    background: rgba(239, 68, 68, 0.12);
     color: var(--danger);
     border: 1px solid rgba(239, 68, 68, 0.3);
-    padding: 7px 11px;
-    border-radius: 8px;
-    font-weight: 700;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-weight: 600;
     cursor: pointer;
   }
   .content-wrap {
-    max-width: 1180px;
+    max-width: 1200px;
     width: 100%;
     margin: 0 auto;
-    padding: 26px 28px 72px;
+    padding: 22px 24px 64px;
   }
   .page-header {
-    margin-bottom: 22px;
+    margin-bottom: 18px;
   }
   .page-header h2 {
-    margin: 0 0 6px;
-    font-size: 21px;
+    margin: 0 0 4px;
+    font-size: 18px;
     font-weight: 700;
+    color: var(--text-strong);
   }
   .page-header p {
     margin: 0;
     color: var(--muted);
-    font-size: 13.5px;
-    line-height: 1.5;
+    font-size: 13px;
+    line-height: 1.45;
   }
   .grid-2 {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
-    gap: 20px;
+    gap: 16px;
   }
   .card {
     background: var(--card);
     border: 1px solid var(--border);
-    border-radius: 14px;
-    padding: 20px;
-    box-shadow: var(--shadow);
+    border-radius: 9px;
+    padding: 18px;
     min-width: 0;
   }
   .card h3 {
-    margin: 0 0 6px;
-    font-size: 15.5px;
+    margin: 0 0 5px;
+    font-size: 14.5px;
     font-weight: 700;
+    color: var(--text-strong);
   }
   .card p.desc {
-    margin: 0 0 16px;
+    margin: 0 0 14px;
     font-size: 12.5px;
     color: var(--muted);
     line-height: 1.45;
@@ -708,151 +700,162 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
   .hero-stats {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 14px;
-    margin-bottom: 20px;
+    gap: 12px;
+    margin-bottom: 16px;
   }
   .stat-box {
     background: var(--card);
     border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 14px 16px;
+    border-radius: 8px;
+    padding: 12px 14px;
   }
   .stat-box span {
     display: block;
-    font-size: 11.5px;
+    font-size: 11px;
     font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
     color: var(--muted);
     margin-bottom: 4px;
   }
   .stat-box strong {
-    font-size: 17px;
+    font-size: 15.5px;
     font-weight: 700;
-    color: var(--accent);
+    color: var(--text-strong);
     display: block;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
-  .field { margin-bottom: 14px; }
+  .field { margin-bottom: 13px; }
   .field label {
     display: block;
     font-size: 12px;
     font-weight: 600;
     color: var(--muted);
-    margin-bottom: 6px;
+    margin-bottom: 5px;
   }
   select, input[type="text"], input[type="number"] {
     width: 100%;
-    padding: 9px 12px;
-    border-radius: 9px;
+    padding: 8px 10px;
+    border-radius: 6px;
     border: 1px solid var(--border);
     background: var(--input-bg);
-    color: var(--text);
+    color: var(--text-strong);
     font-size: 13px;
   }
   select:focus, input:focus {
-    outline: 2px solid var(--accent);
-    border-color: transparent;
+    outline: 1px solid var(--accent);
+    border-color: var(--accent);
   }
   .toggle-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 10px 0;
+    padding: 9px 0;
     border-bottom: 1px solid var(--border);
     font-size: 13px;
     gap: 12px;
   }
   .toggle-row:last-child { border-bottom: none; }
-  .rssi-bar { margin-bottom: 11px; }
+  .rssi-bar { margin-bottom: 10px; }
   .rssi-header {
     display: flex;
     justify-content: space-between;
-    font-size: 12.5px;
-    margin-bottom: 5px;
+    font-size: 12px;
+    margin-bottom: 4px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
   .rssi-track {
-    height: 8px;
+    height: 7px;
     background: var(--input-bg);
-    border-radius: 99px;
+    border-radius: 4px;
     overflow: hidden;
     border: 1px solid var(--border);
   }
   .rssi-fill {
     height: 100%;
-    background: linear-gradient(90deg, var(--accent-2), var(--accent));
-    border-radius: 99px;
-    transition: width 0.3s ease;
+    background: var(--accent-solid);
+    border-radius: 4px;
+    transition: width 0.25s ease;
   }
   .room-cards-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
-    gap: 10px;
-    margin-top: 12px;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 8px;
+    margin-top: 10px;
   }
   .room-mini-card {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 11px 14px;
-    border-radius: 10px;
+    padding: 9px 12px;
+    border-radius: 7px;
     background: var(--input-bg);
     border: 1px solid var(--border);
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: background 0.12s ease;
   }
+  .room-mini-card:hover { background: var(--card-hover); }
   .room-mini-card.on {
     border-color: var(--accent);
-    background: var(--accent-glow);
+    background: var(--accent-subtle);
   }
   .room-mini-card strong {
-    font-size: 13px;
+    font-size: 12.5px;
+    color: var(--text-strong);
     display: block;
   }
   .room-mini-card small {
     font-size: 11px;
     color: var(--muted);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
   .esp-layout {
     display: grid;
-    grid-template-columns: 240px minmax(0, 1fr);
-    gap: 18px;
+    grid-template-columns: 230px minmax(0, 1fr);
+    gap: 16px;
     align-items: start;
   }
-  .esp-nav { display: flex; flex-direction: column; gap: 6px; }
+  .esp-nav { display: flex; flex-direction: column; gap: 4px; }
   .esp-nav-btn {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 10px 12px;
-    border-radius: 9px;
+    padding: 8px 11px;
+    border-radius: 6px;
     background: var(--input-bg);
     border: 1px solid var(--border);
     color: var(--text);
     cursor: pointer;
-    font-size: 13px;
+    font-size: 12.5px;
     font-weight: 600;
   }
   .esp-nav-btn.active {
     border-color: var(--accent);
     color: var(--accent);
-    background: var(--accent-glow);
+    background: var(--accent-subtle);
   }
-  .entity-list { display: flex; flex-direction: column; gap: 9px; }
+  .entity-list { display: flex; flex-direction: column; gap: 7px; }
   .entity-row {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
-    gap: 14px;
+    gap: 12px;
     align-items: center;
-    padding: 11px 14px;
+    padding: 10px 12px;
     background: var(--input-bg);
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: 7px;
     font-size: 13px;
   }
   .entity-row.wide-val { grid-template-columns: 1fr; gap: 8px; }
-  .entity-row .meta strong { display: block; font-size: 13.5px; }
-  .entity-row .meta small { color: var(--muted); font-size: 11px; }
+  .entity-row .meta strong { display: block; font-size: 13px; color: var(--text-strong); }
+  .entity-row .meta small {
+    color: var(--muted);
+    font-size: 11px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
   .entity-row .ctrl {
     display: flex;
     align-items: center;
@@ -860,13 +863,13 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
   }
   .state-badge {
     display: inline-block;
-    padding: 5px 10px;
-    border-radius: 7px;
+    padding: 4px 8px;
+    border-radius: 5px;
     background: var(--card);
     border: 1px solid var(--border);
     color: var(--accent);
-    font-weight: 700;
-    font-size: 12px;
+    font-weight: 600;
+    font-size: 11.5px;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
   .binding-row {
@@ -874,20 +877,21 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     grid-template-columns: 1.1fr 1.6fr 0.9fr auto auto;
     gap: 8px;
     align-items: center;
-    margin-bottom: 10px;
+    margin-bottom: 8px;
     background: var(--input-bg);
-    padding: 10px;
-    border-radius: 10px;
+    padding: 9px;
+    border-radius: 7px;
     border: 1px solid var(--border);
   }
-  .chip-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .chip-list { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
   .chip {
-    background: var(--accent-glow);
-    border: 1px solid var(--accent);
-    color: var(--text);
-    padding: 5px 11px;
-    border-radius: 99px;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    color: var(--text-strong);
+    padding: 4px 10px;
+    border-radius: 6px;
     font-size: 12px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     display: flex;
     align-items: center;
     gap: 7px;
@@ -895,17 +899,17 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
   .chip b { cursor: pointer; color: var(--danger); }
   .toast {
     position: fixed;
-    bottom: 22px;
-    right: 22px;
-    background: var(--success);
-    color: #ffffff;
-    padding: 12px 20px;
-    border-radius: 10px;
-    font-weight: 700;
-    font-size: 13px;
+    bottom: 20px;
+    right: 20px;
+    background: var(--card);
+    color: var(--text-strong);
+    border: 1px solid var(--accent);
+    padding: 10px 16px;
+    border-radius: 7px;
+    font-weight: 600;
+    font-size: 12.5px;
     display: none;
     z-index: 50;
-    box-shadow: var(--shadow);
   }
   .hidden { display: none !important; }
   @media (max-width: 900px) {
@@ -921,7 +925,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
   }
 </style>
 </head>
-<body data-theme="amoled_midnight">
+<body data-theme="dark">
 <div class="app-shell">
   <!-- LEFT SIDEBAR NAVIGATION -->
   <aside class="sidebar">
@@ -929,43 +933,43 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
       <div class="brand-badge">L</div>
       <div class="brand-text">
         <h1 id="hdr-title">Latter Studio</h1>
-        <small id="hdr-sub">ESPHome Companion</small>
+        <small id="hdr-sub">v1.4.6</small>
       </div>
     </div>
 
     <div class="nav-group-label">Live & Everyday</div>
     <button class="nav-btn active" onclick="switchView('dashboard', this)">
-      <span class="nav-left"><span>Dashboard & Radar</span></span>
+      <span>Dashboard & Radar</span>
       <span class="nav-badge" id="nav-room-badge">--</span>
     </button>
     <button class="nav-btn" onclick="switchView('esphome', this)">
-      <span class="nav-left"><span>Device Controls</span></span>
+      <span>Device Controls</span>
       <span class="nav-badge" id="nav-esp-badge">0</span>
     </button>
 
     <div class="nav-group-label">Entity Mapping</div>
     <button class="nav-btn" onclick="switchView('audio', this)">
-      <span class="nav-left"><span>Audio & Speakers</span></span>
+      <span>Audio & Speakers</span>
     </button>
     <button class="nav-btn" onclick="switchView('remotes', this)">
-      <span class="nav-left"><span>TV Remotes & Home</span></span>
+      <span>TV Remotes & Home</span>
     </button>
     <button class="nav-btn" onclick="switchView('mapper', this)">
-      <span class="nav-left"><span>Buttons & Pinned</span></span>
+      <span>Buttons & Pinned</span>
     </button>
 
     <div class="nav-group-label">System</div>
     <button class="nav-btn" onclick="switchView('display', this)">
-      <span class="nav-left"><span>Display & Advanced</span></span>
+      <span>Display & Advanced</span>
     </button>
 
     <div class="sidebar-footer">
       <div class="field" style="margin-bottom:0;">
-        <label>Studio Color Theme (Auto-Saves)</label>
+        <label>Appearance</label>
         <select id="cfg-web_theme" onchange="onThemeChanged(this.value)">
-          <option value="amoled_midnight">AMOLED Midnight (Dark)</option>
-          <option value="daylight_clean">Daylight Clean (Light)</option>
-          <option value="cyber_cyan">Cyber Cyan</option>
+          <option value="dark">Dark</option>
+          <option value="light">Light</option>
+          <option value="system">System</option>
         </select>
       </div>
     </div>
@@ -981,7 +985,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
       </div>
       <div class="topbar-actions">
         <div id="dirty-indicator" class="dirty-banner">Unsaved Changes</div>
-        <button class="btn-secondary" onclick="refreshState(true)">Sync Now</button>
+        <button class="btn-secondary" onclick="refreshState(true)">Sync</button>
         <button class="btn-primary" onclick="saveAllConfig()">Save Changes</button>
       </div>
     </header>
@@ -990,8 +994,8 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
       <!-- VIEW 1: DASHBOARD & ROOM RADAR -->
       <section id="view-dashboard">
         <div class="page-header">
-          <h2>Live Overview & BLE Room Radar</h2>
-          <p>Monitor your device's active room, test curated room cards in real time, and view multi-room ESPHome BLE proxy signal strength.</p>
+          <h2>Overview & BLE Room Presence</h2>
+          <p>Live device telemetry, active room controls, and multi-proxy Bluetooth RSSI triangulation.</p>
         </div>
 
         <div class="hero-stats">
@@ -1003,35 +1007,35 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
 
         <div class="grid-2">
           <div class="card">
-            <h3>Active Room Context & Live Cards</h3>
-            <p class="desc">Switch the device's active room or click any curated card below to toggle it in Home Assistant.</p>
+            <h3>Active Context & Curated Room Entities</h3>
+            <p class="desc">Override the active room or speaker, or click any curated entity below to toggle it directly.</p>
             <div class="field">
-              <label>Active Room (Instant Switch)</label>
+              <label>Active Room</label>
               <select id="quick-area" onchange="quickSwitchArea(this.value)"></select>
             </div>
             <div class="field">
-              <label>Active Speaker (Instant Switch)</label>
+              <label>Active Speaker</label>
               <select id="quick-speaker" onchange="quickSwitchSpeaker(this.value)"></select>
             </div>
-            <label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-top:14px;">Curated Cards Pushed to Device (<span id="st-card-count">0</span>)</label>
+            <label style="font-size:11.5px;font-weight:600;color:var(--muted);display:block;margin-top:12px;">Active Room Entities (<span id="st-card-count">0</span>)</label>
             <div id="live-room-cards" class="room-cards-grid"></div>
           </div>
 
           <div class="card">
-            <h3>BLE Room Presence Radar</h3>
-            <p class="desc">Live smoothed RSSI (dBm) reported by each room's ESPHome Bluetooth proxy for your device's beacon.</p>
-            <div id="rssi-container" style="margin-bottom:16px;"></div>
+            <h3>BLE Proxy Signal Telemetry (EMA RSSI)</h3>
+            <p class="desc">Smoothed signal strength (dBm) reported by each room's ESPHome Bluetooth proxy.</p>
+            <div id="rssi-container" style="margin-bottom:14px;"></div>
 
             <div class="toggle-row">
-              <span>Built-In ESPHome BLE Proxy Room Tracking</span>
+              <span>Built-In ESPHome BLE Proxy Tracking</span>
               <input type="checkbox" id="cfg-native_ble_tracking" onchange="markDirty()">
             </div>
             <div class="toggle-row">
-              <span>Auto-Switch Active Room When Walking Between Rooms</span>
+              <span>Auto-Switch Active Room on Movement</span>
               <input type="checkbox" id="cfg-ble_auto_switch" onchange="markDirty()">
             </div>
             <div class="toggle-row">
-              <span>Sync Active Room to HA Device Area (Room-Aware Voice Assistant)</span>
+              <span>Sync Active Room to HA Device Area (Assist Voice Context)</span>
               <input type="checkbox" id="cfg-sync_device_area" onchange="markDirty()">
             </div>
           </div>
@@ -1042,15 +1046,15 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
       <section id="view-esphome" class="hidden">
         <div class="page-header">
           <h2 id="esp-dev-title">ESPHome Device Controls</h2>
-          <p id="esp-dev-meta">Inspect and adjust every setting, switch, select, number, and diagnostic sensor exposed by your ESPHome firmware.</p>
+          <p id="esp-dev-meta">Inspect and control all entities exposed by the ESPHome node.</p>
         </div>
 
-        <div class="card" style="margin-bottom:18px;padding:14px 18px;">
-          <input type="text" id="esp-search" placeholder="Search device controls or sensors by name or entity_id..." oninput="renderActiveEspSection()">
+        <div class="card" style="margin-bottom:16px;padding:12px 14px;">
+          <input type="text" id="esp-search" placeholder="Filter entities by name or entity_id..." oninput="renderActiveEspSection()">
         </div>
 
         <div class="esp-layout">
-          <div class="card" style="padding:14px;">
+          <div class="card" style="padding:12px;">
             <div id="esp-nav-list" class="esp-nav"></div>
           </div>
           <div class="card">
@@ -1064,42 +1068,42 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
       <!-- VIEW 3: AUDIO & SPEAKERS -->
       <section id="view-audio" class="hidden">
         <div class="page-header">
-          <h2>Music Assistant & AVR Volume Overrides</h2>
-          <p>Configure your default speaker and optionally route volume control to a separate AV Receiver or amplifier when streaming to a specific room player.</p>
+          <h2>Audio Routing & AVR Volume Overrides</h2>
+          <p>Configure default Music Assistant playback targets and external AV Receiver volume mappings.</p>
         </div>
 
         <div class="grid-2">
           <div class="card">
             <h3>Default Speaker & Room Handoff</h3>
-            <p class="desc">Your device defaults to its own local speaker on boot unless a remote speaker is actively playing.</p>
+            <p class="desc">Resets to the device's local speaker on boot/wake unless a remote speaker is actively playing.</p>
             <div class="field">
               <label>Default Speaker Entity</label>
               <select id="cfg-default_speaker" onchange="markDirty()"></select>
             </div>
             <div class="toggle-row">
-              <span>Unified Area Handoff (Link Room Speaker & Remote on Manual Switch)</span>
+              <span>Unified Area Handoff (Link Room Speaker & Remote)</span>
               <input type="checkbox" id="cfg-area_handoff" onchange="markDirty()">
             </div>
           </div>
 
           <div class="card">
             <h3>Streamer &rarr; AV Receiver Volume Overrides</h3>
-            <p class="desc">When streaming to a Music Assistant player plugged into an external AVR/amplifier, route volume slider & buttons to the AVR.</p>
+            <p class="desc">Route volume commands to an external AVR or amplifier entity when streaming to a mapped player.</p>
             <div class="field">
-              <label>Override 1: When Streaming to Speaker...</label>
+              <label>Override 1: Source Speaker</label>
               <select id="cfg-vol_speaker_1" onchange="markDirty()"></select>
             </div>
             <div class="field">
-              <label>Override 1: Control Physical Volume on Entity...</label>
+              <label>Override 1: Volume Target Entity (media_player / number)</label>
               <select id="cfg-vol_target_1" onchange="markDirty()"></select>
             </div>
-            <hr style="border:0;border-top:1px solid var(--border);margin:14px 0;">
+            <hr style="border:0;border-top:1px solid var(--border);margin:12px 0;">
             <div class="field">
-              <label>Override 2: When Streaming to Speaker...</label>
+              <label>Override 2: Source Speaker</label>
               <select id="cfg-vol_speaker_2" onchange="markDirty()"></select>
             </div>
             <div class="field">
-              <label>Override 2: Control Physical Volume on Entity...</label>
+              <label>Override 2: Volume Target Entity (media_player / number)</label>
               <select id="cfg-vol_target_2" onchange="markDirty()"></select>
             </div>
           </div>
@@ -1109,14 +1113,14 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
       <!-- VIEW 4: TV REMOTES & HOME -->
       <section id="view-remotes" class="hidden">
         <div class="page-header">
-          <h2>4-Slot TV Remotes, Security Alarm & Weather</h2>
-          <p>Assign up to 4 TVs or media players (Android TV, Apple TV, Roku, LG webOS, Denon/Marantz) and bind your home's alarm and weather provider.</p>
+          <h2>TV Remotes, Security Alarm & Weather</h2>
+          <p>Bind up to 4 TV/media remotes, home security alarm panel, and weather forecast provider.</p>
         </div>
 
         <div class="grid-2">
           <div class="card">
             <h3>4-Slot Hybrid TV / Media Remotes</h3>
-            <p class="desc">Pick either the <code>remote.*</code> or <code>media_player.*</code> entity—Latter automatically binds both sibling entities on the device.</p>
+            <p class="desc">Select either <code>remote.*</code> or <code>media_player.*</code>; sibling entities on the same device are paired automatically.</p>
             <div class="field">
               <label>Remote Slot 1</label>
               <select id="cfg-remote_1" onchange="markDirty()"></select>
@@ -1136,8 +1140,8 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
           </div>
 
           <div class="card">
-            <h3>Home Security Alarm & Weather Provider</h3>
-            <p class="desc">Used by the Home Security screen and 5-day weather forecast engine.</p>
+            <h3>Security Alarm & Weather Provider</h3>
+            <p class="desc">Entities used by the Home Security control view and 5-day weather serializer.</p>
             <div class="field">
               <label>Home Security Alarm (alarm_control_panel)</label>
               <select id="cfg-alarm_entity" onchange="markDirty()"></select>
@@ -1157,21 +1161,21 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
       <!-- VIEW 5: BUTTONS & PINNED ENTITIES -->
       <section id="view-mapper" class="hidden">
         <div class="page-header">
-          <h2>Universal Button Mapper & Pinned Entities</h2>
-          <p>Bind hardware buttons, rotary encoders, or touch macros (<code>latter.trigger_binding</code>) and pin favorite entities to the top of Room Control.</p>
+          <h2>Hardware Trigger Bindings & Pinned Entities</h2>
+          <p>Map custom firmware trigger slots (<code>latter.trigger_binding</code>) and pin global entities to Room Control.</p>
         </div>
 
-        <div class="card" style="margin-bottom:20px;">
+        <div class="card" style="margin-bottom:16px;">
           <h3>Hardware Trigger & Slot Bindings</h3>
-          <p class="desc">Map any slot ID sent by your firmware (e.g. <code>button_1_single</code>, <code>macro_goodnight</code>) to any Home Assistant entity.</p>
+          <p class="desc">Bind any slot identifier (e.g. <code>button_1_single</code>, <code>macro_goodnight</code>) to a target Home Assistant entity and action.</p>
           <div id="bindings-list"></div>
           <button class="btn-secondary" onclick="addBindingRow('', '', 'toggle'); markDirty();">+ Add Trigger Binding</button>
         </div>
 
         <div class="card">
           <h3>Pinned Room / Home Entities</h3>
-          <p class="desc">Pinned entities always appear first in your device's Room Control list regardless of which room you are in.</p>
-          <div style="display:flex;gap:10px;">
+          <p class="desc">Pinned entities appear at the top of Room Control across all areas.</p>
+          <div style="display:flex;gap:8px;">
             <select id="pin-entity-picker"></select>
             <button class="btn-secondary" onclick="addPinnedEntity()">Pin Entity</button>
           </div>
@@ -1182,13 +1186,13 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
       <!-- VIEW 6: DISPLAY & ADVANCED -->
       <section id="view-display" class="hidden">
         <div class="page-header">
-          <h2>Display Geometry, Wallpaper & Advanced BLE</h2>
-          <p>Configure screen shape, artwork transcoding resolution, pagination size, Home Dock tokens, and advanced BLE parameters.</p>
+          <h2>Display Geometry, Wallpaper & BLE Tuning</h2>
+          <p>Configure hardware profile, image transcoder dimensions, slot pagination, and BLE beacon settings.</p>
         </div>
 
         <div class="grid-2">
           <div class="card">
-            <h3>Screen Geometry & Pagination</h3>
+            <h3>Hardware Profile & Pagination</h3>
             <div class="field">
               <label>ESPHome Device Slug (sensor.&lt;slug&gt;_*)</label>
               <input type="text" id="cfg-device_slug" oninput="markDirty()">
@@ -1196,16 +1200,16 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
             <div class="field">
               <label>Device Archetype</label>
               <select id="cfg-device_profile" onchange="markDirty()">
-                <option value="mobile_display">Mobile Smart Display (e.g. Pocket Assistant)</option>
-                <option value="stationary_display">Stationary Room Display / Wall Panel</option>
+                <option value="mobile_display">Mobile Smart Display</option>
+                <option value="stationary_display">Stationary Wall / Desk Display</option>
                 <option value="headless_node">Headless Sensor / Button / Audio Node</option>
               </select>
             </div>
             <div class="field">
-              <label>Display Geometry / Mask</label>
+              <label>Display Geometry</label>
               <select id="cfg-display_shape" onchange="markDirty()">
-                <option value="circle">Circular Display (Bezel-Masked)</option>
-                <option value="square">Square / Rectangular Display</option>
+                <option value="circle">Circular (Bezel-Masked Corners)</option>
+                <option value="square">Square / Rectangular</option>
               </select>
             </div>
             <div class="field">
@@ -1214,7 +1218,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
                 <option value="466">466x466 (1.75" Round AMOLED)</option>
                 <option value="360">360x360 (Round LCD / AMOLED)</option>
                 <option value="240">240x240 (Compact Display)</option>
-                <option value="233">233x233 (Fast Low-Bandwidth Thumbnail)</option>
+                <option value="233">233x233 (Low-Bandwidth Thumbnail)</option>
                 <option value="480">480x480 (Large Wall Panel)</option>
               </select>
             </div>
@@ -1234,13 +1238,13 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
               <label>Photo Wallpaper Source (/local/... or https://...)</label>
               <input type="text" id="cfg-wallpaper_source" placeholder="/local/wallpaper.jpg" oninput="markDirty()">
             </div>
-            <hr style="border:0;border-top:1px solid var(--border);margin:14px 0;">
+            <hr style="border:0;border-top:1px solid var(--border);margin:12px 0;">
             <div class="field">
               <label>BLE iBeacon UUID</label>
               <input type="text" id="cfg-ble_beacon_uuid" oninput="markDirty()">
             </div>
             <div class="field">
-              <label>External BLE Room Sensor Override (Optional Bermuda Sensor)</label>
+              <label>External BLE Room Sensor Override (Optional)</label>
               <select id="cfg-presence_entity" onchange="markDirty()"></select>
             </div>
           </div>
@@ -1250,7 +1254,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
   </div>
 </div>
 
-<div id="toast" class="toast">Saved!</div>
+<div id="toast" class="toast">Saved</div>
 
 <script>
 const API_URL = window.location.pathname + "/api" + window.location.search;
@@ -1259,17 +1263,41 @@ let PINNED = [];
 let ACTIVE_ESP_SEC = null;
 let IS_DIRTY = false;
 let INITIAL_FORM_LOADED = false;
+let CURRENT_THEME_PREF = localStorage.getItem("latter_web_theme") || "dark";
 
-const savedLocalTheme = localStorage.getItem("latter_web_theme");
-if (savedLocalTheme) {
-  document.body.setAttribute("data-theme", savedLocalTheme);
+const sysMedia = window.matchMedia("(prefers-color-scheme: dark)");
+sysMedia.addEventListener("change", () => {
+  if (CURRENT_THEME_PREF === "system") {
+    applyTheme("system");
+  }
+});
+
+function resolveEffectiveTheme(pref) {
+  if (pref === "system") {
+    return sysMedia.matches ? "dark" : "light";
+  }
+  return pref === "light" ? "light" : "dark";
 }
+
+function applyTheme(pref) {
+  const valid = ["dark", "light", "system"];
+  CURRENT_THEME_PREF = valid.includes(pref) ? pref : "dark";
+  const effective = resolveEffectiveTheme(CURRENT_THEME_PREF);
+  document.body.setAttribute("data-theme", effective);
+  localStorage.setItem("latter_web_theme", CURRENT_THEME_PREF);
+  const sel = document.getElementById("cfg-web_theme");
+  if (sel && sel.value !== CURRENT_THEME_PREF) {
+    sel.value = CURRENT_THEME_PREF;
+  }
+}
+
+applyTheme(CURRENT_THEME_PREF);
 
 function showToast(msg) {
   const t = document.getElementById("toast");
   t.textContent = msg;
   t.style.display = "block";
-  setTimeout(() => { t.style.display = "none"; }, 2600);
+  setTimeout(() => { t.style.display = "none"; }, 2400);
 }
 
 function markDirty() {
@@ -1282,29 +1310,20 @@ function clearDirty() {
   document.getElementById("dirty-indicator").classList.remove("visible");
 }
 
-function applyTheme(themeName) {
-  const valid = ["amoled_midnight", "daylight_clean", "cyber_cyan"];
-  const chosen = valid.includes(themeName) ? themeName : "amoled_midnight";
-  document.body.setAttribute("data-theme", chosen);
-  localStorage.setItem("latter_web_theme", chosen);
-  const sel = document.getElementById("cfg-web_theme");
-  if (sel && sel.value !== chosen) sel.value = chosen;
-}
-
-async function onThemeChanged(themeName) {
-  applyTheme(themeName);
+async function onThemeChanged(themePref) {
+  applyTheme(themePref);
   const resp = await fetch(API_URL, {
     method: "POST",
     headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({command: "set_theme", web_theme: themeName})
+    body: JSON.stringify({command: "set_theme", web_theme: themePref})
   });
   if (resp.ok) {
-    showToast("Theme saved!");
+    showToast(`Appearance set to ${themePref}`);
   }
 }
 
 function switchView(viewId, btnEl) {
-  document.querySelectorAll(". sidebar .nav-btn, aside .nav-btn").forEach(b => b.classList.remove("active"));
+  document.querySelectorAll("aside .nav-btn").forEach(b => b.classList.remove("active"));
   btnEl.classList.add("active");
   ["dashboard", "esphome", "audio", "remotes", "mapper", "display"].forEach(id => {
     document.getElementById("view-" + id).classList.toggle("hidden", id !== viewId);
@@ -1334,7 +1353,7 @@ function renderRssiBars(rssiMap, packetsSeen) {
   const box = document.getElementById("rssi-container");
   const entries = Object.entries(rssiMap || {});
   if (!entries.length) {
-    box.innerHTML = `<p class="desc">Waiting for BLE iBeacon packets (Seen: ${packetsSeen || 0}). Ensure the BLE Presence Beacon switch is ON on your device.</p>`;
+    box.innerHTML = `<p class="desc">No recent BLE iBeacon packets (Seen: ${packetsSeen || 0}). Ensure BLE Presence Beacon is ON.</p>`;
     return;
   }
   entries.sort((a, b) => b[1] - a[1]);
@@ -1392,7 +1411,7 @@ function renderEspInspector() {
   if (!sections.length) {
     document.getElementById("esp-nav-list").innerHTML = "";
     document.getElementById("esp-sec-title").textContent = "No ESPHome Entities Found";
-    document.getElementById("esp-sec-desc").textContent = "Check that your ESPHome device slug matches your node in Home Assistant.";
+    document.getElementById("esp-sec-desc").textContent = "Verify that the device slug matches your ESPHome node.";
     document.getElementById("esp-sec-items").innerHTML = "";
     return;
   }
@@ -1580,14 +1599,13 @@ function applyStateToDom(data, forceFormUpdate=false) {
   const cat = data.catalog;
   const esp = data.esphome;
 
-  // Always update live telemetry badges, room cards, BLE radar, and ESPHome live states
   const roomName = live.active_area_name || "Home";
   const spkShort = (live.active_speaker || "").replace("media_player.", "");
   const tempStr = live.room_temp != null ? `${live.room_temp}°` : "--";
   const humStr = live.room_humidity != null ? ` • ${live.room_humidity}%` : "";
 
   document.getElementById("hdr-title").textContent = esp?.device?.name || data.title;
-  document.getElementById("hdr-sub").textContent = `Latter v${data.version || '1.4'}`;
+  document.getElementById("hdr-sub").textContent = `Latter v${data.version || '1.4.6'}`;
   document.getElementById("nav-room-badge").textContent = roomName;
   document.getElementById("top-room").textContent = `Room: ${roomName}`;
   document.getElementById("top-speaker").textContent = `Speaker: ${spkShort}`;
@@ -1608,17 +1626,15 @@ function applyStateToDom(data, forceFormUpdate=false) {
   if (esp && esp.device) {
     document.getElementById("esp-dev-title").textContent = `${esp.device.name} (${esp.device.model})`;
     document.getElementById("esp-dev-meta").textContent = `Manufacturer: ${esp.device.manufacturer} • Firmware: ${esp.device.sw_version || 'ESPHome'} • MAC: ${esp.device.mac || 'N/A'}`;
-    // Only re-render ESPHome list if user isn't actively focused on a select/number inside it
     const activeEl = document.activeElement;
     if (!activeEl || !document.getElementById("esp-sec-items")?.contains(activeEl)) {
       renderEspInspector();
     }
   }
 
-  // NEVER overwrite form inputs during background 5s polling if the user has unsaved edits!
   if (!INITIAL_FORM_LOADED || forceFormUpdate) {
     INITIAL_FORM_LOADED = true;
-    applyTheme(cfg.web_theme || "amoled_midnight");
+    applyTheme(cfg.web_theme || "dark");
 
     document.getElementById("cfg-device_slug").value = cfg.device_slug || "";
     document.getElementById("cfg-device_profile").value = cfg.device_profile || "mobile_display";
@@ -1674,7 +1690,7 @@ async function quickSwitchArea(areaId) {
   });
   if (resp.ok) {
     applyStateToDom(await resp.json(), false);
-    showToast("Switched active room!");
+    showToast("Switched active room");
   }
 }
 
@@ -1686,7 +1702,7 @@ async function quickSwitchSpeaker(speakerId) {
   });
   if (resp.ok) {
     applyStateToDom(await resp.json(), false);
-    showToast("Switched active speaker!");
+    showToast("Switched active speaker");
   }
 }
 
@@ -1737,7 +1753,7 @@ async function saveAllConfig() {
   });
   if (resp.ok) {
     applyStateToDom(await resp.json(), true);
-    showToast("Configuration saved & applied!");
+    showToast("Configuration saved");
   }
 }
 

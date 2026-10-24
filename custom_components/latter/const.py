@@ -7,7 +7,7 @@ from typing import Final
 from homeassistant.const import Platform
 
 DOMAIN: Final = "latter"
-INTEGRATION_VERSION: Final = "1.4.5"
+INTEGRATION_VERSION: Final = "1.4.6"
 PLATFORMS: Final[list[Platform]] = [Platform.SENSOR]
 
 STORAGE_VERSION: Final = 1
@@ -48,7 +48,7 @@ CONF_ART_SIZE: Final = "art_size"
 DEFAULT_DEVICE_PROFILE: Final = "mobile_display"
 DEFAULT_DISPLAY_SHAPE: Final = "circle"
 DEFAULT_PAGE_SIZE: Final = 3
-DEFAULT_WEB_THEME: Final = "amoled_midnight"
+DEFAULT_WEB_THEME: Final = "dark"
 DEFAULT_NATIVE_BLE_TRACKING: Final = True
 DEFAULT_BLE_BEACON_UUID: Final = "504F434B-4554-4153-5354-000000000210"
 DEFAULT_BLE_AUTO_SWITCH: Final = True
