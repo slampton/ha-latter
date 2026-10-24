@@ -537,3 +537,62 @@ media_command:
       required: false
       selector:
         text:
+
+notify_device:
+  name: Send Smart Device Notification / Camera Peephole Alert
+  description: Dispatch an on-screen toast alert, optional chime, and optional live camera peephole snapshot to the ESPHome display.
+  fields:
+    target_device:
+      name: Target ESPHome Device
+      description: Optional ESPHome device slug (auto-resolved when running a single Latter device).
+      required: false
+      selector:
+        text:
+    title:
+      name: Alert Title
+      description: Short heading for the notification banner (e.g., Front Doorbell, Laundry).
+      required: false
+      default: "Notification"
+      selector:
+        text:
+    message:
+      name: Alert Message
+      description: Body text of the notification (e.g., Someone is at the front door).
+      required: true
+      selector:
+        text:
+    priority:
+      name: Priority Level
+      description: Visual urgency of the alert (normal, warning, critical).
+      required: false
+      default: "normal"
+      selector:
+        select:
+          options:
+            - "normal"
+            - "warning"
+            - "critical"
+    duration:
+      name: Display Duration (Seconds)
+      description: How many seconds to show the alert overlay on screen.
+      required: false
+      default: 8
+      selector:
+        number:
+          min: 2
+          max: 60
+          mode: slider
+    chime:
+      name: Play Chime
+      description: Play an alert chime on the device speaker when the notification arrives.
+      required: false
+      default: true
+      selector:
+        boolean:
+    camera_entity:
+      name: Camera Entity (Optional Peephole Snapshot)
+      description: Optional camera.* entity to transcode and display alongside the notification.
+      required: false
+      selector:
+        entity:
+          domain: camera

@@ -23,8 +23,16 @@ from .const import (
     PLATFORMS,
 )
 from .coordinator import LatterCoordinator
-from .dashboard import LatterBrandIconView, LatterCompanionApiView, LatterCompanionDashboardView
-from .http import LatterArtworkTranscoderView, LatterWallpaperProxyView
+from .dashboard import (
+    LatterBrandIconView,
+    LatterCompanionApiView,
+    LatterCompanionDashboardView,
+)
+from .http import (
+    LatterArtworkTranscoderView,
+    LatterCameraSnapshotView,
+    LatterWallpaperProxyView,
+)
 from .room_engine import inject_esphome_visit_link
 from .services import async_setup_services
 
@@ -85,6 +93,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
         domain_data[DATA_HMAC_SECRET] = secrets.token_bytes(32)
         hass.http.register_view(LatterArtworkTranscoderView(hass))
         hass.http.register_view(LatterWallpaperProxyView(hass))
+        hass.http.register_view(LatterCameraSnapshotView(hass))
         hass.http.register_view(LatterCompanionDashboardView(hass))
         hass.http.register_view(LatterCompanionApiView(hass))
         hass.http.register_view(LatterBrandIconView(hass))

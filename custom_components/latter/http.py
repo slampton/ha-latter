@@ -1,4 +1,4 @@
-"""Universal Baseline-JPEG Artwork & Wallpaper Transcoder Proxy Views for Latter."""
+"""Universal Baseline-JPEG Artwork, Wallpaper & Camera Peephole Transcoder Views for Latter."""
 
 from __future__ import annotations
 
@@ -18,6 +18,7 @@ from homeassistant.helpers.network import get_url
 
 from .const import (
     API_ARTWORK_PROXY_PATH,
+    API_CAMERA_PROXY_PATH,
     API_WALLPAPER_PROXY_PATH,
     DOMAIN,
     normalize_device_slug,
@@ -304,4 +305,77 @@ class LatterWallpaperProxyView(HomeAssistantView):
             body=jpeg_bytes,
             content_type="image/jpeg",
             headers={"Cache-Control": "public, max-age=300", "X-Latter-Cache": "MISS"},
+        )
+
+
+class LatterCameraSnapshotView(HomeAssistantView):
+    """Fetches a live frame from any Home Assistant camera.* entity and transcodes to Baseline JPEG (/api/latter/camera/{target_device})."""
+
+    requires_auth = False
+    url = API_CAMERA_PROXY_PATH
+    name = "api:latter:camera_proxy"
+
+    def __init__(self, hass: HomeAssistant) -> None:
+        """Initialize the camera snapshot transcoder view."""
+        self.hass = hass
+
+    async def get(self, request: web.Request, target_device: str) -> web.Response:
+        """Handle GET /api/latter/camera/{target_device}?entity_id=camera.front_door&w=466&h=466&shape=circle"""
+        coordinator = _resolve_coordinator_by_target(self.hass, target_device)
+        if coordinator is None:
+            return web.Response(status=HTTPStatus.NOT_FOUND, text="Unknown target device")
+
+        token = request.query.get("token")
+        if token and not coordinator.verify_token(token):
+            return web.Response(status=HTTPStatus.FORBIDDEN, text="Invalid signature")
+
+        cam_entity = str(
+            request.query.get("entity_id") or coordinator.camera_entity or ""
+        ).strip()
+        if not cam_entity or not cam_entity.startswith("camera."):
+            return web.Response(status=HTTPStatus.NOT_FOUND, text="No camera entity specified")
+
+        default_dim = coordinator.art_size
+        try:
+            width = max(32, min(1200, int(request.query.get("w") or default_dim)))
+            height = max(32, min(1200, int(request.query.get("h") or width)))
+        except ValueError:
+            width, height = default_dim, default_dim
+
+        is_circle = coordinator.display_shape == "circle"
+        if request.query.get("shape") in ("circle", "square"):
+            is_circle = request.query.get("shape") == "circle"
+
+        try:
+            from homeassistant.components import camera
+
+            image_obj = await camera.async_get_image(
+                self.hass, cam_entity, timeout=8
+            )
+            raw_bytes = image_obj.content
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("Camera snapshot fetch failed for %s: %s", cam_entity, err)
+            return web.Response(
+                status=HTTPStatus.BAD_GATEWAY, text="Camera snapshot unavailable"
+            )
+
+        try:
+            jpeg_bytes = await self.hass.async_add_executor_job(
+                _transcode_to_baseline_jpeg,
+                raw_bytes,
+                width,
+                height,
+                is_circle,
+                1.0,
+            )
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("Camera snapshot Pillow transcode failed: %s", err)
+            return web.Response(
+                status=HTTPStatus.UNPROCESSABLE_ENTITY, text="Camera image processing error"
+            )
+
+        return web.Response(
+            body=jpeg_bytes,
+            content_type="image/jpeg",
+            headers={"Cache-Control": "no-store, max-age=0"},
         )

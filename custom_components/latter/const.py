@@ -7,7 +7,7 @@ from typing import Final
 from homeassistant.const import Platform
 
 DOMAIN: Final = "latter"
-INTEGRATION_VERSION: Final = "1.5.8"
+INTEGRATION_VERSION: Final = "1.6.0"
 PLATFORMS: Final[list[Platform]] = [Platform.SENSOR]
 
 STORAGE_VERSION: Final = 1
@@ -22,6 +22,7 @@ CONF_WEB_THEME: Final = "web_theme"
 CONF_COMPANION_BASE_URL: Final = "companion_base_url"
 CONF_WEATHER_ENTITY: Final = "weather_entity"
 CONF_ALARM_ENTITY: Final = "alarm_entity"
+CONF_CAMERA_ENTITY: Final = "camera_entity"
 CONF_DEFAULT_SPEAKER: Final = "default_speaker"
 CONF_VOL_SPEAKER_1: Final = "vol_speaker_1"
 CONF_VOL_TARGET_1: Final = "vol_target_1"
@@ -75,10 +76,12 @@ SERVICE_TRIGGER_BINDING: Final = "trigger_binding"
 SERVICE_CALENDAR_FETCH: Final = "calendar_fetch"
 SERVICE_CALENDAR_CREATE_EVENT: Final = "calendar_create_event"
 SERVICE_INTERCOM_BROADCAST: Final = "intercom_broadcast"
+SERVICE_NOTIFY_DEVICE: Final = "notify_device"
 
-# HTTP Endpoints (Universal Artwork Transcoder, Wallpaper Proxy & Web Companion Studio)
+# HTTP Endpoints (Artwork, Wallpaper, Camera Peephole & Web Companion Studio)
 API_ARTWORK_PROXY_PATH: Final = "/api/latter/artwork/{target_device}"
 API_WALLPAPER_PROXY_PATH: Final = "/api/latter/wallpaper/{target_device}"
+API_CAMERA_PROXY_PATH: Final = "/api/latter/camera/{target_device}"
 API_COMPANION_UI_PATH: Final = "/api/latter/companion/{entry_id}"
 API_COMPANION_API_PATH: Final = "/api/latter/companion/{entry_id}/api"
 API_BRAND_ICON_PATH: Final = "/api/latter/brand/icon.png"

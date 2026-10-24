@@ -25,6 +25,7 @@ from .const import (
     CONF_BLE_BEACON_UUID,
     CONF_BLE_ROOM_OFFSETS,
     CONF_CALENDAR_ENTITIES,
+    CONF_CAMERA_ENTITY,
     CONF_COMPANION_BASE_URL,
     CONF_CUSTOM_BINDINGS,
     CONF_CUSTOM_ENTITIES,
@@ -103,6 +104,7 @@ def _build_companion_state_payload(
     remotes_list: list[dict[str, str]] = []
     volume_targets: list[dict[str, str]] = []
     alarms_list: list[dict[str, str]] = []
+    cameras_list: list[dict[str, str]] = []
     weathers_list: list[dict[str, str]] = []
     calendars_list: list[dict[str, str]] = []
     presence_sensors: list[dict[str, str]] = []
@@ -131,6 +133,8 @@ def _build_companion_state_payload(
             volume_targets.append(item)
         elif domain == "alarm_control_panel":
             alarms_list.append(item)
+        elif domain == "camera":
+            cameras_list.append(item)
         elif domain == "weather":
             weathers_list.append(item)
         elif domain == "calendar":
@@ -206,6 +210,7 @@ def _build_companion_state_payload(
         CONF_ALARM_ENTITY: coordinator.get_opt(CONF_ALARM_ENTITY, "")
         or coordinator.alarm_entity
         or "",
+        CONF_CAMERA_ENTITY: coordinator.camera_entity or "",
         CONF_REMOTE_1: coordinator.get_opt(CONF_REMOTE_1, ""),
         CONF_REMOTE_2: coordinator.get_opt(CONF_REMOTE_2, ""),
         CONF_REMOTE_3: coordinator.get_opt(CONF_REMOTE_3, ""),
@@ -272,6 +277,7 @@ def _build_companion_state_payload(
             "volume_targets": volume_targets,
             "remotes": remotes_list,
             "alarms": alarms_list,
+            "cameras": cameras_list,
             "weathers": weathers_list,
             "calendars": calendars_list,
             "presence_sensors": presence_sensors,
@@ -394,6 +400,29 @@ class LatterCompanionApiView(HomeAssistantView):
                 coordinator.async_set_active_area(
                     target_area_id, handoff_media=False, sync_device_registry=True
                 )
+            return web.json_response(
+                _build_companion_state_payload(self.hass, coordinator)
+            )
+
+        if cmd == "send_test_notification":
+            title = str(body.get("title") or "Doorbell Alert").strip()
+            message = str(body.get("message") or "Motion detected at Front Door").strip()
+            priority = str(body.get("priority") or "normal").strip()
+            inc_cam = bool(body.get("include_camera", False))
+            cam_ent = coordinator.camera_entity if inc_cam else None
+            await self.hass.services.async_call(
+                DOMAIN,
+                "notify_device",
+                {
+                    "device_slug": coordinator.device_slug,
+                    "title": title,
+                    "message": message,
+                    "priority": priority,
+                    "chime": True,
+                    **({"camera_entity": cam_ent} if cam_ent else {}),
+                },
+                blocking=True,
+            )
             return web.json_response(
                 _build_companion_state_payload(self.hass, coordinator)
             )
@@ -577,6 +606,7 @@ class LatterCompanionApiView(HomeAssistantView):
                 CONF_SYNC_DEVICE_AREA,
                 CONF_AREA_HANDOFF,
                 CONF_ALARM_ENTITY,
+                CONF_CAMERA_ENTITY,
                 CONF_REMOTE_1,
                 CONF_REMOTE_2,
                 CONF_REMOTE_3,
@@ -1251,7 +1281,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
         <img src="/api/latter/brand/icon.png" alt="Latter" style="width:34px;height:34px;border-radius:8px;object-fit:contain;flex-shrink:0;" onerror="this.style.display='none'">
         <div class="brand-text">
           <h1 id="hdr-title">Latter Studio</h1>
-          <small id="hdr-sub">v1.5.8</small>
+          <small id="hdr-sub">v1.6.0</small>
         </div>
       </div>
     </div>
@@ -1522,8 +1552,8 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
       <!-- 5. TV REMOTES, SECURITY & HOME -->
       <section id="view-remotes" class="hidden">
         <div class="page-header">
-          <h2>4-Slot TV Remotes, Security Alarm & Weather</h2>
-          <p>Assign each remote slot's Home Assistant entity and protocol profile in one place, plus configure your home alarm, weather, and pinned room entities.</p>
+          <h2>4-Slot TV Remotes, Security, Doorbell Camera & Alerts</h2>
+          <p>Assign each remote slot's Home Assistant entity and protocol profile in one place, plus configure your home alarm, doorbell camera peephole, weather, and notifications.</p>
         </div>
 
         <div class="card" style="margin-bottom:16px;">
@@ -1583,10 +1613,22 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
 
         <div class="grid-2">
           <div class="card">
-            <h3>Home Security Alarm & Weather Provider</h3>
+            <h3>Security Alarm, Doorbell Camera & Weather</h3>
             <div class="field">
               <label>Home Security Alarm (alarm_control_panel)</label>
               <select id="cfg-alarm_entity" onchange="markDirty()"></select>
+            </div>
+            <div class="field">
+              <label>Primary Doorbell / Peephole Camera (camera.*)</label>
+              <select id="cfg-camera_entity" onchange="markDirty(); renderCameraPreview(this.value);"></select>
+            </div>
+            <div id="cam-preview-box" style="display:none;align-items:center;gap:12px;margin-bottom:13px;padding:10px;background:var(--input-bg);border:1px solid var(--border);border-radius:8px;">
+              <img id="cam-preview-img" class="wp-thumb circle" style="width:76px;height:76px;" alt="Camera Snapshot">
+              <div style="flex:1;min-width:0;">
+                <strong style="font-size:12.5px;color:var(--text-strong);display:block;">Live Baseline-JPEG Transcoder Preview</strong>
+                <small style="color:var(--muted);display:block;margin:2px 0 6px;">Served via <code>/api/latter/camera/&lt;slug&gt;</code></small>
+                <button class="btn-secondary" style="padding:5px 10px;font-size:11.5px;" onclick="renderCameraPreview(document.getElementById('cfg-camera_entity').value)">Refresh Snapshot</button>
+              </div>
             </div>
             <div class="field" style="margin-bottom:0;">
               <label>Weather Forecast Provider</label>
@@ -1595,13 +1637,32 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
           </div>
 
           <div class="card">
-            <h3>Pinned Room / Home Entities</h3>
-            <p class="desc">Pinned entities always appear first in Room Control across all rooms.</p>
-            <div style="display:flex;gap:8px;">
+            <h3>Pinned Entities & Smart Notification Dispatcher</h3>
+            <p class="desc">Pin entities to the top of Room Control, or test dispatching an on-screen toast / doorbell peephole alert (<code>latter.notify_device</code>).</p>
+            <div style="display:flex;gap:8px;margin-bottom:10px;">
               <select id="pin-entity-picker"></select>
               <button class="btn-secondary" onclick="addPinnedEntity()">Pin</button>
             </div>
-            <div id="pinned-chips" class="chip-list"></div>
+            <div id="pinned-chips" class="chip-list" style="margin-bottom:14px;"></div>
+
+            <div style="padding-top:12px;border-top:1px solid var(--border);">
+              <label style="font-size:12px;font-weight:700;color:var(--text-strong);display:block;margin-bottom:6px;">Test Device Alert / Doorbell Popup (<code>latter.notify_device</code>)</label>
+              <div style="display:grid;grid-template-columns:1fr 1.4fr auto;gap:8px;margin-bottom:8px;">
+                <input type="text" id="test-alert-title" value="Front Door">
+                <input type="text" id="test-alert-msg" value="Person detected at Front Door">
+                <select id="test-alert-prio" style="width:auto;">
+                  <option value="normal">Normal</option>
+                  <option value="warning">Warning</option>
+                  <option value="critical">Critical</option>
+                </select>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
+                <label style="font-size:12px;color:var(--muted);display:inline-flex;align-items:center;gap:6px;cursor:pointer;">
+                  <input type="checkbox" id="test-alert-cam" checked> Include Camera Peephole Snapshot
+                </label>
+                <button class="btn-action" style="padding:7px 14px;font-size:12px;" onclick="sendTestNotification()">Send Alert to Device</button>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -1873,6 +1934,43 @@ async function autoCalibrateHere(areaId) {
   if (resp.ok) {
     applyStateToDom(await resp.json(), false);
     showToast("Calibrated & prioritized current room!");
+  }
+}
+
+function renderCameraPreview(camEntityId) {
+  const box = document.getElementById("cam-preview-box");
+  const img = document.getElementById("cam-preview-img");
+  if (!box || !img) return;
+  if (!camEntityId) {
+    box.style.display = "none";
+    return;
+  }
+  const slug = STATE?.config?.device_slug || "esphome_device";
+  const shape = STATE?.config?.display_shape === "square" ? "square" : "circle";
+  img.className = `wp-thumb ${shape}`;
+  img.src = `/api/latter/camera/${slug}?entity_id=${encodeURIComponent(camEntityId)}&w=240&h=240&shape=${shape}&v=${Date.now()}`;
+  box.style.display = "flex";
+}
+
+async function sendTestNotification() {
+  const title = document.getElementById("test-alert-title").value.trim() || "Alert";
+  const message = document.getElementById("test-alert-msg").value.trim() || "Test notification";
+  const priority = document.getElementById("test-alert-prio").value;
+  const include_camera = document.getElementById("test-alert-cam").checked;
+  const resp = await fetch(API_URL, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({
+      command: "send_test_notification",
+      title,
+      message,
+      priority,
+      include_camera
+    })
+  });
+  if (resp.ok) {
+    applyStateToDom(await resp.json(), false);
+    showToast("Dispatched notification to device");
   }
 }
 
@@ -2232,7 +2330,7 @@ function renderYamlGenerator() {
   const incActions = document.getElementById("yg-actions")?.checked;
 
   const lines = [
-    `# Latter v1.5+ ESPHome Companion Wire Snippet for '${nodeHyphen}' (slug: ${slug})`,
+    `# Latter v1.6+ ESPHome Companion Wire Snippet for '${nodeHyphen}' (slug: ${slug})`,
     `esphome:`,
     `  name: ${nodeHyphen}`,
     ``
@@ -2348,7 +2446,7 @@ function applyStateToDom(data, forceFormUpdate=false) {
   const humStr = live.room_humidity != null ? ` • ${live.room_humidity}%` : "";
 
   document.getElementById("hdr-title").textContent = esp?.device?.name || data.title;
-  document.getElementById("hdr-sub").textContent = `Latter v${data.version || '1.5.8'}`;
+  document.getElementById("hdr-sub").textContent = `Latter v${data.version || '1.6.0'}`;
   document.getElementById("nav-room-badge").textContent = roomName;
   document.getElementById("top-room").textContent = `Room: ${roomName}`;
   document.getElementById("top-speaker").textContent = `Speaker: ${spkShort}`;
@@ -2415,6 +2513,8 @@ function applyStateToDom(data, forceFormUpdate=false) {
     populateSelect("cfg-remote_3", cat.remotes, cfg.remote_3);
     populateSelect("cfg-remote_4", cat.remotes, cfg.remote_4);
     populateSelect("cfg-alarm_entity", cat.alarms, cfg.alarm_entity);
+    populateSelect("cfg-camera_entity", cat.cameras, cfg.camera_entity);
+    renderCameraPreview(cfg.camera_entity);
     populateSelect("cfg-weather_entity", cat.weathers, cfg.weather_entity);
     populateSelect("pin-entity-picker", cat.bindable_entities, "", false);
 
@@ -2493,6 +2593,7 @@ async function saveAllConfig() {
     remote_3: document.getElementById("cfg-remote_3").value,
     remote_4: document.getElementById("cfg-remote_4").value,
     alarm_entity: document.getElementById("cfg-alarm_entity").value,
+    camera_entity: document.getElementById("cfg-camera_entity").value,
     weather_entity: document.getElementById("cfg-weather_entity").value,
     default_area: document.getElementById("cfg-default_area").value,
     dock_apps: document.getElementById("cfg-dock_apps").value.trim(),

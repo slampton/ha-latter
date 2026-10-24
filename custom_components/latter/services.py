@@ -24,6 +24,7 @@ from .const import (
     SERVICE_MEDIA_COMMAND,
     SERVICE_MEDIA_VOLUME,
     SERVICE_MUSIC_BROWSE,
+    SERVICE_NOTIFY_DEVICE,
     SERVICE_REMOTE_ACTION,
     SERVICE_ROOM_ACTION,
     SERVICE_ROOM_BROWSE,
@@ -1012,6 +1013,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN,
         SERVICE_MUSIC_BROWSE,
+    SERVICE_NOTIFY_DEVICE,
         _handle_music_browse,
         schema=vol.Schema(
             {
@@ -1092,6 +1094,94 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             extra=vol.ALLOW_EXTRA,
         ),
     )
+    async def _handle_notify_device(call: ServiceCall) -> None:
+        """Dispatch a toast notification, chime, and optional live camera peephole snapshot to the ESPHome device."""
+        coord = _resolve_coordinator_from_call(hass, call)
+        if not coord:
+            return
+        data = call.data
+        title = str(data.get("title") or "Alert").strip()
+        message = str(data.get("message") or "").strip()
+        priority = str(data.get("priority") or "normal").strip().lower()
+        duration = int(data.get("duration") or 8)
+        chime = _parse_bool(data.get("chime"), default=True)
+        cam_ent = str(data.get("camera_entity") or "").strip() or None
+
+        coord.async_dispatch_notification(
+            title=title,
+            message=message,
+            priority=priority,
+            duration=duration,
+            chime=chime,
+            camera_entity=cam_ent,
+        )
+
+        # Also invoke direct esphome.<slug>_show_notification service if implemented by the firmware
+        esp_notify_svc = _resolve_esphome_action(
+            hass, coord.device_slug, "show_notification"
+        )
+        if esp_notify_svc:
+            try:
+                await hass.services.async_call(
+                    "esphome",
+                    esp_notify_svc,
+                    {
+                        "title": title[:48],
+                        "message": message[:160],
+                        "priority": priority,
+                        "duration": duration,
+                        "chime": chime,
+                        "image_url": coord.alert_camera_url,
+                    },
+                    blocking=False,
+                )
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.debug("Direct esphome.%s call skipped: %s", esp_notify_svc, err)
+
+    async def _handle_notify_device(call: ServiceCall) -> None:
+        """Dispatch a toast notification, chime, and optional live camera peephole snapshot to the ESPHome device."""
+        coord = _resolve_coordinator_from_call(hass, call)
+        if not coord:
+            return
+        data = call.data
+        title = str(data.get("title") or "Alert").strip()
+        message = str(data.get("message") or "").strip()
+        priority = str(data.get("priority") or "normal").strip().lower()
+        duration = int(data.get("duration") or 8)
+        chime = _parse_bool(data.get("chime"), default=True)
+        cam_ent = str(data.get("camera_entity") or "").strip() or None
+
+        coord.async_dispatch_notification(
+            title=title,
+            message=message,
+            priority=priority,
+            duration=duration,
+            chime=chime,
+            camera_entity=cam_ent,
+        )
+
+        # Also invoke direct esphome.<slug>_show_notification service if implemented by the firmware
+        esp_notify_svc = _resolve_esphome_action(
+            hass, coord.device_slug, "show_notification"
+        )
+        if esp_notify_svc:
+            try:
+                await hass.services.async_call(
+                    "esphome",
+                    esp_notify_svc,
+                    {
+                        "title": title[:48],
+                        "message": message[:160],
+                        "priority": priority,
+                        "duration": duration,
+                        "chime": chime,
+                        "image_url": coord.alert_camera_url,
+                    },
+                    blocking=False,
+                )
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.debug("Direct esphome.%s call skipped: %s", esp_notify_svc, err)
+
     hass.services.async_register(
         DOMAIN,
         SERVICE_INTERCOM_BROADCAST,
@@ -1102,6 +1192,40 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 vol.Optional("media_url"): cv.string,
                 vol.Optional("target_speakers"): vol.Any(cv.string, [cv.string]),
                 vol.Optional("tts_entity"): cv.string,
+            },
+            extra=vol.ALLOW_EXTRA,
+        ),
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_NOTIFY_DEVICE,
+        _handle_notify_device,
+        schema=vol.Schema(
+            {
+                **BASE_TARGET_FIELDS,
+                vol.Optional("title", default="Notification"): cv.string,
+                vol.Required("message"): cv.string,
+                vol.Optional("priority", default="normal"): cv.string,
+                vol.Optional("duration", default=8): vol.Coerce(int),
+                vol.Optional("chime", default=True): vol.Any(bool, cv.string),
+                vol.Optional("camera_entity"): cv.string,
+            },
+            extra=vol.ALLOW_EXTRA,
+        ),
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_NOTIFY_DEVICE,
+        _handle_notify_device,
+        schema=vol.Schema(
+            {
+                **BASE_TARGET_FIELDS,
+                vol.Optional("title", default="Notification"): cv.string,
+                vol.Required("message"): cv.string,
+                vol.Optional("priority", default="normal"): cv.string,
+                vol.Optional("duration", default=8): vol.Coerce(int),
+                vol.Optional("chime", default=True): vol.Any(bool, cv.string),
+                vol.Optional("camera_entity"): cv.string,
             },
             extra=vol.ALLOW_EXTRA,
         ),

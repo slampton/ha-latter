@@ -49,6 +49,7 @@ from .calendar_engine import async_fetch_calendar_agenda
 from .const import (
     CALENDAR_REFRESH_INTERVAL_MINUTES,
     CONF_ALARM_ENTITY,
+    CONF_CAMERA_ENTITY,
     CONF_AREA_HANDOFF,
     CONF_ART_SIZE,
     CONF_BLE_AUTO_SWITCH,
@@ -296,6 +297,24 @@ class LatterCoordinator:
         self.calendar_agenda_string: str = "NONE"
         self.calendar_events: list[dict[str, Any]] = []
 
+        # Smart Device Notification & Camera Peephole Alert State
+        self.alert_id: int = 0
+        self.alert_title: str = ""
+        self.alert_message: str = ""
+        self.alert_priority: str = "normal"
+        self.alert_duration: int = 8
+        self.alert_chime: bool = True
+        self.alert_camera_url: str = "none"
+
+        # Smart Device Notification & Camera Peephole Alert State
+        self.alert_id: int = 0
+        self.alert_title: str = ""
+        self.alert_message: str = ""
+        self.alert_priority: str = "normal"
+        self.alert_duration: int = 8
+        self.alert_chime: bool = True
+        self.alert_camera_url: str = "none"
+
     def get_opt(self, key: str, default: Any = None) -> Any:
         """Retrieve a value from entry.options with fallback to entry.data."""
         if self.entry.options and key in self.entry.options:
@@ -394,6 +413,18 @@ class LatterCoordinator:
             return str(val)
         info = get_home_alarm_summary(self.hass)
         return info["entity_id"] or None
+
+    @property
+    def camera_entity(self) -> str | None:
+        """Return configured primary doorbell/security camera entity_id."""
+        val = self.get_opt(CONF_CAMERA_ENTITY)
+        return str(val).strip() if val else None
+
+    @property
+    def camera_entity(self) -> str | None:
+        """Return configured primary doorbell/security camera entity_id."""
+        val = self.get_opt(CONF_CAMERA_ENTITY)
+        return str(val).strip() if val else None
 
     @property
     def native_ble_tracking_enabled(self) -> bool:
@@ -527,6 +558,92 @@ class LatterCoordinator:
                     base_url = "http://homeassistant.local:8123"
         token = self.get_signed_token()
         return f"{base_url.rstrip('/')}/api/latter/companion/{self.entry.entry_id}?token={token}"
+
+    def build_camera_snapshot_url(
+        self, camera_entity_id: str | None = None, cache_bust: str = ""
+    ) -> str:
+        """Build the local LAN HTTP Baseline-JPEG camera snapshot URL for ESP32 online_image."""
+        cam_ent = (camera_entity_id or self.camera_entity or "").strip()
+        if not cam_ent:
+            return "none"
+        try:
+            base_url = get_url(self.hass, allow_internal=True, prefer_external=False)
+        except Exception:  # noqa: BLE001
+            base_url = "http://homeassistant.local:8123"
+        size = self.art_size
+        v_tag = cache_bust or str(int(time.time()))
+        return (
+            f"{base_url}/api/latter/camera/{self.device_slug}"
+            f"?entity_id={cam_ent}&w={size}&h={size}&shape={self.display_shape}&v={v_tag}"
+        )
+
+    @callback
+    def async_dispatch_notification(
+        self,
+        title: str,
+        message: str,
+        priority: str = "normal",
+        duration: int = 8,
+        chime: bool = True,
+        camera_entity: str | None = None,
+    ) -> None:
+        """Update device alert state & camera snapshot URL and notify listeners."""
+        self.alert_id += 1
+        self.alert_title = title.strip() or "Notification"
+        self.alert_message = message.strip()
+        self.alert_priority = priority.strip().lower() or "normal"
+        self.alert_duration = max(2, min(60, int(duration)))
+        self.alert_chime = bool(chime)
+        if camera_entity:
+            self.alert_camera_url = self.build_camera_snapshot_url(
+                camera_entity, cache_bust=f"{self.alert_id}_{int(time.time())}"
+            )
+        else:
+            self.alert_camera_url = "none"
+        self._notify_listeners()
+
+    def build_camera_snapshot_url(
+        self, camera_entity_id: str | None = None, cache_bust: str = ""
+    ) -> str:
+        """Build the local LAN HTTP Baseline-JPEG camera snapshot URL for ESP32 online_image."""
+        cam_ent = (camera_entity_id or self.camera_entity or "").strip()
+        if not cam_ent:
+            return "none"
+        try:
+            base_url = get_url(self.hass, allow_internal=True, prefer_external=False)
+        except Exception:  # noqa: BLE001
+            base_url = "http://homeassistant.local:8123"
+        size = self.art_size
+        v_tag = cache_bust or str(int(time.time()))
+        return (
+            f"{base_url}/api/latter/camera/{self.device_slug}"
+            f"?entity_id={cam_ent}&w={size}&h={size}&shape={self.display_shape}&v={v_tag}"
+        )
+
+    @callback
+    def async_dispatch_notification(
+        self,
+        title: str,
+        message: str,
+        priority: str = "normal",
+        duration: int = 8,
+        chime: bool = True,
+        camera_entity: str | None = None,
+    ) -> None:
+        """Update device alert state & camera snapshot URL and notify listeners."""
+        self.alert_id += 1
+        self.alert_title = title.strip() or "Notification"
+        self.alert_message = message.strip()
+        self.alert_priority = priority.strip().lower() or "normal"
+        self.alert_duration = max(2, min(60, int(duration)))
+        self.alert_chime = bool(chime)
+        if camera_entity:
+            self.alert_camera_url = self.build_camera_snapshot_url(
+                camera_entity, cache_bust=f"{self.alert_id}_{int(time.time())}"
+            )
+        else:
+            self.alert_camera_url = "none"
+        self._notify_listeners()
 
     def build_wallpaper_url(self) -> str:
         """Build the device-scoped baseline-JPEG photo wallpaper URL (always local LAN HTTP for ESP32 online_image)."""
@@ -1602,6 +1719,24 @@ class LatterCoordinator:
             "ble_auto_switch": self.ble_auto_switch_enabled,
             "voice_area_synced": self.sync_device_area_enabled,
             "entities_summary": ";".join(summary_items) if summary_items else "NONE",
+            "camera_entity": self.camera_entity or "",
+            "camera_snapshot_url": self.build_camera_snapshot_url() if self.camera_entity else "none",
+            "alert_id": self.alert_id,
+            "alert_title": self.alert_title,
+            "alert_message": self.alert_message,
+            "alert_priority": self.alert_priority,
+            "alert_duration": self.alert_duration,
+            "alert_chime": self.alert_chime,
+            "alert_camera_url": self.alert_camera_url,
+            "camera_entity": self.camera_entity or "",
+            "camera_snapshot_url": self.build_camera_snapshot_url() if self.camera_entity else "none",
+            "alert_id": self.alert_id,
+            "alert_title": self.alert_title,
+            "alert_message": self.alert_message,
+            "alert_priority": self.alert_priority,
+            "alert_duration": self.alert_duration,
+            "alert_chime": self.alert_chime,
+            "alert_camera_url": self.alert_camera_url,
             "custom_entities": self.custom_entities,
             "custom_bindings": self.custom_bindings,
         }
