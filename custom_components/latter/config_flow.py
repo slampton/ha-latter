@@ -140,7 +140,7 @@ def _build_schema(
         schema_dict,
         CONF_VOL_SPEAKER_1,
         current.get(CONF_VOL_SPEAKER_1),
-        "media_player",
+        ["media_player", "remote"],
     )
     _add_optional_entity(
         schema_dict,
@@ -152,7 +152,7 @@ def _build_schema(
         schema_dict,
         CONF_VOL_SPEAKER_2,
         current.get(CONF_VOL_SPEAKER_2),
-        "media_player",
+        ["media_player", "remote"],
     )
     _add_optional_entity(
         schema_dict,
