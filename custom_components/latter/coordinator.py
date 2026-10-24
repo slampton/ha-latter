@@ -1508,6 +1508,7 @@ class LatterCoordinator:
             "ble_packets_seen": self._ble_tracker.packets_seen if self._ble_tracker else 0,
             "ble_rssi_by_room": self._ble_tracker.get_live_rssi_summary() if self._ble_tracker else {},
             "ble_scanners_map": get_all_scanners_diagnostic_map(self.hass),
+            "ble_target_macs": self._ble_tracker.target_macs_formatted if self._ble_tracker else [],
             "presence_entity": pres_ent or "",
             "presence_state": pres_state,
             "ble_auto_switch": self.ble_auto_switch_enabled,

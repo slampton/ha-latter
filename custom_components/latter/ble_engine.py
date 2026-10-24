@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta
 import logging
 import time
-from typing import Callable
+from typing import Any, Callable
 
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import (
@@ -12,6 +13,7 @@ from homeassistant.helpers import (
     device_registry as dr,
     entity_registry as er,
 )
+from homeassistant.helpers.event import async_track_time_interval
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -23,6 +25,7 @@ FAST_OVERRIDE_DB = 8.0
 STALE_PROXY_SECONDS = 15.0
 WAKE_GAP_SECONDS = 8.0
 MIN_HOLD_SECONDS = 4.0
+SCANNER_POLL_INTERVAL_SECONDS = 2.0
 
 
 def _iter_devices(dev_reg: dr.DeviceRegistry) -> list[dr.DeviceEntry]:
@@ -65,6 +68,12 @@ def _mac_to_int(mac_str: str) -> int | None:
         return int(clean, 16)
     except ValueError:
         return None
+
+
+def _int_to_mac(mac_int: int) -> str:
+    """Format a 48-bit integer as an uppercase colon-delimited MAC string."""
+    hex_str = f"{mac_int:012X}"
+    return ":".join(hex_str[i : i + 2] for i in range(0, 12, 2))
 
 
 def _discover_target_device_macs(
@@ -117,7 +126,6 @@ def _resolve_device_area_or_entity_area(
         if entry.area_id:
             return entry.area_id
 
-    # Check if the device's user name or default name contains a known Area name (longest area name first)
     for raw_label in (dev.name_by_user, dev.name):
         if not raw_label:
             continue
@@ -198,7 +206,7 @@ def _resolve_scanner_area_id(
                     if resolved:
                         return resolved
 
-    # Tier 3: Exact device name match (never substring-matching generic "esp32" or "proxy")
+    # Tier 3: Exact device name match
     for device in all_devices:
         for candidate_name in (device.name_by_user, device.name):
             if not candidate_name:
@@ -288,24 +296,30 @@ class LatterNativeBleTracker:
         self._on_area_detected = on_area_detected
 
         self._unsub_ble: Callable[[], None] | None = None
+        self._unsub_poll: Callable[[], None] | None = None
         # area_id -> (ema_rssi, last_seen_monotonic)
         self._area_rssi: dict[str, tuple[float, float]] = {}
         # raw_source -> (rssi, last_seen_monotonic) for unmapped proxy diagnostics
         self._unmapped_rssi: dict[str, tuple[int, float]] = {}
         self._scanner_area_cache: dict[str, str | None] = {}
         self._target_mac_ints: set[int] = set()
+        self._matched_ble_addresses: set[str] = set()
         self.current_area_id: str | None = None
         self.closest_scanner: str = ""
         self.packets_seen: int = 0
         self.last_packet_monotonic: float = 0.0
         self._last_switch_monotonic: float = 0.0
 
+    @property
+    def target_macs_formatted(self) -> list[str]:
+        """Return the list of candidate Wi-Fi/BLE MAC addresses for the target ESPHome device."""
+        return sorted(_int_to_mac(m) for m in self._target_mac_ints)
+
     @callback
     def reset_for_device_wake(self) -> None:
         """Clear stale RSSI history only if no packet was received in the last 6 seconds."""
         now = time.monotonic()
         if self.last_packet_monotonic > 0.0 and (now - self.last_packet_monotonic) < 6.0:
-            # Device has already been broadcasting during boot; keep fresh RSSI data!
             return
         self._area_rssi.clear()
         self._unmapped_rssi.clear()
@@ -318,7 +332,7 @@ class LatterNativeBleTracker:
 
     @callback
     def async_start(self) -> None:
-        """Subscribe to Home Assistant's internal Bluetooth advertisement stream."""
+        """Subscribe to Home Assistant's internal Bluetooth stream and start 2s per-scanner table polling."""
         self.async_stop()
         self._target_mac_ints = _discover_target_device_macs(
             self.hass, self._raw_slug
@@ -333,11 +347,17 @@ class LatterNativeBleTracker:
                 {},
                 bluetooth.BluetoothScanningMode.ACTIVE,
             )
+            self._unsub_poll = async_track_time_interval(
+                self.hass,
+                self._async_poll_scanner_tables,
+                timedelta(seconds=SCANNER_POLL_INTERVAL_SECONDS),
+            )
+            # Run an immediate initial poll of all scanners
+            self._async_poll_scanner_tables(datetime.now())
             _LOGGER.info(
-                "Latter Native BLE Room Tracker active (UUID=%s, known_macs=%d, scanners=%s)",
+                "Latter Native BLE Room Tracker active (UUID=%s, candidate_macs=%s)",
                 self._target_uuid_hex,
-                len(self._target_mac_ints),
-                get_all_scanners_diagnostic_map(self.hass),
+                self.target_macs_formatted,
             )
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug(
@@ -347,10 +367,13 @@ class LatterNativeBleTracker:
 
     @callback
     def async_stop(self) -> None:
-        """Unsubscribe from Bluetooth advertisements."""
+        """Unsubscribe from Bluetooth advertisements and scanner polling."""
         if self._unsub_ble is not None:
             self._unsub_ble()
             self._unsub_ble = None
+        if self._unsub_poll is not None:
+            self._unsub_poll()
+            self._unsub_poll = None
         self._area_rssi.clear()
         self._unmapped_rssi.clear()
         self._scanner_area_cache.clear()
@@ -370,11 +393,13 @@ class LatterNativeBleTracker:
                 out[f"unmapped:{raw_src}"] = int(raw_rssi)
         return out
 
-    def _matches_target_device(self, service_info: object) -> bool:
-        """Return True if advertisement matches iBeacon UUID, MAC, or local name."""
-        mfg_data: dict[int, bytes] = getattr(
-            service_info, "manufacturer_data", {}
-        )
+    def _matches_raw_adv(
+        self,
+        address: str,
+        name: str,
+        mfg_data: dict[int, bytes],
+    ) -> bool:
+        """Return True if raw advertisement fields match iBeacon UUID, MAC, or local name."""
         apple_bytes = mfg_data.get(APPLE_COMPANY_ID)
         if apple_bytes and len(apple_bytes) >= 18:
             if len(apple_bytes) >= 20 and apple_bytes[:2] == IBEACON_PREFIX:
@@ -384,27 +409,91 @@ class LatterNativeBleTracker:
             elif self._target_uuid_hex in apple_bytes.hex().lower():
                 return True
 
-        adv_address = str(getattr(service_info, "address", "") or "")
-        if adv_address and self._target_mac_ints:
-            adv_int = _mac_to_int(adv_address)
-            if adv_int is not None and adv_int in self._target_mac_ints:
+        if address:
+            if address in self._matched_ble_addresses:
                 return True
+            if self._target_mac_ints:
+                adv_int = _mac_to_int(address)
+                if adv_int is not None and adv_int in self._target_mac_ints:
+                    return True
 
-        adv_name = (
-            str(getattr(service_info, "name", "") or "")
-            .lower()
-            .replace("_", "-")
-        )
+        adv_name = name.lower().replace("_", "-") if name else ""
         if adv_name and self._device_slug in adv_name:
             return True
 
         return False
 
+    def _matches_target_device(self, service_info: object) -> bool:
+        """Return True if a BluetoothServiceInfoBleak object matches iBeacon UUID, MAC, or local name."""
+        mfg_data: dict[int, bytes] = getattr(
+            service_info, "manufacturer_data", {}
+        ) or {}
+        adv_address = str(getattr(service_info, "address", "") or "")
+        adv_name = str(getattr(service_info, "name", "") or "")
+        matched = self._matches_raw_adv(adv_address, adv_name, mfg_data)
+        if matched and adv_address:
+            self._matched_ble_addresses.add(adv_address)
+        return matched
+
+    @callback
+    def _async_poll_scanner_tables(self, _now: datetime) -> None:
+        """Poll each ESPHome BLE Proxy's live advertisement table to bypass habluetooth static-iBeacon deduplication."""
+        if not self._target_mac_ints:
+            self._target_mac_ints = _discover_target_device_macs(
+                self.hass, self._raw_slug
+            )
+
+        try:
+            from homeassistant.components import bluetooth
+
+            now_mono = time.monotonic()
+            scanners = bluetooth.async_current_scanners(self.hass)
+            for scanner in scanners:
+                source = str(getattr(scanner, "source", "") or "")
+                if not source:
+                    continue
+
+                # Check timestamps dict if exposed by HaBluetoothScanner
+                timestamps: dict[str, float] = getattr(
+                    scanner, "_previous_seen_timestamps", {}
+                ) or getattr(scanner, "timestamps", {}) or {}
+
+                dev_adv_map: dict[str, tuple[Any, Any]] = getattr(
+                    scanner, "discovered_devices_and_advertisement_data", {}
+                ) or {}
+
+                for addr, pair in dev_adv_map.items():
+                    if not isinstance(pair, tuple) or len(pair) != 2:
+                        continue
+                    ble_dev, adv_data = pair
+                    # Skip if scanner has a timestamp for this address and it is older than STALE_PROXY_SECONDS
+                    last_ts = timestamps.get(addr)
+                    if last_ts is not None and (now_mono - float(last_ts)) > STALE_PROXY_SECONDS:
+                        continue
+
+                    mfg_data = getattr(adv_data, "manufacturer_data", {}) or {}
+                    local_name = str(
+                        getattr(adv_data, "local_name", "")
+                        or getattr(ble_dev, "name", "")
+                        or ""
+                    )
+                    if not self._matches_raw_adv(str(addr), local_name, mfg_data):
+                        continue
+
+                    self._matched_ble_addresses.add(str(addr))
+                    rssi = getattr(adv_data, "rssi", None)
+                    if rssi is None:
+                        rssi = getattr(ble_dev, "rssi", None)
+                    if rssi is not None and int(rssi) > -100:
+                        self._ingest_proxy_observation(source, int(rssi), now_mono)
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("BLE scanner table poll error: %s", err)
+
     @callback
     def _async_on_ble_advertisement(
         self, service_info: object, _change: object
     ) -> None:
-        """Process incoming BLE advertisement from an ESPHome BLE proxy."""
+        """Process incoming BLE advertisement callback from an ESPHome BLE proxy."""
         if not self._matches_target_device(service_info):
             return
 
@@ -413,7 +502,13 @@ class LatterNativeBleTracker:
         if rssi is None or not source or int(rssi) <= -100:
             return
 
-        now = time.monotonic()
+        self._ingest_proxy_observation(source, int(rssi), time.monotonic())
+
+    @callback
+    def _ingest_proxy_observation(
+        self, source: str, rssi: int, now: float
+    ) -> None:
+        """Ingest a (scanner_source, rssi) observation and evaluate room transitions."""
         just_woke_from_standby = (
             self.last_packet_monotonic > 0.0
             and (now - self.last_packet_monotonic) >= WAKE_GAP_SECONDS
@@ -470,10 +565,8 @@ class LatterNativeBleTracker:
             self._area_rssi.items(), key=lambda item: item[1][0]
         )
 
-        # If we have no current room yet, only lock immediately if signal is reasonably strong (>= -76 dBm)
-        # OR if we've heard at least 2 proxies.
         if self.current_area_id is None:
-            if best_ema >= -76.0 or len(self._area_rssi) >= 2:
+            if best_ema >= -78.0 or len(self._area_rssi) >= 2:
                 self.current_area_id = best_area
                 self.closest_scanner = source
                 self._last_switch_monotonic = now
@@ -488,8 +581,6 @@ class LatterNativeBleTracker:
         cur_ema = cur_entry[0] if cur_entry is not None else -100.0
         delta_db = best_ema - cur_ema
 
-        # Fast Override: If a proxy is >= 8 dB stronger than the initial/current room (e.g. Garage vs distant Living Room),
-        # switch IMMEDIATELY without waiting for MIN_HOLD_SECONDS!
         if delta_db >= FAST_OVERRIDE_DB:
             self.current_area_id = best_area
             self.closest_scanner = source
