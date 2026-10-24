@@ -394,6 +394,35 @@ class LatterCoordinator:
         val = self.get_opt(CONF_CUSTOM_BINDINGS, [])
         return list(val) if isinstance(val, list) else []
 
+    def _build_custom_bindings_summary(self) -> str:
+        """Build a semicolon-delimited 5-slot summary ('slot|Friendly Name|action;...') for on-device Macro UIs."""
+        rows: list[str] = []
+        for b in self.custom_bindings[:5]:
+            if not isinstance(b, dict):
+                continue
+            slot_id = str(b.get("slot") or "").strip().replace(";", "").replace("|", "")
+            ent_id = str(b.get("entity_id") or "").strip()
+            act = str(b.get("action") or "toggle").strip()
+            if not slot_id or not ent_id:
+                continue
+            st = self.hass.states.get(ent_id)
+            friendly = (
+                str(st.attributes.get("friendly_name") if st else "")
+                or ent_id.split(".", 1)[-1].replace("_", " ").title()
+            )
+            friendly = friendly.replace(";", "").replace("|", "")[:32]
+            rows.append(f"{slot_id}|{friendly}|{act}")
+        if not rows and self.custom_entities:
+            for idx, ent_id in enumerate(self.custom_entities[:5], start=1):
+                st = self.hass.states.get(ent_id)
+                friendly = (
+                    str(st.attributes.get("friendly_name") if st else "")
+                    or ent_id.split(".", 1)[-1].replace("_", " ").title()
+                )
+                friendly = friendly.replace(";", "").replace("|", "")[:32]
+                rows.append(f"macro_{idx}|{friendly}|toggle")
+        return ";".join(rows) if rows else "NONE"
+
     @property
     def local_speaker(self) -> str:
         """Automatically resolve the on-device media_player entity from device_slug."""
