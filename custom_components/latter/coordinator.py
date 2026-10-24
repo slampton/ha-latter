@@ -54,6 +54,7 @@ from .const import (
     CONF_BLE_AUTO_SWITCH,
     CONF_BLE_BEACON_UUID,
     CONF_CALENDAR_ENTITIES,
+    CONF_COMPANION_BASE_URL,
     CONF_CUSTOM_BINDINGS,
     CONF_CUSTOM_ENTITIES,
     CONF_DEFAULT_AREA,
@@ -74,7 +75,6 @@ from .const import (
     CONF_VOL_SPEAKER_2,
     CONF_VOL_TARGET_1,
     CONF_VOL_TARGET_2,
-    CONF_COMPANION_BASE_URL,
     CONF_WALLPAPER_CYCLE_MINUTES,
     CONF_WALLPAPER_FAVORITES,
     CONF_WALLPAPER_SOURCE,
@@ -213,7 +213,7 @@ def _interpolate_speaker_position(state_obj: Any) -> float:
 
 
 class LatterCoordinator:
-    """Manages active speaker, BLE room context, 4-slot remotes, custom bindings, alarm, calendar, and weather."""
+    """Manages active speaker, BLE room context, 4-slot remotes, custom bindings, wallpapers, alarm, calendar, and weather."""
 
     def __init__(
         self,
@@ -242,7 +242,6 @@ class LatterCoordinator:
         self._unsub_position_timer: callable | None = None
         self._unsub_forecast_timer: callable | None = None
         self._unsub_calendar_timer: callable | None = None
-        self._unsub_wallpaper_timer: callable | None = None
         self._unsub_wallpaper_timer: callable | None = None
         self._ble_tracker: LatterNativeBleTracker | None = None
 
@@ -338,9 +337,36 @@ class LatterCoordinator:
         return str(self.get_opt(CONF_DOCK_APPS, DEFAULT_DOCK_APPS)).strip()
 
     @property
+    def companion_base_url(self) -> str:
+        """Return optional user-configured reverse proxy base URL (e.g. https://home.lamptons.com)."""
+        return str(self.get_opt(CONF_COMPANION_BASE_URL, "") or "").strip().rstrip("/")
+
+    @property
     def wallpaper_source(self) -> str:
-        """Return configured photo wallpaper URL or /local/ path."""
+        """Return configured photo wallpaper URL, preset ID, or /local/ path."""
         return str(self.get_opt(CONF_WALLPAPER_SOURCE, "") or "").strip()
+
+    @property
+    def wallpaper_favorites(self) -> list[str]:
+        """Return list of favorite wallpaper source IDs for rotation."""
+        val = self.get_opt(CONF_WALLPAPER_FAVORITES, [])
+        return [str(x) for x in val] if isinstance(val, (list, tuple)) else []
+
+    @property
+    def wallpaper_cycle_minutes(self) -> int:
+        """Return wallpaper rotation interval in minutes (0 = disabled)."""
+        try:
+            return max(
+                0,
+                int(
+                    self.get_opt(
+                        CONF_WALLPAPER_CYCLE_MINUTES,
+                        DEFAULT_WALLPAPER_CYCLE_MINUTES,
+                    )
+                ),
+            )
+        except (ValueError, TypeError):
+            return 0
 
     @property
     def custom_bindings(self) -> list[dict[str, str]]:
@@ -470,7 +496,7 @@ class LatterCoordinator:
         return f"{base_url.rstrip('/')}/api/latter/companion/{self.entry.entry_id}?token={token}"
 
     def build_wallpaper_url(self) -> str:
-        """Build the device-scoped baseline-JPEG photo wallpaper URL."""
+        """Build the device-scoped baseline-JPEG photo wallpaper URL (always local LAN HTTP for ESP32 online_image)."""
         if not self.wallpaper_source:
             return "none"
         try:
@@ -624,7 +650,6 @@ class LatterCoordinator:
             timedelta(minutes=CALENDAR_REFRESH_INTERVAL_MINUTES),
         )
         self._bind_wallpaper_cycle_timer()
-        self._bind_wallpaper_cycle_timer()
 
     async def async_shutdown(self) -> None:
         """Clean up all subscriptions and timers."""
@@ -661,6 +686,7 @@ class LatterCoordinator:
         self._unsub_position_timer = None
         self._unsub_forecast_timer = None
         self._unsub_calendar_timer = None
+        self._unsub_wallpaper_timer = None
         self._listeners.clear()
 
     @callback
@@ -1861,43 +1887,6 @@ class LatterCoordinator:
     async def _async_periodic_weather_refresh(self, _now: datetime) -> None:
         """Refresh 5-day weather forecast every 30 minutes."""
         await self.async_refresh_weather_forecast()
-
-    @callback
-    def _bind_wallpaper_cycle_timer(self) -> None:
-        """Start or stop the automatic favorite wallpaper rotation timer."""
-        if self._unsub_wallpaper_timer is not None:
-            self._unsub_wallpaper_timer()
-            self._unsub_wallpaper_timer = None
-
-        mins = self.wallpaper_cycle_minutes
-        if mins > 0 and len(self.wallpaper_favorites) >= 2:
-            self._unsub_wallpaper_timer = async_track_time_interval(
-                self.hass,
-                self._async_on_wallpaper_cycle_tick,
-                timedelta(minutes=mins),
-            )
-
-    @callback
-    def _async_on_wallpaper_cycle_tick(self, _now: datetime) -> None:
-        """Advance to the next favorite wallpaper and notify listeners."""
-        favs = self.wallpaper_favorites
-        if len(favs) < 2:
-            return
-        cur = self.wallpaper_source
-        try:
-            idx = (favs.index(cur) + 1) % len(favs)
-        except ValueError:
-            idx = 0
-        next_wp = favs[idx]
-        merged = {
-            **self.entry.data,
-            **(self.entry.options or {}),
-            CONF_WALLPAPER_SOURCE: next_wp,
-        }
-        self.hass.config_entries.async_update_entry(
-            self.entry, data=merged, options=merged
-        )
-        self._notify_listeners()
 
     @callback
     def _bind_wallpaper_cycle_timer(self) -> None:
