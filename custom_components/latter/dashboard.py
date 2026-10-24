@@ -1710,7 +1710,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
                 </select>
               </div>
               <div class="field">
-                <label>Companion HTTPS Base URL Override (e.g. https://home.lamptons.com)</label>
+                <label>Companion HTTPS Base URL Override (e.g. https://ha.example.com)</label>
                 <input type="text" id="cfg-companion_base_url" placeholder="Auto-detected from Home Assistant Network settings" oninput="markDirty()">
               </div>
               <div class="field" style="margin-bottom:0;">
@@ -2338,10 +2338,10 @@ function renderYamlGenerator() {
 
   if (incBrowse || incRoom) {
     lines.push(`api:`);
-    lines.push(`  services:`);
+    lines.push(`  actions:`);
     if (incBrowse) {
       lines.push(`    # 5-Slot List Callback (Music, Room Picker 'room_areas', Calendar)`);
-      lines.push(`    - service: set_browse_slots`);
+      lines.push(`    - action: set_browse_slots`);
       lines.push(`      variables:`);
       lines.push(`        mode: string`);
       lines.push(`        page: int`);
@@ -2357,7 +2357,7 @@ function renderYamlGenerator() {
     }
     if (incRoom) {
       lines.push(`    # ${roomSlots}-Slot Interactive Room Control Callback (includes sX_level 0..100 or -1)`);
-      lines.push(`    - service: set_room_slots`);
+      lines.push(`    - action: set_room_slots`);
       lines.push(`      variables:`);
       lines.push(`        mode: string`);
       lines.push(`        page: int`);

@@ -12,10 +12,13 @@ from .const import DOMAIN
 from .coordinator import LatterCoordinator
 
 TO_REDACT: set[str] = {
-    "companion_url",
-    "wallpaper_url",
+    "alert_camera_url",
     "art_url",
+    "ble_beacon_uuid",
+    "companion_base_url",
+    "companion_url",
     "mac",
+    "wallpaper_url",
 }
 
 

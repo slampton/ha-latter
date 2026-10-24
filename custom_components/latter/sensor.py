@@ -13,6 +13,8 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from .const import DOMAIN, INTEGRATION_VERSION, build_device_entity_id
 from .coordinator import LatterCoordinator
 
+PARALLEL_UPDATES = 0
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -37,14 +39,15 @@ async def async_setup_entry(
 class _BaseLatterSensor(SensorEntity):
     """Base sensor subscribed to LatterCoordinator updates."""
 
+    _attr_has_entity_name = True
     _attr_should_poll = False
 
     def __init__(self, coordinator: LatterCoordinator, suffix: str, label: str) -> None:
         """Initialize base sensor with a device-scoped entity_id."""
         self.coordinator = coordinator
         slug = coordinator.device_slug
-        pretty_device = slug.replace("_", " ").title()
-        self._attr_name = f"{pretty_device} {label}"
+        self._attr_translation_key = suffix
+        self._attr_name = label
         self._attr_unique_id = f"{coordinator.entry.entry_id}_{suffix}"
         self.entity_id = build_device_entity_id(slug, suffix)
 

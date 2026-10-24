@@ -3,7 +3,35 @@
     "step": {
       "user": {
         "title": "Latter",
-        "description": "Bind Home Assistant entities, BLE room presence, 4-slot TV remotes, alarm, media players, weather, and calendars to your Pocket Assistant or ESPHome device with zero YAML substitutions.",
+        "description": "Bind Home Assistant entities, BLE room presence, 4-slot TV remotes, alarm, media players, weather, and calendars to your ESPHome device with zero YAML substitutions.",
+        "data": {
+          "device_slug": "ESPHome Device Name / Slug",
+          "default_speaker": "Default Active Speaker (Music Assistant)",
+          "vol_speaker_1": "Volume Override 1: When Streaming to Speaker...",
+          "vol_target_1": "Volume Override 1: Control Volume on Entity (AVR / Number)...",
+          "vol_speaker_2": "Volume Override 2: When Streaming to Speaker...",
+          "vol_target_2": "Volume Override 2: Control Volume on Entity (AVR / Number)...",
+          "default_area": "Default Room / Area Context",
+          "native_ble_tracking": "Enable Built-In ESPHome BLE Proxy Room Tracking (Zero-Config)",
+          "ble_beacon_uuid": "Device BLE iBeacon UUID (for Built-In or Bermuda Tracking)",
+          "presence_entity": "External BLE Room Sensor Override (Optional Bermuda / ESPresense sensor)",
+          "ble_auto_switch": "Auto-Switch Room Controls When Entering a New Room",
+          "sync_device_area": "Sync Active Room to ESPHome Device Area (Room-Aware Voice Assistant)",
+          "area_handoff": "Unified Area Context Handoff (Auto-link Room Speaker & Remote)",
+          "alarm_entity": "Home Security Alarm Entity (alarm_control_panel)",
+          "remote_1": "TV / Media Remote Slot 1 (remote or media_player)",
+          "remote_2": "TV / Media Remote Slot 2 (remote or media_player)",
+          "remote_3": "TV / Media Remote Slot 3 (remote or media_player)",
+          "remote_4": "TV / Media Remote Slot 4 (remote or media_player)",
+          "weather_entity": "Weather Provider Entity",
+          "calendar_entities": "Calendars (Agenda Serialization)",
+          "custom_entities": "Pinned Custom Entities (Dynamic Entity Mapper)",
+          "art_size": "Image Proxy Resolution"
+        }
+      },
+      "reconfigure": {
+        "title": "Reconfigure Latter Device Mapping",
+        "description": "Update the bound Home Assistant entities, BLE room presence settings, remotes, and media options for this ESPHome device.",
         "data": {
           "device_slug": "ESPHome Device Name / Slug",
           "default_speaker": "Default Active Speaker (Music Assistant)",
@@ -31,7 +59,9 @@
       }
     },
     "abort": {
-      "already_configured": "This ESPHome device is already configured in Latter."
+      "already_configured": "This ESPHome device is already configured in Latter.",
+      "unique_id_mismatch": "The ESPHome device slug does not match the existing configuration entry.",
+      "reconfigure_successful": "Configuration updated successfully."
     }
   },
   "options": {
@@ -63,6 +93,25 @@
           "custom_entities": "Pinned Custom Entities (Dynamic Entity Mapper)",
           "art_size": "Image Proxy Resolution"
         }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "active_media": {
+        "name": "Active Media"
+      },
+      "weather_forecast": {
+        "name": "Weather Forecast"
+      },
+      "room_context": {
+        "name": "Room Context"
+      },
+      "calendar_agenda": {
+        "name": "Calendar Agenda"
+      },
+      "remote_config": {
+        "name": "Remote Config"
       }
     }
   },

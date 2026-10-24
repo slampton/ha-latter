@@ -105,7 +105,7 @@ music_browse:
 
 set_active_speaker:
   name: Set Active Speaker
-  description: Change the active target media_player for the Pocket Assistant or ESPHome device.
+  description: Change the active target media_player for the ESPHome device.
   fields:
     entity_id:
       name: Speaker Entity
@@ -495,7 +495,7 @@ media_command:
   fields:
     target_device:
       name: Target ESPHome Device
-      description: Optional ESPHome device slug (defaults to pocket-assistant).
+      description: Optional ESPHome device slug (auto-resolved when running a single Latter device).
       required: false
       selector:
         text:

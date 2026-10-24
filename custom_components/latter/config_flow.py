@@ -346,6 +346,34 @@ class LatterConfigFlow(ConfigFlow, domain=DOMAIN):
             data_schema=_build_schema(self.hass, initial),
         )
 
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Handle a reconfiguration flow initialized by the user."""
+        reconfigure_entry = self._get_reconfigure_entry()
+        if user_input is not None:
+            slug = normalize_device_slug(str(user_input[CONF_DEVICE_SLUG]))
+            user_input[CONF_DEVICE_SLUG] = slug
+            user_input[CONF_ART_SIZE] = int(
+                user_input.get(CONF_ART_SIZE, DEFAULT_ART_SIZE)
+            )
+            await self.async_set_unique_id(f"{DOMAIN}_{slug}")
+            self._abort_if_unique_id_mismatch()
+            return self.async_update_reload_and_abort(
+                reconfigure_entry,
+                data_updates=user_input,
+            )
+
+        current = (
+            dict(reconfigure_entry.options)
+            if reconfigure_entry.options
+            else dict(reconfigure_entry.data)
+        )
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=_build_schema(self.hass, current),
+        )
+
     @staticmethod
     @callback
     def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
