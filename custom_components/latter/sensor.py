@@ -54,9 +54,10 @@ class _BaseLatterSensor(SensorEntity):
     @property
     def device_info(self) -> DeviceInfo:
         """Return DeviceInfo with a 1-click 'Visit' link to the Latter Web Companion Studio."""
+        pretty_device = self.coordinator.device_slug.replace("_", " ").title()
         return DeviceInfo(
             identifiers={(DOMAIN, self.coordinator.entry.entry_id)},
-            name=f"Latter ({self.coordinator.device_slug})",
+            name=pretty_device,
             manufacturer="Lampton Labs",
             model="Latter ESPHome Companion Middleware",
             sw_version=INTEGRATION_VERSION,
