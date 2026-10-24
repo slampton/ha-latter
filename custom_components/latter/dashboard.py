@@ -61,6 +61,7 @@ from .const import (
     INTEGRATION_VERSION,
 )
 from .coordinator import LatterCoordinator
+from .repairs import async_audit_coordinator_health
 from .room_engine import (
     async_execute_room_action,
     get_area_entities,
@@ -221,10 +222,13 @@ def _build_companion_state_payload(
         CONF_ART_SIZE: coordinator.art_size,
     }
 
+    health_warnings = async_audit_coordinator_health(hass, coordinator)
+
     return {
         "entry_id": coordinator.entry.entry_id,
         "title": coordinator.entry.title,
         "version": INTEGRATION_VERSION,
+        "health_warnings": health_warnings,
         "config": config_data,
         "esphome": esphome_inspector,
         "wallpapers": wallpapers_catalog,
@@ -1249,7 +1253,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
         <img src="/api/latter/brand/icon.png" alt="Latter" style="width:34px;height:34px;border-radius:8px;object-fit:contain;flex-shrink:0;" onerror="this.style.display='none'">
         <div class="brand-text">
           <h1 id="hdr-title">Latter Studio</h1>
-          <small id="hdr-sub">v1.5.4</small>
+          <small id="hdr-sub">v1.5.5</small>
         </div>
       </div>
     </div>
@@ -1679,6 +1683,24 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
               </div>
             </div>
           </div>
+        </div>
+
+        <div class="card" style="margin-top:16px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:8px;">
+            <div>
+              <h3 style="margin:0;">ESPHome YAML Integration Generator</h3>
+              <p class="desc" style="margin:4px 0 0;">Generate a modular, copy-pasteable ESPHome YAML contract tailored to this device's slug and slot capacity.</p>
+            </div>
+            <button class="btn-action" onclick="copyGeneratedYaml()">Copy YAML Snippet</button>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:14px;margin-bottom:12px;padding:10px 12px;background:var(--input-bg);border:1px solid var(--border);border-radius:7px;font-size:12.5px;">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="yg-sensors" checked onchange="renderYamlGenerator()"> Push Sensors (<code>sensor.&lt;slug&gt;_*</code>)</label>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="yg-browse" checked onchange="renderYamlGenerator()"> 5-Slot List Callback (<code>set_browse_slots</code>)</label>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="yg-room" checked onchange="renderYamlGenerator()"> Room Slider Callback (<code>set_room_slots</code>)</label>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="yg-ble" checked onchange="renderYamlGenerator()"> BLE Presence Beacon</label>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="yg-actions" checked onchange="renderYamlGenerator()"> Action Examples (<code>latter.*</code>)</label>
+          </div>
+          <pre id="yaml-gen-output" class="mono" style="background:var(--input-bg);border:1px solid var(--border);border-radius:7px;padding:14px;overflow-x:auto;max-height:380px;margin:0;color:var(--text-strong);line-height:1.45;"></pre>
         </div>
       </section>
 
@@ -2198,12 +2220,14 @@ function applyStateToDom(data, forceFormUpdate=false) {
   const activeEl = document.activeElement;
   if (!activeEl || !["SELECT", "INPUT"].includes(activeEl.tagName)) {
     renderCohesiveDeviceSections();
+    renderYamlGenerator();
   }
 
   if (!INITIAL_FORM_LOADED || forceFormUpdate) {
     INITIAL_FORM_LOADED = true;
     applyTheme(cfg.web_theme || "dark");
     renderCohesiveDeviceSections();
+    renderYamlGenerator();
 
     document.getElementById("cfg-device_slug").value = cfg.device_slug || "";
     document.getElementById("cfg-companion_base_url").value = cfg.companion_base_url || "";
@@ -2325,6 +2349,124 @@ async function setBleOffset(areaId, offsetDb) {
     applyStateToDom(await resp.json(), false);
     showToast(`BLE calibration updated`);
   }
+}
+
+function renderYamlGenerator() {
+  const box = document.getElementById("yaml-gen-output");
+  if (!box) return;
+  const slug = (document.getElementById("cfg-device_slug")?.value || STATE?.config?.device_slug || "esphome_device").trim().toLowerCase().replace(/-/g, "_");
+  const nodeHyphen = slug.replace(/_/g, "-");
+  const roomSlots = Math.max(1, Math.min(20, parseInt(document.getElementById("cfg-default_page_size")?.value || STATE?.config?.default_page_size || 3, 10)));
+  const uuid = (document.getElementById("cfg-ble_beacon_uuid")?.value || STATE?.config?.ble_beacon_uuid || "504F434B-4554-4153-5354-000000000210").trim();
+
+  const incSensors = document.getElementById("yg-sensors")?.checked;
+  const incBrowse = document.getElementById("yg-browse")?.checked;
+  const incRoom = document.getElementById("yg-room")?.checked;
+  const incBle = document.getElementById("yg-ble")?.checked;
+  const incActions = document.getElementById("yg-actions")?.checked;
+
+  const lines = [
+    `# Latter v1.5+ ESPHome Companion Wire Snippet for '${nodeHyphen}' (slug: ${slug})`,
+    `esphome:`,
+    `  name: ${nodeHyphen}`,
+    ``
+  ];
+
+  if (incBrowse || incRoom) {
+    lines.push(`api:`);
+    lines.push(`  services:`);
+    if (incBrowse) {
+      lines.push(`    # 5-Slot List Callback (Music, Room Picker 'room_areas', Calendar)`);
+      lines.push(`    - service: set_browse_slots`);
+      lines.push(`      variables:`);
+      lines.push(`        mode: string`);
+      lines.push(`        page: int`);
+      lines.push(`        total_pages: int`);
+      lines.push(`        has_prev: bool`);
+      lines.push(`        has_next: bool`);
+      for (let i = 1; i <= 5; i++) {
+        lines.push(`        s${i}_name: string`);
+        lines.push(`        s${i}_id: string`);
+        lines.push(`        s${i}_type: string`);
+        lines.push(`        s${i}_active: bool`);
+      }
+    }
+    if (incRoom) {
+      lines.push(`    # ${roomSlots}-Slot Interactive Room Control Callback (includes sX_level 0..100 or -1)`);
+      lines.push(`    - service: set_room_slots`);
+      lines.push(`      variables:`);
+      lines.push(`        mode: string`);
+      lines.push(`        page: int`);
+      lines.push(`        total_pages: int`);
+      lines.push(`        has_prev: bool`);
+      lines.push(`        has_next: bool`);
+      for (let i = 1; i <= roomSlots; i++) {
+        lines.push(`        s${i}_name: string`);
+        lines.push(`        s${i}_id: string`);
+        lines.push(`        s${i}_type: string`);
+        lines.push(`        s${i}_active: bool`);
+        lines.push(`        s${i}_level: int`);
+      }
+    }
+    lines.push(``);
+  }
+
+  if (incSensors) {
+    lines.push(`# Device-Scoped Latter Push Sensors`);
+    lines.push(`text_sensor:`);
+    lines.push(`  - platform: homeassistant`);
+    lines.push(`    id: latter_active_media`);
+    lines.push(`    entity_id: sensor.${slug}_active_media`);
+    lines.push(`  - platform: homeassistant`);
+    lines.push(`    id: latter_room_context`);
+    lines.push(`    entity_id: sensor.${slug}_room_context`);
+    lines.push(`  - platform: homeassistant`);
+    lines.push(`    id: latter_weather_forecast`);
+    lines.push(`    entity_id: sensor.${slug}_weather_forecast`);
+    lines.push(`  - platform: homeassistant`);
+    lines.push(`    id: latter_remote_config`);
+    lines.push(`    entity_id: sensor.${slug}_remote_config`);
+    lines.push(`  - platform: homeassistant`);
+    lines.push(`    id: latter_calendar_agenda`);
+    lines.push(`    entity_id: sensor.${slug}_calendar_agenda`);
+    lines.push(``);
+  }
+
+  if (incBle) {
+    lines.push(`# Zero-Config BLE Room Presence Beacon`);
+    lines.push(`esp32_ble_beacon:`);
+    lines.push(`  type: iBeacon`);
+    lines.push(`  uuid: "${uuid}"`);
+    lines.push(`  major: 1`);
+    lines.push(`  minor: 1`);
+    lines.push(``);
+  }
+
+  if (incActions) {
+    lines.push(`# Example Outbound Latter Actions (use inside touch/button/rotary handlers)`);
+    lines.push(`# - homeassistant.action:`);
+    lines.push(`#     action: latter.room_browse`);
+    lines.push(`#     data:`);
+    lines.push(`#       device_slug: "${slug}"`);
+    lines.push(`#       mode: "entities"`);
+    lines.push(`#       domain_filter: "all"`);
+    lines.push(`#       page: "1"`);
+    lines.push(`# - homeassistant.action:`);
+    lines.push(`#     action: latter.trigger_binding`);
+    lines.push(`#     data:`);
+    lines.push(`#       device_slug: "${slug}"`);
+    lines.push(`#       slot: "button_1_single"`);
+  }
+
+  box.textContent = lines.join("\n");
+}
+
+function copyGeneratedYaml() {
+  const text = document.getElementById("yaml-gen-output")?.textContent || "";
+  if (!text) return;
+  navigator.clipboard.writeText(text).then(() => {
+    showToast("Copied ESPHome YAML snippet to clipboard");
+  });
 }
 
 async function quickSwitchArea(areaId) {

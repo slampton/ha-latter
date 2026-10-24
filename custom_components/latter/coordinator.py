@@ -684,6 +684,18 @@ class LatterCoordinator:
             timedelta(minutes=CALENDAR_REFRESH_INTERVAL_MINUTES),
         )
         self._bind_wallpaper_cycle_timer()
+        try:
+            from .repairs import async_audit_coordinator_health
+
+            async_audit_coordinator_health(self.hass, self)
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("Repairs audit skipped: %s", err)
+        try:
+            from .repairs import async_audit_coordinator_health
+
+            async_audit_coordinator_health(self.hass, self)
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("Repairs audit skipped: %s", err)
 
     async def async_shutdown(self) -> None:
         """Clean up all subscriptions and timers."""

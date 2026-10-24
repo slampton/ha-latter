@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Latter",
-        "description": "Bind Home Assistant entities, BLE room presence, 4-slot TV remotes, alarm, media players, weather, and calendars to your Pocket Assistant (v2.1+) or ESPHome device with zero YAML substitutions.",
+        "description": "Bind Home Assistant entities, BLE room presence, 4-slot TV remotes, alarm, media players, weather, and calendars to your Pocket Assistant or ESPHome device with zero YAML substitutions.",
         "data": {
           "device_slug": "ESPHome Device Name / Slug",
           "default_speaker": "Default Active Speaker (Music Assistant)",
@@ -62,6 +62,30 @@
           "calendar_entities": "Calendars (Agenda Serialization)",
           "custom_entities": "Pinned Custom Entities (Dynamic Entity Mapper)",
           "art_size": "Image Proxy Resolution"
+        }
+      }
+    }
+  },
+  "issues": {
+    "missing_mapped_entity": {
+      "title": "Mapped entity missing for {device_slug}",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Update mapped entity in Latter",
+            "description": "The following mapped entity for `{device_slug}` was deleted or renamed in Home Assistant: **{missing_list}**. Open the Latter Companion Studio or integration options to select a replacement."
+          }
+        }
+      }
+    },
+    "ble_no_proxies": {
+      "title": "No room-assigned BLE proxies found for {device_slug}",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Assign Bluetooth proxies to Home Assistant Areas",
+            "description": "Built-in BLE Room Presence is enabled for `{device_slug}`, but no active Bluetooth scanners/proxies are assigned to a Home Assistant Area. Assign each ESPHome BLE proxy to its room Area in Home Assistant, or disable Built-In BLE Tracking if not used."
+          }
         }
       }
     }
