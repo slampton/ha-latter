@@ -1646,7 +1646,6 @@ class LatterCoordinator:
             "ble_packets_seen": self._ble_tracker.packets_seen if self._ble_tracker else 0,
             "ble_rssi_by_room": self._ble_tracker.get_live_rssi_summary() if self._ble_tracker else {},
             "ble_room_offsets": self.ble_room_offsets,
-            "ble_room_offsets": self.ble_room_offsets,
             "ble_scanners_map": get_all_scanners_diagnostic_map(self.hass),
             "ble_target_macs": self._ble_tracker.target_macs_formatted if self._ble_tracker else [],
             "presence_entity": pres_ent or "",
@@ -1663,17 +1662,9 @@ class LatterCoordinator:
             "alert_duration": self.alert_duration,
             "alert_chime": self.alert_chime,
             "alert_camera_url": self.alert_camera_url,
-            "camera_entity": self.camera_entity or "",
-            "camera_snapshot_url": self.build_camera_snapshot_url() if self.camera_entity else "none",
-            "alert_id": self.alert_id,
-            "alert_title": self.alert_title,
-            "alert_message": self.alert_message,
-            "alert_priority": self.alert_priority,
-            "alert_duration": self.alert_duration,
-            "alert_chime": self.alert_chime,
-            "alert_camera_url": self.alert_camera_url,
             "custom_entities": self.custom_entities,
             "custom_bindings": self.custom_bindings,
+            "custom_bindings_summary": self._build_custom_bindings_summary(),
         }
 
     @callback

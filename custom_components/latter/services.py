@@ -369,21 +369,41 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         if not slot_key:
             return
 
-        for binding in coord.custom_bindings:
+        bindings = coord.custom_bindings
+        matched: dict[str, Any] | None = None
+        for binding in bindings:
             b_slot = str(binding.get("slot") or "").strip().lower()
             if b_slot == slot_key:
-                ent_id = str(binding.get("entity_id") or "").strip()
-                action = str(
-                    data.get("action") or binding.get("action") or "toggle"
-                ).strip()
-                raw_lvl = data.get("level")
-                lvl = int(float(raw_lvl)) if raw_lvl is not None else None
-                if ent_id:
-                    await async_execute_room_action(
-                        hass, entity_id=ent_id, action=action, level=lvl
-                    )
-                    coord._notify_listeners()
-                return
+                matched = binding
+                break
+
+        if matched is None and slot_key.startswith("macro_"):
+            try:
+                idx = int(slot_key.split("_", 1)[1]) - 1
+                if 0 <= idx < len(bindings):
+                    matched = bindings[idx]
+                elif 0 <= idx < len(coord.custom_entities):
+                    matched = {
+                        "slot": slot_key,
+                        "entity_id": coord.custom_entities[idx],
+                        "action": "toggle",
+                    }
+            except ValueError:
+                pass
+
+        if matched is not None:
+            ent_id = str(matched.get("entity_id") or "").strip()
+            action = str(
+                data.get("action") or matched.get("action") or "toggle"
+            ).strip()
+            raw_lvl = data.get("level")
+            lvl = int(float(raw_lvl)) if raw_lvl is not None else None
+            if ent_id:
+                await async_execute_room_action(
+                    hass, entity_id=ent_id, action=action, level=lvl
+                )
+                coord._notify_listeners()
+            return
 
         _LOGGER.debug(
             "No custom binding found for slot '%s' on device '%s'",
