@@ -24,6 +24,32 @@ WAKE_GAP_SECONDS = 10.0
 MIN_HOLD_SECONDS = 5.0
 
 
+def _iter_devices(dev_reg: dr.DeviceRegistry) -> list[dr.DeviceEntry]:
+    """Yield DeviceEntry objects across all Home Assistant versions without triggering mapping deprecation warnings."""
+    out: list[dr.DeviceEntry] = []
+    for item in dev_reg.devices:
+        if isinstance(item, str):
+            dev = dev_reg.async_get(item)
+            if dev is not None:
+                out.append(dev)
+        else:
+            out.append(item)
+    return out
+
+
+def _iter_entities(ent_reg: er.EntityRegistry) -> list[er.RegistryEntry]:
+    """Yield RegistryEntry objects across all Home Assistant versions without triggering mapping deprecation warnings."""
+    out: list[er.RegistryEntry] = []
+    for item in ent_reg.entities:
+        if isinstance(item, str):
+            ent = ent_reg.async_get(item)
+            if ent is not None:
+                out.append(ent)
+        else:
+            out.append(item)
+    return out
+
+
 def _normalize_uuid_hex(uuid_str: str) -> str:
     """Normalize a UUID string to 32 lowercase hex chars without dashes."""
     return uuid_str.strip().lower().replace("-", "")
@@ -49,14 +75,14 @@ def _discover_target_device_macs(
     slug_norm = device_slug.strip().lower().replace("-", "_")
 
     target_dev_id: str | None = None
-    for entry in ent_reg.entities:
+    for entry in _iter_entities(ent_reg):
         if entry.platform == "esphome" and slug_norm in entry.entity_id:
             if entry.device_id:
                 target_dev_id = entry.device_id
                 break
 
     mac_ints: set[int] = set()
-    for dev in dev_reg.devices:
+    for dev in _iter_devices(dev_reg):
         dev_name = str(dev.name_by_user or dev.name or "").lower().replace("-", "_").replace(" ", "_")
         if dev.id == target_dev_id or (slug_norm and slug_norm in dev_name):
             for _conn_type, conn_val in dev.connections:
@@ -100,7 +126,7 @@ def _resolve_scanner_area_id(
     except Exception:  # noqa: BLE001
         pass
 
-    for device in dev_reg.devices:
+    for device in _iter_devices(dev_reg):
         if not device.area_id:
             continue
         for _conn_type, conn_val in device.connections:
@@ -138,7 +164,7 @@ def _resolve_scanner_area_id(
             if a_norm and a_norm in scan_norm:
                 return area.id
 
-    for entry in ent_reg.entities:
+    for entry in _iter_entities(ent_reg):
         if src_low in entry.entity_id or (scanner_name and scanner_name.replace("-", "_") in entry.entity_id):
             if entry.area_id:
                 return entry.area_id
