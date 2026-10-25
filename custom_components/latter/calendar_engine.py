@@ -90,6 +90,7 @@ async def async_fetch_calendar_agenda(
     calendar_entities: list[str],
     days: int = 30,
     max_events: int = 25,
+    map_url_builder: Any = None,
 ) -> tuple[str, list[dict[str, Any]]]:
     """Fetch upcoming events across calendars and return (semicolon_string, slot_items)."""
     targets = _discover_calendars(hass, calendar_entities)
@@ -161,18 +162,24 @@ async def async_fetch_calendar_agenda(
         time_label = _format_event_time_label(ev["start_dt"], now_local, ev["all_day"])
         clean_summary = ev["summary"].replace(";", ",").replace("|", "-")
         clean_loc = str(ev.get("location") or "").replace("|", "-").strip()
+        map_url = (
+            map_url_builder(clean_loc)
+            if (clean_loc and callable(map_url_builder))
+            else "none"
+        )
         segments.append(f"{time_label}|{clean_summary}")
 
         slot_items.append(
             {
                 "name": f"{time_label}: {clean_summary}",
-                "id": f"{time_label}|{clean_summary}|{clean_loc}",
+                "id": f"{time_label}|{clean_summary}|{clean_loc}|{map_url}",
                 "type": "calendar_event",
                 "active": idx == 0,
                 "summary": clean_summary,
                 "start": ev["start_raw"],
                 "end": ev["end_raw"],
                 "location": clean_loc,
+                "map_url": map_url,
             }
         )
 

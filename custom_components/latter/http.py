@@ -584,27 +584,35 @@ class LatterMapSnapshotView(HomeAssistantView):
         base_tx = int(center_tx) - 1
         base_ty = int(center_ty) - 1
 
+        import asyncio
+
         session = async_get_clientsession(self.hass)
         tile_images: dict[tuple[int, int], bytes] = {}
         n_tiles = 1 << zoom
 
-        for dy in range(3):
-            for dx in range(3):
-                tx = (base_tx + dx) % n_tiles
-                ty = base_ty + dy
-                if ty < 0 or ty >= n_tiles:
-                    continue
-                tile_url = f"https://basemaps.cartocdn.com/rastertiles/voyager/{zoom}/{tx}/{ty}.png"
-                try:
-                    async with session.get(
-                        tile_url,
-                        headers={"User-Agent": "HomeAssistant-Latter-Companion/1.9"},
-                        timeout=ClientTimeout(total=4),
-                    ) as t_resp:
-                        if t_resp.status == HTTPStatus.OK:
-                            tile_images[(base_tx + dx, base_ty + dy)] = await t_resp.read()
-                except Exception:  # noqa: BLE001
-                    pass
+        async def _fetch_single_tile(gx: int, gy: int) -> None:
+            tx = gx % n_tiles
+            if gy < 0 or gy >= n_tiles:
+                return
+            tile_url = f"https://basemaps.cartocdn.com/rastertiles/voyager/{zoom}/{tx}/{gy}.png"
+            try:
+                async with session.get(
+                    tile_url,
+                    headers={"User-Agent": "HomeAssistant-Latter-Companion/1.9"},
+                    timeout=ClientTimeout(total=3.5),
+                ) as t_resp:
+                    if t_resp.status == HTTPStatus.OK:
+                        tile_images[(gx, gy)] = await t_resp.read()
+            except Exception:  # noqa: BLE001
+                pass
+
+        await asyncio.gather(
+            *[
+                _fetch_single_tile(base_tx + dx, base_ty + dy)
+                for dy in range(3)
+                for dx in range(3)
+            ]
+        )
 
         jpeg_bytes = await self.hass.async_add_executor_job(
             _compose_map_snapshot_jpeg,

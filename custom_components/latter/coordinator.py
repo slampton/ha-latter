@@ -603,17 +603,45 @@ class LatterCoordinator:
             return False
         return hmac.compare_digest(token, self.get_signed_token())
 
+    def get_lan_base_url(self) -> str:
+        """Resolve the numeric-IP LAN HTTP base URL and actual active HTTP port for ESP32 online_image clients."""
+        import socket
+        from urllib.parse import urlparse
+
+        active_port = getattr(getattr(self.hass, "http", None), "server_port", None)
+        raw_url = ""
+        try:
+            raw_url = get_url(self.hass, allow_internal=True, prefer_external=False)
+        except Exception:  # noqa: BLE001
+            raw_url = ""
+
+        parsed = urlparse(raw_url) if raw_url else None
+        host = (parsed.hostname or "") if parsed else ""
+        port = parsed.port if (parsed and parsed.port) else active_port
+        scheme = (parsed.scheme or "http") if parsed else "http"
+
+        # ESP-IDF getaddrinfo cannot resolve .local mDNS hostnames without a DNS proxy;
+        # always resolve .local or missing hosts to the HA server's numeric LAN IPv4 address.
+        if not host or host.endswith(".local") or host == "localhost":
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+                    s.connect(("10.254.254.254", 1))
+                    host = s.getsockname()[0]
+            except Exception:  # noqa: BLE001
+                host = host or "homeassistant.local"
+            scheme = "http"
+            port = active_port
+
+        if port and not (
+            (scheme == "http" and int(port) == 80)
+            or (scheme == "https" and int(port) == 443)
+        ):
+            return f"{scheme}://{host}:{int(port)}"
+        return f"{scheme}://{host}"
+
     def build_companion_url(self) -> str:
         """Build the authenticated Web Companion Studio URL, preferring the local internal HA URL over remote Nabu Casa."""
-        base_url = self.companion_base_url
-        if not base_url:
-            try:
-                base_url = get_url(self.hass, allow_internal=True, prefer_external=False)
-            except Exception:  # noqa: BLE001
-                try:
-                    base_url = get_url(self.hass, allow_internal=True, prefer_external=True)
-                except Exception:  # noqa: BLE001
-                    base_url = "http://homeassistant.local:8123"
+        base_url = self.companion_base_url or self.get_lan_base_url()
         token = self.get_signed_token()
         return f"{base_url.rstrip('/')}/api/latter/companion/{self.entry.entry_id}?token={token}"
 
@@ -624,15 +652,26 @@ class LatterCoordinator:
         cam_ent = (camera_entity_id or self.camera_entity or "").strip()
         if not cam_ent:
             return "none"
-        try:
-            base_url = get_url(self.hass, allow_internal=True, prefer_external=False)
-        except Exception:  # noqa: BLE001
-            base_url = "http://homeassistant.local:8123"
+        base_url = self.get_lan_base_url()
         size = self.art_size
         v_tag = cache_bust or str(int(time.time()))
         return (
             f"{base_url}/api/latter/camera/{self.device_slug}"
             f"?entity_id={cam_ent}&w={size}&h={size}&shape={self.display_shape}&v={v_tag}"
+        )
+
+    def build_map_snapshot_url(self, location: str) -> str:
+        """Build the local LAN HTTP Baseline-JPEG map snapshot URL for a calendar event location."""
+        from urllib.parse import quote_plus
+
+        clean_loc = (location or "").strip()
+        if not clean_loc:
+            return "none"
+        base_url = self.get_lan_base_url()
+        size = self.art_size
+        return (
+            f"{base_url}/api/latter/map/{self.device_slug}"
+            f"?w={size}&h={size}&shape={self.display_shape}&q={quote_plus(clean_loc)}"
         )
 
     @callback
@@ -664,10 +703,7 @@ class LatterCoordinator:
         """Build the device-scoped baseline-JPEG photo wallpaper URL (always local LAN HTTP for ESP32 online_image)."""
         if not self.wallpaper_source:
             return "none"
-        try:
-            base_url = get_url(self.hass, allow_internal=True, prefer_external=False)
-        except Exception:  # noqa: BLE001
-            base_url = "http://homeassistant.local:8123"
+        base_url = self.get_lan_base_url()
         size = self.art_size
         digest = hashlib.md5(
             f"{self.wallpaper_source}|{self.display_shape}|{size}".encode("utf-8")
@@ -679,10 +715,7 @@ class LatterCoordinator:
 
     def build_proxy_art_url(self, cache_bust: str) -> str:
         """Build the universal Baseline-JPEG artwork URL (/api/latter/artwork/<device_slug>?w=...&h=...&v=...)."""
-        try:
-            base_url = get_url(self.hass, allow_internal=True, prefer_external=False)
-        except Exception:  # noqa: BLE001
-            base_url = "http://homeassistant.local:8123"
+        base_url = self.get_lan_base_url()
         size = self.art_size
         digest = hashlib.md5(cache_bust.encode("utf-8")).hexdigest()[:10]
         return (
@@ -2124,7 +2157,10 @@ class LatterCoordinator:
     async def async_refresh_calendar_agenda(self, days: int = 30) -> None:
         """Fetch upcoming calendar events and update sensor state."""
         agenda_str, events = await async_fetch_calendar_agenda(
-            self.hass, self.calendar_entities, days=days
+            self.hass,
+            self.calendar_entities,
+            days=days,
+            map_url_builder=self.build_map_snapshot_url,
         )
         self.calendar_agenda_string = agenda_str
         self.calendar_events = events
