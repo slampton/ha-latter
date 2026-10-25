@@ -53,10 +53,38 @@ CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 type LatterConfigEntry = ConfigEntry[LatterCoordinator]
 
+LATTER_CONTRACT_ACTION_SUFFIXES: tuple[str, ...] = (
+    "_set_browse_slots",
+    "_set_room_slots",
+    "_show_notification",
+)
+
 
 def _slugify_device_name(name: str) -> str:
     """Convert an ESPHome device name into a normalized slug."""
     return re.sub(r"[^a-z0-9]+", "_", name.strip().lower()).strip("_")
+
+
+def is_latter_compatible_esphome_device(
+    hass: HomeAssistant, device: dr.DeviceEntry, slug: str
+) -> bool:
+    """Return True ONLY if the ESPHome device announces Latter contract actions or project metadata."""
+    # 1. Check ESPHome project name / model / sw_version metadata
+    model_str = f"{device.model or ''} {device.sw_version or ''} {device.name or ''}".lower()
+    if "latter" in model_str or "pocket-assistant" in model_str or "pocket_assistant" in model_str:
+        return True
+
+    # 2. Check registered ESPHome API actions (esphome.<slug>_set_browse_slots / _set_room_slots / _show_notification)
+    esphome_services = hass.services.async_services().get("esphome", {})
+    for suffix in LATTER_CONTRACT_ACTION_SUFFIXES:
+        exact = f"{slug}{suffix}"
+        if exact in esphome_services:
+            return True
+        for svc_name in esphome_services:
+            if svc_name.endswith(suffix) and slug in svc_name:
+                return True
+
+    return False
 
 
 async def _async_ensure_global_store(
@@ -88,17 +116,34 @@ async def _async_ensure_global_store(
 
 @callback
 def _async_scan_all_esphome_devices_for_discovery(hass: HomeAssistant) -> None:
-    """Scan all existing ESPHome devices in the Device Registry and trigger discovery for any unconfigured device."""
+    """Scan ESPHome devices, aborting any non-Latter discovery flows and discovering Latter-compatible devices."""
     dev_reg = dr.async_get(hass)
+    devices_by_slug: dict[str, dr.DeviceEntry] = {}
     for dev in _iter_devices(dev_reg):
+        dev_name = str(dev.name_by_user or dev.name or "").strip()
+        if dev_name:
+            devices_by_slug[_slugify_device_name(dev_name)] = dev
         _async_check_esphome_device_for_discovery(hass, dev)
+
+    # Clean up any pending discovery flows for generic ESPHome devices that do not support Latter
+    for flow in list(hass.config_entries.flow.async_progress_by_handler(DOMAIN)):
+        ctx = flow.get("context", {})
+        if ctx.get("source") != SOURCE_INTEGRATION_DISCOVERY:
+            continue
+        unique_id = str(ctx.get("unique_id") or "")
+        flow_slug = unique_id.removeprefix(f"{DOMAIN}_") if unique_id.startswith(f"{DOMAIN}_") else ""
+        if not flow_slug:
+            continue
+        dev = devices_by_slug.get(flow_slug)
+        if dev is None or not is_latter_compatible_esphome_device(hass, dev, flow_slug):
+            hass.config_entries.flow.async_abort(flow["flow_id"])
 
 
 @callback
 def _async_check_esphome_device_for_discovery(
     hass: HomeAssistant, device: dr.DeviceEntry
 ) -> None:
-    """Trigger a Latter discovery flow if a newly added ESPHome device is not configured or ignored."""
+    """Trigger a Latter discovery flow ONLY if the ESPHome device implements the Latter contract."""
     ent_reg = er.async_get(hass)
     entries = er.async_entries_for_device(ent_reg, device.id)
     if not any(e.platform == "esphome" for e in entries):
@@ -108,15 +153,11 @@ def _async_check_esphome_device_for_discovery(
     if not dev_name:
         return
 
-    if "proxy" in dev_name.lower() and not any(
-        e.domain in ("media_player", "light", "switch", "button", "select", "number")
-        and e.entity_category is None
-        for e in entries
-    ):
-        return
-
     slug = _slugify_device_name(dev_name)
     if not slug:
+        return
+
+    if not is_latter_compatible_esphome_device(hass, device, slug):
         return
 
     for entry in hass.config_entries.async_entries(DOMAIN):
@@ -134,7 +175,7 @@ def _async_check_esphome_device_for_discovery(
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Set up the Latter domain, register services, and scan for ESPHome devices."""
+    """Set up the Latter domain, register services, and scan for Latter-compatible ESPHome devices."""
     hass.data.setdefault(DOMAIN, {})
     await _async_ensure_global_store(hass)
     await async_setup_services(hass)
@@ -171,7 +212,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
     entry.runtime_data = coordinator
     domain_data[entry.entry_id] = coordinator
 
-    # Automatically migrate legacy "Latter (slug)" entry titles to clean device names (e.g. "Pocket Assistant")
     clean_title = coordinator.device_slug.replace("_", " ").title()
     if entry.title.lower().startswith("latter (") or entry.title != clean_title:
         hass.config_entries.async_update_entry(entry, title=clean_title)
@@ -180,6 +220,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
         hass, coordinator.device_slug, coordinator.build_companion_url()
     )
     inject_hacs_update_brand_icon(hass)
+    _async_scan_all_esphome_devices_for_discovery(hass)
 
     if DATA_DISCOVERY_UNSUB not in domain_data:
         @callback
