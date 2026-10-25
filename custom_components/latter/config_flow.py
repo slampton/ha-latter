@@ -6,6 +6,7 @@ import re
 from typing import Any
 import voluptuous as vol
 
+from homeassistant.components.zeroconf import ZeroconfServiceInfo
 from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlow,
@@ -294,6 +295,19 @@ def _build_schema(
     return vol.Schema(schema_dict)
 
 
+def _format_clean_device_title(hass: HomeAssistant, slug: str, fallback_name: str = "") -> str:
+    """Resolve the clean friendly name for an ESPHome device without 'Latter (...)' wrapper."""
+    norm = normalize_device_slug(slug)
+    dev_reg = dr.async_get(hass)
+    for dev in _iter_devices(dev_reg):
+        dev_name = str(dev.name_by_user or dev.name or "").strip()
+        if dev_name and normalize_device_slug(dev_name) == norm:
+            return dev_name
+    if fallback_name and fallback_name.strip():
+        return fallback_name.strip()
+    return norm.replace("_", " ").title()
+
+
 class LatterConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow and automatic ESPHome device discovery for Latter."""
 
@@ -303,6 +317,51 @@ class LatterConfigFlow(ConfigFlow, domain=DOMAIN):
         """Initialize config flow."""
         self._discovered_slug: str = ""
         self._discovered_name: str = ""
+
+    async def async_step_zeroconf(
+        self, discovery_info: ZeroconfServiceInfo
+    ) -> ConfigFlowResult:
+        """Handle Zeroconf mDNS auto-discovery of ESPHome devices on the LAN."""
+        raw_name = (
+            str(discovery_info.properties.get("friendly_name") or "")
+            or str(discovery_info.properties.get("name") or "")
+            or discovery_info.name.split(".", 1)[0]
+        ).strip()
+        node_name = (
+            str(discovery_info.properties.get("name") or "")
+            or discovery_info.hostname.split(".", 1)[0]
+            or raw_name
+        ).strip()
+        slug = normalize_device_slug(node_name)
+        if not slug or "proxy" in slug or "proxy" in raw_name.lower():
+            return self.async_abort(reason="not_supported")
+
+        # Only auto-discover ESPHome nodes that exist in HA with interactive entities (not bare BLE proxies)
+        dev_reg = dr.async_get(self.hass)
+        ent_reg = er.async_get(self.hass)
+        matched_dev: dr.DeviceEntry | None = None
+        for dev in _iter_devices(dev_reg):
+            d_name = str(dev.name_by_user or dev.name or "").strip()
+            if normalize_device_slug(d_name) == slug:
+                matched_dev = dev
+                break
+
+        if matched_dev is not None:
+            entries = er.async_entries_for_device(ent_reg, matched_dev.id)
+            if not any(
+                e.domain in ("media_player", "light", "switch", "button", "select", "number")
+                and e.entity_category is None
+                for e in entries
+            ):
+                return self.async_abort(reason="not_supported")
+
+        await self.async_set_unique_id(f"{DOMAIN}_{slug}")
+        self._abort_if_unique_id_configured()
+
+        self._discovered_slug = slug
+        self._discovered_name = _format_clean_device_title(self.hass, slug, raw_name)
+        self.context["title_placeholders"] = {"name": self._discovered_name}
+        return await self.async_step_user()
 
     async def async_step_integration_discovery(
         self, discovery_info: dict[str, Any]
@@ -316,7 +375,9 @@ class LatterConfigFlow(ConfigFlow, domain=DOMAIN):
         self._abort_if_unique_id_configured()
 
         self._discovered_slug = slug
-        self._discovered_name = str(discovery_info.get("name") or slug)
+        self._discovered_name = _format_clean_device_title(
+            self.hass, slug, str(discovery_info.get("name") or "")
+        )
         self.context["title_placeholders"] = {"name": self._discovered_name}
         return await self.async_step_user()
 
@@ -332,8 +393,11 @@ class LatterConfigFlow(ConfigFlow, domain=DOMAIN):
             await self.async_set_unique_id(f"{DOMAIN}_{slug}")
             self._abort_if_unique_id_configured()
 
+            clean_title = _format_clean_device_title(
+                self.hass, slug, self._discovered_name
+            )
             return self.async_create_entry(
-                title=f"Latter ({slug})",
+                title=clean_title,
                 data=user_input,
             )
 

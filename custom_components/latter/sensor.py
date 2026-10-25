@@ -7,11 +7,13 @@ from typing import Any
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .const import DOMAIN, INTEGRATION_VERSION, build_device_entity_id
 from .coordinator import LatterCoordinator
+from .room_engine import find_esphome_device_id
 
 PARALLEL_UPDATES = 0
 
@@ -53,10 +55,24 @@ class _BaseLatterSensor(SensorEntity):
 
     @property
     def device_info(self) -> DeviceInfo:
-        """Return DeviceInfo with a 1-click 'Visit' link to the Latter Web Companion Studio."""
+        """Return DeviceInfo linked to the native ESPHome device (if present) so all entities live under one unified device."""
         pretty_device = self.coordinator.device_slug.replace("_", " ").title()
+        connections: set[tuple[str, str]] = set()
+        identifiers: set[tuple[str, str]] = {(DOMAIN, self.coordinator.entry.entry_id)}
+
+        target_dev_id = find_esphome_device_id(self.coordinator.hass, self.coordinator.device_slug)
+        if target_dev_id:
+            dev_reg = dr.async_get(self.coordinator.hass)
+            esp_dev = dev_reg.async_get(target_dev_id)
+            if esp_dev is not None:
+                if esp_dev.connections:
+                    connections = set(esp_dev.connections)
+                if esp_dev.identifiers:
+                    identifiers |= set(esp_dev.identifiers)
+
         return DeviceInfo(
-            identifiers={(DOMAIN, self.coordinator.entry.entry_id)},
+            connections=connections,
+            identifiers=identifiers,
             name=pretty_device,
             manufacturer="Lampton Labs",
             model="Latter ESPHome Companion Middleware",

@@ -60,6 +60,7 @@
     },
     "abort": {
       "already_configured": "This ESPHome device is already configured in Latter.",
+      "not_supported": "This ESPHome node does not expose interactive display, audio, or control entities.",
       "unique_id_mismatch": "The ESPHome device slug does not match the existing configuration entry.",
       "reconfigure_successful": "Configuration updated successfully."
     }

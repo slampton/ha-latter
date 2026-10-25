@@ -86,6 +86,14 @@ async def _async_ensure_global_store(
 
 
 @callback
+def _async_scan_all_esphome_devices_for_discovery(hass: HomeAssistant) -> None:
+    """Scan all existing ESPHome devices in the Device Registry and trigger discovery for any unconfigured device."""
+    dev_reg = dr.async_get(hass)
+    for dev in list(dev_reg.devices.values()):
+        _async_check_esphome_device_for_discovery(hass, dev)
+
+
+@callback
 def _async_check_esphome_device_for_discovery(
     hass: HomeAssistant, device: dr.DeviceEntry
 ) -> None:
@@ -154,6 +162,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
     await coordinator.async_setup()
     entry.runtime_data = coordinator
     domain_data[entry.entry_id] = coordinator
+
+    # Automatically migrate legacy "Latter (slug)" entry titles to clean device names (e.g. "Pocket Assistant")
+    clean_title = coordinator.device_slug.replace("_", " ").title()
+    if entry.title.lower().startswith("latter (") or entry.title != clean_title:
+        hass.config_entries.async_update_entry(entry, title=clean_title)
 
     inject_esphome_visit_link(
         hass, coordinator.device_slug, coordinator.build_companion_url()
@@ -224,3 +237,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> b
         if coordinator is not None:
             await coordinator.async_shutdown()
     return unload_ok
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> None:
+    """Re-trigger discovery scan when a device entry is removed so it can be re-added in 1 click."""
+    _async_scan_all_esphome_devices_for_discovery(hass)
