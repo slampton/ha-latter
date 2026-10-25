@@ -8,7 +8,7 @@ import secrets
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry, SOURCE_INTEGRATION_DISCOVERY
-from homeassistant.const import EVENT_STATE_CHANGED
+from homeassistant.const import EVENT_HOMEASSISTANT_STARTED, EVENT_STATE_CHANGED
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers import (
     config_validation as cv,
@@ -19,6 +19,7 @@ from homeassistant.helpers import (
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.typing import ConfigType
 
+from .ble_engine import _iter_devices
 from .const import (
     CONF_DEVICE_SLUG,
     DATA_DISCOVERY_UNSUB,
@@ -89,7 +90,7 @@ async def _async_ensure_global_store(
 def _async_scan_all_esphome_devices_for_discovery(hass: HomeAssistant) -> None:
     """Scan all existing ESPHome devices in the Device Registry and trigger discovery for any unconfigured device."""
     dev_reg = dr.async_get(hass)
-    for dev in list(dev_reg.devices.values()):
+    for dev in _iter_devices(dev_reg):
         _async_check_esphome_device_for_discovery(hass, dev)
 
 
@@ -133,10 +134,17 @@ def _async_check_esphome_device_for_discovery(
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Set up the Latter domain and register domain-level services (Platinum action-setup)."""
+    """Set up the Latter domain, register services, and scan for ESPHome devices."""
     hass.data.setdefault(DOMAIN, {})
     await _async_ensure_global_store(hass)
     await async_setup_services(hass)
+    if hass.is_running:
+        _async_scan_all_esphome_devices_for_discovery(hass)
+    else:
+        hass.bus.async_listen_once(
+            EVENT_HOMEASSISTANT_STARTED,
+            lambda _ev: _async_scan_all_esphome_devices_for_discovery(hass),
+        )
     return True
 
 
