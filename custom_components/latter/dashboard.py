@@ -1542,7 +1542,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
         <img src="/api/latter/brand/icon.png" alt="Latter" style="width:34px;height:34px;border-radius:8px;object-fit:contain;flex-shrink:0;" onerror="this.style.display='none'">
         <div class="brand-text">
           <h1 id="hdr-title">Latter Studio</h1>
-          <small id="hdr-sub">v1.8.0</small>
+          <small id="hdr-sub">v1.8.1</small>
         </div>
       </div>
     </div>
@@ -3255,7 +3255,7 @@ function applyStateToDom(data, forceFormUpdate=false) {
 
   const devTitle = esp?.device?.name || data.title;
   document.getElementById("hdr-title").textContent = devTitle;
-  document.getElementById("hdr-sub").textContent = `Latter v${data.version || '1.8.0'}`;
+  document.getElementById("hdr-sub").textContent = `Latter v${data.version || '1.8.1'}`;
   document.getElementById("survey-device-name").textContent = devTitle;
   document.getElementById("nav-room-badge").textContent = roomName;
   document.getElementById("top-room").textContent = `Room: ${roomName}`;
@@ -3306,7 +3306,7 @@ function applyStateToDom(data, forceFormUpdate=false) {
     const wy = document.getElementById("vpn-esphome-yaml");
     const sp = document.getElementById("vpn-server-peer");
     if (wy) wy.textContent = data.vpn_snippets.esphome_yaml || "";
-    if (sp) sp.textContent = (data.vpn_snippets.server_peer_conf || "") + "\n\n" + (data.vpn_snippets.ha_addon_yaml || "");
+    if (sp) sp.textContent = [data.vpn_snippets.server_peer_conf || "", data.vpn_snippets.ha_addon_yaml || ""].join("\\n\\n");
   }
 
   const activeEl = document.activeElement;
