@@ -312,6 +312,25 @@ def inject_hacs_update_brand_icon(hass: HomeAssistant) -> None:
             )
 
 
+def _apply_ha_display_precision(
+    entry: er.RegistryEntry | None, raw_val: float, default_precision: int = 0
+) -> int | float:
+    """Format a numeric sensor value using Home Assistant's Entity Registry display_precision."""
+    prec: int | None = None
+    if entry is not None and isinstance(entry.options, dict):
+        sensor_opts = entry.options.get("sensor")
+        if isinstance(sensor_opts, dict):
+            if sensor_opts.get("display_precision") is not None:
+                prec = int(sensor_opts["display_precision"])
+            elif sensor_opts.get("suggested_display_precision") is not None:
+                prec = int(sensor_opts["suggested_display_precision"])
+    if prec is None:
+        prec = default_precision
+    if prec <= 0:
+        return int(round(raw_val))
+    return round(raw_val, prec)
+
+
 def get_esphome_device_entities(
     hass: HomeAssistant, device_slug: str
 ) -> dict[str, Any]:
@@ -381,6 +400,13 @@ def get_esphome_device_entities(
     for entry in entries:
         state_obj = hass.states.get(entry.entity_id)
         state_val = state_obj.state if state_obj else "unavailable"
+        if entry.domain == "sensor" and state_val not in ("unavailable", "unknown", ""):
+            try:
+                num_v = float(state_val)
+                fmt_v = _apply_ha_display_precision(entry, num_v, default_precision=1)
+                state_val = str(fmt_v)
+            except ValueError:
+                pass
         attrs = state_obj.attributes if state_obj else {}
         raw_friendly = str(
             attrs.get("friendly_name")
@@ -761,7 +787,9 @@ def get_area_climate_telemetry(
         dev_class = str(state_obj.attributes.get("device_class") or "").lower()
         if dev_class == "temperature" and result["temperature"] is None:
             try:
-                result["temperature"] = round(float(state_obj.state), 1)
+                result["temperature"] = _apply_ha_display_precision(
+                    entry, float(state_obj.state), default_precision=0
+                )
                 result["temperature_unit"] = str(
                     state_obj.attributes.get("unit_of_measurement") or "°"
                 )
@@ -769,7 +797,9 @@ def get_area_climate_telemetry(
                 pass
         elif dev_class == "humidity" and result["humidity"] is None:
             try:
-                result["humidity"] = round(float(state_obj.state), 1)
+                result["humidity"] = _apply_ha_display_precision(
+                    entry, float(state_obj.state), default_precision=0
+                )
             except ValueError:
                 pass
 

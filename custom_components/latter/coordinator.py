@@ -604,14 +604,14 @@ class LatterCoordinator:
         return hmac.compare_digest(token, self.get_signed_token())
 
     def build_companion_url(self) -> str:
-        """Build the authenticated Web Companion Studio URL, preferring HTTPS/external reverse-proxy URLs when configured."""
+        """Build the authenticated Web Companion Studio URL, preferring the local internal HA URL over remote Nabu Casa."""
         base_url = self.companion_base_url
         if not base_url:
             try:
-                base_url = get_url(self.hass, allow_internal=True, prefer_external=True)
+                base_url = get_url(self.hass, allow_internal=True, prefer_external=False)
             except Exception:  # noqa: BLE001
                 try:
-                    base_url = get_url(self.hass, allow_internal=True, prefer_external=False)
+                    base_url = get_url(self.hass, allow_internal=True, prefer_external=True)
                 except Exception:  # noqa: BLE001
                     base_url = "http://homeassistant.local:8123"
         token = self.get_signed_token()

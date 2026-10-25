@@ -1705,7 +1705,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
         <div style="display:flex;align-items:center;gap:10px;margin-right:6px;">
           <img src="/api/latter/brand/icon.png" alt="Latter" style="width:28px;height:28px;border-radius:6px;object-fit:contain;flex-shrink:0;" onerror="this.style.display='none'">
           <strong id="hdr-title" style="font-size:15px;color:var(--text-strong);">Latter</strong>
-          <span class="nav-badge" id="hdr-sub">v1.8.6</span>
+          <span class="nav-badge" id="hdr-sub">v1.8.7</span>
         </div>
         <div id="topbar-household-chips" class="hidden" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
           <div class="status-chip"><span id="top-hh-devices">Devices: --</span></div>
@@ -2456,6 +2456,15 @@ let PINNED = [];
 let CALENDARS = [];
 let IS_DIRTY = false;
 let INITIAL_FORM_LOADED = false;
+// If opened via 'Visit' link on a different hostname (e.g. nabu.casa vs local IP), match the referrer's HA origin
+try {
+  if (document.referrer && window.parent === window) {
+    const refUrl = new URL(document.referrer);
+    if (refUrl.origin !== window.location.origin && (refUrl.pathname.startsWith("/config") || refUrl.pathname.startsWith("/latter"))) {
+      window.location.replace(refUrl.origin + window.location.pathname + window.location.search);
+    }
+  }
+} catch (_e) {}
 const URL_PARAMS = new URLSearchParams(window.location.search);
 const ENTERED_VIA_HOUSEHOLD = ["system", "household"].includes(URL_PARAMS.get("scope"));
 let CURRENT_SCOPE = ENTERED_VIA_HOUSEHOLD ? "household" : "device";
@@ -3455,7 +3464,7 @@ function applyStateToDom(data, forceFormUpdate=false) {
     : `${live.media_state || 'idle'}`;
 
   const devTitle = esp?.device?.name || data.title;
-  document.getElementById("hdr-sub").textContent = `v${data.version || '1.8.6'}`;
+  document.getElementById("hdr-sub").textContent = `v${data.version || '1.8.7'}`;
   document.getElementById("survey-device-name").textContent = devTitle;
   document.getElementById("nav-room-badge").textContent = roomName;
   document.getElementById("top-room").textContent = `Room: ${roomName}`;
