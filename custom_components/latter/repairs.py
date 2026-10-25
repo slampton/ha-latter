@@ -78,10 +78,17 @@ def async_audit_coordinator_health(
 
     # 2. Check BLE proxy availability when native BLE tracking is enabled on a mobile display
     ble_issue_id = f"ble_no_proxies_{entry_id}"
+    tracker = coordinator._ble_tracker
+    has_seen_ble = bool(
+        (tracker is not None and tracker.packets_seen > 0)
+        or coordinator.ble_room_offsets
+    )
     if (
-        coordinator.native_ble_tracking_enabled
+        hass.is_running
+        and coordinator.native_ble_tracking_enabled
         and coordinator.device_profile == "mobile_display"
         and not coordinator.presence_entity
+        and not has_seen_ble
     ):
         proxy_areas = get_ble_proxy_area_ids(hass)
         if not proxy_areas:

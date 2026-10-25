@@ -1542,7 +1542,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
         <img src="/api/latter/brand/icon.png" alt="Latter" style="width:34px;height:34px;border-radius:8px;object-fit:contain;flex-shrink:0;" onerror="this.style.display='none'">
         <div class="brand-text">
           <h1 id="hdr-title">Latter Studio</h1>
-          <small id="hdr-sub">v1.8.1</small>
+          <small id="hdr-sub">v1.8.2</small>
         </div>
       </div>
     </div>
@@ -3255,7 +3255,7 @@ function applyStateToDom(data, forceFormUpdate=false) {
 
   const devTitle = esp?.device?.name || data.title;
   document.getElementById("hdr-title").textContent = devTitle;
-  document.getElementById("hdr-sub").textContent = `Latter v${data.version || '1.8.1'}`;
+  document.getElementById("hdr-sub").textContent = `Latter v${data.version || '1.8.2'}`;
   document.getElementById("survey-device-name").textContent = devTitle;
   document.getElementById("nav-room-badge").textContent = roomName;
   document.getElementById("top-room").textContent = `Room: ${roomName}`;
