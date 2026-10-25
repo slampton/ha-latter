@@ -486,6 +486,16 @@ class LatterCompanionApiView(HomeAssistantView):
                 {"error": "Unauthorized or unknown entry"},
                 status=HTTPStatus.FORBIDDEN,
             )
+        # If the user is browsing via a reverse proxy (e.g. Nginx HTTPS domain) and hasn't hardcoded an override,
+        # dynamically link the ESPHome 'Visit' button to the active browser origin while keeping ESP32 URLs on LAN IP.
+        if not coordinator.companion_base_url:
+            fwd_proto = request.headers.get("X-Forwarded-Proto") or request.scheme
+            fwd_host = request.headers.get("X-Forwarded-Host") or request.host
+            if fwd_host and "nabu.casa" not in fwd_host.lower():
+                browser_base = f"{fwd_proto}://{fwd_host}".rstrip("/")
+                token = coordinator.get_signed_token()
+                visit_url = f"{browser_base}/api/latter/companion/{coordinator.entry.entry_id}?token={token}"
+                inject_esphome_visit_link(self.hass, coordinator.device_slug, visit_url)
         payload = _build_companion_state_payload(self.hass, coordinator)
         return web.json_response(payload)
 
@@ -1705,7 +1715,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
         <div style="display:flex;align-items:center;gap:10px;margin-right:6px;">
           <img src="/api/latter/brand/icon.png" alt="Latter" style="width:28px;height:28px;border-radius:6px;object-fit:contain;flex-shrink:0;" onerror="this.style.display='none'">
           <strong id="hdr-title" style="font-size:15px;color:var(--text-strong);">Latter</strong>
-          <span class="nav-badge" id="hdr-sub">v1.8.7</span>
+          <span class="nav-badge" id="hdr-sub">v1.8.8</span>
         </div>
         <div id="topbar-household-chips" class="hidden" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
           <div class="status-chip"><span id="top-hh-devices">Devices: --</span></div>
@@ -3464,7 +3474,7 @@ function applyStateToDom(data, forceFormUpdate=false) {
     : `${live.media_state || 'idle'}`;
 
   const devTitle = esp?.device?.name || data.title;
-  document.getElementById("hdr-sub").textContent = `v${data.version || '1.8.7'}`;
+  document.getElementById("hdr-sub").textContent = `v${data.version || '1.8.8'}`;
   document.getElementById("survey-device-name").textContent = devTitle;
   document.getElementById("nav-room-badge").textContent = roomName;
   document.getElementById("top-room").textContent = `Room: ${roomName}`;
