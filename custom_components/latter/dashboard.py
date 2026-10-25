@@ -815,6 +815,13 @@ class LatterCompanionApiView(HomeAssistantView):
                 CONF_WALLPAPER_SOURCE,
                 CONF_WALLPAPER_CYCLE_MINUTES,
                 CONF_ART_SIZE,
+                CONF_SITE_ID,
+                CONF_VPN_ENABLED,
+                CONF_VPN_CLIENT_IP,
+                CONF_VPN_PRIVATE_KEY,
+                CONF_VPN_PUBLIC_KEY,
+                CONF_VPN_PRESHARED_KEY,
+                CONF_VPN_HOTSPOT_SSID,
             )
 
             for k in device_keys:
