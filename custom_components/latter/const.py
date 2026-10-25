@@ -7,7 +7,7 @@ from typing import Final
 from homeassistant.const import Platform
 
 DOMAIN: Final = "latter"
-INTEGRATION_VERSION: Final = "1.9.0"
+INTEGRATION_VERSION: Final = "1.9.1"
 PLATFORMS: Final[list[Platform]] = [Platform.SENSOR]
 
 STORAGE_VERSION: Final = 1
@@ -82,6 +82,7 @@ SERVICE_NOTIFY_DEVICE: Final = "notify_device"
 API_ARTWORK_PROXY_PATH: Final = "/api/latter/artwork/{target_device}"
 API_WALLPAPER_PROXY_PATH: Final = "/api/latter/wallpaper/{target_device}"
 API_CAMERA_PROXY_PATH: Final = "/api/latter/camera/{target_device}"
+API_MAP_PROXY_PATH: Final = "/api/latter/map/{target_device}"
 API_COMPANION_UI_PATH: Final = "/api/latter/companion/{entry_id}"
 API_COMPANION_API_PATH: Final = "/api/latter/companion/{entry_id}/api"
 API_BRAND_ICON_PATH: Final = "/api/latter/brand/icon.png"

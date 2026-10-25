@@ -160,18 +160,19 @@ async def async_fetch_calendar_agenda(
     for idx, ev in enumerate(unique_events):
         time_label = _format_event_time_label(ev["start_dt"], now_local, ev["all_day"])
         clean_summary = ev["summary"].replace(";", ",").replace("|", "-")
+        clean_loc = str(ev.get("location") or "").replace("|", "-").strip()
         segments.append(f"{time_label}|{clean_summary}")
 
         slot_items.append(
             {
                 "name": f"{time_label}: {clean_summary}",
-                "id": f"{ev['calendar_id']}|{ev['start_raw']}",
+                "id": f"{time_label}|{clean_summary}|{clean_loc}",
                 "type": "calendar_event",
                 "active": idx == 0,
                 "summary": clean_summary,
                 "start": ev["start_raw"],
                 "end": ev["end_raw"],
-                "location": ev["location"],
+                "location": clean_loc,
             }
         )
 

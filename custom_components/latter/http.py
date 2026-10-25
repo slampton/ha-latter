@@ -19,6 +19,7 @@ from homeassistant.helpers.network import get_url
 from .const import (
     API_ARTWORK_PROXY_PATH,
     API_CAMERA_PROXY_PATH,
+    API_MAP_PROXY_PATH,
     API_WALLPAPER_PROXY_PATH,
     DOMAIN,
     normalize_device_slug,
@@ -378,4 +379,252 @@ class LatterCameraSnapshotView(HomeAssistantView):
             body=jpeg_bytes,
             content_type="image/jpeg",
             headers={"Cache-Control": "no-store, max-age=0"},
+        )
+
+
+_MAP_GEOCODE_CACHE: dict[str, tuple[float, float]] = {}
+_MAP_JPEG_CACHE: OrderedDict[str, bytes] = OrderedDict()
+
+
+def _latlon_to_tile_xy(lat: float, lon: float, zoom: int) -> tuple[float, float]:
+    """Convert (lat, lon) in degrees to fractional Web Mercator tile coordinates at zoom."""
+    import math
+
+    lat_rad = math.radians(max(-85.0511, min(85.0511, lat)))
+    n = float(1 << zoom)
+    xtile = (lon + 180.0) / 360.0 * n
+    ytile = (1.0 - math.asinh(math.tan(lat_rad)) / math.pi) / 2.0 * n
+    return xtile, ytile
+
+
+def _compose_map_snapshot_jpeg(
+    tile_images: dict[tuple[int, int], bytes],
+    center_tx: float,
+    center_ty: float,
+    base_tx: int,
+    base_ty: int,
+    width: int,
+    height: int,
+    circular_mask: bool,
+    label: str,
+) -> bytes:
+    """Stitch 3x3 256px map tiles centered on (center_tx, center_ty), draw a vector map pin, and encode Baseline JPEG."""
+    canvas = Image.new("RGB", (768, 768), (20, 26, 36))
+    tiles_loaded = 0
+    for dy in range(3):
+        for dx in range(3):
+            raw = tile_images.get((base_tx + dx, base_ty + dy))
+            if raw:
+                try:
+                    with Image.open(io.BytesIO(raw)) as t_img:
+                        canvas.paste(t_img.convert("RGB"), (dx * 256, dy * 256))
+                        tiles_loaded += 1
+                except Exception:  # noqa: BLE001
+                    pass
+
+    draw_c = ImageDraw.Draw(canvas)
+    if tiles_loaded == 0:
+        # Offline fallback vector radar grid
+        for g in range(0, 768, 48):
+            draw_c.line([(g, 0), (g, 768)], fill=(32, 42, 56), width=1)
+            draw_c.line([(0, g), (768, g)], fill=(32, 42, 56), width=1)
+
+    px = int((center_tx - base_tx) * 256.0)
+    py = int((center_ty - base_ty) * 256.0)
+
+    half_w = width // 2
+    half_h = height // 2
+    left = max(0, min(768 - width, px - half_w))
+    top = max(0, min(768 - height, py - half_h))
+    cropped = canvas.crop((left, top, left + width, top + height))
+
+    pin_x = px - left
+    pin_y = py - top
+    d = ImageDraw.Draw(cropped)
+
+    # Outer accuracy halo + drop shadow + sculpted crimson/gold vector map pin
+    d.ellipse(
+        (pin_x - 28, pin_y - 28, pin_x + 28, pin_y + 28),
+        outline=(56, 152, 255),
+        width=2,
+    )
+    d.ellipse(
+        (pin_x - 6, pin_y - 3, pin_x + 6, pin_y + 5),
+        fill=(10, 14, 20),
+    )
+    d.polygon(
+        [(pin_x, pin_y), (pin_x - 13, pin_y - 22), (pin_x + 13, pin_y - 22)],
+        fill=(235, 52, 62),
+    )
+    d.ellipse(
+        (pin_x - 14, pin_y - 36, pin_x + 14, pin_y - 8),
+        fill=(235, 52, 62),
+        outline=(255, 255, 255),
+        width=2,
+    )
+    d.ellipse(
+        (pin_x - 5, pin_y - 27, pin_x + 5, pin_y - 17),
+        fill=(255, 255, 255),
+    )
+
+    if circular_mask:
+        mask = Image.new("L", (width, height), 0)
+        md = ImageDraw.Draw(mask)
+        md.ellipse((0, 0, width - 1, height - 1), fill=255)
+        black_bg = Image.new("RGB", (width, height), (0, 0, 0))
+        cropped = Image.composite(cropped, black_bg, mask)
+
+    out = io.BytesIO()
+    cropped.save(out, format="JPEG", quality=86, optimize=True, progressive=False)
+    return out.getvalue()
+
+
+class LatterMapSnapshotView(HomeAssistantView):
+    """Geocodes an address or HA zone and renders a 466x466 Baseline-JPEG map snapshot (/api/latter/map/{target_device})."""
+
+    requires_auth = False
+    url = API_MAP_PROXY_PATH
+    name = "api:latter:map_proxy"
+
+    def __init__(self, hass: HomeAssistant) -> None:
+        """Initialize the map snapshot view."""
+        self.hass = hass
+
+    async def _async_resolve_coordinates(self, query: str) -> tuple[float, float]:
+        """Resolve an address string, 'lat,lon', or HA zone name to (lat, lon)."""
+        q_clean = query.strip()
+        if not q_clean:
+            return float(self.hass.config.latitude or 37.8044), float(
+                self.hass.config.longitude or -122.2712
+            )
+
+        cache_key = q_clean.lower()
+        if cache_key in _MAP_GEOCODE_CACHE:
+            return _MAP_GEOCODE_CACHE[cache_key]
+
+        # 1. Check if query is already "lat,lon"
+        if "," in q_clean:
+            parts = [p.strip() for p in q_clean.split(",", 1)]
+            try:
+                lat_v = float(parts[0])
+                lon_v = float(parts[1])
+                if -90.0 <= lat_v <= 90.0 and -180.0 <= lon_v <= 180.0:
+                    _MAP_GEOCODE_CACHE[cache_key] = (lat_v, lon_v)
+                    return lat_v, lon_v
+            except ValueError:
+                pass
+
+        # 2. Check Home Assistant zone.* entities
+        for st in self.hass.states.async_all("zone"):
+            z_name = str(st.attributes.get("friendly_name") or st.name or "").lower()
+            if z_name and (z_name in cache_key or cache_key in z_name):
+                lat_z = st.attributes.get("latitude")
+                lon_z = st.attributes.get("longitude")
+                if lat_z is not None and lon_z is not None:
+                    coords = (float(lat_z), float(lon_z))
+                    _MAP_GEOCODE_CACHE[cache_key] = coords
+                    return coords
+
+        # 3. Geocode via OpenStreetMap Nominatim
+        session = async_get_clientsession(self.hass)
+        try:
+            async with session.get(
+                "https://nominatim.openstreetmap.org/search",
+                params={"q": q_clean, "format": "json", "limit": "1"},
+                headers={"User-Agent": "HomeAssistant-Latter-Companion/1.9"},
+                timeout=ClientTimeout(total=5),
+            ) as resp:
+                if resp.status == HTTPStatus.OK:
+                    data = await resp.json()
+                    if isinstance(data, list) and data:
+                        lat_n = float(data[0]["lat"])
+                        lon_n = float(data[0]["lon"])
+                        _MAP_GEOCODE_CACHE[cache_key] = (lat_n, lon_n)
+                        return lat_n, lon_n
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("Nominatim geocode fallback for '%s': %s", q_clean, err)
+
+        return float(self.hass.config.latitude or 37.8044), float(
+            self.hass.config.longitude or -122.2712
+        )
+
+    async def get(self, request: web.Request, target_device: str) -> web.Response:
+        """Handle GET /api/latter/map/{target_device}?q=1900+Broadway+Oakland&w=466&h=466&shape=circle"""
+        coordinator = _resolve_coordinator_by_target(self.hass, target_device)
+        default_dim = coordinator.art_size if coordinator else 466
+        try:
+            width = max(128, min(768, int(request.query.get("w") or default_dim)))
+            height = max(128, min(768, int(request.query.get("h") or width)))
+        except ValueError:
+            width, height = default_dim, default_dim
+
+        is_circle = (coordinator.display_shape == "circle") if coordinator else True
+        if request.query.get("shape") in ("circle", "square"):
+            is_circle = request.query.get("shape") == "circle"
+
+        query = str(request.query.get("q") or "").strip()
+        zoom = 15
+        try:
+            if request.query.get("z"):
+                zoom = max(10, min(18, int(request.query.get("z", "15"))))
+        except ValueError:
+            zoom = 15
+
+        cache_id = f"{query.lower()}|{width}x{height}|{int(is_circle)}|z{zoom}"
+        if cache_id in _MAP_JPEG_CACHE:
+            _MAP_JPEG_CACHE.move_to_end(cache_id)
+            return web.Response(
+                body=_MAP_JPEG_CACHE[cache_id],
+                content_type="image/jpeg",
+                headers={"Cache-Control": "public, max-age=600", "X-Latter-Cache": "HIT"},
+            )
+
+        lat, lon = await self._async_resolve_coordinates(query)
+        center_tx, center_ty = _latlon_to_tile_xy(lat, lon, zoom)
+        base_tx = int(center_tx) - 1
+        base_ty = int(center_ty) - 1
+
+        session = async_get_clientsession(self.hass)
+        tile_images: dict[tuple[int, int], bytes] = {}
+        n_tiles = 1 << zoom
+
+        for dy in range(3):
+            for dx in range(3):
+                tx = (base_tx + dx) % n_tiles
+                ty = base_ty + dy
+                if ty < 0 or ty >= n_tiles:
+                    continue
+                tile_url = f"https://basemaps.cartocdn.com/rastertiles/voyager/{zoom}/{tx}/{ty}.png"
+                try:
+                    async with session.get(
+                        tile_url,
+                        headers={"User-Agent": "HomeAssistant-Latter-Companion/1.9"},
+                        timeout=ClientTimeout(total=4),
+                    ) as t_resp:
+                        if t_resp.status == HTTPStatus.OK:
+                            tile_images[(base_tx + dx, base_ty + dy)] = await t_resp.read()
+                except Exception:  # noqa: BLE001
+                    pass
+
+        jpeg_bytes = await self.hass.async_add_executor_job(
+            _compose_map_snapshot_jpeg,
+            tile_images,
+            center_tx,
+            center_ty,
+            base_tx,
+            base_ty,
+            width,
+            height,
+            is_circle,
+            query,
+        )
+
+        _MAP_JPEG_CACHE[cache_id] = jpeg_bytes
+        while len(_MAP_JPEG_CACHE) > MAX_ART_CACHE_ENTRIES:
+            _MAP_JPEG_CACHE.popitem(last=False)
+
+        return web.Response(
+            body=jpeg_bytes,
+            content_type="image/jpeg",
+            headers={"Cache-Control": "public, max-age=600", "X-Latter-Cache": "MISS"},
         )

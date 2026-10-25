@@ -44,6 +44,7 @@ from .dashboard import (
 from .http import (
     LatterArtworkTranscoderView,
     LatterCameraSnapshotView,
+    LatterMapSnapshotView,
     LatterWallpaperProxyView,
 )
 from .room_engine import inject_esphome_visit_link, inject_hacs_update_brand_icon
@@ -201,6 +202,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
         hass.http.register_view(LatterArtworkTranscoderView(hass))
         hass.http.register_view(LatterWallpaperProxyView(hass))
         hass.http.register_view(LatterCameraSnapshotView(hass))
+        hass.http.register_view(LatterMapSnapshotView(hass))
         hass.http.register_view(LatterCompanionDashboardView(hass))
         hass.http.register_view(LatterCompanionApiView(hass))
         hass.http.register_view(LatterBrandIconView(hass))
