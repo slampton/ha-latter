@@ -7,7 +7,7 @@ from typing import Final
 from homeassistant.const import Platform
 
 DOMAIN: Final = "latter"
-INTEGRATION_VERSION: Final = "1.7.6"
+INTEGRATION_VERSION: Final = "1.8.0"
 PLATFORMS: Final[list[Platform]] = [Platform.SENSOR]
 
 STORAGE_VERSION: Final = 1
@@ -98,6 +98,23 @@ GLOBAL_STORAGE_KEY: Final = "latter.household"
 DATA_GLOBAL_CONFIG: Final = "global_config"
 DATA_GLOBAL_STORE: Final = "global_store"
 
+# Multi-Site & Roaming WireGuard VPN Keys (Phase 1 & Phase 2 Foundation)
+CONF_SITE_ID: Final = "site_id"
+DEFAULT_SITE_ID: Final = "primary"
+CONF_SITES_REGISTRY: Final = "sites"
+
+CONF_VPN_ENDPOINT: Final = "vpn_endpoint"
+CONF_VPN_SERVER_PUBLIC_KEY: Final = "vpn_server_public_key"
+CONF_VPN_SUBNET: Final = "vpn_subnet"
+CONF_VPN_HA_IP: Final = "vpn_ha_ip"
+
+CONF_VPN_ENABLED: Final = "vpn_enabled"
+CONF_VPN_CLIENT_IP: Final = "vpn_client_ip"
+CONF_VPN_PRIVATE_KEY: Final = "vpn_private_key"
+CONF_VPN_PUBLIC_KEY: Final = "vpn_public_key"
+CONF_VPN_PRESHARED_KEY: Final = "vpn_preshared_key"
+CONF_VPN_HOTSPOT_SSID: Final = "vpn_hotspot_ssid"
+
 GLOBAL_CONFIG_KEYS: Final[tuple[str, ...]] = (
     CONF_WEB_THEME,
     CONF_COMPANION_BASE_URL,
@@ -116,6 +133,11 @@ GLOBAL_CONFIG_KEYS: Final[tuple[str, ...]] = (
     CONF_CALENDAR_ENTITIES,
     CONF_CUSTOM_ENTITIES,
     CONF_CUSTOM_BINDINGS,
+    CONF_SITES_REGISTRY,
+    CONF_VPN_ENDPOINT,
+    CONF_VPN_SERVER_PUBLIC_KEY,
+    CONF_VPN_SUBNET,
+    CONF_VPN_HA_IP,
 )
 
 

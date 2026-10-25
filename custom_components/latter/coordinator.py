@@ -64,6 +64,18 @@ from .const import (
     CONF_DEFAULT_SPEAKER,
     CONF_DEVICE_PROFILE,
     CONF_DEVICE_SLUG,
+    CONF_SITE_ID,
+    CONF_VPN_CLIENT_IP,
+    CONF_VPN_ENABLED,
+    CONF_VPN_ENDPOINT,
+    CONF_VPN_HA_IP,
+    CONF_VPN_HOTSPOT_SSID,
+    CONF_VPN_PRESHARED_KEY,
+    CONF_VPN_PRIVATE_KEY,
+    CONF_VPN_PUBLIC_KEY,
+    CONF_VPN_SERVER_PUBLIC_KEY,
+    CONF_VPN_SUBNET,
+    DEFAULT_SITE_ID,
     CONF_DISPLAY_SHAPE,
     CONF_DOCK_APPS,
     CONF_NATIVE_BLE_TRACKING,
@@ -352,6 +364,21 @@ class LatterCoordinator:
         """Return normalized ESPHome device slug (underscores)."""
         raw = str(self.get_opt(CONF_DEVICE_SLUG, "esphome_device"))
         return normalize_device_slug(raw)
+
+    @property
+    def site_id(self) -> str:
+        """Return the logical site identifier for this device (defaults to 'primary' for single-site homes)."""
+        return str(self.get_opt(CONF_SITE_ID, DEFAULT_SITE_ID) or DEFAULT_SITE_ID).strip()
+
+    @property
+    def vpn_enabled(self) -> bool:
+        """Return True if Roaming WireGuard VPN is enabled for this device."""
+        return bool(self.get_opt(CONF_VPN_ENABLED, False))
+
+    @property
+    def vpn_client_ip(self) -> str:
+        """Return the assigned WireGuard tunnel IP for this device."""
+        return str(self.get_opt(CONF_VPN_CLIENT_IP, "") or "").strip()
 
     @property
     def device_profile(self) -> str:
@@ -1674,9 +1701,12 @@ class LatterCoordinator:
             pres_state = "none"
 
         return area_name, {
+            "site_id": self.site_id,
             "area_id": self.active_area_id or "",
             "area_name": area_name,
             "device_profile": self.device_profile,
+            "vpn_enabled": self.vpn_enabled,
+            "vpn_client_ip": self.vpn_client_ip,
             "display_shape": self.display_shape,
             "default_page_size": self.default_page_size,
             "dock_apps": self.dock_apps_csv,

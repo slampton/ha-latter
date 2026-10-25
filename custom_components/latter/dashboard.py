@@ -49,9 +49,21 @@ from .const import (
     CONF_VOL_TARGET_2,
     CONF_WALLPAPER_CYCLE_MINUTES,
     CONF_WALLPAPER_FAVORITES,
+    CONF_SITE_ID,
+    CONF_VPN_CLIENT_IP,
+    CONF_VPN_ENABLED,
+    CONF_VPN_ENDPOINT,
+    CONF_VPN_HA_IP,
+    CONF_VPN_HOTSPOT_SSID,
+    CONF_VPN_PRESHARED_KEY,
+    CONF_VPN_PRIVATE_KEY,
+    CONF_VPN_PUBLIC_KEY,
+    CONF_VPN_SERVER_PUBLIC_KEY,
+    CONF_VPN_SUBNET,
     CONF_WALLPAPER_SOURCE,
     CONF_WEATHER_ENTITY,
     CONF_WEB_THEME,
+    DEFAULT_SITE_ID,
     DATA_GLOBAL_CONFIG,
     DATA_GLOBAL_STORE,
     DEFAULT_ART_SIZE,
@@ -72,6 +84,7 @@ from .room_engine import (
     get_esphome_device_entities,
     inject_esphome_visit_link,
 )
+from .vpn_engine import allocate_next_tunnel_ip, build_wireguard_provisioning_snippets, generate_wireguard_keypair
 from .wallpaper_engine import (
     delete_uploaded_wallpaper,
     list_wallpaper_catalog,
@@ -298,6 +311,17 @@ def _build_companion_state_payload(
         CONF_WALLPAPER_FAVORITES: coordinator.wallpaper_favorites,
         CONF_WALLPAPER_CYCLE_MINUTES: coordinator.wallpaper_cycle_minutes,
         CONF_ART_SIZE: coordinator.art_size,
+        CONF_SITE_ID: coordinator.site_id,
+        CONF_VPN_ENDPOINT: str(coordinator.get_opt(CONF_VPN_ENDPOINT, "") or ""),
+        CONF_VPN_SERVER_PUBLIC_KEY: str(coordinator.get_opt(CONF_VPN_SERVER_PUBLIC_KEY, "") or ""),
+        CONF_VPN_SUBNET: str(coordinator.get_opt(CONF_VPN_SUBNET, "10.10.10.0/24") or "10.10.10.0/24"),
+        CONF_VPN_HA_IP: str(coordinator.get_opt(CONF_VPN_HA_IP, "10.10.10.1") or "10.10.10.1"),
+        CONF_VPN_ENABLED: coordinator.vpn_enabled,
+        CONF_VPN_CLIENT_IP: coordinator.vpn_client_ip,
+        CONF_VPN_PRIVATE_KEY: str(coordinator.get_opt(CONF_VPN_PRIVATE_KEY, "") or ""),
+        CONF_VPN_PUBLIC_KEY: str(coordinator.get_opt(CONF_VPN_PUBLIC_KEY, "") or ""),
+        CONF_VPN_PRESHARED_KEY: str(coordinator.get_opt(CONF_VPN_PRESHARED_KEY, "") or ""),
+        CONF_VPN_HOTSPOT_SSID: str(coordinator.get_opt(CONF_VPN_HOTSPOT_SSID, "") or ""),
     }
 
     try:
@@ -341,6 +365,9 @@ def _build_companion_state_payload(
         "config": config_data,
         "esphome": esphome_inspector,
         "wallpapers": wallpapers_catalog,
+        "vpn_snippets": build_wireguard_provisioning_snippets(
+            coordinator.device_slug, config_data, config_data
+        ),
         "live": {
             "active_area_id": coordinator.active_area_id or "",
             "active_area_name": room_attrs.get("area_name", "Home"),
@@ -525,6 +552,37 @@ class LatterCompanionApiView(HomeAssistantView):
                 },
                 blocking=True,
             )
+            return web.json_response(
+                _build_companion_state_payload(self.hass, coordinator)
+            )
+
+        if cmd == "generate_vpn_keys":
+            keys = generate_wireguard_keypair()
+            subnet = str(coordinator.get_opt(CONF_VPN_SUBNET, "10.10.10.0/24") or "10.10.10.0/24")
+            used_ips = [
+                c.vpn_client_ip
+                for c in _get_all_coordinators(self.hass)
+                if c.entry.entry_id != coordinator.entry.entry_id and c.vpn_client_ip
+            ]
+            server_ip, next_client_ip = allocate_next_tunnel_ip(subnet, used_ips)
+            client_ip = coordinator.vpn_client_ip or next_client_ip
+            merged_vpn: dict[str, Any] = {
+                **coordinator.entry.data,
+                **(coordinator.entry.options or {}),
+                CONF_VPN_ENABLED: True,
+                CONF_VPN_CLIENT_IP: client_ip,
+                CONF_VPN_PRIVATE_KEY: keys["private_key"],
+                CONF_VPN_PUBLIC_KEY: keys["public_key"],
+                CONF_VPN_PRESHARED_KEY: keys["preshared_key"],
+            }
+            self.hass.config_entries.async_update_entry(
+                coordinator.entry, data=merged_vpn, options=merged_vpn
+            )
+            if not coordinator.get_opt(CONF_VPN_HA_IP):
+                await _async_save_and_broadcast_global_config(
+                    self.hass, {CONF_VPN_HA_IP: server_ip, CONF_VPN_SUBNET: subnet}
+                )
+            coordinator._notify_listeners()
             return web.json_response(
                 _build_companion_state_payload(self.hass, coordinator)
             )
@@ -1484,7 +1542,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
         <img src="/api/latter/brand/icon.png" alt="Latter" style="width:34px;height:34px;border-radius:8px;object-fit:contain;flex-shrink:0;" onerror="this.style.display='none'">
         <div class="brand-text">
           <h1 id="hdr-title">Latter Studio</h1>
-          <small id="hdr-sub">v1.7.6</small>
+          <small id="hdr-sub">v1.8.0</small>
         </div>
       </div>
     </div>
@@ -1553,6 +1611,9 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
       </button>
       <button class="nav-btn" data-view="audio" onclick="switchView('audio', this)">
         <span>Audio & Media</span>
+      </button>
+      <button class="nav-btn" data-view="roaming_vpn" onclick="switchView('roaming_vpn', this)">
+        <span>Roaming & VPN</span>
       </button>
 
       <div class="nav-group-label">Administration</div>
@@ -2130,7 +2191,98 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
       </section>
 
       <!-- ================================================================== -->
-      <!-- DEVICE SCOPE: 6. SYSTEM                                            -->
+      <!-- DEVICE SCOPE: 6. ROAMING & WIREGUARD VPN                           -->
+      <!-- ================================================================== -->
+      <section id="view-roaming_vpn" class="hidden">
+        <div class="page-header">
+          <h2>Roaming & VPN</h2>
+          <p>Keep this device connected to Home Assistant and Latter when away from home over an encrypted ESPHome WireGuard tunnel.</p>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <h3>Household WireGuard Endpoint (Global)</h3>
+            <p class="desc">Configure your home WireGuard server endpoint and public key once for all roaming devices.</p>
+            <div class="field">
+              <label>Public Endpoint (Hostname/IP:Port)</label>
+              <input type="text" id="cfg-vpn_endpoint" placeholder="vpn.example.com:51820" oninput="markDirty()">
+            </div>
+            <div class="field">
+              <label>WireGuard Server Public Key (Base64)</label>
+              <input type="text" id="cfg-vpn_server_public_key" placeholder="Server Curve25519 Public Key" oninput="markDirty()">
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+              <div class="field" style="margin-bottom:0;">
+                <label>Tunnel Subnet (CIDR)</label>
+                <input type="text" id="cfg-vpn_subnet" placeholder="10.10.10.0/24" oninput="markDirty()">
+              </div>
+              <div class="field" style="margin-bottom:0;">
+                <label>Home Assistant Tunnel IP</label>
+                <input type="text" id="cfg-vpn_ha_ip" placeholder="10.10.10.1" oninput="markDirty()">
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:4px;">
+              <h3 style="margin:0;">Device Roaming Identity</h3>
+              <button class="btn-primary" onclick="generateDeviceVpnKeys()">Generate WireGuard Keys</button>
+            </div>
+            <p class="desc">Generate a dedicated Curve25519 keypair and tunnel IP for this ESPHome device.</p>
+            <div class="toggle-row" style="margin-bottom:10px;">
+              <span>Enable Roaming WireGuard Profile</span>
+              <input type="checkbox" id="cfg-vpn_enabled" onchange="markDirty()">
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+              <div class="field">
+                <label>Device Tunnel IP</label>
+                <input type="text" id="cfg-vpn_client_ip" placeholder="10.10.10.2" oninput="markDirty()">
+              </div>
+              <div class="field">
+                <label>Phone Hotspot / Travel Wi-Fi SSID</label>
+                <input type="text" id="cfg-vpn_hotspot_ssid" placeholder="iPhone Hotspot" oninput="markDirty()">
+              </div>
+            </div>
+            <div class="field">
+              <label>Device Public Key (Add to WireGuard Server)</label>
+              <input type="text" id="cfg-vpn_public_key" readonly class="mono">
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+              <div class="field" style="margin-bottom:0;">
+                <label>Device Private Key</label>
+                <input type="text" id="cfg-vpn_private_key" class="mono" oninput="markDirty()">
+              </div>
+              <div class="field" style="margin-bottom:0;">
+                <label>Preshared Key (PSK)</label>
+                <input type="text" id="cfg-vpn_preshared_key" class="mono" oninput="markDirty()">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+              <h3 style="margin:0;">1. ESPHome WireGuard & Hotspot YAML</h3>
+              <button class="btn-secondary" onclick="copyTextById('vpn-esphome-yaml')">Copy ESPHome YAML</button>
+            </div>
+            <p class="desc">Paste into your device's ESPHome YAML configuration to enable multi-Wi-Fi roaming and WireGuard.</p>
+            <pre id="vpn-esphome-yaml" class="mono" style="background:var(--input-bg);border:1px solid var(--border);border-radius:7px;padding:12px;overflow-x:auto;max-height:260px;margin:0;color:var(--text-strong);line-height:1.45;"></pre>
+          </div>
+
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+              <h3 style="margin:0;">2. WireGuard Server / HA Add-on Peer Config</h3>
+              <button class="btn-secondary" onclick="copyTextById('vpn-server-peer')">Copy Peer Config</button>
+            </div>
+            <p class="desc">Add this peer block to your WireGuard server (UniFi, OPNsense, or Home Assistant WireGuard Add-on).</p>
+            <pre id="vpn-server-peer" class="mono" style="background:var(--input-bg);border:1px solid var(--border);border-radius:7px;padding:12px;overflow-x:auto;max-height:260px;margin:0;color:var(--text-strong);line-height:1.45;"></pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================================================================== -->
+      <!-- DEVICE SCOPE: 7. SYSTEM                                            -->
       <!-- ================================================================== -->
       <section id="view-system" class="hidden">
         <div class="page-header">
@@ -2238,6 +2390,7 @@ const DEVICE_VIEWS = [
   "power",
   "voice",
   "audio",
+  "roaming_vpn",
   "system"
 ];
 
@@ -3065,6 +3218,26 @@ function copyGeneratedYaml() {
   });
 }
 
+function copyTextById(elId) {
+  const text = document.getElementById(elId)?.textContent || "";
+  if (!text) return;
+  navigator.clipboard.writeText(text).then(() => {
+    showToast("Copied snippet to clipboard");
+  });
+}
+
+async function generateDeviceVpnKeys() {
+  const resp = await fetch(API_URL, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({command: "generate_vpn_keys"})
+  });
+  if (resp.ok) {
+    applyStateToDom(await resp.json(), true);
+    showToast("Generated Curve25519 WireGuard keys for device");
+  }
+}
+
 function applyStateToDom(data, forceFormUpdate=false) {
   STATE = data;
   const cfg = data.config;
@@ -3082,7 +3255,7 @@ function applyStateToDom(data, forceFormUpdate=false) {
 
   const devTitle = esp?.device?.name || data.title;
   document.getElementById("hdr-title").textContent = devTitle;
-  document.getElementById("hdr-sub").textContent = `Latter v${data.version || '1.7.0'}`;
+  document.getElementById("hdr-sub").textContent = `Latter v${data.version || '1.8.0'}`;
   document.getElementById("survey-device-name").textContent = devTitle;
   document.getElementById("nav-room-badge").textContent = roomName;
   document.getElementById("top-room").textContent = `Room: ${roomName}`;
@@ -3129,6 +3302,12 @@ function applyStateToDom(data, forceFormUpdate=false) {
   renderLiveRoomCards(live.room_cards);
   renderRssiBars(live.ble_survey_rows, live.ble_packets_seen);
   renderWallpaperGallery(data.wallpapers, cfg.device_slug, cfg.display_shape);
+  if (data.vpn_snippets) {
+    const wy = document.getElementById("vpn-esphome-yaml");
+    const sp = document.getElementById("vpn-server-peer");
+    if (wy) wy.textContent = data.vpn_snippets.esphome_yaml || "";
+    if (sp) sp.textContent = (data.vpn_snippets.server_peer_conf || "") + "\n\n" + (data.vpn_snippets.ha_addon_yaml || "");
+  }
 
   const activeEl = document.activeElement;
   if (!activeEl || !["SELECT", "INPUT"].includes(activeEl.tagName)) {
@@ -3144,6 +3323,16 @@ function applyStateToDom(data, forceFormUpdate=false) {
 
     document.getElementById("cfg-device_slug").value = cfg.device_slug || "";
     document.getElementById("cfg-companion_base_url").value = cfg.companion_base_url || "";
+    document.getElementById("cfg-vpn_endpoint").value = cfg.vpn_endpoint || "";
+    document.getElementById("cfg-vpn_server_public_key").value = cfg.vpn_server_public_key || "";
+    document.getElementById("cfg-vpn_subnet").value = cfg.vpn_subnet || "10.10.10.0/24";
+    document.getElementById("cfg-vpn_ha_ip").value = cfg.vpn_ha_ip || "10.10.10.1";
+    document.getElementById("cfg-vpn_enabled").checked = !!cfg.vpn_enabled;
+    document.getElementById("cfg-vpn_client_ip").value = cfg.vpn_client_ip || "";
+    document.getElementById("cfg-vpn_hotspot_ssid").value = cfg.vpn_hotspot_ssid || "";
+    document.getElementById("cfg-vpn_public_key").value = cfg.vpn_public_key || "";
+    document.getElementById("cfg-vpn_private_key").value = cfg.vpn_private_key || "";
+    document.getElementById("cfg-vpn_preshared_key").value = cfg.vpn_preshared_key || "";
     document.getElementById("cfg-device_profile").value = cfg.device_profile || "mobile_display";
     document.getElementById("cfg-display_shape").value = cfg.display_shape || "circle";
     document.getElementById("cfg-default_page_size").value = cfg.default_page_size ?? 3;
@@ -3232,6 +3421,16 @@ async function saveAllConfig() {
   const config = {
     device_slug: document.getElementById("cfg-device_slug").value.trim(),
     companion_base_url: document.getElementById("cfg-companion_base_url").value.trim(),
+    vpn_endpoint: document.getElementById("cfg-vpn_endpoint").value.trim(),
+    vpn_server_public_key: document.getElementById("cfg-vpn_server_public_key").value.trim(),
+    vpn_subnet: document.getElementById("cfg-vpn_subnet").value.trim(),
+    vpn_ha_ip: document.getElementById("cfg-vpn_ha_ip").value.trim(),
+    vpn_enabled: document.getElementById("cfg-vpn_enabled").checked,
+    vpn_client_ip: document.getElementById("cfg-vpn_client_ip").value.trim(),
+    vpn_hotspot_ssid: document.getElementById("cfg-vpn_hotspot_ssid").value.trim(),
+    vpn_public_key: document.getElementById("cfg-vpn_public_key").value.trim(),
+    vpn_private_key: document.getElementById("cfg-vpn_private_key").value.trim(),
+    vpn_preshared_key: document.getElementById("cfg-vpn_preshared_key").value.trim(),
     device_profile: document.getElementById("cfg-device_profile").value,
     display_shape: document.getElementById("cfg-display_shape").value,
     default_page_size: parseInt(document.getElementById("cfg-default_page_size").value, 10) || 3,

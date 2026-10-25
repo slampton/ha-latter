@@ -18,6 +18,9 @@ TO_REDACT: set[str] = {
     "companion_base_url",
     "companion_url",
     "mac",
+    "vpn_endpoint",
+    "vpn_preshared_key",
+    "vpn_private_key",
     "wallpaper_url",
 }
 
