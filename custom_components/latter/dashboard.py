@@ -16,6 +16,7 @@ from homeassistant.helpers import area_registry as ar
 from .browse_engine import is_music_assistant_player
 from .const import (
     API_BRAND_ICON_PATH,
+    API_SIDEBAR_ICON_JS_PATH,
     API_STUDIO_ROOT_PATH,
     API_COMPANION_API_PATH,
     API_COMPANION_UI_PATH,
@@ -1704,7 +1705,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
         <div style="display:flex;align-items:center;gap:10px;margin-right:6px;">
           <img src="/api/latter/brand/icon.png" alt="Latter" style="width:28px;height:28px;border-radius:6px;object-fit:contain;flex-shrink:0;" onerror="this.style.display='none'">
           <strong id="hdr-title" style="font-size:15px;color:var(--text-strong);">Latter</strong>
-          <span class="nav-badge" id="hdr-sub">v1.8.4</span>
+          <span class="nav-badge" id="hdr-sub">v1.8.5</span>
         </div>
         <div id="topbar-household-chips" class="hidden" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
           <div class="status-chip"><span id="top-hh-devices">Devices: --</span></div>
@@ -3454,7 +3455,7 @@ function applyStateToDom(data, forceFormUpdate=false) {
     : `${live.media_state || 'idle'}`;
 
   const devTitle = esp?.device?.name || data.title;
-  document.getElementById("hdr-sub").textContent = `v${data.version || '1.8.4'}`;
+  document.getElementById("hdr-sub").textContent = `v${data.version || '1.8.5'}`;
   document.getElementById("survey-device-name").textContent = devTitle;
   document.getElementById("nav-room-badge").textContent = roomName;
   document.getElementById("top-room").textContent = `Room: ${roomName}`;
@@ -3759,4 +3760,38 @@ class LatterBrandIconView(HomeAssistantView):
             body=raw_bytes,
             content_type="image/png",
             headers={"Cache-Control": "public, max-age=86400"},
+        )
+
+SIDEBAR_ICON_JS = """
+window.customIcons = window.customIcons || {};
+window.customIcons["latter"] = {
+  getIcon: async (iconName) => {
+    return {
+      viewBox: "0 0 24 24",
+      path: "M4 5.5A1.5 1.5 0 0 1 5.5 4h1A1.5 1.5 0 0 1 8 5.5v13A1.5 1.5 0 0 1 6.5 20h-1A1.5 1.5 0 0 1 4 18.5v-13ZM16 5.5A1.5 1.5 0 0 1 17.5 4h1A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5h-1A1.5 1.5 0 0 1 16 18.5v-13ZM4 16.5h16v2A1.5 1.5 0 0 1 18.5 20h-13A1.5 1.5 0 0 1 4 18.5v-2ZM8 5.25h8v2.5H8v-2.5ZM8 10.75h8v2.5H8v-2.5Z"
+    };
+  },
+  getIconList: async () => [{ name: "logo" }]
+};
+"""
+
+
+class LatterSidebarIconJsView(HomeAssistantView):
+    """Serves the custom unframed Latter SVG icon set (`latter:logo`) for the Home Assistant sidebar."""
+
+    requires_auth = False
+    url = API_SIDEBAR_ICON_JS_PATH
+    name = "api:latter:sidebar_icon_js"
+
+    def __init__(self, hass: HomeAssistant) -> None:
+        """Initialize the sidebar icon JS view."""
+        self.hass = hass
+
+    async def get(self, request: web.Request) -> web.Response:
+        """Serve the custom icon registration script."""
+        return web.Response(
+            body=SIDEBAR_ICON_JS.strip(),
+            content_type="application/javascript",
+            charset="utf-8",
+            headers={"Cache-Control": "public, max-age=3600"},
         )

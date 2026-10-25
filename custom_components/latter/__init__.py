@@ -38,6 +38,7 @@ from .dashboard import (
     LatterBrandIconView,
     LatterCompanionApiView,
     LatterCompanionDashboardView,
+    LatterSidebarIconJsView,
     LatterStudioRootView,
 )
 from .http import (
@@ -204,13 +205,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
         hass.http.register_view(LatterCompanionApiView(hass))
         hass.http.register_view(LatterBrandIconView(hass))
         hass.http.register_view(LatterStudioRootView(hass))
+        hass.http.register_view(LatterSidebarIconJsView(hass))
         try:
             from homeassistant.components import frontend
+            frontend.add_extra_js_url(hass, "/api/latter/brand/sidebar_icon.js")
             frontend.async_register_built_in_panel(
                 hass,
                 component_name="iframe",
                 sidebar_title="Latter",
-                sidebar_icon="mdi:devices",
+                sidebar_icon="latter:logo",
                 frontend_url_path="latter",
                 config={"url": "/api/latter/studio?scope=household"},
                 require_admin=False,
