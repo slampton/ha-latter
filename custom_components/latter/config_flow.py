@@ -6,7 +6,6 @@ import re
 from typing import Any
 import voluptuous as vol
 
-from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlow,
@@ -319,7 +318,7 @@ class LatterConfigFlow(ConfigFlow, domain=DOMAIN):
         self._discovered_name: str = ""
 
     async def async_step_zeroconf(
-        self, discovery_info: ZeroconfServiceInfo
+        self, discovery_info: Any
     ) -> ConfigFlowResult:
         """Handle Zeroconf mDNS auto-discovery of ESPHome devices on the LAN."""
         raw_name = (
