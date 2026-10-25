@@ -1609,16 +1609,6 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
 <div class="app-shell">
   <!-- DUAL-SCOPE SIDEBAR: HOUSEHOLD (GLOBAL) vs DEVICE -->
   <aside class="sidebar">
-    <div class="brand">
-      <div style="display:flex;align-items:center;gap:10px;min-width:0;">
-        <img src="/api/latter/brand/icon.png" alt="Latter" style="width:34px;height:34px;border-radius:8px;object-fit:contain;flex-shrink:0;" onerror="this.style.display='none'">
-        <div class="brand-text">
-          <h1 id="hdr-title">Latter Studio</h1>
-          <small id="hdr-sub">v1.8.3</small>
-        </div>
-      </div>
-    </div>
-
     <!-- SCOPE & DEVICE SWITCHER -->
     <div class="scope-box">
       <div class="scope-tabs">
@@ -1711,10 +1701,20 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
   <div class="main-area">
     <header class="topbar">
       <div class="topbar-status">
-        <span class="scope-pill" id="top-scope-pill">Device</span>
-        <div class="status-chip"><span class="dot-live"></span><span id="top-room">Room: --</span></div>
-        <div class="status-chip"><span id="top-speaker">Speaker: --</span></div>
-        <div class="status-chip"><span id="top-media">Media: Idle</span></div>
+        <div style="display:flex;align-items:center;gap:10px;margin-right:6px;">
+          <img src="/api/latter/brand/icon.png" alt="Latter" style="width:28px;height:28px;border-radius:6px;object-fit:contain;flex-shrink:0;" onerror="this.style.display='none'">
+          <strong id="hdr-title" style="font-size:15px;color:var(--text-strong);">Latter</strong>
+          <span class="nav-badge" id="hdr-sub">v1.8.4</span>
+        </div>
+        <div id="topbar-household-chips" class="hidden" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <div class="status-chip"><span id="top-hh-devices">Devices: --</span></div>
+          <div class="status-chip"><span id="top-hh-alarm">Alarm: --</span></div>
+        </div>
+        <div id="topbar-device-chips" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <div class="status-chip"><span class="dot-live"></span><span id="top-room">Room: --</span></div>
+          <div class="status-chip"><span id="top-speaker">Speaker: --</span></div>
+          <div class="status-chip"><span id="top-media">Media: Idle</span></div>
+        </div>
       </div>
       <div class="topbar-actions">
         <div id="dirty-indicator" class="dirty-banner">Unsaved</div>
@@ -2029,6 +2029,20 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
               <input type="text" id="cfg-companion_base_url" placeholder="Auto-detected from Home Assistant Network settings" oninput="markDirty()">
             </div>
           </div>
+        </div>
+      </section>
+
+      <!-- ================================================================== -->
+      <!-- DEVICE SCOPE: 0. SELECT A DEVICE PROMPT (WHEN UNSELECTED)          -->
+      <!-- ================================================================== -->
+      <section id="view-select_device_prompt" class="hidden">
+        <div class="page-header">
+          <h2>Select a Device</h2>
+          <p>Choose an onboarded ESPHome device from the list below or the sidebar dropdown to view its dashboard and device-specific settings.</p>
+        </div>
+        <div class="card">
+          <h3>Available Devices</h3>
+          <div id="prompt-devices-list" class="native-controls-box"></div>
         </div>
       </section>
 
@@ -2442,7 +2456,9 @@ let CALENDARS = [];
 let IS_DIRTY = false;
 let INITIAL_FORM_LOADED = false;
 const URL_PARAMS = new URLSearchParams(window.location.search);
-let CURRENT_SCOPE = URL_PARAMS.get("scope") === "household" ? "household" : "device";
+const ENTERED_VIA_HOUSEHOLD = URL_PARAMS.get("scope") === "household";
+let CURRENT_SCOPE = ENTERED_VIA_HOUSEHOLD ? "household" : "device";
+let DEVICE_SELECTED = !ENTERED_VIA_HOUSEHOLD;
 let CURRENT_THEME_PREF = localStorage.getItem("latter_web_theme") || "ha_auto";
 let POLL_TIMER = null;
 
@@ -2458,6 +2474,7 @@ const HOUSEHOLD_VIEWS = [
 ];
 
 const DEVICE_VIEWS = [
+  "select_device_prompt",
   "dashboard",
   "home_display",
   "power",
@@ -2598,23 +2615,33 @@ async function onThemeChanged(themePref) {
   if (resp.ok) showToast(`Appearance set to ${themePref}`);
 }
 
+function updateTopHeaderForScope() {
+  const isHH = (CURRENT_SCOPE === "household") || !DEVICE_SELECTED;
+  const devTitle = STATE?.esphome?.device?.name || STATE?.title || "Device";
+  document.getElementById("hdr-title").textContent = isHH ? "Latter" : devTitle;
+  document.getElementById("topbar-household-chips").classList.toggle("hidden", !isHH);
+  document.getElementById("topbar-device-chips").classList.toggle("hidden", isHH);
+  document.getElementById("nav-scope-device").classList.toggle("hidden", CURRENT_SCOPE !== "device" || !DEVICE_SELECTED);
+}
+
 function setScope(scope, targetView=null) {
   CURRENT_SCOPE = scope === "household" ? "household" : "device";
   document.getElementById("tab-scope-household").classList.toggle("active", CURRENT_SCOPE === "household");
   document.getElementById("tab-scope-device").classList.toggle("active", CURRENT_SCOPE === "device");
   document.getElementById("nav-scope-household").classList.toggle("hidden", CURRENT_SCOPE !== "household");
-  document.getElementById("nav-scope-device").classList.toggle("hidden", CURRENT_SCOPE !== "device");
   document.getElementById("device-picker-wrap").classList.toggle("hidden", CURRENT_SCOPE !== "device");
+  updateTopHeaderForScope();
 
-  const pill = document.getElementById("top-scope-pill");
-  if (pill) {
-    pill.textContent = CURRENT_SCOPE === "household"
-      ? "Household (Global)"
-      : `Device: ${STATE?.title || 'Active'}`;
+  if (CURRENT_SCOPE === "household") {
+    switchView(targetView || "fleet_overview", null);
+  } else if (!DEVICE_SELECTED) {
+    switchView("select_device_prompt", null);
+  } else {
+    switchView(targetView || "dashboard", null);
   }
-
-  const defaultView = CURRENT_SCOPE === "household" ? "fleet_overview" : "dashboard";
-  switchView(targetView || defaultView, null);
+  if (STATE) {
+    renderFleetOverview(STATE.fleet_devices, STATE.fleet_controls, STATE.config);
+  }
 }
 
 function switchView(viewId, btnEl) {
@@ -2622,6 +2649,9 @@ function switchView(viewId, btnEl) {
   if (CURRENT_SCOPE !== neededScope) {
     setScope(neededScope, viewId);
     return;
+  }
+  if (CURRENT_SCOPE === "device" && !DEVICE_SELECTED && viewId !== "select_device_prompt") {
+    viewId = "select_device_prompt";
   }
   document.querySelectorAll("aside .nav-btn").forEach(b => b.classList.remove("active"));
   if (btnEl) {
@@ -2641,8 +2671,21 @@ function navigateToView(viewId) {
   window.scrollTo({top: 0, behavior: "smooth"});
 }
 
+function selectCurrentDevice() {
+  DEVICE_SELECTED = true;
+  setScope("device", "dashboard");
+}
+
 function switchFleetDevice(companionUrl) {
-  if (companionUrl && companionUrl !== window.location.pathname + window.location.search) {
+  if (!companionUrl) {
+    DEVICE_SELECTED = false;
+    setScope("device", "select_device_prompt");
+    return;
+  }
+  const curBase = window.location.pathname + "?token=" + (URL_PARAMS.get("token") || "");
+  if (companionUrl === curBase || companionUrl === window.location.pathname + window.location.search) {
+    selectCurrentDevice();
+  } else {
     window.location.href = companionUrl;
   }
 }
@@ -2724,28 +2767,33 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
 
   const picker = document.getElementById("fleet-device-picker");
   if (picker && fleetDevices) {
-    picker.innerHTML = fleetDevices.map(d =>
-      `<option value="${d.companion_url}" ${d.is_current ? 'selected' : ''}>${d.title} (${d.active_area_name})</option>`
+    const placeholder = `<option value="" ${!DEVICE_SELECTED ? 'selected' : ''}>— Select a Device —</option>`;
+    picker.innerHTML = placeholder + fleetDevices.map(d =>
+      `<option value="${d.companion_url}" ${(DEVICE_SELECTED && d.is_current) ? 'selected' : ''}>${d.title} (${d.active_area_name})</option>`
     ).join("");
   }
 
+  const rowsHtml = (fleetDevices || []).map(d => {
+    const spk = (d.active_speaker || "").replace("media_player.", "");
+    const isActDev = DEVICE_SELECTED && d.is_current && CURRENT_SCOPE === "device";
+    const actAction = d.is_current
+      ? `selectCurrentDevice()`
+      : `switchFleetDevice('${d.companion_url}')`;
+    return `<div class="native-ctrl-row">
+      <div class="lbl">
+        ${d.title} ${isActDev ? '<span class="state-badge" style="margin-left:6px;">Active</span>' : ''}
+        <small>Slug: <code>${d.device_slug}</code> &bull; Room: <strong>${d.active_area_name}</strong> &bull; Speaker: <strong>${spk}</strong> &bull; Proxy: ${d.ble_closest_proxy || 'None'}</small>
+      </div>
+      <div class="widget">
+        <button class="btn-primary" onclick="${actAction}">Manage Device</button>
+      </div>
+    </div>`;
+  }).join("");
+
   const listBox = document.getElementById("fleet-devices-list");
-  if (listBox) {
-    listBox.innerHTML = (fleetDevices || []).map(d => {
-      const spk = (d.active_speaker || "").replace("media_player.", "");
-      return `<div class="native-ctrl-row">
-        <div class="lbl">
-          ${d.title} ${d.is_current ? '<span class="state-badge" style="margin-left:6px;">Viewing</span>' : ''}
-          <small>Slug: <code>${d.device_slug}</code> &bull; Room: <strong>${d.active_area_name}</strong> &bull; Speaker: <strong>${spk}</strong> &bull; Proxy: ${d.ble_closest_proxy || 'None'}</small>
-        </div>
-        <div class="widget">
-          ${d.is_current
-            ? `<button class="btn-primary" onclick="setScope('device', 'dashboard')">Open Device Dashboard</button>`
-            : `<button class="btn-secondary" onclick="switchFleetDevice('${d.companion_url}')">Switch to Device</button>`}
-        </div>
-      </div>`;
-    }).join("");
-  }
+  if (listBox) listBox.innerHTML = rowsHtml;
+  const promptBox = document.getElementById("prompt-devices-list");
+  if (promptBox) promptBox.innerHTML = rowsHtml;
 
   const fBox = document.getElementById("fleet-controls-list");
   if (fBox) {
@@ -3406,20 +3454,15 @@ function applyStateToDom(data, forceFormUpdate=false) {
     : `${live.media_state || 'idle'}`;
 
   const devTitle = esp?.device?.name || data.title;
-  document.getElementById("hdr-title").textContent = devTitle;
-  document.getElementById("hdr-sub").textContent = `Latter v${data.version || '1.8.3'}`;
+  document.getElementById("hdr-sub").textContent = `v${data.version || '1.8.4'}`;
   document.getElementById("survey-device-name").textContent = devTitle;
   document.getElementById("nav-room-badge").textContent = roomName;
   document.getElementById("top-room").textContent = `Room: ${roomName}`;
   document.getElementById("top-speaker").textContent = `Speaker: ${spkShort}`;
   document.getElementById("top-media").textContent = `Media: ${mediaSummary}`;
-
-  const pill = document.getElementById("top-scope-pill");
-  if (pill) {
-    pill.textContent = CURRENT_SCOPE === "household"
-      ? "Household (Global)"
-      : `Device: ${devTitle}`;
-  }
+  document.getElementById("top-hh-devices").textContent = `Devices: ${(data.fleet_devices || []).length}`;
+  document.getElementById("top-hh-alarm").textContent = `Alarm: ${(live.alarm_state || 'none').toUpperCase()}`;
+  updateTopHeaderForScope();
 
   document.getElementById("st-room").textContent = roomName;
   document.getElementById("st-climate").textContent = tempStr + humStr;
