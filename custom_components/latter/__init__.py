@@ -176,12 +176,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
         @callback
         def _on_update_entity_state_changed(event: Event) -> None:
             ent_id = str(event.data.get("entity_id") or "")
-            if ent_id.startswith("update.") and "latter" in ent_id.lower():
+            if ent_id.startswith("update."):
                 new_st = event.data.get("new_state")
                 if new_st is not None:
-                    pic = str(new_st.attributes.get("entity_picture") or "")
-                    if "brands.home-assistant.io/_/latter/" in pic:
-                        inject_hacs_update_brand_icon(hass)
+                    friendly = str(new_st.attributes.get("friendly_name") or "").lower()
+                    if "latter" in ent_id.lower() or "latter" in friendly:
+                        pic = str(new_st.attributes.get("entity_picture") or "")
+                        if pic != "/api/latter/brand/icon.png":
+                            inject_hacs_update_brand_icon(hass)
 
         unsub_dev = hass.bus.async_listen(
             dr.EVENT_DEVICE_REGISTRY_UPDATED, _on_device_registry_updated

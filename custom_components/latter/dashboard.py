@@ -1484,7 +1484,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
         <img src="/api/latter/brand/icon.png" alt="Latter" style="width:34px;height:34px;border-radius:8px;object-fit:contain;flex-shrink:0;" onerror="this.style.display='none'">
         <div class="brand-text">
           <h1 id="hdr-title">Latter Studio</h1>
-          <small id="hdr-sub">v1.7.1</small>
+          <small id="hdr-sub">v1.7.2</small>
         </div>
       </div>
     </div>
@@ -1791,9 +1791,17 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
                 <button class="btn-secondary" style="padding:5px 10px;font-size:11.5px;" onclick="renderCameraPreview(document.getElementById('cfg-camera_entity').value)">Refresh</button>
               </div>
             </div>
-            <div class="field" style="margin-bottom:0;">
+            <div class="field">
               <label>Weather Forecast Provider</label>
               <select id="cfg-weather_entity" onchange="markDirty()"></select>
+            </div>
+            <div class="field" style="margin-bottom:0;">
+              <label>Household Calendars (calendar.*)</label>
+              <div style="display:flex;gap:8px;">
+                <select id="cal-entity-picker"></select>
+                <button class="btn-secondary" onclick="addCalendarEntity()">Add</button>
+              </div>
+              <div id="calendar-chips" class="chip-list"></div>
             </div>
           </div>
 
@@ -2206,6 +2214,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
 const API_URL = window.location.pathname + "/api" + window.location.search;
 let STATE = null;
 let PINNED = [];
+let CALENDARS = [];
 let IS_DIRTY = false;
 let INITIAL_FORM_LOADED = false;
 let CURRENT_SCOPE = "device";
@@ -2858,6 +2867,7 @@ async function espNumber(entity_id, level) {
 
 function renderPinnedChips() {
   const box = document.getElementById("pinned-chips");
+  if (!box) return;
   box.innerHTML = PINNED.map((ent, idx) =>
     `<div class="chip"><span>${ent}</span><b onclick="removePinned(${idx})">✕</b></div>`
   ).join("");
@@ -2875,6 +2885,29 @@ function addPinnedEntity() {
 function removePinned(idx) {
   PINNED.splice(idx, 1);
   renderPinnedChips();
+  markDirty();
+}
+
+function renderCalendarChips() {
+  const box = document.getElementById("calendar-chips");
+  if (!box) return;
+  box.innerHTML = CALENDARS.map((ent, idx) =>
+    `<div class="chip"><span>${ent}</span><b onclick="removeCalendarEntity(${idx})">✕</b></div>`
+  ).join("");
+}
+
+function addCalendarEntity() {
+  const val = document.getElementById("cal-entity-picker").value;
+  if (val && !CALENDARS.includes(val)) {
+    CALENDARS.push(val);
+    renderCalendarChips();
+    markDirty();
+  }
+}
+
+function removeCalendarEntity(idx) {
+  CALENDARS.splice(idx, 1);
+  renderCalendarChips();
   markDirty();
 }
 
@@ -3139,8 +3172,11 @@ function applyStateToDom(data, forceFormUpdate=false) {
     populateSelect("cfg-camera_entity", cat.cameras, cfg.camera_entity);
     renderCameraPreview(cfg.camera_entity);
     populateSelect("cfg-weather_entity", cat.weathers, cfg.weather_entity);
+    populateSelect("cal-entity-picker", cat.calendars, "", false);
     populateSelect("pin-entity-picker", cat.bindable_entities, "", false);
 
+    CALENDARS = Array.isArray(cfg.calendar_entities) ? [...cfg.calendar_entities] : [];
+    renderCalendarChips();
     PINNED = Array.isArray(cfg.custom_entities) ? [...cfg.custom_entities] : [];
     renderPinnedChips();
 
@@ -3223,6 +3259,7 @@ async function saveAllConfig() {
     wallpaper_source: document.getElementById("cfg-wallpaper_source").value.trim(),
     wallpaper_cycle_minutes: parseInt(document.getElementById("cfg-wallpaper_cycle_minutes").value, 10) || 0,
     art_size: parseInt(document.getElementById("cfg-art_size").value, 10),
+    calendar_entities: CALENDARS,
     custom_entities: PINNED,
     custom_bindings: bindings,
   };
