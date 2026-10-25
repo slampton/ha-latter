@@ -16,6 +16,7 @@ from homeassistant.helpers import area_registry as ar
 from .browse_engine import is_music_assistant_player
 from .const import (
     API_BRAND_ICON_PATH,
+    API_STUDIO_ROOT_PATH,
     API_COMPANION_API_PATH,
     API_COMPANION_UI_PATH,
     CONF_ALARM_ENTITY,
@@ -93,17 +94,60 @@ from .wallpaper_engine import (
 
 _LOGGER = logging.getLogger(__name__)
 
-VALID_WEB_THEMES: set[str] = {"dark", "light", "system"}
-
-
 def _normalize_web_theme(raw_theme: Any) -> str:
-    """Normalize legacy or custom theme strings to 'dark', 'light', or 'system'."""
-    val = str(raw_theme or DEFAULT_WEB_THEME).strip().lower()
-    if val in VALID_WEB_THEMES:
-        return val
-    if "light" in val or "day" in val or "warm" in val:
-        return "light"
-    return "dark"
+    """Normalize theme selection ('ha_auto', 'ha_dark', 'ha_light', or an installed HA theme name)."""
+    val = str(raw_theme or "ha_auto").strip()
+    if not val or val in ("system", "auto"):
+        return "ha_auto"
+    if val == "dark":
+        return "ha_dark"
+    if val == "light":
+        return "ha_light"
+    return val
+
+
+def _get_ha_installed_themes(hass: HomeAssistant) -> dict[str, dict[str, str]]:
+    """Extract installed Home Assistant themes and their core CSS variables from frontend storage."""
+    out: dict[str, dict[str, str]] = {}
+    fe_data = hass.data.get("frontend_themes") or hass.data.get("frontend", {})
+    raw_themes = getattr(fe_data, "themes", None) or (
+        fe_data.get("themes") if isinstance(fe_data, dict) else None
+    )
+    if not isinstance(raw_themes, dict):
+        return out
+
+    wanted_keys = (
+        "primary-color",
+        "accent-color",
+        "primary-background-color",
+        "secondary-background-color",
+        "card-background-color",
+        "ha-card-background",
+        "primary-text-color",
+        "secondary-text-color",
+        "divider-color",
+        "success-color",
+        "warning-color",
+        "error-color",
+    )
+    for t_name, t_dict in raw_themes.items():
+        if not isinstance(t_dict, dict):
+            continue
+        extracted: dict[str, str] = {}
+        for k in wanted_keys:
+            if k in t_dict and isinstance(t_dict[k], str):
+                extracted[k] = t_dict[k]
+        # Also check nested modes: {"modes": {"dark": {...}, "light": {...}}}
+        modes = t_dict.get("modes")
+        if isinstance(modes, dict):
+            mode_dict = modes.get("dark") or modes.get("light") or {}
+            if isinstance(mode_dict, dict):
+                for k in wanted_keys:
+                    if k not in extracted and k in mode_dict and isinstance(mode_dict[k], str):
+                        extracted[k] = mode_dict[k]
+        if extracted:
+            out[str(t_name)] = extracted
+    return out
 
 
 def _get_all_coordinators(hass: HomeAssistant) -> list[LatterCoordinator]:
@@ -394,6 +438,7 @@ def _build_companion_state_payload(
             "active_remote_slot": coordinator.active_remote_slot,
             "remote_slots_meta": remote_attrs,
         },
+        "ha_themes": _get_ha_installed_themes(hass),
         "catalog": {
             "areas": areas_list,
             "ma_speakers": ma_speakers,
@@ -810,39 +855,66 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
 <link rel="icon" type="image/png" href="/api/latter/brand/icon.png">
 <title>Latter Companion Studio</title>
 <style>
+  /* Native Home Assistant Default Dark & Light Theme Tokens (Inherits live HA variables when embedded) */
   :root, [data-theme="dark"] {
-    --bg: #080a0f;
-    --sidebar: #0d1118;
-    --card: #121822;
-    --card-hover: #18202e;
-    --border: #1e2736;
-    --input-bg: #0a0e15;
-    --text: #dce3ec;
-    --text-strong: #f1f5f9;
-    --muted: #8492a6;
-    --accent: #6899d3;
-    --accent-solid: #2b5b94;
-    --accent-subtle: rgba(104, 153, 211, 0.12);
-    --success: #10b981;
-    --warning: #f59e0b;
-    --danger: #ef4444;
+    --primary-background-color: #111111;
+    --secondary-background-color: #1c1c1c;
+    --card-background-color: #1c1c1c;
+    --primary-text-color: #e1e1e1;
+    --secondary-text-color: #9b9b9b;
+    --primary-color: #03a9f4;
+    --accent-color: #ff9800;
+    --divider-color: rgba(225, 225, 225, 0.12);
+    --input-fill-color: #141414;
+    --success-color: #4caf50;
+    --warning-color: #ff9800;
+    --error-color: #db4437;
+
+    --bg: var(--primary-background-color);
+    --sidebar: var(--secondary-background-color);
+    --card: var(--card-background-color);
+    --card-hover: rgba(3, 169, 244, 0.08);
+    --border: var(--divider-color);
+    --input-bg: var(--input-fill-color);
+    --text: var(--primary-text-color);
+    --text-strong: var(--primary-text-color);
+    --muted: var(--secondary-text-color);
+    --accent: var(--primary-color);
+    --accent-solid: var(--primary-color);
+    --accent-subtle: rgba(3, 169, 244, 0.14);
+    --success: var(--success-color);
+    --warning: var(--warning-color);
+    --danger: var(--error-color);
   }
   [data-theme="light"] {
-    --bg: #dde3ea;
-    --sidebar: #e6ebf1;
-    --card: #eef2f6;
-    --card-hover: #e2e8f0;
-    --border: #cbd5e1;
-    --input-bg: #e2e8f0;
-    --text: #1e293b;
-    --text-strong: #0f172a;
-    --muted: #475569;
-    --accent: #2b5b94;
-    --accent-solid: #2b5b94;
-    --accent-subtle: rgba(43, 91, 148, 0.11);
-    --success: #059669;
-    --warning: #d97706;
-    --danger: #dc2626;
+    --primary-background-color: #fafafa;
+    --secondary-background-color: #f0f0f0;
+    --card-background-color: #ffffff;
+    --primary-text-color: #212121;
+    --secondary-text-color: #727272;
+    --primary-color: #03a9f4;
+    --accent-color: #ff9800;
+    --divider-color: rgba(0, 0, 0, 0.12);
+    --input-fill-color: #f5f5f5;
+    --success-color: #4caf50;
+    --warning-color: #ff9800;
+    --error-color: #db4437;
+
+    --bg: var(--primary-background-color);
+    --sidebar: var(--secondary-background-color);
+    --card: var(--card-background-color);
+    --card-hover: rgba(3, 169, 244, 0.08);
+    --border: var(--divider-color);
+    --input-bg: var(--input-fill-color);
+    --text: var(--primary-text-color);
+    --text-strong: var(--primary-text-color);
+    --muted: var(--secondary-text-color);
+    --accent: var(--primary-color);
+    --accent-solid: var(--primary-color);
+    --accent-subtle: rgba(3, 169, 244, 0.12);
+    --success: var(--success-color);
+    --warning: var(--warning-color);
+    --danger: var(--error-color);
   }
   * { box-sizing: border-box; }
   body {
@@ -1542,7 +1614,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
         <img src="/api/latter/brand/icon.png" alt="Latter" style="width:34px;height:34px;border-radius:8px;object-fit:contain;flex-shrink:0;" onerror="this.style.display='none'">
         <div class="brand-text">
           <h1 id="hdr-title">Latter Studio</h1>
-          <small id="hdr-sub">v1.8.2</small>
+          <small id="hdr-sub">v1.8.3</small>
         </div>
       </div>
     </div>
@@ -1625,11 +1697,11 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
 
     <div class="sidebar-footer">
       <div class="field" style="margin-bottom:0;">
-        <label>Appearance</label>
+        <label>Home Assistant Theme</label>
         <select id="cfg-web_theme" onchange="onThemeChanged(this.value)">
-          <option value="dark">Dark</option>
-          <option value="light">Light</option>
-          <option value="system">System</option>
+          <option value="ha_auto">Home Assistant (Auto)</option>
+          <option value="ha_dark">Home Assistant (Dark)</option>
+          <option value="ha_light">Home Assistant (Light)</option>
         </select>
       </div>
     </div>
@@ -1945,11 +2017,11 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
           <h3>Appearance & Reverse Proxy</h3>
           <div class="grid-2" style="margin-bottom:0;">
             <div class="field" style="margin-bottom:0;">
-              <label>Studio Appearance</label>
+              <label>Home Assistant Theme</label>
               <select id="cfg-web_theme_mobile" onchange="onThemeChanged(this.value)">
-                <option value="dark">Dark</option>
-                <option value="light">Light</option>
-                <option value="system">System</option>
+                <option value="ha_auto">Home Assistant (Auto)</option>
+                <option value="ha_dark">Home Assistant (Dark)</option>
+                <option value="ha_light">Home Assistant (Light)</option>
               </select>
             </div>
             <div class="field" style="margin-bottom:0;">
@@ -2369,8 +2441,9 @@ let PINNED = [];
 let CALENDARS = [];
 let IS_DIRTY = false;
 let INITIAL_FORM_LOADED = false;
-let CURRENT_SCOPE = "device";
-let CURRENT_THEME_PREF = localStorage.getItem("latter_web_theme") || "dark";
+const URL_PARAMS = new URLSearchParams(window.location.search);
+let CURRENT_SCOPE = URL_PARAMS.get("scope") === "household" ? "household" : "device";
+let CURRENT_THEME_PREF = localStorage.getItem("latter_web_theme") || "ha_auto";
 let POLL_TIMER = null;
 
 const HOUSEHOLD_VIEWS = [
@@ -2396,20 +2469,96 @@ const DEVICE_VIEWS = [
 
 const ALL_VIEWS = HOUSEHOLD_VIEWS.concat(DEVICE_VIEWS);
 
+const HA_CSS_VARS = [
+  "--primary-background-color",
+  "--secondary-background-color",
+  "--card-background-color",
+  "--primary-text-color",
+  "--secondary-text-color",
+  "--primary-color",
+  "--accent-color",
+  "--divider-color",
+  "--success-color",
+  "--warning-color",
+  "--error-color"
+];
+
 const sysMedia = window.matchMedia("(prefers-color-scheme: dark)");
 sysMedia.addEventListener("change", () => {
-  if (CURRENT_THEME_PREF === "system") applyTheme("system");
+  if (CURRENT_THEME_PREF === "ha_auto") applyTheme("ha_auto");
 });
 
-function resolveEffectiveTheme(pref) {
-  if (pref === "system") return sysMedia.matches ? "dark" : "light";
-  return pref === "light" ? "light" : "dark";
+function clearCustomCssVars() {
+  HA_CSS_VARS.forEach(v => document.documentElement.style.removeProperty(v));
+  document.documentElement.style.removeProperty("--input-fill-color");
+}
+
+function trySyncFromParentHaFrame() {
+  try {
+    const hostWin = (window.parent && window.parent !== window) ? window.parent : window.opener;
+    if (!hostWin || !hostWin.document) return false;
+    const computed = hostWin.getComputedStyle(hostWin.document.documentElement);
+    const bg = computed.getPropertyValue("--primary-background-color").trim();
+    if (!bg) return false;
+    HA_CSS_VARS.forEach(v => {
+      const val = computed.getPropertyValue(v).trim();
+      if (val) document.documentElement.style.setProperty(v, val);
+    });
+    document.documentElement.style.setProperty("--input-fill-color", bg);
+    return true;
+  } catch (_e) {
+    return false;
+  }
+}
+
+function populateThemeDropdowns(haThemes, selectedPref) {
+  ["cfg-web_theme", "cfg-web_theme_mobile"].forEach(id => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    const baseOpts = [
+      {id: "ha_auto", name: "Home Assistant (Auto)"},
+      {id: "ha_dark", name: "Home Assistant (Dark)"},
+      {id: "ha_light", name: "Home Assistant (Light)"}
+    ];
+    Object.keys(haThemes || {}).sort().forEach(tName => {
+      baseOpts.push({id: tName, name: `HA Theme: ${tName}`});
+    });
+    sel.innerHTML = baseOpts.map(o =>
+      `<option value="${o.id}" ${o.id === selectedPref ? 'selected' : ''}>${o.name}</option>`
+    ).join("");
+  });
 }
 
 function applyTheme(pref) {
-  const valid = ["dark", "light", "system"];
-  CURRENT_THEME_PREF = valid.includes(pref) ? pref : "dark";
-  document.body.setAttribute("data-theme", resolveEffectiveTheme(CURRENT_THEME_PREF));
+  CURRENT_THEME_PREF = pref || "ha_auto";
+  if (CURRENT_THEME_PREF === "dark") CURRENT_THEME_PREF = "ha_dark";
+  if (CURRENT_THEME_PREF === "light") CURRENT_THEME_PREF = "ha_light";
+  if (CURRENT_THEME_PREF === "system") CURRENT_THEME_PREF = "ha_auto";
+
+  clearCustomCssVars();
+  const haThemes = STATE?.ha_themes || {};
+
+  if (CURRENT_THEME_PREF === "ha_dark") {
+    document.body.setAttribute("data-theme", "dark");
+  } else if (CURRENT_THEME_PREF === "ha_light") {
+    document.body.setAttribute("data-theme", "light");
+  } else if (haThemes[CURRENT_THEME_PREF]) {
+    document.body.setAttribute("data-theme", sysMedia.matches ? "dark" : "light");
+    const tVars = haThemes[CURRENT_THEME_PREF];
+    Object.entries(tVars).forEach(([k, v]) => {
+      document.documentElement.style.setProperty(`--${k}`, v);
+    });
+    if (tVars["ha-card-background"] && !tVars["card-background-color"]) {
+      document.documentElement.style.setProperty("--card-background-color", tVars["ha-card-background"]);
+    }
+    if (tVars["primary-background-color"]) {
+      document.documentElement.style.setProperty("--input-fill-color", tVars["primary-background-color"]);
+    }
+  } else {
+    document.body.setAttribute("data-theme", sysMedia.matches ? "dark" : "light");
+    trySyncFromParentHaFrame();
+  }
+
   localStorage.setItem("latter_web_theme", CURRENT_THEME_PREF);
   ["cfg-web_theme", "cfg-web_theme_mobile"].forEach(id => {
     const sel = document.getElementById(id);
@@ -2418,6 +2567,9 @@ function applyTheme(pref) {
 }
 
 applyTheme(CURRENT_THEME_PREF);
+if (CURRENT_SCOPE === "household") {
+  window.addEventListener("DOMContentLoaded", () => setScope("household", "fleet_overview"));
+}
 
 function showToast(msg) {
   const t = document.getElementById("toast");
@@ -3255,7 +3407,7 @@ function applyStateToDom(data, forceFormUpdate=false) {
 
   const devTitle = esp?.device?.name || data.title;
   document.getElementById("hdr-title").textContent = devTitle;
-  document.getElementById("hdr-sub").textContent = `Latter v${data.version || '1.8.2'}`;
+  document.getElementById("hdr-sub").textContent = `Latter v${data.version || '1.8.3'}`;
   document.getElementById("survey-device-name").textContent = devTitle;
   document.getElementById("nav-room-badge").textContent = roomName;
   document.getElementById("top-room").textContent = `Room: ${roomName}`;
@@ -3317,7 +3469,8 @@ function applyStateToDom(data, forceFormUpdate=false) {
 
   if (!INITIAL_FORM_LOADED || forceFormUpdate) {
     INITIAL_FORM_LOADED = true;
-    applyTheme(cfg.web_theme || "dark");
+    populateThemeDropdowns(data.ha_themes, cfg.web_theme || "ha_auto");
+    applyTheme(cfg.web_theme || "ha_auto");
     renderCohesiveDeviceSections();
     renderFleetOverview(data.fleet_devices, data.fleet_controls, cfg);
 
@@ -3512,6 +3665,32 @@ class LatterCompanionDashboardView(HomeAssistantView):
             content_type="text/html",
             charset="utf-8",
         )
+
+
+class LatterStudioRootView(HomeAssistantView):
+    """Master entry point (`/api/latter/studio?scope=household`) used by the Home Assistant Sidebar Panel."""
+
+    requires_auth = False
+    url = API_STUDIO_ROOT_PATH
+    name = "api:latter:studio_root"
+
+    def __init__(self, hass: HomeAssistant) -> None:
+        """Initialize the master Studio redirector view."""
+        self.hass = hass
+
+    async def get(self, request: web.Request) -> web.Response:
+        """Redirect to the Household Studio view using the first active coordinator."""
+        coords = _get_all_coordinators(self.hass)
+        if not coords:
+            return web.Response(
+                status=HTTPStatus.NOT_FOUND,
+                text="No Latter devices configured yet. Add an ESPHome device under Settings -> Devices & Services -> Latter.",
+            )
+        primary = coords[0]
+        scope = request.query.get("scope") or "household"
+        token = primary.get_signed_token()
+        target_url = f"/api/latter/companion/{primary.entry.entry_id}?token={token}&scope={scope}"
+        raise web.HTTPFound(location=target_url)
 
 
 class LatterBrandIconView(HomeAssistantView):

@@ -38,6 +38,7 @@ from .dashboard import (
     LatterBrandIconView,
     LatterCompanionApiView,
     LatterCompanionDashboardView,
+    LatterStudioRootView,
 )
 from .http import (
     LatterArtworkTranscoderView,
@@ -202,6 +203,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
         hass.http.register_view(LatterCompanionDashboardView(hass))
         hass.http.register_view(LatterCompanionApiView(hass))
         hass.http.register_view(LatterBrandIconView(hass))
+        hass.http.register_view(LatterStudioRootView(hass))
+        try:
+            from homeassistant.components import frontend
+            frontend.async_register_built_in_panel(
+                hass,
+                component_name="iframe",
+                sidebar_title="Latter",
+                sidebar_icon="mdi:devices",
+                frontend_url_path="latter",
+                config={"url": "/api/latter/studio?scope=household"},
+                require_admin=False,
+                update=True,
+            )
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("Sidebar panel registration skipped: %s", err)
 
     coordinator = LatterCoordinator(
         hass=hass,
