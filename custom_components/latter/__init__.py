@@ -215,7 +215,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
                 sidebar_title="Latter",
                 sidebar_icon="latter:logo",
                 frontend_url_path="latter",
-                config={"url": "/api/latter/studio?scope=household"},
+                config={"url": "/api/latter/studio?scope=system"},
                 require_admin=False,
                 update=True,
             )

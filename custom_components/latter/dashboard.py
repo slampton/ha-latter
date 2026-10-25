@@ -1613,7 +1613,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
     <!-- SCOPE & DEVICE SWITCHER -->
     <div class="scope-box">
       <div class="scope-tabs">
-        <button class="scope-tab" id="tab-scope-household" onclick="setScope('household')">Household</button>
+        <button class="scope-tab" id="tab-scope-household" onclick="setScope('household')">System</button>
         <button class="scope-tab active" id="tab-scope-device" onclick="setScope('device')">Device</button>
       </div>
       <div class="device-picker-wrap" id="device-picker-wrap">
@@ -1624,7 +1624,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
 
     <!-- HOUSEHOLD (GLOBAL) NAVIGATION -->
     <div class="nav-list hidden" id="nav-scope-household">
-      <div class="nav-group-label">Household</div>
+      <div class="nav-group-label">System</div>
       <button class="nav-btn" data-view="fleet_overview" onclick="switchView('fleet_overview', this)">
         <span>Overview & Devices</span>
         <span class="nav-badge" id="nav-fleet-count">1</span>
@@ -1644,7 +1644,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
         <span>Volume Routing</span>
       </button>
       <button class="nav-btn" data-view="household" onclick="switchView('household', this)">
-        <span>Household Entities</span>
+        <span>Shared Entities</span>
       </button>
       <button class="nav-btn" data-view="macros" onclick="switchView('macros', this)">
         <span>Macros & YAML</span>
@@ -1681,7 +1681,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
 
       <div class="nav-group-label">Administration</div>
       <button class="nav-btn" data-view="system" onclick="switchView('system', this)">
-        <span>System</span>
+        <span>Diagnostics &amp; Identity</span>
         <span class="nav-badge" id="nav-esp-badge">0</span>
       </button>
     </div>
@@ -1705,7 +1705,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
         <div style="display:flex;align-items:center;gap:10px;margin-right:6px;">
           <img src="/api/latter/brand/icon.png" alt="Latter" style="width:28px;height:28px;border-radius:6px;object-fit:contain;flex-shrink:0;" onerror="this.style.display='none'">
           <strong id="hdr-title" style="font-size:15px;color:var(--text-strong);">Latter</strong>
-          <span class="nav-badge" id="hdr-sub">v1.8.5</span>
+          <span class="nav-badge" id="hdr-sub">v1.8.6</span>
         </div>
         <div id="topbar-household-chips" class="hidden" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
           <div class="status-chip"><span id="top-hh-devices">Devices: --</span></div>
@@ -1730,8 +1730,8 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
       <!-- ================================================================== -->
       <section id="view-fleet_overview" class="hidden">
         <div class="page-header">
-          <h2>Household Overview & Devices</h2>
-          <p>Global view of all onboarded ESPHome devices and shared household integrations.</p>
+          <h2>System Overview &amp; Devices</h2>
+          <p>System-wide view of all onboarded ESPHome devices and shared integrations.</p>
         </div>
 
         <div class="card" style="margin-bottom:16px;">
@@ -1742,8 +1742,8 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
 
         <div class="grid-2">
           <div class="card">
-            <h3>Shared Household Configuration</h3>
-            <p class="desc">Settings configured in the Household scope apply automatically across all devices.</p>
+            <h3>Shared System Configuration</h3>
+            <p class="desc">Settings configured in the System scope apply automatically across all devices.</p>
             <div class="summary-row"><span>Security Alarm</span><strong id="hh-sum-alarm">--</strong></div>
             <div class="summary-row"><span>Primary Camera</span><strong id="hh-sum-camera">--</strong></div>
             <div class="summary-row"><span>Weather Provider</span><strong id="hh-sum-weather">--</strong></div>
@@ -1751,14 +1751,14 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
           </div>
 
           <div class="card">
-            <h3>Quick Household Navigation</h3>
-            <p class="desc">Jump directly to shared household calibration and entity mappings.</p>
+            <h3>Quick System Navigation</h3>
+            <p class="desc">Jump directly to shared calibration, fleet defaults, and entity mappings.</p>
             <div style="display:flex;flex-wrap:wrap;gap:8px;">
               <button class="btn-secondary" onclick="navigateToView('room_tracking')">Room Calibration</button>
               <button class="btn-secondary" onclick="navigateToView('fleet_sync')">Fleet Defaults</button>
               <button class="btn-secondary" onclick="navigateToView('remotes')">Remote Controls</button>
               <button class="btn-secondary" onclick="navigateToView('volume_routing')">Volume Routing</button>
-              <button class="btn-secondary" onclick="navigateToView('household')">Household Entities</button>
+              <button class="btn-secondary" onclick="navigateToView('household')">Shared Entities</button>
               <button class="btn-secondary" onclick="navigateToView('macros')">Macros & YAML</button>
             </div>
           </div>
@@ -1901,14 +1901,14 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
       <!-- ================================================================== -->
       <section id="view-household" class="hidden">
         <div class="page-header">
-          <h2>Household Entities</h2>
-          <p>Configure global security alarm, camera, weather provider, pinned entities, and notifications shared across all devices.</p>
+          <h2>Shared Entities</h2>
+          <p>Configure shared security alarm, camera, weather provider, calendars, pinned entities, and notifications.</p>
         </div>
 
         <div class="grid-2">
           <div class="card">
             <h3>Global Entities</h3>
-            <p class="desc">Primary household entities shared across all rooms and devices.</p>
+            <p class="desc">Primary entities shared across all rooms and devices.</p>
             <div class="field">
               <label>Security Alarm (alarm_control_panel)</label>
               <select id="cfg-alarm_entity" onchange="markDirty()"></select>
@@ -1930,7 +1930,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
               <select id="cfg-weather_entity" onchange="markDirty()"></select>
             </div>
             <div class="field" style="margin-bottom:0;">
-              <label>Household Calendars (calendar.*)</label>
+              <label>Shared Calendars (calendar.*)</label>
               <div style="display:flex;gap:8px;">
                 <select id="cal-entity-picker"></select>
                 <button class="btn-secondary" onclick="addCalendarEntity()">Add</button>
@@ -2263,7 +2263,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
 
           <div class="card">
             <h3>Device Speaker & Room Handoff</h3>
-            <p class="desc">Select this device's default speaker and room media handoff behavior. (Global AVR volume overrides are configured in Household &rarr; Volume Routing.)</p>
+            <p class="desc">Select this device's default speaker and room media handoff behavior. (Shared AVR volume overrides are configured in System &rarr; Volume Routing.)</p>
             <div class="field">
               <label>Default Speaker Entity</label>
               <select id="cfg-default_speaker" onchange="markDirty()"></select>
@@ -2288,7 +2288,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
 
         <div class="grid-2">
           <div class="card">
-            <h3>Household WireGuard Endpoint (Global)</h3>
+            <h3>System WireGuard Endpoint</h3>
             <p class="desc">Configure your home WireGuard server endpoint and public key once for all roaming devices.</p>
             <div class="field">
               <label>Public Endpoint (Hostname/IP:Port)</label>
@@ -2369,11 +2369,11 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
       </section>
 
       <!-- ================================================================== -->
-      <!-- DEVICE SCOPE: 7. SYSTEM                                            -->
+      <!-- DEVICE SCOPE: 7. DIAGNOSTICS & IDENTITY                            -->
       <!-- ================================================================== -->
       <section id="view-system" class="hidden">
         <div class="page-header">
-          <h2>System</h2>
+          <h2>Diagnostics &amp; Identity</h2>
           <p>Execute device actions, view network diagnostics, and configure device identity and tracking options.</p>
         </div>
 
@@ -2457,7 +2457,7 @@ let CALENDARS = [];
 let IS_DIRTY = false;
 let INITIAL_FORM_LOADED = false;
 const URL_PARAMS = new URLSearchParams(window.location.search);
-const ENTERED_VIA_HOUSEHOLD = URL_PARAMS.get("scope") === "household";
+const ENTERED_VIA_HOUSEHOLD = ["system", "household"].includes(URL_PARAMS.get("scope"));
 let CURRENT_SCOPE = ENTERED_VIA_HOUSEHOLD ? "household" : "device";
 let DEVICE_SELECTED = !ENTERED_VIA_HOUSEHOLD;
 let CURRENT_THEME_PREF = localStorage.getItem("latter_web_theme") || "ha_auto";
@@ -3455,7 +3455,7 @@ function applyStateToDom(data, forceFormUpdate=false) {
     : `${live.media_state || 'idle'}`;
 
   const devTitle = esp?.device?.name || data.title;
-  document.getElementById("hdr-sub").textContent = `v${data.version || '1.8.5'}`;
+  document.getElementById("hdr-sub").textContent = `v${data.version || '1.8.6'}`;
   document.getElementById("survey-device-name").textContent = devTitle;
   document.getElementById("nav-room-badge").textContent = roomName;
   document.getElementById("top-room").textContent = `Room: ${roomName}`;
@@ -3731,7 +3731,7 @@ class LatterStudioRootView(HomeAssistantView):
                 text="No Latter devices configured yet. Add an ESPHome device under Settings -> Devices & Services -> Latter.",
             )
         primary = coords[0]
-        scope = request.query.get("scope") or "household"
+        scope = request.query.get("scope") or "system"
         token = primary.get_signed_token()
         target_url = f"/api/latter/companion/{primary.entry.entry_id}?token={token}&scope={scope}"
         raise web.HTTPFound(location=target_url)
