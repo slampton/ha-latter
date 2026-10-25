@@ -817,12 +817,12 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             else normalize_device_slug(str(raw_target or "esphome_device"))
         )
 
-        days = int(data.get("days") or 7)
+        days = int(data.get("days") or 30)
         page = int(data.get("page") or 1)
         page_size = int(data.get("page_size") or 5)
 
         if coord:
-            await coord.async_refresh_calendar_agenda()
+            await coord.async_refresh_calendar_agenda(days=days)
             items = coord.calendar_events
         else:
             _, items = await async_fetch_calendar_agenda(hass, [], days=days)

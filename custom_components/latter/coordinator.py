@@ -2121,10 +2121,10 @@ class LatterCoordinator:
         """Refresh family calendar agenda every 15 minutes."""
         await self.async_refresh_calendar_agenda()
 
-    async def async_refresh_calendar_agenda(self) -> None:
+    async def async_refresh_calendar_agenda(self, days: int = 30) -> None:
         """Fetch upcoming calendar events and update sensor state."""
         agenda_str, events = await async_fetch_calendar_agenda(
-            self.hass, self.calendar_entities
+            self.hass, self.calendar_entities, days=days
         )
         self.calendar_agenda_string = agenda_str
         self.calendar_events = events
