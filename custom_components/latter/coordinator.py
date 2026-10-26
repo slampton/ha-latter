@@ -2092,6 +2092,38 @@ class LatterCoordinator:
         duration = float(attrs.get("media_duration") or 0)
         position = _interpolate_speaker_position(state_obj)
 
+        # When playing on the local ESPHome Sendspin speaker, media_player.<slug> often omits media_title in HA;
+        # fall back to the Music Assistant counterpart entity or the ESPHome Now Playing text_sensors!
+        if title == "Idle":
+            ma_counterpart = _resolve_ma_counterpart_entity(
+                self.hass, self.active_speaker, self.device_slug
+            )
+            if ma_counterpart and ma_counterpart != self.active_speaker:
+                ma_st = self.hass.states.get(ma_counterpart)
+                if ma_st is not None and ma_st.attributes.get("media_title"):
+                    m_attrs = ma_st.attributes
+                    title = str(m_attrs.get("media_title") or title)
+                    artist = str(
+                        m_attrs.get("media_artist")
+                        or m_attrs.get("media_series_title")
+                        or m_attrs.get("media_album_artist")
+                        or artist
+                    )
+                    album = str(m_attrs.get("media_album_name") or album)
+                    duration = float(m_attrs.get("media_duration") or duration)
+                    position = _interpolate_speaker_position(ma_st) or position
+
+        if title == "Idle" and self.active_speaker == self.local_speaker:
+            t_st = self.hass.states.get(f"sensor.{self.device_slug}_now_playing_title")
+            a_st = self.hass.states.get(f"sensor.{self.device_slug}_now_playing_artist")
+            al_st = self.hass.states.get(f"sensor.{self.device_slug}_now_playing_album")
+            if t_st is not None and t_st.state not in ("", "None", "Idle", STATE_UNKNOWN, STATE_UNAVAILABLE):
+                title = str(t_st.state)
+                if a_st is not None and a_st.state not in ("", "None", STATE_UNKNOWN, STATE_UNAVAILABLE):
+                    artist = str(a_st.state)
+                if al_st is not None and al_st.state not in ("", "None", STATE_UNKNOWN, STATE_UNAVAILABLE):
+                    album = str(al_st.state)
+
         raw_type = str(attrs.get("media_content_type") or "music").lower()
         if "podcast" in raw_type:
             media_type = "podcast"
@@ -2224,78 +2256,151 @@ class LatterCoordinator:
         album: str,
         duration: float,
     ) -> None:
-        """Fetch time-synced/plain lyrics and artist/album bio from Music Assistant + LRCLIB/Wikipedia."""
+        """Fetch time-synced/plain lyrics and artist/album bio from Music Assistant controllers + LRCLIB/Wikipedia."""
         lrc_lines: list[tuple[float, str]] = []
         plain_lyrics: str = ""
         bio_text: str = ""
 
-        # 1. Check in-process Music Assistant queue item & artist/album metadata first
+        clean_title = re.sub(r"\s*[\(\[][^\)\]]*(?:remaster|edition|version|mix|live|deluxe|mono|stereo)[^\)\]]*[\)\]]", "", title, flags=re.IGNORECASE).strip()
+        clean_title = re.sub(r"\s*-\s*.*(?:remaster|edition|version|mix|live|deluxe).*$", "", clean_title, flags=re.IGNORECASE).strip() or title.strip()
+        clean_album = re.sub(r"\s*[\(\[][^\)\]]*(?:remaster|edition|version|deluxe|expanded)[^\)\]]*[\)\]]", "", album, flags=re.IGNORECASE).strip() or album.strip()
+
+        def _ingest_meta_dict(meta: Any) -> None:
+            nonlocal lrc_lines, plain_lyrics, bio_text
+            if hasattr(meta, "to_dict") and callable(meta.to_dict):
+                meta = meta.to_dict()
+            if not isinstance(meta, dict):
+                return
+            raw_lrc = str(meta.get("lrc_lyrics") or "").strip()
+            raw_plain = str(meta.get("lyrics") or "").strip()
+            raw_desc = str(meta.get("description") or "").strip()
+            if raw_lrc and not lrc_lines:
+                lrc_lines = _parse_lrc_lines(raw_lrc)
+            if raw_plain and not lrc_lines and not plain_lyrics:
+                if "[0" in raw_plain:
+                    lrc_lines = _parse_lrc_lines(raw_plain)
+                if not lrc_lines:
+                    plain_lyrics = raw_plain
+            if raw_desc and not bio_text and len(raw_desc) > 20:
+                bio_text = raw_desc
+
+        # 1. Query Music Assistant in-process queues, music controllers (tracks/albums/artists), and metadata controller
         try:
             mass = _get_mass_client(self.hass)
-            if mass is not None and hasattr(mass, "player_queues"):
-                queues = (
-                    mass.player_queues.all()
-                    if callable(getattr(mass.player_queues, "all", None))
-                    else []
-                )
-                for q in queues:
-                    q_dict = q.to_dict() if hasattr(q, "to_dict") else {}
-                    cur_item = q_dict.get("current_item") or {}
-                    m_item = cur_item.get("media_item") if isinstance(cur_item, dict) else None
-                    if isinstance(m_item, dict):
-                        m_name = str(m_item.get("name") or "").strip().lower()
-                        if m_name and m_name == title.strip().lower():
-                            meta = m_item.get("metadata") or {}
-                            if isinstance(meta, dict):
-                                raw_lrc = str(meta.get("lrc_lyrics") or "").strip()
-                                raw_plain = str(meta.get("lyrics") or "").strip()
-                                raw_desc = str(meta.get("description") or "").strip()
-                                if raw_lrc:
-                                    lrc_lines = _parse_lrc_lines(raw_lrc)
-                                if raw_plain and not lrc_lines:
-                                    if "[0" in raw_plain:
-                                        lrc_lines = _parse_lrc_lines(raw_plain)
-                                    if not lrc_lines:
-                                        plain_lyrics = raw_plain
-                                if raw_desc:
-                                    bio_text = raw_desc
-                            break
+            if mass is not None:
+                if hasattr(mass, "player_queues"):
+                    queues = (
+                        mass.player_queues.all()
+                        if callable(getattr(mass.player_queues, "all", None))
+                        else []
+                    )
+                    for q in queues:
+                        q_dict = q.to_dict() if hasattr(q, "to_dict") else {}
+                        cur_item = q_dict.get("current_item") or {}
+                        m_item = cur_item.get("media_item") if isinstance(cur_item, dict) else None
+                        if isinstance(m_item, dict):
+                            m_name = str(m_item.get("name") or "").strip().lower()
+                            if m_name and (m_name == title.strip().lower() or m_name == clean_title.lower()):
+                                _ingest_meta_dict(m_item.get("metadata"))
+                                break
+
+                if hasattr(mass, "music"):
+                    # Query MA tracks library for full track metadata (lyrics / lrc_lyrics)
+                    if not lrc_lines and not plain_lyrics and hasattr(mass.music, "tracks"):
+                        t_ctrl = mass.music.tracks
+                        if hasattr(t_ctrl, "library_items"):
+                            t_res = await t_ctrl.library_items(search=clean_title, limit=10)
+                            t_items = getattr(t_res, "items", t_res) if t_res is not None else []
+                            for trk in (t_items if isinstance(t_items, list) else []):
+                                _ingest_meta_dict(getattr(trk, "metadata", None))
+                                if not lrc_lines and not plain_lyrics and hasattr(mass, "metadata") and hasattr(mass.metadata, "get_track_lyrics"):
+                                    try:
+                                        lyr_res = await mass.metadata.get_track_lyrics(trk)
+                                        if isinstance(lyr_res, tuple) and len(lyr_res) == 2:
+                                            lyr_txt, is_lrc = lyr_res
+                                            if lyr_txt:
+                                                if is_lrc or "[0" in str(lyr_txt):
+                                                    lrc_lines = _parse_lrc_lines(str(lyr_txt))
+                                                else:
+                                                    plain_lyrics = str(lyr_txt).strip()
+                                        elif isinstance(lyr_res, str) and lyr_res.strip():
+                                            if "[0" in lyr_res:
+                                                lrc_lines = _parse_lrc_lines(lyr_res)
+                                            else:
+                                                plain_lyrics = lyr_res.strip()
+                                    except Exception:  # noqa: BLE001
+                                        pass
+                                if lrc_lines or plain_lyrics:
+                                    break
+
+                    # Query MA albums & artists library for full biography / description metadata
+                    if not bio_text and album and album != "None" and hasattr(mass.music, "albums"):
+                        al_ctrl = mass.music.albums
+                        if hasattr(al_ctrl, "library_items"):
+                            al_res = await al_ctrl.library_items(search=clean_album, limit=5)
+                            al_items = getattr(al_res, "items", al_res) if al_res is not None else []
+                            for alb_obj in (al_items if isinstance(al_items, list) else []):
+                                _ingest_meta_dict(getattr(alb_obj, "metadata", None))
+                                if bio_text:
+                                    break
+
+                    if not bio_text and artist and artist != "None" and hasattr(mass.music, "artists"):
+                        ar_ctrl = mass.music.artists
+                        if hasattr(ar_ctrl, "library_items"):
+                            ar_res = await ar_ctrl.library_items(search=artist, limit=5)
+                            ar_items = getattr(ar_res, "items", ar_res) if ar_res is not None else []
+                            for art_obj in (ar_items if isinstance(ar_items, list) else []):
+                                _ingest_meta_dict(getattr(art_obj, "metadata", None))
+                                if bio_text:
+                                    break
         except Exception as err:  # noqa: BLE001
-            _LOGGER.debug("MA metadata lyrics/bio lookup skipped: %s", err)
+            _LOGGER.debug("MA controller lyrics/bio lookup skipped: %s", err)
 
         session = async_get_clientsession(self.hass)
-        timeout = aiohttp.ClientTimeout(total=4.5)
+        timeout = aiohttp.ClientTimeout(total=5.0)
         headers = {"User-Agent": "HomeAssistant-Latter/2.0 (https://github.com/slampton/ha-latter)"}
 
-        # 2. Fetch synced/plain lyrics from LRCLIB if not already found in MA
+        # 2. Fetch synced/plain lyrics from LRCLIB (tries exact title first, then clean remaster-stripped title)
         if not lrc_lines and not plain_lyrics and artist and artist != "None":
-            try:
-                q_url = (
-                    f"https://lrclib.net/api/search?track_name={quote(title)}"
-                    f"&artist_name={quote(artist)}"
-                )
-                async with session.get(q_url, timeout=timeout, headers=headers) as resp:
-                    if resp.status == 200:
-                        items = await resp.json()
-                        if isinstance(items, list) and items:
-                            best = items[0]
-                            for cand in items:
-                                if isinstance(cand, dict) and cand.get("syncedLyrics"):
-                                    best = cand
-                                    break
-                            if isinstance(best, dict):
-                                s_lrc = str(best.get("syncedLyrics") or "").strip()
-                                p_lyr = str(best.get("plainLyrics") or "").strip()
-                                if s_lrc:
-                                    lrc_lines = _parse_lrc_lines(s_lrc)
-                                if p_lyr and not plain_lyrics:
-                                    plain_lyrics = p_lyr
-            except Exception as err:  # noqa: BLE001
-                _LOGGER.debug("LRCLIB lookup failed for '%s': %s", title, err)
+            search_titles = [title.strip()]
+            if clean_title.lower() != title.strip().lower():
+                search_titles.append(clean_title)
+            for s_title in search_titles:
+                if lrc_lines or plain_lyrics:
+                    break
+                try:
+                    q_url = (
+                        f"https://lrclib.net/api/search?track_name={quote(s_title)}"
+                        f"&artist_name={quote(artist)}"
+                    )
+                    async with session.get(q_url, timeout=timeout, headers=headers) as resp:
+                        if resp.status == 200:
+                            items = await resp.json()
+                            if isinstance(items, list) and items:
+                                best = items[0]
+                                for cand in items:
+                                    if isinstance(cand, dict) and cand.get("syncedLyrics"):
+                                        best = cand
+                                        break
+                                if isinstance(best, dict):
+                                    s_lrc = str(best.get("syncedLyrics") or "").strip()
+                                    p_lyr = str(best.get("plainLyrics") or "").strip()
+                                    if s_lrc:
+                                        lrc_lines = _parse_lrc_lines(s_lrc)
+                                    if p_lyr and not plain_lyrics:
+                                        plain_lyrics = p_lyr
+                except Exception as err:  # noqa: BLE001
+                    _LOGGER.debug("LRCLIB lookup failed for '%s': %s", s_title, err)
 
         # 3. Fetch Artist / Album summary bio from Wikipedia REST API if not in MA
         if not bio_text and artist and artist != "None":
-            for query_term in (f"{album} ({artist} album)", album, f"{artist} (band)", f"{artist} (musician)", artist):
+            for query_term in (
+                f"{clean_album} ({artist} album)",
+                clean_album,
+                f"{artist} (band)",
+                f"{artist} (musician)",
+                artist,
+            ):
                 if not query_term or query_term == "None":
                     continue
                 try:
