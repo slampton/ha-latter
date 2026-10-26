@@ -985,7 +985,8 @@ class LatterCompanionApiView(HomeAssistantView):
                 if k in incoming_cfg:
                     val = incoming_cfg[k]
                     if k == CONF_ART_SIZE:
-                        val = int(val or DEFAULT_ART_SIZE)
+                        s_val = str(val or DEFAULT_ART_SIZE).strip().lower()
+                        val = s_val if "x" in s_val else int(s_val or DEFAULT_ART_SIZE)
                     elif k == CONF_DEFAULT_PAGE_SIZE:
                         val = max(1, min(20, int(val or DEFAULT_PAGE_SIZE)))
                     elif k == CONF_WALLPAPER_CYCLE_MINUTES:
@@ -1016,6 +1017,37 @@ class LatterCompanionApiView(HomeAssistantView):
             return web.json_response(
                 _build_companion_state_payload(self.hass, coordinator)
             )
+
+        if cmd == "remove_device":
+            target_entry_id = str(body.get("entry_id") or "").strip()
+            target_slug = str(body.get("device_slug") or "").strip()
+            all_coords = _get_all_coordinators(self.hass)
+            target_coord = next(
+                (
+                    c
+                    for c in all_coords
+                    if c.entry.entry_id == target_entry_id or (target_slug and c.device_slug == target_slug)
+                ),
+                None,
+            )
+            if target_coord is None:
+                return web.json_response(
+                    {"error": "Target device not found"}, status=HTTPStatus.NOT_FOUND
+                )
+            remaining = [
+                c for c in all_coords if c.entry.entry_id != target_coord.entry.entry_id
+            ]
+            redirect_url = (
+                f"/api/latter/companion/{remaining[0].entry.entry_id}?token={remaining[0].get_signed_token()}&scope=system"
+                if remaining
+                else "/config/integrations/integration/latter"
+            )
+            await self.hass.config_entries.async_remove(target_coord.entry.entry_id)
+            if remaining and coordinator.entry.entry_id != target_coord.entry.entry_id:
+                return web.json_response(
+                    _build_companion_state_payload(self.hass, coordinator)
+                )
+            return web.json_response({"removed": True, "redirect_url": redirect_url})
 
         if cmd == "bridge_esphome_device":
             raw_slug = str(body.get("device_slug") or "").strip()
@@ -2480,7 +2512,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
               </div>
               <small style="color:var(--muted);display:block;margin-bottom:8px;">Makes any portable/battery ESP32 trackable room-to-room by Latter (disambiguated automatically by hardware MAC).</small>
               <pre id="mixin-ble-beacon" class="mono" style="margin:0;padding:8px;background:var(--card);border:1px solid var(--border);border-radius:6px;overflow-x:auto;">packages:
-  latter.ble: github://slampton/ha-latter/esphome/latter-ble-beacon.yaml@main</pre>
+  latter.ble: github://slampton/esphome-latter-core/mixins/ble_beacon.yaml@main</pre>
             </div>
 
             <div style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
@@ -2490,7 +2522,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
               </div>
               <small style="color:var(--muted);display:block;margin-bottom:8px;">Adds encrypted remote access over phone hotspots + live VPN status sensors (generate keys in Device &rarr; Roaming &amp; VPN).</small>
               <pre id="mixin-vpn" class="mono" style="margin:0;padding:8px;background:var(--card);border:1px solid var(--border);border-radius:6px;overflow-x:auto;">packages:
-  latter.vpn: github://slampton/ha-latter/esphome/latter-vpn.yaml@main</pre>
+  latter.vpn: github://slampton/esphome-latter-core/mixins/roaming_vpn.yaml@main</pre>
             </div>
 
             <div style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
@@ -2500,7 +2532,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
               </div>
               <small style="color:var(--muted);display:block;margin-bottom:8px;">Turns any mains-powered ESP32 node into an active room Bluetooth scanner for Latter's Room Calibration radar.</small>
               <pre id="mixin-ble-proxy" class="mono" style="margin:0;padding:8px;background:var(--card);border:1px solid var(--border);border-radius:6px;overflow-x:auto;">packages:
-  latter.proxy: github://slampton/ha-latter/esphome/latter-ble-proxy.yaml@main</pre>
+  latter.proxy: github://slampton/esphome-latter-core/mixins/ble_proxy.yaml@main</pre>
             </div>
 
             <div style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
@@ -2510,7 +2542,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
               </div>
               <small style="color:var(--muted);display:block;margin-bottom:8px;">Adds Uptime, Wi-Fi Signal, Restart button, and automatic Latter discovery for custom nodes.</small>
               <pre id="mixin-core" class="mono" style="margin:0;padding:8px;background:var(--card);border:1px solid var(--border);border-radius:6px;overflow-x:auto;">packages:
-  latter.core: github://slampton/ha-latter/esphome/latter-core.yaml@main</pre>
+  latter.core: github://slampton/esphome-latter-core/mixins/diagnostics.yaml@main</pre>
             </div>
           </div>
         </div>
@@ -2659,7 +2691,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
               </div>
               <small style="color:var(--muted);display:block;margin-bottom:8px;">Broadcasts a BLE iBeacon so Latter tracks which room this device is in.</small>
               <pre id="dev-ble-beacon-snip" class="mono" style="margin:0;padding:8px;background:var(--card);border:1px solid var(--border);border-radius:6px;overflow-x:auto;">packages:
-  latter.ble: github://slampton/ha-latter/esphome/latter-ble-beacon.yaml@main</pre>
+  latter.ble: github://slampton/esphome-latter-core/mixins/ble_beacon.yaml@main</pre>
             </div>
             <div style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
@@ -2668,7 +2700,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
               </div>
               <small style="color:var(--muted);display:block;margin-bottom:8px;">Turns this stationary ESP32 (e.g. Bed Presence) into an active room Bluetooth scanner for your mobile displays.</small>
               <pre id="dev-ble-proxy-snip" class="mono" style="margin:0;padding:8px;background:var(--card);border:1px solid var(--border);border-radius:6px;overflow-x:auto;">packages:
-  latter.proxy: github://slampton/ha-latter/esphome/latter-ble-proxy.yaml@main</pre>
+  latter.proxy: github://slampton/esphome-latter-core/mixins/ble_proxy.yaml@main</pre>
             </div>
           </div>
         </div>
@@ -2730,10 +2762,11 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
                   <option value="square">Square / Rectangular</option>
                 </select>
                 <select id="cfg-art_size" onchange="markDirty()">
-                  <option value="466">466x466 px</option>
+                  <option value="466">466x466 px (1.75" Round)</option>
+                  <option value="410x502">410x502 px (2.06" Watch)</option>
                   <option value="360">360x360 px</option>
                   <option value="240">240x240 px</option>
-                  <option value="480">480x480 px</option>
+                  <option value="480">480x480 px (Wall Panel)</option>
                 </select>
               </div>
             </div>
@@ -3005,6 +3038,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
               <button type="button" class="btn-secondary" onclick="createDeviceQuickBackup()">Backup This Device</button>
               <button type="button" class="btn-secondary" onclick="exportBackupToComputer('device')">Download Device .JSON</button>
               <button type="button" class="btn-secondary" onclick="navigateToView('fleet_sync')">Apply Profile &rarr;</button>
+              <button type="button" class="btn-danger" onclick="removeManagedDevice(STATE.entry_id, STATE.title)">Remove Device</button>
             </div>
             <div class="toggle-row">
               <span>Enable ESPHome BLE Proxy Room Tracking</span>
@@ -3459,6 +3493,7 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
       <div class="widget">
         <select style="min-width:140px;" title="Assign Device Group" onchange="assignDeviceGroup('${d.device_slug}', this.value)">${grpOpts}</select>
         <button class="btn-primary" onclick="${actAction}">Manage Device</button>
+        <button class="btn-danger" title="Remove device from Latter" onclick="removeManagedDevice('${d.entry_id}', '${d.title.replace(/'/g, "")}')">✕</button>
       </div>
     </div>`;
   }).join("");
@@ -4221,6 +4256,26 @@ async function generateDeviceVpnKeys() {
   }
 }
 
+async function removeManagedDevice(entryId, title) {
+  if (!confirm(`Remove '${title || entryId}' from Latter? (Your ESPHome device itself will remain in Home Assistant, and you can re-add or bridge it anytime.)`)) {
+    return;
+  }
+  const resp = await fetch(API_URL, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({command: "remove_device", entry_id: entryId})
+  });
+  if (resp.ok) {
+    const data = await resp.json();
+    if (data.removed && data.redirect_url) {
+      window.location.href = data.redirect_url;
+      return;
+    }
+    applyStateToDom(data, false);
+    showToast(`Removed '${title}' from Latter`);
+  }
+}
+
 async function bridgeSelectedEsphomeDevice() {
   const picker = document.getElementById("bridge-device-picker");
   if (!picker || !picker.value) return;
@@ -4711,7 +4766,7 @@ async function saveAllConfig() {
     dock_apps: document.getElementById("cfg-dock_apps").value.trim(),
     wallpaper_source: document.getElementById("cfg-wallpaper_source").value.trim(),
     wallpaper_cycle_minutes: parseInt(document.getElementById("cfg-wallpaper_cycle_minutes").value, 10) || 0,
-    art_size: parseInt(document.getElementById("cfg-art_size").value, 10),
+    art_size: document.getElementById("cfg-art_size").value.includes("x") ? document.getElementById("cfg-art_size").value : (parseInt(document.getElementById("cfg-art_size").value, 10) || 466),
     calendar_entities: CALENDARS,
     custom_entities: PINNED,
     custom_bindings: bindings,

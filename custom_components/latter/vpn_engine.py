@@ -88,7 +88,7 @@ def build_wireguard_provisioning_snippets(
         f"# === OPTION A: 1-Line Drop-In Mixin Package for '{device_slug}' (Recommended) ===",
         "# 1. Add this single line under packages: in your device's ESPHome YAML:",
         "packages:",
-        "  latter.vpn: github://slampton/ha-latter/esphome/latter-vpn.yaml@main",
+        "  latter.vpn: github://slampton/esphome-latter-core/mixins/roaming_vpn.yaml@main",
         "",
         "# 2. Paste these 4 lines into your ESPHome secrets.yaml:",
         f"# latter_vpn_private_key: \"{client_priv}\"",

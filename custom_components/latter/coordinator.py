@@ -618,9 +618,33 @@ class LatterCoordinator:
         return bool(self.get_opt(CONF_AREA_HANDOFF, DEFAULT_AREA_HANDOFF))
 
     @property
-    def art_size(self) -> int:
-        """Return target square artwork dimension in pixels."""
-        return int(self.get_opt(CONF_ART_SIZE, DEFAULT_ART_SIZE))
+    def art_size(self) -> str | int:
+        """Return configured artwork resolution ('410x502' or integer square size like 466)."""
+        raw = str(self.get_opt(CONF_ART_SIZE, DEFAULT_ART_SIZE) or DEFAULT_ART_SIZE).strip().lower()
+        if "x" in raw:
+            return raw
+        try:
+            return int(raw)
+        except ValueError:
+            return DEFAULT_ART_SIZE
+
+    @property
+    def art_dimensions(self) -> tuple[int, int]:
+        """Return (width, height) in pixels for Baseline-JPEG transcoders (supports square 466x466 and rectangular 410x502)."""
+        raw = str(self.get_opt(CONF_ART_SIZE, DEFAULT_ART_SIZE) or DEFAULT_ART_SIZE).strip().lower()
+        if "x" in raw:
+            parts = raw.split("x", 1)
+            try:
+                w = max(64, min(1920, int(parts[0].strip())))
+                h = max(64, min(1920, int(parts[1].strip())))
+                return w, h
+            except ValueError:
+                return DEFAULT_ART_SIZE, DEFAULT_ART_SIZE
+        try:
+            sq = max(64, min(1920, int(raw)))
+            return sq, sq
+        except ValueError:
+            return DEFAULT_ART_SIZE, DEFAULT_ART_SIZE
 
     def get_signed_token(self) -> str:
         """Generate an HMAC-SHA256 token for this config entry's companion UI."""
@@ -686,11 +710,11 @@ class LatterCoordinator:
         if not cam_ent:
             return "none"
         base_url = self.get_lan_base_url()
-        size = self.art_size
+        w, h = self.art_dimensions
         v_tag = cache_bust or str(int(time.time()))
         return (
             f"{base_url}/api/latter/camera/{self.device_slug}"
-            f"?entity_id={cam_ent}&w={size}&h={size}&shape={self.display_shape}&v={v_tag}"
+            f"?entity_id={cam_ent}&w={w}&h={h}&shape={self.display_shape}&v={v_tag}"
         )
 
     def build_map_snapshot_url(self, location: str) -> str:
@@ -701,10 +725,10 @@ class LatterCoordinator:
         if not clean_loc:
             return "none"
         base_url = self.get_lan_base_url()
-        size = self.art_size
+        w, h = self.art_dimensions
         return (
             f"{base_url}/api/latter/map/{self.device_slug}"
-            f"?w={size}&h={size}&shape={self.display_shape}&q={quote_plus(clean_loc)}"
+            f"?w={w}&h={h}&shape={self.display_shape}&q={quote_plus(clean_loc)}"
         )
 
     @callback
@@ -737,23 +761,23 @@ class LatterCoordinator:
         if not self.wallpaper_source:
             return "none"
         base_url = self.get_lan_base_url()
-        size = self.art_size
+        w, h = self.art_dimensions
         digest = hashlib.md5(
-            f"{self.wallpaper_source}|{self.display_shape}|{size}".encode("utf-8")
+            f"{self.wallpaper_source}|{self.display_shape}|{w}x{h}".encode("utf-8")
         ).hexdigest()[:10]
         return (
             f"{base_url}/api/latter/wallpaper/{self.device_slug}"
-            f"?w={size}&h={size}&shape={self.display_shape}&v={digest}"
+            f"?w={w}&h={h}&shape={self.display_shape}&v={digest}"
         )
 
     def build_proxy_art_url(self, cache_bust: str) -> str:
         """Build the universal Baseline-JPEG artwork URL (/api/latter/artwork/<device_slug>?w=...&h=...&v=...)."""
         base_url = self.get_lan_base_url()
-        size = self.art_size
+        w, h = self.art_dimensions
         digest = hashlib.md5(cache_bust.encode("utf-8")).hexdigest()[:10]
         return (
             f"{base_url}/api/latter/artwork/{self.device_slug}"
-            f"?w={size}&h={size}&v={digest}"
+            f"?w={w}&h={h}&v={digest}"
         )
 
     @callback
