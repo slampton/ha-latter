@@ -1,140 +1,100 @@
 # Latter (`ha-latter`)
 
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=slampton&repository=ha-latter&category=integration)
+[![Version](https://img.shields.io/badge/Version-v2.1.0-03a9f4.svg)](https://github.com/slampton/ha-latter/releases)
+[![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2026.10.0%2B-41BDF5.svg)](https://www.home-assistant.io)
+[![Quality Scale](https://img.shields.io/badge/Quality%20Scale-Platinum%20Target-brightgreen.svg)](custom_components/latter/quality_scale.yaml)
 
-**Universal Home Assistant companion middleware and dynamic entity-mapping platform for ESPHome devices.**
+**Universal Home Assistant companion middleware, dynamic entity-mapping platform, and room/site fabric for ESPHome devices.**
 
-Flagship reference hardware: **[Pocket Assistant](https://github.com/slampton/esphome-pocket-assistant)** (Waveshare ESP32-S3-Touch-AMOLED-1.75C).
+Flagship reference hardware: **[Pocket Assistant (`v2.1.0+`)](https://github.com/slampton/esphome-pocket-assistant)** (Waveshare ESP32-S3-Touch-AMOLED-1.75C).
 
 ---
 
 ## Why Latter Exists
 
-ESPHome devices—whether portable battery-powered smart displays, stationary wall panels, rotary knob controllers, or headless button/sensor nodes—should do as much as possible locally on the MCU. However, three limitations always hit complex ESPHome projects:
+ESPHome devices—whether portable battery-powered smart displays, stationary wall panels, rotary knob controllers, or headless button/sensor nodes—should do as much as possible locally on the MCU. However, three limitations always hit sophisticated ESPHome projects:
 
-1. **The YAML Recompile Trap**: Users shouldn't have to edit YAML `substitutions:` and recompile C++ firmware for 10 minutes just to change a weather provider, swap a TV remote entity, map a hardware button, or add a speaker volume override.
-2. **MCU RAM & Flash Limits**: Running an on-device `web_server`, decoding 2000×2000 progressive PNG/WebP album art, or sorting 500 Music Assistant library items on an ESP32 wastes precious PSRAM, flash, and battery.
-3. **Cross-Integration Context**: A portable ESPHome device moving from room to room needs Home Assistant to track its BLE signal across room proxies, switch its active room controls, and update its Home Assistant Area assignment so saying *"Turn on the lights"* to the Voice Assistant controls the room you are standing in.
+1. **The YAML Recompile Trap**: Users shouldn't have to edit YAML `substitutions:` and recompile C++ firmware just to change a weather provider, swap a TV remote entity, map a macro button, or add an AV receiver volume override.
+2. **MCU RAM & Flash Limits**: Running an on-device `web_server`, decoding progressive PNG/WebP album art, rendering OpenStreetMap tiles, or sorting 500 Music Assistant library items on an ESP32 wastes PSRAM, flash, and battery.
+3. **Cross-Integration Context & Multi-Device Management**: A portable ESPHome device moving from room to room needs Home Assistant to track its BLE signal across room proxies, switch its active room controls, and update its Home Assistant Area assignment so saying *"Turn on the lights"* to Assist targets the room you are standing in—while multiple devices across your home need shared entity mappings, reusable profiles, and 1-click backup/restore.
 
-**Latter** solves all three on the Home Assistant server while exposing a clean, hardware-agnostic **ESPHome Wire Specification** over ESPHome's native Noise-encrypted API.
+**Latter** solves all three on the Home Assistant server while exposing a clean, hardware-agnostic **ESPHome Wire Specification (`v2.1+`)** over ESPHome's native Noise-encrypted API.
 
 ---
 
-## Core Capabilities
+## Core Capabilities in v2.1.0
 
-- **Server-Side Web Companion Studio (`/api/latter/companion/<entry_id>`)**: Click **Visit** on your ESPHome device in Home Assistant to open a full Device Manager, Live BLE Signal Radar, 4-Slot Remote Mapper, AVR Volume Override Mapper, and Universal Hardware Trigger Mapper—zero on-device `web_server` overhead.
-- **Native ESPHome BLE Proxy Room Tracking (`ble_engine.py`)**: Tracks your portable device's BLE iBeacon across fixed ESPHome `bluetooth_proxy` nodes (EMA RSSI smoothing, 5 dB hysteresis, instant wake lock after standby) with optional Bermuda BLE Trilateration override.
-- **Live Two-Way Room Control & Environmental Telemetry (`room_engine.py`)**: Automatically discovers lights, window coverings, fans, climate, scenes, and smart outlets per room, subscribes to live state changes (`250ms` debounced push), and exposes ambient `room_temp` and `room_humidity`.
-- **Music Assistant 2.10+ Library, Queue & Handoff Engine (`browse_engine.py`)**: Paginates speakers, favorites, playlists, artists, albums, tracks, active queues, and podcast episodes, and performs single-call `music_assistant.transfer_queue` handoffs with position verification.
-- **Universal Baseline-JPEG Transcoder (`/api/latter/artwork/<device_slug>`)**: Converts any upstream image format (PNG, WebP, Progressive JPEG, GIF) into non-progressive Baseline JPEG sized to your screen (`?w=466&h=466&shape=circle`), backed by a 16-entry RAM LRU cache.
-- **4-Slot Hybrid TV / Media Remote Adapter**: Automatically pairs sibling `remote.*` and `media_player.*` entities on the same device and translates navigation intents across Android TV (`DPAD_*`), Apple TV, Roku, LG webOS (`webostv.button`), and Denon/Marantz AVRs (`denonavr.get_command`).
+- **Native Home Assistant Sidebar Panel (`Latter Studio`)**: Registers a native `Latter` panel in the Home Assistant sidebar (inheriting your active HA dark/light/custom theme variables) with dual **System** and **Device** scopes—zero on-device `web_server` overhead.
+- **System & Device Backup & Restore (`backup_engine.py`)**:
+  - **Dual Scope**: Back up your entire **System** (`.storage/latter.household` shared entities, BLE room calibration offsets, 4-slot remotes, AVR volume routing, custom color palettes, macro bindings, device groups, reusable profiles, and all devices) or an individual **Device** (including a live snapshot of all configurable ESPHome `select`, `switch`, and `number` entities).
+  - **Internal Snapshot Vault & Computer `.JSON` Export/Import**: Save up to 25 restore points in `.storage/latter.backups`, download `.json` backup bundles to your computer, upload `.json` files to restore, or clone a device snapshot onto a replacement ESPHome node.
+- **Device Groups & Reusable Configuration Profiles**: Organize devices into logical groups (*Handheld Displays*, *Bedrooms*, *Common Areas*, *Wall Panels*, or custom groups), capture a device's complete settings + ESPHome preferences as a reusable **Profile** (or use built-in starter profiles), and apply profiles or live controls across a single device, a group, or all devices in 1 click.
+- **Native ESPHome BLE Proxy Room Tracking & 1-Tap Calibration (`ble_engine.py`)**: Tracks your portable device's BLE iBeacon across fixed ESPHome `bluetooth_proxy` nodes (EMA RSSI smoothing, 5 dB hysteresis, log-distance estimation) with a live **Site Survey** UI and **1-Tap `Prioritize Here`** per-room dB offset calibration.
+- **Live Two-Way Room & Whole-Home Control (`room_engine.py`)**: Automatically discovers scenes, lights (including RGB color & `2000K–6500K` Kelvin control), window coverings (blinds/curtains), fans, switches, room media, and whole-home entities (alarm, thermostat, garage/locks, robot vacuum), pushing debounced (`250ms`) slot updates and ambient `room_temp` / `room_humidity`.
+- **Music Assistant 2.10.8+ Library, Queue, Lyrics & Bio Engine (`browse_engine.py`)**: Paginates speakers, favorites, playlists, artists, albums, tracks, active queues, podcast episodes, **time-synced/plain track lyrics**, and **artist/album biographies** (via Music Assistant + LRCLIB/Wikipedia fallback), plus single-call `music_assistant.transfer_queue` handoffs and post-reboot Sendspin queue recovery.
+- **Baseline-JPEG Transcoders (`/api/latter/{artwork|wallpaper|camera|map}/<device_slug>`)**: Converts album art, custom/preset wallpapers, live `camera.*` snapshots, and **OpenStreetMap** event location tiles (with zoom `z=10..18` and `pan_x`/`pan_y` support) into non-progressive Baseline JPEGs sized and bezel-masked for your display.
+- **4-Slot Hybrid TV / Media Remote & AVR Volume Router**: Automatically pairs sibling `remote.*` and `media_player.*` entities and translates navigation commands across Android TV (`DPAD_*`), Apple TV, Roku, Samsung TV, LG webOS (`webostv.button`), and Denon/Marantz AVRs (`denonavr.get_command`).
+- **Roaming WireGuard VPN Provisioner (`vpn_engine.py`)**: Generates RFC 7748 Curve25519 WireGuard keypairs and copy-pasteable ESPHome + WireGuard server peer snippets so portable ESPHome devices stay connected over a phone hotspot away from home.
 
 ---
 
 ## Installation
 
-1. Click the **Open HACS Repository** badge above, or add `https://github.com/slampton/ha-latter` as a Custom Repository (Category: **Integration**) in HACS / Home Assistant Marketplace.
+1. Click the **Open HACS Repository** badge above, or add `https://github.com/slampton/ha-latter` as a Custom Repository (Category: **Integration**) in HACS.
 2. Download **Latter** and restart Home Assistant.
-3. Go to **Settings > Devices & Services > Add Integration** and search for **Latter** (or accept the automatic discovery card when your ESPHome device connects).
-4. Click **Visit** on the Latter or ESPHome device page to open the **Latter Companion Studio**, or use **Configure** in Home Assistant.
+3. Latter automatically discovers compatible ESPHome devices under **Settings -> Devices & Services** (or click **Add Integration -> Latter**).
+4. Open **Latter** from the Home Assistant sidebar (or click **Visit** on the device page) to launch **Latter Studio**.
 
 ---
 
-## Public ESPHome Developer Wire Specification (`v1.4+`)
+## Public ESPHome Developer Wire Specification (`v2.1+`)
 
-Any ESPHome project (custom C++ display, LVGL touchscreen, e-paper dashboard, or headless button/sensor node) can adopt Latter modularly. You only subscribe to the sensors or services your hardware needs.
+Any ESPHome project (custom C++ display, LVGL panel, e-paper dashboard, or headless button/sensor node) can adopt Latter modularly.
 
 ### 1. Device-Scoped Sensors (`sensor.<device_slug>_*`)
 
-When you configure Latter for an ESPHome device named `kitchen-panel` (slug `kitchen_panel`) or `pocket-assistant` (slug `pocket_assistant`), Latter creates 5 push-updated sensors:
-
 | Entity ID | State | Key Attributes |
 | :--- | :--- | :--- |
-| `sensor.<slug>_active_media` | `playing` \| `paused` \| `idle` \| `buffering` \| `off` | `title`, `artist`, `album`, `duration`, `position` (2s idle-guarded only while playing), `volume` (`0.0..1.0`), `media_type`, `supported_features`, `art_url`, `active_speaker`, `last_speaker`, `local_speaker`, `volume_entity` |
-| `sensor.<slug>_room_context` | Active Room Name (e.g. `Living Room`) | `area_id`, `area_name`, `room_temp`, `room_humidity`, `lights_on`, `covers_open`, `entity_count`, `area_speaker`, `area_remote`, `alarm_entity`, `alarm_state`, `alarm_code_required`, `dock_apps`, `wallpaper_url`, `companion_url`, `entities_summary` |
+| `sensor.<slug>_active_media` | `playing` \| `paused` \| `idle` \| `buffering` \| `off` | `title`, `artist`, `album`, `duration`, `position` (2s idle-guarded + 4.5s transfer hold), `volume` (`0.0..1.0`), `media_type`, `supported_features`, `art_url`, `active_speaker`, `last_speaker`, `local_speaker`, `volume_entity` |
+| `sensor.<slug>_room_context` | Active Room Name | `site_id`, `area_id`, `area_name`, `available_domains` (`scene,light,cover,fan,switch,media`), `room_temp`, `room_humidity`, `alarm_entity`, `alarm_state`, `ble_closest_proxy`, `ble_packets_seen`, `ble_rssi_by_room`, `ble_room_offsets`, `dock_apps`, `wallpaper_url`, `camera_snapshot_url`, `alert_*`, `custom_bindings_summary`, `theme_color_hex`, `custom_palettes`, `vpn_enabled`, `vpn_client_ip` |
 | `sensor.<slug>_weather_forecast` | `MON:72:55:sunny;TUE:68:52:cloudy;...` (5 days) | `condition`, `temperature`, `humidity`, `wind_speed`, `wind_bearing`, `high`, `low`, `weather_entity` |
 | `sensor.<slug>_remote_config` | Active Remote Name | `active_slot` (`1..4`), `configured_count`, `slot_1..4_name`, `slot_1..4_remote`, `slot_1..4_media_player`, `slot_1..4_state`, `slots_summary` |
 | `sensor.<slug>_calendar_agenda` | `TODAY 14:30\|Dentist;TOM 09:00\|Standup;...` | `event_count`, `events`, `calendars` |
 
 ### 2. Baseline-JPEG HTTP Endpoints (For `online_image`)
 
-ESPHome's `online_image` JPEG decoder requires non-progressive Baseline JPEGs. Latter provides two fast LAN endpoints (cached in RAM):
+- **Album / Podcast Artwork**: `/api/latter/artwork/<device_slug>?w=466&h=466&v=<hash>`
+- **Photo & Preset Wallpapers**: `/api/latter/wallpaper/<device_slug>?w=466&h=466&shape=circle&v=<hash>`
+- **Live Camera Snapshots**: `/api/latter/camera/<device_slug>?entity_id=camera.front_door&w=466&h=466&shape=circle&v=<ts>`
+- **Interactive OpenStreetMap Snapshots**: `/api/latter/map/<device_slug>?w=466&h=466&shape=circle&q=<location>&z=15&pan_x=0&pan_y=0`
 
-- **Album / Podcast Artwork**:
-  `http://<ha_ip>:8123/api/latter/artwork/<device_slug>?w=466&h=466&shape=circle&v=<hash>`
-  *(Automatically published in the `art_url` attribute of `sensor.<slug>_active_media`)*
-- **Pre-Masked Photo Wallpaper**:
-  `http://<ha_ip>:8123/api/latter/wallpaper/<device_slug>?w=466&h=466&shape=circle&v=<hash>`
-  *(Automatically published in the `wallpaper_url` attribute of `sensor.<slug>_room_context`)*
+### 3. ESPHome Inbound API Actions (`api: actions:`)
 
-### 3. ESPHome Inbound Pagination Callbacks (`api.services`)
+Expose any of these actions under `api: actions:` in your ESPHome YAML (Latter auto-detects slot capacity `s1`..`s20`):
 
-To display paginated lists or room controls without storing large arrays in MCU RAM, expose one or both of these services in your ESPHome YAML under `api: services:`. Latter automatically inspects your service schema to detect how many slots (`s1` .. `sN`, from `1` to `20`) your GUI supports!
+- **`set_browse_slots`**: 5-slot (up to 20-slot) paginated list callback for Music (`speakers`, `favorites`, `playlist`, `artist`, `album`, `podcast`, `radio`, `audiobook`, `active_queue`, `lyrics`, `bio`), Room Picker (`room_areas`), and Calendar (`calendar_agenda`).
+- **`set_room_slots`**: Interactive room entity callback including `sX_level` (`0..100` for `light`, `cover`, `fan`; `-1` for toggle/scene domains).
+- **`show_notification`**: Optional direct push toast & camera peephole alert callback (`title`, `message`, `priority`, `duration`, `chime`, `camera_url`).
 
-#### A. `set_browse_slots` (5-Slot Compact List Callback — Music, Room Picker `room_areas`, Calendar)
-```yaml
-api:
-  services:
-    - service: set_browse_slots
-      variables:
-        mode: string
-        page: int
-        total_pages: int
-        has_prev: bool
-        has_next: bool
-        s1_name: string
-        s1_id: string
-        s1_type: string
-        s1_active: bool
-        # Repeat s2_* through s5_* (or up to s20_* for large wall panels)
-```
+### 4. Outbound Latter Services (`homeassistant.action` -> `latter.*`)
 
-#### B. `set_room_slots` (3-Slot Interactive Control Card Callback — Room Entities & Home Alarm)
-Includes `sX_level` (`0..100` for slider-capable domains `light`, `cover`, `fan`; `-1` for toggle/button domains `scene`, `switch`, `climate`, `media_player`, `alarm_control_panel`):
-```yaml
-api:
-  services:
-    - service: set_room_slots
-      variables:
-        mode: string
-        page: int
-        total_pages: int
-        has_prev: bool
-        has_next: bool
-        s1_name: string
-        s1_id: string
-        s1_type: string
-        s1_active: bool
-        s1_level: int
-        # Repeat s2_* through s3_* (or up to s20_*; falls back to set_browse_slots if omitted)
-```
-
-### 4. Outbound Actions (`homeassistant.action` -> `latter.*`)
-
-Call any of Latter's 12 services from ESPHome using `homeassistant.action:`:
-
-| Service | Purpose & Parameters |
+| Service | Purpose |
 | :--- | :--- |
-| `latter.room_browse` | Browse rooms or room entities. `mode`: `"areas"` (pushes 5-row page to `set_browse_slots`), `"entities"` (pushes 3-card page with `level` to `set_room_slots`), or `"home"` (alarm + pinned entities). `domain_filter`: `"all"`, `"light"`, `"cover,fan"`, `"scene"`, `"climate"`. `page`: `1..N`. |
-| `latter.room_action` | Control any room entity or home alarm. `entity_id`, `action`: `"toggle"`, `"turn_on"`, `"turn_off"`, `"set_level"`, `"step_up"`, `"step_down"`, `"arm_home"`, `"arm_away"`, `"arm_night"`, `"disarm"`. Optional `level` (`0..100`), `code`. |
-| `latter.set_active_area` | Switch the device's active room by `area_id` or room name (`area`) and sync the ESPHome device's Home Assistant Area for room-aware Voice Assistant. |
-| `latter.music_browse` | Browse Music Assistant (`mode`: `"speakers"`, `"favorites"`, `"playlist"`, `"artist"`, `"album"`, `"radio"`, `"podcast"`, `"audiobook"`, `"track"`, `"artist_albums"`, `"album_tracks"`, `"current_album_tracks"`, `"active_queue"`, `"podcast_episodes"`). Pushes 5-row page to `set_browse_slots`. |
-| `latter.set_active_speaker` | Switch `active_speaker` (`entity_id`) and automatically transfer the active Music Assistant queue (`transfer_queue: true`). |
-| `latter.media_command` | Transport control (`command`: `"play"`, `"pause"`, `"toggle"`, `"next"`, `"previous"`, `"stop"`, `"seek"`, `"play_media"`, `"clear_queue"`). Includes post-reboot local Sendspin queue resumption. |
-| `latter.media_volume` | Adjust volume (`action`: `"set"`, `"up"`, `"down"`, `"mute"`, `volume_level`: `0..100`), routing automatically to mapped AVR / `number.*` volume overrides. |
-| `latter.remote_action` | Control 4-slot TV/Media remotes (`slot`: `1..4`, `action`: `"select_slot"`, `"toggle"`, `"volume_up"`, `"volume_down"`, `"volume_mute"`, `"command"`, `command`: `"up"`, `"down"`, `"left"`, `"right"`, `"select"`, `"back"`, `"home"`, `"menu"`). |
-| `latter.trigger_binding` | For headless buttons, rotary encoders, or custom touch macros: send `slot: "button_1_single"` and Latter executes whatever entity + action the user mapped in the Web Companion Studio. |
-| `latter.calendar_fetch` | Refresh upcoming calendar events (`days`: `7`, `page`: `1`) and push a 5-row page to `set_browse_slots`. |
-| `latter.calendar_create_event` | Create a new event (`summary`, `start_date_time`, `end_date_time`) on the primary family calendar. |
+| `latter.music_browse` | Paginate Music Assistant (`speakers`, `favorites`, `playlist`, `artist`, `album`, `radio`, `podcast`, `audiobook`, `track`, `artist_albums`, `album_tracks`, `current_album_tracks`, `active_queue`, `podcast_episodes`, `lyrics`, `bio`). |
+| `latter.set_active_speaker` | Switch `active_speaker` (`entity_id`) and optionally transfer the active Music Assistant queue (`transfer_queue`). |
+| `latter.media_command` | Unified playback transport (`play`, `pause`, `toggle`, `next`, `previous`, `stop`, `seek`, `play_media`, `clear_queue`) with post-reboot Sendspin queue recovery. |
+| `latter.media_volume` | Adjust speaker volume (`set`, `up`, `down`, `mute`), automatically routing to mapped AVR / `number.*` overrides. |
+| `latter.room_browse` | Paginate rooms (`mode: "areas"`), room entities (`mode: "entities"`, `domain_filter: "scene"\|"light"\|"cover"\|"fan"\|"switch"\|"media"\|"all"`), or home-wide entities (`mode: "home"`). |
+| `latter.room_action` | Execute room, light color/Kelvin (`set_color`, `set_kelvin`), or whole-home actions (`arm_home`, `arm_away`, `disarm`, `heat`, `cool`, `auto`, `off`, `lock`, `unlock`, `start`, `pause`, `dock`). |
+| `latter.set_active_area` | Switch active room context (`area`), sync ESPHome Device Registry Area for Assist, and honor `handoff_media`. |
+| `latter.remote_action` | Select a remote slot (`1..4`) or dispatch a protocol-translated remote command. |
+| `latter.trigger_binding` | Execute user-mapped macro or hardware button bindings (`macro_1`..`macro_5`). |
+| `latter.calendar_fetch` | Refresh upcoming family calendar events (`days`: `1..60`) and push paginated slots. |
+| `latter.calendar_create_event` | Create a calendar event or relative quick reminder (`summary`, `in_minutes`, `duration_minutes` or `start_date_time`, `end_date_time`). |
 | `latter.intercom_broadcast` | Broadcast a TTS `message` or `media_url` announcement across household speakers. |
-
----
-
-## Convention-Over-Configuration for ESPHome Device Controls
-
-When you open the **ESPHome Device Manager** tab in the Latter Web Companion Studio, Latter automatically organizes all entities exposed by your ESPHome firmware:
-- Prefix any ESPHome entity name with `"Category: Name"` (e.g., `"Display: Brightness"`, `"Sleep & Wake: Timeout"`, `"Voice: Wake Word"`, or your own custom `"Hydroponics: Pump Mode"`) and Latter dynamically creates a dedicated navigation category for it!
-- Entities without a prefix are semantically grouped by domain/device_class, with a `"General & Custom Entities"` spillover bucket so custom project entities are always accessible.
+| `latter.notify_device` | Push a toast alert, chime, and optional live `camera_entity` peephole snapshot to the ESPHome display. |
+| `latter.save_custom_color` | Save a `#RRGGBB` hex color into the shared Household Color Library and apply it to the device. |
 
 ---
 
