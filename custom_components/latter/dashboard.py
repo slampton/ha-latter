@@ -1005,7 +1005,6 @@ class LatterCompanionApiView(HomeAssistantView):
             g_name = str(body.get("name") or "").strip()
             g_desc = str(body.get("description") or "").strip()
             if g_name:
-                import re
                 g_id = re.sub(r"[^a-z0-9]+", "_", g_name.lower()).strip("_") or "group"
                 groups, _ = get_device_groups_and_profiles(self.hass)
                 if not any(g.get("id") == g_id for g in groups):
