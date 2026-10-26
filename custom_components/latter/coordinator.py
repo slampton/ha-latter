@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 import hashlib
 import hmac
 import logging
+import re
 import time
 from typing import Any
 
@@ -215,58 +216,6 @@ def _get_esphome_device_current_area(
         if slug_norm and slug_norm in dev_name and dev.area_id:
             return dev.area_id
     return None
-
-
-# In-memory cache: track_key -> {"lrc": [(sec, text), ...], "plain": str, "bio": str}
-_LYRICS_BIO_CACHE: dict[str, dict[str, Any]] = {}
-_LRC_TAG_RE = re.compile(r"\[(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?\]")
-
-
-def _parse_lrc_lines(raw_lrc: str) -> list[tuple[float, str]]:
-    """Parse standard [mm:ss.xx] LRC text into sorted (seconds, lyric_line) tuples."""
-    entries: list[tuple[float, str]] = []
-    for raw_line in raw_lrc.splitlines():
-        matches = list(_LRC_TAG_RE.finditer(raw_line))
-        if not matches:
-            continue
-        text = _LRC_TAG_RE.sub("", raw_line).strip()
-        if not text:
-            continue
-        for m in matches:
-            mins = int(m.group(1))
-            secs = int(m.group(2))
-            frac_s = m.group(3) or "0"
-            frac = int(frac_s) / (10.0 ** len(frac_s))
-            entries.append((mins * 60.0 + secs + frac, text))
-    entries.sort(key=lambda x: x[0])
-    return entries
-
-
-def _format_synced_lyrics_payload(
-    meta: dict[str, Any] | None, position_sec: float
-) -> str:
-    """Format active lyrics window ('SYNC|<active_idx>|line1\\nline2...' or plain text) for ESPHome."""
-    if not meta:
-        return ""
-    lrc_list: list[tuple[float, str]] = meta.get("lrc") or []
-    if lrc_list:
-        active_idx = 0
-        for i, (ts, _txt) in enumerate(lrc_list):
-            if position_sec + 0.35 >= ts:
-                active_idx = i
-            else:
-                break
-        # Build a 40-line window around active_idx or full list (up to 900 chars) so both live-follow and manual paging work!
-        lines_only = [txt.replace("|", "/") for _ts, txt in lrc_list]
-        start_i = max(0, active_idx - 2)
-        window = lines_only[start_i : start_i + 18]
-        rel_active = active_idx - start_i
-        joined = "\n".join(window)[:700]
-        return f"SYNC|{rel_active}|{joined}"
-    plain = str(meta.get("plain") or "").strip()
-    if plain:
-        return plain[:750]
-    return ""
 
 
 def _interpolate_speaker_position(state_obj: Any) -> float:
