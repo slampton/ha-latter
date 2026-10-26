@@ -13,6 +13,17 @@ from homeassistant.components.http import HomeAssistantView
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import area_registry as ar
 
+from .backup_engine import (
+    async_apply_profile_to_coordinators,
+    async_create_vault_backup,
+    async_delete_vault_backup,
+    async_get_vault_backup,
+    async_list_vault_backups,
+    async_restore_backup_bundle,
+    build_backup_bundle,
+    capture_profile_from_coordinator,
+    get_device_groups_and_profiles,
+)
 from .browse_engine import is_music_assistant_player
 from .const import (
     API_BRAND_ICON_PATH,
@@ -36,8 +47,12 @@ from .const import (
     CONF_DEFAULT_AREA,
     CONF_DEFAULT_PAGE_SIZE,
     CONF_DEFAULT_SPEAKER,
+    CONF_DEVICE_GROUP,
+    CONF_DEVICE_GROUPS,
     CONF_DEVICE_PROFILE,
     CONF_DEVICE_SLUG,
+    CONF_SAVED_PROFILES,
+    DEFAULT_DEVICE_GROUP,
     CONF_DISPLAY_SHAPE,
     CONF_DOCK_APPS,
     CONF_NATIVE_BLE_TRACKING,
@@ -214,6 +229,8 @@ def _build_fleet_shared_controls(hass: HomeAssistant) -> list[dict[str, Any]]:
                 bucket["targets"].append(
                     {
                         "device_slug": coord.device_slug,
+                        "device_group": coord.device_group,
+                        "device_profile": coord.device_profile,
                         "entity_id": item.get("entity_id"),
                         "state": item.get("state"),
                     }
@@ -322,6 +339,7 @@ def _build_companion_state_payload(
         CONF_DEVICE_PROFILE: coordinator.get_opt(
             CONF_DEVICE_PROFILE, DEFAULT_DEVICE_PROFILE
         ),
+        CONF_DEVICE_GROUP: coordinator.device_group,
         CONF_DISPLAY_SHAPE: coordinator.display_shape,
         CONF_DEFAULT_PAGE_SIZE: coordinator.default_page_size,
         CONF_WEB_THEME: saved_theme,
@@ -384,16 +402,23 @@ def _build_companion_state_payload(
     ):
         ble_survey_rows = coordinator._ble_tracker.get_room_calibration_telemetry()
 
+    device_groups, saved_profiles = get_device_groups_and_profiles(hass)
+    group_name_map = {g["id"]: g["name"] for g in device_groups if isinstance(g, dict) and g.get("id")}
+
     fleet_devices: list[dict[str, Any]] = []
     for c in _get_all_coordinators(hass):
         c_room_name, c_room_attrs = c.get_room_context_payload()
         c_media_state, _ = c.get_active_media_payload()
+        c_grp = c.device_group
         fleet_devices.append(
             {
                 "entry_id": c.entry.entry_id,
                 "device_slug": c.device_slug,
                 "title": c.device_slug.replace("_", " ").title(),
                 "device_profile": c.device_profile,
+                "device_group": c_grp,
+                "device_group_name": group_name_map.get(c_grp, c_grp.replace("_", " ").title()),
+                "site_id": c.site_id,
                 "display_shape": c.display_shape,
                 "active_area_name": c_room_name,
                 "active_speaker": c.active_speaker,
@@ -404,6 +429,32 @@ def _build_companion_state_payload(
             }
         )
 
+    vault_backups = hass.data.get(DOMAIN, {}).get("backups_data", {}).get("snapshots", [])
+    vault_summaries: list[dict[str, Any]] = []
+    for s in vault_backups:
+        if isinstance(s, dict) and s.get("id"):
+            dev_obj = s.get("device") or {}
+            ctrl_cnt = (
+                len(dev_obj.get("esphome_controls") or {})
+                if s.get("scope") == "device"
+                else sum(
+                    len((d or {}).get("esphome_controls") or {})
+                    for d in (s.get("devices") or {}).values()
+                )
+            )
+            vault_summaries.append(
+                {
+                    "id": s["id"],
+                    "name": s.get("name", s["id"]),
+                    "scope": s.get("scope", "device"),
+                    "created_at": s.get("created_at", ""),
+                    "target_device": s.get("target_device", ""),
+                    "device_count": int(s.get("device_count") or 1),
+                    "control_count": ctrl_cnt,
+                    "version": s.get("version", INTEGRATION_VERSION),
+                }
+            )
+
     return {
         "entry_id": coordinator.entry.entry_id,
         "title": coordinator.device_slug.replace("_", " ").title(),
@@ -411,6 +462,9 @@ def _build_companion_state_payload(
         "health_warnings": health_warnings,
         "fleet_devices": fleet_devices,
         "fleet_controls": _build_fleet_shared_controls(hass),
+        "device_groups": device_groups,
+        "saved_profiles": saved_profiles,
+        "vault_backups": vault_summaries,
         "config": config_data,
         "esphome": esphome_inspector,
         "wallpapers": wallpapers_catalog,
@@ -500,6 +554,7 @@ class LatterCompanionApiView(HomeAssistantView):
                 token = coordinator.get_signed_token()
                 visit_url = f"{browser_base}/api/latter/companion/{coordinator.entry.entry_id}?token={token}"
                 inject_esphome_visit_link(self.hass, coordinator.device_slug, visit_url)
+        await async_list_vault_backups(self.hass)
         payload = _build_companion_state_payload(self.hass, coordinator)
         return web.json_response(payload)
 
@@ -805,6 +860,7 @@ class LatterCompanionApiView(HomeAssistantView):
             device_keys = (
                 CONF_DEVICE_SLUG,
                 CONF_DEVICE_PROFILE,
+                CONF_DEVICE_GROUP,
                 CONF_DISPLAY_SHAPE,
                 CONF_DEFAULT_PAGE_SIZE,
                 CONF_DEFAULT_SPEAKER,
@@ -861,6 +917,175 @@ class LatterCompanionApiView(HomeAssistantView):
                 coordinator.build_companion_url(),
             )
             coordinator._bind_wallpaper_cycle_timer()
+            return web.json_response(
+                _build_companion_state_payload(self.hass, coordinator)
+            )
+
+        if cmd == "set_device_group":
+            target_slug = str(body.get("device_slug") or coordinator.device_slug).strip()
+            group_id = str(body.get("device_group") or DEFAULT_DEVICE_GROUP).strip()
+            for c in _get_all_coordinators(self.hass):
+                if c.device_slug == target_slug:
+                    merged_grp: dict[str, Any] = {
+                        **c.entry.data,
+                        **(c.entry.options or {}),
+                        CONF_DEVICE_GROUP: group_id,
+                    }
+                    self.hass.config_entries.async_update_entry(
+                        c.entry, data=merged_grp, options=merged_grp
+                    )
+                    c._notify_listeners()
+                    break
+            return web.json_response(
+                _build_companion_state_payload(self.hass, coordinator)
+            )
+
+        if cmd == "create_device_group":
+            g_name = str(body.get("name") or "").strip()
+            g_desc = str(body.get("description") or "").strip()
+            if g_name:
+                import re
+                g_id = re.sub(r"[^a-z0-9]+", "_", g_name.lower()).strip("_") or "group"
+                groups, _ = get_device_groups_and_profiles(self.hass)
+                if not any(g.get("id") == g_id for g in groups):
+                    groups.append(
+                        {
+                            "id": g_id,
+                            "name": g_name,
+                            "description": g_desc or f"Custom group ({g_name})",
+                        }
+                    )
+                    await _async_save_and_broadcast_global_config(
+                        self.hass, {CONF_DEVICE_GROUPS: groups}
+                    )
+            return web.json_response(
+                _build_companion_state_payload(self.hass, coordinator)
+            )
+
+        if cmd == "delete_device_group":
+            g_id = str(body.get("group_id") or "").strip()
+            groups, _ = get_device_groups_and_profiles(self.hass)
+            groups = [g for g in groups if g.get("id") != g_id]
+            await _async_save_and_broadcast_global_config(
+                self.hass, {CONF_DEVICE_GROUPS: groups}
+            )
+            return web.json_response(
+                _build_companion_state_payload(self.hass, coordinator)
+            )
+
+        if cmd == "capture_profile":
+            p_name = str(body.get("name") or "").strip()
+            p_desc = str(body.get("description") or "").strip()
+            _, profiles = get_device_groups_and_profiles(self.hass)
+            new_prof = capture_profile_from_coordinator(
+                self.hass, coordinator, name=p_name, description=p_desc
+            )
+            profiles = [p for p in profiles if p.get("name") != new_prof["name"]]
+            profiles.insert(0, new_prof)
+            await _async_save_and_broadcast_global_config(
+                self.hass, {CONF_SAVED_PROFILES: profiles[:30]}
+            )
+            return web.json_response(
+                _build_companion_state_payload(self.hass, coordinator)
+            )
+
+        if cmd == "delete_profile":
+            p_id = str(body.get("profile_id") or "").strip()
+            _, profiles = get_device_groups_and_profiles(self.hass)
+            profiles = [p for p in profiles if p.get("id") != p_id]
+            await _async_save_and_broadcast_global_config(
+                self.hass, {CONF_SAVED_PROFILES: profiles}
+            )
+            return web.json_response(
+                _build_companion_state_payload(self.hass, coordinator)
+            )
+
+        if cmd == "apply_profile":
+            p_id = str(body.get("profile_id") or "").strip()
+            target_scope = str(body.get("target_scope") or "current").strip()
+            _, profiles = get_device_groups_and_profiles(self.hass)
+            prof = next((p for p in profiles if p.get("id") == p_id), None)
+            if prof is not None:
+                all_coords = _get_all_coordinators(self.hass)
+                if target_scope == "all":
+                    targets = all_coords
+                elif target_scope.startswith("group:"):
+                    grp_id = target_scope.split(":", 1)[1]
+                    targets = [c for c in all_coords if c.device_group == grp_id]
+                elif target_scope.startswith("device:"):
+                    d_slug = target_scope.split(":", 1)[1]
+                    targets = [c for c in all_coords if c.device_slug == d_slug]
+                else:
+                    targets = [coordinator]
+                await async_apply_profile_to_coordinators(self.hass, prof, targets)
+            return web.json_response(
+                _build_companion_state_payload(self.hass, coordinator)
+            )
+
+        if cmd == "create_vault_backup":
+            b_scope = str(body.get("scope") or "device").strip()
+            b_name = str(body.get("name") or "").strip()
+            inc_vpn = bool(body.get("include_vpn_secrets", True))
+            await async_create_vault_backup(
+                self.hass,
+                scope=b_scope,
+                coordinators=_get_all_coordinators(self.hass),
+                target_coordinator=coordinator,
+                name=b_name,
+                include_vpn_secrets=inc_vpn,
+            )
+            return web.json_response(
+                _build_companion_state_payload(self.hass, coordinator)
+            )
+
+        if cmd == "export_backup_json":
+            b_scope = str(body.get("scope") or "device").strip()
+            b_id = str(body.get("backup_id") or "").strip()
+            inc_vpn = bool(body.get("include_vpn_secrets", True))
+            if b_id:
+                bundle = await async_get_vault_backup(self.hass, b_id)
+                if bundle is None:
+                    return web.json_response(
+                        {"error": "Backup snapshot not found"},
+                        status=HTTPStatus.NOT_FOUND,
+                    )
+            else:
+                bundle = build_backup_bundle(
+                    hass=self.hass,
+                    scope=b_scope,
+                    coordinators=_get_all_coordinators(self.hass),
+                    target_coordinator=coordinator,
+                    include_vpn_secrets=inc_vpn,
+                )
+            return web.json_response({"bundle": bundle})
+
+        if cmd == "restore_backup":
+            b_id = str(body.get("backup_id") or "").strip()
+            bundle = body.get("bundle")
+            if b_id and not isinstance(bundle, dict):
+                bundle = await async_get_vault_backup(self.hass, b_id)
+            if not isinstance(bundle, dict):
+                return web.json_response(
+                    {"error": "Valid backup bundle or backup_id required"},
+                    status=HTTPStatus.BAD_REQUEST,
+                )
+            restore_esp = bool(body.get("restore_esphome_entities", True))
+            await async_restore_backup_bundle(
+                self.hass,
+                bundle=bundle,
+                coordinators=_get_all_coordinators(self.hass),
+                target_coordinator=coordinator,
+                restore_esphome_entities=restore_esp,
+            )
+            await async_list_vault_backups(self.hass)
+            return web.json_response(
+                _build_companion_state_payload(self.hass, coordinator)
+            )
+
+        if cmd == "delete_vault_backup":
+            b_id = str(body.get("backup_id") or "").strip()
+            if b_id:
+                await async_delete_vault_backup(self.hass, b_id)
             return web.json_response(
                 _build_companion_state_payload(self.hass, coordinator)
             )
@@ -1655,7 +1880,10 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
         <span>Room Calibration</span>
       </button>
       <button class="nav-btn" data-view="fleet_sync" onclick="switchView('fleet_sync', this)">
-        <span>Fleet Defaults</span>
+        <span>Groups &amp; Profiles</span>
+      </button>
+      <button class="nav-btn" data-view="backups" onclick="switchView('backups', this)">
+        <span>Backup &amp; Restore</span>
       </button>
 
       <div class="nav-group-label">Shared Integrations</div>
@@ -1774,14 +2002,15 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
 
           <div class="card">
             <h3>Quick System Navigation</h3>
-            <p class="desc">Jump directly to shared calibration, fleet defaults, and entity mappings.</p>
+            <p class="desc">Jump directly to room calibration, device groups &amp; profiles, backups, and shared entity mappings.</p>
             <div style="display:flex;flex-wrap:wrap;gap:8px;">
               <button class="btn-secondary" onclick="navigateToView('room_tracking')">Room Calibration</button>
-              <button class="btn-secondary" onclick="navigateToView('fleet_sync')">Fleet Defaults</button>
+              <button class="btn-secondary" onclick="navigateToView('fleet_sync')">Groups &amp; Profiles</button>
+              <button class="btn-secondary" onclick="navigateToView('backups')">Backup &amp; Restore</button>
               <button class="btn-secondary" onclick="navigateToView('remotes')">Remote Controls</button>
               <button class="btn-secondary" onclick="navigateToView('volume_routing')">Volume Routing</button>
               <button class="btn-secondary" onclick="navigateToView('household')">Shared Entities</button>
-              <button class="btn-secondary" onclick="navigateToView('macros')">Macros & YAML</button>
+              <button class="btn-secondary" onclick="navigateToView('macros')">Macros &amp; YAML</button>
             </div>
           </div>
         </div>
@@ -1809,18 +2038,111 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
       </section>
 
       <!-- ================================================================== -->
-      <!-- HOUSEHOLD SCOPE: 3. FLEET DEFAULTS (BULK SYNC ACROSS DEVICES)      -->
+      <!-- HOUSEHOLD SCOPE: 3. DEVICE GROUPS & REUSABLE PROFILES              -->
       <!-- ================================================================== -->
       <section id="view-fleet_sync" class="hidden">
         <div class="page-header">
-          <h2>Fleet Defaults</h2>
-          <p>Apply shared wake word, sensitivity, display, or sleep settings across all onboarded ESPHome devices at once.</p>
+          <h2>Device Groups &amp; Reusable Profiles</h2>
+          <p>Organize your ESPHome devices into logical groups, save reusable configuration profiles, and apply settings to a single device, a group, or your entire home.</p>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:6px;">
+              <h3 style="margin:0;">Reusable Configuration Profiles</h3>
+            </div>
+            <p class="desc">Capture display, dock, wake word, sensitivity, brightness, and sleep settings from the active device (<strong id="prof-active-dev-label">Device</strong>) as a reusable profile, or apply an existing profile to any target.</p>
+            <div style="display:grid;grid-template-columns:1fr 1.2fr auto;gap:8px;margin-bottom:14px;">
+              <input type="text" id="new-profile-name" placeholder="Profile Name (e.g. Guest Room)">
+              <input type="text" id="new-profile-desc" placeholder="Optional description">
+              <button class="btn-primary" onclick="captureCurrentDeviceProfile()">Capture Profile</button>
+            </div>
+            <div class="field">
+              <label>Apply Profile Target Scope</label>
+              <select id="profile-target-scope"></select>
+            </div>
+            <div id="saved-profiles-list" class="native-controls-box"></div>
+          </div>
+
+          <div class="card">
+            <h3>Device Groups</h3>
+            <p class="desc">Assign devices to logical groups (such as <em>Handheld Displays</em>, <em>Bedrooms</em>, or <em>Wall Panels</em>) for targeted profile deployment and group controls.</p>
+            <div style="display:grid;grid-template-columns:1fr 1.3fr auto;gap:8px;margin-bottom:14px;">
+              <input type="text" id="new-group-name" placeholder="New Group Name">
+              <input type="text" id="new-group-desc" placeholder="Description">
+              <button class="btn-secondary" onclick="createDeviceGroup()">+ Add Group</button>
+            </div>
+            <div id="device-groups-list" class="native-controls-box"></div>
+          </div>
         </div>
 
         <div class="card">
-          <h3>Shared Device Controls</h3>
-          <p class="desc">Changing a control below dispatches the new setting to every onboarded ESPHome device that exposes that entity.</p>
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:6px;">
+            <div>
+              <h3 style="margin:0;">Live Group &amp; Multi-Device Controls</h3>
+              <p class="desc" style="margin:4px 0 0;">Dispatch wake word, sensitivity, display, or sleep changes across all devices or a selected Device Group.</p>
+            </div>
+            <div style="min-width:220px;">
+              <select id="group-ctrl-filter" onchange="renderFleetOverview(STATE.fleet_devices, STATE.fleet_controls, STATE.config)"></select>
+            </div>
+          </div>
           <div id="fleet-controls-list" class="native-controls-box"></div>
+        </div>
+      </section>
+
+      <!-- ================================================================== -->
+      <!-- HOUSEHOLD SCOPE: 3B. SYSTEM & DEVICE BACKUP & RESTORE              -->
+      <!-- ================================================================== -->
+      <section id="view-backups" class="hidden">
+        <div class="page-header">
+          <h2>Backup &amp; Restore</h2>
+          <p>Back up and restore your System configuration or individual ESPHome devices (including live on-device preferences) to the internal Latter Vault or your computer.</p>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <h3>Create Snapshot or Export to Computer</h3>
+            <p class="desc">Snapshots include Latter entity mappings, BLE room offsets, custom color palettes, and live ESPHome settings (wake words, sensitivities, timeouts, brightness, and sorting).</p>
+            <div class="field">
+              <label>Backup Scope</label>
+              <select id="bkp-scope-select">
+                <option value="system">Full System &amp; All Devices (.storage/latter.household + Devices)</option>
+                <option value="device">Active Device Only (Latter Config + Live ESPHome Controls)</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Snapshot Label (Optional)</label>
+              <input type="text" id="bkp-label-input" placeholder="e.g. Before Firmware Update, Baseline Config">
+            </div>
+            <div class="toggle-row" style="margin-bottom:14px;">
+              <span>Include Roaming WireGuard Private Keys</span>
+              <input type="checkbox" id="bkp-include-vpn" checked>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button class="btn-primary" onclick="createVaultSnapshot()">Save to Internal Vault</button>
+              <button class="btn-secondary" onclick="exportBackupToComputer('')">Download .JSON to Computer</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>Restore from Computer File (.JSON)</h3>
+            <p class="desc">Upload a previously downloaded <code>latter-system-backup-*.json</code> or <code>latter-device-*.json</code> file from your computer. Device backups can be restored to the original device or cloned onto the currently selected device.</p>
+            <div class="field">
+              <label>Select Backup .JSON File</label>
+              <input type="file" id="bkp-upload-file" accept=".json,application/json">
+            </div>
+            <div class="toggle-row" style="margin-bottom:14px;">
+              <span>Also Restore Live ESPHome Device Preferences (Wake Word, Timeouts, Brightness)</span>
+              <input type="checkbox" id="bkp-restore-esp" checked>
+            </div>
+            <button class="btn-primary" onclick="restoreFromUploadedFile()">Upload &amp; Restore Backup</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Internal Snapshot Vault (<code>.storage/latter.backups</code>)</h3>
+          <p class="desc">Restore any saved snapshot in 1 click, download a copy to your computer, or delete old restore points.</p>
+          <div id="vault-backups-list" class="native-controls-box"></div>
         </div>
       </section>
 
@@ -2430,15 +2752,21 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
               <input type="text" id="cfg-device_slug" oninput="markDirty(); renderYamlGenerator();">
             </div>
             <div class="field">
-              <label>Device Archetype & Room Cards Per Page</label>
-              <div style="display:grid;grid-template-columns:2fr 1fr;gap:8px;">
+              <label>Device Archetype, Group &amp; Room Cards Per Page</label>
+              <div style="display:grid;grid-template-columns:1.4fr 1.2fr 0.7fr;gap:8px;">
                 <select id="cfg-device_profile" onchange="markDirty()">
                   <option value="mobile_display">Mobile Smart Display</option>
                   <option value="stationary_display">Stationary Wall / Desk Display</option>
                   <option value="headless_node">Headless Sensor / Button Node</option>
                 </select>
+                <select id="cfg-device_group" onchange="markDirty()"></select>
                 <input type="number" id="cfg-default_page_size" min="1" max="20" value="3" oninput="markDirty(); renderYamlGenerator();">
               </div>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+              <button type="button" class="btn-secondary" onclick="createDeviceQuickBackup()">Backup This Device</button>
+              <button type="button" class="btn-secondary" onclick="exportBackupToComputer('device')">Download Device .JSON</button>
+              <button type="button" class="btn-secondary" onclick="navigateToView('fleet_sync')">Apply Profile &rarr;</button>
             </div>
             <div class="toggle-row">
               <span>Enable ESPHome BLE Proxy Room Tracking</span>
@@ -2508,6 +2836,7 @@ const HOUSEHOLD_VIEWS = [
   "fleet_overview",
   "room_tracking",
   "fleet_sync",
+  "backups",
   "remotes",
   "volume_routing",
   "household",
@@ -2807,11 +3136,66 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
   const countBadge = document.getElementById("nav-fleet-count");
   if (countBadge) countBadge.textContent = String((fleetDevices || []).length);
 
+  const groups = STATE?.device_groups || [];
+  const profiles = STATE?.saved_profiles || [];
+  const backups = STATE?.vault_backups || [];
+
+  const profDevLbl = document.getElementById("prof-active-dev-label");
+  if (profDevLbl) profDevLbl.textContent = STATE?.title || cfg?.device_slug || "Active Device";
+
   const picker = document.getElementById("fleet-device-picker");
   if (picker && fleetDevices) {
     const placeholder = `<option value="" ${!DEVICE_SELECTED ? 'selected' : ''}>— Select a Device —</option>`;
     picker.innerHTML = placeholder + fleetDevices.map(d =>
       `<option value="${d.companion_url}" ${(DEVICE_SELECTED && d.is_current) ? 'selected' : ''}>${d.title} (${d.active_area_name})</option>`
+    ).join("");
+  }
+
+  // Populate Device Group selector on the Device Identity card
+  const devGrpSel = document.getElementById("cfg-device_group");
+  if (devGrpSel && groups.length) {
+    const curGrp = cfg?.device_group || "handhelds";
+    devGrpSel.innerHTML = groups.map(g =>
+      `<option value="${g.id}" ${g.id === curGrp ? 'selected' : ''}>Group: ${g.name}</option>`
+    ).join("");
+  }
+
+  // Populate Profile Target Scope & Live Group Control Filter dropdowns
+  const targetScopes = [
+    {id: "current", name: `Current Device (${STATE?.title || cfg?.device_slug || 'Active'})`},
+    {id: "all", name: `All Onboarded Devices (${(fleetDevices || []).length})`}
+  ];
+  groups.forEach(g => {
+    const cnt = (fleetDevices || []).filter(d => d.device_group === g.id).length;
+    targetScopes.push({id: `group:${g.id}`, name: `Group: ${g.name} (${cnt})`});
+  });
+  (fleetDevices || []).forEach(d => {
+    targetScopes.push({id: `device:${d.device_slug}`, name: `Device: ${d.title}`});
+  });
+
+  const profScopeSel = document.getElementById("profile-target-scope");
+  if (profScopeSel) {
+    const prevVal = profScopeSel.value || "current";
+    profScopeSel.innerHTML = targetScopes.map(o =>
+      `<option value="${o.id}" ${o.id === prevVal ? 'selected' : ''}>${o.name}</option>`
+    ).join("");
+  }
+
+  const grpFilterSel = document.getElementById("group-ctrl-filter");
+  let activeFilter = "all";
+  if (grpFilterSel) {
+    activeFilter = grpFilterSel.value || "all";
+    const filterOpts = [
+      {id: "all", name: `Target: All Devices (${(fleetDevices || []).length})`}
+    ];
+    groups.forEach(g => {
+      const cnt = (fleetDevices || []).filter(d => d.device_group === g.id).length;
+      filterOpts.push({id: `group:${g.id}`, name: `Target Group: ${g.name} (${cnt})`});
+    });
+    filterOpts.push({id: "arch:mobile_display", name: "Archetype: Mobile Displays"});
+    filterOpts.push({id: "arch:stationary_display", name: "Archetype: Stationary Displays"});
+    grpFilterSel.innerHTML = filterOpts.map(o =>
+      `<option value="${o.id}" ${o.id === activeFilter ? 'selected' : ''}>${o.name}</option>`
     ).join("");
   }
 
@@ -2821,12 +3205,18 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
     const actAction = d.is_current
       ? `selectCurrentDevice()`
       : `switchFleetDevice('${d.companion_url}')`;
+    const grpOpts = groups.map(g =>
+      `<option value="${g.id}" ${g.id === d.device_group ? 'selected' : ''}>${g.name}</option>`
+    ).join("");
     return `<div class="native-ctrl-row">
       <div class="lbl">
-        ${d.title} ${isActDev ? '<span class="state-badge" style="margin-left:6px;">Active</span>' : ''}
+        ${d.title}
+        <span class="state-badge" style="margin-left:6px;">${d.device_group_name || d.device_group || 'Handhelds'}</span>
+        ${isActDev ? '<span class="state-badge" style="margin-left:4px;border-color:var(--success);color:var(--success);">Active</span>' : ''}
         <small>Slug: <code>${d.device_slug}</code> &bull; Room: <strong>${d.active_area_name}</strong> &bull; Speaker: <strong>${spk}</strong> &bull; Proxy: ${d.ble_closest_proxy || 'None'}</small>
       </div>
       <div class="widget">
+        <select style="min-width:140px;" title="Assign Device Group" onchange="assignDeviceGroup('${d.device_slug}', this.value)">${grpOpts}</select>
         <button class="btn-primary" onclick="${actAction}">Manage Device</button>
       </div>
     </div>`;
@@ -2837,34 +3227,113 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
   const promptBox = document.getElementById("prompt-devices-list");
   if (promptBox) promptBox.innerHTML = rowsHtml;
 
+  // Render Reusable Profiles List
+  const profBox = document.getElementById("saved-profiles-list");
+  if (profBox) {
+    if (!profiles.length) {
+      profBox.innerHTML = `<p class="desc">No profiles saved yet.</p>`;
+    } else {
+      profBox.innerHTML = profiles.map(p => {
+        const ctrlCnt = Object.keys(p.esphome_controls || {}).length;
+        const isBuiltin = String(p.id || "").startsWith("preset_");
+        return `<div class="native-ctrl-row">
+          <div class="lbl">
+            ${p.name} <span class="state-badge" style="margin-left:6px;">${ctrlCnt} controls</span>
+            <small>${p.description || ''}</small>
+          </div>
+          <div class="widget">
+            <button class="btn-primary" onclick="applySavedProfile('${p.id}')">Apply</button>
+            ${!isBuiltin ? `<button class="btn-danger" onclick="deleteSavedProfile('${p.id}')">✕</button>` : ''}
+          </div>
+        </div>`;
+      }).join("");
+    }
+  }
+
+  // Render Device Groups List
+  const grpBox = document.getElementById("device-groups-list");
+  if (grpBox) {
+    grpBox.innerHTML = groups.map(g => {
+      const members = (fleetDevices || []).filter(d => d.device_group === g.id);
+      const memNames = members.length ? members.map(m => m.title).join(", ") : "No devices assigned";
+      const isDefault = ["handhelds", "bedrooms", "common_areas", "wall_panels"].includes(g.id);
+      return `<div class="native-ctrl-row">
+        <div class="lbl">
+          ${g.name} <span class="state-badge" style="margin-left:6px;">${members.length} device${members.length === 1 ? '' : 's'}</span>
+          <small>${g.description || ''} &bull; Members: <strong>${memNames}</strong></small>
+        </div>
+        <div class="widget">
+          ${!isDefault ? `<button class="btn-danger" onclick="deleteDeviceGroup('${g.id}')">✕</button>` : ''}
+        </div>
+      </div>`;
+    }).join("");
+  }
+
+  // Render Filtered Live Group Controls
   const fBox = document.getElementById("fleet-controls-list");
   if (fBox) {
     if (!fleetControls || !fleetControls.length) {
       fBox.innerHTML = `<p class="desc">No shared ESPHome controls discovered.</p>`;
     } else {
-      fBox.innerHTML = fleetControls.map(fc => {
-        const entIdsJson = JSON.stringify(fc.targets.map(t => t.entity_id)).replace(/"/g, "&quot;");
-        const devCount = fc.targets.length;
-        let widget = `<span class="state-badge">${fc.state}</span>`;
+      const filteredRows = fleetControls.map(fc => {
+        const matchingTargets = (fc.targets || []).filter(t => {
+          if (activeFilter === "all") return true;
+          if (activeFilter.startsWith("group:")) return t.device_group === activeFilter.split(":")[1];
+          if (activeFilter.startsWith("arch:")) return t.device_profile === activeFilter.split(":")[1];
+          return true;
+        });
+        if (!matchingTargets.length) return "";
+        const entIdsJson = JSON.stringify(matchingTargets.map(t => t.entity_id)).replace(/"/g, "&quot;");
+        const devCount = matchingTargets.length;
+        const curState = matchingTargets[0].state ?? fc.state;
+        let widget = `<span class="state-badge">${curState}</span>`;
         if (fc.domain === "select" && fc.options && fc.options.length) {
-          const opts = fc.options.map(o => `<option value="${o}" ${o===fc.state?'selected':''}>${o}</option>`).join("");
+          const opts = fc.options.map(o => `<option value="${o}" ${o===curState?'selected':''}>${o}</option>`).join("");
           widget = `<select onchange="fleetSelect(${entIdsJson}, this.value)">${opts}</select>`;
         } else if (fc.domain === "switch") {
-          const isOn = fc.state === "on";
+          const isOn = curState === "on";
           widget = `<button class="${isOn ? 'btn-primary' : 'btn-secondary'}" onclick="fleetToggle(${entIdsJson}, '${isOn ? 'turn_off' : 'turn_on'}')">${isOn ? 'ON' : 'OFF'}</button>`;
         } else if (fc.domain === "number") {
           const minV = fc.min ?? 0;
           const maxV = fc.max ?? 100;
           const stepV = fc.step ?? 1;
-          const numVal = parseFloat(fc.state) || 0;
-          widget = `<input type="range" min="${minV}" max="${maxV}" step="${stepV}" value="${numVal}" onchange="fleetNumber(${entIdsJson}, this.value)"><span class="state-badge">${fc.state} ${fc.unit || ''}</span>`;
+          const numVal = parseFloat(curState) || 0;
+          widget = `<input type="range" min="${minV}" max="${maxV}" step="${stepV}" value="${numVal}" onchange="fleetNumber(${entIdsJson}, this.value)"><span class="state-badge">${curState} ${fc.unit || ''}</span>`;
         }
         return `<div class="native-ctrl-row">
           <div class="lbl">
             ${fc.name}
-            <small>${fc.section_title} &bull; Applies to ${devCount} device${devCount > 1 ? 's' : ''}</small>
+            <small>${fc.section_title} &bull; Applies to ${devCount} matching device${devCount > 1 ? 's' : ''}</small>
           </div>
           <div class="widget">${widget}</div>
+        </div>`;
+      }).filter(Boolean).join("");
+      fBox.innerHTML = filteredRows || `<p class="desc">No devices match the selected group filter.</p>`;
+    }
+  }
+
+  // Render Internal Snapshot Vault List
+  const vBox = document.getElementById("vault-backups-list");
+  if (vBox) {
+    if (!backups.length) {
+      vBox.innerHTML = `<p class="desc">No snapshots saved in the internal vault yet. Click <strong>Save to Internal Vault</strong> above to create a restore point.</p>`;
+    } else {
+      vBox.innerHTML = backups.map(b => {
+        const isSys = b.scope === "system";
+        const scopeBadge = isSys
+          ? `<span class="state-badge" style="border-color:var(--accent);color:var(--accent);">SYSTEM (${b.device_count} dev)</span>`
+          : `<span class="state-badge">DEVICE: ${b.target_device}</span>`;
+        const tsClean = (b.created_at || "").replace("T", " ").slice(0, 19);
+        return `<div class="native-ctrl-row">
+          <div class="lbl">
+            ${b.name} ${scopeBadge}
+            <small>Created: <strong>${tsClean}</strong> &bull; Saved ESPHome Controls: <strong>${b.control_count || 0}</strong> &bull; v${b.version || ''}</small>
+          </div>
+          <div class="widget">
+            <button class="btn-primary" onclick="restoreVaultSnapshot('${b.id}', '${b.name.replace(/'/g, "")}')">Restore</button>
+            <button class="btn-secondary" onclick="downloadVaultSnapshot('${b.id}')">Download .JSON</button>
+            <button class="btn-danger" onclick="deleteVaultSnapshot('${b.id}')">✕</button>
+          </div>
         </div>`;
       }).join("");
     }
@@ -3480,6 +3949,228 @@ async function generateDeviceVpnKeys() {
   }
 }
 
+async function assignDeviceGroup(deviceSlug, groupId) {
+  const resp = await fetch(API_URL, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({command: "set_device_group", device_slug: deviceSlug, device_group: groupId})
+  });
+  if (resp.ok) {
+    applyStateToDom(await resp.json(), false);
+    showToast(`Assigned ${deviceSlug} to group '${groupId}'`);
+  }
+}
+
+async function createDeviceGroup() {
+  const nameEl = document.getElementById("new-group-name");
+  const descEl = document.getElementById("new-group-desc");
+  const name = (nameEl?.value || "").trim();
+  if (!name) {
+    showToast("Enter a group name first");
+    return;
+  }
+  const resp = await fetch(API_URL, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({command: "create_device_group", name, description: (descEl?.value || "").trim()})
+  });
+  if (resp.ok) {
+    if (nameEl) nameEl.value = "";
+    if (descEl) descEl.value = "";
+    applyStateToDom(await resp.json(), false);
+    showToast(`Created device group '${name}'`);
+  }
+}
+
+async function deleteDeviceGroup(groupId) {
+  const resp = await fetch(API_URL, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({command: "delete_device_group", group_id: groupId})
+  });
+  if (resp.ok) {
+    applyStateToDom(await resp.json(), false);
+    showToast("Removed device group");
+  }
+}
+
+async function captureCurrentDeviceProfile() {
+  const nameEl = document.getElementById("new-profile-name");
+  const descEl = document.getElementById("new-profile-desc");
+  const name = (nameEl?.value || "").trim() || `${STATE?.title || 'Device'} Profile`;
+  const resp = await fetch(API_URL, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({command: "capture_profile", name, description: (descEl?.value || "").trim()})
+  });
+  if (resp.ok) {
+    if (nameEl) nameEl.value = "";
+    if (descEl) descEl.value = "";
+    applyStateToDom(await resp.json(), false);
+    showToast(`Saved reusable profile '${name}'`);
+  }
+}
+
+async function applySavedProfile(profileId) {
+  const scope = document.getElementById("profile-target-scope")?.value || "current";
+  const resp = await fetch(API_URL, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({command: "apply_profile", profile_id: profileId, target_scope: scope})
+  });
+  if (resp.ok) {
+    applyStateToDom(await resp.json(), true);
+    showToast(`Applied profile to ${scope}`);
+  }
+}
+
+async function deleteSavedProfile(profileId) {
+  const resp = await fetch(API_URL, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({command: "delete_profile", profile_id: profileId})
+  });
+  if (resp.ok) {
+    applyStateToDom(await resp.json(), false);
+    showToast("Deleted profile");
+  }
+}
+
+async function createVaultSnapshot() {
+  const scope = document.getElementById("bkp-scope-select")?.value || "system";
+  const name = (document.getElementById("bkp-label-input")?.value || "").trim();
+  const incVpn = document.getElementById("bkp-include-vpn")?.checked ?? true;
+  const resp = await fetch(API_URL, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({command: "create_vault_backup", scope, name, include_vpn_secrets: incVpn})
+  });
+  if (resp.ok) {
+    const lblEl = document.getElementById("bkp-label-input");
+    if (lblEl) lblEl.value = "";
+    applyStateToDom(await resp.json(), false);
+    showToast(`Saved ${scope.toUpperCase()} snapshot to Internal Vault`);
+  }
+}
+
+async function createDeviceQuickBackup() {
+  const resp = await fetch(API_URL, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({command: "create_vault_backup", scope: "device", name: "", include_vpn_secrets: true})
+  });
+  if (resp.ok) {
+    applyStateToDom(await resp.json(), false);
+    showToast("Saved device snapshot to Internal Vault");
+  }
+}
+
+function triggerJsonDownload(bundle) {
+  const dateStr = new Date().toISOString().slice(0, 10);
+  const slugPart = bundle.scope === "system" ? "system" : `device-${bundle.target_device || 'esphome'}`;
+  const filename = `latter-${slugPart}-backup-${dateStr}.json`;
+  const blob = new Blob([JSON.stringify(bundle, null, 2)], {type: "application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 200);
+}
+
+async function exportBackupToComputer(overrideScope) {
+  const scope = overrideScope || document.getElementById("bkp-scope-select")?.value || "system";
+  const incVpn = document.getElementById("bkp-include-vpn")?.checked ?? true;
+  const resp = await fetch(API_URL, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({command: "export_backup_json", scope, include_vpn_secrets: incVpn})
+  });
+  if (resp.ok) {
+    const data = await resp.json();
+    if (data.bundle) {
+      triggerJsonDownload(data.bundle);
+      showToast(`Downloaded ${scope.toUpperCase()} backup .JSON`);
+    }
+  }
+}
+
+async function downloadVaultSnapshot(backupId) {
+  const resp = await fetch(API_URL, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({command: "export_backup_json", backup_id: backupId})
+  });
+  if (resp.ok) {
+    const data = await resp.json();
+    if (data.bundle) {
+      triggerJsonDownload(data.bundle);
+      showToast("Downloaded snapshot .JSON");
+    }
+  }
+}
+
+async function restoreVaultSnapshot(backupId, label) {
+  const restoreEsp = document.getElementById("bkp-restore-esp")?.checked ?? true;
+  const resp = await fetch(API_URL, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({command: "restore_backup", backup_id: backupId, restore_esphome_entities: restoreEsp})
+  });
+  if (resp.ok) {
+    applyStateToDom(await resp.json(), true);
+    showToast(`Restored snapshot '${label}'`);
+  }
+}
+
+async function deleteVaultSnapshot(backupId) {
+  const resp = await fetch(API_URL, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({command: "delete_vault_backup", backup_id: backupId})
+  });
+  if (resp.ok) {
+    applyStateToDom(await resp.json(), false);
+    showToast("Deleted snapshot from vault");
+  }
+}
+
+function restoreFromUploadedFile() {
+  const input = document.getElementById("bkp-upload-file");
+  if (!input || !input.files || !input.files.length) {
+    showToast("Choose a .JSON backup file first");
+    return;
+  }
+  const restoreEsp = document.getElementById("bkp-restore-esp")?.checked ?? true;
+  const file = input.files[0];
+  const reader = new FileReader();
+  reader.onload = async () => {
+    try {
+      const parsed = JSON.parse(reader.result);
+      const bundle = parsed.bundle || parsed;
+      const resp = await fetch(API_URL, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({command: "restore_backup", bundle, restore_esphome_entities: restoreEsp})
+      });
+      if (resp.ok) {
+        input.value = "";
+        applyStateToDom(await resp.json(), true);
+        showToast(`Restored ${bundle.scope || 'backup'} from file`);
+      } else {
+        showToast("Restore failed: invalid backup file");
+      }
+    } catch (_e) {
+      showToast("Invalid JSON backup file");
+    }
+  };
+  reader.readAsText(file);
+}
+
 function applyStateToDom(data, forceFormUpdate=false) {
   STATE = data;
   const cfg = data.config;
@@ -3671,6 +4362,7 @@ async function saveAllConfig() {
     vpn_private_key: document.getElementById("cfg-vpn_private_key").value.trim(),
     vpn_preshared_key: document.getElementById("cfg-vpn_preshared_key").value.trim(),
     device_profile: document.getElementById("cfg-device_profile").value,
+    device_group: document.getElementById("cfg-device_group")?.value || "handhelds",
     display_shape: document.getElementById("cfg-display_shape").value,
     default_page_size: parseInt(document.getElementById("cfg-default_page_size").value, 10) || 3,
     web_theme: document.getElementById("cfg-web_theme").value,

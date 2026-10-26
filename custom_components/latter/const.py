@@ -7,7 +7,7 @@ from typing import Final
 from homeassistant.const import Platform
 
 DOMAIN: Final = "latter"
-INTEGRATION_VERSION: Final = "2.0.3"
+INTEGRATION_VERSION: Final = "2.1.0"
 PLATFORMS: Final[list[Platform]] = [Platform.SENSOR]
 
 STORAGE_VERSION: Final = 1
@@ -101,13 +101,19 @@ CALENDAR_REFRESH_INTERVAL_MINUTES: Final = 15
 
 
 GLOBAL_STORAGE_KEY: Final = "latter.household"
+BACKUPS_STORAGE_KEY: Final = "latter.backups"
 DATA_GLOBAL_CONFIG: Final = "global_config"
 DATA_GLOBAL_STORE: Final = "global_store"
+DATA_BACKUPS_STORE: Final = "backups_store"
 
-# Multi-Site & Roaming WireGuard VPN Keys (Phase 1 & Phase 2 Foundation)
+# Multi-Site, Device Groups, Reusable Profiles & Roaming WireGuard VPN Keys
 CONF_SITE_ID: Final = "site_id"
 DEFAULT_SITE_ID: Final = "primary"
 CONF_SITES_REGISTRY: Final = "sites"
+CONF_DEVICE_GROUP: Final = "device_group"
+DEFAULT_DEVICE_GROUP: Final = "handhelds"
+CONF_DEVICE_GROUPS: Final = "device_groups"
+CONF_SAVED_PROFILES: Final = "saved_profiles"
 
 CONF_VPN_ENDPOINT: Final = "vpn_endpoint"
 CONF_VPN_SERVER_PUBLIC_KEY: Final = "vpn_server_public_key"
@@ -141,6 +147,8 @@ GLOBAL_CONFIG_KEYS: Final[tuple[str, ...]] = (
     CONF_CUSTOM_BINDINGS,
     CONF_CUSTOM_PALETTES,
     CONF_SITES_REGISTRY,
+    CONF_DEVICE_GROUPS,
+    CONF_SAVED_PROFILES,
     CONF_VPN_ENDPOINT,
     CONF_VPN_SERVER_PUBLIC_KEY,
     CONF_VPN_SUBNET,

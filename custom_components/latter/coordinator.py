@@ -65,8 +65,10 @@ from .const import (
     CONF_DEFAULT_AREA,
     CONF_DEFAULT_PAGE_SIZE,
     CONF_DEFAULT_SPEAKER,
+    CONF_DEVICE_GROUP,
     CONF_DEVICE_PROFILE,
     CONF_DEVICE_SLUG,
+    DEFAULT_DEVICE_GROUP,
     CONF_SITE_ID,
     CONF_VPN_CLIENT_IP,
     CONF_VPN_ENABLED,
@@ -433,6 +435,16 @@ class LatterCoordinator:
         return str(
             self.get_opt(CONF_DEVICE_PROFILE, DEFAULT_DEVICE_PROFILE)
         ).strip()
+
+    @property
+    def device_group(self) -> str:
+        """Return logical device group ID (e.g. 'handhelds', 'bedrooms', 'common_areas', 'wall_panels')."""
+        default_grp = (
+            "wall_panels"
+            if self.device_profile == "stationary_display"
+            else DEFAULT_DEVICE_GROUP
+        )
+        return str(self.get_opt(CONF_DEVICE_GROUP, default_grp) or default_grp).strip()
 
     @property
     def display_shape(self) -> str:
