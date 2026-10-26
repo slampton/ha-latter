@@ -26,8 +26,13 @@ from .const import (
     SERVICE_MUSIC_BROWSE,
     SERVICE_NOTIFY_DEVICE,
     SERVICE_REMOTE_ACTION,
+    CONF_CUSTOM_PALETTES,
+    CONF_DEVICE_CUSTOM_COLOR,
+    DATA_GLOBAL_CONFIG,
+    DATA_GLOBAL_STORE,
     SERVICE_ROOM_ACTION,
     SERVICE_ROOM_BROWSE,
+    SERVICE_SAVE_CUSTOM_COLOR,
     SERVICE_SET_ACTIVE_AREA,
     SERVICE_SET_ACTIVE_SPEAKER,
     SERVICE_TRIGGER_BINDING,
@@ -1196,4 +1201,46 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             },
             extra=vol.ALLOW_EXTRA,
         ),
+    )
+
+    async def _handle_save_custom_color(call: ServiceCall) -> None:
+        coord = _resolve_coordinator_from_call(hass, call)
+        raw_hex = str(call.data.get("hex_color") or "").strip().upper()
+        if not raw_hex.startswith("#"):
+            raw_hex = f"#{raw_hex}"
+        if len(raw_hex) != 7:
+            return
+        name = str(call.data.get("name") or f"Custom ({raw_hex})").strip()
+
+        domain_data = hass.data.setdefault(DOMAIN, {})
+        global_cfg: dict[str, Any] = domain_data.setdefault(DATA_GLOBAL_CONFIG, {})
+        palettes: list[dict[str, str]] = list(global_cfg.get(CONF_CUSTOM_PALETTES) or [])
+        existing = next((p for p in palettes if str(p.get("hex", "")).upper() == raw_hex), None)
+        if existing is not None:
+            if call.data.get("name"):
+                existing["name"] = name
+        else:
+            palettes.insert(0, {"name": name, "hex": raw_hex})
+            palettes = palettes[:24]
+        global_cfg[CONF_CUSTOM_PALETTES] = palettes
+        store = domain_data.get(DATA_GLOBAL_STORE)
+        if store is not None:
+            await store.async_save(global_cfg)
+
+        if coord is not None:
+            merged = {
+                **coord.entry.data,
+                **(coord.entry.options or {}),
+                CONF_CUSTOM_PALETTES: palettes,
+                CONF_DEVICE_CUSTOM_COLOR: raw_hex,
+            }
+            hass.config_entries.async_update_entry(
+                coord.entry, data=merged, options=merged
+            )
+            coord._notify_listeners()
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SAVE_CUSTOM_COLOR,
+        _handle_save_custom_color,
     )

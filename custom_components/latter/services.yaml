@@ -596,3 +596,26 @@ notify_device:
       selector:
         entity:
           domain: camera
+
+save_custom_color:
+  name: Save Custom Color Profile
+  description: Save a custom hex color from the on-device or Studio Color Wheel into the System-Wide Household Color Library and apply it to the target device.
+  fields:
+    target_device:
+      name: Target Device
+      description: Target ESPHome device slug (e.g. pocket-assistant).
+      required: false
+      selector:
+        text:
+    hex_color:
+      name: Hex Color
+      description: 6-digit RGB hex color string (e.g. "#3898FF").
+      required: true
+      selector:
+        text:
+    name:
+      name: Color Name
+      description: Optional friendly name for the Household Color Library.
+      required: false
+      selector:
+        text:

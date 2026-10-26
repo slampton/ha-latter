@@ -31,6 +31,8 @@ from .const import (
     CONF_COMPANION_BASE_URL,
     CONF_CUSTOM_BINDINGS,
     CONF_CUSTOM_ENTITIES,
+    CONF_CUSTOM_PALETTES,
+    CONF_DEVICE_CUSTOM_COLOR,
     CONF_DEFAULT_AREA,
     CONF_DEFAULT_PAGE_SIZE,
     CONF_DEFAULT_SPEAKER,
@@ -351,6 +353,8 @@ def _build_companion_state_payload(
         CONF_CALENDAR_ENTITIES: coordinator.calendar_entities,
         CONF_CUSTOM_ENTITIES: coordinator.custom_entities,
         CONF_CUSTOM_BINDINGS: coordinator.custom_bindings,
+        CONF_CUSTOM_PALETTES: coordinator.custom_palettes,
+        CONF_DEVICE_CUSTOM_COLOR: coordinator.device_custom_color,
         CONF_DOCK_APPS: coordinator.dock_apps_csv,
         CONF_WALLPAPER_SOURCE: coordinator.wallpaper_source,
         CONF_WALLPAPER_FAVORITES: coordinator.wallpaper_favorites,
@@ -815,6 +819,7 @@ class LatterCompanionApiView(HomeAssistantView):
                 CONF_WALLPAPER_SOURCE,
                 CONF_WALLPAPER_CYCLE_MINUTES,
                 CONF_ART_SIZE,
+                CONF_DEVICE_CUSTOM_COLOR,
                 CONF_SITE_ID,
                 CONF_VPN_ENABLED,
                 CONF_VPN_CLIENT_IP,
@@ -2152,6 +2157,16 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
             <h3>Display Settings</h3>
             <p class="desc">Adjust screen brightness, UI color profile, auto-brightness schedule, and screen geometry.</p>
             <div id="embedded-display" class="native-controls-box" style="margin-bottom:14px;"></div>
+            <div class="field" style="margin-bottom:14px;padding:12px;border-radius:10px;background:var(--input-bg);border:1px solid var(--border);">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                <label style="margin-bottom:0;font-weight:600;">Custom Color Profile & Household Library</label>
+                <button type="button" class="btn-secondary" style="padding:4px 10px;font-size:12px;" onclick="openColorWheelModal('device')">+ Color Wheel...</button>
+              </div>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <span id="dev-color-swatch" style="width:24px;height:24px;border-radius:50%;border:2px solid #fff;background:#3898FF;flex-shrink:0;"></span>
+                <select id="dev-custom-palette-select" onchange="onSelectDeviceCustomPalette(this.value)" style="flex:1;"></select>
+              </div>
+            </div>
             <div class="field" style="margin-bottom:0;">
               <label>Screen Bezel Mask & Resolution</label>
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
@@ -3598,6 +3613,7 @@ function applyStateToDom(data, forceFormUpdate=false) {
     renderYamlGenerator();
     clearDirty();
   }
+  renderCustomColorPalettes();
 }
 
 async function refreshState(forceForm=false) {
@@ -3684,6 +3700,8 @@ async function saveAllConfig() {
     calendar_entities: CALENDARS,
     custom_entities: PINNED,
     custom_bindings: bindings,
+    custom_palettes: Array.isArray((STATE?.config || {}).custom_palettes) ? STATE.config.custom_palettes : [],
+    device_custom_color: (STATE?.config || {}).device_custom_color || "#3898FF",
   };
 
   const resp = await fetch(API_URL, {
@@ -3694,6 +3712,242 @@ async function saveAllConfig() {
   if (resp.ok) {
     applyStateToDom(await resp.json(), true);
     showToast("Saved device & household configuration");
+  }
+}
+
+let cwTargetScope = "device";
+let cwSelectedHex = "#3898FF";
+
+function ensureColorWheelModal() {
+  if (document.getElementById("latter-cw-modal")) return;
+  const modal = document.createElement("div");
+  modal.id = "latter-cw-modal";
+  modal.style.cssText = "position:fixed;inset:0;background:rgba(8,12,18,0.82);backdrop-filter:blur(6px);z-index:9999;display:none;align-items:center;justify-content:center;padding:16px;";
+  modal.innerHTML = `
+    <div class="card" style="max-width:380px;width:100%;margin:0;text-align:center;position:relative;">
+      <h3 style="margin-bottom:4px;">HSV Color Wheel Picker</h3>
+      <p class="desc" style="margin-bottom:12px;">Click or drag on the wheel to choose a specific color. Saving adds it to your System-Wide Household Color Library.</p>
+      <div style="display:flex;justify-content:center;margin-bottom:14px;">
+        <canvas id="latter-cw-canvas" width="220" height="220" style="border-radius:50%;cursor:crosshair;box-shadow:0 4px 20px rgba(0,0,0,0.45);"></canvas>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px;">
+        <span id="latter-cw-preview" style="width:32px;height:32px;border-radius:50%;border:2px solid #fff;background:#3898FF;"></span>
+        <input type="text" id="latter-cw-hex" value="#3898FF" style="width:110px;font-family:monospace;text-align:center;" oninput="onCwHexInput(this.value)">
+      </div>
+      <div class="field" style="text-align:left;margin-bottom:14px;">
+        <label>Color Profile Name (System-Wide Library)</label>
+        <input type="text" id="latter-cw-name" placeholder="e.g. Sunset Coral, Cyber Violet">
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button type="button" class="btn-secondary" onclick="closeColorWheelModal()">Cancel</button>
+        <button type="button" class="btn-primary" onclick="saveColorWheelSelection()">Save to Household Library</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  const canvas = document.getElementById("latter-cw-canvas");
+  const ctx = canvas.getContext("2d");
+  const cx = 110, cy = 110, r = 108;
+  const img = ctx.createImageData(220, 220);
+  for (let y = 0; y < 220; y++) {
+    for (let x = 0; x < 220; x++) {
+      const dx = x - cx, dy = y - cy;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const idx = (y * 220 + x) * 4;
+      if (dist <= r) {
+        let hue = (Math.atan2(dy, dx) * 180 / Math.PI + 360) % 360;
+        let sat = Math.min(1, dist / r);
+        const [cr, cg, cb] = hsvToRgbJS(hue, sat, 1.0);
+        img.data[idx] = cr; img.data[idx + 1] = cg; img.data[idx + 2] = cb; img.data[idx + 3] = 255;
+      } else {
+        img.data[idx + 3] = 0;
+      }
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+
+  let dragging = false;
+  const pickAt = (ev) => {
+    const rect = canvas.getBoundingClientRect();
+    const x = (ev.touches ? ev.touches[0].clientX : ev.clientX) - rect.left;
+    const y = (ev.touches ? ev.touches[0].clientY : ev.clientY) - rect.top;
+    const dx = x - cx, dy = y - cy;
+    const dist = Math.min(r, Math.sqrt(dx * dx + dy * dy));
+    const hue = (Math.atan2(dy, dx) * 180 / Math.PI + 360) % 360;
+    const sat = dist / r;
+    const [cr, cg, cb] = hsvToRgbJS(hue, sat, 1.0);
+    const hex = "#" + [cr, cg, cb].map(v => v.toString(16).padStart(2, "0")).join("").toUpperCase();
+    setCwHex(hex);
+  };
+  canvas.addEventListener("mousedown", (e) => { dragging = true; pickAt(e); });
+  window.addEventListener("mousemove", (e) => { if (dragging) pickAt(e); });
+  window.addEventListener("mouseup", () => { dragging = false; });
+  canvas.addEventListener("touchstart", (e) => { dragging = true; pickAt(e); e.preventDefault(); }, {passive: false});
+  canvas.addEventListener("touchmove", (e) => { if (dragging) pickAt(e); e.preventDefault(); }, {passive: false});
+  canvas.addEventListener("touchend", () => { dragging = false; });
+}
+
+function hsvToRgbJS(h, s, v) {
+  let c = v * s;
+  let x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  let m = v - c;
+  let r = 0, g = 0, b = 0;
+  if (h < 60) { r = c; g = x; }
+  else if (h < 120) { r = x; g = c; }
+  else if (h < 180) { g = c; b = x; }
+  else if (h < 240) { g = x; b = c; }
+  else if (h < 300) { r = x; b = c; }
+  else { r = c; b = x; }
+  return [Math.round((r + m) * 255), Math.round((g + m) * 255), Math.round((b + m) * 255)];
+}
+
+function setCwHex(hex) {
+  cwSelectedHex = hex.toUpperCase();
+  const prev = document.getElementById("latter-cw-preview");
+  const inp = document.getElementById("latter-cw-hex");
+  if (prev) prev.style.background = cwSelectedHex;
+  if (inp && document.activeElement !== inp) inp.value = cwSelectedHex;
+}
+
+function onCwHexInput(val) {
+  let v = val.trim().toUpperCase();
+  if (!v.startsWith("#")) v = "#" + v;
+  if (/^#[0-9A-F]{6}$/.test(v)) {
+    cwSelectedHex = v;
+    const prev = document.getElementById("latter-cw-preview");
+    if (prev) prev.style.background = v;
+  }
+}
+
+function openColorWheelModal(scope) {
+  ensureColorWheelModal();
+  cwTargetScope = scope || "device";
+  const curHex = ((STATE && STATE.config && STATE.config.device_custom_color) || "#3898FF").toUpperCase();
+  setCwHex(curHex);
+  const nameInp = document.getElementById("latter-cw-name");
+  if (nameInp) nameInp.value = "";
+  document.getElementById("latter-cw-modal").style.display = "flex";
+}
+
+function closeColorWheelModal() {
+  const m = document.getElementById("latter-cw-modal");
+  if (m) m.style.display = "none";
+}
+
+async function saveColorWheelSelection() {
+  const nameInp = document.getElementById("latter-cw-name");
+  const name = (nameInp && nameInp.value.trim()) ? nameInp.value.trim() : `Custom (${cwSelectedHex})`;
+  STATE.config = STATE.config || {};
+  let pals = Array.isArray(STATE.config.custom_palettes) ? [...STATE.config.custom_palettes] : [];
+  const existing = pals.find(p => (p.hex || "").toUpperCase() === cwSelectedHex);
+  if (existing) {
+    existing.name = name;
+  } else {
+    pals.unshift({name, hex: cwSelectedHex});
+  }
+  STATE.config.custom_palettes = pals;
+  STATE.config.device_custom_color = cwSelectedHex;
+  closeColorWheelModal();
+  await applyDeviceCustomColor(cwSelectedHex, true);
+}
+
+async function applyDeviceCustomColor(hexColor, alsoSwitchSelect) {
+  STATE.config = STATE.config || {};
+  STATE.config.device_custom_color = hexColor.toUpperCase();
+  await saveAllConfig();
+  if (alsoSwitchSelect) {
+    const secs = ((STATE.esphome || {}).sections || []);
+    for (const s of secs) {
+      for (const it of (s.items || [])) {
+        if (it.domain === "select" && (it.name || "").toLowerCase().includes("color profile") && (it.options || []).includes("Custom")) {
+          await espSelect(it.entity_id, "Custom");
+        }
+      }
+    }
+  }
+}
+
+async function onSelectDeviceCustomPalette(val) {
+  if (val === "__new__") {
+    openColorWheelModal("device");
+    renderCustomColorPalettes();
+    return;
+  }
+  if (val && val.startsWith("#")) {
+    await applyDeviceCustomColor(val, true);
+  }
+}
+
+async function deleteCustomPalette(hexColor) {
+  STATE.config = STATE.config || {};
+  let pals = Array.isArray(STATE.config.custom_palettes) ? STATE.config.custom_palettes : [];
+  STATE.config.custom_palettes = pals.filter(p => (p.hex || "").toUpperCase() !== hexColor.toUpperCase());
+  await saveAllConfig();
+}
+
+function renderCustomColorPalettes() {
+  if (!STATE || !STATE.config) return;
+  const pals = Array.isArray(STATE.config.custom_palettes) ? STATE.config.custom_palettes : [];
+  const curHex = (STATE.config.device_custom_color || "#3898FF").toUpperCase();
+
+  // Dynamically inject the System-Wide Custom Color Library card into Studio Settings if not yet present
+  const studioSec = document.getElementById("view-studio_settings");
+  if (studioSec && !document.getElementById("sys-custom-palettes-card")) {
+    const card = document.createElement("div");
+    card.id = "sys-custom-palettes-card";
+    card.className = "card";
+    card.style.marginTop = "16px";
+    card.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px;">
+        <div>
+          <h3 style="margin-bottom:4px;">Household Custom Color Profiles (System-Wide Library)</h3>
+          <p class="desc" style="margin-bottom:0;">Create custom UI color profiles on the HSV Color Wheel once at the system level and reuse them across any device in your home.</p>
+        </div>
+        <button type="button" class="btn-primary" onclick="openColorWheelModal('system')">+ Open Color Wheel...</button>
+      </div>
+      <div id="sys-custom-palettes-list" style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;"></div>
+    `;
+    studioSec.appendChild(card);
+  }
+
+  const sw = document.getElementById("dev-color-swatch");
+  if (sw) sw.style.background = curHex;
+
+  const sel = document.getElementById("dev-custom-palette-select");
+  if (sel) {
+    let optsHtml = "";
+    if (pals.length === 0) {
+      optsHtml += `<option value="${curHex}">Active Custom (${curHex})</option>`;
+    } else {
+      for (const p of pals) {
+        const h = (p.hex || "").toUpperCase();
+        const selAttr = (h === curHex) ? "selected" : "";
+        optsHtml += `<option value="${h}" ${selAttr}>${p.name || h} (${h})</option>`;
+      }
+    }
+    optsHtml += `<option value="__new__">+ Create New Color (Wheel)...</option>`;
+    sel.innerHTML = optsHtml;
+  }
+
+  const sysBox = document.getElementById("sys-custom-palettes-list");
+  if (sysBox) {
+    if (pals.length === 0) {
+      sysBox.innerHTML = `<p class="desc" style="margin:0;">No custom household colors saved yet. Click "+ Open Color Wheel..." to create one.</p>`;
+    } else {
+      sysBox.innerHTML = pals.map(p => {
+        const h = (p.hex || "").toUpperCase();
+        return `
+          <div style="display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;background:var(--input-bg);border:1px solid var(--border);">
+            <span style="width:16px;height:16px;border-radius:50%;background:${h};border:1px solid #fff;"></span>
+            <strong style="font-size:13px;">${p.name || h}</strong>
+            <code style="font-size:11px;opacity:0.75;">${h}</code>
+            <button type="button" class="btn-secondary" style="padding:2px 8px;font-size:11px;" onclick="applyDeviceCustomColor('${h}', true)">Apply</button>
+            <button type="button" class="btn-secondary" style="padding:2px 6px;font-size:11px;color:var(--danger);" onclick="deleteCustomPalette('${h}')">&times;</button>
+          </div>
+        `;
+      }).join("");
+    }
   }
 }
 

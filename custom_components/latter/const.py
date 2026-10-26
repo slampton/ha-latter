@@ -7,7 +7,7 @@ from typing import Final
 from homeassistant.const import Platform
 
 DOMAIN: Final = "latter"
-INTEGRATION_VERSION: Final = "1.9.5"
+INTEGRATION_VERSION: Final = "1.9.6"
 PLATFORMS: Final[list[Platform]] = [Platform.SENSOR]
 
 STORAGE_VERSION: Final = 1
@@ -48,6 +48,8 @@ CONF_WALLPAPER_SOURCE: Final = "wallpaper_source"
 CONF_WALLPAPER_FAVORITES: Final = "wallpaper_favorites"
 CONF_WALLPAPER_CYCLE_MINUTES: Final = "wallpaper_cycle_minutes"
 CONF_ART_SIZE: Final = "art_size"
+CONF_CUSTOM_PALETTES: Final = "custom_palettes"
+CONF_DEVICE_CUSTOM_COLOR: Final = "device_custom_color"
 
 # Defaults
 DEFAULT_DEVICE_PROFILE: Final = "mobile_display"
@@ -77,6 +79,7 @@ SERVICE_CALENDAR_FETCH: Final = "calendar_fetch"
 SERVICE_CALENDAR_CREATE_EVENT: Final = "calendar_create_event"
 SERVICE_INTERCOM_BROADCAST: Final = "intercom_broadcast"
 SERVICE_NOTIFY_DEVICE: Final = "notify_device"
+SERVICE_SAVE_CUSTOM_COLOR: Final = "save_custom_color"
 
 # HTTP Endpoints (Artwork, Wallpaper, Camera Peephole & Web Companion Studio)
 API_ARTWORK_PROXY_PATH: Final = "/api/latter/artwork/{target_device}"
@@ -136,6 +139,7 @@ GLOBAL_CONFIG_KEYS: Final[tuple[str, ...]] = (
     CONF_CALENDAR_ENTITIES,
     CONF_CUSTOM_ENTITIES,
     CONF_CUSTOM_BINDINGS,
+    CONF_CUSTOM_PALETTES,
     CONF_SITES_REGISTRY,
     CONF_VPN_ENDPOINT,
     CONF_VPN_SERVER_PUBLIC_KEY,

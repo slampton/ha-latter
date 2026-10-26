@@ -59,6 +59,8 @@ from .const import (
     CONF_COMPANION_BASE_URL,
     CONF_CUSTOM_BINDINGS,
     CONF_CUSTOM_ENTITIES,
+    CONF_CUSTOM_PALETTES,
+    CONF_DEVICE_CUSTOM_COLOR,
     CONF_DEFAULT_AREA,
     CONF_DEFAULT_PAGE_SIZE,
     CONF_DEFAULT_SPEAKER,
@@ -438,6 +440,33 @@ class LatterCoordinator:
             )
         except (ValueError, TypeError):
             return 0
+
+    @property
+    def custom_palettes(self) -> list[dict[str, str]]:
+        """Return system-wide custom color profiles saved in the Household Library."""
+        val = self.get_opt(CONF_CUSTOM_PALETTES, [])
+        if not isinstance(val, list):
+            return []
+        out: list[dict[str, str]] = []
+        for item in val:
+            if isinstance(item, dict) and item.get("hex"):
+                out.append(
+                    {
+                        "name": str(item.get("name") or item["hex"]).strip(),
+                        "hex": str(item["hex"]).strip().upper(),
+                    }
+                )
+        return out
+
+    @property
+    def device_custom_color(self) -> str:
+        """Return the active custom hex color (#RRGGBB) for this device."""
+        raw = str(self.get_opt(CONF_DEVICE_CUSTOM_COLOR, "") or "").strip().upper()
+        if raw.startswith("#") and len(raw) == 7:
+            return raw
+        if self.custom_palettes:
+            return self.custom_palettes[0]["hex"]
+        return "#3898FF"
 
     @property
     def custom_bindings(self) -> list[dict[str, str]]:
@@ -1781,6 +1810,8 @@ class LatterCoordinator:
             "custom_entities": self.custom_entities,
             "custom_bindings": self.custom_bindings,
             "custom_bindings_summary": self._build_custom_bindings_summary(),
+            "theme_color_hex": self.device_custom_color,
+            "custom_palettes": self.custom_palettes,
         }
 
     @callback
