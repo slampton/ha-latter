@@ -117,6 +117,7 @@ from .const import (
 )
 from .room_engine import (
     find_area_media_entities,
+    get_area_available_domains,
     get_area_climate_telemetry,
     get_area_entities,
     get_areas_summary,
@@ -272,7 +273,7 @@ class LatterCoordinator:
         self.active_area_id: str | None = self.get_opt(CONF_DEFAULT_AREA)
         self.active_remote: str = ""
         self.active_remote_slot: int = 1
-        self.last_room_filter: str = "all"
+        self.last_room_filter: str = "scene"
         self.last_room_page: int = 1
         self.on_area_changed_push_slots: callable | None = None
 
@@ -1733,6 +1734,12 @@ class LatterCoordinator:
             custom_entities=self.custom_entities,
             local_speaker=self.local_speaker,
         )
+        avail_domains = get_area_available_domains(
+            self.hass,
+            area_id=self.active_area_id,
+            custom_entities=self.custom_entities,
+            local_speaker=self.local_speaker,
+        )
         lights_on = sum(
             1 for e in entities if e["type"] == "light" and e["active"]
         )
@@ -1775,6 +1782,7 @@ class LatterCoordinator:
             "wallpaper_url": self.build_wallpaper_url(),
             "companion_url": self.build_companion_url(),
             "entity_count": len(entities),
+            "available_domains": avail_domains,
             "lights_on": lights_on,
             "covers_open": covers_open,
             "room_temp": climate_telemetry["temperature"],

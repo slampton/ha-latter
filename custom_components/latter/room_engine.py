@@ -29,11 +29,12 @@ from .const import normalize_device_slug
 _LOGGER = logging.getLogger(__name__)
 
 ROOM_CONTROL_DOMAINS: tuple[str, ...] = (
-    "light",
     "scene",
+    "light",
     "cover",
     "fan",
     "switch",
+    "input_boolean",
     "climate",
     "media_player",
 )
@@ -671,11 +672,8 @@ def _is_curated_room_entity(
             return True
         return dev_class in WINDOW_COVER_CLASSES
 
-    if domain == "switch":
-        if dev_class == "outlet":
-            return True
-        name_low = str(attrs.get("friendly_name") or state_obj.entity_id).lower()
-        return any(k in name_low for k in ("outlet", "plug", "lamp", "socket"))
+    if domain in ("switch", "input_boolean"):
+        return True
 
     if domain == "media_player":
         if state_obj.entity_id == local_speaker:
@@ -979,12 +977,20 @@ def get_areas_summary(
 
 
 def _parse_domain_filter(domain_filter: str) -> tuple[str, ...]:
-    """Parse a single domain, comma-separated domain list ('cover,fan'), or alias into allowed domains."""
+    """Parse a single domain, comma-separated domain list, or alias into allowed domains (cover and fan are strictly separate!)."""
     raw = domain_filter.strip().lower()
     if not raw or raw == "all":
         return ROOM_CONTROL_DOMAINS
-    if raw in ("cover", "shades", "shades_fans"):
-        return ("cover", "fan")
+    if raw in ("scene", "scenes"):
+        return ("scene",)
+    if raw in ("light", "lights"):
+        return ("light",)
+    if raw in ("cover", "covers", "shades", "blinds", "curtains"):
+        return ("cover",)
+    if raw in ("fan", "fans"):
+        return ("fan",)
+    if raw in ("switch", "switches", "outlet", "outlets", "helper", "helpers"):
+        return ("switch", "input_boolean")
     if "," in raw:
         parts = [
             p.strip()
@@ -996,6 +1002,37 @@ def _parse_domain_filter(domain_filter: str) -> tuple[str, ...]:
     if raw in ROOM_CONTROL_DOMAINS:
         return (raw,)
     return ROOM_CONTROL_DOMAINS
+
+
+def get_area_available_domains(
+    hass: HomeAssistant,
+    area_id: str | None,
+    custom_entities: list[str] | None = None,
+    local_speaker: str = "",
+) -> str:
+    """Return comma-separated canonical room categories ('scene,light,cover,fan,switch') present in the active area."""
+    all_items = get_area_entities(
+        hass,
+        area_id=area_id,
+        domain_filter="all",
+        custom_entities=custom_entities,
+        local_speaker=local_speaker,
+    )
+    present_types = {str(it.get("type") or "") for it in all_items}
+    ordered: list[str] = []
+    if "scene" in present_types or "script" in present_types:
+        ordered.append("scene")
+    if "light" in present_types:
+        ordered.append("light")
+    if "cover" in present_types:
+        ordered.append("cover")
+    if "fan" in present_types:
+        ordered.append("fan")
+    if "switch" in present_types or "input_boolean" in present_types:
+        ordered.append("switch")
+    if "climate" in present_types:
+        ordered.append("climate")
+    return ",".join(ordered)
 
 
 def get_area_entities(
