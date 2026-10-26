@@ -8,7 +8,11 @@ import secrets
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry, SOURCE_INTEGRATION_DISCOVERY
-from homeassistant.const import EVENT_HOMEASSISTANT_STARTED, EVENT_STATE_CHANGED
+from homeassistant.const import (
+    EVENT_HOMEASSISTANT_STARTED,
+    EVENT_SERVICE_REGISTERED,
+    EVENT_STATE_CHANGED,
+)
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers import (
     config_validation as cv,
@@ -16,6 +20,7 @@ from homeassistant.helpers import (
     discovery_flow,
     entity_registry as er,
 )
+from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.typing import ConfigType
 
@@ -74,8 +79,11 @@ def is_latter_compatible_esphome_device(
 ) -> bool:
     """Return True ONLY if the ESPHome device announces Latter contract actions or project metadata."""
     # 1. Check ESPHome project name / model / sw_version metadata
-    model_str = f"{device.model or ''} {device.sw_version or ''} {device.name or ''}".lower()
-    if "latter" in model_str or "pocket-assistant" in model_str or "pocket_assistant" in model_str:
+    model_str = f"{device.model or ''} {device.sw_version or ''} {device.name or ''} {slug}".lower()
+    if any(
+        k in model_str
+        for k in ("latter", "pocket-assistant", "pocket_assistant", "wrist-assist", "wrist_assist")
+    ):
         return True
 
     # 2. Check registered ESPHome API actions (esphome.<slug>_set_browse_slots / _set_room_slots / _show_notification)
@@ -256,6 +264,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
             dev = dev_reg.async_get(dev_id)
             if dev is not None:
                 _async_check_esphome_device_for_discovery(hass, dev)
+                # Re-check 5s later after ESPHome finishes registering entities & API services
+                async_call_later(
+                    hass,
+                    5.0,
+                    lambda _now: _async_scan_all_esphome_devices_for_discovery(hass),
+                )
+
+        @callback
+        def _on_service_registered(event: Event) -> None:
+            if event.data.get("domain") != "esphome":
+                return
+            svc = str(event.data.get("service") or "")
+            if any(svc.endswith(sfx) for sfx in LATTER_CONTRACT_ACTION_SUFFIXES):
+                _async_scan_all_esphome_devices_for_discovery(hass)
 
         @callback
         def _on_update_entity_state_changed(event: Event) -> None:
@@ -272,10 +294,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
         unsub_dev = hass.bus.async_listen(
             dr.EVENT_DEVICE_REGISTRY_UPDATED, _on_device_registry_updated
         )
+        unsub_svc = hass.bus.async_listen(
+            EVENT_SERVICE_REGISTERED, _on_service_registered
+        )
         unsub_upd = hass.bus.async_listen(
             EVENT_STATE_CHANGED, _on_update_entity_state_changed
         )
-        domain_data[DATA_DISCOVERY_UNSUB] = (unsub_dev, unsub_upd)
+        domain_data[DATA_DISCOVERY_UNSUB] = (unsub_dev, unsub_svc, unsub_upd)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     await async_setup_services(hass)

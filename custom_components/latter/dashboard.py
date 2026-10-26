@@ -650,6 +650,41 @@ class LatterCompanionApiView(HomeAssistantView):
                 token = coordinator.get_signed_token()
                 visit_url = f"{browser_base}/api/latter/companion/{coordinator.entry.entry_id}?token={token}"
                 inject_esphome_visit_link(self.hass, coordinator.device_slug, visit_url)
+        from . import (
+            _async_scan_all_esphome_devices_for_discovery,
+            is_latter_compatible_esphome_device,
+        )
+
+        _async_scan_all_esphome_devices_for_discovery(self.hass)
+        # Auto-onboard any newly connected Native Latter device (e.g. Wrist Assist / Pocket Assistant)
+        onboarded_slugs = {c.device_slug for c in _get_all_coordinators(self.hass)}
+        dev_reg = dr.async_get(self.hass)
+        ent_reg = er.async_get(self.hass)
+        for dev in _iter_devices(dev_reg):
+            dev_entries = er.async_entries_for_device(ent_reg, dev.id)
+            if not any(e.platform == "esphome" for e in dev_entries):
+                continue
+            raw_name = str(dev.name_by_user or dev.name or "").strip()
+            if not raw_name:
+                continue
+            cand_slug = re.sub(r"[^a-z0-9]+", "_", raw_name.lower()).strip("_")
+            if not cand_slug or cand_slug in onboarded_slugs:
+                continue
+            if is_latter_compatible_esphome_device(self.hass, dev, cand_slug):
+                is_watch = "wrist" in cand_slug or "206" in str(dev.model or "").lower()
+                await self.hass.config_entries.flow.async_init(
+                    DOMAIN,
+                    context={"source": "user"},
+                    data={
+                        CONF_DEVICE_SLUG: cand_slug,
+                        CONF_DEVICE_PROFILE: "mobile_display",
+                        CONF_DISPLAY_SHAPE: "square" if is_watch else "circle",
+                        CONF_ART_SIZE: "410x502" if is_watch else DEFAULT_ART_SIZE,
+                        CONF_DEFAULT_SPEAKER: f"media_player.{cand_slug}",
+                    },
+                )
+                onboarded_slugs.add(cand_slug)
+
         await async_list_vault_backups(self.hass)
         payload = _build_companion_state_payload(self.hass, coordinator)
         return web.json_response(payload)
