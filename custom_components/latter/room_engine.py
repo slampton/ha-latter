@@ -991,6 +991,8 @@ def _parse_domain_filter(domain_filter: str) -> tuple[str, ...]:
         return ("fan",)
     if raw in ("switch", "switches", "outlet", "outlets", "helper", "helpers"):
         return ("switch", "input_boolean")
+    if raw in ("media", "media_player", "speaker", "speakers"):
+        return ("media_player",)
     if "," in raw:
         parts = [
             p.strip()
@@ -1030,6 +1032,8 @@ def get_area_available_domains(
         ordered.append("fan")
     if "switch" in present_types or "input_boolean" in present_types:
         ordered.append("switch")
+    if "media_player" in present_types:
+        ordered.append("media")
     if "climate" in present_types:
         ordered.append("climate")
     return ",".join(ordered)
@@ -1145,10 +1149,31 @@ async def async_execute_room_action(
     code: str | None = None,
     option: str | None = None,
 ) -> None:
-    """Execute a normalized room, home-alarm, or ESPHome device entity action."""
+    """Execute a normalized room, whole-home (alarm/thermostat/garage/lock/vacuum), or light color/kelvin action."""
     state_obj = hass.states.get(entity_id)
+    if state_obj is None and entity_id.startswith("whole_home."):
+        # Auto-discover primary household entity by domain when invoked from Whole-Home Hub
+        wh_kind = entity_id.split(".", 1)[1].lower()
+        target_dom = {
+            "thermostat": "climate",
+            "climate": "climate",
+            "lock": "lock",
+            "vacuum": "vacuum",
+            "garage": "cover",
+        }.get(wh_kind, "")
+        if target_dom:
+            for cand in hass.states.async_all(target_dom):
+                if cand.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+                    continue
+                if wh_kind == "garage":
+                    d_cls = str(cand.attributes.get("device_class") or "").lower()
+                    if d_cls not in ("garage", "gate", "door") and "garage" not in cand.entity_id.lower():
+                        continue
+                state_obj = cand
+                entity_id = cand.entity_id
+                break
     if state_obj is None:
-        _LOGGER.warning("Action target entity not found: %s", entity_id)
+        _LOGGER.debug("Action target entity not found (or running in on-device demo mode): %s", entity_id)
         return
 
     domain = state_obj.domain
@@ -1214,6 +1239,48 @@ async def async_execute_room_action(
         await hass.services.async_call(
             domain, "turn_on", {ATTR_ENTITY_ID: entity_id}, blocking=False
         )
+        return
+
+    if domain == "light" and action == "set_color" and code:
+        hex_s = code.strip().lstrip("#")
+        if len(hex_s) == 6:
+            try:
+                rgb = [int(hex_s[0:2], 16), int(hex_s[2:4], 16), int(hex_s[4:6], 16)]
+                payload_c: dict[str, Any] = {ATTR_ENTITY_ID: entity_id, "rgb_color": rgb}
+                if level is not None and int(level) > 0:
+                    payload_c["brightness_pct"] = max(1, min(100, int(level)))
+                await hass.services.async_call("light", "turn_on", payload_c, blocking=False)
+                return
+            except ValueError:
+                pass
+
+    if domain == "light" and action == "set_kelvin" and level is not None:
+        kelvin = max(2000, min(6500, int(level)))
+        await hass.services.async_call(
+            "light",
+            "turn_on",
+            {ATTR_ENTITY_ID: entity_id, "color_temp_kelvin": kelvin},
+            blocking=False,
+        )
+        return
+
+    if domain == "climate" and action in ("heat", "cool", "heat_cool", "auto", "off"):
+        await hass.services.async_call(
+            "climate",
+            "set_hvac_mode",
+            {ATTR_ENTITY_ID: entity_id, "hvac_mode": action},
+            blocking=False,
+        )
+        return
+
+    if domain == "lock":
+        svc_l = "unlock" if (action == "unlock" or (action == "toggle" and state_obj.state == "locked")) else "lock"
+        await hass.services.async_call("lock", svc_l, {ATTR_ENTITY_ID: entity_id}, blocking=False)
+        return
+
+    if domain == "vacuum":
+        svc_v = "return_to_base" if action in ("dock", "return_to_base") else ("pause" if action == "pause" else "start")
+        await hass.services.async_call("vacuum", svc_v, {ATTR_ENTITY_ID: entity_id}, blocking=False)
         return
 
     if action == "set_level" and level is not None:
