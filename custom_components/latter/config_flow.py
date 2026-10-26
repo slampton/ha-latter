@@ -336,8 +336,9 @@ class LatterConfigFlow(ConfigFlow, domain=DOMAIN):
             return self.async_abort(reason="not_supported")
 
         # Only auto-discover ESPHome nodes that exist in HA with interactive entities (not bare BLE proxies)
+        from . import is_latter_compatible_esphome_device
+
         dev_reg = dr.async_get(self.hass)
-        ent_reg = er.async_get(self.hass)
         matched_dev: dr.DeviceEntry | None = None
         for dev in _iter_devices(dev_reg):
             d_name = str(dev.name_by_user or dev.name or "").strip()
@@ -345,14 +346,10 @@ class LatterConfigFlow(ConfigFlow, domain=DOMAIN):
                 matched_dev = dev
                 break
 
-        if matched_dev is not None:
-            entries = er.async_entries_for_device(ent_reg, matched_dev.id)
-            if not any(
-                e.domain in ("media_player", "light", "switch", "button", "select", "number")
-                and e.entity_category is None
-                for e in entries
-            ):
-                return self.async_abort(reason="not_supported")
+        if matched_dev is None or not is_latter_compatible_esphome_device(
+            self.hass, matched_dev, slug
+        ):
+            return self.async_abort(reason="not_supported")
 
         await self.async_set_unique_id(f"{DOMAIN}_{slug}")
         self._abort_if_unique_id_configured()

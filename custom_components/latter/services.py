@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import timedelta
 import logging
 import math
 from typing import Any
@@ -11,6 +12,7 @@ import voluptuous as vol
 from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import config_validation as cv, device_registry as dr
+from homeassistant.util import dt as dt_util
 
 from .browse_engine import async_browse_media_items, is_music_assistant_player
 from .calendar_engine import async_fetch_calendar_agenda
@@ -507,9 +509,15 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         coord = _resolve_coordinator_from_call(hass, call)
         area_val = str(call.data.get("area") or call.data.get("area_id") or "").strip()
         if coord and area_val:
+            raw_handoff = call.data.get("handoff_media")
+            handoff_val = (
+                _parse_bool(raw_handoff, default=coord.area_handoff_enabled)
+                if raw_handoff is not None
+                else None
+            )
             coord.async_set_active_area(
                 area_val,
-                handoff_media=False,
+                handoff_media=handoff_val,
                 sync_device_registry=True,
             )
 
@@ -857,11 +865,22 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             _LOGGER.warning("No writable calendar entity found for calendar_create_event.")
             return
 
+        start_str = str(data.get("start_date_time") or "").strip()
+        end_str = str(data.get("end_date_time") or "").strip()
+        if not start_str or not end_str:
+            in_mins = max(1, int(float(data.get("in_minutes") or 15)))
+            dur_mins = max(5, int(float(data.get("duration_minutes") or 30)))
+            now_local = dt_util.now().replace(second=0, microsecond=0)
+            start_dt = now_local + timedelta(minutes=in_mins)
+            end_dt = start_dt + timedelta(minutes=dur_mins)
+            start_str = start_dt.strftime("%Y-%m-%d %H:%M:%S")
+            end_str = end_dt.strftime("%Y-%m-%d %H:%M:%S")
+
         payload: dict[str, Any] = {
             ATTR_ENTITY_ID: cal_entity,
             "summary": str(data.get("summary") or "Reminder"),
-            "start_date_time": str(data.get("start_date_time") or ""),
-            "end_date_time": str(data.get("end_date_time") or ""),
+            "start_date_time": start_str,
+            "end_date_time": end_str,
         }
         if data.get("description"):
             payload["description"] = str(data["description"])
@@ -1120,8 +1139,10 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 **BASE_TARGET_FIELDS,
                 vol.Optional("calendar_entity"): cv.string,
                 vol.Required("summary"): cv.string,
-                vol.Required("start_date_time"): cv.string,
-                vol.Required("end_date_time"): cv.string,
+                vol.Optional("start_date_time"): cv.string,
+                vol.Optional("end_date_time"): cv.string,
+                vol.Optional("in_minutes", default=15): vol.Any(vol.Coerce(int), cv.string),
+                vol.Optional("duration_minutes", default=30): vol.Any(vol.Coerce(int), cv.string),
                 vol.Optional("description"): cv.string,
             },
             extra=vol.ALLOW_EXTRA,
