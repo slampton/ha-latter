@@ -384,6 +384,8 @@ class LatterCameraSnapshotView(HomeAssistantView):
 
 _MAP_GEOCODE_CACHE: dict[str, tuple[float, float]] = {}
 _MAP_JPEG_CACHE: OrderedDict[str, bytes] = OrderedDict()
+_OSM_TILE_CACHE: OrderedDict[tuple[int, int, int], bytes] = OrderedDict()
+MAX_OSM_TILE_CACHE = 128
 
 
 def _latlon_to_tile_xy(lat: float, lon: float, zoom: int) -> tuple[float, float]:
@@ -397,18 +399,33 @@ def _latlon_to_tile_xy(lat: float, lon: float, zoom: int) -> tuple[float, float]
     return xtile, ytile
 
 
+def _haversine_miles(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Return great-circle distance in miles between two (lat, lon) points."""
+    import math
+
+    r_miles = 3958.7613
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp = math.radians(lat2 - lat1)
+    dl = math.radians(lon2 - lon1)
+    a = math.sin(dp / 2.0) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2.0) ** 2
+    return 2.0 * r_miles * math.asin(min(1.0, math.sqrt(a)))
+
+
 def _compose_map_snapshot_jpeg(
     tile_images: dict[tuple[int, int], bytes],
-    center_tx: float,
-    center_ty: float,
+    view_tx: float,
+    view_ty: float,
+    event_tx: float,
+    event_ty: float,
+    home_tx: float,
+    home_ty: float,
     base_tx: int,
     base_ty: int,
     width: int,
     height: int,
     circular_mask: bool,
-    label: str,
 ) -> bytes:
-    """Stitch 3x3 256px map tiles centered on (center_tx, center_ty), draw a vector map pin, and encode Baseline JPEG."""
+    """Stitch 3x3 256px OSM tiles centered on (view_tx, view_ty) and draw Event & Home vector pins."""
     canvas = Image.new("RGB", (768, 768), (20, 26, 36))
     tiles_loaded = 0
     for dy in range(3):
@@ -424,48 +441,65 @@ def _compose_map_snapshot_jpeg(
 
     draw_c = ImageDraw.Draw(canvas)
     if tiles_loaded == 0:
-        # Offline fallback vector radar grid
         for g in range(0, 768, 48):
             draw_c.line([(g, 0), (g, 768)], fill=(32, 42, 56), width=1)
             draw_c.line([(0, g), (768, g)], fill=(32, 42, 56), width=1)
 
-    px = int((center_tx - base_tx) * 256.0)
-    py = int((center_ty - base_ty) * 256.0)
+    v_px = int((view_tx - base_tx) * 256.0)
+    v_py = int((view_ty - base_ty) * 256.0)
 
     half_w = width // 2
     half_h = height // 2
-    left = max(0, min(768 - width, px - half_w))
-    top = max(0, min(768 - height, py - half_h))
+    left = max(0, min(768 - width, v_px - half_w))
+    top = max(0, min(768 - height, v_py - half_h))
     cropped = canvas.crop((left, top, left + width, top + height))
 
-    pin_x = px - left
-    pin_y = py - top
     d = ImageDraw.Draw(cropped)
 
-    # Outer accuracy halo + drop shadow + sculpted crimson/gold vector map pin
-    d.ellipse(
-        (pin_x - 28, pin_y - 28, pin_x + 28, pin_y + 28),
-        outline=(56, 152, 255),
-        width=2,
-    )
-    d.ellipse(
-        (pin_x - 6, pin_y - 3, pin_x + 6, pin_y + 5),
-        fill=(10, 14, 20),
-    )
-    d.polygon(
-        [(pin_x, pin_y), (pin_x - 13, pin_y - 22), (pin_x + 13, pin_y - 22)],
-        fill=(235, 52, 62),
-    )
-    d.ellipse(
-        (pin_x - 14, pin_y - 36, pin_x + 14, pin_y - 8),
-        fill=(235, 52, 62),
-        outline=(255, 255, 255),
-        width=2,
-    )
-    d.ellipse(
-        (pin_x - 5, pin_y - 27, pin_x + 5, pin_y - 17),
-        fill=(255, 255, 255),
-    )
+    # 1. Optional Home Pin (Cyan/Blue bullseye if Home is within visible viewport and >20px from event)
+    h_px = int((home_tx - base_tx) * 256.0) - left
+    h_py = int((home_ty - base_ty) * 256.0) - top
+    pin_x = int((event_tx - base_tx) * 256.0) - left
+    pin_y = int((event_ty - base_ty) * 256.0) - top
+
+    if (
+        16 <= h_px <= width - 16
+        and 16 <= h_py <= height - 16
+        and (abs(h_px - pin_x) + abs(h_py - pin_y) > 24)
+    ):
+        d.ellipse(
+            (h_px - 10, h_py - 10, h_px + 10, h_py + 10),
+            fill=(24, 132, 245),
+            outline=(255, 255, 255),
+            width=2,
+        )
+        d.ellipse((h_px - 3, h_py - 3, h_px + 3, h_py + 3), fill=(255, 255, 255))
+
+    # 2. Event Destination Vector Pin (Anchored to event_tx, event_ty as you pan!)
+    if -32 <= pin_x <= width + 32 and -32 <= pin_y <= height + 40:
+        d.ellipse(
+            (pin_x - 28, pin_y - 28, pin_x + 28, pin_y + 28),
+            outline=(56, 152, 255),
+            width=2,
+        )
+        d.ellipse(
+            (pin_x - 6, pin_y - 3, pin_x + 6, pin_y + 5),
+            fill=(10, 14, 20),
+        )
+        d.polygon(
+            [(pin_x, pin_y), (pin_x - 13, pin_y - 22), (pin_x + 13, pin_y - 22)],
+            fill=(235, 52, 62),
+        )
+        d.ellipse(
+            (pin_x - 14, pin_y - 36, pin_x + 14, pin_y - 8),
+            fill=(235, 52, 62),
+            outline=(255, 255, 255),
+            width=2,
+        )
+        d.ellipse(
+            (pin_x - 5, pin_y - 27, pin_x + 5, pin_y - 17),
+            fill=(255, 255, 255),
+        )
 
     if circular_mask:
         mask = Image.new("L", (width, height), 0)
@@ -531,7 +565,7 @@ class LatterMapSnapshotView(HomeAssistantView):
             async with session.get(
                 "https://nominatim.openstreetmap.org/search",
                 params={"q": q_clean, "format": "json", "limit": "1"},
-                headers={"User-Agent": "HomeAssistant-Latter-Companion/1.9"},
+                headers={"User-Agent": "HomeAssistant-Latter/1.9.4 (+https://github.com/slampton/ha-latter)"},
                 timeout=ClientTimeout(total=5),
             ) as resp:
                 if resp.status == HTTPStatus.OK:
@@ -549,7 +583,7 @@ class LatterMapSnapshotView(HomeAssistantView):
         )
 
     async def get(self, request: web.Request, target_device: str) -> web.Response:
-        """Handle GET /api/latter/map/{target_device}?q=1900+Broadway+Oakland&w=466&h=466&shape=circle"""
+        """Handle GET /api/latter/map/{target_device}?q=...&z=15&pan_x=0&pan_y=0&w=466&h=466"""
         coordinator = _resolve_coordinator_by_target(self.hass, target_device)
         default_dim = coordinator.art_size if coordinator else 466
         try:
@@ -564,13 +598,19 @@ class LatterMapSnapshotView(HomeAssistantView):
 
         query = str(request.query.get("q") or "").strip()
         zoom = 15
+        pan_x = 0
+        pan_y = 0
         try:
             if request.query.get("z"):
                 zoom = max(10, min(18, int(request.query.get("z", "15"))))
+            if request.query.get("pan_x"):
+                pan_x = max(-30, min(30, int(request.query.get("pan_x", "0"))))
+            if request.query.get("pan_y"):
+                pan_y = max(-30, min(30, int(request.query.get("pan_y", "0"))))
         except ValueError:
-            zoom = 15
+            pass
 
-        cache_id = f"{query.lower()}|{width}x{height}|{int(is_circle)}|z{zoom}"
+        cache_id = f"{query.lower()}|{width}x{height}|{int(is_circle)}|z{zoom}|px{pan_x}|py{pan_y}"
         if cache_id in _MAP_JPEG_CACHE:
             _MAP_JPEG_CACHE.move_to_end(cache_id)
             return web.Response(
@@ -580,9 +620,17 @@ class LatterMapSnapshotView(HomeAssistantView):
             )
 
         lat, lon = await self._async_resolve_coordinates(query)
-        center_tx, center_ty = _latlon_to_tile_xy(lat, lon, zoom)
-        base_tx = int(center_tx) - 1
-        base_ty = int(center_ty) - 1
+        home_lat = float(self.hass.config.latitude or 37.8044)
+        home_lon = float(self.hass.config.longitude or -122.2712)
+
+        event_tx, event_ty = _latlon_to_tile_xy(lat, lon, zoom)
+        home_tx, home_ty = _latlon_to_tile_xy(home_lat, home_lon, zoom)
+
+        # Each pan step shifts the viewport by 0.62 tiles (~158px)
+        view_tx = event_tx + (pan_x * 0.62)
+        view_ty = event_ty + (pan_y * 0.62)
+        base_tx = int(view_tx) - 1
+        base_ty = int(view_ty) - 1
 
         import asyncio
 
@@ -594,18 +642,27 @@ class LatterMapSnapshotView(HomeAssistantView):
             tx = gx % n_tiles
             if gy < 0 or gy >= n_tiles:
                 return
+            t_key = (zoom, tx, gy)
+            if t_key in _OSM_TILE_CACHE:
+                _OSM_TILE_CACHE.move_to_end(t_key)
+                tile_images[(gx, gy)] = _OSM_TILE_CACHE[t_key]
+                return
             tile_url = f"https://tile.openstreetmap.org/{zoom}/{tx}/{gy}.png"
             try:
                 async with session.get(
                     tile_url,
                     headers={
-                        "User-Agent": "HomeAssistant-Latter/1.9.3 (+https://github.com/slampton/ha-latter)",
+                        "User-Agent": "HomeAssistant-Latter/1.9.4 (+https://github.com/slampton/ha-latter)",
                         "Accept": "image/png,image/*;q=0.8",
                     },
                     timeout=ClientTimeout(total=4.0),
                 ) as t_resp:
                     if t_resp.status == HTTPStatus.OK:
-                        tile_images[(gx, gy)] = await t_resp.read()
+                        raw_t = await t_resp.read()
+                        tile_images[(gx, gy)] = raw_t
+                        _OSM_TILE_CACHE[t_key] = raw_t
+                        while len(_OSM_TILE_CACHE) > MAX_OSM_TILE_CACHE:
+                            _OSM_TILE_CACHE.popitem(last=False)
             except Exception:  # noqa: BLE001
                 pass
 
@@ -620,14 +677,17 @@ class LatterMapSnapshotView(HomeAssistantView):
         jpeg_bytes = await self.hass.async_add_executor_job(
             _compose_map_snapshot_jpeg,
             tile_images,
-            center_tx,
-            center_ty,
+            view_tx,
+            view_ty,
+            event_tx,
+            event_ty,
+            home_tx,
+            home_ty,
             base_tx,
             base_ty,
             width,
             height,
             is_circle,
-            query,
         )
 
         _MAP_JPEG_CACHE[cache_id] = jpeg_bytes
