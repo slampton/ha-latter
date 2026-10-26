@@ -85,8 +85,18 @@ def build_wireguard_provisioning_snippets(
     hotspot_psk = str(device_vpn.get("vpn_hotspot_password") or "!secret hotspot_password").strip()
 
     esphome_lines = [
-        f"# Latter v1.8+ Roaming WireGuard & Multi-Wi-Fi Configuration for '{device_slug}'",
-        "# 1. Add your phone hotspot or travel Wi-Fi under wifi: -> networks:",
+        f"# === OPTION A: 1-Line Drop-In Mixin Package for '{device_slug}' (Recommended) ===",
+        "# 1. Add this single line under packages: in your device's ESPHome YAML:",
+        "packages:",
+        "  latter.vpn: github://slampton/ha-latter/esphome/latter-vpn.yaml@main",
+        "",
+        "# 2. Paste these 4 lines into your ESPHome secrets.yaml:",
+        f"# latter_vpn_private_key: \"{client_priv}\"",
+        f"# latter_vpn_endpoint: \"{host}\"",
+        f"# latter_vpn_server_public_key: \"{server_pub}\"",
+        f"# latter_vpn_preshared_key: \"{psk}\"",
+        "",
+        f"# === OPTION B: Full Inline WireGuard & Multi-Wi-Fi YAML for '{device_slug}' ===",
         "wifi:",
         "  networks:",
         "    - ssid: !secret wifi_ssid",

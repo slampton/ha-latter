@@ -9,10 +9,17 @@ from typing import Any
 
 from aiohttp import web
 
+import re
+
 from homeassistant.components.http import HomeAssistantView
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import area_registry as ar
+from homeassistant.helpers import (
+    area_registry as ar,
+    device_registry as dr,
+    entity_registry as er,
+)
 
+from .ble_engine import _iter_devices
 from .backup_engine import (
     async_apply_profile_to_coordinators,
     async_create_vault_backup,
@@ -455,12 +462,41 @@ def _build_companion_state_payload(
                 }
             )
 
+    onboarded_slugs = {c.device_slug for c in _get_all_coordinators(hass)}
+    dev_reg = dr.async_get(hass)
+    ent_reg = er.async_get(hass)
+    unbridged_devices: list[dict[str, str]] = []
+    seen_unbridged: set[str] = set()
+    for dev in _iter_devices(dev_reg):
+        dev_entries = er.async_entries_for_device(ent_reg, dev.id)
+        if not any(e.platform == "esphome" for e in dev_entries):
+            continue
+        raw_name = str(dev.name_by_user or dev.name or "").strip()
+        if not raw_name:
+            continue
+        cand_slug = re.sub(r"[^a-z0-9]+", "_", raw_name.lower()).strip("_")
+        if not cand_slug or cand_slug in onboarded_slugs or cand_slug in seen_unbridged:
+            continue
+        seen_unbridged.add(cand_slug)
+        area_obj = area_reg.async_get_area(dev.area_id) if dev.area_id else None
+        area_lbl = f" • {area_obj.name}" if area_obj else ""
+        model_lbl = f" ({dev.model})" if dev.model else ""
+        unbridged_devices.append(
+            {
+                "slug": cand_slug,
+                "name": f"{raw_name}{model_lbl}{area_lbl}",
+                "area_id": dev.area_id or "",
+            }
+        )
+    unbridged_devices.sort(key=lambda d: d["name"].lower())
+
     return {
         "entry_id": coordinator.entry.entry_id,
         "title": coordinator.device_slug.replace("_", " ").title(),
         "version": INTEGRATION_VERSION,
         "health_warnings": health_warnings,
         "fleet_devices": fleet_devices,
+        "unbridged_devices": unbridged_devices,
         "fleet_controls": _build_fleet_shared_controls(hass),
         "device_groups": device_groups,
         "saved_profiles": saved_profiles,
@@ -917,6 +953,31 @@ class LatterCompanionApiView(HomeAssistantView):
                 coordinator.build_companion_url(),
             )
             coordinator._bind_wallpaper_cycle_timer()
+            return web.json_response(
+                _build_companion_state_payload(self.hass, coordinator)
+            )
+
+        if cmd == "bridge_esphome_device":
+            raw_slug = str(body.get("device_slug") or "").strip()
+            target_slug = re.sub(r"[^a-z0-9]+", "_", raw_slug.lower()).strip("_")
+            if target_slug:
+                existing = [
+                    c for c in _get_all_coordinators(self.hass)
+                    if c.device_slug == target_slug
+                ]
+                if not existing:
+                    default_area = str(body.get("area_id") or "").strip()
+                    await self.hass.config_entries.flow.async_init(
+                        DOMAIN,
+                        context={"source": "user"},
+                        data={
+                            CONF_DEVICE_SLUG: target_slug,
+                            CONF_DEVICE_PROFILE: "headless_node",
+                            CONF_DEFAULT_SPEAKER: coordinator.active_speaker or f"media_player.{target_slug}",
+                            CONF_ART_SIZE: DEFAULT_ART_SIZE,
+                            **({CONF_DEFAULT_AREA: default_area} if default_area else {}),
+                        },
+                    )
             return web.json_response(
                 _build_companion_state_payload(self.hass, coordinator)
             )
@@ -1985,8 +2046,16 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
         </div>
 
         <div class="card" style="margin-bottom:16px;">
-          <h3>Onboarded ESPHome Devices</h3>
-          <p class="desc">Select any device to inspect its live telemetry or customize per-device settings.</p>
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:6px;">
+            <div>
+              <h3 style="margin:0;">Onboarded ESPHome Devices</h3>
+              <p class="desc" style="margin:4px 0 0;">Select any device to inspect its live telemetry, assign its group, or customize per-device settings.</p>
+            </div>
+            <div id="bridge-device-bar" style="display:none;align-items:center;gap:8px;flex-wrap:wrap;">
+              <select id="bridge-device-picker" style="min-width:230px;"></select>
+              <button class="btn-secondary" style="border-color:var(--accent);color:var(--accent);" onclick="bridgeSelectedEsphomeDevice()">+ Bridge Existing Device</button>
+            </div>
+          </div>
           <div id="fleet-devices-list" class="native-controls-box"></div>
         </div>
 
@@ -2328,6 +2397,52 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
           <p class="desc">Map slot IDs (such as <code>macro_1</code>..<code>macro_5</code> in the Pocket Assistant Macros tool or custom hardware buttons) to any Home Assistant entity via <code>latter.trigger_binding</code>.</p>
           <div id="bindings-list"></div>
           <button class="btn-secondary" onclick="addBindingRow('', '', 'toggle'); markDirty();">+ Add Binding</button>
+        </div>
+
+        <div class="card" style="margin-bottom:16px;">
+          <h3>1-Line Drop-In ESPHome Mixin Packages</h3>
+          <p class="desc">Add any of these 1-line packages under <code>packages:</code> in an existing ESPHome device's YAML to unlock BLE room tracking, WireGuard roaming VPN, or stationary BLE room scanning with zero substitution variables required.</p>
+          <div class="grid-2" style="margin-bottom:0;">
+            <div style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                <strong style="color:var(--text-strong);font-size:13px;">1. Roaming BLE Room Presence Beacon</strong>
+                <button class="btn-secondary" style="padding:4px 10px;font-size:11.5px;" onclick="copyTextById('mixin-ble-beacon')">Copy</button>
+              </div>
+              <small style="color:var(--muted);display:block;margin-bottom:8px;">Makes any portable/battery ESP32 trackable room-to-room by Latter (disambiguated automatically by hardware MAC).</small>
+              <pre id="mixin-ble-beacon" class="mono" style="margin:0;padding:8px;background:var(--card);border:1px solid var(--border);border-radius:6px;overflow-x:auto;">packages:
+  latter.ble: github://slampton/ha-latter/esphome/latter-ble-beacon.yaml@main</pre>
+            </div>
+
+            <div style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                <strong style="color:var(--text-strong);font-size:13px;">2. Roaming WireGuard VPN Tunnel</strong>
+                <button class="btn-secondary" style="padding:4px 10px;font-size:11.5px;" onclick="copyTextById('mixin-vpn')">Copy</button>
+              </div>
+              <small style="color:var(--muted);display:block;margin-bottom:8px;">Adds encrypted remote access over phone hotspots + live VPN status sensors (generate keys in Device &rarr; Roaming &amp; VPN).</small>
+              <pre id="mixin-vpn" class="mono" style="margin:0;padding:8px;background:var(--card);border:1px solid var(--border);border-radius:6px;overflow-x:auto;">packages:
+  latter.vpn: github://slampton/ha-latter/esphome/latter-vpn.yaml@main</pre>
+            </div>
+
+            <div style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                <strong style="color:var(--text-strong);font-size:13px;">3. Stationary Room BLE Scanner Proxy</strong>
+                <button class="btn-secondary" style="padding:4px 10px;font-size:11.5px;" onclick="copyTextById('mixin-ble-proxy')">Copy</button>
+              </div>
+              <small style="color:var(--muted);display:block;margin-bottom:8px;">Turns any mains-powered ESP32 node into an active room Bluetooth scanner for Latter's Room Calibration radar.</small>
+              <pre id="mixin-ble-proxy" class="mono" style="margin:0;padding:8px;background:var(--card);border:1px solid var(--border);border-radius:6px;overflow-x:auto;">packages:
+  latter.proxy: github://slampton/ha-latter/esphome/latter-ble-proxy.yaml@main</pre>
+            </div>
+
+            <div style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                <strong style="color:var(--text-strong);font-size:13px;">4. Core Studio Discovery &amp; Diagnostics</strong>
+                <button class="btn-secondary" style="padding:4px 10px;font-size:11.5px;" onclick="copyTextById('mixin-core')">Copy</button>
+              </div>
+              <small style="color:var(--muted);display:block;margin-bottom:8px;">Adds Uptime, Wi-Fi Signal, Restart button, and automatic Latter discovery for custom nodes.</small>
+              <pre id="mixin-core" class="mono" style="margin:0;padding:8px;background:var(--card);border:1px solid var(--border);border-radius:6px;overflow-x:auto;">packages:
+  latter.core: github://slampton/ha-latter/esphome/latter-core.yaml@main</pre>
+            </div>
+          </div>
         </div>
 
         <div class="card">
@@ -3227,6 +3342,20 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
   const promptBox = document.getElementById("prompt-devices-list");
   if (promptBox) promptBox.innerHTML = rowsHtml;
 
+  const unbridged = STATE?.unbridged_devices || [];
+  const bridgeBar = document.getElementById("bridge-device-bar");
+  const bridgePicker = document.getElementById("bridge-device-picker");
+  if (bridgeBar && bridgePicker) {
+    if (unbridged.length > 0) {
+      bridgeBar.style.display = "flex";
+      bridgePicker.innerHTML = unbridged.map(u =>
+        `<option value="${u.slug}" data-area="${u.area_id || ''}">${u.name}</option>`
+      ).join("");
+    } else {
+      bridgeBar.style.display = "none";
+    }
+  }
+
   // Render Reusable Profiles List
   const profBox = document.getElementById("saved-profiles-list");
   if (profBox) {
@@ -3946,6 +4075,23 @@ async function generateDeviceVpnKeys() {
   if (resp.ok) {
     applyStateToDom(await resp.json(), true);
     showToast("Generated Curve25519 WireGuard keys for device");
+  }
+}
+
+async function bridgeSelectedEsphomeDevice() {
+  const picker = document.getElementById("bridge-device-picker");
+  if (!picker || !picker.value) return;
+  const slug = picker.value;
+  const optEl = picker.options[picker.selectedIndex];
+  const areaId = optEl ? (optEl.getAttribute("data-area") || "") : "";
+  const resp = await fetch(API_URL, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({command: "bridge_esphome_device", device_slug: slug, area_id: areaId})
+  });
+  if (resp.ok) {
+    applyStateToDom(await resp.json(), false);
+    showToast(`Bridged ESPHome device '${slug}' into Latter Studio`);
   }
 }
 

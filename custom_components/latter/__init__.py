@@ -60,6 +60,7 @@ LATTER_CONTRACT_ACTION_SUFFIXES: tuple[str, ...] = (
     "_set_browse_slots",
     "_set_room_slots",
     "_show_notification",
+    "_latter_ping",
 )
 
 

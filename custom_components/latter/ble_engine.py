@@ -503,27 +503,35 @@ class LatterNativeBleTracker:
         name: str,
         mfg_data: dict[int, bytes],
     ) -> bool:
-        """Return True if raw advertisement fields match iBeacon UUID, MAC, or local name."""
-        apple_bytes = mfg_data.get(APPLE_COMPANY_ID)
-        if apple_bytes and len(apple_bytes) >= 18:
-            if len(apple_bytes) >= 20 and apple_bytes[:2] == IBEACON_PREFIX:
-                uuid_hex = apple_bytes[2:18].hex().lower()
-                if uuid_hex == self._target_uuid_hex:
-                    return True
-            elif self._target_uuid_hex in apple_bytes.hex().lower():
-                return True
+        """Return True if raw advertisement fields match this specific device's MAC/name or iBeacon UUID."""
+        adv_int = _mac_to_int(address) if address else None
 
-        if address:
-            if address in self._matched_ble_addresses:
-                return True
-            if self._target_mac_ints:
-                adv_int = _mac_to_int(address)
-                if adv_int is not None and adv_int in self._target_mac_ints:
-                    return True
+        # 1. Exact hardware Wi-Fi/BLE MAC range match (+/-2 offset from HA Device Registry)
+        if address and address in self._matched_ble_addresses:
+            return True
+        if self._target_mac_ints and adv_int is not None and adv_int in self._target_mac_ints:
+            return True
 
+        # 2. Local BLE device name match
         adv_name = name.lower().replace("_", "-") if name else ""
         if adv_name and self._device_slug in adv_name:
             return True
+
+        # 3. Apple iBeacon UUID match (if multiple Latter devices share the default UUID and this
+        #    device's MAC range is known, require the advertisement MAC to match this device so
+        #    multiple devices using latter-ble-beacon.yaml never cross-talk!)
+        apple_bytes = mfg_data.get(APPLE_COMPANY_ID)
+        if apple_bytes and len(apple_bytes) >= 18:
+            uuid_matched = False
+            if len(apple_bytes) >= 20 and apple_bytes[:2] == IBEACON_PREFIX:
+                uuid_hex = apple_bytes[2:18].hex().lower()
+                uuid_matched = uuid_hex == self._target_uuid_hex
+            elif self._target_uuid_hex in apple_bytes.hex().lower():
+                uuid_matched = True
+            if uuid_matched:
+                if self._target_mac_ints and adv_int is not None:
+                    return adv_int in self._target_mac_ints
+                return True
 
         return False
 
