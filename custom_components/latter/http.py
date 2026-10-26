@@ -594,12 +594,15 @@ class LatterMapSnapshotView(HomeAssistantView):
             tx = gx % n_tiles
             if gy < 0 or gy >= n_tiles:
                 return
-            tile_url = f"https://basemaps.cartocdn.com/rastertiles/voyager/{zoom}/{tx}/{gy}.png"
+            tile_url = f"https://tile.openstreetmap.org/{zoom}/{tx}/{gy}.png"
             try:
                 async with session.get(
                     tile_url,
-                    headers={"User-Agent": "HomeAssistant-Latter-Companion/1.9"},
-                    timeout=ClientTimeout(total=3.5),
+                    headers={
+                        "User-Agent": "HomeAssistant-Latter/1.9.3 (+https://github.com/slampton/ha-latter)",
+                        "Accept": "image/png,image/*;q=0.8",
+                    },
+                    timeout=ClientTimeout(total=4.0),
                 ) as t_resp:
                     if t_resp.status == HTTPStatus.OK:
                         tile_images[(gx, gy)] = await t_resp.read()
