@@ -1,0 +1,37 @@
+{
+  "entity": {
+    "sensor": {
+      "active_media": {
+        "default": "mdi:music-circle"
+      },
+      "weather_forecast": {
+        "default": "mdi:weather-partly-cloudy"
+      },
+      "room_context": {
+        "default": "mdi:floor-plan"
+      },
+      "calendar_agenda": {
+        "default": "mdi:calendar-clock"
+      },
+      "remote_config": {
+        "default": "mdi:remote-tv"
+      }
+    }
+  },
+  "services": {
+    "music_browse": "mdi:library-music",
+    "set_active_speaker": "mdi:speaker-wireless",
+    "media_command": "mdi:play-pause",
+    "media_volume": "mdi:volume-high",
+    "room_browse": "mdi:home-search-outline",
+    "room_action": "mdi:home-lightning-bolt-outline",
+    "set_active_area": "mdi:map-marker-radius",
+    "remote_action": "mdi:remote-tv",
+    "trigger_binding": "mdi:gesture-tap-button",
+    "calendar_fetch": "mdi:calendar-sync",
+    "calendar_create_event": "mdi:calendar-plus",
+    "intercom_broadcast": "mdi:bullhorn-outline",
+    "notify_device": "mdi:bell-ring-outline",
+    "save_custom_color": "mdi:palette-outline"
+  }
+}

@@ -1,6 +1,6 @@
 music_browse:
   name: Music Browse
-  description: Browse Music Assistant speakers, library, podcasts, and queues and push a 5-slot page to the ESPHome device.
+  description: Browse Music Assistant speakers, library, podcasts, queues, lyrics, and artist/album bios and push paginated slots to the ESPHome device.
   fields:
     target_device:
       name: Target ESPHome Device
@@ -10,7 +10,7 @@ music_browse:
         text:
     mode:
       name: Browse Mode
-      description: Category or drill-down mode to browse.
+      description: Category, drill-down, or metadata reader mode to browse.
       required: true
       default: "speakers"
       selector:
@@ -30,6 +30,8 @@ music_browse:
             - "current_album_tracks"
             - "active_queue"
             - "podcast_episodes"
+            - "lyrics"
+            - "bio"
     page:
       name: Page Number
       description: 1-based page index.
@@ -42,17 +44,17 @@ music_browse:
           mode: box
     page_size:
       name: Page Size
-      description: Items per page (default 5).
+      description: Items per page (default 5, supports up to 20).
       required: false
       default: 5
       selector:
         number:
           min: 1
-          max: 5
+          max: 20
           mode: box
     search:
       name: Search / Filter Context
-      description: Artist name, Album URI/name, or Podcast URI for drill-down modes.
+      description: Artist name, Album URI/name, Podcast URI, or "Title|Artist|Album" for lyrics/bio modes.
       required: false
       selector:
         text:
@@ -105,7 +107,7 @@ music_browse:
 
 set_active_speaker:
   name: Set Active Speaker
-  description: Change the active target media_player for the ESPHome device.
+  description: Change the active target media_player for the ESPHome device and optionally transfer the active playback queue.
   fields:
     entity_id:
       name: Speaker Entity
@@ -114,6 +116,13 @@ set_active_speaker:
       selector:
         entity:
           domain: media_player
+    transfer_queue:
+      name: Transfer Active Queue
+      description: Transfer the active Music Assistant queue to the new speaker (default true).
+      required: false
+      default: true
+      selector:
+        boolean:
     target_device:
       name: Target ESPHome Device
       description: Optional ESPHome device slug when running multiple devices.
@@ -170,6 +179,13 @@ media_volume:
       required: false
       selector:
         text:
+    entity_id:
+      name: Speaker Entity Override
+      description: Optional speaker entity_id (defaults to the device's active speaker).
+      required: false
+      selector:
+        entity:
+          domain: media_player
     action:
       name: Volume Action
       description: Set level, step up/down, or toggle mute.
@@ -259,7 +275,7 @@ remote_action:
 
 room_browse:
   name: Room Browse
-  description: Browse Home Assistant areas, curated room entities, or home-wide alarm/pinned entities and push a 5-slot page to the ESPHome device.
+  description: Browse Home Assistant areas, curated room entities, or home-wide alarm/pinned entities and push paginated slots to the ESPHome device.
   fields:
     target_device:
       name: Target ESPHome Device
@@ -286,20 +302,21 @@ room_browse:
         area:
     domain_filter:
       name: Domain Filter
-      description: Filter room entities by domain.
+      description: Filter room entities by domain or category.
       required: false
       default: "all"
       selector:
         select:
           options:
             - "all"
-            - "light"
             - "scene"
+            - "light"
             - "cover"
             - "fan"
             - "switch"
-            - "climate"
+            - "media"
             - "media_player"
+            - "climate"
     page:
       name: Page Number
       description: 1-based page index.
@@ -312,13 +329,13 @@ room_browse:
           mode: box
     page_size:
       name: Page Size
-      description: Items per page (default 5).
+      description: Items per page (defaults to device page size, up to 20).
       required: false
-      default: 5
+      default: 3
       selector:
         number:
           min: 1
-          max: 5
+          max: 20
           mode: box
     handoff_media:
       name: Handoff Area Media Context
@@ -328,8 +345,8 @@ room_browse:
         boolean:
 
 room_action:
-  name: Room & Alarm Action
-  description: Execute a normalized room control or home alarm action (toggle, turn_on, turn_off, set_level, arm_home, arm_away, arm_night, disarm).
+  name: Room & Whole-Home Action
+  description: Execute a normalized room control, light color/Kelvin, thermostat, lock, vacuum, or home security alarm action.
   fields:
     target_device:
       name: Target ESPHome Device
@@ -339,10 +356,10 @@ room_action:
         text:
     entity_id:
       name: Target Entity
-      description: Light, cover, climate, fan, switch, scene, or alarm_control_panel entity_id (if omitted for alarm actions, uses configured Home Alarm).
+      description: Target entity_id (or whole_home.thermostat / whole_home.garage / whole_home.lock / whole_home.vacuum).
       required: false
       selector:
-        entity:
+        text:
     area_id:
       name: Switch Active Area ID
       description: Optional area_id to set as the active room context.
@@ -361,6 +378,8 @@ room_action:
             - "turn_on"
             - "turn_off"
             - "set_level"
+            - "set_color"
+            - "set_kelvin"
             - "step_up"
             - "step_down"
             - "arm_home"
@@ -368,18 +387,27 @@ room_action:
             - "arm_night"
             - "arm_vacation"
             - "disarm"
+            - "heat"
+            - "cool"
+            - "auto"
+            - "off"
+            - "lock"
+            - "unlock"
+            - "start"
+            - "pause"
+            - "dock"
     level:
-      name: Level / Temperature (0-100)
-      description: Brightness %, cover position %, fan speed %, or target temperature.
+      name: Level / Temperature / Kelvin (0-6500)
+      description: Brightness %, cover position %, fan speed %, target temperature, or white color temperature in Kelvin (2000-6500).
       required: false
       selector:
         number:
           min: 0
-          max: 100
-          mode: slider
+          max: 6500
+          mode: box
     code:
-      name: Alarm PIN Code
-      description: Optional PIN code when arming or disarming an alarm_control_panel.
+      name: Alarm PIN Code or RGB Hex Color
+      description: Optional PIN code for alarm actions, or "#RRGGBB" hex color when action is set_color.
       required: false
       selector:
         text:
@@ -396,13 +424,13 @@ calendar_fetch:
         text:
     days:
       name: Lookahead Days
-      description: Number of days ahead to query (default 7).
+      description: Number of days ahead to query (default 30).
       required: false
-      default: 7
+      default: 30
       selector:
         number:
           min: 1
-          max: 30
+          max: 60
           mode: box
     page:
       name: Page Number
@@ -414,10 +442,20 @@ calendar_fetch:
           min: 1
           max: 20
           mode: box
+    page_size:
+      name: Page Size
+      description: Items per page (default 5).
+      required: false
+      default: 5
+      selector:
+        number:
+          min: 1
+          max: 20
+          mode: box
 
 calendar_create_event:
   name: Calendar Create Event
-  description: Create a new event on the primary family calendar and refresh the agenda sensor.
+  description: Create a new event or quick reminder on the primary family calendar and refresh the agenda sensor.
   fields:
     target_device:
       name: Target ESPHome Device
@@ -434,22 +472,42 @@ calendar_create_event:
           domain: calendar
     summary:
       name: Event Summary / Title
-      description: Title of the calendar event.
+      description: Title of the calendar event or reminder.
       required: true
       selector:
         text:
     start_date_time:
       name: Start Date & Time
-      description: ISO 8601 start datetime string.
-      required: true
+      description: Optional ISO 8601 start datetime string (if omitted, computed from in_minutes).
+      required: false
       selector:
         text:
     end_date_time:
       name: End Date & Time
-      description: ISO 8601 end datetime string.
-      required: true
+      description: Optional ISO 8601 end datetime string (if omitted, computed from duration_minutes).
+      required: false
       selector:
         text:
+    in_minutes:
+      name: Start In (Minutes from Now)
+      description: Relative start offset in minutes when start_date_time is omitted (default 15).
+      required: false
+      default: 15
+      selector:
+        number:
+          min: 1
+          max: 10080
+          mode: box
+    duration_minutes:
+      name: Duration (Minutes)
+      description: Event duration in minutes when end_date_time is omitted (default 30).
+      required: false
+      default: 30
+      selector:
+        number:
+          min: 5
+          max: 1440
+          mode: box
     description:
       name: Description
       description: Optional event notes or description.
@@ -461,6 +519,12 @@ intercom_broadcast:
   name: Household Intercom Broadcast
   description: Broadcast a TTS announcement or recorded audio clip to one or all household media_player speakers.
   fields:
+    target_device:
+      name: Target ESPHome Device
+      description: Optional originating ESPHome device slug.
+      required: false
+      selector:
+        text:
     message:
       name: Announcement Message (TTS)
       description: Text message to announce via Home Assistant TTS.
