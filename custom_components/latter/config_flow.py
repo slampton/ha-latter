@@ -271,7 +271,10 @@ def _build_schema(
         selector.SelectSelectorConfig(
             options=[
                 selector.SelectOptionDict(
-                    value="466", label="466x466 (Full Native AMOLED)"
+                    value="466", label="466x466 (1.75\" Round AMOLED)"
+                ),
+                selector.SelectOptionDict(
+                    value="410x502", label="410x502 (2.06\" Watch AMOLED)"
                 ),
                 selector.SelectOptionDict(
                     value="360", label="360x360 (Round LCD / AMOLED)"
@@ -291,6 +294,17 @@ def _build_schema(
     )
 
     return vol.Schema(schema_dict)
+
+
+def _normalize_art_size(raw_val: Any) -> int | str:
+    """Normalize square integer art size (466) or rectangular WxH string ('410x502')."""
+    s_val = str(raw_val or DEFAULT_ART_SIZE).strip().lower()
+    if "x" in s_val:
+        return s_val
+    try:
+        return int(s_val)
+    except ValueError:
+        return DEFAULT_ART_SIZE
 
 
 def _format_clean_device_title(hass: HomeAssistant, slug: str, fallback_name: str = "") -> str:
@@ -383,7 +397,7 @@ class LatterConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             slug = normalize_device_slug(str(user_input[CONF_DEVICE_SLUG]))
             user_input[CONF_DEVICE_SLUG] = slug
-            user_input[CONF_ART_SIZE] = int(user_input.get(CONF_ART_SIZE, DEFAULT_ART_SIZE))
+            user_input[CONF_ART_SIZE] = _normalize_art_size(user_input.get(CONF_ART_SIZE, DEFAULT_ART_SIZE))
 
             await self.async_set_unique_id(f"{DOMAIN}_{slug}")
             self._abort_if_unique_id_configured()
@@ -413,7 +427,7 @@ class LatterConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             slug = normalize_device_slug(str(user_input[CONF_DEVICE_SLUG]))
             user_input[CONF_DEVICE_SLUG] = slug
-            user_input[CONF_ART_SIZE] = int(
+            user_input[CONF_ART_SIZE] = _normalize_art_size(
                 user_input.get(CONF_ART_SIZE, DEFAULT_ART_SIZE)
             )
             await self.async_set_unique_id(f"{DOMAIN}_{slug}")
@@ -451,7 +465,7 @@ class LatterOptionsFlowHandler(OptionsFlow):
             user_input[CONF_DEVICE_SLUG] = normalize_device_slug(
                 str(user_input[CONF_DEVICE_SLUG])
             )
-            user_input[CONF_ART_SIZE] = int(user_input.get(CONF_ART_SIZE, DEFAULT_ART_SIZE))
+            user_input[CONF_ART_SIZE] = _normalize_art_size(user_input.get(CONF_ART_SIZE, DEFAULT_ART_SIZE))
             self.hass.config_entries.async_update_entry(
                 self.config_entry, data=user_input
             )
