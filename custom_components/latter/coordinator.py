@@ -142,11 +142,11 @@ VOLUME_FEATURE_FLAGS = 4 | 8 | 1024  # VOLUME_SET | VOLUME_MUTE | VOLUME_STEP
 def _resolve_esphome_local_speaker(
     hass: HomeAssistant, device_slug: str
 ) -> str:
-    """Automatically resolve the on-device media_player entity for the configured ESPHome node."""
+    """Resolve the on-device media_player entity for the ESPHome node, or '' if the device has no speaker."""
     slug_norm = normalize_device_slug(device_slug)
-    direct_candidate = f"media_player.{slug_norm}"
-    if hass.states.get(direct_candidate) is not None:
-        return direct_candidate
+    for cand in (f"media_player.{slug_norm}", f"media_player.{slug_norm}_music"):
+        if hass.states.get(cand) is not None:
+            return cand
 
     ent_reg = er.async_get(hass)
     dev_reg = dr.async_get(hass)
@@ -168,7 +168,7 @@ def _resolve_esphome_local_speaker(
                 if entry.domain == "media_player" and not entry.disabled_by:
                     return entry.entity_id
 
-    return direct_candidate
+    return ""
 
 
 def _resolve_ma_counterpart_entity(
@@ -387,13 +387,11 @@ class LatterCoordinator:
 
     @property
     def device_group(self) -> str:
-        """Return logical device group ID (e.g. 'handhelds', 'bedrooms', 'common_areas', 'wall_panels')."""
-        default_grp = (
-            "wall_panels"
-            if self.device_profile == "stationary_display"
-            else DEFAULT_DEVICE_GROUP
-        )
-        return str(self.get_opt(CONF_DEVICE_GROUP, default_grp) or default_grp).strip()
+        """Return logical device group ID (defaults to 'unassigned' so no profile is assumed)."""
+        raw = str(self.get_opt(CONF_DEVICE_GROUP, DEFAULT_DEVICE_GROUP) or DEFAULT_DEVICE_GROUP).strip()
+        if raw == "handhelds" and self.device_profile == "headless_node":
+            return DEFAULT_DEVICE_GROUP
+        return raw
 
     @property
     def display_shape(self) -> str:
@@ -805,13 +803,24 @@ class LatterCoordinator:
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("Failed loading Latter runtime store: %s", err)
 
-        if not self.active_speaker:
-            self.active_speaker = self.local_speaker
-        if not self.last_speaker:
-            self.last_speaker = self.active_speaker
-
-        # Enforce Strict Boot Rule: Never restore an idle/off remote speaker on startup
-        self._enforce_local_speaker_if_remote_idle("ha_startup")
+        local_spk = self.local_speaker
+        esphome_svcs = self.hass.services.async_services().get("esphome", {})
+        has_media_ui = bool(local_spk) or any(
+            s.endswith("_set_browse_slots") and self.device_slug in s
+            for s in esphome_svcs
+        )
+        if not has_media_ui:
+            # Headless / sensor-only device (e.g. Bed Presence): clear any accidentally inherited speaker
+            self.active_speaker = ""
+            self.last_speaker = ""
+        else:
+            if not self.active_speaker:
+                self.active_speaker = local_spk
+            # If CONF_DEFAULT_SPEAKER was previously auto-filled with an unrelated speaker (e.g. front_door_tablet)
+            # while this device has its own local_speaker, reset to local_speaker when idle
+            self._enforce_local_speaker_if_remote_idle("ha_startup")
+            if not self.last_speaker:
+                self.last_speaker = self.active_speaker
 
         if self.device_profile == "mobile_display":
             protect_handheld_sensors_from_area_dashboards(

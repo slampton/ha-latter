@@ -90,19 +90,17 @@ def _discover_default_alarm(hass: HomeAssistant) -> str | None:
 
 
 def _discover_default_speaker(hass: HomeAssistant, device_slug: str) -> str:
-    """Return the device's own media_player if present, or the first available media_player."""
-    local_candidate = f"media_player.{normalize_device_slug(device_slug)}"
-    if hass.states.get(local_candidate) is not None:
-        return local_candidate
+    """Return the device's own on-device media_player entity if present, or empty string if speakerless."""
+    slug_norm = normalize_device_slug(device_slug)
+    for candidate in (f"media_player.{slug_norm}", f"media_player.{slug_norm}_music"):
+        if hass.states.get(candidate) is not None:
+            return candidate
     ent_reg = er.async_get(hass)
     for entry in _iter_entities(ent_reg):
         if entry.domain == "media_player" and entry.platform == "esphome":
-            if normalize_device_slug(device_slug) in entry.entity_id:
+            if slug_norm in entry.entity_id and not entry.disabled_by:
                 return entry.entity_id
-    states = hass.states.async_all("media_player")
-    if states:
-        return states[0].entity_id
-    return local_candidate
+    return ""
 
 
 def _add_optional_entity(
@@ -152,8 +150,9 @@ def _build_schema(
 
     schema_dict: dict[Any, Any] = {
         vol.Required(CONF_DEVICE_SLUG, default=default_slug): selector.TextSelector(),
-        vol.Required(
-            CONF_DEFAULT_SPEAKER, default=default_speaker
+        vol.Optional(
+            CONF_DEFAULT_SPEAKER,
+            description={"suggested_value": default_speaker} if default_speaker else {},
         ): selector.EntitySelector(
             selector.EntitySelectorConfig(domain="media_player")
         ),

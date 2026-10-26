@@ -108,10 +108,12 @@ PROFILE_DEVICE_KEYS: tuple[str, ...] = (
 )
 
 DEFAULT_DEVICE_GROUPS: list[dict[str, str]] = [
+    {"id": "unassigned", "name": "Unassigned / General", "description": "Default group with no assumed profile or hardware settings"},
     {"id": "handhelds", "name": "Handheld Displays", "description": "Battery-powered mobile smart displays"},
     {"id": "bedrooms", "name": "Bedrooms", "description": "Nightstand & bedroom companion devices"},
     {"id": "common_areas", "name": "Common Areas", "description": "Living room, kitchen & family room devices"},
     {"id": "wall_panels", "name": "Wall Panels", "description": "Stationary mounted control panels"},
+    {"id": "sensors", "name": "Presence & Room Sensors", "description": "Headless mmWave, PIR, bed & environmental sensor nodes"},
 ]
 
 BUILTIN_STARTER_PROFILES: list[dict[str, Any]] = [

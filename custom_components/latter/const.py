@@ -7,7 +7,7 @@ from typing import Final
 from homeassistant.const import Platform
 
 DOMAIN: Final = "latter"
-INTEGRATION_VERSION: Final = "2.1.1"
+INTEGRATION_VERSION: Final = "2.1.2"
 PLATFORMS: Final[list[Platform]] = [Platform.SENSOR]
 
 STORAGE_VERSION: Final = 1
@@ -111,7 +111,7 @@ CONF_SITE_ID: Final = "site_id"
 DEFAULT_SITE_ID: Final = "primary"
 CONF_SITES_REGISTRY: Final = "sites"
 CONF_DEVICE_GROUP: Final = "device_group"
-DEFAULT_DEVICE_GROUP: Final = "handhelds"
+DEFAULT_DEVICE_GROUP: Final = "unassigned"
 CONF_DEVICE_GROUPS: Final = "device_groups"
 CONF_SAVED_PROFILES: Final = "saved_profiles"
 

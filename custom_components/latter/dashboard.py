@@ -337,6 +337,60 @@ def _build_companion_state_payload(
         coordinator.wallpaper_favorites,
     )
 
+    esphome_svcs = hass.services.async_services().get("esphome", {})
+    slug = coordinator.device_slug
+    has_native_slots = any(
+        (s.endswith("_set_browse_slots") or s.endswith("_set_room_slots")) and slug in s
+        for s in esphome_svcs
+    )
+    has_mixin_ping = any(
+        s.endswith("_latter_ping") and slug in s for s in esphome_svcs
+    )
+
+    sec_ids = {s.get("id") for s in esphome_inspector.get("sections", []) if s.get("count", 0) > 0}
+    all_esp_items: list[dict[str, Any]] = []
+    for s in esphome_inspector.get("sections", []):
+        all_esp_items.extend(s.get("items") or [])
+
+    has_vpn_entities = any(
+        "vpn" in str(it.get("entity_id") or "").lower()
+        or "wireguard" in str(it.get("entity_id") or "").lower()
+        or "vpn" in str(it.get("name") or "").lower()
+        for it in all_esp_items
+    )
+    has_ble_beacon_entity = any(
+        "ble" in str(it.get("entity_id") or "").lower()
+        and "beacon" in str(it.get("entity_id") or "").lower()
+        for it in all_esp_items
+    )
+    local_spk = coordinator.local_speaker
+    has_display = has_native_slots or ("display" in sec_ids) or ("home" in sec_ids)
+    has_power = ("sleep" in sec_ids) or ("battery" in sec_ids)
+    has_voice = "voice" in sec_ids
+    has_audio = has_native_slots or bool(local_spk) or ("sound" in sec_ids) or ("music" in sec_ids)
+
+    if has_native_slots:
+        dev_tier = 1
+        dev_tier_label = "Tier 1: Native Latter"
+    elif has_mixin_ping or has_vpn_entities or has_ble_beacon_entity:
+        dev_tier = 2
+        dev_tier_label = "Tier 2: Mixin Enabled"
+    else:
+        dev_tier = 3
+        dev_tier_label = "Tier 3: Bridged Device"
+
+    device_capabilities = {
+        "tier": dev_tier,
+        "tier_label": dev_tier_label,
+        "has_display": has_display,
+        "has_power": has_power,
+        "has_voice": has_voice,
+        "has_audio": has_audio,
+        "has_ble_beacon": has_native_slots or has_ble_beacon_entity,
+        "has_vpn_mixin": has_vpn_entities or coordinator.vpn_enabled,
+        "total_entities": len(all_esp_items),
+    }
+
     saved_theme = _normalize_web_theme(
         coordinator.get_opt(CONF_WEB_THEME, DEFAULT_WEB_THEME)
     )
@@ -417,6 +471,10 @@ def _build_companion_state_payload(
         c_room_name, c_room_attrs = c.get_room_context_payload()
         c_media_state, _ = c.get_active_media_payload()
         c_grp = c.device_group
+        c_has_audio = bool(c.local_speaker) or any(
+            s.endswith("_set_browse_slots") and c.device_slug in s
+            for s in esphome_svcs
+        )
         fleet_devices.append(
             {
                 "entry_id": c.entry.entry_id,
@@ -428,8 +486,9 @@ def _build_companion_state_payload(
                 "site_id": c.site_id,
                 "display_shape": c.display_shape,
                 "active_area_name": c_room_name,
-                "active_speaker": c.active_speaker,
-                "media_state": c_media_state,
+                "active_speaker": c.active_speaker if c_has_audio else "",
+                "has_audio": c_has_audio,
+                "media_state": c_media_state if c_has_audio else "",
                 "ble_closest_proxy": c_room_attrs.get("ble_closest_proxy", ""),
                 "companion_url": f"/api/latter/companion/{c.entry.entry_id}?token={c.get_signed_token()}",
                 "is_current": c.entry.entry_id == coordinator.entry.entry_id,
@@ -494,6 +553,7 @@ def _build_companion_state_payload(
         "entry_id": coordinator.entry.entry_id,
         "title": coordinator.device_slug.replace("_", " ").title(),
         "version": INTEGRATION_VERSION,
+        "capabilities": device_capabilities,
         "health_warnings": health_warnings,
         "fleet_devices": fleet_devices,
         "unbridged_devices": unbridged_devices,
@@ -973,7 +1033,11 @@ class LatterCompanionApiView(HomeAssistantView):
                         data={
                             CONF_DEVICE_SLUG: target_slug,
                             CONF_DEVICE_PROFILE: "headless_node",
-                            CONF_DEFAULT_SPEAKER: coordinator.active_speaker or f"media_player.{target_slug}",
+                            CONF_DEVICE_GROUP: DEFAULT_DEVICE_GROUP,
+                            CONF_DEFAULT_SPEAKER: "",
+                            CONF_NATIVE_BLE_TRACKING: False,
+                            CONF_BLE_AUTO_SWITCH: False,
+                            CONF_SYNC_DEVICE_AREA: False,
                             CONF_ART_SIZE: DEFAULT_ART_SIZE,
                             **({CONF_DEFAULT_AREA: default_area} if default_area else {}),
                         },
@@ -1964,29 +2028,36 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
       </button>
     </div>
 
-    <!-- DEVICE-SCOPED NAVIGATION -->
+    <!-- DEVICE-SCOPED NAVIGATION (CAPABILITY-AWARE) -->
     <div class="nav-list" id="nav-scope-device">
       <div class="nav-group-label">Overview</div>
       <button class="nav-btn active" data-view="dashboard" onclick="switchView('dashboard', this)">
-        <span>Dashboard</span>
+        <span>Device Overview</span>
         <span class="nav-badge" id="nav-room-badge">--</span>
       </button>
 
-      <div class="nav-group-label">Device Settings</div>
-      <button class="nav-btn" data-view="home_display" onclick="switchView('home_display', this)">
-        <span>Home & Display</span>
+      <div class="nav-group-label" id="nav-grp-dev-settings">Device Settings</div>
+      <button class="nav-btn" id="nav-btn-home_display" data-view="home_display" onclick="switchView('home_display', this)">
+        <span>Home &amp; Display</span>
       </button>
-      <button class="nav-btn" data-view="power" onclick="switchView('power', this)">
+      <button class="nav-btn" id="nav-btn-power" data-view="power" onclick="switchView('power', this)">
         <span>Power</span>
       </button>
-      <button class="nav-btn" data-view="voice" onclick="switchView('voice', this)">
+      <button class="nav-btn" id="nav-btn-voice" data-view="voice" onclick="switchView('voice', this)">
         <span>Voice Assistant</span>
       </button>
-      <button class="nav-btn" data-view="audio" onclick="switchView('audio', this)">
-        <span>Audio & Media</span>
+      <button class="nav-btn" id="nav-btn-audio" data-view="audio" onclick="switchView('audio', this)">
+        <span>Audio &amp; Media</span>
       </button>
-      <button class="nav-btn" data-view="roaming_vpn" onclick="switchView('roaming_vpn', this)">
-        <span>Roaming & VPN</span>
+
+      <div class="nav-group-label">Connectivity &amp; Add-Ons</div>
+      <button class="nav-btn" id="nav-btn-ble_addon" data-view="ble_addon" onclick="switchView('ble_addon', this)">
+        <span>BLE Tracking &amp; Proxy</span>
+        <span class="nav-badge" id="nav-ble-addon-badge">Add-On</span>
+      </button>
+      <button class="nav-btn" id="nav-btn-roaming_vpn" data-view="roaming_vpn" onclick="switchView('roaming_vpn', this)">
+        <span>Roaming &amp; VPN</span>
+        <span class="nav-badge" id="nav-vpn-addon-badge">Add-On</span>
       </button>
 
       <div class="nav-group-label">Administration</div>
@@ -2506,66 +2577,114 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
       </section>
 
       <!-- ================================================================== -->
-      <!-- DEVICE SCOPE: 1. DASHBOARD                                         -->
+      <!-- DEVICE SCOPE: 1. DEVICE OVERVIEW (CAPABILITY-AWARE)                -->
       <!-- ================================================================== -->
       <section id="view-dashboard">
         <div class="page-header">
-          <h2>Dashboard</h2>
-          <p>Current device status, active room controls, and media context.</p>
+          <h2 id="dash-header-title">Device Overview</h2>
+          <p id="dash-header-desc">Live device sensors, configurable parameters, hardware diagnostics, and quick backups.</p>
         </div>
 
         <div class="hero-stats">
-          <div class="stat-box"><span>Active Room</span><strong id="st-room">--</strong></div>
-          <div class="stat-box"><span>Room Climate</span><strong id="st-climate">--</strong></div>
-          <div class="stat-box"><span>Active Speaker</span><strong id="st-speaker">--</strong></div>
-          <div class="stat-box"><span>Security Alarm</span><strong id="st-alarm">--</strong></div>
+          <div class="stat-box"><span>Integration Tier</span><strong id="st-tier">--</strong></div>
+          <div class="stat-box"><span>Assigned Room</span><strong id="st-room">--</strong></div>
+          <div class="stat-box"><span>Device Group</span><strong id="st-group">Unassigned</strong></div>
+          <div class="stat-box"><span>Exposed Entities</span><strong id="st-entities">0</strong></div>
         </div>
 
         <div class="grid-2">
+          <!-- LEFT CARD: LIVE DEVICE CONTROLS & SENSORS -->
           <div class="card">
-            <h3>Active Room & Speaker Context</h3>
-            <p class="desc">Switch the active room or speaker, or tap any room entity below to toggle it.</p>
-            <div class="field">
-              <label>Active Room</label>
-              <select id="quick-area" onchange="quickSwitchArea(this.value)"></select>
-            </div>
-            <div class="field">
-              <label>Active Speaker</label>
-              <select id="quick-speaker" onchange="quickSwitchSpeaker(this.value)"></select>
-            </div>
-            <label style="font-size:11.5px;font-weight:600;color:var(--muted);display:block;margin-top:12px;">Active Room Entities (<span id="st-card-count">0</span>)</label>
-            <div id="live-room-cards" class="room-cards-grid"></div>
+            <h3 id="dash-primary-card-title">Device Controls &amp; Live Sensors</h3>
+            <p class="desc" id="dash-primary-card-desc">Directly inspect and adjust this ESPHome device's exposed sensors, numbers, switches, and options.</p>
+            <div id="dash-device-entities" class="native-controls-box"></div>
           </div>
 
+          <!-- RIGHT CARD: DEVICE MANAGEMENT, BACKUP & OPTIONAL CONTEXT -->
           <div class="card">
-            <h3>Device & Tracking Status</h3>
-            <p class="desc">Live summary of room presence tracking, media playback, and active remote control.</p>
+            <h3>Device Management &amp; Quick Actions</h3>
+            <p class="desc">Assign this device's room or group, trigger a quick backup, or enable optional Latter add-on modules.</p>
+            <div class="field">
+              <label>Assigned Room / Area</label>
+              <select id="quick-area" onchange="quickSwitchArea(this.value)"></select>
+            </div>
+            <div class="field" id="dash-speaker-field">
+              <label>Active Speaker Target</label>
+              <select id="quick-speaker" onchange="quickSwitchSpeaker(this.value)"></select>
+            </div>
+            <div class="summary-row">
+              <span>ESPHome Model / Version</span>
+              <strong id="dash-hw-model">--</strong>
+            </div>
             <div class="summary-row">
               <span>BLE Room Tracking</span>
               <strong id="dash-ble-mode">--</strong>
             </div>
-            <div class="summary-row">
+            <div class="summary-row" id="dash-row-ble-proxy">
               <span>Nearest BLE Proxy</span>
               <strong id="dash-ble-proxy">--</strong>
             </div>
-            <div class="summary-row">
-              <span>BLE Packets Observed</span>
-              <strong id="dash-ble-packets">0</strong>
-            </div>
-            <div class="summary-row">
+            <div class="summary-row" id="dash-row-media">
               <span>Now Playing</span>
               <strong id="dash-media-summary">Idle</strong>
             </div>
-            <div class="summary-row">
-              <span>Active Remote Slot</span>
-              <strong id="dash-remote-summary">Slot 1</strong>
-            </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px;">
-              <button class="btn-secondary" onclick="navigateToView('room_tracking')">Room Calibration</button>
-              <button class="btn-secondary" onclick="navigateToView('power')">Power Settings</button>
-              <button class="btn-secondary" onclick="navigateToView('remotes')">Remote Controls</button>
+              <button class="btn-primary" onclick="createDeviceQuickBackup()">Backup Device</button>
+              <button class="btn-secondary" onclick="exportBackupToComputer('device')">Download .JSON</button>
+              <button class="btn-secondary" onclick="navigateToView('ble_addon')">BLE Add-On</button>
+              <button class="btn-secondary" onclick="navigateToView('roaming_vpn')">Roaming VPN</button>
+              <button class="btn-secondary" onclick="navigateToView('system')">Diagnostics</button>
             </div>
           </div>
+        </div>
+      </section>
+
+      <!-- ================================================================== -->
+      <!-- DEVICE SCOPE: 5B. BLE TRACKING & PROXY ADD-ON                      -->
+      <!-- ================================================================== -->
+      <section id="view-ble_addon" class="hidden">
+        <div class="page-header">
+          <h2>BLE Room Tracking &amp; Scanner Proxy</h2>
+          <p>Configure Bluetooth room presence tracking for this device, or install a 1-line YAML mixin to enable it.</p>
+        </div>
+
+        <div class="card" id="ble-addon-missing-banner" style="margin-bottom:16px;border-color:var(--accent);">
+          <h3>Add-On Available: 1-Line BLE Mixin for ESPHome</h3>
+          <p class="desc">This device does not currently broadcast a Latter BLE iBeacon. Depending on whether this device is portable or stationary, paste one of the 1-line packages below into its YAML in ESPHome Device Builder and recompile:</p>
+          <div class="grid-2" style="margin-bottom:0;">
+            <div style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                <strong style="color:var(--text-strong);">Option A: Portable / Handheld Device (BLE Beacon)</strong>
+                <button class="btn-secondary" style="padding:4px 10px;font-size:11.5px;" onclick="copyTextById('dev-ble-beacon-snip')">Copy</button>
+              </div>
+              <small style="color:var(--muted);display:block;margin-bottom:8px;">Broadcasts a BLE iBeacon so Latter tracks which room this device is in.</small>
+              <pre id="dev-ble-beacon-snip" class="mono" style="margin:0;padding:8px;background:var(--card);border:1px solid var(--border);border-radius:6px;overflow-x:auto;">packages:
+  latter.ble: github://slampton/ha-latter/esphome/latter-ble-beacon.yaml@main</pre>
+            </div>
+            <div style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                <strong style="color:var(--text-strong);">Option B: Stationary Room Sensor (BLE Scanner Proxy)</strong>
+                <button class="btn-secondary" style="padding:4px 10px;font-size:11.5px;" onclick="copyTextById('dev-ble-proxy-snip')">Copy</button>
+              </div>
+              <small style="color:var(--muted);display:block;margin-bottom:8px;">Turns this stationary ESP32 (e.g. Bed Presence) into an active room Bluetooth scanner for your mobile displays.</small>
+              <pre id="dev-ble-proxy-snip" class="mono" style="margin:0;padding:8px;background:var(--card);border:1px solid var(--border);border-radius:6px;overflow-x:auto;">packages:
+  latter.proxy: github://slampton/ha-latter/esphome/latter-ble-proxy.yaml@main</pre>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Device BLE Tracking Settings</h3>
+          <p class="desc">Configure how Latter tracks this device across room Bluetooth proxies when beaconing is enabled.</p>
+          <div class="toggle-row">
+            <span>Enable ESPHome BLE Proxy Room Tracking for This Device</span>
+            <input type="checkbox" id="cfg-native_ble_tracking_ mirror" onchange="document.getElementById('cfg-native_ble_tracking').checked = this.checked; markDirty();">
+          </div>
+          <div class="toggle-row" style="margin-bottom:10px;">
+            <span>Auto-Switch Active Room on Movement</span>
+            <input type="checkbox" id="cfg-ble_auto_switch_mirror" onchange="document.getElementById('cfg-ble_auto_switch').checked = this.checked; markDirty();">
+          </div>
+          <button class="btn-secondary" onclick="navigateToView('room_tracking')">Open Global Room Calibration Radar &rarr;</button>
         </div>
       </section>
 
@@ -2750,8 +2869,13 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
       <!-- ================================================================== -->
       <section id="view-roaming_vpn" class="hidden">
         <div class="page-header">
-          <h2>Roaming & VPN</h2>
+          <h2>Roaming &amp; WireGuard VPN</h2>
           <p>Keep this device connected to Home Assistant and Latter when away from home over an encrypted ESPHome WireGuard tunnel.</p>
+        </div>
+
+        <div class="card" id="vpn-addon-missing-banner" style="margin-bottom:16px;border-color:var(--accent);">
+          <h3>Add-On Not Yet Installed on This Device</h3>
+          <p class="desc" style="margin-bottom:0;">This device does not currently report an active WireGuard component. To enable remote roaming on this device: <strong>1)</strong> Click <strong>Generate WireGuard Keys</strong> below, <strong>2)</strong> Copy the <strong>1-Line Mixin Package</strong> snippet in Box 1 into your device's YAML in ESPHome Device Builder, and <strong>3)</strong> Recompile.</p>
         </div>
 
         <div class="grid-2">
@@ -2965,6 +3089,7 @@ const DEVICE_VIEWS = [
   "power",
   "voice",
   "audio",
+  "ble_addon",
   "roaming_vpn",
   "system"
 ];
@@ -3315,6 +3440,8 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
 
   const rowsHtml = (fleetDevices || []).map(d => {
     const spk = (d.active_speaker || "").replace("media_player.", "");
+    const spkMeta = (d.has_audio && spk) ? ` &bull; Speaker: <strong>${spk}</strong>` : "";
+    const proxyMeta = d.ble_closest_proxy ? ` &bull; Proxy: ${d.ble_closest_proxy}` : "";
     const isActDev = DEVICE_SELECTED && d.is_current && CURRENT_SCOPE === "device";
     const actAction = d.is_current
       ? `selectCurrentDevice()`
@@ -3325,9 +3452,9 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
     return `<div class="native-ctrl-row">
       <div class="lbl">
         ${d.title}
-        <span class="state-badge" style="margin-left:6px;">${d.device_group_name || d.device_group || 'Handhelds'}</span>
+        <span class="state-badge" style="margin-left:6px;">${d.device_group_name || d.device_group || 'Unassigned'}</span>
         ${isActDev ? '<span class="state-badge" style="margin-left:4px;border-color:var(--success);color:var(--success);">Active</span>' : ''}
-        <small>Slug: <code>${d.device_slug}</code> &bull; Room: <strong>${d.active_area_name}</strong> &bull; Speaker: <strong>${spk}</strong> &bull; Proxy: ${d.ble_closest_proxy || 'None'}</small>
+        <small>Slug: <code>${d.device_slug}</code> &bull; Room: <strong>${d.active_area_name}</strong>${spkMeta}${proxyMeta}</small>
       </div>
       <div class="widget">
         <select style="min-width:140px;" title="Assign Device Group" onchange="assignDeviceGroup('${d.device_slug}', this.value)">${grpOpts}</select>
@@ -3384,7 +3511,7 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
     grpBox.innerHTML = groups.map(g => {
       const members = (fleetDevices || []).filter(d => d.device_group === g.id);
       const memNames = members.length ? members.map(m => m.title).join(", ") : "No devices assigned";
-      const isDefault = ["handhelds", "bedrooms", "common_areas", "wall_panels"].includes(g.id);
+      const isDefault = ["unassigned", "handhelds", "bedrooms", "common_areas", "wall_panels", "sensors"].includes(g.id);
       return `<div class="native-ctrl-row">
         <div class="lbl">
           ${g.name} <span class="state-badge" style="margin-left:6px;">${members.length} device${members.length === 1 ? '' : 's'}</span>
@@ -3701,6 +3828,23 @@ function renderCohesiveDeviceSections() {
   document.getElementById("embedded-network").innerHTML = netItems.length
     ? netItems.map(it => renderNativeControlRow(it)).join("")
     : `<p class="desc">No network or diagnostic entities reported.</p>`;
+
+  // Populate the primary Device Controls & Live Sensors box on Device Overview
+  const dashBox = document.getElementById("dash-device-entities");
+  if (dashBox) {
+    let primaryItems = getSectionItems("other")
+      .concat(getSectionItems("room"))
+      .concat(getSectionItems("home"))
+      .concat(getSectionItems("display"))
+      .concat(getSectionItems("battery"))
+      .concat(getSectionItems("actions"));
+    if (!primaryItems.length) {
+      primaryItems = getSectionItems("network");
+    }
+    dashBox.innerHTML = primaryItems.length
+      ? primaryItems.slice(0, 18).map(it => renderNativeControlRow(it, true)).join("")
+      : `<p class="desc">No configurable controls or sensors reported by this device yet.</p>`;
+  }
 
   renderRawEntityList();
 }
@@ -4331,33 +4475,68 @@ function applyStateToDom(data, forceFormUpdate=false) {
     ? `${live.media_title} (${live.media_artist})`
     : `${live.media_state || 'idle'}`;
 
+  const caps = data.capabilities || {};
   const devTitle = esp?.device?.name || data.title;
-  document.getElementById("hdr-sub").textContent = `v${data.version || '1.8.8'}`;
+  document.getElementById("hdr-sub").textContent = `v${data.version || '2.1.2'}`;
   document.getElementById("survey-device-name").textContent = devTitle;
   document.getElementById("nav-room-badge").textContent = roomName;
   document.getElementById("top-room").textContent = `Room: ${roomName}`;
-  document.getElementById("top-speaker").textContent = `Speaker: ${spkShort}`;
+  const topSpkChip = document.getElementById("top-speaker")?.parentElement;
+  const topMedChip = document.getElementById("top-media")?.parentElement;
+  if (topSpkChip) topSpkChip.style.display = (caps.has_audio && spkShort) ? "inline-flex" : "none";
+  if (topMedChip) topMedChip.style.display = (caps.has_audio && spkShort) ? "inline-flex" : "none";
+  document.getElementById("top-speaker").textContent = `Speaker: ${spkShort || 'None'}`;
   document.getElementById("top-media").textContent = `Media: ${mediaSummary}`;
   document.getElementById("top-hh-devices").textContent = `Devices: ${(data.fleet_devices || []).length}`;
   document.getElementById("top-hh-alarm").textContent = `Alarm: ${(live.alarm_state || 'none').toUpperCase()}`;
   updateTopHeaderForScope();
 
-  document.getElementById("st-room").textContent = roomName;
-  document.getElementById("st-climate").textContent = tempStr + humStr;
-  document.getElementById("st-speaker").textContent = spkShort;
-  document.getElementById("st-alarm").textContent = (live.alarm_state || "none").toUpperCase();
+  // Capability-Aware Sidebar Tabs & Add-On Badges
+  const showDisplay = !!caps.has_display;
+  const showPower = !!caps.has_power;
+  const showVoice = !!caps.has_voice;
+  const showAudio = !!caps.has_audio;
+  const anySettingsTab = showDisplay || showPower || showVoice || showAudio;
+  document.getElementById("nav-grp-dev-settings")?.classList.toggle("hidden", !anySettingsTab);
+  document.getElementById("nav-btn-home_display")?.classList.toggle("hidden", !showDisplay);
+  document.getElementById("nav-btn-power")?.classList.toggle("hidden", !showPower);
+  document.getElementById("nav-btn-voice")?.classList.toggle("hidden", !showVoice);
+  document.getElementById("nav-btn-audio")?.classList.toggle("hidden", !showAudio);
 
-  document.getElementById("dash-ble-mode").textContent = cfg.native_ble_tracking
+  const bleBadge = document.getElementById("nav-ble-addon-badge");
+  if (bleBadge) bleBadge.textContent = caps.has_ble_beacon ? "Active" : "Add-On";
+  const vpnBadge = document.getElementById("nav-vpn-addon-badge");
+  if (vpnBadge) vpnBadge.textContent = caps.has_vpn_mixin ? "Active" : "Add-On";
+
+  const bleBanner = document.getElementById("ble-addon-missing-banner");
+  if (bleBanner) bleBanner.style.display = caps.has_ble_beacon ? "none" : "block";
+  const vpnBanner = document.getElementById("vpn-addon-missing-banner");
+  if (vpnBanner) vpnBanner.style.display = caps.has_vpn_mixin ? "none" : "block";
+
+  // Device-Centric Hero Stats on Device Overview
+  document.getElementById("dash-header-title").textContent = `${devTitle} — Overview`;
+  document.getElementById("st-tier").textContent = caps.tier_label || "ESPHome Device";
+  document.getElementById("st-room").textContent = roomName;
+  const grpList = data.device_groups || [];
+  const grpObj = grpList.find(g => g.id === cfg.device_group);
+  document.getElementById("st-group").textContent = grpObj ? grpObj.name : (cfg.device_group || "Unassigned");
+  document.getElementById("st-entities").textContent = `${caps.total_entities || 0} Entities`;
+
+  const hwModel = `${esp?.device?.model || 'ESPHome'}${esp?.device?.sw_version ? ' (' + esp.device.sw_version + ')' : ''}`;
+  document.getElementById("dash-hw-model").textContent = hwModel;
+  document.getElementById("dash-ble-mode").textContent = (caps.has_ble_beacon && cfg.native_ble_tracking)
     ? (cfg.ble_auto_switch ? "Enabled (Auto-Switch)" : "Enabled (Manual Switch)")
-    : "Disabled";
+    : "Not Active (See BLE Add-On)";
   const winRow = (live.ble_survey_rows || []).find(r => r.is_winner);
   const distSuffix = (winRow && winRow.distance_m != null) ? ` (~${winRow.distance_m}m / ${winRow.distance_ft}ft)` : "";
   document.getElementById("dash-ble-proxy").textContent = (live.ble_closest_proxy || "None") + distSuffix;
-  document.getElementById("dash-ble-packets").textContent = String(live.ble_packets_seen || 0);
+  const proxyRow = document.getElementById("dash-row-ble-proxy");
+  if (proxyRow) proxyRow.style.display = caps.has_ble_beacon ? "flex" : "none";
+  const spkField = document.getElementById("dash-speaker-field");
+  if (spkField) spkField.style.display = caps.has_audio ? "block" : "none";
+  const medRow = document.getElementById("dash-row-media");
+  if (medRow) medRow.style.display = caps.has_audio ? "flex" : "none";
   document.getElementById("dash-media-summary").textContent = mediaSummary;
-  const actSlotIdx = live.active_remote_slot || 1;
-  const actSlotName = live.remote_slots_meta?.[`slot_${actSlotIdx}_name`] || `Slot ${actSlotIdx}`;
-  document.getElementById("dash-remote-summary").textContent = `Slot ${actSlotIdx} (${actSlotName})`;
 
   [1, 2, 3, 4].forEach(idx => {
     const isAct = actSlotIdx === idx;
@@ -4370,9 +4549,8 @@ function applyStateToDom(data, forceFormUpdate=false) {
     }
   });
 
-  populateSelect("quick-area", cat.areas, live.active_area_id, false);
-  populateSelect("quick-speaker", cat.ma_speakers, live.active_speaker, false);
-  renderLiveRoomCards(live.room_cards);
+  populateSelect("quick-area", cat.areas, live.active_area_id, true);
+  populateSelect("quick-speaker", cat.ma_speakers, live.active_speaker, true);
   renderRssiBars(live.ble_survey_rows, live.ble_packets_seen);
   renderWallpaperGallery(data.wallpapers, cfg.device_slug, cfg.display_shape);
   if (data.vpn_snippets) {
