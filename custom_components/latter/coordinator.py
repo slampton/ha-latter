@@ -7,8 +7,13 @@ from datetime import datetime, timedelta
 import hashlib
 import hmac
 import logging
+import re
 import time
 from typing import Any
+from urllib.parse import quote
+
+import aiohttp
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
@@ -214,6 +219,58 @@ def _get_esphome_device_current_area(
     return None
 
 
+# In-memory cache: track_key -> {"lrc": [(sec, text), ...], "plain": str, "bio": str}
+_LYRICS_BIO_CACHE: dict[str, dict[str, Any]] = {}
+_LRC_TAG_RE = re.compile(r"\[(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?\]")
+
+
+def _parse_lrc_lines(raw_lrc: str) -> list[tuple[float, str]]:
+    """Parse standard [mm:ss.xx] LRC text into sorted (seconds, lyric_line) tuples."""
+    entries: list[tuple[float, str]] = []
+    for raw_line in raw_lrc.splitlines():
+        matches = list(_LRC_TAG_RE.finditer(raw_line))
+        if not matches:
+            continue
+        text = _LRC_TAG_RE.sub("", raw_line).strip()
+        if not text:
+            continue
+        for m in matches:
+            mins = int(m.group(1))
+            secs = int(m.group(2))
+            frac_s = m.group(3) or "0"
+            frac = int(frac_s) / (10.0 ** len(frac_s))
+            entries.append((mins * 60.0 + secs + frac, text))
+    entries.sort(key=lambda x: x[0])
+    return entries
+
+
+def _format_synced_lyrics_payload(
+    meta: dict[str, Any] | None, position_sec: float
+) -> str:
+    """Format active lyrics window ('SYNC|<active_idx>|line1\\nline2...' or plain text) for ESPHome."""
+    if not meta:
+        return ""
+    lrc_list: list[tuple[float, str]] = meta.get("lrc") or []
+    if lrc_list:
+        active_idx = 0
+        for i, (ts, _txt) in enumerate(lrc_list):
+            if position_sec + 0.35 >= ts:
+                active_idx = i
+            else:
+                break
+        # Build a 40-line window around active_idx or full list (up to 900 chars) so both live-follow and manual paging work!
+        lines_only = [txt.replace("|", "/") for _ts, txt in lrc_list]
+        start_i = max(0, active_idx - 2)
+        window = lines_only[start_i : start_i + 18]
+        rel_active = active_idx - start_i
+        joined = "\n".join(window)[:700]
+        return f"SYNC|{rel_active}|{joined}"
+    plain = str(meta.get("plain") or "").strip()
+    if plain:
+        return plain[:750]
+    return ""
+
+
 def _interpolate_speaker_position(state_obj: Any) -> float:
     """Calculate the live interpolated playback position in seconds for a media_player state."""
     if state_obj is None:
@@ -292,6 +349,8 @@ class LatterCoordinator:
         self.last_valid_raw_pic: str = ""
         self._last_art_track_key: str = ""
         self._last_art_proxy_url: str = "none"
+        self._last_lyrics_track_key: str = ""
+        self._fetching_lyrics_key: str = ""
         self._transfer_hold_until: float = 0.0
         self._transfer_hold_position: float = 0.0
         self._transfer_hold_title: str = ""
@@ -2007,6 +2066,8 @@ class LatterCoordinator:
                 "last_speaker": self.last_speaker,
                 "local_speaker": self.local_speaker,
                 "volume_entity": vol_target,
+                "lyrics_summary": "No track playing.",
+                "bio_summary": "Play a track to view artist & album info.",
             }
 
         state = state_obj.state
@@ -2108,6 +2169,35 @@ class LatterCoordinator:
         else:
             art_url = "none"
 
+        if title != "Idle" and artist != "None":
+            if (
+                track_key not in _LYRICS_BIO_CACHE
+                and self._fetching_lyrics_key != track_key
+            ):
+                self._fetching_lyrics_key = track_key
+                self.hass.async_create_task(
+                    self._async_fetch_track_lyrics_and_bio(
+                        track_key, title, artist, album, duration
+                    )
+                )
+
+        cached_meta = _LYRICS_BIO_CACHE.get(track_key)
+        if cached_meta is not None:
+            lyrics_summary = (
+                _format_synced_lyrics_payload(cached_meta, position)
+                or "No lyrics found for this track."
+            )
+            bio_summary = (
+                str(cached_meta.get("bio") or "").strip()[:750]
+                or f"{artist} — {album}"
+            )
+        elif title != "Idle":
+            lyrics_summary = "Loading lyrics..."
+            bio_summary = f"Loading info for {artist}..."
+        else:
+            lyrics_summary = "No track playing."
+            bio_summary = "Play a track to view artist & album info."
+
         return state, {
             "title": title,
             "artist": artist,
@@ -2122,7 +2212,122 @@ class LatterCoordinator:
             "last_speaker": self.last_speaker,
             "local_speaker": self.local_speaker,
             "volume_entity": vol_target,
+            "lyrics_summary": lyrics_summary,
+            "bio_summary": bio_summary,
         }
+
+    async def _async_fetch_track_lyrics_and_bio(
+        self,
+        track_key: str,
+        title: str,
+        artist: str,
+        album: str,
+        duration: float,
+    ) -> None:
+        """Fetch time-synced/plain lyrics and artist/album bio from Music Assistant + LRCLIB/Wikipedia."""
+        lrc_lines: list[tuple[float, str]] = []
+        plain_lyrics: str = ""
+        bio_text: str = ""
+
+        # 1. Check in-process Music Assistant queue item & artist/album metadata first
+        try:
+            mass = _get_mass_client(self.hass)
+            if mass is not None and hasattr(mass, "player_queues"):
+                queues = (
+                    mass.player_queues.all()
+                    if callable(getattr(mass.player_queues, "all", None))
+                    else []
+                )
+                for q in queues:
+                    q_dict = q.to_dict() if hasattr(q, "to_dict") else {}
+                    cur_item = q_dict.get("current_item") or {}
+                    m_item = cur_item.get("media_item") if isinstance(cur_item, dict) else None
+                    if isinstance(m_item, dict):
+                        m_name = str(m_item.get("name") or "").strip().lower()
+                        if m_name and m_name == title.strip().lower():
+                            meta = m_item.get("metadata") or {}
+                            if isinstance(meta, dict):
+                                raw_lrc = str(meta.get("lrc_lyrics") or "").strip()
+                                raw_plain = str(meta.get("lyrics") or "").strip()
+                                raw_desc = str(meta.get("description") or "").strip()
+                                if raw_lrc:
+                                    lrc_lines = _parse_lrc_lines(raw_lrc)
+                                if raw_plain and not lrc_lines:
+                                    if "[0" in raw_plain:
+                                        lrc_lines = _parse_lrc_lines(raw_plain)
+                                    if not lrc_lines:
+                                        plain_lyrics = raw_plain
+                                if raw_desc:
+                                    bio_text = raw_desc
+                            break
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("MA metadata lyrics/bio lookup skipped: %s", err)
+
+        session = async_get_clientsession(self.hass)
+        timeout = aiohttp.ClientTimeout(total=4.5)
+        headers = {"User-Agent": "HomeAssistant-Latter/2.0 (https://github.com/slampton/ha-latter)"}
+
+        # 2. Fetch synced/plain lyrics from LRCLIB if not already found in MA
+        if not lrc_lines and not plain_lyrics and artist and artist != "None":
+            try:
+                q_url = (
+                    f"https://lrclib.net/api/search?track_name={quote(title)}"
+                    f"&artist_name={quote(artist)}"
+                )
+                async with session.get(q_url, timeout=timeout, headers=headers) as resp:
+                    if resp.status == 200:
+                        items = await resp.json()
+                        if isinstance(items, list) and items:
+                            best = items[0]
+                            for cand in items:
+                                if isinstance(cand, dict) and cand.get("syncedLyrics"):
+                                    best = cand
+                                    break
+                            if isinstance(best, dict):
+                                s_lrc = str(best.get("syncedLyrics") or "").strip()
+                                p_lyr = str(best.get("plainLyrics") or "").strip()
+                                if s_lrc:
+                                    lrc_lines = _parse_lrc_lines(s_lrc)
+                                if p_lyr and not plain_lyrics:
+                                    plain_lyrics = p_lyr
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.debug("LRCLIB lookup failed for '%s': %s", title, err)
+
+        # 3. Fetch Artist / Album summary bio from Wikipedia REST API if not in MA
+        if not bio_text and artist and artist != "None":
+            for query_term in (f"{album} ({artist} album)", album, f"{artist} (band)", f"{artist} (musician)", artist):
+                if not query_term or query_term == "None":
+                    continue
+                try:
+                    wiki_title = quote(query_term.replace(" ", "_"))
+                    w_url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{wiki_title}"
+                    async with session.get(w_url, timeout=timeout, headers=headers) as resp:
+                        if resp.status == 200:
+                            w_data = await resp.json()
+                            extract = str(w_data.get("extract") or "").strip()
+                            w_type = str(w_data.get("type") or "")
+                            if extract and w_type != "disambiguation" and len(extract) > 40:
+                                bio_text = extract
+                                break
+                except Exception:  # noqa: BLE001
+                    pass
+
+        if not bio_text:
+            if album and album != "None":
+                bio_text = f"{title} by {artist}, from the album '{album}'."
+            else:
+                bio_text = f"Now playing {title} by {artist}."
+
+        if len(_LYRICS_BIO_CACHE) >= 32:
+            oldest_k = next(iter(_LYRICS_BIO_CACHE))
+            _LYRICS_BIO_CACHE.pop(oldest_k, None)
+
+        _LYRICS_BIO_CACHE[track_key] = {
+            "lrc": lrc_lines,
+            "plain": plain_lyrics,
+            "bio": bio_text,
+        }
+        self._notify_listeners()
 
     @callback
     def _bind_weather_listener(self) -> None:
