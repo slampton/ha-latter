@@ -966,21 +966,13 @@
     <div class="scope-box">
       <div class="scope-tabs">
         <button class="scope-tab" id="tab-scope-household" onclick="setScope('household')">System</button>
-        <button class="scope-tab active" id="tab-scope-device" onclick="setScope('device')">Device</button>
-      </div>
-      <div class="device-picker-wrap" id="device-picker-wrap">
-        <label>Active Device</label>
-        <select id="fleet-device-picker" onchange="switchFleetDevice(this.value)"></select>
+        <button class="scope-tab active" id="tab-scope-device" onclick="openDevicesLanding()">Devices</button>
       </div>
     </div>
 
-    <!-- SYSTEM NAVIGATION (6 TABS) -->
+    <!-- SYSTEM NAVIGATION (5 TABS) -->
     <div class="nav-list hidden" id="nav-scope-household">
       <div class="nav-group-label">System</div>
-      <button class="nav-btn" data-view="fleet_overview" onclick="switchView('fleet_overview', this)">
-        <span>Devices</span>
-        <span class="nav-badge" id="nav-fleet-count">1</span>
-      </button>
       <button class="nav-btn" data-view="household" onclick="switchView('household', this)">
         <span>Shared Entities</span>
       </button>
@@ -998,9 +990,21 @@
       </button>
     </div>
 
-    <!-- DEVICE NAVIGATION (5 TABS) -->
+    <!-- DEVICES LIST SIDEBAR (WHEN ON ALL DEVICES LANDING PAGE) -->
+    <div class="nav-list hidden" id="nav-scope-devices-list">
+      <div class="nav-group-label">Devices</div>
+      <button class="nav-btn active" data-view="select_device_prompt" onclick="openDevicesLanding()">
+        <span>All Devices</span>
+        <span class="nav-badge" id="nav-fleet-count">1</span>
+      </button>
+    </div>
+
+    <!-- SELECTED DEVICE NAVIGATION (5 TABS) -->
     <div class="nav-list" id="nav-scope-device">
-      <div class="nav-group-label">Device</div>
+      <button class="nav-btn" style="color:var(--muted);margin-bottom:4px;" onclick="openDevicesLanding()">
+        <span>&larr; All Devices</span>
+      </button>
+      <div class="nav-group-label" id="nav-selected-device-label">Device</div>
       <button class="nav-btn active" data-view="dashboard" onclick="switchView('dashboard', this)">
         <span>Overview</span>
       </button>
@@ -1341,7 +1345,11 @@
 
           <div class="card">
             <h3>Notification Tester</h3>
-            <p class="desc">Send a test on-screen alert (<code>latter.notify_device</code>) to the active device.</p>
+            <p class="desc">Send a test on-screen alert (<code>latter.notify_device</code>) to a specific device.</p>
+            <div class="field">
+              <label>Target Device</label>
+              <select id="test-alert-device"></select>
+            </div>
             <div class="form-grid-2" style="margin-bottom:10px;">
               <input type="text" id="test-alert-title" value="Front Door" placeholder="Title">
               <select id="test-alert-prio">
@@ -1458,16 +1466,19 @@
       </section>
 
       <!-- ================================================================== -->
-      <!-- DEVICE SCOPE: 0. SELECT A DEVICE PROMPT                            -->
+      <!-- DEVICES LANDING PAGE (SORTABLE TABLE + ADD DEVICE MODAL)           -->
       <!-- ================================================================== -->
       <section id="view-select_device_prompt" class="hidden">
         <div class="page-header">
-          <h2>Select a Device</h2>
-          <p>Choose an ESPHome device below or from the sidebar selector.</p>
+          <h2>Devices</h2>
+          <p>Select a device to manage its settings, or add an existing ESPHome device.</p>
         </div>
         <div class="card">
-          <div style="margin-bottom:12px;max-width:340px;">
-            <input type="text" id="prompt-search-input" placeholder="Filter devices by name, model, area, or group..." oninput="onFilterDeviceTable(this.value)">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
+            <div style="flex:1;min-width:200px;max-width:320px;">
+              <input type="text" id="prompt-search-input" placeholder="Search..." oninput="onFilterDeviceTable(this.value)">
+            </div>
+            <button type="button" class="btn-primary" id="btn-open-add-device" onclick="openAddDeviceModal()">+ Add Device</button>
           </div>
           <div id="prompt-devices-list"></div>
         </div>
@@ -1501,6 +1512,11 @@
                 <select id="quick-profile-select"></select>
                 <button class="btn-chip" onclick="applyQuickProfileFromOverview()">Apply Profile</button>
               </div>
+            </div>
+
+            <div class="field" id="dash-assigned-person-field" style="padding-top:12px;border-top:1px solid var(--border);">
+              <label>Assigned Person (Exposes <code>sensor.&lt;person&gt;_current_room</code> for Dashboards)</label>
+              <select id="cfg-assigned_person" onchange="onAssignedPersonChanged(this.value)"></select>
             </div>
           </div>
 
@@ -1923,7 +1939,6 @@ let DEVICE_SORT_ASC = true;
 let DEVICE_FILTER_TEXT = "";
 
 const HOUSEHOLD_VIEWS = [
-  "fleet_overview",
   "household",
   "remotes",
   "fleet_sync",
@@ -2066,7 +2081,7 @@ function applyTheme(pref) {
 
 applyTheme(CURRENT_THEME_PREF);
 if (CURRENT_SCOPE === "household") {
-  window.addEventListener("DOMContentLoaded", () => setScope("household", "fleet_overview"));
+  window.addEventListener("DOMContentLoaded", () => setScope("household", "household"));
 }
 
 function showToast(msg) {
@@ -2195,6 +2210,9 @@ function updateTopHeaderForScope() {
   const isHH = (CURRENT_SCOPE === "household") || !DEVICE_SELECTED;
   const devTitle = STATE?.esphome?.device?.name || STATE?.title || "Device";
   document.getElementById("hdr-title").textContent = isHH ? "Latter" : devTitle;
+  const devNavLbl = document.getElementById("nav-selected-device-label");
+  if (devNavLbl) devNavLbl.textContent = devTitle;
+
   const rawVer = isHH
     ? (STATE?.version || "2.2.0")
     : (STATE?.live?.device_sw_version || STATE?.esphome?.device?.sw_version || STATE?.version || "2.2.0");
@@ -2210,6 +2228,8 @@ function updateTopHeaderForScope() {
       updPill.textContent = `Update Available${lat} — Click to Update`;
     }
   }
+  document.getElementById("nav-scope-household").classList.toggle("hidden", CURRENT_SCOPE !== "household");
+  document.getElementById("nav-scope-devices-list")?.classList.toggle("hidden", CURRENT_SCOPE !== "device" || DEVICE_SELECTED);
   document.getElementById("nav-scope-device").classList.toggle("hidden", CURRENT_SCOPE !== "device" || !DEVICE_SELECTED);
 }
 
@@ -2219,16 +2239,19 @@ async function triggerHeaderFirmwareUpdate() {
   await espAction(entId, "install");
 }
 
+function openDevicesLanding() {
+  DEVICE_SELECTED = false;
+  setScope("device", "select_device_prompt");
+}
+
 function setScope(scope, targetView=null) {
   CURRENT_SCOPE = scope === "household" ? "household" : "device";
   document.getElementById("tab-scope-household").classList.toggle("active", CURRENT_SCOPE === "household");
   document.getElementById("tab-scope-device").classList.toggle("active", CURRENT_SCOPE === "device");
-  document.getElementById("nav-scope-household").classList.toggle("hidden", CURRENT_SCOPE !== "household");
-  document.getElementById("device-picker-wrap").classList.toggle("hidden", CURRENT_SCOPE !== "device");
   updateTopHeaderForScope();
 
   if (CURRENT_SCOPE === "household") {
-    switchView(targetView || "fleet_overview", null);
+    switchView(targetView || "household", null);
   } else if (!DEVICE_SELECTED) {
     switchView("select_device_prompt", null);
   } else {
@@ -2593,18 +2616,16 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
   const promptBox = document.getElementById("prompt-devices-list");
   if (promptBox) promptBox.innerHTML = tableHtml;
 
-  const unbridged = STATE?.unbridged_devices || [];
-  const bridgeBar = document.getElementById("bridge-device-bar");
-  const bridgePicker = document.getElementById("bridge-device-picker");
-  if (bridgeBar && bridgePicker) {
-    if (unbridged.length > 0) {
-      bridgeBar.style.display = "flex";
-      bridgePicker.innerHTML = unbridged.map(u =>
-        `<option value="${u.slug}" data-area="${u.area_id || ''}">${u.name}</option>`
-      ).join("");
-    } else {
-      bridgeBar.style.display = "none";
+  const alertDevSel = document.getElementById("test-alert-device");
+  if (alertDevSel && fleetDevices && fleetDevices.length) {
+    const prevTarget = alertDevSel.value || (STATE?.config?.device_slug || fleetDevices[0].device_slug);
+    const devOpts = fleetDevices.map(d =>
+      `<option value="${d.device_slug}" ${d.device_slug === prevTarget ? 'selected' : ''}>${d.title} (${d.device_slug})</option>`
+    );
+    if (fleetDevices.length > 1) {
+      devOpts.push(`<option value="all" ${prevTarget === 'all' ? 'selected' : ''}>All Devices (${fleetDevices.length})</option>`);
     }
+    alertDevSel.innerHTML = devOpts.join("");
   }
 
   const profBox = document.getElementById("saved-profiles-list");
@@ -2864,6 +2885,7 @@ function refreshActiveCameraPreview() {
 }
 
 async function sendTestNotification() {
+  const target_device = document.getElementById("test-alert-device")?.value || STATE?.config?.device_slug || "";
   const title = document.getElementById("test-alert-title").value.trim() || "Alert";
   const message = document.getElementById("test-alert-msg").value.trim() || "Test notification";
   const priority = document.getElementById("test-alert-prio").value;
@@ -2873,6 +2895,7 @@ async function sendTestNotification() {
     headers: {"Content-Type": "application/json"},
     body: JSON.stringify({
       command: "send_test_notification",
+      target_device,
       title,
       message,
       priority,
@@ -2881,7 +2904,7 @@ async function sendTestNotification() {
   });
   if (resp.ok) {
     applyStateToDom(await resp.json(), false);
-    showToast("Sent notification to device");
+    showToast(`Sent notification to ${target_device}`);
   }
 }
 
@@ -3687,12 +3710,66 @@ async function confirmRemoveManagedDevice() {
   }
 }
 
+function ensureAddDeviceModal() {
+  if (document.getElementById("latter-add-dev-modal")) return;
+  const modal = document.createElement("div");
+  modal.id = "latter-add-dev-modal";
+  modal.style.cssText = "position:fixed;inset:0;background:rgba(8,12,18,0.82);backdrop-filter:blur(6px);z-index:9999;display:none;align-items:center;justify-content:center;padding:16px;";
+  modal.innerHTML = `
+    <div class="card" style="max-width:440px;width:100%;margin:0;">
+      <h3 style="margin-bottom:6px;">Add ESPHome Device to Latter</h3>
+      <p class="desc" style="margin-bottom:14px;">Select an existing ESPHome device discovered in Home Assistant to manage it in Latter Studio.</p>
+      <div class="field" id="add-dev-modal-picker-wrap">
+        <label>Discovered ESPHome Devices</label>
+        <select id="bridge-device-picker"></select>
+      </div>
+      <p class="desc hidden" id="add-dev-modal-empty" style="color:var(--muted);">All discovered ESPHome devices in Home Assistant are already onboarded in Latter.</p>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
+        <button type="button" class="btn-secondary" onclick="closeAddDeviceModal()">Cancel</button>
+        <button type="button" class="btn-primary" id="btn-confirm-add-device" onclick="bridgeSelectedEsphomeDevice()">Add Device</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+}
+
+function openAddDeviceModal() {
+  ensureAddDeviceModal();
+  const unbridged = STATE?.unbridged_devices || [];
+  const picker = document.getElementById("bridge-device-picker");
+  const wrap = document.getElementById("add-dev-modal-picker-wrap");
+  const emptyMsg = document.getElementById("add-dev-modal-empty");
+  const addBtn = document.getElementById("btn-confirm-add-device");
+
+  if (unbridged.length > 0) {
+    wrap?.classList.remove("hidden");
+    emptyMsg?.classList.add("hidden");
+    if (addBtn) addBtn.disabled = false;
+    if (picker) {
+      picker.innerHTML = unbridged.map(u =>
+        `<option value="${u.slug}" data-area="${u.area_id || ''}">${u.name}</option>`
+      ).join("");
+    }
+  } else {
+    wrap?.classList.add("hidden");
+    emptyMsg?.classList.remove("hidden");
+    if (addBtn) addBtn.disabled = true;
+  }
+  document.getElementById("latter-add-dev-modal").style.display = "flex";
+}
+
+function closeAddDeviceModal() {
+  const m = document.getElementById("latter-add-dev-modal");
+  if (m) m.style.display = "none";
+}
+
 async function bridgeSelectedEsphomeDevice() {
   const picker = document.getElementById("bridge-device-picker");
   if (!picker || !picker.value) return;
   const slug = picker.value;
   const optEl = picker.options[picker.selectedIndex];
   const areaId = optEl ? (optEl.getAttribute("data-area") || "") : "";
+  closeAddDeviceModal();
   const resp = await fetch(API_URL, {
     method: "POST",
     headers: {"Content-Type": "application/json"},
@@ -3702,6 +3779,11 @@ async function bridgeSelectedEsphomeDevice() {
     applyStateToDom(await resp.json(), false);
     showToast(`Added ESPHome device '${slug}'`);
   }
+}
+
+async function onAssignedPersonChanged(personEnt) {
+  markDirty();
+  await saveAllConfig();
 }
 
 function toggleDeviceTableSort(col) {
@@ -4058,6 +4140,7 @@ function applyStateToDom(data, forceFormUpdate=false) {
 
     populateSelect("cfg-default_area", cat.areas, cfg.default_area);
     populateSelect("cfg-presence_entity", cat.presence_sensors, cfg.presence_entity);
+    populateSelect("cfg-assigned_person", cat.persons, cfg.assigned_person);
     populateSelect("cfg-default_speaker", cat.ma_speakers, cfg.default_speaker, false);
     const voListEl = document.getElementById("volume-overrides-list");
     if (voListEl) {
@@ -4220,6 +4303,7 @@ async function saveAllConfig() {
     area_handoff: document.getElementById("cfg-area_handoff").checked,
     ble_beacon_uuid: document.getElementById("cfg-ble_beacon_uuid").value.trim(),
     presence_entity: document.getElementById("cfg-presence_entity").value,
+    assigned_person: document.getElementById("cfg-assigned_person")?.value || "",
     default_speaker: document.getElementById("cfg-default_speaker").value,
     volume_overrides: volumeOverrides,
     vol_speaker_1: volumeOverrides[0]?.speaker || "",

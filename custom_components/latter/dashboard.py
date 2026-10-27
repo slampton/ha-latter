@@ -41,6 +41,7 @@ from .const import (
     CONF_ALARM_ENTITY,
     CONF_AREA_HANDOFF,
     CONF_ART_SIZE,
+    CONF_ASSIGNED_PERSON,
     CONF_BLE_AUTO_SWITCH,
     CONF_BLE_BEACON_UUID,
     CONF_BLE_ROOM_OFFSETS,
@@ -349,6 +350,7 @@ def _build_companion_state_payload(
     vacuums_list: list[dict[str, str]] = []
     weathers_list: list[dict[str, str]] = []
     calendars_list: list[dict[str, str]] = []
+    persons_list: list[dict[str, str]] = []
     presence_sensors: list[dict[str, str]] = []
     bindable_entities: list[dict[str, str]] = []
 
@@ -389,6 +391,16 @@ def _build_companion_state_payload(
             weathers_list.append(item)
         elif domain == "calendar":
             calendars_list.append(item)
+        elif domain == "person":
+            p_slug = re.sub(r"[^a-z0-9]+", "_", ent_id.split(".", 1)[-1].lower()).strip("_")
+            persons_list.append(
+                {
+                    "id": ent_id,
+                    "name": f"{friendly} (sensor.{p_slug}_current_room)",
+                    "friendly": friendly,
+                    "room_sensor": f"sensor.{p_slug}_current_room",
+                }
+            )
         elif domain in ("sensor", "device_tracker", "input_text"):
             presence_sensors.append(item)
 
@@ -513,6 +525,7 @@ def _build_companion_state_payload(
         CONF_BLE_BEACON_UUID: coordinator.ble_beacon_uuid,
         CONF_BLE_ROOM_OFFSETS: coordinator.ble_room_offsets,
         CONF_PRESENCE_ENTITY: coordinator.presence_entity or "",
+        CONF_ASSIGNED_PERSON: coordinator.assigned_person,
         CONF_BLE_AUTO_SWITCH: coordinator.ble_auto_switch_enabled,
         CONF_SYNC_DEVICE_AREA: coordinator.sync_device_area_enabled,
         CONF_AREA_HANDOFF: coordinator.area_handoff_enabled,
@@ -866,6 +879,7 @@ def _build_companion_state_payload(
             "vacuums": vacuums_list,
             "weathers": weathers_list,
             "calendars": calendars_list,
+            "persons": persons_list,
             "presence_sensors": presence_sensors,
             "bindable_entities": bindable_entities,
         },
@@ -1040,20 +1054,28 @@ class LatterCompanionApiView(HomeAssistantView):
             message = str(body.get("message") or "Motion detected at Front Door").strip()
             priority = str(body.get("priority") or "normal").strip()
             inc_cam = bool(body.get("include_camera", False))
+            target_slug = str(body.get("target_device") or coordinator.device_slug).strip()
             cam_ent = coordinator.camera_entity if inc_cam else None
-            await self.hass.services.async_call(
-                DOMAIN,
-                "notify_device",
-                {
-                    "device_slug": coordinator.device_slug,
-                    "title": title,
-                    "message": message,
-                    "priority": priority,
-                    "chime": True,
-                    **({"camera_entity": cam_ent} if cam_ent else {}),
-                },
-                blocking=True,
+            all_coords = _get_all_coordinators(self.hass)
+            targets = (
+                [c.device_slug for c in all_coords]
+                if target_slug == "all"
+                else [target_slug]
             )
+            for t_slug in targets:
+                await self.hass.services.async_call(
+                    DOMAIN,
+                    "notify_device",
+                    {
+                        "device_slug": t_slug,
+                        "title": title,
+                        "message": message,
+                        "priority": priority,
+                        "chime": True,
+                        **({"camera_entity": cam_ent} if cam_ent else {}),
+                    },
+                    blocking=True,
+                )
             return web.json_response(
                 _build_companion_state_payload(self.hass, coordinator)
             )
@@ -1166,6 +1188,7 @@ class LatterCompanionApiView(HomeAssistantView):
                 coordinator.entry, data=merged_fav, options=merged_fav
             )
             coordinator._bind_wallpaper_cycle_timer()
+            coordinator._notify_listeners()
             return web.json_response(
                 _build_companion_state_payload(self.hass, coordinator)
             )
@@ -1293,6 +1316,7 @@ class LatterCompanionApiView(HomeAssistantView):
                 CONF_NATIVE_BLE_TRACKING,
                 CONF_BLE_BEACON_UUID,
                 CONF_PRESENCE_ENTITY,
+                CONF_ASSIGNED_PERSON,
                 CONF_BLE_AUTO_SWITCH,
                 CONF_SYNC_DEVICE_AREA,
                 CONF_AREA_HANDOFF,
@@ -1355,6 +1379,7 @@ class LatterCompanionApiView(HomeAssistantView):
                 coordinator.build_companion_url(),
             )
             coordinator._bind_wallpaper_cycle_timer()
+            coordinator._notify_listeners()
             return web.json_response(
                 _build_companion_state_payload(self.hass, coordinator)
             )

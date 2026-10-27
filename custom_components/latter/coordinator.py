@@ -59,6 +59,7 @@ from .const import (
     CONF_VACUUM_ENTITY,
     CONF_AREA_HANDOFF,
     CONF_ART_SIZE,
+    CONF_ASSIGNED_PERSON,
     CONF_BLE_AUTO_SWITCH,
     CONF_BLE_BEACON_UUID,
     CONF_BLE_ROOM_OFFSETS,
@@ -638,6 +639,12 @@ class LatterCoordinator:
         """Return configured external BLE room presence entity_id (e.g. Bermuda)."""
         val = self.get_opt(CONF_PRESENCE_ENTITY)
         return str(val) if val else None
+
+    @property
+    def assigned_person(self) -> str:
+        """Return optional person.* entity_id assigned to carry this device."""
+        val = self.get_opt(CONF_ASSIGNED_PERSON, "")
+        return str(val or "").strip()
 
     @property
     def ble_auto_switch_enabled(self) -> bool:
@@ -1574,8 +1581,59 @@ class LatterCoordinator:
         return _remove
 
     @callback
+    def _sync_person_room_sensor(self) -> None:
+        """Publish sensor.<person_slug>_current_room for any person.* assigned to Latter devices."""
+        domain_data = self.hass.data.get(DOMAIN, {})
+        coords = [
+            v for v in domain_data.values() if isinstance(v, LatterCoordinator)
+        ]
+        by_person: dict[str, list[LatterCoordinator]] = {}
+        for c in coords:
+            p_ent = c.assigned_person
+            if p_ent and p_ent.startswith("person."):
+                by_person.setdefault(p_ent, []).append(c)
+
+        area_reg = ar.async_get(self.hass)
+        for p_ent, p_coords in by_person.items():
+            # Pick the device with the freshest BLE packet (or first active coordinator)
+            best_c = max(
+                p_coords,
+                key=lambda x: (
+                    x._ble_tracker.last_packet_monotonic
+                    if x._ble_tracker is not None
+                    else 0.0
+                ),
+            )
+            a_entry = (
+                area_reg.async_get_area(best_c.active_area_id)
+                if best_c.active_area_id
+                else None
+            )
+            room_name = a_entry.name if a_entry else "Home"
+            p_st = self.hass.states.get(p_ent)
+            p_friendly = (
+                str(p_st.attributes.get("friendly_name") or "").strip()
+                if p_st
+                else ""
+            ) or p_ent.split(".", 1)[-1].replace("_", " ").title()
+            p_slug = normalize_device_slug(p_ent.split(".", 1)[-1])
+            sensor_id = f"sensor.{p_slug}_current_room"
+            self.hass.states.async_set(
+                sensor_id,
+                room_name,
+                {
+                    "friendly_name": f"{p_friendly} Current Room",
+                    "icon": "mdi:account-location",
+                    "person_entity": p_ent,
+                    "area_id": best_c.active_area_id or "",
+                    "source_device": best_c.device_slug,
+                },
+            )
+
+    @callback
     def _notify_listeners(self) -> None:
-        """Notify all registered sensors of a state update."""
+        """Notify all registered sensors of a state update and sync person room sensors."""
+        self._sync_person_room_sensor()
         for update_callback in list(self._listeners):
             update_callback()
 
@@ -1959,6 +2017,7 @@ class LatterCoordinator:
             "ble_room_offsets": self.ble_room_offsets,
             "ble_scanners_map": get_all_scanners_diagnostic_map(self.hass),
             "ble_target_macs": self._ble_tracker.target_macs_formatted if self._ble_tracker else [],
+            "assigned_person": self.assigned_person,
             "presence_entity": pres_ent or "",
             "presence_state": pres_state,
             "ble_auto_switch": self.ble_auto_switch_enabled,
