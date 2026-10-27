@@ -986,7 +986,7 @@
       <section id="view-fleet_overview" class="hidden">
         <div class="page-header">
           <h2>Devices</h2>
-          <p>Manage onboarded ESPHome devices and view system-wide entity status.</p>
+          <p>Manage onboarded ESPHome devices and assign device groups.</p>
         </div>
 
         <div class="card">
@@ -1001,32 +1001,6 @@
             </div>
           </div>
           <div id="fleet-devices-list" class="native-controls-box"></div>
-        </div>
-
-        <div class="grid-2">
-          <div class="card">
-            <h3>Whole-Home Entity Status</h3>
-            <p class="desc">Live states of shared household entities mapped under Shared Entities.</p>
-            <div class="summary-row"><span>Weather</span><strong id="hh-sum-weather">--</strong></div>
-            <div class="summary-row"><span>Security Alarm</span><strong id="hh-sum-alarm">--</strong></div>
-            <div class="summary-row"><span>Thermostat</span><strong id="hh-sum-thermostat">--</strong></div>
-            <div class="summary-row"><span>Entry Lock &amp; Garage</span><strong id="hh-sum-entry">--</strong></div>
-            <div class="summary-row"><span>Robot Vacuum</span><strong id="hh-sum-vacuum">--</strong></div>
-            <div class="summary-row"><span>Primary Camera</span><strong id="hh-sum-camera">--</strong></div>
-          </div>
-
-          <div class="card">
-            <h3>System Configuration Shortcuts</h3>
-            <p class="desc">Jump to shared entity mappings, remote slots, profiles, or room calibration.</p>
-            <div class="quick-actions-row" style="margin-bottom:14px;">
-              <button class="btn-chip" onclick="navigateToView('household')">Shared Entities</button>
-              <button class="btn-chip" onclick="navigateToView('remotes')">Media &amp; Remotes</button>
-              <button class="btn-chip" onclick="navigateToView('fleet_sync')">Groups &amp; Profiles</button>
-              <button class="btn-chip" onclick="navigateToView('room_tracking')">BLE Calibration</button>
-              <button class="btn-chip" onclick="navigateToView('system_admin')">Backups &amp; Admin</button>
-            </div>
-            <div class="summary-row"><span>Calibrated BLE Rooms</span><strong id="hh-sum-ble">0</strong></div>
-          </div>
         </div>
       </section>
 
@@ -1044,15 +1018,24 @@
             <h3>Whole-Home Entities</h3>
             <p class="desc">Primary entities displayed on the Home screen, Whole-Home Hub, and camera alerts.</p>
             <div class="field">
-              <label>Weather Provider (weather.*)</label>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+                <label style="margin:0;">Weather Provider (weather.*)</label>
+                <span class="state-badge" id="hh-sum-weather">--</span>
+              </div>
               <select id="cfg-weather_entity" onchange="markDirty()"></select>
             </div>
             <div class="field">
-              <label>Security Alarm (alarm_control_panel.*)</label>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+                <label style="margin:0;">Security Alarm (alarm_control_panel.*)</label>
+                <span class="state-badge" id="hh-sum-alarm">--</span>
+              </div>
               <select id="cfg-alarm_entity" onchange="markDirty()"></select>
             </div>
             <div class="field">
-              <label>Primary Camera (camera.*)</label>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+                <label style="margin:0;">Primary Camera (camera.*)</label>
+                <span class="state-badge" id="hh-sum-camera">--</span>
+              </div>
               <select id="cfg-camera_entity" onchange="markDirty(); renderCameraPreview(this.value);"></select>
             </div>
             <div id="cam-preview-box" style="display:none;align-items:center;gap:12px;margin-bottom:13px;padding:10px;background:var(--input-bg);border:1px solid var(--border);border-radius:8px;">
@@ -1065,21 +1048,33 @@
             </div>
             <div class="form-grid-2">
               <div class="field">
-                <label>Thermostat (climate.*)</label>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+                  <label style="margin:0;">Thermostat (climate.*)</label>
+                  <span class="state-badge" id="hh-sum-thermostat">--</span>
+                </div>
                 <select id="cfg-thermostat_entity" onchange="markDirty()"></select>
               </div>
               <div class="field">
-                <label>Entry Lock (lock.*)</label>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+                  <label style="margin:0;">Entry Lock (lock.*)</label>
+                  <span class="state-badge" id="hh-sum-lock">--</span>
+                </div>
                 <select id="cfg-lock_entity" onchange="markDirty()"></select>
               </div>
             </div>
             <div class="form-grid-2">
               <div class="field">
-                <label>Garage Door (cover.*)</label>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+                  <label style="margin:0;">Garage Door (cover.*)</label>
+                  <span class="state-badge" id="hh-sum-garage">--</span>
+                </div>
                 <select id="cfg-garage_entity" onchange="markDirty()"></select>
               </div>
               <div class="field">
-                <label>Robot Vacuum (vacuum.*)</label>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+                  <label style="margin:0;">Robot Vacuum (vacuum.*)</label>
+                  <span class="state-badge" id="hh-sum-vacuum">--</span>
+                </div>
                 <select id="cfg-vacuum_entity" onchange="markDirty()"></select>
               </div>
             </div>
@@ -2642,20 +2637,20 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
     }
   }
 
+  const setTxt = (id, val) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = val;
+  };
   const wCond = live.weather_condition && live.weather_condition !== "unknown"
     ? `${live.weather_temp != null ? Math.round(Number(live.weather_temp)) + '° • ' : ''}${formatFriendlyState(live.weather_condition)}`
-    : (cfg.weather_entity ? "Connected" : "Not Configured");
-  document.getElementById("hh-sum-weather").textContent = wCond;
-  document.getElementById("hh-sum-alarm").textContent = cfg.alarm_entity
-    ? formatFriendlyState(live.alarm_state || "disarmed")
-    : "Not Configured";
-  document.getElementById("hh-sum-thermostat").textContent = cfg.thermostat_entity
-    ? `${formatFriendlyState(live.thermostat_state || 'off')}${live.thermostat_temp != null ? ' • ' + live.thermostat_temp + '°' : ''}`
-    : `${formatFriendlyState(live.thermostat_state || 'auto')}${live.thermostat_temp != null ? ' • ' + live.thermostat_temp + '°' : ''}`;
-  document.getElementById("hh-sum-entry").textContent = `Lock: ${formatFriendlyState(live.lock_state || 'locked')} • Garage: ${formatFriendlyState(live.garage_state || 'closed')}`;
-  document.getElementById("hh-sum-vacuum").textContent = formatFriendlyState(live.vacuum_state || "docked");
-  document.getElementById("hh-sum-camera").textContent = cfg.camera_entity ? "Configured" : "Not Configured";
-  document.getElementById("hh-sum-ble").textContent = String(Object.keys(cfg.ble_room_offsets || {}).length);
+    : (cfg.weather_entity ? "Connected" : "Unassigned");
+  setTxt("hh-sum-weather", wCond);
+  setTxt("hh-sum-alarm", cfg.alarm_entity ? formatFriendlyState(live.alarm_state || "disarmed") : "Auto / Default");
+  setTxt("hh-sum-thermostat", `${formatFriendlyState(live.thermostat_state || 'auto')}${live.thermostat_temp != null ? ' • ' + live.thermostat_temp + '°' : ''}`);
+  setTxt("hh-sum-lock", formatFriendlyState(live.lock_state || "locked"));
+  setTxt("hh-sum-garage", formatFriendlyState(live.garage_state || "closed"));
+  setTxt("hh-sum-vacuum", formatFriendlyState(live.vacuum_state || "docked"));
+  setTxt("hh-sum-camera", cfg.camera_entity ? "Active" : "None");
 }
 
 async function applyQuickProfileFromOverview() {
