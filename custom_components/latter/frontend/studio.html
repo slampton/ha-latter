@@ -1013,101 +1013,84 @@
       </section>
 
       <!-- ================================================================== -->
-      <!-- SYSTEM TAB 2: SHARED ENTITIES & MACROS                             -->
+      <!-- SYSTEM TAB 2: SHARED ENTITIES (WHOLE-HOME, CAMERAS, CALENDARS, PINS)-->
       <!-- ================================================================== -->
       <section id="view-household" class="hidden">
         <div class="page-header">
           <h2>Shared Entities</h2>
-          <p>Map household entities shared across all displays, room controls, and macro slots.</p>
+          <p>Select shared household entities, cameras, calendars, and pinned room controls.</p>
         </div>
 
         <div class="grid-2">
+          <!-- CARD 1: WHOLE-HOME ENTITIES -->
           <div class="card">
             <h3>Whole-Home Entities</h3>
-            <p class="desc">Primary entities displayed on the Home screen, Whole-Home Hub, and camera alerts.</p>
+            <p class="desc">Primary household entities used by the Home screen and Whole-Home Hub.</p>
             <div class="field">
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
-                <label style="margin:0;">Weather Provider (weather.*)</label>
-                <span class="state-badge" id="hh-sum-weather">--</span>
-              </div>
+              <label>Weather Provider (weather.*)</label>
               <select id="cfg-weather_entity" onchange="markDirty()"></select>
             </div>
             <div class="field">
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
-                <label style="margin:0;">Security Alarm (alarm_control_panel.*)</label>
-                <span class="state-badge" id="hh-sum-alarm">--</span>
-              </div>
+              <label>Security Alarm (alarm_control_panel.*)</label>
               <select id="cfg-alarm_entity" onchange="markDirty()"></select>
-            </div>
-            <div class="field">
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
-                <label style="margin:0;">Primary Camera (camera.*)</label>
-                <span class="state-badge" id="hh-sum-camera">--</span>
-              </div>
-              <select id="cfg-camera_entity" onchange="markDirty(); renderCameraPreview(this.value);"></select>
-            </div>
-            <div id="cam-preview-box" style="display:none;align-items:center;gap:12px;margin-bottom:13px;padding:10px;background:var(--input-bg);border:1px solid var(--border);border-radius:8px;">
-              <img id="cam-preview-img" class="wp-thumb circle" style="width:68px;height:68px;" alt="Camera Snapshot">
-              <div style="flex:1;min-width:0;">
-                <strong style="font-size:13px;font-weight:500;color:var(--text-strong);display:block;">Camera Snapshot Preview</strong>
-                <small style="color:var(--muted);display:block;margin:2px 0 6px;"><code>/api/latter/camera/&lt;slug&gt;</code></small>
-                <button class="btn-secondary" style="padding:4px 10px;font-size:12px;" onclick="renderCameraPreview(document.getElementById('cfg-camera_entity').value)">Refresh</button>
-              </div>
             </div>
             <div class="form-grid-2">
               <div class="field">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
-                  <label style="margin:0;">Thermostat (climate.*)</label>
-                  <span class="state-badge" id="hh-sum-thermostat">--</span>
-                </div>
+                <label>Thermostat (climate.*)</label>
                 <select id="cfg-thermostat_entity" onchange="markDirty()"></select>
               </div>
               <div class="field">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
-                  <label style="margin:0;">Entry Lock (lock.*)</label>
-                  <span class="state-badge" id="hh-sum-lock">--</span>
-                </div>
+                <label>Entry Lock (lock.*)</label>
                 <select id="cfg-lock_entity" onchange="markDirty()"></select>
               </div>
             </div>
             <div class="form-grid-2">
               <div class="field">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
-                  <label style="margin:0;">Garage Door (cover.*)</label>
-                  <span class="state-badge" id="hh-sum-garage">--</span>
-                </div>
+                <label>Garage Door (cover.*)</label>
                 <select id="cfg-garage_entity" onchange="markDirty()"></select>
               </div>
               <div class="field">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
-                  <label style="margin:0;">Robot Vacuum (vacuum.*)</label>
-                  <span class="state-badge" id="hh-sum-vacuum">--</span>
-                </div>
+                <label>Robot Vacuum (vacuum.*)</label>
                 <select id="cfg-vacuum_entity" onchange="markDirty()"></select>
               </div>
             </div>
           </div>
 
+          <!-- CARD 2: CAMERAS (UP TO 10 SLOTS + RECTANGULAR PREVIEW) -->
           <div class="card">
-            <h3>Calendars &amp; Pinned Room Entities</h3>
-            <p class="desc">Select family calendars for the Agenda tool and pin favorite entities to Room Control.</p>
-            <div class="field">
-              <label>Shared Calendars (calendar.*)</label>
-              <div class="input-action-row">
-                <select id="cal-entity-picker"></select>
-                <button class="btn-secondary" onclick="addCalendarEntity()">Add</button>
-              </div>
-              <div id="calendar-chips" class="chip-list"></div>
-            </div>
+            <h3>Cameras</h3>
+            <p class="desc">Add up to 10 <code>camera.*</code> entities for alert snapshots and camera viewing. <strong>Camera 1</strong> is the default notification camera.</p>
+            <div id="cameras-list"></div>
+            <button type="button" class="btn-secondary" id="btn-add-camera" onclick="addCameraRow(''); markDirty();">+ Add Camera</button>
 
-            <div class="field" style="padding-top:12px;border-top:1px solid var(--border);">
-              <label>Pinned Entities &amp; Quick Actions (Room Control &amp; On-Device Macros)</label>
-              <div class="input-action-row">
-                <select id="pin-entity-picker"></select>
-                <button class="btn-secondary" onclick="addPinnedEntity()">Pin Entity</button>
+            <div id="cam-preview-box" style="display:none;flex-direction:column;gap:8px;margin-top:14px;padding:12px;background:var(--input-bg);border:1px solid var(--border);border-radius:10px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+                <strong id="cam-preview-label" style="font-size:13px;font-weight:500;color:var(--text-strong);">Camera Snapshot Preview</strong>
+                <div style="display:flex;gap:6px;">
+                  <button type="button" class="btn-secondary" style="padding:4px 10px;font-size:12px;" onclick="refreshActiveCameraPreview()">Refresh</button>
+                  <button type="button" class="btn-secondary" style="padding:4px 8px;font-size:12px;" onclick="document.getElementById('cam-preview-box').style.display='none'">Close</button>
+                </div>
               </div>
-              <div id="pinned-chips" class="chip-list"></div>
+              <img id="cam-preview-img" style="width:100%;max-width:360px;height:auto;aspect-ratio:16/9;object-fit:cover;border-radius:8px;border:1px solid var(--border);background:#000;" alt="Camera Snapshot">
             </div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <!-- CARD 3: CALENDARS -->
+          <div class="card">
+            <h3>Calendars</h3>
+            <p class="desc">Add family calendars (<code>calendar.*</code>) to aggregate upcoming events in the Agenda tool and Home screen.</p>
+            <div id="calendars-list"></div>
+            <button type="button" class="btn-secondary" onclick="addCalendarRow(''); markDirty();">+ Add Calendar</button>
+          </div>
+
+          <!-- CARD 4: PINNED ROOM ENTITIES -->
+          <div class="card">
+            <h3>Pinned Room Entities</h3>
+            <p class="desc">Pin favorite scenes, scripts, lights, or switches to appear in Room Control and the on-device Macros tool.</p>
+            <div id="pinned-entities-list"></div>
+            <button type="button" class="btn-secondary" onclick="addPinnedEntityRow(''); markDirty();">+ Add Pinned Entity</button>
           </div>
         </div>
       </section>
@@ -1866,7 +1849,8 @@ let CURRENT_SCOPE = ENTERED_VIA_HOUSEHOLD ? "household" : "device";
 let DEVICE_SELECTED = !ENTERED_VIA_HOUSEHOLD;
 let CURRENT_THEME_PREF = localStorage.getItem("latter_web_theme") || "ha_auto";
 let POLL_TIMER = null;
-let SELECTED_SURVEY_SLUG = "";
+let SELECTED_SURVEY_SLUG = localStorage.getItem("latter_ble_survey_slug") || "";
+let PREVIEW_CAMERA_ENTITY = "";
 
 const HOUSEHOLD_VIEWS = [
   "fleet_overview",
@@ -2620,20 +2604,7 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
     }
   }
 
-  const setTxt = (id, val) => {
-    const el = document.getElementById(id);
-    if (el) el.textContent = val;
-  };
-  const wCond = live.weather_condition && live.weather_condition !== "unknown"
-    ? `${live.weather_temp != null ? Math.round(Number(live.weather_temp)) + '° • ' : ''}${formatFriendlyState(live.weather_condition)}`
-    : (cfg.weather_entity ? "Connected" : "Unassigned");
-  setTxt("hh-sum-weather", wCond);
-  setTxt("hh-sum-alarm", cfg.alarm_entity ? formatFriendlyState(live.alarm_state || "disarmed") : "Auto / Default");
-  setTxt("hh-sum-thermostat", `${formatFriendlyState(live.thermostat_state || 'auto')}${live.thermostat_temp != null ? ' • ' + live.thermostat_temp + '°' : ''}`);
-  setTxt("hh-sum-lock", formatFriendlyState(live.lock_state || "locked"));
-  setTxt("hh-sum-garage", formatFriendlyState(live.garage_state || "closed"));
-  setTxt("hh-sum-vacuum", formatFriendlyState(live.vacuum_state || "docked"));
-  setTxt("hh-sum-camera", cfg.camera_entity ? "Active" : "None");
+  (void 0);
 }
 
 async function applyQuickProfileFromOverview() {
@@ -2700,6 +2671,9 @@ async function setBleOffset(areaId, offsetDb) {
 
 function onSelectBleSurveyDevice(slug) {
   SELECTED_SURVEY_SLUG = slug || "";
+  if (SELECTED_SURVEY_SLUG) {
+    localStorage.setItem("latter_ble_survey_slug", SELECTED_SURVEY_SLUG);
+  }
   renderActiveSurveyDeviceBars();
 }
 
@@ -2719,6 +2693,7 @@ function renderActiveSurveyDeviceBars() {
   if (!activeDev) {
     activeDev = bleDevs.find(d => d.is_current) || bleDevs[0];
     SELECTED_SURVEY_SLUG = activeDev.device_slug;
+    localStorage.setItem("latter_ble_survey_slug", SELECTED_SURVEY_SLUG);
   }
 
   if (picker) {
@@ -2756,16 +2731,23 @@ async function autoCalibrateHere(areaId) {
 function renderCameraPreview(camEntityId) {
   const box = document.getElementById("cam-preview-box");
   const img = document.getElementById("cam-preview-img");
+  const lbl = document.getElementById("cam-preview-label");
   if (!box || !img) return;
   if (!camEntityId) {
     box.style.display = "none";
     return;
   }
+  PREVIEW_CAMERA_ENTITY = camEntityId;
   const slug = STATE?.config?.device_slug || "esphome_device";
-  const shape = STATE?.config?.display_shape === "square" ? "square" : "circle";
-  img.className = `wp-thumb ${shape}`;
-  img.src = `/api/latter/camera/${slug}?entity_id=${encodeURIComponent(camEntityId)}&w=240&h=240&shape=${shape}&v=${Date.now()}`;
+  if (lbl) lbl.textContent = `Preview: ${camEntityId}`;
+  img.src = `/api/latter/camera/${slug}?entity_id=${encodeURIComponent(camEntityId)}&w=320&h=180&shape=square&v=${Date.now()}`;
   box.style.display = "flex";
+}
+
+function refreshActiveCameraPreview() {
+  if (PREVIEW_CAMERA_ENTITY) {
+    renderCameraPreview(PREVIEW_CAMERA_ENTITY);
+  }
 }
 
 async function sendTestNotification() {
@@ -3192,50 +3174,82 @@ async function espNumber(entity_id, level) {
   }
 }
 
-function renderPinnedChips() {
-  const box = document.getElementById("pinned-chips");
-  if (!box) return;
-  box.innerHTML = PINNED.map((ent, idx) =>
-    `<div class="chip"><span>${ent}</span><b onclick="removePinned(${idx})">✕</b></div>`
-  ).join("");
+function renumberCameraRows() {
+  const rows = document.querySelectorAll("#cameras-list .camera-row-item");
+  rows.forEach((row, idx) => {
+    const lbl = row.querySelector(".cam-slot-lbl");
+    if (lbl) {
+      lbl.textContent = idx === 0
+        ? "Camera 1 (Primary / Default Notification Camera)"
+        : `Camera ${idx + 1}`;
+    }
+  });
 }
 
-function addPinnedEntity() {
-  const val = document.getElementById("pin-entity-picker").value;
-  if (val && !PINNED.includes(val)) {
-    PINNED.push(val);
-    renderPinnedChips();
-    markDirty();
+function addCameraRow(entityId="") {
+  const list = document.getElementById("cameras-list");
+  if (!list) return;
+  const existingCount = list.querySelectorAll(".camera-row-item").length;
+  if (existingCount >= 10) {
+    showToast("Maximum of 10 cameras reached");
+    return;
   }
-}
-
-function removePinned(idx) {
-  PINNED.splice(idx, 1);
-  renderPinnedChips();
-  markDirty();
-}
-
-function renderCalendarChips() {
-  const box = document.getElementById("calendar-chips");
-  if (!box) return;
-  box.innerHTML = CALENDARS.map((ent, idx) =>
-    `<div class="chip"><span>${ent}</span><b onclick="removeCalendarEntity(${idx})">✕</b></div>`
+  const row = document.createElement("div");
+  row.className = "native-ctrl-row camera-row-item";
+  row.style.marginBottom = "8px";
+  const camOptions = (STATE?.catalog?.cameras || []).map(c =>
+    `<option value="${c.id}" ${c.id === entityId ? 'selected' : ''}>${c.name}</option>`
   ).join("");
+  const slotTitle = existingCount === 0
+    ? "Camera 1 (Primary / Default Notification Camera)"
+    : `Camera ${existingCount + 1}`;
+  row.innerHTML = `
+    <div style="flex:1;min-width:0;">
+      <small class="cam-slot-lbl" style="color:var(--muted);display:block;margin-bottom:3px;font-size:11px;font-weight:500;">${slotTitle}</small>
+      <select class="cam-ent-sel" style="width:100%;max-width:none;" onchange="markDirty()"><option value="">— Select Camera —</option>${camOptions}</select>
+    </div>
+    <div style="display:flex;gap:6px;align-items:center;">
+      <button type="button" class="btn-secondary" style="padding:6px 10px;font-size:12px;" onclick="renderCameraPreview(this.parentElement.parentElement.querySelector('.cam-ent-sel').value)">Preview</button>
+      <button type="button" class="btn-danger" title="Remove Camera" onclick="this.parentElement.parentElement.remove(); renumberCameraRows(); markDirty();">✕</button>
+    </div>
+  `;
+  list.appendChild(row);
 }
 
-function addCalendarEntity() {
-  const val = document.getElementById("cal-entity-picker").value;
-  if (val && !CALENDARS.includes(val)) {
-    CALENDARS.push(val);
-    renderCalendarChips();
-    markDirty();
-  }
+function addCalendarRow(entityId="") {
+  const list = document.getElementById("calendars-list");
+  if (!list) return;
+  const row = document.createElement("div");
+  row.className = "native-ctrl-row calendar-row-item";
+  row.style.marginBottom = "8px";
+  const calOptions = (STATE?.catalog?.calendars || []).map(c =>
+    `<option value="${c.id}" ${c.id === entityId ? 'selected' : ''}>${c.name}</option>`
+  ).join("");
+  row.innerHTML = `
+    <div style="flex:1;min-width:0;">
+      <select class="cal-ent-sel" style="width:100%;max-width:none;" onchange="markDirty()"><option value="">— Select Calendar —</option>${calOptions}</select>
+    </div>
+    <button type="button" class="btn-danger" title="Remove Calendar" onclick="this.parentElement.remove(); markDirty();">✕</button>
+  `;
+  list.appendChild(row);
 }
 
-function removeCalendarEntity(idx) {
-  CALENDARS.splice(idx, 1);
-  renderCalendarChips();
-  markDirty();
+function addPinnedEntityRow(entityId="") {
+  const list = document.getElementById("pinned-entities-list");
+  if (!list) return;
+  const row = document.createElement("div");
+  row.className = "native-ctrl-row pinned-row-item";
+  row.style.marginBottom = "8px";
+  const pinOptions = (STATE?.catalog?.bindable_entities || []).map(e =>
+    `<option value="${e.id}" ${e.id === entityId ? 'selected' : ''}>${e.name}</option>`
+  ).join("");
+  row.innerHTML = `
+    <div style="flex:1;min-width:0;">
+      <select class="pin-ent-sel" style="width:100%;max-width:none;" onchange="markDirty()"><option value="">— Select Entity, Scene, or Script —</option>${pinOptions}</select>
+    </div>
+    <button type="button" class="btn-danger" title="Remove Pinned Entity" onclick="this.parentElement.remove(); markDirty();">✕</button>
+  `;
+  list.appendChild(row);
 }
 
 function renumberRemoteControlRows() {
@@ -3934,20 +3948,35 @@ function applyStateToDom(data, forceFormUpdate=false) {
       remItems.forEach(rId => addRemoteControlRow(rId));
     }
     populateSelect("cfg-alarm_entity", cat.alarms, cfg.alarm_entity);
-    populateSelect("cfg-camera_entity", cat.cameras, cfg.camera_entity);
-    renderCameraPreview(cfg.camera_entity);
     populateSelect("cfg-weather_entity", cat.weathers, cfg.weather_entity);
     populateSelect("cfg-thermostat_entity", cat.climates, cfg.thermostat_entity);
     populateSelect("cfg-lock_entity", cat.locks, cfg.lock_entity);
     populateSelect("cfg-garage_entity", cat.garages, cfg.garage_entity);
     populateSelect("cfg-vacuum_entity", cat.vacuums, cfg.vacuum_entity);
-    populateSelect("cal-entity-picker", cat.calendars, "", false);
-    populateSelect("pin-entity-picker", cat.bindable_entities, "", false);
 
-    CALENDARS = Array.isArray(cfg.calendar_entities) ? [...cfg.calendar_entities] : [];
-    renderCalendarChips();
-    PINNED = Array.isArray(cfg.custom_entities) ? [...cfg.custom_entities] : [];
-    renderPinnedChips();
+    const camListEl = document.getElementById("cameras-list");
+    if (camListEl) {
+      camListEl.innerHTML = "";
+      let camItems = Array.isArray(cfg.camera_entities) ? cfg.camera_entities.filter(Boolean) : [];
+      if (!camItems.length && cfg.camera_entity) {
+        camItems.push(cfg.camera_entity);
+      }
+      camItems.forEach(cId => addCameraRow(cId));
+    }
+
+    const calListEl = document.getElementById("calendars-list");
+    if (calListEl) {
+      calListEl.innerHTML = "";
+      const calItems = Array.isArray(cfg.calendar_entities) ? cfg.calendar_entities.filter(Boolean) : [];
+      calItems.forEach(cId => addCalendarRow(cId));
+    }
+
+    const pinListEl = document.getElementById("pinned-entities-list");
+    if (pinListEl) {
+      pinListEl.innerHTML = "";
+      const pinItems = Array.isArray(cfg.custom_entities) ? cfg.custom_entities.filter(Boolean) : [];
+      pinItems.forEach(pId => addPinnedEntityRow(pId));
+    }
 
     const bList = document.getElementById("bindings-list");
     if (bList) {
@@ -4014,6 +4043,24 @@ async function saveAllConfig() {
     if (rEnt) remotesList.push(rEnt);
   });
 
+  const cameraEntities = [];
+  document.querySelectorAll("#cameras-list .camera-row-item").forEach(row => {
+    const cEnt = row.querySelector(".cam-ent-sel")?.value?.trim() || "";
+    if (cEnt && !cameraEntities.includes(cEnt)) cameraEntities.push(cEnt);
+  });
+
+  const calendarEntities = [];
+  document.querySelectorAll("#calendars-list .calendar-row-item").forEach(row => {
+    const calEnt = row.querySelector(".cal-ent-sel")?.value?.trim() || "";
+    if (calEnt && !calendarEntities.includes(calEnt)) calendarEntities.push(calEnt);
+  });
+
+  const pinnedEntities = [];
+  document.querySelectorAll("#pinned-entities-list .pinned-row-item").forEach(row => {
+    const pEnt = row.querySelector(".pin-ent-sel")?.value?.trim() || "";
+    if (pEnt && !pinnedEntities.includes(pEnt)) pinnedEntities.push(pEnt);
+  });
+
   const config = {
     device_slug: document.getElementById("cfg-device_slug").value.trim(),
     companion_base_url: document.getElementById("cfg-companion_base_url").value.trim(),
@@ -4050,7 +4097,8 @@ async function saveAllConfig() {
     remote_3: remotesList[2] || "",
     remote_4: remotesList[3] || "",
     alarm_entity: document.getElementById("cfg-alarm_entity").value,
-    camera_entity: document.getElementById("cfg-camera_entity").value,
+    camera_entity: cameraEntities[0] || "",
+    camera_entities: cameraEntities,
     weather_entity: document.getElementById("cfg-weather_entity").value,
     thermostat_entity: document.getElementById("cfg-thermostat_entity")?.value || "",
     lock_entity: document.getElementById("cfg-lock_entity")?.value || "",
@@ -4061,8 +4109,8 @@ async function saveAllConfig() {
     wallpaper_source: document.getElementById("cfg-wallpaper_source").value.trim(),
     wallpaper_cycle_minutes: parseInt(document.getElementById("cfg-wallpaper_cycle_minutes").value, 10) || 0,
     art_size: document.getElementById("cfg-art_size").value.includes("x") ? document.getElementById("cfg-art_size").value : (parseInt(document.getElementById("cfg-art_size").value, 10) || 466),
-    calendar_entities: CALENDARS,
-    custom_entities: PINNED,
+    calendar_entities: calendarEntities,
+    custom_entities: pinnedEntities,
     custom_bindings: bindings,
     custom_palettes: Array.isArray((STATE?.config || {}).custom_palettes) ? STATE.config.custom_palettes : [],
     device_custom_color: (STATE?.config || {}).device_custom_color || "#3898FF",

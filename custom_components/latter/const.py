@@ -23,6 +23,7 @@ CONF_COMPANION_BASE_URL: Final = "companion_base_url"
 CONF_WEATHER_ENTITY: Final = "weather_entity"
 CONF_ALARM_ENTITY: Final = "alarm_entity"
 CONF_CAMERA_ENTITY: Final = "camera_entity"
+CONF_CAMERA_ENTITIES: Final = "camera_entities"
 CONF_THERMOSTAT_ENTITY: Final = "thermostat_entity"
 CONF_LOCK_ENTITY: Final = "lock_entity"
 CONF_GARAGE_ENTITY: Final = "garage_entity"
@@ -140,6 +141,7 @@ GLOBAL_CONFIG_KEYS: Final[tuple[str, ...]] = (
     CONF_WEATHER_ENTITY,
     CONF_ALARM_ENTITY,
     CONF_CAMERA_ENTITY,
+    CONF_CAMERA_ENTITIES,
     CONF_THERMOSTAT_ENTITY,
     CONF_LOCK_ENTITY,
     CONF_GARAGE_ENTITY,

@@ -52,6 +52,8 @@ class _BaseLatterSensor(SensorEntity):
             "ble_rssi_by_room",
             "ble_scanners_map",
             "ble_target_macs",
+            "camera_entities",
+            "cameras_summary",
             "camera_snapshot_url",
             "companion_url",
             "custom_bindings",

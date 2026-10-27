@@ -45,6 +45,7 @@ from .const import (
     CONF_BLE_BEACON_UUID,
     CONF_BLE_ROOM_OFFSETS,
     CONF_CALENDAR_ENTITIES,
+    CONF_CAMERA_ENTITIES,
     CONF_CAMERA_ENTITY,
     CONF_GARAGE_ENTITY,
     CONF_LOCK_ENTITY,
@@ -518,6 +519,7 @@ def _build_companion_state_payload(
         or coordinator.alarm_entity
         or "",
         CONF_CAMERA_ENTITY: coordinator.camera_entity or "",
+        CONF_CAMERA_ENTITIES: coordinator.camera_entities,
         CONF_THERMOSTAT_ENTITY: coordinator.thermostat_entity or "",
         CONF_LOCK_ENTITY: coordinator.lock_entity or "",
         CONF_GARAGE_ENTITY: coordinator.garage_entity or "",
@@ -1180,6 +1182,15 @@ class LatterCompanionApiView(HomeAssistantView):
                 **(coordinator.entry.options or {}),
             }
             global_updates: dict[str, Any] = {}
+
+            if "camera_entities" in incoming_cfg and isinstance(incoming_cfg["camera_entities"], list):
+                clean_cams = [
+                    str(x).strip()
+                    for x in incoming_cfg["camera_entities"][:10]
+                    if str(x or "").strip()
+                ]
+                incoming_cfg[CONF_CAMERA_ENTITIES] = clean_cams
+                incoming_cfg[CONF_CAMERA_ENTITY] = clean_cams[0] if clean_cams else ""
 
             if "remotes_list" in incoming_cfg and isinstance(incoming_cfg["remotes_list"], list):
                 clean_rems = [

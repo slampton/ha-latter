@@ -51,6 +51,7 @@ from .calendar_engine import async_fetch_calendar_agenda
 from .const import (
     CALENDAR_REFRESH_INTERVAL_MINUTES,
     CONF_ALARM_ENTITY,
+    CONF_CAMERA_ENTITIES,
     CONF_CAMERA_ENTITY,
     CONF_GARAGE_ENTITY,
     CONF_LOCK_ENTITY,
@@ -546,10 +547,37 @@ class LatterCoordinator:
         return info["entity_id"] or None
 
     @property
+    def camera_entities(self) -> list[str]:
+        """Return configured list of up to 10 camera entity_ids (Slot 1 is primary)."""
+        raw_list = self.get_opt(CONF_CAMERA_ENTITIES)
+        if isinstance(raw_list, list):
+            cleaned = [str(x).strip() for x in raw_list[:10] if str(x or "").strip()]
+            if cleaned:
+                return cleaned
+        single = str(self.get_opt(CONF_CAMERA_ENTITY) or "").strip()
+        return [single] if single else []
+
+    @property
     def camera_entity(self) -> str | None:
-        """Return configured primary doorbell/security camera entity_id."""
+        """Return configured primary doorbell/security camera entity_id (Slot 1)."""
+        cams = self.camera_entities
+        if cams:
+            return cams[0]
         val = self.get_opt(CONF_CAMERA_ENTITY)
         return str(val).strip() if val else None
+
+    def _build_cameras_summary(self) -> str:
+        """Build semicolon-delimited 'entity_id|Friendly Name;...' summary for up to 10 cameras."""
+        rows: list[str] = []
+        for ent_id in self.camera_entities[:10]:
+            st = self.hass.states.get(ent_id)
+            friendly = (
+                str(st.attributes.get("friendly_name") if st else "")
+                or ent_id.split(".", 1)[-1].replace("_", " ").title()
+            )
+            friendly = friendly.replace(";", "").replace("|", "")[:32]
+            rows.append(f"{ent_id}|{friendly}")
+        return ";".join(rows) if rows else "NONE"
 
     @property
     def thermostat_entity(self) -> str | None:
@@ -1937,6 +1965,8 @@ class LatterCoordinator:
             "voice_area_synced": self.sync_device_area_enabled,
             "entities_summary": ";".join(summary_items) if summary_items else "NONE",
             "camera_entity": self.camera_entity or "",
+            "camera_entities": self.camera_entities,
+            "cameras_summary": self._build_cameras_summary(),
             "camera_snapshot_url": self.build_camera_snapshot_url() if self.camera_entity else "none",
             "alert_id": self.alert_id,
             "alert_title": self.alert_title,
