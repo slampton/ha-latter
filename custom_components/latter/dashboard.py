@@ -114,6 +114,7 @@ from .coordinator import LatterCoordinator
 from .repairs import async_audit_coordinator_health
 from .room_engine import (
     async_execute_room_action,
+    find_esphome_device_id,
     get_area_entities,
     get_esphome_device_entities,
     inject_esphome_visit_link,
@@ -567,6 +568,9 @@ def _build_companion_state_payload(
     device_groups, saved_profiles = get_device_groups_and_profiles(hass)
     group_name_map = {g["id"]: g["name"] for g in device_groups if isinstance(g, dict) and g.get("id")}
 
+    dev_reg = dr.async_get(hass)
+    ent_reg = er.async_get(hass)
+
     fleet_devices: list[dict[str, Any]] = []
     for c in _get_all_coordinators(hass):
         c_room_name, c_room_attrs = c.get_room_context_payload()
@@ -621,11 +625,65 @@ def _build_companion_state_payload(
                 c_wifi_val = int(round(float(c_wifi_st.state)))
             except ValueError:
                 c_wifi_val = None
+
+        c_dev_id = find_esphome_device_id(hass, c.device_slug)
+        c_dev_entry = dev_reg.async_get(c_dev_id) if c_dev_id else None
+        raw_model = str((c_dev_entry.model if c_dev_entry else "") or "").strip()
+        m_low = f"{raw_model} {c.device_slug}".lower()
+        if "175" in m_low or "pocket" in m_low:
+            c_model_label = 'Pocket Assistant 1.75"'
+        elif "206" in m_low or "wrist" in m_low:
+            c_model_label = 'Wrist Assist 2.06"'
+        elif "216" in m_low or "mobile_assistant" in m_low or "mobile-assistant" in m_low:
+            c_model_label = 'Mobile Assistant 2.16"'
+        elif "p4_35" in m_low or "p4-35" in m_low or "remote_assistant" in m_low or "remote-assistant" in m_low:
+            c_model_label = 'Remote Assistant 3.5" P4'
+        elif "4b" in m_low or "desk_assistant" in m_low or "desk-assistant" in m_low:
+            c_model_label = 'Desk Assistant 4.0" P4'
+        else:
+            c_model_label = raw_model or "ESPHome Node"
+
+        # Area column: "Roaming" if mobile/BLE-roaming or no fixed area assigned; otherwise fixed Area name
+        fixed_area_id = str(c.get_opt(CONF_DEFAULT_AREA) or "").strip()
+        if not fixed_area_id and not c.native_ble_tracking_enabled and c_dev_entry and c_dev_entry.area_id:
+            fixed_area_id = c_dev_entry.area_id
+        if c.native_ble_tracking_enabled or not fixed_area_id:
+            c_area_label = "Roaming"
+        else:
+            a_obj = area_reg.async_get_area(fixed_area_id)
+            c_area_label = a_obj.name if a_obj else "Roaming"
+
+        # Status column: "Update Available", "Online", or "Offline"
+        c_upd_st = hass.states.get(f"update.{c.device_slug}_project_firmware")
+        c_has_update = bool(c_upd_st and c_upd_st.state == "on")
+        c_is_online = bool(c_wifi_val is not None or c_ip_val)
+        if not c_is_online and c_dev_id:
+            for e_reg in er.async_entries_for_device(ent_reg, c_dev_id):
+                if e_reg.platform == "esphome":
+                    st_e = hass.states.get(e_reg.entity_id)
+                    if st_e and st_e.state not in ("unavailable", "unknown"):
+                        c_is_online = True
+                        break
+                    if e_reg.domain == "update" and st_e and st_e.state == "on":
+                        c_has_update = True
+        c_status_label = (
+            "Update Available"
+            if c_has_update
+            else ("Online" if c_is_online else "Offline")
+        )
+
         fleet_devices.append(
             {
                 "entry_id": c.entry.entry_id,
                 "device_slug": c.device_slug,
-                "title": c.device_slug.replace("_", " ").title(),
+                "title": (
+                    str(c_dev_entry.name_by_user or c_dev_entry.name).strip()
+                    if c_dev_entry and (c_dev_entry.name_by_user or c_dev_entry.name)
+                    else c.device_slug.replace("_", " ").title()
+                ),
+                "model_label": c_model_label,
+                "area_label": c_area_label,
+                "status_label": c_status_label,
                 "device_profile": c.device_profile,
                 "device_group": c_grp,
                 "device_group_name": group_name_map.get(c_grp, c_grp.replace("_", " ").title()),
@@ -675,8 +733,6 @@ def _build_companion_state_payload(
             )
 
     onboarded_slugs = {c.device_slug for c in _get_all_coordinators(hass)}
-    dev_reg = dr.async_get(hass)
-    ent_reg = er.async_get(hass)
     unbridged_devices: list[dict[str, str]] = []
     seen_unbridged: set[str] = set()
     for dev in _iter_devices(dev_reg):

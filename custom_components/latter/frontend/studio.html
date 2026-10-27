@@ -568,6 +568,71 @@
     padding: 16px 18px;
   }
 
+  /* HOME ASSISTANT SORTABLE DATA TABLE */
+  .ha-table-wrap {
+    width: 100%;
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--input-bg);
+  }
+  table.ha-data-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+    font-size: 13.5px;
+  }
+  table.ha-data-table thead th {
+    padding: 10px 14px;
+    font-size: 11.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+    transition: color 0.12s ease, background 0.12s ease;
+  }
+  table.ha-data-table thead th:hover {
+    color: var(--text-strong);
+    background: var(--card-hover);
+  }
+  table.ha-data-table thead th.sorted {
+    color: var(--accent);
+  }
+  table.ha-data-table tbody tr {
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background 0.12s ease;
+  }
+  table.ha-data-table tbody tr:last-child {
+    border-bottom: none;
+  }
+  table.ha-data-table tbody tr:hover {
+    background: var(--card-hover);
+  }
+  table.ha-data-table tbody td {
+    padding: 11px 14px;
+    color: var(--text);
+    white-space: nowrap;
+  }
+  table.ha-data-table tbody td.col-name {
+    font-weight: 500;
+    color: var(--text-strong);
+  }
+  .status-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 6px;
+  }
+  .status-dot.online { background: var(--success); }
+  .status-dot.offline { background: var(--muted); opacity: 0.5; }
+  .status-dot.update { background: var(--warning); }
+
   /* ENTITY ROWS & LISTS */
   .native-controls-box {
     display: flex;
@@ -998,17 +1063,16 @@
         </div>
 
         <div class="card">
-          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:10px;">
-            <div>
-              <h3 style="margin:0;">Managed ESPHome Devices</h3>
-              <p class="desc" style="margin:2px 0 0;">Select a device to view its controls, assign its group, or customize hardware settings.</p>
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
+            <div style="flex:1;min-width:220px;max-width:340px;">
+              <input type="text" id="fleet-search-input" placeholder="Filter devices by name, model, area, or group..." oninput="onFilterDeviceTable(this.value)">
             </div>
             <div id="bridge-device-bar" class="input-action-row" style="display:none;">
               <select id="bridge-device-picker" style="min-width:210px;"></select>
               <button class="btn-secondary" onclick="bridgeSelectedEsphomeDevice()">+ Add Device</button>
             </div>
           </div>
-          <div id="fleet-devices-list" class="native-controls-box"></div>
+          <div id="fleet-devices-list"></div>
         </div>
       </section>
 
@@ -1403,8 +1467,10 @@
           <p>Choose an ESPHome device below or from the sidebar selector.</p>
         </div>
         <div class="card">
-          <h3>Managed Devices</h3>
-          <div id="prompt-devices-list" class="native-controls-box"></div>
+          <div style="margin-bottom:12px;max-width:340px;">
+            <input type="text" id="prompt-search-input" placeholder="Filter devices by name, model, area, or group..." oninput="onFilterDeviceTable(this.value)">
+          </div>
+          <div id="prompt-devices-list"></div>
         </div>
       </section>
 
@@ -1853,6 +1919,9 @@ let CURRENT_THEME_PREF = localStorage.getItem("latter_web_theme") || "ha_auto";
 let POLL_TIMER = null;
 let SELECTED_SURVEY_SLUG = localStorage.getItem("latter_ble_survey_slug") || "";
 let PREVIEW_CAMERA_ENTITY = "";
+let DEVICE_SORT_COL = "title";
+let DEVICE_SORT_ASC = true;
+let DEVICE_FILTER_TEXT = "";
 
 const HOUSEHOLD_VIEWS = [
   "fleet_overview",
@@ -2446,41 +2515,84 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
     ).join("");
   }
 
-  const rowsHtml = (fleetDevices || []).map(d => {
-    const spk = (d.active_speaker || "").replace("media_player.", "");
-    const spkMeta = (d.has_audio && spk) ? ` &bull; Speaker: <strong>${spk}</strong>` : "";
-    const batMeta = (d.battery_level !== null && d.battery_level !== undefined)
-      ? ` &bull; Battery: <strong>${d.battery_level}%${d.is_charging ? ' ⚡' : ''}</strong>`
-      : "";
-    const wifiMeta = (d.wifi_rssi !== null && d.wifi_rssi !== undefined)
-      ? ` &bull; Wi-Fi: ${d.wifi_rssi} dBm`
-      : "";
-    const isActDev = DEVICE_SELECTED && d.is_current && CURRENT_SCOPE === "device";
+  const statusRank = (st) => {
+    if (st === "Update Available") return 1;
+    if (st === "Offline") return 2;
+    return 3;
+  };
+
+  const q = DEVICE_FILTER_TEXT.trim().toLowerCase();
+  const filteredDevices = (fleetDevices || []).filter(d => {
+    if (!q) return true;
+    const hay = `${d.title || ''} ${d.device_slug || ''} ${d.model_label || ''} ${d.area_label || ''} ${d.device_group_name || ''} ${d.status_label || ''}`.toLowerCase();
+    return hay.includes(q);
+  });
+
+  filteredDevices.sort((a, b) => {
+    let cmp = 0;
+    if (DEVICE_SORT_COL === "status") {
+      cmp = statusRank(a.status_label) - statusRank(b.status_label);
+      if (cmp === 0) cmp = (a.title || "").localeCompare(b.title || "");
+    } else if (DEVICE_SORT_COL === "model") {
+      cmp = (a.model_label || "").localeCompare(b.model_label || "");
+    } else if (DEVICE_SORT_COL === "area") {
+      cmp = (a.area_label || "Roaming").localeCompare(b.area_label || "Roaming");
+    } else if (DEVICE_SORT_COL === "group") {
+      cmp = (a.device_group_name || "Unassigned").localeCompare(b.device_group_name || "Unassigned");
+    } else {
+      cmp = (a.title || "").localeCompare(b.title || "");
+    }
+    return DEVICE_SORT_ASC ? cmp : -cmp;
+  });
+
+  const sortArrow = (col) => {
+    if (DEVICE_SORT_COL !== col) return "";
+    return DEVICE_SORT_ASC ? " ▲" : " ▼";
+  };
+
+  const thClass = (col) => DEVICE_SORT_COL === col ? "sorted" : "";
+
+  const tableRowsHtml = filteredDevices.map(d => {
     const actAction = d.is_current
       ? `selectCurrentDevice()`
       : `switchFleetDevice('${d.companion_url}')`;
-    const grpOpts = groups.map(g =>
-      `<option value="${g.id}" ${g.id === d.device_group ? 'selected' : ''}>${g.name}</option>`
-    ).join("");
-    return `<div class="native-ctrl-row">
-      <div class="lbl">
-        ${d.title}
-        <span class="state-badge" style="margin-left:6px;">${d.device_group_name || d.device_group || 'Unassigned'}</span>
-        ${isActDev ? '<span class="state-badge" style="margin-left:4px;border-color:var(--success);color:var(--success);">Active</span>' : ''}
-        <small>Room: <strong>${d.active_area_name}</strong>${batMeta}${spkMeta}${wifiMeta}</small>
-      </div>
-      <div class="widget">
-        <select style="min-width:135px;" title="Device Group" onchange="assignDeviceGroup('${d.device_slug}', this.value)">${grpOpts}</select>
-        <button class="btn-primary" onclick="${actAction}">Manage</button>
-        <button class="btn-danger" title="Remove device from Latter" onclick="removeManagedDevice('${d.entry_id}', '${d.title.replace(/'/g, "")}')">✕</button>
-      </div>
-    </div>`;
+    const st = d.status_label || "Online";
+    const dotCls = st === "Update Available" ? "update" : (st === "Offline" ? "offline" : "online");
+    const areaVal = d.area_label || "Roaming";
+    const grpVal = d.device_group_name || "Unassigned";
+    const mdlVal = d.model_label || "ESPHome Node";
+    return `<tr onclick="${actAction}">
+      <td class="col-name">${d.title}</td>
+      <td>${mdlVal}</td>
+      <td>${areaVal}</td>
+      <td>${grpVal}</td>
+      <td><span class="status-dot ${dotCls}"></span>${st}</td>
+      <td style="text-align:right;color:var(--muted);font-size:16px;">›</td>
+    </tr>`;
   }).join("");
 
+  const tableHtml = filteredDevices.length
+    ? `<div class="ha-table-wrap">
+        <table class="ha-data-table">
+          <thead>
+            <tr>
+              <th class="${thClass('title')}" onclick="toggleDeviceTableSort('title')">Device${sortArrow('title')}</th>
+              <th class="${thClass('model')}" onclick="toggleDeviceTableSort('model')">Model${sortArrow('model')}</th>
+              <th class="${thClass('area')}" onclick="toggleDeviceTableSort('area')">Area${sortArrow('area')}</th>
+              <th class="${thClass('group')}" onclick="toggleDeviceTableSort('group')">Group${sortArrow('group')}</th>
+              <th class="${thClass('status')}" onclick="toggleDeviceTableSort('status')">Status${sortArrow('status')}</th>
+              <th style="width:32px;"></th>
+            </tr>
+          </thead>
+          <tbody>${tableRowsHtml}</tbody>
+        </table>
+      </div>`
+    : `<p class="desc" style="margin:8px 0 0;">No matching devices found.</p>`;
+
   const listBox = document.getElementById("fleet-devices-list");
-  if (listBox) listBox.innerHTML = rowsHtml;
+  if (listBox) listBox.innerHTML = tableHtml;
   const promptBox = document.getElementById("prompt-devices-list");
-  if (promptBox) promptBox.innerHTML = rowsHtml;
+  if (promptBox) promptBox.innerHTML = tableHtml;
 
   const unbridged = STATE?.unbridged_devices || [];
   const bridgeBar = document.getElementById("bridge-device-bar");
@@ -3590,6 +3702,29 @@ async function bridgeSelectedEsphomeDevice() {
   if (resp.ok) {
     applyStateToDom(await resp.json(), false);
     showToast(`Added ESPHome device '${slug}'`);
+  }
+}
+
+function toggleDeviceTableSort(col) {
+  if (DEVICE_SORT_COL === col) {
+    DEVICE_SORT_ASC = !DEVICE_SORT_ASC;
+  } else {
+    DEVICE_SORT_COL = col;
+    DEVICE_SORT_ASC = true;
+  }
+  if (STATE) {
+    renderFleetOverview(STATE.fleet_devices, STATE.fleet_controls, STATE.config);
+  }
+}
+
+function onFilterDeviceTable(val) {
+  DEVICE_FILTER_TEXT = val || "";
+  const f1 = document.getElementById("fleet-search-input");
+  const f2 = document.getElementById("prompt-search-input");
+  if (f1 && document.activeElement !== f1) f1.value = DEVICE_FILTER_TEXT;
+  if (f2 && document.activeElement !== f2) f2.value = DEVICE_FILTER_TEXT;
+  if (STATE) {
+    renderFleetOverview(STATE.fleet_devices, STATE.fleet_controls, STATE.config);
   }
 }
 
