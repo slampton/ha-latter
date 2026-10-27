@@ -1356,7 +1356,33 @@ class LatterCompanionApiView(HomeAssistantView):
                     {"error": "Valid backup bundle or backup_id required"},
                     status=HTTPStatus.BAD_REQUEST,
                 )
-    _STUDIO_HTML_PATH = Path(__file__).parent / "frontend" / "studio.html"
+            restore_esp = bool(body.get("restore_esphome_entities", True))
+            await async_restore_backup_bundle(
+                self.hass,
+                bundle=bundle,
+                coordinators=_get_all_coordinators(self.hass),
+                target_coordinator=coordinator,
+                restore_esphome_entities=restore_esp,
+            )
+            await async_list_vault_backups(self.hass)
+            return web.json_response(
+                _build_companion_state_payload(self.hass, coordinator)
+            )
+
+        if cmd == "delete_vault_backup":
+            b_id = str(body.get("backup_id") or "").strip()
+            if b_id:
+                await async_delete_vault_backup(self.hass, b_id)
+            return web.json_response(
+                _build_companion_state_payload(self.hass, coordinator)
+            )
+
+        return web.json_response(
+            {"error": f"Unknown command: {cmd}"}, status=HTTPStatus.BAD_REQUEST
+        )
+
+
+_STUDIO_HTML_PATH = Path(__file__).parent / "frontend" / "studio.html"
 
 
 def get_studio_panel_token(hmac_secret: bytes) -> str:
