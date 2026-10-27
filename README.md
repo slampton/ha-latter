@@ -21,9 +21,8 @@ Instead of hardcoding entity IDs in ESPHome YAML and recompiling firmware every 
 | Repository | Role in the Ecosystem |
 | :--- | :--- |
 | 👉 **[Latter (`ha-latter`)](https://github.com/slampton/ha-latter)** | **Home Assistant Middleware & Web Studio (You Are Here)** — Zero-YAML entity mapping, BLE room presence radar, Music Assistant browser, Baseline-JPEG transcoder, and backup vault. |
-| **[Latter Core (`esphome-latter-core`)](https://github.com/slampton/esphome-latter-core)** | **Shared ESPHome OS & 1-Line Mixin SDK** — Modular C++20 UI engine, audio/voice pipeline, 3-tier power state machine, and 1-line drop-in mixins for any ESPHome device. |
+| **[Latter Core (`esphome-latter-core`)](https://github.com/slampton/esphome-latter-core)** | **Shared ESPHome OS, Device Catalog & 1-Line Mixin SDK** — Modular C++20 UI engine, board HALs (`boards/`), turnkey device configs (`devices/` for **Wrist Assist**, **Mobile Assistant**, **Remote Assistant**, and **Desk Assistant**), and 1-line drop-in mixins. |
 | **[Pocket Assistant (`esphome-pocket-assistant`)](https://github.com/slampton/esphome-pocket-assistant)** | **Flagship Round Handheld (`466×466`)** — Turnkey firmware & 1-click web installer for the Waveshare ESP32-S3-Touch-AMOLED-1.75C pocket companion. |
-| **[Wrist Assist (`esphome-wrist-assist`)](https://github.com/slampton/esphome-wrist-assist)** | **Flagship Smartwatch (`410×502`)** — Turnkey firmware & 1-click web installer for the Waveshare ESP32-S3-Touch-AMOLED-2.06 wearable companion. |
 
 ---
 
@@ -39,7 +38,7 @@ Instead of hardcoding entity IDs in ESPHome YAML and recompiling firmware every 
 ## Key Features & Supported Functions
 
 1. **3-Tier Universal ESPHome Device Model**:
-   - **Tier 1 (Flagship Native Displays)**: Zero-YAML auto-discovered smart displays such as **[Pocket Assistant](https://github.com/slampton/esphome-pocket-assistant)** (`466×466` round AMOLED) and **[Wrist Assist](https://github.com/slampton/esphome-wrist-assist)** (`410×502` rectangular watch).
+   - **Tier 1 (Flagship Native Displays)**: Zero-YAML auto-discovered smart displays including **[Pocket Assistant](https://github.com/slampton/esphome-pocket-assistant)** (`466×466` round AMOLED), **[Mobile Assistant](https://github.com/slampton/esphome-latter-core/blob/main/devices/mobile-assistant.yaml)** (`480×480` square AMOLED), **[Wrist Assist](https://github.com/slampton/esphome-latter-core/blob/main/devices/wrist-assist.yaml)** (`410×502` watch), **[Remote Assistant](https://github.com/slampton/esphome-latter-core/blob/main/devices/remote-assistant.yaml)** (`320×480` P4 handheld), and **[Desk Assistant](https://github.com/slampton/esphome-latter-core/blob/main/devices/desk-assistant.yaml)** (`720×720` P4 panel).
    - **Tier 2 (1-Line Drop-In Mixin Nodes)**: Upgrade any existing ESPHome YAML with a single line from `esphome-latter-core/mixins/*.yaml` to add BLE room beaconing (`ble_beacon.yaml`), stationary BLE proxy scanning (`ble_proxy.yaml`), WireGuard roaming VPN (`roaming_vpn.yaml`), or Studio diagnostics (`diagnostics.yaml`).
    - **Tier 3 (Zero-YAML Bridged Devices)**: Bridge any existing ESPHome device (e.g., Everything Presence One, Bed Presence, Home Assistant Voice PE) in 1 click from **Latter Studio &rarr; System &rarr; Overview &amp; Devices** to organize groups, inspect live entities, and back up device preferences.
 2. **Native BLE Proxy Room Presence & Site Survey Radar**:
@@ -103,7 +102,10 @@ ha-latter/
 - **Music Assistant** *(Optional, recommended for media browsing & Sendspin streaming)*: `2.10.8` or newer.
 - **Supported Hardware**:
   - **Pocket Assistant**: Waveshare ESP32-S3-Touch-AMOLED-1.75C (`466×466` Round QSPI AMOLED).
+  - **Mobile Assistant**: Waveshare ESP32-S3-Touch-AMOLED-2.16 (`480×480` Square QSPI AMOLED).
   - **Wrist Assist**: Waveshare ESP32-S3-Touch-AMOLED-2.06 (`410×502` Rectangular Watch QSPI AMOLED).
+  - **Remote Assistant**: Waveshare ESP32-P4-WIFI6-Touch-LCD-3.5 (`320×480` Widescreen IPS LCD + 5MP Camera).
+  - **Desk Assistant**: Waveshare ESP32-P4-WIFI6-Touch-LCD-4B (`720×720` High-DPI Stationary MIPI-DSI Panel).
   - **Any ESP32 / ESP32-S3 / ESP32-C3 / ESP32-C6 / ESP32-P4 ESPHome Node**: Via 1-line mixins (`esphome-latter-core/mixins/*.yaml`) or 1-click Zero-YAML bridging in Latter Studio.
 
 ---
