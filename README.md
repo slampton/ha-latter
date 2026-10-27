@@ -57,6 +57,46 @@ Instead of hardcoding entity IDs in ESPHome YAML and recompiling firmware every 
 
 ---
 
+## Repository Architecture (`v2.2+`)
+
+```text
+ha-latter/
+├── custom_components/
+│   └── latter/
+│       ├── __init__.py          # Domain setup, auto-discovery & signed sidebar panel registration
+│       ├── manifest.json        # Integration metadata (local_push, device, zero PyPI requirements)
+│       ├── const.py             # Configuration keys, service names & entity ID builders
+│       ├── config_flow.py       # Streamlined 3-field onboarding & hardware auto-detection
+│       ├── coordinator.py       # Push state coordinator, queue recovery & LAN URL builders
+│       ├── sensor.py            # 5 device-scoped sensors with _unrecorded_attributes DB guard
+│       ├── services.py          # 14 native latter.* service handlers & slot pagination engine
+│       ├── services.yaml        # Home Assistant Developer Tools service schemas
+│       ├── ble_engine.py        # 2s per-scanner BLE proxy room tracker & dB offset calibrator
+│       ├── browse_engine.py     # Music Assistant 2.10.8+ library browser & Lyrics/Bio engine
+│       ├── calendar_engine.py   # Multi-calendar agenda serializer & event creator
+│       ├── room_engine.py       # Curated room entity filter, Whole-Home Hub & ESPHome inspector
+│       ├── vpn_engine.py        # Curve25519 WireGuard key generator & YAML snippet builder
+│       ├── backup_engine.py     # System & Device snapshot vault (.storage/latter.backups) & profiles
+│       ├── wallpaper_engine.py  # Built-in AMOLED presets & custom photo wallpaper manager
+│       ├── http.py              # Baseline-JPEG transcoders (artwork, wallpaper, camera, OSM map)
+│       ├── dashboard.py         # REST API & studio view handlers
+│       ├── frontend/
+│       │   └── studio.html      # Extracted single-page Latter Web Companion Studio UI
+│       ├── brand/
+│       │   └── icon.png         # Local integration brand icon
+│       ├── strings.json         # Config flow, entity & repairs strings
+│       ├── icons.json           # Entity & service icon translations
+│       ├── quality_scale.yaml   # Home Assistant Platinum Quality Scale manifest
+│       └── py.typed             # PEP 561 strict typing marker
+├── docs/
+│   ├── USER_GUIDE.md            # Everyday user & Latter Studio administration guide
+│   ├── BLE_AND_VPN_GUIDE.md     # BLE room calibration radar & WireGuard roaming guide
+│   └── SERVICES_AND_AUTOMATIONS.md # Automation recipes for doorbell alerts, intercom & macros
+└── hacs.json                    # HACS repository manifest
+```
+
+---
+
 ## Supported Devices & Requirements
 
 - **Home Assistant**: `2026.10.0` or newer.
