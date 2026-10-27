@@ -298,24 +298,24 @@
     border-color: var(--accent);
   }
   button.btn-chip {
-    background: var(--input-bg);
+    background: rgba(3, 169, 244, 0.16);
     color: var(--text-strong);
-    border: 1px solid var(--border);
-    padding: 7px 13px;
-    border-radius: 18px;
+    border: 1px solid var(--accent);
+    padding: 8px 14px;
+    border-radius: 8px;
     font-weight: 500;
     cursor: pointer;
-    font-size: 12.5px;
+    font-size: 13px;
     display: inline-flex;
     align-items: center;
     gap: 6px;
     white-space: nowrap;
-    transition: background 0.12s ease, border-color 0.12s ease;
+    transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
   }
   button.btn-chip:hover {
-    background: var(--accent-subtle);
-    border-color: var(--accent);
-    color: var(--accent);
+    background: var(--accent-solid);
+    border-color: var(--accent-solid);
+    color: #ffffff;
   }
   button.btn-danger {
     background: rgba(219, 68, 55, 0.12);
@@ -907,19 +907,10 @@
   <div class="main-area">
     <header class="topbar">
       <div class="topbar-status">
-        <div style="display:flex;align-items:center;gap:10px;margin-right:4px;">
+        <div style="display:flex;align-items:center;gap:10px;">
           <img src="/api/latter/brand/icon.png" alt="Latter" style="width:26px;height:26px;border-radius:6px;object-fit:contain;flex-shrink:0;" onerror="this.style.display='none'">
           <strong id="hdr-title" style="font-size:15px;font-weight:500;color:var(--text-strong);">Latter</strong>
           <span class="nav-badge" id="hdr-sub">v2.2.0</span>
-        </div>
-        <div id="topbar-household-chips" class="hidden" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-          <div class="status-chip"><span id="top-hh-devices">Devices: --</span></div>
-          <div class="status-chip"><span id="top-hh-alarm">Alarm: --</span></div>
-        </div>
-        <div id="topbar-device-chips" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-          <div class="status-chip"><span class="dot-live"></span><span id="top-room">Room: --</span></div>
-          <div class="status-chip"><span id="top-speaker">Speaker: --</span></div>
-          <div class="status-chip"><span id="top-media">Media: Idle</span></div>
         </div>
       </div>
       <div class="topbar-actions">
@@ -1428,32 +1419,28 @@
       </section>
 
       <!-- ================================================================== -->
-      <!-- DEVICE TAB 1: OVERVIEW (TELEMETRY, QUICK ACTIONS & ROOM CONTROLS)  -->
+      <!-- DEVICE TAB 1: OVERVIEW (TELEMETRY, QUICK ACTIONS & DEVICE STATUS)  -->
       <!-- ================================================================== -->
       <section id="view-dashboard">
         <div class="page-header">
           <h2 id="dash-header-title">Device Overview</h2>
-          <p id="dash-header-desc">Quick actions, active room controls, and live device telemetry.</p>
+          <p id="dash-header-desc">Quick actions, configuration profiles, and live hardware telemetry.</p>
         </div>
 
         <div class="hero-stats">
-          <div class="stat-box"><span>Room</span><strong id="st-room">--</strong></div>
+          <div class="stat-box"><span id="st-room-label">Current Room</span><strong id="st-room">--</strong></div>
           <div class="stat-box"><span>Battery / Power</span><strong id="st-battery">--</strong></div>
           <div class="stat-box"><span>Wi-Fi Signal</span><strong id="st-wifi">--</strong></div>
-          <div class="stat-box"><span>Media</span><strong id="st-media">Idle</strong></div>
+          <div class="stat-box"><span>IP &amp; Firmware</span><strong id="st-fw-ip">--</strong></div>
         </div>
 
         <div class="grid-2">
-          <!-- CARD 1: QUICK ACTIONS & CONTEXT -->
+          <!-- CARD 1: QUICK ACTIONS & PROFILE -->
           <div class="card">
             <h3>Quick Actions</h3>
-            <p class="desc">Execute immediate device commands or switch room and speaker context.</p>
-            <div id="dash-quick-actions" class="quick-actions-row" style="margin-bottom:16px;"></div>
+            <p class="desc">Execute immediate device commands or apply a saved configuration profile.</p>
+            <div id="dash-quick-actions" class="quick-actions-row" style="margin-bottom:18px;"></div>
 
-            <div class="field">
-              <label>Assigned Room / Area</label>
-              <select id="quick-area" onchange="quickSwitchArea(this.value)"></select>
-            </div>
             <div class="field" id="dash-speaker-field">
               <label>Active Speaker Target</label>
               <select id="quick-speaker" onchange="quickSwitchSpeaker(this.value)"></select>
@@ -1462,36 +1449,26 @@
               <label>Apply Configuration Profile</label>
               <div class="input-action-row">
                 <select id="quick-profile-select"></select>
-                <button class="btn-secondary" onclick="applyQuickProfileFromOverview()">Apply</button>
+                <button class="btn-chip" onclick="applyQuickProfileFromOverview()">Apply Profile</button>
               </div>
             </div>
           </div>
 
-          <!-- CARD 2: DEVICE STATUS & TELEMETRY -->
+          <!-- CARD 2: DEVICE STATUS & BACKUPS -->
           <div class="card">
             <h3>Device Status</h3>
-            <p class="desc">Hardware model, BLE room tracking state, and network summary.</p>
+            <p class="desc">Hardware model, roaming location mode, and device management.</p>
             <div class="summary-row"><span>Model &amp; Firmware</span><strong id="dash-hw-model">--</strong></div>
-            <div class="summary-row"><span>Device Group</span><strong id="st-group">Unassigned</strong></div>
-            <div class="summary-row"><span>BLE Room Tracking</span><strong id="dash-ble-mode">--</strong></div>
+            <div class="summary-row"><span>IP Address</span><strong id="dash-ip-addr">--</strong></div>
+            <div class="summary-row"><span>Location Mode</span><strong id="dash-ble-mode">--</strong></div>
             <div class="summary-row" id="dash-row-ble-proxy"><span>Nearest BLE Proxy</span><strong id="dash-ble-proxy">--</strong></div>
-            <div class="summary-row" id="dash-row-media"><span>Now Playing</span><strong id="dash-media-summary">Idle</strong></div>
-            <div class="quick-actions-row" style="margin-top:14px;">
+            <div class="summary-row"><span>Device Group</span><strong id="st-group">Unassigned</strong></div>
+            <div class="quick-actions-row" style="margin-top:16px;">
               <button class="btn-chip" onclick="createDeviceQuickBackup()">Save Device Backup</button>
               <button class="btn-chip" onclick="exportBackupToComputer('device')">Download .JSON</button>
               <button class="btn-chip" onclick="navigateToView('system')">Administration &amp; Logs</button>
             </div>
           </div>
-        </div>
-
-        <!-- ACTIVE ROOM CONTROLS (LIVE TOGGLE CARDS) -->
-        <div class="card" id="dash-room-controls-card">
-          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;">
-            <h3 style="margin:0;">Active Room Controls (<span id="st-room-cards-area">Home</span>)</h3>
-            <span class="nav-badge" id="st-card-count">0</span>
-          </div>
-          <p class="desc">Tap any entity in the device's current room to toggle it.</p>
-          <div id="live-room-cards" class="room-cards-grid"></div>
         </div>
 
         <!-- TIER 3 / SENSOR NODE CONTROLS (SHOWN WHEN CUSTOM/OTHER ENTITIES EXIST) -->
@@ -2126,8 +2103,6 @@ function updateTopHeaderForScope() {
   const isHH = (CURRENT_SCOPE === "household") || !DEVICE_SELECTED;
   const devTitle = STATE?.esphome?.device?.name || STATE?.title || "Device";
   document.getElementById("hdr-title").textContent = isHH ? "Latter" : devTitle;
-  document.getElementById("topbar-household-chips").classList.toggle("hidden", !isHH);
-  document.getElementById("topbar-device-chips").classList.toggle("hidden", isHH);
   document.getElementById("nav-scope-device").classList.toggle("hidden", CURRENT_SCOPE !== "device" || !DEVICE_SELECTED);
 }
 
@@ -3574,26 +3549,11 @@ function applyStateToDom(data, forceFormUpdate=false) {
   const esp = data.esphome;
 
   const roomName = live.active_area_name || "Home";
-  const spkShort = (live.active_speaker || "").replace("media_player.", "");
-  const tempStr = live.room_temp != null ? ` (${live.room_temp}°)` : "";
-  const mediaSummary = live.media_title && live.media_title !== "Idle"
-    ? `${live.media_title}${live.media_artist && live.media_artist !== 'None' ? ' • ' + live.media_artist : ''}`
-    : `${live.media_state || 'Idle'}`;
-
   const caps = data.capabilities || {};
   const devTitle = esp?.device?.name || data.title;
   document.getElementById("hdr-sub").textContent = `v${data.version || '2.2.0'}`;
   document.getElementById("survey-device-name").textContent = devTitle;
   document.getElementById("nav-room-badge").textContent = roomName;
-  document.getElementById("top-room").textContent = `Room: ${roomName}`;
-  const topSpkChip = document.getElementById("top-speaker")?.parentElement;
-  const topMedChip = document.getElementById("top-media")?.parentElement;
-  if (topSpkChip) topSpkChip.style.display = (caps.has_audio && spkShort) ? "inline-flex" : "none";
-  if (topMedChip) topMedChip.style.display = (caps.has_audio && spkShort) ? "inline-flex" : "none";
-  document.getElementById("top-speaker").textContent = `Speaker: ${spkShort || 'None'}`;
-  document.getElementById("top-media").textContent = `Media: ${mediaSummary}`;
-  document.getElementById("top-hh-devices").textContent = `Devices: ${(data.fleet_devices || []).length}`;
-  document.getElementById("top-hh-alarm").textContent = `Alarm: ${(live.alarm_state || 'none').toUpperCase()}`;
   updateTopHeaderForScope();
 
   // Capability-Aware Device Sidebar Tabs
@@ -3604,7 +3564,7 @@ function applyStateToDom(data, forceFormUpdate=false) {
   document.getElementById("nav-btn-audio_voice")?.classList.toggle("hidden", !showAudioVoice);
   document.getElementById("nav-btn-power")?.classList.toggle("hidden", !showPower);
 
-  // Extract live Battery & Wi-Fi from current device's fleet entry or ESPHome sections
+  // Extract live Battery, Wi-Fi & IP from current device's fleet entry
   const curFleet = (data.fleet_devices || []).find(d => d.is_current) || {};
   const batText = (curFleet.battery_level !== null && curFleet.battery_level !== undefined)
     ? `${curFleet.battery_level}%${curFleet.is_charging ? ' (Charging)' : ''}`
@@ -3612,13 +3572,19 @@ function applyStateToDom(data, forceFormUpdate=false) {
   const wifiText = (curFleet.wifi_rssi !== null && curFleet.wifi_rssi !== undefined)
     ? `${curFleet.wifi_rssi} dBm`
     : "Online";
+  const ipStr = curFleet.ip_address || "Connected";
+  const fwVer = esp?.device?.sw_version || `v${data.version || '2.2.0'}`;
+
+  const isRoaming = !!(cfg.native_ble_tracking && cfg.ble_auto_switch);
+  const roomLblEl = document.getElementById("st-room-label");
+  if (roomLblEl) roomLblEl.textContent = isRoaming ? "Current Room (Roaming)" : "Assigned Room";
 
   // 4 Hero Stat Boxes on Device Overview
   document.getElementById("dash-header-title").textContent = devTitle;
-  document.getElementById("st-room").textContent = `${roomName}${tempStr}`;
+  document.getElementById("st-room").textContent = roomName;
   document.getElementById("st-battery").textContent = batText;
   document.getElementById("st-wifi").textContent = wifiText;
-  document.getElementById("st-media").textContent = caps.has_audio ? mediaSummary : (caps.tier_label || "Connected");
+  document.getElementById("st-fw-ip").textContent = curFleet.ip_address ? `${curFleet.ip_address} • ${fwVer}` : fwVer;
 
   const grpList = data.device_groups || [];
   const grpObj = grpList.find(g => g.id === cfg.device_group);
@@ -3626,22 +3592,18 @@ function applyStateToDom(data, forceFormUpdate=false) {
 
   const hwModel = `${esp?.device?.model || 'ESPHome'}${esp?.device?.sw_version ? ' (' + esp.device.sw_version + ')' : ''}`;
   document.getElementById("dash-hw-model").textContent = hwModel;
-  document.getElementById("dash-ble-mode").textContent = (caps.has_ble_beacon && cfg.native_ble_tracking)
-    ? (cfg.ble_auto_switch ? "Enabled (Auto-Switch)" : "Enabled (Manual)")
-    : "Disabled";
+  document.getElementById("dash-ip-addr").textContent = ipStr;
+  document.getElementById("dash-ble-mode").textContent = isRoaming
+    ? `Roaming (BLE Auto-Switch • ${roomName})`
+    : `Stationary (${roomName})`;
   const winRow = (live.ble_survey_rows || []).find(r => r.is_winner);
   const distSuffix = (winRow && winRow.distance_m != null) ? ` (~${winRow.distance_m}m / ${winRow.distance_ft}ft)` : "";
   document.getElementById("dash-ble-proxy").textContent = (live.ble_closest_proxy || "None") + distSuffix;
   const proxyRow = document.getElementById("dash-row-ble-proxy");
-  if (proxyRow) proxyRow.style.display = caps.has_ble_beacon ? "flex" : "none";
+  if (proxyRow) proxyRow.style.display = (caps.has_ble_beacon && cfg.native_ble_tracking) ? "flex" : "none";
   const spkField = document.getElementById("dash-speaker-field");
   if (spkField) spkField.style.display = caps.has_audio ? "block" : "none";
-  const medRow = document.getElementById("dash-row-media");
-  if (medRow) medRow.style.display = caps.has_audio ? "flex" : "none";
-  const medSumEl = document.getElementById("dash-media-summary");
-  if (medSumEl) medSumEl.textContent = mediaSummary;
 
-  renderLiveRoomCards(live.room_cards, roomName);
   renderLogsView();
 
   const actSlotIdx = live.active_remote_slot || 1;
@@ -3656,7 +3618,6 @@ function applyStateToDom(data, forceFormUpdate=false) {
     }
   });
 
-  populateSelect("quick-area", cat.areas, live.active_area_id, true);
   populateSelect("quick-speaker", cat.ma_speakers, live.active_speaker, true);
   renderRssiBars(live.ble_survey_rows, live.ble_packets_seen);
   renderWallpaperGallery(data.wallpapers, cfg.device_slug, cfg.display_shape);

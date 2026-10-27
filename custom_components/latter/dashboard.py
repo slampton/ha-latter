@@ -574,6 +574,12 @@ def _build_companion_state_payload(
             or hass.states.get(f"sensor.{c.device_slug}_wifi_signal")
             or hass.states.get(f"sensor.{c.device_slug}_system_wi_fi_signal")
         )
+        c_ip_st = hass.states.get(f"sensor.{c.device_slug}_ip_address")
+        c_ip_val = (
+            str(c_ip_st.state)
+            if (c_ip_st and c_ip_st.state not in ("unavailable", "unknown", ""))
+            else ""
+        )
         c_bat_val: int | None = None
         if c_bat_st and c_bat_st.state not in ("unavailable", "unknown", ""):
             try:
@@ -603,6 +609,7 @@ def _build_companion_state_payload(
                 "battery_level": c_bat_val,
                 "is_charging": bool(c_chg_st and c_chg_st.state == "on"),
                 "wifi_rssi": c_wifi_val,
+                "ip_address": c_ip_val,
                 "ble_closest_proxy": c_room_attrs.get("ble_closest_proxy", ""),
                 "companion_url": f"/api/latter/companion/{c.entry.entry_id}?token={c.get_signed_token()}",
                 "is_current": c.entry.entry_id == coordinator.entry.entry_id,
