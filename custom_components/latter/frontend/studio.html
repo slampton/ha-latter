@@ -281,6 +281,14 @@
     cursor: pointer;
     font-size: 13px;
     white-space: nowrap;
+    transition: opacity 0.15s ease, background 0.15s ease;
+  }
+  button.btn-primary:disabled {
+    background: var(--card);
+    color: var(--muted);
+    border: 1px solid var(--border);
+    opacity: 0.65;
+    cursor: default;
   }
   button.btn-secondary {
     background: var(--card);
@@ -975,7 +983,7 @@
       </div>
       <div class="topbar-actions">
         <div id="dirty-indicator" class="dirty-banner">Unsaved</div>
-        <button class="btn-primary" onclick="saveAllConfig()">Save Changes</button>
+        <button id="btn-save-changes" class="btn-primary" disabled onclick="saveAllConfig()">Saved</button>
       </div>
     </header>
 
@@ -1132,7 +1140,6 @@
                 <label>Target Entity</label>
                 <select id="cfg-remote_1" onchange="markDirty()"></select>
               </div>
-              <div id="embedded-remote-slot-1" class="native-controls-box"></div>
             </div>
 
             <div class="remote-slot-card">
@@ -1143,7 +1150,6 @@
                 <label>Target Entity</label>
                 <select id="cfg-remote_2" onchange="markDirty()"></select>
               </div>
-              <div id="embedded-remote-slot-2" class="native-controls-box"></div>
             </div>
 
             <div class="remote-slot-card">
@@ -1154,7 +1160,6 @@
                 <label>Target Entity</label>
                 <select id="cfg-remote_3" onchange="markDirty()"></select>
               </div>
-              <div id="embedded-remote-slot-3" class="native-controls-box"></div>
             </div>
 
             <div class="remote-slot-card">
@@ -1165,10 +1170,8 @@
                 <label>Target Entity</label>
                 <select id="cfg-remote_4" onchange="markDirty()"></select>
               </div>
-              <div id="embedded-remote-slot-4" class="native-controls-box"></div>
             </div>
           </div>
-          <div id="embedded-remote-general" class="native-controls-box" style="margin-top:12px;"></div>
         </div>
 
         <div class="card">
@@ -1216,18 +1219,30 @@
           </div>
         </div>
 
-        <div class="card">
-          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:10px;">
-            <div>
-              <h3 style="margin:0;">Bulk Device Controls</h3>
-              <p class="desc" style="margin:2px 0 0;">Apply wake word, timeout, or display settings across all devices or a selected group.</p>
+        <details class="ha-details">
+          <summary>Bulk Device Controls (Multi-Device Live Settings)</summary>
+          <div class="details-body">
+            <p class="desc" style="margin:0 0 12px;color:var(--muted);font-size:13px;">Dispatch display, sleep, voice, or sound changes simultaneously across all devices or a selected group.</p>
+            <div class="form-grid-2" style="margin-bottom:12px;">
+              <div>
+                <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px;">Category</label>
+                <select id="group-ctrl-cat-filter" onchange="renderFleetOverview(STATE.fleet_devices, STATE.fleet_controls, STATE.config)">
+                  <option value="display">Display &amp; Appearance</option>
+                  <option value="sleep">Sleep &amp; Wake</option>
+                  <option value="voice">Voice Assistant</option>
+                  <option value="sound">Sound &amp; Alerts</option>
+                  <option value="music">Music &amp; Media</option>
+                  <option value="all">All Categories</option>
+                </select>
+              </div>
+              <div>
+                <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px;">Target Devices</label>
+                <select id="group-ctrl-filter" onchange="renderFleetOverview(STATE.fleet_devices, STATE.fleet_controls, STATE.config)"></select>
+              </div>
             </div>
-            <div style="min-width:210px;">
-              <select id="group-ctrl-filter" onchange="renderFleetOverview(STATE.fleet_devices, STATE.fleet_controls, STATE.config)"></select>
-            </div>
+            <div id="fleet-controls-list" class="native-controls-box"></div>
           </div>
-          <div id="fleet-controls-list" class="native-controls-box"></div>
-        </div>
+        </details>
       </section>
 
       <!-- ================================================================== -->
@@ -1564,53 +1579,39 @@
 
           <div class="card">
             <h3>Home Screen &amp; Room UI</h3>
-            <p class="desc">Configure home screen behavior, dock app order, and default Room Control category.</p>
+            <p class="desc">Configure home screen behavior, dock apps, and default Room Control category.</p>
             <div id="embedded-home" class="native-controls-box" style="margin-bottom:14px;"></div>
 
             <div class="field">
-              <label>Home Dock App Order (Click to Toggle, Arrows to Reorder)</label>
-              <div id="dock-pills-container" class="dock-pill-list" style="margin-bottom:6px;"></div>
-              <input type="text" id="cfg-dock_apps" class="mono" style="font-size:11.5px;padding:6px 9px;" oninput="markDirty(); renderDockPillsFromInput();">
-            </div>
-          </div>
-        </div>
-
-        <div class="grid-2">
-          <div class="card">
-            <h3>Upload Wallpaper</h3>
-            <p class="desc">Photos are center-cropped, darkened for legibility, and transcoded to Baseline JPEG.</p>
-            <div class="input-action-row" style="margin-bottom:12px;">
-              <input type="file" id="wp-file-input" accept="image/*">
-              <button class="btn-primary" onclick="uploadWallpaperFile()">Upload &amp; Use</button>
-            </div>
-            <div class="field">
-              <label>Active Wallpaper Source</label>
-              <div class="input-action-row">
-                <input type="text" id="cfg-wallpaper_source" placeholder="preset:amoled_rings or /local/wallpaper.jpg" oninput="markDirty()">
-                <button class="btn-secondary" onclick="selectWallpaperSource('')">Clear</button>
-              </div>
-            </div>
-          </div>
-
-          <div class="card">
-            <h3>Wallpaper Rotation</h3>
-            <p class="desc">Star multiple wallpapers in the gallery below to rotate through favorites automatically.</p>
-            <div class="field">
-              <label>Rotation Interval</label>
-              <select id="cfg-wallpaper_cycle_minutes" onchange="markDirty()">
-                <option value="0">Off (Keep Selected Wallpaper)</option>
-                <option value="15">Every 15 Minutes</option>
-                <option value="60">Every Hour</option>
-                <option value="360">Every 6 Hours</option>
-                <option value="1440">Every 24 Hours</option>
-              </select>
+              <label>Home Dock Apps (Click to Enable/Disable, Arrows to Reorder)</label>
+              <div id="dock-pills-container" class="dock-pill-list"></div>
+              <input type="hidden" id="cfg-dock_apps">
             </div>
           </div>
         </div>
 
         <div class="card">
-          <h3>Wallpaper Gallery</h3>
-          <p class="desc">AMOLED presets and uploaded wallpapers for this device.</p>
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:12px;">
+            <div>
+              <h3 style="margin:0;">Wallpapers</h3>
+              <p class="desc" style="margin:2px 0 0;">Select an AMOLED preset, upload a custom photo, or star multiple favorites to rotate automatically.</p>
+            </div>
+            <div class="input-action-row" style="flex:0 1 auto;">
+              <select id="cfg-wallpaper_cycle_minutes" style="width:auto;min-width:170px;" title="Favorite Wallpaper Rotation" onchange="markDirty()">
+                <option value="0">Rotation: Off</option>
+                <option value="15">Rotate: Every 15m</option>
+                <option value="60">Rotate: Every Hour</option>
+                <option value="360">Rotate: Every 6h</option>
+                <option value="1440">Rotate: Daily</option>
+              </select>
+              <button class="btn-secondary" onclick="selectWallpaperSource('')">Disable Wallpaper</button>
+            </div>
+          </div>
+          <div class="input-action-row" style="padding:10px 12px;background:var(--input-bg);border:1px solid var(--border);border-radius:8px;margin-bottom:12px;">
+            <input type="file" id="wp-file-input" accept="image/*">
+            <button class="btn-primary" onclick="uploadWallpaperFile()">Upload Photo</button>
+            <input type="hidden" id="cfg-wallpaper_source">
+          </div>
           <div id="wp-gallery-grid" class="wp-gallery"></div>
         </div>
       </section>
@@ -1635,7 +1636,7 @@
               <input type="checkbox" id="cfg-sync_device_area" onchange="markDirty()">
             </div>
 
-            <details class="ha-details" style="margin-bottom:0;">
+            <details class="ha-details" id="details-voice-sens" style="margin-bottom:0;">
               <summary>Wake Word Sensitivity (Per Model)</summary>
               <div class="details-body">
                 <div id="embedded-voice-sens" class="native-controls-box"></div>
@@ -1645,7 +1646,7 @@
 
           <div class="card">
             <h3>Sound &amp; Media Player</h3>
-            <p class="desc">Adjust onboard alert volume, volume step size, default speaker, and library sort order.</p>
+            <p class="desc">Adjust onboard alert volume, volume step size, player appearance, and default speaker.</p>
             <div id="embedded-sound" class="native-controls-box" style="margin-bottom:8px;"></div>
             <div id="embedded-music" class="native-controls-box" style="margin-bottom:12px;"></div>
 
@@ -1653,10 +1654,17 @@
               <label>Default Speaker Entity</label>
               <select id="cfg-default_speaker" onchange="markDirty()"></select>
             </div>
-            <div class="toggle-row">
+            <div class="toggle-row" style="margin-bottom:10px;">
               <span>Auto-Switch Speaker &amp; Remote on Room Change</span>
               <input type="checkbox" id="cfg-area_handoff" onchange="markDirty()">
             </div>
+
+            <details class="ha-details" style="margin-bottom:0;">
+              <summary>Library Sorting Preferences</summary>
+              <div class="details-body">
+                <div id="embedded-music-sort" class="native-controls-box"></div>
+              </div>
+            </details>
           </div>
         </div>
       </section>
@@ -2153,11 +2161,21 @@ async function clearInternalLogs() {
 function markDirty() {
   IS_DIRTY = true;
   document.getElementById("dirty-indicator").classList.add("visible");
+  const btn = document.getElementById("btn-save-changes");
+  if (btn) {
+    btn.disabled = false;
+    btn.textContent = "Save Changes";
+  }
 }
 
 function clearDirty() {
   IS_DIRTY = false;
   document.getElementById("dirty-indicator").classList.remove("visible");
+  const btn = document.getElementById("btn-save-changes");
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Saved";
+  }
 }
 
 async function onThemeChanged(themePref) {
@@ -2324,15 +2342,29 @@ function toggleDockAppToken(tok) {
     .split(/[,;| ]+/)
     .map(t => t.trim().toLowerCase())
     .filter(t => DOCK_APP_META.some(m => m.token === t));
+  let nowEnabled = true;
   if (active.includes(tok)) {
     if (active.length <= 1) return;
     active = active.filter(t => t !== tok);
+    nowEnabled = false;
   } else {
     active.push(tok);
+    nowEnabled = true;
   }
   inp.value = active.join(",");
   markDirty();
   renderDockPillsFromInput();
+
+  // Also sync the underlying ESPHome Shortcut switch immediately if present
+  const homeItems = getSectionItems("home");
+  const matchSw = homeItems.find(it =>
+    it.domain === "switch" &&
+    `${it.name} ${it.entity_id}`.toLowerCase().includes(`shortcut`) &&
+    `${it.name} ${it.entity_id}`.toLowerCase().includes(tok)
+  );
+  if (matchSw) {
+    espAction(matchSw.entity_id, nowEnabled ? "turn_on" : "turn_off");
+  }
 }
 
 function moveDockAppToken(tok, dir) {
@@ -2574,7 +2606,9 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
     if (!fleetControls || !fleetControls.length) {
       fBox.innerHTML = `<p class="desc">No shared ESPHome controls discovered.</p>`;
     } else {
+      const activeCat = document.getElementById("group-ctrl-cat-filter")?.value || "display";
       const filteredRows = fleetControls.map(fc => {
+        if (activeCat !== "all" && fc.section !== activeCat) return "";
         const matchingTargets = (fc.targets || []).filter(t => {
           if (activeFilter === "all") return true;
           if (activeFilter.startsWith("group:")) return t.device_group === activeFilter.split(":")[1];
@@ -2848,66 +2882,134 @@ function renderCohesiveDeviceSections() {
   const totalCount = sections.reduce((acc, s) => acc + s.count, 0);
   document.getElementById("nav-esp-badge").textContent = totalCount;
 
-  // Split "room" section items into UI items (Default Category / Show All) vs BLE / Handoff
+  const sortByOrder = (items, keywords) => {
+    return [...items].sort((a, b) => {
+      const aLow = `${a.name} ${a.entity_id}`.toLowerCase();
+      const bLow = `${b.name} ${b.entity_id}`.toLowerCase();
+      let aIdx = keywords.findIndex(k => aLow.includes(k));
+      let bIdx = keywords.findIndex(k => bLow.includes(k));
+      if (aIdx === -1) aIdx = 99;
+      if (bIdx === -1) bIdx = 99;
+      return aIdx !== bIdx ? aIdx - bIdx : aLow.localeCompare(bLow);
+    });
+  };
+
+  // 1. Split "room" section items into UI items (Default Category / Show All) vs BLE Beacon
   const roomItems = getSectionItems("room");
   const roomUiItems = [];
   const roomBleItems = [];
   roomItems.forEach(it => {
     const low = `${it.name} ${it.entity_id}`.toLowerCase();
     if (low.includes("category")) roomUiItems.push(it);
-    else roomBleItems.push(it);
+    else if (!low.includes("handoff")) roomBleItems.push(it);
   });
-
   document.getElementById("embedded-room-ble").innerHTML = roomBleItems.map(it => renderNativeControlRow(it)).join("");
 
-  const homeItems = getSectionItems("home").concat(roomUiItems);
+  // 2. Home Screen & Room UI: Filter out the 6 redundant "Shortcut *" switches (handled by Home Dock App pills)
+  const rawHomeItems = getSectionItems("home").filter(it => {
+    const low = `${it.name} ${it.entity_id}`.toLowerCase();
+    return !low.includes("shortcut");
+  });
+  const homeItems = sortByOrder(rawHomeItems.concat(roomUiItems), [
+    "wake greeting", "weather background", "default category", "show all category"
+  ]);
   document.getElementById("embedded-home").innerHTML = homeItems.length
     ? homeItems.map(it => renderNativeControlRow(it)).join("")
     : `<p class="desc">No on-device Home Screen entities exposed.</p>`;
 
-  const dispItems = getSectionItems("display");
+  // 3. Display & Appearance: Logical order + Conditional Brightness visibility based on Auto Brightness Mode
+  const rawDispItems = getSectionItems("display");
+  const abModeItem = rawDispItems.find(it => `${it.name} ${it.entity_id}`.toLowerCase().includes("auto_brightness") || (it.name || "").toLowerCase().includes("auto brightness"));
+  const abMode = abModeItem ? String(abModeItem.state) : "Sun Synchronized";
+
+  const filteredDisp = rawDispItems.filter(it => {
+    const low = `${it.name} ${it.entity_id}`.toLowerCase();
+    if (abMode === "Disabled") {
+      if (low.includes("day brightness") || low.includes("night brightness") || low.includes("start hour")) return false;
+    } else if (abMode === "Sun Synchronized") {
+      if (low.includes("manual brightness") || low.includes("start hour")) return false;
+    } else if (abMode === "Time Schedule") {
+      if (low.includes("manual brightness")) return false;
+    }
+    return true;
+  });
+  const dispItems = sortByOrder(filteredDisp, [
+    "start screen", "clock face", "time format", "color profile",
+    "auto brightness", "manual brightness", "day brightness", "night brightness",
+    "day start hour", "night start hour", "condition simulation"
+  ]);
   document.getElementById("embedded-display").innerHTML = dispItems.map(it => renderNativeControlRow(it)).join("");
 
-  const sleepItems = getSectionItems("sleep");
+  // 4. Sleep & Wake: Filter out diagnostic timer/alarm readouts, hide Screensaver Style if Docked Screensaver is OFF, and order logically
+  const rawSleepItems = getSectionItems("sleep");
+  const dockedSsItem = rawSleepItems.find(it => `${it.name} ${it.entity_id}`.toLowerCase().includes("docked_screensaver") || (it.name || "").toLowerCase().includes("docked screensaver"));
+  const dockedSsOn = !dockedSsItem || dockedSsItem.state === "on";
+
+  const filteredSleep = rawSleepItems.filter(it => {
+    const low = `${it.name} ${it.entity_id}`.toLowerCase();
+    if (low.includes("timer_remaining") || low.includes("timer_active") || low.includes("alarm_ringing")) return false;
+    if (!dockedSsOn && low.includes("screensaver style")) return false;
+    return true;
+  });
+  const sleepItems = sortByOrder(filteredSleep, [
+    "battery screen timeout", "docked idle timeout", "battery hibernate timeout",
+    "stay awake", "pickup to wake", "tap to wake", "docked screensaver",
+    "screensaver style", "hold crown"
+  ]);
   document.getElementById("embedded-sleep").innerHTML = sleepItems.length
     ? sleepItems.map(it => renderNativeControlRow(it)).join("")
     : `<p class="desc">No on-device Sleep &amp; Wake entities exposed.</p>`;
 
-  // Split Voice items into primary controls vs per-model sensitivity dropdowns
+  // 5. Voice Assistant: Hide Active Wake Word & Sensitivity drawer when Wake Word Mode is Disabled
   const voiceItems = getSectionItems("voice");
+  const wwModeItem = voiceItems.find(it => `${it.name} ${it.entity_id}`.toLowerCase().includes("wake_word_mode") || (it.name || "").toLowerCase().includes("wake word mode"));
+  const wwDisabled = wwModeItem && wwModeItem.state === "Disabled";
+
   const voicePrimary = [];
   const voiceSens = [];
   voiceItems.forEach(it => {
-    if ((it.name || "").toLowerCase().includes("sensitivity")) voiceSens.push(it);
-    else voicePrimary.push(it);
+    const low = `${it.name} ${it.entity_id}`.toLowerCase();
+    if (low.includes("sensitivity")) {
+      voiceSens.push(it);
+    } else if (!(wwDisabled && low.includes("active wake word"))) {
+      voicePrimary.push(it);
+    }
   });
-  document.getElementById("embedded-voice-primary").innerHTML = voicePrimary.length
-    ? voicePrimary.map(it => renderNativeControlRow(it)).join("")
+  const sortedVoicePrimary = sortByOrder(voicePrimary, [
+    "wake word mode", "active wake word", "visual profile", "wake screen"
+  ]);
+  document.getElementById("embedded-voice-primary").innerHTML = sortedVoicePrimary.length
+    ? sortedVoicePrimary.map(it => renderNativeControlRow(it)).join("")
     : `<p class="desc">No on-device Voice Assistant entities exposed.</p>`;
   document.getElementById("embedded-voice-sens").innerHTML = voiceSens.length
     ? voiceSens.map(it => renderNativeControlRow(it)).join("")
     : `<p class="desc">No per-model sensitivity controls exposed.</p>`;
+  const sensDetails = document.getElementById("details-voice-sens");
+  if (sensDetails) {
+    sensDetails.classList.toggle("hidden", !!(wwDisabled || voiceSens.length === 0));
+  }
 
-  const soundItems = getSectionItems("sound");
+  // 6. Sound & Media: Split player appearance/shortcuts vs Library Sorting drawer
+  const soundItems = sortByOrder(getSectionItems("sound"), [
+    "alert volume", "volume step", "game sound"
+  ]);
   document.getElementById("embedded-sound").innerHTML = soundItems.map(it => renderNativeControlRow(it)).join("");
-  const musicItems = getSectionItems("music");
-  document.getElementById("embedded-music").innerHTML = musicItems.map(it => renderNativeControlRow(it)).join("");
 
-  const remoteItems = getSectionItems("remote");
-  const slotBuckets = {1: [], 2: [], 3: [], 4: [], general: []};
-  remoteItems.forEach(it => {
-    const txt = `${it.name} ${it.entity_id}`.toLowerCase();
-    if (txt.includes("slot 1") || txt.includes("slot_1") || txt.includes("remote 1") || txt.includes("remote_1")) slotBuckets[1].push(it);
-    else if (txt.includes("slot 2") || txt.includes("slot_2") || txt.includes("remote 2") || txt.includes("remote_2")) slotBuckets[2].push(it);
-    else if (txt.includes("slot 3") || txt.includes("slot_3") || txt.includes("remote 3") || txt.includes("remote_3")) slotBuckets[3].push(it);
-    else if (txt.includes("slot 4") || txt.includes("slot_4") || txt.includes("remote 4") || txt.includes("remote_4")) slotBuckets[4].push(it);
-    else slotBuckets.general.push(it);
+  const allMusicItems = getSectionItems("music").filter(it => it.domain !== "media_player");
+  const musicPrimary = [];
+  const musicSort = [];
+  allMusicItems.forEach(it => {
+    const low = `${it.name} ${it.entity_id}`.toLowerCase();
+    if (low.includes("sort")) musicSort.push(it);
+    else musicPrimary.push(it);
   });
-  [1, 2, 3, 4].forEach(idx => {
-    const box = document.getElementById(`embedded-remote-slot-${idx}`);
-    if (box) box.innerHTML = slotBuckets[idx].map(it => renderNativeControlRow(it)).join("");
-  });
-  document.getElementById("embedded-remote-general").innerHTML = slotBuckets.general.map(it => renderNativeControlRow(it)).join("");
+  document.getElementById("embedded-music").innerHTML = sortByOrder(musicPrimary, [
+    "album art style", "overlay style", "speaker shortcut", "library shortcut"
+  ]).map(it => renderNativeControlRow(it)).join("");
+  const sortBox = document.getElementById("embedded-music-sort");
+  if (sortBox) {
+    sortBox.innerHTML = musicSort.map(it => renderNativeControlRow(it)).join("");
+  }
 
   // Render Quick Actions right at the top of Device Overview!
   const actionItems = getSectionItems("actions");
