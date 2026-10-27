@@ -21,8 +21,7 @@ Instead of hardcoding entity IDs in ESPHome YAML and recompiling firmware every 
 | Repository | Role in the Ecosystem |
 | :--- | :--- |
 | 👉 **[Latter (`ha-latter`)](https://github.com/slampton/ha-latter)** | **Home Assistant Middleware & Web Studio (You Are Here)** — Zero-YAML entity mapping, BLE room presence radar, Music Assistant browser, Baseline-JPEG transcoder, and backup vault. |
-| **[Latter Core (`esphome-latter-core`)](https://github.com/slampton/esphome-latter-core)** | **Shared ESPHome OS, Device Catalog & 1-Line Mixin SDK** — Modular C++20 UI engine, board HALs (`boards/`), turnkey device configs (`devices/` for **Wrist Assist**, **Mobile Assistant**, **Remote Assistant**, and **Desk Assistant**), and 1-line drop-in mixins. |
-| **[Pocket Assistant (`esphome-pocket-assistant`)](https://github.com/slampton/esphome-pocket-assistant)** | **Flagship Round Handheld (`466×466`)** — Turnkey firmware & 1-click web installer for the Waveshare ESP32-S3-Touch-AMOLED-1.75C pocket companion. |
+| **[Latter Core (`esphome-latter-core`)](https://github.com/slampton/esphome-latter-core)** | **Shared ESPHome OS, Device Catalog & 1-Line Mixin SDK** — Modular C++20 UI engine, board HALs (`boards/`), turnkey device configs (`devices/` for **Pocket Assistant**, **Mobile Assistant**, **Wrist Assist**, **Remote Assistant**, and **Desk Assistant**), and 1-line drop-in mixins. |
 
 ---
 
@@ -38,7 +37,7 @@ Instead of hardcoding entity IDs in ESPHome YAML and recompiling firmware every 
 ## Key Features & Supported Functions
 
 1. **3-Tier Universal ESPHome Device Model**:
-   - **Tier 1 (Flagship Native Displays)**: Zero-YAML auto-discovered smart displays including **[Pocket Assistant](https://github.com/slampton/esphome-pocket-assistant)** (`466×466` round AMOLED), **[Mobile Assistant](https://github.com/slampton/esphome-latter-core/blob/main/devices/mobile-assistant.yaml)** (`480×480` square AMOLED), **[Wrist Assist](https://github.com/slampton/esphome-latter-core/blob/main/devices/wrist-assist.yaml)** (`410×502` watch), **[Remote Assistant](https://github.com/slampton/esphome-latter-core/blob/main/devices/remote-assistant.yaml)** (`320×480` P4 handheld), and **[Desk Assistant](https://github.com/slampton/esphome-latter-core/blob/main/devices/desk-assistant.yaml)** (`720×720` P4 panel).
+   - **Tier 1 (Flagship Native Displays)**: Zero-YAML auto-discovered smart displays including **[Pocket Assistant](https://github.com/slampton/esphome-latter-core/blob/main/devices/pocket-assistant.yaml)** (`466×466` round AMOLED), **[Mobile Assistant](https://github.com/slampton/esphome-latter-core/blob/main/devices/mobile-assistant.yaml)** (`480×480` square AMOLED), **[Wrist Assist](https://github.com/slampton/esphome-latter-core/blob/main/devices/wrist-assist.yaml)** (`410×502` watch), **[Remote Assistant](https://github.com/slampton/esphome-latter-core/blob/main/devices/remote-assistant.yaml)** (`320×480` P4 handheld), and **[Desk Assistant](https://github.com/slampton/esphome-latter-core/blob/main/devices/desk-assistant.yaml)** (`720×720` P4 panel).
    - **Tier 2 (1-Line Drop-In Mixin Nodes)**: Upgrade any existing ESPHome YAML with a single line from `esphome-latter-core/mixins/*.yaml` to add BLE room beaconing (`ble_beacon.yaml`), stationary BLE proxy scanning (`ble_proxy.yaml`), WireGuard roaming VPN (`roaming_vpn.yaml`), or Studio diagnostics (`diagnostics.yaml`).
    - **Tier 3 (Zero-YAML Bridged Devices)**: Bridge any existing ESPHome device (e.g., Everything Presence One, Bed Presence, Home Assistant Voice PE) in 1 click from **Latter Studio &rarr; System &rarr; Overview &amp; Devices** to organize groups, inspect live entities, and back up device preferences.
 2. **Native BLE Proxy Room Presence & Site Survey Radar**:
