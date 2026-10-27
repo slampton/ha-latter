@@ -62,6 +62,7 @@ from .const import (
     CONF_ASSIGNED_PERSON,
     CONF_BLE_AUTO_SWITCH,
     CONF_BLE_BEACON_UUID,
+    CONF_BLE_TARGET_ADDRESS,
     CONF_BLE_ROOM_OFFSETS,
     CONF_CALENDAR_ENTITIES,
     CONF_COMPANION_BASE_URL,
@@ -619,6 +620,11 @@ class LatterCoordinator:
         ).strip()
 
     @property
+    def ble_target_address(self) -> str:
+        """Return optional explicit BLE MAC, private_ble_device entity_id, or UUID for standalone BLE tracking."""
+        return str(self.get_opt(CONF_BLE_TARGET_ADDRESS, "") or "").strip()
+
+    @property
     def ble_room_offsets(self) -> dict[str, float]:
         """Return per-room BLE RSSI calibration offsets (area_id -> dB bias)."""
         raw = self.get_opt(CONF_BLE_ROOM_OFFSETS, {})
@@ -1004,6 +1010,7 @@ class LatterCoordinator:
                 device_slug=self.device_slug,
                 on_area_detected=self._async_on_native_ble_area_detected,
                 room_offsets=self.ble_room_offsets,
+                target_address=self.ble_target_address,
             )
             self._ble_tracker.async_start()
 
@@ -1544,11 +1551,57 @@ class LatterCoordinator:
                 blocking=False,
             )
 
+    def is_device_away(self) -> bool:
+        """Return True if a roaming BLE device has timed out across all proxies (and is not awake on local Wi-Fi)."""
+        if not self.native_ble_tracking_enabled or self._ble_tracker is None:
+            return False
+        if not self._ble_tracker.is_away:
+            return False
+        if self.device_profile == "ble_beacon":
+            return True
+        # For ESPHome displays, if connected to local Wi-Fi (not away), keep last room when sleeping in Standby
+        wifi_st = (
+            self.hass.states.get(f"sensor.{self.device_slug}_wi_fi_signal")
+            or self.hass.states.get(f"sensor.{self.device_slug}_wifi_signal")
+            or self.hass.states.get(f"sensor.{self.device_slug}_ip_address")
+        )
+        if wifi_st is not None and wifi_st.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN, ""):
+            return False
+        return True
+
+    def get_current_room_and_distance(self) -> tuple[str, dict[str, Any]]:
+        """Return (room_or_away_state, attributes) for sensor.<slug>_current_room and sensor.<slug>_ble_distance."""
+        away = self.is_device_away()
+        area_reg = ar.async_get(self.hass)
+        area_entry = (
+            area_reg.async_get_area(self.active_area_id)
+            if (self.active_area_id and not away)
+            else None
+        )
+        room_state = "Away" if away else (area_entry.name if area_entry else "Home")
+        dist_ft = self._ble_tracker.winning_distance_ft if (self._ble_tracker and not away) else None
+        dist_m = self._ble_tracker.winning_distance_m if (self._ble_tracker and not away) else None
+        rssi = self._ble_tracker.winning_rssi if (self._ble_tracker and not away) else None
+        proxy = self._ble_tracker.closest_scanner if (self._ble_tracker and not away) else ""
+        return room_state, {
+            "area_id": "" if away else (self.active_area_id or ""),
+            "area_name": room_state,
+            "is_home": not away,
+            "closest_proxy": proxy,
+            "distance_ft": dist_ft,
+            "distance_m": dist_m,
+            "rssi": rssi,
+            "assigned_person": self.assigned_person,
+        }
+
     @callback
     def _async_on_native_ble_area_detected(
         self, area_id: str, scanner_source: str
     ) -> None:
-        """Handle room transition detected by Latter's native ESPHome BLE proxy tracker."""
+        """Handle room transition or Away timeout detected by Latter's BLE proxy tracker."""
+        if area_id == "away":
+            self._notify_listeners()
+            return
         if not self.ble_auto_switch_enabled:
             self._notify_listeners()
             return
@@ -1593,23 +1646,18 @@ class LatterCoordinator:
             if p_ent and p_ent.startswith("person."):
                 by_person.setdefault(p_ent, []).append(c)
 
-        area_reg = ar.async_get(self.hass)
         for p_ent, p_coords in by_person.items():
-            # Pick the device with the freshest BLE packet (or first active coordinator)
+            home_coords = [c for c in p_coords if not c.is_device_away()]
+            pool = home_coords if home_coords else p_coords
             best_c = max(
-                p_coords,
+                pool,
                 key=lambda x: (
                     x._ble_tracker.last_packet_monotonic
                     if x._ble_tracker is not None
                     else 0.0
                 ),
             )
-            a_entry = (
-                area_reg.async_get_area(best_c.active_area_id)
-                if best_c.active_area_id
-                else None
-            )
-            room_name = a_entry.name if a_entry else "Home"
+            room_name, r_attrs = best_c.get_current_room_and_distance()
             p_st = self.hass.states.get(p_ent)
             p_friendly = (
                 str(p_st.attributes.get("friendly_name") or "").strip()
@@ -1617,18 +1665,36 @@ class LatterCoordinator:
                 else ""
             ) or p_ent.split(".", 1)[-1].replace("_", " ").title()
             p_slug = normalize_device_slug(p_ent.split(".", 1)[-1])
-            sensor_id = f"sensor.{p_slug}_current_room"
             self.hass.states.async_set(
-                sensor_id,
+                f"sensor.{p_slug}_current_room",
                 room_name,
                 {
                     "friendly_name": f"{p_friendly} Current Room",
-                    "icon": "mdi:account-location",
+                    "icon": "mdi:account-location" if room_name != "Away" else "mdi:account-arrow-right",
                     "person_entity": p_ent,
-                    "area_id": best_c.active_area_id or "",
+                    "area_id": r_attrs["area_id"],
+                    "is_home": r_attrs["is_home"],
+                    "distance_ft": r_attrs["distance_ft"],
+                    "distance_m": r_attrs["distance_m"],
+                    "closest_proxy": r_attrs["closest_proxy"],
                     "source_device": best_c.device_slug,
                 },
             )
+            if r_attrs["distance_ft"] is not None:
+                self.hass.states.async_set(
+                    f"sensor.{p_slug}_ble_distance",
+                    str(r_attrs["distance_ft"]),
+                    {
+                        "friendly_name": f"{p_friendly} BLE Distance",
+                        "unit_of_measurement": "ft",
+                        "device_class": "distance",
+                        "state_class": "measurement",
+                        "icon": "mdi:map-marker-distance",
+                        "distance_m": r_attrs["distance_m"],
+                        "area_name": room_name,
+                        "source_device": best_c.device_slug,
+                    },
+                )
 
     @callback
     def _notify_listeners(self) -> None:

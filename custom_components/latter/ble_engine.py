@@ -27,6 +27,7 @@ SURVEY_RETENTION_SECONDS = 180.0
 WAKE_GAP_SECONDS = 8.0
 MIN_HOLD_SECONDS = 4.0
 SCANNER_POLL_INTERVAL_SECONDS = 2.0
+AWAY_TIMEOUT_SECONDS = 180.0
 
 
 def _iter_devices(dev_reg: dr.DeviceRegistry) -> list[dr.DeviceEntry]:
@@ -289,10 +290,12 @@ class LatterNativeBleTracker:
         device_slug: str,
         on_area_detected: Callable[[str, str], None],
         room_offsets: dict[str, float] | None = None,
+        target_address: str = "",
     ) -> None:
         """Initialize the native BLE proxy room tracker."""
         self.hass = hass
         self._target_uuid_hex = _normalize_uuid_hex(beacon_uuid)
+        self._target_address = str(target_address or "").strip()
         self._device_slug = device_slug.lower().replace("_", "-")
         self._raw_slug = device_slug
         self._on_area_detected = on_area_detected
@@ -316,6 +319,63 @@ class LatterNativeBleTracker:
         self.packets_seen: int = 0
         self.last_packet_monotonic: float = 0.0
         self._last_switch_monotonic: float = 0.0
+        self.is_away: bool = False
+        self.winning_rssi: int | None = None
+        self.winning_distance_m: float | None = None
+        self.winning_distance_ft: float | None = None
+        self._seed_explicit_target_address()
+
+    @callback
+    def _seed_explicit_target_address(self) -> None:
+        """Seed MAC, iBeacon UUID, or dynamic private_ble_device address from _target_address."""
+        t_addr = self._target_address
+        if not t_addr:
+            return
+        # 1. Static MAC address (AA:BB:CC:DD:EE:FF)
+        m_int = _mac_to_int(t_addr)
+        if m_int is not None:
+            self._target_mac_ints.add(m_int)
+            self._matched_ble_addresses.add(_int_to_mac(m_int))
+            return
+        # 2. Home Assistant entity (private_ble_device or ibeacon tracker)
+        if "." in t_addr:
+            st = self.hass.states.get(t_addr)
+            if st is not None:
+                cur_mac = str(
+                    st.attributes.get("current_address")
+                    or st.attributes.get("mac")
+                    or st.attributes.get("address")
+                    or ""
+                ).strip()
+                if cur_mac:
+                    self._matched_ble_addresses.add(cur_mac.upper())
+                    c_int = _mac_to_int(cur_mac)
+                    if c_int is not None:
+                        self._target_mac_ints.add(c_int)
+                u_attr = str(st.attributes.get("uuid") or "").strip()
+                if len(_normalize_uuid_hex(u_attr)) == 32:
+                    self._target_uuid_hex = _normalize_uuid_hex(u_attr)
+            return
+        # 3. Raw 32-hex iBeacon UUID
+        norm_u = _normalize_uuid_hex(t_addr.split(":", 1)[0])
+        if len(norm_u) == 32:
+            self._target_uuid_hex = norm_u
+
+    @callback
+    def check_away_timeout(self, now_mono: float) -> None:
+        """Transition tracker to Away if no BLE packet has been received within AWAY_TIMEOUT_SECONDS."""
+        self._seed_explicit_target_address()
+        if (
+            not self.is_away
+            and self.last_packet_monotonic > 0.0
+            and (now_mono - self.last_packet_monotonic) >= AWAY_TIMEOUT_SECONDS
+        ):
+            self.is_away = True
+            self.current_area_id = None
+            self.winning_rssi = None
+            self.winning_distance_m = None
+            self.winning_distance_ft = None
+            self._on_area_detected("away", "")
 
     @property
     def target_macs_formatted(self) -> list[str]:
@@ -659,10 +719,21 @@ class LatterNativeBleTracker:
         best_area, (best_ema, _) = max(
             fresh_areas.items(), key=lambda item: item[1][0]
         )
+        self.is_away = False
+
+        def _update_winner_metrics(win_area: str) -> None:
+            eff_entry = fresh_areas.get(win_area)
+            if eff_entry is not None:
+                eff_dbm = eff_entry[0]
+                self.winning_rssi = int(round(eff_dbm))
+                d_m = round(max(0.2, min(50.0, 10.0 ** ((-59.0 - eff_dbm) / (10.0 * 2.2)))), 1)
+                self.winning_distance_m = d_m
+                self.winning_distance_ft = round(d_m * 3.28084, 1)
 
         if self.current_area_id is None:
-            if best_ema >= -82.0 or len(fresh_areas) >= 2:
+            if best_ema >= -88.0 or len(fresh_areas) >= 1:
                 self.current_area_id = best_area
+                _update_winner_metrics(best_area)
                 if latest_source:
                     self.closest_scanner = latest_source
                 self._last_switch_monotonic = now
@@ -670,6 +741,7 @@ class LatterNativeBleTracker:
             return
 
         if best_area == self.current_area_id:
+            _update_winner_metrics(best_area)
             if latest_source:
                 self.closest_scanner = latest_source
             return
@@ -768,7 +840,9 @@ class LatterBleFabric:
         """Scan all HA Bluetooth proxy tables in a single pass for all registered trackers."""
         if not self._trackers:
             return
+        now_mono_check = time.monotonic()
         for tracker in list(self._trackers):
+            tracker.check_away_timeout(now_mono_check)
             if not tracker._target_mac_ints:
                 tracker._target_mac_ints = _discover_target_device_macs(
                     self.hass, tracker._raw_slug
@@ -828,3 +902,90 @@ def get_ble_fabric(hass: HomeAssistant) -> LatterBleFabric:
     if "ble_fabric" not in domain_data:
         domain_data["ble_fabric"] = LatterBleFabric(hass)
     return domain_data["ble_fabric"]
+import re
+
+
+def get_discovered_ble_candidates(
+    hass: HomeAssistant, onboarded_slugs: set[str], onboarded_addresses: set[str]
+) -> list[dict[str, str]]:
+    """Discover non-ESPHome BLE devices (private_ble_device, ibeacon, active BLE tags) available to track."""
+    candidates: list[dict[str, str]] = []
+    seen_targets: set[str] = {a.lower() for a in onboarded_addresses if a}
+    ent_reg = er.async_get(hass)
+
+    # 1. Check private_ble_device & ibeacon entities in Home Assistant
+    for entry in _iter_entities(ent_reg):
+        if entry.disabled_by:
+            continue
+        if entry.platform in ("private_ble_device", "ibeacon") and entry.domain in (
+            "device_tracker",
+            "sensor",
+        ):
+            if entry.domain == "sensor" and not entry.entity_id.endswith("estimated_distance"):
+                continue
+            st = hass.states.get(entry.entity_id)
+            friendly = (
+                str(st.attributes.get("friendly_name") if st else "")
+                or entry.name
+                or entry.original_name
+                or entry.entity_id
+            ).strip()
+            for suffix in (" Estimated Distance", "Signal Strength"):
+                if friendly.endswith(suffix):
+                    friendly = friendly[: -len(suffix)].strip()
+            cand_slug = re.sub(r"[^a-z0-9]+", "_", friendly.lower()).strip("_")
+            if not cand_slug or cand_slug in onboarded_slugs or entry.entity_id.lower() in seen_targets:
+                continue
+            seen_targets.add(entry.entity_id.lower())
+            kind_lbl = "Private BLE (Phone/Watch)" if entry.platform == "private_ble_device" else "iBeacon Tracker"
+            candidates.append(
+                {
+                    "slug": cand_slug,
+                    "title": friendly,
+                    "target_address": entry.entity_id,
+                    "label": f"{friendly} [{kind_lbl}]",
+                }
+            )
+
+    # 2. Check live Bluetooth scanner tables for named BLE devices / iBeacons
+    try:
+        from homeassistant.components import bluetooth
+
+        for scanner in bluetooth.async_current_scanners(hass):
+            dev_adv_map: dict[str, tuple[Any, Any]] = (
+                getattr(scanner, "discovered_devices_and_advertisement_data", {})
+                or {}
+            )
+            for addr, pair in dev_adv_map.items():
+                if not isinstance(pair, tuple) or len(pair) != 2:
+                    continue
+                ble_dev, adv_data = pair
+                addr_str = str(addr).upper()
+                if addr_str.lower() in seen_targets:
+                    continue
+                local_name = str(
+                    getattr(adv_data, "local_name", "")
+                    or getattr(ble_dev, "name", "")
+                    or ""
+                ).strip()
+                if not local_name or local_name.replace(":", "").replace("-", "").upper() == addr_str.replace(":", ""):
+                    continue
+                cand_slug = re.sub(r"[^a-z0-9]+", "_", local_name.lower()).strip("_")
+                if not cand_slug or cand_slug in onboarded_slugs:
+                    continue
+                seen_targets.add(addr_str.lower())
+                rssi = getattr(adv_data, "rssi", None)
+                rssi_str = f" ({rssi} dBm)" if rssi is not None else ""
+                candidates.append(
+                    {
+                        "slug": cand_slug,
+                        "title": local_name,
+                        "target_address": addr_str,
+                        "label": f"{local_name} [{addr_str}]{rssi_str}",
+                    }
+                )
+    except Exception:  # noqa: BLE001
+        pass
+
+    candidates.sort(key=lambda x: x["title"].lower())
+    return candidates[:40]

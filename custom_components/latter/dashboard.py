@@ -19,7 +19,7 @@ from homeassistant.helpers import (
     entity_registry as er,
 )
 
-from .ble_engine import _iter_devices
+from .ble_engine import _iter_devices, get_discovered_ble_candidates
 from .backup_engine import (
     async_apply_profile_to_coordinators,
     async_create_vault_backup,
@@ -44,6 +44,7 @@ from .const import (
     CONF_ASSIGNED_PERSON,
     CONF_BLE_AUTO_SWITCH,
     CONF_BLE_BEACON_UUID,
+    CONF_BLE_TARGET_ADDRESS,
     CONF_BLE_ROOM_OFFSETS,
     CONF_CALENDAR_ENTITIES,
     CONF_CAMERA_ENTITIES,
@@ -643,7 +644,13 @@ def _build_companion_state_payload(
         c_dev_entry = dev_reg.async_get(c_dev_id) if c_dev_id else None
         raw_model = str((c_dev_entry.model if c_dev_entry else "") or "").strip()
         m_low = f"{raw_model} {c.device_slug}".lower()
-        if "175" in m_low or "pocket" in m_low:
+        if c.device_profile == "ble_beacon":
+            c_model_label = (
+                "Private BLE (Phone/Watch)"
+                if "private_ble" in c.ble_target_address or "." in c.ble_target_address
+                else "BLE Beacon / Tag"
+            )
+        elif "175" in m_low or "pocket" in m_low:
             c_model_label = 'Pocket Assistant 1.75"'
         elif "206" in m_low or "wrist" in m_low:
             c_model_label = 'Wrist Assist 2.06"'
@@ -683,11 +690,16 @@ def _build_companion_state_payload(
                         break
                     if e_reg.domain == "update" and st_e and st_e.state == "on":
                         c_has_update = True
-        c_status_label = (
-            "Update Available"
-            if c_has_update
-            else ("Online" if c_is_online else "Offline")
-        )
+        if c.device_profile == "ble_beacon":
+            c_away = c.is_device_away()
+            c_seen = bool(c._ble_tracker and c._ble_tracker.packets_seen > 0 and not c_away)
+            c_status_label = f"Online ({c_room_name})" if c_seen else ("Away" if c_away else "Scanning")
+        else:
+            c_status_label = (
+                "Update Available"
+                if c_has_update
+                else ("Online" if c_is_online else "Offline")
+            )
 
         fleet_devices.append(
             {
@@ -787,6 +799,11 @@ def _build_companion_state_payload(
         "health_warnings": health_warnings,
         "fleet_devices": fleet_devices,
         "unbridged_devices": unbridged_devices,
+        "discovered_ble_devices": get_discovered_ble_candidates(
+            hass,
+            onboarded_slugs,
+            {c.ble_target_address for c in _get_all_coordinators(hass) if c.ble_target_address},
+        ),
         "fleet_controls": _build_fleet_shared_controls(hass),
         "device_groups": device_groups,
         "saved_profiles": saved_profiles,
@@ -1431,6 +1448,37 @@ class LatterCompanionApiView(HomeAssistantView):
                     _build_companion_state_payload(self.hass, coordinator)
                 )
             return web.json_response({"removed": True, "redirect_url": redirect_url})
+
+        if cmd == "add_ble_device":
+            raw_name = str(body.get("name") or body.get("device_slug") or "ble_device").strip()
+            target_addr = str(body.get("target_address") or "").strip()
+            assigned_person = str(body.get("assigned_person") or "").strip()
+            target_slug = re.sub(r"[^a-z0-9]+", "_", raw_name.lower()).strip("_") or "ble_device"
+            if target_slug and target_addr:
+                existing = [
+                    c for c in _get_all_coordinators(self.hass)
+                    if c.device_slug == target_slug
+                ]
+                if not existing:
+                    await self.hass.config_entries.flow.async_init(
+                        DOMAIN,
+                        context={"source": "user"},
+                        data={
+                            CONF_DEVICE_SLUG: target_slug,
+                            CONF_DEVICE_PROFILE: "ble_beacon",
+                            CONF_DEVICE_GROUP: DEFAULT_DEVICE_GROUP,
+                            CONF_DEFAULT_SPEAKER: "",
+                            CONF_NATIVE_BLE_TRACKING: True,
+                            CONF_BLE_AUTO_SWITCH: True,
+                            CONF_SYNC_DEVICE_AREA: False,
+                            CONF_BLE_TARGET_ADDRESS: target_addr,
+                            CONF_ASSIGNED_PERSON: assigned_person,
+                            CONF_ART_SIZE: DEFAULT_ART_SIZE,
+                        },
+                    )
+            return web.json_response(
+                _build_companion_state_payload(self.hass, coordinator)
+            )
 
         if cmd == "bridge_esphome_device":
             raw_slug = str(body.get("device_slug") or "").strip()

@@ -3775,41 +3775,96 @@ async function confirmRemoveManagedDevice() {
   }
 }
 
+let ADD_DEV_MODE = "esphome";
+
 function ensureAddDeviceModal() {
   if (document.getElementById("latter-add-dev-modal")) return;
   const modal = document.createElement("div");
   modal.id = "latter-add-dev-modal";
   modal.style.cssText = "position:fixed;inset:0;background:rgba(8,12,18,0.82);backdrop-filter:blur(6px);z-index:9999;display:none;align-items:center;justify-content:center;padding:16px;";
   modal.innerHTML = `
-    <div class="card" style="max-width:440px;width:100%;margin:0;">
-      <h3 style="margin-bottom:6px;">Add ESPHome Device to Latter</h3>
-      <p class="desc" style="margin-bottom:14px;">Select an existing ESPHome device discovered in Home Assistant to manage it in Latter Studio.</p>
-      <div class="field" id="add-dev-modal-picker-wrap">
-        <label>Discovered ESPHome Devices</label>
-        <select id="bridge-device-picker"></select>
+    <div class="card" style="max-width:460px;width:100%;margin:0;">
+      <h3 style="margin-bottom:12px;">Add Device to Latter</h3>
+      <div class="scope-tabs" style="margin-bottom:14px;">
+        <button type="button" class="scope-tab active" id="add-tab-esphome" onclick="switchAddDeviceTab('esphome')">ESPHome Device</button>
+        <button type="button" class="scope-tab" id="add-tab-ble" onclick="switchAddDeviceTab('ble')">BLE Phone / Watch / Tag</button>
       </div>
-      <p class="desc hidden" id="add-dev-modal-empty" style="color:var(--muted);">All discovered ESPHome devices in Home Assistant are already onboarded in Latter.</p>
+
+      <!-- TAB 1: ESPHOME DEVICE -->
+      <div id="add-dev-pane-esphome">
+        <div class="field" id="add-dev-modal-picker-wrap">
+          <label>Discovered ESPHome Devices</label>
+          <select id="bridge-device-picker"></select>
+        </div>
+        <p class="hidden" id="add-dev-modal-empty" style="color:var(--muted);font-size:13px;margin:0 0 12px;">All discovered ESPHome devices are already onboarded.</p>
+      </div>
+
+      <!-- TAB 2: BLE PHONE / WATCH / BEACON -->
+      <div id="add-dev-pane-ble" class="hidden">
+        <div class="field">
+          <label>Discovered Bluetooth / Private BLE / iBeacon Devices</label>
+          <select id="ble-candidate-picker" onchange="onSelectBleCandidate(this.value)"></select>
+        </div>
+        <div class="field">
+          <label>Device Name</label>
+          <input type="text" id="ble-custom-name" placeholder="e.g. Sean iPhone, Thu Apple Watch, Keys">
+        </div>
+        <div class="field">
+          <label>BLE MAC Address, Entity ID (private_ble_device), or iBeacon UUID</label>
+          <input type="text" id="ble-custom-addr" class="mono" placeholder="AA:BB:CC:DD:EE:FF or device_tracker.iphone_ble">
+        </div>
+        <div class="field">
+          <label>Assign to Person (Optional — Creates <code>sensor.&lt;person&gt;_current_room</code>)</label>
+          <select id="ble-custom-person"></select>
+        </div>
+      </div>
+
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
         <button type="button" class="btn-secondary" onclick="closeAddDeviceModal()">Cancel</button>
-        <button type="button" class="btn-primary" id="btn-confirm-add-device" onclick="bridgeSelectedEsphomeDevice()">Add Device</button>
+        <button type="button" class="btn-primary" id="btn-confirm-add-device" onclick="confirmAddDeviceModal()">Add Device</button>
       </div>
     </div>
   `;
   document.body.appendChild(modal);
 }
 
+function switchAddDeviceTab(mode) {
+  ADD_DEV_MODE = mode === "ble" ? "ble" : "esphome";
+  document.getElementById("add-tab-esphome")?.classList.toggle("active", ADD_DEV_MODE === "esphome");
+  document.getElementById("add-tab-ble")?.classList.toggle("active", ADD_DEV_MODE === "ble");
+  document.getElementById("add-dev-pane-esphome")?.classList.toggle("hidden", ADD_DEV_MODE !== "esphome");
+  document.getElementById("add-dev-pane-ble")?.classList.toggle("hidden", ADD_DEV_MODE !== "ble");
+  const addBtn = document.getElementById("btn-confirm-add-device");
+  if (addBtn) {
+    if (ADD_DEV_MODE === "esphome") {
+      addBtn.disabled = !(STATE?.unbridged_devices?.length > 0);
+    } else {
+      addBtn.disabled = false;
+    }
+  }
+}
+
+function onSelectBleCandidate(targetAddr) {
+  if (!targetAddr) return;
+  const cands = STATE?.discovered_ble_devices || [];
+  const found = cands.find(c => c.target_address === targetAddr);
+  const nameInp = document.getElementById("ble-custom-name");
+  const addrInp = document.getElementById("ble-custom-addr");
+  if (addrInp) addrInp.value = targetAddr;
+  if (nameInp && found) nameInp.value = found.title;
+}
+
 function openAddDeviceModal() {
   ensureAddDeviceModal();
   const unbridged = STATE?.unbridged_devices || [];
+  const bleCands = STATE?.discovered_ble_devices || [];
   const picker = document.getElementById("bridge-device-picker");
   const wrap = document.getElementById("add-dev-modal-picker-wrap");
   const emptyMsg = document.getElementById("add-dev-modal-empty");
-  const addBtn = document.getElementById("btn-confirm-add-device");
 
   if (unbridged.length > 0) {
     wrap?.classList.remove("hidden");
     emptyMsg?.classList.add("hidden");
-    if (addBtn) addBtn.disabled = false;
     if (picker) {
       picker.innerHTML = unbridged.map(u =>
         `<option value="${u.slug}" data-area="${u.area_id || ''}">${u.name}</option>`
@@ -3818,8 +3873,22 @@ function openAddDeviceModal() {
   } else {
     wrap?.classList.add("hidden");
     emptyMsg?.classList.remove("hidden");
-    if (addBtn) addBtn.disabled = true;
   }
+
+  const blePicker = document.getElementById("ble-candidate-picker");
+  if (blePicker) {
+    const opts = [`<option value="">— Select Discovered BLE Device or Enter Below —</option>`].concat(
+      bleCands.map(c => `<option value="${c.target_address}">${c.label}</option>`)
+    );
+    blePicker.innerHTML = opts.join("");
+  }
+  const nameInp = document.getElementById("ble-custom-name");
+  const addrInp = document.getElementById("ble-custom-addr");
+  if (nameInp) nameInp.value = "";
+  if (addrInp) addrInp.value = "";
+  populateSelect("ble-custom-person", STATE?.catalog?.persons || [], "", true);
+
+  switchAddDeviceTab(unbridged.length > 0 ? "esphome" : "ble");
   document.getElementById("latter-add-dev-modal").style.display = "flex";
 }
 
@@ -3828,7 +3897,33 @@ function closeAddDeviceModal() {
   if (m) m.style.display = "none";
 }
 
-async function bridgeSelectedEsphomeDevice() {
+async function confirmAddDeviceModal() {
+  if (ADD_DEV_MODE === "ble") {
+    const name = document.getElementById("ble-custom-name")?.value?.trim() || "";
+    const target_address = document.getElementById("ble-custom-addr")?.value?.trim() || "";
+    const assigned_person = document.getElementById("ble-custom-person")?.value || "";
+    if (!name || !target_address) {
+      showToast("Enter a Device Name and BLE Address/Entity");
+      return;
+    }
+    closeAddDeviceModal();
+    const resp = await fetch(API_URL, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        command: "add_ble_device",
+        name,
+        target_address,
+        assigned_person
+      })
+    });
+    if (resp.ok) {
+      applyStateToDom(await resp.json(), false);
+      showToast(`Added BLE device '${name}'`);
+    }
+    return;
+  }
+
   const picker = document.getElementById("bridge-device-picker");
   if (!picker || !picker.value) return;
   const slug = picker.value;

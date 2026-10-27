@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from homeassistant.components.sensor import SensorEntity
+from homeassistant.components.sensor import (
+    SensorDeviceClass,
+    SensorEntity,
+    SensorStateClass,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr
@@ -27,15 +31,26 @@ async def async_setup_entry(
     coordinator: LatterCoordinator = (
         getattr(entry, "runtime_data", None) or hass.data[DOMAIN][entry.entry_id]
     )
-    async_add_entities(
-        [
-            LatterActiveMediaSensor(coordinator),
-            LatterWeatherForecastSensor(coordinator),
-            LatterRoomContextSensor(coordinator),
-            LatterCalendarAgendaSensor(coordinator),
-            LatterRemoteConfigSensor(coordinator),
-        ]
-    )
+    if coordinator.device_profile == "ble_beacon":
+        async_add_entities(
+            [
+                LatterCurrentRoomSensor(coordinator),
+                LatterBleDistanceSensor(coordinator),
+                LatterRoomContextSensor(coordinator),
+            ]
+        )
+    else:
+        async_add_entities(
+            [
+                LatterCurrentRoomSensor(coordinator),
+                LatterBleDistanceSensor(coordinator),
+                LatterActiveMediaSensor(coordinator),
+                LatterWeatherForecastSensor(coordinator),
+                LatterRoomContextSensor(coordinator),
+                LatterCalendarAgendaSensor(coordinator),
+                LatterRemoteConfigSensor(coordinator),
+            ]
+        )
 
 
 class _BaseLatterSensor(SensorEntity):
@@ -222,4 +237,50 @@ class LatterRemoteConfigSensor(_BaseLatterSensor):
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return slot_1..4 names, remote_entity, media_player_entity, and states."""
         _, attrs = self.coordinator.get_remote_config_payload()
+        return attrs
+
+class LatterCurrentRoomSensor(_BaseLatterSensor):
+    """Exposes sensor.<device_slug>_current_room with live room name or 'Away'."""
+
+    _attr_icon = "mdi:map-marker-radius"
+
+    def __init__(self, coordinator: LatterCoordinator) -> None:
+        """Initialize current room sensor."""
+        super().__init__(coordinator, "current_room", "Current Room")
+
+    @property
+    def native_value(self) -> str:
+        """Return active room name or 'Away'."""
+        state, _ = self.coordinator.get_current_room_and_distance()
+        return state
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return BLE distance, closest proxy, and person assignment."""
+        _, attrs = self.coordinator.get_current_room_and_distance()
+        return attrs
+
+
+class LatterBleDistanceSensor(_BaseLatterSensor):
+    """Exposes sensor.<device_slug>_ble_distance with estimated distance (ft) to the winning room proxy."""
+
+    _attr_icon = "mdi:map-marker-distance"
+    _attr_native_unit_of_measurement = "ft"
+    _attr_device_class = SensorDeviceClass.DISTANCE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(self, coordinator: LatterCoordinator) -> None:
+        """Initialize BLE distance sensor."""
+        super().__init__(coordinator, "ble_distance", "BLE Distance")
+
+    @property
+    def native_value(self) -> float | None:
+        """Return estimated distance in feet to the closest room proxy."""
+        _, attrs = self.coordinator.get_current_room_and_distance()
+        return attrs.get("distance_ft")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return distance in meters, RSSI, and closest proxy."""
+        _, attrs = self.coordinator.get_current_room_and_distance()
         return attrs

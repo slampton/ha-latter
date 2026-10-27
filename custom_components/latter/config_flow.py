@@ -232,9 +232,22 @@ def _apply_onboarding_profile_and_defaults(
     slug = normalize_device_slug(str(user_input.get(CONF_DEVICE_SLUG) or "esphome_device"))
     hw_defaults = _detect_hardware_defaults(hass, slug)
 
+    passthrough_keys = (
+        "device_profile",
+        "device_group",
+        "ble_target_address",
+        "assigned_person",
+        "default_area",
+    )
+    extra_init = {
+        k: user_input[k]
+        for k in passthrough_keys
+        if k in user_input and user_input[k] not in (None, "")
+    }
     merged: dict[str, Any] = {
         **hw_defaults,
         **(existing or {}),
+        **extra_init,
         CONF_DEVICE_SLUG: slug,
     }
 
