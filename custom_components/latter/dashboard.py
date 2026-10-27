@@ -78,6 +78,7 @@ from .const import (
     CONF_VOL_SPEAKER_2,
     CONF_VOL_TARGET_1,
     CONF_VOL_TARGET_2,
+    CONF_VOLUME_OVERRIDES,
     CONF_WALLPAPER_CYCLE_MINUTES,
     CONF_WALLPAPER_FAVORITES,
     CONF_SITE_ID,
@@ -500,6 +501,10 @@ def _build_companion_state_payload(
         CONF_VOL_TARGET_1: coordinator.get_opt(CONF_VOL_TARGET_1, ""),
         CONF_VOL_SPEAKER_2: coordinator.get_opt(CONF_VOL_SPEAKER_2, ""),
         CONF_VOL_TARGET_2: coordinator.get_opt(CONF_VOL_TARGET_2, ""),
+        CONF_VOLUME_OVERRIDES: [
+            {"speaker": k, "target": v}
+            for k, v in coordinator.volume_overrides.items()
+        ],
         CONF_DEFAULT_AREA: coordinator.get_opt(CONF_DEFAULT_AREA, ""),
         CONF_NATIVE_BLE_TRACKING: coordinator.native_ble_tracking_enabled,
         CONF_BLE_BEACON_UUID: coordinator.ble_beacon_uuid,
@@ -723,6 +728,41 @@ def _build_companion_state_payload(
             "wallpaper_url": room_attrs.get("wallpaper_url", "none"),
             "active_remote_slot": coordinator.active_remote_slot,
             "remote_slots_meta": remote_attrs,
+            "device_sw_version": str(
+                (
+                    hass.states.get(f"sensor.{coordinator.device_slug}_firmware_version").state
+                    if hass.states.get(f"sensor.{coordinator.device_slug}_firmware_version")
+                    and hass.states.get(f"sensor.{coordinator.device_slug}_firmware_version").state
+                    not in ("unavailable", "unknown", "")
+                    else esphome_inspector.get("device", {}).get("sw_version")
+                )
+                or INTEGRATION_VERSION
+            ),
+            "fw_update_entity": next(
+                (
+                    str(it.get("entity_id"))
+                    for it in all_esp_items
+                    if it.get("domain") == "update" and it.get("entity_id")
+                ),
+                "",
+            ),
+            "fw_update_available": any(
+                it.get("domain") == "update" and it.get("state") == "on"
+                for it in all_esp_items
+            ),
+            "fw_latest_version": next(
+                (
+                    str(
+                        hass.states.get(str(it.get("entity_id"))).attributes.get("latest_version")
+                        or ""
+                    )
+                    for it in all_esp_items
+                    if it.get("domain") == "update"
+                    and it.get("entity_id")
+                    and hass.states.get(str(it.get("entity_id")))
+                ),
+                "",
+            ),
         },
         "ha_themes": _get_ha_installed_themes(hass),
         "catalog": {
@@ -1090,6 +1130,23 @@ class LatterCompanionApiView(HomeAssistantView):
                 **(coordinator.entry.options or {}),
             }
             global_updates: dict[str, Any] = {}
+
+            if "volume_overrides" in incoming_cfg and isinstance(incoming_cfg["volume_overrides"], list):
+                clean_vo = [
+                    {
+                        "speaker": str(x.get("speaker") or "").strip(),
+                        "target": str(x.get("target") or "").strip(),
+                    }
+                    for x in incoming_cfg["volume_overrides"][:10]
+                    if isinstance(x, dict)
+                    and str(x.get("speaker") or "").strip()
+                    and str(x.get("target") or "").strip()
+                ]
+                incoming_cfg[CONF_VOLUME_OVERRIDES] = clean_vo
+                incoming_cfg[CONF_VOL_SPEAKER_1] = clean_vo[0]["speaker"] if len(clean_vo) >= 1 else ""
+                incoming_cfg[CONF_VOL_TARGET_1] = clean_vo[0]["target"] if len(clean_vo) >= 1 else ""
+                incoming_cfg[CONF_VOL_SPEAKER_2] = clean_vo[1]["speaker"] if len(clean_vo) >= 2 else ""
+                incoming_cfg[CONF_VOL_TARGET_2] = clean_vo[1]["target"] if len(clean_vo) >= 2 else ""
 
             device_keys = (
                 CONF_DEVICE_SLUG,

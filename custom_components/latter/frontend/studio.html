@@ -399,9 +399,65 @@
   }
   .hero-stats {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 10px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
     margin-bottom: 16px;
+  }
+  .theme-icon-group {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
+    background: var(--input-bg);
+    padding: 4px;
+    border-radius: 9px;
+    border: 1px solid var(--border);
+  }
+  .theme-icon-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 32px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    transition: background 0.12s ease, color 0.12s ease;
+  }
+  .theme-icon-btn:hover {
+    color: var(--text-strong);
+    background: var(--card-hover);
+  }
+  .theme-icon-btn.active {
+    background: var(--text-strong);
+    color: var(--bg);
+  }
+  .theme-icon-btn svg {
+    width: 16px;
+    height: 16px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .update-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 11px;
+    border-radius: 16px;
+    background: rgba(3, 169, 244, 0.18);
+    border: 1px solid var(--accent);
+    color: var(--text-strong);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.12s ease, color 0.12s ease;
+  }
+  .update-pill:hover {
+    background: var(--accent-solid);
+    color: #ffffff;
   }
   .stat-box {
     background: var(--card);
@@ -808,7 +864,7 @@
     }
     .content-wrap { padding: 14px 12px 72px; }
     .grid-2 { grid-template-columns: 1fr; }
-    .hero-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .hero-stats { grid-template-columns: 1fr; }
     .binding-row { grid-template-columns: 1fr; }
     .native-ctrl-row {
       flex-direction: column;
@@ -892,13 +948,16 @@
     </div>
 
     <div class="sidebar-footer">
-      <div class="field" style="margin-bottom:0;">
-        <label>Theme</label>
-        <select id="cfg-web_theme" onchange="onThemeChanged(this.value)">
-          <option value="ha_auto">Home Assistant (Auto)</option>
-          <option value="ha_dark">Home Assistant (Dark)</option>
-          <option value="ha_light">Home Assistant (Light)</option>
-        </select>
+      <div class="theme-icon-group" role="group" aria-label="Color Theme">
+        <button type="button" class="theme-icon-btn" data-theme-btn="ha_light" title="Light Theme" onclick="onThemeChanged('ha_light')">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+        </button>
+        <button type="button" class="theme-icon-btn" data-theme-btn="ha_dark" title="Dark Theme" onclick="onThemeChanged('ha_dark')">
+          <svg viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+        <button type="button" class="theme-icon-btn" data-theme-btn="ha_auto" title="Auto (Follow System / Home Assistant)" onclick="onThemeChanged('ha_auto')">
+          <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+        </button>
       </div>
     </div>
   </aside>
@@ -907,15 +966,15 @@
   <div class="main-area">
     <header class="topbar">
       <div class="topbar-status">
-        <div style="display:flex;align-items:center;gap:10px;">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
           <img src="/api/latter/brand/icon.png" alt="Latter" style="width:26px;height:26px;border-radius:6px;object-fit:contain;flex-shrink:0;" onerror="this.style.display='none'">
           <strong id="hdr-title" style="font-size:15px;font-weight:500;color:var(--text-strong);">Latter</strong>
           <span class="nav-badge" id="hdr-sub">v2.2.0</span>
+          <button type="button" id="hdr-update-pill" class="update-pill hidden" onclick="triggerHeaderFirmwareUpdate()">Update Available</button>
         </div>
       </div>
       <div class="topbar-actions">
         <div id="dirty-indicator" class="dirty-banner">Unsaved</div>
-        <button class="btn-secondary" onclick="refreshState(true)">Sync</button>
         <button class="btn-primary" onclick="saveAllConfig()">Save Changes</button>
       </div>
     </header>
@@ -1058,22 +1117,21 @@
       </section>
 
       <!-- ================================================================== -->
-      <!-- SYSTEM TAB 3: MEDIA & REMOTES (REMOTES + VOLUME ROUTING)           -->
+      <!-- SYSTEM TAB 3: MEDIA & REMOTES (REMOTES + SPEAKER VOLUME OVERRIDES) -->
       <!-- ================================================================== -->
       <section id="view-remotes" class="hidden">
         <div class="page-header">
           <h2>Media &amp; Remotes</h2>
-          <p>Assign up to four TV/Media remote slots and configure external AV receiver volume overrides.</p>
+          <p>Assign up to four TV/media remote slots and configure speaker volume overrides.</p>
         </div>
 
         <div class="card">
           <h3>Remote Control Slots</h3>
-          <p class="desc">Select a <code>remote.*</code> or <code>media_player.*</code> entity for each slot. Sibling entities on the same device are paired automatically.</p>
+          <p class="desc">Select a <code>remote.*</code> or <code>media_player.*</code> entity for each slot. <strong>Slot 1</strong> is the primary device targeted by the Master Power button on your displays; Slots 2–4 appear as secondary devices.</p>
           <div class="grid-2">
-            <div class="remote-slot-card" id="rslot-card-1">
+            <div class="remote-slot-card">
               <div class="remote-slot-hdr">
-                <strong>Slot 1</strong>
-                <button class="btn-secondary" id="rslot-btn-1" onclick="activateRemoteSlot(1)">Set Active</button>
+                <strong>Slot 1 (Primary Power Target)</strong>
               </div>
               <div class="field">
                 <label>Target Entity</label>
@@ -1082,10 +1140,9 @@
               <div id="embedded-remote-slot-1" class="native-controls-box"></div>
             </div>
 
-            <div class="remote-slot-card" id="rslot-card-2">
+            <div class="remote-slot-card">
               <div class="remote-slot-hdr">
                 <strong>Slot 2</strong>
-                <button class="btn-secondary" id="rslot-btn-2" onclick="activateRemoteSlot(2)">Set Active</button>
               </div>
               <div class="field">
                 <label>Target Entity</label>
@@ -1094,10 +1151,9 @@
               <div id="embedded-remote-slot-2" class="native-controls-box"></div>
             </div>
 
-            <div class="remote-slot-card" id="rslot-card-3">
+            <div class="remote-slot-card">
               <div class="remote-slot-hdr">
                 <strong>Slot 3</strong>
-                <button class="btn-secondary" id="rslot-btn-3" onclick="activateRemoteSlot(3)">Set Active</button>
               </div>
               <div class="field">
                 <label>Target Entity</label>
@@ -1106,10 +1162,9 @@
               <div id="embedded-remote-slot-3" class="native-controls-box"></div>
             </div>
 
-            <div class="remote-slot-card" id="rslot-card-4">
+            <div class="remote-slot-card">
               <div class="remote-slot-hdr">
                 <strong>Slot 4</strong>
-                <button class="btn-secondary" id="rslot-btn-4" onclick="activateRemoteSlot(4)">Set Active</button>
               </div>
               <div class="field">
                 <label>Target Entity</label>
@@ -1122,22 +1177,10 @@
         </div>
 
         <div class="card">
-          <h3>External AVR &amp; Amplifier Volume Routing</h3>
-          <p class="desc">Route volume up/down/set commands to an external AV receiver or amplifier whenever a device streams to a mapped speaker.</p>
-          <div class="field">
-            <label>Override 1: When Streaming to Speaker &rarr; Control Volume On</label>
-            <div class="form-grid-2">
-              <select id="cfg-vol_speaker_1" onchange="markDirty()"></select>
-              <select id="cfg-vol_target_1" onchange="markDirty()"></select>
-            </div>
-          </div>
-          <div class="field">
-            <label>Override 2: When Streaming to Speaker &rarr; Control Volume On</label>
-            <div class="form-grid-2">
-              <select id="cfg-vol_speaker_2" onchange="markDirty()"></select>
-              <select id="cfg-vol_target_2" onchange="markDirty()"></select>
-            </div>
-          </div>
+          <h3>Speaker Volume Overrides</h3>
+          <p class="desc">When streaming audio to a specific speaker, route volume commands to a different media player or number entity instead.</p>
+          <div id="volume-overrides-list"></div>
+          <button type="button" class="btn-secondary" id="btn-add-vol-override" onclick="addVolumeOverrideRow('', ''); markDirty();">+ Add Volume Override</button>
         </div>
       </section>
 
@@ -1273,12 +1316,18 @@
             <h3>Appearance &amp; Reverse Proxy</h3>
             <p class="desc">Configure Web Studio theme and optional external HTTPS base URL.</p>
             <div class="field">
-              <label>Home Assistant Theme</label>
-              <select id="cfg-web_theme_mobile" onchange="onThemeChanged(this.value)">
-                <option value="ha_auto">Home Assistant (Auto)</option>
-                <option value="ha_dark">Home Assistant (Dark)</option>
-                <option value="ha_light">Home Assistant (Light)</option>
-              </select>
+              <label>Theme</label>
+              <div class="theme-icon-group" role="group" aria-label="Color Theme" style="max-width:220px;">
+                <button type="button" class="theme-icon-btn" data-theme-btn="ha_light" title="Light Theme" onclick="onThemeChanged('ha_light')">
+                  <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+                </button>
+                <button type="button" class="theme-icon-btn" data-theme-btn="ha_dark" title="Dark Theme" onclick="onThemeChanged('ha_dark')">
+                  <svg viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                </button>
+                <button type="button" class="theme-icon-btn" data-theme-btn="ha_auto" title="Auto (Follow System / Home Assistant)" onclick="onThemeChanged('ha_auto')">
+                  <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                </button>
+              </div>
             </div>
             <div class="field">
               <label>Companion Base URL Override (Optional)</label>
@@ -1431,7 +1480,6 @@
           <div class="stat-box"><span id="st-room-label">Current Room</span><strong id="st-room">--</strong></div>
           <div class="stat-box"><span>Battery / Power</span><strong id="st-battery">--</strong></div>
           <div class="stat-box"><span>Wi-Fi Signal</span><strong id="st-wifi">--</strong></div>
-          <div class="stat-box"><span>IP &amp; Firmware</span><strong id="st-fw-ip">--</strong></div>
         </div>
 
         <div class="grid-2">
@@ -1441,10 +1489,6 @@
             <p class="desc">Execute immediate device commands or apply a saved configuration profile.</p>
             <div id="dash-quick-actions" class="quick-actions-row" style="margin-bottom:18px;"></div>
 
-            <div class="field" id="dash-speaker-field">
-              <label>Active Speaker Target</label>
-              <select id="quick-speaker" onchange="quickSwitchSpeaker(this.value)"></select>
-            </div>
             <div class="field">
               <label>Apply Configuration Profile</label>
               <div class="input-action-row">
@@ -1647,40 +1691,47 @@
       </section>
 
       <!-- ================================================================== -->
-      <!-- DEVICE TAB 5: ADMINISTRATION (NETWORK, IDENTITY, VPN, BLE, RAW)    -->
+      <!-- DEVICE TAB 5: ADMINISTRATION (IDENTITY, BLE, VPN, RAW, REMOVE)     -->
       <!-- ================================================================== -->
       <section id="view-system" class="hidden">
         <div class="page-header">
           <h2>Device Administration</h2>
-          <p>Network diagnostics, firmware updates, device identity, BLE room tracking, and WireGuard roaming VPN.</p>
+          <p>Device identity, BLE room tracking configuration, WireGuard roaming VPN, and entity inspection.</p>
         </div>
 
         <div class="grid-2">
+          <!-- CARD 1: DEVICE IDENTITY -->
           <div class="card">
-            <h3>Network &amp; Firmware Diagnostics</h3>
-            <p class="desc">Wi-Fi signal, IP address, uptime, memory, and firmware update status.</p>
-            <div id="embedded-network" class="native-controls-box"></div>
-          </div>
-
-          <div class="card">
-            <h3>Device Identity &amp; BLE Room Tracking</h3>
-            <p class="desc">Configure device slug, group assignment, and Bluetooth room presence tracking.</p>
+            <h3>Device Identity</h3>
+            <p class="desc">Configure this device's normalized ESPHome slug, hardware type, logical group, and pagination.</p>
             <div class="field">
               <label>ESPHome Device Slug (sensor.&lt;slug&gt;_*)</label>
               <input type="text" id="cfg-device_slug" oninput="markDirty(); renderYamlGenerator();">
             </div>
             <div class="field">
-              <label>Device Type, Group &amp; Room Cards Per Page</label>
-              <div class="form-grid-3">
-                <select id="cfg-device_profile" onchange="markDirty()">
-                  <option value="mobile_display">Mobile Display</option>
-                  <option value="stationary_display">Stationary Display</option>
-                  <option value="headless_node">Headless / Sensor Node</option>
-                </select>
+              <label>Device Type</label>
+              <select id="cfg-device_profile" onchange="markDirty()">
+                <option value="mobile_display">Mobile Display</option>
+                <option value="stationary_display">Stationary Display</option>
+                <option value="headless_node">Headless / Sensor Node</option>
+              </select>
+            </div>
+            <div class="form-grid-2">
+              <div class="field">
+                <label>Device Group</label>
                 <select id="cfg-device_group" onchange="markDirty()"></select>
+              </div>
+              <div class="field">
+                <label>Room Cards Per Page</label>
                 <input type="number" id="cfg-default_page_size" min="1" max="20" value="3" oninput="markDirty(); renderYamlGenerator();">
               </div>
             </div>
+          </div>
+
+          <!-- CARD 2: BLE ROOM TRACKING -->
+          <div class="card">
+            <h3>BLE Room Tracking</h3>
+            <p class="desc">Configure how this device roams between rooms using ESPHome Bluetooth proxies.</p>
             <div class="toggle-row">
               <span>Enable BLE Proxy Room Tracking</span>
               <input type="checkbox" id="cfg-native_ble_tracking" onchange="markDirty()">
@@ -1701,9 +1752,6 @@
             <div class="field">
               <label>External Room Sensor Override (Optional)</label>
               <select id="cfg-presence_entity" onchange="markDirty()"></select>
-            </div>
-            <div style="display:flex;justify-content:flex-end;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
-              <button type="button" class="btn-danger" onclick="removeManagedDevice(STATE.entry_id, STATE.title)">Remove Device from Latter</button>
             </div>
           </div>
         </div>
@@ -1815,16 +1863,28 @@
           </div>
         </details>
 
-        <!-- COLLAPSIBLE: RAW ENTITY INSPECTOR -->
+        <!-- COLLAPSIBLE: DIAGNOSTICS & RAW ENTITY INSPECTOR -->
         <details class="ha-details">
-          <summary>Raw ESPHome Entity Inspector</summary>
+          <summary>Diagnostics &amp; Raw ESPHome Entity Inspector</summary>
           <div class="details-body">
+            <div id="embedded-network" class="native-controls-box" style="margin-bottom:12px;"></div>
             <div style="margin-bottom:10px;">
-              <input type="text" id="esp-search" placeholder="Filter by entity name or entity_id..." oninput="renderRawEntityList()">
+              <input type="text" id="esp-search" placeholder="Filter all entities by name or entity_id..." oninput="renderRawEntityList()">
             </div>
             <div id="raw-entity-items" class="native-controls-box"></div>
           </div>
         </details>
+
+        <!-- DEDICATED REMOVE DEVICE CARD -->
+        <div class="card" style="border-color:rgba(219, 68, 55, 0.35);margin-top:16px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+            <div>
+              <h3 style="margin:0;color:var(--danger);">Remove Device</h3>
+              <p class="desc" style="margin:2px 0 0;">Remove this device from Latter. The ESPHome device itself will remain in Home Assistant and can be re-added anytime.</p>
+            </div>
+            <button type="button" class="btn-danger" onclick="removeManagedDevice(STATE.entry_id, STATE.title)">Remove Device from Latter</button>
+          </div>
+        </div>
       </section>
     </div>
   </div>
@@ -1927,21 +1987,38 @@ function trySyncFromParentHaFrame() {
   }
 }
 
-function populateThemeDropdowns(haThemes, selectedPref) {
-  ["cfg-web_theme", "cfg-web_theme_mobile"].forEach(id => {
-    const sel = document.getElementById(id);
-    if (!sel) return;
-    const baseOpts = [
-      {id: "ha_auto", name: "Home Assistant (Auto)"},
-      {id: "ha_dark", name: "Home Assistant (Dark)"},
-      {id: "ha_light", name: "Home Assistant (Light)"}
-    ];
-    Object.keys(haThemes || {}).sort().forEach(tName => {
-      baseOpts.push({id: tName, name: `HA Theme: ${tName}`});
-    });
-    sel.innerHTML = baseOpts.map(o =>
-      `<option value="${o.id}" ${o.id === selectedPref ? 'selected' : ''}>${o.name}</option>`
-    ).join("");
+function formatFriendlyState(raw) {
+  if (raw === null || raw === undefined) return "--";
+  const s = String(raw).trim();
+  if (!s || s.toLowerCase() === "unknown" || s.toLowerCase() === "unavailable" || s.toLowerCase() === "none") {
+    return "--";
+  }
+  const map = {
+    "clear-night": "Clear Night",
+    "clearnight": "Clear Night",
+    "clear-day": "Clear Day",
+    "clearday": "Clear Day",
+    "partlycloudy": "Partly Cloudy",
+    "partly-cloudy": "Partly Cloudy",
+    "mostlysunny": "Mostly Sunny",
+    "snowy-rainy": "Snowy Rainy",
+    "lightning-rainy": "Thunderstorm",
+    "armed_home": "Armed Home",
+    "armed_away": "Armed Away",
+    "armed_night": "Armed Night",
+    "armed_vacation": "Armed Vacation",
+    "heat_cool": "Heat / Cool"
+  };
+  const low = s.toLowerCase();
+  if (map[low]) return map[low];
+  return low
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function populateThemeDropdowns(_haThemes, selectedPref) {
+  document.querySelectorAll("[data-theme-btn]").forEach(btn => {
+    btn.classList.toggle("active", btn.getAttribute("data-theme-btn") === selectedPref);
   });
 }
 
@@ -1976,9 +2053,8 @@ function applyTheme(pref) {
   }
 
   localStorage.setItem("latter_web_theme", CURRENT_THEME_PREF);
-  ["cfg-web_theme", "cfg-web_theme_mobile"].forEach(id => {
-    const sel = document.getElementById(id);
-    if (sel && sel.value !== CURRENT_THEME_PREF) sel.value = CURRENT_THEME_PREF;
+  document.querySelectorAll("[data-theme-btn]").forEach(btn => {
+    btn.classList.toggle("active", btn.getAttribute("data-theme-btn") === CURRENT_THEME_PREF);
   });
 }
 
@@ -2103,7 +2179,28 @@ function updateTopHeaderForScope() {
   const isHH = (CURRENT_SCOPE === "household") || !DEVICE_SELECTED;
   const devTitle = STATE?.esphome?.device?.name || STATE?.title || "Device";
   document.getElementById("hdr-title").textContent = isHH ? "Latter" : devTitle;
+  const rawVer = isHH
+    ? (STATE?.version || "2.2.0")
+    : (STATE?.live?.device_sw_version || STATE?.esphome?.device?.sw_version || STATE?.version || "2.2.0");
+  const cleanVer = String(rawVer).replace(/^v/i, "");
+  document.getElementById("hdr-sub").textContent = `v${cleanVer}`;
+
+  const updPill = document.getElementById("hdr-update-pill");
+  if (updPill) {
+    const showUpd = !isHH && !!(STATE?.live?.fw_update_available && STATE?.live?.fw_update_entity);
+    updPill.classList.toggle("hidden", !showUpd);
+    if (showUpd) {
+      const lat = STATE?.live?.fw_latest_version ? ` (v${String(STATE.live.fw_latest_version).replace(/^v/i, "")})` : "";
+      updPill.textContent = `Update Available${lat} — Click to Update`;
+    }
+  }
   document.getElementById("nav-scope-device").classList.toggle("hidden", CURRENT_SCOPE !== "device" || !DEVICE_SELECTED);
+}
+
+async function triggerHeaderFirmwareUpdate() {
+  const entId = STATE?.live?.fw_update_entity;
+  if (!entId) return;
+  await espAction(entId, "install");
 }
 
 function setScope(scope, targetView=null) {
@@ -2546,18 +2643,18 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
   }
 
   const wCond = live.weather_condition && live.weather_condition !== "unknown"
-    ? `${live.weather_temp != null ? live.weather_temp + '° • ' : ''}${live.weather_condition}`
-    : (cfg.weather_entity || "Not mapped");
+    ? `${live.weather_temp != null ? Math.round(Number(live.weather_temp)) + '° • ' : ''}${formatFriendlyState(live.weather_condition)}`
+    : (cfg.weather_entity ? "Connected" : "Not Configured");
   document.getElementById("hh-sum-weather").textContent = wCond;
   document.getElementById("hh-sum-alarm").textContent = cfg.alarm_entity
-    ? `${(live.alarm_state || 'disarmed').replace(/_/g, ' ')} (${cfg.alarm_entity})`
-    : "Not mapped";
+    ? formatFriendlyState(live.alarm_state || "disarmed")
+    : "Not Configured";
   document.getElementById("hh-sum-thermostat").textContent = cfg.thermostat_entity
-    ? `${live.thermostat_state || 'off'}${live.thermostat_temp != null ? ' • ' + live.thermostat_temp + '°' : ''}`
-    : "Auto / Default";
-  document.getElementById("hh-sum-entry").textContent = `Lock: ${live.lock_state || 'locked'} • Garage: ${live.garage_state || 'closed'}`;
-  document.getElementById("hh-sum-vacuum").textContent = `${live.vacuum_state || 'docked'}`;
-  document.getElementById("hh-sum-camera").textContent = cfg.camera_entity || "None";
+    ? `${formatFriendlyState(live.thermostat_state || 'off')}${live.thermostat_temp != null ? ' • ' + live.thermostat_temp + '°' : ''}`
+    : `${formatFriendlyState(live.thermostat_state || 'auto')}${live.thermostat_temp != null ? ' • ' + live.thermostat_temp + '°' : ''}`;
+  document.getElementById("hh-sum-entry").textContent = `Lock: ${formatFriendlyState(live.lock_state || 'locked')} • Garage: ${formatFriendlyState(live.garage_state || 'closed')}`;
+  document.getElementById("hh-sum-vacuum").textContent = formatFriendlyState(live.vacuum_state || "docked");
+  document.getElementById("hh-sum-camera").textContent = cfg.camera_entity ? "Configured" : "Not Configured";
   document.getElementById("hh-sum-ble").textContent = String(Object.keys(cfg.ble_room_offsets || {}).length);
 }
 
@@ -3050,6 +3147,39 @@ function removeCalendarEntity(idx) {
   CALENDARS.splice(idx, 1);
   renderCalendarChips();
   markDirty();
+}
+
+function addVolumeOverrideRow(speaker="", target="") {
+  const list = document.getElementById("volume-overrides-list");
+  if (!list) return;
+  const existingCount = list.querySelectorAll(".vol-override-row").length;
+  if (existingCount >= 10) {
+    showToast("Maximum of 10 volume overrides reached");
+    return;
+  }
+  const row = document.createElement("div");
+  row.className = "native-ctrl-row vol-override-row";
+  row.style.marginBottom = "8px";
+  const spkOptions = (STATE?.catalog?.ma_speakers || []).map(s =>
+    `<option value="${s.id}" ${s.id === speaker ? 'selected' : ''}>${s.name}</option>`
+  ).join("");
+  const tgtOptions = (STATE?.catalog?.volume_targets || []).map(t =>
+    `<option value="${t.id}" ${t.id === target ? 'selected' : ''}>${t.name}</option>`
+  ).join("");
+  row.innerHTML = `
+    <div class="form-grid-2" style="flex:1;min-width:0;">
+      <div>
+        <small style="color:var(--muted);display:block;margin-bottom:3px;font-size:11px;">When Streaming To Speaker</small>
+        <select class="vo-spk" style="width:100%;max-width:none;" onchange="markDirty()"><option value="">— Select Speaker —</option>${spkOptions}</select>
+      </div>
+      <div>
+        <small style="color:var(--muted);display:block;margin-bottom:3px;font-size:11px;">Control Volume On</small>
+        <select class="vo-tgt" style="width:100%;max-width:none;" onchange="markDirty()"><option value="">— Select Volume Target —</option>${tgtOptions}</select>
+      </div>
+    </div>
+    <button type="button" class="btn-danger" title="Remove Override" onclick="this.parentElement.remove(); markDirty();">✕</button>
+  `;
+  list.appendChild(row);
 }
 
 function addBindingRow(slot="", entity_id="", action="toggle") {
@@ -3579,12 +3709,11 @@ function applyStateToDom(data, forceFormUpdate=false) {
   const roomLblEl = document.getElementById("st-room-label");
   if (roomLblEl) roomLblEl.textContent = isRoaming ? "Current Room (Roaming)" : "Assigned Room";
 
-  // 4 Hero Stat Boxes on Device Overview
+  // 3 Hero Stat Boxes on Device Overview
   document.getElementById("dash-header-title").textContent = devTitle;
   document.getElementById("st-room").textContent = roomName;
   document.getElementById("st-battery").textContent = batText;
   document.getElementById("st-wifi").textContent = wifiText;
-  document.getElementById("st-fw-ip").textContent = curFleet.ip_address ? `${curFleet.ip_address} • ${fwVer}` : fwVer;
 
   const grpList = data.device_groups || [];
   const grpObj = grpList.find(g => g.id === cfg.device_group);
@@ -3601,24 +3730,8 @@ function applyStateToDom(data, forceFormUpdate=false) {
   document.getElementById("dash-ble-proxy").textContent = (live.ble_closest_proxy || "None") + distSuffix;
   const proxyRow = document.getElementById("dash-row-ble-proxy");
   if (proxyRow) proxyRow.style.display = (caps.has_ble_beacon && cfg.native_ble_tracking) ? "flex" : "none";
-  const spkField = document.getElementById("dash-speaker-field");
-  if (spkField) spkField.style.display = caps.has_audio ? "block" : "none";
 
   renderLogsView();
-
-  const actSlotIdx = live.active_remote_slot || 1;
-  [1, 2, 3, 4].forEach(idx => {
-    const isAct = actSlotIdx === idx;
-    const card = document.getElementById(`rslot-card-${idx}`);
-    const btn = document.getElementById(`rslot-btn-${idx}`);
-    if (card) card.classList.toggle("active-slot", isAct);
-    if (btn) {
-      btn.textContent = isAct ? "Active" : "Set Active";
-      btn.className = isAct ? "btn-primary" : "btn-secondary";
-    }
-  });
-
-  populateSelect("quick-speaker", cat.ma_speakers, live.active_speaker, true);
   renderRssiBars(live.ble_survey_rows, live.ble_packets_seen);
   renderWallpaperGallery(data.wallpapers, cfg.device_slug, cfg.display_shape);
   if (data.vpn_snippets) {
@@ -3670,10 +3783,18 @@ function applyStateToDom(data, forceFormUpdate=false) {
     populateSelect("cfg-default_area", cat.areas, cfg.default_area);
     populateSelect("cfg-presence_entity", cat.presence_sensors, cfg.presence_entity);
     populateSelect("cfg-default_speaker", cat.ma_speakers, cfg.default_speaker, false);
-    populateSelect("cfg-vol_speaker_1", cat.ma_speakers, cfg.vol_speaker_1);
-    populateSelect("cfg-vol_target_1", cat.volume_targets, cfg.vol_target_1);
-    populateSelect("cfg-vol_speaker_2", cat.ma_speakers, cfg.vol_speaker_2);
-    populateSelect("cfg-vol_target_2", cat.volume_targets, cfg.vol_target_2);
+    const voListEl = document.getElementById("volume-overrides-list");
+    if (voListEl) {
+      voListEl.innerHTML = "";
+      let voItems = Array.isArray(cfg.volume_overrides) ? cfg.volume_overrides : [];
+      if (!voItems.length) {
+        if (cfg.vol_speaker_1 && cfg.vol_target_1) voItems.push({speaker: cfg.vol_speaker_1, target: cfg.vol_target_1});
+        if (cfg.vol_speaker_2 && cfg.vol_target_2) voItems.push({speaker: cfg.vol_speaker_2, target: cfg.vol_target_2});
+      }
+      voItems.forEach(vo => {
+        if (vo && vo.speaker && vo.target) addVolumeOverrideRow(vo.speaker, vo.target);
+      });
+    }
     populateSelect("cfg-remote_1", cat.remotes, cfg.remote_1);
     populateSelect("cfg-remote_2", cat.remotes, cfg.remote_2);
     populateSelect("cfg-remote_3", cat.remotes, cfg.remote_3);
@@ -3744,6 +3865,13 @@ async function saveAllConfig() {
     if (slot && entity_id) bindings.push({slot, entity_id, action});
   });
 
+  const volumeOverrides = [];
+  document.querySelectorAll("#volume-overrides-list .vol-override-row").forEach(row => {
+    const speaker = row.querySelector(".vo-spk")?.value?.trim() || "";
+    const target = row.querySelector(".vo-tgt")?.value?.trim() || "";
+    if (speaker && target) volumeOverrides.push({speaker, target});
+  });
+
   const config = {
     device_slug: document.getElementById("cfg-device_slug").value.trim(),
     companion_base_url: document.getElementById("cfg-companion_base_url").value.trim(),
@@ -3761,7 +3889,7 @@ async function saveAllConfig() {
     device_group: document.getElementById("cfg-device_group")?.value || "handhelds",
     display_shape: document.getElementById("cfg-display_shape").value,
     default_page_size: parseInt(document.getElementById("cfg-default_page_size").value, 10) || 3,
-    web_theme: document.getElementById("cfg-web_theme").value,
+    web_theme: CURRENT_THEME_PREF || "ha_auto",
     native_ble_tracking: document.getElementById("cfg-native_ble_tracking").checked,
     ble_auto_switch: document.getElementById("cfg-ble_auto_switch").checked,
     sync_device_area: document.getElementById("cfg-sync_device_area").checked,
@@ -3769,10 +3897,11 @@ async function saveAllConfig() {
     ble_beacon_uuid: document.getElementById("cfg-ble_beacon_uuid").value.trim(),
     presence_entity: document.getElementById("cfg-presence_entity").value,
     default_speaker: document.getElementById("cfg-default_speaker").value,
-    vol_speaker_1: document.getElementById("cfg-vol_speaker_1").value,
-    vol_target_1: document.getElementById("cfg-vol_target_1").value,
-    vol_speaker_2: document.getElementById("cfg-vol_speaker_2").value,
-    vol_target_2: document.getElementById("cfg-vol_target_2").value,
+    volume_overrides: volumeOverrides,
+    vol_speaker_1: volumeOverrides[0]?.speaker || "",
+    vol_target_1: volumeOverrides[0]?.target || "",
+    vol_speaker_2: volumeOverrides[1]?.speaker || "",
+    vol_target_2: volumeOverrides[1]?.target || "",
     remote_1: document.getElementById("cfg-remote_1").value,
     remote_2: document.getElementById("cfg-remote_2").value,
     remote_3: document.getElementById("cfg-remote_3").value,

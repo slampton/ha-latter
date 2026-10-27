@@ -99,6 +99,7 @@ from .const import (
     CONF_VOL_SPEAKER_2,
     CONF_VOL_TARGET_1,
     CONF_VOL_TARGET_2,
+    CONF_VOLUME_OVERRIDES,
     CONF_WALLPAPER_CYCLE_MINUTES,
     CONF_WALLPAPER_FAVORITES,
     CONF_WALLPAPER_SOURCE,
@@ -620,8 +621,18 @@ class LatterCoordinator:
 
     @property
     def volume_overrides(self) -> dict[str, str]:
-        """Build speaker -> volume target dictionary from visual override selectors 1 & 2."""
+        """Build speaker -> volume target dictionary from dynamic volume_overrides list (with legacy 1 & 2 fallback)."""
         mapping: dict[str, str] = {}
+        raw_list = self.get_opt(CONF_VOLUME_OVERRIDES)
+        if isinstance(raw_list, list):
+            for item in raw_list[:10]:
+                if isinstance(item, dict):
+                    spk = str(item.get("speaker") or "").strip()
+                    tgt = str(item.get("target") or "").strip()
+                    if spk and tgt:
+                        mapping[spk] = tgt
+            return mapping
+
         s1 = self.get_opt(CONF_VOL_SPEAKER_1)
         t1 = self.get_opt(CONF_VOL_TARGET_1)
         if s1 and t1:
