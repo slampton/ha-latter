@@ -104,7 +104,7 @@ def _discover_default_speaker(hass: HomeAssistant, device_slug: str) -> str:
 
 
 def _detect_hardware_defaults(hass: HomeAssistant, slug: str) -> dict[str, Any]:
-    """Auto-detect screen shape, art_size (410x502 vs 466), archetype, area, and BLE capability from the ESPHome device."""
+    """Auto-detect screen shape, art_size (410x502 vs 466), archetype, area, and roaming BLE capability."""
     norm = normalize_device_slug(slug)
     dev_reg = dr.async_get(hass)
     ent_reg = er.async_get(hass)
@@ -149,7 +149,7 @@ def _detect_hardware_defaults(hass: HomeAssistant, slug: str) -> dict[str, Any]:
             CONF_BLE_AUTO_SWITCH: True,
             CONF_SYNC_DEVICE_AREA: True,
             CONF_AREA_HANDOFF: DEFAULT_AREA_HANDOFF,
-            CONF_DEFAULT_AREA: (matched_dev.area_id or "") if matched_dev else "",
+            CONF_DEFAULT_AREA: "",
         }
 
     if is_round_175 or has_native_slots:
@@ -163,7 +163,7 @@ def _detect_hardware_defaults(hass: HomeAssistant, slug: str) -> dict[str, Any]:
             CONF_BLE_AUTO_SWITCH: True,
             CONF_SYNC_DEVICE_AREA: True,
             CONF_AREA_HANDOFF: DEFAULT_AREA_HANDOFF,
-            CONF_DEFAULT_AREA: (matched_dev.area_id or "") if matched_dev else "",
+            CONF_DEFAULT_AREA: "",
         }
 
     return {
@@ -183,7 +183,7 @@ def _detect_hardware_defaults(hass: HomeAssistant, slug: str) -> dict[str, Any]:
 def _apply_onboarding_profile_and_defaults(
     hass: HomeAssistant, user_input: dict[str, Any], existing: dict[str, Any] | None = None
 ) -> dict[str, Any]:
-    """Merge auto-detected hardware defaults, optional selected Profile, and global household defaults."""
+    """Merge auto-detected hardware defaults, roaming flag, optional Profile, and global household defaults."""
     slug = normalize_device_slug(str(user_input.get(CONF_DEVICE_SLUG) or "esphome_device"))
     hw_defaults = _detect_hardware_defaults(hass, slug)
 
@@ -193,11 +193,7 @@ def _apply_onboarding_profile_and_defaults(
         CONF_DEVICE_SLUG: slug,
     }
 
-    if user_input.get(CONF_DEFAULT_AREA):
-        merged[CONF_DEFAULT_AREA] = str(user_input[CONF_DEFAULT_AREA])
-    if CONF_DEFAULT_SPEAKER in user_input:
-        merged[CONF_DEFAULT_SPEAKER] = str(user_input.get(CONF_DEFAULT_SPEAKER) or "")
-    elif not merged.get(CONF_DEFAULT_SPEAKER):
+    if not merged.get(CONF_DEFAULT_SPEAKER):
         merged[CONF_DEFAULT_SPEAKER] = _discover_default_speaker(hass, slug)
 
     prof_id = str(user_input.get(CONF_APPLY_PROFILE) or "auto").strip()
@@ -208,6 +204,14 @@ def _apply_onboarding_profile_and_defaults(
             for k, v in matched_prof["device_config"].items():
                 if v is not None:
                     merged[k] = v
+
+    if CONF_NATIVE_BLE_TRACKING in user_input:
+        is_roaming = bool(user_input[CONF_NATIVE_BLE_TRACKING])
+        merged[CONF_NATIVE_BLE_TRACKING] = is_roaming
+        merged[CONF_BLE_AUTO_SWITCH] = is_roaming
+        merged[CONF_SYNC_DEVICE_AREA] = is_roaming
+        if not is_roaming and merged.get(CONF_DEVICE_PROFILE) == "mobile_display":
+            merged[CONF_DEVICE_PROFILE] = "stationary_display"
 
     # Seed global household weather & alarm if not yet configured anywhere
     domain_data = hass.data.get(DOMAIN, {})
@@ -225,15 +229,15 @@ def _apply_onboarding_profile_and_defaults(
 
 
 def _build_schema(hass: HomeAssistant, current: dict[str, Any]) -> vol.Schema:
-    """Build the streamlined 4-field onboarding schema (Hardware Auto-Detect + Profile Selector)."""
+    """Build the clean 3-field onboarding schema (Device Slug, Profile, Roaming Toggle)."""
     default_slug = str(current.get(CONF_DEVICE_SLUG) or _discover_esphome_slug(hass))
     hw_defs = _detect_hardware_defaults(hass, default_slug)
-    default_speaker = (
-        current.get(CONF_DEFAULT_SPEAKER)
-        if CONF_DEFAULT_SPEAKER in current
-        else _discover_default_speaker(hass, default_slug)
+    is_roaming_default = bool(
+        current.get(
+            CONF_NATIVE_BLE_TRACKING,
+            hw_defs.get(CONF_NATIVE_BLE_TRACKING, True),
+        )
     )
-    default_area = current.get(CONF_DEFAULT_AREA) or hw_defs.get(CONF_DEFAULT_AREA) or ""
 
     _, profiles = get_device_groups_and_profiles(hass)
     hw_shape_lbl = (
@@ -268,30 +272,10 @@ def _build_schema(hass: HomeAssistant, current: dict[str, Any]) -> vol.Schema:
                 mode=selector.SelectSelectorMode.DROPDOWN,
             )
         ),
+        vol.Required(
+            CONF_NATIVE_BLE_TRACKING, default=is_roaming_default
+        ): selector.BooleanSelector(),
     }
-
-    if default_area:
-        schema_dict[
-            vol.Optional(
-                CONF_DEFAULT_AREA, description={"suggested_value": default_area}
-            )
-        ] = selector.AreaSelector()
-    else:
-        schema_dict[vol.Optional(CONF_DEFAULT_AREA)] = selector.AreaSelector()
-
-    if default_speaker:
-        schema_dict[
-            vol.Optional(
-                CONF_DEFAULT_SPEAKER,
-                description={"suggested_value": default_speaker},
-            )
-        ] = selector.EntitySelector(
-            selector.EntitySelectorConfig(domain="media_player")
-        )
-    else:
-        schema_dict[vol.Optional(CONF_DEFAULT_SPEAKER)] = selector.EntitySelector(
-            selector.EntitySelectorConfig(domain="media_player")
-        )
 
     return vol.Schema(schema_dict)
 
@@ -304,7 +288,7 @@ def _format_clean_device_title(
     dev_reg = dr.async_get(hass)
     for dev in _iter_devices(dev_reg):
         dev_name = str(dev.name_by_user or dev.name or "").strip()
-        if dev_name and normalize_device_slug(dev_name) == norm:
+        if dev_name and normalize_device_slug(d_name) == norm:
             return dev_name
     if fallback_name and fallback_name.strip():
         return fallback_name.strip()

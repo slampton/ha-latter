@@ -3,22 +3,20 @@
     "step": {
       "user": {
         "title": "Onboard ESPHome Device to Latter",
-        "description": "Screen geometry, resolution (466x466 vs 410x502), and BLE capabilities are auto-detected from your device hardware. Shared household settings (Remotes, Volume Routing, Weather, Alarm, Calendars) are inherited automatically and managed in the Latter sidebar panel.",
+        "description": "Screen geometry, resolution (466x466 vs 410x502), and local speaker are auto-detected. If this device is stationary, uncheck the roaming box and assign its Area on the next screen.",
         "data": {
           "device_slug": "ESPHome Device Name / Slug",
-          "apply_profile": "Initial Configuration Profile",
-          "default_area": "Starting / Default Room",
-          "default_speaker": "Default Active Speaker (Optional)"
+          "apply_profile": "Configuration Profile",
+          "native_ble_tracking": "This device roams (not fixed to a single Area)"
         }
       },
       "reconfigure": {
         "title": "Reconfigure Latter Device",
-        "description": "Update the primary room, default speaker, or apply a saved configuration profile. Open the Latter sidebar panel for full System & Device Studio controls.",
+        "description": "Apply a configuration profile or toggle whether this device roams between Areas. Open the Latter sidebar panel for full System & Device Studio controls.",
         "data": {
           "device_slug": "ESPHome Device Name / Slug",
-          "apply_profile": "Apply Configuration Profile",
-          "default_area": "Starting / Default Room",
-          "default_speaker": "Default Active Speaker (Optional)"
+          "apply_profile": "Configuration Profile",
+          "native_ble_tracking": "This device roams (not fixed to a single Area)"
         }
       }
     },
@@ -33,12 +31,11 @@
     "step": {
       "init": {
         "title": "Latter Device Options",
-        "description": "Update the starting room, default speaker, or apply a saved profile. For full System & Device configuration, open the Latter panel in your Home Assistant sidebar.",
+        "description": "Apply a configuration profile or toggle whether this device roams between Areas. For Stationary devices, assign the device's Area using Home Assistant's standard Device settings.",
         "data": {
           "device_slug": "ESPHome Device Name / Slug",
-          "apply_profile": "Apply Configuration Profile",
-          "default_area": "Starting / Default Room",
-          "default_speaker": "Default Active Speaker (Optional)"
+          "apply_profile": "Configuration Profile",
+          "native_ble_tracking": "This device roams (not fixed to a single Area)"
         }
       }
     }
