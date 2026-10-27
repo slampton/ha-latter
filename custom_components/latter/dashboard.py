@@ -572,6 +572,26 @@ def _build_companion_state_payload(
             s.endswith("_set_browse_slots") and c.device_slug in s
             for s in esphome_svcs
         )
+        c_has_ble = bool(
+            c.native_ble_tracking_enabled
+            or c._ble_tracker is not None
+            or any(
+                (s.endswith("_set_browse_slots") or s.endswith("_set_room_slots"))
+                and c.device_slug in s
+                for s in esphome_svcs
+            )
+            or hass.states.get(f"switch.{c.device_slug}_room_ble_presence_beacon") is not None
+            or hass.states.get(f"switch.{c.device_slug}_ble_presence_beacon") is not None
+        )
+        c_survey_rows = (
+            c._ble_tracker.get_room_calibration_telemetry()
+            if c._ble_tracker is not None
+            and hasattr(c._ble_tracker, "get_room_calibration_telemetry")
+            else []
+        )
+        c_packets_seen = (
+            c._ble_tracker.packets_seen if c._ble_tracker is not None else 0
+        )
         c_bat_st = hass.states.get(f"sensor.{c.device_slug}_battery_level")
         c_chg_st = hass.states.get(f"binary_sensor.{c.device_slug}_battery_charging")
         c_wifi_st = (
@@ -615,6 +635,9 @@ def _build_companion_state_payload(
                 "is_charging": bool(c_chg_st and c_chg_st.state == "on"),
                 "wifi_rssi": c_wifi_val,
                 "ip_address": c_ip_val,
+                "has_ble": c_has_ble,
+                "ble_survey_rows": c_survey_rows,
+                "ble_packets_seen": c_packets_seen,
                 "ble_closest_proxy": c_room_attrs.get("ble_closest_proxy", ""),
                 "companion_url": f"/api/latter/companion/{c.entry.entry_id}?token={c.get_signed_token()}",
                 "is_current": c.entry.entry_id == coordinator.entry.entry_id,
@@ -867,8 +890,33 @@ class LatterCompanionApiView(HomeAssistantView):
 
         if cmd == "auto_calibrate_here":
             target_area_id = str(body.get("area_id") or "").strip()
-            if target_area_id and coordinator._ble_tracker is not None:
-                rows = coordinator._ble_tracker.get_room_calibration_telemetry()
+            survey_slug = str(body.get("survey_device_slug") or "").strip()
+            survey_coord = coordinator
+            if survey_slug:
+                matched_c = next(
+                    (
+                        c
+                        for c in _get_all_coordinators(self.hass)
+                        if c.device_slug == survey_slug and c._ble_tracker is not None
+                    ),
+                    None,
+                )
+                if matched_c is not None:
+                    survey_coord = matched_c
+            elif survey_coord._ble_tracker is None:
+                fallback_c = next(
+                    (
+                        c
+                        for c in _get_all_coordinators(self.hass)
+                        if c._ble_tracker is not None
+                    ),
+                    None,
+                )
+                if fallback_c is not None:
+                    survey_coord = fallback_c
+
+            if target_area_id and survey_coord._ble_tracker is not None:
+                rows = survey_coord._ble_tracker.get_room_calibration_telemetry()
                 target_row = next(
                     (r for r in rows if r["area_id"] == target_area_id), None
                 )
@@ -878,7 +926,7 @@ class LatterCompanionApiView(HomeAssistantView):
                     if r["area_id"] != target_area_id
                     and r["effective_rssi"] is not None
                 ]
-                offsets = dict(coordinator.ble_room_offsets)
+                offsets = dict(survey_coord.ble_room_offsets)
                 if target_row and target_row["raw_rssi"] is not None and competing:
                     best_competing_eff = max(competing)
                     needed_offset = (best_competing_eff - target_row["raw_rssi"]) + 6.0
@@ -896,7 +944,7 @@ class LatterCompanionApiView(HomeAssistantView):
                 await _async_save_and_broadcast_global_config(
                     self.hass, {CONF_BLE_ROOM_OFFSETS: offsets}
                 )
-                coordinator.async_set_active_area(
+                survey_coord.async_set_active_area(
                     target_area_id, handoff_media=False, sync_device_registry=True
                 )
             return web.json_response(

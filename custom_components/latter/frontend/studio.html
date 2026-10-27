@@ -1255,13 +1255,21 @@
         </div>
 
         <div class="card">
-          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:6px;">
-            <h3 style="margin:0;">Per-Room BLE Signal Calibration</h3>
-            <label style="font-size:12.5px;font-weight:500;color:var(--accent);display:inline-flex;align-items:center;gap:6px;cursor:pointer;">
-              <input type="checkbox" id="survey-fast-mode" onchange="toggleSurveyFastMode(this.checked)"> Fast Refresh (1.5s)
-            </label>
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:8px;">
+            <div>
+              <h3 style="margin:0;">Per-Room BLE Signal Calibration</h3>
+              <p class="desc" style="margin:2px 0 0;">Select a BLE-enabled device, carry it into a room, and click <strong>Calibrate Current Room</strong>.</p>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <label style="font-size:12px;color:var(--muted);white-space:nowrap;">Calibration Device:</label>
+                <select id="ble-survey-device-picker" style="width:auto;min-width:185px;" onchange="onSelectBleSurveyDevice(this.value)"></select>
+              </div>
+              <label style="font-size:12.5px;font-weight:500;color:var(--accent);display:inline-flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap;">
+                <input type="checkbox" id="survey-fast-mode" onchange="toggleSurveyFastMode(this.checked)"> Fast Refresh (1.5s)
+              </label>
+            </div>
           </div>
-          <p class="desc">Carry <strong id="survey-device-name">Device</strong> into a room and click <strong>Calibrate Current Room</strong> to calculate the dB offset needed for that room to win over adjacent proxies.</p>
           <div id="rssi-container"></div>
         </div>
       </section>
@@ -1323,25 +1331,11 @@
 
         <div class="grid-2">
           <div class="card">
-            <h3>Appearance &amp; Reverse Proxy</h3>
-            <p class="desc">Configure Web Studio theme and optional external HTTPS base URL.</p>
-            <div class="field">
-              <label>Theme</label>
-              <div class="theme-icon-group" role="group" aria-label="Color Theme" style="max-width:220px;">
-                <button type="button" class="theme-icon-btn" data-theme-btn="ha_light" title="Light Theme" onclick="onThemeChanged('ha_light')">
-                  <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
-                </button>
-                <button type="button" class="theme-icon-btn" data-theme-btn="ha_dark" title="Dark Theme" onclick="onThemeChanged('ha_dark')">
-                  <svg viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-                </button>
-                <button type="button" class="theme-icon-btn" data-theme-btn="ha_auto" title="Auto (Follow System / Home Assistant)" onclick="onThemeChanged('ha_auto')">
-                  <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-                </button>
-              </div>
-            </div>
+            <h3>Reverse Proxy &amp; External Access</h3>
+            <p class="desc">Optional external HTTPS base URL override used when linking ESPHome device <em>Visit</em> buttons through a reverse proxy.</p>
             <div class="field">
               <label>Companion Base URL Override (Optional)</label>
-              <input type="text" id="cfg-companion_base_url" placeholder="Auto-detected from Home Assistant" oninput="markDirty()">
+              <input type="text" id="cfg-companion_base_url" placeholder="Auto-detected from Home Assistant (e.g. https://ha.example.com)" oninput="markDirty()">
             </div>
           </div>
 
@@ -1918,6 +1912,7 @@ let CURRENT_SCOPE = ENTERED_VIA_HOUSEHOLD ? "household" : "device";
 let DEVICE_SELECTED = !ENTERED_VIA_HOUSEHOLD;
 let CURRENT_THEME_PREF = localStorage.getItem("latter_web_theme") || "ha_auto";
 let POLL_TIMER = null;
+let SELECTED_SURVEY_SLUG = "";
 
 const HOUSEHOLD_VIEWS = [
   "fleet_overview",
@@ -2749,11 +2744,54 @@ async function setBleOffset(areaId, offsetDb) {
   }
 }
 
+function onSelectBleSurveyDevice(slug) {
+  SELECTED_SURVEY_SLUG = slug || "";
+  renderActiveSurveyDeviceBars();
+}
+
+function renderActiveSurveyDeviceBars() {
+  if (!STATE) return;
+  const allDevs = STATE.fleet_devices || [];
+  const bleDevs = allDevs.filter(d => d.has_ble);
+  const picker = document.getElementById("ble-survey-device-picker");
+
+  if (!bleDevs.length) {
+    if (picker) picker.innerHTML = `<option value="">No BLE devices found</option>`;
+    renderRssiBars([], 0);
+    return;
+  }
+
+  let activeDev = bleDevs.find(d => d.device_slug === SELECTED_SURVEY_SLUG);
+  if (!activeDev) {
+    activeDev = bleDevs.find(d => d.is_current) || bleDevs[0];
+    SELECTED_SURVEY_SLUG = activeDev.device_slug;
+  }
+
+  if (picker) {
+    picker.innerHTML = bleDevs.map(d =>
+      `<option value="${d.device_slug}" ${d.device_slug === SELECTED_SURVEY_SLUG ? 'selected' : ''}>${d.title} (${d.active_area_name})</option>`
+    ).join("");
+  }
+
+  const rows = Array.isArray(activeDev.ble_survey_rows)
+    ? activeDev.ble_survey_rows
+    : (activeDev.is_current ? (STATE.live?.ble_survey_rows || []) : []);
+  const pkts = (activeDev.ble_packets_seen !== undefined)
+    ? activeDev.ble_packets_seen
+    : (activeDev.is_current ? (STATE.live?.ble_packets_seen || 0) : 0);
+
+  renderRssiBars(rows, pkts);
+}
+
 async function autoCalibrateHere(areaId) {
   const resp = await fetch(API_URL, {
     method: "POST",
     headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({command: "auto_calibrate_here", area_id: areaId})
+    body: JSON.stringify({
+      command: "auto_calibrate_here",
+      area_id: areaId,
+      survey_device_slug: SELECTED_SURVEY_SLUG
+    })
   });
   if (resp.ok) {
     applyStateToDom(await resp.json(), false);
@@ -3779,7 +3817,6 @@ function applyStateToDom(data, forceFormUpdate=false) {
   const caps = data.capabilities || {};
   const devTitle = esp?.device?.name || data.title;
   document.getElementById("hdr-sub").textContent = `v${data.version || '2.2.0'}`;
-  document.getElementById("survey-device-name").textContent = devTitle;
   document.getElementById("nav-room-badge").textContent = roomName;
   updateTopHeaderForScope();
 
@@ -3829,7 +3866,7 @@ function applyStateToDom(data, forceFormUpdate=false) {
   if (proxyRow) proxyRow.style.display = (caps.has_ble_beacon && cfg.native_ble_tracking) ? "flex" : "none";
 
   renderLogsView();
-  renderRssiBars(live.ble_survey_rows, live.ble_packets_seen);
+  renderActiveSurveyDeviceBars();
   renderWallpaperGallery(data.wallpapers, cfg.device_slug, cfg.display_shape);
   if (data.vpn_snippets) {
     const wy = document.getElementById("vpn-esphome-yaml");
