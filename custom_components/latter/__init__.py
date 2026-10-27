@@ -128,27 +128,43 @@ async def _async_ensure_global_store(
 
 @callback
 def _async_scan_all_esphome_devices_for_discovery(hass: HomeAssistant) -> None:
-    """Scan ESPHome devices, aborting any non-Latter discovery flows and discovering Latter-compatible devices."""
+    """Self-heal zombie flows, abort non-Latter discovery flows, and discover Latter-compatible ESPHome devices."""
     dev_reg = dr.async_get(hass)
+    configured_uids = {
+        entry.unique_id
+        for entry in hass.config_entries.async_entries(DOMAIN)
+        if entry.unique_id
+    }
     devices_by_slug: dict[str, dr.DeviceEntry] = {}
     for dev in _iter_devices(dev_reg):
         dev_name = str(dev.name_by_user or dev.name or "").strip()
         if dev_name:
             devices_by_slug[_slugify_device_name(dev_name)] = dev
-        _async_check_esphome_device_for_discovery(hass, dev)
 
-    # Clean up any pending discovery flows for generic ESPHome devices that do not support Latter
+    # 1. Self-heal & purge any zombie flows (step_id is None, already configured, or unsupported device)
+    #    BEFORE scanning devices so a stuck flow never blocks fresh discovery!
     for flow in list(hass.config_entries.flow.async_progress_by_handler(DOMAIN)):
+        fid = flow.get("flow_id")
+        if not fid:
+            continue
         ctx = flow.get("context", {})
+        unique_id = str(ctx.get("unique_id") or "")
+        if flow.get("step_id") is None or (unique_id and unique_id in configured_uids):
+            hass.config_entries.flow.async_abort(fid)
+            continue
         if ctx.get("source") != SOURCE_INTEGRATION_DISCOVERY:
             continue
-        unique_id = str(ctx.get("unique_id") or "")
         flow_slug = unique_id.removeprefix(f"{DOMAIN}_") if unique_id.startswith(f"{DOMAIN}_") else ""
         if not flow_slug:
+            hass.config_entries.flow.async_abort(fid)
             continue
         dev = devices_by_slug.get(flow_slug)
         if dev is None or not is_latter_compatible_esphome_device(hass, dev, flow_slug):
-            hass.config_entries.flow.async_abort(flow["flow_id"])
+            hass.config_entries.flow.async_abort(fid)
+
+    # 2. Trigger discovery for any unconfigured Latter-compatible ESPHome devices
+    for dev in _iter_devices(dev_reg):
+        _async_check_esphome_device_for_discovery(hass, dev)
 
 
 @callback

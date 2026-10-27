@@ -1144,7 +1144,11 @@ class LatterCompanionApiView(HomeAssistantView):
                 if remaining
                 else "/config/integrations/integration/latter"
             )
+            removed_slug = target_coord.device_slug
             await self.hass.config_entries.async_remove(target_coord.entry.entry_id)
+            log_studio_event(
+                self.hass, "INFO", "studio", f"Removed device '{removed_slug}' from Latter"
+            )
             if remaining and coordinator.entry.entry_id != target_coord.entry.entry_id:
                 return web.json_response(
                     _build_companion_state_payload(self.hass, coordinator)
@@ -4607,10 +4611,50 @@ async function generateDeviceVpnKeys() {
   }
 }
 
-async function removeManagedDevice(entryId, title) {
-  if (!confirm(`Remove '${title || entryId}' from Latter? (Your ESPHome device itself will remain in Home Assistant, and you can re-add or bridge it anytime.)`)) {
-    return;
+let pendingRemoveEntryId = "";
+let pendingRemoveTitle = "";
+
+function ensureRemoveDeviceModal() {
+  if (document.getElementById("latter-rm-modal")) return;
+  const modal = document.createElement("div");
+  modal.id = "latter-rm-modal";
+  modal.style.cssText = "position:fixed;inset:0;background:rgba(8,12,18,0.82);backdrop-filter:blur(6px);z-index:9999;display:none;align-items:center;justify-content:center;padding:16px;";
+  modal.innerHTML = `
+    <div class="card" style="max-width:400px;width:100%;margin:0;">
+      <h3 style="margin-bottom:6px;color:var(--danger);">Remove Device from Latter?</h3>
+      <p class="desc" id="latter-rm-desc" style="margin-bottom:16px;">Remove this device from Latter? Your ESPHome device itself will remain in Home Assistant, and you can re-add or bridge it anytime.</p>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button type="button" class="btn-secondary" onclick="closeRemoveDeviceModal()">Cancel</button>
+        <button type="button" class="btn-danger" id="latter-rm-confirm-btn" onclick="confirmRemoveManagedDevice()">Remove Device</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+}
+
+function closeRemoveDeviceModal() {
+  const m = document.getElementById("latter-rm-modal");
+  if (m) m.style.display = "none";
+  pendingRemoveEntryId = "";
+  pendingRemoveTitle = "";
+}
+
+function removeManagedDevice(entryId, title) {
+  ensureRemoveDeviceModal();
+  pendingRemoveEntryId = entryId;
+  pendingRemoveTitle = title || entryId;
+  const desc = document.getElementById("latter-rm-desc");
+  if (desc) {
+    desc.textContent = `Remove '${pendingRemoveTitle}' from Latter? Your ESPHome device itself will remain in Home Assistant, and you can re-add or bridge it anytime.`;
   }
+  document.getElementById("latter-rm-modal").style.display = "flex";
+}
+
+async function confirmRemoveManagedDevice() {
+  const entryId = pendingRemoveEntryId;
+  const title = pendingRemoveTitle;
+  closeRemoveDeviceModal();
+  if (!entryId) return;
   const resp = await fetch(API_URL, {
     method: "POST",
     headers: {"Content-Type": "application/json"},
@@ -4624,6 +4668,8 @@ async function removeManagedDevice(entryId, title) {
     }
     applyStateToDom(data, false);
     showToast(`Removed '${title}' from Latter`);
+  } else {
+    showToast("Failed to remove device");
   }
 }
 
