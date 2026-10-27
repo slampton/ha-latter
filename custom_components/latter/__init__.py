@@ -83,7 +83,19 @@ def is_latter_compatible_esphome_device(
     model_str = f"{device.model or ''} {device.sw_version or ''} {device.name or ''} {slug}".lower()
     if any(
         k in model_str
-        for k in ("latter", "pocket-assistant", "pocket_assistant", "wrist-assist", "wrist_assist")
+        for k in (
+            "latter",
+            "pocket-assistant",
+            "pocket_assistant",
+            "wrist-assist",
+            "wrist_assist",
+            "mobile-assistant",
+            "mobile_assistant",
+            "remote-assistant",
+            "remote_assistant",
+            "desk-assistant",
+            "desk_assistant",
+        )
     ):
         return True
 

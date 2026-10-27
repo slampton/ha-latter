@@ -135,8 +135,53 @@ def _detect_hardware_defaults(hass: HomeAssistant, slug: str) -> dict[str, Any]:
                 has_ble_beacon = True
                 break
 
+    is_desk_4b = any(k in model_meta for k in ("desk_assistant", "desk-assistant", "4b", "720"))
+    is_remote_35 = any(k in model_meta for k in ("remote_assistant", "remote-assistant", "p4_35", "320x480", "3.5"))
+    is_mobile_216 = any(k in model_meta for k in ("mobile_assistant", "mobile-assistant", "216", "2.16", "480x480"))
     is_watch_206 = "wrist" in model_meta or "206" in model_meta or "2.06" in model_meta
     is_round_175 = "pocket" in model_meta or "175" in model_meta or "1.75" in model_meta
+
+    if is_desk_4b:
+        return {
+            CONF_DEVICE_PROFILE: "stationary_display",
+            CONF_DEVICE_GROUP: "wall_panels",
+            CONF_DISPLAY_SHAPE: "square",
+            CONF_ART_SIZE: 720,
+            CONF_DEFAULT_PAGE_SIZE: DEFAULT_PAGE_SIZE,
+            CONF_NATIVE_BLE_TRACKING: False,
+            CONF_BLE_AUTO_SWITCH: False,
+            CONF_SYNC_DEVICE_AREA: False,
+            CONF_AREA_HANDOFF: DEFAULT_AREA_HANDOFF,
+            CONF_DEFAULT_AREA: (matched_dev.area_id or "") if matched_dev else "",
+        }
+
+    if is_remote_35:
+        return {
+            CONF_DEVICE_PROFILE: "mobile_display",
+            CONF_DEVICE_GROUP: "handhelds",
+            CONF_DISPLAY_SHAPE: "square",
+            CONF_ART_SIZE: "320x480",
+            CONF_DEFAULT_PAGE_SIZE: DEFAULT_PAGE_SIZE,
+            CONF_NATIVE_BLE_TRACKING: True,
+            CONF_BLE_AUTO_SWITCH: True,
+            CONF_SYNC_DEVICE_AREA: True,
+            CONF_AREA_HANDOFF: DEFAULT_AREA_HANDOFF,
+            CONF_DEFAULT_AREA: "",
+        }
+
+    if is_mobile_216:
+        return {
+            CONF_DEVICE_PROFILE: "mobile_display",
+            CONF_DEVICE_GROUP: "handhelds",
+            CONF_DISPLAY_SHAPE: "square",
+            CONF_ART_SIZE: 480,
+            CONF_DEFAULT_PAGE_SIZE: DEFAULT_PAGE_SIZE,
+            CONF_NATIVE_BLE_TRACKING: True,
+            CONF_BLE_AUTO_SWITCH: True,
+            CONF_SYNC_DEVICE_AREA: True,
+            CONF_AREA_HANDOFF: DEFAULT_AREA_HANDOFF,
+            CONF_DEFAULT_AREA: "",
+        }
 
     if is_watch_206:
         return {
@@ -240,14 +285,19 @@ def _build_schema(hass: HomeAssistant, current: dict[str, Any]) -> vol.Schema:
     )
 
     _, profiles = get_device_groups_and_profiles(hass)
+    art_sz = str(hw_defs.get(CONF_ART_SIZE) or "")
     hw_shape_lbl = (
         "410x502 Watch"
-        if hw_defs.get(CONF_ART_SIZE) == "410x502"
-        else (
-            "466x466 Round Display"
-            if hw_defs.get(CONF_DISPLAY_SHAPE) == "circle"
-            else "ESPHome Node"
-        )
+        if art_sz == "410x502"
+        else "480x480 Square AMOLED"
+        if art_sz == "480"
+        else "320x480 Widescreen Handheld"
+        if art_sz == "320x480"
+        else "720x720 Stationary Display"
+        if art_sz == "720"
+        else "466x466 Round Display"
+        if hw_defs.get(CONF_DISPLAY_SHAPE) == "circle"
+        else "ESPHome Node"
     )
     profile_options = [
         selector.SelectOptionDict(
