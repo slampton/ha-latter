@@ -191,13 +191,14 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     hass.data.setdefault(DOMAIN, {})
     await _async_ensure_global_store(hass)
     await async_setup_services(hass)
+    @callback
+    def _on_ha_started(_ev: Event) -> None:
+        _async_scan_all_esphome_devices_for_discovery(hass)
+
     if hass.is_running:
         _async_scan_all_esphome_devices_for_discovery(hass)
     else:
-        hass.bus.async_listen_once(
-            EVENT_HOMEASSISTANT_STARTED,
-            lambda _ev: _async_scan_all_esphome_devices_for_discovery(hass),
-        )
+        hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, _on_ha_started)
     return True
 
 
@@ -264,12 +265,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
             dev = dev_reg.async_get(dev_id)
             if dev is not None:
                 _async_check_esphome_device_for_discovery(hass, dev)
-                # Re-check 5s later after ESPHome finishes registering entities & API services
-                async_call_later(
-                    hass,
-                    5.0,
-                    lambda _now: _async_scan_all_esphome_devices_for_discovery(hass),
-                )
+
+                @callback
+                def _delayed_scan(_now: Any) -> None:
+                    _async_scan_all_esphome_devices_for_discovery(hass)
+
+                async_call_later(hass, 5.0, _delayed_scan)
 
         @callback
         def _on_service_registered(event: Event) -> None:

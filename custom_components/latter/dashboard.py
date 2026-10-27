@@ -4554,20 +4554,45 @@ function renderYamlGenerator() {
   box.textContent = lines.join("\\n");
 }
 
+function copyToClipboard(text, successMsg) {
+  if (!text) return;
+  if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+    navigator.clipboard.writeText(text).then(() => {
+      showToast(successMsg);
+    }).catch(() => {
+      fallbackCopyText(text, successMsg);
+    });
+  } else {
+    fallbackCopyText(text, successMsg);
+  }
+}
+
+function fallbackCopyText(text, successMsg) {
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.top = "-9999px";
+    ta.style.left = "-9999px";
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    showToast(ok ? successMsg : "Copy failed — select text manually");
+  } catch (_e) {
+    showToast("Copy failed — select text manually");
+  }
+}
+
 function copyGeneratedYaml() {
   const text = document.getElementById("yaml-gen-output")?.textContent || "";
-  if (!text) return;
-  navigator.clipboard.writeText(text).then(() => {
-    showToast("Copied ESPHome YAML snippet to clipboard");
-  });
+  copyToClipboard(text, "Copied ESPHome YAML snippet to clipboard");
 }
 
 function copyTextById(elId) {
   const text = document.getElementById(elId)?.textContent || "";
-  if (!text) return;
-  navigator.clipboard.writeText(text).then(() => {
-    showToast("Copied snippet to clipboard");
-  });
+  copyToClipboard(text, "Copied to clipboard");
 }
 
 async function generateDeviceVpnKeys() {
