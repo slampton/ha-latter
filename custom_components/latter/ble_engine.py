@@ -352,47 +352,25 @@ class LatterNativeBleTracker:
 
     @callback
     def async_start(self) -> None:
-        """Subscribe to Home Assistant's internal Bluetooth stream and start 2s per-scanner table polling."""
+        """Register this tracker with the singleton LatterBleFabric."""
         self.async_stop()
         self._target_mac_ints = _discover_target_device_macs(
             self.hass, self._raw_slug
         )
-
-        try:
-            from homeassistant.components import bluetooth
-
-            self._unsub_ble = bluetooth.async_register_callback(
-                self.hass,
-                self._async_on_ble_advertisement,
-                {},
-                bluetooth.BluetoothScanningMode.ACTIVE,
-            )
-            self._unsub_poll = async_track_time_interval(
-                self.hass,
-                self._async_poll_scanner_tables,
-                timedelta(seconds=SCANNER_POLL_INTERVAL_SECONDS),
-            )
-            self._async_poll_scanner_tables(datetime.now())
-            _LOGGER.info(
-                "Latter Native BLE Room Tracker active (UUID=%s, candidate_macs=%s)",
-                self._target_uuid_hex,
-                self.target_macs_formatted,
-            )
-        except Exception as err:  # noqa: BLE001
-            _LOGGER.debug(
-                "Home Assistant bluetooth integration not active for native BLE tracking: %s",
-                err,
-            )
+        fabric = get_ble_fabric(self.hass)
+        fabric.register_tracker(self)
+        _LOGGER.info(
+            "Latter Native BLE Room Tracker registered with shared BLE Fabric (device=%s, UUID=%s, macs=%s)",
+            self._raw_slug,
+            self._target_uuid_hex,
+            self.target_macs_formatted,
+        )
 
     @callback
     def async_stop(self) -> None:
-        """Unsubscribe from Bluetooth advertisements and scanner polling."""
-        if self._unsub_ble is not None:
-            self._unsub_ble()
-            self._unsub_ble = None
-        if self._unsub_poll is not None:
-            self._unsub_poll()
-            self._unsub_poll = None
+        """Unregister this tracker from the singleton LatterBleFabric."""
+        fabric = get_ble_fabric(self.hass)
+        fabric.unregister_tracker(self)
         self._area_rssi.clear()
         self._area_raw_rssi.clear()
         self._unmapped_rssi.clear()
@@ -717,3 +695,136 @@ class LatterNativeBleTracker:
                 self.closest_scanner = latest_source
             self._last_switch_monotonic = now
             self._on_area_detected(best_area, self.closest_scanner)
+
+class LatterBleFabric:
+    """Domain-level singleton Bluetooth scanner fabric shared across all Latter & generic BLE trackers."""
+
+    def __init__(self, hass: HomeAssistant) -> None:
+        """Initialize the shared BLE scanner fabric."""
+        self.hass = hass
+        self._trackers: list[LatterNativeBleTracker] = []
+        self._unsub_ble: Callable[[], None] | None = None
+        self._unsub_poll: Callable[[], None] | None = None
+
+    @callback
+    def register_tracker(self, tracker: LatterNativeBleTracker) -> None:
+        """Register a BLE tracker and start the shared scanner loop if needed."""
+        if tracker not in self._trackers:
+            self._trackers.append(tracker)
+        if len(self._trackers) == 1 and self._unsub_poll is None:
+            self._async_start_fabric()
+        else:
+            tracker._async_poll_scanner_tables(datetime.now())
+
+    @callback
+    def unregister_tracker(self, tracker: LatterNativeBleTracker) -> None:
+        """Unregister a BLE tracker and stop the shared scanner loop when empty."""
+        if tracker in self._trackers:
+            self._trackers.remove(tracker)
+        if not self._trackers:
+            self._async_stop_fabric()
+
+    @callback
+    def _async_start_fabric(self) -> None:
+        """Start the single shared Bluetooth advertisement callback and 2s scanner poll timer."""
+        try:
+            from homeassistant.components import bluetooth
+
+            self._unsub_ble = bluetooth.async_register_callback(
+                self.hass,
+                self._async_on_shared_ble_advertisement,
+                {},
+                bluetooth.BluetoothScanningMode.ACTIVE,
+            )
+            self._unsub_poll = async_track_time_interval(
+                self.hass,
+                self._async_poll_all_scanners_once,
+                timedelta(seconds=SCANNER_POLL_INTERVAL_SECONDS),
+            )
+            self._async_poll_all_scanners_once(datetime.now())
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("Shared BLE Fabric startup skipped: %s", err)
+
+    @callback
+    def _async_stop_fabric(self) -> None:
+        """Stop the shared Bluetooth callback and timer."""
+        if self._unsub_ble is not None:
+            self._unsub_ble()
+            self._unsub_ble = None
+        if self._unsub_poll is not None:
+            self._unsub_poll()
+            self._unsub_poll = None
+
+    @callback
+    def _async_on_shared_ble_advertisement(
+        self, service_info: object, change: object
+    ) -> None:
+        """Fan out incoming BLE advertisements to all registered trackers."""
+        for tracker in list(self._trackers):
+            tracker._async_on_ble_advertisement(service_info, change)
+
+    @callback
+    def _async_poll_all_scanners_once(self, now_dt: datetime) -> None:
+        """Scan all HA Bluetooth proxy tables in a single pass for all registered trackers."""
+        if not self._trackers:
+            return
+        for tracker in list(self._trackers):
+            if not tracker._target_mac_ints:
+                tracker._target_mac_ints = _discover_target_device_macs(
+                    self.hass, tracker._raw_slug
+                )
+        try:
+            from homeassistant.components import bluetooth
+
+            now_mono = time.monotonic()
+            scanners = bluetooth.async_current_scanners(self.hass)
+            for scanner in scanners:
+                source = str(getattr(scanner, "source", "") or "")
+                scanner_name = str(getattr(scanner, "name", "") or source)
+                if not source:
+                    continue
+                timestamps: dict[str, float] = (
+                    getattr(scanner, "_previous_seen_timestamps", {})
+                    or getattr(scanner, "timestamps", {})
+                    or {}
+                )
+                dev_adv_map: dict[str, tuple[Any, Any]] = (
+                    getattr(scanner, "discovered_devices_and_advertisement_data", {})
+                    or {}
+                )
+                for addr, pair in dev_adv_map.items():
+                    if not isinstance(pair, tuple) or len(pair) != 2:
+                        continue
+                    ble_dev, adv_data = pair
+                    last_ts = timestamps.get(addr)
+                    obs_mono = float(last_ts) if last_ts is not None else now_mono
+                    if last_ts is not None and (now_mono - obs_mono) > SURVEY_RETENTION_SECONDS:
+                        continue
+                    mfg_data = getattr(adv_data, "manufacturer_data", {}) or {}
+                    local_name = str(
+                        getattr(adv_data, "local_name", "")
+                        or getattr(ble_dev, "name", "")
+                        or ""
+                    )
+                    rssi = getattr(adv_data, "rssi", None)
+                    if rssi is None:
+                        rssi = getattr(ble_dev, "rssi", None)
+                    if rssi is None or int(rssi) <= -100:
+                        continue
+                    addr_str = str(addr)
+                    for tracker in list(self._trackers):
+                        if tracker._matches_raw_adv(addr_str, local_name, mfg_data):
+                            tracker._matched_ble_addresses.add(addr_str)
+                            tracker._ingest_proxy_observation(
+                                source, int(rssi), obs_mono, scanner_name
+                            )
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("Shared BLE Fabric scanner poll error: %s", err)
+
+
+def get_ble_fabric(hass: HomeAssistant) -> LatterBleFabric:
+    """Return or initialize the singleton LatterBleFabric instance."""
+    domain_data = hass.data.setdefault("latter", {})
+    if "ble_fabric" not in domain_data:
+        domain_data["ble_fabric"] = LatterBleFabric(hass)
+    return domain_data["ble_fabric"]

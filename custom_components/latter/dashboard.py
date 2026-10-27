@@ -643,15 +643,19 @@ def _build_companion_state_payload(
         else:
             c_model_label = raw_model or "ESPHome Node"
 
-        # Area column: "Roaming" if mobile/BLE-roaming or no fixed area assigned; otherwise fixed Area name
-        fixed_area_id = str(c.get_opt(CONF_DEFAULT_AREA) or "").strip()
-        if not fixed_area_id and not c.native_ble_tracking_enabled and c_dev_entry and c_dev_entry.area_id:
-            fixed_area_id = c_dev_entry.area_id
-        if c.native_ble_tracking_enabled or not fixed_area_id:
-            c_area_label = "Roaming"
-        else:
-            a_obj = area_reg.async_get_area(fixed_area_id)
-            c_area_label = a_obj.name if a_obj else "Roaming"
+        # Area column: If a Home Assistant Area is assigned (and not a BLE-roaming device without a fixed area),
+        # show the assigned Area name; otherwise show "Roaming".
+        ha_assigned_area_id = (
+            str(c_dev_entry.area_id or "").strip()
+            if (c_dev_entry and not c.sync_device_area_enabled)
+            else ""
+        ) or str(c.get_opt(CONF_DEFAULT_AREA) or "").strip()
+        if not ha_assigned_area_id and not c.native_ble_tracking_enabled and c_dev_entry and c_dev_entry.area_id:
+            ha_assigned_area_id = str(c_dev_entry.area_id).strip()
+
+        a_obj = area_reg.async_get_area(ha_assigned_area_id) if ha_assigned_area_id else None
+        c_has_assigned_area = a_obj is not None
+        c_area_label = a_obj.name if a_obj is not None else "Roaming"
 
         # Status column: "Update Available", "Online", or "Offline"
         c_upd_st = hass.states.get(f"update.{c.device_slug}_project_firmware")
@@ -682,6 +686,7 @@ def _build_companion_state_payload(
                     else c.device_slug.replace("_", " ").title()
                 ),
                 "model_label": c_model_label,
+                "has_assigned_area": c_has_assigned_area,
                 "area_label": c_area_label,
                 "status_label": c_status_label,
                 "device_profile": c.device_profile,

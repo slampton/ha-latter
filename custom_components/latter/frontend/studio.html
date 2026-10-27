@@ -1003,7 +1003,6 @@
       <div class="nav-group-label">Device</div>
       <button class="nav-btn active" data-view="dashboard" onclick="switchView('dashboard', this)">
         <span>Overview</span>
-        <span class="nav-badge" id="nav-room-badge">--</span>
       </button>
       <button class="nav-btn" id="nav-btn-home_display" data-view="home_display" onclick="switchView('home_display', this)">
         <span>Display &amp; Home</span>
@@ -2457,7 +2456,7 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
   if (picker && fleetDevices) {
     const placeholder = `<option value="" ${!DEVICE_SELECTED ? 'selected' : ''}>— Select a Device —</option>`;
     picker.innerHTML = placeholder + fleetDevices.map(d =>
-      `<option value="${d.companion_url}" ${(DEVICE_SELECTED && d.is_current) ? 'selected' : ''}>${d.title} (${d.active_area_name})</option>`
+      `<option value="${d.companion_url}" ${(DEVICE_SELECTED && d.is_current) ? 'selected' : ''}>${d.title}</option>`
     ).join("");
   }
 
@@ -3961,7 +3960,6 @@ function applyStateToDom(data, forceFormUpdate=false) {
   const caps = data.capabilities || {};
   const devTitle = esp?.device?.name || data.title;
   document.getElementById("hdr-sub").textContent = `v${data.version || '2.2.0'}`;
-  document.getElementById("nav-room-badge").textContent = roomName;
   updateTopHeaderForScope();
 
   // Capability-Aware Device Sidebar Tabs
@@ -3981,15 +3979,15 @@ function applyStateToDom(data, forceFormUpdate=false) {
     ? `${curFleet.wifi_rssi} dBm`
     : "Online";
   const ipStr = curFleet.ip_address || "Connected";
-  const fwVer = esp?.device?.sw_version || `v${data.version || '2.2.0'}`;
 
-  const isRoaming = !!(cfg.native_ble_tracking && cfg.ble_auto_switch);
+  const hasAssignedArea = !!curFleet.has_assigned_area;
+  const isRoaming = !hasAssignedArea;
   const roomLblEl = document.getElementById("st-room-label");
-  if (roomLblEl) roomLblEl.textContent = isRoaming ? "Current Room (Roaming)" : "Assigned Room";
+  if (roomLblEl) roomLblEl.textContent = hasAssignedArea ? "Room" : "Current Room (Roaming)";
 
   // 3 Hero Stat Boxes on Device Overview
   document.getElementById("dash-header-title").textContent = devTitle;
-  document.getElementById("st-room").textContent = roomName;
+  document.getElementById("st-room").textContent = hasAssignedArea ? (curFleet.area_label || roomName) : roomName;
   document.getElementById("st-battery").textContent = batText;
   document.getElementById("st-wifi").textContent = wifiText;
 
