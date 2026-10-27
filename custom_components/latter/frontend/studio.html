@@ -150,14 +150,16 @@
     font-size: 13px;
     font-weight: 500;
   }
-  .nav-group-label {
-    font-size: 11px;
+  .nav-device-title {
+    font-size: 15px;
     font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--muted);
-    margin: 14px 8px 4px;
-    padding: 0 4px;
+    color: var(--text-strong);
+    margin: 4px 0 4px;
+    padding: 10px 12px 6px;
+    border-top: 1px solid var(--border);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .nav-group-label:first-child {
     margin-top: 4px;
@@ -910,7 +912,7 @@
       min-width: 0;
     }
     .device-picker-wrap label { display: none; }
-    .nav-group-label { display: none; }
+    .nav-device-title { display: none; }
     .nav-list {
       flex-direction: row;
       overflow-x: auto;
@@ -972,7 +974,6 @@
 
     <!-- SYSTEM NAVIGATION (5 TABS) -->
     <div class="nav-list hidden" id="nav-scope-household">
-      <div class="nav-group-label">System</div>
       <button class="nav-btn" data-view="household" onclick="switchView('household', this)">
         <span>Shared Entities</span>
       </button>
@@ -992,7 +993,6 @@
 
     <!-- DEVICES LIST SIDEBAR (WHEN ON ALL DEVICES LANDING PAGE) -->
     <div class="nav-list hidden" id="nav-scope-devices-list">
-      <div class="nav-group-label">Devices</div>
       <button class="nav-btn active" data-view="select_device_prompt" onclick="openDevicesLanding()">
         <span>All Devices</span>
         <span class="nav-badge" id="nav-fleet-count">1</span>
@@ -1001,10 +1001,10 @@
 
     <!-- SELECTED DEVICE NAVIGATION (5 TABS) -->
     <div class="nav-list" id="nav-scope-device">
-      <button class="nav-btn" style="color:var(--muted);margin-bottom:4px;" onclick="openDevicesLanding()">
+      <button class="nav-btn" style="color:var(--muted);" onclick="openDevicesLanding()">
         <span>&larr; All Devices</span>
       </button>
-      <div class="nav-group-label" id="nav-selected-device-label">Device</div>
+      <div class="nav-device-title" id="nav-selected-device-label">Device</div>
       <button class="nav-btn active" data-view="dashboard" onclick="switchView('dashboard', this)">
         <span>Overview</span>
       </button>
