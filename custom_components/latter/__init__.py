@@ -45,6 +45,7 @@ from .dashboard import (
     LatterCompanionDashboardView,
     LatterSidebarIconJsView,
     LatterStudioRootView,
+    get_studio_panel_token,
 )
 from .http import (
     LatterArtworkTranscoderView,
@@ -230,13 +231,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
         try:
             from homeassistant.components import frontend
             frontend.add_extra_js_url(hass, "/api/latter/brand/sidebar_icon.js")
+            panel_token = get_studio_panel_token(domain_data[DATA_HMAC_SECRET])
             frontend.async_register_built_in_panel(
                 hass,
                 component_name="iframe",
                 sidebar_title="Latter",
                 sidebar_icon="latter:logo",
                 frontend_url_path="latter",
-                config={"url": "/api/latter/studio?scope=system"},
+                config={"url": f"/api/latter/studio?scope=system&token={panel_token}"},
                 require_admin=False,
                 update=True,
             )

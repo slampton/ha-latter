@@ -862,6 +862,93 @@ def get_home_alarm_summary(
     }
 
 
+def get_whole_home_summary(
+    hass: HomeAssistant,
+    thermostat_entity: str | None = None,
+    lock_entity: str | None = None,
+    garage_entity: str | None = None,
+    vacuum_entity: str | None = None,
+) -> dict[str, Any]:
+    """Resolve configured (or primary auto-discovered) Whole-Home Thermostat, Lock, Garage, and Vacuum states."""
+    out: dict[str, Any] = {
+        "thermostat_entity": "",
+        "thermostat_state": "off",
+        "thermostat_temp": 71,
+        "thermostat_current_temp": None,
+        "lock_entity": "",
+        "lock_state": "locked",
+        "garage_entity": "",
+        "garage_state": "closed",
+        "vacuum_entity": "",
+        "vacuum_state": "docked",
+    }
+
+    # 1. Thermostat (climate.*)
+    t_st = hass.states.get(thermostat_entity) if thermostat_entity else None
+    if t_st is None:
+        for cand in hass.states.async_all("climate"):
+            if cand.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+                t_st = cand
+                break
+    if t_st is not None:
+        out["thermostat_entity"] = t_st.entity_id
+        out["thermostat_state"] = t_st.state
+        tgt_t = (
+            t_st.attributes.get("temperature")
+            or t_st.attributes.get("target_temp_low")
+            or t_st.attributes.get("current_temperature")
+        )
+        if tgt_t is not None:
+            try:
+                out["thermostat_temp"] = int(round(float(tgt_t)))
+            except (ValueError, TypeError):
+                pass
+        cur_t = t_st.attributes.get("current_temperature")
+        if cur_t is not None:
+            try:
+                out["thermostat_current_temp"] = round(float(cur_t), 1)
+            except (ValueError, TypeError):
+                pass
+
+    # 2. Entry Lock (lock.*)
+    l_st = hass.states.get(lock_entity) if lock_entity else None
+    if l_st is None:
+        for cand in hass.states.async_all("lock"):
+            if cand.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+                l_st = cand
+                break
+    if l_st is not None:
+        out["lock_entity"] = l_st.entity_id
+        out["lock_state"] = l_st.state
+
+    # 3. Garage Door (cover.*)
+    g_st = hass.states.get(garage_entity) if garage_entity else None
+    if g_st is None:
+        for cand in hass.states.async_all("cover"):
+            if cand.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+                continue
+            d_cls = str(cand.attributes.get("device_class") or "").lower()
+            if d_cls in ("garage", "gate", "door") or "garage" in cand.entity_id.lower():
+                g_st = cand
+                break
+    if g_st is not None:
+        out["garage_entity"] = g_st.entity_id
+        out["garage_state"] = g_st.state
+
+    # 4. Robot Vacuum (vacuum.*)
+    v_st = hass.states.get(vacuum_entity) if vacuum_entity else None
+    if v_st is None:
+        for cand in hass.states.async_all("vacuum"):
+            if cand.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+                v_st = cand
+                break
+    if v_st is not None:
+        out["vacuum_entity"] = v_st.entity_id
+        out["vacuum_state"] = v_st.state
+
+    return out
+
+
 def get_home_wide_entities(
     hass: HomeAssistant,
     configured_alarm_entity: str | None = None,
@@ -1146,26 +1233,25 @@ async def async_execute_room_action(
     """Execute a normalized room, whole-home (alarm/thermostat/garage/lock/vacuum), or light color/kelvin action."""
     state_obj = hass.states.get(entity_id)
     if state_obj is None and entity_id.startswith("whole_home."):
-        # Auto-discover primary household entity by domain when invoked from Whole-Home Hub
         wh_kind = entity_id.split(".", 1)[1].lower()
-        target_dom = {
-            "thermostat": "climate",
-            "climate": "climate",
-            "lock": "lock",
-            "vacuum": "vacuum",
-            "garage": "cover",
+        global_cfg = hass.data.get("latter", {}).get("global_config") or {}
+        wh_summary = get_whole_home_summary(
+            hass,
+            thermostat_entity=global_cfg.get("thermostat_entity"),
+            lock_entity=global_cfg.get("lock_entity"),
+            garage_entity=global_cfg.get("garage_entity"),
+            vacuum_entity=global_cfg.get("vacuum_entity"),
+        )
+        mapped_id = {
+            "thermostat": wh_summary["thermostat_entity"],
+            "climate": wh_summary["thermostat_entity"],
+            "lock": wh_summary["lock_entity"],
+            "garage": wh_summary["garage_entity"],
+            "vacuum": wh_summary["vacuum_entity"],
         }.get(wh_kind, "")
-        if target_dom:
-            for cand in hass.states.async_all(target_dom):
-                if cand.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
-                    continue
-                if wh_kind == "garage":
-                    d_cls = str(cand.attributes.get("device_class") or "").lower()
-                    if d_cls not in ("garage", "gate", "door") and "garage" not in cand.entity_id.lower():
-                        continue
-                state_obj = cand
-                entity_id = cand.entity_id
-                break
+        if mapped_id:
+            entity_id = mapped_id
+            state_obj = hass.states.get(entity_id)
     if state_obj is None:
         _LOGGER.debug("Action target entity not found (or running in on-device demo mode): %s", entity_id)
         return

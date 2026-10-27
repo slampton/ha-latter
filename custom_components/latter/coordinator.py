@@ -52,6 +52,10 @@ from .const import (
     CALENDAR_REFRESH_INTERVAL_MINUTES,
     CONF_ALARM_ENTITY,
     CONF_CAMERA_ENTITY,
+    CONF_GARAGE_ENTITY,
+    CONF_LOCK_ENTITY,
+    CONF_THERMOSTAT_ENTITY,
+    CONF_VACUUM_ENTITY,
     CONF_AREA_HANDOFF,
     CONF_ART_SIZE,
     CONF_BLE_AUTO_SWITCH,
@@ -126,6 +130,7 @@ from .room_engine import (
     get_area_entities,
     get_areas_summary,
     get_home_alarm_summary,
+    get_whole_home_summary,
     match_area_by_name_or_id,
     protect_handheld_sensors_from_area_dashboards,
     resolve_remote_slot_pair,
@@ -541,6 +546,30 @@ class LatterCoordinator:
     def camera_entity(self) -> str | None:
         """Return configured primary doorbell/security camera entity_id."""
         val = self.get_opt(CONF_CAMERA_ENTITY)
+        return str(val).strip() if val else None
+
+    @property
+    def thermostat_entity(self) -> str | None:
+        """Return configured primary household thermostat entity_id."""
+        val = self.get_opt(CONF_THERMOSTAT_ENTITY)
+        return str(val).strip() if val else None
+
+    @property
+    def lock_entity(self) -> str | None:
+        """Return configured primary household lock entity_id."""
+        val = self.get_opt(CONF_LOCK_ENTITY)
+        return str(val).strip() if val else None
+
+    @property
+    def garage_entity(self) -> str | None:
+        """Return configured primary garage door cover entity_id."""
+        val = self.get_opt(CONF_GARAGE_ENTITY)
+        return str(val).strip() if val else None
+
+    @property
+    def vacuum_entity(self) -> str | None:
+        """Return configured primary robot vacuum entity_id."""
+        val = self.get_opt(CONF_VACUUM_ENTITY)
         return str(val).strip() if val else None
 
     @property
@@ -1816,6 +1845,13 @@ class LatterCoordinator:
         alarm_info = get_home_alarm_summary(
             self.hass, self.get_opt(CONF_ALARM_ENTITY)
         )
+        wh_info = get_whole_home_summary(
+            self.hass,
+            thermostat_entity=self.thermostat_entity,
+            lock_entity=self.lock_entity,
+            garage_entity=self.garage_entity,
+            vacuum_entity=self.vacuum_entity,
+        )
 
         summary_items = [
             f"{e['id']}:{e['name']}:{int(e['active'])}:{e['level']}"
@@ -1841,7 +1877,6 @@ class LatterCoordinator:
             "default_page_size": self.default_page_size,
             "dock_apps": self.dock_apps_csv,
             "wallpaper_url": self.build_wallpaper_url(),
-            "companion_url": self.build_companion_url(),
             "entity_count": len(entities),
             "available_domains": avail_domains,
             "lights_on": lights_on,
@@ -1854,6 +1889,16 @@ class LatterCoordinator:
             "alarm_state": alarm_info["state"],
             "alarm_name": alarm_info["name"],
             "alarm_code_required": alarm_info["code_arm_required"],
+            "thermostat_entity": wh_info["thermostat_entity"],
+            "thermostat_state": wh_info["thermostat_state"],
+            "thermostat_temp": wh_info["thermostat_temp"],
+            "thermostat_current_temp": wh_info["thermostat_current_temp"],
+            "lock_entity": wh_info["lock_entity"],
+            "lock_state": wh_info["lock_state"],
+            "garage_entity": wh_info["garage_entity"],
+            "garage_state": wh_info["garage_state"],
+            "vacuum_entity": wh_info["vacuum_entity"],
+            "vacuum_state": wh_info["vacuum_state"],
             "native_ble_tracking": self.native_ble_tracking_enabled,
             "ble_beacon_uuid": self.ble_beacon_uuid,
             "ble_closest_proxy": self._ble_tracker.closest_scanner if self._ble_tracker else "",
@@ -1907,18 +1952,35 @@ class LatterCoordinator:
 
     @callback
     def _bind_alarm_listener(self) -> None:
-        """Subscribe to state changes on the home security alarm_control_panel entity."""
+        """Subscribe to state changes on shared whole-home entities (alarm, thermostat, lock, garage, vacuum)."""
         if self._unsub_alarm_state is not None:
             self._unsub_alarm_state()
             self._unsub_alarm_state = None
 
-        alarm_ent = self.alarm_entity
-        if not alarm_ent:
+        wh_info = get_whole_home_summary(
+            self.hass,
+            thermostat_entity=self.thermostat_entity,
+            lock_entity=self.lock_entity,
+            garage_entity=self.garage_entity,
+            vacuum_entity=self.vacuum_entity,
+        )
+        tracked: list[str] = []
+        for cand in (
+            self.alarm_entity,
+            wh_info["thermostat_entity"],
+            wh_info["lock_entity"],
+            wh_info["garage_entity"],
+            wh_info["vacuum_entity"],
+        ):
+            if cand and cand not in tracked:
+                tracked.append(cand)
+
+        if not tracked:
             return
 
         self._unsub_alarm_state = async_track_state_change_event(
             self.hass,
-            [alarm_ent],
+            tracked,
             self._async_on_generic_state_change,
         )
 

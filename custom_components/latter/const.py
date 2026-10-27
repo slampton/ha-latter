@@ -7,7 +7,7 @@ from typing import Final
 from homeassistant.const import Platform
 
 DOMAIN: Final = "latter"
-INTEGRATION_VERSION: Final = "2.1.11"
+INTEGRATION_VERSION: Final = "2.2.0"
 PLATFORMS: Final[list[Platform]] = [Platform.SENSOR]
 
 STORAGE_VERSION: Final = 1
@@ -23,6 +23,10 @@ CONF_COMPANION_BASE_URL: Final = "companion_base_url"
 CONF_WEATHER_ENTITY: Final = "weather_entity"
 CONF_ALARM_ENTITY: Final = "alarm_entity"
 CONF_CAMERA_ENTITY: Final = "camera_entity"
+CONF_THERMOSTAT_ENTITY: Final = "thermostat_entity"
+CONF_LOCK_ENTITY: Final = "lock_entity"
+CONF_GARAGE_ENTITY: Final = "garage_entity"
+CONF_VACUUM_ENTITY: Final = "vacuum_entity"
 CONF_DEFAULT_SPEAKER: Final = "default_speaker"
 CONF_VOL_SPEAKER_1: Final = "vol_speaker_1"
 CONF_VOL_TARGET_1: Final = "vol_target_1"
@@ -133,6 +137,10 @@ GLOBAL_CONFIG_KEYS: Final[tuple[str, ...]] = (
     CONF_WEATHER_ENTITY,
     CONF_ALARM_ENTITY,
     CONF_CAMERA_ENTITY,
+    CONF_THERMOSTAT_ENTITY,
+    CONF_LOCK_ENTITY,
+    CONF_GARAGE_ENTITY,
+    CONF_VACUUM_ENTITY,
     CONF_VOL_SPEAKER_1,
     CONF_VOL_TARGET_1,
     CONF_VOL_SPEAKER_2,

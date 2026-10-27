@@ -43,6 +43,27 @@ class _BaseLatterSensor(SensorEntity):
 
     _attr_has_entity_name = True
     _attr_should_poll = False
+    _unrecorded_attributes = frozenset(
+        {
+            "alert_camera_url",
+            "art_url",
+            "ble_beacon_uuid",
+            "ble_room_offsets",
+            "ble_rssi_by_room",
+            "ble_scanners_map",
+            "ble_target_macs",
+            "camera_snapshot_url",
+            "companion_url",
+            "custom_bindings",
+            "custom_bindings_summary",
+            "custom_entities",
+            "custom_palettes",
+            "entities_summary",
+            "events",
+            "slots_summary",
+            "wallpaper_url",
+        }
+    )
 
     def __init__(self, coordinator: LatterCoordinator, suffix: str, label: str) -> None:
         """Initialize base sensor with a device-scoped entity_id."""
