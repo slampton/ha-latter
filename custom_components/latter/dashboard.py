@@ -119,6 +119,29 @@ from .wallpaper_engine import (
 
 _LOGGER = logging.getLogger(__name__)
 
+MAX_INTERNAL_LOGS = 150
+
+
+def log_studio_event(
+    hass: HomeAssistant, level: str, source: str, message: str
+) -> None:
+    """Append a timestamped diagnostic event to Latter's in-memory Studio ring buffer."""
+    from homeassistant.util import dt as dt_util
+
+    domain_data = hass.data.setdefault(DOMAIN, {})
+    logs: list[dict[str, str]] = domain_data.setdefault("internal_logs", [])
+    ts = dt_util.now().strftime("%Y-%m-%d %H:%M:%S")
+    logs.insert(
+        0,
+        {
+            "ts": ts,
+            "level": level.upper(),
+            "source": source,
+            "message": str(message),
+        },
+    )
+    del logs[MAX_INTERNAL_LOGS:]
+
 def _normalize_web_theme(raw_theme: Any) -> str:
     """Normalize theme selection ('ha_auto', 'ha_dark', 'ha_light', or an installed HA theme name)."""
     val = str(raw_theme or "ha_auto").strip()
@@ -549,11 +572,14 @@ def _build_companion_state_payload(
         )
     unbridged_devices.sort(key=lambda d: d["name"].lower())
 
+    internal_logs = list(hass.data.get(DOMAIN, {}).get("internal_logs", []))
+
     return {
         "entry_id": coordinator.entry.entry_id,
         "title": coordinator.device_slug.replace("_", " ").title(),
         "version": INTEGRATION_VERSION,
         "capabilities": device_capabilities,
+        "internal_logs": internal_logs,
         "health_warnings": health_warnings,
         "fleet_devices": fleet_devices,
         "unbridged_devices": unbridged_devices,
@@ -1019,7 +1045,13 @@ class LatterCompanionApiView(HomeAssistantView):
             for k in device_keys:
                 if k in incoming_cfg:
                     val = incoming_cfg[k]
-                    if k == CONF_ART_SIZE:
+                    if k == CONF_DEVICE_SLUG:
+                        clean_s = str(val or "").strip().lower().replace("-", "_").replace(" ", "_")
+                        if not clean_s or clean_s == "esphome_device":
+                            val = coordinator.device_slug
+                        else:
+                            val = clean_s
+                    elif k == CONF_ART_SIZE:
                         s_val = str(val or DEFAULT_ART_SIZE).strip().lower()
                         val = s_val if "x" in s_val else int(s_val or DEFAULT_ART_SIZE)
                     elif k == CONF_DEFAULT_PAGE_SIZE:
@@ -1027,6 +1059,12 @@ class LatterCompanionApiView(HomeAssistantView):
                     elif k == CONF_WALLPAPER_CYCLE_MINUTES:
                         val = max(0, int(val or DEFAULT_WALLPAPER_CYCLE_MINUTES))
                     merged_device[k] = val
+            log_studio_event(
+                self.hass,
+                "INFO",
+                coordinator.device_slug,
+                f"Saved configuration for '{merged_device.get(CONF_DEVICE_SLUG, coordinator.device_slug)}'",
+            )
 
             for k in GLOBAL_CONFIG_KEYS:
                 if k in incoming_cfg:
@@ -1049,6 +1087,19 @@ class LatterCompanionApiView(HomeAssistantView):
                 coordinator.build_companion_url(),
             )
             coordinator._bind_wallpaper_cycle_timer()
+            return web.json_response(
+                _build_companion_state_payload(self.hass, coordinator)
+            )
+
+        if cmd == "log_client_error":
+            msg = str(body.get("message") or "Unknown client error")
+            src = str(body.get("source") or "webui")
+            log_studio_event(self.hass, "ERROR", src, msg)
+            return web.json_response({"logged": True})
+
+        if cmd == "clear_internal_logs":
+            self.hass.data.setdefault(DOMAIN, {})["internal_logs"] = []
+            log_studio_event(self.hass, "INFO", "studio", "Cleared internal diagnostic log")
             return web.json_response(
                 _build_companion_state_payload(self.hass, coordinator)
             )
@@ -3099,7 +3150,7 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
           </div>
         </div>
 
-        <div class="card">
+        <div class="card" style="margin-bottom:16px;">
           <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
             <div>
               <h3 style="margin:0;">Entity Inspector</h3>
@@ -3108,6 +3159,20 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
             <input type="text" id="esp-search" style="max-width:300px;" placeholder="Filter by name or entity_id..." oninput="renderRawEntityList()">
           </div>
           <div id="raw-entity-items" class="native-controls-box"></div>
+        </div>
+
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:8px;">
+            <div>
+              <h3 style="margin:0;">Latter Internal Event &amp; Error Log</h3>
+              <p class="desc" style="margin:4px 0 0;">Live ring buffer of Latter Studio actions, onboarding events, and frontend/backend errors.</p>
+            </div>
+            <div style="display:flex;gap:8px;">
+              <button type="button" class="btn-secondary" onclick="copyTextById('internal-log-output')">Copy Log</button>
+              <button type="button" class="btn-danger" onclick="clearInternalLogs()">Clear</button>
+            </div>
+          </div>
+          <pre id="internal-log-output" class="mono" style="background:var(--input-bg);border:1px solid var(--border);border-radius:7px;padding:12px;overflow-x:auto;max-height:280px;margin:0;color:var(--text-strong);line-height:1.45;">No events logged yet.</pre>
         </div>
       </section>
     </div>
@@ -3272,6 +3337,66 @@ function showToast(msg) {
   t.textContent = msg;
   t.style.display = "block";
   setTimeout(() => { t.style.display = "none"; }, 2400);
+}
+
+window.addEventListener("error", (ev) => {
+  const msg = `${ev.message || 'JS Error'} at line ${ev.lineno || '?'}`;
+  fetch(API_URL, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({command: "log_client_error", source: "webui_js", message: msg})
+  }).catch(() => {});
+});
+
+window.addEventListener("unhandledrejection", (ev) => {
+  const msg = `Unhandled Promise Rejection: ${ev.reason?.message || ev.reason || 'unknown'}`;
+  fetch(API_URL, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({command: "log_client_error", source: "webui_promise", message: msg})
+  }).catch(() => {});
+});
+
+async function clearInternalLogs() {
+  const resp = await fetch(API_URL, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({command: "clear_internal_logs"})
+  });
+  if (resp.ok) {
+    applyStateToDom(await resp.json(), false);
+    showToast("Cleared internal log");
+  }
+}
+
+window.addEventListener("error", (ev) => {
+  const msg = `${ev.message || 'JS Error'} at line ${ev.lineno || '?'}`;
+  fetch(API_URL, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({command: "log_client_error", source: "webui_js", message: msg})
+  }).catch(() => {});
+});
+
+window.addEventListener("unhandledrejection", (ev) => {
+  const msg = `Unhandled Promise Rejection: ${ev.reason?.message || ev.reason || 'unknown'}`;
+  fetch(API_URL, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({command: "log_client_error", source: "webui_promise", message: msg})
+  }).catch(() => {});
+});
+
+async function clearInternalLogs() {
+  const resp = await fetch(API_URL, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({command: "clear_internal_logs"})
+  });
+  if (resp.ok) {
+    applyStateToDom(await resp.json(), false);
+    showToast("Cleared internal log");
+  }
 }
 
 function markDirty() {
@@ -4626,8 +4751,18 @@ function applyStateToDom(data, forceFormUpdate=false) {
   if (spkField) spkField.style.display = caps.has_audio ? "block" : "none";
   const medRow = document.getElementById("dash-row-media");
   if (medRow) medRow.style.display = caps.has_audio ? "flex" : "none";
-  document.getElementById("dash-media-summary").textContent = mediaSummary;
+  const medSumEl = document.getElementById("dash-media-summary");
+  if (medSumEl) medSumEl.textContent = mediaSummary;
 
+  const logPre = document.getElementById("internal-log-output");
+  if (logPre) {
+    const logs = data.internal_logs || [];
+    logPre.textContent = logs.length
+      ? logs.map(l => `[${l.ts}] [${l.level}] (${l.source}) ${l.message}`).join("\\n")
+      : "No events or errors logged.";
+  }
+
+  const actSlotIdx = live.active_remote_slot || 1;
   [1, 2, 3, 4].forEach(idx => {
     const isAct = actSlotIdx === idx;
     const card = document.getElementById(`rslot-card-${idx}`);

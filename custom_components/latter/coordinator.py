@@ -359,9 +359,19 @@ class LatterCoordinator:
 
     @property
     def device_slug(self) -> str:
-        """Return normalized ESPHome device slug (underscores)."""
-        raw = str(self.get_opt(CONF_DEVICE_SLUG, "esphome_device"))
-        return normalize_device_slug(raw)
+        """Return normalized ESPHome device slug, auto-healing from unique_id if options were blanked."""
+        raw = str(self.get_opt(CONF_DEVICE_SLUG, "") or "").strip()
+        norm = normalize_device_slug(raw) if raw else "esphome_device"
+        if norm == "esphome_device":
+            uid = str(self.entry.unique_id or "")
+            if uid.startswith(f"{DOMAIN}_"):
+                recovered = normalize_device_slug(uid.removeprefix(f"{DOMAIN}_"))
+                if recovered and recovered != "esphome_device":
+                    return recovered
+            orig_slug = str(self.entry.data.get(CONF_DEVICE_SLUG, "") or "").strip()
+            if orig_slug and orig_slug != "esphome_device":
+                return normalize_device_slug(orig_slug)
+        return norm
 
     @property
     def site_id(self) -> str:
@@ -802,6 +812,23 @@ class LatterCoordinator:
 
     async def async_setup(self) -> None:
         """Restore persisted state, set up subscriptions, start BLE tracker, and sync initial states."""
+        true_slug = self.device_slug
+        saved_opt_slug = str((self.entry.options or {}).get(CONF_DEVICE_SLUG, "") or "").strip()
+        saved_data_slug = str(self.entry.data.get(CONF_DEVICE_SLUG, "") or "").strip()
+        if true_slug != "esphome_device" and (
+            saved_opt_slug in ("", "esphome_device") or saved_data_slug in ("", "esphome_device")
+        ):
+            healed = {
+                **self.entry.data,
+                **(self.entry.options or {}),
+                CONF_DEVICE_SLUG: true_slug,
+            }
+            self.hass.config_entries.async_update_entry(
+                self.entry,
+                title=true_slug.replace("_", " ").title(),
+                data=healed,
+                options=healed,
+            )
         try:
             stored = await self._store.async_load()
             if isinstance(stored, dict):
