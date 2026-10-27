@@ -197,7 +197,7 @@ def _resolve_coordinator_from_call(
 def _resolve_esphome_action(
     hass: HomeAssistant, device_slug: str, suffix: str
 ) -> str | None:
-    """Resolve the registered esphome.<node>_<suffix> service name with smart fallback."""
+    """Resolve the registered esphome.<device_slug>_<suffix> service name strictly for the target device."""
     esphome_services = hass.services.async_services().get("esphome", {})
     exact = f"{device_slug}_{suffix}"
     if exact in esphome_services:
@@ -205,10 +205,6 @@ def _resolve_esphome_action(
 
     for svc_name in esphome_services:
         if svc_name.endswith(f"_{suffix}") and device_slug in svc_name:
-            return svc_name
-
-    for svc_name in esphome_services:
-        if svc_name.endswith(f"_{suffix}"):
             return svc_name
 
     return None
@@ -292,22 +288,49 @@ async def async_push_browse_slots(
                 payload[f"s{idx}_level"] = -1
 
     if esphome_action is None:
-        _LOGGER.warning(
-            "No ESPHome service matching *_%s found (target slug '%s'); is the device online?",
+        _LOGGER.debug(
+            "No ESPHome service matching *_%s found (target slug '%s'); device is headless or offline.",
             preferred_suffix,
             device_slug,
         )
         return
 
-    await hass.services.async_call(
-        "esphome", esphome_action, payload, blocking=False
-    )
+    try:
+        await hass.services.async_call(
+            "esphome", esphome_action, payload, blocking=True
+        )
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.debug(
+            "Skipped %s push for '%s' (device hibernating or handshaking): %s",
+            esphome_action,
+            device_slug,
+            err,
+        )
+
+
+def _is_esphome_device_online(hass: HomeAssistant, coord: LatterCoordinator) -> bool:
+    """Return True if the target ESPHome device supports slot callbacks and has an online entity."""
+    if _resolve_esphome_action(hass, coord.device_slug, "set_room_slots") is None and _resolve_esphome_action(hass, coord.device_slug, "set_browse_slots") is None:
+        return False
+    local_spk = coord.local_speaker
+    if local_spk:
+        st = hass.states.get(local_spk)
+        if st is not None:
+            return st.state not in ("unavailable", "unknown")
+    slug = coord.device_slug
+    for st in hass.states.async_all():
+        if slug in st.entity_id and not st.entity_id.startswith(f"sensor.{slug}_"):
+            if st.state not in ("unavailable", "unknown"):
+                return True
+    return False
 
 
 async def async_push_active_room_entities(
     hass: HomeAssistant, coord: LatterCoordinator
 ) -> None:
-    """Push the active room's entity slots to esphome.<slug>_set_room_slots when room context or entity state updates."""
+    """Push the active room's entity slots to esphome.<slug>_set_room_slots when the device is online."""
+    if not _is_esphome_device_online(hass, coord):
+        return
     items = get_area_entities(
         hass,
         area_id=coord.active_area_id,
@@ -1187,7 +1210,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                         "chime": chime,
                         "camera_url": coord.alert_camera_url,
                     },
-                    blocking=False,
+                    blocking=True,
                 )
             except Exception as err:  # noqa: BLE001
                 _LOGGER.debug("Direct esphome.%s call skipped: %s", esp_notify_svc, err)

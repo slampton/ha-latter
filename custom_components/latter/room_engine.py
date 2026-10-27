@@ -366,12 +366,6 @@ def get_esphome_device_entities(
 
     entries: list[er.RegistryEntry] = []
     if target_device_id:
-        all_dev_entries = er.async_entries_for_device(
-            ent_reg, target_device_id, include_disabled_entities=True
-        )
-        for e in all_dev_entries:
-            if e.disabled_by == er.RegistryEntryDisabler.INTEGRATION and e.entity_category == EntityCategory.DIAGNOSTIC:
-                ent_reg.async_update_entity(e.entity_id, disabled_by=None)
         entries = er.async_entries_for_device(
             ent_reg, target_device_id, include_disabled_entities=False
         )
