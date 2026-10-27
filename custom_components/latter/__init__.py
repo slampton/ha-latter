@@ -350,3 +350,12 @@ async def async_unload_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> b
 async def async_remove_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> None:
     """Re-trigger discovery scan when a device entry is removed so it can be re-added in 1 click."""
     _async_scan_all_esphome_devices_for_discovery(hass)
+
+
+async def async_remove_config_entry_device(
+    hass: HomeAssistant,
+    config_entry: LatterConfigEntry,
+    device_entry: dr.DeviceEntry,
+) -> bool:
+    """Allow users to remove stale device entries from the Home Assistant Device Registry."""
+    return True

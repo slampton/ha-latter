@@ -19,19 +19,47 @@
     }
   },
   "services": {
-    "music_browse": "mdi:library-music",
-    "set_active_speaker": "mdi:speaker-wireless",
-    "media_command": "mdi:play-pause",
-    "media_volume": "mdi:volume-high",
-    "room_browse": "mdi:home-search-outline",
-    "room_action": "mdi:home-lightning-bolt-outline",
-    "set_active_area": "mdi:map-marker-radius",
-    "remote_action": "mdi:remote-tv",
-    "trigger_binding": "mdi:gesture-tap-button",
-    "calendar_fetch": "mdi:calendar-sync",
-    "calendar_create_event": "mdi:calendar-plus",
-    "intercom_broadcast": "mdi:bullhorn-outline",
-    "notify_device": "mdi:bell-ring-outline",
-    "save_custom_color": "mdi:palette-outline"
+    "music_browse": {
+      "service": "mdi:library-music"
+    },
+    "set_active_speaker": {
+      "service": "mdi:speaker-wireless"
+    },
+    "media_command": {
+      "service": "mdi:play-pause"
+    },
+    "media_volume": {
+      "service": "mdi:volume-high"
+    },
+    "room_browse": {
+      "service": "mdi:home-search"
+    },
+    "room_action": {
+      "service": "mdi:home-lightning-bolt"
+    },
+    "set_active_area": {
+      "service": "mdi:map-marker-radius"
+    },
+    "remote_action": {
+      "service": "mdi:remote-tv"
+    },
+    "trigger_binding": {
+      "service": "mdi:gesture-tap-button"
+    },
+    "calendar_fetch": {
+      "service": "mdi:calendar-sync"
+    },
+    "calendar_create_event": {
+      "service": "mdi:calendar-plus"
+    },
+    "intercom_broadcast": {
+      "service": "mdi:bullhorn"
+    },
+    "notify_device": {
+      "service": "mdi:bell-ring"
+    },
+    "save_custom_color": {
+      "service": "mdi:palette"
+    }
   }
 }

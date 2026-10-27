@@ -2,17 +2,22 @@
   "config": {
     "step": {
       "user": {
-        "title": "Onboard ESPHome Device to Latter",
-        "description": "Screen geometry, resolution (466x466 vs 410x502), and local speaker are auto-detected. If this device is stationary, uncheck the roaming box and assign its Area on the next screen.",
+        "title": "Add ESPHome Device to Latter",
+        "description": "Connect an ESPHome companion display, mixin node, or room sensor to Latter. Shared household entities, BLE room calibration, remotes, and wallpapers can be customized in the Latter Studio.",
         "data": {
           "device_slug": "ESPHome Device Name / Slug",
           "apply_profile": "Configuration Profile",
           "native_ble_tracking": "This device roams (not fixed to a single Area)"
+        },
+        "data_description": {
+          "device_slug": "The normalized name of your ESPHome device (for example: pocket_assistant or wrist_assist).",
+          "apply_profile": "Auto-detect screen geometry and capabilities from hardware, or apply a saved Latter profile.",
+          "native_ble_tracking": "Enable for portable/wearable devices that move room-to-room. Uncheck for stationary room devices."
         }
       },
       "reconfigure": {
         "title": "Reconfigure Latter Device",
-        "description": "Apply a configuration profile or toggle whether this device roams between Areas. Open the Latter sidebar panel for full System & Device Studio controls.",
+        "description": "Update onboarding settings or apply a saved configuration profile to this ESPHome device.",
         "data": {
           "device_slug": "ESPHome Device Name / Slug",
           "apply_profile": "Configuration Profile",
@@ -22,16 +27,16 @@
     },
     "abort": {
       "already_configured": "This ESPHome device is already configured in Latter.",
-      "not_supported": "This ESPHome device does not announce Latter companion contract actions or metadata.",
-      "unique_id_mismatch": "The ESPHome device slug does not match the existing configuration entry.",
-      "reconfigure_successful": "Configuration updated successfully."
+      "not_supported": "This device does not announce Latter companion actions.",
+      "reconfigure_successful": "Device configuration updated.",
+      "unique_id_mismatch": "The device slug does not match the existing configuration entry."
     }
   },
   "options": {
     "step": {
       "init": {
         "title": "Latter Device Options",
-        "description": "Apply a configuration profile or toggle whether this device roams between Areas. For Stationary devices, assign the device's Area using Home Assistant's standard Device settings.",
+        "description": "Update device identity, profile, or roaming behavior. For full system and device controls, open the Latter Studio from the Home Assistant sidebar.",
         "data": {
           "device_slug": "ESPHome Device Name / Slug",
           "apply_profile": "Configuration Profile",
@@ -65,19 +70,19 @@
       "fix_flow": {
         "step": {
           "confirm": {
-            "title": "Update mapped entity in Latter",
-            "description": "The following mapped entity for `{device_slug}` was deleted or renamed in Home Assistant: **{missing_list}**. Open the Latter Companion Studio or integration options to select a replacement."
+            "title": "Update mapped entities for {device_slug}",
+            "description": "The following entities mapped to **{device_slug}** could not be found in Home Assistant: **{missing_list}**. Open the Latter Studio to select replacement entities, then confirm below to clear this warning."
           }
         }
       }
     },
     "ble_no_proxies": {
-      "title": "No room-assigned BLE proxies found for {device_slug}",
+      "title": "No Area-assigned Bluetooth proxies found for {device_slug}",
       "fix_flow": {
         "step": {
           "confirm": {
             "title": "Assign Bluetooth proxies to Home Assistant Areas",
-            "description": "Built-in BLE Room Presence is enabled for `{device_slug}`, but no active Bluetooth scanners/proxies are assigned to a Home Assistant Area. Assign each ESPHome BLE proxy to its room Area in Home Assistant, or disable Built-In BLE Tracking if not used."
+            "description": "Built-in BLE Room Tracking is enabled for **{device_slug}**, but no Bluetooth scanner proxies assigned to a Home Assistant Area were detected. Assign your ESPHome BLE proxies to their corresponding Areas in Home Assistant, or disable BLE tracking if stationary."
           }
         }
       }
