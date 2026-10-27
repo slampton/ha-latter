@@ -73,6 +73,7 @@ from .const import (
     CONF_REMOTE_2,
     CONF_REMOTE_3,
     CONF_REMOTE_4,
+    CONF_REMOTES_LIST,
     CONF_SYNC_DEVICE_AREA,
     CONF_VOL_SPEAKER_1,
     CONF_VOL_SPEAKER_2,
@@ -525,6 +526,7 @@ def _build_companion_state_payload(
         CONF_REMOTE_2: coordinator.get_opt(CONF_REMOTE_2, ""),
         CONF_REMOTE_3: coordinator.get_opt(CONF_REMOTE_3, ""),
         CONF_REMOTE_4: coordinator.get_opt(CONF_REMOTE_4, ""),
+        CONF_REMOTES_LIST: coordinator.get_remote_entities_list(),
         CONF_WEATHER_ENTITY: coordinator.weather_entity or "",
         CONF_CALENDAR_ENTITIES: coordinator.calendar_entities,
         CONF_CUSTOM_ENTITIES: coordinator.custom_entities,
@@ -1034,7 +1036,7 @@ class LatterCompanionApiView(HomeAssistantView):
             )
 
         if cmd == "activate_remote_slot":
-            slot_num = max(1, min(4, int(body.get("slot") or 1)))
+            slot_num = max(1, min(10, int(body.get("slot") or 1)))
             coordinator.active_remote_slot = slot_num
             coordinator._schedule_persist_runtime_state()
             coordinator._notify_listeners()
@@ -1178,6 +1180,18 @@ class LatterCompanionApiView(HomeAssistantView):
                 **(coordinator.entry.options or {}),
             }
             global_updates: dict[str, Any] = {}
+
+            if "remotes_list" in incoming_cfg and isinstance(incoming_cfg["remotes_list"], list):
+                clean_rems = [
+                    str(x).strip()
+                    for x in incoming_cfg["remotes_list"][:10]
+                    if str(x or "").strip()
+                ]
+                incoming_cfg[CONF_REMOTES_LIST] = clean_rems
+                incoming_cfg[CONF_REMOTE_1] = clean_rems[0] if len(clean_rems) >= 1 else ""
+                incoming_cfg[CONF_REMOTE_2] = clean_rems[1] if len(clean_rems) >= 2 else ""
+                incoming_cfg[CONF_REMOTE_3] = clean_rems[2] if len(clean_rems) >= 3 else ""
+                incoming_cfg[CONF_REMOTE_4] = clean_rems[3] if len(clean_rems) >= 4 else ""
 
             if "volume_overrides" in incoming_cfg and isinstance(incoming_cfg["volume_overrides"], list):
                 clean_vo = [

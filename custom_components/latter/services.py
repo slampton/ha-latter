@@ -395,29 +395,34 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             return
 
         data = call.data
-        slot_key = str(data.get("slot") or "").strip().lower()
+        slot_raw = str(data.get("slot") or "").strip()
+        slot_key = slot_raw.lower()
         if not slot_key:
             return
 
         bindings = coord.custom_bindings
         matched: dict[str, Any] | None = None
-        for binding in bindings:
-            b_slot = str(binding.get("slot") or "").strip().lower()
-            if b_slot == slot_key:
-                matched = binding
-                break
+        if "." in slot_raw and hass.states.get(slot_raw) is not None:
+            matched = {"slot": slot_raw, "entity_id": slot_raw, "action": "toggle"}
+
+        if matched is None:
+            for binding in bindings:
+                b_slot = str(binding.get("slot") or "").strip().lower()
+                if b_slot == slot_key:
+                    matched = binding
+                    break
 
         if matched is None and slot_key.startswith("macro_"):
             try:
                 idx = int(slot_key.split("_", 1)[1]) - 1
-                if 0 <= idx < len(bindings):
-                    matched = bindings[idx]
-                elif 0 <= idx < len(coord.custom_entities):
+                if 0 <= idx < len(coord.custom_entities):
                     matched = {
                         "slot": slot_key,
                         "entity_id": coord.custom_entities[idx],
                         "action": "toggle",
                     }
+                elif 0 <= idx < len(bindings):
+                    matched = bindings[idx]
             except ValueError:
                 pass
 
@@ -550,8 +555,9 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             return
 
         data = call.data
+        slots = coord.get_remote_slots()
         slot_num = int(data.get("slot") or coord.active_remote_slot or 1)
-        slot_num = max(1, min(4, slot_num))
+        slot_num = max(1, min(max(1, len(slots)), slot_num))
         if slot_num != coord.active_remote_slot:
             coord.active_remote_slot = slot_num
             coord._schedule_persist_runtime_state()
@@ -563,7 +569,6 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         if action in ("select_slot", ""):
             return
 
-        slots = coord.get_remote_slots()
         slot_info = slots[slot_num - 1]
         remote_ent = slot_info["remote_entity"]
         mp_ent = slot_info["media_player_entity"]

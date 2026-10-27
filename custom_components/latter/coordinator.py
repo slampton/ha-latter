@@ -94,6 +94,7 @@ from .const import (
     CONF_REMOTE_2,
     CONF_REMOTE_3,
     CONF_REMOTE_4,
+    CONF_REMOTES_LIST,
     CONF_SYNC_DEVICE_AREA,
     CONF_VOL_SPEAKER_1,
     CONF_VOL_SPEAKER_2,
@@ -495,32 +496,33 @@ class LatterCoordinator:
         return list(val) if isinstance(val, list) else []
 
     def _build_custom_bindings_summary(self) -> str:
-        """Build a semicolon-delimited 5-slot summary ('slot|Friendly Name|action;...') for on-device Macro UIs."""
+        """Build a semicolon-delimited summary ('slot|Friendly Name|action;...') for all Pinned Entities & Scripts."""
         rows: list[str] = []
-        for b in self.custom_bindings[:5]:
-            if not isinstance(b, dict):
-                continue
-            slot_id = str(b.get("slot") or "").strip().replace(";", "").replace("|", "")
-            ent_id = str(b.get("entity_id") or "").strip()
-            act = str(b.get("action") or "toggle").strip()
-            if not slot_id or not ent_id:
-                continue
-            st = self.hass.states.get(ent_id)
-            friendly = (
-                str(st.attributes.get("friendly_name") if st else "")
-                or ent_id.split(".", 1)[-1].replace("_", " ").title()
-            )
-            friendly = friendly.replace(";", "").replace("|", "")[:32]
-            rows.append(f"{slot_id}|{friendly}|{act}")
-        if not rows and self.custom_entities:
-            for idx, ent_id in enumerate(self.custom_entities[:5], start=1):
+        if self.custom_entities:
+            for idx, ent_id in enumerate(self.custom_entities[:30], start=1):
                 st = self.hass.states.get(ent_id)
                 friendly = (
                     str(st.attributes.get("friendly_name") if st else "")
                     or ent_id.split(".", 1)[-1].replace("_", " ").title()
                 )
                 friendly = friendly.replace(";", "").replace("|", "")[:32]
-                rows.append(f"macro_{idx}|{friendly}|toggle")
+                rows.append(f"{ent_id}|{friendly}|toggle")
+        elif self.custom_bindings:
+            for b in self.custom_bindings[:30]:
+                if not isinstance(b, dict):
+                    continue
+                slot_id = str(b.get("slot") or "").strip().replace(";", "").replace("|", "")
+                ent_id = str(b.get("entity_id") or "").strip()
+                act = str(b.get("action") or "toggle").strip()
+                if not slot_id or not ent_id:
+                    continue
+                st = self.hass.states.get(ent_id)
+                friendly = (
+                    str(st.attributes.get("friendly_name") if st else "")
+                    or ent_id.split(".", 1)[-1].replace("_", " ").title()
+                )
+                friendly = friendly.replace(";", "").replace("|", "")[:32]
+                rows.append(f"{slot_id}|{friendly}|{act}")
         return ";".join(rows) if rows else "NONE"
 
     @property
@@ -882,7 +884,7 @@ class LatterCoordinator:
                 if saved_area and not self.active_area_id:
                     self.active_area_id = saved_area
                 saved_slot = stored.get("active_remote_slot")
-                if isinstance(saved_slot, int) and 1 <= saved_slot <= 4:
+                if isinstance(saved_slot, int) and 1 <= saved_slot <= 10:
                     self.active_remote_slot = saved_slot
                 self.last_media_uri = str(stored.get("last_media_uri") or "")
                 self.last_media_type = str(stored.get("last_media_type") or "music")
@@ -1784,22 +1786,33 @@ class LatterCoordinator:
                 self.on_area_changed_push_slots(self)
             )
 
-    def get_remote_slots(self) -> list[dict[str, str]]:
-        """Return the 4 resolved TV/Media Remote slot dictionaries."""
-        keys = (CONF_REMOTE_1, CONF_REMOTE_2, CONF_REMOTE_3, CONF_REMOTE_4)
-        return [
-            resolve_remote_slot_pair(self.hass, self.get_opt(k))
-            for k in keys
+    def get_remote_entities_list(self) -> list[str]:
+        """Return the configured list of up to 10 remote/media_player entity IDs (with legacy 1..4 fallback)."""
+        raw_list = self.get_opt(CONF_REMOTES_LIST)
+        if isinstance(raw_list, list):
+            return [str(x).strip() for x in raw_list[:10] if str(x or "").strip()]
+        legacy = [
+            str(self.get_opt(k) or "").strip()
+            for k in (CONF_REMOTE_1, CONF_REMOTE_2, CONF_REMOTE_3, CONF_REMOTE_4)
         ]
+        return [x for x in legacy if x]
+
+    def get_remote_slots(self) -> list[dict[str, str]]:
+        """Return up to 10 resolved TV/Media Remote slot dictionaries."""
+        ent_ids = self.get_remote_entities_list()
+        if not ent_ids:
+            return [resolve_remote_slot_pair(self.hass, None)]
+        return [resolve_remote_slot_pair(self.hass, eid) for eid in ent_ids[:10]]
 
     def get_remote_config_payload(self) -> tuple[str, dict[str, Any]]:
-        """Compute state and attributes for sensor.<device_slug>_remote_config."""
+        """Compute state and attributes for sensor.<device_slug>_remote_config (supports up to 10 slots)."""
         slots = self.get_remote_slots()
         populated_count = sum(
             1 for s in slots if s["remote_entity"] or s["media_player_entity"]
         )
+        clamped_active = max(1, min(len(slots), self.active_remote_slot))
         attrs: dict[str, Any] = {
-            "active_slot": self.active_remote_slot,
+            "active_slot": clamped_active,
             "configured_count": populated_count,
         }
         summary_parts: list[str] = []
@@ -1813,7 +1826,7 @@ class LatterCoordinator:
                 f"{idx}:{slot['name']}:{slot['remote_entity']}:{slot['media_player_entity']}:{slot['state']}"
             )
 
-        active_slot_data = slots[max(0, min(3, self.active_remote_slot - 1))]
+        active_slot_data = slots[clamped_active - 1]
         state_str = active_slot_data["name"] if populated_count > 0 else "None"
         attrs["slots_summary"] = ";".join(summary_parts)
         return state_str, attrs

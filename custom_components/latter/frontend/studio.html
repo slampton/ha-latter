@@ -1101,7 +1101,7 @@
             </div>
 
             <div class="field" style="padding-top:12px;border-top:1px solid var(--border);">
-              <label>Pinned Room Entities</label>
+              <label>Pinned Entities &amp; Quick Actions (Room Control &amp; On-Device Macros)</label>
               <div class="input-action-row">
                 <select id="pin-entity-picker"></select>
                 <button class="btn-secondary" onclick="addPinnedEntity()">Pin Entity</button>
@@ -1109,13 +1109,6 @@
               <div id="pinned-chips" class="chip-list"></div>
             </div>
           </div>
-        </div>
-
-        <div class="card">
-          <h3>Macro Slot Bindings</h3>
-          <p class="desc">Map on-device macro slots (<code>macro_1</code>..<code>macro_5</code> in the Tools &rarr; Macros app) or custom hardware buttons to Home Assistant entities.</p>
-          <div id="bindings-list"></div>
-          <button class="btn-secondary" onclick="addBindingRow('', '', 'toggle'); markDirty();">+ Add Macro Binding</button>
         </div>
       </section>
 
@@ -1129,49 +1122,10 @@
         </div>
 
         <div class="card">
-          <h3>Remote Control Slots</h3>
-          <p class="desc">Select a <code>remote.*</code> or <code>media_player.*</code> entity for each slot. <strong>Slot 1</strong> is the primary device targeted by the Master Power button on your displays; Slots 2–4 appear as secondary devices.</p>
-          <div class="grid-2">
-            <div class="remote-slot-card">
-              <div class="remote-slot-hdr">
-                <strong>Slot 1 (Primary Power Target)</strong>
-              </div>
-              <div class="field">
-                <label>Target Entity</label>
-                <select id="cfg-remote_1" onchange="markDirty()"></select>
-              </div>
-            </div>
-
-            <div class="remote-slot-card">
-              <div class="remote-slot-hdr">
-                <strong>Slot 2</strong>
-              </div>
-              <div class="field">
-                <label>Target Entity</label>
-                <select id="cfg-remote_2" onchange="markDirty()"></select>
-              </div>
-            </div>
-
-            <div class="remote-slot-card">
-              <div class="remote-slot-hdr">
-                <strong>Slot 3</strong>
-              </div>
-              <div class="field">
-                <label>Target Entity</label>
-                <select id="cfg-remote_3" onchange="markDirty()"></select>
-              </div>
-            </div>
-
-            <div class="remote-slot-card">
-              <div class="remote-slot-hdr">
-                <strong>Slot 4</strong>
-              </div>
-              <div class="field">
-                <label>Target Entity</label>
-                <select id="cfg-remote_4" onchange="markDirty()"></select>
-              </div>
-            </div>
-          </div>
+          <h3>Remote Controls</h3>
+          <p class="desc">Add up to 10 <code>remote.*</code> or <code>media_player.*</code> entities. <strong>Slot 1</strong> is the primary device targeted by the Master Power button on your displays; additional slots appear as scrollable secondary devices.</p>
+          <div id="remotes-list"></div>
+          <button type="button" class="btn-secondary" id="btn-add-remote" onclick="addRemoteControlRow(''); markDirty();">+ Add Remote Control</button>
         </div>
 
         <div class="card">
@@ -3284,6 +3238,45 @@ function removeCalendarEntity(idx) {
   markDirty();
 }
 
+function renumberRemoteControlRows() {
+  const rows = document.querySelectorAll("#remotes-list .remote-row-item");
+  rows.forEach((row, idx) => {
+    const lbl = row.querySelector(".rem-slot-lbl");
+    if (lbl) {
+      lbl.textContent = idx === 0
+        ? "Slot 1 (Primary Power Target)"
+        : `Slot ${idx + 1}`;
+    }
+  });
+}
+
+function addRemoteControlRow(entityId="") {
+  const list = document.getElementById("remotes-list");
+  if (!list) return;
+  const existingCount = list.querySelectorAll(".remote-row-item").length;
+  if (existingCount >= 10) {
+    showToast("Maximum of 10 remote controls reached");
+    return;
+  }
+  const row = document.createElement("div");
+  row.className = "native-ctrl-row remote-row-item";
+  row.style.marginBottom = "8px";
+  const remOptions = (STATE?.catalog?.remotes || []).map(r =>
+    `<option value="${r.id}" ${r.id === entityId ? 'selected' : ''}>${r.name}</option>`
+  ).join("");
+  const slotTitle = existingCount === 0
+    ? "Slot 1 (Primary Power Target)"
+    : `Slot ${existingCount + 1}`;
+  row.innerHTML = `
+    <div style="flex:1;min-width:0;">
+      <small class="rem-slot-lbl" style="color:var(--muted);display:block;margin-bottom:3px;font-size:11px;font-weight:500;">${slotTitle}</small>
+      <select class="rem-ent-sel" style="width:100%;max-width:none;" onchange="markDirty()"><option value="">— Select Remote or Media Player —</option>${remOptions}</select>
+    </div>
+    <button type="button" class="btn-danger" title="Remove Remote" onclick="this.parentElement.remove(); renumberRemoteControlRows(); markDirty();">✕</button>
+  `;
+  list.appendChild(row);
+}
+
 function addVolumeOverrideRow(speaker="", target="") {
   const list = document.getElementById("volume-overrides-list");
   if (!list) return;
@@ -3929,10 +3922,17 @@ function applyStateToDom(data, forceFormUpdate=false) {
         if (vo && vo.speaker && vo.target) addVolumeOverrideRow(vo.speaker, vo.target);
       });
     }
-    populateSelect("cfg-remote_1", cat.remotes, cfg.remote_1);
-    populateSelect("cfg-remote_2", cat.remotes, cfg.remote_2);
-    populateSelect("cfg-remote_3", cat.remotes, cfg.remote_3);
-    populateSelect("cfg-remote_4", cat.remotes, cfg.remote_4);
+    const remListEl = document.getElementById("remotes-list");
+    if (remListEl) {
+      remListEl.innerHTML = "";
+      let remItems = Array.isArray(cfg.remotes_list) ? cfg.remotes_list.filter(Boolean) : [];
+      if (!remItems.length) {
+        [cfg.remote_1, cfg.remote_2, cfg.remote_3, cfg.remote_4].forEach(r => {
+          if (r) remItems.push(r);
+        });
+      }
+      remItems.forEach(rId => addRemoteControlRow(rId));
+    }
     populateSelect("cfg-alarm_entity", cat.alarms, cfg.alarm_entity);
     populateSelect("cfg-camera_entity", cat.cameras, cfg.camera_entity);
     renderCameraPreview(cfg.camera_entity);
@@ -3950,8 +3950,10 @@ function applyStateToDom(data, forceFormUpdate=false) {
     renderPinnedChips();
 
     const bList = document.getElementById("bindings-list");
-    bList.innerHTML = "";
-    (cfg.custom_bindings || []).forEach(b => addBindingRow(b.slot, b.entity_id, b.action));
+    if (bList) {
+      bList.innerHTML = "";
+      (cfg.custom_bindings || []).forEach(b => addBindingRow(b.slot, b.entity_id, b.action));
+    }
     renderYamlGenerator();
     clearDirty();
   }
@@ -4006,6 +4008,12 @@ async function saveAllConfig() {
     if (speaker && target) volumeOverrides.push({speaker, target});
   });
 
+  const remotesList = [];
+  document.querySelectorAll("#remotes-list .remote-row-item").forEach(row => {
+    const rEnt = row.querySelector(".rem-ent-sel")?.value?.trim() || "";
+    if (rEnt) remotesList.push(rEnt);
+  });
+
   const config = {
     device_slug: document.getElementById("cfg-device_slug").value.trim(),
     companion_base_url: document.getElementById("cfg-companion_base_url").value.trim(),
@@ -4036,10 +4044,11 @@ async function saveAllConfig() {
     vol_target_1: volumeOverrides[0]?.target || "",
     vol_speaker_2: volumeOverrides[1]?.speaker || "",
     vol_target_2: volumeOverrides[1]?.target || "",
-    remote_1: document.getElementById("cfg-remote_1").value,
-    remote_2: document.getElementById("cfg-remote_2").value,
-    remote_3: document.getElementById("cfg-remote_3").value,
-    remote_4: document.getElementById("cfg-remote_4").value,
+    remotes_list: remotesList,
+    remote_1: remotesList[0] || "",
+    remote_2: remotesList[1] || "",
+    remote_3: remotesList[2] || "",
+    remote_4: remotesList[3] || "",
     alarm_entity: document.getElementById("cfg-alarm_entity").value,
     camera_entity: document.getElementById("cfg-camera_entity").value,
     weather_entity: document.getElementById("cfg-weather_entity").value,
