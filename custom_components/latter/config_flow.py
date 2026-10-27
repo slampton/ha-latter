@@ -283,14 +283,17 @@ def _build_schema(hass: HomeAssistant, current: dict[str, Any]) -> vol.Schema:
 def _abort_competing_flows_for_slug(
     hass: HomeAssistant, slug: str, keep_flow_id: str | None = None
 ) -> None:
-    """Abort any stale or competing in-progress flows for the given slug so setup never blocks with already_in_progress."""
+    """Abort any background discovery flow for the same slug when the user submits a manual setup flow."""
     target_uid = f"{DOMAIN}_{normalize_device_slug(slug)}"
     for flow in list(hass.config_entries.flow.async_progress_by_handler(DOMAIN)):
         fid = flow.get("flow_id")
         if not fid or fid == keep_flow_id:
             continue
         ctx = flow.get("context") or {}
-        if ctx.get("unique_id") == target_uid or flow.get("step_id") is None:
+        if flow.get("step_id") is None or (
+            ctx.get("unique_id") == target_uid
+            and ctx.get("source") != "user"
+        ):
             hass.config_entries.flow.async_abort(fid)
 
 
@@ -391,7 +394,8 @@ class LatterConfigFlow(ConfigFlow, domain=DOMAIN):
             _abort_competing_flows_for_slug(
                 self.hass, slug, keep_flow_id=self.flow_id
             )
-            await self.async_set_unique_id(f"{DOMAIN}_{slug}")
+            if self.unique_id != f"{DOMAIN}_{slug}":
+                await self.async_set_unique_id(f"{DOMAIN}_{slug}")
             self._abort_if_unique_id_configured()
 
             clean_title = _format_clean_device_title(
