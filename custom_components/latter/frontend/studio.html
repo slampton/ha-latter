@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <link rel="icon" type="image/png" href="/api/latter/brand/icon.png">
-<title>Latter Companion Studio</title>
+<title>Latter Studio</title>
 <style>
-  /* Native Home Assistant Default Dark & Light Theme Tokens (Inherits live HA variables when embedded) */
+  /* Native Home Assistant Default Dark & Light Theme Tokens */
   :root, [data-theme="dark"] {
     --primary-background-color: #111111;
     --secondary-background-color: #1c1c1c;
@@ -70,13 +70,14 @@
   * { box-sizing: border-box; }
   body {
     margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+    font-family: Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     background: var(--bg);
     color: var(--text);
     min-height: 100vh;
     display: flex;
     flex-direction: column;
-    font-size: 13.5px;
+    font-size: 14px;
+    line-height: 1.45;
     -webkit-tap-highlight-color: transparent;
   }
   code, .mono {
@@ -85,52 +86,28 @@
   }
   .app-shell {
     display: grid;
-    grid-template-columns: 256px minmax(0, 1fr);
+    grid-template-columns: 244px minmax(0, 1fr);
     min-height: 100vh;
   }
+
+  /* NATIVE HOME ASSISTANT SIDEBAR */
   aside.sidebar {
     background: var(--sidebar);
     border-right: 1px solid var(--border);
     display: flex;
     flex-direction: column;
-    padding: 14px 12px;
+    padding: 12px;
     position: sticky;
     top: 0;
     height: 100vh;
     overflow-y: auto;
   }
-  .brand {
-    display: flex;
-    align-items: center;
-    gap: 11px;
-    padding: 2px 6px 12px;
-    border-bottom: 1px solid var(--border);
-    margin-bottom: 12px;
-  }
-  .brand-text { min-width: 0; }
-  .brand-text h1 {
-    margin: 0;
-    font-size: 14px;
-    font-weight: 700;
-    color: var(--text-strong);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .brand-text small {
-    color: var(--muted);
-    font-size: 11px;
-    display: block;
-    margin-top: 2px;
-    font-variant-numeric: tabular-nums;
-  }
-  /* SCOPE SWITCHER (HOUSEHOLD & FLEET vs DEVICE) */
   .scope-box {
     background: var(--card);
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: 10px;
     padding: 8px;
-    margin-bottom: 12px;
+    margin-bottom: 10px;
   }
   .scope-tabs {
     display: grid;
@@ -138,7 +115,7 @@
     gap: 4px;
     background: var(--input-bg);
     padding: 3px;
-    border-radius: 6px;
+    border-radius: 7px;
     border: 1px solid var(--border);
   }
   .scope-tab {
@@ -147,8 +124,8 @@
     border: none;
     background: transparent;
     color: var(--muted);
-    font-size: 12px;
-    font-weight: 700;
+    font-size: 12.5px;
+    font-weight: 500;
     cursor: pointer;
     text-align: center;
     transition: background 0.12s ease, color 0.12s ease;
@@ -156,47 +133,34 @@
   .scope-tab.active {
     background: var(--accent-solid);
     color: #ffffff;
+    font-weight: 600;
   }
   .device-picker-wrap {
     margin-top: 8px;
   }
   .device-picker-wrap label {
     display: block;
-    font-size: 10.5px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+    font-size: 11px;
+    font-weight: 500;
     color: var(--muted);
     margin-bottom: 4px;
   }
   .device-picker-wrap select {
     padding: 7px 9px;
-    font-size: 12.5px;
-    font-weight: 600;
+    font-size: 13px;
+    font-weight: 500;
   }
   .nav-group-label {
-    display: flex;
-    align-items: center;
-    gap: 7px;
     font-size: 11px;
-    font-weight: 800;
+    font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.9px;
-    color: var(--text-strong);
-    margin: 14px 4px 5px;
-    padding: 0 6px 5px;
-    border-bottom: 1px solid var(--border);
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    margin: 14px 8px 4px;
+    padding: 0 4px;
   }
   .nav-group-label:first-child {
-    margin-top: 2px;
-  }
-  .nav-group-label::before {
-    content: "";
-    width: 6px;
-    height: 6px;
-    border-radius: 2px;
-    background: var(--accent);
-    flex-shrink: 0;
+    margin-top: 4px;
   }
   .nav-list {
     display: flex;
@@ -208,47 +172,44 @@
     align-items: center;
     justify-content: space-between;
     gap: 8px;
-    width: calc(100% - 12px);
-    margin-left: 12px;
-    padding: 8px 12px 8px 14px;
-    border-radius: 0 7px 7px 0;
-    border: 1px solid transparent;
-    border-left: 2px solid var(--border);
+    width: 100%;
+    margin: 0;
+    padding: 9px 12px;
+    border-radius: 8px;
+    border: none;
     background: transparent;
-    color: var(--muted);
+    color: var(--text);
     font-weight: 500;
-    font-size: 13px;
+    font-size: 13.5px;
     cursor: pointer;
     text-align: left;
     white-space: nowrap;
-    transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+    transition: background 0.12s ease, color 0.12s ease;
   }
   .nav-btn:hover {
     background: var(--card-hover);
-    color: var(--text-strong);
-    border-left-color: var(--muted);
   }
   .nav-btn.active {
     background: var(--accent-subtle);
-    color: var(--text-strong);
-    font-weight: 700;
-    border-color: rgba(104, 153, 211, 0.28);
-    border-left: 3px solid var(--accent);
+    color: var(--accent);
+    font-weight: 600;
   }
   .nav-badge {
     font-size: 11px;
-    padding: 1px 7px;
-    border-radius: 5px;
-    background: var(--card);
+    padding: 2px 7px;
+    border-radius: 10px;
+    background: var(--input-bg);
     border: 1px solid var(--border);
     color: var(--muted);
     font-variant-numeric: tabular-nums;
   }
   .sidebar-footer {
     margin-top: auto;
-    padding-top: 14px;
+    padding-top: 12px;
     border-top: 1px solid var(--border);
   }
+
+  /* MAIN AREA & TOPBAR */
   .main-area {
     display: flex;
     flex-direction: column;
@@ -258,7 +219,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 12px 24px;
+    padding: 10px 24px;
     background: var(--sidebar);
     border-bottom: 1px solid var(--border);
     position: sticky;
@@ -277,26 +238,13 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 5px 10px;
-    border-radius: 6px;
+    padding: 4px 10px;
+    border-radius: 16px;
     background: var(--card);
     border: 1px solid var(--border);
     font-size: 12px;
-    font-weight: 600;
+    font-weight: 500;
     font-variant-numeric: tabular-nums;
-  }
-  .scope-pill {
-    display: inline-flex;
-    align-items: center;
-    padding: 5px 10px;
-    border-radius: 6px;
-    background: var(--accent-subtle);
-    border: 1px solid var(--accent);
-    color: var(--accent);
-    font-size: 11.5px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.4px;
   }
   .dot-live {
     width: 7px;
@@ -312,24 +260,26 @@
   .dirty-banner {
     display: none;
     align-items: center;
-    font-size: 11.5px;
-    font-weight: 700;
+    font-size: 12px;
+    font-weight: 600;
     color: var(--warning);
-    background: rgba(245, 158, 11, 0.12);
-    border: 1px solid rgba(245, 158, 11, 0.35);
-    padding: 5px 10px;
-    border-radius: 6px;
+    background: rgba(255, 152, 0, 0.12);
+    border: 1px solid rgba(255, 152, 0, 0.35);
+    padding: 4px 10px;
+    border-radius: 16px;
   }
   .dirty-banner.visible { display: inline-flex; }
+
+  /* BUTTONS */
   button.btn-primary {
     background: var(--accent-solid);
     color: #ffffff;
     border: 1px solid transparent;
     padding: 8px 14px;
-    border-radius: 6px;
-    font-weight: 600;
+    border-radius: 8px;
+    font-weight: 500;
     cursor: pointer;
-    font-size: 12.5px;
+    font-size: 13px;
     white-space: nowrap;
   }
   button.btn-secondary {
@@ -337,62 +287,66 @@
     color: var(--text-strong);
     border: 1px solid var(--border);
     padding: 8px 13px;
-    border-radius: 6px;
-    font-weight: 600;
+    border-radius: 8px;
+    font-weight: 500;
     cursor: pointer;
-    font-size: 12.5px;
+    font-size: 13px;
     white-space: nowrap;
   }
-  button.btn-action {
-    background: var(--accent-subtle);
+  button.btn-secondary:hover {
+    background: var(--card-hover);
+    border-color: var(--accent);
+  }
+  button.btn-chip {
+    background: var(--input-bg);
     color: var(--text-strong);
-    border: 1px solid var(--accent);
-    height: 38px;
-    padding: 0 12px;
-    border-radius: 7px;
-    font-weight: 600;
+    border: 1px solid var(--border);
+    padding: 7px 13px;
+    border-radius: 18px;
+    font-weight: 500;
     cursor: pointer;
     font-size: 12.5px;
     display: inline-flex;
     align-items: center;
-    justify-content: center;
+    gap: 6px;
     white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    transition: background 0.15s ease;
+    transition: background 0.12s ease, border-color 0.12s ease;
   }
-  button.btn-action:hover {
-    background: var(--accent-solid);
-    color: #ffffff;
+  button.btn-chip:hover {
+    background: var(--accent-subtle);
+    border-color: var(--accent);
+    color: var(--accent);
   }
   button.btn-danger {
-    background: rgba(239, 68, 68, 0.12);
+    background: rgba(219, 68, 55, 0.12);
     color: var(--danger);
-    border: 1px solid rgba(239, 68, 68, 0.3);
-    padding: 6px 10px;
-    border-radius: 6px;
-    font-weight: 600;
+    border: 1px solid rgba(219, 68, 55, 0.3);
+    padding: 7px 11px;
+    border-radius: 8px;
+    font-weight: 500;
     cursor: pointer;
+    font-size: 12.5px;
     white-space: nowrap;
   }
+
+  /* CONTENT & CARDS */
   .content-wrap {
-    max-width: 1180px;
+    max-width: 1140px;
     width: 100%;
     margin: 0 auto;
-    padding: 22px 24px 64px;
+    padding: 20px 24px 64px;
   }
-  .page-header { margin-bottom: 18px; }
+  .page-header { margin-bottom: 16px; }
   .page-header h2 {
     margin: 0 0 4px;
-    font-size: 18px;
-    font-weight: 700;
+    font-size: 20px;
+    font-weight: 500;
     color: var(--text-strong);
   }
   .page-header p {
     margin: 0;
     color: var(--muted);
-    font-size: 13px;
-    line-height: 1.45;
+    font-size: 13.5px;
   }
   .grid-2 {
     display: grid;
@@ -400,49 +354,71 @@
     gap: 16px;
     margin-bottom: 16px;
   }
+  .form-grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .form-grid-3 {
+    display: grid;
+    grid-template-columns: 1.2fr 1.2fr 0.8fr;
+    gap: 10px;
+  }
+  .input-action-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .input-action-row > input,
+  .input-action-row > select {
+    flex: 1 1 180px;
+    min-width: 0;
+  }
   .card {
     background: var(--card);
     border: 1px solid var(--border);
-    border-radius: 9px;
+    border-radius: 12px;
     padding: 18px;
     min-width: 0;
+    margin-bottom: 16px;
+  }
+  .grid-2 > .card {
+    margin-bottom: 0;
   }
   .card h3 {
-    margin: 0 0 5px;
-    font-size: 14.5px;
-    font-weight: 700;
+    margin: 0 0 4px;
+    font-size: 15px;
+    font-weight: 500;
     color: var(--text-strong);
   }
   .card p.desc {
     margin: 0 0 14px;
-    font-size: 12.5px;
+    font-size: 13px;
     color: var(--muted);
-    line-height: 1.45;
   }
   .hero-stats {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 10px;
     margin-bottom: 16px;
   }
   .stat-box {
     background: var(--card);
     border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 11px 13px;
+    border-radius: 10px;
+    padding: 11px 14px;
   }
   .stat-box span {
     display: block;
-    font-size: 10.5px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+    font-size: 11px;
+    font-weight: 500;
     color: var(--muted);
-    margin-bottom: 3px;
+    margin-bottom: 2px;
   }
   .stat-box strong {
     font-size: 15px;
-    font-weight: 700;
+    font-weight: 500;
     color: var(--text-strong);
     display: block;
     white-space: nowrap;
@@ -451,17 +427,18 @@
     font-variant-numeric: tabular-nums;
   }
   .field { margin-bottom: 13px; }
+  .field:last-child { margin-bottom: 0; }
   .field label {
     display: block;
-    font-size: 12px;
-    font-weight: 600;
+    font-size: 12.5px;
+    font-weight: 500;
     color: var(--muted);
     margin-bottom: 5px;
   }
   select, input[type="text"], input[type="number"] {
     width: 100%;
-    padding: 9px 11px;
-    border-radius: 6px;
+    padding: 8px 11px;
+    border-radius: 8px;
     border: 1px solid var(--border);
     background: var(--input-bg);
     color: var(--text-strong);
@@ -473,7 +450,7 @@
     justify-content: space-between;
     padding: 10px 0;
     border-bottom: 1px solid var(--border);
-    font-size: 13px;
+    font-size: 13.5px;
     gap: 12px;
   }
   .toggle-row:last-child { border-bottom: none; }
@@ -483,12 +460,181 @@
     justify-content: space-between;
     padding: 9px 0;
     border-bottom: 1px solid var(--border);
-    font-size: 13px;
+    font-size: 13.5px;
     gap: 10px;
   }
   .summary-row:last-child { border-bottom: none; }
   .summary-row span { color: var(--muted); }
-  .summary-row strong { color: var(--text-strong); font-weight: 600; }
+  .summary-row strong { color: var(--text-strong); font-weight: 500; }
+
+  /* EXPANDABLE HA DETAILS PANELS */
+  details.ha-details {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    margin-bottom: 12px;
+    overflow: hidden;
+  }
+  details.ha-details > summary {
+    padding: 13px 18px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-strong);
+    cursor: pointer;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    user-select: none;
+  }
+  details.ha-details > summary::-webkit-details-marker { display: none; }
+  details.ha-details > summary::after {
+    content: "▾";
+    color: var(--muted);
+    font-size: 14px;
+    transition: transform 0.15s ease;
+  }
+  details.ha-details[open] > summary {
+    border-bottom: 1px solid var(--border);
+  }
+  details.ha-details[open] > summary::after {
+    transform: rotate(180deg);
+  }
+  .details-body {
+    padding: 16px 18px;
+  }
+
+  /* ENTITY ROWS & LISTS */
+  .native-controls-box {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .native-ctrl-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 9px 12px;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  .native-ctrl-row .lbl {
+    font-size: 13.5px;
+    font-weight: 500;
+    color: var(--text-strong);
+    min-width: 0;
+  }
+  .native-ctrl-row .lbl small {
+    display: block;
+    font-weight: 400;
+    font-size: 11.5px;
+    color: var(--muted);
+    margin-top: 1px;
+  }
+  .native-ctrl-row .widget {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+  }
+  .native-ctrl-row select {
+    width: auto;
+    min-width: 145px;
+    max-width: 220px;
+    padding: 6px 10px;
+  }
+  .native-ctrl-row input[type="range"] {
+    width: 120px;
+    accent-color: var(--accent-solid);
+  }
+  .state-badge {
+    display: inline-block;
+    padding: 3px 9px;
+    border-radius: 12px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    color: var(--accent);
+    font-weight: 500;
+    font-size: 11.5px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  /* QUICK ACTIONS & ROOM MINI CARDS */
+  .quick-actions-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .room-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
+    gap: 8px;
+  }
+  .room-mini-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    border-radius: 9px;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: border-color 0.12s ease, background 0.12s ease;
+  }
+  .room-mini-card.on {
+    border-color: var(--accent);
+    background: var(--accent-subtle);
+  }
+  .room-mini-card strong {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-strong);
+    display: block;
+  }
+  .room-mini-card small {
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  /* DOCK PILL SELECTOR */
+  .dock-pill-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .dock-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    border-radius: 16px;
+    font-size: 12.5px;
+    font-weight: 500;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    cursor: pointer;
+    user-select: none;
+  }
+  .dock-pill.enabled {
+    background: var(--accent-subtle);
+    border-color: var(--accent);
+    color: var(--text-strong);
+  }
+  .dock-pill .move-arrow {
+    font-size: 11px;
+    padding: 0 3px;
+    color: var(--muted);
+  }
+  .dock-pill .move-arrow:hover {
+    color: var(--accent);
+  }
+
+  /* RSSI & GALLERIES */
   .rssi-track {
     height: 7px;
     background: var(--input-bg);
@@ -502,87 +648,10 @@
     border-radius: 4px;
     transition: width 0.25s ease;
   }
-  .room-cards-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-    gap: 8px;
-    margin-top: 10px;
-  }
-  .room-mini-card {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 10px 12px;
-    border-radius: 7px;
-    background: var(--input-bg);
-    border: 1px solid var(--border);
-    cursor: pointer;
-  }
-  .room-mini-card.on {
-    border-color: var(--accent);
-    background: var(--accent-subtle);
-  }
-  .room-mini-card strong {
-    font-size: 12.5px;
-    color: var(--text-strong);
-    display: block;
-  }
-  .room-mini-card small {
-    font-size: 11px;
-    color: var(--muted);
-  }
-  .native-controls-box {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-  .native-ctrl-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 9px 12px;
-    background: var(--input-bg);
-    border: 1px solid var(--border);
-    border-radius: 7px;
-  }
-  .native-ctrl-row .lbl {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--text-strong);
-    min-width: 0;
-  }
-  .native-ctrl-row .lbl small {
-    display: block;
-    font-weight: 400;
-    font-size: 11px;
-    color: var(--muted);
-  }
-  .native-ctrl-row .widget {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-shrink: 0;
-  }
-  .native-ctrl-row select {
-    width: auto;
-    min-width: 150px;
-    max-width: 220px;
-    padding: 7px 10px;
-  }
-  .native-ctrl-row input[type="range"] {
-    width: 120px;
-    accent-color: var(--accent-solid);
-  }
-  .native-ctrl-row input[type="number"] {
-    width: 78px;
-    padding: 6px 8px;
-    text-align: right;
-  }
   .remote-slot-card {
     background: var(--input-bg);
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: 10px;
     padding: 14px;
     display: flex;
     flex-direction: column;
@@ -600,40 +669,24 @@
   }
   .remote-slot-hdr strong {
     font-size: 13.5px;
+    font-weight: 500;
     color: var(--text-strong);
-  }
-  .action-btn-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(195px, 1fr));
-    gap: 8px;
-  }
-  .state-badge {
-    display: inline-block;
-    padding: 4px 8px;
-    border-radius: 5px;
-    background: var(--card);
-    border: 1px solid var(--border);
-    color: var(--accent);
-    font-weight: 600;
-    font-size: 11.5px;
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
   }
   .wp-gallery {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
     gap: 12px;
     margin-top: 12px;
   }
   .wp-card {
     background: var(--input-bg);
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: 10px;
     padding: 12px;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     text-align: center;
   }
   .wp-card.active {
@@ -641,8 +694,8 @@
     background: var(--accent-subtle);
   }
   .wp-thumb {
-    width: 112px;
-    height: 112px;
+    width: 104px;
+    height: 104px;
     object-fit: cover;
     border: 1px solid var(--border);
     background: #000;
@@ -650,38 +703,36 @@
   .wp-thumb.circle { border-radius: 50%; }
   .wp-thumb.square { border-radius: 8px; }
   .wp-title {
-    font-size: 12px;
-    font-weight: 600;
+    font-size: 12.5px;
+    font-weight: 500;
     color: var(--text-strong);
-    line-height: 1.3;
   }
   .wp-actions {
     display: flex;
-    gap: 6px;
+    gap: 5px;
     width: 100%;
     justify-content: center;
     margin-top: auto;
   }
   .binding-row {
     display: grid;
-    grid-template-columns: 1.1fr 1.6fr 0.9fr auto auto;
+    grid-template-columns: 1fr 1.6fr 0.9fr auto auto;
     gap: 8px;
     align-items: center;
     margin-bottom: 8px;
     background: var(--input-bg);
     padding: 9px;
-    border-radius: 7px;
+    border-radius: 8px;
     border: 1px solid var(--border);
   }
-  .chip-list { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
+  .chip-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
   .chip {
     background: var(--input-bg);
     border: 1px solid var(--border);
     color: var(--text-strong);
     padding: 4px 10px;
-    border-radius: 6px;
+    border-radius: 14px;
     font-size: 12px;
-    font-variant-numeric: tabular-nums;
     display: flex;
     align-items: center;
     gap: 7px;
@@ -695,14 +746,16 @@
     color: var(--text-strong);
     border: 1px solid var(--accent);
     padding: 10px 16px;
-    border-radius: 7px;
-    font-weight: 600;
-    font-size: 12.5px;
+    border-radius: 8px;
+    font-weight: 500;
+    font-size: 13px;
     display: none;
     z-index: 50;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
   }
   .hidden { display: none !important; }
 
+  /* PHONE & TABLET RESPONSIVE BREAKPOINTS */
   @media (max-width: 860px) {
     .app-shell { grid-template-columns: 1fr; }
     aside.sidebar {
@@ -710,29 +763,37 @@
       top: 0;
       z-index: 25;
       height: auto;
-      padding: 10px 12px;
+      padding: 8px 12px;
       border-right: none;
       border-bottom: 1px solid var(--border);
     }
-    .brand {
-      padding: 0 0 8px;
-      margin-bottom: 8px;
-      justify-content: space-between;
+    .scope-box {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px;
+      margin-bottom: 6px;
     }
+    .scope-tabs { flex: 0 0 150px; }
+    .device-picker-wrap {
+      margin-top: 0;
+      flex: 1;
+      min-width: 0;
+    }
+    .device-picker-wrap label { display: none; }
     .nav-group-label { display: none; }
     .nav-list {
       flex-direction: row;
       overflow-x: auto;
-      padding-bottom: 4px;
+      padding-bottom: 2px;
       gap: 6px;
       scrollbar-width: none;
     }
     .nav-list::-webkit-scrollbar { display: none; }
     .nav-btn {
       width: auto;
-      margin-left: 0;
-      border-radius: 7px;
-      padding: 8px 12px;
+      border-radius: 16px;
+      padding: 6px 12px;
       font-size: 12.5px;
       background: var(--card);
       border: 1px solid var(--border);
@@ -740,11 +801,14 @@
     .sidebar-footer { display: none; }
     header.topbar {
       position: static;
-      padding: 10px 14px;
+      padding: 8px 14px;
     }
-    .content-wrap { padding: 16px 14px 72px; }
+    #topbar-device-chips, #topbar-household-chips {
+      display: none !important;
+    }
+    .content-wrap { padding: 14px 12px 72px; }
     .grid-2 { grid-template-columns: 1fr; }
-    .hero-stats { grid-template-columns: repeat(2, 1fr); }
+    .hero-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .binding-row { grid-template-columns: 1fr; }
     .native-ctrl-row {
       flex-direction: column;
@@ -754,13 +818,22 @@
     .native-ctrl-row .widget { justify-content: space-between; }
     .native-ctrl-row select { max-width: 100%; width: 100%; }
   }
+  @media (max-width: 640px) {
+    .form-grid-2, .form-grid-3 {
+      grid-template-columns: 1fr;
+    }
+    .scope-box {
+      flex-direction: column;
+      align-items: stretch;
+    }
+    .scope-tabs { flex: none; }
+  }
 </style>
 </head>
 <body data-theme="dark">
 <div class="app-shell">
-  <!-- DUAL-SCOPE SIDEBAR: HOUSEHOLD (GLOBAL) vs DEVICE -->
+  <!-- LEFT SIDEBAR: SYSTEM (6 TABS) vs DEVICE (5 TABS) -->
   <aside class="sidebar">
-    <!-- SCOPE & DEVICE SWITCHER -->
     <div class="scope-box">
       <div class="scope-tabs">
         <button class="scope-tab" id="tab-scope-household" onclick="setScope('household')">System</button>
@@ -772,91 +845,55 @@
       </div>
     </div>
 
-    <!-- HOUSEHOLD (GLOBAL) NAVIGATION -->
+    <!-- SYSTEM NAVIGATION (6 TABS) -->
     <div class="nav-list hidden" id="nav-scope-household">
       <div class="nav-group-label">System</div>
       <button class="nav-btn" data-view="fleet_overview" onclick="switchView('fleet_overview', this)">
-        <span>Overview & Devices</span>
+        <span>Devices</span>
         <span class="nav-badge" id="nav-fleet-count">1</span>
-      </button>
-      <button class="nav-btn" data-view="room_tracking" onclick="switchView('room_tracking', this)">
-        <span>Room Calibration</span>
-      </button>
-      <button class="nav-btn" data-view="fleet_sync" onclick="switchView('fleet_sync', this)">
-        <span>Groups &amp; Profiles</span>
-      </button>
-      <button class="nav-btn" data-view="backups" onclick="switchView('backups', this)">
-        <span>Backup &amp; Restore</span>
-      </button>
-
-      <div class="nav-group-label">Shared Integrations</div>
-      <button class="nav-btn" data-view="remotes" onclick="switchView('remotes', this)">
-        <span>Remote Controls</span>
-      </button>
-      <button class="nav-btn" data-view="volume_routing" onclick="switchView('volume_routing', this)">
-        <span>Volume Routing</span>
       </button>
       <button class="nav-btn" data-view="household" onclick="switchView('household', this)">
         <span>Shared Entities</span>
       </button>
-      <button class="nav-btn" data-view="macros" onclick="switchView('macros', this)">
-        <span>Macros &amp; YAML</span>
+      <button class="nav-btn" data-view="remotes" onclick="switchView('remotes', this)">
+        <span>Media &amp; Remotes</span>
       </button>
-
-      <div class="nav-group-label">Administration</div>
-      <button class="nav-btn" data-view="studio_settings" onclick="switchView('studio_settings', this)">
-        <span>Studio Settings</span>
+      <button class="nav-btn" data-view="fleet_sync" onclick="switchView('fleet_sync', this)">
+        <span>Groups &amp; Profiles</span>
       </button>
-      <button class="nav-btn" data-view="logs" onclick="switchView('logs', this)">
-        <span>Logs</span>
+      <button class="nav-btn" data-view="room_tracking" onclick="switchView('room_tracking', this)">
+        <span>BLE Calibration</span>
+      </button>
+      <button class="nav-btn" data-view="system_admin" onclick="switchView('system_admin', this)">
+        <span>Administration</span>
       </button>
     </div>
 
-    <!-- DEVICE-SCOPED NAVIGATION (CAPABILITY-AWARE) -->
+    <!-- DEVICE NAVIGATION (5 TABS) -->
     <div class="nav-list" id="nav-scope-device">
-      <div class="nav-group-label">Overview</div>
+      <div class="nav-group-label">Device</div>
       <button class="nav-btn active" data-view="dashboard" onclick="switchView('dashboard', this)">
-        <span>Device Overview</span>
+        <span>Overview</span>
         <span class="nav-badge" id="nav-room-badge">--</span>
       </button>
-
-      <div class="nav-group-label" id="nav-grp-dev-settings">Device Settings</div>
       <button class="nav-btn" id="nav-btn-home_display" data-view="home_display" onclick="switchView('home_display', this)">
-        <span>Home &amp; Display</span>
+        <span>Display &amp; Home</span>
+      </button>
+      <button class="nav-btn" id="nav-btn-audio_voice" data-view="audio_voice" onclick="switchView('audio_voice', this)">
+        <span>Audio &amp; Voice</span>
       </button>
       <button class="nav-btn" id="nav-btn-power" data-view="power" onclick="switchView('power', this)">
-        <span>Power</span>
+        <span>Power &amp; Battery</span>
       </button>
-      <button class="nav-btn" id="nav-btn-voice" data-view="voice" onclick="switchView('voice', this)">
-        <span>Voice Assistant</span>
-      </button>
-      <button class="nav-btn" id="nav-btn-audio" data-view="audio" onclick="switchView('audio', this)">
-        <span>Audio &amp; Media</span>
-      </button>
-
-      <div class="nav-group-label">Connectivity &amp; Add-Ons</div>
-      <button class="nav-btn" id="nav-btn-ble_addon" data-view="ble_addon" onclick="switchView('ble_addon', this)">
-        <span>BLE Tracking &amp; Proxy</span>
-        <span class="nav-badge" id="nav-ble-addon-badge">Add-On</span>
-      </button>
-      <button class="nav-btn" id="nav-btn-roaming_vpn" data-view="roaming_vpn" onclick="switchView('roaming_vpn', this)">
-        <span>Roaming &amp; VPN</span>
-        <span class="nav-badge" id="nav-vpn-addon-badge">Add-On</span>
-      </button>
-
-      <div class="nav-group-label">Administration</div>
       <button class="nav-btn" data-view="system" onclick="switchView('system', this)">
-        <span>Diagnostics &amp; Identity</span>
+        <span>Administration</span>
         <span class="nav-badge" id="nav-esp-badge">0</span>
-      </button>
-      <button class="nav-btn" data-view="logs" onclick="switchView('logs', this)">
-        <span>Logs</span>
       </button>
     </div>
 
     <div class="sidebar-footer">
       <div class="field" style="margin-bottom:0;">
-        <label>Home Assistant Theme</label>
+        <label>Theme</label>
         <select id="cfg-web_theme" onchange="onThemeChanged(this.value)">
           <option value="ha_auto">Home Assistant (Auto)</option>
           <option value="ha_dark">Home Assistant (Dark)</option>
@@ -866,14 +903,14 @@
     </div>
   </aside>
 
-  <!-- MAIN CONTENT AREA -->
+  <!-- MAIN AREA -->
   <div class="main-area">
     <header class="topbar">
       <div class="topbar-status">
-        <div style="display:flex;align-items:center;gap:10px;margin-right:6px;">
-          <img src="/api/latter/brand/icon.png" alt="Latter" style="width:28px;height:28px;border-radius:6px;object-fit:contain;flex-shrink:0;" onerror="this.style.display='none'">
-          <strong id="hdr-title" style="font-size:15px;color:var(--text-strong);">Latter</strong>
-          <span class="nav-badge" id="hdr-sub">v1.8.8</span>
+        <div style="display:flex;align-items:center;gap:10px;margin-right:4px;">
+          <img src="/api/latter/brand/icon.png" alt="Latter" style="width:26px;height:26px;border-radius:6px;object-fit:contain;flex-shrink:0;" onerror="this.style.display='none'">
+          <strong id="hdr-title" style="font-size:15px;font-weight:500;color:var(--text-strong);">Latter</strong>
+          <span class="nav-badge" id="hdr-sub">v2.2.0</span>
         </div>
         <div id="topbar-household-chips" class="hidden" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
           <div class="status-chip"><span id="top-hh-devices">Devices: --</span></div>
@@ -894,23 +931,23 @@
 
     <div class="content-wrap">
       <!-- ================================================================== -->
-      <!-- HOUSEHOLD SCOPE: 1. OVERVIEW & DEVICES                             -->
+      <!-- SYSTEM TAB 1: DEVICES & WHOLE-HOME OVERVIEW                        -->
       <!-- ================================================================== -->
       <section id="view-fleet_overview" class="hidden">
         <div class="page-header">
-          <h2>System Overview &amp; Devices</h2>
-          <p>System-wide view of all onboarded ESPHome devices and shared integrations.</p>
+          <h2>Devices</h2>
+          <p>Manage onboarded ESPHome devices and view system-wide entity status.</p>
         </div>
 
-        <div class="card" style="margin-bottom:16px;">
-          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:6px;">
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:10px;">
             <div>
-              <h3 style="margin:0;">Onboarded ESPHome Devices</h3>
-              <p class="desc" style="margin:4px 0 0;">Select any device to inspect its live telemetry, assign its group, or customize per-device settings.</p>
+              <h3 style="margin:0;">Managed ESPHome Devices</h3>
+              <p class="desc" style="margin:2px 0 0;">Select a device to view its controls, assign its group, or customize hardware settings.</p>
             </div>
-            <div id="bridge-device-bar" style="display:none;align-items:center;gap:8px;flex-wrap:wrap;">
-              <select id="bridge-device-picker" style="min-width:230px;"></select>
-              <button class="btn-secondary" style="border-color:var(--accent);color:var(--accent);" onclick="bridgeSelectedEsphomeDevice()">+ Bridge Existing Device</button>
+            <div id="bridge-device-bar" class="input-action-row" style="display:none;">
+              <select id="bridge-device-picker" style="min-width:210px;"></select>
+              <button class="btn-secondary" onclick="bridgeSelectedEsphomeDevice()">+ Add Device</button>
             </div>
           </div>
           <div id="fleet-devices-list" class="native-controls-box"></div>
@@ -918,208 +955,136 @@
 
         <div class="grid-2">
           <div class="card">
-            <h3>Shared System Configuration</h3>
-            <p class="desc">Settings configured in the System scope apply automatically across all devices.</p>
+            <h3>Whole-Home Entity Status</h3>
+            <p class="desc">Live states of shared household entities mapped under Shared Entities.</p>
+            <div class="summary-row"><span>Weather</span><strong id="hh-sum-weather">--</strong></div>
             <div class="summary-row"><span>Security Alarm</span><strong id="hh-sum-alarm">--</strong></div>
+            <div class="summary-row"><span>Thermostat</span><strong id="hh-sum-thermostat">--</strong></div>
+            <div class="summary-row"><span>Entry Lock &amp; Garage</span><strong id="hh-sum-entry">--</strong></div>
+            <div class="summary-row"><span>Robot Vacuum</span><strong id="hh-sum-vacuum">--</strong></div>
             <div class="summary-row"><span>Primary Camera</span><strong id="hh-sum-camera">--</strong></div>
-            <div class="summary-row"><span>Weather Provider</span><strong id="hh-sum-weather">--</strong></div>
+          </div>
+
+          <div class="card">
+            <h3>System Configuration Shortcuts</h3>
+            <p class="desc">Jump to shared entity mappings, remote slots, profiles, or room calibration.</p>
+            <div class="quick-actions-row" style="margin-bottom:14px;">
+              <button class="btn-chip" onclick="navigateToView('household')">Shared Entities</button>
+              <button class="btn-chip" onclick="navigateToView('remotes')">Media &amp; Remotes</button>
+              <button class="btn-chip" onclick="navigateToView('fleet_sync')">Groups &amp; Profiles</button>
+              <button class="btn-chip" onclick="navigateToView('room_tracking')">BLE Calibration</button>
+              <button class="btn-chip" onclick="navigateToView('system_admin')">Backups &amp; Admin</button>
+            </div>
             <div class="summary-row"><span>Calibrated BLE Rooms</span><strong id="hh-sum-ble">0</strong></div>
           </div>
-
-          <div class="card">
-            <h3>Quick System Navigation</h3>
-            <p class="desc">Jump directly to room calibration, device groups &amp; profiles, backups, and shared entity mappings.</p>
-            <div style="display:flex;flex-wrap:wrap;gap:8px;">
-              <button class="btn-secondary" onclick="navigateToView('room_tracking')">Room Calibration</button>
-              <button class="btn-secondary" onclick="navigateToView('fleet_sync')">Groups &amp; Profiles</button>
-              <button class="btn-secondary" onclick="navigateToView('backups')">Backup &amp; Restore</button>
-              <button class="btn-secondary" onclick="navigateToView('remotes')">Remote Controls</button>
-              <button class="btn-secondary" onclick="navigateToView('volume_routing')">Volume Routing</button>
-              <button class="btn-secondary" onclick="navigateToView('household')">Shared Entities</button>
-              <button class="btn-secondary" onclick="navigateToView('macros')">Macros &amp; YAML</button>
-            </div>
-          </div>
         </div>
       </section>
 
       <!-- ================================================================== -->
-      <!-- HOUSEHOLD SCOPE: 2. ROOM CALIBRATION (GLOBAL SITE SURVEY)          -->
+      <!-- SYSTEM TAB 2: SHARED ENTITIES & MACROS                             -->
       <!-- ================================================================== -->
-      <section id="view-room_tracking" class="hidden">
+      <section id="view-household" class="hidden">
         <div class="page-header">
-          <h2>Room Calibration</h2>
-          <p>Calibrate Bluetooth proxy signal offsets for your home. Room offsets are shared globally across all mobile devices.</p>
-        </div>
-
-        <div class="card">
-          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:4px;">
-            <h3 style="margin:0;">Site Survey & Per-Room Signal Offsets</h3>
-            <label style="font-size:12px;font-weight:600;color:var(--accent);display:inline-flex;align-items:center;gap:6px;cursor:pointer;">
-              <input type="checkbox" id="survey-fast-mode" onchange="toggleSurveyFastMode(this.checked)"> Fast Refresh (1.5s)
-            </label>
-          </div>
-          <p class="desc">Walk from room to room with your active mobile device (<strong id="survey-device-name">Pocket Assistant</strong>) to compare live <strong>Raw dBm</strong>, <strong>Effective dBm</strong>, and <strong>Estimated Distance</strong>. Click <strong>Prioritize Here</strong> while standing in a room to calculate the offset needed to win over adjacent rooms.</p>
-          <div id="rssi-container"></div>
-        </div>
-      </section>
-
-      <!-- ================================================================== -->
-      <!-- HOUSEHOLD SCOPE: 3. DEVICE GROUPS & REUSABLE PROFILES              -->
-      <!-- ================================================================== -->
-      <section id="view-fleet_sync" class="hidden">
-        <div class="page-header">
-          <h2>Device Groups &amp; Reusable Profiles</h2>
-          <p>Organize your ESPHome devices into logical groups, save reusable configuration profiles, and apply settings to a single device, a group, or your entire home.</p>
+          <h2>Shared Entities</h2>
+          <p>Map household entities shared across all displays, room controls, and macro slots.</p>
         </div>
 
         <div class="grid-2">
           <div class="card">
-            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:6px;">
-              <h3 style="margin:0;">Reusable Configuration Profiles</h3>
-            </div>
-            <p class="desc">Capture display, dock, wake word, sensitivity, brightness, and sleep settings from the active device (<strong id="prof-active-dev-label">Device</strong>) as a reusable profile, or apply an existing profile to any target.</p>
-            <div style="display:grid;grid-template-columns:1fr 1.2fr auto;gap:8px;margin-bottom:14px;">
-              <input type="text" id="new-profile-name" placeholder="Profile Name (e.g. Guest Room)">
-              <input type="text" id="new-profile-desc" placeholder="Optional description">
-              <button class="btn-primary" onclick="captureCurrentDeviceProfile()">Capture Profile</button>
+            <h3>Whole-Home Entities</h3>
+            <p class="desc">Primary entities displayed on the Home screen, Whole-Home Hub, and camera alerts.</p>
+            <div class="field">
+              <label>Weather Provider (weather.*)</label>
+              <select id="cfg-weather_entity" onchange="markDirty()"></select>
             </div>
             <div class="field">
-              <label>Apply Profile Target Scope</label>
-              <select id="profile-target-scope"></select>
-            </div>
-            <div id="saved-profiles-list" class="native-controls-box"></div>
-          </div>
-
-          <div class="card">
-            <h3>Device Groups</h3>
-            <p class="desc">Assign devices to logical groups (such as <em>Handheld Displays</em>, <em>Bedrooms</em>, or <em>Wall Panels</em>) for targeted profile deployment and group controls.</p>
-            <div style="display:grid;grid-template-columns:1fr 1.3fr auto;gap:8px;margin-bottom:14px;">
-              <input type="text" id="new-group-name" placeholder="New Group Name">
-              <input type="text" id="new-group-desc" placeholder="Description">
-              <button class="btn-secondary" onclick="createDeviceGroup()">+ Add Group</button>
-            </div>
-            <div id="device-groups-list" class="native-controls-box"></div>
-          </div>
-        </div>
-
-        <div class="card">
-          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:6px;">
-            <div>
-              <h3 style="margin:0;">Live Group &amp; Multi-Device Controls</h3>
-              <p class="desc" style="margin:4px 0 0;">Dispatch wake word, sensitivity, display, or sleep changes across all devices or a selected Device Group.</p>
-            </div>
-            <div style="min-width:220px;">
-              <select id="group-ctrl-filter" onchange="renderFleetOverview(STATE.fleet_devices, STATE.fleet_controls, STATE.config)"></select>
-            </div>
-          </div>
-          <div id="fleet-controls-list" class="native-controls-box"></div>
-        </div>
-      </section>
-
-      <!-- ================================================================== -->
-      <!-- HOUSEHOLD SCOPE: 3B. SYSTEM & DEVICE BACKUP & RESTORE              -->
-      <!-- ================================================================== -->
-      <section id="view-backups" class="hidden">
-        <div class="page-header">
-          <h2>Backup &amp; Restore</h2>
-          <p>Back up and restore your System configuration or individual ESPHome devices (including live on-device preferences) to the internal Latter Vault or your computer.</p>
-        </div>
-
-        <div class="grid-2">
-          <div class="card">
-            <h3>Create Snapshot or Export to Computer</h3>
-            <p class="desc">Snapshots include Latter entity mappings, BLE room offsets, custom color palettes, and live ESPHome settings (wake words, sensitivities, timeouts, brightness, and sorting).</p>
-            <div class="field">
-              <label>Backup Scope</label>
-              <select id="bkp-scope-select">
-                <option value="system">Full System &amp; All Devices (.storage/latter.household + Devices)</option>
-                <option value="device">Active Device Only (Latter Config + Live ESPHome Controls)</option>
-              </select>
+              <label>Security Alarm (alarm_control_panel.*)</label>
+              <select id="cfg-alarm_entity" onchange="markDirty()"></select>
             </div>
             <div class="field">
-              <label>Snapshot Label (Optional)</label>
-              <input type="text" id="bkp-label-input" placeholder="e.g. Before Firmware Update, Baseline Config">
+              <label>Primary Camera (camera.*)</label>
+              <select id="cfg-camera_entity" onchange="markDirty(); renderCameraPreview(this.value);"></select>
             </div>
-            <div class="toggle-row" style="margin-bottom:14px;">
-              <span>Include Roaming WireGuard Private Keys</span>
-              <input type="checkbox" id="bkp-include-vpn" checked>
+            <div id="cam-preview-box" style="display:none;align-items:center;gap:12px;margin-bottom:13px;padding:10px;background:var(--input-bg);border:1px solid var(--border);border-radius:8px;">
+              <img id="cam-preview-img" class="wp-thumb circle" style="width:68px;height:68px;" alt="Camera Snapshot">
+              <div style="flex:1;min-width:0;">
+                <strong style="font-size:13px;font-weight:500;color:var(--text-strong);display:block;">Camera Snapshot Preview</strong>
+                <small style="color:var(--muted);display:block;margin:2px 0 6px;"><code>/api/latter/camera/&lt;slug&gt;</code></small>
+                <button class="btn-secondary" style="padding:4px 10px;font-size:12px;" onclick="renderCameraPreview(document.getElementById('cfg-camera_entity').value)">Refresh</button>
+              </div>
             </div>
-            <div style="display:flex;gap:8px;flex-wrap:wrap;">
-              <button class="btn-primary" onclick="createVaultSnapshot()">Save to Internal Vault</button>
-              <button class="btn-secondary" onclick="exportBackupToComputer('')">Download .JSON to Computer</button>
+            <div class="form-grid-2">
+              <div class="field">
+                <label>Thermostat (climate.*)</label>
+                <select id="cfg-thermostat_entity" onchange="markDirty()"></select>
+              </div>
+              <div class="field">
+                <label>Entry Lock (lock.*)</label>
+                <select id="cfg-lock_entity" onchange="markDirty()"></select>
+              </div>
+            </div>
+            <div class="form-grid-2">
+              <div class="field">
+                <label>Garage Door (cover.*)</label>
+                <select id="cfg-garage_entity" onchange="markDirty()"></select>
+              </div>
+              <div class="field">
+                <label>Robot Vacuum (vacuum.*)</label>
+                <select id="cfg-vacuum_entity" onchange="markDirty()"></select>
+              </div>
             </div>
           </div>
 
           <div class="card">
-            <h3>Restore from Computer File (.JSON)</h3>
-            <p class="desc">Upload a previously downloaded <code>latter-system-backup-*.json</code> or <code>latter-device-*.json</code> file from your computer. Device backups can be restored to the original device or cloned onto the currently selected device.</p>
+            <h3>Calendars &amp; Pinned Room Entities</h3>
+            <p class="desc">Select family calendars for the Agenda tool and pin favorite entities to Room Control.</p>
             <div class="field">
-              <label>Select Backup .JSON File</label>
-              <input type="file" id="bkp-upload-file" accept=".json,application/json">
+              <label>Shared Calendars (calendar.*)</label>
+              <div class="input-action-row">
+                <select id="cal-entity-picker"></select>
+                <button class="btn-secondary" onclick="addCalendarEntity()">Add</button>
+              </div>
+              <div id="calendar-chips" class="chip-list"></div>
             </div>
-            <div class="toggle-row" style="margin-bottom:14px;">
-              <span>Also Restore Live ESPHome Device Preferences (Wake Word, Timeouts, Brightness)</span>
-              <input type="checkbox" id="bkp-restore-esp" checked>
+
+            <div class="field" style="padding-top:12px;border-top:1px solid var(--border);">
+              <label>Pinned Room Entities</label>
+              <div class="input-action-row">
+                <select id="pin-entity-picker"></select>
+                <button class="btn-secondary" onclick="addPinnedEntity()">Pin Entity</button>
+              </div>
+              <div id="pinned-chips" class="chip-list"></div>
             </div>
-            <button class="btn-primary" onclick="restoreFromUploadedFile()">Upload &amp; Restore Backup</button>
           </div>
         </div>
 
         <div class="card">
-          <h3>Internal Snapshot Vault (<code>.storage/latter.backups</code>)</h3>
-          <p class="desc">Restore any saved snapshot in 1 click, download a copy to your computer, or delete old restore points.</p>
-          <div id="vault-backups-list" class="native-controls-box"></div>
+          <h3>Macro Slot Bindings</h3>
+          <p class="desc">Map on-device macro slots (<code>macro_1</code>..<code>macro_5</code> in the Tools &rarr; Macros app) or custom hardware buttons to Home Assistant entities.</p>
+          <div id="bindings-list"></div>
+          <button class="btn-secondary" onclick="addBindingRow('', '', 'toggle'); markDirty();">+ Add Macro Binding</button>
         </div>
       </section>
 
       <!-- ================================================================== -->
-      <!-- HOUSEHOLD SCOPE: 4. VOLUME ROUTING (GLOBAL AVR OVERRIDES)          -->
-      <!-- ================================================================== -->
-      <section id="view-volume_routing" class="hidden">
-        <div class="page-header">
-          <h2>Volume Routing</h2>
-          <p>Route volume commands to an external AV Receiver or amplifier whenever any device streams to a mapped speaker.</p>
-        </div>
-
-        <div class="card">
-          <h3>External AVR & Amplifier Volume Overrides</h3>
-          <p class="desc">When any Latter device controls playback on the selected Music Assistant speaker, volume up/down/set commands are routed to the target volume entity.</p>
-          <div class="field">
-            <label>Override 1: When Streaming to Speaker &rarr; Control Volume On</label>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-              <select id="cfg-vol_speaker_1" onchange="markDirty()"></select>
-              <select id="cfg-vol_target_1" onchange="markDirty()"></select>
-            </div>
-          </div>
-          <div class="field" style="margin-bottom:0;">
-            <label>Override 2: When Streaming to Speaker &rarr; Control Volume On</label>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-              <select id="cfg-vol_speaker_2" onchange="markDirty()"></select>
-              <select id="cfg-vol_target_2" onchange="markDirty()"></select>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- ================================================================== -->
-      <!-- HOUSEHOLD SCOPE: 5. REMOTE CONTROLS                                -->
+      <!-- SYSTEM TAB 3: MEDIA & REMOTES (REMOTES + VOLUME ROUTING)           -->
       <!-- ================================================================== -->
       <section id="view-remotes" class="hidden">
         <div class="page-header">
-          <h2>Remote Controls</h2>
-          <p>Assign up to four household media players, AV receivers, or TVs and select the command protocol for each slot.</p>
+          <h2>Media &amp; Remotes</h2>
+          <p>Assign up to four TV/Media remote slots and configure external AV receiver volume overrides.</p>
         </div>
 
         <div class="card">
           <h3>Remote Control Slots</h3>
-          <p class="desc">Select either a <code>remote.*</code> or <code>media_player.*</code> entity for each slot. Latter automatically pairs sibling entities on the same device.</p>
-          <div class="grid-2" style="margin-bottom:0;">
+          <p class="desc">Select a <code>remote.*</code> or <code>media_player.*</code> entity for each slot. Sibling entities on the same device are paired automatically.</p>
+          <div class="grid-2">
             <div class="remote-slot-card" id="rslot-card-1">
               <div class="remote-slot-hdr">
                 <strong>Slot 1</strong>
                 <button class="btn-secondary" id="rslot-btn-1" onclick="activateRemoteSlot(1)">Set Active</button>
               </div>
-              <div class="field" style="margin-bottom:0;">
+              <div class="field">
                 <label>Target Entity</label>
                 <select id="cfg-remote_1" onchange="markDirty()"></select>
               </div>
@@ -1131,7 +1096,7 @@
                 <strong>Slot 2</strong>
                 <button class="btn-secondary" id="rslot-btn-2" onclick="activateRemoteSlot(2)">Set Active</button>
               </div>
-              <div class="field" style="margin-bottom:0;">
+              <div class="field">
                 <label>Target Entity</label>
                 <select id="cfg-remote_2" onchange="markDirty()"></select>
               </div>
@@ -1143,7 +1108,7 @@
                 <strong>Slot 3</strong>
                 <button class="btn-secondary" id="rslot-btn-3" onclick="activateRemoteSlot(3)">Set Active</button>
               </div>
-              <div class="field" style="margin-bottom:0;">
+              <div class="field">
                 <label>Target Entity</label>
                 <select id="cfg-remote_3" onchange="markDirty()"></select>
               </div>
@@ -1155,7 +1120,7 @@
                 <strong>Slot 4</strong>
                 <button class="btn-secondary" id="rslot-btn-4" onclick="activateRemoteSlot(4)">Set Active</button>
               </div>
-              <div class="field" style="margin-bottom:0;">
+              <div class="field">
                 <label>Target Entity</label>
                 <select id="cfg-remote_4" onchange="markDirty()"></select>
               </div>
@@ -1164,196 +1129,159 @@
           </div>
           <div id="embedded-remote-general" class="native-controls-box" style="margin-top:12px;"></div>
         </div>
+
+        <div class="card">
+          <h3>External AVR &amp; Amplifier Volume Routing</h3>
+          <p class="desc">Route volume up/down/set commands to an external AV receiver or amplifier whenever a device streams to a mapped speaker.</p>
+          <div class="field">
+            <label>Override 1: When Streaming to Speaker &rarr; Control Volume On</label>
+            <div class="form-grid-2">
+              <select id="cfg-vol_speaker_1" onchange="markDirty()"></select>
+              <select id="cfg-vol_target_1" onchange="markDirty()"></select>
+            </div>
+          </div>
+          <div class="field">
+            <label>Override 2: When Streaming to Speaker &rarr; Control Volume On</label>
+            <div class="form-grid-2">
+              <select id="cfg-vol_speaker_2" onchange="markDirty()"></select>
+              <select id="cfg-vol_target_2" onchange="markDirty()"></select>
+            </div>
+          </div>
+        </div>
       </section>
 
       <!-- ================================================================== -->
-      <!-- HOUSEHOLD SCOPE: 6. HOUSEHOLD ENTITIES                             -->
+      <!-- SYSTEM TAB 4: GROUPS & PROFILES                                    -->
       <!-- ================================================================== -->
-      <section id="view-household" class="hidden">
+      <section id="view-fleet_sync" class="hidden">
         <div class="page-header">
-          <h2>Shared Entities</h2>
-          <p>Configure shared security alarm, camera, weather provider, calendars, pinned entities, and notifications.</p>
+          <h2>Groups &amp; Profiles</h2>
+          <p>Organize devices into groups, save configuration profiles, and apply settings across multiple devices.</p>
         </div>
 
         <div class="grid-2">
           <div class="card">
-            <h3>Global Entities</h3>
-            <p class="desc">Primary entities shared across all rooms and devices.</p>
-            <div class="field">
-              <label>Security Alarm (alarm_control_panel)</label>
-              <select id="cfg-alarm_entity" onchange="markDirty()"></select>
+            <h3>Configuration Profiles</h3>
+            <p class="desc">Capture settings from <strong id="prof-active-dev-label">Active Device</strong> as a reusable profile, or apply a profile to any device or group.</p>
+            <div class="input-action-row" style="margin-bottom:12px;">
+              <input type="text" id="new-profile-name" placeholder="Profile Name (e.g. Nightstand)">
+              <input type="text" id="new-profile-desc" placeholder="Description (optional)">
+              <button class="btn-primary" onclick="captureCurrentDeviceProfile()">Capture Profile</button>
             </div>
             <div class="field">
-              <label>Primary Camera (camera.*)</label>
-              <select id="cfg-camera_entity" onchange="markDirty(); renderCameraPreview(this.value);"></select>
+              <label>Apply Profile Target</label>
+              <select id="profile-target-scope"></select>
             </div>
-            <div id="cam-preview-box" style="display:none;align-items:center;gap:12px;margin-bottom:13px;padding:10px;background:var(--input-bg);border:1px solid var(--border);border-radius:8px;">
-              <img id="cam-preview-img" class="wp-thumb circle" style="width:76px;height:76px;" alt="Camera Snapshot">
-              <div style="flex:1;min-width:0;">
-                <strong style="font-size:12.5px;color:var(--text-strong);display:block;">Camera Snapshot Preview</strong>
-                <small style="color:var(--muted);display:block;margin:2px 0 6px;">Served via <code>/api/latter/camera/&lt;slug&gt;</code></small>
-                <button class="btn-secondary" style="padding:5px 10px;font-size:11.5px;" onclick="renderCameraPreview(document.getElementById('cfg-camera_entity').value)">Refresh</button>
-              </div>
+            <div id="saved-profiles-list" class="native-controls-box"></div>
+          </div>
+
+          <div class="card">
+            <h3>Device Groups</h3>
+            <p class="desc">Assign devices to logical groups for targeted profile deployment and bulk control.</p>
+            <div class="input-action-row" style="margin-bottom:12px;">
+              <input type="text" id="new-group-name" placeholder="New Group Name">
+              <input type="text" id="new-group-desc" placeholder="Description">
+              <button class="btn-secondary" onclick="createDeviceGroup()">+ Add Group</button>
+            </div>
+            <div id="device-groups-list" class="native-controls-box"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:10px;">
+            <div>
+              <h3 style="margin:0;">Bulk Device Controls</h3>
+              <p class="desc" style="margin:2px 0 0;">Apply wake word, timeout, or display settings across all devices or a selected group.</p>
+            </div>
+            <div style="min-width:210px;">
+              <select id="group-ctrl-filter" onchange="renderFleetOverview(STATE.fleet_devices, STATE.fleet_controls, STATE.config)"></select>
+            </div>
+          </div>
+          <div id="fleet-controls-list" class="native-controls-box"></div>
+        </div>
+      </section>
+
+      <!-- ================================================================== -->
+      <!-- SYSTEM TAB 5: BLE CALIBRATION                                      -->
+      <!-- ================================================================== -->
+      <section id="view-room_tracking" class="hidden">
+        <div class="page-header">
+          <h2>BLE Calibration</h2>
+          <p>Calibrate Bluetooth proxy signal offsets per room. Offsets apply globally across all mobile devices.</p>
+        </div>
+
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:6px;">
+            <h3 style="margin:0;">Per-Room BLE Signal Calibration</h3>
+            <label style="font-size:12.5px;font-weight:500;color:var(--accent);display:inline-flex;align-items:center;gap:6px;cursor:pointer;">
+              <input type="checkbox" id="survey-fast-mode" onchange="toggleSurveyFastMode(this.checked)"> Fast Refresh (1.5s)
+            </label>
+          </div>
+          <p class="desc">Carry <strong id="survey-device-name">Device</strong> into a room and click <strong>Calibrate Current Room</strong> to calculate the dB offset needed for that room to win over adjacent proxies.</p>
+          <div id="rssi-container"></div>
+        </div>
+      </section>
+
+      <!-- ================================================================== -->
+      <!-- SYSTEM TAB 6: ADMINISTRATION (BACKUPS, STUDIO, LOGS & DEV YAML)    -->
+      <!-- ================================================================== -->
+      <section id="view-system_admin" class="hidden">
+        <div class="page-header">
+          <h2>System Administration</h2>
+          <p>Backups, appearance, notification testing, developer YAML mixins, and system logs.</p>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <h3>Create or Export Backup</h3>
+            <p class="desc">Save system settings, entity mappings, BLE room offsets, and live ESPHome device preferences.</p>
+            <div class="field">
+              <label>Backup Scope</label>
+              <select id="bkp-scope-select">
+                <option value="system">Full System &amp; All Devices</option>
+                <option value="device">Active Device Only</option>
+              </select>
             </div>
             <div class="field">
-              <label>Weather Forecast Provider</label>
-              <select id="cfg-weather_entity" onchange="markDirty()"></select>
+              <label>Backup Label (Optional)</label>
+              <input type="text" id="bkp-label-input" placeholder="e.g. Baseline Config">
             </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-              <div class="field">
-                <label>Primary Thermostat (climate.*)</label>
-                <select id="cfg-thermostat_entity" onchange="markDirty()"></select>
-              </div>
-              <div class="field">
-                <label>Primary Entry Lock (lock.*)</label>
-                <select id="cfg-lock_entity" onchange="markDirty()"></select>
-              </div>
+            <div class="toggle-row" style="margin-bottom:12px;">
+              <span>Include WireGuard Private Keys</span>
+              <input type="checkbox" id="bkp-include-vpn" checked>
             </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-              <div class="field">
-                <label>Garage Door (cover.*)</label>
-                <select id="cfg-garage_entity" onchange="markDirty()"></select>
-              </div>
-              <div class="field">
-                <label>Robot Vacuum (vacuum.*)</label>
-                <select id="cfg-vacuum_entity" onchange="markDirty()"></select>
-              </div>
-            </div>
-            <div class="field" style="margin-bottom:0;">
-              <label>Shared Calendars (calendar.*)</label>
-              <div style="display:flex;gap:8px;">
-                <select id="cal-entity-picker"></select>
-                <button class="btn-secondary" onclick="addCalendarEntity()">Add</button>
-              </div>
-              <div id="calendar-chips" class="chip-list"></div>
+            <div class="quick-actions-row">
+              <button class="btn-primary" onclick="createVaultSnapshot()">Save Local Backup</button>
+              <button class="btn-secondary" onclick="exportBackupToComputer('')">Download .JSON</button>
             </div>
           </div>
 
           <div class="card">
-            <h3>Pinned Entities & Notification Test</h3>
-            <p class="desc">Pin entities to the top of Room Control, or test sending an on-screen alert (<code>latter.notify_device</code>).</p>
-            <div style="display:flex;gap:8px;margin-bottom:10px;">
-              <select id="pin-entity-picker"></select>
-              <button class="btn-secondary" onclick="addPinnedEntity()">Pin Entity</button>
+            <h3>Restore from File (.JSON)</h3>
+            <p class="desc">Upload a downloaded <code>latter-*.json</code> backup file from your computer.</p>
+            <div class="field">
+              <label>Backup .JSON File</label>
+              <input type="file" id="bkp-upload-file" accept=".json,application/json">
             </div>
-            <div id="pinned-chips" class="chip-list" style="margin-bottom:14px;"></div>
-
-            <div style="padding-top:12px;border-top:1px solid var(--border);">
-              <label style="font-size:12px;font-weight:700;color:var(--text-strong);display:block;margin-bottom:6px;">Send Test Notification</label>
-              <div style="display:grid;grid-template-columns:1fr 1.4fr auto;gap:8px;margin-bottom:8px;">
-                <input type="text" id="test-alert-title" value="Front Door">
-                <input type="text" id="test-alert-msg" value="Person detected at Front Door">
-                <select id="test-alert-prio" style="width:auto;">
-                  <option value="normal">Normal</option>
-                  <option value="warning">Warning</option>
-                  <option value="critical">Critical</option>
-                </select>
-              </div>
-              <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
-                <label style="font-size:12px;color:var(--muted);display:inline-flex;align-items:center;gap:6px;cursor:pointer;">
-                  <input type="checkbox" id="test-alert-cam" checked> Include Camera Snapshot
-                </label>
-                <button class="btn-primary" onclick="sendTestNotification()">Send Notification</button>
-              </div>
+            <div class="toggle-row" style="margin-bottom:12px;">
+              <span>Restore Live ESPHome Device Settings</span>
+              <input type="checkbox" id="bkp-restore-esp" checked>
             </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- ================================================================== -->
-      <!-- HOUSEHOLD SCOPE: 7. MACROS & YAML                                  -->
-      <!-- ================================================================== -->
-      <section id="view-macros" class="hidden">
-        <div class="page-header">
-          <h2>Macros & YAML</h2>
-          <p>Bind on-device macro slots or hardware triggers to Home Assistant entities and export ESPHome YAML snippets.</p>
-        </div>
-
-        <div class="card" style="margin-bottom:16px;">
-          <h3>Macro & Trigger Bindings</h3>
-          <p class="desc">Map slot IDs (such as <code>macro_1</code>..<code>macro_5</code> in the Pocket Assistant Macros tool or custom hardware buttons) to any Home Assistant entity via <code>latter.trigger_binding</code>.</p>
-          <div id="bindings-list"></div>
-          <button class="btn-secondary" onclick="addBindingRow('', '', 'toggle'); markDirty();">+ Add Binding</button>
-        </div>
-
-        <div class="card" style="margin-bottom:16px;">
-          <h3>1-Line Drop-In ESPHome Mixin Packages</h3>
-          <p class="desc">Add any of these 1-line packages under <code>packages:</code> in an existing ESPHome device's YAML to unlock BLE room tracking, WireGuard roaming VPN, or stationary BLE room scanning with zero substitution variables required.</p>
-          <div class="grid-2" style="margin-bottom:0;">
-            <div style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                <strong style="color:var(--text-strong);font-size:13px;">1. Roaming BLE Room Presence Beacon</strong>
-                <button class="btn-secondary" style="padding:4px 10px;font-size:11.5px;" onclick="copyTextById('mixin-ble-beacon')">Copy</button>
-              </div>
-              <small style="color:var(--muted);display:block;margin-bottom:8px;">Makes any portable/battery ESP32 trackable room-to-room by Latter (disambiguated automatically by hardware MAC).</small>
-              <pre id="mixin-ble-beacon" class="mono" style="margin:0;padding:8px;background:var(--card);border:1px solid var(--border);border-radius:6px;overflow-x:auto;">packages:
-  latter.ble: github://slampton/esphome-latter-core/mixins/ble_beacon.yaml@main</pre>
-            </div>
-
-            <div style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                <strong style="color:var(--text-strong);font-size:13px;">2. Roaming WireGuard VPN Tunnel</strong>
-                <button class="btn-secondary" style="padding:4px 10px;font-size:11.5px;" onclick="copyTextById('mixin-vpn')">Copy</button>
-              </div>
-              <small style="color:var(--muted);display:block;margin-bottom:8px;">Adds encrypted remote access over phone hotspots + live VPN status sensors (generate keys in Device &rarr; Roaming &amp; VPN).</small>
-              <pre id="mixin-vpn" class="mono" style="margin:0;padding:8px;background:var(--card);border:1px solid var(--border);border-radius:6px;overflow-x:auto;">packages:
-  latter.vpn: github://slampton/esphome-latter-core/mixins/roaming_vpn.yaml@main</pre>
-            </div>
-
-            <div style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                <strong style="color:var(--text-strong);font-size:13px;">3. Stationary Room BLE Scanner Proxy</strong>
-                <button class="btn-secondary" style="padding:4px 10px;font-size:11.5px;" onclick="copyTextById('mixin-ble-proxy')">Copy</button>
-              </div>
-              <small style="color:var(--muted);display:block;margin-bottom:8px;">Turns any mains-powered ESP32 node into an active room Bluetooth scanner for Latter's Room Calibration radar.</small>
-              <pre id="mixin-ble-proxy" class="mono" style="margin:0;padding:8px;background:var(--card);border:1px solid var(--border);border-radius:6px;overflow-x:auto;">packages:
-  latter.proxy: github://slampton/esphome-latter-core/mixins/ble_proxy.yaml@main</pre>
-            </div>
-
-            <div style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                <strong style="color:var(--text-strong);font-size:13px;">4. Core Studio Discovery &amp; Diagnostics</strong>
-                <button class="btn-secondary" style="padding:4px 10px;font-size:11.5px;" onclick="copyTextById('mixin-core')">Copy</button>
-              </div>
-              <small style="color:var(--muted);display:block;margin-bottom:8px;">Adds Uptime, Wi-Fi Signal, Restart button, and automatic Latter discovery for custom nodes.</small>
-              <pre id="mixin-core" class="mono" style="margin:0;padding:8px;background:var(--card);border:1px solid var(--border);border-radius:6px;overflow-x:auto;">packages:
-  latter.core: github://slampton/esphome-latter-core/mixins/diagnostics.yaml@main</pre>
-            </div>
+            <button class="btn-primary" onclick="restoreFromUploadedFile()">Upload &amp; Restore</button>
           </div>
         </div>
 
         <div class="card">
-          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:8px;">
-            <div>
-              <h3 style="margin:0;">ESPHome YAML Generator</h3>
-              <p class="desc" style="margin:4px 0 0;">Generate a copy-pasteable ESPHome YAML contract for custom devices.</p>
-            </div>
-            <button class="btn-secondary" onclick="copyGeneratedYaml()">Copy YAML</button>
-          </div>
-          <div style="display:flex;flex-wrap:wrap;gap:14px;margin-bottom:12px;padding:10px 12px;background:var(--input-bg);border:1px solid var(--border);border-radius:7px;font-size:12.5px;">
-            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="yg-sensors" checked onchange="renderYamlGenerator()"> Push Sensors (<code>sensor.&lt;slug&gt;_*</code>)</label>
-            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="yg-browse" checked onchange="renderYamlGenerator()"> 5-Slot List Callback (<code>set_browse_slots</code>)</label>
-            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="yg-room" checked onchange="renderYamlGenerator()"> Room Slider Callback (<code>set_room_slots</code>)</label>
-            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="yg-ble" checked onchange="renderYamlGenerator()"> BLE Presence Beacon</label>
-            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="yg-actions" checked onchange="renderYamlGenerator()"> Action Examples (<code>latter.*</code>)</label>
-          </div>
-          <pre id="yaml-gen-output" class="mono" style="background:var(--input-bg);border:1px solid var(--border);border-radius:7px;padding:14px;overflow-x:auto;max-height:380px;margin:0;color:var(--text-strong);line-height:1.45;"></pre>
-        </div>
-      </section>
-
-      <!-- ================================================================== -->
-      <!-- HOUSEHOLD SCOPE: 8. STUDIO SETTINGS                                -->
-      <!-- ================================================================== -->
-      <section id="view-studio_settings" class="hidden">
-        <div class="page-header">
-          <h2>Studio Settings</h2>
-          <p>Global web interface appearance and external reverse-proxy URL configuration.</p>
+          <h3>Saved Local Backups</h3>
+          <p class="desc">Restore a saved backup in one click, download a JSON copy, or remove old snapshots.</p>
+          <div id="vault-backups-list" class="native-controls-box"></div>
         </div>
 
-        <div class="card">
-          <h3>Appearance & Reverse Proxy</h3>
-          <div class="grid-2" style="margin-bottom:0;">
-            <div class="field" style="margin-bottom:0;">
+        <div class="grid-2">
+          <div class="card">
+            <h3>Appearance &amp; Reverse Proxy</h3>
+            <p class="desc">Configure Web Studio theme and optional external HTTPS base URL.</p>
+            <div class="field">
               <label>Home Assistant Theme</label>
               <select id="cfg-web_theme_mobile" onchange="onThemeChanged(this.value)">
                 <option value="ha_auto">Home Assistant (Auto)</option>
@@ -1361,56 +1289,167 @@
                 <option value="ha_light">Home Assistant (Light)</option>
               </select>
             </div>
-            <div class="field" style="margin-bottom:0;">
-              <label>Companion HTTPS Base URL Override (e.g. https://ha.example.com)</label>
-              <input type="text" id="cfg-companion_base_url" placeholder="Auto-detected from Home Assistant Network settings" oninput="markDirty()">
+            <div class="field">
+              <label>Companion Base URL Override (Optional)</label>
+              <input type="text" id="cfg-companion_base_url" placeholder="Auto-detected from Home Assistant" oninput="markDirty()">
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>Notification Tester</h3>
+            <p class="desc">Send a test on-screen alert (<code>latter.notify_device</code>) to the active device.</p>
+            <div class="form-grid-2" style="margin-bottom:10px;">
+              <input type="text" id="test-alert-title" value="Front Door" placeholder="Title">
+              <select id="test-alert-prio">
+                <option value="normal">Priority: Normal</option>
+                <option value="warning">Priority: Warning</option>
+                <option value="critical">Priority: Critical</option>
+              </select>
+            </div>
+            <div class="field">
+              <input type="text" id="test-alert-msg" value="Person detected at Front Door" placeholder="Message">
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
+              <label style="font-size:12.5px;color:var(--muted);display:inline-flex;align-items:center;gap:6px;cursor:pointer;">
+                <input type="checkbox" id="test-alert-cam" checked> Include Camera Snapshot
+              </label>
+              <button class="btn-primary" onclick="sendTestNotification()">Send Notification</button>
             </div>
           </div>
         </div>
+
+        <div class="card" id="sys-custom-palettes-card">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:6px;">
+            <div>
+              <h3 style="margin:0;">System Custom Color Library</h3>
+              <p class="desc" style="margin:2px 0 0;">Create custom UI color profiles on the HSV Color Wheel and reuse them across any display.</p>
+            </div>
+            <button type="button" class="btn-secondary" onclick="openColorWheelModal('system')">+ Open Color Wheel</button>
+          </div>
+          <div id="sys-custom-palettes-list" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;"></div>
+        </div>
+
+        <!-- COLLAPSIBLE: DEVELOPER & YAML TOOLS -->
+        <details class="ha-details">
+          <summary>Developer &amp; YAML Tools (Mixins &amp; Contract Generator)</summary>
+          <div class="details-body">
+            <h3 style="margin:0 0 6px;font-size:14px;">1-Line Drop-In ESPHome Mixin Packages</h3>
+            <p class="desc" style="margin:0 0 12px;color:var(--muted);font-size:12.5px;">Add any of these 1-line packages under <code>packages:</code> in an existing ESPHome device's YAML.</p>
+            <div class="grid-2" style="margin-bottom:16px;">
+              <div style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                  <strong style="font-size:13px;">1. Roaming BLE Presence Beacon</strong>
+                  <button class="btn-secondary" style="padding:4px 10px;font-size:11.5px;" onclick="copyTextById('mixin-ble-beacon')">Copy</button>
+                </div>
+                <pre id="mixin-ble-beacon" class="mono" style="margin:0;padding:8px;background:var(--card);border:1px solid var(--border);border-radius:6px;overflow-x:auto;">packages:
+  latter.ble: github://slampton/esphome-latter-core/mixins/ble_beacon.yaml@main</pre>
+              </div>
+              <div style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                  <strong style="font-size:13px;">2. Roaming WireGuard VPN Tunnel</strong>
+                  <button class="btn-secondary" style="padding:4px 10px;font-size:11.5px;" onclick="copyTextById('mixin-vpn')">Copy</button>
+                </div>
+                <pre id="mixin-vpn" class="mono" style="margin:0;padding:8px;background:var(--card);border:1px solid var(--border);border-radius:6px;overflow-x:auto;">packages:
+  latter.vpn: github://slampton/esphome-latter-core/mixins/roaming_vpn.yaml@main</pre>
+              </div>
+              <div style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                  <strong style="font-size:13px;">3. Stationary Room BLE Scanner Proxy</strong>
+                  <button class="btn-secondary" style="padding:4px 10px;font-size:11.5px;" onclick="copyTextById('mixin-ble-proxy')">Copy</button>
+                </div>
+                <pre id="mixin-ble-proxy" class="mono" style="margin:0;padding:8px;background:var(--card);border:1px solid var(--border);border-radius:6px;overflow-x:auto;">packages:
+  latter.proxy: github://slampton/esphome-latter-core/mixins/ble_proxy.yaml@main</pre>
+              </div>
+              <div style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                  <strong style="font-size:13px;">4. Studio Discovery &amp; Diagnostics</strong>
+                  <button class="btn-secondary" style="padding:4px 10px;font-size:11.5px;" onclick="copyTextById('mixin-core')">Copy</button>
+                </div>
+                <pre id="mixin-core" class="mono" style="margin:0;padding:8px;background:var(--card);border:1px solid var(--border);border-radius:6px;overflow-x:auto;">packages:
+  latter.core: github://slampton/esphome-latter-core/mixins/diagnostics.yaml@main</pre>
+              </div>
+            </div>
+
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:8px;">
+              <strong style="font-size:13.5px;">Custom ESPHome YAML Contract Generator</strong>
+              <button class="btn-secondary" style="padding:5px 10px;font-size:12px;" onclick="copyGeneratedYaml()">Copy YAML</button>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:10px;font-size:12.5px;">
+              <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="yg-sensors" checked onchange="renderYamlGenerator()"> Push Sensors</label>
+              <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="yg-browse" checked onchange="renderYamlGenerator()"> 5-Slot Callback</label>
+              <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="yg-room" checked onchange="renderYamlGenerator()"> Room Slider Callback</label>
+              <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="yg-ble" checked onchange="renderYamlGenerator()"> BLE Beacon</label>
+              <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="yg-actions" checked onchange="renderYamlGenerator()"> Action Examples</label>
+            </div>
+            <pre id="yaml-gen-output" class="mono" style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:12px;overflow-x:auto;max-height:320px;margin:0;color:var(--text-strong);line-height:1.45;"></pre>
+          </div>
+        </details>
+
+        <!-- COLLAPSIBLE: SYSTEM & DEVICE LOGS -->
+        <details class="ha-details">
+          <summary>System &amp; Device Logs</summary>
+          <div class="details-body">
+            <div class="quick-actions-row" style="margin-bottom:12px;">
+              <button type="button" class="btn-secondary" onclick="openNativeHaLogs('latter')">HA Logs (latter)</button>
+              <button type="button" class="btn-secondary" id="btn-native-dev-logs" onclick="openNativeHaLogs(STATE?.config?.device_slug || 'esphome')">HA Logs (Active Device)</button>
+              <button type="button" class="btn-secondary" onclick="openNativeHaLogs('esphome')">HA Logs (esphome)</button>
+              <button type="button" class="btn-secondary" onclick="openNativeHaIntegrations()">HA Integration Page</button>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+              <select id="log-filter-select" style="width:auto;min-width:200px;" onchange="renderLogsView()">
+                <option value="all">All Latter &amp; ESPHome Logs</option>
+                <option value="device">Active Device Only</option>
+                <option value="latter">Latter Middleware Only</option>
+                <option value="errors">Warnings &amp; Errors Only</option>
+              </select>
+              <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                <button type="button" class="btn-secondary" onclick="refreshState(false)">Refresh</button>
+                <button type="button" class="btn-secondary" onclick="copyTextById('internal-log-output')">Copy</button>
+                <button type="button" class="btn-danger" onclick="clearInternalLogs()">Clear</button>
+              </div>
+            </div>
+            <pre id="internal-log-output" class="mono" style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:12px;overflow-x:auto;max-height:380px;margin:0;color:var(--text-strong);line-height:1.5;">No events logged yet.</pre>
+          </div>
+        </details>
       </section>
 
       <!-- ================================================================== -->
-      <!-- DEVICE SCOPE: 0. SELECT A DEVICE PROMPT (WHEN UNSELECTED)          -->
+      <!-- DEVICE SCOPE: 0. SELECT A DEVICE PROMPT                            -->
       <!-- ================================================================== -->
       <section id="view-select_device_prompt" class="hidden">
         <div class="page-header">
           <h2>Select a Device</h2>
-          <p>Choose an onboarded ESPHome device from the list below or the sidebar dropdown to view its dashboard and device-specific settings.</p>
+          <p>Choose an ESPHome device below or from the sidebar selector.</p>
         </div>
         <div class="card">
-          <h3>Available Devices</h3>
+          <h3>Managed Devices</h3>
           <div id="prompt-devices-list" class="native-controls-box"></div>
         </div>
       </section>
 
       <!-- ================================================================== -->
-      <!-- DEVICE SCOPE: 1. DEVICE OVERVIEW (CAPABILITY-AWARE)                -->
+      <!-- DEVICE TAB 1: OVERVIEW (TELEMETRY, QUICK ACTIONS & ROOM CONTROLS)  -->
       <!-- ================================================================== -->
       <section id="view-dashboard">
         <div class="page-header">
           <h2 id="dash-header-title">Device Overview</h2>
-          <p id="dash-header-desc">Live device sensors, configurable parameters, hardware diagnostics, and quick backups.</p>
+          <p id="dash-header-desc">Quick actions, active room controls, and live device telemetry.</p>
         </div>
 
         <div class="hero-stats">
-          <div class="stat-box"><span>Integration Tier</span><strong id="st-tier">--</strong></div>
-          <div class="stat-box"><span>Assigned Room</span><strong id="st-room">--</strong></div>
-          <div class="stat-box"><span>Device Group</span><strong id="st-group">Unassigned</strong></div>
-          <div class="stat-box"><span>Exposed Entities</span><strong id="st-entities">0</strong></div>
+          <div class="stat-box"><span>Room</span><strong id="st-room">--</strong></div>
+          <div class="stat-box"><span>Battery / Power</span><strong id="st-battery">--</strong></div>
+          <div class="stat-box"><span>Wi-Fi Signal</span><strong id="st-wifi">--</strong></div>
+          <div class="stat-box"><span>Media</span><strong id="st-media">Idle</strong></div>
         </div>
 
         <div class="grid-2">
-          <!-- LEFT CARD: LIVE DEVICE CONTROLS & SENSORS -->
+          <!-- CARD 1: QUICK ACTIONS & CONTEXT -->
           <div class="card">
-            <h3 id="dash-primary-card-title">Device Controls &amp; Live Sensors</h3>
-            <p class="desc" id="dash-primary-card-desc">Directly inspect and adjust this ESPHome device's exposed sensors, numbers, switches, and options.</p>
-            <div id="dash-device-entities" class="native-controls-box"></div>
-          </div>
+            <h3>Quick Actions</h3>
+            <p class="desc">Execute immediate device commands or switch room and speaker context.</p>
+            <div id="dash-quick-actions" class="quick-actions-row" style="margin-bottom:16px;"></div>
 
-          <!-- RIGHT CARD: DEVICE MANAGEMENT, BACKUP & OPTIONAL CONTEXT -->
-          <div class="card">
-            <h3>Device Management &amp; Quick Actions</h3>
-            <p class="desc">Assign this device's room or group, trigger a quick backup, or enable optional Latter add-on modules.</p>
             <div class="field">
               <label>Assigned Room / Area</label>
               <select id="quick-area" onchange="quickSwitchArea(this.value)"></select>
@@ -1419,131 +1458,103 @@
               <label>Active Speaker Target</label>
               <select id="quick-speaker" onchange="quickSwitchSpeaker(this.value)"></select>
             </div>
-            <div class="summary-row">
-              <span>ESPHome Model / Version</span>
-              <strong id="dash-hw-model">--</strong>
-            </div>
-            <div class="summary-row">
-              <span>BLE Room Tracking</span>
-              <strong id="dash-ble-mode">--</strong>
-            </div>
-            <div class="summary-row" id="dash-row-ble-proxy">
-              <span>Nearest BLE Proxy</span>
-              <strong id="dash-ble-proxy">--</strong>
-            </div>
-            <div class="summary-row" id="dash-row-media">
-              <span>Now Playing</span>
-              <strong id="dash-media-summary">Idle</strong>
-            </div>
-            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px;">
-              <button class="btn-primary" onclick="createDeviceQuickBackup()">Backup Device</button>
-              <button class="btn-secondary" onclick="exportBackupToComputer('device')">Download .JSON</button>
-              <button class="btn-secondary" onclick="navigateToView('ble_addon')">BLE Add-On</button>
-              <button class="btn-secondary" onclick="navigateToView('roaming_vpn')">Roaming VPN</button>
-              <button class="btn-secondary" onclick="navigateToView('system')">Diagnostics</button>
+            <div class="field">
+              <label>Apply Configuration Profile</label>
+              <div class="input-action-row">
+                <select id="quick-profile-select"></select>
+                <button class="btn-secondary" onclick="applyQuickProfileFromOverview()">Apply</button>
+              </div>
             </div>
           </div>
+
+          <!-- CARD 2: DEVICE STATUS & TELEMETRY -->
+          <div class="card">
+            <h3>Device Status</h3>
+            <p class="desc">Hardware model, BLE room tracking state, and network summary.</p>
+            <div class="summary-row"><span>Model &amp; Firmware</span><strong id="dash-hw-model">--</strong></div>
+            <div class="summary-row"><span>Device Group</span><strong id="st-group">Unassigned</strong></div>
+            <div class="summary-row"><span>BLE Room Tracking</span><strong id="dash-ble-mode">--</strong></div>
+            <div class="summary-row" id="dash-row-ble-proxy"><span>Nearest BLE Proxy</span><strong id="dash-ble-proxy">--</strong></div>
+            <div class="summary-row" id="dash-row-media"><span>Now Playing</span><strong id="dash-media-summary">Idle</strong></div>
+            <div class="quick-actions-row" style="margin-top:14px;">
+              <button class="btn-chip" onclick="createDeviceQuickBackup()">Save Device Backup</button>
+              <button class="btn-chip" onclick="exportBackupToComputer('device')">Download .JSON</button>
+              <button class="btn-chip" onclick="navigateToView('system')">Administration &amp; Logs</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ACTIVE ROOM CONTROLS (LIVE TOGGLE CARDS) -->
+        <div class="card" id="dash-room-controls-card">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;">
+            <h3 style="margin:0;">Active Room Controls (<span id="st-room-cards-area">Home</span>)</h3>
+            <span class="nav-badge" id="st-card-count">0</span>
+          </div>
+          <p class="desc">Tap any entity in the device's current room to toggle it.</p>
+          <div id="live-room-cards" class="room-cards-grid"></div>
+        </div>
+
+        <!-- TIER 3 / SENSOR NODE CONTROLS (SHOWN WHEN CUSTOM/OTHER ENTITIES EXIST) -->
+        <div class="card hidden" id="dash-sensor-entities-card">
+          <h3>Device Sensors &amp; Controls</h3>
+          <p class="desc">Exposed sensors, switches, and parameters on this ESPHome node.</p>
+          <div id="dash-device-entities" class="native-controls-box"></div>
         </div>
       </section>
 
       <!-- ================================================================== -->
-      <!-- DEVICE SCOPE: 5B. BLE TRACKING & PROXY ADD-ON                      -->
-      <!-- ================================================================== -->
-      <section id="view-ble_addon" class="hidden">
-        <div class="page-header">
-          <h2>BLE Room Tracking &amp; Scanner Proxy</h2>
-          <p>Configure Bluetooth room presence tracking for this device, or install a 1-line YAML mixin to enable it.</p>
-        </div>
-
-        <div class="card" id="ble-addon-missing-banner" style="margin-bottom:16px;border-color:var(--accent);">
-          <h3>Add-On Available: 1-Line BLE Mixin for ESPHome</h3>
-          <p class="desc">This device does not currently broadcast a Latter BLE iBeacon. Depending on whether this device is portable or stationary, paste one of the 1-line packages below into its YAML in ESPHome Device Builder and recompile:</p>
-          <div class="grid-2" style="margin-bottom:0;">
-            <div style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                <strong style="color:var(--text-strong);">Option A: Portable / Handheld Device (BLE Beacon)</strong>
-                <button class="btn-secondary" style="padding:4px 10px;font-size:11.5px;" onclick="copyTextById('dev-ble-beacon-snip')">Copy</button>
-              </div>
-              <small style="color:var(--muted);display:block;margin-bottom:8px;">Broadcasts a BLE iBeacon so Latter tracks which room this device is in.</small>
-              <pre id="dev-ble-beacon-snip" class="mono" style="margin:0;padding:8px;background:var(--card);border:1px solid var(--border);border-radius:6px;overflow-x:auto;">packages:
-  latter.ble: github://slampton/esphome-latter-core/mixins/ble_beacon.yaml@main</pre>
-            </div>
-            <div style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                <strong style="color:var(--text-strong);">Option B: Stationary Room Sensor (BLE Scanner Proxy)</strong>
-                <button class="btn-secondary" style="padding:4px 10px;font-size:11.5px;" onclick="copyTextById('dev-ble-proxy-snip')">Copy</button>
-              </div>
-              <small style="color:var(--muted);display:block;margin-bottom:8px;">Turns this stationary ESP32 (e.g. Bed Presence) into an active room Bluetooth scanner for your mobile displays.</small>
-              <pre id="dev-ble-proxy-snip" class="mono" style="margin:0;padding:8px;background:var(--card);border:1px solid var(--border);border-radius:6px;overflow-x:auto;">packages:
-  latter.proxy: github://slampton/esphome-latter-core/mixins/ble_proxy.yaml@main</pre>
-            </div>
-          </div>
-        </div>
-
-        <div class="card">
-          <h3>Device BLE Tracking Settings</h3>
-          <p class="desc">Configure how Latter tracks this device across room Bluetooth proxies when beaconing is enabled.</p>
-          <div class="toggle-row">
-            <span>Enable ESPHome BLE Proxy Room Tracking for This Device</span>
-            <input type="checkbox" id="cfg-native_ble_tracking_ mirror" onchange="document.getElementById('cfg-native_ble_tracking').checked = this.checked; markDirty();">
-          </div>
-          <div class="toggle-row" style="margin-bottom:10px;">
-            <span>Auto-Switch Active Room on Movement</span>
-            <input type="checkbox" id="cfg-ble_auto_switch_mirror" onchange="document.getElementById('cfg-ble_auto_switch').checked = this.checked; markDirty();">
-          </div>
-          <button class="btn-secondary" onclick="navigateToView('room_tracking')">Open Global Room Calibration Radar &rarr;</button>
-        </div>
-      </section>
-
-      <!-- ================================================================== -->
-      <!-- DEVICE SCOPE: 2. HOME & DISPLAY                                    -->
+      <!-- DEVICE TAB 2: DISPLAY & HOME                                       -->
       <!-- ================================================================== -->
       <section id="view-home_display" class="hidden">
         <div class="page-header">
-          <h2>Home & Display</h2>
-          <p>Configure this device's home screen layout, clock face, display brightness, color profile, and wallpapers.</p>
+          <h2>Display &amp; Home</h2>
+          <p>Configure screen brightness, color profile, clock face, home dock apps, room UI defaults, and wallpapers.</p>
         </div>
 
         <div class="grid-2">
           <div class="card">
-            <h3>Home Screen</h3>
-            <p class="desc">Configure your device's clock style, home shortcuts, weather background, and dock order.</p>
-            <div id="embedded-home" class="native-controls-box" style="margin-bottom:14px;"></div>
-            <div class="field" style="margin-bottom:0;">
-              <label>Home Dock App Order (comma-separated tokens)</label>
-              <input type="text" id="cfg-dock_apps" placeholder="music,room,remote,games,tools" oninput="markDirty()">
-            </div>
-          </div>
-
-          <div class="card">
-            <h3>Display Settings</h3>
-            <p class="desc">Adjust screen brightness, UI color profile, auto-brightness schedule, and screen geometry.</p>
+            <h3>Display &amp; Appearance</h3>
+            <p class="desc">Screen brightness, auto-brightness schedule, clock face, color profile, and weather simulation.</p>
             <div id="embedded-display" class="native-controls-box" style="margin-bottom:14px;"></div>
-            <div class="field" style="margin-bottom:14px;padding:12px;border-radius:10px;background:var(--input-bg);border:1px solid var(--border);">
+
+            <div class="field" style="padding:12px;border-radius:10px;background:var(--input-bg);border:1px solid var(--border);">
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-                <label style="margin-bottom:0;font-weight:600;">Custom Color Profile & Household Library</label>
-                <button type="button" class="btn-secondary" style="padding:4px 10px;font-size:12px;" onclick="openColorWheelModal('device')">+ Color Wheel...</button>
+                <label style="margin-bottom:0;">Custom Color Profile</label>
+                <button type="button" class="btn-secondary" style="padding:4px 10px;font-size:12px;" onclick="openColorWheelModal('device')">+ Color Wheel</button>
               </div>
               <div style="display:flex;gap:8px;align-items:center;">
                 <span id="dev-color-swatch" style="width:24px;height:24px;border-radius:50%;border:2px solid #fff;background:#3898FF;flex-shrink:0;"></span>
                 <select id="dev-custom-palette-select" onchange="onSelectDeviceCustomPalette(this.value)" style="flex:1;"></select>
               </div>
             </div>
-            <div class="field" style="margin-bottom:0;">
-              <label>Screen Bezel Mask & Resolution</label>
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+
+            <div class="field">
+              <label>Display Geometry &amp; Resolution</label>
+              <div class="form-grid-2">
                 <select id="cfg-display_shape" onchange="markDirty()">
                   <option value="circle">Circular Display</option>
-                  <option value="square">Square / Rectangular</option>
+                  <option value="square">Rectangular / Square</option>
                 </select>
                 <select id="cfg-art_size" onchange="markDirty()">
                   <option value="466">466x466 px (1.75" Round)</option>
                   <option value="410x502">410x502 px (2.06" Watch)</option>
                   <option value="360">360x360 px</option>
                   <option value="240">240x240 px</option>
-                  <option value="480">480x480 px (Wall Panel)</option>
+                  <option value="480">480x480 px (Panel)</option>
                 </select>
               </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>Home Screen &amp; Room UI</h3>
+            <p class="desc">Configure home screen behavior, dock app order, and default Room Control category.</p>
+            <div id="embedded-home" class="native-controls-box" style="margin-bottom:14px;"></div>
+
+            <div class="field">
+              <label>Home Dock App Order (Click to Toggle, Arrows to Reorder)</label>
+              <div id="dock-pills-container" class="dock-pill-list" style="margin-bottom:6px;"></div>
+              <input type="text" id="cfg-dock_apps" class="mono" style="font-size:11.5px;padding:6px 9px;" oninput="markDirty(); renderDockPillsFromInput();">
             </div>
           </div>
         </div>
@@ -1551,14 +1562,14 @@
         <div class="grid-2">
           <div class="card">
             <h3>Upload Wallpaper</h3>
-            <p class="desc">Photos are automatically center-cropped, darkened for legibility, and transcoded to Baseline JPEG.</p>
-            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-              <input type="file" id="wp-file-input" accept="image/*" style="flex:1;">
-              <button class="btn-primary" onclick="uploadWallpaperFile()">Upload & Use</button>
+            <p class="desc">Photos are center-cropped, darkened for legibility, and transcoded to Baseline JPEG.</p>
+            <div class="input-action-row" style="margin-bottom:12px;">
+              <input type="file" id="wp-file-input" accept="image/*">
+              <button class="btn-primary" onclick="uploadWallpaperFile()">Upload &amp; Use</button>
             </div>
-            <div class="field" style="margin-top:14px;margin-bottom:0;">
-              <label>Active Wallpaper Source (/local/... or preset:...)</label>
-              <div style="display:flex;gap:8px;">
+            <div class="field">
+              <label>Active Wallpaper Source</label>
+              <div class="input-action-row">
                 <input type="text" id="cfg-wallpaper_source" placeholder="preset:amoled_rings or /local/wallpaper.jpg" oninput="markDirty()">
                 <button class="btn-secondary" onclick="selectWallpaperSource('')">Clear</button>
               </div>
@@ -1568,7 +1579,7 @@
           <div class="card">
             <h3>Wallpaper Rotation</h3>
             <p class="desc">Star multiple wallpapers in the gallery below to rotate through favorites automatically.</p>
-            <div class="field" style="margin-bottom:0;">
+            <div class="field">
               <label>Rotation Interval</label>
               <select id="cfg-wallpaper_cycle_minutes" onchange="markDirty()">
                 <option value="0">Off (Keep Selected Wallpaper)</option>
@@ -1583,29 +1594,75 @@
 
         <div class="card">
           <h3>Wallpaper Gallery</h3>
-          <p class="desc">Low-power AMOLED presets and uploaded custom wallpapers for this device.</p>
+          <p class="desc">AMOLED presets and uploaded wallpapers for this device.</p>
           <div id="wp-gallery-grid" class="wp-gallery"></div>
         </div>
       </section>
 
       <!-- ================================================================== -->
-      <!-- DEVICE SCOPE: 3. POWER                                             -->
+      <!-- DEVICE TAB 3: AUDIO & VOICE                                        -->
       <!-- ================================================================== -->
-      <section id="view-power" class="hidden">
+      <section id="view-audio_voice" class="hidden">
         <div class="page-header">
-          <h2>Power Management</h2>
-          <p>Configure sleep timeouts, wake gestures, docked screensaver behavior, and monitor battery health for this device.</p>
+          <h2>Audio &amp; Voice</h2>
+          <p>Configure on-device wake words, voice assistant behavior, sound chimes, and Music Assistant library sorting.</p>
         </div>
 
         <div class="grid-2">
           <div class="card">
-            <h3>Sleep & Wake Behavior</h3>
-            <p class="desc">Control inactivity timeouts, pickup-to-wake, tap-to-wake, docked screensaver, and hardware hibernate.</p>
+            <h3>Voice Assistant &amp; Wake Word</h3>
+            <p class="desc">Configure wake word operating mode, active wake word model, and visual profile.</p>
+            <div id="embedded-voice-primary" class="native-controls-box" style="margin-bottom:10px;"></div>
+
+            <div class="toggle-row" style="margin-bottom:10px;">
+              <span>Sync Active Room to Home Assistant Device Area</span>
+              <input type="checkbox" id="cfg-sync_device_area" onchange="markDirty()">
+            </div>
+
+            <details class="ha-details" style="margin-bottom:0;">
+              <summary>Wake Word Sensitivity (Per Model)</summary>
+              <div class="details-body">
+                <div id="embedded-voice-sens" class="native-controls-box"></div>
+              </div>
+            </details>
+          </div>
+
+          <div class="card">
+            <h3>Sound &amp; Media Player</h3>
+            <p class="desc">Adjust onboard alert volume, volume step size, default speaker, and library sort order.</p>
+            <div id="embedded-sound" class="native-controls-box" style="margin-bottom:8px;"></div>
+            <div id="embedded-music" class="native-controls-box" style="margin-bottom:12px;"></div>
+
+            <div class="field">
+              <label>Default Speaker Entity</label>
+              <select id="cfg-default_speaker" onchange="markDirty()"></select>
+            </div>
+            <div class="toggle-row">
+              <span>Auto-Switch Speaker &amp; Remote on Room Change</span>
+              <input type="checkbox" id="cfg-area_handoff" onchange="markDirty()">
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================================================================== -->
+      <!-- DEVICE TAB 4: POWER & BATTERY                                      -->
+      <!-- ================================================================== -->
+      <section id="view-power" class="hidden">
+        <div class="page-header">
+          <h2>Power &amp; Battery</h2>
+          <p>Configure screen timeouts, wake gestures, docked screensaver, and view live battery health.</p>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <h3>Sleep &amp; Wake Timeouts</h3>
+            <p class="desc">Inactivity timeouts, pickup-to-wake, tap-to-wake, docked screensaver, and hardware hibernate.</p>
             <div id="embedded-sleep" class="native-controls-box"></div>
           </div>
 
           <div class="card">
-            <h3>Battery & Power Telemetry</h3>
+            <h3>Battery &amp; Power Telemetry</h3>
             <p class="desc">Live battery charge level, charging status, PMIC voltage, and internal temperature.</p>
             <div id="embedded-battery" class="native-controls-box"></div>
           </div>
@@ -1613,210 +1670,42 @@
       </section>
 
       <!-- ================================================================== -->
-      <!-- DEVICE SCOPE: 4. VOICE ASSISTANT                                   -->
-      <!-- ================================================================== -->
-      <section id="view-voice" class="hidden">
-        <div class="page-header">
-          <h2>Voice Assistant</h2>
-          <p>Configure on-device wake words, detection sensitivity, and room context synchronization for Assist.</p>
-        </div>
-
-        <div class="grid-2">
-          <div class="card">
-            <h3>Wake Word & Microphone</h3>
-            <p class="desc">Hardware controls exposed by this device's voice pipeline.</p>
-            <div id="embedded-voice" class="native-controls-box"></div>
-          </div>
-
-          <div class="card">
-            <h3>Room Context Sync</h3>
-            <p class="desc">Automatically update this device's Home Assistant Area assignment when its active room changes so room-aware voice commands target the current room.</p>
-            <div class="toggle-row">
-              <span>Sync Active Room to Home Assistant Device Area</span>
-              <input type="checkbox" id="cfg-sync_device_area" onchange="markDirty()">
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- ================================================================== -->
-      <!-- DEVICE SCOPE: 5. AUDIO & MEDIA                                     -->
-      <!-- ================================================================== -->
-      <section id="view-audio" class="hidden">
-        <div class="page-header">
-          <h2>Audio & Media</h2>
-          <p>Configure onboard sound chimes, library sorting, and default speaker behavior for this device.</p>
-        </div>
-
-        <div class="grid-2">
-          <div class="card">
-            <h3>Sound & Library Sorting</h3>
-            <p class="desc">Adjust onboard alert volume, chimes, volume step size, and Music Assistant browse sort order.</p>
-            <div id="embedded-sound" class="native-controls-box" style="margin-bottom:10px;"></div>
-            <div id="embedded-music" class="native-controls-box"></div>
-          </div>
-
-          <div class="card">
-            <h3>Device Speaker & Room Handoff</h3>
-            <p class="desc">Select this device's default speaker and room media handoff behavior. (Shared AVR volume overrides are configured in System &rarr; Volume Routing.)</p>
-            <div class="field">
-              <label>Default Speaker Entity</label>
-              <select id="cfg-default_speaker" onchange="markDirty()"></select>
-            </div>
-            <div class="toggle-row" style="margin-bottom:12px;">
-              <span>Auto-Link Room Speaker & Remote on Room Change</span>
-              <input type="checkbox" id="cfg-area_handoff" onchange="markDirty()">
-            </div>
-            <button class="btn-secondary" onclick="navigateToView('volume_routing')">Configure Global Volume Routing &rarr;</button>
-          </div>
-        </div>
-      </section>
-
-      <!-- ================================================================== -->
-      <!-- DEVICE SCOPE: 6. ROAMING & WIREGUARD VPN                           -->
-      <!-- ================================================================== -->
-      <section id="view-roaming_vpn" class="hidden">
-        <div class="page-header">
-          <h2>Roaming &amp; WireGuard VPN</h2>
-          <p>Keep this device connected to Home Assistant and Latter when away from home over an encrypted ESPHome WireGuard tunnel.</p>
-        </div>
-
-        <div class="card" id="vpn-addon-missing-banner" style="margin-bottom:16px;border-color:var(--accent);">
-          <h3>Add-On Not Yet Installed on This Device</h3>
-          <p class="desc" style="margin-bottom:0;">This device does not currently report an active WireGuard component. To enable remote roaming on this device: <strong>1)</strong> Click <strong>Generate WireGuard Keys</strong> below, <strong>2)</strong> Copy the <strong>1-Line Mixin Package</strong> snippet in Box 1 into your device's YAML in ESPHome Device Builder, and <strong>3)</strong> Recompile.</p>
-        </div>
-
-        <div class="grid-2">
-          <div class="card">
-            <h3>System WireGuard Endpoint</h3>
-            <p class="desc">Configure your home WireGuard server endpoint and public key once for all roaming devices.</p>
-            <div class="field">
-              <label>Public Endpoint (Hostname/IP:Port)</label>
-              <input type="text" id="cfg-vpn_endpoint" placeholder="vpn.example.com:51820" oninput="markDirty()">
-            </div>
-            <div class="field">
-              <label>WireGuard Server Public Key (Base64)</label>
-              <input type="text" id="cfg-vpn_server_public_key" placeholder="Server Curve25519 Public Key" oninput="markDirty()">
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-              <div class="field" style="margin-bottom:0;">
-                <label>Tunnel Subnet (CIDR)</label>
-                <input type="text" id="cfg-vpn_subnet" placeholder="10.10.10.0/24" oninput="markDirty()">
-              </div>
-              <div class="field" style="margin-bottom:0;">
-                <label>Home Assistant Tunnel IP</label>
-                <input type="text" id="cfg-vpn_ha_ip" placeholder="10.10.10.1" oninput="markDirty()">
-              </div>
-            </div>
-          </div>
-
-          <div class="card">
-            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:4px;">
-              <h3 style="margin:0;">Device Roaming Identity</h3>
-              <button class="btn-primary" onclick="generateDeviceVpnKeys()">Generate WireGuard Keys</button>
-            </div>
-            <p class="desc">Generate a dedicated Curve25519 keypair and tunnel IP for this ESPHome device.</p>
-            <div class="toggle-row" style="margin-bottom:10px;">
-              <span>Enable Roaming WireGuard Profile</span>
-              <input type="checkbox" id="cfg-vpn_enabled" onchange="markDirty()">
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-              <div class="field">
-                <label>Device Tunnel IP</label>
-                <input type="text" id="cfg-vpn_client_ip" placeholder="10.10.10.2" oninput="markDirty()">
-              </div>
-              <div class="field">
-                <label>Phone Hotspot / Travel Wi-Fi SSID</label>
-                <input type="text" id="cfg-vpn_hotspot_ssid" placeholder="iPhone Hotspot" oninput="markDirty()">
-              </div>
-            </div>
-            <div class="field">
-              <label>Device Public Key (Add to WireGuard Server)</label>
-              <input type="text" id="cfg-vpn_public_key" readonly class="mono">
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-              <div class="field" style="margin-bottom:0;">
-                <label>Device Private Key</label>
-                <input type="text" id="cfg-vpn_private_key" class="mono" oninput="markDirty()">
-              </div>
-              <div class="field" style="margin-bottom:0;">
-                <label>Preshared Key (PSK)</label>
-                <input type="text" id="cfg-vpn_preshared_key" class="mono" oninput="markDirty()">
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="grid-2">
-          <div class="card">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-              <h3 style="margin:0;">1. ESPHome WireGuard & Hotspot YAML</h3>
-              <button class="btn-secondary" onclick="copyTextById('vpn-esphome-yaml')">Copy ESPHome YAML</button>
-            </div>
-            <p class="desc">Paste into your device's ESPHome YAML configuration to enable multi-Wi-Fi roaming and WireGuard.</p>
-            <pre id="vpn-esphome-yaml" class="mono" style="background:var(--input-bg);border:1px solid var(--border);border-radius:7px;padding:12px;overflow-x:auto;max-height:260px;margin:0;color:var(--text-strong);line-height:1.45;"></pre>
-          </div>
-
-          <div class="card">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-              <h3 style="margin:0;">2. WireGuard Server / HA Add-on Peer Config</h3>
-              <button class="btn-secondary" onclick="copyTextById('vpn-server-peer')">Copy Peer Config</button>
-            </div>
-            <p class="desc">Add this peer block to your WireGuard server (UniFi, OPNsense, or Home Assistant WireGuard Add-on).</p>
-            <pre id="vpn-server-peer" class="mono" style="background:var(--input-bg);border:1px solid var(--border);border-radius:7px;padding:12px;overflow-x:auto;max-height:260px;margin:0;color:var(--text-strong);line-height:1.45;"></pre>
-          </div>
-        </div>
-      </section>
-
-      <!-- ================================================================== -->
-      <!-- DEVICE SCOPE: 7. DIAGNOSTICS & IDENTITY                            -->
+      <!-- DEVICE TAB 5: ADMINISTRATION (NETWORK, IDENTITY, VPN, BLE, RAW)    -->
       <!-- ================================================================== -->
       <section id="view-system" class="hidden">
         <div class="page-header">
-          <h2>Diagnostics &amp; Identity</h2>
-          <p>Execute device actions, view network diagnostics, and configure device identity and tracking options.</p>
-        </div>
-
-        <div class="card" style="margin-bottom:16px;">
-          <h3>Device Actions</h3>
-          <p class="desc">One-tap actions exposed by this ESPHome device.</p>
-          <div id="embedded-actions" class="action-btn-grid"></div>
+          <h2>Device Administration</h2>
+          <p>Network diagnostics, firmware updates, device identity, BLE room tracking, and WireGuard roaming VPN.</p>
         </div>
 
         <div class="grid-2">
           <div class="card">
-            <h3>Network & Diagnostics</h3>
-            <p class="desc">Wi-Fi signal, IP address, uptime, memory, and firmware status.</p>
+            <h3>Network &amp; Firmware Diagnostics</h3>
+            <p class="desc">Wi-Fi signal, IP address, uptime, memory, and firmware update status.</p>
             <div id="embedded-network" class="native-controls-box"></div>
           </div>
 
           <div class="card">
-            <h3>Device Identity & Presence Tracking</h3>
-            <p class="desc">Configure this device's slug, archetype, and BLE beacon tracking.</p>
+            <h3>Device Identity &amp; BLE Room Tracking</h3>
+            <p class="desc">Configure device slug, group assignment, and Bluetooth room presence tracking.</p>
             <div class="field">
               <label>ESPHome Device Slug (sensor.&lt;slug&gt;_*)</label>
               <input type="text" id="cfg-device_slug" oninput="markDirty(); renderYamlGenerator();">
             </div>
             <div class="field">
-              <label>Device Archetype, Group &amp; Room Cards Per Page</label>
-              <div style="display:grid;grid-template-columns:1.4fr 1.2fr 0.7fr;gap:8px;">
+              <label>Device Type, Group &amp; Room Cards Per Page</label>
+              <div class="form-grid-3">
                 <select id="cfg-device_profile" onchange="markDirty()">
-                  <option value="mobile_display">Mobile Smart Display</option>
-                  <option value="stationary_display">Stationary Wall / Desk Display</option>
-                  <option value="headless_node">Headless Sensor / Button Node</option>
+                  <option value="mobile_display">Mobile Display</option>
+                  <option value="stationary_display">Stationary Display</option>
+                  <option value="headless_node">Headless / Sensor Node</option>
                 </select>
                 <select id="cfg-device_group" onchange="markDirty()"></select>
                 <input type="number" id="cfg-default_page_size" min="1" max="20" value="3" oninput="markDirty(); renderYamlGenerator();">
               </div>
             </div>
-            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
-              <button type="button" class="btn-secondary" onclick="createDeviceQuickBackup()">Backup This Device</button>
-              <button type="button" class="btn-secondary" onclick="exportBackupToComputer('device')">Download Device .JSON</button>
-              <button type="button" class="btn-secondary" onclick="navigateToView('fleet_sync')">Apply Profile &rarr;</button>
-              <button type="button" class="btn-danger" onclick="removeManagedDevice(STATE.entry_id, STATE.title)">Remove Device</button>
-            </div>
             <div class="toggle-row">
-              <span>Enable ESPHome BLE Proxy Room Tracking</span>
+              <span>Enable BLE Proxy Room Tracking</span>
               <input type="checkbox" id="cfg-native_ble_tracking" onchange="markDirty()">
             </div>
             <div class="toggle-row" style="margin-bottom:10px;">
@@ -1832,66 +1721,133 @@
               <label>BLE iBeacon UUID</label>
               <input type="text" id="cfg-ble_beacon_uuid" oninput="markDirty(); renderYamlGenerator();">
             </div>
-            <div class="field" style="margin-bottom:0;">
+            <div class="field">
               <label>External Room Sensor Override (Optional)</label>
               <select id="cfg-presence_entity" onchange="markDirty()"></select>
             </div>
-          </div>
-        </div>
-
-        <div class="card" style="margin-bottom:16px;">
-          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
-            <div>
-              <h3 style="margin:0;">Entity Inspector</h3>
-              <p class="desc" style="margin:4px 0 0;">Search and inspect all raw entities registered to this ESPHome device.</p>
-            </div>
-            <input type="text" id="esp-search" style="max-width:300px;" placeholder="Filter by name or entity_id..." oninput="renderRawEntityList()">
-          </div>
-          <div id="raw-entity-items" class="native-controls-box"></div>
-        </div>
-
-        </section>
-
-      <!-- ================================================================== -->
-      <!-- ADMINISTRATION (BOTH SCOPES): DEDICATED LOGS & NATIVE HA LOGS      -->
-      <!-- ================================================================== -->
-      <section id="view-logs" class="hidden">
-        <div class="page-header">
-          <h2>System &amp; Device Logs</h2>
-          <p>Inspect live Home Assistant <code>system_log</code> entries for Latter, ESPHome, and Music Assistant alongside Studio activity, or launch Home Assistant's native Log Viewer.</p>
-        </div>
-
-        <div class="card" style="margin-bottom:16px;">
-          <h3>Native Home Assistant Log &amp; Diagnostic Tools</h3>
-          <p class="desc">Jump directly to Home Assistant's built-in System Log viewer pre-filtered for Latter or your active ESPHome device.</p>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <button type="button" class="btn-primary" onclick="openNativeHaLogs('latter')">Open Native HA Logs (Filter: latter)</button>
-            <button type="button" class="btn-secondary" id="btn-native-dev-logs" onclick="openNativeHaLogs(STATE?.config?.device_slug || 'esphome')">Open Native HA Logs (Active Device)</button>
-            <button type="button" class="btn-secondary" onclick="openNativeHaLogs('esphome')">Open Native HA Logs (Filter: esphome)</button>
-            <button type="button" class="btn-secondary" onclick="openNativeHaIntegrations()">Open HA Latter Integration Page</button>
-          </div>
-        </div>
-
-        <div class="card">
-          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:10px;">
-            <div>
-              <h3 style="margin:0;">Live Combined Log Stream (<code>system_log</code> + Studio Events)</h3>
-              <p class="desc" style="margin:4px 0 0;">Automatically aggregates Home Assistant <code>system_log</code> warnings/errors for Latter &amp; ESPHome with Studio configuration events.</p>
-            </div>
-            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-              <select id="log-filter-select" style="width:auto;min-width:210px;" onchange="renderLogsView()">
-                <option value="all">All Latter &amp; ESPHome Logs</option>
-                <option value="device">Active Device Only</option>
-                <option value="latter">Latter Middleware Only</option>
-                <option value="errors">Warnings &amp; Errors Only</option>
-              </select>
-              <button type="button" class="btn-secondary" onclick="refreshState(false)">Refresh</button>
-              <button type="button" class="btn-secondary" onclick="copyTextById('internal-log-output')">Copy Log</button>
-              <button type="button" class="btn-danger" onclick="clearInternalLogs()">Clear Studio Events</button>
+            <div style="display:flex;justify-content:flex-end;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
+              <button type="button" class="btn-danger" onclick="removeManagedDevice(STATE.entry_id, STATE.title)">Remove Device from Latter</button>
             </div>
           </div>
-          <pre id="internal-log-output" class="mono" style="background:var(--input-bg);border:1px solid var(--border);border-radius:7px;padding:14px;overflow-x:auto;max-height:480px;margin:0;color:var(--text-strong);line-height:1.5;">No events logged yet.</pre>
         </div>
+
+        <!-- COLLAPSIBLE: ROAMING WIREGUARD VPN -->
+        <details class="ha-details">
+          <summary>Roaming WireGuard VPN Provisioning</summary>
+          <div class="details-body">
+            <div class="grid-2" style="margin-bottom:16px;">
+              <div>
+                <h3 style="margin:0 0 8px;font-size:14px;">System WireGuard Server Endpoint</h3>
+                <div class="field">
+                  <label>Public Endpoint (Hostname/IP:Port)</label>
+                  <input type="text" id="cfg-vpn_endpoint" placeholder="vpn.example.com:51820" oninput="markDirty()">
+                </div>
+                <div class="field">
+                  <label>Server Public Key (Base64)</label>
+                  <input type="text" id="cfg-vpn_server_public_key" placeholder="Server Curve25519 Public Key" oninput="markDirty()">
+                </div>
+                <div class="form-grid-2">
+                  <div class="field">
+                    <label>Tunnel Subnet (CIDR)</label>
+                    <input type="text" id="cfg-vpn_subnet" placeholder="10.10.10.0/24" oninput="markDirty()">
+                  </div>
+                  <div class="field">
+                    <label>Home Assistant Tunnel IP</label>
+                    <input type="text" id="cfg-vpn_ha_ip" placeholder="10.10.10.1" oninput="markDirty()">
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;">
+                  <h3 style="margin:0;font-size:14px;">Device Roaming Identity</h3>
+                  <button class="btn-primary" style="padding:6px 12px;font-size:12px;" onclick="generateDeviceVpnKeys()">Generate Keys</button>
+                </div>
+                <div class="toggle-row" style="margin-bottom:10px;">
+                  <span>Enable Roaming WireGuard Profile</span>
+                  <input type="checkbox" id="cfg-vpn_enabled" onchange="markDirty()">
+                </div>
+                <div class="form-grid-2">
+                  <div class="field">
+                    <label>Device Tunnel IP</label>
+                    <input type="text" id="cfg-vpn_client_ip" placeholder="10.10.10.2" oninput="markDirty()">
+                  </div>
+                  <div class="field">
+                    <label>Hotspot / Travel SSID</label>
+                    <input type="text" id="cfg-vpn_hotspot_ssid" placeholder="Phone Hotspot" oninput="markDirty()">
+                  </div>
+                </div>
+                <div class="field">
+                  <label>Device Public Key</label>
+                  <input type="text" id="cfg-vpn_public_key" readonly class="mono">
+                </div>
+                <div class="form-grid-2">
+                  <div class="field">
+                    <label>Device Private Key</label>
+                    <input type="text" id="cfg-vpn_private_key" class="mono" oninput="markDirty()">
+                  </div>
+                  <div class="field">
+                    <label>Preshared Key (PSK)</label>
+                    <input type="text" id="cfg-vpn_preshared_key" class="mono" oninput="markDirty()">
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="grid-2">
+              <div>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                  <strong style="font-size:13px;">1. ESPHome WireGuard &amp; Hotspot YAML</strong>
+                  <button class="btn-secondary" style="padding:4px 10px;font-size:11.5px;" onclick="copyTextById('vpn-esphome-yaml')">Copy YAML</button>
+                </div>
+                <pre id="vpn-esphome-yaml" class="mono" style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:10px;overflow-x:auto;max-height:220px;margin:0;"></pre>
+              </div>
+              <div>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                  <strong style="font-size:13px;">2. WireGuard Server Peer Config</strong>
+                  <button class="btn-secondary" style="padding:4px 10px;font-size:11.5px;" onclick="copyTextById('vpn-server-peer')">Copy Peer Config</button>
+                </div>
+                <pre id="vpn-server-peer" class="mono" style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:10px;overflow-x:auto;max-height:220px;margin:0;"></pre>
+              </div>
+            </div>
+          </div>
+        </details>
+
+        <!-- COLLAPSIBLE: BLE MIXIN SNIPPETS -->
+        <details class="ha-details">
+          <summary>BLE Beacon &amp; Scanner Proxy YAML Mixins</summary>
+          <div class="details-body">
+            <div class="grid-2">
+              <div style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                  <strong style="font-size:13px;">Option A: Portable Device (BLE Beacon)</strong>
+                  <button class="btn-secondary" style="padding:4px 10px;font-size:11.5px;" onclick="copyTextById('dev-ble-beacon-snip')">Copy</button>
+                </div>
+                <pre id="dev-ble-beacon-snip" class="mono" style="margin:0;padding:8px;background:var(--card);border:1px solid var(--border);border-radius:6px;overflow-x:auto;">packages:
+  latter.ble: github://slampton/esphome-latter-core/mixins/ble_beacon.yaml@main</pre>
+              </div>
+              <div style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                  <strong style="font-size:13px;">Option B: Stationary Node (BLE Scanner Proxy)</strong>
+                  <button class="btn-secondary" style="padding:4px 10px;font-size:11.5px;" onclick="copyTextById('dev-ble-proxy-snip')">Copy</button>
+                </div>
+                <pre id="dev-ble-proxy-snip" class="mono" style="margin:0;padding:8px;background:var(--card);border:1px solid var(--border);border-radius:6px;overflow-x:auto;">packages:
+  latter.proxy: github://slampton/esphome-latter-core/mixins/ble_proxy.yaml@main</pre>
+              </div>
+            </div>
+          </div>
+        </details>
+
+        <!-- COLLAPSIBLE: RAW ENTITY INSPECTOR -->
+        <details class="ha-details">
+          <summary>Raw ESPHome Entity Inspector</summary>
+          <div class="details-body">
+            <div style="margin-bottom:10px;">
+              <input type="text" id="esp-search" placeholder="Filter by entity name or entity_id..." oninput="renderRawEntityList()">
+            </div>
+            <div id="raw-entity-items" class="native-controls-box"></div>
+          </div>
+        </details>
       </section>
     </div>
   </div>
@@ -1906,7 +1862,7 @@ let PINNED = [];
 let CALENDARS = [];
 let IS_DIRTY = false;
 let INITIAL_FORM_LOADED = false;
-// If opened via 'Visit' link on a different hostname (e.g. nabu.casa vs local IP), match the referrer's HA origin
+
 try {
   if (document.referrer && window.parent === window) {
     const refUrl = new URL(document.referrer);
@@ -1915,6 +1871,7 @@ try {
     }
   }
 } catch (_e) {}
+
 const URL_PARAMS = new URLSearchParams(window.location.search);
 const ENTERED_VIA_HOUSEHOLD = ["system", "household"].includes(URL_PARAMS.get("scope"));
 let CURRENT_SCOPE = ENTERED_VIA_HOUSEHOLD ? "household" : "device";
@@ -1924,30 +1881,23 @@ let POLL_TIMER = null;
 
 const HOUSEHOLD_VIEWS = [
   "fleet_overview",
-  "room_tracking",
-  "fleet_sync",
-  "backups",
-  "remotes",
-  "volume_routing",
   "household",
-  "macros",
-  "studio_settings"
+  "remotes",
+  "fleet_sync",
+  "room_tracking",
+  "system_admin"
 ];
 
 const DEVICE_VIEWS = [
   "select_device_prompt",
   "dashboard",
   "home_display",
+  "audio_voice",
   "power",
-  "voice",
-  "audio",
-  "ble_addon",
-  "roaming_vpn",
   "system"
 ];
 
-const SHARED_ADMIN_VIEWS = ["logs"];
-const ALL_VIEWS = HOUSEHOLD_VIEWS.concat(DEVICE_VIEWS).concat(SHARED_ADMIN_VIEWS);
+const ALL_VIEWS = HOUSEHOLD_VIEWS.concat(DEVICE_VIEWS);
 
 const HA_CSS_VARS = [
   "--primary-background-color",
@@ -1961,6 +1911,15 @@ const HA_CSS_VARS = [
   "--success-color",
   "--warning-color",
   "--error-color"
+];
+
+const DOCK_APP_META = [
+  {token: "music",  label: "Music"},
+  {token: "alarm",  label: "Home Hub"},
+  {token: "room",   label: "Room"},
+  {token: "remote", label: "Remote"},
+  {token: "games",  label: "Games"},
+  {token: "tools",  label: "Tools"}
 ];
 
 const sysMedia = window.matchMedia("(prefers-color-scheme: dark)");
@@ -2086,7 +2045,7 @@ function renderLogsView() {
 
   const devBtn = document.getElementById("btn-native-dev-logs");
   if (devBtn && slug) {
-    devBtn.textContent = `Open Native HA Logs (${slug})`;
+    devBtn.textContent = `HA Logs (${slug})`;
   }
 
   const filtered = allLogs.filter(l => {
@@ -2143,8 +2102,6 @@ async function clearInternalLogs() {
   }
 }
 
-
-
 function markDirty() {
   IS_DIRTY = true;
   document.getElementById("dirty-indicator").classList.add("visible");
@@ -2162,7 +2119,7 @@ async function onThemeChanged(themePref) {
     headers: {"Content-Type": "application/json"},
     body: JSON.stringify({command: "set_theme", web_theme: themePref})
   });
-  if (resp.ok) showToast(`Appearance set to ${themePref}`);
+  if (resp.ok) showToast(`Theme set to ${themePref}`);
 }
 
 function updateTopHeaderForScope() {
@@ -2195,9 +2152,7 @@ function setScope(scope, targetView=null) {
 }
 
 function switchView(viewId, btnEl) {
-  const neededScope = SHARED_ADMIN_VIEWS.includes(viewId)
-    ? CURRENT_SCOPE
-    : (HOUSEHOLD_VIEWS.includes(viewId) ? "household" : "device");
+  const neededScope = HOUSEHOLD_VIEWS.includes(viewId) ? "household" : "device";
   if (CURRENT_SCOPE !== neededScope) {
     setScope(neededScope, viewId);
     return;
@@ -2261,6 +2216,76 @@ function populateSelect(selId, items, selectedVal, allowEmpty=true) {
   });
 }
 
+function renderDockPillsFromInput() {
+  const box = document.getElementById("dock-pills-container");
+  const inp = document.getElementById("cfg-dock_apps");
+  if (!box || !inp) return;
+  const rawTokens = inp.value
+    .split(/[,;| ]+/)
+    .map(t => t.trim().toLowerCase())
+    .filter(Boolean);
+
+  const activeTokens = [];
+  rawTokens.forEach(t => {
+    if (DOCK_APP_META.some(m => m.token === t) && !activeTokens.includes(t)) {
+      activeTokens.push(t);
+    }
+  });
+  const disabledTokens = DOCK_APP_META
+    .map(m => m.token)
+    .filter(t => !activeTokens.includes(t));
+
+  const allOrdered = activeTokens.concat(disabledTokens);
+  box.innerHTML = allOrdered.map((tok) => {
+    const meta = DOCK_APP_META.find(m => m.token === tok);
+    const isEn = activeTokens.includes(tok);
+    const actIdx = activeTokens.indexOf(tok);
+    const canLeft = isEn && actIdx > 0;
+    const canRight = isEn && actIdx < activeTokens.length - 1;
+    return `<div class="dock-pill ${isEn ? 'enabled' : ''}" onclick="toggleDockAppToken('${tok}')">
+      ${canLeft ? `<span class="move-arrow" title="Move Left" onclick="event.stopPropagation(); moveDockAppToken('${tok}', -1)">◀</span>` : ''}
+      <span>${isEn ? '✓ ' : '+ '}${meta ? meta.label : tok}</span>
+      ${canRight ? `<span class="move-arrow" title="Move Right" onclick="event.stopPropagation(); moveDockAppToken('${tok}', 1)">▶</span>` : ''}
+    </div>`;
+  }).join("");
+}
+
+function toggleDockAppToken(tok) {
+  const inp = document.getElementById("cfg-dock_apps");
+  if (!inp) return;
+  let active = inp.value
+    .split(/[,;| ]+/)
+    .map(t => t.trim().toLowerCase())
+    .filter(t => DOCK_APP_META.some(m => m.token === t));
+  if (active.includes(tok)) {
+    if (active.length <= 1) return;
+    active = active.filter(t => t !== tok);
+  } else {
+    active.push(tok);
+  }
+  inp.value = active.join(",");
+  markDirty();
+  renderDockPillsFromInput();
+}
+
+function moveDockAppToken(tok, dir) {
+  const inp = document.getElementById("cfg-dock_apps");
+  if (!inp) return;
+  const active = inp.value
+    .split(/[,;| ]+/)
+    .map(t => t.trim().toLowerCase())
+    .filter(t => DOCK_APP_META.some(m => m.token === t));
+  const idx = active.indexOf(tok);
+  const swapIdx = idx + dir;
+  if (idx < 0 || swapIdx < 0 || swapIdx >= active.length) return;
+  const tmp = active[idx];
+  active[idx] = active[swapIdx];
+  active[swapIdx] = tmp;
+  inp.value = active.join(",");
+  markDirty();
+  renderDockPillsFromInput();
+}
+
 function toggleSurveyFastMode(enabled) {
   if (POLL_TIMER) clearInterval(POLL_TIMER);
   const intervalMs = enabled ? 1500 : 5000;
@@ -2283,7 +2308,7 @@ function renderRssiBars(surveyRows, packetsSeen) {
     const offSign = r.offset_db > 0 ? `+${r.offset_db}` : `${r.offset_db}`;
     const ageText = hasSignal ? `${r.age_seconds}s ago` : "No signal yet";
     const distText = (hasSignal && r.distance_m != null)
-      ? ` &bull; Est. Distance: <strong style="color:var(--text-strong);">~${r.distance_m}m (${r.distance_ft}ft)</strong>`
+      ? ` &bull; Distance: <strong style="color:var(--text-strong);">~${r.distance_m}m (${r.distance_ft}ft)</strong>`
       : "";
     const sigText = hasSignal
       ? `Raw: <strong>${r.raw_rssi} dBm</strong> &bull; Offset: <strong>${offSign} dB</strong> &rarr; Effective: <strong style="color:var(--accent);">${r.effective_rssi} dBm</strong>${distText}`
@@ -2292,19 +2317,19 @@ function renderRssiBars(surveyRows, packetsSeen) {
       ? `<span class="state-badge" style="border-color:var(--success);color:var(--success);margin-left:6px;">ACTIVE</span>`
       : "";
 
-    return `<div style="background:var(--input-bg);border:1px solid ${r.is_winner ? 'var(--accent)' : 'var(--border)'};border-radius:8px;padding:10px 12px;margin-bottom:8px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:5px;">
+    return `<div style="background:var(--input-bg);border:1px solid ${r.is_winner ? 'var(--accent)' : 'var(--border)'};border-radius:10px;padding:11px 13px;margin-bottom:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:6px;">
         <div>
-          <strong style="color:var(--text-strong);font-size:13.5px;">${r.area_name}</strong>
+          <strong style="color:var(--text-strong);font-size:13.5px;font-weight:500;">${r.area_name}</strong>
           <small style="color:var(--muted);margin-left:6px;">(${r.scanner} &bull; ${ageText})</small>
           ${winBadge}
         </div>
-        <div style="display:flex;align-items:center;gap:4px;">
-          <button class="btn-secondary" style="padding:4px 8px;font-size:11.5px;" onclick="setBleOffset('${r.area_id}', ${Number(r.offset_db) - 1})">-1 dB</button>
+        <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">
+          <button class="btn-secondary" style="padding:4px 8px;font-size:12px;" onclick="setBleOffset('${r.area_id}', ${Number(r.offset_db) - 1})">-1 dB</button>
           <span class="state-badge" style="min-width:52px;text-align:center;">${offSign} dB</span>
-          <button class="btn-secondary" style="padding:4px 8px;font-size:11.5px;" onclick="setBleOffset('${r.area_id}', ${Number(r.offset_db) + 1})">+1 dB</button>
-          ${r.offset_db !== 0 ? `<button class="btn-danger" style="padding:4px 7px;font-size:11px;" title="Reset to 0 dB" onclick="setBleOffset('${r.area_id}', 0)">0</button>` : ''}
-          <button class="btn-secondary" style="padding:4px 10px;font-size:11.5px;margin-left:4px;border-color:var(--accent);color:var(--accent);" title="Auto-calculate dB offset so this room wins at your current spot" onclick="autoCalibrateHere('${r.area_id}')">Prioritize Here</button>
+          <button class="btn-secondary" style="padding:4px 8px;font-size:12px;" onclick="setBleOffset('${r.area_id}', ${Number(r.offset_db) + 1})">+1 dB</button>
+          ${r.offset_db !== 0 ? `<button class="btn-danger" style="padding:4px 7px;font-size:11.5px;" title="Reset to 0 dB" onclick="setBleOffset('${r.area_id}', 0)">0</button>` : ''}
+          <button class="btn-secondary" style="padding:4px 10px;font-size:12px;border-color:var(--accent);color:var(--accent);" onclick="autoCalibrateHere('${r.area_id}')">Calibrate Current Room</button>
         </div>
       </div>
       <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">${sigText}</div>
@@ -2320,6 +2345,7 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
   const groups = STATE?.device_groups || [];
   const profiles = STATE?.saved_profiles || [];
   const backups = STATE?.vault_backups || [];
+  const live = STATE?.live || {};
 
   const profDevLbl = document.getElementById("prof-active-dev-label");
   if (profDevLbl) profDevLbl.textContent = STATE?.title || cfg?.device_slug || "Active Device";
@@ -2332,7 +2358,14 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
     ).join("");
   }
 
-  // Populate Device Group selector on the Device Identity card
+  const quickProfSel = document.getElementById("quick-profile-select");
+  if (quickProfSel && profiles.length) {
+    const prevP = quickProfSel.value;
+    quickProfSel.innerHTML = profiles.map(p =>
+      `<option value="${p.id}" ${p.id === prevP ? 'selected' : ''}>${p.name}</option>`
+    ).join("");
+  }
+
   const devGrpSel = document.getElementById("cfg-device_group");
   if (devGrpSel && groups.length) {
     const curGrp = cfg?.device_group || "handhelds";
@@ -2341,10 +2374,9 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
     ).join("");
   }
 
-  // Populate Profile Target Scope & Live Group Control Filter dropdowns
   const targetScopes = [
     {id: "current", name: `Current Device (${STATE?.title || cfg?.device_slug || 'Active'})`},
-    {id: "all", name: `All Onboarded Devices (${(fleetDevices || []).length})`}
+    {id: "all", name: `All Devices (${(fleetDevices || []).length})`}
   ];
   groups.forEach(g => {
     const cnt = (fleetDevices || []).filter(d => d.device_group === g.id).length;
@@ -2371,10 +2403,10 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
     ];
     groups.forEach(g => {
       const cnt = (fleetDevices || []).filter(d => d.device_group === g.id).length;
-      filterOpts.push({id: `group:${g.id}`, name: `Target Group: ${g.name} (${cnt})`});
+      filterOpts.push({id: `group:${g.id}`, name: `Group: ${g.name} (${cnt})`});
     });
-    filterOpts.push({id: "arch:mobile_display", name: "Archetype: Mobile Displays"});
-    filterOpts.push({id: "arch:stationary_display", name: "Archetype: Stationary Displays"});
+    filterOpts.push({id: "arch:mobile_display", name: "Type: Mobile Displays"});
+    filterOpts.push({id: "arch:stationary_display", name: "Type: Stationary Displays"});
     grpFilterSel.innerHTML = filterOpts.map(o =>
       `<option value="${o.id}" ${o.id === activeFilter ? 'selected' : ''}>${o.name}</option>`
     ).join("");
@@ -2383,7 +2415,12 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
   const rowsHtml = (fleetDevices || []).map(d => {
     const spk = (d.active_speaker || "").replace("media_player.", "");
     const spkMeta = (d.has_audio && spk) ? ` &bull; Speaker: <strong>${spk}</strong>` : "";
-    const proxyMeta = d.ble_closest_proxy ? ` &bull; Proxy: ${d.ble_closest_proxy}` : "";
+    const batMeta = (d.battery_level !== null && d.battery_level !== undefined)
+      ? ` &bull; Battery: <strong>${d.battery_level}%${d.is_charging ? ' ⚡' : ''}</strong>`
+      : "";
+    const wifiMeta = (d.wifi_rssi !== null && d.wifi_rssi !== undefined)
+      ? ` &bull; Wi-Fi: ${d.wifi_rssi} dBm`
+      : "";
     const isActDev = DEVICE_SELECTED && d.is_current && CURRENT_SCOPE === "device";
     const actAction = d.is_current
       ? `selectCurrentDevice()`
@@ -2396,11 +2433,11 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
         ${d.title}
         <span class="state-badge" style="margin-left:6px;">${d.device_group_name || d.device_group || 'Unassigned'}</span>
         ${isActDev ? '<span class="state-badge" style="margin-left:4px;border-color:var(--success);color:var(--success);">Active</span>' : ''}
-        <small>Slug: <code>${d.device_slug}</code> &bull; Room: <strong>${d.active_area_name}</strong>${spkMeta}${proxyMeta}</small>
+        <small>Room: <strong>${d.active_area_name}</strong>${batMeta}${spkMeta}${wifiMeta}</small>
       </div>
       <div class="widget">
-        <select style="min-width:140px;" title="Assign Device Group" onchange="assignDeviceGroup('${d.device_slug}', this.value)">${grpOpts}</select>
-        <button class="btn-primary" onclick="${actAction}">Manage Device</button>
+        <select style="min-width:135px;" title="Device Group" onchange="assignDeviceGroup('${d.device_slug}', this.value)">${grpOpts}</select>
+        <button class="btn-primary" onclick="${actAction}">Manage</button>
         <button class="btn-danger" title="Remove device from Latter" onclick="removeManagedDevice('${d.entry_id}', '${d.title.replace(/'/g, "")}')">✕</button>
       </div>
     </div>`;
@@ -2425,7 +2462,6 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
     }
   }
 
-  // Render Reusable Profiles List
   const profBox = document.getElementById("saved-profiles-list");
   if (profBox) {
     if (!profiles.length) {
@@ -2448,17 +2484,16 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
     }
   }
 
-  // Render Device Groups List
   const grpBox = document.getElementById("device-groups-list");
   if (grpBox) {
     grpBox.innerHTML = groups.map(g => {
       const members = (fleetDevices || []).filter(d => d.device_group === g.id);
-      const memNames = members.length ? members.map(m => m.title).join(", ") : "No devices assigned";
+      const memNames = members.length ? members.map(m => m.title).join(", ") : "None";
       const isDefault = ["unassigned", "handhelds", "bedrooms", "common_areas", "wall_panels", "sensors"].includes(g.id);
       return `<div class="native-ctrl-row">
         <div class="lbl">
-          ${g.name} <span class="state-badge" style="margin-left:6px;">${members.length} device${members.length === 1 ? '' : 's'}</span>
-          <small>${g.description || ''} &bull; Members: <strong>${memNames}</strong></small>
+          ${g.name} <span class="state-badge" style="margin-left:6px;">${members.length}</span>
+          <small>${g.description || ''} &bull; Devices: <strong>${memNames}</strong></small>
         </div>
         <div class="widget">
           ${!isDefault ? `<button class="btn-danger" onclick="deleteDeviceGroup('${g.id}')">✕</button>` : ''}
@@ -2467,7 +2502,6 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
     }).join("");
   }
 
-  // Render Filtered Live Group Controls
   const fBox = document.getElementById("fleet-controls-list");
   if (fBox) {
     if (!fleetControls || !fleetControls.length) {
@@ -2501,7 +2535,7 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
         return `<div class="native-ctrl-row">
           <div class="lbl">
             ${fc.name}
-            <small>${fc.section_title} &bull; Applies to ${devCount} matching device${devCount > 1 ? 's' : ''}</small>
+            <small>${fc.section_title} &bull; ${devCount} device${devCount > 1 ? 's' : ''}</small>
           </div>
           <div class="widget">${widget}</div>
         </div>`;
@@ -2510,26 +2544,25 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
     }
   }
 
-  // Render Internal Snapshot Vault List
   const vBox = document.getElementById("vault-backups-list");
   if (vBox) {
     if (!backups.length) {
-      vBox.innerHTML = `<p class="desc">No snapshots saved in the internal vault yet. Click <strong>Save to Internal Vault</strong> above to create a restore point.</p>`;
+      vBox.innerHTML = `<p class="desc">No local backups saved yet.</p>`;
     } else {
       vBox.innerHTML = backups.map(b => {
         const isSys = b.scope === "system";
         const scopeBadge = isSys
-          ? `<span class="state-badge" style="border-color:var(--accent);color:var(--accent);">SYSTEM (${b.device_count} dev)</span>`
+          ? `<span class="state-badge">SYSTEM (${b.device_count})</span>`
           : `<span class="state-badge">DEVICE: ${b.target_device}</span>`;
         const tsClean = (b.created_at || "").replace("T", " ").slice(0, 19);
         return `<div class="native-ctrl-row">
           <div class="lbl">
             ${b.name} ${scopeBadge}
-            <small>Created: <strong>${tsClean}</strong> &bull; Saved ESPHome Controls: <strong>${b.control_count || 0}</strong> &bull; v${b.version || ''}</small>
+            <small>${tsClean} &bull; ${b.control_count || 0} ESPHome settings &bull; v${b.version || ''}</small>
           </div>
           <div class="widget">
             <button class="btn-primary" onclick="restoreVaultSnapshot('${b.id}', '${b.name.replace(/'/g, "")}')">Restore</button>
-            <button class="btn-secondary" onclick="downloadVaultSnapshot('${b.id}')">Download .JSON</button>
+            <button class="btn-secondary" onclick="downloadVaultSnapshot('${b.id}')">Download</button>
             <button class="btn-danger" onclick="deleteVaultSnapshot('${b.id}')">✕</button>
           </div>
         </div>`;
@@ -2537,10 +2570,34 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
     }
   }
 
-  document.getElementById("hh-sum-alarm").textContent = cfg.alarm_entity || "None";
+  const wCond = live.weather_condition && live.weather_condition !== "unknown"
+    ? `${live.weather_temp != null ? live.weather_temp + '° • ' : ''}${live.weather_condition}`
+    : (cfg.weather_entity || "Not mapped");
+  document.getElementById("hh-sum-weather").textContent = wCond;
+  document.getElementById("hh-sum-alarm").textContent = cfg.alarm_entity
+    ? `${(live.alarm_state || 'disarmed').replace(/_/g, ' ')} (${cfg.alarm_entity})`
+    : "Not mapped";
+  document.getElementById("hh-sum-thermostat").textContent = cfg.thermostat_entity
+    ? `${live.thermostat_state || 'off'}${live.thermostat_temp != null ? ' • ' + live.thermostat_temp + '°' : ''}`
+    : "Auto / Default";
+  document.getElementById("hh-sum-entry").textContent = `Lock: ${live.lock_state || 'locked'} • Garage: ${live.garage_state || 'closed'}`;
+  document.getElementById("hh-sum-vacuum").textContent = `${live.vacuum_state || 'docked'}`;
   document.getElementById("hh-sum-camera").textContent = cfg.camera_entity || "None";
-  document.getElementById("hh-sum-weather").textContent = cfg.weather_entity || "None";
   document.getElementById("hh-sum-ble").textContent = String(Object.keys(cfg.ble_room_offsets || {}).length);
+}
+
+async function applyQuickProfileFromOverview() {
+  const sel = document.getElementById("quick-profile-select");
+  if (!sel || !sel.value) return;
+  const resp = await fetch(API_URL, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({command: "apply_profile", profile_id: sel.value, target_scope: "current"})
+  });
+  if (resp.ok) {
+    applyStateToDom(await resp.json(), true);
+    showToast("Applied configuration profile to device");
+  }
 }
 
 async function fleetSelect(entityIds, option) {
@@ -2587,7 +2644,7 @@ async function setBleOffset(areaId, offsetDb) {
   });
   if (resp.ok) {
     applyStateToDom(await resp.json(), false);
-    showToast("Saved global BLE room offset");
+    showToast("Saved BLE room offset");
   }
 }
 
@@ -2599,7 +2656,7 @@ async function autoCalibrateHere(areaId) {
   });
   if (resp.ok) {
     applyStateToDom(await resp.json(), false);
-    showToast("Calibrated & prioritized current room globally");
+    showToast("Calibrated current room offset");
   }
 }
 
@@ -2640,17 +2697,21 @@ async function sendTestNotification() {
   }
 }
 
-function renderLiveRoomCards(cards) {
+function renderLiveRoomCards(cards, areaName) {
   const box = document.getElementById("live-room-cards");
-  document.getElementById("st-card-count").textContent = (cards || []).length;
+  const cntEl = document.getElementById("st-card-count");
+  const areaEl = document.getElementById("st-room-cards-area");
+  if (areaEl) areaEl.textContent = areaName || "Home";
+  if (cntEl) cntEl.textContent = String((cards || []).length);
+  if (!box) return;
   if (!cards || !cards.length) {
-    box.innerHTML = `<p class="desc">No curated entities found in this area.</p>`;
+    box.innerHTML = `<p class="desc" style="margin:0;">No controllable room entities found in this area.</p>`;
     return;
   }
   box.innerHTML = cards.map(c => `
     <div class="room-mini-card ${c.active ? 'on' : ''}" onclick="toggleRoomCard('${c.id}')">
-      <div>
-        <strong>${c.name}</strong>
+      <div style="min-width:0;padding-right:8px;">
+        <strong style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${c.name}</strong>
         <small>${c.type}</small>
       </div>
       <span class="state-badge">${c.active ? 'ON' : 'OFF'}</span>
@@ -2675,10 +2736,15 @@ function renderNativeControlRow(item, showEntityId=false) {
   let widgetHtml = `<span class="state-badge">${stateText}</span>`;
 
   if (item.domain === "button") {
-    widgetHtml = `<button class="btn-secondary" onclick="espAction('${item.entity_id}', 'press')">Run</button>`;
+    widgetHtml = `<button class="btn-secondary" style="padding:5px 12px;font-size:12px;" onclick="espAction('${item.entity_id}', 'press')">Run</button>`;
+  } else if (item.domain === "update") {
+    const hasUpd = item.state === "on";
+    widgetHtml = hasUpd
+      ? `<button class="btn-primary" style="padding:5px 12px;font-size:12px;" onclick="espAction('${item.entity_id}', 'install')">Install Update</button>`
+      : `<span class="state-badge">Up to date</span><button class="btn-secondary" style="padding:4px 10px;font-size:11.5px;" onclick="espAction('${item.entity_id}', 'check')">Check</button>`;
   } else if (item.domain === "switch" || item.domain === "light" || item.domain === "fan") {
     const isOn = item.state === "on";
-    widgetHtml = `<button class="${isOn ? 'btn-primary' : 'btn-secondary'}" onclick="espAction('${item.entity_id}', 'toggle')">${isOn ? 'ON' : 'OFF'}</button>`;
+    widgetHtml = `<button class="${isOn ? 'btn-primary' : 'btn-secondary'}" style="padding:5px 12px;font-size:12px;" onclick="espAction('${item.entity_id}', 'toggle')">${isOn ? 'ON' : 'OFF'}</button>`;
   } else if (item.domain === "select" && item.options && item.options.length) {
     const opts = item.options.map(o => `<option value="${o}" ${o===item.state?'selected':''}>${o}</option>`).join("");
     widgetHtml = `<select onchange="espSelect('${item.entity_id}', this.value)">${opts}</select>`;
@@ -2715,10 +2781,19 @@ function renderCohesiveDeviceSections() {
   const totalCount = sections.reduce((acc, s) => acc + s.count, 0);
   document.getElementById("nav-esp-badge").textContent = totalCount;
 
+  // Split "room" section items into UI items (Default Category / Show All) vs BLE / Handoff
   const roomItems = getSectionItems("room");
-  document.getElementById("embedded-room-ble").innerHTML = roomItems.map(it => renderNativeControlRow(it)).join("");
+  const roomUiItems = [];
+  const roomBleItems = [];
+  roomItems.forEach(it => {
+    const low = `${it.name} ${it.entity_id}`.toLowerCase();
+    if (low.includes("category")) roomUiItems.push(it);
+    else roomBleItems.push(it);
+  });
 
-  const homeItems = getSectionItems("home");
+  document.getElementById("embedded-room-ble").innerHTML = roomBleItems.map(it => renderNativeControlRow(it)).join("");
+
+  const homeItems = getSectionItems("home").concat(roomUiItems);
   document.getElementById("embedded-home").innerHTML = homeItems.length
     ? homeItems.map(it => renderNativeControlRow(it)).join("")
     : `<p class="desc">No on-device Home Screen entities exposed.</p>`;
@@ -2729,12 +2804,22 @@ function renderCohesiveDeviceSections() {
   const sleepItems = getSectionItems("sleep");
   document.getElementById("embedded-sleep").innerHTML = sleepItems.length
     ? sleepItems.map(it => renderNativeControlRow(it)).join("")
-    : `<p class="desc">No on-device Sleep & Wake entities exposed.</p>`;
+    : `<p class="desc">No on-device Sleep &amp; Wake entities exposed.</p>`;
 
+  // Split Voice items into primary controls vs per-model sensitivity dropdowns
   const voiceItems = getSectionItems("voice");
-  document.getElementById("embedded-voice").innerHTML = voiceItems.length
-    ? voiceItems.map(it => renderNativeControlRow(it)).join("")
-    : `<p class="desc">No on-device Voice Assistant entities exposed by this firmware.</p>`;
+  const voicePrimary = [];
+  const voiceSens = [];
+  voiceItems.forEach(it => {
+    if ((it.name || "").toLowerCase().includes("sensitivity")) voiceSens.push(it);
+    else voicePrimary.push(it);
+  });
+  document.getElementById("embedded-voice-primary").innerHTML = voicePrimary.length
+    ? voicePrimary.map(it => renderNativeControlRow(it)).join("")
+    : `<p class="desc">No on-device Voice Assistant entities exposed.</p>`;
+  document.getElementById("embedded-voice-sens").innerHTML = voiceSens.length
+    ? voiceSens.map(it => renderNativeControlRow(it)).join("")
+    : `<p class="desc">No per-model sensitivity controls exposed.</p>`;
 
   const soundItems = getSectionItems("sound");
   document.getElementById("embedded-sound").innerHTML = soundItems.map(it => renderNativeControlRow(it)).join("");
@@ -2757,36 +2842,38 @@ function renderCohesiveDeviceSections() {
   });
   document.getElementById("embedded-remote-general").innerHTML = slotBuckets.general.map(it => renderNativeControlRow(it)).join("");
 
+  // Render Quick Actions right at the top of Device Overview!
   const actionItems = getSectionItems("actions");
-  document.getElementById("embedded-actions").innerHTML = actionItems.map(it =>
-    `<button class="btn-action" title="${it.name}" onclick="espAction('${it.entity_id}', 'press')">${it.name}</button>`
-  ).join("");
+  const qaBox = document.getElementById("dash-quick-actions");
+  if (qaBox) {
+    qaBox.innerHTML = actionItems.length
+      ? actionItems.map(it =>
+          `<button class="btn-chip" onclick="espAction('${it.entity_id}', 'press')">${it.name}</button>`
+        ).join("")
+      : `<span style="color:var(--muted);font-size:12.5px;">No quick action buttons exposed by this device.</span>`;
+  }
 
   const batItems = getSectionItems("battery");
   document.getElementById("embedded-battery").innerHTML = batItems.length
     ? batItems.map(it => renderNativeControlRow(it)).join("")
     : `<p class="desc">No battery telemetry entities reported.</p>`;
 
-  const netItems = getSectionItems("network").concat(getSectionItems("other"));
+  const netItems = getSectionItems("network");
   document.getElementById("embedded-network").innerHTML = netItems.length
     ? netItems.map(it => renderNativeControlRow(it)).join("")
     : `<p class="desc">No network or diagnostic entities reported.</p>`;
 
-  // Populate the primary Device Controls & Live Sensors box on Device Overview
+  // Only show the extra "Device Sensors & Controls" card on Overview if the device has "other" entities or is a sensor/headless node
+  const otherItems = getSectionItems("other");
+  const sensorCard = document.getElementById("dash-sensor-entities-card");
   const dashBox = document.getElementById("dash-device-entities");
-  if (dashBox) {
-    let primaryItems = getSectionItems("other")
-      .concat(getSectionItems("room"))
-      .concat(getSectionItems("home"))
-      .concat(getSectionItems("display"))
-      .concat(getSectionItems("battery"))
-      .concat(getSectionItems("actions"));
-    if (!primaryItems.length) {
-      primaryItems = getSectionItems("network");
+  if (sensorCard && dashBox) {
+    if (otherItems.length > 0) {
+      sensorCard.classList.remove("hidden");
+      dashBox.innerHTML = otherItems.map(it => renderNativeControlRow(it, false)).join("");
+    } else {
+      sensorCard.classList.add("hidden");
     }
-    dashBox.innerHTML = primaryItems.length
-      ? primaryItems.slice(0, 18).map(it => renderNativeControlRow(it, true)).join("")
-      : `<p class="desc">No configurable controls or sensors reported by this device yet.</p>`;
   }
 
   renderRawEntityList();
@@ -2830,14 +2917,14 @@ function renderWallpaperGallery(wallpapers, slug, shape) {
     const thumbUrl = `/api/latter/wallpaper/${slug}?w=240&h=240&shape=${shapeClass}&src=${encSrc}`;
     const starLabel = wp.favorite ? "★ Fav" : "☆ Fav";
     const delBtn = wp.deletable
-      ? `<button class="btn-danger" onclick="deleteWallpaper('${wp.id}')">✕</button>`
+      ? `<button class="btn-danger" style="padding:5px 8px;" onclick="deleteWallpaper('${wp.id}')">✕</button>`
       : "";
     return `<div class="wp-card ${wp.active ? 'active' : ''}">
       <img class="wp-thumb ${shapeClass}" src="${thumbUrl}" loading="lazy" alt="${wp.name}">
       <div class="wp-title">${wp.name}</div>
       <div class="wp-actions">
-        <button class="${wp.active ? 'btn-primary' : 'btn-secondary'}" onclick="selectWallpaperSource('${wp.id}')">${wp.active ? 'Active' : 'Use'}</button>
-        <button class="${wp.favorite ? 'btn-primary' : 'btn-secondary'}" onclick="toggleWallpaperFav('${wp.id}')">${starLabel}</button>
+        <button class="${wp.active ? 'btn-primary' : 'btn-secondary'}" style="padding:5px 10px;font-size:12px;" onclick="selectWallpaperSource('${wp.id}')">${wp.active ? 'Active' : 'Use'}</button>
+        <button class="${wp.favorite ? 'btn-primary' : 'btn-secondary'}" style="padding:5px 10px;font-size:12px;" onclick="toggleWallpaperFav('${wp.id}')">${starLabel}</button>
         ${delBtn}
       </div>
     </div>`;
@@ -2880,7 +2967,7 @@ async function selectWallpaperSource(sourceId) {
   });
   if (resp.ok) {
     applyStateToDom(await resp.json(), false);
-    showToast(sourceId ? "Wallpaper activated" : "Wallpaper disabled");
+    showToast(sourceId ? "Wallpaper activated" : "Wallpaper cleared");
   }
 }
 
@@ -2916,7 +3003,7 @@ async function espAction(entity_id, action) {
   });
   if (resp.ok) {
     applyStateToDom(await resp.json(), false);
-    showToast(`${action.toUpperCase()}: ${entity_id}`);
+    showToast(`Executed ${action} on ${entity_id}`);
   }
 }
 
@@ -3041,7 +3128,7 @@ function renderYamlGenerator() {
   const incActions = document.getElementById("yg-actions")?.checked;
 
   const lines = [
-    `# Latter v1.7+ ESPHome Companion Wire Snippet for '${nodeHyphen}' (slug: ${slug})`,
+    `# Latter v2.2+ ESPHome Companion Wire Snippet for '${nodeHyphen}' (slug: ${slug})`,
     `esphome:`,
     `  name: ${nodeHyphen}`,
     ``
@@ -3051,7 +3138,6 @@ function renderYamlGenerator() {
     lines.push(`api:`);
     lines.push(`  actions:`);
     if (incBrowse) {
-      lines.push(`    # 5-Slot List Callback (Music, Room Picker 'room_areas', Calendar)`);
       lines.push(`    - action: set_browse_slots`);
       lines.push(`      variables:`);
       lines.push(`        mode: string`);
@@ -3067,7 +3153,6 @@ function renderYamlGenerator() {
       }
     }
     if (incRoom) {
-      lines.push(`    # ${roomSlots}-Slot Interactive Room Control Callback (includes sX_level 0..100 or -1)`);
       lines.push(`    - action: set_room_slots`);
       lines.push(`      variables:`);
       lines.push(`        mode: string`);
@@ -3087,7 +3172,6 @@ function renderYamlGenerator() {
   }
 
   if (incSensors) {
-    lines.push(`# Device-Scoped Latter Push Sensors`);
     lines.push(`text_sensor:`);
     lines.push(`  - platform: homeassistant`);
     lines.push(`    id: latter_active_media`);
@@ -3108,7 +3192,6 @@ function renderYamlGenerator() {
   }
 
   if (incBle) {
-    lines.push(`# Zero-Config BLE Room Presence Beacon`);
     lines.push(`esp32_ble_beacon:`);
     lines.push(`  type: iBeacon`);
     lines.push(`  uuid: "${uuid}"`);
@@ -3118,19 +3201,12 @@ function renderYamlGenerator() {
   }
 
   if (incActions) {
-    lines.push(`# Example Outbound Latter Actions (use inside touch/button/rotary handlers)`);
+    lines.push(`# Example Outbound Latter Actions:`);
     lines.push(`# - homeassistant.action:`);
     lines.push(`#     action: latter.room_browse`);
     lines.push(`#     data:`);
     lines.push(`#       device_slug: "${slug}"`);
     lines.push(`#       mode: "entities"`);
-    lines.push(`#       domain_filter: "all"`);
-    lines.push(`#       page: "1"`);
-    lines.push(`# - homeassistant.action:`);
-    lines.push(`#     action: latter.trigger_binding`);
-    lines.push(`#     data:`);
-    lines.push(`#       device_slug: "${slug}"`);
-    lines.push(`#       slot: "macro_1"`);
   }
 
   box.textContent = lines.join("\n");
@@ -3169,7 +3245,7 @@ function fallbackCopyText(text, successMsg) {
 
 function copyGeneratedYaml() {
   const text = document.getElementById("yaml-gen-output")?.textContent || "";
-  copyToClipboard(text, "Copied ESPHome YAML snippet to clipboard");
+  copyToClipboard(text, "Copied ESPHome YAML snippet");
 }
 
 function copyTextById(elId) {
@@ -3185,7 +3261,7 @@ async function generateDeviceVpnKeys() {
   });
   if (resp.ok) {
     applyStateToDom(await resp.json(), true);
-    showToast("Generated Curve25519 WireGuard keys for device");
+    showToast("Generated WireGuard keys for device");
   }
 }
 
@@ -3200,7 +3276,7 @@ function ensureRemoveDeviceModal() {
   modal.innerHTML = `
     <div class="card" style="max-width:400px;width:100%;margin:0;">
       <h3 style="margin-bottom:6px;color:var(--danger);">Remove Device from Latter?</h3>
-      <p class="desc" id="latter-rm-desc" style="margin-bottom:16px;">Remove this device from Latter? Your ESPHome device itself will remain in Home Assistant, and you can re-add or bridge it anytime.</p>
+      <p class="desc" id="latter-rm-desc" style="margin-bottom:16px;">Remove this device from Latter? Your ESPHome device will remain in Home Assistant.</p>
       <div style="display:flex;gap:8px;justify-content:flex-end;">
         <button type="button" class="btn-secondary" onclick="closeRemoveDeviceModal()">Cancel</button>
         <button type="button" class="btn-danger" id="latter-rm-confirm-btn" onclick="confirmRemoveManagedDevice()">Remove Device</button>
@@ -3223,7 +3299,7 @@ function removeManagedDevice(entryId, title) {
   pendingRemoveTitle = title || entryId;
   const desc = document.getElementById("latter-rm-desc");
   if (desc) {
-    desc.textContent = `Remove '${pendingRemoveTitle}' from Latter? Your ESPHome device itself will remain in Home Assistant, and you can re-add or bridge it anytime.`;
+    desc.textContent = `Remove '${pendingRemoveTitle}' from Latter? Your ESPHome device will remain in Home Assistant, and you can re-add it anytime.`;
   }
   document.getElementById("latter-rm-modal").style.display = "flex";
 }
@@ -3264,7 +3340,7 @@ async function bridgeSelectedEsphomeDevice() {
   });
   if (resp.ok) {
     applyStateToDom(await resp.json(), false);
-    showToast(`Bridged ESPHome device '${slug}' into Latter Studio`);
+    showToast(`Added ESPHome device '${slug}'`);
   }
 }
 
@@ -3326,7 +3402,7 @@ async function captureCurrentDeviceProfile() {
     if (nameEl) nameEl.value = "";
     if (descEl) descEl.value = "";
     applyStateToDom(await resp.json(), false);
-    showToast(`Saved reusable profile '${name}'`);
+    showToast(`Saved profile '${name}'`);
   }
 }
 
@@ -3368,7 +3444,7 @@ async function createVaultSnapshot() {
     const lblEl = document.getElementById("bkp-label-input");
     if (lblEl) lblEl.value = "";
     applyStateToDom(await resp.json(), false);
-    showToast(`Saved ${scope.toUpperCase()} snapshot to Internal Vault`);
+    showToast(`Saved ${scope} backup`);
   }
 }
 
@@ -3380,7 +3456,7 @@ async function createDeviceQuickBackup() {
   });
   if (resp.ok) {
     applyStateToDom(await resp.json(), false);
-    showToast("Saved device snapshot to Internal Vault");
+    showToast("Saved device backup");
   }
 }
 
@@ -3413,7 +3489,7 @@ async function exportBackupToComputer(overrideScope) {
     const data = await resp.json();
     if (data.bundle) {
       triggerJsonDownload(data.bundle);
-      showToast(`Downloaded ${scope.toUpperCase()} backup .JSON`);
+      showToast(`Downloaded ${scope} backup .JSON`);
     }
   }
 }
@@ -3428,7 +3504,7 @@ async function downloadVaultSnapshot(backupId) {
     const data = await resp.json();
     if (data.bundle) {
       triggerJsonDownload(data.bundle);
-      showToast("Downloaded snapshot .JSON");
+      showToast("Downloaded backup .JSON");
     }
   }
 }
@@ -3442,7 +3518,7 @@ async function restoreVaultSnapshot(backupId, label) {
   });
   if (resp.ok) {
     applyStateToDom(await resp.json(), true);
-    showToast(`Restored snapshot '${label}'`);
+    showToast(`Restored backup '${label}'`);
   }
 }
 
@@ -3454,7 +3530,7 @@ async function deleteVaultSnapshot(backupId) {
   });
   if (resp.ok) {
     applyStateToDom(await resp.json(), false);
-    showToast("Deleted snapshot from vault");
+    showToast("Deleted backup");
   }
 }
 
@@ -3499,15 +3575,14 @@ function applyStateToDom(data, forceFormUpdate=false) {
 
   const roomName = live.active_area_name || "Home";
   const spkShort = (live.active_speaker || "").replace("media_player.", "");
-  const tempStr = live.room_temp != null ? `${live.room_temp}°` : "--";
-  const humStr = live.room_humidity != null ? ` • ${live.room_humidity}%` : "";
+  const tempStr = live.room_temp != null ? ` (${live.room_temp}°)` : "";
   const mediaSummary = live.media_title && live.media_title !== "Idle"
-    ? `${live.media_title} (${live.media_artist})`
-    : `${live.media_state || 'idle'}`;
+    ? `${live.media_title}${live.media_artist && live.media_artist !== 'None' ? ' • ' + live.media_artist : ''}`
+    : `${live.media_state || 'Idle'}`;
 
   const caps = data.capabilities || {};
   const devTitle = esp?.device?.name || data.title;
-  document.getElementById("hdr-sub").textContent = `v${data.version || '2.1.2'}`;
+  document.getElementById("hdr-sub").textContent = `v${data.version || '2.2.0'}`;
   document.getElementById("survey-device-name").textContent = devTitle;
   document.getElementById("nav-room-badge").textContent = roomName;
   document.getElementById("top-room").textContent = `Room: ${roomName}`;
@@ -3521,42 +3596,39 @@ function applyStateToDom(data, forceFormUpdate=false) {
   document.getElementById("top-hh-alarm").textContent = `Alarm: ${(live.alarm_state || 'none').toUpperCase()}`;
   updateTopHeaderForScope();
 
-  // Capability-Aware Sidebar Tabs & Add-On Badges
+  // Capability-Aware Device Sidebar Tabs
   const showDisplay = !!caps.has_display;
   const showPower = !!caps.has_power;
-  const showVoice = !!caps.has_voice;
-  const showAudio = !!caps.has_audio;
-  const anySettingsTab = showDisplay || showPower || showVoice || showAudio;
-  document.getElementById("nav-grp-dev-settings")?.classList.toggle("hidden", !anySettingsTab);
+  const showAudioVoice = !!(caps.has_voice || caps.has_audio);
   document.getElementById("nav-btn-home_display")?.classList.toggle("hidden", !showDisplay);
+  document.getElementById("nav-btn-audio_voice")?.classList.toggle("hidden", !showAudioVoice);
   document.getElementById("nav-btn-power")?.classList.toggle("hidden", !showPower);
-  document.getElementById("nav-btn-voice")?.classList.toggle("hidden", !showVoice);
-  document.getElementById("nav-btn-audio")?.classList.toggle("hidden", !showAudio);
 
-  const bleBadge = document.getElementById("nav-ble-addon-badge");
-  if (bleBadge) bleBadge.textContent = caps.has_ble_beacon ? "Active" : "Add-On";
-  const vpnBadge = document.getElementById("nav-vpn-addon-badge");
-  if (vpnBadge) vpnBadge.textContent = caps.has_vpn_mixin ? "Active" : "Add-On";
+  // Extract live Battery & Wi-Fi from current device's fleet entry or ESPHome sections
+  const curFleet = (data.fleet_devices || []).find(d => d.is_current) || {};
+  const batText = (curFleet.battery_level !== null && curFleet.battery_level !== undefined)
+    ? `${curFleet.battery_level}%${curFleet.is_charging ? ' (Charging)' : ''}`
+    : (caps.has_power ? "Mains / USB" : "Mains Powered");
+  const wifiText = (curFleet.wifi_rssi !== null && curFleet.wifi_rssi !== undefined)
+    ? `${curFleet.wifi_rssi} dBm`
+    : "Online";
 
-  const bleBanner = document.getElementById("ble-addon-missing-banner");
-  if (bleBanner) bleBanner.style.display = caps.has_ble_beacon ? "none" : "block";
-  const vpnBanner = document.getElementById("vpn-addon-missing-banner");
-  if (vpnBanner) vpnBanner.style.display = caps.has_vpn_mixin ? "none" : "block";
+  // 4 Hero Stat Boxes on Device Overview
+  document.getElementById("dash-header-title").textContent = devTitle;
+  document.getElementById("st-room").textContent = `${roomName}${tempStr}`;
+  document.getElementById("st-battery").textContent = batText;
+  document.getElementById("st-wifi").textContent = wifiText;
+  document.getElementById("st-media").textContent = caps.has_audio ? mediaSummary : (caps.tier_label || "Connected");
 
-  // Device-Centric Hero Stats on Device Overview
-  document.getElementById("dash-header-title").textContent = `${devTitle} — Overview`;
-  document.getElementById("st-tier").textContent = caps.tier_label || "ESPHome Device";
-  document.getElementById("st-room").textContent = roomName;
   const grpList = data.device_groups || [];
   const grpObj = grpList.find(g => g.id === cfg.device_group);
   document.getElementById("st-group").textContent = grpObj ? grpObj.name : (cfg.device_group || "Unassigned");
-  document.getElementById("st-entities").textContent = `${caps.total_entities || 0} Entities`;
 
   const hwModel = `${esp?.device?.model || 'ESPHome'}${esp?.device?.sw_version ? ' (' + esp.device.sw_version + ')' : ''}`;
   document.getElementById("dash-hw-model").textContent = hwModel;
   document.getElementById("dash-ble-mode").textContent = (caps.has_ble_beacon && cfg.native_ble_tracking)
-    ? (cfg.ble_auto_switch ? "Enabled (Auto-Switch)" : "Enabled (Manual Switch)")
-    : "Not Active (See BLE Add-On)";
+    ? (cfg.ble_auto_switch ? "Enabled (Auto-Switch)" : "Enabled (Manual)")
+    : "Disabled";
   const winRow = (live.ble_survey_rows || []).find(r => r.is_winner);
   const distSuffix = (winRow && winRow.distance_m != null) ? ` (~${winRow.distance_m}m / ${winRow.distance_ft}ft)` : "";
   document.getElementById("dash-ble-proxy").textContent = (live.ble_closest_proxy || "None") + distSuffix;
@@ -3569,6 +3641,7 @@ function applyStateToDom(data, forceFormUpdate=false) {
   const medSumEl = document.getElementById("dash-media-summary");
   if (medSumEl) medSumEl.textContent = mediaSummary;
 
+  renderLiveRoomCards(live.room_cards, roomName);
   renderLogsView();
 
   const actSlotIdx = live.active_remote_slot || 1;
@@ -3578,7 +3651,7 @@ function applyStateToDom(data, forceFormUpdate=false) {
     const btn = document.getElementById(`rslot-btn-${idx}`);
     if (card) card.classList.toggle("active-slot", isAct);
     if (btn) {
-      btn.textContent = isAct ? "Active on Device" : "Set Active";
+      btn.textContent = isAct ? "Active" : "Set Active";
       btn.className = isAct ? "btn-primary" : "btn-secondary";
     }
   });
@@ -3627,7 +3700,8 @@ function applyStateToDom(data, forceFormUpdate=false) {
     document.getElementById("cfg-sync_device_area").checked = !!cfg.sync_device_area;
     document.getElementById("cfg-area_handoff").checked = !!cfg.area_handoff;
     document.getElementById("cfg-ble_beacon_uuid").value = cfg.ble_beacon_uuid || "";
-    document.getElementById("cfg-dock_apps").value = cfg.dock_apps || "";
+    document.getElementById("cfg-dock_apps").value = cfg.dock_apps || "music,alarm,room,remote,games,tools";
+    renderDockPillsFromInput();
     document.getElementById("cfg-wallpaper_source").value = cfg.wallpaper_source || "";
     document.getElementById("cfg-wallpaper_cycle_minutes").value = String(cfg.wallpaper_cycle_minutes || 0);
     document.getElementById("cfg-art_size").value = String(cfg.art_size || 466);
@@ -3768,7 +3842,7 @@ async function saveAllConfig() {
   });
   if (resp.ok) {
     applyStateToDom(await resp.json(), true);
-    showToast("Saved device & household configuration");
+    showToast("Saved configuration");
   }
 }
 
@@ -3783,7 +3857,7 @@ function ensureColorWheelModal() {
   modal.innerHTML = `
     <div class="card" style="max-width:380px;width:100%;margin:0;text-align:center;position:relative;">
       <h3 style="margin-bottom:4px;">HSV Color Wheel Picker</h3>
-      <p class="desc" style="margin-bottom:12px;">Click or drag on the wheel to choose a specific color. Saving adds it to your System-Wide Household Color Library.</p>
+      <p class="desc" style="margin-bottom:12px;">Select a custom UI accent color and save it to your system color library.</p>
       <div style="display:flex;justify-content:center;margin-bottom:14px;">
         <canvas id="latter-cw-canvas" width="220" height="220" style="border-radius:50%;cursor:crosshair;box-shadow:0 4px 20px rgba(0,0,0,0.45);"></canvas>
       </div>
@@ -3792,12 +3866,12 @@ function ensureColorWheelModal() {
         <input type="text" id="latter-cw-hex" value="#3898FF" style="width:110px;font-family:monospace;text-align:center;" oninput="onCwHexInput(this.value)">
       </div>
       <div class="field" style="text-align:left;margin-bottom:14px;">
-        <label>Color Profile Name (System-Wide Library)</label>
-        <input type="text" id="latter-cw-name" placeholder="e.g. Sunset Coral, Cyber Violet">
+        <label>Color Profile Name</label>
+        <input type="text" id="latter-cw-name" placeholder="e.g. Sunset Coral">
       </div>
       <div style="display:flex;gap:8px;justify-content:flex-end;">
         <button type="button" class="btn-secondary" onclick="closeColorWheelModal()">Cancel</button>
-        <button type="button" class="btn-primary" onclick="saveColorWheelSelection()">Save to Household Library</button>
+        <button type="button" class="btn-primary" onclick="saveColorWheelSelection()">Save Color</button>
       </div>
     </div>
   `;
@@ -3948,26 +4022,6 @@ function renderCustomColorPalettes() {
   const pals = Array.isArray(STATE.config.custom_palettes) ? STATE.config.custom_palettes : [];
   const curHex = (STATE.config.device_custom_color || "#3898FF").toUpperCase();
 
-  // Dynamically inject the System-Wide Custom Color Library card into Studio Settings if not yet present
-  const studioSec = document.getElementById("view-studio_settings");
-  if (studioSec && !document.getElementById("sys-custom-palettes-card")) {
-    const card = document.createElement("div");
-    card.id = "sys-custom-palettes-card";
-    card.className = "card";
-    card.style.marginTop = "16px";
-    card.innerHTML = `
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px;">
-        <div>
-          <h3 style="margin-bottom:4px;">Household Custom Color Profiles (System-Wide Library)</h3>
-          <p class="desc" style="margin-bottom:0;">Create custom UI color profiles on the HSV Color Wheel once at the system level and reuse them across any device in your home.</p>
-        </div>
-        <button type="button" class="btn-primary" onclick="openColorWheelModal('system')">+ Open Color Wheel...</button>
-      </div>
-      <div id="sys-custom-palettes-list" style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;"></div>
-    `;
-    studioSec.appendChild(card);
-  }
-
   const sw = document.getElementById("dev-color-swatch");
   if (sw) sw.style.background = curHex;
 
@@ -3990,14 +4044,14 @@ function renderCustomColorPalettes() {
   const sysBox = document.getElementById("sys-custom-palettes-list");
   if (sysBox) {
     if (pals.length === 0) {
-      sysBox.innerHTML = `<p class="desc" style="margin:0;">No custom household colors saved yet. Click "+ Open Color Wheel..." to create one.</p>`;
+      sysBox.innerHTML = `<p class="desc" style="margin:0;">No custom colors saved yet. Click "+ Open Color Wheel" to create one.</p>`;
     } else {
       sysBox.innerHTML = pals.map(p => {
         const h = (p.hex || "").toUpperCase();
         return `
-          <div style="display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;background:var(--input-bg);border:1px solid var(--border);">
-            <span style="width:16px;height:16px;border-radius:50%;background:${h};border:1px solid #fff;"></span>
-            <strong style="font-size:13px;">${p.name || h}</strong>
+          <div style="display:inline-flex;align-items:center;gap:8px;padding:5px 11px;border-radius:18px;background:var(--input-bg);border:1px solid var(--border);">
+            <span style="width:14px;height:14px;border-radius:50%;background:${h};border:1px solid #fff;"></span>
+            <strong style="font-size:12.5px;font-weight:500;">${p.name || h}</strong>
             <code style="font-size:11px;opacity:0.75;">${h}</code>
             <button type="button" class="btn-secondary" style="padding:2px 8px;font-size:11px;" onclick="applyDeviceCustomColor('${h}', true)">Apply</button>
             <button type="button" class="btn-secondary" style="padding:2px 6px;font-size:11px;color:var(--danger);" onclick="deleteCustomPalette('${h}')">&times;</button>

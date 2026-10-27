@@ -567,6 +567,25 @@ def _build_companion_state_payload(
             s.endswith("_set_browse_slots") and c.device_slug in s
             for s in esphome_svcs
         )
+        c_bat_st = hass.states.get(f"sensor.{c.device_slug}_battery_level")
+        c_chg_st = hass.states.get(f"binary_sensor.{c.device_slug}_battery_charging")
+        c_wifi_st = (
+            hass.states.get(f"sensor.{c.device_slug}_wi_fi_signal")
+            or hass.states.get(f"sensor.{c.device_slug}_wifi_signal")
+            or hass.states.get(f"sensor.{c.device_slug}_system_wi_fi_signal")
+        )
+        c_bat_val: int | None = None
+        if c_bat_st and c_bat_st.state not in ("unavailable", "unknown", ""):
+            try:
+                c_bat_val = int(round(float(c_bat_st.state)))
+            except ValueError:
+                c_bat_val = None
+        c_wifi_val: int | None = None
+        if c_wifi_st and c_wifi_st.state not in ("unavailable", "unknown", ""):
+            try:
+                c_wifi_val = int(round(float(c_wifi_st.state)))
+            except ValueError:
+                c_wifi_val = None
         fleet_devices.append(
             {
                 "entry_id": c.entry.entry_id,
@@ -581,6 +600,9 @@ def _build_companion_state_payload(
                 "active_speaker": c.active_speaker if c_has_audio else "",
                 "has_audio": c_has_audio,
                 "media_state": c_media_state if c_has_audio else "",
+                "battery_level": c_bat_val,
+                "is_charging": bool(c_chg_st and c_chg_st.state == "on"),
+                "wifi_rssi": c_wifi_val,
                 "ble_closest_proxy": c_room_attrs.get("ble_closest_proxy", ""),
                 "companion_url": f"/api/latter/companion/{c.entry.entry_id}?token={c.get_signed_token()}",
                 "is_current": c.entry.entry_id == coordinator.entry.entry_id,
@@ -684,6 +706,13 @@ def _build_companion_state_payload(
             "media_artist": media_attrs.get("artist", "None"),
             "media_art_url": media_attrs.get("art_url", "none"),
             "alarm_state": room_attrs.get("alarm_state", "none"),
+            "thermostat_state": room_attrs.get("thermostat_state", "off"),
+            "thermostat_temp": room_attrs.get("thermostat_temp"),
+            "lock_state": room_attrs.get("lock_state", "locked"),
+            "garage_state": room_attrs.get("garage_state", "closed"),
+            "vacuum_state": room_attrs.get("vacuum_state", "docked"),
+            "weather_condition": coordinator.weather_attributes.get("condition", "unknown"),
+            "weather_temp": coordinator.weather_attributes.get("temperature"),
             "wallpaper_url": room_attrs.get("wallpaper_url", "none"),
             "active_remote_slot": coordinator.active_remote_slot,
             "remote_slots_meta": remote_attrs,

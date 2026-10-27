@@ -90,7 +90,7 @@ def classify_esphome_entity_section(
         prefix_low = prefix_raw.lower()
         if prefix_low in ("home", "home screen", "clock"):
             return "home", None
-        if prefix_low in ("display", "ui", "screen", "theme", "appearance"):
+        if prefix_low in ("display", "ui", "screen", "theme", "appearance", "weather"):
             return "display", None
         if prefix_low in ("sleep & wake", "sleep", "wake"):
             return "sleep", None
@@ -121,9 +121,12 @@ def classify_esphome_entity_section(
     if domain == "button" or dev_cls in ("restart", "identify"):
         return "actions", None
 
+    if any(k in ent_suffix for k in ("timer_remaining", "timer_active", "alarm_ringing")):
+        return "sleep", None
+
     if dev_cls in ("battery", "voltage", "current", "power", "energy") or any(
         k in clean_low or k in ent_suffix
-        for k in ("battery", "charging", "charger", "vbus", "axp2101", "pmic", "voltage", "internal_temp", "die_temp")
+        for k in ("battery", "charging", "charger", "vbus", "axp2101", "pmic", "voltage", "internal_temp", "die_temp", "imu_temp")
     ):
         return "battery", None
 
@@ -1264,6 +1267,20 @@ async def async_execute_room_action(
         await hass.services.async_call(
             "button", "press", {ATTR_ENTITY_ID: entity_id}, blocking=False
         )
+        return
+
+    if domain == "update":
+        if action in ("install", "update") and state_obj.state == STATE_ON:
+            await hass.services.async_call(
+                "update", "install", {ATTR_ENTITY_ID: entity_id}, blocking=False
+            )
+        elif hass.services.has_service("homeassistant", "update_entity"):
+            await hass.services.async_call(
+                "homeassistant",
+                "update_entity",
+                {ATTR_ENTITY_ID: entity_id},
+                blocking=False,
+            )
         return
 
     if domain in ("select", "input_select") and option is not None:
