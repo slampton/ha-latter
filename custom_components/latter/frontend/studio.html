@@ -151,15 +151,21 @@
     font-weight: 500;
   }
   .nav-device-title {
-    font-size: 15px;
+    font-size: 16px;
     font-weight: 600;
     color: var(--text-strong);
-    margin: 4px 0 4px;
-    padding: 10px 12px 6px;
+    margin: 6px 0 6px;
+    padding: 10px 12px;
     border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+  #nav-scope-device .nav-btn:not(.nav-back-btn) {
+    margin-left: 10px;
+    width: calc(100% - 10px);
+    padding: 8px 12px;
   }
   .nav-group-label:first-child {
     margin-top: 4px;
@@ -346,17 +352,19 @@
     margin: 0 auto;
     padding: 20px 24px 64px;
   }
-  .page-header { margin-bottom: 16px; }
+  .page-header { margin-bottom: 14px; }
   .page-header h2 {
-    margin: 0 0 4px;
+    margin: 0;
     font-size: 20px;
     font-weight: 500;
     color: var(--text-strong);
   }
-  .page-header p {
-    margin: 0;
-    color: var(--muted);
-    font-size: 13.5px;
+  .page-header > p,
+  .card > p.desc,
+  .card > div > p.desc,
+  .card > div > div > p.desc,
+  .details-body > p.desc {
+    display: none !important;
   }
   .grid-2 {
     display: grid;
@@ -397,7 +405,7 @@
     margin-bottom: 0;
   }
   .card h3 {
-    margin: 0 0 4px;
+    margin: 0 0 12px;
     font-size: 15px;
     font-weight: 500;
     color: var(--text-strong);
@@ -972,8 +980,11 @@
       </div>
     </div>
 
-    <!-- SYSTEM NAVIGATION (5 TABS) -->
+    <!-- SYSTEM NAVIGATION (6 TABS) -->
     <div class="nav-list hidden" id="nav-scope-household">
+      <button class="nav-btn" data-view="fleet_overview" onclick="switchView('fleet_overview', this)">
+        <span>Overview</span>
+      </button>
       <button class="nav-btn" data-view="household" onclick="switchView('household', this)">
         <span>Shared Entities</span>
       </button>
@@ -1001,7 +1012,7 @@
 
     <!-- SELECTED DEVICE NAVIGATION (5 TABS) -->
     <div class="nav-list" id="nav-scope-device">
-      <button class="nav-btn" style="color:var(--muted);" onclick="openDevicesLanding()">
+      <button class="nav-btn nav-back-btn" style="color:var(--muted);" onclick="openDevicesLanding()">
         <span>&larr; All Devices</span>
       </button>
       <div class="nav-device-title" id="nav-selected-device-label">Device</div>
@@ -1044,7 +1055,7 @@
       <div class="topbar-status">
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
           <img src="/api/latter/brand/icon.png" alt="Latter" style="width:26px;height:26px;border-radius:6px;object-fit:contain;flex-shrink:0;" onerror="this.style.display='none'">
-          <strong id="hdr-title" style="font-size:15px;font-weight:500;color:var(--text-strong);">Latter</strong>
+          <strong id="hdr-title" style="font-size:18px;font-weight:500;color:var(--text-strong);">Latter</strong>
           <span class="nav-badge" id="hdr-sub">v2.2.0</span>
           <button type="button" id="hdr-update-pill" class="update-pill hidden" onclick="triggerHeaderFirmwareUpdate()">Update Available</button>
         </div>
@@ -1061,21 +1072,36 @@
       <!-- ================================================================== -->
       <section id="view-fleet_overview" class="hidden">
         <div class="page-header">
-          <h2>Devices</h2>
-          <p>Manage onboarded ESPHome devices and assign device groups.</p>
+          <h2>Overview</h2>
         </div>
 
-        <div class="card">
-          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
-            <div style="flex:1;min-width:220px;max-width:340px;">
-              <input type="text" id="fleet-search-input" placeholder="Filter devices by name, model, area, or group..." oninput="onFilterDeviceTable(this.value)">
-            </div>
-            <div id="bridge-device-bar" class="input-action-row" style="display:none;">
-              <select id="bridge-device-picker" style="min-width:210px;"></select>
-              <button class="btn-secondary" onclick="bridgeSelectedEsphomeDevice()">+ Add Device</button>
-            </div>
+        <div class="hero-stats" style="grid-template-columns:repeat(4, minmax(0, 1fr));">
+          <div class="stat-box"><span>Total Devices</span><strong id="sys-st-total">0</strong></div>
+          <div class="stat-box"><span>Native Displays</span><strong id="sys-st-native">0</strong></div>
+          <div class="stat-box"><span>Roaming Devices</span><strong id="sys-st-roaming">0</strong></div>
+          <div class="stat-box"><span>BLE Room Proxies</span><strong id="sys-st-proxies">0</strong></div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <h3>Fleet Summary</h3>
+            <div class="summary-row"><span>Online Devices</span><strong id="sys-sum-online">0 / 0</strong></div>
+            <div class="summary-row"><span>Stationary Devices</span><strong id="sys-sum-stationary">0</strong></div>
+            <div class="summary-row"><span>Firmware Updates Available</span><strong id="sys-sum-updates">0</strong></div>
+            <div class="summary-row"><span>Device Groups</span><strong id="sys-sum-groups">0</strong></div>
+            <div class="summary-row"><span>Saved Profiles</span><strong id="sys-sum-profiles">0</strong></div>
+            <div class="summary-row"><span>Saved Backups</span><strong id="sys-sum-backups">0</strong></div>
           </div>
-          <div id="fleet-devices-list"></div>
+
+          <div class="card">
+            <h3>Configured Integrations</h3>
+            <div class="summary-row"><span>Remote Controls</span><strong id="sys-sum-remotes">0</strong></div>
+            <div class="summary-row"><span>Speaker Volume Overrides</span><strong id="sys-sum-vol">0</strong></div>
+            <div class="summary-row"><span>Cameras</span><strong id="sys-sum-cameras">0</strong></div>
+            <div class="summary-row"><span>Calendars</span><strong id="sys-sum-calendars">0</strong></div>
+            <div class="summary-row"><span>Pinned Room Entities</span><strong id="sys-sum-pinned">0</strong></div>
+            <div class="summary-row"><span>Calibrated BLE Rooms</span><strong id="sys-sum-ble-rooms">0</strong></div>
+          </div>
         </div>
       </section>
 
@@ -1489,8 +1515,7 @@
       <!-- ================================================================== -->
       <section id="view-dashboard">
         <div class="page-header">
-          <h2 id="dash-header-title">Device Overview</h2>
-          <p id="dash-header-desc">Quick actions, configuration profiles, and live hardware telemetry.</p>
+          <h2 id="dash-header-title">Overview</h2>
         </div>
 
         <div class="hero-stats">
@@ -1939,6 +1964,7 @@ let DEVICE_SORT_ASC = true;
 let DEVICE_FILTER_TEXT = "";
 
 const HOUSEHOLD_VIEWS = [
+  "fleet_overview",
   "household",
   "remotes",
   "fleet_sync",
@@ -2081,7 +2107,7 @@ function applyTheme(pref) {
 
 applyTheme(CURRENT_THEME_PREF);
 if (CURRENT_SCOPE === "household") {
-  window.addEventListener("DOMContentLoaded", () => setScope("household", "household"));
+  window.addEventListener("DOMContentLoaded", () => setScope("household", "fleet_overview"));
 }
 
 function showToast(msg) {
@@ -2251,7 +2277,7 @@ function setScope(scope, targetView=null) {
   updateTopHeaderForScope();
 
   if (CURRENT_SCOPE === "household") {
-    switchView(targetView || "household", null);
+    switchView(targetView || "fleet_overview", null);
   } else if (!DEVICE_SELECTED) {
     switchView("select_device_prompt", null);
   } else {
@@ -2611,10 +2637,49 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
       </div>`
     : `<p class="desc" style="margin:8px 0 0;">No matching devices found.</p>`;
 
-  const listBox = document.getElementById("fleet-devices-list");
-  if (listBox) listBox.innerHTML = tableHtml;
   const promptBox = document.getElementById("prompt-devices-list");
   if (promptBox) promptBox.innerHTML = tableHtml;
+
+  // Populate System -> Overview stats
+  const allDevs = fleetDevices || [];
+  const totalDevs = allDevs.length;
+  const onlineDevs = allDevs.filter(d => d.status_label !== "Offline").length;
+  const updateDevs = allDevs.filter(d => d.status_label === "Update Available").length;
+  const nativeDevs = allDevs.filter(d => d.has_audio || d.device_profile === "mobile_display" || d.device_profile === "stationary_display").length;
+  const roamingDevs = allDevs.filter(d => (d.area_label || "Roaming") === "Roaming").length;
+  const stationaryDevs = totalDevs - roamingDevs;
+  const scannersMap = STATE?.live?.ble_scanners_map || {};
+  const proxyCount = Object.keys(scannersMap).length || (STATE?.live?.ble_survey_rows || []).length;
+  const calRoomsCount = Object.keys(cfg?.ble_room_offsets || {}).length;
+
+  const setSysTxt = (id, val) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = String(val);
+  };
+  setSysTxt("sys-st-total", totalDevs);
+  setSysTxt("sys-st-native", nativeDevs);
+  setSysTxt("sys-st-roaming", roamingDevs);
+  setSysTxt("sys-st-proxies", proxyCount);
+
+  setSysTxt("sys-sum-online", `${onlineDevs} / ${totalDevs}`);
+  setSysTxt("sys-sum-stationary", stationaryDevs);
+  setSysTxt("sys-sum-updates", updateDevs);
+  setSysTxt("sys-sum-groups", groups.length);
+  setSysTxt("sys-sum-profiles", profiles.length);
+  setSysTxt("sys-sum-backups", backups.length);
+
+  const remCnt = Array.isArray(cfg?.remotes_list) ? cfg.remotes_list.filter(Boolean).length : 0;
+  const volCnt = Array.isArray(cfg?.volume_overrides) ? cfg.volume_overrides.length : 0;
+  const camCnt = Array.isArray(cfg?.camera_entities) ? cfg.camera_entities.filter(Boolean).length : (cfg?.camera_entity ? 1 : 0);
+  const calCnt = Array.isArray(cfg?.calendar_entities) ? cfg.calendar_entities.filter(Boolean).length : 0;
+  const pinCnt = Array.isArray(cfg?.custom_entities) ? cfg.custom_entities.filter(Boolean).length : 0;
+
+  setSysTxt("sys-sum-remotes", remCnt);
+  setSysTxt("sys-sum-vol", volCnt);
+  setSysTxt("sys-sum-cameras", camCnt);
+  setSysTxt("sys-sum-calendars", calCnt);
+  setSysTxt("sys-sum-pinned", pinCnt);
+  setSysTxt("sys-sum-ble-rooms", calRoomsCount);
 
   const alertDevSel = document.getElementById("test-alert-device");
   if (alertDevSel && fleetDevices && fleetDevices.length) {
@@ -4068,7 +4133,7 @@ function applyStateToDom(data, forceFormUpdate=false) {
   if (roomLblEl) roomLblEl.textContent = hasAssignedArea ? "Room" : "Current Room (Roaming)";
 
   // 3 Hero Stat Boxes on Device Overview
-  document.getElementById("dash-header-title").textContent = devTitle;
+  document.getElementById("dash-header-title").textContent = "Overview";
   document.getElementById("st-room").textContent = hasAssignedArea ? (curFleet.area_label || roomName) : roomName;
   document.getElementById("st-battery").textContent = batText;
   document.getElementById("st-wifi").textContent = wifiText;
