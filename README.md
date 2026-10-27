@@ -1,7 +1,7 @@
 # Latter — Universal ESPHome Companion & Room Fabric for Home Assistant
 
 [![Validate](https://github.com/slampton/ha-latter/actions/workflows/validate.yml/badge.svg)](https://github.com/slampton/ha-latter/actions)
-[![Version](https://img.shields.io/badge/Version-v2.2.2-blue)](https://github.com/slampton/ha-latter/releases)
+[![Version](https://img.shields.io/badge/Version-v2.2.0-blue)](https://github.com/slampton/ha-latter/releases)
 [![Quality Scale](https://img.shields.io/badge/Quality%20Scale-Platinum-E5E4E2)](https://developers.home-assistant.io/docs/core/integration-quality-scale/)
 [![ESPHome](https://img.shields.io/badge/ESPHome-2026.10.0%2B-blue?logo=esphome&logoColor=white)](https://esphome.io)
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2026.10%2B-41BDF5?logo=homeassistant&logoColor=white)](https://www.home-assistant.io)
