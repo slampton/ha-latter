@@ -142,6 +142,54 @@ def log_studio_event(
     )
     del logs[MAX_INTERNAL_LOGS:]
 
+
+def _get_combined_system_and_studio_logs(hass: HomeAssistant) -> list[dict[str, str]]:
+    """Combine Latter Studio events with live entries from Home Assistant's native system_log handler."""
+    from datetime import datetime
+
+    combined: list[dict[str, str]] = list(
+        hass.data.get(DOMAIN, {}).get("internal_logs", [])
+    )
+
+    # Pull relevant entries from Home Assistant's native system_log integration
+    try:
+        sys_log = hass.data.get("system_log")
+        records = getattr(sys_log, "records", None)
+        if records is not None:
+            raw_list = list(records.values()) if hasattr(records, "values") else list(records)
+            for rec in reversed(raw_list[-200:]):
+                d = rec.to_dict() if hasattr(rec, "to_dict") else {}
+                logger_name = str(d.get("name") or "")
+                msgs = d.get("message")
+                msg_str = str(msgs[0] if isinstance(msgs, list) and msgs else (msgs or ""))
+                exc_str = str(d.get("exception") or "").strip()
+                haystack = f"{logger_name} {msg_str} {exc_str}".lower()
+                if not any(
+                    k in haystack
+                    for k in ("latter", "esphome", "aioesphomeapi", "sendspin", "music_assistant", "assist_satellite")
+                ):
+                    continue
+                ts_val = d.get("timestamp")
+                ts_str = (
+                    datetime.fromtimestamp(float(ts_val)).strftime("%Y-%m-%d %H:%M:%S")
+                    if ts_val
+                    else ""
+                )
+                full_msg = f"{msg_str}\n{exc_str}".strip() if exc_str else msg_str
+                combined.append(
+                    {
+                        "ts": ts_str,
+                        "level": str(d.get("level") or "ERROR").upper(),
+                        "source": f"ha:{logger_name}",
+                        "message": full_msg[:600],
+                    }
+                )
+    except Exception:  # noqa: BLE001
+        pass
+
+    combined.sort(key=lambda x: x.get("ts") or "", reverse=True)
+    return combined[:MAX_INTERNAL_LOGS]
+
 def _normalize_web_theme(raw_theme: Any) -> str:
     """Normalize theme selection ('ha_auto', 'ha_dark', 'ha_light', or an installed HA theme name)."""
     val = str(raw_theme or "ha_auto").strip()
@@ -572,7 +620,7 @@ def _build_companion_state_payload(
         )
     unbridged_devices.sort(key=lambda d: d["name"].lower())
 
-    internal_logs = list(hass.data.get(DOMAIN, {}).get("internal_logs", []))
+    internal_logs = _get_combined_system_and_studio_logs(hass)
 
     return {
         "entry_id": coordinator.entry.entry_id,
@@ -676,41 +724,9 @@ class LatterCompanionApiView(HomeAssistantView):
                 token = coordinator.get_signed_token()
                 visit_url = f"{browser_base}/api/latter/companion/{coordinator.entry.entry_id}?token={token}"
                 inject_esphome_visit_link(self.hass, coordinator.device_slug, visit_url)
-        from . import (
-            _async_scan_all_esphome_devices_for_discovery,
-            is_latter_compatible_esphome_device,
-        )
+        from . import _async_scan_all_esphome_devices_for_discovery
 
         _async_scan_all_esphome_devices_for_discovery(self.hass)
-        # Auto-onboard any newly connected Native Latter device (e.g. Wrist Assist / Pocket Assistant)
-        onboarded_slugs = {c.device_slug for c in _get_all_coordinators(self.hass)}
-        dev_reg = dr.async_get(self.hass)
-        ent_reg = er.async_get(self.hass)
-        for dev in _iter_devices(dev_reg):
-            dev_entries = er.async_entries_for_device(ent_reg, dev.id)
-            if not any(e.platform == "esphome" for e in dev_entries):
-                continue
-            raw_name = str(dev.name_by_user or dev.name or "").strip()
-            if not raw_name:
-                continue
-            cand_slug = re.sub(r"[^a-z0-9]+", "_", raw_name.lower()).strip("_")
-            if not cand_slug or cand_slug in onboarded_slugs:
-                continue
-            if is_latter_compatible_esphome_device(self.hass, dev, cand_slug):
-                is_watch = "wrist" in cand_slug or "206" in str(dev.model or "").lower()
-                await self.hass.config_entries.flow.async_init(
-                    DOMAIN,
-                    context={"source": "user"},
-                    data={
-                        CONF_DEVICE_SLUG: cand_slug,
-                        CONF_DEVICE_PROFILE: "mobile_display",
-                        CONF_DISPLAY_SHAPE: "square" if is_watch else "circle",
-                        CONF_ART_SIZE: "410x502" if is_watch else DEFAULT_ART_SIZE,
-                        CONF_DEFAULT_SPEAKER: f"media_player.{cand_slug}",
-                    },
-                )
-                onboarded_slugs.add(cand_slug)
-
         await async_list_vault_backups(self.hass)
         payload = _build_companion_state_payload(self.hass, coordinator)
         return web.json_response(payload)
@@ -2139,10 +2155,15 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
         <span>Shared Entities</span>
       </button>
       <button class="nav-btn" data-view="macros" onclick="switchView('macros', this)">
-        <span>Macros & YAML</span>
+        <span>Macros &amp; YAML</span>
       </button>
+
+      <div class="nav-group-label">Administration</div>
       <button class="nav-btn" data-view="studio_settings" onclick="switchView('studio_settings', this)">
         <span>Studio Settings</span>
+      </button>
+      <button class="nav-btn" data-view="logs" onclick="switchView('logs', this)">
+        <span>Logs</span>
       </button>
     </div>
 
@@ -2182,6 +2203,9 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
       <button class="nav-btn" data-view="system" onclick="switchView('system', this)">
         <span>Diagnostics &amp; Identity</span>
         <span class="nav-badge" id="nav-esp-badge">0</span>
+      </button>
+      <button class="nav-btn" data-view="logs" onclick="switchView('logs', this)">
+        <span>Logs</span>
       </button>
     </div>
 
@@ -3161,18 +3185,47 @@ COMPANION_HTML_TEMPLATE = """<!DOCTYPE html>
           <div id="raw-entity-items" class="native-controls-box"></div>
         </div>
 
+        </section>
+
+      <!-- ================================================================== -->
+      <!-- ADMINISTRATION (BOTH SCOPES): DEDICATED LOGS & NATIVE HA LOGS      -->
+      <!-- ================================================================== -->
+      <section id="view-logs" class="hidden">
+        <div class="page-header">
+          <h2>System &amp; Device Logs</h2>
+          <p>Inspect live Home Assistant <code>system_log</code> entries for Latter, ESPHome, and Music Assistant alongside Studio activity, or launch Home Assistant's native Log Viewer.</p>
+        </div>
+
+        <div class="card" style="margin-bottom:16px;">
+          <h3>Native Home Assistant Log &amp; Diagnostic Tools</h3>
+          <p class="desc">Jump directly to Home Assistant's built-in System Log viewer pre-filtered for Latter or your active ESPHome device.</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button type="button" class="btn-primary" onclick="openNativeHaLogs('latter')">Open Native HA Logs (Filter: latter)</button>
+            <button type="button" class="btn-secondary" id="btn-native-dev-logs" onclick="openNativeHaLogs(STATE?.config?.device_slug || 'esphome')">Open Native HA Logs (Active Device)</button>
+            <button type="button" class="btn-secondary" onclick="openNativeHaLogs('esphome')">Open Native HA Logs (Filter: esphome)</button>
+            <button type="button" class="btn-secondary" onclick="openNativeHaIntegrations()">Open HA Latter Integration Page</button>
+          </div>
+        </div>
+
         <div class="card">
-          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:8px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:10px;">
             <div>
-              <h3 style="margin:0;">Latter Internal Event &amp; Error Log</h3>
-              <p class="desc" style="margin:4px 0 0;">Live ring buffer of Latter Studio actions, onboarding events, and frontend/backend errors.</p>
+              <h3 style="margin:0;">Live Combined Log Stream (<code>system_log</code> + Studio Events)</h3>
+              <p class="desc" style="margin:4px 0 0;">Automatically aggregates Home Assistant <code>system_log</code> warnings/errors for Latter &amp; ESPHome with Studio configuration events.</p>
             </div>
-            <div style="display:flex;gap:8px;">
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <select id="log-filter-select" style="width:auto;min-width:210px;" onchange="renderLogsView()">
+                <option value="all">All Latter &amp; ESPHome Logs</option>
+                <option value="device">Active Device Only</option>
+                <option value="latter">Latter Middleware Only</option>
+                <option value="errors">Warnings &amp; Errors Only</option>
+              </select>
+              <button type="button" class="btn-secondary" onclick="refreshState(false)">Refresh</button>
               <button type="button" class="btn-secondary" onclick="copyTextById('internal-log-output')">Copy Log</button>
-              <button type="button" class="btn-danger" onclick="clearInternalLogs()">Clear</button>
+              <button type="button" class="btn-danger" onclick="clearInternalLogs()">Clear Studio Events</button>
             </div>
           </div>
-          <pre id="internal-log-output" class="mono" style="background:var(--input-bg);border:1px solid var(--border);border-radius:7px;padding:12px;overflow-x:auto;max-height:280px;margin:0;color:var(--text-strong);line-height:1.45;">No events logged yet.</pre>
+          <pre id="internal-log-output" class="mono" style="background:var(--input-bg);border:1px solid var(--border);border-radius:7px;padding:14px;overflow-x:auto;max-height:480px;margin:0;color:var(--text-strong);line-height:1.5;">No events logged yet.</pre>
         </div>
       </section>
     </div>
@@ -3228,7 +3281,8 @@ const DEVICE_VIEWS = [
   "system"
 ];
 
-const ALL_VIEWS = HOUSEHOLD_VIEWS.concat(DEVICE_VIEWS);
+const SHARED_ADMIN_VIEWS = ["logs"];
+const ALL_VIEWS = HOUSEHOLD_VIEWS.concat(DEVICE_VIEWS).concat(SHARED_ADMIN_VIEWS);
 
 const HA_CSS_VARS = [
   "--primary-background-color",
@@ -3357,6 +3411,61 @@ window.addEventListener("unhandledrejection", (ev) => {
   }).catch(() => {});
 });
 
+function renderLogsView() {
+  const logPre = document.getElementById("internal-log-output");
+  if (!logPre) return;
+  const allLogs = STATE?.internal_logs || [];
+  const filterMode = document.getElementById("log-filter-select")?.value || "all";
+  const slug = (STATE?.config?.device_slug || "").toLowerCase();
+  const slugHyphen = slug.replace(/_/g, "-");
+
+  const devBtn = document.getElementById("btn-native-dev-logs");
+  if (devBtn && slug) {
+    devBtn.textContent = `Open Native HA Logs (${slug})`;
+  }
+
+  const filtered = allLogs.filter(l => {
+    const hay = `${l.source || ''} ${l.message || ''}`.toLowerCase();
+    if (filterMode === "device" && slug) {
+      return hay.includes(slug) || hay.includes(slugHyphen);
+    }
+    if (filterMode === "latter") {
+      return hay.includes("latter") || !(l.source || "").startsWith("ha:");
+    }
+    if (filterMode === "errors") {
+      return ["WARN", "WARNING", "ERROR", "CRITICAL"].includes((l.level || "").toUpperCase());
+    }
+    return true;
+  });
+
+  logPre.textContent = filtered.length
+    ? filtered.map(l => `[${l.ts}] [${l.level}] (${l.source}) ${l.message}`).join("\\n\\n")
+    : "No matching log entries.";
+}
+
+function openNativeHaLogs(filterTerm) {
+  const q = filterTerm ? `?filter=${encodeURIComponent(filterTerm)}` : "";
+  const targetPath = `/config/logs${q}`;
+  try {
+    if (window.parent && window.parent !== window) {
+      window.parent.location.href = targetPath;
+      return;
+    }
+  } catch (_e) {}
+  window.open(targetPath, "_blank");
+}
+
+function openNativeHaIntegrations() {
+  const targetPath = "/config/integrations/integration/latter";
+  try {
+    if (window.parent && window.parent !== window) {
+      window.parent.location.href = targetPath;
+      return;
+    }
+  } catch (_e) {}
+  window.open(targetPath, "_blank");
+}
+
 async function clearInternalLogs() {
   const resp = await fetch(API_URL, {
     method: "POST",
@@ -3365,7 +3474,7 @@ async function clearInternalLogs() {
   });
   if (resp.ok) {
     applyStateToDom(await resp.json(), false);
-    showToast("Cleared internal log");
+    showToast("Cleared studio events");
   }
 }
 
@@ -3387,6 +3496,61 @@ window.addEventListener("unhandledrejection", (ev) => {
   }).catch(() => {});
 });
 
+function renderLogsView() {
+  const logPre = document.getElementById("internal-log-output");
+  if (!logPre) return;
+  const allLogs = STATE?.internal_logs || [];
+  const filterMode = document.getElementById("log-filter-select")?.value || "all";
+  const slug = (STATE?.config?.device_slug || "").toLowerCase();
+  const slugHyphen = slug.replace(/_/g, "-");
+
+  const devBtn = document.getElementById("btn-native-dev-logs");
+  if (devBtn && slug) {
+    devBtn.textContent = `Open Native HA Logs (${slug})`;
+  }
+
+  const filtered = allLogs.filter(l => {
+    const hay = `${l.source || ''} ${l.message || ''}`.toLowerCase();
+    if (filterMode === "device" && slug) {
+      return hay.includes(slug) || hay.includes(slugHyphen);
+    }
+    if (filterMode === "latter") {
+      return hay.includes("latter") || !(l.source || "").startsWith("ha:");
+    }
+    if (filterMode === "errors") {
+      return ["WARN", "WARNING", "ERROR", "CRITICAL"].includes((l.level || "").toUpperCase());
+    }
+    return true;
+  });
+
+  logPre.textContent = filtered.length
+    ? filtered.map(l => `[${l.ts}] [${l.level}] (${l.source}) ${l.message}`).join("\\n\\n")
+    : "No matching log entries.";
+}
+
+function openNativeHaLogs(filterTerm) {
+  const q = filterTerm ? `?filter=${encodeURIComponent(filterTerm)}` : "";
+  const targetPath = `/config/logs${q}`;
+  try {
+    if (window.parent && window.parent !== window) {
+      window.parent.location.href = targetPath;
+      return;
+    }
+  } catch (_e) {}
+  window.open(targetPath, "_blank");
+}
+
+function openNativeHaIntegrations() {
+  const targetPath = "/config/integrations/integration/latter";
+  try {
+    if (window.parent && window.parent !== window) {
+      window.parent.location.href = targetPath;
+      return;
+    }
+  } catch (_e) {}
+  window.open(targetPath, "_blank");
+}
+
 async function clearInternalLogs() {
   const resp = await fetch(API_URL, {
     method: "POST",
@@ -3395,7 +3559,7 @@ async function clearInternalLogs() {
   });
   if (resp.ok) {
     applyStateToDom(await resp.json(), false);
-    showToast("Cleared internal log");
+    showToast("Cleared studio events");
   }
 }
 
@@ -3449,7 +3613,9 @@ function setScope(scope, targetView=null) {
 }
 
 function switchView(viewId, btnEl) {
-  const neededScope = HOUSEHOLD_VIEWS.includes(viewId) ? "household" : "device";
+  const neededScope = SHARED_ADMIN_VIEWS.includes(viewId)
+    ? CURRENT_SCOPE
+    : (HOUSEHOLD_VIEWS.includes(viewId) ? "household" : "device");
   if (CURRENT_SCOPE !== neededScope) {
     setScope(neededScope, viewId);
     return;
@@ -4754,13 +4920,7 @@ function applyStateToDom(data, forceFormUpdate=false) {
   const medSumEl = document.getElementById("dash-media-summary");
   if (medSumEl) medSumEl.textContent = mediaSummary;
 
-  const logPre = document.getElementById("internal-log-output");
-  if (logPre) {
-    const logs = data.internal_logs || [];
-    logPre.textContent = logs.length
-      ? logs.map(l => `[${l.ts}] [${l.level}] (${l.source}) ${l.message}`).join("\\n")
-      : "No events or errors logged.";
-  }
+  renderLogsView();
 
   const actSlotIdx = live.active_remote_slot || 1;
   [1, 2, 3, 4].forEach(idx => {

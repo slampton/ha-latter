@@ -2,59 +2,23 @@
   "config": {
     "step": {
       "user": {
-        "title": "Latter",
-        "description": "Bind Home Assistant entities, BLE room presence, 4-slot TV remotes, alarm, media players, weather, and calendars to your ESPHome device with zero YAML substitutions.",
+        "title": "Onboard ESPHome Device to Latter",
+        "description": "Screen geometry, resolution (466x466 vs 410x502), and BLE capabilities are auto-detected from your device hardware. Shared household settings (Remotes, Volume Routing, Weather, Alarm, Calendars) are inherited automatically and managed in the Latter sidebar panel.",
         "data": {
           "device_slug": "ESPHome Device Name / Slug",
-          "default_speaker": "Default Active Speaker (Music Assistant)",
-          "vol_speaker_1": "Volume Override 1: When Streaming to Speaker...",
-          "vol_target_1": "Volume Override 1: Control Volume on Entity (AVR / Number)...",
-          "vol_speaker_2": "Volume Override 2: When Streaming to Speaker...",
-          "vol_target_2": "Volume Override 2: Control Volume on Entity (AVR / Number)...",
-          "default_area": "Default Room / Area Context",
-          "native_ble_tracking": "Enable Built-In ESPHome BLE Proxy Room Tracking (Zero-Config)",
-          "ble_beacon_uuid": "Device BLE iBeacon UUID (for Built-In or Bermuda Tracking)",
-          "presence_entity": "External BLE Room Sensor Override (Optional Bermuda / ESPresense sensor)",
-          "ble_auto_switch": "Auto-Switch Room Controls When Entering a New Room",
-          "sync_device_area": "Sync Active Room to ESPHome Device Area (Room-Aware Voice Assistant)",
-          "area_handoff": "Unified Area Context Handoff (Auto-link Room Speaker & Remote)",
-          "alarm_entity": "Home Security Alarm Entity (alarm_control_panel)",
-          "remote_1": "TV / Media Remote Slot 1 (remote or media_player)",
-          "remote_2": "TV / Media Remote Slot 2 (remote or media_player)",
-          "remote_3": "TV / Media Remote Slot 3 (remote or media_player)",
-          "remote_4": "TV / Media Remote Slot 4 (remote or media_player)",
-          "weather_entity": "Weather Provider Entity",
-          "calendar_entities": "Calendars (Agenda Serialization)",
-          "custom_entities": "Pinned Custom Entities (Dynamic Entity Mapper)",
-          "art_size": "Image Proxy Resolution"
+          "apply_profile": "Initial Configuration Profile",
+          "default_area": "Starting / Default Room",
+          "default_speaker": "Default Active Speaker (Optional)"
         }
       },
       "reconfigure": {
-        "title": "Reconfigure Latter Device Mapping",
-        "description": "Update the bound Home Assistant entities, BLE room presence settings, remotes, and media options for this ESPHome device.",
+        "title": "Reconfigure Latter Device",
+        "description": "Update the primary room, default speaker, or apply a saved configuration profile. Open the Latter sidebar panel for full System & Device Studio controls.",
         "data": {
           "device_slug": "ESPHome Device Name / Slug",
-          "default_speaker": "Default Active Speaker (Music Assistant)",
-          "vol_speaker_1": "Volume Override 1: When Streaming to Speaker...",
-          "vol_target_1": "Volume Override 1: Control Volume on Entity (AVR / Number)...",
-          "vol_speaker_2": "Volume Override 2: When Streaming to Speaker...",
-          "vol_target_2": "Volume Override 2: Control Volume on Entity (AVR / Number)...",
-          "default_area": "Default Room / Area Context",
-          "native_ble_tracking": "Enable Built-In ESPHome BLE Proxy Room Tracking (Zero-Config)",
-          "ble_beacon_uuid": "Device BLE iBeacon UUID (for Built-In or Bermuda Tracking)",
-          "presence_entity": "External BLE Room Sensor Override (Optional Bermuda / ESPresense sensor)",
-          "ble_auto_switch": "Auto-Switch Room Controls When Entering a New Room",
-          "sync_device_area": "Sync Active Room to ESPHome Device Area (Room-Aware Voice Assistant)",
-          "area_handoff": "Unified Area Context Handoff (Auto-link Room Speaker & Remote)",
-          "alarm_entity": "Home Security Alarm Entity (alarm_control_panel)",
-          "remote_1": "TV / Media Remote Slot 1 (remote or media_player)",
-          "remote_2": "TV / Media Remote Slot 2 (remote or media_player)",
-          "remote_3": "TV / Media Remote Slot 3 (remote or media_player)",
-          "remote_4": "TV / Media Remote Slot 4 (remote or media_player)",
-          "weather_entity": "Weather Provider Entity",
-          "calendar_entities": "Calendars (Agenda Serialization)",
-          "custom_entities": "Pinned Custom Entities (Dynamic Entity Mapper)",
-          "art_size": "Image Proxy Resolution"
+          "apply_profile": "Apply Configuration Profile",
+          "default_area": "Starting / Default Room",
+          "default_speaker": "Default Active Speaker (Optional)"
         }
       }
     },
@@ -68,31 +32,13 @@
   "options": {
     "step": {
       "init": {
-        "title": "Latter Device Mapping & Middleware Options",
-        "description": "Dynamically remap Home Assistant entities, BLE room presence, 4-slot TV remotes, alarm, and volume overrides for this ESPHome device.",
+        "title": "Latter Device Options",
+        "description": "Update the starting room, default speaker, or apply a saved profile. For full System & Device configuration, open the Latter panel in your Home Assistant sidebar.",
         "data": {
           "device_slug": "ESPHome Device Name / Slug",
-          "default_speaker": "Default Active Speaker (Music Assistant)",
-          "vol_speaker_1": "Volume Override 1: When Streaming to Speaker...",
-          "vol_target_1": "Volume Override 1: Control Volume on Entity (AVR / Number)...",
-          "vol_speaker_2": "Volume Override 2: When Streaming to Speaker...",
-          "vol_target_2": "Volume Override 2: Control Volume on Entity (AVR / Number)...",
-          "default_area": "Default Room / Area Context",
-          "native_ble_tracking": "Enable Built-In ESPHome BLE Proxy Room Tracking (Zero-Config)",
-          "ble_beacon_uuid": "Device BLE iBeacon UUID (for Built-In or Bermuda Tracking)",
-          "presence_entity": "External BLE Room Sensor Override (Optional Bermuda / ESPresense sensor)",
-          "ble_auto_switch": "Auto-Switch Room Controls When Entering a New Room",
-          "sync_device_area": "Sync Active Room to ESPHome Device Area (Room-Aware Voice Assistant)",
-          "area_handoff": "Unified Area Context Handoff (Auto-link Room Speaker & Remote)",
-          "alarm_entity": "Home Security Alarm Entity (alarm_control_panel)",
-          "remote_1": "TV / Media Remote Slot 1 (remote or media_player)",
-          "remote_2": "TV / Media Remote Slot 2 (remote or media_player)",
-          "remote_3": "TV / Media Remote Slot 3 (remote or media_player)",
-          "remote_4": "TV / Media Remote Slot 4 (remote or media_player)",
-          "weather_entity": "Weather Provider Entity",
-          "calendar_entities": "Calendars (Agenda Serialization)",
-          "custom_entities": "Pinned Custom Entities (Dynamic Entity Mapper)",
-          "art_size": "Image Proxy Resolution"
+          "apply_profile": "Apply Configuration Profile",
+          "default_area": "Starting / Default Room",
+          "default_speaker": "Default Active Speaker (Optional)"
         }
       }
     }
