@@ -1,6 +1,12 @@
 {
   "entity": {
     "sensor": {
+      "current_room": {
+        "default": "mdi:map-marker-radius"
+      },
+      "ble_distance": {
+        "default": "mdi:map-marker-distance"
+      },
       "active_media": {
         "default": "mdi:music-circle"
       },

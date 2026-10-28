@@ -683,3 +683,64 @@ save_custom_color:
       required: false
       selector:
         text:
+
+doorbell_intercom:
+  name: Doorbell & SIP Two-Way Intercom Action
+  description: Control live de-noised camera audio listening, two-way doorbell/SIP talkback, quick replies, 90° camera selection, and RFC 2833 DTMF / smart lock unlocking.
+  fields:
+    target_device:
+      name: Target ESPHome Device
+      description: Optional ESPHome device slug (auto-resolved when running a single Latter device).
+      required: false
+      selector:
+        text:
+    action:
+      name: Intercom Action
+      description: Two-way audio or doorbell action to perform.
+      required: true
+      default: "listen_toggle"
+      selector:
+        select:
+          options:
+            - "listen_start"
+            - "listen_stop"
+            - "listen_toggle"
+            - "talk_message"
+            - "quick_reply"
+            - "unlock_door"
+            - "call_target"
+            - "set_anc_mode"
+            - "select_camera"
+    camera_entity:
+      name: Camera Entity
+      description: Target camera.* entity (defaults to the device's active carousel camera).
+      required: false
+      selector:
+        entity:
+          domain: camera
+    camera_index:
+      name: Camera Carousel Index (0-9)
+      description: Optional 0-based index in the 10-slot Camera Carousel.
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 9
+          mode: box
+    message:
+      name: Spoken Message / SIP Target URI / DTMF Digits
+      description: Message to speak to the doorbell speaker, target device/SIP URI for call_target, or DTMF digits for unlock_door.
+      required: false
+      selector:
+        text:
+    anc_mode:
+      name: Noise & Echo Cancellation Mode (ANC+AEC)
+      description: DSP filter profile (ultra, balanced, raw).
+      required: false
+      default: "ultra"
+      selector:
+        select:
+          options:
+            - "ultra"
+            - "balanced"
+            - "raw"

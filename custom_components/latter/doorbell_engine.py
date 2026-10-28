@@ -570,9 +570,27 @@ class LatterCameraAudioStreamView(HomeAssistantView):
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("camera.async_get_stream_source(%s) failed: %s", cam_ent, err)
 
+        sip = get_sip_engine(self.hass)
+        dsp = get_dsp_pipeline(self.hass)
+
+        # If an active SIP call is in progress with RTP audio arriving and no RTSP camera stream is used,
+        # drain and DSP-process the live SIP RTP ring buffer into a WAV stream for the ESPHome speaker!
+        if sip.call_state == "in_call" and sip._inbound_pcm_ring and not stream_url:
+            raw_pcm = array("h", list(sip._inbound_pcm_ring))
+            sip._inbound_pcm_ring.clear()
+            clean_pcm = await self.hass.async_add_executor_job(
+                dsp.process_pcm16_frames, raw_pcm, 16000, anc_mode, False, True
+            )
+            out_io = io.BytesIO()
+            with wave.open(out_io, "wb") as wf_out:
+                wf_out.setnchannels(1)
+                wf_out.setsampwidth(2)
+                wf_out.setframerate(16000)
+                wf_out.writeframes(clean_pcm.tobytes())
+            return web.Response(body=out_io.getvalue(), content_type="audio/wav")
+
         ffmpeg_bin = shutil.which("ffmpeg")
         if not stream_url or not ffmpeg_bin:
-            dsp = get_dsp_pipeline(self.hass)
             wav_bytes = dsp.process_wav_bytes(b"", anc_mode=anc_mode, prepend_unifi_preroll=True)
             return web.Response(body=wav_bytes, content_type="audio/wav")
 
@@ -739,6 +757,18 @@ async def async_play_talkback_clip_to_doorbell(
     if cam_ent and wav_bytes:
         if await _async_push_go2rtc_or_onvif_backchannel(hass, cam_ent, wav_bytes):
             return True
+
+    sip = get_sip_engine(hass)
+    if sip.call_state == "in_call" and wav_bytes:
+        try:
+            with wave.open(io.BytesIO(wav_bytes), "rb") as wf:
+                frames = wf.readframes(wf.getnframes())
+                pcm_arr = array("h")
+                pcm_arr.frombytes(frames[: len(frames) - (len(frames) % 2)])
+                await sip.async_stream_pcm16_to_rtp(pcm_arr)
+                return True
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("SIP RTP talkback stream error: %s", err)
 
     return False
 
