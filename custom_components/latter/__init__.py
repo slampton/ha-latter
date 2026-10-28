@@ -84,28 +84,8 @@ def _slugify_device_name(name: str) -> str:
 def is_latter_compatible_esphome_device(
     hass: HomeAssistant, device: dr.DeviceEntry, slug: str
 ) -> bool:
-    """Return True ONLY if the ESPHome device announces Latter contract actions or project metadata."""
-    # 1. Check ESPHome project name / model / sw_version metadata
-    model_str = f"{device.model or ''} {device.sw_version or ''} {device.name or ''} {slug}".lower()
-    if any(
-        k in model_str
-        for k in (
-            "latter",
-            "pocket-assistant",
-            "pocket_assistant",
-            "wrist-assist",
-            "wrist_assist",
-            "mobile-assistant",
-            "mobile_assistant",
-            "remote-assistant",
-            "remote_assistant",
-            "desk-assistant",
-            "desk_assistant",
-        )
-    ):
-        return True
-
-    # 2. Check registered ESPHome API actions (esphome.<slug>_set_browse_slots / _set_room_slots / _show_notification)
+    """Return True ONLY if the ESPHome device implements the Latter API contract or Latter project namespace."""
+    # 1. Check registered ESPHome API contract actions (_set_browse_slots, _set_room_slots, _show_notification, _latter_ping)
     esphome_services = hass.services.async_services().get("esphome", {})
     for suffix in LATTER_CONTRACT_ACTION_SUFFIXES:
         exact = f"{slug}{suffix}"
@@ -114,6 +94,11 @@ def is_latter_compatible_esphome_device(
         for svc_name in esphome_services:
             if svc_name.endswith(suffix) and slug in svc_name:
                 return True
+
+    # 2. Check ESPHome project namespace or Latter OTA update entity
+    model_str = f"{device.model or ''} {device.sw_version or ''}".lower()
+    if "latter" in model_str or hass.states.get(f"update.{slug}_project_firmware") is not None:
+        return True
 
     return False
 

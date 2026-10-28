@@ -685,22 +685,7 @@ def _build_companion_state_payload(
                     for s in esphome_svcs
                 )
                 or hass.states.get(f"update.{c.device_slug}_project_firmware") is not None
-                or any(
-                    k in m_low
-                    for k in (
-                        "slampton",
-                        "pocket_assistant",
-                        "pocket-assistant",
-                        "wrist_assist",
-                        "wrist-assist",
-                        "mobile_assistant",
-                        "mobile-assistant",
-                        "remote_assistant",
-                        "remote-assistant",
-                        "desk_assistant",
-                        "desk-assistant",
-                    )
-                )
+                or "latter" in m_low
             )
         )
         if c.device_profile == "ble_beacon":
