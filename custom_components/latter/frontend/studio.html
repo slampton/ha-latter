@@ -362,8 +362,9 @@
   }
   .unified-page-header h2 {
     margin: 0;
-    font-size: 20px;
-    font-weight: 500;
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
     color: var(--text-strong);
   }
   .content-wrap > section > .page-header {
@@ -415,9 +416,10 @@
     margin-bottom: 0;
   }
   .card h3 {
-    margin: 0 0 12px;
-    font-size: 15px;
-    font-weight: 500;
+    margin: 0 0 14px;
+    font-size: 17.5px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
     color: var(--text-strong);
   }
   .card p.desc {
@@ -550,6 +552,25 @@
   .summary-row:last-child { border-bottom: none; }
   .summary-row span { color: var(--muted); }
   .summary-row strong { color: var(--text-strong); font-weight: 500; }
+  .summary-row.clickable {
+    cursor: pointer;
+    margin: 0 -8px;
+    padding: 9px 8px;
+    border-radius: 7px;
+    transition: background 0.12s ease, color 0.12s ease;
+  }
+  .summary-row.clickable:hover {
+    background: var(--card-hover);
+  }
+  .summary-row.clickable:hover span {
+    color: var(--text-strong);
+  }
+  .summary-row.clickable strong::after {
+    content: " ›";
+    color: var(--muted);
+    font-weight: 400;
+    margin-left: 6px;
+  }
 
   /* EXPANDABLE HA DETAILS PANELS */
   details.ha-details {
@@ -560,9 +581,10 @@
     overflow: hidden;
   }
   details.ha-details > summary {
-    padding: 13px 18px;
-    font-size: 14px;
-    font-weight: 500;
+    padding: 14px 18px;
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
     color: var(--text-strong);
     cursor: pointer;
     list-style: none;
@@ -1072,23 +1094,16 @@
       </div>
 
       <!-- ================================================================== -->
-      <!-- SYSTEM TAB 1: SYSTEM & BLE PRESENCE OVERVIEW                       -->
+      <!-- SYSTEM TAB 1: SYSTEM OVERVIEW                                      -->
       <!-- ================================================================== -->
       <section id="view-fleet_overview" class="hidden">
         <div class="page-header">
           <h2>Overview</h2>
         </div>
 
-        <div class="hero-stats" style="grid-template-columns:repeat(4, minmax(0, 1fr));">
-          <div class="stat-box"><span>Total Devices</span><strong id="sys-st-total">0</strong></div>
-          <div class="stat-box"><span>Native Displays</span><strong id="sys-st-native">0</strong></div>
-          <div class="stat-box"><span>BLE Tracked Devices</span><strong id="sys-st-roaming">0</strong></div>
-          <div class="stat-box"><span>BLE Room Proxies</span><strong id="sys-st-proxies">0</strong></div>
-        </div>
-
         <div class="grid-2">
           <div class="card">
-            <h3>System &amp; BLE Presence</h3>
+            <h3>System</h3>
             <div class="summary-row">
               <span>Latter Version</span>
               <div style="display:flex;align-items:center;gap:8px;">
@@ -1096,21 +1111,43 @@
                 <button type="button" class="btn-secondary" style="padding:3px 9px;font-size:11.5px;" onclick="checkSystemUpdates()">Check for Updates</button>
               </div>
             </div>
-            <div class="summary-row"><span>Online / Active Devices</span><strong id="sys-sum-online">0 / 0</strong></div>
-            <div class="summary-row"><span>ESPHome Displays &amp; Nodes</span><strong id="sys-sum-esphome">0</strong></div>
-            <div class="summary-row"><span>BLE Phones, Watches &amp; Tags</span><strong id="sys-sum-ble-tags">0</strong></div>
-            <div class="summary-row"><span>People Tracked (BLE Room)</span><strong id="sys-sum-people">0</strong></div>
-            <div class="summary-row"><span>Calibrated BLE Rooms</span><strong id="sys-sum-ble-rooms">0</strong></div>
+            <div class="summary-row clickable" onclick="openDevicesWithCategory('all')">
+              <span>Online / Active Devices</span><strong id="sys-sum-online">0 / 0</strong>
+            </div>
+            <div class="summary-row clickable" onclick="openDevicesWithCategory('native')">
+              <span>Latter Native Devices</span><strong id="sys-sum-native">0</strong>
+            </div>
+            <div class="summary-row clickable" onclick="openDevicesWithCategory('ble_tracked')">
+              <span>BLE Tracked Devices</span><strong id="sys-sum-ble-tracked">0</strong>
+            </div>
+            <div class="summary-row clickable" onclick="openDevicesWithCategory('ble_tracked')">
+              <span>People Tracked (BLE Room)</span><strong id="sys-sum-people">0</strong>
+            </div>
+            <div class="summary-row clickable" onclick="openSystemSection('room_tracking', '')">
+              <span>BLE Room Proxies</span><strong id="sys-sum-proxies">0</strong>
+            </div>
           </div>
 
           <div class="card">
             <h3>Configured Integrations</h3>
-            <div class="summary-row"><span>Remote Controls</span><strong id="sys-sum-remotes">0</strong></div>
-            <div class="summary-row"><span>Speaker Volume Overrides</span><strong id="sys-sum-vol">0</strong></div>
-            <div class="summary-row"><span>Cameras</span><strong id="sys-sum-cameras">0</strong></div>
-            <div class="summary-row"><span>Calendars</span><strong id="sys-sum-calendars">0</strong></div>
-            <div class="summary-row"><span>Pinned Room Entities</span><strong id="sys-sum-pinned">0</strong></div>
-            <div class="summary-row"><span>Groups &amp; Saved Profiles</span><strong id="sys-sum-groups-profiles">0</strong></div>
+            <div class="summary-row clickable" onclick="openSystemSection('remotes', 'card-remotes')">
+              <span>Remote Controls</span><strong id="sys-sum-remotes">0</strong>
+            </div>
+            <div class="summary-row clickable" onclick="openSystemSection('remotes', 'card-vol-overrides')">
+              <span>Speaker Volume Overrides</span><strong id="sys-sum-vol">0</strong>
+            </div>
+            <div class="summary-row clickable" onclick="openSystemSection('household', 'card-cameras')">
+              <span>Cameras</span><strong id="sys-sum-cameras">0</strong>
+            </div>
+            <div class="summary-row clickable" onclick="openSystemSection('household', 'card-calendars')">
+              <span>Calendars</span><strong id="sys-sum-calendars">0</strong>
+            </div>
+            <div class="summary-row clickable" onclick="openSystemSection('household', 'card-pinned')">
+              <span>Pinned Room Entities</span><strong id="sys-sum-pinned">0</strong>
+            </div>
+            <div class="summary-row clickable" onclick="openSystemSection('fleet_sync', '')">
+              <span>Groups &amp; Saved Profiles</span><strong id="sys-sum-groups-profiles">0</strong>
+            </div>
           </div>
         </div>
       </section>
@@ -1160,7 +1197,7 @@
           </div>
 
           <!-- CARD 2: CAMERAS & UNIFI TWO-WAY DOORBELL AUDIO -->
-          <div class="card">
+          <div class="card" id="card-cameras">
             <h3>Cameras &amp; Doorbell Two-Way Audio</h3>
             <p class="desc">Add up to 10 <code>camera.*</code> entities for the on-device Camera Carousel and two-way doorbell intercom.</p>
             <div class="field">
@@ -1235,7 +1272,7 @@
 
         <div class="grid-2">
           <!-- CARD 3: CALENDARS -->
-          <div class="card">
+          <div class="card" id="card-calendars">
             <h3>Calendars</h3>
             <p class="desc">Add family calendars (<code>calendar.*</code>) to aggregate upcoming events in the Agenda tool and Home screen.</p>
             <div id="calendars-list"></div>
@@ -1243,7 +1280,7 @@
           </div>
 
           <!-- CARD 4: PINNED ROOM ENTITIES -->
-          <div class="card">
+          <div class="card" id="card-pinned">
             <h3>Pinned Room Entities</h3>
             <p class="desc">Pin favorite scenes, scripts, lights, or switches to appear in Room Control and the on-device Macros tool.</p>
             <div id="pinned-entities-list"></div>
@@ -1261,14 +1298,14 @@
           <p>Assign up to four TV/media remote slots and configure speaker volume overrides.</p>
         </div>
 
-        <div class="card">
+        <div class="card" id="card-remotes">
           <h3>Remote Controls</h3>
           <p class="desc">Add up to 10 <code>remote.*</code> or <code>media_player.*</code> entities. <strong>Slot 1</strong> is the primary device targeted by the Master Power button on your displays; additional slots appear as scrollable secondary devices.</p>
           <div id="remotes-list"></div>
           <button type="button" class="btn-secondary" id="btn-add-remote" onclick="addRemoteControlRow(''); markDirty();">+ Add Remote Control</button>
         </div>
 
-        <div class="card">
+        <div class="card" id="card-vol-overrides">
           <h3>Speaker Volume Overrides</h3>
           <p class="desc">When streaming audio to a specific speaker, route volume commands to a different media player or number entity instead.</p>
           <div id="volume-overrides-list"></div>
@@ -1564,7 +1601,7 @@
       </section>
 
       <!-- ================================================================== -->
-      <!-- DEVICES LANDING PAGE (SORTABLE TABLE + ADD DEVICE MODAL)           -->
+      <!-- DEVICES LANDING PAGE (CATEGORY DROPDOWN + SORTABLE TABLE)          -->
       <!-- ================================================================== -->
       <section id="view-select_device_prompt" class="hidden">
         <div class="page-header">
@@ -1573,8 +1610,18 @@
         </div>
         <div class="card">
           <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
-            <div style="flex:1;min-width:200px;max-width:320px;">
-              <input type="text" id="prompt-search-input" placeholder="Search..." oninput="onFilterDeviceTable(this.value)">
+            <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:220px;max-width:340px;">
+              <select id="device-category-filter" onchange="onFilterDeviceCategory(this.value)">
+                <option value="all">Category: All Devices</option>
+                <option value="online">Online / Active Devices</option>
+                <option value="native">Latter Native Devices</option>
+                <option value="ble_tracked">BLE Tracked Devices</option>
+                <option value="roaming">Roaming Devices</option>
+                <option value="stationary">Stationary Devices</option>
+                <option value="headless">Screenless / Headless Devices</option>
+                <option value="ble_beacon">BLE Phones, Watches &amp; Tags</option>
+                <option value="updates">Firmware Updates Available</option>
+              </select>
             </div>
             <button type="button" class="btn-primary" id="btn-open-add-device" onclick="openAddDeviceModal()">+ Add Device</button>
           </div>
@@ -2034,7 +2081,7 @@ let SELECTED_SURVEY_SLUG = localStorage.getItem("latter_ble_survey_slug") || "";
 let PREVIEW_CAMERA_ENTITY = "";
 let DEVICE_SORT_COL = "title";
 let DEVICE_SORT_ASC = true;
-let DEVICE_FILTER_TEXT = "";
+let DEVICE_CATEGORY_FILTER = "all";
 
 const HOUSEHOLD_VIEWS = [
   "fleet_overview",
@@ -2380,6 +2427,27 @@ function openDevicesLanding() {
   setScope("device", "select_device_prompt");
 }
 
+function openDevicesWithCategory(categoryKey) {
+  DEVICE_CATEGORY_FILTER = categoryKey || "all";
+  const sel = document.getElementById("device-category-filter");
+  if (sel) sel.value = DEVICE_CATEGORY_FILTER;
+  DEVICE_SELECTED = false;
+  setScope("device", "select_device_prompt");
+  window.scrollTo({top: 0, behavior: "smooth"});
+}
+
+function openSystemSection(viewId, cardId) {
+  setScope("household", viewId);
+  if (cardId) {
+    setTimeout(() => {
+      const el = document.getElementById(cardId);
+      if (el) el.scrollIntoView({behavior: "smooth", block: "start"});
+    }, 60);
+  } else {
+    window.scrollTo({top: 0, behavior: "smooth"});
+  }
+}
+
 function setScope(scope, targetView=null) {
   CURRENT_SCOPE = scope === "household" ? "household" : "device";
   document.getElementById("tab-scope-household").classList.toggle("active", CURRENT_SCOPE === "household");
@@ -2680,11 +2748,24 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
     return 3;
   };
 
-  const q = DEVICE_FILTER_TEXT.trim().toLowerCase();
+  const catSel = document.getElementById("device-category-filter");
+  if (catSel && catSel.value !== DEVICE_CATEGORY_FILTER) {
+    catSel.value = DEVICE_CATEGORY_FILTER;
+  }
+  const cat = DEVICE_CATEGORY_FILTER || "all";
   const filteredDevices = (fleetDevices || []).filter(d => {
-    if (!q) return true;
-    const hay = `${d.title || ''} ${d.device_slug || ''} ${d.model_label || ''} ${d.area_label || ''} ${d.device_group_name || ''} ${d.status_label || ''}`.toLowerCase();
-    return hay.includes(q);
+    const isNative = !!(d.has_audio || d.device_profile === "mobile_display" || d.device_profile === "stationary_display");
+    const isBleTracked = !!(d.has_ble || d.device_profile === "ble_beacon" || (d.area_label || "Roaming") === "Roaming");
+    const isRoaming = (d.area_label || "Roaming") === "Roaming";
+    if (cat === "online") return d.status_label !== "Offline";
+    if (cat === "native") return isNative;
+    if (cat === "ble_tracked") return isBleTracked;
+    if (cat === "roaming") return isRoaming;
+    if (cat === "stationary") return !isRoaming;
+    if (cat === "headless") return !isNative;
+    if (cat === "ble_beacon") return d.device_profile === "ble_beacon";
+    if (cat === "updates") return d.status_label === "Update Available";
+    return true;
   });
 
   filteredDevices.sort((a, b) => {
@@ -2757,29 +2838,22 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
   const onlineDevs = allDevs.filter(d => d.status_label !== "Offline").length;
   const nativeDevs = allDevs.filter(d => d.has_audio || d.device_profile === "mobile_display" || d.device_profile === "stationary_display").length;
   const bleTrackedDevs = allDevs.filter(d => d.has_ble || d.device_profile === "ble_beacon" || (d.area_label || "Roaming") === "Roaming").length;
-  const bleTagsCount = allDevs.filter(d => d.device_profile === "ble_beacon").length;
-  const esphomeNodesCount = totalDevs - bleTagsCount;
   const scannersMap = STATE?.live?.ble_scanners_map || {};
   const proxyCount = Object.keys(scannersMap).length || (STATE?.live?.ble_survey_rows || []).length;
-  const calRoomsCount = Object.keys(cfg?.ble_room_offsets || {}).length;
   const peopleCount = (STATE?.catalog?.persons || []).length;
 
   const setSysTxt = (id, val) => {
     const el = document.getElementById(id);
     if (el) el.textContent = String(val);
   };
-  setSysTxt("sys-st-total", totalDevs);
-  setSysTxt("sys-st-native", nativeDevs);
-  setSysTxt("sys-st-roaming", bleTrackedDevs);
-  setSysTxt("sys-st-proxies", proxyCount);
 
   const sysVerClean = String(STATE?.version || "2.2.0").replace(/^v/i, "");
   setSysTxt("sys-sum-version", `v${sysVerClean}`);
   setSysTxt("sys-sum-online", `${onlineDevs} / ${totalDevs}`);
-  setSysTxt("sys-sum-esphome", esphomeNodesCount);
-  setSysTxt("sys-sum-ble-tags", bleTagsCount);
+  setSysTxt("sys-sum-native", nativeDevs);
+  setSysTxt("sys-sum-ble-tracked", bleTrackedDevs);
   setSysTxt("sys-sum-people", peopleCount);
-  setSysTxt("sys-sum-ble-rooms", calRoomsCount);
+  setSysTxt("sys-sum-proxies", proxyCount);
 
   const remCnt = Array.isArray(cfg?.remotes_list) ? cfg.remotes_list.filter(Boolean).length : 0;
   const volCnt = Array.isArray(cfg?.volume_overrides) ? cfg.volume_overrides.length : 0;
@@ -4094,12 +4168,8 @@ function toggleDeviceTableSort(col) {
   }
 }
 
-function onFilterDeviceTable(val) {
-  DEVICE_FILTER_TEXT = val || "";
-  const f1 = document.getElementById("fleet-search-input");
-  const f2 = document.getElementById("prompt-search-input");
-  if (f1 && document.activeElement !== f1) f1.value = DEVICE_FILTER_TEXT;
-  if (f2 && document.activeElement !== f2) f2.value = DEVICE_FILTER_TEXT;
+function onFilterDeviceCategory(val) {
+  DEVICE_CATEGORY_FILTER = val || "all";
   if (STATE) {
     renderFleetOverview(STATE.fleet_devices, STATE.fleet_controls, STATE.config);
   }
