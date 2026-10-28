@@ -1149,10 +1149,21 @@
             </div>
           </div>
 
-          <!-- CARD 2: CAMERAS (UP TO 10 SLOTS + RECTANGULAR PREVIEW) -->
+          <!-- CARD 2: CAMERAS & UNIFI TWO-WAY DOORBELL AUDIO -->
           <div class="card">
-            <h3>Cameras</h3>
-            <p class="desc">Add up to 10 <code>camera.*</code> entities for alert snapshots and camera viewing. <strong>Camera 1</strong> is the default notification camera.</p>
+            <h3>Cameras &amp; Doorbell Two-Way Audio</h3>
+            <p class="desc">Add up to 10 <code>camera.*</code> entities for the on-device Camera Carousel and two-way doorbell intercom.</p>
+            <div class="field">
+              <label>Doorbell Noise &amp; Echo Cancellation (ANC + NLMS AEC)</label>
+              <div class="input-action-row">
+                <select id="cfg-doorbell_anc_mode" onchange="markDirty()">
+                  <option value="ultra">Ultra ANC + NLMS Echo Cancel (UniFi Protect Optimized)</option>
+                  <option value="balanced">Balanced Spectral ANC</option>
+                  <option value="raw">Raw Audio Passthrough</option>
+                </select>
+                <button type="button" class="btn-secondary" onclick="testDoorbellTalkback()">Test Talkback</button>
+              </div>
+            </div>
             <div id="cameras-list"></div>
             <button type="button" class="btn-secondary" id="btn-add-camera" onclick="addCameraRow(''); markDirty();">+ Add Camera</button>
 
@@ -2002,6 +2013,7 @@ const DOCK_APP_META = [
   {token: "alarm",  label: "Home Hub"},
   {token: "room",   label: "Room"},
   {token: "remote", label: "Remote"},
+  {token: "camera", label: "Cameras"},
   {token: "games",  label: "Games"},
   {token: "tools",  label: "Tools"}
 ];
@@ -2946,6 +2958,29 @@ function renderCameraPreview(camEntityId) {
 function refreshActiveCameraPreview() {
   if (PREVIEW_CAMERA_ENTITY) {
     renderCameraPreview(PREVIEW_CAMERA_ENTITY);
+  }
+}
+
+async function testDoorbellTalkback() {
+  const firstCam = document.querySelector("#cameras-list .cam-ent-sel")?.value || STATE?.config?.camera_entity || "";
+  const ancMode = document.getElementById("cfg-doorbell_anc_mode")?.value || "ultra";
+  if (!firstCam) {
+    showToast("Add a camera entity first");
+    return;
+  }
+  const resp = await fetch(API_URL, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({
+      command: "test_doorbell_talkback",
+      camera_entity: firstCam,
+      anc_mode: ancMode,
+      message: "Hello! Please leave the package by the front door."
+    })
+  });
+  if (resp.ok) {
+    applyStateToDom(await resp.json(), false);
+    showToast(`Sent DSP-stabilized talkback to ${firstCam}`);
   }
 }
 
@@ -4297,6 +4332,9 @@ function applyStateToDom(data, forceFormUpdate=false) {
     document.getElementById("cfg-wallpaper_source").value = cfg.wallpaper_source || "";
     document.getElementById("cfg-wallpaper_cycle_minutes").value = String(cfg.wallpaper_cycle_minutes || 0);
     document.getElementById("cfg-art_size").value = String(cfg.art_size || 466);
+    if (document.getElementById("cfg-doorbell_anc_mode")) {
+      document.getElementById("cfg-doorbell_anc_mode").value = cfg.doorbell_anc_mode || "ultra";
+    }
 
     populateSelect("cfg-default_area", cat.areas, cfg.default_area);
     populateSelect("cfg-presence_entity", cat.presence_sensors, cfg.presence_entity);
@@ -4493,6 +4531,7 @@ async function saveAllConfig() {
     custom_bindings: bindings,
     custom_palettes: Array.isArray((STATE?.config || {}).custom_palettes) ? STATE.config.custom_palettes : [],
     device_custom_color: (STATE?.config || {}).device_custom_color || "#3898FF",
+    doorbell_anc_mode: document.getElementById("cfg-doorbell_anc_mode")?.value || "ultra",
   };
 
   const resp = await fetch(API_URL, {

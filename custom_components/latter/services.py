@@ -22,6 +22,7 @@ from .const import (
     DOMAIN,
     SERVICE_CALENDAR_CREATE_EVENT,
     SERVICE_CALENDAR_FETCH,
+    SERVICE_DOORBELL_INTERCOM,
     SERVICE_INTERCOM_BROADCAST,
     SERVICE_MEDIA_COMMAND,
     SERVICE_MEDIA_VOLUME,
@@ -1292,4 +1293,45 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         DOMAIN,
         SERVICE_SAVE_CUSTOM_COLOR,
         _handle_save_custom_color,
+    )
+
+    async def _handle_doorbell_intercom(call: ServiceCall) -> None:
+        """Execute a two-way doorbell intercom or camera audio action."""
+        from .doorbell_engine import async_execute_doorbell_intercom
+
+        coord = _resolve_coordinator_from_call(hass, call)
+        if not coord:
+            return
+        data = call.data
+        action = str(data.get("action") or "listen_toggle").strip()
+        cam_ent = str(data.get("camera_entity") or "").strip() or None
+        msg = str(data.get("message") or "").strip()
+        anc = str(data.get("anc_mode") or "").strip() or None
+        raw_idx = data.get("camera_index")
+        cam_idx = int(raw_idx) if raw_idx is not None and str(raw_idx).strip() != "" else None
+        await async_execute_doorbell_intercom(
+            hass=hass,
+            coordinator=coord,
+            action=action,
+            camera_entity=cam_ent,
+            message=msg,
+            anc_mode=anc,
+            camera_index=cam_idx,
+        )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_DOORBELL_INTERCOM,
+        _handle_doorbell_intercom,
+        schema=vol.Schema(
+            {
+                **BASE_TARGET_FIELDS,
+                vol.Optional("action", default="listen_toggle"): cv.string,
+                vol.Optional("camera_entity"): cv.string,
+                vol.Optional("camera_index"): vol.Any(vol.Coerce(int), cv.string),
+                vol.Optional("message"): cv.string,
+                vol.Optional("anc_mode"): cv.string,
+            },
+            extra=vol.ALLOW_EXTRA,
+        ),
     )

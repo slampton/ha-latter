@@ -60,8 +60,10 @@ CONF_WALLPAPER_CYCLE_MINUTES: Final = "wallpaper_cycle_minutes"
 CONF_ART_SIZE: Final = "art_size"
 CONF_CUSTOM_PALETTES: Final = "custom_palettes"
 CONF_DEVICE_CUSTOM_COLOR: Final = "device_custom_color"
+CONF_DOORBELL_ANC_MODE: Final = "doorbell_anc_mode"
 
 # Defaults
+DEFAULT_DOORBELL_ANC_MODE: Final = "ultra"
 DEFAULT_DEVICE_PROFILE: Final = "mobile_display"
 DEFAULT_DISPLAY_SHAPE: Final = "circle"
 DEFAULT_PAGE_SIZE: Final = 3
@@ -90,11 +92,14 @@ SERVICE_CALENDAR_CREATE_EVENT: Final = "calendar_create_event"
 SERVICE_INTERCOM_BROADCAST: Final = "intercom_broadcast"
 SERVICE_NOTIFY_DEVICE: Final = "notify_device"
 SERVICE_SAVE_CUSTOM_COLOR: Final = "save_custom_color"
+SERVICE_DOORBELL_INTERCOM: Final = "doorbell_intercom"
 
-# HTTP Endpoints (Artwork, Wallpaper, Camera Peephole & Web Companion Studio)
+# HTTP Endpoints (Artwork, Wallpaper, Camera Peephole, Doorbell Audio & Web Companion Studio)
 API_ARTWORK_PROXY_PATH: Final = "/api/latter/artwork/{target_device}"
 API_WALLPAPER_PROXY_PATH: Final = "/api/latter/wallpaper/{target_device}"
 API_CAMERA_PROXY_PATH: Final = "/api/latter/camera/{target_device}"
+API_CAMERA_AUDIO_STREAM_PATH: Final = "/api/latter/camera_audio/{target_device}"
+API_DOORBELL_TALKBACK_PATH: Final = "/api/latter/doorbell_talkback/{target_device}"
 API_MAP_PROXY_PATH: Final = "/api/latter/map/{target_device}"
 API_COMPANION_UI_PATH: Final = "/api/latter/companion/{entry_id}"
 API_COMPANION_API_PATH: Final = "/api/latter/companion/{entry_id}/api"
@@ -164,6 +169,7 @@ GLOBAL_CONFIG_KEYS: Final[tuple[str, ...]] = (
     CONF_CUSTOM_ENTITIES,
     CONF_CUSTOM_BINDINGS,
     CONF_CUSTOM_PALETTES,
+    CONF_DOORBELL_ANC_MODE,
     CONF_SITES_REGISTRY,
     CONF_DEVICE_GROUPS,
     CONF_SAVED_PROFILES,

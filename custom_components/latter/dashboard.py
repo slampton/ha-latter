@@ -59,6 +59,8 @@ from .const import (
     CONF_CUSTOM_ENTITIES,
     CONF_CUSTOM_PALETTES,
     CONF_DEVICE_CUSTOM_COLOR,
+    CONF_DOORBELL_ANC_MODE,
+    DEFAULT_DOORBELL_ANC_MODE,
     CONF_DEFAULT_AREA,
     CONF_DEFAULT_PAGE_SIZE,
     CONF_DEFAULT_SPEAKER,
@@ -550,6 +552,10 @@ def _build_companion_state_payload(
         CONF_CUSTOM_BINDINGS: coordinator.custom_bindings,
         CONF_CUSTOM_PALETTES: coordinator.custom_palettes,
         CONF_DEVICE_CUSTOM_COLOR: coordinator.device_custom_color,
+        CONF_DOORBELL_ANC_MODE: str(
+            coordinator.get_opt(CONF_DOORBELL_ANC_MODE, coordinator.doorbell_anc_mode)
+            or DEFAULT_DOORBELL_ANC_MODE
+        ),
         CONF_DOCK_APPS: coordinator.dock_apps_csv,
         CONF_WALLPAPER_SOURCE: coordinator.wallpaper_source,
         CONF_WALLPAPER_FAVORITES: coordinator.wallpaper_favorites,
@@ -844,6 +850,8 @@ def _build_companion_state_payload(
             "weather_condition": coordinator.weather_attributes.get("condition", "unknown"),
             "weather_temp": coordinator.weather_attributes.get("temperature"),
             "wallpaper_url": room_attrs.get("wallpaper_url", "none"),
+            "doorbell_talk_state": coordinator.doorbell_talk_state,
+            "doorbell_anc_mode": coordinator.doorbell_anc_mode,
             "active_remote_slot": coordinator.active_remote_slot,
             "remote_slots_meta": remote_attrs,
             "device_sw_version": str(
@@ -1062,6 +1070,25 @@ class LatterCompanionApiView(HomeAssistantView):
                             level=int(float(level)) if level is not None else None,
                             option=str(option) if option is not None else None,
                         )
+            return web.json_response(
+                _build_companion_state_payload(self.hass, coordinator)
+            )
+
+        if cmd == "test_doorbell_talkback":
+            from .doorbell_engine import async_execute_doorbell_intercom
+
+            cam_ent = str(body.get("camera_entity") or coordinator.camera_entity or "").strip()
+            msg = str(body.get("message") or "Hello! Please leave the package by the front door.").strip()
+            anc = str(body.get("anc_mode") or coordinator.doorbell_anc_mode or "ultra").strip()
+            coordinator.doorbell_anc_mode = anc
+            await async_execute_doorbell_intercom(
+                self.hass,
+                coordinator,
+                action="talk_message",
+                camera_entity=cam_ent,
+                message=msg,
+                anc_mode=anc,
+            )
             return web.json_response(
                 _build_companion_state_payload(self.hass, coordinator)
             )

@@ -47,6 +47,10 @@ from .dashboard import (
     LatterStudioRootView,
     get_studio_panel_token,
 )
+from .doorbell_engine import (
+    LatterCameraAudioStreamView,
+    LatterDoorbellTalkbackView,
+)
 from .http import (
     LatterArtworkTranscoderView,
     LatterCameraSnapshotView,
@@ -234,6 +238,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
         hass.http.register_view(LatterArtworkTranscoderView(hass))
         hass.http.register_view(LatterWallpaperProxyView(hass))
         hass.http.register_view(LatterCameraSnapshotView(hass))
+        hass.http.register_view(LatterCameraAudioStreamView(hass))
+        hass.http.register_view(LatterDoorbellTalkbackView(hass))
         hass.http.register_view(LatterMapSnapshotView(hass))
         hass.http.register_view(LatterCompanionDashboardView(hass))
         hass.http.register_view(LatterCompanionApiView(hass))

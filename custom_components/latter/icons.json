@@ -60,6 +60,9 @@
     },
     "save_custom_color": {
       "service": "mdi:palette"
+    },
+    "doorbell_intercom": {
+      "service": "mdi:doorbell-video"
     }
   }
 }

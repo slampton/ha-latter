@@ -70,6 +70,8 @@ from .const import (
     CONF_CUSTOM_ENTITIES,
     CONF_CUSTOM_PALETTES,
     CONF_DEVICE_CUSTOM_COLOR,
+    CONF_DOORBELL_ANC_MODE,
+    DEFAULT_DOORBELL_ANC_MODE,
     CONF_DEFAULT_AREA,
     CONF_DEFAULT_PAGE_SIZE,
     CONF_DEFAULT_SPEAKER,
@@ -337,6 +339,12 @@ class LatterCoordinator:
         self.alert_duration: int = 8
         self.alert_chime: bool = True
         self.alert_camera_url: str = "none"
+        self.active_camera_index: int = 0
+        self.active_carousel_camera: str = ""
+        self.doorbell_talk_state: str = "idle"
+        self.doorbell_anc_mode: str = str(
+            self.get_opt(CONF_DOORBELL_ANC_MODE, DEFAULT_DOORBELL_ANC_MODE) or DEFAULT_DOORBELL_ANC_MODE
+        )
 
     def get_opt(self, key: str, default: Any = None) -> Any:
         """Retrieve a setting, prioritizing Global Household config for shared keys and entry options/data for device keys."""
@@ -2092,7 +2100,11 @@ class LatterCoordinator:
             "camera_entity": self.camera_entity or "",
             "camera_entities": self.camera_entities,
             "cameras_summary": self._build_cameras_summary(),
-            "camera_snapshot_url": self.build_camera_snapshot_url() if self.camera_entity else "none",
+            "camera_snapshot_url": self.build_camera_snapshot_url(
+                self.active_carousel_camera or self.camera_entity
+            ) if (self.active_carousel_camera or self.camera_entity) else "none",
+            "doorbell_talk_state": self.doorbell_talk_state,
+            "doorbell_anc_mode": self.doorbell_anc_mode,
             "alert_id": self.alert_id,
             "alert_title": self.alert_title,
             "alert_message": self.alert_message,

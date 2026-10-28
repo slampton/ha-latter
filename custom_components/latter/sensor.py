@@ -71,6 +71,7 @@ class _BaseLatterSensor(SensorEntity):
             "cameras_summary",
             "camera_snapshot_url",
             "companion_url",
+            "doorbell_speakers_map",
             "custom_bindings",
             "custom_bindings_summary",
             "custom_entities",
