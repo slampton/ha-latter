@@ -60,6 +60,8 @@ from .const import (
     CONF_AREA_HANDOFF,
     CONF_ART_SIZE,
     CONF_ASSIGNED_PERSON,
+    CONF_ASSIGNED_ROLE,
+    DEFAULT_ASSIGNED_ROLE,
     CONF_BLE_AUTO_SWITCH,
     CONF_BLE_BEACON_UUID,
     CONF_BLE_TARGET_ADDRESS,
@@ -688,9 +690,15 @@ class LatterCoordinator:
 
     @property
     def assigned_person(self) -> str:
-        """Return optional person.* entity_id assigned to carry this device."""
+        """Return optional person.* entity_id assigned to this device."""
         val = self.get_opt(CONF_ASSIGNED_PERSON, "")
         return str(val or "").strip()
+
+    @property
+    def assigned_role(self) -> str:
+        """Return RBAC role assigned to this device (admin, member, guest, kiosk_room_only)."""
+        val = str(self.get_opt(CONF_ASSIGNED_ROLE, DEFAULT_ASSIGNED_ROLE) or DEFAULT_ASSIGNED_ROLE).strip().lower()
+        return val if val in ("admin", "member", "guest", "kiosk_room_only") else DEFAULT_ASSIGNED_ROLE
 
     @property
     def ble_auto_switch_enabled(self) -> bool:
@@ -2136,6 +2144,7 @@ class LatterCoordinator:
             "ble_scanners_map": get_all_scanners_diagnostic_map(self.hass),
             "ble_target_macs": self._ble_tracker.target_macs_formatted if self._ble_tracker else [],
             "assigned_person": self.assigned_person,
+            "assigned_role": self.assigned_role,
             "presence_entity": pres_ent or "",
             "presence_state": pres_state,
             "ble_auto_switch": self.ble_auto_switch_enabled,

@@ -1669,9 +1669,20 @@
               </div>
             </div>
 
-            <div class="field" id="dash-assigned-person-field" style="padding-top:12px;border-top:1px solid var(--border);">
-              <label>Assigned Person (Exposes <code>sensor.&lt;person&gt;_current_room</code> for Dashboards)</label>
-              <select id="cfg-assigned_person" onchange="onAssignedPersonChanged(this.value)"></select>
+            <div class="form-grid-2" id="dash-assigned-person-field" style="padding-top:12px;border-top:1px solid var(--border);">
+              <div class="field">
+                <label>Assigned Person (<code>sensor.&lt;person&gt;_current_room</code>)</label>
+                <select id="cfg-assigned_person" onchange="onAssignedPersonChanged(this.value)"></select>
+              </div>
+              <div class="field">
+                <label>Device Access Role (RBAC)</label>
+                <select id="cfg-assigned_role" onchange="onAssignedPersonChanged(this.value)">
+                  <option value="admin">Administrator (Full Access)</option>
+                  <option value="member">Site Member (Standard)</option>
+                  <option value="guest">Guest (Restricted)</option>
+                  <option value="kiosk_room_only">Room Kiosk (Assigned Area Only)</option>
+                </select>
+              </div>
             </div>
           </div>
 
@@ -4574,6 +4585,9 @@ function applyStateToDom(data, forceFormUpdate=false) {
     populateSelect("cfg-default_area", cat.areas, cfg.default_area);
     populateSelect("cfg-presence_entity", cat.presence_sensors, cfg.presence_entity);
     populateSelect("cfg-assigned_person", cat.persons, cfg.assigned_person);
+    if (document.getElementById("cfg-assigned_role")) {
+      document.getElementById("cfg-assigned_role").value = cfg.assigned_role || "admin";
+    }
     populateSelect("cfg-default_speaker", cat.ma_speakers, cfg.default_speaker, false);
     const voListEl = document.getElementById("volume-overrides-list");
     if (voListEl) {
@@ -4738,6 +4752,7 @@ async function saveAllConfig() {
     ble_target_address: document.getElementById("cfg-ble_target_address")?.value?.trim() || "",
     presence_entity: document.getElementById("cfg-presence_entity").value,
     assigned_person: document.getElementById("cfg-assigned_person")?.value || "",
+    assigned_role: document.getElementById("cfg-assigned_role")?.value || "admin",
     default_speaker: document.getElementById("cfg-default_speaker").value,
     volume_overrides: volumeOverrides,
     vol_speaker_1: volumeOverrides[0]?.speaker || "",

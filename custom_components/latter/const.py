@@ -41,6 +41,8 @@ CONF_BLE_TARGET_ADDRESS: Final = "ble_target_address"
 CONF_BLE_ROOM_OFFSETS: Final = "ble_room_offsets"
 CONF_PRESENCE_ENTITY: Final = "presence_entity"
 CONF_ASSIGNED_PERSON: Final = "assigned_person"
+CONF_ASSIGNED_ROLE: Final = "assigned_role"
+DEFAULT_ASSIGNED_ROLE: Final = "admin"
 CONF_BLE_AUTO_SWITCH: Final = "ble_auto_switch"
 CONF_SYNC_DEVICE_AREA: Final = "sync_device_area"
 CONF_AREA_HANDOFF: Final = "area_handoff"
@@ -124,7 +126,8 @@ FORECAST_REFRESH_INTERVAL_MINUTES: Final = 30
 CALENDAR_REFRESH_INTERVAL_MINUTES: Final = 15
 
 
-GLOBAL_STORAGE_KEY: Final = "latter.household"
+GLOBAL_STORAGE_KEY: Final = "latter.site"
+LEGACY_GLOBAL_STORAGE_KEY: Final = "latter.household"
 BACKUPS_STORAGE_KEY: Final = "latter.backups"
 DATA_GLOBAL_CONFIG: Final = "global_config"
 DATA_GLOBAL_STORE: Final = "global_store"
@@ -151,11 +154,13 @@ CONF_VPN_PUBLIC_KEY: Final = "vpn_public_key"
 CONF_VPN_PRESHARED_KEY: Final = "vpn_preshared_key"
 CONF_VPN_HOTSPOT_SSID: Final = "vpn_hotspot_ssid"
 
-# Forward-Compatible Extensibility Envelopes (v2.2+ -> v3.0 Site-to-Site, Tile-Grid GUI & Sensor Fusion)
+# Forward-Compatible Extensibility Envelopes (v2.2+ -> v3.0 Site-to-Site, RBAC, Identity & Tile-Grid GUI)
 CONF_CAPABILITIES_MANIFEST: Final = "capabilities_manifest"
 CONF_GUI_LAYOUT: Final = "gui_layout"
 CONF_FEDERATION_CONFIG: Final = "federation_config"
 CONF_AREA_FUSION_CONFIG: Final = "area_fusion_config"
+CONF_RBAC_POLICY: Final = "rbac_policy"
+CONF_IDENTITY_PROFILES: Final = "identity_profiles"
 EVENT_LATTER: Final = "latter_event"
 
 GLOBAL_CONFIG_KEYS: Final[tuple[str, ...]] = (
@@ -202,6 +207,8 @@ GLOBAL_CONFIG_KEYS: Final[tuple[str, ...]] = (
     CONF_VPN_HA_IP,
     CONF_FEDERATION_CONFIG,
     CONF_AREA_FUSION_CONFIG,
+    CONF_RBAC_POLICY,
+    CONF_IDENTITY_PROFILES,
 )
 
 

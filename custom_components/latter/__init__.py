@@ -35,6 +35,7 @@ from .const import (
     GLOBAL_CONFIG_KEYS,
     GLOBAL_STORAGE_KEY,
     INTEGRATION_VERSION,
+    LEGACY_GLOBAL_STORAGE_KEY,
     PLATFORMS,
     STORAGE_VERSION,
 )
@@ -120,7 +121,7 @@ def is_latter_compatible_esphome_device(
 async def _async_ensure_global_store(
     hass: HomeAssistant, seed_entry: ConfigEntry | None = None
 ) -> dict[str, Any]:
-    """Load or initialize the shared Global Household configuration store (`.storage/latter.household`)."""
+    """Load or initialize the shared Site configuration store (`.storage/latter.site`), migrating legacy `.storage/latter.household` if present."""
     domain_data = hass.data.setdefault(DOMAIN, {})
     if DATA_GLOBAL_STORE not in domain_data:
         store: Store[dict[str, Any]] = Store(
@@ -128,6 +129,14 @@ async def _async_ensure_global_store(
         )
         domain_data[DATA_GLOBAL_STORE] = store
         loaded = await store.async_load()
+        if not isinstance(loaded, dict) or not loaded:
+            legacy_store: Store[dict[str, Any]] = Store(
+                hass, STORAGE_VERSION, LEGACY_GLOBAL_STORAGE_KEY
+            )
+            legacy_loaded = await legacy_store.async_load()
+            if isinstance(legacy_loaded, dict) and legacy_loaded:
+                loaded = dict(legacy_loaded)
+                await store.async_save(loaded)
         domain_data[DATA_GLOBAL_CONFIG] = dict(loaded) if isinstance(loaded, dict) else {}
 
     global_cfg: dict[str, Any] = domain_data[DATA_GLOBAL_CONFIG]
