@@ -497,7 +497,13 @@ def _build_companion_state_payload(
         dev_tier = 3
         dev_tier_label = "Tier 3: Bridged Device"
 
-    has_imu = not any(k in slug for k in ("remote_assistant", "desk_assistant")) and (
+    dev_model_meta = (
+        f"{esphome_inspector.get('device', {}).get('model', '')} "
+        f"{esphome_inspector.get('device', {}).get('sw_version', '')} "
+        f"{coordinator.art_size} {slug}"
+    ).lower()
+    is_no_imu_hw = any(k in dev_model_meta for k in ("p4_35", "p4-35", "p4_4b", "p4-4b", "320x480", "720"))
+    has_imu = (not is_no_imu_hw) and (
         has_native_slots
         or any("imu" in str(it.get("entity_id") or "").lower() for it in all_esp_items)
     )

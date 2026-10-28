@@ -377,6 +377,16 @@ class LatterNativeBleTracker:
             self.winning_distance_ft = None
             self._on_area_detected("away", "")
 
+    def _resolve_hardware_meta(self) -> str:
+        """Return combined lowercase hardware model, sw_version, and slug metadata from HA Device Registry."""
+        dev_reg = dr.async_get(self.hass)
+        slug_norm = self._raw_slug.lower().replace("-", "_")
+        for dev in _iter_devices(dev_reg):
+            d_name = str(dev.name_by_user or dev.name or "").strip().lower().replace("-", "_").replace(" ", "_")
+            if slug_norm and slug_norm in d_name:
+                return f"{dev.model or ''} {dev.sw_version or ''} {d_name} {slug_norm}".lower()
+        return slug_norm
+
     @property
     def target_macs_formatted(self) -> list[str]:
         """Return the list of candidate Wi-Fi/BLE MAC addresses for the target ESPHome device."""
@@ -569,13 +579,13 @@ class LatterNativeBleTracker:
             elif self._target_uuid_hex in apple_bytes.hex().lower():
                 uuid_matched = True
             if uuid_matched:
-                slug_norm = self._raw_slug.lower().replace("-", "_")
+                hw_meta = self._resolve_hardware_meta()
                 expected_minor = (
-                    4 if "remote_assistant" in slug_norm
-                    else 3 if "mobile_assistant" in slug_norm
-                    else 2 if "wrist_assist" in slug_norm
-                    else 5 if "desk_assistant" in slug_norm
-                    else 1 if "pocket_assistant" in slug_norm
+                    4 if any(k in hw_meta for k in ("p4_35", "p4-35", "320x480", "remote_assistant"))
+                    else 3 if any(k in hw_meta for k in ("216", "480x480", "mobile_assistant"))
+                    else 2 if any(k in hw_meta for k in ("206", "410x502", "wrist_assist"))
+                    else 5 if any(k in hw_meta for k in ("p4_4b", "p4-4b", "4b", "720x720", "desk_assistant"))
+                    else 1 if any(k in hw_meta for k in ("175", "466x466", "pocket_assistant"))
                     else None
                 )
                 if minor_val is not None and expected_minor is not None:
@@ -583,8 +593,8 @@ class LatterNativeBleTracker:
                         return True
                     if minor_val >= 2 and minor_val != expected_minor:
                         return False
-                if "remote_assistant" in slug_norm or "desk_assistant" in slug_norm:
-                    # On ESP32-P4 + ESP32-C6 boards, the C6 radio has its own factory BLE MAC
+                if any(k in hw_meta for k in ("p4", "esp32p4", "320x480", "720x720", "remote_assistant", "desk_assistant")):
+                    # On ESP32-P4 + ESP32-C6 boards, the C6 co-processor has its own factory BLE MAC
                     return True
                 if self._target_mac_ints and adv_int is not None:
                     return adv_int in self._target_mac_ints
