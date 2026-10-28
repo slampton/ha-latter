@@ -84,6 +84,7 @@ DEVICE_CONFIG_EXPORT_KEYS: tuple[str, ...] = (
     CONF_WALLPAPER_CYCLE_MINUTES,
     CONF_ART_SIZE,
     CONF_DEVICE_CUSTOM_COLOR,
+    "device_remote_group",
     CONF_SITE_ID,
     CONF_VPN_ENABLED,
     CONF_VPN_CLIENT_IP,
@@ -113,6 +114,7 @@ PROFILE_DEVICE_KEYS: tuple[str, ...] = (
     CONF_WALLPAPER_CYCLE_MINUTES,
     CONF_ART_SIZE,
     CONF_DEVICE_CUSTOM_COLOR,
+    "device_remote_group",
 )
 
 DEFAULT_DEVICE_GROUPS: list[dict[str, str]] = [

@@ -1131,10 +1131,10 @@
               <span>BLE Tracked Devices</span><strong id="sys-sum-ble-tracked">0</strong>
             </div>
             <div class="summary-row clickable" onclick="openDevicesWithCategory('ble_tracked')">
-              <span>People Tracked (BLE Room)</span><strong id="sys-sum-people">0</strong>
+              <span>People Tracked (BLE Area)</span><strong id="sys-sum-people">0</strong>
             </div>
             <div class="summary-row clickable" onclick="openSystemSection('room_tracking', '')">
-              <span>BLE Room Proxies</span><strong id="sys-sum-proxies">0</strong>
+              <span>BLE Area Proxies</span><strong id="sys-sum-proxies">0</strong>
             </div>
           </div>
 
@@ -1153,7 +1153,7 @@
               <span>Calendars</span><strong id="sys-sum-calendars">0</strong>
             </div>
             <div class="summary-row clickable" onclick="openSystemSection('household', 'card-pinned')">
-              <span>Pinned Room Entities</span><strong id="sys-sum-pinned">0</strong>
+              <span>Pinned Area Entities</span><strong id="sys-sum-pinned">0</strong>
             </div>
             <div class="summary-row clickable" onclick="openSystemSection('fleet_sync', '')">
               <span>Groups &amp; Saved Profiles</span><strong id="sys-sum-groups-profiles">0</strong>
@@ -1291,7 +1291,7 @@
 
           <!-- CARD 4: PINNED ROOM ENTITIES -->
           <div class="card" id="card-pinned">
-            <h3>Pinned Room Entities</h3>
+            <h3>Pinned Area Entities</h3>
             <p class="desc">Pin favorite scenes, scripts, lights, or switches to appear in Room Control and the on-device Macros tool.</p>
             <div id="pinned-entities-list"></div>
             <button type="button" class="btn-secondary" onclick="addPinnedEntityRow(''); markDirty();">+ Add Pinned Entity</button>
@@ -1309,10 +1309,22 @@
         </div>
 
         <div class="card" id="card-remotes">
-          <h3>Remote Controls</h3>
-          <p class="desc">Add up to 10 <code>remote.*</code> or <code>media_player.*</code> entities. <strong>Slot 1</strong> is the primary device targeted by the Master Power button on your displays; additional slots appear as scrollable secondary devices.</p>
+          <h3>System Remote Inventory</h3>
+          <p class="desc">Add up to 10 <code>remote.*</code> or <code>media_player.*</code> entities across your site. Once added here, organize them into Area or Device Remote Groups below.</p>
           <div id="remotes-list"></div>
           <button type="button" class="btn-secondary" id="btn-add-remote" onclick="addRemoteControlRow(''); markDirty();">+ Add Remote Control</button>
+        </div>
+
+        <div class="card" id="card-remote-groups">
+          <h3>Remote Control Groups (Area &amp; Device Assignment)</h3>
+          <p class="desc">Create groups of remotes and assign them to an <strong>Area</strong> (so roaming devices automatically see that Area's remotes when present, or hide the Remote app when an Area has none) or assign a group statically to a specific device.</p>
+          <div id="remote-groups-list"></div>
+          <button type="button" class="btn-secondary" onclick="addRemoteGroupRow(); markDirty();">+ Create Remote Group</button>
+
+          <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border);">
+            <h4 style="margin:0 0 10px;font-size:14.5px;font-weight:600;color:var(--text-strong);">Device Remote Assignment</h4>
+            <div id="device-remote-assignments-list" class="native-controls-box"></div>
+          </div>
         </div>
 
         <div class="card" id="card-vol-overrides">
@@ -1399,7 +1411,7 @@
           <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:18px;">
             <div>
               <h3 style="margin:0;">Per-Room BLE Signal Calibration</h3>
-              <p class="desc" style="margin:2px 0 0;">Select a BLE-enabled device, carry it into a room, and click <strong>Calibrate Current Room</strong>.</p>
+              <p class="desc" style="margin:2px 0 0;">Select a BLE-enabled device, carry it into a room, and click <strong>Calibrate Current Area</strong>.</p>
             </div>
             <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
               <div style="display:flex;align-items:center;gap:8px;">
@@ -1648,7 +1660,7 @@
         </div>
 
         <div class="hero-stats" style="grid-template-columns:repeat(4, minmax(0, 1fr));">
-          <div class="stat-box"><span id="st-room-label">Current Room</span><strong id="st-room">--</strong></div>
+          <div class="stat-box"><span id="st-room-label">Current Area</span><strong id="st-room">--</strong></div>
           <div class="stat-box"><span>Battery / Power</span><strong id="st-battery">--</strong></div>
           <div class="stat-box"><span>Wi-Fi Signal</span><strong id="st-wifi">--</strong></div>
           <div class="stat-box"><span>Firmware Version</span><strong id="st-fw-version">--</strong></div>
@@ -1758,7 +1770,7 @@
           </div>
 
           <div class="card">
-            <h3>Home Screen &amp; Room UI</h3>
+            <h3>Home Screen &amp; Area UI</h3>
             <p class="desc">Configure home screen behavior, dock apps, and default Room Control category.</p>
             <div id="embedded-home" class="native-controls-box" style="margin-bottom:14px;"></div>
 
@@ -1812,7 +1824,7 @@
             <div id="embedded-voice-primary" class="native-controls-box" style="margin-bottom:10px;"></div>
 
             <div class="toggle-row" style="margin-bottom:10px;">
-              <span>Sync Active Room to Home Assistant Device Area</span>
+              <span>Sync Active Area to Home Assistant Device Area</span>
               <input type="checkbox" id="cfg-sync_device_area" onchange="markDirty()">
             </div>
 
@@ -1835,7 +1847,7 @@
               <select id="cfg-default_speaker" onchange="markDirty()"></select>
             </div>
             <div class="toggle-row" style="margin-bottom:10px;">
-              <span>Auto-Switch Speaker &amp; Remote on Room Change</span>
+              <span>Auto-Switch Speaker &amp; Remote on Area Change</span>
               <input type="checkbox" id="cfg-area_handoff" onchange="markDirty()">
             </div>
 
@@ -1906,7 +1918,7 @@
                 <select id="cfg-device_group" onchange="markDirty()"></select>
               </div>
               <div class="field">
-                <label>Room Cards Per Page</label>
+                <label>Area Cards Per Page</label>
                 <input type="number" id="cfg-default_page_size" min="1" max="20" value="3" oninput="markDirty(); renderYamlGenerator();">
               </div>
             </div>
@@ -1914,19 +1926,19 @@
 
           <!-- CARD 2: BLE ROOM TRACKING -->
           <div class="card">
-            <h3>BLE Room Tracking</h3>
+            <h3>BLE Area Tracking</h3>
             <p class="desc">Configure how this device roams between rooms using ESPHome Bluetooth proxies.</p>
             <div class="toggle-row">
-              <span>Enable BLE Proxy Room Tracking</span>
+              <span>Enable BLE Proxy Area Tracking</span>
               <input type="checkbox" id="cfg-native_ble_tracking" onchange="markDirty()">
             </div>
             <div class="toggle-row" style="margin-bottom:10px;">
-              <span>Auto-Switch Active Room on Movement</span>
+              <span>Auto-Switch Active Area on Movement</span>
               <input type="checkbox" id="cfg-ble_auto_switch" onchange="markDirty()">
             </div>
             <div id="embedded-room-ble" class="native-controls-box" style="margin-bottom:12px;"></div>
             <div class="field">
-              <label>Default Fallback Room</label>
+              <label>Default Fallback Area</label>
               <select id="cfg-default_area" onchange="markDirty()"></select>
             </div>
             <div class="field">
@@ -1938,7 +1950,7 @@
               <input type="text" id="cfg-ble_beacon_uuid" oninput="markDirty(); renderYamlGenerator();">
             </div>
             <div class="field">
-              <label>External Room Sensor Override (Optional)</label>
+              <label>External Area Sensor Override (Optional)</label>
               <select id="cfg-presence_entity" onchange="markDirty()"></select>
             </div>
           </div>
@@ -2146,7 +2158,7 @@ const HA_CSS_VARS = [
 const DOCK_APP_META = [
   {token: "music",  label: "Music"},
   {token: "alarm",  label: "Home Hub"},
-  {token: "room",   label: "Room"},
+  {token: "room",   label: "Area"},
   {token: "remote", label: "Remote"},
   {token: "camera", label: "Cameras"},
   {token: "games",  label: "Games"},
@@ -2686,7 +2698,7 @@ function renderRssiBars(surveyRows, packetsSeen) {
           <span class="state-badge" style="min-width:52px;text-align:center;">${offSign} dB</span>
           <button class="btn-secondary" style="padding:4px 8px;font-size:12px;" onclick="setBleOffset('${r.area_id}', ${Number(r.offset_db) + 1})">+1 dB</button>
           ${r.offset_db !== 0 ? `<button class="btn-danger" style="padding:4px 7px;font-size:11.5px;" title="Reset to 0 dB" onclick="setBleOffset('${r.area_id}', 0)">0</button>` : ''}
-          <button class="btn-secondary" style="padding:4px 10px;font-size:12px;border-color:var(--accent);color:var(--accent);" onclick="autoCalibrateHere('${r.area_id}')">Calibrate Current Room</button>
+          <button class="btn-secondary" style="padding:4px 10px;font-size:12px;border-color:var(--accent);color:var(--accent);" onclick="autoCalibrateHere('${r.area_id}')">Calibrate Current Area</button>
         </div>
       </div>
       <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">${sigText}</div>
@@ -3711,6 +3723,151 @@ function addPinnedEntityRow(entityId="") {
   list.appendChild(row);
 }
 
+let REMOTE_GROUPS_STATE = [];
+
+function getInventoryRemoteIds() {
+  const out = [];
+  document.querySelectorAll("#remotes-list .rem-ent-sel").forEach(sel => {
+    const v = (sel.value || "").trim();
+    if (v && !out.includes(v)) out.push(v);
+  });
+  return out;
+}
+
+function getRemoteFriendlyLabel(entId) {
+  const cat = STATE?.catalog?.remotes || [];
+  const found = cat.find(r => r.id === entId);
+  return found ? found.name.split(" (")[0] : entId;
+}
+
+function renderRemoteGroupsEditor() {
+  const box = document.getElementById("remote-groups-list");
+  if (!box) return;
+  const areas = STATE?.catalog?.areas || [];
+  const invIds = getInventoryRemoteIds();
+
+  if (!REMOTE_GROUPS_STATE.length) {
+    box.innerHTML = `<p style="color:var(--muted);font-size:13px;margin:0 0 10px;">No Remote Groups created yet. Click <strong>+ Create Remote Group</strong> to group remotes by Area.</p>`;
+  } else {
+    box.innerHTML = REMOTE_GROUPS_STATE.map((grp, gIdx) => {
+      const areaOpts = [`<option value="">— No Area (Static Device Assignment Only) —</option>`].concat(
+        areas.map(a => `<option value="${a.id}" ${a.id === grp.area_id ? 'selected' : ''}>Area: ${a.name}</option>`)
+      ).join("");
+      const selectedRems = Array.isArray(grp.remotes) ? grp.remotes : [];
+      const orderedPool = selectedRems.filter(id => invIds.includes(id)).concat(invIds.filter(id => !selectedRems.includes(id)));
+      const pillsHtml = orderedPool.length
+        ? orderedPool.map(entId => {
+            const isEn = selectedRems.includes(entId);
+            const pos = selectedRems.indexOf(entId);
+            const badge = isEn ? (pos === 0 ? "★ Primary: " : `#${pos + 1}: `) : "+ ";
+            return `<div class="dock-pill ${isEn ? 'enabled' : ''}" onclick="toggleRemoteInGroup(${gIdx}, '${entId}')">
+              <span>${badge}${getRemoteFriendlyLabel(entId)}</span>
+            </div>`;
+          }).join("")
+        : `<span style="color:var(--muted);font-size:12px;">Add remotes to the System Remote Inventory above first.</span>`;
+
+      return `<div style="background:var(--input-bg);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px;">
+        <div class="form-grid-2" style="margin-bottom:10px;">
+          <div>
+            <small style="color:var(--muted);display:block;margin-bottom:3px;font-size:11px;">Group Name</small>
+            <input type="text" value="${(grp.name || '').replace(/"/g, '&quot;')}" placeholder="e.g. Living Room AV" oninput="updateRemoteGroupField(${gIdx}, 'name', this.value)">
+          </div>
+          <div style="display:flex;gap:8px;align-items:flex-end;">
+            <div style="flex:1;">
+              <small style="color:var(--muted);display:block;margin-bottom:3px;font-size:11px;">Assigned Area (Auto-Loads When Device Enters Area)</small>
+              <select onchange="updateRemoteGroupField(${gIdx}, 'area_id', this.value)">${areaOpts}</select>
+            </div>
+            <button type="button" class="btn-danger" title="Delete Remote Group" onclick="removeRemoteGroupRow(${gIdx})">✕</button>
+          </div>
+        </div>
+        <div>
+          <small style="color:var(--muted);display:block;margin-bottom:5px;font-size:11px;">Remotes in Group (Click to Enable/Disable; First Selected = Primary Power Target)</small>
+          <div class="dock-pill-list">${pillsHtml}</div>
+        </div>
+      </div>`;
+    }).join("");
+  }
+  renderDeviceRemoteAssignments();
+}
+
+function addRemoteGroupRow() {
+  const idx = REMOTE_GROUPS_STATE.length + 1;
+  REMOTE_GROUPS_STATE.push({
+    id: `rg_${Date.now()}_${idx}`,
+    name: `Area Group ${idx}`,
+    area_id: "",
+    remotes: []
+  });
+  renderRemoteGroupsEditor();
+}
+
+function removeRemoteGroupRow(gIdx) {
+  REMOTE_GROUPS_STATE.splice(gIdx, 1);
+  markDirty();
+  renderRemoteGroupsEditor();
+}
+
+function updateRemoteGroupField(gIdx, field, val) {
+  if (!REMOTE_GROUPS_STATE[gIdx]) return;
+  REMOTE_GROUPS_STATE[gIdx][field] = val;
+  markDirty();
+  if (field === "name") renderDeviceRemoteAssignments();
+}
+
+function toggleRemoteInGroup(gIdx, entId) {
+  const grp = REMOTE_GROUPS_STATE[gIdx];
+  if (!grp) return;
+  grp.remotes = Array.isArray(grp.remotes) ? grp.remotes : [];
+  if (grp.remotes.includes(entId)) {
+    grp.remotes = grp.remotes.filter(x => x !== entId);
+  } else {
+    grp.remotes.push(entId);
+  }
+  markDirty();
+  renderRemoteGroupsEditor();
+}
+
+function renderDeviceRemoteAssignments() {
+  const box = document.getElementById("device-remote-assignments-list");
+  if (!box) return;
+  const devs = (STATE?.fleet_devices || []).filter(d => d.device_profile !== "ble_beacon" && d.device_profile !== "headless_node");
+  if (!devs.length) {
+    box.innerHTML = `<p style="color:var(--muted);font-size:12.5px;margin:0;">No display devices onboarded.</p>`;
+    return;
+  }
+  box.innerHTML = devs.map(d => {
+    const curMode = d.device_remote_group || "area_auto";
+    const opts = [
+      `<option value="area_auto" ${curMode === 'area_auto' ? 'selected' : ''}>Follow Active Area (Hide Remote App When Area Has None)</option>`,
+      ...REMOTE_GROUPS_STATE.map(g =>
+        `<option value="group:${g.id}" ${curMode === ('group:' + g.id) ? 'selected' : ''}>Static Group: ${g.name}</option>`
+      ),
+      `<option value="all" ${curMode === 'all' ? 'selected' : ''}>All System Remotes</option>`
+    ].join("");
+    return `<div class="native-ctrl-row">
+      <div class="lbl">
+        ${d.title}
+        <small>Active Area: ${d.active_area_name || 'Unassigned'}</small>
+      </div>
+      <div class="widget">
+        <select onchange="assignDeviceRemoteGroup('${d.device_slug}', this.value)">${opts}</select>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+async function assignDeviceRemoteGroup(deviceSlug, modeVal) {
+  const resp = await fetch(API_URL, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({command: "set_device_remote_group", device_slug: deviceSlug, device_remote_group: modeVal})
+  });
+  if (resp.ok) {
+    applyStateToDom(await resp.json(), false);
+    showToast(`Updated remote assignment for ${deviceSlug}`);
+  }
+}
+
 function renumberRemoteControlRows() {
   const rows = document.querySelectorAll("#remotes-list .remote-row-item");
   rows.forEach((row, idx) => {
@@ -3743,7 +3900,7 @@ function addRemoteControlRow(entityId="") {
   row.innerHTML = `
     <div style="flex:1;min-width:0;">
       <small class="rem-slot-lbl" style="color:var(--muted);display:block;margin-bottom:3px;font-size:11px;font-weight:500;">${slotTitle}</small>
-      <select class="rem-ent-sel" style="width:100%;max-width:none;" onchange="markDirty()"><option value="">— Select Remote or Media Player —</option>${remOptions}</select>
+      <select class="rem-ent-sel" style="width:100%;max-width:none;" onchange="markDirty(); renderRemoteGroupsEditor();"><option value="">— Select Remote or Media Player —</option>${remOptions}</select>
     </div>
     <button type="button" class="btn-danger" title="Remove Remote" onclick="this.parentElement.remove(); renumberRemoteControlRows(); markDirty();">✕</button>
   `;
@@ -4490,7 +4647,7 @@ function applyStateToDom(data, forceFormUpdate=false) {
   const hasAssignedArea = !!curFleet.has_assigned_area;
   const isRoaming = !hasAssignedArea;
   const roomLblEl = document.getElementById("st-room-label");
-  if (roomLblEl) roomLblEl.textContent = hasAssignedArea ? "Room" : "Current Room (Roaming)";
+  if (roomLblEl) roomLblEl.textContent = hasAssignedArea ? "Area" : "Current Area (Roaming)";
 
   // 4 Hero Stat Boxes on Device Overview
   const rawDevSw = String(live.device_sw_version || esp?.device?.sw_version || data.version || "2.2.0").replace(/^v/i, "");
@@ -4614,6 +4771,8 @@ function applyStateToDom(data, forceFormUpdate=false) {
       }
       remItems.forEach(rId => addRemoteControlRow(rId));
     }
+    REMOTE_GROUPS_STATE = Array.isArray(cfg.remote_groups) ? JSON.parse(JSON.stringify(cfg.remote_groups)) : [];
+    renderRemoteGroupsEditor();
     populateSelect("cfg-alarm_entity", cat.alarms, cfg.alarm_entity);
     populateSelect("cfg-weather_entity", cat.weathers, cfg.weather_entity);
     populateSelect("cfg-thermostat_entity", cat.climates, cfg.thermostat_entity);
@@ -4762,6 +4921,7 @@ async function saveAllConfig() {
     vol_speaker_2: volumeOverrides[1]?.speaker || "",
     vol_target_2: volumeOverrides[1]?.target || "",
     remotes_list: remotesList,
+    remote_groups: REMOTE_GROUPS_STATE,
     remote_1: remotesList[0] || "",
     remote_2: remotesList[1] || "",
     remote_3: remotesList[2] || "",

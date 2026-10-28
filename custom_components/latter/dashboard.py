@@ -85,10 +85,12 @@ from .const import (
     CONF_DOCK_APPS,
     CONF_NATIVE_BLE_TRACKING,
     CONF_PRESENCE_ENTITY,
+    CONF_DEVICE_REMOTE_GROUP,
     CONF_REMOTE_1,
     CONF_REMOTE_2,
     CONF_REMOTE_3,
     CONF_REMOTE_4,
+    CONF_REMOTE_GROUPS,
     CONF_REMOTES_LIST,
     CONF_SYNC_DEVICE_AREA,
     CONF_VOL_SPEAKER_1,
@@ -570,6 +572,8 @@ def _build_companion_state_payload(
         CONF_REMOTE_3: coordinator.get_opt(CONF_REMOTE_3, ""),
         CONF_REMOTE_4: coordinator.get_opt(CONF_REMOTE_4, ""),
         CONF_REMOTES_LIST: coordinator.get_remote_entities_list(),
+        CONF_REMOTE_GROUPS: coordinator.remote_groups,
+        CONF_DEVICE_REMOTE_GROUP: coordinator.device_remote_group,
         CONF_WEATHER_ENTITY: coordinator.weather_entity or "",
         CONF_CALENDAR_ENTITIES: coordinator.calendar_entities,
         CONF_CUSTOM_ENTITIES: coordinator.custom_entities,
@@ -771,6 +775,7 @@ def _build_companion_state_payload(
                 "status_label": c_status_label,
                 "device_profile": c.device_profile,
                 "device_group": c_grp,
+                "device_remote_group": c.device_remote_group,
                 "device_group_name": group_name_map.get(c_grp, c_grp.replace("_", " ").title()),
                 "site_id": c.site_id,
                 "display_shape": c.display_shape,
@@ -1421,6 +1426,7 @@ class LatterCompanionApiView(HomeAssistantView):
                 CONF_DEVICE_SLUG,
                 CONF_DEVICE_PROFILE,
                 CONF_DEVICE_GROUP,
+                CONF_DEVICE_REMOTE_GROUP,
                 CONF_DISPLAY_SHAPE,
                 CONF_DEFAULT_PAGE_SIZE,
                 CONF_DEFAULT_SPEAKER,
@@ -1605,6 +1611,25 @@ class LatterCompanionApiView(HomeAssistantView):
                             **({CONF_DEFAULT_AREA: default_area} if default_area else {}),
                         },
                     )
+            return web.json_response(
+                _build_companion_state_payload(self.hass, coordinator)
+            )
+
+        if cmd == "set_device_remote_group":
+            target_slug = str(body.get("device_slug") or coordinator.device_slug).strip()
+            rem_grp = str(body.get("device_remote_group") or "area_auto").strip()
+            for c in _get_all_coordinators(self.hass):
+                if c.device_slug == target_slug:
+                    merged_rg: dict[str, Any] = {
+                        **c.entry.data,
+                        **(c.entry.options or {}),
+                        CONF_DEVICE_REMOTE_GROUP: rem_grp,
+                    }
+                    self.hass.config_entries.async_update_entry(
+                        c.entry, data=merged_rg, options=merged_rg
+                    )
+                    c._notify_listeners()
+                    break
             return web.json_response(
                 _build_companion_state_payload(self.hass, coordinator)
             )

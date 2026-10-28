@@ -51,6 +51,9 @@ CONF_REMOTE_2: Final = "remote_2"
 CONF_REMOTE_3: Final = "remote_3"
 CONF_REMOTE_4: Final = "remote_4"
 CONF_REMOTES_LIST: Final = "remotes_list"
+CONF_REMOTE_GROUPS: Final = "remote_groups"
+CONF_DEVICE_REMOTE_GROUP: Final = "device_remote_group"
+DEFAULT_DEVICE_REMOTE_GROUP: Final = "area_auto"
 CONF_CALENDAR_ENTITIES: Final = "calendar_entities"
 CONF_CUSTOM_ENTITIES: Final = "custom_entities"
 CONF_CUSTOM_BINDINGS: Final = "custom_bindings"
@@ -185,6 +188,7 @@ GLOBAL_CONFIG_KEYS: Final[tuple[str, ...]] = (
     CONF_REMOTE_3,
     CONF_REMOTE_4,
     CONF_REMOTES_LIST,
+    CONF_REMOTE_GROUPS,
     CONF_CALENDAR_ENTITIES,
     CONF_CUSTOM_ENTITIES,
     CONF_CUSTOM_BINDINGS,

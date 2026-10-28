@@ -97,11 +97,14 @@ from .const import (
     CONF_DOCK_APPS,
     CONF_NATIVE_BLE_TRACKING,
     CONF_PRESENCE_ENTITY,
+    CONF_DEVICE_REMOTE_GROUP,
     CONF_REMOTE_1,
     CONF_REMOTE_2,
     CONF_REMOTE_3,
     CONF_REMOTE_4,
+    CONF_REMOTE_GROUPS,
     CONF_REMOTES_LIST,
+    DEFAULT_DEVICE_REMOTE_GROUP,
     CONF_SYNC_DEVICE_AREA,
     CONF_VOL_SPEAKER_1,
     CONF_VOL_SPEAKER_2,
@@ -1959,6 +1962,7 @@ class LatterCoordinator:
         if media_map["remote"]:
             self.active_remote = media_map["remote"]
 
+        self.active_remote_slot = 1
         for slot_idx, slot_info in enumerate(self.get_remote_slots(), start=1):
             if slot_info["area_id"] == matched_id:
                 self.active_remote_slot = slot_idx
@@ -1990,8 +1994,41 @@ class LatterCoordinator:
                 self.on_area_changed_push_slots(self)
             )
 
+    @property
+    def remote_groups(self) -> list[dict[str, Any]]:
+        """Return system-wide Remote Control Groups ([{'id', 'name', 'area_id', 'remotes': [...]}, ...])."""
+        raw = self.get_opt(CONF_REMOTE_GROUPS, [])
+        if not isinstance(raw, list):
+            return []
+        out: list[dict[str, Any]] = []
+        for item in raw[:20]:
+            if isinstance(item, dict) and item.get("id") and item.get("name"):
+                rems = [
+                    str(r).strip()
+                    for r in (item.get("remotes") or [])[:10]
+                    if str(r or "").strip()
+                ]
+                out.append(
+                    {
+                        "id": str(item["id"]).strip(),
+                        "name": str(item["name"]).strip(),
+                        "area_id": str(item.get("area_id") or "").strip(),
+                        "remotes": rems,
+                    }
+                )
+        return out
+
+    @property
+    def device_remote_group(self) -> str:
+        """Return this device's remote assignment mode ('area_auto', 'all', or 'group:<id>')."""
+        val = str(
+            self.get_opt(CONF_DEVICE_REMOTE_GROUP, DEFAULT_DEVICE_REMOTE_GROUP)
+            or DEFAULT_DEVICE_REMOTE_GROUP
+        ).strip()
+        return val or DEFAULT_DEVICE_REMOTE_GROUP
+
     def get_remote_entities_list(self) -> list[str]:
-        """Return the configured list of up to 10 remote/media_player entity IDs (with legacy 1..4 fallback)."""
+        """Return the system-wide inventory of up to 10 remote/media_player entity IDs."""
         raw_list = self.get_opt(CONF_REMOTES_LIST)
         if isinstance(raw_list, list):
             return [str(x).strip() for x in raw_list[:10] if str(x or "").strip()]
@@ -2001,24 +2038,80 @@ class LatterCoordinator:
         ]
         return [x for x in legacy if x]
 
+    def get_effective_remote_entities_for_device(self) -> list[str]:
+        """Resolve the ordered list of remote entities for this device (Static Group vs Active Area vs All)."""
+        all_inventory = self.get_remote_entities_list()
+        groups = self.remote_groups
+        mode = self.device_remote_group
+
+        # 1. Explicit Static Remote Group assigned directly to this device
+        if mode.startswith("group:"):
+            gid = mode.split(":", 1)[1].strip()
+            matched_grp = next((g for g in groups if g["id"] == gid), None)
+            if matched_grp is not None:
+                return list(matched_grp.get("remotes") or [])[:10]
+            return []
+
+        # 2. Explicit 'All System Remotes' mode
+        if mode == "all":
+            return all_inventory[:10]
+
+        # 3. Default 'area_auto' mode: Follow the device's current Active Area!
+        cur_area = (self.active_area_id or str(self.get_opt(CONF_DEFAULT_AREA) or "")).strip()
+        if cur_area:
+            # 3A. Check if any Remote Group is assigned to cur_area
+            area_group_remotes: list[str] = []
+            for grp in groups:
+                if grp.get("area_id") == cur_area:
+                    for r in grp.get("remotes") or []:
+                        if r not in area_group_remotes:
+                            area_group_remotes.append(r)
+            if area_group_remotes:
+                return area_group_remotes[:10]
+
+            # 3B. If Remote Groups exist in the system, only show remotes explicitly assigned to cur_area
+            if groups:
+                return []
+
+            # 3C. No Remote Groups defined yet: filter system inventory by HA entity area_id (if any remotes have areas)
+            resolved_all = [resolve_remote_slot_pair(self.hass, eid) for eid in all_inventory]
+            any_has_area = any(bool(r.get("area_id")) for r in resolved_all)
+            if any_has_area:
+                return [
+                    eid
+                    for eid, r in zip(all_inventory, resolved_all)
+                    if r.get("area_id") == cur_area
+                ][:10]
+
+        # Fallback when no groups exist and no areas are assigned to remotes yet
+        if not groups:
+            return all_inventory[:10]
+        return []
+
     def get_remote_slots(self) -> list[dict[str, str]]:
-        """Return up to 10 resolved TV/Media Remote slot dictionaries."""
-        ent_ids = self.get_remote_entities_list()
+        """Return up to 10 resolved TV/Media Remote slot dictionaries for this device's current context."""
+        ent_ids = self.get_effective_remote_entities_for_device()
         if not ent_ids:
-            return [resolve_remote_slot_pair(self.hass, None)]
+            return []
         return [resolve_remote_slot_pair(self.hass, eid) for eid in ent_ids[:10]]
 
     def get_remote_config_payload(self) -> tuple[str, dict[str, Any]]:
-        """Compute state and attributes for sensor.<device_slug>_remote_config (supports up to 10 slots)."""
+        """Compute state and attributes for sensor.<device_slug>_remote_config (supports 0..10 slots)."""
         slots = self.get_remote_slots()
         populated_count = sum(
             1 for s in slots if s["remote_entity"] or s["media_player_entity"]
         )
-        clamped_active = max(1, min(len(slots), self.active_remote_slot))
+        clamped_active = max(1, min(max(1, len(slots)), self.active_remote_slot))
         attrs: dict[str, Any] = {
             "active_slot": clamped_active,
             "configured_count": populated_count,
+            "device_remote_group": self.device_remote_group,
+            "active_area_id": self.active_area_id or "",
         }
+        if populated_count == 0 or not slots:
+            attrs["slots_summary"] = "NONE"
+            return "None", attrs
+
         summary_parts: list[str] = []
         for idx, slot in enumerate(slots, start=1):
             attrs[f"slot_{idx}_name"] = slot["name"]

@@ -203,7 +203,7 @@ class LatterRoomContextSensor(_BaseLatterSensor):
 
     def __init__(self, coordinator: LatterCoordinator) -> None:
         """Initialize room context sensor."""
-        super().__init__(coordinator, "room_context", "Room Context")
+        super().__init__(coordinator, "room_context", "Area Context")
 
     @property
     def native_value(self) -> str:
@@ -270,7 +270,7 @@ class LatterCurrentRoomSensor(_BaseLatterSensor):
 
     def __init__(self, coordinator: LatterCoordinator) -> None:
         """Initialize current room sensor."""
-        super().__init__(coordinator, "current_room", "Current Room")
+        super().__init__(coordinator, "current_room", "Current Area")
 
     @property
     def native_value(self) -> str:
@@ -323,7 +323,7 @@ class LatterPersonCurrentRoomSensor(_BaseLatterSensor):
             if p_st
             else ""
         ) or p_slug.replace("_", " ").title()
-        super().__init__(coordinator, f"person_{p_slug}_current_room", f"{p_friendly} Current Room")
+        super().__init__(coordinator, f"person_{p_slug}_current_room", f"{p_friendly} Current Area")
         self._attr_has_entity_name = False
         self._attr_unique_id = f"{DOMAIN}_person_{p_slug}_current_room"
         self.entity_id = f"sensor.{p_slug}_current_room"

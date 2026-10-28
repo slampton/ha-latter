@@ -63,7 +63,7 @@ UNIVERSAL_SECTION_META: tuple[tuple[str, str, str], ...] = (
     ("voice", "Voice Assistant", "Wake word models, microphone mute, and voice detection sensitivity."),
     ("sound", "Sound & Alerts", "Onboard speaker chimes, alert volume, and volume step increments."),
     ("music", "Music & Media", "Media player entity and library, artist, album, and podcast sorting options."),
-    ("room", "Room & BLE Presence", "BLE presence beacon toggle and automatic room handoff settings."),
+    ("room", "Area & BLE Presence", "BLE presence beacon toggle and automatic area handoff settings."),
     ("remote", "TV & Media Remote", "Active remote slot selection and on-device remote behavior."),
     ("battery", "Battery & Power", "Battery charge level, charging status, PMIC voltage, and internal temperature."),
     ("actions", "Device Actions", "One-tap restart, hibernate, refresh, and maintenance triggers."),
