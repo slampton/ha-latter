@@ -153,6 +153,7 @@ def _detect_hardware_defaults(hass: HomeAssistant, slug: str) -> dict[str, Any]:
             CONF_SYNC_DEVICE_AREA: False,
             CONF_AREA_HANDOFF: DEFAULT_AREA_HANDOFF,
             CONF_DEFAULT_AREA: (matched_dev.area_id or "") if matched_dev else "",
+            "dock_apps": "music,alarm,room,remote,tools",
         }
 
     if is_remote_35:
@@ -167,6 +168,7 @@ def _detect_hardware_defaults(hass: HomeAssistant, slug: str) -> dict[str, Any]:
             CONF_SYNC_DEVICE_AREA: True,
             CONF_AREA_HANDOFF: DEFAULT_AREA_HANDOFF,
             CONF_DEFAULT_AREA: "",
+            "dock_apps": "music,alarm,room,remote,tools",
         }
 
     if is_mobile_216:

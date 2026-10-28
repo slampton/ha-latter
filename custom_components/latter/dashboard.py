@@ -497,10 +497,15 @@ def _build_companion_state_payload(
         dev_tier = 3
         dev_tier_label = "Tier 3: Bridged Device"
 
+    has_imu = not any(k in slug for k in ("remote_assistant", "desk_assistant")) and (
+        has_native_slots
+        or any("imu" in str(it.get("entity_id") or "").lower() for it in all_esp_items)
+    )
     device_capabilities = {
         "tier": dev_tier,
         "tier_label": dev_tier_label,
         "has_display": has_display,
+        "has_imu": has_imu,
         "has_power": has_power,
         "has_voice": has_voice,
         "has_audio": has_audio,

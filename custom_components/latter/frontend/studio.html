@@ -2561,6 +2561,8 @@ function renderDockPillsFromInput() {
   const box = document.getElementById("dock-pills-container");
   const inp = document.getElementById("cfg-dock_apps");
   if (!box || !inp) return;
+  const hasImu = STATE?.capabilities?.has_imu !== false;
+  const availDockMeta = DOCK_APP_META.filter(m => hasImu || m.token !== "games");
   const rawTokens = inp.value
     .split(/[,;| ]+/)
     .map(t => t.trim().toLowerCase())
@@ -2568,11 +2570,11 @@ function renderDockPillsFromInput() {
 
   const activeTokens = [];
   rawTokens.forEach(t => {
-    if (DOCK_APP_META.some(m => m.token === t) && !activeTokens.includes(t)) {
+    if (availDockMeta.some(m => m.token === t) && !activeTokens.includes(t)) {
       activeTokens.push(t);
     }
   });
-  const disabledTokens = DOCK_APP_META
+  const disabledTokens = availDockMeta
     .map(m => m.token)
     .filter(t => !activeTokens.includes(t));
 
