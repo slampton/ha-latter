@@ -61,9 +61,19 @@ CONF_ART_SIZE: Final = "art_size"
 CONF_CUSTOM_PALETTES: Final = "custom_palettes"
 CONF_DEVICE_CUSTOM_COLOR: Final = "device_custom_color"
 CONF_DOORBELL_ANC_MODE: Final = "doorbell_anc_mode"
+CONF_SIP_ENABLED: Final = "sip_enabled"
+CONF_SIP_SERVER: Final = "sip_server"
+CONF_SIP_PORT: Final = "sip_port"
+CONF_SIP_USERNAME: Final = "sip_username"
+CONF_SIP_PASSWORD: Final = "sip_password"
+CONF_SIP_EXTENSION: Final = "sip_extension"
+CONF_SIP_DTMF_CODE: Final = "sip_dtmf_code"
+CONF_SIP_SPEED_DIALS: Final = "sip_speed_dials"
 
 # Defaults
 DEFAULT_DOORBELL_ANC_MODE: Final = "ultra"
+DEFAULT_SIP_PORT: Final = 5060
+DEFAULT_SIP_DTMF_CODE: Final = "#9"
 DEFAULT_DEVICE_PROFILE: Final = "mobile_display"
 DEFAULT_DISPLAY_SHAPE: Final = "circle"
 DEFAULT_PAGE_SIZE: Final = 3
@@ -170,6 +180,14 @@ GLOBAL_CONFIG_KEYS: Final[tuple[str, ...]] = (
     CONF_CUSTOM_BINDINGS,
     CONF_CUSTOM_PALETTES,
     CONF_DOORBELL_ANC_MODE,
+    CONF_SIP_ENABLED,
+    CONF_SIP_SERVER,
+    CONF_SIP_PORT,
+    CONF_SIP_USERNAME,
+    CONF_SIP_PASSWORD,
+    CONF_SIP_EXTENSION,
+    CONF_SIP_DTMF_CODE,
+    CONF_SIP_SPEED_DIALS,
     CONF_SITES_REGISTRY,
     CONF_DEVICE_GROUPS,
     CONF_SAVED_PROFILES,

@@ -1167,6 +1167,49 @@
             <div id="cameras-list"></div>
             <button type="button" class="btn-secondary" id="btn-add-camera" onclick="addCameraRow(''); markDirty();">+ Add Camera</button>
 
+            <details class="ha-details" style="margin-top:14px;margin-bottom:0;">
+              <summary>SIP / VoIP Intercom &amp; Gate DTMF Settings</summary>
+              <div class="details-body">
+                <div class="toggle-row" style="margin-bottom:10px;">
+                  <span>Enable SIP / RTP VoIP Client (PBX or Peer-to-Peer DoorBird / 2N / UniFi)</span>
+                  <input type="checkbox" id="cfg-sip_enabled" onchange="markDirty()">
+                </div>
+                <div class="form-grid-2">
+                  <div class="field">
+                    <label>SIP Server / PBX Host (Blank = Peer-to-Peer)</label>
+                    <input type="text" id="cfg-sip_server" placeholder="192.168.1.10 or pbx.local" oninput="markDirty()">
+                  </div>
+                  <div class="field">
+                    <label>SIP Port &amp; Extension</label>
+                    <div class="form-grid-2">
+                      <input type="number" id="cfg-sip_port" value="5060" placeholder="5060" oninput="markDirty()">
+                      <input type="text" id="cfg-sip_extension" placeholder="101" oninput="markDirty()">
+                    </div>
+                  </div>
+                </div>
+                <div class="form-grid-2">
+                  <div class="field">
+                    <label>SIP Auth Username</label>
+                    <input type="text" id="cfg-sip_username" placeholder="101" oninput="markDirty()">
+                  </div>
+                  <div class="field">
+                    <label>SIP Auth Password</label>
+                    <input type="text" id="cfg-sip_password" placeholder="Password" oninput="markDirty()">
+                  </div>
+                </div>
+                <div class="form-grid-2">
+                  <div class="field">
+                    <label>Gate / Door Strike DTMF Unlock Code (RFC 2833)</label>
+                    <input type="text" id="cfg-sip_dtmf_code" value="#9" placeholder="#9" oninput="markDirty()">
+                  </div>
+                  <div class="field">
+                    <label>SIP Speed-Dials (Label|sip:ext@host, ...)</label>
+                    <input type="text" id="cfg-sip_speed_dials" placeholder="Front Gate|sip:201@192.168.1.20" oninput="markDirty()">
+                  </div>
+                </div>
+              </div>
+            </details>
+
             <div id="cam-preview-box" style="display:none;flex-direction:column;gap:8px;margin-top:14px;padding:12px;background:var(--input-bg);border:1px solid var(--border);border-radius:10px;">
               <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
                 <strong id="cam-preview-label" style="font-size:13px;font-weight:500;color:var(--text-strong);">Camera Snapshot Preview</strong>
@@ -4335,6 +4378,16 @@ function applyStateToDom(data, forceFormUpdate=false) {
     if (document.getElementById("cfg-doorbell_anc_mode")) {
       document.getElementById("cfg-doorbell_anc_mode").value = cfg.doorbell_anc_mode || "ultra";
     }
+    if (document.getElementById("cfg-sip_enabled")) {
+      document.getElementById("cfg-sip_enabled").checked = !!cfg.sip_enabled;
+      document.getElementById("cfg-sip_server").value = cfg.sip_server || "";
+      document.getElementById("cfg-sip_port").value = cfg.sip_port || 5060;
+      document.getElementById("cfg-sip_username").value = cfg.sip_username || "latter";
+      document.getElementById("cfg-sip_password").value = cfg.sip_password || "";
+      document.getElementById("cfg-sip_extension").value = cfg.sip_extension || "101";
+      document.getElementById("cfg-sip_dtmf_code").value = cfg.sip_dtmf_code || "#9";
+      document.getElementById("cfg-sip_speed_dials").value = cfg.sip_speed_dials || "";
+    }
 
     populateSelect("cfg-default_area", cat.areas, cfg.default_area);
     populateSelect("cfg-presence_entity", cat.presence_sensors, cfg.presence_entity);
@@ -4532,6 +4585,14 @@ async function saveAllConfig() {
     custom_palettes: Array.isArray((STATE?.config || {}).custom_palettes) ? STATE.config.custom_palettes : [],
     device_custom_color: (STATE?.config || {}).device_custom_color || "#3898FF",
     doorbell_anc_mode: document.getElementById("cfg-doorbell_anc_mode")?.value || "ultra",
+    sip_enabled: !!document.getElementById("cfg-sip_enabled")?.checked,
+    sip_server: document.getElementById("cfg-sip_server")?.value?.trim() || "",
+    sip_port: parseInt(document.getElementById("cfg-sip_port")?.value || "5060", 10) || 5060,
+    sip_username: document.getElementById("cfg-sip_username")?.value?.trim() || "latter",
+    sip_password: document.getElementById("cfg-sip_password")?.value?.trim() || "",
+    sip_extension: document.getElementById("cfg-sip_extension")?.value?.trim() || "101",
+    sip_dtmf_code: document.getElementById("cfg-sip_dtmf_code")?.value?.trim() || "#9",
+    sip_speed_dials: document.getElementById("cfg-sip_speed_dials")?.value?.trim() || "",
   };
 
   const resp = await fetch(API_URL, {

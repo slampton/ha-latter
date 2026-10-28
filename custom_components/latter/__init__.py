@@ -50,13 +50,14 @@ from .dashboard import (
 from .doorbell_engine import (
     LatterCameraAudioStreamView,
     LatterDoorbellTalkbackView,
+    LatterRotatableCameraSnapshotView,
 )
 from .http import (
     LatterArtworkTranscoderView,
-    LatterCameraSnapshotView,
     LatterMapSnapshotView,
     LatterWallpaperProxyView,
 )
+from .sip_engine import get_sip_engine
 from .room_engine import inject_esphome_visit_link, inject_hacs_update_brand_icon
 from .services import async_setup_services
 
@@ -237,10 +238,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
         domain_data[DATA_HMAC_SECRET] = secrets.token_bytes(32)
         hass.http.register_view(LatterArtworkTranscoderView(hass))
         hass.http.register_view(LatterWallpaperProxyView(hass))
-        hass.http.register_view(LatterCameraSnapshotView(hass))
+        hass.http.register_view(LatterRotatableCameraSnapshotView(hass))
         hass.http.register_view(LatterCameraAudioStreamView(hass))
         hass.http.register_view(LatterDoorbellTalkbackView(hass))
         hass.http.register_view(LatterMapSnapshotView(hass))
+        await get_sip_engine(hass).async_start_or_reload()
         hass.http.register_view(LatterCompanionDashboardView(hass))
         hass.http.register_view(LatterCompanionApiView(hass))
         hass.http.register_view(LatterBrandIconView(hass))

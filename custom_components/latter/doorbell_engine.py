@@ -1,4 +1,4 @@
-"""Universal Doorbell Two-Way Audio, UniFi Protect Talkback & 4-Stage ANC+AEC DSP Engine for Latter."""
+"""Universal Doorbell Two-Way Audio (UniFi, go2rtc, ONVIF, SIP), 90° Landscape Proxy & 4-Stage ANC+AEC DSP Engine."""
 
 from __future__ import annotations
 
@@ -15,20 +15,25 @@ from typing import Any
 import wave
 
 from aiohttp import web
+from PIL import Image, ImageOps
 
 from homeassistant.components.http import HomeAssistantView
 from homeassistant.const import ATTR_ENTITY_ID, STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .ble_engine import _iter_entities
 from .const import (
     API_CAMERA_AUDIO_STREAM_PATH,
+    API_CAMERA_PROXY_PATH,
     API_DOORBELL_TALKBACK_PATH,
     DOMAIN,
     normalize_device_slug,
 )
+from .http import LatterCameraSnapshotView, _transcode_to_baseline_jpeg
 from .room_engine import resolve_entity_area_id
+from .sip_engine import get_sip_engine
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -41,7 +46,7 @@ def resolve_doorbell_talkback_target(
     camera_entity_id: str | None,
     volume_overrides: dict[str, str] | None = None,
 ) -> dict[str, Any]:
-    """Auto-discover the talkback media_player (e.g. UniFi Protect speaker) and area lock for a camera."""
+    """Auto-discover the talkback media_player (UniFi Protect), ONVIF/go2rtc stream, and area lock for a camera."""
     info: dict[str, Any] = {
         "camera_entity": "",
         "friendly_name": "Camera",
@@ -80,7 +85,7 @@ def resolve_doorbell_talkback_target(
             dev = dev_reg.async_get(cam_entry.device_id)
             if dev is not None:
                 mfg_model = f"{dev.manufacturer or ''} {dev.model or ''}".lower()
-                if "ubiquiti" in mfg_model or "unifi" in mfg_model or "g4" in mfg_model or "g6" in mfg_model:
+                if any(k in mfg_model for k in ("ubiquiti", "unifi", "g4", "g5", "g6")):
                     info["is_unifi"] = True
 
             for sib in er.async_entries_for_device(ent_reg, cam_entry.device_id):
@@ -95,7 +100,7 @@ def resolve_doorbell_talkback_target(
 
     if not info["talkback_media_player"]:
         base_slug = cam_ent.split(".", 1)[-1]
-        for suffix in ("_high", "_medium", "_low", "_package", "_camera", "_rtsp"):
+        for suffix in ("_high", "_medium", "_low", "_package", "_camera", "_rtsp", "_fluent", "_clear"):
             if base_slug.endswith(suffix):
                 base_slug = base_slug[: -len(suffix)]
                 break
@@ -131,6 +136,66 @@ def resolve_doorbell_talkback_target(
     return info
 
 
+class LatterRotatableCameraSnapshotView(LatterCameraSnapshotView):
+    """Extends LatterCameraSnapshotView with server-side 90° Landscape Widescreen rotation (&rot=90)."""
+
+    url = API_CAMERA_PROXY_PATH
+    name = "api:latter:camera_snapshot"
+
+    async def get(self, request: web.Request, target_device: str) -> web.Response:
+        """Serve camera snapshot, rotating 90° when &rot=90 is requested for rectangular displays."""
+        rot_str = (request.query.get("rot") or "0").strip()
+        if rot_str not in ("90", "180", "270"):
+            return await super().get(request, target_device)
+
+        coord = _resolve_coordinator_by_slug(self.hass, target_device)
+        cam_ent = (
+            request.query.get("entity_id")
+            or (coord.active_carousel_camera if coord else "")
+            or (coord.camera_entity if coord else "")
+            or ""
+        ).strip()
+        if not cam_ent:
+            return web.Response(status=HTTPStatus.NOT_FOUND)
+
+        try:
+            width = max(64, min(1920, int(request.query.get("w", 320))))
+            height = max(64, min(1920, int(request.query.get("h", 480))))
+        except ValueError:
+            width, height = 320, 480
+
+        circular_mask = (request.query.get("shape") or "square").lower() == "circle"
+        rot_deg = int(rot_str)
+
+        try:
+            from homeassistant.components.camera import async_get_image
+
+            image_obj = await async_get_image(self.hass, cam_ent, timeout=8)
+            raw_bytes = image_obj.content
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("Camera snapshot fetch failed for %s: %s", cam_ent, err)
+            return web.Response(status=HTTPStatus.BAD_GATEWAY)
+
+        def _rotate_and_transcode() -> bytes:
+            with Image.open(io.BytesIO(raw_bytes)) as img:
+                img_rgb = img.convert("RGB")
+                # Rotate 90° CCW so a 16:9 widescreen feed fills a 320x480 / 410x502 portrait screen
+                rotated = img_rgb.rotate(rot_deg, expand=True)
+                fitted = ImageOps.fit(rotated, (width, height), method=Image.Resampling.LANCZOS)
+                buf = io.BytesIO()
+                fitted.save(buf, format="JPEG", quality=88, optimize=False, progressive=False)
+                if circular_mask:
+                    return _transcode_to_baseline_jpeg(buf.getvalue(), width, height, circular_mask=True)
+                return buf.getvalue()
+
+        jpeg_bytes = await self.hass.async_add_executor_job(_rotate_and_transcode)
+        return web.Response(
+            body=jpeg_bytes,
+            content_type="image/jpeg",
+            headers={"Cache-Control": "no-store"},
+        )
+
+
 class LatterAudioDspPipeline:
     """4-Stage Leading-Class Audio DSP Pipeline (Biquad Wind Filter + Wiener ANC + NLMS AEC + Soft-Knee AGC)."""
 
@@ -162,8 +227,6 @@ class LatterAudioDspPipeline:
                 "acompressor=threshold=-18dB:ratio=2.5:attack=5:release=90,"
                 "alimiter=limit=0.91"
             )
-        # Default 'ultra': 2-pole 120Hz wind rumble high-pass + 3.6kHz voice low-pass +
-        # FFT Wiener spectral subtraction (-26dB floor) + speech presence boost + soft-knee AGC limiter
         return (
             "highpass=f=120,lowpass=f=3600,"
             "afftdn=nf=-26,"
@@ -219,11 +282,10 @@ class LatterAudioDspPipeline:
         if not samples or anc_mode == "raw":
             return samples
 
-        frame_len = max(64, int(sample_rate * 0.020))  # 20ms frame
+        frame_len = max(64, int(sample_rate * 0.020))
         atten_floor = 0.14 if anc_mode == "ultra" else 0.28
         out = array("h", [0] * len(samples))
 
-        # Estimate initial noise floor from quietest 20ms frame
         min_rms = 99999.0
         n_total = len(samples)
         for start in range(0, n_total, frame_len):
@@ -262,7 +324,6 @@ class LatterAudioDspPipeline:
             for k in range(start, end):
                 smooth_gain = 0.92 * smooth_gain + 0.08 * target_gain
                 raw_x = float(samples[k])
-                # Subtle +2.5dB high-frequency vocal consonant clarity pre-emphasis
                 emph = raw_x - 0.18 * prev_sample
                 prev_sample = raw_x
                 val = emph * smooth_gain
@@ -293,7 +354,7 @@ class LatterAudioDspPipeline:
 
         for i, d_int in enumerate(mic_samples):
             d = float(d_int)
-            r_idx = (i % (ref_len - taps))
+            r_idx = i % (ref_len - taps)
             y_est = 0.0
             norm_x = eps
             for k in range(taps):
@@ -339,7 +400,6 @@ class LatterAudioDspPipeline:
             else:
                 env_gain = 0.995 * env_gain + 0.005 * makeup_gain
 
-            # Soft-knee tanh-like saturation above 28000
             if val > 28000.0:
                 val = 28000.0 + 4700.0 * math.tanh((val - 28000.0) / 4700.0)
             elif val < -28000.0:
@@ -357,9 +417,7 @@ class LatterAudioDspPipeline:
     ) -> array[int]:
         """Run the full 4-stage DSP pipeline and optionally prepend the 250ms UniFi talkback stabilizer."""
         stage1 = self.biquad_highpass_120hz(pcm_samples, sample_rate)
-        stage2 = (
-            self.nlms_echo_cancel(stage1) if apply_aec else stage1
-        )
+        stage2 = self.nlms_echo_cancel(stage1) if apply_aec else stage1
         stage3 = self.wiener_spectral_denoise(stage2, sample_rate, anc_mode)
         stage4 = self.soft_knee_agc_limiter(stage3)
 
@@ -445,6 +503,35 @@ def _resolve_coordinator_by_slug(hass: HomeAssistant, target_slug: str) -> Any |
     return None
 
 
+async def _async_push_go2rtc_or_onvif_backchannel(
+    hass: HomeAssistant, camera_entity_id: str, wav_bytes: bytes
+) -> bool:
+    """Attempt to push talkback audio via local go2rtc (port 1984) or ONVIF RTSP backchannel."""
+    slug = camera_entity_id.split(".", 1)[-1]
+    session = async_get_clientsession(hass)
+    try:
+        async with session.get("http://127.0.0.1:1984/api/streams", timeout=1.5) as resp:
+            if resp.status == 200:
+                streams = await resp.json()
+                matched_stream = None
+                if isinstance(streams, dict):
+                    if slug in streams:
+                        matched_stream = slug
+                    else:
+                        for s_key in streams:
+                            if slug in str(s_key).lower():
+                                matched_stream = str(s_key)
+                                break
+                if matched_stream:
+                    post_url = f"http://127.0.0.1:1984/api/streams?dst={matched_stream}"
+                    async with session.post(post_url, data=wav_bytes, timeout=8.0) as p_resp:
+                        if p_resp.status in (200, 201, 204):
+                            return True
+    except Exception:  # noqa: BLE001
+        pass
+    return False
+
+
 class LatterCameraAudioStreamView(HomeAssistantView):
     """Streams live RTSP camera audio through Latter's 4-Stage ANC+AEC filterchain to ESPHome."""
 
@@ -485,12 +572,10 @@ class LatterCameraAudioStreamView(HomeAssistantView):
 
         ffmpeg_bin = shutil.which("ffmpeg")
         if not stream_url or not ffmpeg_bin:
-            # Fallback: return a clean 2-second comfort-silence WAV so media_player never errors out
             dsp = get_dsp_pipeline(self.hass)
             wav_bytes = dsp.process_wav_bytes(b"", anc_mode=anc_mode, prepend_unifi_preroll=True)
             return web.Response(body=wav_bytes, content_type="audio/wav")
 
-        # Normalize UniFi Protect rtsps:// URLs for FFmpeg compatibility
         input_args: list[str] = ["-rtsp_transport", "tcp"]
         filtergraph = LatterAudioDspPipeline.build_ffmpeg_anc_filtergraph(anc_mode)
         out_codec = "flac" if fmt == "flac" else "pcm_s16le"
@@ -541,8 +626,6 @@ class LatterCameraAudioStreamView(HomeAssistantView):
                     chunk = await proc.stdout.read(4096)
                     if not chunk:
                         break
-                    # If talkback is actively transmitting to the doorbell, mute inbound audio chunks
-                    # so the UniFi doorbell speaker never feeds back into the indoor display!
                     if dsp.is_in_echo_guard_window() and out_fmt == "wav":
                         chunk = b"\x00" * len(chunk)
                     await resp.write(chunk)
@@ -561,7 +644,7 @@ class LatterCameraAudioStreamView(HomeAssistantView):
 
 
 class LatterDoorbellTalkbackView(HomeAssistantView):
-    """Serves and ingests DSP-processed, pre-roll-stabilized talkback audio for UniFi & ONVIF doorbells."""
+    """Serves and ingests DSP-processed, pre-roll-stabilized talkback audio for UniFi, go2rtc, ONVIF & SIP."""
 
     requires_auth = False
     url = API_DOORBELL_TALKBACK_PATH
@@ -617,42 +700,47 @@ class LatterDoorbellTalkbackView(HomeAssistantView):
         clips[norm] = wav_bytes
 
         if coord is not None:
-            await async_play_talkback_clip_to_doorbell(self.hass, coord, cam_ent)
+            await async_play_talkback_clip_to_doorbell(self.hass, coord, cam_ent, wav_bytes)
 
         return web.json_response({"status": "ok", "bytes": len(wav_bytes)})
 
 
 async def async_play_talkback_clip_to_doorbell(
-    hass: HomeAssistant, coordinator: Any, camera_entity_id: str | None = None
+    hass: HomeAssistant,
+    coordinator: Any,
+    camera_entity_id: str | None = None,
+    wav_bytes: bytes | None = None,
 ) -> bool:
-    """Stream the stored DSP-stabilized talkback WAV clip to the paired UniFi / doorbell speaker."""
+    """Stream the stored DSP-stabilized talkback WAV clip to UniFi speaker, go2rtc, or SIP."""
     cam_ent = camera_entity_id or coordinator.active_carousel_camera or coordinator.camera_entity
     target_info = resolve_doorbell_talkback_target(
         hass, cam_ent, coordinator.volume_overrides
     )
     talkback_mp = target_info["talkback_media_player"]
-    if not talkback_mp:
-        return False
+    if talkback_mp:
+        base_url = coordinator.get_lan_base_url()
+        clip_url = f"{base_url}/api/latter/doorbell_talkback/{coordinator.device_slug}.wav?v={int(time.time() * 1000)}"
+        try:
+            await hass.services.async_call(
+                "media_player",
+                "play_media",
+                {
+                    ATTR_ENTITY_ID: talkback_mp,
+                    "media_content_id": clip_url,
+                    "media_content_type": "music",
+                    "announce": True,
+                },
+                blocking=False,
+            )
+            return True
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("Doorbell talkback play_media failed on %s: %s", talkback_mp, err)
 
-    base_url = coordinator.get_lan_base_url()
-    clip_url = f"{base_url}/api/latter/doorbell_talkback/{coordinator.device_slug}.wav?v={int(time.time() * 1000)}"
+    if cam_ent and wav_bytes:
+        if await _async_push_go2rtc_or_onvif_backchannel(hass, cam_ent, wav_bytes):
+            return True
 
-    try:
-        await hass.services.async_call(
-            "media_player",
-            "play_media",
-            {
-                ATTR_ENTITY_ID: talkback_mp,
-                "media_content_id": clip_url,
-                "media_content_type": "music",
-                "announce": True,
-            },
-            blocking=False,
-        )
-        return True
-    except Exception as err:  # noqa: BLE001
-        _LOGGER.debug("Doorbell talkback play_media failed on %s: %s", talkback_mp, err)
-        return False
+    return False
 
 
 async def async_execute_doorbell_intercom(
@@ -664,9 +752,10 @@ async def async_execute_doorbell_intercom(
     anc_mode: str | None = None,
     camera_index: int | None = None,
 ) -> dict[str, Any]:
-    """Execute a unified two-way doorbell intercom command (listen, talkback, quick reply, ANC mode)."""
+    """Execute a unified two-way doorbell, SIP, or room-to-room intercom command."""
     act = (action or "listen_toggle").strip().lower()
     dsp = get_dsp_pipeline(hass)
+    sip = get_sip_engine(hass)
 
     if anc_mode and anc_mode.strip().lower() in ("ultra", "balanced", "raw"):
         coordinator.doorbell_anc_mode = anc_mode.strip().lower()
@@ -691,6 +780,60 @@ async def async_execute_doorbell_intercom(
     )
     local_spk = coordinator.local_speaker
 
+    # 1. Door / Gate Unlock (Triggers paired HA lock.* entity AND sends SIP RFC 2833 DTMF tones!)
+    if act in ("unlock_door", "dtmf_unlock", "send_dtmf"):
+        lock_ent = target_info.get("lock_entity") or coordinator.lock_entity
+        if lock_ent and hass.states.get(lock_ent) is not None:
+            try:
+                await hass.services.async_call(
+                    "lock", "unlock", {ATTR_ENTITY_ID: lock_ent}, blocking=False
+                )
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.debug("Lock unlock failed on %s: %s", lock_ent, err)
+        await sip.async_send_dtmf(message if message else None)
+        return target_info
+
+    # 2. Room-to-Room Device Call or Outbound SIP Speed-Dial Call
+    if act == "call_target":
+        target_str = (message or "").strip()
+        if target_str.startswith("sip:") or "@" in target_str:
+            sip.dial_sip_uri(target_str)
+            coordinator.doorbell_talk_state = "listening"
+            coordinator._notify_listeners()
+            return target_info
+
+        # Room-to-Room Call to another Latter display (or 'all' displays)
+        domain_data = hass.data.get(DOMAIN, {})
+        all_coords = [v for v in domain_data.values() if hasattr(v, "device_slug")]
+        caller_title = coordinator.device_slug.replace("_", " ").title()
+        # Check if calling device has an onboard P4 camera entity to include in the video call popup!
+        caller_cam = (
+            f"camera.{coordinator.device_slug}"
+            if hass.states.get(f"camera.{coordinator.device_slug}") is not None
+            else (coordinator.camera_entity or "")
+        )
+        for c in all_coords:
+            if c.device_slug == coordinator.device_slug:
+                continue
+            if target_str in ("all", "", c.device_slug):
+                await hass.services.async_call(
+                    DOMAIN,
+                    "notify_device",
+                    {
+                        "device_slug": c.device_slug,
+                        "title": f"Intercom: {caller_title}",
+                        "message": "Tap Answer for 2-Way Call",
+                        "priority": "critical",
+                        "duration": 20,
+                        "chime": True,
+                        **({"camera_entity": caller_cam} if caller_cam else {}),
+                    },
+                    blocking=False,
+                )
+        coordinator.doorbell_talk_state = "listening"
+        coordinator._notify_listeners()
+        return target_info
+
     if act == "select_camera":
         coordinator._notify_listeners()
         return target_info
@@ -710,6 +853,8 @@ async def async_execute_doorbell_intercom(
         )
 
     if act == "listen_stop":
+        if sip.call_state != "idle":
+            sip.hangup_call()
         coordinator.doorbell_talk_state = "idle"
         coordinator._notify_listeners()
         if local_spk:
@@ -725,6 +870,8 @@ async def async_execute_doorbell_intercom(
         return target_info
 
     if act == "listen_start":
+        if sip.call_state == "ringing":
+            sip.answer_incoming_call()
         if not local_spk or not cam_ent:
             return target_info
         coordinator.doorbell_talk_state = "listening"
@@ -760,7 +907,6 @@ async def async_execute_doorbell_intercom(
         dsp.record_talkback_activity()
         coordinator._notify_listeners()
 
-        # 1. Echo Guard: Immediately silence inbound camera audio on the indoor ESPHome display
         if local_spk and was_listening:
             try:
                 await hass.services.async_call(
@@ -772,10 +918,8 @@ async def async_execute_doorbell_intercom(
             except Exception:  # noqa: BLE001
                 pass
 
-        # 2. Route speech to the paired UniFi Protect Doorbell speaker (with pre-roll stabilization)
         talkback_mp = target_info["talkback_media_player"]
         if talkback_mp:
-            # Ensure UniFi Doorbell speaker is unmuted and at audible talkback volume
             mp_st = hass.states.get(talkback_mp)
             if mp_st is not None:
                 cur_vol = mp_st.attributes.get("volume_level")
@@ -790,7 +934,6 @@ async def async_execute_doorbell_intercom(
                     except Exception:  # noqa: BLE001
                         pass
 
-            # Pad message with a brief leading pause for UniFi Protect G4/G4 Pro/G6 talkback stream lock
             stabilized_msg = (
                 f"... {spoken_text}" if target_info["is_unifi"] else spoken_text
             )
@@ -826,7 +969,6 @@ async def async_execute_doorbell_intercom(
                 except Exception as err:  # noqa: BLE001
                     _LOGGER.debug("tts.cloud_say to doorbell %s failed: %s", talkback_mp, err)
 
-        # 3. Hold Echo Guard across the talkback playback + 750ms acoustic tail, then resume listening if active
         est_duration = max(2.2, min(8.0, len(spoken_text) * 0.085 + 1.2))
         dsp.record_talkback_activity()
 

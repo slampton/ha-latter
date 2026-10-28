@@ -558,14 +558,45 @@ class LatterCoordinator:
 
     @property
     def camera_entities(self) -> list[str]:
-        """Return configured list of up to 10 camera entity_ids (Slot 1 is primary)."""
+        """Return configured list of up to 10 camera entity_ids, plus any onboard ESPHome P4 cameras."""
+        cleaned: list[str] = []
         raw_list = self.get_opt(CONF_CAMERA_ENTITIES)
         if isinstance(raw_list, list):
             cleaned = [str(x).strip() for x in raw_list[:10] if str(x or "").strip()]
-            if cleaned:
-                return cleaned
-        single = str(self.get_opt(CONF_CAMERA_ENTITY) or "").strip()
-        return [single] if single else []
+        if not cleaned:
+            single = str(self.get_opt(CONF_CAMERA_ENTITY) or "").strip()
+            if single:
+                cleaned = [single]
+        # Auto-include any onboard ESPHome camera belonging to a Latter device (e.g. P4 Remote Assistant 5MP cam)
+        domain_data = self.hass.data.get(DOMAIN, {})
+        for val in domain_data.values():
+            if hasattr(val, "device_slug"):
+                for cand in (f"camera.{val.device_slug}", f"camera.{val.device_slug}_camera"):
+                    if self.hass.states.get(cand) is not None and cand not in cleaned and len(cleaned) < 10:
+                        cleaned.append(cand)
+        return cleaned[:10]
+
+    def _build_intercom_targets_summary(self) -> str:
+        """Build semicolon-delimited 'target_id|Friendly Label;...' for Room-to-Room & SIP Speed-Dial calling."""
+        rows: list[str] = ["all|Call All Rooms"]
+        domain_data = self.hass.data.get(DOMAIN, {})
+        for val in domain_data.values():
+            if hasattr(val, "device_slug") and getattr(val, "device_profile", "") != "ble_beacon":
+                if val.device_slug != self.device_slug:
+                    title = val.device_slug.replace("_", " ").title()[:24]
+                    rows.append(f"{val.device_slug}|Call: {title}")
+        raw_sd = str(self.get_opt("sip_speed_dials") or "").strip()
+        if raw_sd:
+            for item in raw_sd.split(","):
+                item = item.strip()
+                if not item:
+                    continue
+                if "|" in item:
+                    lbl, uri = item.split("|", 1)
+                    rows.append(f"{uri.strip()}|SIP: {lbl.strip()[:22]}")
+                else:
+                    rows.append(f"sip:{item}|SIP: {item[:22]}")
+        return ";".join(rows[:10])
 
     @property
     def camera_entity(self) -> str | None:
@@ -2105,6 +2136,7 @@ class LatterCoordinator:
             ) if (self.active_carousel_camera or self.camera_entity) else "none",
             "doorbell_talk_state": self.doorbell_talk_state,
             "doorbell_anc_mode": self.doorbell_anc_mode,
+            "intercom_targets_summary": self._build_intercom_targets_summary(),
             "alert_id": self.alert_id,
             "alert_title": self.alert_title,
             "alert_message": self.alert_message,

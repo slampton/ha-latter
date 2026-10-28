@@ -60,7 +60,17 @@ from .const import (
     CONF_CUSTOM_PALETTES,
     CONF_DEVICE_CUSTOM_COLOR,
     CONF_DOORBELL_ANC_MODE,
+    CONF_SIP_DTMF_CODE,
+    CONF_SIP_ENABLED,
+    CONF_SIP_EXTENSION,
+    CONF_SIP_PASSWORD,
+    CONF_SIP_PORT,
+    CONF_SIP_SERVER,
+    CONF_SIP_SPEED_DIALS,
+    CONF_SIP_USERNAME,
     DEFAULT_DOORBELL_ANC_MODE,
+    DEFAULT_SIP_DTMF_CODE,
+    DEFAULT_SIP_PORT,
     CONF_DEFAULT_AREA,
     CONF_DEFAULT_PAGE_SIZE,
     CONF_DEFAULT_SPEAKER,
@@ -556,6 +566,14 @@ def _build_companion_state_payload(
             coordinator.get_opt(CONF_DOORBELL_ANC_MODE, coordinator.doorbell_anc_mode)
             or DEFAULT_DOORBELL_ANC_MODE
         ),
+        CONF_SIP_ENABLED: bool(coordinator.get_opt(CONF_SIP_ENABLED, False)),
+        CONF_SIP_SERVER: str(coordinator.get_opt(CONF_SIP_SERVER, "") or ""),
+        CONF_SIP_PORT: int(coordinator.get_opt(CONF_SIP_PORT, DEFAULT_SIP_PORT) or DEFAULT_SIP_PORT),
+        CONF_SIP_USERNAME: str(coordinator.get_opt(CONF_SIP_USERNAME, "latter") or "latter"),
+        CONF_SIP_PASSWORD: str(coordinator.get_opt(CONF_SIP_PASSWORD, "") or ""),
+        CONF_SIP_EXTENSION: str(coordinator.get_opt(CONF_SIP_EXTENSION, "101") or "101"),
+        CONF_SIP_DTMF_CODE: str(coordinator.get_opt(CONF_SIP_DTMF_CODE, DEFAULT_SIP_DTMF_CODE) or DEFAULT_SIP_DTMF_CODE),
+        CONF_SIP_SPEED_DIALS: str(coordinator.get_opt(CONF_SIP_SPEED_DIALS, "") or ""),
         CONF_DOCK_APPS: coordinator.dock_apps_csv,
         CONF_WALLPAPER_SOURCE: coordinator.wallpaper_source,
         CONF_WALLPAPER_FAVORITES: coordinator.wallpaper_favorites,
@@ -1417,6 +1435,9 @@ class LatterCompanionApiView(HomeAssistantView):
                 await _async_save_and_broadcast_global_config(
                     self.hass, global_updates
                 )
+                from .sip_engine import get_sip_engine
+
+                await get_sip_engine(self.hass).async_start_or_reload()
             inject_esphome_visit_link(
                 self.hass,
                 coordinator.device_slug,
