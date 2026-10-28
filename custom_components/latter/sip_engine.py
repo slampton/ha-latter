@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from array import array
 import asyncio
+from collections import deque
 import hashlib
 import logging
 import random
 import re
 import socket
 import struct
-import time
 from typing import Any
 
 from homeassistant.core import HomeAssistant, callback
@@ -32,15 +32,16 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
-# Precomputed 256-entry G.711 mu-law -> 16-bit linear PCM lookup table (Python 3.13/3.14 native, zero audioop)
-_ULAW_TO_PCM16: tuple[int, ...] = tuple(
-    (
-        (-1 if (b ^ 0xFF) & 0x80 else 1)
-        * ((((b ^ 0xFF) & 0x0F) << 3) + 0x84) << (((b ^ 0xFF) & 0x70) >> 4)
-        - (0x84 if not ((b ^ 0xFF) & 0x80) else -0x84)
-    )
-    for b in range(256)
-)
+
+def _decode_ulaw_byte(u_val: int) -> int:
+    """Decode a single 8-bit ITU-T G.711 mu-law byte to signed 16-bit linear PCM."""
+    u = (~u_val) & 0xFF
+    t = (((u & 0x0F) << 3) + 0x84) << ((u & 0x70) >> 4)
+    val = (0x84 - t) if (u & 0x80) else (t - 0x84)
+    return max(-32768, min(32767, val))
+
+
+_ULAW_TO_PCM16: tuple[int, ...] = tuple(_decode_ulaw_byte(b) for b in range(256))
 
 
 def _pcm16_to_ulaw_byte(sample: int) -> int:
@@ -66,7 +67,7 @@ def decode_ulaw_to_pcm16_16khz(ulaw_bytes: bytes) -> array[int]:
     idx = 0
     prev = 0
     for b in ulaw_bytes:
-        cur = max(-32768, min(32767, _ULAW_TO_PCM16[b]))
+        cur = _ULAW_TO_PCM16[b]
         out[idx] = int((prev + cur) >> 1)
         out[idx + 1] = cur
         prev = cur
@@ -169,7 +170,7 @@ class LatterSipEngine:
         self._local_rtp_port: int = 16400
 
         self.registered: bool = False
-        self.call_state: str = "idle"  # idle, ringing, in_call
+        self.call_state: str = "idle"
         self.active_call_id: str = ""
         self.remote_caller: str = ""
         self.remote_sip_addr: tuple[str, int] = ("", 0)
@@ -268,7 +269,7 @@ class LatterSipEngine:
         lines = [
             f"REGISTER sip:{server}:{port} SIP/2.0",
             f"Via: SIP/2.0/UDP {self._local_ip}:{self._local_sip_port};rport;branch={branch}",
-            f"Max-Forwards: 70",
+            "Max-Forwards: 70",
             f"From: <sip:{user}@{server}>;tag=latter01",
             f"To: <sip:{user}@{server}>",
             f"Call-ID: {call_id}",
@@ -317,7 +318,6 @@ class LatterSipEngine:
 
         cfg = self.get_cfg()
 
-        # 1. Handle SIP Responses (200 OK, 401 Unauthorized, 407 Proxy Auth)
         if first.startswith("SIP/2.0 200"):
             cseq = headers.get("cseq", "")
             if "REGISTER" in cseq:
@@ -338,7 +338,6 @@ class LatterSipEngine:
                     self._send_register(cfg, auth_header=auth_hdr)
             return
 
-        # 2. Handle OPTIONS keepalive
         if first.startswith("OPTIONS "):
             resp = [
                 "SIP/2.0 200 OK",
@@ -352,7 +351,6 @@ class LatterSipEngine:
             self._send_raw_sip("\r\n".join(resp), addr)
             return
 
-        # 3. Handle Incoming INVITE (Doorbell / Gate / PBX Call)
         if first.startswith("INVITE "):
             self._last_invite_headers = headers
             self.active_call_id = headers.get("call-id", "")
@@ -374,12 +372,9 @@ class LatterSipEngine:
                 "Content-Length: 0\r\n\r\n",
             ]
             self._send_raw_sip("\r\n".join(ring_resp), addr)
-
-            # Dispatch ringing alert with camera snapshot to all Latter displays
             self.hass.async_create_task(self._async_notify_incoming_sip_call())
             return
 
-        # 4. Handle BYE / CANCEL
         if first.startswith("BYE ") or first.startswith("CANCEL "):
             ok_resp = [
                 "SIP/2.0 200 OK",
@@ -469,11 +464,13 @@ class LatterSipEngine:
             cfg = self.get_cfg()
             hdrs = self._last_invite_headers
             branch = f"z9hG4bK-{random.randint(100000, 999999)}"
+            default_from = f"<sip:{cfg['username']}@{self._local_ip}>"
+            from_uri = hdrs.get("to", default_from)
             bye_msg = [
                 f"BYE sip:{self.remote_sip_addr[0]}:{self.remote_sip_addr[1]} SIP/2.0",
                 f"Via: SIP/2.0/UDP {self._local_ip}:{self._local_sip_port};rport;branch={branch}",
                 "Max-Forwards: 70",
-                f"From: {hdrs.get('to', f'<sip:{cfg[\"username\"]}@{self._local_ip}>')};tag=lattercall",
+                f"From: {from_uri};tag=lattercall",
                 f"To: {hdrs.get('from', '')}",
                 f"Call-ID: {self.active_call_id}",
                 "CSeq: 102 BYE",
@@ -521,7 +518,7 @@ class LatterSipEngine:
             f"INVITE sip:{user_part}@{host}:{port} SIP/2.0",
             f"Via: SIP/2.0/UDP {self._local_ip}:{self._local_sip_port};rport;branch={branch}",
             "Max-Forwards: 70",
-            f"From: \"Latter\" <sip:{cfg['username']}@{self._local_ip}>;tag=latterout",
+            f'From: "Latter" <sip:{cfg["username"]}@{self._local_ip}>;tag=latterout',
             f"To: <sip:{user_part}@{host}>",
             f"Call-ID: {self.active_call_id}",
             "CSeq: 1 INVITE",
@@ -542,7 +539,6 @@ class LatterSipEngine:
             ev = RFC2833_EVENT_MAP.get(ch.upper())
             if ev is None:
                 continue
-            # 1. Send RFC 2833 RTP telephone-event packets (PT=101)
             if self._rtp_protocol is not None and self.remote_rtp_addr[0]:
                 for seq_i, end_bit in ((1, 0), (2, 0), (3, 0x80)):
                     dur = seq_i * 160
@@ -550,7 +546,6 @@ class LatterSipEngine:
                     self._rtp_protocol.send_rtp_packet(
                         payload, 101, seq_i == 1, self.remote_rtp_addr, ts_step=0 if seq_i < 3 else 480
                     )
-            # 2. Also send SIP INFO application/dtmf-relay for PBXs/doorbells that prefer signaling DTMF
             if self.remote_sip_addr[0] and self.active_call_id:
                 body = f"Signal={ch}\r\nDuration=160\r\n"
                 branch = f"z9hG4bK-{random.randint(100000, 999999)}"
@@ -577,7 +572,6 @@ class LatterSipEngine:
         if self._rtp_protocol is None or not self.remote_rtp_addr[0]:
             return
         ulaw_all = encode_pcm16_16khz_to_ulaw(pcm_16k)
-        # 20ms @ 8kHz = 160 bytes per RTP packet
         for idx in range(0, len(ulaw_all), 160):
             chunk = ulaw_all[idx : idx + 160]
             if len(chunk) < 160:
