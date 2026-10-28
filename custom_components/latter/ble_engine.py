@@ -555,18 +555,37 @@ class LatterNativeBleTracker:
         if adv_name and self._device_slug in adv_name:
             return True
 
-        # 3. Apple iBeacon UUID match (if multiple Latter devices share the default UUID and this
-        #    device's MAC range is known, require the advertisement MAC to match this device so
-        #    multiple devices using latter-ble-beacon.yaml never cross-talk!)
+        # 3. Apple iBeacon UUID + Minor ID match (supports ESP32-P4 + ESP32-C6 where the C6 BLE MAC
+        #    differs from the P4 host MAC in HA Device Registry)
         apple_bytes = mfg_data.get(APPLE_COMPANY_ID)
         if apple_bytes and len(apple_bytes) >= 18:
             uuid_matched = False
+            minor_val: int | None = None
             if len(apple_bytes) >= 20 and apple_bytes[:2] == IBEACON_PREFIX:
                 uuid_hex = apple_bytes[2:18].hex().lower()
                 uuid_matched = uuid_hex == self._target_uuid_hex
+                if len(apple_bytes) >= 22:
+                    minor_val = (apple_bytes[20] << 8) | apple_bytes[21]
             elif self._target_uuid_hex in apple_bytes.hex().lower():
                 uuid_matched = True
             if uuid_matched:
+                slug_norm = self._raw_slug.lower().replace("-", "_")
+                expected_minor = (
+                    4 if "remote_assistant" in slug_norm
+                    else 3 if "mobile_assistant" in slug_norm
+                    else 2 if "wrist_assist" in slug_norm
+                    else 5 if "desk_assistant" in slug_norm
+                    else 1 if "pocket_assistant" in slug_norm
+                    else None
+                )
+                if minor_val is not None and expected_minor is not None:
+                    if minor_val == expected_minor and minor_val >= 2:
+                        return True
+                    if minor_val >= 2 and minor_val != expected_minor:
+                        return False
+                if "remote_assistant" in slug_norm or "desk_assistant" in slug_norm:
+                    # On ESP32-P4 + ESP32-C6 boards, the C6 radio has its own factory BLE MAC
+                    return True
                 if self._target_mac_ints and adv_int is not None:
                     return adv_int in self._target_mac_ints
                 return True

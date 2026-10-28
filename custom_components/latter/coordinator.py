@@ -1010,25 +1010,17 @@ class LatterCoordinator:
                 if matched:
                     self.active_area_id = matched
 
-        if not self.active_area_id:
+        explicit_default_area = str(self.get_opt(CONF_DEFAULT_AREA) or "").strip()
+        if self.native_ble_tracking_enabled and not explicit_default_area:
+            # Roaming BLE device without a fixed default area: never assume a non-proxy room from storage or alphabetical fallback!
+            if self.active_area_id and proxy_areas and self.active_area_id not in proxy_areas:
+                self.active_area_id = None
+        elif not self.active_area_id:
             dev_area = _get_esphome_device_current_area(
                 self.hass, self.device_slug
             )
-            if dev_area and (not proxy_areas or dev_area in proxy_areas):
+            if dev_area:
                 self.active_area_id = dev_area
-
-        if not self.active_area_id:
-            areas = get_areas_summary(
-                self.hass,
-                local_speaker=self.local_speaker,
-                device_slug=self.device_slug,
-            )
-            for area_item in areas:
-                if not proxy_areas or str(area_item["id"]) in proxy_areas:
-                    self.active_area_id = str(area_item["id"])
-                    break
-            if not self.active_area_id and areas:
-                self.active_area_id = str(areas[0]["id"])
 
         self._bind_speaker_listener()
         self._bind_local_reconnect_listener()
@@ -1612,18 +1604,33 @@ class LatterCoordinator:
         """Return (room_or_away_state, attributes) for sensor.<slug>_current_room and sensor.<slug>_ble_distance."""
         away = self.is_device_away()
         area_reg = ar.async_get(self.hass)
-        area_entry = (
-            area_reg.async_get_area(self.active_area_id)
-            if (self.active_area_id and not away)
-            else None
-        )
-        room_state = "Away" if away else (area_entry.name if area_entry else "Home")
-        dist_ft = self._ble_tracker.winning_distance_ft if (self._ble_tracker and not away) else None
-        dist_m = self._ble_tracker.winning_distance_m if (self._ble_tracker and not away) else None
-        rssi = self._ble_tracker.winning_rssi if (self._ble_tracker and not away) else None
-        proxy = self._ble_tracker.closest_scanner if (self._ble_tracker and not away) else ""
+        explicit_default = str(self.get_opt(CONF_DEFAULT_AREA) or "").strip()
+
+        if self.native_ble_tracking_enabled:
+            ble_area_id = (
+                self._ble_tracker.current_area_id
+                if (self._ble_tracker is not None and not away)
+                else None
+            ) or (explicit_default if not away else None)
+            area_entry = area_reg.async_get_area(ble_area_id) if ble_area_id else None
+            if away:
+                room_state = "Away"
+            elif area_entry is not None:
+                room_state = area_entry.name
+            else:
+                room_state = "Unassigned"
+            eff_area_id = ble_area_id or ""
+        else:
+            eff_area_id = "" if away else (self.active_area_id or explicit_default)
+            area_entry = area_reg.async_get_area(eff_area_id) if eff_area_id else None
+            room_state = "Away" if away else (area_entry.name if area_entry else "Unassigned")
+
+        dist_ft = self._ble_tracker.winning_distance_ft if (self._ble_tracker and not away and eff_area_id) else None
+        dist_m = self._ble_tracker.winning_distance_m if (self._ble_tracker and not away and eff_area_id) else None
+        rssi = self._ble_tracker.winning_rssi if (self._ble_tracker and not away and eff_area_id) else None
+        proxy = self._ble_tracker.closest_scanner if (self._ble_tracker and not away and eff_area_id) else ""
         return room_state, {
-            "area_id": "" if away else (self.active_area_id or ""),
+            "area_id": eff_area_id,
             "area_name": room_state,
             "is_home": not away,
             "closest_proxy": proxy,
@@ -2025,12 +2032,20 @@ class LatterCoordinator:
     def get_room_context_payload(self) -> tuple[str, dict[str, Any]]:
         """Compute state and attributes for sensor.<device_slug>_room_context."""
         area_reg = ar.async_get(self.hass)
-        area_entry = (
-            area_reg.async_get_area(self.active_area_id)
-            if self.active_area_id
-            else None
+        explicit_default = str(self.get_opt(CONF_DEFAULT_AREA) or "").strip()
+        has_ble_lock = bool(
+            self._ble_tracker is not None and self._ble_tracker.current_area_id
         )
-        area_name = area_entry.name if area_entry else "Home"
+        if self.native_ble_tracking_enabled and not has_ble_lock and not explicit_default:
+            area_entry = None
+        else:
+            eff_id = (
+                self._ble_tracker.current_area_id
+                if (self.native_ble_tracking_enabled and has_ble_lock and self._ble_tracker)
+                else (self.active_area_id or explicit_default)
+            )
+            area_entry = area_reg.async_get_area(eff_id) if eff_id else None
+        area_name = area_entry.name if area_entry else "Unassigned"
 
         entities = get_area_entities(
             self.hass,
