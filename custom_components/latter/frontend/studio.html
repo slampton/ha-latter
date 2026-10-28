@@ -2759,6 +2759,7 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
       {id: "all", label: "Category: All Devices"},
       {id: "online", label: "Online / Active Devices"},
       {id: "native", label: "Latter Native Devices"},
+      {id: "bridged", label: "Bridged ESPHome Devices"},
       {id: "ble_tracked", label: "BLE Tracked Devices"},
       {id: "roaming", label: "Roaming Devices"},
       {id: "stationary", label: "Stationary Devices"},
@@ -2777,15 +2778,16 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
   }
   const cat = DEVICE_CATEGORY_FILTER || "all";
   const filteredDevices = (fleetDevices || []).filter(d => {
-    const isNative = !!(d.has_audio || d.device_profile === "mobile_display" || d.device_profile === "stationary_display");
+    const isNative = !!d.is_latter_native;
     const isBleTracked = !!(d.has_ble || d.device_profile === "ble_beacon" || (d.area_label || "Roaming") === "Roaming");
     const isRoaming = (d.area_label || "Roaming") === "Roaming";
     if (cat === "online") return d.status_label !== "Offline";
     if (cat === "native") return isNative;
+    if (cat === "bridged") return !isNative && d.device_profile !== "ble_beacon";
     if (cat === "ble_tracked") return isBleTracked;
     if (cat === "roaming") return isRoaming;
     if (cat === "stationary") return !isRoaming;
-    if (cat === "headless") return !isNative;
+    if (cat === "headless") return d.device_profile === "headless_node" || d.device_profile === "ble_beacon";
     if (cat === "ble_beacon") return d.device_profile === "ble_beacon";
     if (cat === "updates") return d.status_label === "Update Available";
     if (cat.startsWith("group:")) return d.device_group === cat.split(":", 2)[1];
@@ -2860,7 +2862,7 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
   const allDevs = fleetDevices || [];
   const totalDevs = allDevs.length;
   const onlineDevs = allDevs.filter(d => d.status_label !== "Offline").length;
-  const nativeDevs = allDevs.filter(d => d.has_audio || d.device_profile === "mobile_display" || d.device_profile === "stationary_display").length;
+  const nativeDevs = allDevs.filter(d => d.is_latter_native).length;
   const bleTrackedDevs = allDevs.filter(d => d.has_ble || d.device_profile === "ble_beacon" || (d.area_label || "Roaming") === "Roaming").length;
   const scannersMap = STATE?.live?.ble_scanners_map || {};
   const proxyCount = Object.keys(scannersMap).length || (STATE?.live?.ble_survey_rows || []).length;

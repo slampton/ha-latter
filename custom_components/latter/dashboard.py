@@ -669,6 +669,37 @@ def _build_companion_state_payload(
         c_dev_entry = dev_reg.async_get(c_dev_id) if c_dev_id else None
         raw_model = str((c_dev_entry.model if c_dev_entry else "") or "").strip()
         m_low = f"{raw_model} {c.device_slug}".lower()
+        c_is_latter_native = bool(
+            c.device_profile != "ble_beacon"
+            and (
+                any(
+                    (
+                        s.endswith("_set_browse_slots")
+                        or s.endswith("_set_room_slots")
+                        or s.endswith("_show_notification")
+                    )
+                    and c.device_slug in s
+                    for s in esphome_svcs
+                )
+                or hass.states.get(f"update.{c.device_slug}_project_firmware") is not None
+                or any(
+                    k in m_low
+                    for k in (
+                        "slampton",
+                        "pocket_assistant",
+                        "pocket-assistant",
+                        "wrist_assist",
+                        "wrist-assist",
+                        "mobile_assistant",
+                        "mobile-assistant",
+                        "remote_assistant",
+                        "remote-assistant",
+                        "desk_assistant",
+                        "desk-assistant",
+                    )
+                )
+            )
+        )
         if c.device_profile == "ble_beacon":
             c_model_label = (
                 "Private BLE (Phone/Watch)"
@@ -747,6 +778,7 @@ def _build_companion_state_payload(
                 "active_area_name": c_room_name,
                 "active_speaker": c.active_speaker if c_has_audio else "",
                 "has_audio": c_has_audio,
+                "is_latter_native": c_is_latter_native,
                 "media_state": c_media_state if c_has_audio else "",
                 "battery_level": c_bat_val,
                 "is_charging": bool(c_chg_st and c_chg_st.state == "on"),
