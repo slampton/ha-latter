@@ -352,12 +352,22 @@
     margin: 0 auto;
     padding: 20px 24px 64px;
   }
-  .page-header { margin-bottom: 14px; }
-  .page-header h2 {
+  .unified-page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+  }
+  .unified-page-header h2 {
     margin: 0;
     font-size: 20px;
     font-weight: 500;
     color: var(--text-strong);
+  }
+  .content-wrap > section > .page-header {
+    display: none !important;
   }
   .page-header > p,
   .card > p.desc,
@@ -1051,24 +1061,18 @@
 
   <!-- MAIN AREA -->
   <div class="main-area">
-    <header class="topbar">
-      <div class="topbar-status">
-        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-          <img src="/api/latter/brand/icon.png" alt="Latter" style="width:26px;height:26px;border-radius:6px;object-fit:contain;flex-shrink:0;" onerror="this.style.display='none'">
-          <strong id="hdr-title" style="font-size:18px;font-weight:500;color:var(--text-strong);">Latter</strong>
-          <span class="nav-badge" id="hdr-sub">v2.2.0</span>
+    <div class="content-wrap">
+      <div class="unified-page-header">
+        <h2 id="unified-page-title">Overview</h2>
+        <div class="topbar-actions">
           <button type="button" id="hdr-update-pill" class="update-pill hidden" onclick="triggerHeaderFirmwareUpdate()">Update Available</button>
+          <div id="dirty-indicator" class="dirty-banner">Unsaved</div>
+          <button id="btn-save-changes" class="btn-primary" disabled onclick="saveAllConfig()">Saved</button>
         </div>
       </div>
-      <div class="topbar-actions">
-        <div id="dirty-indicator" class="dirty-banner">Unsaved</div>
-        <button id="btn-save-changes" class="btn-primary" disabled onclick="saveAllConfig()">Saved</button>
-      </div>
-    </header>
 
-    <div class="content-wrap">
       <!-- ================================================================== -->
-      <!-- SYSTEM TAB 1: DEVICES & WHOLE-HOME OVERVIEW                        -->
+      <!-- SYSTEM TAB 1: SYSTEM & BLE PRESENCE OVERVIEW                       -->
       <!-- ================================================================== -->
       <section id="view-fleet_overview" class="hidden">
         <div class="page-header">
@@ -1078,19 +1082,25 @@
         <div class="hero-stats" style="grid-template-columns:repeat(4, minmax(0, 1fr));">
           <div class="stat-box"><span>Total Devices</span><strong id="sys-st-total">0</strong></div>
           <div class="stat-box"><span>Native Displays</span><strong id="sys-st-native">0</strong></div>
-          <div class="stat-box"><span>Roaming Devices</span><strong id="sys-st-roaming">0</strong></div>
+          <div class="stat-box"><span>BLE Tracked Devices</span><strong id="sys-st-roaming">0</strong></div>
           <div class="stat-box"><span>BLE Room Proxies</span><strong id="sys-st-proxies">0</strong></div>
         </div>
 
         <div class="grid-2">
           <div class="card">
-            <h3>Fleet Summary</h3>
-            <div class="summary-row"><span>Online Devices</span><strong id="sys-sum-online">0 / 0</strong></div>
-            <div class="summary-row"><span>Stationary Devices</span><strong id="sys-sum-stationary">0</strong></div>
-            <div class="summary-row"><span>Firmware Updates Available</span><strong id="sys-sum-updates">0</strong></div>
-            <div class="summary-row"><span>Device Groups</span><strong id="sys-sum-groups">0</strong></div>
-            <div class="summary-row"><span>Saved Profiles</span><strong id="sys-sum-profiles">0</strong></div>
-            <div class="summary-row"><span>Saved Backups</span><strong id="sys-sum-backups">0</strong></div>
+            <h3>System &amp; BLE Presence</h3>
+            <div class="summary-row">
+              <span>Latter Version</span>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <strong id="sys-sum-version">v2.2.0</strong>
+                <button type="button" class="btn-secondary" style="padding:3px 9px;font-size:11.5px;" onclick="checkSystemUpdates()">Check for Updates</button>
+              </div>
+            </div>
+            <div class="summary-row"><span>Online / Active Devices</span><strong id="sys-sum-online">0 / 0</strong></div>
+            <div class="summary-row"><span>ESPHome Displays &amp; Nodes</span><strong id="sys-sum-esphome">0</strong></div>
+            <div class="summary-row"><span>BLE Phones, Watches &amp; Tags</span><strong id="sys-sum-ble-tags">0</strong></div>
+            <div class="summary-row"><span>People Tracked (BLE Room)</span><strong id="sys-sum-people">0</strong></div>
+            <div class="summary-row"><span>Calibrated BLE Rooms</span><strong id="sys-sum-ble-rooms">0</strong></div>
           </div>
 
           <div class="card">
@@ -1100,7 +1110,7 @@
             <div class="summary-row"><span>Cameras</span><strong id="sys-sum-cameras">0</strong></div>
             <div class="summary-row"><span>Calendars</span><strong id="sys-sum-calendars">0</strong></div>
             <div class="summary-row"><span>Pinned Room Entities</span><strong id="sys-sum-pinned">0</strong></div>
-            <div class="summary-row"><span>Calibrated BLE Rooms</span><strong id="sys-sum-ble-rooms">0</strong></div>
+            <div class="summary-row"><span>Groups &amp; Saved Profiles</span><strong id="sys-sum-groups-profiles">0</strong></div>
           </div>
         </div>
       </section>
@@ -1580,10 +1590,11 @@
           <h2 id="dash-header-title">Overview</h2>
         </div>
 
-        <div class="hero-stats">
+        <div class="hero-stats" style="grid-template-columns:repeat(4, minmax(0, 1fr));">
           <div class="stat-box"><span id="st-room-label">Current Room</span><strong id="st-room">--</strong></div>
           <div class="stat-box"><span>Battery / Power</span><strong id="st-battery">--</strong></div>
           <div class="stat-box"><span>Wi-Fi Signal</span><strong id="st-wifi">--</strong></div>
+          <div class="stat-box"><span>Firmware Version</span><strong id="st-fw-version">--</strong></div>
         </div>
 
         <div class="grid-2">
@@ -1611,7 +1622,7 @@
           <div class="card">
             <h3>Device Status</h3>
             <p class="desc">Hardware model, roaming location mode, and device management.</p>
-            <div class="summary-row"><span>Model &amp; Firmware</span><strong id="dash-hw-model">--</strong></div>
+            <div class="summary-row"><span>Hardware Model</span><strong id="dash-hw-model">--</strong></div>
             <div class="summary-row"><span>IP Address</span><strong id="dash-ip-addr">--</strong></div>
             <div class="summary-row"><span>Location Mode</span><strong id="dash-ble-mode">--</strong></div>
             <div class="summary-row" id="dash-row-ble-proxy"><span>Nearest BLE Proxy</span><strong id="dash-ble-proxy">--</strong></div>
@@ -2295,18 +2306,41 @@ async function onThemeChanged(themePref) {
   if (resp.ok) showToast(`Theme set to ${themePref}`);
 }
 
+const VIEW_TITLES = {
+  fleet_overview: "Overview",
+  household: "Shared Entities",
+  remotes: "Media & Remotes",
+  fleet_sync: "Groups & Profiles",
+  room_tracking: "BLE Calibration",
+  system_admin: "Administration",
+  select_device_prompt: "Devices",
+  dashboard: "Overview",
+  home_display: "Display & Home",
+  audio_voice: "Audio & Voice",
+  power: "Power & Battery",
+  system: "Administration"
+};
+let CURRENT_VIEW_ID = "dashboard";
+
+function updateUnifiedPageTitle(viewId) {
+  if (viewId) CURRENT_VIEW_ID = viewId;
+  const titleEl = document.getElementById("unified-page-title");
+  if (!titleEl) return;
+  const baseTitle = VIEW_TITLES[CURRENT_VIEW_ID] || "Overview";
+  const isMobile = window.innerWidth <= 860;
+  if (CURRENT_SCOPE === "device" && DEVICE_SELECTED && CURRENT_VIEW_ID !== "select_device_prompt" && isMobile) {
+    const devTitle = STATE?.esphome?.device?.name || STATE?.title || "Device";
+    titleEl.textContent = `${devTitle} — ${baseTitle}`;
+  } else {
+    titleEl.textContent = baseTitle;
+  }
+}
+
 function updateTopHeaderForScope() {
   const isHH = (CURRENT_SCOPE === "household") || !DEVICE_SELECTED;
   const devTitle = STATE?.esphome?.device?.name || STATE?.title || "Device";
-  document.getElementById("hdr-title").textContent = isHH ? "Latter" : devTitle;
   const devNavLbl = document.getElementById("nav-selected-device-label");
   if (devNavLbl) devNavLbl.textContent = devTitle;
-
-  const rawVer = isHH
-    ? (STATE?.version || "2.2.0")
-    : (STATE?.live?.device_sw_version || STATE?.esphome?.device?.sw_version || STATE?.version || "2.2.0");
-  const cleanVer = String(rawVer).replace(/^v/i, "");
-  document.getElementById("hdr-sub").textContent = `v${cleanVer}`;
 
   const updPill = document.getElementById("hdr-update-pill");
   if (updPill) {
@@ -2320,12 +2354,25 @@ function updateTopHeaderForScope() {
   document.getElementById("nav-scope-household").classList.toggle("hidden", CURRENT_SCOPE !== "household");
   document.getElementById("nav-scope-devices-list")?.classList.toggle("hidden", CURRENT_SCOPE !== "device" || DEVICE_SELECTED);
   document.getElementById("nav-scope-device").classList.toggle("hidden", CURRENT_SCOPE !== "device" || !DEVICE_SELECTED);
+  updateUnifiedPageTitle(CURRENT_VIEW_ID);
 }
 
 async function triggerHeaderFirmwareUpdate() {
   const entId = STATE?.live?.fw_update_entity;
   if (!entId) return;
   await espAction(entId, "install");
+}
+
+async function checkSystemUpdates() {
+  const resp = await fetch(API_URL, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({command: "check_system_updates"})
+  });
+  if (resp.ok) {
+    applyStateToDom(await resp.json(), false);
+    showToast("Checked for Latter & device firmware updates");
+  }
 }
 
 function openDevicesLanding() {
@@ -2371,6 +2418,7 @@ function switchView(viewId, btnEl) {
     const el = document.getElementById("view-" + id);
     if (el) el.classList.toggle("hidden", id !== viewId);
   });
+  updateUnifiedPageTitle(viewId);
 }
 
 function navigateToView(viewId) {
@@ -2707,13 +2755,14 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
   const allDevs = fleetDevices || [];
   const totalDevs = allDevs.length;
   const onlineDevs = allDevs.filter(d => d.status_label !== "Offline").length;
-  const updateDevs = allDevs.filter(d => d.status_label === "Update Available").length;
   const nativeDevs = allDevs.filter(d => d.has_audio || d.device_profile === "mobile_display" || d.device_profile === "stationary_display").length;
-  const roamingDevs = allDevs.filter(d => (d.area_label || "Roaming") === "Roaming").length;
-  const stationaryDevs = totalDevs - roamingDevs;
+  const bleTrackedDevs = allDevs.filter(d => d.has_ble || d.device_profile === "ble_beacon" || (d.area_label || "Roaming") === "Roaming").length;
+  const bleTagsCount = allDevs.filter(d => d.device_profile === "ble_beacon").length;
+  const esphomeNodesCount = totalDevs - bleTagsCount;
   const scannersMap = STATE?.live?.ble_scanners_map || {};
   const proxyCount = Object.keys(scannersMap).length || (STATE?.live?.ble_survey_rows || []).length;
   const calRoomsCount = Object.keys(cfg?.ble_room_offsets || {}).length;
+  const peopleCount = (STATE?.catalog?.persons || []).length;
 
   const setSysTxt = (id, val) => {
     const el = document.getElementById(id);
@@ -2721,15 +2770,16 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
   };
   setSysTxt("sys-st-total", totalDevs);
   setSysTxt("sys-st-native", nativeDevs);
-  setSysTxt("sys-st-roaming", roamingDevs);
+  setSysTxt("sys-st-roaming", bleTrackedDevs);
   setSysTxt("sys-st-proxies", proxyCount);
 
+  const sysVerClean = String(STATE?.version || "2.2.0").replace(/^v/i, "");
+  setSysTxt("sys-sum-version", `v${sysVerClean}`);
   setSysTxt("sys-sum-online", `${onlineDevs} / ${totalDevs}`);
-  setSysTxt("sys-sum-stationary", stationaryDevs);
-  setSysTxt("sys-sum-updates", updateDevs);
-  setSysTxt("sys-sum-groups", groups.length);
-  setSysTxt("sys-sum-profiles", profiles.length);
-  setSysTxt("sys-sum-backups", backups.length);
+  setSysTxt("sys-sum-esphome", esphomeNodesCount);
+  setSysTxt("sys-sum-ble-tags", bleTagsCount);
+  setSysTxt("sys-sum-people", peopleCount);
+  setSysTxt("sys-sum-ble-rooms", calRoomsCount);
 
   const remCnt = Array.isArray(cfg?.remotes_list) ? cfg.remotes_list.filter(Boolean).length : 0;
   const volCnt = Array.isArray(cfg?.volume_overrides) ? cfg.volume_overrides.length : 0;
@@ -2742,7 +2792,7 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
   setSysTxt("sys-sum-cameras", camCnt);
   setSysTxt("sys-sum-calendars", calCnt);
   setSysTxt("sys-sum-pinned", pinCnt);
-  setSysTxt("sys-sum-ble-rooms", calRoomsCount);
+  setSysTxt("sys-sum-groups-profiles", `${groups.length} groups / ${profiles.length} profiles`);
 
   const alertDevSel = document.getElementById("test-alert-device");
   if (alertDevSel && fleetDevices && fleetDevices.length) {
@@ -4287,7 +4337,6 @@ function applyStateToDom(data, forceFormUpdate=false) {
   const roomName = live.active_area_name || "Home";
   const caps = data.capabilities || {};
   const devTitle = esp?.device?.name || data.title;
-  document.getElementById("hdr-sub").textContent = `v${data.version || '2.2.0'}`;
   updateTopHeaderForScope();
 
   // Capability-Aware Device Sidebar Tabs
@@ -4313,17 +4362,22 @@ function applyStateToDom(data, forceFormUpdate=false) {
   const roomLblEl = document.getElementById("st-room-label");
   if (roomLblEl) roomLblEl.textContent = hasAssignedArea ? "Room" : "Current Room (Roaming)";
 
-  // 3 Hero Stat Boxes on Device Overview
+  // 4 Hero Stat Boxes on Device Overview
+  const rawDevSw = String(live.device_sw_version || esp?.device?.sw_version || data.version || "2.2.0").replace(/^v/i, "");
   document.getElementById("dash-header-title").textContent = "Overview";
   document.getElementById("st-room").textContent = hasAssignedArea ? (curFleet.area_label || roomName) : roomName;
   document.getElementById("st-battery").textContent = batText;
   document.getElementById("st-wifi").textContent = wifiText;
+  const fwEl = document.getElementById("st-fw-version");
+  if (fwEl) {
+    fwEl.textContent = live.fw_update_available ? `v${rawDevSw} (Update)` : `v${rawDevSw}`;
+  }
 
   const grpList = data.device_groups || [];
   const grpObj = grpList.find(g => g.id === cfg.device_group);
   document.getElementById("st-group").textContent = grpObj ? grpObj.name : (cfg.device_group || "Unassigned");
 
-  const hwModel = `${esp?.device?.model || 'ESPHome'}${esp?.device?.sw_version ? ' (' + esp.device.sw_version + ')' : ''}`;
+  const hwModel = curFleet.model_label || esp?.device?.model || "ESPHome Node";
   document.getElementById("dash-hw-model").textContent = hwModel;
   document.getElementById("dash-ip-addr").textContent = ipStr;
   document.getElementById("dash-ble-mode").textContent = isRoaming

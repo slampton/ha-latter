@@ -1173,6 +1173,23 @@ class LatterCompanionApiView(HomeAssistantView):
                 _build_companion_state_payload(self.hass, coordinator)
             )
 
+        if cmd == "check_system_updates":
+            for st_u in self.hass.states.async_all("update"):
+                eid_low = st_u.entity_id.lower()
+                if "latter" in eid_low or any(
+                    c.device_slug in eid_low for c in _get_all_coordinators(self.hass)
+                ):
+                    if self.hass.services.has_service("homeassistant", "update_entity"):
+                        await self.hass.services.async_call(
+                            "homeassistant",
+                            "update_entity",
+                            {"entity_id": st_u.entity_id},
+                            blocking=False,
+                        )
+            return web.json_response(
+                _build_companion_state_payload(self.hass, coordinator)
+            )
+
         if cmd == "set_theme":
             theme_val = _normalize_web_theme(body.get("web_theme"))
             await _async_save_and_broadcast_global_config(
