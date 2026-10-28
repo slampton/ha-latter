@@ -240,6 +240,21 @@ class LatterSipEngine:
         else:
             self.registered = bool(cfg["enabled"])
 
+    @callback
+    def async_stop(self) -> None:
+        """Close SIP and RTP UDP sockets and cancel background registration."""
+        if self._reg_task is not None:
+            self._reg_task.cancel()
+            self._reg_task = None
+        if self._sip_transport is not None:
+            self._sip_transport.close()
+            self._sip_transport = None
+        if self._rtp_protocol is not None and self._rtp_protocol.transport is not None:
+            self._rtp_protocol.transport.close()
+            self._rtp_protocol = None
+        self.registered = False
+        self.call_state = "idle"
+
     async def _async_registration_loop(self) -> None:
         """Periodically send SIP REGISTER to the configured PBX."""
         while True:

@@ -151,6 +151,13 @@ CONF_VPN_PUBLIC_KEY: Final = "vpn_public_key"
 CONF_VPN_PRESHARED_KEY: Final = "vpn_preshared_key"
 CONF_VPN_HOTSPOT_SSID: Final = "vpn_hotspot_ssid"
 
+# Forward-Compatible Extensibility Envelopes (v2.2+ -> v3.0 Site-to-Site, Tile-Grid GUI & Sensor Fusion)
+CONF_CAPABILITIES_MANIFEST: Final = "capabilities_manifest"
+CONF_GUI_LAYOUT: Final = "gui_layout"
+CONF_FEDERATION_CONFIG: Final = "federation_config"
+CONF_AREA_FUSION_CONFIG: Final = "area_fusion_config"
+EVENT_LATTER: Final = "latter_event"
+
 GLOBAL_CONFIG_KEYS: Final[tuple[str, ...]] = (
     CONF_WEB_THEME,
     CONF_COMPANION_BASE_URL,
@@ -193,6 +200,8 @@ GLOBAL_CONFIG_KEYS: Final[tuple[str, ...]] = (
     CONF_VPN_SERVER_PUBLIC_KEY,
     CONF_VPN_SUBNET,
     CONF_VPN_HA_IP,
+    CONF_FEDERATION_CONFIG,
+    CONF_AREA_FUSION_CONFIG,
 )
 
 

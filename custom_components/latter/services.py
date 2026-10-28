@@ -10,7 +10,7 @@ from typing import Any
 import voluptuous as vol
 
 from homeassistant.const import ATTR_ENTITY_ID
-from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.core import HomeAssistant, ServiceCall, ServiceResponse, SupportsResponse
 from homeassistant.helpers import config_validation as cv, device_registry as dr
 from homeassistant.util import dt as dt_util
 
@@ -1295,13 +1295,13 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         _handle_save_custom_color,
     )
 
-    async def _handle_doorbell_intercom(call: ServiceCall) -> None:
-        """Execute a two-way doorbell intercom or camera audio action."""
+    async def _handle_doorbell_intercom(call: ServiceCall) -> ServiceResponse:
+        """Execute a two-way doorbell intercom or camera audio action and return target metadata."""
         from .doorbell_engine import async_execute_doorbell_intercom
 
         coord = _resolve_coordinator_from_call(hass, call)
         if not coord:
-            return
+            return {"status": "error", "reason": "no_coordinator"}
         data = call.data
         action = str(data.get("action") or "listen_toggle").strip()
         cam_ent = str(data.get("camera_entity") or "").strip() or None
@@ -1309,7 +1309,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         anc = str(data.get("anc_mode") or "").strip() or None
         raw_idx = data.get("camera_index")
         cam_idx = int(raw_idx) if raw_idx is not None and str(raw_idx).strip() != "" else None
-        await async_execute_doorbell_intercom(
+        info = await async_execute_doorbell_intercom(
             hass=hass,
             coordinator=coord,
             action=action,
@@ -1318,6 +1318,14 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             anc_mode=anc,
             camera_index=cam_idx,
         )
+        return {
+            "status": "ok",
+            "device_slug": coord.device_slug,
+            "action": action,
+            "doorbell_talk_state": coord.doorbell_talk_state,
+            "doorbell_anc_mode": coord.doorbell_anc_mode,
+            **info,
+        }
 
     hass.services.async_register(
         DOMAIN,
@@ -1334,4 +1342,5 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             },
             extra=vol.ALLOW_EXTRA,
         ),
+        supports_response=SupportsResponse.OPTIONAL,
     )

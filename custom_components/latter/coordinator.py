@@ -123,6 +123,7 @@ from .const import (
     DEFAULT_SYNC_DEVICE_AREA,
     DEFAULT_WALLPAPER_CYCLE_MINUTES,
     DOMAIN,
+    EVENT_LATTER,
     FORECAST_REFRESH_INTERVAL_MINUTES,
     GLOBAL_CONFIG_KEYS,
     POSITION_UPDATE_INTERVAL_SECONDS,
@@ -886,6 +887,17 @@ class LatterCoordinator:
             )
         else:
             self.alert_camera_url = "none"
+        self.hass.bus.async_fire(
+            EVENT_LATTER,
+            {
+                "type": "notification_dispatched",
+                "device_slug": self.device_slug,
+                "title": self.alert_title,
+                "message": self.alert_message,
+                "priority": self.alert_priority,
+                "camera_url": self.alert_camera_url,
+            },
+        )
         self._notify_listeners()
 
     def build_wallpaper_url(self) -> str:
@@ -1679,68 +1691,42 @@ class LatterCoordinator:
 
         return _remove
 
+    def get_person_room_and_distance(self, person_entity: str) -> tuple[str, dict[str, Any]]:
+        """Resolve the freshest room and BLE distance across all Latter devices carried by a person."""
+        domain_data = self.hass.data.get(DOMAIN, {})
+        p_coords = [
+            v
+            for v in domain_data.values()
+            if isinstance(v, LatterCoordinator) and v.assigned_person == person_entity
+        ]
+        if not p_coords:
+            p_coords = [self]
+        home_coords = [c for c in p_coords if not c.is_device_away()]
+        pool = home_coords if home_coords else p_coords
+        best_c = max(
+            pool,
+            key=lambda x: (
+                x._ble_tracker.last_packet_monotonic
+                if x._ble_tracker is not None
+                else 0.0
+            ),
+        )
+        room_name, r_attrs = best_c.get_current_room_and_distance()
+        return room_name, {
+            "person_entity": person_entity,
+            "area_id": r_attrs["area_id"],
+            "area_name": room_name,
+            "is_home": r_attrs["is_home"],
+            "distance_ft": r_attrs["distance_ft"],
+            "distance_m": r_attrs["distance_m"],
+            "closest_proxy": r_attrs["closest_proxy"],
+            "source_device": best_c.device_slug,
+        }
+
     @callback
     def _sync_person_room_sensor(self) -> None:
-        """Publish sensor.<person_slug>_current_room for any person.* assigned to Latter devices."""
-        domain_data = self.hass.data.get(DOMAIN, {})
-        coords = [
-            v for v in domain_data.values() if isinstance(v, LatterCoordinator)
-        ]
-        by_person: dict[str, list[LatterCoordinator]] = {}
-        for c in coords:
-            p_ent = c.assigned_person
-            if p_ent and p_ent.startswith("person."):
-                by_person.setdefault(p_ent, []).append(c)
-
-        for p_ent, p_coords in by_person.items():
-            home_coords = [c for c in p_coords if not c.is_device_away()]
-            pool = home_coords if home_coords else p_coords
-            best_c = max(
-                pool,
-                key=lambda x: (
-                    x._ble_tracker.last_packet_monotonic
-                    if x._ble_tracker is not None
-                    else 0.0
-                ),
-            )
-            room_name, r_attrs = best_c.get_current_room_and_distance()
-            p_st = self.hass.states.get(p_ent)
-            p_friendly = (
-                str(p_st.attributes.get("friendly_name") or "").strip()
-                if p_st
-                else ""
-            ) or p_ent.split(".", 1)[-1].replace("_", " ").title()
-            p_slug = normalize_device_slug(p_ent.split(".", 1)[-1])
-            self.hass.states.async_set(
-                f"sensor.{p_slug}_current_room",
-                room_name,
-                {
-                    "friendly_name": f"{p_friendly} Current Room",
-                    "icon": "mdi:account-location" if room_name != "Away" else "mdi:account-arrow-right",
-                    "person_entity": p_ent,
-                    "area_id": r_attrs["area_id"],
-                    "is_home": r_attrs["is_home"],
-                    "distance_ft": r_attrs["distance_ft"],
-                    "distance_m": r_attrs["distance_m"],
-                    "closest_proxy": r_attrs["closest_proxy"],
-                    "source_device": best_c.device_slug,
-                },
-            )
-            if r_attrs["distance_ft"] is not None:
-                self.hass.states.async_set(
-                    f"sensor.{p_slug}_ble_distance",
-                    str(r_attrs["distance_ft"]),
-                    {
-                        "friendly_name": f"{p_friendly} BLE Distance",
-                        "unit_of_measurement": "ft",
-                        "device_class": "distance",
-                        "state_class": "measurement",
-                        "icon": "mdi:map-marker-distance",
-                        "distance_m": r_attrs["distance_m"],
-                        "area_name": room_name,
-                        "source_device": best_c.device_slug,
-                    },
-                )
+        """No-op hook retained for backward compatibility; person sensors are native SensorEntities."""
+        return
 
     @callback
     def _notify_listeners(self) -> None:
@@ -1936,8 +1922,20 @@ class LatterCoordinator:
         matched_id = match_area_by_name_or_id(self.hass, area_id_or_name)
         if not matched_id:
             return
+        prev_area = self.active_area_id
         self.active_area_id = matched_id
         self._bind_room_entities_listener()
+        if prev_area != matched_id:
+            self.hass.bus.async_fire(
+                EVENT_LATTER,
+                {
+                    "type": "room_changed",
+                    "device_slug": self.device_slug,
+                    "previous_area_id": prev_area or "",
+                    "area_id": matched_id,
+                    "assigned_person": self.assigned_person,
+                },
+            )
 
         if sync_device_registry and self.sync_device_area_enabled:
             sync_esphome_device_area(

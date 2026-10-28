@@ -14,7 +14,7 @@ import time
 from typing import Any
 import wave
 
-from aiohttp import web
+from aiohttp import ClientTimeout, web
 from PIL import Image, ImageOps
 
 from homeassistant.components.http import HomeAssistantView
@@ -510,7 +510,9 @@ async def _async_push_go2rtc_or_onvif_backchannel(
     slug = camera_entity_id.split(".", 1)[-1]
     session = async_get_clientsession(hass)
     try:
-        async with session.get("http://127.0.0.1:1984/api/streams", timeout=1.5) as resp:
+        async with session.get(
+            "http://127.0.0.1:1984/api/streams", timeout=ClientTimeout(total=1.5)
+        ) as resp:
             if resp.status == 200:
                 streams = await resp.json()
                 matched_stream = None
@@ -524,7 +526,9 @@ async def _async_push_go2rtc_or_onvif_backchannel(
                                 break
                 if matched_stream:
                     post_url = f"http://127.0.0.1:1984/api/streams?dst={matched_stream}"
-                    async with session.post(post_url, data=wav_bytes, timeout=8.0) as p_resp:
+                    async with session.post(
+                        post_url, data=wav_bytes, timeout=ClientTimeout(total=8.0)
+                    ) as p_resp:
                         if p_resp.status in (200, 201, 204):
                             return True
     except Exception:  # noqa: BLE001
@@ -688,7 +692,22 @@ class LatterDoorbellTalkbackView(HomeAssistantView):
         )
 
     async def post(self, request: web.Request, target_device: str) -> web.Response:
-        """Ingest raw PCM16 or WAV talkback audio, run the 4-stage ANC+AEC DSP pipeline, and play to doorbell."""
+        """Ingest raw PCM16 or WAV talkback audio (requires valid Latter token or HA Bearer token)."""
+        from .dashboard import verify_studio_panel_token
+
+        token = request.query.get("token") or request.headers.get("X-Latter-Token")
+        authed = verify_studio_panel_token(self.hass, token)
+        if not authed:
+            auth_hdr = request.headers.get("Authorization", "")
+            if auth_hdr.startswith("Bearer "):
+                bearer = auth_hdr.removeprefix("Bearer ").strip()
+                rt = await self.hass.auth.async_validate_access_token(bearer)
+                authed = rt is not None
+        if not authed:
+            return web.json_response(
+                {"error": "Unauthorized"}, status=HTTPStatus.FORBIDDEN
+            )
+
         coord = _resolve_coordinator_by_slug(self.hass, target_device)
         raw_bytes = await request.read()
         if not raw_bytes:

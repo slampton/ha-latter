@@ -31,8 +31,9 @@ async def async_setup_entry(
     coordinator: LatterCoordinator = (
         getattr(entry, "runtime_data", None) or hass.data[DOMAIN][entry.entry_id]
     )
+    entities: list[SensorEntity] = []
     if coordinator.device_profile == "ble_beacon":
-        async_add_entities(
+        entities.extend(
             [
                 LatterCurrentRoomSensor(coordinator),
                 LatterBleDistanceSensor(coordinator),
@@ -40,7 +41,7 @@ async def async_setup_entry(
             ]
         )
     else:
-        async_add_entities(
+        entities.extend(
             [
                 LatterCurrentRoomSensor(coordinator),
                 LatterBleDistanceSensor(coordinator),
@@ -51,6 +52,27 @@ async def async_setup_entry(
                 LatterRemoteConfigSensor(coordinator),
             ]
         )
+
+    domain_data = hass.data.setdefault(DOMAIN, {})
+    registered_persons: set[str] = domain_data.setdefault("registered_person_sensors", set())
+
+    @callback
+    def _async_ensure_person_sensors() -> None:
+        person_ent = coordinator.assigned_person
+        if person_ent and person_ent.startswith("person.") and person_ent not in registered_persons:
+            registered_persons.add(person_ent)
+            async_add_entities(
+                [
+                    LatterPersonCurrentRoomSensor(coordinator, person_ent),
+                    LatterPersonBleDistanceSensor(coordinator, person_ent),
+                ]
+            )
+
+    _async_ensure_person_sensors()
+    entry.async_on_unload(
+        coordinator.async_add_listener(_async_ensure_person_sensors)
+    )
+    async_add_entities(entities)
 
 
 class _BaseLatterSensor(SensorEntity):
@@ -285,4 +307,76 @@ class LatterBleDistanceSensor(_BaseLatterSensor):
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return distance in meters, RSSI, and closest proxy."""
         _, attrs = self.coordinator.get_current_room_and_distance()
+        return attrs
+
+
+class LatterPersonCurrentRoomSensor(_BaseLatterSensor):
+    """Exposes sensor.<person_slug>_current_room as a native Entity Registry sensor."""
+
+    def __init__(self, coordinator: LatterCoordinator, person_entity: str) -> None:
+        """Initialize person current room sensor."""
+        self._person_entity = person_entity
+        p_slug = normalize_device_slug(person_entity.split(".", 1)[-1])
+        p_st = coordinator.hass.states.get(person_entity)
+        p_friendly = (
+            str(p_st.attributes.get("friendly_name") or "").strip()
+            if p_st
+            else ""
+        ) or p_slug.replace("_", " ").title()
+        super().__init__(coordinator, f"person_{p_slug}_current_room", f"{p_friendly} Current Room")
+        self._attr_has_entity_name = False
+        self._attr_unique_id = f"{DOMAIN}_person_{p_slug}_current_room"
+        self.entity_id = f"sensor.{p_slug}_current_room"
+
+    @property
+    def icon(self) -> str:
+        """Return dynamic icon based on room state."""
+        return "mdi:account-location" if self.native_value not in ("Away", "Unassigned") else "mdi:account-arrow-right"
+
+    @property
+    def native_value(self) -> str:
+        """Return freshest room name across all devices carried by this person."""
+        room_name, _ = self.coordinator.get_person_room_and_distance(self._person_entity)
+        return room_name
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return person BLE room tracking attributes."""
+        _, attrs = self.coordinator.get_person_room_and_distance(self._person_entity)
+        return attrs
+
+
+class LatterPersonBleDistanceSensor(_BaseLatterSensor):
+    """Exposes sensor.<person_slug>_ble_distance as a native Entity Registry sensor."""
+
+    _attr_icon = "mdi:map-marker-distance"
+    _attr_native_unit_of_measurement = "ft"
+    _attr_device_class = SensorDeviceClass.DISTANCE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(self, coordinator: LatterCoordinator, person_entity: str) -> None:
+        """Initialize person BLE distance sensor."""
+        self._person_entity = person_entity
+        p_slug = normalize_device_slug(person_entity.split(".", 1)[-1])
+        p_st = coordinator.hass.states.get(person_entity)
+        p_friendly = (
+            str(p_st.attributes.get("friendly_name") or "").strip()
+            if p_st
+            else ""
+        ) or p_slug.replace("_", " ").title()
+        super().__init__(coordinator, f"person_{p_slug}_ble_distance", f"{p_friendly} BLE Distance")
+        self._attr_has_entity_name = False
+        self._attr_unique_id = f"{DOMAIN}_person_{p_slug}_ble_distance"
+        self.entity_id = f"sensor.{p_slug}_ble_distance"
+
+    @property
+    def native_value(self) -> float | None:
+        """Return estimated distance in feet for this person."""
+        _, attrs = self.coordinator.get_person_room_and_distance(self._person_entity)
+        return attrs.get("distance_ft")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return person BLE distance attributes."""
+        _, attrs = self.coordinator.get_person_room_and_distance(self._person_entity)
         return attrs

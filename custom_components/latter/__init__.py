@@ -364,6 +364,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> b
         )
         if coordinator is not None:
             await coordinator.async_shutdown()
+        remaining = [
+            v for v in hass.data.get(DOMAIN, {}).values() if isinstance(v, LatterCoordinator)
+        ]
+        if not remaining and "sip_engine" in hass.data.get(DOMAIN, {}):
+            hass.data[DOMAIN]["sip_engine"].async_stop()
     return unload_ok
 
 

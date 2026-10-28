@@ -89,6 +89,8 @@ DEVICE_CONFIG_EXPORT_KEYS: tuple[str, ...] = (
     CONF_VPN_PUBLIC_KEY,
     CONF_VPN_PRESHARED_KEY,
     CONF_VPN_HOTSPOT_SSID,
+    "capabilities_manifest",
+    "gui_layout",
 )
 
 VPN_SECRET_KEYS: tuple[str, ...] = (
