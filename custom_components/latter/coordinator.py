@@ -1015,9 +1015,9 @@ class LatterCoordinator:
             if not self.last_speaker:
                 self.last_speaker = self.active_speaker
 
-        if self.device_profile == "mobile_display":
+        if self.device_profile != "ble_beacon":
             protect_handheld_sensors_from_area_dashboards(
-                self.hass, self.device_slug
+                self.hass, self.device_slug, self.device_profile
             )
 
         proxy_areas = get_ble_proxy_area_ids(self.hass)

@@ -513,33 +513,163 @@ def get_esphome_device_entities(
     }
 
 
-def protect_handheld_sensors_from_area_dashboards(
-    hass: HomeAssistant, device_slug: str
+INTERNAL_DEVICE_CONTROL_KEYWORDS: tuple[str, ...] = (
+    "backlight",
+    "display",
+    "screen",
+    "lcd",
+    "oled",
+    "amoled",
+    "status_led",
+    "indicator",
+    "onboard_led",
+    "speaker_enable",
+    "speaker_amp",
+    "pa_enable",
+    "mic_mute",
+    "microphone",
+    "wake_word",
+    "ble_presence",
+    "ble_beacon",
+    "ibeacon",
+    "bluetooth_proxy",
+    "vpn_",
+    "wireguard",
+    "shortcut_",
+    "sleep_",
+    "screensaver",
+    "stay_awake",
+    "hold_crown",
+    "game_sound",
+    "area_media_handoff",
+    "show_all_category",
+    "wake_greeting",
+    "weather_background",
+    "speaker_shortcut",
+    "library_shortcut",
+    "engineering_mode",
+    "ld2410",
+    "ld2420",
+    "ld2450",
+    "mmwave",
+    "radar_",
+    "buzzer",
+    "beeper",
+    "child_lock",
+    "restart",
+    "reboot",
+    "safe_mode",
+)
+
+
+def _is_internal_device_control_entity(
+    entity_id: str, friendly_name: str, is_companion_display: bool = False
+) -> bool:
+    """Return True if a light or switch is an internal ESPHome hardware/UI control rather than a room load."""
+    if is_companion_display:
+        return True
+    ent_suffix = entity_id.split(".", 1)[-1].lower()
+    haystack = f"{ent_suffix} {friendly_name.lower()}"
+    if ":" in friendly_name:
+        prefix = friendly_name.split(":", 1)[0].strip().lower()
+        if prefix in (
+            "home",
+            "display",
+            "sleep & wake",
+            "sleep",
+            "wake",
+            "voice",
+            "sound",
+            "music",
+            "room",
+            "remote",
+            "system",
+            "actions",
+        ):
+            return True
+    return any(k in haystack for k in INTERNAL_DEVICE_CONTROL_KEYWORDS)
+
+
+def _unexpose_entity_from_voice_assistants(
+    hass: HomeAssistant, entity_id: str
 ) -> None:
-    """Mark on-device temperature/humidity sensors on a mobile device as DIAGNOSTIC so they never pollute room dashboards."""
+    """Unexpose an internal device backlight or hardware switch from Assist/Alexa/Google room commands."""
+    try:
+        from homeassistant.components.homeassistant.exposed_entities import (
+            async_expose_entity,
+        )
+
+        for assistant in ("conversation", "cloud.alexa", "cloud.google_assistant"):
+            try:
+                async_expose_entity(hass, assistant, entity_id, False)
+            except Exception:  # noqa: BLE001
+                pass
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def protect_handheld_sensors_from_area_dashboards(
+    hass: HomeAssistant, device_slug: str, device_profile: str = "mobile_display"
+) -> None:
+    """Shield internal device backlights, hardware switches, and mobile sensors from Area dashboards and Assist room commands."""
     target_device_id = find_esphome_device_id(hass, device_slug)
     if not target_device_id:
         return
 
     ent_reg = er.async_get(hass)
-    for entry in er.async_entries_for_device(ent_reg, target_device_id):
-        if entry.domain != "sensor":
-            continue
-        state_obj = hass.states.get(entry.entity_id)
-        dev_class = (
-            str(state_obj.attributes.get("device_class") or "").lower()
-            if state_obj
-            else str(entry.original_device_class or "").lower()
+    esphome_svcs = hass.services.async_services().get("esphome", {})
+    slug_norm = normalize_device_slug(device_slug)
+    is_companion_display = (
+        device_profile in ("mobile_display", "stationary_display")
+        or any(
+            (s.endswith("_set_browse_slots") or s.endswith("_set_room_slots"))
+            and slug_norm in s
+            for s in esphome_svcs
         )
-        if dev_class in ("temperature", "humidity") and entry.entity_category is None:
-            ent_reg.async_update_entity(
-                entry.entity_id,
-                entity_category=EntityCategory.DIAGNOSTIC,
+    )
+
+    for entry in er.async_entries_for_device(ent_reg, target_device_id):
+        state_obj = hass.states.get(entry.entity_id)
+        friendly = str(
+            (state_obj.attributes.get("friendly_name") if state_obj else None)
+            or entry.name
+            or entry.original_name
+            or entry.entity_id
+        )
+
+        # 1. On mobile displays, mark onboard temperature/humidity sensors as DIAGNOSTIC
+        if entry.domain == "sensor" and device_profile == "mobile_display":
+            dev_class = (
+                str(state_obj.attributes.get("device_class") or "").lower()
+                if state_obj
+                else str(entry.original_device_class or "").lower()
             )
-            _LOGGER.info(
-                "Marked mobile device sensor '%s' as DIAGNOSTIC so it will not override room Area temperatures",
-                entry.entity_id,
-            )
+            if dev_class in ("temperature", "humidity") and entry.entity_category is None:
+                ent_reg.async_update_entity(
+                    entry.entity_id,
+                    entity_category=EntityCategory.DIAGNOSTIC,
+                )
+            continue
+
+        # 2. On ANY onboarded ESPHome device (native display or bridged node), shield internal
+        #    backlights (light.*) and internal hardware/config switches (switch.*) from Area
+        #    room commands ("Turn off all lights" / "Turn off everything") and Area cards
+        if entry.domain in ("light", "switch"):
+            if _is_internal_device_control_entity(
+                entry.entity_id, friendly, is_companion_display=is_companion_display
+            ):
+                updates: dict[str, Any] = {}
+                if entry.entity_category is None:
+                    updates["entity_category"] = EntityCategory.CONFIG
+                if entry.hidden_by is None:
+                    updates["hidden_by"] = er.RegistryEntryHider.INTEGRATION
+                if updates:
+                    ent_reg.async_update_entity(entry.entity_id, **updates)
+                    _LOGGER.info(
+                        "Shielded internal device entity '%s' (CONFIG + Hidden from Area/Room controls)",
+                        entry.entity_id,
+                    )
+                _unexpose_entity_from_voice_assistants(hass, entry.entity_id)
 
 
 def sync_esphome_device_area(
@@ -644,10 +774,32 @@ def resolve_remote_slot_pair(
     }
 
 
+def _get_companion_display_device_ids_and_slugs(
+    hass: HomeAssistant, local_speaker: str = ""
+) -> tuple[set[str], set[str]]:
+    """Return (device_ids, slugs) of all Latter companion displays so their own backlights/switches never appear as room loads."""
+    dev_ids: set[str] = set()
+    slugs: set[str] = set()
+    if local_speaker.startswith("media_player."):
+        sp_slug = local_speaker.removeprefix("media_player.").removesuffix("_music")
+        if sp_slug:
+            slugs.add(sp_slug)
+    domain_data = hass.data.get("latter", {})
+    for val in domain_data.values():
+        slug = getattr(val, "device_slug", "")
+        prof = getattr(val, "device_profile", "")
+        if slug and prof in ("mobile_display", "stationary_display"):
+            slugs.add(slug)
+            did = find_esphome_device_id(hass, slug)
+            if did:
+                dev_ids.add(did)
+    return dev_ids, slugs
+
+
 def _is_curated_room_entity(
     hass: HomeAssistant, state_obj: State, local_speaker: str = ""
 ) -> bool:
-    """Strictly filter out config/diagnostic entities, non-outlet switches, and non-MA speakers."""
+    """Strictly filter out config/diagnostic entities, companion display backlights/switches, and non-MA speakers."""
     ent_reg = er.async_get(hass)
     entry = ent_reg.async_get(state_obj.entity_id)
     if entry is not None:
@@ -658,7 +810,26 @@ def _is_curated_room_entity(
 
     domain = state_obj.domain
     attrs = state_obj.attributes
+    friendly = str(attrs.get("friendly_name") or state_obj.entity_id)
     dev_class = str(attrs.get("device_class") or "").lower()
+
+    # Never include a companion display's own backlight/switches or ESPHome internal hardware controls in Room Control
+    if domain in ("light", "switch", "fan", "cover"):
+        comp_dev_ids, comp_slugs = _get_companion_display_device_ids_and_slugs(
+            hass, local_speaker
+        )
+        is_comp_dev = bool(
+            (entry and entry.device_id and entry.device_id in comp_dev_ids)
+            or any(
+                state_obj.entity_id.startswith(f"{domain}.{s}_") for s in comp_slugs
+            )
+        )
+        if domain in ("light", "switch") and _is_internal_device_control_entity(
+            state_obj.entity_id, friendly, is_companion_display=is_comp_dev
+        ):
+            return False
+        if is_comp_dev:
+            return False
 
     if domain in ("light", "scene", "fan", "climate"):
         return True
