@@ -492,7 +492,7 @@ async def _async_apply_device_snapshot_to_coordinator(
     if dev_snap.get("active_area_id"):
         coord.active_area_id = str(dev_snap["active_area_id"])
     if isinstance(dev_snap.get("active_remote_slot"), int):
-        coord.active_remote_slot = max(1, min(4, int(dev_snap["active_remote_slot"])))
+        coord.active_remote_slot = max(1, min(10, int(dev_snap["active_remote_slot"])))
 
     coord._bind_wallpaper_cycle_timer()
     coord._schedule_persist_runtime_state()

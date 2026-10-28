@@ -1876,6 +1876,7 @@
                 <option value="mobile_display">Mobile Display</option>
                 <option value="stationary_display">Stationary Display</option>
                 <option value="headless_node">Headless / Sensor Node</option>
+                <option value="ble_beacon">BLE Phone / Watch / Tag</option>
               </select>
             </div>
             <div class="form-grid-2">
@@ -1906,6 +1907,10 @@
             <div class="field">
               <label>Default Fallback Room</label>
               <select id="cfg-default_area" onchange="markDirty()"></select>
+            </div>
+            <div class="field">
+              <label>BLE Target Address / Entity (Optional — MAC or private_ble_device)</label>
+              <input type="text" id="cfg-ble_target_address" class="mono" placeholder="Auto-discovered from ESPHome or device_tracker.*" oninput="markDirty()">
             </div>
             <div class="field">
               <label>BLE iBeacon UUID</label>
@@ -2749,8 +2754,26 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
   };
 
   const catSel = document.getElementById("device-category-filter");
-  if (catSel && catSel.value !== DEVICE_CATEGORY_FILTER) {
-    catSel.value = DEVICE_CATEGORY_FILTER;
+  if (catSel) {
+    const baseOpts = [
+      {id: "all", label: "Category: All Devices"},
+      {id: "online", label: "Online / Active Devices"},
+      {id: "native", label: "Latter Native Devices"},
+      {id: "ble_tracked", label: "BLE Tracked Devices"},
+      {id: "roaming", label: "Roaming Devices"},
+      {id: "stationary", label: "Stationary Devices"},
+      {id: "headless", label: "Screenless / Headless Devices"},
+      {id: "ble_beacon", label: "BLE Phones, Watches & Tags"},
+      {id: "updates", label: "Firmware Updates Available"}
+    ];
+    groups.forEach(g => {
+      if (g && g.id && g.id !== "unassigned") {
+        baseOpts.push({id: `group:${g.id}`, label: `Group: ${g.name}`});
+      }
+    });
+    catSel.innerHTML = baseOpts.map(o =>
+      `<option value="${o.id}" ${o.id === DEVICE_CATEGORY_FILTER ? 'selected' : ''}>${o.label}</option>`
+    ).join("");
   }
   const cat = DEVICE_CATEGORY_FILTER || "all";
   const filteredDevices = (fleetDevices || []).filter(d => {
@@ -2765,6 +2788,7 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
     if (cat === "headless") return !isNative;
     if (cat === "ble_beacon") return d.device_profile === "ble_beacon";
     if (cat === "updates") return d.status_label === "Update Available";
+    if (cat.startsWith("group:")) return d.device_group === cat.split(":", 2)[1];
     return true;
   });
 
@@ -4417,15 +4441,17 @@ function applyStateToDom(data, forceFormUpdate=false) {
   document.getElementById("nav-btn-audio_voice")?.classList.toggle("hidden", !showAudioVoice);
   document.getElementById("nav-btn-power")?.classList.toggle("hidden", !showPower);
 
-  // Extract live Battery, Wi-Fi & IP from current device's fleet entry
+  // Extract live Battery, Wi-Fi/BLE & IP/Target from current device's fleet entry
   const curFleet = (data.fleet_devices || []).find(d => d.is_current) || {};
+  const isBleOnly = cfg.device_profile === "ble_beacon";
+  const winBleRow = (live.ble_survey_rows || []).find(r => r.is_winner);
   const batText = (curFleet.battery_level !== null && curFleet.battery_level !== undefined)
     ? `${curFleet.battery_level}%${curFleet.is_charging ? ' (Charging)' : ''}`
-    : (caps.has_power ? "Mains / USB" : "Mains Powered");
+    : (isBleOnly ? "BLE Beacon / Tag" : (caps.has_power ? "Mains / USB" : "Mains Powered"));
   const wifiText = (curFleet.wifi_rssi !== null && curFleet.wifi_rssi !== undefined)
     ? `${curFleet.wifi_rssi} dBm`
-    : "Online";
-  const ipStr = curFleet.ip_address || "Connected";
+    : (isBleOnly && winBleRow && winBleRow.effective_rssi !== null ? `${winBleRow.effective_rssi} dBm (BLE)` : (curFleet.status_label || "Online"));
+  const ipStr = curFleet.ip_address || (isBleOnly ? (cfg.ble_target_address || "BLE Tracked") : "Connected");
 
   const hasAssignedArea = !!curFleet.has_assigned_area;
   const isRoaming = !hasAssignedArea;
@@ -4502,6 +4528,9 @@ function applyStateToDom(data, forceFormUpdate=false) {
     document.getElementById("cfg-sync_device_area").checked = !!cfg.sync_device_area;
     document.getElementById("cfg-area_handoff").checked = !!cfg.area_handoff;
     document.getElementById("cfg-ble_beacon_uuid").value = cfg.ble_beacon_uuid || "";
+    if (document.getElementById("cfg-ble_target_address")) {
+      document.getElementById("cfg-ble_target_address").value = cfg.ble_target_address || "";
+    }
     document.getElementById("cfg-dock_apps").value = cfg.dock_apps || "music,alarm,room,remote,games,tools";
     renderDockPillsFromInput();
     document.getElementById("cfg-wallpaper_source").value = cfg.wallpaper_source || "";
@@ -4685,6 +4714,7 @@ async function saveAllConfig() {
     sync_device_area: document.getElementById("cfg-sync_device_area").checked,
     area_handoff: document.getElementById("cfg-area_handoff").checked,
     ble_beacon_uuid: document.getElementById("cfg-ble_beacon_uuid").value.trim(),
+    ble_target_address: document.getElementById("cfg-ble_target_address")?.value?.trim() || "",
     presence_entity: document.getElementById("cfg-presence_entity").value,
     assigned_person: document.getElementById("cfg-assigned_person")?.value || "",
     default_speaker: document.getElementById("cfg-default_speaker").value,

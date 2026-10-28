@@ -34,7 +34,6 @@ CONF_VOL_TARGET_1: Final = "vol_target_1"
 CONF_VOL_SPEAKER_2: Final = "vol_speaker_2"
 CONF_VOL_TARGET_2: Final = "vol_target_2"
 CONF_VOLUME_OVERRIDES: Final = "volume_overrides"
-CONF_VOLUME_OVERRIDES: Final = "volume_overrides"
 CONF_DEFAULT_AREA: Final = "default_area"
 CONF_NATIVE_BLE_TRACKING: Final = "native_ble_tracking"
 CONF_BLE_BEACON_UUID: Final = "ble_beacon_uuid"
@@ -167,7 +166,6 @@ GLOBAL_CONFIG_KEYS: Final[tuple[str, ...]] = (
     CONF_VOL_TARGET_1,
     CONF_VOL_SPEAKER_2,
     CONF_VOL_TARGET_2,
-    CONF_VOLUME_OVERRIDES,
     CONF_VOLUME_OVERRIDES,
     CONF_BLE_ROOM_OFFSETS,
     CONF_REMOTE_1,
