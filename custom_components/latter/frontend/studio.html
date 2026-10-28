@@ -366,6 +366,16 @@
     font-weight: 600;
     letter-spacing: -0.01em;
     color: var(--text-strong);
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .unified-page-header h2 .header-device-sub {
+    font-size: 17.5px;
+    font-weight: 400;
+    color: var(--muted);
+    letter-spacing: normal;
   }
   .content-wrap > section > .page-header {
     display: none !important;
@@ -416,7 +426,7 @@
     margin-bottom: 0;
   }
   .card h3 {
-    margin: 0 0 14px;
+    margin: 0 0 18px;
     font-size: 17.5px;
     font-weight: 600;
     letter-spacing: -0.01em;
@@ -1386,7 +1396,7 @@
         </div>
 
         <div class="card">
-          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:8px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:18px;">
             <div>
               <h3 style="margin:0;">Per-Room BLE Signal Calibration</h3>
               <p class="desc" style="margin:2px 0 0;">Select a BLE-enabled device, carry it into a room, and click <strong>Calibrate Current Room</strong>.</p>
@@ -1498,7 +1508,7 @@
         </div>
 
         <div class="card" id="sys-custom-palettes-card">
-          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:6px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:18px;">
             <div>
               <h3 style="margin:0;">System Custom Color Library</h3>
               <p class="desc" style="margin:2px 0 0;">Create custom UI color profiles on the HSV Color Wheel and reuse them across any display.</p>
@@ -1750,7 +1760,7 @@
         </div>
 
         <div class="card">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:12px;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:18px;">
             <div>
               <h3 style="margin:0;">Wallpapers</h3>
               <p class="desc" style="margin:2px 0 0;">Select an AMOLED preset, upload a custom photo, or star multiple favorites to rotate automatically.</p>
@@ -2379,10 +2389,9 @@ function updateUnifiedPageTitle(viewId) {
   const titleEl = document.getElementById("unified-page-title");
   if (!titleEl) return;
   const baseTitle = VIEW_TITLES[CURRENT_VIEW_ID] || "Overview";
-  const isMobile = window.innerWidth <= 860;
-  if (CURRENT_SCOPE === "device" && DEVICE_SELECTED && CURRENT_VIEW_ID !== "select_device_prompt" && isMobile) {
+  if (CURRENT_SCOPE === "device" && DEVICE_SELECTED && CURRENT_VIEW_ID !== "select_device_prompt") {
     const devTitle = STATE?.esphome?.device?.name || STATE?.title || "Device";
-    titleEl.textContent = `${devTitle} — ${baseTitle}`;
+    titleEl.innerHTML = `<span>${baseTitle}</span><span class="header-device-sub">&mdash; ${devTitle}</span>`;
   } else {
     titleEl.textContent = baseTitle;
   }
@@ -4446,10 +4455,20 @@ function applyStateToDom(data, forceFormUpdate=false) {
   // Extract live Battery, Wi-Fi/BLE & IP/Target from current device's fleet entry
   const curFleet = (data.fleet_devices || []).find(d => d.is_current) || {};
   const isBleOnly = cfg.device_profile === "ble_beacon";
+  const isStationary = cfg.device_profile === "stationary_display";
   const winBleRow = (live.ble_survey_rows || []).find(r => r.is_winner);
-  const batText = (curFleet.battery_level !== null && curFleet.battery_level !== undefined)
-    ? `${curFleet.battery_level}%${curFleet.is_charging ? ' (Charging)' : ''}`
-    : (isBleOnly ? "BLE Beacon / Tag" : (caps.has_power ? "Mains / USB" : "Mains Powered"));
+  let batText = "Plugged In";
+  if (isBleOnly) {
+    batText = "BLE Beacon";
+  } else if (curFleet.battery_level !== null && curFleet.battery_level !== undefined && !isStationary) {
+    if (curFleet.is_charging) {
+      batText = `${curFleet.battery_level}% (Charging)`;
+    } else if (curFleet.is_usb_connected) {
+      batText = `${curFleet.battery_level}% (Plugged In)`;
+    } else {
+      batText = `${curFleet.battery_level}%`;
+    }
+  }
   const wifiText = (curFleet.wifi_rssi !== null && curFleet.wifi_rssi !== undefined)
     ? `${curFleet.wifi_rssi} dBm`
     : (isBleOnly && winBleRow && winBleRow.effective_rssi !== null ? `${winBleRow.effective_rssi} dBm (BLE)` : (curFleet.status_label || "Online"));

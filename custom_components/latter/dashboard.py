@@ -641,6 +641,7 @@ def _build_companion_state_payload(
         )
         c_bat_st = hass.states.get(f"sensor.{c.device_slug}_battery_level")
         c_chg_st = hass.states.get(f"binary_sensor.{c.device_slug}_battery_charging")
+        c_usb_st = hass.states.get(f"binary_sensor.{c.device_slug}_usb_power_connected")
         c_wifi_st = (
             hass.states.get(f"sensor.{c.device_slug}_wi_fi_signal")
             or hass.states.get(f"sensor.{c.device_slug}_wifi_signal")
@@ -782,6 +783,7 @@ def _build_companion_state_payload(
                 "media_state": c_media_state if c_has_audio else "",
                 "battery_level": c_bat_val,
                 "is_charging": bool(c_chg_st and c_chg_st.state == "on"),
+                "is_usb_connected": bool(c_usb_st and c_usb_st.state == "on"),
                 "wifi_rssi": c_wifi_val,
                 "ip_address": c_ip_val,
                 "has_ble": c_has_ble,
