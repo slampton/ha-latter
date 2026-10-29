@@ -142,7 +142,7 @@ Once added, open **Latter** from the Home Assistant sidebar (or click **Visit** 
 Latter uses a **local push (`local_push`)** coordinator model with an idle-guarded timer:
 - Each onboarded device exposes 5 device-scoped sensors linked directly to the ESPHome device entry:
   1. `sensor.<device_slug>_active_media`: Active speaker playback state and track attributes. Uses an **idle-guarded 2-second position timer** that runs *only* while media is actively playing, plus `_unrecorded_attributes` to prevent SQLite database bloat.
-  2. `sensor.<device_slug>_room_context`: Active room name, room temperature/humidity, curated entity counts, and live Whole-Home Hub states (Alarm, Thermostat, Lock, Garage, Vacuum, Alert/Notification state).
+  2. `sensor.<device_slug>_area_context`: Active room name, room temperature/humidity, curated entity counts, and live Whole-Home Hub states (Alarm, Thermostat, Lock, Garage, Vacuum, Alert/Notification state).
   3. `sensor.<device_slug>_weather_forecast`: Semicolon-delimited 5-day forecast string (`DAY:HIGH:LOW:COND;...`) refreshed every 30 minutes and on weather state changes.
   4. `sensor.<device_slug>_calendar_agenda`: Upcoming family calendar events refreshed every 15 minutes, with automatic geocoded OpenStreetMap snapshot URLs for events with locations.
   5. `sensor.<device_slug>_remote_config`: Active TV/AVR remote slot and 4-slot entity pairings.
