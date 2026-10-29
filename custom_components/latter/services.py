@@ -245,7 +245,7 @@ async def async_push_browse_slots(
 ) -> None:
     """Paginate items for any GUI page_size (1..20) and push to esphome.<slug>_<suffix>."""
     esphome_action = _resolve_esphome_action(hass, device_slug, preferred_suffix)
-    include_levels = preferred_suffix == "set_room_slots" and esphome_action is not None
+    include_levels = preferred_suffix == "set_area_slots" and esphome_action is not None
 
     if esphome_action is None and preferred_suffix != "set_browse_slots":
         esphome_action = _resolve_esphome_action(
@@ -311,7 +311,7 @@ async def async_push_browse_slots(
 
 def _is_esphome_device_online(hass: HomeAssistant, coord: LatterCoordinator) -> bool:
     """Return True if the target ESPHome device supports slot callbacks and has an online entity."""
-    if _resolve_esphome_action(hass, coord.device_slug, "set_room_slots") is None and _resolve_esphome_action(hass, coord.device_slug, "set_browse_slots") is None:
+    if _resolve_esphome_action(hass, coord.device_slug, "set_area_slots") is None and _resolve_esphome_action(hass, coord.device_slug, "set_browse_slots") is None:
         return False
     local_spk = coord.local_speaker
     if local_spk:
@@ -329,7 +329,7 @@ def _is_esphome_device_online(hass: HomeAssistant, coord: LatterCoordinator) -> 
 async def async_push_active_room_entities(
     hass: HomeAssistant, coord: LatterCoordinator
 ) -> None:
-    """Push the active room's entity slots to esphome.<slug>_set_room_slots when the device is online."""
+    """Push the active room's entity slots to esphome.<slug>_set_area_slots when the device is online."""
     if not _is_esphome_device_online(hass, coord):
         return
     items = get_area_entities(
@@ -346,7 +346,7 @@ async def async_push_active_room_entities(
         page=coord.last_room_page or 1,
         page_size=coord.default_page_size,
         items=items,
-        preferred_suffix="set_room_slots",
+        preferred_suffix="set_area_slots",
     )
 
 
@@ -799,7 +799,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             )
             slot_mode = f"room_{domain_filter}"
 
-        target_suffix = "set_browse_slots" if mode == "areas" else "set_room_slots"
+        target_suffix = "set_browse_slots" if mode == "areas" else "set_area_slots"
         await async_push_browse_slots(
             hass=hass,
             device_slug=device_slug,

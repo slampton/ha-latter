@@ -47,7 +47,7 @@
   },
   "entity": {
     "sensor": {
-      "current_room": {
+      "current_area": {
         "name": "Current Area"
       },
       "ble_distance": {
@@ -59,7 +59,7 @@
       "weather_forecast": {
         "name": "Weather Forecast"
       },
-      "room_context": {
+      "area_context": {
         "name": "Area Context"
       },
       "calendar_agenda": {

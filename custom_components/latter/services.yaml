@@ -273,7 +273,7 @@ remote_action:
       selector:
         text:
 
-room_browse:
+area_browse:
   name: Room Browse
   description: Browse Home Assistant areas, curated room entities, or home-wide alarm/pinned entities and push paginated slots to the ESPHome device.
   fields:
@@ -344,7 +344,7 @@ room_browse:
       selector:
         boolean:
 
-room_action:
+area_action:
   name: Room & Whole-Home Action
   description: Execute a normalized room control, light color/Kelvin, thermostat, lock, vacuum, or home security alarm action.
   fields:

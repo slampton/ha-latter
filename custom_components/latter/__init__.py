@@ -35,7 +35,6 @@ from .const import (
     GLOBAL_CONFIG_KEYS,
     GLOBAL_STORAGE_KEY,
     INTEGRATION_VERSION,
-    LEGACY_GLOBAL_STORAGE_KEY,
     PLATFORMS,
     STORAGE_VERSION,
 )
@@ -70,7 +69,7 @@ type LatterConfigEntry = ConfigEntry[LatterCoordinator]
 
 LATTER_CONTRACT_ACTION_SUFFIXES: tuple[str, ...] = (
     "_set_browse_slots",
-    "_set_room_slots",
+    "_set_area_slots",
     "_show_notification",
     "_latter_ping",
 )
@@ -114,14 +113,6 @@ async def _async_ensure_global_store(
         )
         domain_data[DATA_GLOBAL_STORE] = store
         loaded = await store.async_load()
-        if not isinstance(loaded, dict) or not loaded:
-            legacy_store: Store[dict[str, Any]] = Store(
-                hass, STORAGE_VERSION, LEGACY_GLOBAL_STORAGE_KEY
-            )
-            legacy_loaded = await legacy_store.async_load()
-            if isinstance(legacy_loaded, dict) and legacy_loaded:
-                loaded = dict(legacy_loaded)
-                await store.async_save(loaded)
         domain_data[DATA_GLOBAL_CONFIG] = dict(loaded) if isinstance(loaded, dict) else {}
 
     global_cfg: dict[str, Any] = domain_data[DATA_GLOBAL_CONFIG]

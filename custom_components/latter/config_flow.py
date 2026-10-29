@@ -51,7 +51,7 @@ def _discover_esphome_slug(hass: HomeAssistant) -> str:
         for e in hass.config_entries.async_entries(DOMAIN)
     }
     esphome_services = hass.services.async_services().get("esphome", {})
-    for suffix in ("_set_browse_slots", "_set_room_slots", "_latter_ping"):
+    for suffix in ("_set_browse_slots", "_set_area_slots", "_latter_ping"):
         for service_name in esphome_services:
             if service_name.endswith(suffix):
                 cand = normalize_device_slug(service_name[: -len(suffix)])
@@ -124,7 +124,7 @@ def _detect_hardware_defaults(hass: HomeAssistant, slug: str) -> dict[str, Any]:
     )
 
     has_native_slots = any(
-        (s.endswith("_set_browse_slots") or s.endswith("_set_room_slots")) and norm in s
+        (s.endswith("_set_browse_slots") or s.endswith("_set_area_slots")) and norm in s
         for s in esphome_svcs
     )
 

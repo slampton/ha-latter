@@ -29,16 +29,12 @@ CONF_LOCK_ENTITY: Final = "lock_entity"
 CONF_GARAGE_ENTITY: Final = "garage_entity"
 CONF_VACUUM_ENTITY: Final = "vacuum_entity"
 CONF_DEFAULT_SPEAKER: Final = "default_speaker"
-CONF_VOL_SPEAKER_1: Final = "vol_speaker_1"
-CONF_VOL_TARGET_1: Final = "vol_target_1"
-CONF_VOL_SPEAKER_2: Final = "vol_speaker_2"
-CONF_VOL_TARGET_2: Final = "vol_target_2"
 CONF_VOLUME_OVERRIDES: Final = "volume_overrides"
 CONF_DEFAULT_AREA: Final = "default_area"
 CONF_NATIVE_BLE_TRACKING: Final = "native_ble_tracking"
 CONF_BLE_BEACON_UUID: Final = "ble_beacon_uuid"
 CONF_BLE_TARGET_ADDRESS: Final = "ble_target_address"
-CONF_BLE_ROOM_OFFSETS: Final = "ble_room_offsets"
+CONF_BLE_ROOM_OFFSETS: Final = "ble_area_offsets"
 CONF_PRESENCE_ENTITY: Final = "presence_entity"
 CONF_ASSIGNED_PERSON: Final = "assigned_person"
 CONF_ASSIGNED_ROLE: Final = "assigned_role"
@@ -46,10 +42,6 @@ DEFAULT_ASSIGNED_ROLE: Final = "admin"
 CONF_BLE_AUTO_SWITCH: Final = "ble_auto_switch"
 CONF_SYNC_DEVICE_AREA: Final = "sync_device_area"
 CONF_AREA_HANDOFF: Final = "area_handoff"
-CONF_REMOTE_1: Final = "remote_1"
-CONF_REMOTE_2: Final = "remote_2"
-CONF_REMOTE_3: Final = "remote_3"
-CONF_REMOTE_4: Final = "remote_4"
 CONF_REMOTES_LIST: Final = "remotes_list"
 CONF_REMOTE_GROUPS: Final = "remote_groups"
 CONF_DEVICE_REMOTE_GROUP: Final = "device_remote_group"
@@ -87,7 +79,7 @@ DEFAULT_BLE_BEACON_UUID: Final = "504F434B-4554-4153-5354-000000000210"
 DEFAULT_BLE_AUTO_SWITCH: Final = True
 DEFAULT_SYNC_DEVICE_AREA: Final = True
 DEFAULT_AREA_HANDOFF: Final = False
-DEFAULT_DOCK_APPS: Final = "music,alarm,room,remote,games,tools"
+DEFAULT_DOCK_APPS: Final = "music,alarm,area,remote,games,tools"
 DEFAULT_WALLPAPER_CYCLE_MINUTES: Final = 0
 DEFAULT_ART_SIZE: Final = 466
 
@@ -96,8 +88,8 @@ SERVICE_MUSIC_BROWSE: Final = "music_browse"
 SERVICE_SET_ACTIVE_SPEAKER: Final = "set_active_speaker"
 SERVICE_MEDIA_COMMAND: Final = "media_command"
 SERVICE_MEDIA_VOLUME: Final = "media_volume"
-SERVICE_ROOM_BROWSE: Final = "room_browse"
-SERVICE_ROOM_ACTION: Final = "room_action"
+SERVICE_ROOM_BROWSE: Final = "area_browse"
+SERVICE_ROOM_ACTION: Final = "area_action"
 SERVICE_SET_ACTIVE_AREA: Final = "set_active_area"
 SERVICE_REMOTE_ACTION: Final = "remote_action"
 SERVICE_TRIGGER_BINDING: Final = "trigger_binding"
@@ -130,7 +122,6 @@ CALENDAR_REFRESH_INTERVAL_MINUTES: Final = 15
 
 
 GLOBAL_STORAGE_KEY: Final = "latter.site"
-LEGACY_GLOBAL_STORAGE_KEY: Final = "latter.household"
 BACKUPS_STORAGE_KEY: Final = "latter.backups"
 DATA_GLOBAL_CONFIG: Final = "global_config"
 DATA_GLOBAL_STORE: Final = "global_store"
@@ -177,16 +168,8 @@ GLOBAL_CONFIG_KEYS: Final[tuple[str, ...]] = (
     CONF_LOCK_ENTITY,
     CONF_GARAGE_ENTITY,
     CONF_VACUUM_ENTITY,
-    CONF_VOL_SPEAKER_1,
-    CONF_VOL_TARGET_1,
-    CONF_VOL_SPEAKER_2,
-    CONF_VOL_TARGET_2,
     CONF_VOLUME_OVERRIDES,
     CONF_BLE_ROOM_OFFSETS,
-    CONF_REMOTE_1,
-    CONF_REMOTE_2,
-    CONF_REMOTE_3,
-    CONF_REMOTE_4,
     CONF_REMOTES_LIST,
     CONF_REMOTE_GROUPS,
     CONF_CALENDAR_ENTITIES,

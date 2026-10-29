@@ -622,7 +622,7 @@ def protect_handheld_sensors_from_area_dashboards(
     is_companion_display = (
         device_profile in ("mobile_display", "stationary_display")
         or any(
-            (s.endswith("_set_browse_slots") or s.endswith("_set_room_slots"))
+            (s.endswith("_set_browse_slots") or s.endswith("_set_area_slots"))
             and slug_norm in s
             for s in esphome_svcs
         )

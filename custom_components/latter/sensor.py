@@ -53,6 +53,13 @@ async def async_setup_entry(
             ]
         )
 
+    # Automatically purge any legacy _current_room / _room_context entities from HA Entity Registry
+    from homeassistant.helpers import entity_registry as er
+    ent_reg = er.async_get(hass)
+    for ent_entry in list(er.async_entries_for_config_entry(ent_reg, entry.entry_id)):
+        if ent_entry.entity_id.endswith(("_current_area", "_room_context")):
+            ent_reg.async_remove(ent_entry.entity_id)
+
     domain_data = hass.data.setdefault(DOMAIN, {})
     registered_persons: set[str] = domain_data.setdefault("registered_person_sensors", set())
 
@@ -203,7 +210,7 @@ class LatterRoomContextSensor(_BaseLatterSensor):
 
     def __init__(self, coordinator: LatterCoordinator) -> None:
         """Initialize room context sensor."""
-        super().__init__(coordinator, "room_context", "Area Context")
+        super().__init__(coordinator, "area_context", "Area Context")
 
     @property
     def native_value(self) -> str:
@@ -270,7 +277,7 @@ class LatterCurrentRoomSensor(_BaseLatterSensor):
 
     def __init__(self, coordinator: LatterCoordinator) -> None:
         """Initialize current room sensor."""
-        super().__init__(coordinator, "current_room", "Current Area")
+        super().__init__(coordinator, "current_area", "Current Area")
 
     @property
     def native_value(self) -> str:
@@ -323,10 +330,10 @@ class LatterPersonCurrentRoomSensor(_BaseLatterSensor):
             if p_st
             else ""
         ) or p_slug.replace("_", " ").title()
-        super().__init__(coordinator, f"person_{p_slug}_current_room", f"{p_friendly} Current Area")
+        super().__init__(coordinator, f"person_{p_slug}_current_area", f"{p_friendly} Current Area")
         self._attr_has_entity_name = False
-        self._attr_unique_id = f"{DOMAIN}_person_{p_slug}_current_room"
-        self.entity_id = f"sensor.{p_slug}_current_room"
+        self._attr_unique_id = f"{DOMAIN}_person_{p_slug}_current_area"
+        self.entity_id = f"sensor.{p_slug}_current_area"
 
     @property
     def icon(self) -> str:

@@ -86,17 +86,9 @@ from .const import (
     CONF_NATIVE_BLE_TRACKING,
     CONF_PRESENCE_ENTITY,
     CONF_DEVICE_REMOTE_GROUP,
-    CONF_REMOTE_1,
-    CONF_REMOTE_2,
-    CONF_REMOTE_3,
-    CONF_REMOTE_4,
     CONF_REMOTE_GROUPS,
     CONF_REMOTES_LIST,
     CONF_SYNC_DEVICE_AREA,
-    CONF_VOL_SPEAKER_1,
-    CONF_VOL_SPEAKER_2,
-    CONF_VOL_TARGET_1,
-    CONF_VOL_TARGET_2,
     CONF_VOLUME_OVERRIDES,
     CONF_WALLPAPER_CYCLE_MINUTES,
     CONF_WALLPAPER_FAVORITES,
@@ -412,9 +404,9 @@ def _build_companion_state_payload(
             persons_list.append(
                 {
                     "id": ent_id,
-                    "name": f"{friendly} (sensor.{p_slug}_current_room)",
+                    "name": f"{friendly} (sensor.{p_slug}_current_area)",
                     "friendly": friendly,
-                    "room_sensor": f"sensor.{p_slug}_current_room",
+                    "room_sensor": f"sensor.{p_slug}_current_area",
                 }
             )
         elif domain in ("sensor", "device_tracker", "input_text"):
@@ -460,7 +452,7 @@ def _build_companion_state_payload(
     esphome_svcs = hass.services.async_services().get("esphome", {})
     slug = coordinator.device_slug
     has_native_slots = any(
-        (s.endswith("_set_browse_slots") or s.endswith("_set_room_slots")) and slug in s
+        (s.endswith("_set_browse_slots") or s.endswith("_set_area_slots")) and slug in s
         for s in esphome_svcs
     )
     has_mixin_ping = any(
@@ -539,10 +531,6 @@ def _build_companion_state_payload(
         CONF_DEFAULT_SPEAKER: coordinator.get_opt(
             CONF_DEFAULT_SPEAKER, coordinator.active_speaker
         ),
-        CONF_VOL_SPEAKER_1: coordinator.get_opt(CONF_VOL_SPEAKER_1, ""),
-        CONF_VOL_TARGET_1: coordinator.get_opt(CONF_VOL_TARGET_1, ""),
-        CONF_VOL_SPEAKER_2: coordinator.get_opt(CONF_VOL_SPEAKER_2, ""),
-        CONF_VOL_TARGET_2: coordinator.get_opt(CONF_VOL_TARGET_2, ""),
         CONF_VOLUME_OVERRIDES: [
             {"speaker": k, "target": v}
             for k, v in coordinator.volume_overrides.items()
@@ -567,10 +555,6 @@ def _build_companion_state_payload(
         CONF_LOCK_ENTITY: coordinator.lock_entity or "",
         CONF_GARAGE_ENTITY: coordinator.garage_entity or "",
         CONF_VACUUM_ENTITY: coordinator.vacuum_entity or "",
-        CONF_REMOTE_1: coordinator.get_opt(CONF_REMOTE_1, ""),
-        CONF_REMOTE_2: coordinator.get_opt(CONF_REMOTE_2, ""),
-        CONF_REMOTE_3: coordinator.get_opt(CONF_REMOTE_3, ""),
-        CONF_REMOTE_4: coordinator.get_opt(CONF_REMOTE_4, ""),
         CONF_REMOTES_LIST: coordinator.get_remote_entities_list(),
         CONF_REMOTE_GROUPS: coordinator.remote_groups,
         CONF_DEVICE_REMOTE_GROUP: coordinator.device_remote_group,
@@ -640,7 +624,7 @@ def _build_companion_state_payload(
             c.native_ble_tracking_enabled
             or c._ble_tracker is not None
             or any(
-                (s.endswith("_set_browse_slots") or s.endswith("_set_room_slots"))
+                (s.endswith("_set_browse_slots") or s.endswith("_set_area_slots"))
                 and c.device_slug in s
                 for s in esphome_svcs
             )
@@ -693,7 +677,7 @@ def _build_companion_state_payload(
                 any(
                     (
                         s.endswith("_set_browse_slots")
-                        or s.endswith("_set_room_slots")
+                        or s.endswith("_set_area_slots")
                         or s.endswith("_show_notification")
                     )
                     and c.device_slug in s
@@ -879,8 +863,8 @@ def _build_companion_state_payload(
         "live": {
             "active_area_id": coordinator.active_area_id or "",
             "active_area_name": room_attrs.get("area_name", "Home"),
-            "room_temp": room_attrs.get("room_temp"),
-            "room_humidity": room_attrs.get("room_humidity"),
+            "room_temp": room_attrs.get("area_temp"),
+            "room_humidity": room_attrs.get("area_humidity"),
             "lights_on": room_attrs.get("lights_on", 0),
             "covers_open": room_attrs.get("covers_open", 0),
             "entity_count": room_attrs.get("entity_count", 0),
@@ -1394,19 +1378,14 @@ class LatterCompanionApiView(HomeAssistantView):
                 incoming_cfg[CONF_CAMERA_ENTITY] = clean_cams[0] if clean_cams else ""
 
             if "remotes_list" in incoming_cfg and isinstance(incoming_cfg["remotes_list"], list):
-                clean_rems = [
+                incoming_cfg[CONF_REMOTES_LIST] = [
                     str(x).strip()
                     for x in incoming_cfg["remotes_list"][:10]
                     if str(x or "").strip()
                 ]
-                incoming_cfg[CONF_REMOTES_LIST] = clean_rems
-                incoming_cfg[CONF_REMOTE_1] = clean_rems[0] if len(clean_rems) >= 1 else ""
-                incoming_cfg[CONF_REMOTE_2] = clean_rems[1] if len(clean_rems) >= 2 else ""
-                incoming_cfg[CONF_REMOTE_3] = clean_rems[2] if len(clean_rems) >= 3 else ""
-                incoming_cfg[CONF_REMOTE_4] = clean_rems[3] if len(clean_rems) >= 4 else ""
 
             if "volume_overrides" in incoming_cfg and isinstance(incoming_cfg["volume_overrides"], list):
-                clean_vo = [
+                incoming_cfg[CONF_VOLUME_OVERRIDES] = [
                     {
                         "speaker": str(x.get("speaker") or "").strip(),
                         "target": str(x.get("target") or "").strip(),
@@ -1416,11 +1395,6 @@ class LatterCompanionApiView(HomeAssistantView):
                     and str(x.get("speaker") or "").strip()
                     and str(x.get("target") or "").strip()
                 ]
-                incoming_cfg[CONF_VOLUME_OVERRIDES] = clean_vo
-                incoming_cfg[CONF_VOL_SPEAKER_1] = clean_vo[0]["speaker"] if len(clean_vo) >= 1 else ""
-                incoming_cfg[CONF_VOL_TARGET_1] = clean_vo[0]["target"] if len(clean_vo) >= 1 else ""
-                incoming_cfg[CONF_VOL_SPEAKER_2] = clean_vo[1]["speaker"] if len(clean_vo) >= 2 else ""
-                incoming_cfg[CONF_VOL_TARGET_2] = clean_vo[1]["target"] if len(clean_vo) >= 2 else ""
 
             device_keys = (
                 CONF_DEVICE_SLUG,

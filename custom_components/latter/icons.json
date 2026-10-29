@@ -1,7 +1,7 @@
 {
   "entity": {
     "sensor": {
-      "current_room": {
+      "current_area": {
         "default": "mdi:map-marker-radius"
       },
       "ble_distance": {
@@ -13,7 +13,7 @@
       "weather_forecast": {
         "default": "mdi:weather-partly-cloudy"
       },
-      "room_context": {
+      "area_context": {
         "default": "mdi:floor-plan"
       },
       "calendar_agenda": {
@@ -37,10 +37,10 @@
     "media_volume": {
       "service": "mdi:volume-high"
     },
-    "room_browse": {
+    "area_browse": {
       "service": "mdi:home-search"
     },
-    "room_action": {
+    "area_action": {
       "service": "mdi:home-lightning-bolt"
     },
     "set_active_area": {

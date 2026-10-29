@@ -98,18 +98,10 @@ from .const import (
     CONF_NATIVE_BLE_TRACKING,
     CONF_PRESENCE_ENTITY,
     CONF_DEVICE_REMOTE_GROUP,
-    CONF_REMOTE_1,
-    CONF_REMOTE_2,
-    CONF_REMOTE_3,
-    CONF_REMOTE_4,
     CONF_REMOTE_GROUPS,
     CONF_REMOTES_LIST,
     DEFAULT_DEVICE_REMOTE_GROUP,
     CONF_SYNC_DEVICE_AREA,
-    CONF_VOL_SPEAKER_1,
-    CONF_VOL_SPEAKER_2,
-    CONF_VOL_TARGET_1,
-    CONF_VOL_TARGET_2,
     CONF_VOLUME_OVERRIDES,
     CONF_WALLPAPER_CYCLE_MINUTES,
     CONF_WALLPAPER_FAVORITES,
@@ -715,7 +707,7 @@ class LatterCoordinator:
 
     @property
     def volume_overrides(self) -> dict[str, str]:
-        """Build speaker -> volume target dictionary from dynamic volume_overrides list (with legacy 1 & 2 fallback)."""
+        """Build speaker -> volume target dictionary from dynamic volume_overrides list."""
         mapping: dict[str, str] = {}
         raw_list = self.get_opt(CONF_VOLUME_OVERRIDES)
         if isinstance(raw_list, list):
@@ -725,18 +717,6 @@ class LatterCoordinator:
                     tgt = str(item.get("target") or "").strip()
                     if spk and tgt:
                         mapping[spk] = tgt
-            return mapping
-
-        s1 = self.get_opt(CONF_VOL_SPEAKER_1)
-        t1 = self.get_opt(CONF_VOL_TARGET_1)
-        if s1 and t1:
-            mapping[str(s1).strip()] = str(t1).strip()
-
-        s2 = self.get_opt(CONF_VOL_SPEAKER_2)
-        t2 = self.get_opt(CONF_VOL_TARGET_2)
-        if s2 and t2:
-            mapping[str(s2).strip()] = str(t2).strip()
-
         return mapping
 
     def get_volume_target_entity(self, speaker_entity_id: str | None = None) -> str:
@@ -1735,14 +1715,8 @@ class LatterCoordinator:
         }
 
     @callback
-    def _sync_person_room_sensor(self) -> None:
-        """No-op hook retained for backward compatibility; person sensors are native SensorEntities."""
-        return
-
-    @callback
     def _notify_listeners(self) -> None:
-        """Notify all registered sensors of a state update and sync person room sensors."""
-        self._sync_person_room_sensor()
+        """Notify all registered sensors of a state update."""
         for update_callback in list(self._listeners):
             update_callback()
 
@@ -2032,11 +2006,7 @@ class LatterCoordinator:
         raw_list = self.get_opt(CONF_REMOTES_LIST)
         if isinstance(raw_list, list):
             return [str(x).strip() for x in raw_list[:10] if str(x or "").strip()]
-        legacy = [
-            str(self.get_opt(k) or "").strip()
-            for k in (CONF_REMOTE_1, CONF_REMOTE_2, CONF_REMOTE_3, CONF_REMOTE_4)
-        ]
-        return [x for x in legacy if x]
+        return []
 
     def get_effective_remote_entities_for_device(self) -> list[str]:
         """Resolve the ordered list of remote entities for this device (Static Group vs Active Area vs All)."""
@@ -2210,8 +2180,8 @@ class LatterCoordinator:
             "available_domains": avail_domains,
             "lights_on": lights_on,
             "covers_open": covers_open,
-            "room_temp": climate_telemetry["temperature"],
-            "room_humidity": climate_telemetry["humidity"],
+            "area_temp": climate_telemetry["temperature"],
+            "area_humidity": climate_telemetry["humidity"],
             "area_speaker": media_map["speaker"] or self.active_speaker,
             "area_remote": media_map["remote"] or self.active_remote,
             "alarm_entity": alarm_info["entity_id"],
