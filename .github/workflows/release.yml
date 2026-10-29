@@ -1,0 +1,50 @@
+name: Build & Attach HACS Release Asset (latter.zip)
+
+on:
+  release:
+    types: [published, created, edited]
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  package-hacs-zip:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build latter.zip from custom_components/latter
+        run: |
+          cd custom_components/latter
+          zip -r ../../latter.zip . -x "*.pyc" "*__pycache__*"
+
+      - name: Attach latter.zip to target or latest GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [[ "${{ github.event_name }}" == "release" ]]; then
+            TAG="${{ github.event.release.tag_name }}"
+            gh release upload "$TAG" latter.zip --clobber
+          elif [[ "${{ github.ref_type }}" == "tag" ]]; then
+            TAG="${{ github.ref_name }}"
+            if gh release view "$TAG" >/dev/null 2>&1; then
+              gh release upload "$TAG" latter.zip --clobber
+            else
+              gh release create "$TAG" latter.zip --title "$TAG" --generate-notes
+            fi
+          else
+            LATEST_TAG=$(gh release view --json tagName -q .tagName 2>/dev/null || true)
+            if [[ -n "$LATEST_TAG" ]]; then
+              echo "Updating latter.zip on latest release: $LATEST_TAG"
+              gh release upload "$LATEST_TAG" latter.zip --clobber
+            else
+              echo "No existing GitHub Release yet; latter.zip verified and ready for next release."
+            fi
+          fi
