@@ -84,10 +84,59 @@
     font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
     font-size: 12px;
   }
+  header.latter-top-titlebar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 56px;
+    padding: 0 20px 0 16px;
+    background: var(--sidebar);
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    gap: 12px;
+  }
+  .titlebar-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 20px;
+    font-weight: 500;
+    color: var(--text-strong);
+    user-select: none;
+  }
+  .titlebar-brand svg.brand-logo {
+    width: 22px;
+    height: 22px;
+    fill: var(--accent);
+    flex-shrink: 0;
+  }
+  .ha-menu-btn {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    margin-right: 2px;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--text-strong);
+    cursor: pointer;
+  }
+  .ha-menu-btn:hover {
+    background: var(--card-hover);
+  }
+  .ha-menu-btn svg {
+    width: 22px;
+    height: 22px;
+    fill: currentColor;
+  }
   .app-shell {
     display: grid;
     grid-template-columns: 244px minmax(0, 1fr);
-    min-height: 100vh;
+    min-height: calc(100vh - 56px);
   }
 
   /* NATIVE HOME ASSISTANT SIDEBAR */
@@ -96,30 +145,11 @@
     border-right: 1px solid var(--border);
     display: flex;
     flex-direction: column;
-    padding: 20px 12px 12px;
+    padding: 16px 12px 12px;
     position: sticky;
-    top: 0;
-    height: 100vh;
+    top: 56px;
+    height: calc(100vh - 56px);
     overflow-y: auto;
-  }
-  .sidebar-brand {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    min-height: 36px;
-    padding: 0 6px;
-    margin: 0 0 16px;
-    font-size: 22px;
-    font-weight: 600;
-    letter-spacing: -0.01em;
-    color: var(--text-strong);
-    user-select: none;
-  }
-  .sidebar-brand svg {
-    width: 22px;
-    height: 22px;
-    fill: var(--accent);
-    flex-shrink: 0;
   }
   .scope-box {
     background: var(--card);
@@ -957,20 +987,16 @@
 
   /* PHONE & TABLET RESPONSIVE BREAKPOINTS */
   @media (max-width: 860px) {
+    .ha-menu-btn { display: inline-flex; }
     .app-shell { grid-template-columns: 1fr; }
     aside.sidebar {
       position: sticky;
-      top: 0;
+      top: 56px;
       z-index: 25;
       height: auto;
       padding: 8px 12px;
       border-right: none;
       border-bottom: 1px solid var(--border);
-    }
-    .sidebar-brand {
-      font-size: 18px;
-      min-height: 28px;
-      margin-bottom: 8px;
     }
     .scope-box {
       display: flex;
@@ -1036,13 +1062,23 @@
 </style>
 </head>
 <body data-theme="dark">
+<header class="latter-top-titlebar">
+  <div class="titlebar-brand">
+    <button type="button" class="ha-menu-btn" title="Toggle Home Assistant Sidebar" onclick="toggleParentHaSidebar()">
+      <svg viewBox="0 0 24 24"><path d="M3 6h18v2H3V6m0 5h18v2H3v-2m0 5h18v2H3v-2Z"/></svg>
+    </button>
+    <svg class="brand-logo" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h1A1.5 1.5 0 0 1 8 5.5v13A1.5 1.5 0 0 1 6.5 20h-1A1.5 1.5 0 0 1 4 18.5v-13ZM16 5.5A1.5 1.5 0 0 1 17.5 4h1A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5h-1A1.5 1.5 0 0 1 16 18.5v-13ZM4 16.5h16v2A1.5 1.5 0 0 1 18.5 20h-13A1.5 1.5 0 0 1 4 18.5v-2ZM8 5.25h8v2.5H8v-2.5ZM8 10.75h8v2.5H8v-2.5Z"/></svg>
+    <span>Latter</span>
+  </div>
+  <div class="topbar-actions">
+    <button type="button" id="hdr-update-pill" class="update-pill hidden" onclick="triggerHeaderFirmwareUpdate()">Update Available</button>
+    <div id="dirty-indicator" class="dirty-banner">Unsaved</div>
+    <button id="btn-save-changes" class="btn-primary" disabled onclick="saveAllConfig()">Saved</button>
+  </div>
+</header>
 <div class="app-shell">
   <!-- LEFT SIDEBAR: SYSTEM (6 TABS) vs DEVICE (5 TABS) -->
   <aside class="sidebar">
-    <div class="sidebar-brand">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h1A1.5 1.5 0 0 1 8 5.5v13A1.5 1.5 0 0 1 6.5 20h-1A1.5 1.5 0 0 1 4 18.5v-13ZM16 5.5A1.5 1.5 0 0 1 17.5 4h1A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5h-1A1.5 1.5 0 0 1 16 18.5v-13ZM4 16.5h16v2A1.5 1.5 0 0 1 18.5 20h-13A1.5 1.5 0 0 1 4 18.5v-2ZM8 5.25h8v2.5H8v-2.5ZM8 10.75h8v2.5H8v-2.5Z"/></svg>
-      <span>Latter</span>
-    </div>
     <div class="scope-box">
       <div class="scope-tabs">
         <button class="scope-tab" id="tab-scope-household" onclick="setScope('household')">System</button>
@@ -1104,19 +1140,6 @@
       </button>
     </div>
 
-    <div class="sidebar-footer">
-      <div class="theme-icon-group" role="group" aria-label="Color Theme">
-        <button type="button" class="theme-icon-btn" data-theme-btn="ha_light" title="Light Theme" onclick="onThemeChanged('ha_light')">
-          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
-        </button>
-        <button type="button" class="theme-icon-btn" data-theme-btn="ha_dark" title="Dark Theme" onclick="onThemeChanged('ha_dark')">
-          <svg viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-        </button>
-        <button type="button" class="theme-icon-btn" data-theme-btn="ha_auto" title="Auto (Follow System / Home Assistant)" onclick="onThemeChanged('ha_auto')">
-          <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-        </button>
-      </div>
-    </div>
   </aside>
 
   <!-- MAIN AREA -->
@@ -1124,11 +1147,6 @@
     <div class="content-wrap">
       <div class="unified-page-header">
         <h2 id="unified-page-title">Overview</h2>
-        <div class="topbar-actions">
-          <button type="button" id="hdr-update-pill" class="update-pill hidden" onclick="triggerHeaderFirmwareUpdate()">Update Available</button>
-          <div id="dirty-indicator" class="dirty-banner">Unsaved</div>
-          <button id="btn-save-changes" class="btn-primary" disabled onclick="saveAllConfig()">Saved</button>
-        </div>
       </div>
 
       <!-- ================================================================== -->
@@ -2223,24 +2241,60 @@ function clearCustomCssVars() {
   document.documentElement.style.removeProperty("--input-fill-color");
 }
 
-function blankParentHaIframeTitle(rootNode) {
+function toggleParentHaSidebar() {
+  try {
+    if (window.parent && window.parent !== window && window.parent.document) {
+      const haEl = window.parent.document.querySelector("home-assistant");
+      const target = (haEl && haEl.shadowRoot && haEl.shadowRoot.querySelector("home-assistant-main")) || haEl || window.parent.document.body;
+      target.dispatchEvent(new CustomEvent("hass-toggle-menu", {bubbles: true, composed: true}));
+    }
+  } catch (_e) {}
+}
+
+function collapseParentHaSubpageToolbar(rootNode) {
   if (!rootNode) return;
   const walker = [rootNode];
   while (walker.length) {
     const cur = walker.pop();
     if (!cur) continue;
     if (cur.nodeType === 1) {
-      if (cur.hasAttribute && cur.hasAttribute("main-title") && cur.textContent.trim() === "Latter") {
-        cur.textContent = "";
+      if (cur.tagName === "HASS-SUBPAGE") {
+        cur.style.setProperty("--header-height", "0px");
+        if (cur.shadowRoot) {
+          const tb = cur.shadowRoot.querySelector(".toolbar");
+          if (tb) tb.style.display = "none";
+          const ct = cur.shadowRoot.querySelector(".content");
+          if (ct) ct.style.height = "100%";
+        }
       }
-      if (cur.tagName === "HA-PANEL-IFRAME" || cur.tagName === "HASS-SUBPAGE" || cur.tagName === "HOME-ASSISTANT" ||
-          cur.tagName === "HOME-ASSISTANT-MAIN" || cur.tagName === "PARTIAL-PANEL-RESOLVER") {
-        if (cur.shadowRoot) walker.push(cur.shadowRoot);
-      }
+      if (cur.shadowRoot) walker.push(cur.shadowRoot);
     }
     const children = cur.children || cur.childNodes || [];
     for (let i = 0; i < children.length; i++) walker.push(children[i]);
   }
+}
+
+function isColorLight(colorStr) {
+  if (!colorStr) return false;
+  const c = colorStr.trim();
+  if (c.startsWith("#")) {
+    const hex = c.slice(1);
+    const full = hex.length === 3 ? hex.split("").map(x => x + x).join("") : hex;
+    if (full.length >= 6) {
+      const r = parseInt(full.slice(0, 2), 16);
+      const g = parseInt(full.slice(2, 4), 16);
+      const b = parseInt(full.slice(4, 6), 16);
+      return (0.299 * r + 0.587 * g + 0.114 * b) > 140;
+    }
+  }
+  const rgbMatch = c.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
+  if (rgbMatch) {
+    const r = parseInt(rgbMatch[1], 10);
+    const g = parseInt(rgbMatch[2], 10);
+    const b = parseInt(rgbMatch[3], 10);
+    return (0.299 * r + 0.587 * g + 0.114 * b) > 140;
+  }
+  return false;
 }
 
 function trySyncFromParentHaFrame() {
@@ -2248,11 +2302,13 @@ function trySyncFromParentHaFrame() {
     const hostWin = (window.parent && window.parent !== window) ? window.parent : window.opener;
     if (!hostWin || !hostWin.document) return false;
     if (window.parent && window.parent !== window) {
-      blankParentHaIframeTitle(hostWin.document.body);
+      collapseParentHaSubpageToolbar(hostWin.document.body);
     }
-    const computed = hostWin.getComputedStyle(hostWin.document.documentElement);
+    const haEl = hostWin.document.querySelector("home-assistant") || hostWin.document.documentElement;
+    const computed = hostWin.getComputedStyle(haEl);
     const bg = computed.getPropertyValue("--primary-background-color").trim();
     if (!bg) return false;
+    document.body.setAttribute("data-theme", isColorLight(bg) ? "light" : "dark");
     HA_CSS_VARS.forEach(v => {
       const val = computed.getPropertyValue(v).trim();
       if (val) document.documentElement.style.setProperty(v, val);
@@ -2299,40 +2355,11 @@ function populateThemeDropdowns(_haThemes, selectedPref) {
   });
 }
 
-function applyTheme(pref) {
-  CURRENT_THEME_PREF = pref || "ha_auto";
-  if (CURRENT_THEME_PREF === "dark") CURRENT_THEME_PREF = "ha_dark";
-  if (CURRENT_THEME_PREF === "light") CURRENT_THEME_PREF = "ha_light";
-  if (CURRENT_THEME_PREF === "system") CURRENT_THEME_PREF = "ha_auto";
-
+function applyTheme(_pref) {
+  CURRENT_THEME_PREF = "ha_auto";
   clearCustomCssVars();
-  const haThemes = STATE?.ha_themes || {};
-
-  if (CURRENT_THEME_PREF === "ha_dark") {
-    document.body.setAttribute("data-theme", "dark");
-  } else if (CURRENT_THEME_PREF === "ha_light") {
-    document.body.setAttribute("data-theme", "light");
-  } else if (haThemes[CURRENT_THEME_PREF]) {
-    document.body.setAttribute("data-theme", sysMedia.matches ? "dark" : "light");
-    const tVars = haThemes[CURRENT_THEME_PREF];
-    Object.entries(tVars).forEach(([k, v]) => {
-      document.documentElement.style.setProperty(`--${k}`, v);
-    });
-    if (tVars["ha-card-background"] && !tVars["card-background-color"]) {
-      document.documentElement.style.setProperty("--card-background-color", tVars["ha-card-background"]);
-    }
-    if (tVars["primary-background-color"]) {
-      document.documentElement.style.setProperty("--input-fill-color", tVars["primary-background-color"]);
-    }
-  } else {
-    document.body.setAttribute("data-theme", sysMedia.matches ? "dark" : "light");
-    trySyncFromParentHaFrame();
-  }
-
-  localStorage.setItem("latter_web_theme", CURRENT_THEME_PREF);
-  document.querySelectorAll("[data-theme-btn]").forEach(btn => {
-    btn.classList.toggle("active", btn.getAttribute("data-theme-btn") === CURRENT_THEME_PREF);
-  });
+  document.body.setAttribute("data-theme", sysMedia.matches ? "dark" : "light");
+  trySyncFromParentHaFrame();
 }
 
 applyTheme(CURRENT_THEME_PREF);
