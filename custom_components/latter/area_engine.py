@@ -552,6 +552,7 @@ INTERNAL_DEVICE_CONTROL_KEYWORDS: tuple[str, ...] = (
     "speaker_shortcut",
     "library_shortcut",
     "engineering_mode",
+    "telemetry_profiler",
     "ld2410",
     "ld2420",
     "ld2450",
