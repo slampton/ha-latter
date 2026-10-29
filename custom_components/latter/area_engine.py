@@ -1,4 +1,4 @@
-"""Universal Area-Aware Room Discovery, Curated Entity Filtering, Telemetry, Alarm & ESPHome Inspector for Latter."""
+"""Universal Area Discovery, Curated Entity Filtering, Telemetry, Alarm & ESPHome Inspector for Latter."""
 
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ from .const import normalize_device_slug
 
 _LOGGER = logging.getLogger(__name__)
 
-ROOM_CONTROL_DOMAINS: tuple[str, ...] = (
+AREA_CONTROL_DOMAINS: tuple[str, ...] = (
     "scene",
     "light",
     "cover",
@@ -406,12 +406,16 @@ def get_esphome_device_entities(
             except ValueError:
                 pass
         attrs = state_obj.attributes if state_obj else {}
-        raw_friendly = str(
-            attrs.get("friendly_name")
-            or entry.name
-            or entry.original_name
-            or entry.entity_id
-        )
+        # HA 2026.11+ rebuilds friendly_name from Device + Entity; prefer entry.name/original_name when has_entity_name is True
+        if getattr(entry, "has_entity_name", False) and (entry.name or entry.original_name):
+            raw_friendly = str(entry.name or entry.original_name)
+        else:
+            raw_friendly = str(
+                attrs.get("friendly_name")
+                or entry.name
+                or entry.original_name
+                or entry.entity_id
+            )
         clean_name = raw_friendly
         for candidate_prefix in (dev_prefix, slug_words):
             if candidate_prefix and clean_name.lower().startswith(candidate_prefix.lower() + " "):
@@ -796,7 +800,7 @@ def _get_companion_display_device_ids_and_slugs(
     return dev_ids, slugs
 
 
-def _is_curated_room_entity(
+def _is_curated_area_entity(
     hass: HomeAssistant, state_obj: State, local_speaker: str = ""
 ) -> bool:
     """Strictly filter out config/diagnostic entities, companion display backlights/switches, and non-MA speakers."""
@@ -1180,11 +1184,11 @@ def get_areas_summary(
 
     area_counts: dict[str, dict[str, int]] = {}
     for state_obj in hass.states.async_all():
-        if state_obj.domain not in ROOM_CONTROL_DOMAINS:
+        if state_obj.domain not in AREA_CONTROL_DOMAINS:
             continue
         if state_obj.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
             continue
-        if not _is_curated_room_entity(hass, state_obj, local_speaker):
+        if not _is_curated_area_entity(hass, state_obj, local_speaker):
             continue
 
         a_id = resolve_entity_area_id(hass, state_obj.entity_id)
@@ -1235,7 +1239,7 @@ def _parse_domain_filter(domain_filter: str) -> tuple[str, ...]:
     """Parse a single domain, comma-separated domain list, or alias into allowed domains (cover and fan are strictly separate!)."""
     raw = domain_filter.strip().lower()
     if not raw or raw == "all":
-        return ROOM_CONTROL_DOMAINS
+        return AREA_CONTROL_DOMAINS
     if raw in ("scene", "scenes"):
         return ("scene",)
     if raw in ("light", "lights"):
@@ -1252,13 +1256,13 @@ def _parse_domain_filter(domain_filter: str) -> tuple[str, ...]:
         parts = [
             p.strip()
             for p in raw.split(",")
-            if p.strip() in ROOM_CONTROL_DOMAINS
+            if p.strip() in AREA_CONTROL_DOMAINS
         ]
         if parts:
             return tuple(parts)
-    if raw in ROOM_CONTROL_DOMAINS:
+    if raw in AREA_CONTROL_DOMAINS:
         return (raw,)
-    return ROOM_CONTROL_DOMAINS
+    return AREA_CONTROL_DOMAINS
 
 
 def get_area_available_domains(
@@ -1336,7 +1340,7 @@ def get_area_entities(
         if not is_pinned:
             if state_obj.domain not in allowed_domains:
                 continue
-            if not _is_curated_room_entity(hass, state_obj, local_speaker):
+            if not _is_curated_area_entity(hass, state_obj, local_speaker):
                 continue
         elif not is_all_filter and state_obj.domain not in allowed_domains:
             continue
@@ -1396,7 +1400,7 @@ def find_area_media_entities(
     return result
 
 
-async def async_execute_room_action(
+async def async_execute_area_action(
     hass: HomeAssistant,
     entity_id: str,
     action: str = "toggle",
@@ -1404,7 +1408,7 @@ async def async_execute_room_action(
     code: str | None = None,
     option: str | None = None,
 ) -> None:
-    """Execute a normalized room, whole-home (alarm/thermostat/garage/lock/vacuum), or light color/kelvin action."""
+    """Execute a normalized area, whole-home (alarm/thermostat/garage/lock/vacuum), or light color/kelvin action."""
     state_obj = hass.states.get(entity_id)
     if state_obj is None and entity_id.startswith("whole_home."):
         wh_kind = entity_id.split(".", 1)[1].lower()

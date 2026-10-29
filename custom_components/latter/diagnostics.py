@@ -40,7 +40,7 @@ async def async_get_config_entry_diagnostics(
         return {"entry_data": async_redact_data(dict(entry.data), TO_REDACT)}
 
     media_state, media_attrs = coordinator.get_active_media_payload()
-    room_state, room_attrs = coordinator.get_room_context_payload()
+    area_state, area_attrs = coordinator.get_area_context_payload()
     remote_state, remote_attrs = coordinator.get_remote_config_payload()
 
     payload: dict[str, Any] = {
@@ -64,7 +64,7 @@ async def async_get_config_entry_diagnostics(
         },
         "sensors": {
             "active_media": {"state": media_state, "attributes": media_attrs},
-            "room_context": {"state": room_state, "attributes": room_attrs},
+            "area_context": {"state": area_state, "attributes": area_attrs},
             "remote_config": {"state": remote_state, "attributes": remote_attrs},
             "weather_forecast": {
                 "state": coordinator.forecast_string,

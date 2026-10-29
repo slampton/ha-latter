@@ -58,7 +58,7 @@ from .http import (
     LatterWallpaperProxyView,
 )
 from .sip_engine import get_sip_engine
-from .room_engine import inject_esphome_visit_link, inject_hacs_update_brand_icon
+from .area_engine import inject_esphome_visit_link, inject_hacs_update_brand_icon
 from .services import async_setup_services
 
 _LOGGER = logging.getLogger(__name__)

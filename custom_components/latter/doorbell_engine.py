@@ -32,7 +32,7 @@ from .const import (
     normalize_device_slug,
 )
 from .http import LatterCameraSnapshotView, _transcode_to_baseline_jpeg
-from .room_engine import resolve_entity_area_id
+from .area_engine import resolve_entity_area_id
 from .sip_engine import get_sip_engine
 
 _LOGGER = logging.getLogger(__name__)

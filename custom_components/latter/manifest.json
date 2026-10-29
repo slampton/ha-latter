@@ -2,6 +2,11 @@
   "domain": "latter",
   "name": "Latter",
   "after_dependencies": ["bluetooth", "camera", "frontend"],
+  "categories": [
+    "ai_voice.voice_assistants",
+    "diy_makers.boards_hardware",
+    "presence_location.trackers"
+  ],
   "codeowners": ["@slampton"],
   "config_flow": true,
   "dependencies": ["http"],

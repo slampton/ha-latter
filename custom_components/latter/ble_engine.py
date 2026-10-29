@@ -289,18 +289,18 @@ class LatterNativeBleTracker:
         beacon_uuid: str,
         device_slug: str,
         on_area_detected: Callable[[str, str], None],
-        room_offsets: dict[str, float] | None = None,
+        area_offsets: dict[str, float] | None = None,
         target_address: str = "",
     ) -> None:
-        """Initialize the native BLE proxy room tracker."""
+        """Initialize the native BLE proxy area tracker."""
         self.hass = hass
         self._target_uuid_hex = _normalize_uuid_hex(beacon_uuid)
         self._target_address = str(target_address or "").strip()
         self._device_slug = device_slug.lower().replace("_", "-")
         self._raw_slug = device_slug
         self._on_area_detected = on_area_detected
-        self._room_offsets: dict[str, float] = {
-            str(k): float(v) for k, v in (room_offsets or {}).items()
+        self._area_offsets: dict[str, float] = {
+            str(k): float(v) for k, v in (area_offsets or {}).items()
         }
 
         self._unsub_ble: Callable[[], None] | None = None
@@ -393,15 +393,15 @@ class LatterNativeBleTracker:
         return sorted(_int_to_mac(m) for m in self._target_mac_ints)
 
     @callback
-    def set_room_offsets(self, offsets: dict[str, float] | None) -> None:
-        """Update per-room RSSI calibration offsets (dB bias) in real time and recompute effective RSSI."""
-        self._room_offsets = {
+    def set_area_offsets(self, offsets: dict[str, float] | None) -> None:
+        """Update per-area RSSI calibration offsets (dB bias) in real time and recompute effective RSSI."""
+        self._area_offsets = {
             str(k): max(-25.0, min(25.0, float(v)))
             for k, v in (offsets or {}).items()
         }
         now = time.monotonic()
         for area_id, (raw_ema, ts, _scanner) in list(self._area_raw_rssi.items()):
-            offset_db = float(self._room_offsets.get(area_id, 0.0))
+            offset_db = float(self._area_offsets.get(area_id, 0.0))
             self._area_rssi[area_id] = (raw_ema + offset_db, ts)
         self._evaluate_best_room(now)
 
@@ -461,8 +461,8 @@ class LatterNativeBleTracker:
                 out[f"unmapped:{raw_src}"] = int(raw_rssi)
         return out
 
-    def get_room_calibration_telemetry(self) -> list[dict[str, Any]]:
-        """Return rich per-room BLE site survey telemetry (all proxy rooms, raw dBm, offset dB, effective dBm, age, winner)."""
+    def get_area_calibration_telemetry(self) -> list[dict[str, Any]]:
+        """Return rich per-area BLE site survey telemetry (all proxy areas, raw dBm, offset dB, effective dBm, age, winner)."""
         area_reg = ar.async_get(self.hass)
         now = time.monotonic()
 
@@ -486,14 +486,14 @@ class LatterNativeBleTracker:
         all_area_ids = (
             set(area_scanners.keys())
             | set(self._area_raw_rssi.keys())
-            | set(self._room_offsets.keys())
+            | set(self._area_offsets.keys())
         )
 
         rows: list[dict[str, Any]] = []
         for area_id in all_area_ids:
             area_obj = area_reg.async_get_area(area_id)
             area_name = area_obj.name if area_obj else area_id
-            offset_db = round(float(self._room_offsets.get(area_id, 0.0)), 1)
+            offset_db = round(float(self._area_offsets.get(area_id, 0.0)), 1)
             raw_tuple = self._area_raw_rssi.get(area_id)
 
             raw_dbm: int | None = None
@@ -727,7 +727,7 @@ class LatterNativeBleTracker:
             raw_ema = (EMA_ALPHA * raw_f) + ((1.0 - EMA_ALPHA) * prev_raw[0])
         self._area_raw_rssi[area_id] = (raw_ema, obs_time, scanner_name or source)
 
-        offset_db = float(self._room_offsets.get(area_id, 0.0))
+        offset_db = float(self._area_offsets.get(area_id, 0.0))
         eff_ema = raw_ema + offset_db
         self._area_rssi[area_id] = (eff_ema, obs_time)
 

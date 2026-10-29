@@ -33,8 +33,8 @@ from .const import (
     CONF_DEVICE_CUSTOM_COLOR,
     DATA_GLOBAL_CONFIG,
     DATA_GLOBAL_STORE,
-    SERVICE_ROOM_ACTION,
-    SERVICE_ROOM_BROWSE,
+    SERVICE_AREA_ACTION,
+    SERVICE_AREA_BROWSE,
     SERVICE_SAVE_CUSTOM_COLOR,
     SERVICE_SET_ACTIVE_AREA,
     SERVICE_SET_ACTIVE_SPEAKER,
@@ -42,8 +42,8 @@ from .const import (
     normalize_device_slug,
 )
 from .coordinator import LatterCoordinator
-from .room_engine import (
-    async_execute_room_action,
+from .area_engine import (
+    async_execute_area_action,
     get_area_entities,
     get_areas_summary,
     get_home_wide_entities,
@@ -435,7 +435,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             raw_lvl = data.get("level")
             lvl = int(float(raw_lvl)) if raw_lvl is not None else None
             if ent_id:
-                await async_execute_room_action(
+                await async_execute_area_action(
                     hass, entity_id=ent_id, action=action, level=lvl
                 )
                 coord._notify_listeners()
@@ -837,7 +837,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             raw_level = data.get("level")
             level = int(float(raw_level)) if raw_level is not None and str(raw_level).strip() != "" else None
             code = str(data.get("code")) if data.get("code") is not None else None
-            await async_execute_room_action(
+            await async_execute_area_action(
                 hass,
                 entity_id=entity_id,
                 action=action,
@@ -1114,7 +1114,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     )
     hass.services.async_register(
         DOMAIN,
-        SERVICE_ROOM_BROWSE,
+        SERVICE_AREA_BROWSE,
         _handle_room_browse,
         schema=vol.Schema(
             {
@@ -1131,7 +1131,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     )
     hass.services.async_register(
         DOMAIN,
-        SERVICE_ROOM_ACTION,
+        SERVICE_AREA_ACTION,
         _handle_room_action,
         schema=vol.Schema(
             {

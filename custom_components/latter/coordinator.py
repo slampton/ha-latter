@@ -65,7 +65,7 @@ from .const import (
     CONF_BLE_AUTO_SWITCH,
     CONF_BLE_BEACON_UUID,
     CONF_BLE_TARGET_ADDRESS,
-    CONF_BLE_ROOM_OFFSETS,
+    CONF_BLE_AREA_OFFSETS,
     CONF_CALENDAR_ENTITIES,
     CONF_COMPANION_BASE_URL,
     CONF_CUSTOM_BINDINGS,
@@ -128,7 +128,7 @@ from .const import (
     STORAGE_VERSION,
     normalize_device_slug,
 )
-from .room_engine import (
+from .area_engine import (
     find_area_media_entities,
     get_area_available_domains,
     get_area_climate_telemetry,
@@ -363,7 +363,7 @@ class LatterCoordinator:
     async def async_on_global_config_updated(self) -> None:
         """Refresh listeners, BLE offsets, weather, and calendar when Global Household config changes."""
         if self._ble_tracker is not None:
-            self._ble_tracker.set_room_offsets(self.ble_room_offsets)
+            self._ble_tracker.set_area_offsets(self.ble_area_offsets)
         self._bind_speaker_listener()
         self._bind_weather_listener()
         self._bind_alarm_listener()
@@ -662,9 +662,9 @@ class LatterCoordinator:
         return str(self.get_opt(CONF_BLE_TARGET_ADDRESS, "") or "").strip()
 
     @property
-    def ble_room_offsets(self) -> dict[str, float]:
-        """Return per-room BLE RSSI calibration offsets (area_id -> dB bias)."""
-        raw = self.get_opt(CONF_BLE_ROOM_OFFSETS, {})
+    def ble_area_offsets(self) -> dict[str, float]:
+        """Return per-area BLE RSSI calibration offsets (area_id -> dB bias)."""
+        raw = self.get_opt(CONF_BLE_AREA_OFFSETS, {})
         if not isinstance(raw, dict):
             return {}
         out: dict[str, float] = {}
@@ -1043,7 +1043,7 @@ class LatterCoordinator:
                 beacon_uuid=self.ble_beacon_uuid,
                 device_slug=self.device_slug,
                 on_area_detected=self._async_on_native_ble_area_detected,
-                room_offsets=self.ble_room_offsets,
+                area_offsets=self.ble_area_offsets,
                 target_address=self.ble_target_address,
             )
             self._ble_tracker.async_start()
@@ -1603,8 +1603,8 @@ class LatterCoordinator:
             return False
         return True
 
-    def get_current_room_and_distance(self) -> tuple[str, dict[str, Any]]:
-        """Return (room_or_away_state, attributes) for sensor.<slug>_current_room and sensor.<slug>_ble_distance."""
+    def get_current_area_and_distance(self) -> tuple[str, dict[str, Any]]:
+        """Return (area_or_away_state, attributes) for sensor.<slug>_current_area and sensor.<slug>_ble_distance."""
         away = self.is_device_away()
         area_reg = ar.async_get(self.hass)
         explicit_default = str(self.get_opt(CONF_DEFAULT_AREA) or "").strip()
@@ -1682,8 +1682,8 @@ class LatterCoordinator:
 
         return _remove
 
-    def get_person_room_and_distance(self, person_entity: str) -> tuple[str, dict[str, Any]]:
-        """Resolve the freshest room and BLE distance across all Latter devices carried by a person."""
+    def get_person_area_and_distance(self, person_entity: str) -> tuple[str, dict[str, Any]]:
+        """Resolve the freshest area and BLE distance across all Latter devices carried by a person."""
         domain_data = self.hass.data.get(DOMAIN, {})
         p_coords = [
             v
@@ -1702,11 +1702,11 @@ class LatterCoordinator:
                 else 0.0
             ),
         )
-        room_name, r_attrs = best_c.get_current_room_and_distance()
-        return room_name, {
+        area_name, r_attrs = best_c.get_current_area_and_distance()
+        return area_name, {
             "person_entity": person_entity,
             "area_id": r_attrs["area_id"],
-            "area_name": room_name,
+            "area_name": area_name,
             "is_home": r_attrs["is_home"],
             "distance_ft": r_attrs["distance_ft"],
             "distance_m": r_attrs["distance_m"],
@@ -2098,8 +2098,8 @@ class LatterCoordinator:
         attrs["slots_summary"] = ";".join(summary_parts)
         return state_str, attrs
 
-    def get_room_context_payload(self) -> tuple[str, dict[str, Any]]:
-        """Compute state and attributes for sensor.<device_slug>_room_context."""
+    def get_area_context_payload(self) -> tuple[str, dict[str, Any]]:
+        """Compute state and attributes for sensor.<device_slug>_area_context."""
         area_reg = ar.async_get(self.hass)
         explicit_default = str(self.get_opt(CONF_DEFAULT_AREA) or "").strip()
         has_ble_lock = bool(
@@ -2202,8 +2202,8 @@ class LatterCoordinator:
             "ble_beacon_uuid": self.ble_beacon_uuid,
             "ble_closest_proxy": self._ble_tracker.closest_scanner if self._ble_tracker else "",
             "ble_packets_seen": self._ble_tracker.packets_seen if self._ble_tracker else 0,
-            "ble_rssi_by_room": self._ble_tracker.get_live_rssi_summary() if self._ble_tracker else {},
-            "ble_room_offsets": self.ble_room_offsets,
+            "ble_rssi_by_area": self._ble_tracker.get_live_rssi_summary() if self._ble_tracker else {},
+            "ble_area_offsets": self.ble_area_offsets,
             "ble_scanners_map": get_all_scanners_diagnostic_map(self.hass),
             "ble_target_macs": self._ble_tracker.target_macs_formatted if self._ble_tracker else [],
             "assigned_person": self.assigned_person,

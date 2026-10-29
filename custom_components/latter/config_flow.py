@@ -497,7 +497,7 @@ class LatterConfigFlow(ConfigFlow, domain=DOMAIN):
             slug = merged_data[CONF_DEVICE_SLUG]
             await self.async_set_unique_id(f"{DOMAIN}_{slug}")
             self._abort_if_unique_id_mismatch()
-            return self.async_update_reload_and_abort(
+            return self.async_update_and_abort(
                 reconfigure_entry,
                 data_updates=merged_data,
             )

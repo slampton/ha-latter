@@ -55,7 +55,7 @@ from .const import (
     INTEGRATION_VERSION,
     STORAGE_VERSION,
 )
-from .room_engine import async_execute_room_action, get_esphome_device_entities
+from .area_engine import async_execute_area_action, get_esphome_device_entities
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -268,13 +268,13 @@ async def apply_esphome_controls_to_device(
             if dom == "select":
                 opts = item.get("options") or []
                 if not opts or str(target_val) in opts:
-                    await async_execute_room_action(
+                    await async_execute_area_action(
                         hass, entity_id=ent_id, action="select", option=str(target_val)
                     )
                     applied += 1
             elif dom == "switch":
                 want_on = str(target_val).lower() in ("on", "true", "1")
-                await async_execute_room_action(
+                await async_execute_area_action(
                     hass,
                     entity_id=ent_id,
                     action="turn_on" if want_on else "turn_off",
@@ -283,7 +283,7 @@ async def apply_esphome_controls_to_device(
             elif dom == "number":
                 try:
                     num_v = float(target_val)
-                    await async_execute_room_action(
+                    await async_execute_area_action(
                         hass, entity_id=ent_id, action="set_level", level=int(round(num_v))
                     )
                     applied += 1

@@ -34,7 +34,7 @@ CONF_DEFAULT_AREA: Final = "default_area"
 CONF_NATIVE_BLE_TRACKING: Final = "native_ble_tracking"
 CONF_BLE_BEACON_UUID: Final = "ble_beacon_uuid"
 CONF_BLE_TARGET_ADDRESS: Final = "ble_target_address"
-CONF_BLE_ROOM_OFFSETS: Final = "ble_area_offsets"
+CONF_BLE_AREA_OFFSETS: Final = "ble_area_offsets"
 CONF_PRESENCE_ENTITY: Final = "presence_entity"
 CONF_ASSIGNED_PERSON: Final = "assigned_person"
 CONF_ASSIGNED_ROLE: Final = "assigned_role"
@@ -88,8 +88,8 @@ SERVICE_MUSIC_BROWSE: Final = "music_browse"
 SERVICE_SET_ACTIVE_SPEAKER: Final = "set_active_speaker"
 SERVICE_MEDIA_COMMAND: Final = "media_command"
 SERVICE_MEDIA_VOLUME: Final = "media_volume"
-SERVICE_ROOM_BROWSE: Final = "area_browse"
-SERVICE_ROOM_ACTION: Final = "area_action"
+SERVICE_AREA_BROWSE: Final = "area_browse"
+SERVICE_AREA_ACTION: Final = "area_action"
 SERVICE_SET_ACTIVE_AREA: Final = "set_active_area"
 SERVICE_REMOTE_ACTION: Final = "remote_action"
 SERVICE_TRIGGER_BINDING: Final = "trigger_binding"
@@ -169,7 +169,7 @@ GLOBAL_CONFIG_KEYS: Final[tuple[str, ...]] = (
     CONF_GARAGE_ENTITY,
     CONF_VACUUM_ENTITY,
     CONF_VOLUME_OVERRIDES,
-    CONF_BLE_ROOM_OFFSETS,
+    CONF_BLE_AREA_OFFSETS,
     CONF_REMOTES_LIST,
     CONF_REMOTE_GROUPS,
     CONF_CALENDAR_ENTITIES,

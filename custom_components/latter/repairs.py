@@ -58,16 +58,37 @@ def async_audit_coordinator_health(
                 }
             )
 
+    def _create_scoped_issue(
+        issue_id: str, translation_key: str, placeholders: dict[str, str]
+    ) -> None:
+        try:
+            ir.async_create_issue(
+                hass,
+                DOMAIN,
+                issue_id,
+                is_fixable=True,
+                severity=ir.IssueSeverity.WARNING,
+                translation_key=translation_key,
+                translation_placeholders=placeholders,
+                config_entry_id=entry_id,
+            )
+        except TypeError:
+            ir.async_create_issue(
+                hass,
+                DOMAIN,
+                issue_id,
+                is_fixable=True,
+                severity=ir.IssueSeverity.WARNING,
+                translation_key=translation_key,
+                translation_placeholders=placeholders,
+            )
+
     missing_issue_id = f"missing_mapped_entity_{entry_id}"
     if missing_labels:
-        ir.async_create_issue(
-            hass,
-            DOMAIN,
+        _create_scoped_issue(
             missing_issue_id,
-            is_fixable=True,
-            severity=ir.IssueSeverity.WARNING,
-            translation_key="missing_mapped_entity",
-            translation_placeholders={
+            "missing_mapped_entity",
+            {
                 "device_slug": slug,
                 "missing_list": ", ".join(missing_labels),
                 "companion_url": coordinator.build_companion_url(),
@@ -81,7 +102,7 @@ def async_audit_coordinator_health(
     tracker = coordinator._ble_tracker
     has_seen_ble = bool(
         (tracker is not None and tracker.packets_seen > 0)
-        or coordinator.ble_room_offsets
+        or coordinator.ble_area_offsets
     )
     if (
         hass.is_running
@@ -95,19 +116,13 @@ def async_audit_coordinator_health(
             warnings.append(
                 {
                     "code": "ble_no_proxies",
-                    "message": "Built-in BLE Room Tracking is enabled, but no Bluetooth proxies assigned to a Home Assistant Area were found.",
+                    "message": "Built-in BLE Area Tracking is enabled, but no Bluetooth proxies assigned to a Home Assistant Area were found.",
                 }
             )
-            ir.async_create_issue(
-                hass,
-                DOMAIN,
+            _create_scoped_issue(
                 ble_issue_id,
-                is_fixable=True,
-                severity=ir.IssueSeverity.WARNING,
-                translation_key="ble_no_proxies",
-                translation_placeholders={
-                    "device_slug": slug,
-                },
+                "ble_no_proxies",
+                {"device_slug": slug},
             )
         else:
             ir.async_delete_issue(hass, DOMAIN, ble_issue_id)

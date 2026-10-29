@@ -46,7 +46,7 @@ from .const import (
     CONF_BLE_AUTO_SWITCH,
     CONF_BLE_BEACON_UUID,
     CONF_BLE_TARGET_ADDRESS,
-    CONF_BLE_ROOM_OFFSETS,
+    CONF_BLE_AREA_OFFSETS,
     CONF_CALENDAR_ENTITIES,
     CONF_CAMERA_ENTITIES,
     CONF_CAMERA_ENTITY,
@@ -121,8 +121,8 @@ from .const import (
 )
 from .coordinator import LatterCoordinator
 from .repairs import async_audit_coordinator_health
-from .room_engine import (
-    async_execute_room_action,
+from .area_engine import (
+    async_execute_area_action,
     find_esphome_device_id,
     get_area_entities,
     get_esphome_device_entities,
@@ -429,7 +429,7 @@ def _build_companion_state_payload(
         ):
             bindable_entities.append(item)
 
-    _, room_attrs = coordinator.get_room_context_payload()
+    _, room_attrs = coordinator.get_area_context_payload()
     media_state, media_attrs = coordinator.get_active_media_payload()
     _, remote_attrs = coordinator.get_remote_config_payload()
     esphome_inspector = get_esphome_device_entities(
@@ -539,7 +539,7 @@ def _build_companion_state_payload(
         CONF_NATIVE_BLE_TRACKING: coordinator.native_ble_tracking_enabled,
         CONF_BLE_BEACON_UUID: coordinator.ble_beacon_uuid,
         CONF_BLE_TARGET_ADDRESS: coordinator.ble_target_address,
-        CONF_BLE_ROOM_OFFSETS: coordinator.ble_room_offsets,
+        CONF_BLE_AREA_OFFSETS: coordinator.ble_area_offsets,
         CONF_PRESENCE_ENTITY: coordinator.presence_entity or "",
         CONF_ASSIGNED_PERSON: coordinator.assigned_person,
         CONF_ASSIGNED_ROLE: coordinator.assigned_role,
@@ -601,9 +601,9 @@ def _build_companion_state_payload(
 
     ble_survey_rows: list[dict[str, Any]] = []
     if coordinator._ble_tracker is not None and hasattr(
-        coordinator._ble_tracker, "get_room_calibration_telemetry"
+        coordinator._ble_tracker, "get_area_calibration_telemetry"
     ):
-        ble_survey_rows = coordinator._ble_tracker.get_room_calibration_telemetry()
+        ble_survey_rows = coordinator._ble_tracker.get_area_calibration_telemetry()
 
     device_groups, saved_profiles = get_device_groups_and_profiles(hass)
     group_name_map = {g["id"]: g["name"] for g in device_groups if isinstance(g, dict) and g.get("id")}
@@ -613,7 +613,7 @@ def _build_companion_state_payload(
 
     fleet_devices: list[dict[str, Any]] = []
     for c in _get_all_coordinators(hass):
-        c_room_name, c_room_attrs = c.get_room_context_payload()
+        c_room_name, c_room_attrs = c.get_area_context_payload()
         c_media_state, _ = c.get_active_media_payload()
         c_grp = c.device_group
         c_has_audio = bool(c.local_speaker) or any(
@@ -632,9 +632,9 @@ def _build_companion_state_payload(
             or hass.states.get(f"switch.{c.device_slug}_ble_presence_beacon") is not None
         )
         c_survey_rows = (
-            c._ble_tracker.get_room_calibration_telemetry()
+            c._ble_tracker.get_area_calibration_telemetry()
             if c._ble_tracker is not None
-            and hasattr(c._ble_tracker, "get_room_calibration_telemetry")
+            and hasattr(c._ble_tracker, "get_area_calibration_telemetry")
             else []
         )
         c_packets_seen = (
@@ -871,7 +871,7 @@ def _build_companion_state_payload(
             "room_cards": active_room_cards[:12],
             "ble_closest_proxy": room_attrs.get("ble_closest_proxy", ""),
             "ble_packets_seen": room_attrs.get("ble_packets_seen", 0),
-            "ble_rssi_by_room": room_attrs.get("ble_rssi_by_room", {}),
+            "ble_rssi_by_area": room_attrs.get("ble_rssi_by_area", {}),
             "ble_survey_rows": ble_survey_rows,
             "ble_scanners_map": room_attrs.get("ble_scanners_map", {}),
             "active_speaker": coordinator.active_speaker,
@@ -1020,13 +1020,13 @@ class LatterCompanionApiView(HomeAssistantView):
         if cmd == "set_ble_room_offset":
             area_id = str(body.get("area_id") or "").strip()
             offset_val = float(body.get("offset_db") or 0.0)
-            offsets = dict(coordinator.ble_room_offsets)
+            offsets = dict(coordinator.ble_area_offsets)
             if abs(offset_val) < 0.1:
                 offsets.pop(area_id, None)
             elif area_id:
                 offsets[area_id] = round(max(-25.0, min(25.0, offset_val)), 1)
             await _async_save_and_broadcast_global_config(
-                self.hass, {CONF_BLE_ROOM_OFFSETS: offsets}
+                self.hass, {CONF_BLE_AREA_OFFSETS: offsets}
             )
             return web.json_response(
                 _build_companion_state_payload(self.hass, coordinator)
@@ -1060,7 +1060,7 @@ class LatterCompanionApiView(HomeAssistantView):
                     survey_coord = fallback_c
 
             if target_area_id and survey_coord._ble_tracker is not None:
-                rows = survey_coord._ble_tracker.get_room_calibration_telemetry()
+                rows = survey_coord._ble_tracker.get_area_calibration_telemetry()
                 target_row = next(
                     (r for r in rows if r["area_id"] == target_area_id), None
                 )
@@ -1070,7 +1070,7 @@ class LatterCompanionApiView(HomeAssistantView):
                     if r["area_id"] != target_area_id
                     and r["effective_rssi"] is not None
                 ]
-                offsets = dict(survey_coord.ble_room_offsets)
+                offsets = dict(survey_coord.ble_area_offsets)
                 if target_row and target_row["raw_rssi"] is not None and competing:
                     best_competing_eff = max(competing)
                     needed_offset = (best_competing_eff - target_row["raw_rssi"]) + 6.0
@@ -1086,7 +1086,7 @@ class LatterCompanionApiView(HomeAssistantView):
                         1,
                     )
                 await _async_save_and_broadcast_global_config(
-                    self.hass, {CONF_BLE_ROOM_OFFSETS: offsets}
+                    self.hass, {CONF_BLE_AREA_OFFSETS: offsets}
                 )
                 survey_coord.async_set_active_area(
                     target_area_id, handoff_media=False, sync_device_registry=True
@@ -1103,7 +1103,7 @@ class LatterCompanionApiView(HomeAssistantView):
             if isinstance(entity_ids, list):
                 for ent_id in entity_ids:
                     if isinstance(ent_id, str) and ent_id.strip():
-                        await async_execute_room_action(
+                        await async_execute_area_action(
                             self.hass,
                             entity_id=ent_id.strip(),
                             action=action,
@@ -1349,7 +1349,7 @@ class LatterCompanionApiView(HomeAssistantView):
             level = body.get("level")
             option = body.get("option")
             if entity_id:
-                await async_execute_room_action(
+                await async_execute_area_action(
                     self.hass,
                     entity_id=entity_id,
                     action=action,

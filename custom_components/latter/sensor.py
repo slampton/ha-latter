@@ -17,7 +17,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .const import DOMAIN, INTEGRATION_VERSION, build_device_entity_id, normalize_device_slug
 from .coordinator import LatterCoordinator
-from .room_engine import find_esphome_device_id
+from .area_engine import find_esphome_device_id
 
 PARALLEL_UPDATES = 0
 
@@ -35,19 +35,19 @@ async def async_setup_entry(
     if coordinator.device_profile == "ble_beacon":
         entities.extend(
             [
-                LatterCurrentRoomSensor(coordinator),
+                LatterCurrentAreaSensor(coordinator),
                 LatterBleDistanceSensor(coordinator),
-                LatterRoomContextSensor(coordinator),
+                LatterAreaContextSensor(coordinator),
             ]
         )
     else:
         entities.extend(
             [
-                LatterCurrentRoomSensor(coordinator),
+                LatterCurrentAreaSensor(coordinator),
                 LatterBleDistanceSensor(coordinator),
                 LatterActiveMediaSensor(coordinator),
                 LatterWeatherForecastSensor(coordinator),
-                LatterRoomContextSensor(coordinator),
+                LatterAreaContextSensor(coordinator),
                 LatterCalendarAgendaSensor(coordinator),
                 LatterRemoteConfigSensor(coordinator),
             ]
@@ -70,7 +70,7 @@ async def async_setup_entry(
             registered_persons.add(person_ent)
             async_add_entities(
                 [
-                    LatterPersonCurrentRoomSensor(coordinator, person_ent),
+                    LatterPersonCurrentAreaSensor(coordinator, person_ent),
                     LatterPersonBleDistanceSensor(coordinator, person_ent),
                 ]
             )
@@ -92,8 +92,8 @@ class _BaseLatterSensor(SensorEntity):
             "alert_camera_url",
             "art_url",
             "ble_beacon_uuid",
-            "ble_room_offsets",
-            "ble_rssi_by_room",
+            "ble_area_offsets",
+            "ble_rssi_by_area",
             "ble_scanners_map",
             "ble_target_macs",
             "camera_entities",
@@ -114,7 +114,7 @@ class _BaseLatterSensor(SensorEntity):
     )
 
     def __init__(self, coordinator: LatterCoordinator, suffix: str, label: str) -> None:
-        """Initialize base sensor with a device-scoped entity_id."""
+        """Initialize base sensor with a device-scoped entity_id and link to the native ESPHome DeviceEntry (HA 2026.11+)."""
         self.coordinator = coordinator
         slug = coordinator.device_slug
         self._attr_translation_key = suffix
@@ -122,26 +122,31 @@ class _BaseLatterSensor(SensorEntity):
         self._attr_unique_id = f"{coordinator.entry.entry_id}_{suffix}"
         self.entity_id = build_device_entity_id(slug, suffix)
 
-    @property
-    def device_info(self) -> DeviceInfo:
-        """Return DeviceInfo linked to the native ESPHome device (if present) so all entities live under one unified device."""
-        pretty_device = self.coordinator.device_slug.replace("_", " ").title()
-        connections: set[tuple[str, str]] = set()
-        identifiers: set[tuple[str, str]] = {(DOMAIN, self.coordinator.entry.entry_id)}
+        target_dev_id = find_esphome_device_id(coordinator.hass, slug)
+        if target_dev_id:
+            dev_reg = dr.async_get(coordinator.hass)
+            esp_dev = dev_reg.async_get(target_dev_id)
+            if esp_dev is not None:
+                self.device_entry = esp_dev
 
-        target_dev_id = find_esphome_device_id(self.coordinator.hass, self.coordinator.device_slug)
+    @property
+    def device_info(self) -> DeviceInfo | None:
+        """Return DeviceInfo for standalone Latter devices when not directly linked via self.device_entry."""
+        if getattr(self, "device_entry", None) is not None:
+            return None
+        target_dev_id = find_esphome_device_id(
+            self.coordinator.hass, self.coordinator.device_slug
+        )
         if target_dev_id:
             dev_reg = dr.async_get(self.coordinator.hass)
             esp_dev = dev_reg.async_get(target_dev_id)
             if esp_dev is not None:
-                if esp_dev.connections:
-                    connections = set(esp_dev.connections)
-                if esp_dev.identifiers:
-                    identifiers |= set(esp_dev.identifiers)
+                self.device_entry = esp_dev
+                return None
 
+        pretty_device = self.coordinator.device_slug.replace("_", " ").title()
         return DeviceInfo(
-            connections=connections,
-            identifiers=identifiers,
+            identifiers={(DOMAIN, self.coordinator.entry.entry_id)},
             name=pretty_device,
             manufacturer="Lampton Labs",
             model="Latter ESPHome Companion Middleware",
@@ -203,25 +208,25 @@ class LatterWeatherForecastSensor(_BaseLatterSensor):
         return self.coordinator.weather_attributes
 
 
-class LatterRoomContextSensor(_BaseLatterSensor):
-    """Exposes sensor.<device_slug>_room_context for Area-Aware Room Control, Telemetry & Alarm."""
+class LatterAreaContextSensor(_BaseLatterSensor):
+    """Exposes sensor.<device_slug>_area_context for Area Control, Telemetry & Alarm."""
 
     _attr_icon = "mdi:floor-plan"
 
     def __init__(self, coordinator: LatterCoordinator) -> None:
-        """Initialize room context sensor."""
+        """Initialize area context sensor."""
         super().__init__(coordinator, "area_context", "Area Context")
 
     @property
     def native_value(self) -> str:
-        """Return active room area name."""
-        state, _ = self.coordinator.get_room_context_payload()
+        """Return active area name."""
+        state, _ = self.coordinator.get_area_context_payload()
         return state
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return room entity summary, telemetry, alarm state, and companion_url."""
-        _, attrs = self.coordinator.get_room_context_payload()
+        """Return area entity summary, telemetry, alarm state, and companion_url."""
+        _, attrs = self.coordinator.get_area_context_payload()
         return attrs
 
 
@@ -270,30 +275,30 @@ class LatterRemoteConfigSensor(_BaseLatterSensor):
         _, attrs = self.coordinator.get_remote_config_payload()
         return attrs
 
-class LatterCurrentRoomSensor(_BaseLatterSensor):
-    """Exposes sensor.<device_slug>_current_room with live room name or 'Away'."""
+class LatterCurrentAreaSensor(_BaseLatterSensor):
+    """Exposes sensor.<device_slug>_current_area with live area name or 'Away'."""
 
     _attr_icon = "mdi:map-marker-radius"
 
     def __init__(self, coordinator: LatterCoordinator) -> None:
-        """Initialize current room sensor."""
+        """Initialize current area sensor."""
         super().__init__(coordinator, "current_area", "Current Area")
 
     @property
     def native_value(self) -> str:
-        """Return active room name or 'Away'."""
-        state, _ = self.coordinator.get_current_room_and_distance()
+        """Return active area name or 'Away'."""
+        state, _ = self.coordinator.get_current_area_and_distance()
         return state
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return BLE distance, closest proxy, and person assignment."""
-        _, attrs = self.coordinator.get_current_room_and_distance()
+        _, attrs = self.coordinator.get_current_area_and_distance()
         return attrs
 
 
 class LatterBleDistanceSensor(_BaseLatterSensor):
-    """Exposes sensor.<device_slug>_ble_distance with estimated distance (ft) to the winning room proxy."""
+    """Exposes sensor.<device_slug>_ble_distance with estimated distance (ft) to the winning area proxy."""
 
     _attr_icon = "mdi:map-marker-distance"
     _attr_native_unit_of_measurement = "ft"
@@ -306,22 +311,22 @@ class LatterBleDistanceSensor(_BaseLatterSensor):
 
     @property
     def native_value(self) -> float | None:
-        """Return estimated distance in feet to the closest room proxy."""
-        _, attrs = self.coordinator.get_current_room_and_distance()
+        """Return estimated distance in feet to the closest area proxy."""
+        _, attrs = self.coordinator.get_current_area_and_distance()
         return attrs.get("distance_ft")
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return distance in meters, RSSI, and closest proxy."""
-        _, attrs = self.coordinator.get_current_room_and_distance()
+        _, attrs = self.coordinator.get_current_area_and_distance()
         return attrs
 
 
-class LatterPersonCurrentRoomSensor(_BaseLatterSensor):
-    """Exposes sensor.<person_slug>_current_room as a native Entity Registry sensor."""
+class LatterPersonCurrentAreaSensor(_BaseLatterSensor):
+    """Exposes sensor.<person_slug>_current_area as a native Entity Registry sensor."""
 
     def __init__(self, coordinator: LatterCoordinator, person_entity: str) -> None:
-        """Initialize person current room sensor."""
+        """Initialize person current area sensor."""
         self._person_entity = person_entity
         p_slug = normalize_device_slug(person_entity.split(".", 1)[-1])
         p_st = coordinator.hass.states.get(person_entity)
@@ -337,19 +342,19 @@ class LatterPersonCurrentRoomSensor(_BaseLatterSensor):
 
     @property
     def icon(self) -> str:
-        """Return dynamic icon based on room state."""
+        """Return dynamic icon based on area state."""
         return "mdi:account-location" if self.native_value not in ("Away", "Unassigned") else "mdi:account-arrow-right"
 
     @property
     def native_value(self) -> str:
-        """Return freshest room name across all devices carried by this person."""
-        room_name, _ = self.coordinator.get_person_room_and_distance(self._person_entity)
-        return room_name
+        """Return freshest area name across all devices carried by this person."""
+        area_name, _ = self.coordinator.get_person_area_and_distance(self._person_entity)
+        return area_name
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return person BLE room tracking attributes."""
-        _, attrs = self.coordinator.get_person_room_and_distance(self._person_entity)
+        """Return person BLE area tracking attributes."""
+        _, attrs = self.coordinator.get_person_area_and_distance(self._person_entity)
         return attrs
 
 
@@ -379,11 +384,11 @@ class LatterPersonBleDistanceSensor(_BaseLatterSensor):
     @property
     def native_value(self) -> float | None:
         """Return estimated distance in feet for this person."""
-        _, attrs = self.coordinator.get_person_room_and_distance(self._person_entity)
+        _, attrs = self.coordinator.get_person_area_and_distance(self._person_entity)
         return attrs.get("distance_ft")
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return person BLE distance attributes."""
-        _, attrs = self.coordinator.get_person_room_and_distance(self._person_entity)
+        _, attrs = self.coordinator.get_person_area_and_distance(self._person_entity)
         return attrs
