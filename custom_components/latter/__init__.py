@@ -281,6 +281,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
             dev = dev_reg.async_get(dev_id)
             if dev is not None:
                 _async_check_esphome_device_for_discovery(hass, dev)
+                dev_name = str(dev.name_by_user or dev.name or "").strip()
+                if dev_name:
+                    upd_slug = _slugify_device_name(dev_name)
+                    for val in domain_data.values():
+                        if isinstance(val, LatterCoordinator) and val.device_slug == upd_slug:
+                            inject_esphome_visit_link(
+                                hass, val.device_slug, val.build_companion_url()
+                            )
 
                 @callback
                 def _delayed_scan(_now: Any) -> None:

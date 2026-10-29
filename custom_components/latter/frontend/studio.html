@@ -96,11 +96,30 @@
     border-right: 1px solid var(--border);
     display: flex;
     flex-direction: column;
-    padding: 12px;
+    padding: 20px 12px 12px;
     position: sticky;
     top: 0;
     height: 100vh;
     overflow-y: auto;
+  }
+  .sidebar-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 36px;
+    padding: 0 6px;
+    margin: 0 0 16px;
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--text-strong);
+    user-select: none;
+  }
+  .sidebar-brand svg {
+    width: 22px;
+    height: 22px;
+    fill: var(--accent);
+    flex-shrink: 0;
   }
   .scope-box {
     background: var(--card);
@@ -948,6 +967,11 @@
       border-right: none;
       border-bottom: 1px solid var(--border);
     }
+    .sidebar-brand {
+      font-size: 18px;
+      min-height: 28px;
+      margin-bottom: 8px;
+    }
     .scope-box {
       display: flex;
       align-items: center;
@@ -1015,6 +1039,10 @@
 <div class="app-shell">
   <!-- LEFT SIDEBAR: SYSTEM (6 TABS) vs DEVICE (5 TABS) -->
   <aside class="sidebar">
+    <div class="sidebar-brand">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h1A1.5 1.5 0 0 1 8 5.5v13A1.5 1.5 0 0 1 6.5 20h-1A1.5 1.5 0 0 1 4 18.5v-13ZM16 5.5A1.5 1.5 0 0 1 17.5 4h1A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5h-1A1.5 1.5 0 0 1 16 18.5v-13ZM4 16.5h16v2A1.5 1.5 0 0 1 18.5 20h-13A1.5 1.5 0 0 1 4 18.5v-2ZM8 5.25h8v2.5H8v-2.5ZM8 10.75h8v2.5H8v-2.5Z"/></svg>
+      <span>Latter</span>
+    </div>
     <div class="scope-box">
       <div class="scope-tabs">
         <button class="scope-tab" id="tab-scope-household" onclick="setScope('household')">System</button>
@@ -2110,6 +2138,26 @@ try {
 } catch (_e) {}
 
 const URL_PARAMS = new URLSearchParams(window.location.search);
+try {
+  // 1. If opened via a Device "Visit" link in a top-level tab, hand off to /latter so the HA Sidebar shell is preserved
+  if (window.parent === window && !URL_PARAMS.has("standalone") && !URL_PARAMS.get("scope")) {
+    const hasHaTokens = !!localStorage.getItem("hassTokens");
+    if (hasHaTokens) {
+      sessionStorage.setItem("latter_visit_redirect", window.location.pathname + window.location.search);
+      window.location.replace("/latter");
+    }
+  } else if (window.parent && window.parent !== window) {
+    // 2. Inside /latter iframe: check if a "Visit" redirect target was queued and jump straight to that device
+    const pendingTarget = window.parent.sessionStorage.getItem("latter_visit_redirect") || sessionStorage.getItem("latter_visit_redirect");
+    if (pendingTarget) {
+      window.parent.sessionStorage.removeItem("latter_visit_redirect");
+      sessionStorage.removeItem("latter_visit_redirect");
+      if (pendingTarget !== (window.location.pathname + window.location.search)) {
+        window.location.replace(pendingTarget);
+      }
+    }
+  }
+} catch (_e) {}
 const ENTERED_VIA_HOUSEHOLD = ["system", "household"].includes(URL_PARAMS.get("scope"));
 let CURRENT_SCOPE = ENTERED_VIA_HOUSEHOLD ? "household" : "device";
 let DEVICE_SELECTED = !ENTERED_VIA_HOUSEHOLD;
@@ -2175,10 +2223,33 @@ function clearCustomCssVars() {
   document.documentElement.style.removeProperty("--input-fill-color");
 }
 
+function blankParentHaIframeTitle(rootNode) {
+  if (!rootNode) return;
+  const walker = [rootNode];
+  while (walker.length) {
+    const cur = walker.pop();
+    if (!cur) continue;
+    if (cur.nodeType === 1) {
+      if (cur.hasAttribute && cur.hasAttribute("main-title") && cur.textContent.trim() === "Latter") {
+        cur.textContent = "";
+      }
+      if (cur.tagName === "HA-PANEL-IFRAME" || cur.tagName === "HASS-SUBPAGE" || cur.tagName === "HOME-ASSISTANT" ||
+          cur.tagName === "HOME-ASSISTANT-MAIN" || cur.tagName === "PARTIAL-PANEL-RESOLVER") {
+        if (cur.shadowRoot) walker.push(cur.shadowRoot);
+      }
+    }
+    const children = cur.children || cur.childNodes || [];
+    for (let i = 0; i < children.length; i++) walker.push(children[i]);
+  }
+}
+
 function trySyncFromParentHaFrame() {
   try {
     const hostWin = (window.parent && window.parent !== window) ? window.parent : window.opener;
     if (!hostWin || !hostWin.document) return false;
+    if (window.parent && window.parent !== window) {
+      blankParentHaIframeTitle(hostWin.document.body);
+    }
     const computed = hostWin.getComputedStyle(hostWin.document.documentElement);
     const bg = computed.getPropertyValue("--primary-background-color").trim();
     if (!bg) return false;

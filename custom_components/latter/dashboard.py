@@ -989,9 +989,9 @@ class LatterCompanionApiView(HomeAssistantView):
             fwd_host = request.headers.get("X-Forwarded-Host") or request.host
             if fwd_host and "nabu.casa" not in fwd_host.lower():
                 browser_base = f"{fwd_proto}://{fwd_host}".rstrip("/")
-                token = coordinator.get_signed_token()
-                visit_url = f"{browser_base}/api/latter/companion/{coordinator.entry.entry_id}?token={token}"
-                inject_esphome_visit_link(self.hass, coordinator.device_slug, visit_url)
+                self.hass.data.setdefault(DOMAIN, {})["last_browser_base_url"] = browser_base
+                for c_item in _get_all_coordinators(self.hass):
+                    inject_esphome_visit_link(self.hass, c_item.device_slug, c_item.build_companion_url())
         from . import _async_scan_all_esphome_devices_for_discovery
 
         _async_scan_all_esphome_devices_for_discovery(self.hass)

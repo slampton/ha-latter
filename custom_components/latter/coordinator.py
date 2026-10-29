@@ -821,8 +821,9 @@ class LatterCoordinator:
         return f"{scheme}://{host}"
 
     def build_companion_url(self) -> str:
-        """Build the authenticated Web Companion Studio URL, preferring the local internal HA URL over remote Nabu Casa."""
-        base_url = self.companion_base_url or self.get_lan_base_url()
+        """Build the authenticated Web Companion Studio URL, preferring the active browser origin or local LAN URL."""
+        learned_base = str(self.hass.data.get(DOMAIN, {}).get("last_browser_base_url") or "").strip()
+        base_url = self.companion_base_url or learned_base or self.get_lan_base_url()
         token = self.get_signed_token()
         return f"{base_url.rstrip('/')}/api/latter/companion/{self.entry.entry_id}?token={token}"
 
@@ -1227,7 +1228,9 @@ class LatterCoordinator:
             self._schedule_persist_runtime_state()
 
     async def _async_handle_device_reconnect(self) -> None:
-        """Reset idle remote speaker, sync BLE room lock, and push active room slots after ESPHome boot/wake."""
+        """Reset idle remote speaker, re-assert Visit link, sync BLE room lock, and push active room slots after ESPHome boot/wake."""
+        from .area_engine import inject_esphome_visit_link
+        inject_esphome_visit_link(self.hass, self.device_slug, self.build_companion_url())
         self._enforce_local_speaker_if_remote_idle("device_reconnect")
         if self._ble_tracker is not None:
             self._ble_tracker.reset_for_device_wake()
