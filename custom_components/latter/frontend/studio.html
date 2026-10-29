@@ -2158,7 +2158,7 @@ const HA_CSS_VARS = [
 const DOCK_APP_META = [
   {token: "music",  label: "Music"},
   {token: "alarm",  label: "Home Hub"},
-  {token: "room",   label: "Area"},
+  {token: "area",   label: "Area"},
   {token: "remote", label: "Remote"},
   {token: "camera", label: "Cameras"},
   {token: "games",  label: "Games"},
@@ -2577,7 +2577,10 @@ function renderDockPillsFromInput() {
   const availDockMeta = DOCK_APP_META.filter(m => hasImu || m.token !== "games");
   const rawTokens = inp.value
     .split(/[,;| ]+/)
-    .map(t => t.trim().toLowerCase())
+    .map(t => {
+      const v = t.trim().toLowerCase();
+      return v === "room" ? "area" : v;
+    })
     .filter(Boolean);
 
   const activeTokens = [];
@@ -2610,7 +2613,10 @@ function toggleDockAppToken(tok) {
   if (!inp) return;
   let active = inp.value
     .split(/[,;| ]+/)
-    .map(t => t.trim().toLowerCase())
+    .map(t => {
+      const v = t.trim().toLowerCase();
+      return v === "room" ? "area" : v;
+    })
     .filter(t => DOCK_APP_META.some(m => m.token === t));
   let nowEnabled = true;
   if (active.includes(tok)) {
@@ -2642,7 +2648,10 @@ function moveDockAppToken(tok, dir) {
   if (!inp) return;
   const active = inp.value
     .split(/[,;| ]+/)
-    .map(t => t.trim().toLowerCase())
+    .map(t => {
+      const v = t.trim().toLowerCase();
+      return v === "room" ? "area" : v;
+    })
     .filter(t => DOCK_APP_META.some(m => m.token === t));
   const idx = active.indexOf(tok);
   const swapIdx = idx + dir;
@@ -4722,7 +4731,7 @@ function applyStateToDom(data, forceFormUpdate=false) {
     if (document.getElementById("cfg-ble_target_address")) {
       document.getElementById("cfg-ble_target_address").value = cfg.ble_target_address || "";
     }
-    document.getElementById("cfg-dock_apps").value = cfg.dock_apps || "music,alarm,room,remote,games,tools";
+    document.getElementById("cfg-dock_apps").value = cfg.dock_apps || "music,alarm,area,remote,games,tools";
     renderDockPillsFromInput();
     document.getElementById("cfg-wallpaper_source").value = cfg.wallpaper_source || "";
     document.getElementById("cfg-wallpaper_cycle_minutes").value = String(cfg.wallpaper_cycle_minutes || 0);

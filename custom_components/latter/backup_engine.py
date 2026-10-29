@@ -140,7 +140,7 @@ BUILTIN_STARTER_PROFILES: list[dict[str, Any]] = [
             CONF_BLE_AUTO_SWITCH: True,
             CONF_SYNC_DEVICE_AREA: True,
             CONF_AREA_HANDOFF: False,
-            CONF_DOCK_APPS: "music,alarm,room,remote,games,tools",
+            CONF_DOCK_APPS: "music,alarm,area,remote,games,tools",
             CONF_ART_SIZE: 466,
         },
         "esphome_controls": {
@@ -170,7 +170,7 @@ BUILTIN_STARTER_PROFILES: list[dict[str, Any]] = [
             CONF_BLE_AUTO_SWITCH: True,
             CONF_SYNC_DEVICE_AREA: True,
             CONF_AREA_HANDOFF: False,
-            CONF_DOCK_APPS: "music,alarm,room,remote,tools",
+            CONF_DOCK_APPS: "music,alarm,area,remote,tools",
             CONF_ART_SIZE: 466,
         },
         "esphome_controls": {

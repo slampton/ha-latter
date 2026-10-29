@@ -15,7 +15,7 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .const import DOMAIN, INTEGRATION_VERSION, build_device_entity_id
+from .const import DOMAIN, INTEGRATION_VERSION, build_device_entity_id, normalize_device_slug
 from .coordinator import LatterCoordinator
 from .room_engine import find_esphome_device_id
 
@@ -57,7 +57,7 @@ async def async_setup_entry(
     from homeassistant.helpers import entity_registry as er
     ent_reg = er.async_get(hass)
     for ent_entry in list(er.async_entries_for_config_entry(ent_reg, entry.entry_id)):
-        if ent_entry.entity_id.endswith(("_current_area", "_room_context")):
+        if ent_entry.entity_id.endswith(("_current_room", "_room_context")):
             ent_reg.async_remove(ent_entry.entity_id)
 
     domain_data = hass.data.setdefault(DOMAIN, {})
