@@ -491,7 +491,7 @@ class LatterCoordinator:
 
     @property
     def companion_base_url(self) -> str:
-        """Return optional user-configured reverse proxy base URL (e.g. https://home.lamptons.com)."""
+        """Return optional user-configured reverse proxy base URL (e.g. https://ha.example.com)."""
         return str(self.get_opt(CONF_COMPANION_BASE_URL, "") or "").strip().rstrip("/")
 
     @property
