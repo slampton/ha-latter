@@ -18,12 +18,16 @@ TO_REDACT: set[str] = {
     "ble_target_address",
     "companion_base_url",
     "companion_url",
+    "hmac_secret_hex",
     "mac",
     "sip_password",
     "sip_server",
+    "sip_username",
+    "vpn_client_ip",
     "vpn_endpoint",
     "vpn_preshared_key",
     "vpn_private_key",
+    "vpn_public_key",
     "wallpaper_url",
 }
 

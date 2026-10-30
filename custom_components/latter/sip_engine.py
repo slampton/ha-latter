@@ -116,7 +116,14 @@ class _RtpSessionProtocol(asyncio.DatagramProtocol):
         self.transport = transport  # type: ignore[assignment]
 
     def datagram_received(self, data: bytes, addr: tuple[str, int]) -> None:
-        if len(data) <= 12:
+        if len(data) <= 12 or self.sip_engine.call_state != "in_call":
+            return
+        remote_ip = self.sip_engine.remote_rtp_addr[0]
+        if (
+            remote_ip
+            and addr[0] != remote_ip
+            and addr[0] not in self.sip_engine._allowed_sip_hosts
+        ):
             return
         pt = data[1] & 0x7F
         if pt == 0:  # PCMU (G.711 mu-law 8kHz)
@@ -175,6 +182,7 @@ class LatterSipEngine:
         self.remote_caller: str = ""
         self.remote_sip_addr: tuple[str, int] = ("", 0)
         self.remote_rtp_addr: tuple[str, int] = ("", 0)
+        self._allowed_sip_hosts: set[str] = set()
         self._last_invite_headers: dict[str, str] = {}
         self._inbound_pcm_ring: deque[int] = deque(maxlen=64000)
 
@@ -195,10 +203,28 @@ class LatterSipEngine:
     async def async_start_or_reload(self) -> None:
         """Start or reload the SIP UDP listener and PBX registration loop."""
         cfg = self.get_cfg()
+        if not cfg["enabled"]:
+            self.async_stop()
+            return
+
         self._local_ip = _get_local_ip()
+        loop = asyncio.get_running_loop()
+
+        allowed_hosts: set[str] = set()
+        if cfg["server"]:
+            allowed_hosts.add(cfg["server"])
+            try:
+                infos = await loop.getaddrinfo(
+                    cfg["server"], None, family=socket.AF_INET
+                )
+                for info in infos:
+                    if info[4] and info[4][0]:
+                        allowed_hosts.add(str(info[4][0]))
+            except Exception:  # noqa: BLE001
+                pass
+        self._allowed_sip_hosts = allowed_hosts
 
         if self._sip_transport is None:
-            loop = asyncio.get_running_loop()
             for candidate_port in (5060, 5062, 5064):
                 try:
                     await loop.create_datagram_endpoint(
@@ -216,7 +242,6 @@ class LatterSipEngine:
                     continue
 
         if self._rtp_protocol is None:
-            loop = asyncio.get_running_loop()
             for r_port in (16400, 16402, 16404):
                 try:
                     _tr, proto = await loop.create_datagram_endpoint(
@@ -233,12 +258,12 @@ class LatterSipEngine:
             self._reg_task.cancel()
             self._reg_task = None
 
-        if cfg["enabled"] and cfg["server"]:
+        if cfg["server"]:
             self._reg_task = self.hass.async_create_background_task(
                 self._async_registration_loop(), "latter_sip_register"
             )
         else:
-            self.registered = bool(cfg["enabled"])
+            self.registered = True
 
     @callback
     def async_stop(self) -> None:
@@ -332,6 +357,10 @@ class LatterSipEngine:
                 headers[k.strip().lower()] = v.strip()
 
         cfg = self.get_cfg()
+        if not cfg["enabled"]:
+            return
+        if self._allowed_sip_hosts and addr[0] not in self._allowed_sip_hosts:
+            return
 
         if first.startswith("SIP/2.0 200"):
             cseq = headers.get("cseq", "")

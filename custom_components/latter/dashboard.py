@@ -343,8 +343,14 @@ def _build_fleet_shared_controls(hass: HomeAssistant) -> list[dict[str, Any]]:
     )
 
 
+_SECRET_MASK = "••••••••"
+
+
 def _build_companion_state_payload(
-    hass: HomeAssistant, coordinator: LatterCoordinator
+    hass: HomeAssistant,
+    coordinator: LatterCoordinator,
+    *,
+    include_vpn_secrets: bool = False,
 ) -> dict[str, Any]:
     """Build the JSON payload consumed by the Latter Web Companion Studio."""
     area_reg = ar.async_get(hass)
@@ -579,7 +585,14 @@ def _build_companion_state_payload(
         CONF_SIP_SERVER: str(coordinator.get_opt(CONF_SIP_SERVER, "") or ""),
         CONF_SIP_PORT: int(coordinator.get_opt(CONF_SIP_PORT, DEFAULT_SIP_PORT) or DEFAULT_SIP_PORT),
         CONF_SIP_USERNAME: str(coordinator.get_opt(CONF_SIP_USERNAME, "latter") or "latter"),
-        CONF_SIP_PASSWORD: str(coordinator.get_opt(CONF_SIP_PASSWORD, "") or ""),
+        CONF_SIP_PASSWORD: (
+            _SECRET_MASK
+            if str(coordinator.get_opt(CONF_SIP_PASSWORD, "") or "")
+            else ""
+        ),
+        "has_sip_password": bool(
+            str(coordinator.get_opt(CONF_SIP_PASSWORD, "") or "")
+        ),
         CONF_SIP_EXTENSION: str(coordinator.get_opt(CONF_SIP_EXTENSION, "101") or "101"),
         CONF_SIP_DTMF_CODE: str(coordinator.get_opt(CONF_SIP_DTMF_CODE, DEFAULT_SIP_DTMF_CODE) or DEFAULT_SIP_DTMF_CODE),
         CONF_SIP_SPEED_DIALS: str(coordinator.get_opt(CONF_SIP_SPEED_DIALS, "") or ""),
@@ -595,9 +608,31 @@ def _build_companion_state_payload(
         CONF_VPN_HA_IP: str(coordinator.get_opt(CONF_VPN_HA_IP, "10.10.10.1") or "10.10.10.1"),
         CONF_VPN_ENABLED: coordinator.vpn_enabled,
         CONF_VPN_CLIENT_IP: coordinator.vpn_client_ip,
-        CONF_VPN_PRIVATE_KEY: str(coordinator.get_opt(CONF_VPN_PRIVATE_KEY, "") or ""),
+        CONF_VPN_PRIVATE_KEY: (
+            str(coordinator.get_opt(CONF_VPN_PRIVATE_KEY, "") or "")
+            if include_vpn_secrets
+            else (
+                _SECRET_MASK
+                if str(coordinator.get_opt(CONF_VPN_PRIVATE_KEY, "") or "")
+                else ""
+            )
+        ),
+        "has_vpn_private_key": bool(
+            str(coordinator.get_opt(CONF_VPN_PRIVATE_KEY, "") or "")
+        ),
         CONF_VPN_PUBLIC_KEY: str(coordinator.get_opt(CONF_VPN_PUBLIC_KEY, "") or ""),
-        CONF_VPN_PRESHARED_KEY: str(coordinator.get_opt(CONF_VPN_PRESHARED_KEY, "") or ""),
+        CONF_VPN_PRESHARED_KEY: (
+            str(coordinator.get_opt(CONF_VPN_PRESHARED_KEY, "") or "")
+            if include_vpn_secrets
+            else (
+                _SECRET_MASK
+                if str(coordinator.get_opt(CONF_VPN_PRESHARED_KEY, "") or "")
+                else ""
+            )
+        ),
+        "has_vpn_preshared_key": bool(
+            str(coordinator.get_opt(CONF_VPN_PRESHARED_KEY, "") or "")
+        ),
         CONF_VPN_HOTSPOT_SSID: str(coordinator.get_opt(CONF_VPN_HOTSPOT_SSID, "") or ""),
     }
 
@@ -990,16 +1025,6 @@ class LatterCompanionApiView(HomeAssistantView):
                 {"error": "Unauthorized or unknown entry"},
                 status=HTTPStatus.FORBIDDEN,
             )
-        # If the user is browsing via a reverse proxy (e.g. Nginx HTTPS domain) and hasn't hardcoded an override,
-        # dynamically link the ESPHome 'Visit' button to the active browser origin while keeping ESP32 URLs on LAN IP.
-        if not coordinator.companion_base_url:
-            fwd_proto = request.headers.get("X-Forwarded-Proto") or request.scheme
-            fwd_host = request.headers.get("X-Forwarded-Host") or request.host
-            if fwd_host and "nabu.casa" not in fwd_host.lower():
-                browser_base = f"{fwd_proto}://{fwd_host}".rstrip("/")
-                self.hass.data.setdefault(DOMAIN, {})["last_browser_base_url"] = browser_base
-                for c_item in _get_all_coordinators(self.hass):
-                    inject_esphome_visit_link(self.hass, c_item.device_slug, c_item.build_companion_url())
         from . import _async_scan_all_esphome_devices_for_discovery
 
         _async_scan_all_esphome_devices_for_discovery(self.hass)
@@ -1216,7 +1241,9 @@ class LatterCompanionApiView(HomeAssistantView):
                 )
             coordinator._notify_listeners()
             return web.json_response(
-                _build_companion_state_payload(self.hass, coordinator)
+                _build_companion_state_payload(
+                    self.hass, coordinator, include_vpn_secrets=True
+                )
             )
 
         if cmd == "check_system_updates":
@@ -1455,6 +1482,8 @@ class LatterCompanionApiView(HomeAssistantView):
             for k in device_keys:
                 if k in incoming_cfg:
                     val = incoming_cfg[k]
+                    if k in (CONF_VPN_PRIVATE_KEY, CONF_VPN_PRESHARED_KEY) and val == _SECRET_MASK:
+                        continue
                     if k == CONF_DEVICE_SLUG:
                         clean_s = str(val or "").strip().lower().replace("-", "_").replace(" ", "_")
                         if not clean_s or clean_s == "esphome_device":
@@ -1479,6 +1508,8 @@ class LatterCompanionApiView(HomeAssistantView):
             for k in GLOBAL_CONFIG_KEYS:
                 if k in incoming_cfg:
                     val = incoming_cfg[k]
+                    if k == CONF_SIP_PASSWORD and val == _SECRET_MASK:
+                        continue
                     if k == CONF_WEB_THEME:
                         val = _normalize_web_theme(val)
                     global_updates[k] = val

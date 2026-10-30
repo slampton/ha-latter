@@ -566,7 +566,7 @@ class LatterCoordinator:
         return str(val).strip() if val else None
 
     def _build_cameras_summary(self) -> str:
-        """Build semicolon-delimited 'entity_id|Friendly Name;...' summary for up to 10 cameras."""
+        """Build semicolon-delimited 'entity_id|Friendly Name|signed_url;...' summary for up to 10 cameras."""
         rows: list[str] = []
         for ent_id in self.camera_entities[:10]:
             st = self.hass.states.get(ent_id)
@@ -575,7 +575,8 @@ class LatterCoordinator:
                 or ent_id.split(".", 1)[-1].replace("_", " ").title()
             )
             friendly = friendly.replace(";", "").replace("|", "")[:32]
-            rows.append(f"{ent_id}|{friendly}")
+            signed_url = self.build_camera_snapshot_url(ent_id)
+            rows.append(f"{ent_id}|{friendly}|{signed_url}")
         return ";".join(rows) if rows else "NONE"
 
     @property
@@ -755,6 +756,34 @@ class LatterCoordinator:
             return False
         return hmac.compare_digest(token, self.get_signed_token())
 
+    def sign_resource(self, resource: str, ttl_s: int = 604800) -> str:
+        """Generate a time-bounded, resource-scoped HMAC-SHA256 signature."""
+        exp = int(time.time()) + ttl_s
+        msg = f"{self.entry.entry_id}|{resource}|{exp}".encode("utf-8")
+        mac = hmac.new(self._hmac_secret, msg, hashlib.sha256).hexdigest()[:32]
+        return f"{exp}.{mac}"
+
+    def verify_resource(
+        self,
+        resource: str,
+        sig: str | None = None,
+        token: str | None = None,
+    ) -> bool:
+        """Verify a resource-scoped expiring signature or a valid entry companion token."""
+        if sig:
+            try:
+                exp_s, mac = sig.split(".", 1)
+                if int(exp_s) < int(time.time()):
+                    return False
+            except ValueError:
+                return False
+            msg = f"{self.entry.entry_id}|{resource}|{exp_s}".encode("utf-8")
+            expected = hmac.new(self._hmac_secret, msg, hashlib.sha256).hexdigest()[:32]
+            return hmac.compare_digest(mac, expected)
+        if token:
+            return self.verify_token(token)
+        return False
+
     def get_lan_base_url(self) -> str:
         """Resolve the numeric-IP LAN HTTP base URL and actual active HTTP port for ESP32 online_image clients."""
         import socket
@@ -807,10 +836,11 @@ class LatterCoordinator:
             return "none"
         base_url = self.get_lan_base_url()
         w, h = self.art_dimensions
+        sig = self.sign_resource(f"camera:{cam_ent}")
         v_tag = cache_bust or str(int(time.time()))
         return (
             f"{base_url}/api/latter/camera/{self.device_slug}"
-            f"?entity_id={cam_ent}&w={w}&h={h}&shape={self.display_shape}&v={v_tag}"
+            f"?entity_id={cam_ent}&w={w}&h={h}&shape={self.display_shape}&sig={sig}&v={v_tag}"
         )
 
     def build_map_snapshot_url(self, location: str) -> str:
@@ -822,9 +852,10 @@ class LatterCoordinator:
             return "none"
         base_url = self.get_lan_base_url()
         w, h = self.art_dimensions
+        sig = self.sign_resource(f"map:{clean_loc}")
         return (
             f"{base_url}/api/latter/map/{self.device_slug}"
-            f"?w={w}&h={h}&shape={self.display_shape}&q={quote_plus(clean_loc)}"
+            f"?w={w}&h={h}&shape={self.display_shape}&q={quote_plus(clean_loc)}&sig={sig}"
         )
 
     @callback
@@ -869,22 +900,24 @@ class LatterCoordinator:
             return "none"
         base_url = self.get_lan_base_url()
         w, h = self.art_dimensions
+        sig = self.sign_resource(f"wallpaper:{self.wallpaper_source}")
         digest = hashlib.md5(
             f"{self.wallpaper_source}|{self.display_shape}|{w}x{h}".encode("utf-8")
         ).hexdigest()[:10]
         return (
             f"{base_url}/api/latter/wallpaper/{self.device_slug}"
-            f"?w={w}&h={h}&shape={self.display_shape}&v={digest}"
+            f"?w={w}&h={h}&shape={self.display_shape}&sig={sig}&v={digest}"
         )
 
     def build_proxy_art_url(self, cache_bust: str) -> str:
-        """Build the universal Baseline-JPEG artwork URL (/api/latter/artwork/<device_slug>?w=...&h=...&v=...)."""
+        """Build the universal Baseline-JPEG artwork URL (/api/latter/artwork/<device_slug>?w=...&h=...&sig=...&v=...)."""
         base_url = self.get_lan_base_url()
         w, h = self.art_dimensions
+        sig = self.sign_resource("artwork")
         digest = hashlib.md5(cache_bust.encode("utf-8")).hexdigest()[:10]
         return (
             f"{base_url}/api/latter/artwork/{self.device_slug}"
-            f"?w={w}&h={h}&v={digest}"
+            f"?w={w}&h={h}&sig={sig}&v={digest}"
         )
 
     @callback

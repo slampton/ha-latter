@@ -116,15 +116,28 @@ async def _async_ensure_global_store(
         domain_data[DATA_GLOBAL_CONFIG] = dict(loaded) if isinstance(loaded, dict) else {}
 
     global_cfg: dict[str, Any] = domain_data[DATA_GLOBAL_CONFIG]
+    changed = False
+    secret_hex = str(global_cfg.get("hmac_secret_hex") or "").strip()
+    if len(secret_hex) != 64:
+        secret_hex = secrets.token_hex(32)
+        global_cfg["hmac_secret_hex"] = secret_hex
+        changed = True
+    try:
+        domain_data[DATA_HMAC_SECRET] = bytes.fromhex(secret_hex)
+    except ValueError:
+        secret_hex = secrets.token_hex(32)
+        global_cfg["hmac_secret_hex"] = secret_hex
+        domain_data[DATA_HMAC_SECRET] = bytes.fromhex(secret_hex)
+        changed = True
+
     if seed_entry is not None:
         merged_entry = {**seed_entry.data, **(seed_entry.options or {})}
-        changed = False
         for k in GLOBAL_CONFIG_KEYS:
             if k not in global_cfg and k in merged_entry and merged_entry[k] not in (None, "", [], {}):
                 global_cfg[k] = merged_entry[k]
                 changed = True
-        if changed:
-            await domain_data[DATA_GLOBAL_STORE].async_save(global_cfg)
+    if changed:
+        await domain_data[DATA_GLOBAL_STORE].async_save(global_cfg)
 
     return global_cfg
 
@@ -219,15 +232,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
     domain_data = hass.data.setdefault(DOMAIN, {})
     await _async_ensure_global_store(hass, seed_entry=entry)
 
-    if DATA_HMAC_SECRET not in domain_data:
-        domain_data[DATA_HMAC_SECRET] = secrets.token_bytes(32)
+    if "views_registered" not in domain_data:
+        domain_data["views_registered"] = True
         hass.http.register_view(LatterArtworkTranscoderView(hass))
         hass.http.register_view(LatterWallpaperProxyView(hass))
         hass.http.register_view(LatterRotatableCameraSnapshotView(hass))
         hass.http.register_view(LatterCameraAudioStreamView(hass))
         hass.http.register_view(LatterDoorbellTalkbackView(hass))
         hass.http.register_view(LatterMapSnapshotView(hass))
-        await get_sip_engine(hass).async_start_or_reload()
         hass.http.register_view(LatterCompanionDashboardView(hass))
         hass.http.register_view(LatterCompanionApiView(hass))
         hass.http.register_view(LatterBrandIconView(hass))
@@ -244,11 +256,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
                 sidebar_icon="latter:logo",
                 frontend_url_path="latter",
                 config={"url": f"/api/latter/studio?scope=system&token={panel_token}"},
-                require_admin=False,
+                require_admin=True,
                 update=True,
             )
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("Sidebar panel registration skipped: %s", err)
+
+    await get_sip_engine(hass).async_start_or_reload()
 
     coordinator = LatterCoordinator(
         hass=hass,

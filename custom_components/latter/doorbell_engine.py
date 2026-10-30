@@ -15,7 +15,6 @@ from typing import Any
 import wave
 
 from aiohttp import ClientTimeout, web
-from PIL import Image, ImageOps
 
 from homeassistant.components.http import HomeAssistantView
 from homeassistant.const import ATTR_ENTITY_ID, STATE_UNAVAILABLE, STATE_UNKNOWN
@@ -31,7 +30,7 @@ from .const import (
     DOMAIN,
     normalize_device_slug,
 )
-from .http import LatterCameraSnapshotView, _transcode_to_baseline_jpeg
+from .http import LatterCameraSnapshotView
 from .area_engine import resolve_entity_area_id
 from .sip_engine import get_sip_engine
 
@@ -39,6 +38,7 @@ _LOGGER = logging.getLogger(__name__)
 
 UNIFI_PREROLL_MS: int = 250
 TALKBACK_ECHO_GUARD_SECONDS: float = 0.75
+_FFMPEG_STREAM_SEMAPHORE = asyncio.Semaphore(2)
 
 
 def resolve_doorbell_talkback_target(
@@ -143,57 +143,8 @@ class LatterRotatableCameraSnapshotView(LatterCameraSnapshotView):
     name = "api:latter:camera_snapshot"
 
     async def get(self, request: web.Request, target_device: str) -> web.Response:
-        """Serve camera snapshot, rotating 90° when &rot=90 is requested for rectangular displays."""
-        rot_str = (request.query.get("rot") or "0").strip()
-        if rot_str not in ("90", "180", "270"):
-            return await super().get(request, target_device)
-
-        coord = _resolve_coordinator_by_slug(self.hass, target_device)
-        cam_ent = (
-            request.query.get("entity_id")
-            or (coord.active_carousel_camera if coord else "")
-            or (coord.camera_entity if coord else "")
-            or ""
-        ).strip()
-        if not cam_ent:
-            return web.Response(status=HTTPStatus.NOT_FOUND)
-
-        try:
-            width = max(64, min(1920, int(request.query.get("w", 320))))
-            height = max(64, min(1920, int(request.query.get("h", 480))))
-        except ValueError:
-            width, height = 320, 480
-
-        circular_mask = (request.query.get("shape") or "square").lower() == "circle"
-        rot_deg = int(rot_str)
-
-        try:
-            from homeassistant.components.camera import async_get_image
-
-            image_obj = await async_get_image(self.hass, cam_ent, timeout=8)
-            raw_bytes = image_obj.content
-        except Exception as err:  # noqa: BLE001
-            _LOGGER.debug("Camera snapshot fetch failed for %s: %s", cam_ent, err)
-            return web.Response(status=HTTPStatus.BAD_GATEWAY)
-
-        def _rotate_and_transcode() -> bytes:
-            with Image.open(io.BytesIO(raw_bytes)) as img:
-                img_rgb = img.convert("RGB")
-                # Rotate 90° CCW so a 16:9 widescreen feed fills a 320x480 / 410x502 portrait screen
-                rotated = img_rgb.rotate(rot_deg, expand=True)
-                fitted = ImageOps.fit(rotated, (width, height), method=Image.Resampling.LANCZOS)
-                buf = io.BytesIO()
-                fitted.save(buf, format="JPEG", quality=88, optimize=False, progressive=False)
-                if circular_mask:
-                    return _transcode_to_baseline_jpeg(buf.getvalue(), width, height, circular_mask=True)
-                return buf.getvalue()
-
-        jpeg_bytes = await self.hass.async_add_executor_job(_rotate_and_transcode)
-        return web.Response(
-            body=jpeg_bytes,
-            content_type="image/jpeg",
-            headers={"Cache-Control": "no-store"},
-        )
+        """Serve camera snapshot, delegating to LatterCameraSnapshotView (which supports &rot=90/180/270)."""
+        return await super().get(request, target_device)
 
 
 class LatterAudioDspPipeline:
@@ -550,21 +501,39 @@ class LatterCameraAudioStreamView(HomeAssistantView):
     async def get(self, request: web.Request, target_device: str) -> web.StreamResponse:
         """Stream live de-noised FLAC/WAV audio from a camera's RTSP source."""
         coord = _resolve_coordinator_by_slug(self.hass, target_device)
+        if coord is None:
+            return web.Response(status=HTTPStatus.NOT_FOUND)
+
         cam_ent = (
             request.query.get("entity_id")
-            or (coord.active_carousel_camera if coord else "")
-            or (coord.camera_entity if coord else "")
+            or coord.active_carousel_camera
+            or coord.camera_entity
             or ""
         ).strip()
+        if not cam_ent:
+            return web.Response(status=HTTPStatus.NOT_FOUND, text="No camera entity configured")
+
+        if not coord.verify_resource(
+            f"camera_audio:{cam_ent}",
+            sig=request.query.get("sig"),
+            token=request.query.get("token"),
+        ):
+            return web.Response(status=HTTPStatus.FORBIDDEN, text="Invalid or missing signature")
+
+        allowed_cams = set(coord.camera_entities)
+        if coord.camera_entity:
+            allowed_cams.add(coord.camera_entity)
+        if coord.active_carousel_camera:
+            allowed_cams.add(coord.active_carousel_camera)
+        if cam_ent not in allowed_cams:
+            return web.Response(status=HTTPStatus.FORBIDDEN, text="Camera entity not authorized")
+
         anc_mode = (
             request.query.get("anc")
-            or (coord.doorbell_anc_mode if coord else "ultra")
+            or coord.doorbell_anc_mode
             or "ultra"
         ).strip().lower()
         fmt = (request.query.get("fmt") or "flac").strip().lower()
-
-        if not cam_ent:
-            return web.Response(status=HTTPStatus.NOT_FOUND, text="No camera entity configured")
 
         stream_url: str | None = None
         try:
@@ -598,6 +567,12 @@ class LatterCameraAudioStreamView(HomeAssistantView):
             wav_bytes = dsp.process_wav_bytes(b"", anc_mode=anc_mode, prepend_unifi_preroll=True)
             return web.Response(body=wav_bytes, content_type="audio/wav")
 
+        if _FFMPEG_STREAM_SEMAPHORE.locked():
+            return web.Response(
+                status=HTTPStatus.TOO_MANY_REQUESTS,
+                text="Maximum concurrent camera audio streams reached",
+            )
+
         input_args: list[str] = ["-rtsp_transport", "tcp"]
         filtergraph = LatterAudioDspPipeline.build_ffmpeg_anc_filtergraph(anc_mode)
         out_codec = "flac" if fmt == "flac" else "pcm_s16le"
@@ -626,43 +601,43 @@ class LatterCameraAudioStreamView(HomeAssistantView):
             "pipe:1",
         ]
 
-        resp = web.StreamResponse(
-            status=HTTPStatus.OK,
-            headers={
-                "Content-Type": content_type,
-                "Cache-Control": "no-store, no-cache, must-revalidate",
-            },
-        )
-        await resp.prepare(request)
-
-        proc: asyncio.subprocess.Process | None = None
-        dsp = get_dsp_pipeline(self.hass)
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.DEVNULL,
+        async with _FFMPEG_STREAM_SEMAPHORE:
+            resp = web.StreamResponse(
+                status=HTTPStatus.OK,
+                headers={
+                    "Content-Type": content_type,
+                    "Cache-Control": "no-store, no-cache, must-revalidate",
+                },
             )
-            if proc.stdout is not None:
-                while True:
-                    chunk = await proc.stdout.read(4096)
-                    if not chunk:
-                        break
-                    if dsp.is_in_echo_guard_window() and out_fmt == "wav":
-                        chunk = b"\x00" * len(chunk)
-                    await resp.write(chunk)
-        except (asyncio.CancelledError, ConnectionResetError):
-            pass
-        except Exception as err:  # noqa: BLE001
-            _LOGGER.debug("Camera audio stream ended for %s: %s", cam_ent, err)
-        finally:
-            if proc is not None and proc.returncode is None:
-                try:
-                    proc.terminate()
-                except ProcessLookupError:
-                    pass
+            await resp.prepare(request)
 
-        return resp
+            proc: asyncio.subprocess.Process | None = None
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.DEVNULL,
+                )
+                if proc.stdout is not None:
+                    while True:
+                        chunk = await proc.stdout.read(4096)
+                        if not chunk:
+                            break
+                        if dsp.is_in_echo_guard_window() and out_fmt == "wav":
+                            chunk = b"\x00" * len(chunk)
+                        await resp.write(chunk)
+            except (asyncio.CancelledError, ConnectionResetError):
+                pass
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.debug("Camera audio stream ended for %s: %s", cam_ent, err)
+            finally:
+                if proc is not None and proc.returncode is None:
+                    try:
+                        proc.terminate()
+                    except ProcessLookupError:
+                        pass
+
+            return resp
 
 
 class LatterDoorbellTalkbackView(HomeAssistantView):
@@ -678,9 +653,17 @@ class LatterDoorbellTalkbackView(HomeAssistantView):
 
     async def get(self, request: web.Request, target_device: str) -> web.Response:
         """Serve the latest DSP-stabilized talkback WAV clip for media_player.<doorbell>_speaker."""
+        norm = normalize_device_slug(target_device.removesuffix(".wav"))
+        coord = _resolve_coordinator_by_slug(self.hass, norm)
+        if coord is None or not coord.verify_resource(
+            "talkback",
+            sig=request.query.get("sig"),
+            token=request.query.get("token"),
+        ):
+            return web.Response(status=HTTPStatus.FORBIDDEN, text="Invalid or missing signature")
+
         domain_data = self.hass.data.setdefault(DOMAIN, {})
         clips: dict[str, bytes] = domain_data.setdefault("talkback_clips", {})
-        norm = normalize_device_slug(target_device.removesuffix(".wav"))
         wav_bytes = clips.get(norm)
         if not wav_bytes:
             dsp = get_dsp_pipeline(self.hass)
@@ -756,7 +739,11 @@ async def async_play_talkback_clip_to_doorbell(
     talkback_mp = target_info["talkback_media_player"]
     if talkback_mp:
         base_url = coordinator.get_lan_base_url()
-        clip_url = f"{base_url}/api/latter/doorbell_talkback/{coordinator.device_slug}.wav?v={int(time.time() * 1000)}"
+        sig = coordinator.sign_resource("talkback", ttl_s=300)
+        clip_url = (
+            f"{base_url}/api/latter/doorbell_talkback/{coordinator.device_slug}.wav"
+            f"?v={int(time.time() * 1000)}&sig={sig}"
+        )
         try:
             await hass.services.async_call(
                 "media_player",
@@ -926,9 +913,11 @@ async def async_execute_doorbell_intercom(
         coordinator.doorbell_talk_state = "listening"
         coordinator._notify_listeners()
         base_url = coordinator.get_lan_base_url()
+        sig = coordinator.sign_resource(f"camera_audio:{cam_ent}", ttl_s=3600)
         stream_url = (
             f"{base_url}/api/latter/camera_audio/{coordinator.device_slug}"
-            f"?entity_id={cam_ent}&anc={coordinator.doorbell_anc_mode}&fmt=flac&v={int(time.time())}"
+            f"?entity_id={cam_ent}&anc={coordinator.doorbell_anc_mode}&fmt=flac"
+            f"&v={int(time.time())}&sig={sig}"
         )
         try:
             await hass.services.async_call(

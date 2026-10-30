@@ -125,8 +125,11 @@ async def _async_serve_speaker_artwork(
     coordinator: LatterCoordinator,
 ) -> web.Response:
     """Fetch active speaker artwork, transcode to Baseline JPEG (with RAM LRU cache), and serve over HTTP."""
-    token = request.query.get("token")
-    if token and not coordinator.verify_token(token):
+    if not coordinator.verify_resource(
+        "artwork",
+        sig=request.query.get("sig"),
+        token=request.query.get("token"),
+    ):
         return web.Response(status=HTTPStatus.FORBIDDEN, text="Invalid signature")
 
     default_w, default_h = coordinator.art_dimensions
@@ -248,13 +251,16 @@ class LatterWallpaperProxyView(HomeAssistantView):
         if coordinator is None:
             return web.Response(status=HTTPStatus.NOT_FOUND, text="Unknown target device")
 
-        token = request.query.get("token")
-        if token and not coordinator.verify_token(token):
-            return web.Response(status=HTTPStatus.FORBIDDEN, text="Invalid signature")
-
         wp_source = str(request.query.get("src") or coordinator.wallpaper_source).strip()
         if not wp_source:
             return web.Response(status=HTTPStatus.NOT_FOUND, text="No wallpaper configured")
+
+        if not coordinator.verify_resource(
+            f"wallpaper:{wp_source}",
+            sig=request.query.get("sig"),
+            token=request.query.get("token"),
+        ):
+            return web.Response(status=HTTPStatus.FORBIDDEN, text="Invalid signature")
 
         default_w, default_h = coordinator.art_dimensions
         try:
@@ -286,28 +292,16 @@ class LatterWallpaperProxyView(HomeAssistantView):
             )
         elif wp_source.startswith(("/local/", "/config/www/")):
             rel = wp_source.replace("/local/", "").replace("/config/www/", "").lstrip("/")
-            local_file = Path(self.hass.config.path("www")) / rel
-            if local_file.is_file():
+            www_root = Path(self.hass.config.path("www")).resolve()
+            local_file = (www_root / rel).resolve()
+            if not local_file.is_relative_to(www_root):
+                return web.Response(status=HTTPStatus.FORBIDDEN, text="Path traversal rejected")
+            if await self.hass.async_add_executor_job(local_file.is_file):
                 raw_bytes = await self.hass.async_add_executor_job(
                     local_file.read_bytes
                 )
-        elif wp_source.startswith(("http://", "https://", "/")):
-            url = wp_source
-            if url.startswith("/"):
-                try:
-                    base_url = get_url(
-                        self.hass, allow_internal=True, prefer_external=False
-                    )
-                except Exception:  # noqa: BLE001
-                    base_url = "http://127.0.0.1:8123"
-                url = f"{base_url}{url}"
-            session = async_get_clientsession(self.hass)
-            try:
-                async with session.get(url, timeout=ClientTimeout(total=8), allow_redirects=True) as resp:
-                    if resp.status == HTTPStatus.OK:
-                        raw_bytes = await resp.read()
-            except Exception as err:  # noqa: BLE001
-                _LOGGER.debug("Failed fetching wallpaper from %s: %s", url, err)
+        else:
+            return web.Response(status=HTTPStatus.FORBIDDEN, text="Unsupported wallpaper source")
 
         if not raw_bytes:
             return web.Response(status=HTTPStatus.NOT_FOUND, text="Wallpaper source unreadable")
@@ -355,15 +349,24 @@ class LatterCameraSnapshotView(HomeAssistantView):
         if coordinator is None:
             return web.Response(status=HTTPStatus.NOT_FOUND, text="Unknown target device")
 
-        token = request.query.get("token")
-        if token and not coordinator.verify_token(token):
-            return web.Response(status=HTTPStatus.FORBIDDEN, text="Invalid signature")
-
         cam_entity = str(
             request.query.get("entity_id") or coordinator.camera_entity or ""
         ).strip()
         if not cam_entity or not cam_entity.startswith("camera."):
             return web.Response(status=HTTPStatus.NOT_FOUND, text="No camera entity specified")
+
+        if not coordinator.verify_resource(
+            f"camera:{cam_entity}",
+            sig=request.query.get("sig"),
+            token=request.query.get("token"),
+        ):
+            return web.Response(status=HTTPStatus.FORBIDDEN, text="Invalid signature")
+
+        allowed_cams = set(coordinator.camera_entities)
+        if coordinator.camera_entity:
+            allowed_cams.add(coordinator.camera_entity)
+        if cam_entity not in allowed_cams:
+            return web.Response(status=HTTPStatus.NOT_FOUND, text="Camera entity not in allow-list")
 
         default_w, default_h = coordinator.art_dimensions
         try:
@@ -376,7 +379,8 @@ class LatterCameraSnapshotView(HomeAssistantView):
         if request.query.get("shape") in ("circle", "square"):
             is_circle = request.query.get("shape") == "circle"
 
-        rotate_deg = 90 if request.query.get("rot") == "90" else 0
+        rot_str = (request.query.get("rot") or "0").strip()
+        rotate_deg = int(rot_str) if rot_str in ("90", "180", "270") else 0
 
         cam_cache_key = (cam_entity, width, height, is_circle, rotate_deg)
         now_mono = time.monotonic()
@@ -430,7 +434,8 @@ class LatterCameraSnapshotView(HomeAssistantView):
         )
 
 
-_MAP_GEOCODE_CACHE: dict[str, tuple[float, float]] = {}
+_MAP_GEOCODE_CACHE: OrderedDict[str, tuple[float, float]] = OrderedDict()
+MAX_MAP_GEOCODE_CACHE = 64
 _MAP_JPEG_CACHE: OrderedDict[str, bytes] = OrderedDict()
 _OSM_TILE_CACHE: OrderedDict[tuple[int, int, int], bytes] = OrderedDict()
 MAX_OSM_TILE_CACHE = 128
@@ -445,18 +450,6 @@ def _latlon_to_tile_xy(lat: float, lon: float, zoom: int) -> tuple[float, float]
     xtile = (lon + 180.0) / 360.0 * n
     ytile = (1.0 - math.asinh(math.tan(lat_rad)) / math.pi) / 2.0 * n
     return xtile, ytile
-
-
-def _haversine_miles(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    """Return great-circle distance in miles between two (lat, lon) points."""
-    import math
-
-    r_miles = 3958.7613
-    p1, p2 = math.radians(lat1), math.radians(lat2)
-    dp = math.radians(lat2 - lat1)
-    dl = math.radians(lon2 - lon1)
-    a = math.sin(dp / 2.0) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2.0) ** 2
-    return 2.0 * r_miles * math.asin(min(1.0, math.sqrt(a)))
 
 
 def _compose_map_snapshot_jpeg(
@@ -582,7 +575,14 @@ class LatterMapSnapshotView(HomeAssistantView):
 
         cache_key = q_clean.lower()
         if cache_key in _MAP_GEOCODE_CACHE:
+            _MAP_GEOCODE_CACHE.move_to_end(cache_key)
             return _MAP_GEOCODE_CACHE[cache_key]
+
+        def _store_geocode(coords: tuple[float, float]) -> tuple[float, float]:
+            _MAP_GEOCODE_CACHE[cache_key] = coords
+            while len(_MAP_GEOCODE_CACHE) > MAX_MAP_GEOCODE_CACHE:
+                _MAP_GEOCODE_CACHE.popitem(last=False)
+            return coords
 
         # 1. Check if query is already "lat,lon"
         if "," in q_clean:
@@ -591,8 +591,7 @@ class LatterMapSnapshotView(HomeAssistantView):
                 lat_v = float(parts[0])
                 lon_v = float(parts[1])
                 if -90.0 <= lat_v <= 90.0 and -180.0 <= lon_v <= 180.0:
-                    _MAP_GEOCODE_CACHE[cache_key] = (lat_v, lon_v)
-                    return lat_v, lon_v
+                    return _store_geocode((lat_v, lon_v))
             except ValueError:
                 pass
 
@@ -603,9 +602,7 @@ class LatterMapSnapshotView(HomeAssistantView):
                 lat_z = st.attributes.get("latitude")
                 lon_z = st.attributes.get("longitude")
                 if lat_z is not None and lon_z is not None:
-                    coords = (float(lat_z), float(lon_z))
-                    _MAP_GEOCODE_CACHE[cache_key] = coords
-                    return coords
+                    return _store_geocode((float(lat_z), float(lon_z)))
 
         # 3. Geocode via OpenStreetMap Nominatim
         session = async_get_clientsession(self.hass)
@@ -613,7 +610,7 @@ class LatterMapSnapshotView(HomeAssistantView):
             async with session.get(
                 "https://nominatim.openstreetmap.org/search",
                 params={"q": q_clean, "format": "json", "limit": "1"},
-                headers={"User-Agent": "HomeAssistant-Latter/1.9.4 (+https://github.com/slampton/ha-latter)"},
+                headers={"User-Agent": "HomeAssistant-Latter/2.2.1 (+https://github.com/slampton/ha-latter)"},
                 timeout=ClientTimeout(total=5),
             ) as resp:
                 if resp.status == HTTPStatus.OK:
@@ -621,8 +618,7 @@ class LatterMapSnapshotView(HomeAssistantView):
                     if isinstance(data, list) and data:
                         lat_n = float(data[0]["lat"])
                         lon_n = float(data[0]["lon"])
-                        _MAP_GEOCODE_CACHE[cache_key] = (lat_n, lon_n)
-                        return lat_n, lon_n
+                        return _store_geocode((lat_n, lon_n))
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("Nominatim geocode fallback for '%s': %s", q_clean, err)
 
@@ -633,7 +629,18 @@ class LatterMapSnapshotView(HomeAssistantView):
     async def get(self, request: web.Request, target_device: str) -> web.Response:
         """Handle GET /api/latter/map/{target_device}?q=...&z=15&pan_x=0&pan_y=0&w=466&h=466"""
         coordinator = _resolve_coordinator_by_target(self.hass, target_device)
-        default_w, default_h = coordinator.art_dimensions if coordinator else (466, 466)
+        if coordinator is None:
+            return web.Response(status=HTTPStatus.NOT_FOUND, text="Unknown target device")
+
+        query = str(request.query.get("q") or "").strip()
+        if not coordinator.verify_resource(
+            f"map:{query}",
+            sig=request.query.get("sig"),
+            token=request.query.get("token"),
+        ):
+            return web.Response(status=HTTPStatus.FORBIDDEN, text="Invalid signature")
+
+        default_w, default_h = coordinator.art_dimensions
         try:
             width = max(128, min(768, int(request.query.get("w") or default_w)))
             height = max(128, min(768, int(request.query.get("h") or default_h)))
