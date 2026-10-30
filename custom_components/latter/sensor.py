@@ -114,7 +114,7 @@ class _BaseLatterSensor(SensorEntity):
     )
 
     def __init__(self, coordinator: LatterCoordinator, suffix: str, label: str) -> None:
-        """Initialize base sensor with a device-scoped entity_id and link to the native ESPHome DeviceEntry (HA 2026.11+)."""
+        """Initialize base sensor with a device-scoped entity_id under its Latter DeviceEntry."""
         self.coordinator = coordinator
         slug = coordinator.device_slug
         self._attr_translation_key = suffix
@@ -122,28 +122,9 @@ class _BaseLatterSensor(SensorEntity):
         self._attr_unique_id = f"{coordinator.entry.entry_id}_{suffix}"
         self.entity_id = build_device_entity_id(slug, suffix)
 
-        target_dev_id = find_esphome_device_id(coordinator.hass, slug)
-        if target_dev_id:
-            dev_reg = dr.async_get(coordinator.hass)
-            esp_dev = dev_reg.async_get(target_dev_id)
-            if esp_dev is not None:
-                self.device_entry = esp_dev
-
     @property
-    def device_info(self) -> DeviceInfo | None:
-        """Return DeviceInfo for standalone Latter devices when not directly linked via self.device_entry."""
-        if getattr(self, "device_entry", None) is not None:
-            return None
-        target_dev_id = find_esphome_device_id(
-            self.coordinator.hass, self.coordinator.device_slug
-        )
-        if target_dev_id:
-            dev_reg = dr.async_get(self.coordinator.hass)
-            esp_dev = dev_reg.async_get(target_dev_id)
-            if esp_dev is not None:
-                self.device_entry = esp_dev
-                return None
-
+    def device_info(self) -> DeviceInfo:
+        """Return canonical Latter DeviceInfo so every config entry has an expandable Device card in Home Assistant."""
         pretty_device = self.coordinator.device_slug.replace("_", " ").title()
         return DeviceInfo(
             identifiers={(DOMAIN, self.coordinator.entry.entry_id)},
