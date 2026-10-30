@@ -191,6 +191,9 @@ def _resolve_ma_counterpart_entity(
 
     slug_norm = normalize_device_slug(device_slug)
     spk_short = speaker_entity_id.replace("media_player.", "").lower()
+    core_slug = re.sub(r"(_media_player|_music|_speaker)$", "", spk_short)
+    core_slug_no_prefix = re.sub(r"^latter_", "", core_slug)
+    slug_no_prefix = re.sub(r"^latter_", "", slug_norm)
 
     for candidate in hass.states.async_all("media_player"):
         if candidate.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
@@ -204,7 +207,14 @@ def _resolve_ma_counterpart_entity(
             .replace("-", "_")
             .replace(" ", "_")
         )
-        if slug_norm in cid_low or spk_short in cid_low or slug_norm in friendly_low:
+        if (
+            slug_norm in cid_low
+            or spk_short in cid_low
+            or slug_norm in friendly_low
+            or (core_slug and (core_slug in cid_low or core_slug in friendly_low))
+            or (core_slug_no_prefix and len(core_slug_no_prefix) >= 4 and (core_slug_no_prefix in cid_low or core_slug_no_prefix in friendly_low))
+            or (slug_no_prefix and len(slug_no_prefix) >= 4 and (slug_no_prefix in cid_low or slug_no_prefix in friendly_low))
+        ):
             return candidate.entity_id
 
     return None
@@ -1481,32 +1491,39 @@ class LatterCoordinator:
             ma_target = _resolve_ma_counterpart_entity(
                 self.hass, target_spk, self.device_slug
             )
-            if (
-                ma_target
-                and self.hass.services.has_service("music_assistant", "play_media")
-            ):
+            play_entity = ma_target or target_spk
+            if self.hass.services.has_service("music_assistant", "play_media"):
                 payload: dict[str, Any] = {
-                    ATTR_ENTITY_ID: ma_target,
+                    ATTR_ENTITY_ID: play_entity,
                     "media_id": media_id,
                 }
                 if media_type:
                     payload["media_type"] = media_type
                 if enqueue:
                     payload["enqueue"] = enqueue
-                await self.hass.services.async_call(
-                    "music_assistant", "play_media", payload, blocking=False
-                )
-            else:
-                await self.hass.services.async_call(
-                    "media_player",
-                    "play_media",
-                    {
-                        ATTR_ENTITY_ID: target_spk,
-                        "media_content_id": media_id,
-                        "media_content_type": media_type or "music",
-                    },
-                    blocking=False,
-                )
+                try:
+                    await self.hass.services.async_call(
+                        "music_assistant", "play_media", payload, blocking=True
+                    )
+                    return
+                except Exception as err:  # noqa: BLE001
+                    _LOGGER.debug(
+                        "music_assistant.play_media(%s, %s) on %s failed, falling back to media_player.play_media: %s",
+                        media_id,
+                        media_type,
+                        play_entity,
+                        err,
+                    )
+            await self.hass.services.async_call(
+                "media_player",
+                "play_media",
+                {
+                    ATTR_ENTITY_ID: play_entity,
+                    "media_content_id": media_id,
+                    "media_content_type": media_type or "music",
+                },
+                blocking=False,
+            )
             return
 
         if cmd == "play":
