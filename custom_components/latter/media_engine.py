@@ -18,7 +18,11 @@ from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.util import dt as dt_util
 
 from .ble_engine import _iter_devices, _iter_entities
-from .browse_engine import _get_mass_client, browse_music_library, is_music_assistant_player
+from .browse_engine import (
+    _get_mass_client,
+    async_browse_media_items,
+    is_music_assistant_player,
+)
 from .const import normalize_device_slug
 
 _LOGGER = logging.getLogger(__name__)
@@ -265,30 +269,29 @@ async def async_play_media_with_ma_fallback(
                     resolved_id = ""
                     resolved_type = "track"
                     if eff_type == "artist":
-                        albums_res = await browse_music_library(
+                        album_slots = await async_browse_media_items(
                             hass,
-                            target_spk,
                             "artist_albums",
-                            page=1,
-                            page_size=5,
-                            parent_id=media_id,
+                            target_spk,
+                            target_spk,
+                            target_spk,
+                            search=media_id,
                         )
-                        album_slots = albums_res.get("slots") or []
                         if album_slots and album_slots[0].get("id"):
                             resolved_id = str(album_slots[0]["id"])
                             resolved_type = "album"
                     if eff_type == "album" or resolved_type == "album":
                         alb_uri = resolved_id or media_id
-                        tracks_res = await browse_music_library(
+                        raw_tracks = await async_browse_media_items(
                             hass,
-                            target_spk,
                             "album_tracks",
-                            page=1,
-                            page_size=25,
-                            parent_id=alb_uri,
+                            target_spk,
+                            target_spk,
+                            target_spk,
+                            search=alb_uri,
                         )
                         track_slots = [
-                            s for s in (tracks_res.get("slots") or []) if s.get("id")
+                            s for s in (raw_tracks or [])[:25] if s.get("id")
                         ]
                         if track_slots:
                             track_uris = [str(s["id"]) for s in track_slots]
