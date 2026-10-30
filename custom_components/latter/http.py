@@ -40,14 +40,22 @@ def _transcode_to_baseline_jpeg(
     height: int,
     circular_mask: bool = False,
     darken: float = 1.0,
+    rotate_deg: int = 0,
+    fast_live: bool = False,
 ) -> bytes:
     """Decode any image format (PNG/WebP/Progressive JPEG/GIF), resize to (w, h), and encode non-progressive Baseline JPEG."""
     with Image.open(io.BytesIO(raw_bytes)) as img:
         img_rgb = img.convert("RGB")
+        if rotate_deg == 90:
+            img_rgb = img_rgb.transpose(Image.Transpose.ROTATE_270)
+        elif rotate_deg == 180:
+            img_rgb = img_rgb.transpose(Image.Transpose.ROTATE_180)
+        elif rotate_deg == 270:
+            img_rgb = img_rgb.transpose(Image.Transpose.ROTATE_90)
         fitted = ImageOps.fit(
             img_rgb,
             (width, height),
-            method=Image.Resampling.LANCZOS,
+            method=Image.Resampling.BILINEAR if fast_live else Image.Resampling.LANCZOS,
             centering=(0.5, 0.5),
         )
         if darken < 1.0:
@@ -64,9 +72,10 @@ def _transcode_to_baseline_jpeg(
         fitted.save(
             out,
             format="JPEG",
-            quality=85,
-            optimize=True,
+            quality=80 if fast_live else 85,
+            optimize=not fast_live,
             progressive=False,
+            subsampling=2,
         )
         return out.getvalue()
 
@@ -100,12 +109,12 @@ async def _async_serve_speaker_artwork(
     if token and not coordinator.verify_token(token):
         return web.Response(status=HTTPStatus.FORBIDDEN, text="Invalid signature")
 
-    default_dim = coordinator.art_size
+    default_w, default_h = coordinator.art_dimensions
     try:
-        width = max(32, min(1200, int(request.query.get("w") or default_dim)))
-        height = max(32, min(1200, int(request.query.get("h") or width)))
+        width = max(32, min(1200, int(request.query.get("w") or default_w)))
+        height = max(32, min(1200, int(request.query.get("h") or default_h)))
     except ValueError:
-        width, height = default_dim, default_dim
+        width, height = default_w, default_h
 
     circular = request.query.get("mask") == "circle" or request.query.get("shape") == "circle"
 
@@ -227,12 +236,12 @@ class LatterWallpaperProxyView(HomeAssistantView):
         if not wp_source:
             return web.Response(status=HTTPStatus.NOT_FOUND, text="No wallpaper configured")
 
-        default_dim = coordinator.art_size
+        default_w, default_h = coordinator.art_dimensions
         try:
-            width = max(32, min(1200, int(request.query.get("w") or default_dim)))
-            height = max(32, min(1200, int(request.query.get("h") or width)))
+            width = max(32, min(1200, int(request.query.get("w") or default_w)))
+            height = max(32, min(1200, int(request.query.get("h") or default_h)))
         except ValueError:
-            width, height = default_dim, default_dim
+            width, height = default_w, default_h
 
         is_circle = coordinator.display_shape == "circle"
         if request.query.get("shape") in ("circle", "square"):
@@ -336,16 +345,18 @@ class LatterCameraSnapshotView(HomeAssistantView):
         if not cam_entity or not cam_entity.startswith("camera."):
             return web.Response(status=HTTPStatus.NOT_FOUND, text="No camera entity specified")
 
-        default_dim = coordinator.art_size
+        default_w, default_h = coordinator.art_dimensions
         try:
-            width = max(32, min(1200, int(request.query.get("w") or default_dim)))
-            height = max(32, min(1200, int(request.query.get("h") or width)))
+            width = max(32, min(1200, int(request.query.get("w") or default_w)))
+            height = max(32, min(1200, int(request.query.get("h") or default_h)))
         except ValueError:
-            width, height = default_dim, default_dim
+            width, height = default_w, default_h
 
         is_circle = coordinator.display_shape == "circle"
         if request.query.get("shape") in ("circle", "square"):
             is_circle = request.query.get("shape") == "circle"
+
+        rotate_deg = 90 if request.query.get("rot") == "90" else 0
 
         try:
             from homeassistant.components import camera
@@ -368,6 +379,8 @@ class LatterCameraSnapshotView(HomeAssistantView):
                 height,
                 is_circle,
                 1.0,
+                rotate_deg,
+                True,
             )
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("Camera snapshot Pillow transcode failed: %s", err)
@@ -585,12 +598,12 @@ class LatterMapSnapshotView(HomeAssistantView):
     async def get(self, request: web.Request, target_device: str) -> web.Response:
         """Handle GET /api/latter/map/{target_device}?q=...&z=15&pan_x=0&pan_y=0&w=466&h=466"""
         coordinator = _resolve_coordinator_by_target(self.hass, target_device)
-        default_dim = coordinator.art_size if coordinator else 466
+        default_w, default_h = coordinator.art_dimensions if coordinator else (466, 466)
         try:
-            width = max(128, min(768, int(request.query.get("w") or default_dim)))
-            height = max(128, min(768, int(request.query.get("h") or width)))
+            width = max(128, min(768, int(request.query.get("w") or default_w)))
+            height = max(128, min(768, int(request.query.get("h") or default_h)))
         except ValueError:
-            width, height = default_dim, default_dim
+            width, height = default_w, default_h
 
         is_circle = (coordinator.display_shape == "circle") if coordinator else True
         if request.query.get("shape") in ("circle", "square"):
