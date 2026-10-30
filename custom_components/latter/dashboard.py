@@ -1171,26 +1171,19 @@ class LatterCompanionApiView(HomeAssistantView):
             inc_cam = bool(body.get("include_camera", False))
             target_slug = str(body.get("target_device") or coordinator.device_slug).strip()
             cam_ent = coordinator.camera_entity if inc_cam else None
-            all_coords = _get_all_coordinators(self.hass)
-            targets = (
-                [c.device_slug for c in all_coords]
-                if target_slug == "all"
-                else [target_slug]
+            await self.hass.services.async_call(
+                DOMAIN,
+                "notify_device",
+                {
+                    "target_device": target_slug,
+                    "title": title,
+                    "message": message,
+                    "priority": priority,
+                    "chime": True,
+                    **({"camera_entity": cam_ent} if cam_ent else {}),
+                },
+                blocking=True,
             )
-            for t_slug in targets:
-                await self.hass.services.async_call(
-                    DOMAIN,
-                    "notify_device",
-                    {
-                        "device_slug": t_slug,
-                        "title": title,
-                        "message": message,
-                        "priority": priority,
-                        "chime": True,
-                        **({"camera_entity": cam_ent} if cam_ent else {}),
-                    },
-                    blocking=True,
-                )
             return web.json_response(
                 _build_companion_state_payload(self.hass, coordinator)
             )

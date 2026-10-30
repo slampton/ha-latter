@@ -932,12 +932,64 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         elif isinstance(target_speakers, list) and target_speakers:
             speakers = [str(s) for s in target_speakers]
         else:
-            speakers = [
+            speakers = []
+
+        follow_me_mode = (
+            speakers in (["follow_me"], ["occupied"])
+            or str(data.get("target_device") or "").strip().lower() in ("follow_me", "occupied")
+        )
+        if follow_me_mode or not speakers:
+            all_online_speakers = [
                 s.entity_id
                 for s in hass.states.async_all("media_player")
                 if s.state not in ("unavailable", "unknown")
                 and is_music_assistant_player(hass, s)
             ]
+            if follow_me_mode:
+                from .ble_engine import get_ble_fabric
+                from homeassistant.helpers import entity_registry as er
+
+                fabric = get_ble_fabric(hass)
+                ent_reg = er.async_get(hass)
+                dev_reg = dr.async_get(hass)
+                occupied_areas: set[str] = set()
+                for c in hass.data.get(DOMAIN, {}).values():
+                    if isinstance(c, LatterCoordinator) and c.active_area_id:
+                        if fabric.get_area_occupancy(c.active_area_id).get("is_occupied"):
+                            occupied_areas.add(c.active_area_id)
+                for reg_e in ent_reg.entities.values():
+                    a_id = reg_e.area_id or (
+                        dev_reg.async_get(reg_e.device_id).area_id
+                        if reg_e.device_id and dev_reg.async_get(reg_e.device_id)
+                        else None
+                    )
+                    if a_id and fabric.get_area_occupancy(a_id).get("is_occupied"):
+                        occupied_areas.add(a_id)
+
+                matched_speakers: list[str] = []
+                if occupied_areas:
+                    for spk_id in all_online_speakers:
+                        e_entry = ent_reg.async_get(spk_id)
+                        spk_area = e_entry.area_id if e_entry else None
+                        if not spk_area and e_entry and e_entry.device_id:
+                            d_entry = dev_reg.async_get(e_entry.device_id)
+                            if d_entry:
+                                spk_area = d_entry.area_id
+                        if spk_area in occupied_areas:
+                            matched_speakers.append(spk_id)
+                    for c in hass.data.get(DOMAIN, {}).values():
+                        if (
+                            isinstance(c, LatterCoordinator)
+                            and c.active_area_id in occupied_areas
+                        ):
+                            for cand_spk in (c.active_speaker, c.local_speaker):
+                                if cand_spk and cand_spk not in matched_speakers:
+                                    st_s = hass.states.get(cand_spk)
+                                    if st_s and st_s.state not in ("unavailable", "unknown"):
+                                        matched_speakers.append(cand_spk)
+                speakers = matched_speakers or all_online_speakers
+            else:
+                speakers = all_online_speakers
 
         if not speakers:
             return
@@ -1178,11 +1230,67 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         ),
     )
     async def _handle_notify_device(call: ServiceCall) -> None:
-        """Dispatch a toast notification, chime, and optional live camera peephole snapshot to the ESPHome device."""
-        coord = _resolve_coordinator_from_call(hass, call)
-        if not coord:
-            return
+        """Dispatch a toast notification, chime, and optional live camera peephole snapshot to one, occupied ('follow_me'), or all Latter displays."""
         data = call.data
+        raw_target = str(
+            data.get("target_device")
+            or data.get("device_slug")
+            or data.get("person_entity")
+            or ""
+        ).strip()
+        target_low = raw_target.lower()
+
+        all_coords = [
+            c
+            for c in hass.data.get(DOMAIN, {}).values()
+            if isinstance(c, LatterCoordinator)
+            and c.device_profile not in ("ble_beacon", "headless_node")
+        ]
+        target_coords: list[LatterCoordinator] = []
+
+        if target_low == "all":
+            target_coords = list(all_coords)
+        elif target_low in ("follow_me", "occupied") or target_low.startswith("person."):
+            from .ble_engine import get_ble_fabric
+
+            fabric = get_ble_fabric(hass)
+            person_area_name = ""
+            if target_low.startswith("person."):
+                p_slug = raw_target.split(".", 1)[-1].lower()
+                p_st = hass.states.get(f"sensor.{p_slug}_current_area")
+                if p_st and p_st.state not in ("unknown", "unavailable", "Away", ""):
+                    person_area_name = p_st.state.strip().lower()
+
+            for c in all_coords:
+                if target_low.startswith("person."):
+                    if c.assigned_person.lower() == target_low:
+                        target_coords.append(c)
+                        continue
+                    if person_area_name and c.active_area_id:
+                        occ = fabric.get_area_occupancy(c.active_area_id)
+                        if (
+                            c.active_area_id.lower() == person_area_name
+                            or any(
+                                person_area_name in str(n).lower()
+                                for n in (occ.get("occupant_names") or [])
+                            )
+                        ):
+                            target_coords.append(c)
+                elif c.active_area_id:
+                    occ = fabric.get_area_occupancy(c.active_area_id)
+                    if occ.get("is_occupied"):
+                        target_coords.append(c)
+
+            if not target_coords:
+                target_coords = list(all_coords)
+        else:
+            single = _resolve_coordinator_from_call(hass, call)
+            if single:
+                target_coords = [single]
+
+        if not target_coords:
+            return
+
         title = str(data.get("title") or "Alert").strip()
         message = str(data.get("message") or "").strip()
         priority = str(data.get("priority") or "normal").strip().lower()
@@ -1190,36 +1298,36 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         chime = _parse_bool(data.get("chime"), default=True)
         cam_ent = str(data.get("camera_entity") or "").strip() or None
 
-        coord.async_dispatch_notification(
-            title=title,
-            message=message,
-            priority=priority,
-            duration=duration,
-            chime=chime,
-            camera_entity=cam_ent,
-        )
+        for coord in target_coords:
+            coord.async_dispatch_notification(
+                title=title,
+                message=message,
+                priority=priority,
+                duration=duration,
+                chime=chime,
+                camera_entity=cam_ent,
+            )
 
-        # Also invoke direct esphome.<slug>_show_notification service if implemented by the firmware
-        esp_notify_svc = _resolve_esphome_action(
-            hass, coord.device_slug, "show_notification"
-        )
-        if esp_notify_svc:
-            try:
-                await hass.services.async_call(
-                    "esphome",
-                    esp_notify_svc,
-                    {
-                        "title": title[:48],
-                        "message": message[:160],
-                        "priority": priority,
-                        "duration": duration,
-                        "chime": chime,
-                        "camera_url": coord.alert_camera_url,
-                    },
-                    blocking=True,
-                )
-            except Exception as err:  # noqa: BLE001
-                _LOGGER.debug("Direct esphome.%s call skipped: %s", esp_notify_svc, err)
+            esp_notify_svc = _resolve_esphome_action(
+                hass, coord.device_slug, "show_notification"
+            )
+            if esp_notify_svc:
+                try:
+                    await hass.services.async_call(
+                        "esphome",
+                        esp_notify_svc,
+                        {
+                            "title": title[:48],
+                            "message": message[:160],
+                            "priority": priority,
+                            "duration": duration,
+                            "chime": chime,
+                            "camera_url": coord.alert_camera_url,
+                        },
+                        blocking=True,
+                    )
+                except Exception as err:  # noqa: BLE001
+                    _LOGGER.debug("Direct esphome.%s call skipped: %s", esp_notify_svc, err)
 
     hass.services.async_register(
         DOMAIN,

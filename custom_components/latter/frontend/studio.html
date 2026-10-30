@@ -2697,8 +2697,7 @@ function renderDockPillsFromInput() {
   const box = document.getElementById("dock-pills-container");
   const inp = document.getElementById("cfg-dock_apps");
   if (!box || !inp) return;
-  const hasImu = STATE?.capabilities?.has_imu !== false;
-  const availDockMeta = DOCK_APP_META.filter(m => hasImu || m.token !== "games");
+  const availDockMeta = DOCK_APP_META.slice();
   const rawTokens = inp.value
     .split(/[,;| ]+/)
     .map(t => {
@@ -3068,7 +3067,10 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
       `<option value="${d.device_slug}" ${d.device_slug === prevTarget ? 'selected' : ''}>${d.title} (${d.device_slug})</option>`
     );
     if (fleetDevices.length > 1) {
+      devOpts.push(`<option value="follow_me" ${prevTarget === 'follow_me' ? 'selected' : ''}>Follow-Me (Occupied Areas Only)</option>`);
       devOpts.push(`<option value="all" ${prevTarget === 'all' ? 'selected' : ''}>All Devices (${fleetDevices.length})</option>`);
+    } else {
+      devOpts.push(`<option value="follow_me" ${prevTarget === 'follow_me' ? 'selected' : ''}>Follow-Me (Occupied Areas Only)</option>`);
     }
     alertDevSel.innerHTML = devOpts.join("");
   }

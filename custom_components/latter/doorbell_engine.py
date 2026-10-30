@@ -1036,3 +1036,94 @@ async def async_execute_doorbell_intercom(
         return target_info
 
     return target_info
+
+
+def resolve_doorbell_ring_entities(
+    hass: HomeAssistant, camera_entities: list[str]
+) -> dict[str, str]:
+    """Discover sibling doorbell ring / visitor binary_sensor or event entities for configured cameras.
+
+    Returns a mapping of `ring_entity_id -> camera_entity_id`.
+    """
+    if not camera_entities:
+        return {}
+
+    ent_reg = er.async_get(hass)
+    ring_to_cam: dict[str, str] = {}
+
+    ring_keywords = (
+        "doorbell",
+        "visitor",
+        "ring",
+        "ding",
+        "chime_button",
+        "button_press",
+    )
+    exclude_keywords = (
+        "motion",
+        "person",
+        "package",
+        "vehicle",
+        "animal",
+        "pet",
+        "light",
+        "dark",
+        "battery",
+        "tamper",
+        "wifi",
+        "signal",
+        "volume",
+        "status",
+        "chime_duration",
+        "chime_type",
+    )
+
+    for cam_ent in camera_entities:
+        if not cam_ent or not cam_ent.startswith("camera."):
+            continue
+        cam_entry = ent_reg.async_get(cam_ent)
+        cam_dev_id = cam_entry.device_id if cam_entry else None
+        cam_slug = cam_ent.split(".", 1)[-1].lower()
+        for suffix in (
+            "_high_resolution_channel",
+            "_medium_resolution_channel",
+            "_low_resolution_channel",
+            "_package_camera",
+            "_camera",
+            "_live",
+        ):
+            if cam_slug.endswith(suffix):
+                cam_slug = cam_slug[: -len(suffix)]
+                break
+
+        for reg_ent in ent_reg.entities.values():
+            if reg_ent.disabled_by is not None:
+                continue
+            domain = reg_ent.domain
+            if domain not in ("binary_sensor", "event"):
+                continue
+
+            same_device = bool(cam_dev_id and reg_ent.device_id == cam_dev_id)
+            eid_low = reg_ent.entity_id.lower()
+            slug_match = bool(cam_slug and len(cam_slug) >= 4 and cam_slug in eid_low)
+            if not same_device and not slug_match:
+                continue
+
+            meta_low = " ".join(
+                filter(
+                    None,
+                    [
+                        eid_low,
+                        str(reg_ent.translation_key or "").lower(),
+                        str(reg_ent.original_device_class or "").lower(),
+                        str(reg_ent.device_class or "").lower(),
+                        str(reg_ent.original_name or "").lower(),
+                    ],
+                )
+            )
+            if any(k in meta_low for k in ring_keywords) and not any(
+                ex in eid_low for ex in exclude_keywords
+            ):
+                ring_to_cam[reg_ent.entity_id] = cam_ent
+
+    return ring_to_cam

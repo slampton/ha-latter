@@ -323,6 +323,9 @@ class LatterCoordinator:
         self._unsub_forecast_timer: Callable[[], None] | None = None
         self._unsub_calendar_timer: Callable[[], None] | None = None
         self._unsub_wallpaper_timer: Callable[[], None] | None = None
+        self._unsub_doorbell_ring_state: Callable[[], None] | None = None
+        self._doorbell_ring_map: dict[str, str] = {}
+        self._doorbell_ring_cooldown_until: dict[str, float] = {}
         self._ble_tracker: LatterNativeBleTracker | None = None
 
         self.active_speaker: str = (
@@ -415,6 +418,7 @@ class LatterCoordinator:
         self._bind_alarm_listener()
         self._bind_remotes_listener()
         self._bind_area_entities_listener()
+        self._bind_doorbell_ring_listener()
         await self.async_refresh_weather_forecast()
         await self.async_refresh_calendar_agenda()
         self._notify_listeners()
@@ -1079,6 +1083,7 @@ class LatterCoordinator:
         self._bind_presence_listener()
         self._bind_remotes_listener()
         self._bind_area_entities_listener()
+        self._bind_doorbell_ring_listener()
 
         self._unsub_play_interceptor = self.hass.bus.async_listen(
             EVENT_CALL_SERVICE, self._async_on_service_call_event
@@ -1136,6 +1141,7 @@ class LatterCoordinator:
             self._unsub_forecast_timer,
             self._unsub_calendar_timer,
             self._unsub_wallpaper_timer,
+            self._unsub_doorbell_ring_state,
         ):
             if unsub is not None:
                 unsub()
@@ -1152,6 +1158,7 @@ class LatterCoordinator:
         self._unsub_forecast_timer = None
         self._unsub_calendar_timer = None
         self._unsub_wallpaper_timer = None
+        self._unsub_doorbell_ring_state = None
         self._listeners.clear()
 
     @callback
@@ -1199,6 +1206,106 @@ class LatterCoordinator:
         self._unsub_area_debounce = async_call_later(
             self.hass, 0.25, _push_area_update
         )
+
+    @callback
+    def _bind_doorbell_ring_listener(self) -> None:
+        """Auto-detect sibling doorbell ring / visitor entities on configured cameras and subscribe."""
+        if self._unsub_doorbell_ring_state is not None:
+            self._unsub_doorbell_ring_state()
+            self._unsub_doorbell_ring_state = None
+
+        if self.device_profile in ("ble_beacon", "headless_node"):
+            return
+
+        from .doorbell_engine import resolve_doorbell_ring_entities
+
+        self._doorbell_ring_map = resolve_doorbell_ring_entities(
+            self.hass, self.camera_entities
+        )
+        if not self._doorbell_ring_map:
+            return
+
+        self._unsub_doorbell_ring_state = async_track_state_change_event(
+            self.hass,
+            list(self._doorbell_ring_map.keys()),
+            self._async_on_doorbell_ring_state_change,
+        )
+
+    @callback
+    def _async_on_doorbell_ring_state_change(
+        self, event: Event[EventStateChangedData]
+    ) -> None:
+        """Automatically wake the display with a live camera popup and chime when a doorbell rings."""
+        entity_id = event.data.get("entity_id")
+        old_state = event.data.get("old_state")
+        new_state = event.data.get("new_state")
+        if not entity_id or new_state is None or old_state is None:
+            return
+        if old_state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+            return
+        if new_state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN, "off"):
+            return
+        if entity_id.startswith("binary_sensor.") and new_state.state != "on":
+            return
+        if old_state.state == new_state.state:
+            return
+
+        cam_ent = self._doorbell_ring_map.get(entity_id) or self.camera_entity
+        if not cam_ent:
+            return
+
+        now_mono = time.monotonic()
+        if now_mono < self._doorbell_ring_cooldown_until.get(cam_ent, 0.0):
+            return
+        self._doorbell_ring_cooldown_until[cam_ent] = now_mono + 15.0
+
+        cam_st = self.hass.states.get(cam_ent)
+        cam_friendly = (
+            str(cam_st.attributes.get("friendly_name") if cam_st else "")
+            or cam_ent.split(".", 1)[-1].replace("_", " ").title()
+        )
+        title = "Doorbell Ringing"
+        message = f"Visitor at {cam_friendly}"
+
+        self.async_dispatch_notification(
+            title=title,
+            message=message,
+            priority="critical",
+            duration=20,
+            chime=True,
+            camera_entity=cam_ent,
+        )
+
+        esphome_svcs = self.hass.services.async_services().get("esphome", {})
+        expected_svc = f"{self.device_slug}_show_notification"
+        esp_notify_svc = (
+            expected_svc
+            if expected_svc in esphome_svcs
+            else next(
+                (
+                    s
+                    for s in esphome_svcs
+                    if s.endswith("_show_notification") and self.device_slug in s
+                ),
+                None,
+            )
+        )
+        if esp_notify_svc:
+            self.hass.async_create_task(
+                self.hass.services.async_call(
+                    "esphome",
+                    esp_notify_svc,
+                    {
+                        "title": title[:48],
+                        "message": message[:160],
+                        "priority": "critical",
+                        "duration": 20,
+                        "chime": True,
+                        "camera_url": self.alert_camera_url,
+                    },
+                    blocking=False,
+                )
+            )
 
     @callback
     def _bind_local_reconnect_listener(self) -> None:
