@@ -123,7 +123,7 @@ DEFAULT_DEVICE_GROUPS: list[dict[str, str]] = [
     {"id": "bedrooms", "name": "Bedrooms", "description": "Nightstand & bedroom companion devices"},
     {"id": "common_areas", "name": "Common Areas", "description": "Living room, kitchen & family room devices"},
     {"id": "wall_panels", "name": "Wall Panels", "description": "Stationary mounted control panels"},
-    {"id": "sensors", "name": "Presence & Room Sensors", "description": "Headless mmWave, PIR, bed & environmental sensor nodes"},
+    {"id": "sensors", "name": "Presence & Area Sensors", "description": "Headless mmWave, PIR, bed & environmental sensor nodes"},
 ]
 
 BUILTIN_STARTER_PROFILES: list[dict[str, Any]] = [
@@ -189,7 +189,7 @@ BUILTIN_STARTER_PROFILES: list[dict[str, Any]] = [
         "id": "preset_wall_panel",
         "name": "Stationary Wall / Desk Panel",
         "archetype": "stationary_display",
-        "description": "Always-On wake word, Tap-to-Wake Always On, 5 min idle timeout, and stationary room assignment.",
+        "description": "Always-On wake word, Tap-to-Wake Always On, 5 min idle timeout, and stationary area assignment.",
         "device_config": {
             CONF_DEVICE_PROFILE: "stationary_display",
             CONF_NATIVE_BLE_TRACKING: False,

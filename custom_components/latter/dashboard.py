@@ -295,7 +295,7 @@ def _build_fleet_shared_controls(hass: HomeAssistant) -> list[dict[str, Any]]:
         esp_info = get_esphome_device_entities(hass, coord.device_slug)
         for sec in esp_info.get("sections", []):
             sec_id = sec.get("id", "")
-            if sec_id not in ("voice", "sleep", "display", "sound", "music", "room"):
+            if sec_id not in ("voice", "sleep", "display", "sound", "music", "area"):
                 continue
             for item in sec.get("items", []):
                 dom = item.get("domain")
@@ -406,7 +406,7 @@ def _build_companion_state_payload(
                     "id": ent_id,
                     "name": f"{friendly} (sensor.{p_slug}_current_area)",
                     "friendly": friendly,
-                    "room_sensor": f"sensor.{p_slug}_current_area",
+                    "area_sensor": f"sensor.{p_slug}_current_area",
                 }
             )
         elif domain in ("sensor", "device_tracker", "input_text"):
@@ -429,13 +429,13 @@ def _build_companion_state_payload(
         ):
             bindable_entities.append(item)
 
-    _, room_attrs = coordinator.get_area_context_payload()
+    _, area_attrs = coordinator.get_area_context_payload()
     media_state, media_attrs = coordinator.get_active_media_payload()
     _, remote_attrs = coordinator.get_remote_config_payload()
     esphome_inspector = get_esphome_device_entities(
         hass, coordinator.device_slug
     )
-    active_room_cards = get_area_entities(
+    active_area_cards = get_area_entities(
         hass,
         area_id=coordinator.active_area_id,
         domain_filter="all",
@@ -613,7 +613,7 @@ def _build_companion_state_payload(
 
     fleet_devices: list[dict[str, Any]] = []
     for c in _get_all_coordinators(hass):
-        c_room_name, c_room_attrs = c.get_area_context_payload()
+        c_area_name, c_area_attrs = c.get_area_context_payload()
         c_media_state, _ = c.get_active_media_payload()
         c_grp = c.device_group
         c_has_audio = bool(c.local_speaker) or any(
@@ -628,7 +628,7 @@ def _build_companion_state_payload(
                 and c.device_slug in s
                 for s in esphome_svcs
             )
-            or hass.states.get(f"switch.{c.device_slug}_room_ble_presence_beacon") is not None
+            or hass.states.get(f"switch.{c.device_slug}_area_ble_presence_beacon") is not None
             or hass.states.get(f"switch.{c.device_slug}_ble_presence_beacon") is not None
         )
         c_survey_rows = (
@@ -736,7 +736,7 @@ def _build_companion_state_payload(
         if c.device_profile == "ble_beacon":
             c_away = c.is_device_away()
             c_seen = bool(c._ble_tracker and c._ble_tracker.packets_seen > 0 and not c_away)
-            c_status_label = f"Online ({c_room_name})" if c_seen else ("Away" if c_away else "Scanning")
+            c_status_label = f"Online ({c_area_name})" if c_seen else ("Away" if c_away else "Scanning")
         else:
             c_status_label = (
                 "Update Available"
@@ -763,7 +763,7 @@ def _build_companion_state_payload(
                 "device_group_name": group_name_map.get(c_grp, c_grp.replace("_", " ").title()),
                 "site_id": c.site_id,
                 "display_shape": c.display_shape,
-                "active_area_name": c_room_name,
+                "active_area_name": c_area_name,
                 "active_speaker": c.active_speaker if c_has_audio else "",
                 "has_audio": c_has_audio,
                 "is_latter_native": c_is_latter_native,
@@ -776,7 +776,7 @@ def _build_companion_state_payload(
                 "has_ble": c_has_ble,
                 "ble_survey_rows": c_survey_rows,
                 "ble_packets_seen": c_packets_seen,
-                "ble_closest_proxy": c_room_attrs.get("ble_closest_proxy", ""),
+                "ble_closest_proxy": c_area_attrs.get("ble_closest_proxy", ""),
                 "companion_url": f"/api/latter/companion/{c.entry.entry_id}?token={c.get_signed_token()}",
                 "is_current": c.entry.entry_id == coordinator.entry.entry_id,
             }
@@ -862,18 +862,18 @@ def _build_companion_state_payload(
         ),
         "live": {
             "active_area_id": coordinator.active_area_id or "",
-            "active_area_name": room_attrs.get("area_name", "Home"),
-            "room_temp": room_attrs.get("area_temp"),
-            "room_humidity": room_attrs.get("area_humidity"),
-            "lights_on": room_attrs.get("lights_on", 0),
-            "covers_open": room_attrs.get("covers_open", 0),
-            "entity_count": room_attrs.get("entity_count", 0),
-            "room_cards": active_room_cards[:12],
-            "ble_closest_proxy": room_attrs.get("ble_closest_proxy", ""),
-            "ble_packets_seen": room_attrs.get("ble_packets_seen", 0),
-            "ble_rssi_by_area": room_attrs.get("ble_rssi_by_area", {}),
+            "active_area_name": area_attrs.get("area_name", "Home"),
+            "area_temp": area_attrs.get("area_temp"),
+            "area_humidity": area_attrs.get("area_humidity"),
+            "lights_on": area_attrs.get("lights_on", 0),
+            "covers_open": area_attrs.get("covers_open", 0),
+            "entity_count": area_attrs.get("entity_count", 0),
+            "area_cards": active_area_cards[:12],
+            "ble_closest_proxy": area_attrs.get("ble_closest_proxy", ""),
+            "ble_packets_seen": area_attrs.get("ble_packets_seen", 0),
+            "ble_rssi_by_area": area_attrs.get("ble_rssi_by_area", {}),
             "ble_survey_rows": ble_survey_rows,
-            "ble_scanners_map": room_attrs.get("ble_scanners_map", {}),
+            "ble_scanners_map": area_attrs.get("ble_scanners_map", {}),
             "active_speaker": coordinator.active_speaker,
             "local_speaker": coordinator.local_speaker,
             "volume_entity": media_attrs.get("volume_entity", ""),
@@ -881,15 +881,15 @@ def _build_companion_state_payload(
             "media_title": media_attrs.get("title", "Idle"),
             "media_artist": media_attrs.get("artist", "None"),
             "media_art_url": media_attrs.get("art_url", "none"),
-            "alarm_state": room_attrs.get("alarm_state", "none"),
-            "thermostat_state": room_attrs.get("thermostat_state", "off"),
-            "thermostat_temp": room_attrs.get("thermostat_temp"),
-            "lock_state": room_attrs.get("lock_state", "locked"),
-            "garage_state": room_attrs.get("garage_state", "closed"),
-            "vacuum_state": room_attrs.get("vacuum_state", "docked"),
+            "alarm_state": area_attrs.get("alarm_state", "none"),
+            "thermostat_state": area_attrs.get("thermostat_state", "off"),
+            "thermostat_temp": area_attrs.get("thermostat_temp"),
+            "lock_state": area_attrs.get("lock_state", "locked"),
+            "garage_state": area_attrs.get("garage_state", "closed"),
+            "vacuum_state": area_attrs.get("vacuum_state", "docked"),
             "weather_condition": coordinator.weather_attributes.get("condition", "unknown"),
             "weather_temp": coordinator.weather_attributes.get("temperature"),
-            "wallpaper_url": room_attrs.get("wallpaper_url", "none"),
+            "wallpaper_url": area_attrs.get("wallpaper_url", "none"),
             "doorbell_talk_state": coordinator.doorbell_talk_state,
             "doorbell_anc_mode": coordinator.doorbell_anc_mode,
             "active_remote_slot": coordinator.active_remote_slot,
@@ -1017,7 +1017,7 @@ class LatterCompanionApiView(HomeAssistantView):
 
         cmd = str(body.get("command") or "save_config")
 
-        if cmd == "set_ble_room_offset":
+        if cmd == "set_ble_area_offset":
             area_id = str(body.get("area_id") or "").strip()
             offset_val = float(body.get("offset_db") or 0.0)
             offsets = dict(coordinator.ble_area_offsets)
@@ -1343,7 +1343,7 @@ class LatterCompanionApiView(HomeAssistantView):
                 _build_companion_state_payload(self.hass, coordinator)
             )
 
-        if cmd in ("test_binding", "esphome_entity_action", "room_card_action"):
+        if cmd in ("test_binding", "esphome_entity_action", "area_card_action"):
             entity_id = str(body.get("entity_id") or "").strip()
             action = str(body.get("action") or "toggle").strip()
             level = body.get("level")

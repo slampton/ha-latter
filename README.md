@@ -1,4 +1,4 @@
-# Latter — Universal ESPHome Companion & Room Fabric for Home Assistant
+# Latter — Universal ESPHome Companion & Area Fabric for Home Assistant
 
 [![Validate](https://github.com/slampton/ha-latter/actions/workflows/validate.yml/badge.svg)](https://github.com/slampton/ha-latter/actions)
 [![Version](https://img.shields.io/badge/Version-v2.2.0-blue)](https://github.com/slampton/ha-latter/releases)
@@ -10,9 +10,9 @@
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ffdd00?logo=buy-me-a-coffee&logoColor=black)](https://www.buymeacoffee.com/slampton)
 [![GitHub Sponsors](https://img.shields.io/badge/Sponsor-%E2%9D%A4-ea4aaa?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/slampton)
 
-**Latter** (`custom_components/latter`) is an asynchronous, zero-dependency Home Assistant middleware integration and web studio that turns **any ESPHome device**—from flagship AMOLED handhelds and smartwatches to 1-line mixin nodes and existing off-the-shelf presence sensors—into a room-aware, dynamically mapped smart home companion.
+**Latter** (`custom_components/latter`) is an asynchronous, zero-dependency Home Assistant middleware integration and web studio that turns **any ESPHome device**—from flagship AMOLED handhelds and smartwatches to 1-line mixin nodes and existing off-the-shelf presence sensors—into a area-aware, dynamically mapped smart home companion.
 
-Instead of hardcoding entity IDs in ESPHome YAML and recompiling firmware every time you buy a smart light, speaker, or TV, Latter provides a dynamic entity-mapping contract, a native Bluetooth room-presence calibration radar, an on-demand Baseline-JPEG artwork/camera/map transcoder, and a built-in **Latter Studio** sidebar panel.
+Instead of hardcoding entity IDs in ESPHome YAML and recompiling firmware every time you buy a smart light, speaker, or TV, Latter provides a dynamic entity-mapping contract, a native Bluetooth area-presence calibration radar, an on-demand Baseline-JPEG artwork/camera/map transcoder, and a built-in **Latter Studio** sidebar panel.
 
 ---
 
@@ -20,7 +20,7 @@ Instead of hardcoding entity IDs in ESPHome YAML and recompiling firmware every 
 
 | Repository | Role in the Ecosystem |
 | :--- | :--- |
-| 👉 **[Latter (`ha-latter`)](https://github.com/slampton/ha-latter)** | **Home Assistant Middleware & Web Studio (You Are Here)** — Zero-YAML entity mapping, BLE room presence radar, Music Assistant browser, Baseline-JPEG transcoder, and backup vault. |
+| 👉 **[Latter (`ha-latter`)](https://github.com/slampton/ha-latter)** | **Home Assistant Middleware & Web Studio (You Are Here)** — Zero-YAML entity mapping, BLE area presence radar, Music Assistant browser, Baseline-JPEG transcoder, and backup vault. |
 | **[Latter Core (`esphome-latter-core`)](https://github.com/slampton/esphome-latter-core)** | **Shared ESPHome OS, Device Catalog & 1-Line Mixin SDK** — Modular C++20 UI engine, board HALs (`boards/`), turnkey device configs (`devices/` for **Pocket Assistant**, **Mobile Assistant**, **Wrist Assist**, **Remote Assistant**, and **Desk Assistant**), and 1-line drop-in mixins. |
 
 ---
@@ -28,7 +28,7 @@ Instead of hardcoding entity IDs in ESPHome YAML and recompiling firmware every 
 ## Documentation & Deep-Dive Guides
 
 - 📖 **[Everyday User & Studio Guide (`docs/USER_GUIDE.md`)](docs/USER_GUIDE.md)** — Navigating Latter Studio, mapping Shared Household Entities (Alarm, Camera, Weather, Thermostat, Lock, Garage, Vacuum, Calendars), setting up 4-Slot TV Remotes & AVR Volume Routing, uploading Wallpapers, and using Device Groups, Profiles & Backups.
-- 📡 **[BLE Room Calibration & Roaming VPN Guide (`docs/BLE_AND_VPN_GUIDE.md`)](docs/BLE_AND_VPN_GUIDE.md)** — Placing ESPHome BLE proxies, using the live Site Survey radar & *"Prioritize Here"* calibration, syncing room context with Assist, and provisioning 1-click WireGuard roaming over phone hotspots.
+- 📡 **[BLE Area Calibration & Roaming VPN Guide (`docs/BLE_AND_VPN_GUIDE.md`)](docs/BLE_AND_VPN_GUIDE.md)** — Placing ESPHome BLE proxies, using the live Site Survey radar & *"Prioritize Here"* calibration, syncing area context with Assist, and provisioning 1-click WireGuard roaming over phone hotspots.
 - ⚡ **[Services & Automations Cookbook (`docs/SERVICES_AND_AUTOMATIONS.md`)](docs/SERVICES_AND_AUTOMATIONS.md)** — Copy-pasteable Home Assistant automation recipes for Doorbell Camera Peephole Alerts (`latter.notify_device`), Family Intercom (`latter.intercom_broadcast`), and Custom Macro Buttons (`latter.trigger_binding`).
 - 🛠️ **[Developer API Contract & Hardware Porting (`esphome-latter-core/docs/`)](https://github.com/slampton/esphome-latter-core/tree/main/docs)** — How to build your own custom ESPHome display or sensor node for Latter.
 
@@ -38,15 +38,15 @@ Instead of hardcoding entity IDs in ESPHome YAML and recompiling firmware every 
 
 1. **3-Tier Universal ESPHome Device Model**:
    - **Tier 1 (Flagship Native Displays)**: Zero-YAML auto-discovered smart displays including **[Pocket Assistant](https://github.com/slampton/esphome-latter-core/blob/main/devices/pocket-assistant.yaml)** (`466×466` round AMOLED), **[Mobile Assistant](https://github.com/slampton/esphome-latter-core/blob/main/devices/mobile-assistant.yaml)** (`480×480` square AMOLED), **[Wrist Assist](https://github.com/slampton/esphome-latter-core/blob/main/devices/wrist-assist.yaml)** (`410×502` watch), **[Remote Assistant](https://github.com/slampton/esphome-latter-core/blob/main/devices/remote-assistant.yaml)** (`320×480` P4 handheld), and **[Desk Assistant](https://github.com/slampton/esphome-latter-core/blob/main/devices/desk-assistant.yaml)** (`720×720` P4 panel).
-   - **Tier 2 (1-Line Drop-In Mixin Nodes)**: Upgrade any existing ESPHome YAML with a single line from `esphome-latter-core/mixins/*.yaml` to add BLE room beaconing (`ble_beacon.yaml`), stationary BLE proxy scanning (`ble_proxy.yaml`), WireGuard roaming VPN (`roaming_vpn.yaml`), or Studio diagnostics (`diagnostics.yaml`).
+   - **Tier 2 (1-Line Drop-In Mixin Nodes)**: Upgrade any existing ESPHome YAML with a single line from `esphome-latter-core/mixins/*.yaml` to add BLE area beaconing (`ble_beacon.yaml`), stationary BLE proxy scanning (`ble_proxy.yaml`), WireGuard roaming VPN (`roaming_vpn.yaml`), or Studio diagnostics (`diagnostics.yaml`).
    - **Tier 3 (Zero-YAML Bridged Devices)**: Bridge any existing ESPHome device (e.g., Everything Presence One, Bed Presence, Home Assistant Voice PE) in 1 click from **Latter Studio &rarr; System &rarr; Overview &amp; Devices** to organize groups, inspect live entities, and back up device preferences.
-2. **Native BLE Proxy Room Presence & Site Survey Radar**:
-   - Tracks roaming ESPHome BLE iBeacons across your home's ESPHome Bluetooth Proxies, bypassing static-beacon deduplication via 2-second per-scanner advertisement table polling, Exponential Moving Average (EMA) smoothing, per-room dB calibration offsets, and 1-click **"Prioritize Here"** calibration.
-   - Automatically syncs the active room to the ESPHome device's Home Assistant Area assignment so room-aware **Assist** voice commands (*"turn on the lights"*) target the room you are standing in.
+2. **Native BLE Proxy Area Presence & Site Survey Radar**:
+   - Tracks roaming ESPHome BLE iBeacons across your home's ESPHome Bluetooth Proxies, bypassing static-beacon deduplication via 2-second per-scanner advertisement table polling, Exponential Moving Average (EMA) smoothing, per-area dB calibration offsets, and 1-click **"Prioritize Here"** calibration.
+   - Automatically syncs the active area to the ESPHome device's Home Assistant Area assignment so area-aware **Assist** voice commands (*"turn on the lights"*) target the area you are standing in.
 3. **Music Assistant 2.10.8+ Browse, Queue Transfer & Lyrics/Bio Engine**:
    - Paginates Music Assistant libraries (Favorites, Playlists, Artists, Albums, Tracks, Podcasts, Radio, Audiobooks, Active Queue), fetches synced track lyrics and artist/album biographies (via Music Assistant metadata, LRCLIB, and Wikipedia fallbacks), and performs seamless speaker-to-speaker queue transfers.
-4. **Area-Aware Room Control & Whole-Home Hub**:
-   - Curates room entities by domain (`scene`, `light`, `cover`, `fan`, `switch`, `media_player`, `climate`) and pushes 3-card or 5-slot pages with live brightness/cover/fan levels (`0..100%`), RGB color wheel & Kelvin temperature control, and shared Whole-Home Hub state (Security Alarm, Primary Thermostat, Entry Lock, Garage Door, Robot Vacuum, and Doorbell Camera).
+4. **Area Control & Whole-Home Hub**:
+   - Curates area entities by domain (`scene`, `light`, `cover`, `fan`, `switch`, `media_player`, `climate`) and pushes 3-card or 5-slot pages with live brightness/cover/fan levels (`0..100%`), RGB color wheel & Kelvin temperature control, and shared Whole-Home Hub state (Security Alarm, Primary Thermostat, Entry Lock, Garage Door, Robot Vacuum, and Doorbell Camera).
 5. **Local LAN Baseline-JPEG Transcoder (Artwork, Wallpapers, Camera Peephole & OpenStreetMap)**:
    - Transcodes progressive PNG/WebP/JPEG album art, custom wallpapers, live `camera.*` snapshots, and multi-tile OpenStreetMap event location maps into memory-safe **Baseline RGB565 JPEG** sized to each device's exact display geometry (`466×466` circle or `410×502` rectangle).
 6. **System & Device Backup Vault, Reusable Profiles & Roaming WireGuard Provisioning**:
@@ -69,10 +69,10 @@ ha-latter/
 │       ├── sensor.py            # 5 device-scoped sensors with _unrecorded_attributes DB guard
 │       ├── services.py          # 14 native latter.* service handlers & slot pagination engine
 │       ├── services.yaml        # Home Assistant Developer Tools service schemas
-│       ├── ble_engine.py        # 2s per-scanner BLE proxy room tracker & dB offset calibrator
+│       ├── ble_engine.py        # 2s per-scanner BLE proxy area tracker & dB offset calibrator
 │       ├── browse_engine.py     # Music Assistant 2.10.8+ library browser & Lyrics/Bio engine
 │       ├── calendar_engine.py   # Multi-calendar agenda serializer & event creator
-│       ├── room_engine.py       # Curated room entity filter, Whole-Home Hub & ESPHome inspector
+│       ├── area_engine.py       # Curated area entity filter, Whole-Home Hub & ESPHome inspector
 │       ├── vpn_engine.py        # Curve25519 WireGuard key generator & YAML snippet builder
 │       ├── backup_engine.py     # System & Device snapshot vault (.storage/latter.backups) & profiles
 │       ├── wallpaper_engine.py  # Built-in AMOLED presets & custom photo wallpaper manager
@@ -88,7 +88,7 @@ ha-latter/
 │       └── py.typed             # PEP 561 strict typing marker
 ├── docs/
 │   ├── USER_GUIDE.md            # Everyday user & Latter Studio administration guide
-│   ├── BLE_AND_VPN_GUIDE.md     # BLE room calibration radar & WireGuard roaming guide
+│   ├── BLE_AND_VPN_GUIDE.md     # BLE area calibration radar & WireGuard roaming guide
 │   └── SERVICES_AND_AUTOMATIONS.md # Automation recipes for doorbell alerts, intercom & macros
 └── hacs.json                    # HACS repository manifest
 ```
@@ -131,7 +131,7 @@ Latter automatically discovers compatible ESPHome devices on your network. You c
 | :--- | :--- |
 | **ESPHome Device Name / Slug** (`device_slug`) | The normalized name of your ESPHome node (e.g., `pocket_assistant` or `wrist_assist`). |
 | **Configuration Profile** (`apply_profile`) | Defaults to **Auto-Detect from Device Hardware** (automatically configures `466×466` round for Pocket Assistant, `410×502` square/rect for Wrist Assist, or headless sensor defaults), or applies any saved reusable profile. |
-| **This device roams** (`native_ble_tracking`) | Enable for portable/wearable devices that move between rooms. Uncheck for stationary devices fixed to a single Area. |
+| **This device roams** (`native_ble_tracking`) | Enable for portable/wearable devices that move between areas. Uncheck for stationary devices fixed to a single Area. |
 
 Once added, open **Latter** from the Home Assistant sidebar (or click **Visit** on the ESPHome device page) to configure shared household entities.
 
@@ -142,7 +142,7 @@ Once added, open **Latter** from the Home Assistant sidebar (or click **Visit** 
 Latter uses a **local push (`local_push`)** coordinator model with an idle-guarded timer:
 - Each onboarded device exposes 5 device-scoped sensors linked directly to the ESPHome device entry:
   1. `sensor.<device_slug>_active_media`: Active speaker playback state and track attributes. Uses an **idle-guarded 2-second position timer** that runs *only* while media is actively playing, plus `_unrecorded_attributes` to prevent SQLite database bloat.
-  2. `sensor.<device_slug>_area_context`: Active room name, room temperature/humidity, curated entity counts, and live Whole-Home Hub states (Alarm, Thermostat, Lock, Garage, Vacuum, Alert/Notification state).
+  2. `sensor.<device_slug>_area_context`: Active area name, area temperature/humidity, curated entity counts, and live Whole-Home Hub states (Alarm, Thermostat, Lock, Garage, Vacuum, Alert/Notification state).
   3. `sensor.<device_slug>_weather_forecast`: Semicolon-delimited 5-day forecast string (`DAY:HIGH:LOW:COND;...`) refreshed every 30 minutes and on weather state changes.
   4. `sensor.<device_slug>_calendar_agenda`: Upcoming family calendar events refreshed every 15 minutes, with automatic geocoded OpenStreetMap snapshot URLs for events with locations.
   5. `sensor.<device_slug>_remote_config`: Active TV/AVR remote slot and 4-slot entity pairings.
@@ -153,8 +153,8 @@ Latter uses a **local push (`local_push`)** coordinator model with an idle-guard
 
 - **ESP32 Artwork / Camera Snapshots Not Loading**:
   - ESP-IDF's `http_request` client on ESP32 cannot resolve `.local` mDNS hostnames without a local DNS proxy and requires **Baseline JPEG** (non-progressive). Latter automatically resolves Home Assistant's numeric LAN IPv4 address and transcodes all images to Baseline JPEG via `/api/latter/{artwork,wallpaper,camera,map}/<device_slug>`.
-- **BLE Room Presence Not Switching Rooms**:
-  - Ensure your stationary ESPHome nodes have `bluetooth_proxy: active: true` (or include `github://slampton/esphome-latter-core/mixins/ble_proxy.yaml@main`) and are assigned to a Home Assistant **Area**. Open **Latter Studio &rarr; System &rarr; Room Calibration** to inspect live Raw dBm vs. Effective dBm per room and click **Prioritize Here**.
+- **BLE Area Presence Not Switching Areas**:
+  - Ensure your stationary ESPHome nodes have `bluetooth_proxy: active: true` (or include `github://slampton/esphome-latter-core/mixins/ble_proxy.yaml@main`) and are assigned to a Home Assistant **Area**. Open **Latter Studio &rarr; System &rarr; BLE Calibration** to inspect live Raw dBm vs. Effective dBm per area and click **Prioritize Here**.
 - **Known Limitations**:
   - Music library browsing (`favorites`, `playlist`, `artist`, `album`, `podcast`, `audiobook`, `active_queue`) requires the **Music Assistant** integration to be loaded in Home Assistant. Basic transport controls (`play`, `pause`, `next`, `previous`, `volume`) work with any Home Assistant `media_player.*` entity.
 

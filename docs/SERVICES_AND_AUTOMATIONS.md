@@ -62,9 +62,9 @@ data:
 
 ---
 
-## 4. Room & Media Handoff Actions
+## 4. Area & Media Handoff Actions
 
-- **`latter.set_active_area`**: Programmatically switch a device's active room context (`area: "living_room"`, `handoff_media: true`).
+- **`latter.set_active_area`**: Programmatically switch a device's active area context (`area: "living_room"`, `handoff_media: true`).
 - **`latter.set_active_speaker`**: Switch the target media player (`entity_id: "media_player.kitchen_speaker"`, `transfer_queue: true`).
 - **`latter.media_command`**: Execute debounced playback commands (`command: "toggle" | "play" | "pause" | "next" | "previous" | "seek" | "clear_queue"`).
 - **`latter.media_volume`**: Step or set volume (`action: "up" | "down" | "mute" | "set"`), automatically respecting external AVR volume overrides.

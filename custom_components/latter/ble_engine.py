@@ -1,4 +1,4 @@
-"""Native Zero-Config ESPHome BLE Proxy Room Presence Engine for Latter."""
+"""Native Zero-Config ESPHome BLE Proxy Area Presence Engine for Latter."""
 
 from __future__ import annotations
 
@@ -281,7 +281,7 @@ def get_all_scanners_diagnostic_map(hass: HomeAssistant) -> dict[str, str]:
 
 
 class LatterNativeBleTracker:
-    """Tracks a mobile ESPHome BLE iBeacon across ESPHome BLE Proxies to auto-detect the room."""
+    """Tracks a mobile ESPHome BLE iBeacon across ESPHome BLE Proxies to auto-detect the area."""
 
     def __init__(
         self,
@@ -403,7 +403,7 @@ class LatterNativeBleTracker:
         for area_id, (raw_ema, ts, _scanner) in list(self._area_raw_rssi.items()):
             offset_db = float(self._area_offsets.get(area_id, 0.0))
             self._area_rssi[area_id] = (raw_ema + offset_db, ts)
-        self._evaluate_best_room(now)
+        self._evaluate_best_area(now)
 
     @callback
     def reset_for_device_wake(self) -> None:
@@ -430,7 +430,7 @@ class LatterNativeBleTracker:
         fabric = get_ble_fabric(self.hass)
         fabric.register_tracker(self)
         _LOGGER.info(
-            "Latter Native BLE Room Tracker registered with shared BLE Fabric (device=%s, UUID=%s, macs=%s)",
+            "Latter Native BLE Area Tracker registered with shared BLE Fabric (device=%s, UUID=%s, macs=%s)",
             self._raw_slug,
             self._target_uuid_hex,
             self.target_macs_formatted,
@@ -689,7 +689,7 @@ class LatterNativeBleTracker:
     def _ingest_proxy_observation(
         self, source: str, rssi: int, obs_time: float, scanner_name: str = ""
     ) -> None:
-        """Ingest a (scanner_source, rssi) observation and evaluate room transitions."""
+        """Ingest a (scanner_source, rssi) observation and evaluate area transitions."""
         now = time.monotonic()
         just_woke_from_standby = (
             self.last_packet_monotonic > 0.0
@@ -732,11 +732,11 @@ class LatterNativeBleTracker:
         self._area_rssi[area_id] = (eff_ema, obs_time)
 
         if (now - obs_time) <= STALE_PROXY_SECONDS:
-            self._evaluate_best_room(now, source)
+            self._evaluate_best_area(now, source)
 
     @callback
-    def _evaluate_best_room(self, now: float, latest_source: str = "") -> None:
-        """Evaluate fresh effective RSSI scores across all rooms and trigger room switch if needed."""
+    def _evaluate_best_area(self, now: float, latest_source: str = "") -> None:
+        """Evaluate fresh effective RSSI scores across all areas and trigger area switch if needed."""
         fresh_areas = {
             k: (val, ts)
             for k, (val, ts) in self._area_rssi.items()

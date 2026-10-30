@@ -793,18 +793,18 @@
     white-space: nowrap;
   }
 
-  /* QUICK ACTIONS & ROOM MINI CARDS */
+  /* QUICK ACTIONS & AREA MINI CARDS */
   .quick-actions-row {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
   }
-  .room-cards-grid {
+  .area-cards-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
     gap: 8px;
   }
-  .room-mini-card {
+  .area-mini-card {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -815,17 +815,17 @@
     cursor: pointer;
     transition: border-color 0.12s ease, background 0.12s ease;
   }
-  .room-mini-card.on {
+  .area-mini-card.on {
     border-color: var(--accent);
     background: var(--accent-subtle);
   }
-  .room-mini-card strong {
+  .area-mini-card strong {
     font-size: 13px;
     font-weight: 500;
     color: var(--text-strong);
     display: block;
   }
-  .room-mini-card small {
+  .area-mini-card small {
     font-size: 11px;
     color: var(--muted);
   }
@@ -1100,7 +1100,7 @@
       <button class="nav-btn" data-view="fleet_sync" onclick="switchView('fleet_sync', this)">
         <span>Groups &amp; Profiles</span>
       </button>
-      <button class="nav-btn" data-view="room_tracking" onclick="switchView('room_tracking', this)">
+      <button class="nav-btn" data-view="area_tracking" onclick="switchView('area_tracking', this)">
         <span>BLE Calibration</span>
       </button>
       <button class="nav-btn" data-view="system_admin" onclick="switchView('system_admin', this)">
@@ -1179,7 +1179,7 @@
             <div class="summary-row clickable" onclick="openDevicesWithCategory('ble_tracked')">
               <span>People Tracked (BLE Area)</span><strong id="sys-sum-people">0</strong>
             </div>
-            <div class="summary-row clickable" onclick="openSystemSection('room_tracking', '')">
+            <div class="summary-row clickable" onclick="openSystemSection('area_tracking', '')">
               <span>BLE Area Proxies</span><strong id="sys-sum-proxies">0</strong>
             </div>
           </div>
@@ -1214,7 +1214,7 @@
       <section id="view-household" class="hidden">
         <div class="page-header">
           <h2>Shared Entities</h2>
-          <p>Select shared household entities, cameras, calendars, and pinned room controls.</p>
+          <p>Select shared system entities, cameras, calendars, and pinned area controls.</p>
         </div>
 
         <div class="grid-2">
@@ -1335,10 +1335,10 @@
             <button type="button" class="btn-secondary" onclick="addCalendarRow(''); markDirty();">+ Add Calendar</button>
           </div>
 
-          <!-- CARD 4: PINNED ROOM ENTITIES -->
+          <!-- CARD 4: PINNED AREA ENTITIES -->
           <div class="card" id="card-pinned">
             <h3>Pinned Area Entities</h3>
-            <p class="desc">Pin favorite scenes, scripts, lights, or switches to appear in Room Control and the on-device Macros tool.</p>
+            <p class="desc">Pin favorite scenes, scripts, lights, or switches to appear in Area Control and the on-device Macros tool.</p>
             <div id="pinned-entities-list"></div>
             <button type="button" class="btn-secondary" onclick="addPinnedEntityRow(''); markDirty();">+ Add Pinned Entity</button>
           </div>
@@ -1447,17 +1447,17 @@
       <!-- ================================================================== -->
       <!-- SYSTEM TAB 5: BLE CALIBRATION                                      -->
       <!-- ================================================================== -->
-      <section id="view-room_tracking" class="hidden">
+      <section id="view-area_tracking" class="hidden">
         <div class="page-header">
           <h2>BLE Calibration</h2>
-          <p>Calibrate Bluetooth proxy signal offsets per room. Offsets apply globally across all mobile devices.</p>
+          <p>Calibrate Bluetooth proxy signal offsets per area. Offsets apply globally across all mobile devices.</p>
         </div>
 
         <div class="card">
           <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:18px;">
             <div>
-              <h3 style="margin:0;">Per-Room BLE Signal Calibration</h3>
-              <p class="desc" style="margin:2px 0 0;">Select a BLE-enabled device, carry it into a room, and click <strong>Calibrate Current Area</strong>.</p>
+              <h3 style="margin:0;">Per-Area BLE Signal Calibration</h3>
+              <p class="desc" style="margin:2px 0 0;">Select a BLE-enabled device, carry it into an area, and click <strong>Calibrate Current Area</strong>.</p>
             </div>
             <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
               <div style="display:flex;align-items:center;gap:8px;">
@@ -1485,7 +1485,7 @@
         <div class="grid-2">
           <div class="card">
             <h3>Create or Export Backup</h3>
-            <p class="desc">Save system settings, entity mappings, BLE room offsets, and live ESPHome device preferences.</p>
+            <p class="desc">Save system settings, entity mappings, BLE area offsets, and live ESPHome device preferences.</p>
             <div class="field">
               <label>Backup Scope</label>
               <select id="bkp-scope-select">
@@ -1601,7 +1601,7 @@
               </div>
               <div style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                  <strong style="font-size:13px;">3. Stationary Room BLE Scanner Proxy</strong>
+                  <strong style="font-size:13px;">3. Stationary Area BLE Scanner Proxy</strong>
                   <button class="btn-secondary" style="padding:4px 10px;font-size:11.5px;" onclick="copyTextById('mixin-ble-proxy')">Copy</button>
                 </div>
                 <pre id="mixin-ble-proxy" class="mono" style="margin:0;padding:8px;background:var(--card);border:1px solid var(--border);border-radius:6px;overflow-x:auto;">packages:
@@ -1632,7 +1632,7 @@
             <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:10px;font-size:12.5px;">
               <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="yg-sensors" checked onchange="renderYamlGenerator()"> Push Sensors</label>
               <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="yg-browse" checked onchange="renderYamlGenerator()"> 5-Slot Callback</label>
-              <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="yg-room" checked onchange="renderYamlGenerator()"> Room Slider Callback</label>
+              <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="yg-area" checked onchange="renderYamlGenerator()"> Area Slider Callback</label>
               <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="yg-ble" checked onchange="renderYamlGenerator()"> BLE Beacon</label>
               <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="yg-actions" checked onchange="renderYamlGenerator()"> Action Examples</label>
             </div>
@@ -1706,7 +1706,7 @@
         </div>
 
         <div class="hero-stats" style="grid-template-columns:repeat(4, minmax(0, 1fr));">
-          <div class="stat-box"><span id="st-room-label">Current Area</span><strong id="st-room">--</strong></div>
+          <div class="stat-box"><span id="st-area-label">Current Area</span><strong id="st-area">--</strong></div>
           <div class="stat-box"><span>Battery / Power</span><strong id="st-battery">--</strong></div>
           <div class="stat-box"><span>Wi-Fi Signal</span><strong id="st-wifi">--</strong></div>
           <div class="stat-box"><span>Firmware Version</span><strong id="st-fw-version">--</strong></div>
@@ -1738,7 +1738,7 @@
                   <option value="admin">Administrator (Full Access)</option>
                   <option value="member">Site Member (Standard)</option>
                   <option value="guest">Guest (Restricted)</option>
-                  <option value="kiosk_room_only">Room Kiosk (Assigned Area Only)</option>
+                  <option value="kiosk_area_only">Area Kiosk (Assigned Area Only)</option>
                 </select>
               </div>
             </div>
@@ -1775,7 +1775,7 @@
       <section id="view-home_display" class="hidden">
         <div class="page-header">
           <h2>Display &amp; Home</h2>
-          <p>Configure screen brightness, color profile, clock face, home dock apps, room UI defaults, and wallpapers.</p>
+          <p>Configure screen brightness, color profile, clock face, home dock apps, area UI defaults, and wallpapers.</p>
         </div>
 
         <div class="grid-2">
@@ -1817,7 +1817,7 @@
 
           <div class="card">
             <h3>Home Screen &amp; Area UI</h3>
-            <p class="desc">Configure home screen behavior, dock apps, and default Room Control category.</p>
+            <p class="desc">Configure home screen behavior, dock apps, and default Area Control category.</p>
             <div id="embedded-home" class="native-controls-box" style="margin-bottom:14px;"></div>
 
             <div class="field">
@@ -1937,7 +1937,7 @@
       <section id="view-system" class="hidden">
         <div class="page-header">
           <h2>Device Administration</h2>
-          <p>Device identity, BLE room tracking configuration, WireGuard roaming VPN, and entity inspection.</p>
+          <p>Device identity, BLE area tracking configuration, WireGuard roaming VPN, and entity inspection.</p>
         </div>
 
         <div class="grid-2">
@@ -1970,10 +1970,10 @@
             </div>
           </div>
 
-          <!-- CARD 2: BLE ROOM TRACKING -->
+          <!-- CARD 2: BLE AREA TRACKING -->
           <div class="card">
             <h3>BLE Area Tracking</h3>
-            <p class="desc">Configure how this device roams between rooms using ESPHome Bluetooth proxies.</p>
+            <p class="desc">Configure how this device roams between areas using ESPHome Bluetooth proxies.</p>
             <div class="toggle-row">
               <span>Enable BLE Proxy Area Tracking</span>
               <input type="checkbox" id="cfg-native_ble_tracking" onchange="markDirty()">
@@ -1982,7 +1982,7 @@
               <span>Auto-Switch Active Area on Movement</span>
               <input type="checkbox" id="cfg-ble_auto_switch" onchange="markDirty()">
             </div>
-            <div id="embedded-room-ble" class="native-controls-box" style="margin-bottom:12px;"></div>
+            <div id="embedded-area-ble" class="native-controls-box" style="margin-bottom:12px;"></div>
             <div class="field">
               <label>Default Fallback Area</label>
               <select id="cfg-default_area" onchange="markDirty()"></select>
@@ -2192,7 +2192,7 @@ const HOUSEHOLD_VIEWS = [
   "household",
   "remotes",
   "fleet_sync",
-  "room_tracking",
+  "area_tracking",
   "system_admin"
 ];
 
@@ -2494,7 +2494,7 @@ const VIEW_TITLES = {
   household: "Shared Entities",
   remotes: "Media & Remotes",
   fleet_sync: "Groups & Profiles",
-  room_tracking: "BLE Calibration",
+  area_tracking: "BLE Calibration",
   system_admin: "Administration",
   select_device_prompt: "Devices",
   dashboard: "Overview",
@@ -2677,7 +2677,7 @@ function renderDockPillsFromInput() {
     .split(/[,;| ]+/)
     .map(t => {
       const v = t.trim().toLowerCase();
-      return v === "room" ? "area" : v;
+      return v;
     })
     .filter(Boolean);
 
@@ -2713,7 +2713,7 @@ function toggleDockAppToken(tok) {
     .split(/[,;| ]+/)
     .map(t => {
       const v = t.trim().toLowerCase();
-      return v === "room" ? "area" : v;
+      return v;
     })
     .filter(t => DOCK_APP_META.some(m => m.token === t));
   let nowEnabled = true;
@@ -2748,7 +2748,7 @@ function moveDockAppToken(tok, dir) {
     .split(/[,;| ]+/)
     .map(t => {
       const v = t.trim().toLowerCase();
-      return v === "room" ? "area" : v;
+      return v;
     })
     .filter(t => DOCK_APP_META.some(m => m.token === t));
   const idx = active.indexOf(tok);
@@ -3214,11 +3214,11 @@ async function setBleOffset(areaId, offsetDb) {
   const resp = await fetch(API_URL, {
     method: "POST",
     headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({command: "set_ble_room_offset", area_id: areaId, offset_db: offsetDb})
+    body: JSON.stringify({command: "set_ble_area_offset", area_id: areaId, offset_db: offsetDb})
   });
   if (resp.ok) {
     applyStateToDom(await resp.json(), false);
-    showToast("Saved BLE room offset");
+    showToast("Saved BLE area offset");
   }
 }
 
@@ -3277,7 +3277,7 @@ async function autoCalibrateHere(areaId) {
   });
   if (resp.ok) {
     applyStateToDom(await resp.json(), false);
-    showToast("Calibrated current room offset");
+    showToast("Calibrated current area offset");
   }
 }
 
@@ -3350,19 +3350,19 @@ async function sendTestNotification() {
   }
 }
 
-function renderLiveRoomCards(cards, areaName) {
-  const box = document.getElementById("live-room-cards");
+function renderLiveAreaCards(cards, areaName) {
+  const box = document.getElementById("live-area-cards");
   const cntEl = document.getElementById("st-card-count");
-  const areaEl = document.getElementById("st-room-cards-area");
+  const areaEl = document.getElementById("st-area-cards-area");
   if (areaEl) areaEl.textContent = areaName || "Home";
   if (cntEl) cntEl.textContent = String((cards || []).length);
   if (!box) return;
   if (!cards || !cards.length) {
-    box.innerHTML = `<p class="desc" style="margin:0;">No controllable room entities found in this area.</p>`;
+    box.innerHTML = `<p class="desc" style="margin:0;">No controllable area entities found in this area.</p>`;
     return;
   }
   box.innerHTML = cards.map(c => `
-    <div class="room-mini-card ${c.active ? 'on' : ''}" onclick="toggleRoomCard('${c.id}')">
+    <div class="area-mini-card ${c.active ? 'on' : ''}" onclick="toggleAreaCard('${c.id}')">
       <div style="min-width:0;padding-right:8px;">
         <strong style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${c.name}</strong>
         <small>${c.type}</small>
@@ -3372,11 +3372,11 @@ function renderLiveRoomCards(cards, areaName) {
   `).join("");
 }
 
-async function toggleRoomCard(entity_id) {
+async function toggleAreaCard(entity_id) {
   const resp = await fetch(API_URL, {
     method: "POST",
     headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({command: "room_card_action", entity_id, action: "toggle"})
+    body: JSON.stringify({command: "area_card_action", entity_id, action: "toggle"})
   });
   if (resp.ok) {
     applyStateToDom(await resp.json(), false);
@@ -3446,23 +3446,23 @@ function renderCohesiveDeviceSections() {
     });
   };
 
-  // 1. Split "room" section items into UI items (Default Category / Show All) vs BLE Beacon
-  const roomItems = getSectionItems("room");
-  const roomUiItems = [];
-  const roomBleItems = [];
-  roomItems.forEach(it => {
+  // 1. Split "area" section items into UI items (Default Category / Show All) vs BLE Beacon
+  const areaItems = getSectionItems("area");
+  const areaUiItems = [];
+  const areaBleItems = [];
+  areaItems.forEach(it => {
     const low = `${it.name} ${it.entity_id}`.toLowerCase();
-    if (low.includes("category")) roomUiItems.push(it);
-    else if (!low.includes("handoff")) roomBleItems.push(it);
+    if (low.includes("category")) areaUiItems.push(it);
+    else if (!low.includes("handoff")) areaBleItems.push(it);
   });
-  document.getElementById("embedded-room-ble").innerHTML = roomBleItems.map(it => renderNativeControlRow(it)).join("");
+  document.getElementById("embedded-area-ble").innerHTML = areaBleItems.map(it => renderNativeControlRow(it)).join("");
 
-  // 2. Home Screen & Room UI: Filter out the 6 redundant "Shortcut *" switches (handled by Home Dock App pills)
+  // 2. Home Screen & Area UI: Filter out the 6 redundant "Shortcut *" switches (handled by Home Dock App pills)
   const rawHomeItems = getSectionItems("home").filter(it => {
     const low = `${it.name} ${it.entity_id}`.toLowerCase();
     return !low.includes("shortcut");
   });
-  const homeItems = sortByOrder(rawHomeItems.concat(roomUiItems), [
+  const homeItems = sortByOrder(rawHomeItems.concat(areaUiItems), [
     "wake greeting", "weather background", "default category", "show all category"
   ]);
   document.getElementById("embedded-home").innerHTML = homeItems.length
@@ -4088,12 +4088,12 @@ function renderYamlGenerator() {
   if (!box) return;
   const slug = (document.getElementById("cfg-device_slug")?.value || STATE?.config?.device_slug || "esphome_device").trim().toLowerCase().replace(/-/g, "_");
   const nodeHyphen = slug.replace(/_/g, "-");
-  const roomSlots = Math.max(1, Math.min(20, parseInt(document.getElementById("cfg-default_page_size")?.value || STATE?.config?.default_page_size || 3, 10)));
+  const areaSlots = Math.max(1, Math.min(20, parseInt(document.getElementById("cfg-default_page_size")?.value || STATE?.config?.default_page_size || 3, 10)));
   const uuid = (document.getElementById("cfg-ble_beacon_uuid")?.value || STATE?.config?.ble_beacon_uuid || "504F434B-4554-4153-5354-000000000210").trim();
 
   const incSensors = document.getElementById("yg-sensors")?.checked;
   const incBrowse = document.getElementById("yg-browse")?.checked;
-  const incRoom = document.getElementById("yg-room")?.checked;
+  const incArea = document.getElementById("yg-area")?.checked;
   const incBle = document.getElementById("yg-ble")?.checked;
   const incActions = document.getElementById("yg-actions")?.checked;
 
@@ -4104,7 +4104,7 @@ function renderYamlGenerator() {
     ``
   ];
 
-  if (incBrowse || incRoom) {
+  if (incBrowse || incArea) {
     lines.push(`api:`);
     lines.push(`  actions:`);
     if (incBrowse) {
@@ -4122,7 +4122,7 @@ function renderYamlGenerator() {
         lines.push(`        s${i}_active: bool`);
       }
     }
-    if (incRoom) {
+    if (incArea) {
       lines.push(`    - action: set_area_slots`);
       lines.push(`      variables:`);
       lines.push(`        mode: string`);
@@ -4130,7 +4130,7 @@ function renderYamlGenerator() {
       lines.push(`        total_pages: int`);
       lines.push(`        has_prev: bool`);
       lines.push(`        has_next: bool`);
-      for (let i = 1; i <= roomSlots; i++) {
+      for (let i = 1; i <= areaSlots; i++) {
         lines.push(`        s${i}_name: string`);
         lines.push(`        s${i}_id: string`);
         lines.push(`        s${i}_type: string`);
@@ -4716,7 +4716,7 @@ function applyStateToDom(data, forceFormUpdate=false) {
   const cat = data.catalog;
   const esp = data.esphome;
 
-  const roomName = live.active_area_name || "Home";
+  const areaName = live.active_area_name || "Home";
   const caps = data.capabilities || {};
   const devTitle = esp?.device?.name || data.title;
   updateTopHeaderForScope();
@@ -4753,13 +4753,13 @@ function applyStateToDom(data, forceFormUpdate=false) {
 
   const hasAssignedArea = !!curFleet.has_assigned_area;
   const isRoaming = !hasAssignedArea;
-  const roomLblEl = document.getElementById("st-room-label");
-  if (roomLblEl) roomLblEl.textContent = hasAssignedArea ? "Area" : "Current Area (Roaming)";
+  const areaLblEl = document.getElementById("st-area-label");
+  if (areaLblEl) areaLblEl.textContent = hasAssignedArea ? "Area" : "Current Area (Roaming)";
 
   // 4 Hero Stat Boxes on Device Overview
   const rawDevSw = String(live.device_sw_version || esp?.device?.sw_version || data.version || "2.2.0").replace(/^v/i, "");
   document.getElementById("dash-header-title").textContent = "Overview";
-  document.getElementById("st-room").textContent = hasAssignedArea ? (curFleet.area_label || roomName) : roomName;
+  document.getElementById("st-area").textContent = hasAssignedArea ? (curFleet.area_label || areaName) : areaName;
   document.getElementById("st-battery").textContent = batText;
   document.getElementById("st-wifi").textContent = wifiText;
   const fwEl = document.getElementById("st-fw-version");
@@ -4775,8 +4775,8 @@ function applyStateToDom(data, forceFormUpdate=false) {
   document.getElementById("dash-hw-model").textContent = hwModel;
   document.getElementById("dash-ip-addr").textContent = ipStr;
   document.getElementById("dash-ble-mode").textContent = isRoaming
-    ? `Roaming (BLE Auto-Switch • ${roomName})`
-    : `Stationary (${roomName})`;
+    ? `Roaming (BLE Auto-Switch • ${areaName})`
+    : `Stationary (${areaName})`;
   const winRow = (live.ble_survey_rows || []).find(r => r.is_winner);
   const distSuffix = (winRow && winRow.distance_m != null) ? ` (~${winRow.distance_m}m / ${winRow.distance_ft}ft)` : "";
   document.getElementById("dash-ble-proxy").textContent = (live.ble_closest_proxy || "None") + distSuffix;
@@ -4938,7 +4938,7 @@ async function quickSwitchArea(areaId) {
   });
   if (resp.ok) {
     applyStateToDom(await resp.json(), false);
-    showToast("Switched active room");
+    showToast("Switched active area");
   }
 }
 

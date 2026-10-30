@@ -3,7 +3,7 @@
 When you install **Latter**, a new **Latter** panel is registered in your Home Assistant sidebar (and linked to the **Visit** button on each onboarded ESPHome device page).
 
 Latter Studio is organized into two scopes using the top-left switcher:
-1. **System Scope**: Shared household entities, BLE room calibration radar, device groups & reusable profiles, system/device backups, 4-slot TV remotes, and AVR volume routing.
+1. **System Scope**: Shared system entities, BLE area calibration radar, device groups & reusable profiles, system/device backups, 4-slot TV remotes, and AVR volume routing.
 2. **Device Scope**: Per-device live telemetry, capability-aware settings (Home & Display, Power, Voice Assistant, Audio & Media), BLE & WireGuard add-ons, and diagnostics.
 
 ---
@@ -13,7 +13,7 @@ Latter Studio is organized into two scopes using the top-left switcher:
 Settings configured under **System** are stored in `.storage/latter.household` and automatically shared across all companion devices in your home:
 
 - **Overview & Devices**:
-  - View all onboarded ESPHome devices, their current room, active speaker, and assigned Device Group.
+  - View all onboarded ESPHome devices, their current area, active speaker, and assigned Device Group.
   - Use **+ Bridge Existing Device** to onboard any existing 3rd-party ESPHome sensor (e.g., Everything Presence One, Bed Presence) in 1 click without editing YAML.
 - **Shared Entities**:
   - **Security Alarm** (`alarm_control_panel.*`): Used by the on-device Whole-Home Hub (Disarm, Arm Home, Arm Away).
@@ -21,7 +21,7 @@ Settings configured under **System** are stored in `.storage/latter.household` a
   - **Weather Forecast Provider** (`weather.*`): Drives the 20 FPS animated weather sky, 5-day forecast, and wake greetings.
   - **Primary Thermostat (`climate.*`), Entry Lock (`lock.*`), Garage Door (`cover.*`), Robot Vacuum (`vacuum.*`)**: Live entities controlled by the Whole-Home Hub (Page 9) on Pocket Assistant and Wrist Assist.
   - **Shared Calendars (`calendar.*`)**: Aggregated and deduplicated into upcoming agenda slots with automatic geocoded OpenStreetMap location views.
-  - **Pinned Entities**: Entities pinned here appear at the top of Room Control across all rooms.
+  - **Pinned Entities**: Entities pinned here appear at the top of Area Control across all areas.
 - **Remote Controls (4 Slots)**:
   - Assign up to 4 TVs, streaming boxes (Apple TV, Android TV / Shield / Fire TV / Bravia, Roku, Samsung, LG webOS), or AV Receivers (Denon / Marantz). Latter automatically pairs sibling `remote.*` and `media_player.*` entities on the same device.
 - **Volume Routing**:
@@ -39,7 +39,7 @@ Settings configured under **System** are stored in `.storage/latter.household` a
 Select any device in the sidebar dropdown to configure settings specific to that hardware:
 
 - **Home & Display**:
-  - Customize the Home Dock app order (`music,alarm,room,remote,games,tools`), choose a custom HSV Color Profile from the household color wheel, and upload or favorite photo wallpapers.
+  - Customize the Home Dock app order (`music,alarm,area,remote,games,tools`), choose a custom HSV Color Profile from the system color wheel, and upload or favorite photo wallpapers.
 - **Power**:
   - Adjust battery screen timeout, docked idle timeout, hibernate schedule, pickup-to-wake, tap-to-wake, and screensaver style (*Aurora Borealis*, *Starfield*, *Matrix Rain*, *Fireworks*, *Ambient Clock*).
 - **Voice Assistant**:

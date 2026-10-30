@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Add ESPHome Device to Latter",
-        "description": "Connect an ESPHome companion display, mixin node, or room sensor to Latter. Shared household entities, BLE room calibration, remotes, and wallpapers can be customized in the Latter Studio.",
+        "description": "Connect an ESPHome companion display, mixin node, or area sensor to Latter. Shared system entities, BLE area calibration, remotes, and wallpapers can be customized in the Latter Studio.",
         "data": {
           "device_slug": "ESPHome Device Name / Slug",
           "apply_profile": "Configuration Profile",
@@ -12,7 +12,7 @@
         "data_description": {
           "device_slug": "The normalized name of your ESPHome device (for example: pocket_assistant or wrist_assist).",
           "apply_profile": "Auto-detect screen geometry and capabilities from hardware, or apply a saved Latter profile.",
-          "native_ble_tracking": "Enable for portable/wearable devices that move room-to-room. Uncheck for stationary room devices."
+          "native_ble_tracking": "Enable for portable/wearable devices that move area-to-area. Uncheck for stationary area devices."
         }
       },
       "reconfigure": {
@@ -88,7 +88,7 @@
         "step": {
           "confirm": {
             "title": "Assign Bluetooth proxies to Home Assistant Areas",
-            "description": "Built-in BLE Room Tracking is enabled for **{device_slug}**, but no Bluetooth scanner proxies assigned to a Home Assistant Area were detected. Assign your ESPHome BLE proxies to their corresponding Areas in Home Assistant, or disable BLE tracking if stationary."
+            "description": "Built-in BLE Area Tracking is enabled for **{device_slug}**, but no Bluetooth scanner proxies assigned to a Home Assistant Area were detected. Assign your ESPHome BLE proxies to their corresponding Areas in Home Assistant, or disable BLE tracking if stationary."
           }
         }
       }

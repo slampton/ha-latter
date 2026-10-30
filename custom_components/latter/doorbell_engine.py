@@ -801,7 +801,7 @@ async def async_execute_doorbell_intercom(
     anc_mode: str | None = None,
     camera_index: int | None = None,
 ) -> dict[str, Any]:
-    """Execute a unified two-way doorbell, SIP, or room-to-room intercom command."""
+    """Execute a unified two-way doorbell, SIP, or area-to-area intercom command."""
     act = (action or "listen_toggle").strip().lower()
     dsp = get_dsp_pipeline(hass)
     sip = get_sip_engine(hass)
@@ -842,7 +842,7 @@ async def async_execute_doorbell_intercom(
         await sip.async_send_dtmf(message if message else None)
         return target_info
 
-    # 2. Room-to-Room Device Call or Outbound SIP Speed-Dial Call
+    # 2. Area-to-Area Device Call or Outbound SIP Speed-Dial Call
     if act == "call_target":
         target_str = (message or "").strip()
         if target_str.startswith("sip:") or "@" in target_str:
@@ -851,7 +851,7 @@ async def async_execute_doorbell_intercom(
             coordinator._notify_listeners()
             return target_info
 
-        # Room-to-Room Call to another Latter display (or 'all' displays)
+        # Area-to-Area Call to another Latter display (or 'all' displays)
         domain_data = hass.data.get(DOMAIN, {})
         all_coords = [v for v in domain_data.values() if hasattr(v, "device_slug")]
         caller_title = coordinator.device_slug.replace("_", " ").title()

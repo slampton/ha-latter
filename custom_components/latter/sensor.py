@@ -53,13 +53,6 @@ async def async_setup_entry(
             ]
         )
 
-    # Automatically purge any legacy _current_room / _room_context entities from HA Entity Registry
-    from homeassistant.helpers import entity_registry as er
-    ent_reg = er.async_get(hass)
-    for ent_entry in list(er.async_entries_for_config_entry(ent_reg, entry.entry_id)):
-        if ent_entry.entity_id.endswith(("_current_room", "_room_context")):
-            ent_reg.async_remove(ent_entry.entity_id)
-
     domain_data = hass.data.setdefault(DOMAIN, {})
     registered_persons: set[str] = domain_data.setdefault("registered_person_sensors", set())
 

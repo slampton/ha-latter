@@ -1,5 +1,5 @@
 # ==============================================================================
-# Latter 1-Line Drop-In Mixin: Stationary Room BLE Scanner Proxy
+# Latter 1-Line Drop-In Mixin: Stationary Area BLE Scanner Proxy
 # Usage in any mains-powered ESP32 device YAML:
 #   packages:
 #     latter.proxy: github://slampton/ha-latter/esphome/latter-ble-proxy.yaml@main
@@ -8,6 +8,7 @@
 api:
   actions:
     - action: latter_ping
+      id: latter_ping_action
       then:
         - logger.log: "Latter Stationary BLE Scanner Proxy Mixin active"
 

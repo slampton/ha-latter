@@ -1,4 +1,4 @@
-"""Service registration for Latter (Universal ESPHome Pagination, Room Control, BLE Area Sync, TV Remote, Trigger Bindings, Calendar, Intercom)."""
+"""Service registration for Latter (Universal ESPHome Pagination, Area Control, BLE Area Sync, TV Remote, Trigger Bindings, Calendar, Intercom)."""
 
 from __future__ import annotations
 
@@ -326,24 +326,24 @@ def _is_esphome_device_online(hass: HomeAssistant, coord: LatterCoordinator) -> 
     return False
 
 
-async def async_push_active_room_entities(
+async def async_push_active_area_entities(
     hass: HomeAssistant, coord: LatterCoordinator
 ) -> None:
-    """Push the active room's entity slots to esphome.<slug>_set_area_slots when the device is online."""
+    """Push the active area's entity slots to esphome.<slug>_set_area_slots when the device is online."""
     if not _is_esphome_device_online(hass, coord):
         return
     items = get_area_entities(
         hass,
         area_id=coord.active_area_id,
-        domain_filter=coord.last_room_filter or "all",
+        domain_filter=coord.last_area_filter or "all",
         custom_entities=coord.custom_entities,
         local_speaker=coord.local_speaker,
     )
     await async_push_browse_slots(
         hass=hass,
         device_slug=coord.device_slug,
-        mode=f"room_{coord.last_room_filter or 'all'}",
-        page=coord.last_room_page or 1,
+        mode=f"area_{coord.last_area_filter or 'all'}",
+        page=coord.last_area_page or 1,
         page_size=coord.default_page_size,
         items=items,
         preferred_suffix="set_area_slots",
@@ -355,7 +355,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     domain_data = hass.data.get(DOMAIN, {})
     for val in domain_data.values():
         if isinstance(val, LatterCoordinator):
-            val.on_area_changed_push_slots = lambda c: async_push_active_room_entities(hass, c)
+            val.on_area_changed_push_slots = lambda c: async_push_active_area_entities(hass, c)
 
     if hass.services.has_service(DOMAIN, SERVICE_MUSIC_BROWSE):
         return
@@ -738,7 +738,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             preferred_suffix="set_browse_slots",
         )
 
-    async def _handle_room_browse(call: ServiceCall) -> None:
+    async def _handle_area_browse(call: ServiceCall) -> None:
         coord = _resolve_coordinator_from_call(hass, call)
         data = call.data
         raw_target = data.get("device_slug") or data.get("target_device")
@@ -765,14 +765,14 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
         if coord:
             if mode == "entities":
-                coord.last_room_filter = domain_filter
-                coord.last_room_page = page
+                coord.last_area_filter = domain_filter
+                coord.last_area_page = page
             if area_id and area_id != coord.active_area_id:
                 coord.on_area_changed_push_slots = None
                 coord.async_set_active_area(
                     area_id, handoff_media=False, sync_device_registry=False
                 )
-                coord.on_area_changed_push_slots = lambda c: async_push_active_room_entities(hass, c)
+                coord.on_area_changed_push_slots = lambda c: async_push_active_area_entities(hass, c)
 
         if mode == "areas":
             items = get_areas_summary(
@@ -781,14 +781,14 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 local_speaker=local_speaker,
                 device_slug=device_slug,
             )
-            slot_mode = "room_areas"
+            slot_mode = "area_areas"
         elif mode == "home":
             items = get_home_wide_entities(
                 hass,
                 configured_alarm_entity=coord.get_opt(CONF_ALARM_ENTITY) if coord else None,
                 custom_entities=coord.custom_entities if coord else None,
             )
-            slot_mode = "room_home"
+            slot_mode = "area_home"
         else:
             items = get_area_entities(
                 hass,
@@ -797,7 +797,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 custom_entities=coord.custom_entities if coord else None,
                 local_speaker=local_speaker,
             )
-            slot_mode = f"room_{domain_filter}"
+            slot_mode = f"area_{domain_filter}"
 
         target_suffix = "set_browse_slots" if mode == "areas" else "set_area_slots"
         await async_push_browse_slots(
@@ -810,7 +810,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             preferred_suffix=target_suffix,
         )
 
-    async def _handle_room_action(call: ServiceCall) -> None:
+    async def _handle_area_action(call: ServiceCall) -> None:
         coord = _resolve_coordinator_from_call(hass, call)
         data = call.data
 
@@ -847,7 +847,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             if coord:
                 await asyncio.sleep(0.15)
                 coord._notify_listeners()
-                await async_push_active_room_entities(hass, coord)
+                await async_push_active_area_entities(hass, coord)
 
     async def _handle_calendar_fetch(call: ServiceCall) -> None:
         coord = _resolve_coordinator_from_call(hass, call)
@@ -1115,7 +1115,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN,
         SERVICE_AREA_BROWSE,
-        _handle_room_browse,
+        _handle_area_browse,
         schema=vol.Schema(
             {
                 **BASE_TARGET_FIELDS,
@@ -1132,7 +1132,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN,
         SERVICE_AREA_ACTION,
-        _handle_room_action,
+        _handle_area_action,
         schema=vol.Schema(
             {
                 **BASE_TARGET_FIELDS,

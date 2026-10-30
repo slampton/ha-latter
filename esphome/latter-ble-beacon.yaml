@@ -1,5 +1,5 @@
 # ==============================================================================
-# Latter 1-Line Drop-In Mixin: Roaming BLE Room Presence Beacon
+# Latter 1-Line Drop-In Mixin: Roaming BLE Area Presence Beacon
 # Usage in any ESP32 device YAML:
 #   packages:
 #     latter.ble: github://slampton/ha-latter/esphome/latter-ble-beacon.yaml@main
@@ -11,8 +11,9 @@ substitutions:
 api:
   actions:
     - action: latter_ping
+      id: latter_ping_action
       then:
-        - logger.log: "Latter BLE Room Presence Mixin active"
+        - logger.log: "Latter BLE Area Presence Mixin active"
 
 esp32_ble:
   id: latter_ble_ctrl
@@ -30,7 +31,7 @@ esp32_ble_beacon:
 
 switch:
   - platform: template
-    name: "Room: BLE Presence Beacon"
+    name: "Area: BLE Presence Beacon"
     id: latter_ble_beacon_switch
     icon: "mdi:bluetooth-audio"
     entity_category: config

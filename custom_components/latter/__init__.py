@@ -84,7 +84,7 @@ def is_latter_compatible_esphome_device(
     hass: HomeAssistant, device: dr.DeviceEntry, slug: str
 ) -> bool:
     """Return True ONLY if the ESPHome device implements the Latter API contract or Latter project namespace."""
-    # 1. Check registered ESPHome API contract actions (_set_browse_slots, _set_room_slots, _show_notification, _latter_ping)
+    # 1. Check registered ESPHome API contract actions (_set_browse_slots, _set_area_slots, _show_notification, _latter_ping)
     esphome_services = hass.services.async_services().get("esphome", {})
     for suffix in LATTER_CONTRACT_ACTION_SUFFIXES:
         exact = f"{slug}{suffix}"

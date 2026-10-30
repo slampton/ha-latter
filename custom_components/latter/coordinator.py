@@ -257,7 +257,7 @@ def _interpolate_speaker_position(state_obj: Any) -> float:
 
 
 class LatterCoordinator:
-    """Manages active speaker, BLE room context, 4-slot remotes, custom bindings, wallpapers, alarm, calendar, and weather."""
+    """Manages active speaker, BLE area context, 4-slot remotes, custom bindings, wallpapers, alarm, calendar, and weather."""
 
     def __init__(
         self,
@@ -281,8 +281,8 @@ class LatterCoordinator:
         self._unsub_alarm_state: Callable[[], None] | None = None
         self._unsub_presence_state: Callable[[], None] | None = None
         self._unsub_remotes_state: Callable[[], None] | None = None
-        self._unsub_room_entities_state: Callable[[], None] | None = None
-        self._unsub_room_debounce: Callable[[], None] | None = None
+        self._unsub_area_entities_state: Callable[[], None] | None = None
+        self._unsub_area_debounce: Callable[[], None] | None = None
         self._unsub_position_timer: Callable[[], None] | None = None
         self._unsub_forecast_timer: Callable[[], None] | None = None
         self._unsub_calendar_timer: Callable[[], None] | None = None
@@ -297,8 +297,8 @@ class LatterCoordinator:
         self.active_area_id: str | None = self.get_opt(CONF_DEFAULT_AREA)
         self.active_remote: str = ""
         self.active_remote_slot: int = 1
-        self.last_room_filter: str = "scene"
-        self.last_room_page: int = 1
+        self.last_area_filter: str = "scene"
+        self.last_area_page: int = 1
         self.on_area_changed_push_slots: Callable[[LatterCoordinator], Any] | None = None
 
         # Persisted track metadata & URI for post-reboot Sendspin queue resumption
@@ -378,7 +378,7 @@ class LatterCoordinator:
         self._bind_weather_listener()
         self._bind_alarm_listener()
         self._bind_remotes_listener()
-        self._bind_room_entities_listener()
+        self._bind_area_entities_listener()
         await self.async_refresh_weather_forecast()
         await self.async_refresh_calendar_agenda()
         self._notify_listeners()
@@ -438,7 +438,7 @@ class LatterCoordinator:
 
     @property
     def default_page_size(self) -> int:
-        """Return default room/entity pagination page size for this device's GUI."""
+        """Return default area/entity pagination page size for this device's GUI."""
         return max(
             1,
             min(20, int(self.get_opt(CONF_DEFAULT_PAGE_SIZE, DEFAULT_PAGE_SIZE))),
@@ -585,8 +585,8 @@ class LatterCoordinator:
         return cleaned[:10]
 
     def _build_intercom_targets_summary(self) -> str:
-        """Build semicolon-delimited 'target_id|Friendly Label;...' for Room-to-Room & SIP Speed-Dial calling."""
-        rows: list[str] = ["all|Call All Rooms"]
+        """Build semicolon-delimited 'target_id|Friendly Label;...' for Area-to-Area & SIP Speed-Dial calling."""
+        rows: list[str] = ["all|Call All Areas"]
         domain_data = self.hass.data.get(DOMAIN, {})
         for val in domain_data.values():
             if hasattr(val, "device_slug") and getattr(val, "device_profile", "") != "ble_beacon":
@@ -689,7 +689,7 @@ class LatterCoordinator:
 
     @property
     def presence_entity(self) -> str | None:
-        """Return configured external BLE room presence entity_id (e.g. Bermuda)."""
+        """Return configured external BLE area presence entity_id (e.g. Bermuda)."""
         val = self.get_opt(CONF_PRESENCE_ENTITY)
         return str(val) if val else None
 
@@ -701,18 +701,18 @@ class LatterCoordinator:
 
     @property
     def assigned_role(self) -> str:
-        """Return RBAC role assigned to this device (admin, member, guest, kiosk_room_only)."""
+        """Return RBAC role assigned to this device (admin, member, guest, kiosk_area_only)."""
         val = str(self.get_opt(CONF_ASSIGNED_ROLE, DEFAULT_ASSIGNED_ROLE) or DEFAULT_ASSIGNED_ROLE).strip().lower()
-        return val if val in ("admin", "member", "guest", "kiosk_room_only") else DEFAULT_ASSIGNED_ROLE
+        return val if val in ("admin", "member", "guest", "kiosk_area_only") else DEFAULT_ASSIGNED_ROLE
 
     @property
     def ble_auto_switch_enabled(self) -> bool:
-        """Return True if BLE presence changes should auto-switch active room."""
+        """Return True if BLE presence changes should auto-switch active area."""
         return bool(self.get_opt(CONF_BLE_AUTO_SWITCH, DEFAULT_BLE_AUTO_SWITCH))
 
     @property
     def sync_device_area_enabled(self) -> bool:
-        """Return True if active room should sync to ESPHome Device Registry for Voice Assistant."""
+        """Return True if active area should sync to ESPHome Device Registry for Voice Assistant."""
         return bool(self.get_opt(CONF_SYNC_DEVICE_AREA, DEFAULT_SYNC_DEVICE_AREA))
 
     @property
@@ -748,7 +748,7 @@ class LatterCoordinator:
 
     @property
     def area_handoff_enabled(self) -> bool:
-        """Return True if switching rooms should hand off active speaker/remote context."""
+        """Return True if switching areas should hand off active speaker/remote context."""
         return bool(self.get_opt(CONF_AREA_HANDOFF, DEFAULT_AREA_HANDOFF))
 
     @property
@@ -1026,7 +1026,7 @@ class LatterCoordinator:
 
         explicit_default_area = str(self.get_opt(CONF_DEFAULT_AREA) or "").strip()
         if self.native_ble_tracking_enabled and not explicit_default_area:
-            # Roaming BLE device without a fixed default area: never assume a non-proxy room from storage or alphabetical fallback!
+            # Roaming BLE device without a fixed default area: never assume a non-proxy area from storage or alphabetical fallback!
             if self.active_area_id and proxy_areas and self.active_area_id not in proxy_areas:
                 self.active_area_id = None
         elif not self.active_area_id:
@@ -1042,7 +1042,7 @@ class LatterCoordinator:
         self._bind_alarm_listener()
         self._bind_presence_listener()
         self._bind_remotes_listener()
-        self._bind_room_entities_listener()
+        self._bind_area_entities_listener()
 
         self._unsub_play_interceptor = self.hass.bus.async_listen(
             EVENT_CALL_SERVICE, self._async_on_service_call_event
@@ -1094,8 +1094,8 @@ class LatterCoordinator:
             self._unsub_alarm_state,
             self._unsub_presence_state,
             self._unsub_remotes_state,
-            self._unsub_room_entities_state,
-            self._unsub_room_debounce,
+            self._unsub_area_entities_state,
+            self._unsub_area_debounce,
             self._unsub_position_timer,
             self._unsub_forecast_timer,
             self._unsub_calendar_timer,
@@ -1110,8 +1110,8 @@ class LatterCoordinator:
         self._unsub_alarm_state = None
         self._unsub_presence_state = None
         self._unsub_remotes_state = None
-        self._unsub_room_entities_state = None
-        self._unsub_room_debounce = None
+        self._unsub_area_entities_state = None
+        self._unsub_area_debounce = None
         self._unsub_position_timer = None
         self._unsub_forecast_timer = None
         self._unsub_calendar_timer = None
@@ -1119,49 +1119,49 @@ class LatterCoordinator:
         self._listeners.clear()
 
     @callback
-    def _bind_room_entities_listener(self) -> None:
-        """Subscribe to state changes on all curated entities in the active room for live two-way sync."""
-        if self._unsub_room_entities_state is not None:
-            self._unsub_room_entities_state()
-            self._unsub_room_entities_state = None
+    def _bind_area_entities_listener(self) -> None:
+        """Subscribe to state changes on all curated entities in the active area for live two-way sync."""
+        if self._unsub_area_entities_state is not None:
+            self._unsub_area_entities_state()
+            self._unsub_area_entities_state = None
 
-        room_items = get_area_entities(
+        area_items = get_area_entities(
             self.hass,
             area_id=self.active_area_id,
             domain_filter="all",
             custom_entities=self.custom_entities,
             local_speaker=self.local_speaker,
         )
-        tracked_ids = [str(it["id"]) for it in room_items if it.get("id")]
+        tracked_ids = [str(it["id"]) for it in area_items if it.get("id")]
         if not tracked_ids:
             return
 
-        self._unsub_room_entities_state = async_track_state_change_event(
+        self._unsub_area_entities_state = async_track_state_change_event(
             self.hass,
             tracked_ids,
-            self._async_on_room_entity_state_change,
+            self._async_on_area_entity_state_change,
         )
 
     @callback
-    def _async_on_room_entity_state_change(
+    def _async_on_area_entity_state_change(
         self, event: Event[EventStateChangedData]
     ) -> None:
-        """Debounce active room entity state changes (250ms) and push updated room slots to ESPHome."""
+        """Debounce active area entity state changes (250ms) and push updated area slots to ESPHome."""
         self._notify_listeners()
-        if self._unsub_room_debounce is not None:
-            self._unsub_room_debounce()
-            self._unsub_room_debounce = None
+        if self._unsub_area_debounce is not None:
+            self._unsub_area_debounce()
+            self._unsub_area_debounce = None
 
         @callback
-        def _push_room_update(_now: datetime) -> None:
-            self._unsub_room_debounce = None
+        def _push_area_update(_now: datetime) -> None:
+            self._unsub_area_debounce = None
             if self.on_area_changed_push_slots is not None:
                 self.hass.async_create_task(
                     self.on_area_changed_push_slots(self)
                 )
 
-        self._unsub_room_debounce = async_call_later(
-            self.hass, 0.25, _push_room_update
+        self._unsub_area_debounce = async_call_later(
+            self.hass, 0.25, _push_area_update
         )
 
     @callback
@@ -1238,7 +1238,7 @@ class LatterCoordinator:
             self._schedule_persist_runtime_state()
 
     async def _async_handle_device_reconnect(self) -> None:
-        """Reset idle remote speaker, re-assert Visit link, sync BLE room lock, and push active room slots after ESPHome boot/wake."""
+        """Reset idle remote speaker, re-assert Visit link, sync BLE area lock, and push active area slots after ESPHome boot/wake."""
         from .area_engine import inject_esphome_visit_link
         inject_esphome_visit_link(self.hass, self.device_slug, self.build_companion_url())
         self._enforce_local_speaker_if_remote_idle("device_reconnect")
@@ -1613,7 +1613,7 @@ class LatterCoordinator:
             return False
         if self.device_profile == "ble_beacon":
             return True
-        # For ESPHome displays, if connected to local Wi-Fi (not away), keep last room when sleeping in Standby
+        # For ESPHome displays, if connected to local Wi-Fi (not away), keep last area when sleeping in Standby
         wifi_st = (
             self.hass.states.get(f"sensor.{self.device_slug}_wi_fi_signal")
             or self.hass.states.get(f"sensor.{self.device_slug}_wifi_signal")
@@ -1637,24 +1637,24 @@ class LatterCoordinator:
             ) or (explicit_default if not away else None)
             area_entry = area_reg.async_get_area(ble_area_id) if ble_area_id else None
             if away:
-                room_state = "Away"
+                area_state = "Away"
             elif area_entry is not None:
-                room_state = area_entry.name
+                area_state = area_entry.name
             else:
-                room_state = "Unassigned"
+                area_state = "Unassigned"
             eff_area_id = ble_area_id or ""
         else:
             eff_area_id = "" if away else (self.active_area_id or explicit_default)
             area_entry = area_reg.async_get_area(eff_area_id) if eff_area_id else None
-            room_state = "Away" if away else (area_entry.name if area_entry else "Unassigned")
+            area_state = "Away" if away else (area_entry.name if area_entry else "Unassigned")
 
         dist_ft = self._ble_tracker.winning_distance_ft if (self._ble_tracker and not away and eff_area_id) else None
         dist_m = self._ble_tracker.winning_distance_m if (self._ble_tracker and not away and eff_area_id) else None
         rssi = self._ble_tracker.winning_rssi if (self._ble_tracker and not away and eff_area_id) else None
         proxy = self._ble_tracker.closest_scanner if (self._ble_tracker and not away and eff_area_id) else ""
-        return room_state, {
+        return area_state, {
             "area_id": eff_area_id,
-            "area_name": room_state,
+            "area_name": area_state,
             "is_home": not away,
             "closest_proxy": proxy,
             "distance_ft": dist_ft,
@@ -1667,7 +1667,7 @@ class LatterCoordinator:
     def _async_on_native_ble_area_detected(
         self, area_id: str, scanner_source: str
     ) -> None:
-        """Handle room transition or Away timeout detected by Latter's BLE proxy tracker."""
+        """Handle area transition or Away timeout detected by Latter's BLE proxy tracker."""
         if area_id == "away":
             self._notify_listeners()
             return
@@ -1923,18 +1923,18 @@ class LatterCoordinator:
         handoff_media: bool | None = None,
         sync_device_registry: bool = False,
     ) -> None:
-        """Switch active room area, persist to Store, sync ESPHome device area, and hand off media."""
+        """Switch active area, persist to Store, sync ESPHome device area, and hand off media."""
         matched_id = match_area_by_name_or_id(self.hass, area_id_or_name)
         if not matched_id:
             return
         prev_area = self.active_area_id
         self.active_area_id = matched_id
-        self._bind_room_entities_listener()
+        self._bind_area_entities_listener()
         if prev_area != matched_id:
             self.hass.bus.async_fire(
                 EVENT_LATTER,
                 {
-                    "type": "room_changed",
+                    "type": "area_changed",
                     "device_slug": self.device_slug,
                     "previous_area_id": prev_area or "",
                     "area_id": matched_id,
@@ -2314,7 +2314,7 @@ class LatterCoordinator:
 
     @callback
     def _bind_presence_listener(self) -> None:
-        """Subscribe to external BLE trilateration room presence entity changes."""
+        """Subscribe to external BLE trilateration area presence entity changes."""
         if self._unsub_presence_state is not None:
             self._unsub_presence_state()
             self._unsub_presence_state = None
@@ -2363,7 +2363,7 @@ class LatterCoordinator:
     def _async_on_presence_state_change(
         self, event: Event[EventStateChangedData]
     ) -> None:
-        """Auto-switch active room when external BLE presence sensor reports a new area."""
+        """Auto-switch active area when external BLE presence sensor reports a new area."""
         new_state = event.data.get("new_state")
         if new_state is None or not self.ble_auto_switch_enabled:
             self._notify_listeners()

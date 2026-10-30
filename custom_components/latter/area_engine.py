@@ -63,7 +63,7 @@ UNIVERSAL_SECTION_META: tuple[tuple[str, str, str], ...] = (
     ("voice", "Voice Assistant", "Wake word models, microphone mute, and voice detection sensitivity."),
     ("sound", "Sound & Alerts", "Onboard speaker chimes, alert volume, and volume step increments."),
     ("music", "Music & Media", "Media player entity and library, artist, album, and podcast sorting options."),
-    ("room", "Area & BLE Presence", "BLE presence beacon toggle and automatic area handoff settings."),
+    ("area", "Area & BLE Presence", "BLE presence beacon toggle and automatic area handoff settings."),
     ("remote", "TV & Media Remote", "Active remote slot selection and on-device remote behavior."),
     ("battery", "Battery & Power", "Battery charge level, charging status, PMIC voltage, and internal temperature."),
     ("actions", "Device Actions", "One-tap restart, hibernate, refresh, and maintenance triggers."),
@@ -100,8 +100,8 @@ def classify_esphome_entity_section(
             return "sound", None
         if prefix_low in ("music", "media", "player"):
             return "music", None
-        if prefix_low in ("room", "ble", "area", "presence"):
-            return "room", None
+        if prefix_low in ("ble", "area", "presence"):
+            return "area", None
         if prefix_low in ("remote", "tv"):
             return "remote", None
         if prefix_low in ("battery", "power", "pmic"):
@@ -182,8 +182,8 @@ def classify_esphome_entity_section(
     if any(k in clean_low or k in ent_suffix for k in ("sound", "chime", "beep", "ringtone", "alert_volume", "volume_step", "dac", "es8311")):
         return "sound", None
 
-    if any(k in clean_low or k in ent_suffix for k in ("ble", "beacon", "ibeacon", "presence", "room", "area")):
-        return "room", None
+    if any(k in clean_low or k in ent_suffix for k in ("ble", "beacon", "ibeacon", "presence", "area")):
+        return "area", None
 
     if any(k in clean_low or k in ent_suffix for k in ("remote", "slot_1", "slot_2", "slot_3", "slot_4")):
         return "remote", None
@@ -219,7 +219,7 @@ def resolve_entity_area_id(
 def match_area_by_name_or_id(
     hass: HomeAssistant, raw_value: str
 ) -> str | None:
-    """Match a BLE presence sensor state (room name, slug, or area_id) to a valid HA area_id."""
+    """Match a BLE presence sensor state (area name, slug, or area_id) to a valid HA area_id."""
     val = raw_value.strip()
     if not val or val.lower() in (
         "unknown",
@@ -570,7 +570,7 @@ INTERNAL_DEVICE_CONTROL_KEYWORDS: tuple[str, ...] = (
 def _is_internal_device_control_entity(
     entity_id: str, friendly_name: str, is_companion_display: bool = False
 ) -> bool:
-    """Return True if a light or switch is an internal ESPHome hardware/UI control rather than a room load."""
+    """Return True if a light or switch is an internal ESPHome hardware/UI control rather than an area load."""
     if is_companion_display:
         return True
     ent_suffix = entity_id.split(".", 1)[-1].lower()
@@ -586,7 +586,7 @@ def _is_internal_device_control_entity(
             "voice",
             "sound",
             "music",
-            "room",
+            "area",
             "remote",
             "system",
             "actions",
@@ -598,7 +598,7 @@ def _is_internal_device_control_entity(
 def _unexpose_entity_from_voice_assistants(
     hass: HomeAssistant, entity_id: str
 ) -> None:
-    """Unexpose an internal device backlight or hardware switch from Assist/Alexa/Google room commands."""
+    """Unexpose an internal device backlight or hardware switch from Assist/Alexa/Google area commands."""
     try:
         from homeassistant.components.homeassistant.exposed_entities import (
             async_expose_entity,
@@ -616,7 +616,7 @@ def _unexpose_entity_from_voice_assistants(
 def protect_handheld_sensors_from_area_dashboards(
     hass: HomeAssistant, device_slug: str, device_profile: str = "mobile_display"
 ) -> None:
-    """Shield internal device backlights, hardware switches, and mobile sensors from Area dashboards and Assist room commands."""
+    """Shield internal device backlights, hardware switches, and mobile sensors from Area dashboards and Assist area commands."""
     target_device_id = find_esphome_device_id(hass, device_slug)
     if not target_device_id:
         return
@@ -658,7 +658,7 @@ def protect_handheld_sensors_from_area_dashboards(
 
         # 2. On ANY onboarded ESPHome device (native display or bridged node), shield internal
         #    backlights (light.*) and internal hardware/config switches (switch.*) from Area
-        #    room commands ("Turn off all lights" / "Turn off everything") and Area cards
+        #    area commands ("Turn off all lights" / "Turn off everything") and Area cards
         if entry.domain in ("light", "switch"):
             if _is_internal_device_control_entity(
                 entry.entity_id, friendly, is_companion_display=is_companion_display
@@ -671,7 +671,7 @@ def protect_handheld_sensors_from_area_dashboards(
                 if updates:
                     ent_reg.async_update_entity(entry.entity_id, **updates)
                     _LOGGER.info(
-                        "Shielded internal device entity '%s' (CONFIG + Hidden from Area/Room controls)",
+                        "Shielded internal device entity '%s' (CONFIG + Hidden from Area controls)",
                         entry.entity_id,
                     )
                 _unexpose_entity_from_voice_assistants(hass, entry.entity_id)
@@ -683,7 +683,7 @@ def sync_esphome_device_area(
     area_id: str,
     require_ble_proxy_area: bool = True,
 ) -> None:
-    """Update the ESPHome device's area_id in HA Device Registry ONLY for valid rooms."""
+    """Update the ESPHome device's area_id in HA Device Registry ONLY for valid areas."""
     if not area_id:
         return
 
@@ -705,7 +705,7 @@ def sync_esphome_device_area(
         if dev and dev.area_id != area_id:
             dev_reg.async_update_device(target_device_id, area_id=area_id)
             _LOGGER.debug(
-                "Synced ESPHome device '%s' (id=%s) to area_id='%s' for room-aware Voice Assistant",
+                "Synced ESPHome device '%s' (id=%s) to area_id='%s' for area-aware Voice Assistant",
                 device_slug,
                 target_device_id,
                 area_id,
@@ -782,7 +782,7 @@ def resolve_remote_slot_pair(
 def _get_companion_display_device_ids_and_slugs(
     hass: HomeAssistant, local_speaker: str = ""
 ) -> tuple[set[str], set[str]]:
-    """Return (device_ids, slugs) of all Latter companion displays so their own backlights/switches never appear as room loads."""
+    """Return (device_ids, slugs) of all Latter companion displays so their own backlights/switches never appear as area loads."""
     dev_ids: set[str] = set()
     slugs: set[str] = set()
     if local_speaker.startswith("media_player."):
@@ -818,7 +818,7 @@ def _is_curated_area_entity(
     friendly = str(attrs.get("friendly_name") or state_obj.entity_id)
     dev_class = str(attrs.get("device_class") or "").lower()
 
-    # Never include a companion display's own backlight/switches or ESPHome internal hardware controls in Room Control
+    # Never include a companion display's own backlight/switches or ESPHome internal hardware controls in Area Control
     if domain in ("light", "switch", "fan", "cover"):
         comp_dev_ids, comp_slugs = _get_companion_display_device_ids_and_slugs(
             hass, local_speaker
@@ -922,7 +922,7 @@ def format_entity_slot_name(state_obj: State, area_name: str = "") -> str:
 def get_area_climate_telemetry(
     hass: HomeAssistant, area_id: str | None, device_slug: str = ""
 ) -> dict[str, Any]:
-    """Discover ambient room temperature and humidity assigned to an area."""
+    """Discover ambient area temperature and humidity assigned to an area."""
     result: dict[str, Any] = {
         "temperature": None,
         "temperature_unit": "",
@@ -1272,7 +1272,7 @@ def get_area_available_domains(
     custom_entities: list[str] | None = None,
     local_speaker: str = "",
 ) -> str:
-    """Return comma-separated canonical room categories ('scene,light,cover,fan,switch') present in the active area."""
+    """Return comma-separated canonical area categories ('scene,light,cover,fan,switch') present in the active area."""
     all_items = get_area_entities(
         hass,
         area_id=area_id,

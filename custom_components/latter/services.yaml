@@ -209,18 +209,18 @@ media_volume:
           mode: slider
 
 set_active_area:
-  name: Set Active Room / Area (BLE Presence & Voice Sync)
-  description: Switch the active room context by area_id or room name, sync the ESPHome device's HA area for room-aware Voice Assistant, and optionally hand off speaker/remote.
+  name: Set Active Area (BLE Presence & Voice Sync)
+  description: Switch the active area context by area_id or area name, sync the ESPHome device's HA area for area-aware Voice Assistant, and optionally hand off speaker/remote.
   fields:
     area:
-      name: Area ID or Room Name
-      description: Target Home Assistant area_id or friendly room name.
+      name: Area ID or Area Name
+      description: Target Home Assistant area_id or friendly area name.
       required: true
       selector:
         text:
     handoff_media:
       name: Handoff Media Context
-      description: Optional override for automatic room speaker & remote handoff.
+      description: Optional override for automatic area speaker & remote handoff.
       required: false
       selector:
         boolean:
@@ -274,8 +274,8 @@ remote_action:
         text:
 
 area_browse:
-  name: Room Browse
-  description: Browse Home Assistant areas, curated room entities, or home-wide alarm/pinned entities and push paginated slots to the ESPHome device.
+  name: Area Browse
+  description: Browse Home Assistant areas, curated area entities, or home-wide alarm/pinned entities and push paginated slots to the ESPHome device.
   fields:
     target_device:
       name: Target ESPHome Device
@@ -302,7 +302,7 @@ area_browse:
         area:
     domain_filter:
       name: Domain Filter
-      description: Filter room entities by domain or category.
+      description: Filter area entities by domain or category.
       required: false
       default: "all"
       selector:
@@ -339,14 +339,14 @@ area_browse:
           mode: box
     handoff_media:
       name: Handoff Area Media Context
-      description: Automatically switch active speaker and TV remote to the selected room.
+      description: Automatically switch active speaker and TV remote to the selected area.
       required: false
       selector:
         boolean:
 
 area_action:
-  name: Room & Whole-Home Action
-  description: Execute a normalized room control, light color/Kelvin, thermostat, lock, vacuum, or home security alarm action.
+  name: Area & Whole-Home Action
+  description: Execute a normalized area control, light color/Kelvin, thermostat, lock, vacuum, or home security alarm action.
   fields:
     target_device:
       name: Target ESPHome Device
@@ -362,7 +362,7 @@ area_action:
         text:
     area_id:
       name: Switch Active Area ID
-      description: Optional area_id to set as the active room context.
+      description: Optional area_id to set as the active area context.
       required: false
       selector:
         area:
