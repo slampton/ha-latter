@@ -118,6 +118,7 @@ class _BaseLatterSensor(SensorEntity):
             "custom_palettes",
             "entities_summary",
             "events",
+            "hardware_manifest",
             "slots_summary",
             "wallpaper_url",
         }

@@ -394,7 +394,7 @@ class LatterCoordinator:
         )
 
     def get_opt(self, key: str, default: Any = None) -> Any:
-        """Retrieve a setting, prioritizing Global Household config for shared keys and entry options/data for device keys."""
+        """Retrieve a setting, prioritizing System-Wide config for shared keys and entry options/data for device keys."""
         domain_data = self.hass.data.get(DOMAIN, {})
         global_cfg = domain_data.get(DATA_GLOBAL_CONFIG)
         if key in GLOBAL_CONFIG_KEYS and isinstance(global_cfg, dict) and key in global_cfg:
@@ -410,7 +410,7 @@ class LatterCoordinator:
         return default
 
     async def async_on_global_config_updated(self) -> None:
-        """Refresh listeners, BLE offsets, weather, and calendar when Global Household config changes."""
+        """Refresh listeners, BLE offsets, weather, and calendar when System-Wide config changes."""
         if self._ble_tracker is not None:
             self._ble_tracker.set_area_offsets(self.ble_area_offsets)
         self._bind_speaker_listener()
@@ -454,12 +454,37 @@ class LatterCoordinator:
         """Return the assigned WireGuard tunnel IP for this device."""
         return str(self.get_opt(CONF_VPN_CLIENT_IP, "") or "").strip()
 
+    def _read_device_hardware_manifest(self) -> dict[str, Any]:
+        """Read compile-time hardware capability manifest reported by sensor.<slug>_system_hardware_manifest."""
+        for cand in (
+            f"sensor.{self.device_slug}_system_hardware_manifest",
+            f"sensor.{self.device_slug}_hardware_manifest",
+        ):
+            st = self.hass.states.get(cand)
+            if st is not None and st.state and st.state.startswith("{"):
+                try:
+                    import json
+
+                    parsed = json.loads(st.state)
+                    if isinstance(parsed, dict):
+                        return parsed
+                except Exception:  # noqa: BLE001
+                    pass
+        return {}
+
+    @property
+    def hardware_manifest(self) -> dict[str, Any]:
+        """Return parsed hardware capability manifest from the ESPHome device (or empty dict if offline)."""
+        return self._read_device_hardware_manifest()
+
     @property
     def device_profile(self) -> str:
-        """Return device archetype (mobile_display, stationary_display, headless_node)."""
-        return str(
-            self.get_opt(CONF_DEVICE_PROFILE, DEFAULT_DEVICE_PROFILE)
-        ).strip()
+        """Return device archetype (auto-detected from hardware_manifest when unconfigured)."""
+        hw_prof = str(self._read_device_hardware_manifest().get("profile") or "").strip()
+        configured = str(self.get_opt(CONF_DEVICE_PROFILE, "") or "").strip()
+        if hw_prof and (not configured or configured == DEFAULT_DEVICE_PROFILE):
+            return hw_prof
+        return configured or DEFAULT_DEVICE_PROFILE
 
     @property
     def device_group(self) -> str:
@@ -471,7 +496,10 @@ class LatterCoordinator:
 
     @property
     def display_shape(self) -> str:
-        """Return display geometry ('circle' or 'square')."""
+        """Return display geometry ('circle' or 'square', auto-detected from hardware_manifest)."""
+        hw_shape = str(self._read_device_hardware_manifest().get("shape") or "").strip().lower()
+        if hw_shape in ("circle", "square"):
+            return hw_shape
         return str(
             self.get_opt(CONF_DISPLAY_SHAPE, DEFAULT_DISPLAY_SHAPE)
         ).strip().lower()
@@ -523,7 +551,7 @@ class LatterCoordinator:
 
     @property
     def custom_palettes(self) -> list[dict[str, str]]:
-        """Return system-wide custom color profiles saved in the Household Library."""
+        """Return system-wide custom color profiles saved in the System-Wide Color Library."""
         val = self.get_opt(CONF_CUSTOM_PALETTES, [])
         if not isinstance(val, list):
             return []
@@ -670,13 +698,13 @@ class LatterCoordinator:
 
     @property
     def thermostat_entity(self) -> str | None:
-        """Return configured primary household thermostat entity_id."""
+        """Return configured primary system thermostat entity_id."""
         val = self.get_opt(CONF_THERMOSTAT_ENTITY)
         return str(val).strip() if val else None
 
     @property
     def lock_entity(self) -> str | None:
-        """Return configured primary household lock entity_id."""
+        """Return configured primary system lock entity_id."""
         val = self.get_opt(CONF_LOCK_ENTITY)
         return str(val).strip() if val else None
 
@@ -804,7 +832,15 @@ class LatterCoordinator:
 
     @property
     def art_dimensions(self) -> tuple[int, int]:
-        """Return (width, height) in pixels for Baseline-JPEG transcoders (supports square 466x466 and rectangular 410x502)."""
+        """Return (width, height) in pixels for Baseline-JPEG transcoders (auto-detected from hardware_manifest or CONF_ART_SIZE)."""
+        hw = self._read_device_hardware_manifest()
+        try:
+            hw_w = int(hw.get("w") or 0)
+            hw_h = int(hw.get("h") or 0)
+            if hw_w >= 64 and hw_h >= 64:
+                return max(64, min(1920, hw_w)), max(64, min(1920, hw_h))
+        except (ValueError, TypeError):
+            pass
         raw = str(self.get_opt(CONF_ART_SIZE, DEFAULT_ART_SIZE) or DEFAULT_ART_SIZE).strip().lower()
         if "x" in raw:
             parts = raw.split("x", 1)
@@ -2464,6 +2500,7 @@ class LatterCoordinator:
             "custom_bindings_summary": self._build_custom_bindings_summary(),
             "theme_color_hex": self.device_custom_color,
             "custom_palettes": self.custom_palettes,
+            "hardware_manifest": self.hardware_manifest,
         }
 
     @callback
