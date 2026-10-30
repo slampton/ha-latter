@@ -36,6 +36,24 @@ _ARTWORK_LRU_CACHE: OrderedDict[tuple[str, int, int, bool, float], bytes] = Orde
 # (cam_entity, width, height, is_circle, rotate_deg) -> (monotonic_ts, encoded_baseline_jpeg_bytes)
 _CAMERA_SNAPSHOT_MICRO_CACHE: dict[tuple[str, int, int, bool, int], tuple[float, bytes]] = {}
 CAMERA_MICRO_CACHE_TTL_SECONDS = 0.20
+# (width, height) -> (mask_L, black_bg_RGB) cached to avoid re-allocating PIL surfaces per frame
+_CIRCULAR_MASK_CACHE: dict[tuple[int, int], tuple[Image.Image, Image.Image]] = {}
+
+
+def _get_circular_mask_surfaces(width: int, height: int) -> tuple[Image.Image, Image.Image]:
+    """Return cached (mask_L, black_bg_RGB) PIL surfaces for (width, height)."""
+    key = (width, height)
+    cached = _CIRCULAR_MASK_CACHE.get(key)
+    if cached is not None:
+        return cached
+    mask = Image.new("L", (width, height), 0)
+    draw = ImageDraw.Draw(mask)
+    draw.ellipse((0, 0, width - 1, height - 1), fill=255)
+    black_bg = Image.new("RGB", (width, height), (0, 0, 0))
+    if len(_CIRCULAR_MASK_CACHE) >= 16:
+        _CIRCULAR_MASK_CACHE.clear()
+    _CIRCULAR_MASK_CACHE[key] = (mask, black_bg)
+    return mask, black_bg
 
 
 def _transcode_to_baseline_jpeg(
@@ -66,10 +84,7 @@ def _transcode_to_baseline_jpeg(
             fitted = ImageEnhance.Brightness(fitted).enhance(darken)
 
         if circular_mask:
-            mask = Image.new("L", (width, height), 0)
-            draw = ImageDraw.Draw(mask)
-            draw.ellipse((0, 0, width - 1, height - 1), fill=255)
-            black_bg = Image.new("RGB", (width, height), (0, 0, 0))
+            mask, black_bg = _get_circular_mask_surfaces(width, height)
             fitted = Image.composite(fitted, black_bg, mask)
 
         out = io.BytesIO()

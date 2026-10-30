@@ -4259,7 +4259,7 @@ function renderYamlGenerator() {
   const slug = (document.getElementById("cfg-device_slug")?.value || STATE?.config?.device_slug || "esphome_device").trim().toLowerCase().replace(/-/g, "_");
   const nodeHyphen = slug.replace(/_/g, "-");
   const areaSlots = Math.max(1, Math.min(20, parseInt(document.getElementById("cfg-default_page_size")?.value || STATE?.config?.default_page_size || 3, 10)));
-  const uuid = (document.getElementById("cfg-ble_beacon_uuid")?.value || STATE?.config?.ble_beacon_uuid || "504F434B-4554-4153-5354-000000000210").trim();
+  const uuid = (document.getElementById("cfg-ble_beacon_uuid")?.value || STATE?.config?.ble_beacon_uuid || "4C415454-4552-434F-5245-000000000220").trim();
 
   const incSensors = document.getElementById("yg-sensors")?.checked;
   const incBrowse = document.getElementById("yg-browse")?.checked;
