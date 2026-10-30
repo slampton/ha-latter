@@ -1719,6 +1719,11 @@
             <p class="desc">Execute immediate device commands or apply a saved configuration profile.</p>
             <div id="dash-quick-actions" class="quick-actions-row" style="margin-bottom:18px;"></div>
 
+            <div class="field hidden" id="dash-power-profile-wrap">
+              <label>Sleep &amp; Wake Power Profile</label>
+              <select id="dash-power-profile-select" onchange="if (this.dataset.ent) espSelect(this.dataset.ent, this.value)"></select>
+            </div>
+
             <div class="field">
               <label>Apply Configuration Profile</label>
               <div class="input-action-row">
@@ -3504,6 +3509,7 @@ function renderCohesiveDeviceSections() {
     return true;
   });
   const sleepItems = sortByOrder(filteredSleep, [
+    "power profile",
     "battery screen timeout", "docked idle timeout", "battery hibernate timeout",
     "stay awake", "pickup to wake", "tap to wake", "docked screensaver",
     "screensaver style", "hold crown"
@@ -3511,6 +3517,21 @@ function renderCohesiveDeviceSections() {
   document.getElementById("embedded-sleep").innerHTML = sleepItems.length
     ? sleepItems.map(it => renderNativeControlRow(it)).join("")
     : `<p class="desc">No on-device Sleep &amp; Wake entities exposed.</p>`;
+
+  const pwrProfItem = rawSleepItems.find(it => `${it.name} ${it.entity_id}`.toLowerCase().includes("power_profile") || (it.name || "").toLowerCase().includes("power profile"));
+  const pwrWrap = document.getElementById("dash-power-profile-wrap");
+  const pwrSel = document.getElementById("dash-power-profile-select");
+  if (pwrWrap && pwrSel) {
+    if (pwrProfItem && pwrProfItem.options && pwrProfItem.options.length) {
+      pwrWrap.classList.remove("hidden");
+      pwrSel.dataset.ent = pwrProfItem.entity_id;
+      pwrSel.innerHTML = pwrProfItem.options.map(o =>
+        `<option value="${o}" ${o === pwrProfItem.state ? 'selected' : ''}>${o}</option>`
+      ).join("");
+    } else {
+      pwrWrap.classList.add("hidden");
+    }
+  }
 
   // 5. Voice Assistant: Hide Active Wake Word & Sensitivity drawer when Wake Word Mode is Disabled
   const voiceItems = getSectionItems("voice");
