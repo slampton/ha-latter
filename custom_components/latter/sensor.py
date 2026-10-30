@@ -158,7 +158,7 @@ class _BaseLatterSensor(SensorEntity):
 
 
 class LatterActiveMediaSensor(_BaseLatterSensor):
-    """Exposes sensor.<device_slug>_active_media with idle-guarded 2s position updates."""
+    """Exposes sensor.<device_slug>_active_media with idle-guarded 15s position updates."""
 
     _attr_icon = "mdi:music-circle"
 
@@ -222,7 +222,7 @@ class LatterAreaContextSensor(_BaseLatterSensor):
 
 
 class LatterCalendarAgendaSensor(_BaseLatterSensor):
-    """Exposes sensor.<device_slug>_calendar_agenda with upcoming family events."""
+    """Exposes sensor.<device_slug>_calendar_agenda with upcoming system events."""
 
     _attr_icon = "mdi:calendar-clock"
 

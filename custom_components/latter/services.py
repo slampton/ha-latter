@@ -27,6 +27,7 @@ from .const import (
     SERVICE_MEDIA_COMMAND,
     SERVICE_MEDIA_VOLUME,
     SERVICE_MUSIC_BROWSE,
+    SERVICE_NOTIFY,
     SERVICE_NOTIFY_DEVICE,
     SERVICE_REMOTE_ACTION,
     CONF_CUSTOM_PALETTES,
@@ -935,8 +936,9 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             speakers = []
 
         follow_me_mode = (
-            speakers in (["follow_me"], ["occupied"])
-            or str(data.get("target_device") or "").strip().lower() in ("follow_me", "occupied")
+            speakers in (["follow_me"], ["occupied"], ["occupied_areas"])
+            or str(data.get("target_device") or "").strip().lower()
+            in ("follow_me", "occupied", "occupied_areas")
         )
         if follow_me_mode or not speakers:
             all_online_speakers = [
@@ -1250,7 +1252,10 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
         if target_low == "all":
             target_coords = list(all_coords)
-        elif target_low in ("follow_me", "occupied") or target_low.startswith("person."):
+        elif (
+            target_low in ("follow_me", "occupied", "occupied_areas")
+            or target_low.startswith("person.")
+        ):
             from .ble_engine import get_ble_fabric
 
             fabric = get_ble_fabric(hass)
@@ -1343,22 +1348,29 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             extra=vol.ALLOW_EXTRA,
         ),
     )
+    notify_schema = vol.Schema(
+        {
+            **BASE_TARGET_FIELDS,
+            vol.Optional("title", default="Notification"): cv.string,
+            vol.Required("message"): cv.string,
+            vol.Optional("priority", default="normal"): cv.string,
+            vol.Optional("duration", default=8): vol.Coerce(int),
+            vol.Optional("chime", default=True): vol.Any(bool, cv.string),
+            vol.Optional("camera_entity"): cv.string,
+        },
+        extra=vol.ALLOW_EXTRA,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_NOTIFY,
+        _handle_notify_device,
+        schema=notify_schema,
+    )
     hass.services.async_register(
         DOMAIN,
         SERVICE_NOTIFY_DEVICE,
         _handle_notify_device,
-        schema=vol.Schema(
-            {
-                **BASE_TARGET_FIELDS,
-                vol.Optional("title", default="Notification"): cv.string,
-                vol.Required("message"): cv.string,
-                vol.Optional("priority", default="normal"): cv.string,
-                vol.Optional("duration", default=8): vol.Coerce(int),
-                vol.Optional("chime", default=True): vol.Any(bool, cv.string),
-                vol.Optional("camera_entity"): cv.string,
-            },
-            extra=vol.ALLOW_EXTRA,
-        ),
+        schema=notify_schema,
     )
 
     async def _handle_save_custom_color(call: ServiceCall) -> None:

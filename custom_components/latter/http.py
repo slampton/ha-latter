@@ -7,6 +7,7 @@ from http import HTTPStatus
 import io
 import logging
 from pathlib import Path
+import time
 
 from aiohttp import ClientTimeout, web
 from PIL import Image, ImageDraw, ImageEnhance, ImageOps
@@ -32,6 +33,9 @@ _LOGGER = logging.getLogger(__name__)
 MAX_ART_CACHE_ENTRIES = 24
 # (pic_url, width, height, circular_mask, darken) -> encoded_baseline_jpeg_bytes
 _ARTWORK_LRU_CACHE: OrderedDict[tuple[str, int, int, bool, float], bytes] = OrderedDict()
+# (cam_entity, width, height, is_circle, rotate_deg) -> (monotonic_ts, encoded_baseline_jpeg_bytes)
+_CAMERA_SNAPSHOT_MICRO_CACHE: dict[tuple[str, int, int, bool, int], tuple[float, bytes]] = {}
+CAMERA_MICRO_CACHE_TTL_SECONDS = 0.20
 
 
 def _transcode_to_baseline_jpeg(
@@ -69,10 +73,11 @@ def _transcode_to_baseline_jpeg(
             fitted = Image.composite(fitted, black_bg, mask)
 
         out = io.BytesIO()
+        live_quality = 72 if (width * height > 300000) else 80
         fitted.save(
             out,
             format="JPEG",
-            quality=80 if fast_live else 85,
+            quality=live_quality if fast_live else 85,
             optimize=not fast_live,
             progressive=False,
             subsampling=2,
@@ -358,11 +363,21 @@ class LatterCameraSnapshotView(HomeAssistantView):
 
         rotate_deg = 90 if request.query.get("rot") == "90" else 0
 
+        cam_cache_key = (cam_entity, width, height, is_circle, rotate_deg)
+        now_mono = time.monotonic()
+        cached_cam = _CAMERA_SNAPSHOT_MICRO_CACHE.get(cam_cache_key)
+        if cached_cam is not None and (now_mono - cached_cam[0]) <= CAMERA_MICRO_CACHE_TTL_SECONDS:
+            return web.Response(
+                body=cached_cam[1],
+                content_type="image/jpeg",
+                headers={"Cache-Control": "no-store, max-age=0", "X-Latter-Cam-Cache": "HIT"},
+            )
+
         try:
             from homeassistant.components import camera
 
             image_obj = await camera.async_get_image(
-                self.hass, cam_entity, timeout=8
+                self.hass, cam_entity, width=width, height=height, timeout=8
             )
             raw_bytes = image_obj.content
         except Exception as err:  # noqa: BLE001
@@ -388,10 +403,15 @@ class LatterCameraSnapshotView(HomeAssistantView):
                 status=HTTPStatus.UNPROCESSABLE_ENTITY, text="Camera image processing error"
             )
 
+        _CAMERA_SNAPSHOT_MICRO_CACHE[cam_cache_key] = (time.monotonic(), jpeg_bytes)
+        if len(_CAMERA_SNAPSHOT_MICRO_CACHE) > 24:
+            oldest_k = min(_CAMERA_SNAPSHOT_MICRO_CACHE, key=lambda k: _CAMERA_SNAPSHOT_MICRO_CACHE[k][0])
+            _CAMERA_SNAPSHOT_MICRO_CACHE.pop(oldest_k, None)
+
         return web.Response(
             body=jpeg_bytes,
             content_type="image/jpeg",
-            headers={"Cache-Control": "no-store, max-age=0"},
+            headers={"Cache-Control": "no-store, max-age=0", "X-Latter-Cam-Cache": "MISS"},
         )
 
 

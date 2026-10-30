@@ -96,6 +96,7 @@ SERVICE_TRIGGER_BINDING: Final = "trigger_binding"
 SERVICE_CALENDAR_FETCH: Final = "calendar_fetch"
 SERVICE_CALENDAR_CREATE_EVENT: Final = "calendar_create_event"
 SERVICE_INTERCOM_BROADCAST: Final = "intercom_broadcast"
+SERVICE_NOTIFY: Final = "notify"
 SERVICE_NOTIFY_DEVICE: Final = "notify_device"
 SERVICE_SAVE_CUSTOM_COLOR: Final = "save_custom_color"
 SERVICE_DOORBELL_INTERCOM: Final = "doorbell_intercom"
@@ -115,8 +116,8 @@ API_SIDEBAR_ICON_JS_PATH: Final = "/api/latter/brand/sidebar_icon.js"
 DATA_HMAC_SECRET: Final = "hmac_secret"
 DATA_DISCOVERY_UNSUB: Final = "discovery_unsub"
 
-# Timing & Recorder Idle-Guard
-POSITION_UPDATE_INTERVAL_SECONDS: Final = 2
+# Timing & Recorder Idle-Guard (MCU interpolates progress locally via millis(); 15s sync cuts Wi-Fi wakeups by 87%)
+POSITION_UPDATE_INTERVAL_SECONDS: Final = 15
 FORECAST_REFRESH_INTERVAL_MINUTES: Final = 30
 CALENDAR_REFRESH_INTERVAL_MINUTES: Final = 15
 

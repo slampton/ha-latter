@@ -2604,7 +2604,7 @@ class LatterCoordinator:
 
     @callback
     def _update_position_timer_state(self) -> None:
-        """Idle-Guard: Run 2s position timer ONLY when speaker is playing/buffering."""
+        """Idle-Guard: Run 15s position timer ONLY when speaker is playing/buffering."""
         state_obj = self.hass.states.get(self.active_speaker)
         is_active = state_obj is not None and state_obj.state in (
             STATE_PLAYING,
@@ -2652,6 +2652,11 @@ class LatterCoordinator:
         """Compute state and attributes for sensor.<device_slug>_active_media."""
         state_obj = self.hass.states.get(self.active_speaker)
         vol_target = self.get_volume_target_entity(self.active_speaker)
+        fallback_spk_name = (
+            self.active_speaker.split(".", 1)[-1].replace("_", " ").title()
+            if self.active_speaker
+            else "Local Speaker"
+        )
 
         if state_obj is None or state_obj.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
             return STATE_OFF, {
@@ -2665,6 +2670,7 @@ class LatterCoordinator:
                 "supported_features": 0,
                 "art_url": "none",
                 "active_speaker": self.active_speaker,
+                "speaker_name": fallback_spk_name,
                 "last_speaker": self.last_speaker,
                 "local_speaker": self.local_speaker,
                 "volume_entity": vol_target,
@@ -2801,6 +2807,8 @@ class LatterCoordinator:
         else:
             art_url = "none"
 
+        speaker_name = str(attrs.get("friendly_name") or fallback_spk_name)
+
         return state, {
             "title": title,
             "artist": artist,
@@ -2812,6 +2820,7 @@ class LatterCoordinator:
             "supported_features": supported_features,
             "art_url": art_url,
             "active_speaker": self.active_speaker,
+            "speaker_name": speaker_name,
             "last_speaker": self.last_speaker,
             "local_speaker": self.local_speaker,
             "volume_entity": vol_target,
@@ -2883,7 +2892,7 @@ class LatterCoordinator:
         self._notify_listeners()
 
     async def _async_periodic_calendar_refresh(self, _now: datetime) -> None:
-        """Refresh family calendar agenda every 15 minutes."""
+        """Refresh system calendar agenda every 15 minutes."""
         await self.async_refresh_calendar_agenda()
 
     async def async_refresh_calendar_agenda(self, days: int = 30) -> None:
