@@ -22,6 +22,7 @@ IBEACON_PREFIX = b"\x02\x15"
 EMA_ALPHA = 0.50
 HYSTERESIS_DB = 5.0
 FAST_OVERRIDE_DB = 8.0
+CROSS_FLOOR_ATTENUATION_DB = 6.0
 STALE_PROXY_SECONDS = 25.0
 SURVEY_RETENTION_SECONDS = 180.0
 WAKE_GAP_SECONDS = 8.0
@@ -376,6 +377,7 @@ class LatterNativeBleTracker:
             self.winning_distance_m = None
             self.winning_distance_ft = None
             self._on_area_detected("away", "")
+            get_ble_fabric(self.hass).notify_occupancy_listeners()
 
     def _resolve_hardware_meta(self) -> str:
         """Return combined lowercase hardware model, sw_version, and slug metadata from HA Device Registry."""
@@ -736,14 +738,31 @@ class LatterNativeBleTracker:
 
     @callback
     def _evaluate_best_area(self, now: float, latest_source: str = "") -> None:
-        """Evaluate fresh effective RSSI scores across all areas and trigger area switch if needed."""
-        fresh_areas = {
+        """Evaluate fresh effective RSSI scores across all areas (with multi-story floor attenuation) and trigger area switch if needed."""
+        raw_fresh_areas = {
             k: (val, ts)
             for k, (val, ts) in self._area_rssi.items()
             if (now - ts) <= STALE_PROXY_SECONDS
         }
-        if not fresh_areas:
+        if not raw_fresh_areas:
             return
+
+        area_reg = ar.async_get(self.hass)
+        cur_floor_id: str | None = None
+        if self.current_area_id:
+            cur_area_entry = area_reg.async_get_area(self.current_area_id)
+            if cur_area_entry:
+                cur_floor_id = getattr(cur_area_entry, "floor_id", None)
+
+        fresh_areas: dict[str, tuple[float, float]] = {}
+        for k, (val, ts) in raw_fresh_areas.items():
+            adj_val = val
+            if cur_floor_id and k != self.current_area_id:
+                cand_entry = area_reg.async_get_area(k)
+                cand_floor_id = getattr(cand_entry, "floor_id", None) if cand_entry else None
+                if cand_floor_id and cand_floor_id != cur_floor_id:
+                    adj_val -= CROSS_FLOOR_ATTENUATION_DB
+            fresh_areas[k] = (adj_val, ts)
 
         best_area, (best_ema, _) = max(
             fresh_areas.items(), key=lambda item: item[1][0]
@@ -751,7 +770,7 @@ class LatterNativeBleTracker:
         self.is_away = False
 
         def _update_winner_metrics(win_area: str) -> None:
-            eff_entry = fresh_areas.get(win_area)
+            eff_entry = raw_fresh_areas.get(win_area)
             if eff_entry is not None:
                 eff_dbm = eff_entry[0]
                 self.winning_rssi = int(round(eff_dbm))
@@ -767,6 +786,7 @@ class LatterNativeBleTracker:
                     self.closest_scanner = latest_source
                 self._last_switch_monotonic = now
                 self._on_area_detected(best_area, self.closest_scanner)
+                get_ble_fabric(self.hass).notify_occupancy_listeners()
             return
 
         if best_area == self.current_area_id:
@@ -781,10 +801,12 @@ class LatterNativeBleTracker:
 
         if delta_db >= FAST_OVERRIDE_DB:
             self.current_area_id = best_area
+            _update_winner_metrics(best_area)
             if latest_source:
                 self.closest_scanner = latest_source
             self._last_switch_monotonic = now
             self._on_area_detected(best_area, self.closest_scanner)
+            get_ble_fabric(self.hass).notify_occupancy_listeners()
             return
 
         if (now - self._last_switch_monotonic) < MIN_HOLD_SECONDS:
@@ -792,10 +814,12 @@ class LatterNativeBleTracker:
 
         if delta_db >= HYSTERESIS_DB:
             self.current_area_id = best_area
+            _update_winner_metrics(best_area)
             if latest_source:
                 self.closest_scanner = latest_source
             self._last_switch_monotonic = now
             self._on_area_detected(best_area, self.closest_scanner)
+            get_ble_fabric(self.hass).notify_occupancy_listeners()
 
 class LatterBleFabric:
     """Domain-level singleton Bluetooth scanner fabric shared across all Latter & generic BLE trackers."""
@@ -804,8 +828,55 @@ class LatterBleFabric:
         """Initialize the shared BLE scanner fabric."""
         self.hass = hass
         self._trackers: list[LatterNativeBleTracker] = []
+        self._occupancy_listeners: list[Callable[[], None]] = []
         self._unsub_ble: Callable[[], None] | None = None
         self._unsub_poll: Callable[[], None] | None = None
+
+    @callback
+    def register_occupancy_listener(
+        self, listener: Callable[[], None]
+    ) -> Callable[[], None]:
+        """Register a listener for real-time per-area BLE occupancy changes."""
+        self._occupancy_listeners.append(listener)
+
+        @callback
+        def _unsub() -> None:
+            if listener in self._occupancy_listeners:
+                self._occupancy_listeners.remove(listener)
+
+        return _unsub
+
+    @callback
+    def notify_occupancy_listeners(self) -> None:
+        """Notify all registered per-area BLE occupancy binary sensors."""
+        for listener in list(self._occupancy_listeners):
+            listener()
+
+    @callback
+    def get_area_occupancy(self, area_id: str) -> dict[str, Any]:
+        """Return aggregated BLE occupancy telemetry for a specific Home Assistant area_id."""
+        occupants: list[str] = []
+        best_rssi: int | None = None
+        closest_dev: str | None = None
+        closest_dist_m: float | None = None
+        for tracker in self._trackers:
+            if not tracker.is_away and tracker.current_area_id == area_id:
+                slug = tracker._raw_slug
+                occupants.append(slug)
+                if tracker.winning_rssi is not None and (
+                    best_rssi is None or tracker.winning_rssi > best_rssi
+                ):
+                    best_rssi = tracker.winning_rssi
+                    closest_dev = slug
+                    closest_dist_m = tracker.winning_distance_m
+        return {
+            "is_occupied": len(occupants) > 0,
+            "tracker_count": len(occupants),
+            "occupied_by": occupants,
+            "closest_device": closest_dev,
+            "winning_rssi": best_rssi,
+            "closest_distance_m": closest_dist_m,
+        }
 
     @callback
     def register_tracker(self, tracker: LatterNativeBleTracker) -> None:
@@ -816,6 +887,7 @@ class LatterBleFabric:
             self._async_start_fabric()
         else:
             tracker._async_poll_scanner_tables(datetime.now())
+        self.notify_occupancy_listeners()
 
     @callback
     def unregister_tracker(self, tracker: LatterNativeBleTracker) -> None:
@@ -824,6 +896,7 @@ class LatterBleFabric:
             self._trackers.remove(tracker)
         if not self._trackers:
             self._async_stop_fabric()
+        self.notify_occupancy_listeners()
 
     @callback
     def _async_start_fabric(self) -> None:

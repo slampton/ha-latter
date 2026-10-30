@@ -184,38 +184,74 @@ def _resolve_esphome_local_speaker(
 def _resolve_ma_counterpart_entity(
     hass: HomeAssistant, speaker_entity_id: str, device_slug: str
 ) -> str | None:
-    """Find the Music Assistant media_player entity corresponding to an ESPHome speaker (if wrapped by MA)."""
+    """Find the Music Assistant media_player entity corresponding to a target speaker (or device slug fallback)."""
     state_obj = hass.states.get(speaker_entity_id)
     if state_obj and is_music_assistant_player(hass, state_obj):
         return speaker_entity_id
 
-    slug_norm = normalize_device_slug(device_slug)
+    ent_reg = er.async_get(hass)
+    spk_entry = ent_reg.async_get(speaker_entity_id) if speaker_entity_id else None
+    spk_dev_id = spk_entry.device_id if spk_entry else None
+
     spk_short = speaker_entity_id.replace("media_player.", "").lower()
-    core_slug = re.sub(r"(_media_player|_music|_speaker)$", "", spk_short)
+    core_slug = re.sub(r"(_media_player|_music|_speaker|_ma|_mass)$", "", spk_short)
     core_slug_no_prefix = re.sub(r"^latter_", "", core_slug)
+
+    slug_norm = normalize_device_slug(device_slug)
     slug_no_prefix = re.sub(r"^latter_", "", slug_norm)
 
+    ma_candidates: list[tuple[str, str, str | None]] = []
     for candidate in hass.states.async_all("media_player"):
-        if candidate.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
-            continue
         if not is_music_assistant_player(hass, candidate):
             continue
+        c_entry = ent_reg.async_get(candidate.entity_id)
+        c_dev_id = c_entry.device_id if c_entry else None
         cid_low = candidate.entity_id.lower()
         friendly_low = (
-            str(candidate.attributes.get("friendly_name") or "")
+            str(
+                candidate.attributes.get("friendly_name")
+                or (c_entry.original_name if c_entry else "")
+                or ""
+            )
             .lower()
             .replace("-", "_")
             .replace(" ", "_")
         )
+        # Prefer available/online MA players over unavailable ones
+        if candidate.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+            ma_candidates.append((cid_low, friendly_low, c_dev_id))
+        else:
+            ma_candidates.insert(0, (cid_low, friendly_low, c_dev_id))
+
+    # Pass 1: Match the target speaker_entity_id specifically (device_id, entity_id, or friendly_name)
+    for cid_low, friendly_low, c_dev_id in ma_candidates:
+        if spk_dev_id and c_dev_id and spk_dev_id == c_dev_id:
+            return cid_low
         if (
-            slug_norm in cid_low
-            or spk_short in cid_low
-            or slug_norm in friendly_low
+            (spk_short and (spk_short in cid_low or spk_short in friendly_low))
             or (core_slug and (core_slug in cid_low or core_slug in friendly_low))
-            or (core_slug_no_prefix and len(core_slug_no_prefix) >= 4 and (core_slug_no_prefix in cid_low or core_slug_no_prefix in friendly_low))
-            or (slug_no_prefix and len(slug_no_prefix) >= 4 and (slug_no_prefix in cid_low or slug_no_prefix in friendly_low))
+            or (
+                core_slug_no_prefix
+                and len(core_slug_no_prefix) >= 4
+                and (
+                    core_slug_no_prefix in cid_low
+                    or core_slug_no_prefix in friendly_low
+                )
+            )
         ):
-            return candidate.entity_id
+            return cid_low
+
+    # Pass 2: Fallback to matching device_slug if target_spk is the local companion speaker
+    for cid_low, friendly_low, _c_dev_id in ma_candidates:
+        if (
+            (slug_norm and (slug_norm in cid_low or slug_norm in friendly_low))
+            or (
+                slug_no_prefix
+                and len(slug_no_prefix) >= 4
+                and (slug_no_prefix in cid_low or slug_no_prefix in friendly_low)
+            )
+        ):
+            return cid_low
 
     return None
 
@@ -1492,13 +1528,26 @@ class LatterCoordinator:
                 self.hass, target_spk, self.device_slug
             )
             play_entity = ma_target or target_spk
+            eff_type = (media_type or "").strip().lower()
+            if not eff_type or eff_type == "music":
+                if "artist" in media_id.lower():
+                    eff_type = "artist"
+                elif "album" in media_id.lower():
+                    eff_type = "album"
+                elif "playlist" in media_id.lower():
+                    eff_type = "playlist"
+                elif "track" in media_id.lower():
+                    eff_type = "track"
+                elif "radio" in media_id.lower():
+                    eff_type = "radio"
+
             if self.hass.services.has_service("music_assistant", "play_media"):
                 payload: dict[str, Any] = {
                     ATTR_ENTITY_ID: play_entity,
                     "media_id": media_id,
                 }
-                if media_type:
-                    payload["media_type"] = media_type
+                if eff_type:
+                    payload["media_type"] = eff_type
                 if enqueue:
                     payload["enqueue"] = enqueue
                 try:
@@ -1508,19 +1557,73 @@ class LatterCoordinator:
                     return
                 except Exception as err:  # noqa: BLE001
                     _LOGGER.debug(
-                        "music_assistant.play_media(%s, %s) on %s failed, falling back to media_player.play_media: %s",
+                        "music_assistant.play_media(%s, %s) on %s failed: %s",
                         media_id,
-                        media_type,
+                        eff_type,
                         play_entity,
                         err,
                     )
+                    # If artist or album container playback failed (e.g., native Sendspin player or MA container resolution),
+                    # resolve the first playable album/track from the browse engine and play it.
+                    if eff_type in ("artist", "album"):
+                        try:
+                            resolved_id = ""
+                            resolved_type = "track"
+                            if eff_type == "artist":
+                                albums_res = await browse_music_library(
+                                    self.hass,
+                                    target_spk,
+                                    "artist_albums",
+                                    page=1,
+                                    page_size=5,
+                                    parent_id=media_id,
+                                )
+                                album_slots = albums_res.get("slots") or []
+                                if album_slots and album_slots[0].get("id"):
+                                    resolved_id = str(album_slots[0]["id"])
+                                    resolved_type = "album"
+                            if eff_type == "album" or resolved_type == "album":
+                                alb_uri = resolved_id or media_id
+                                tracks_res = await browse_music_library(
+                                    self.hass,
+                                    target_spk,
+                                    "album_tracks",
+                                    page=1,
+                                    page_size=25,
+                                    parent_id=alb_uri,
+                                )
+                                track_slots = [
+                                    s for s in (tracks_res.get("slots") or []) if s.get("id")
+                                ]
+                                if track_slots:
+                                    track_uris = [str(s["id"]) for s in track_slots]
+                                    await self.hass.services.async_call(
+                                        "music_assistant",
+                                        "play_media",
+                                        {
+                                            ATTR_ENTITY_ID: play_entity,
+                                            "media_id": track_uris,
+                                            "media_type": "track",
+                                            "enqueue": enqueue or "replace",
+                                        },
+                                        blocking=True,
+                                    )
+                                    return
+                        except Exception as inner_err:  # noqa: BLE001
+                            _LOGGER.debug(
+                                "Fallback container track expansion for %s (%s) failed: %s",
+                                media_id,
+                                eff_type,
+                                inner_err,
+                            )
+
             await self.hass.services.async_call(
                 "media_player",
                 "play_media",
                 {
                     ATTR_ENTITY_ID: play_entity,
                     "media_content_id": media_id,
-                    "media_content_type": media_type or "music",
+                    "media_content_type": eff_type or "music",
                 },
                 blocking=False,
             )

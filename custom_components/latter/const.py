@@ -8,7 +8,7 @@ from homeassistant.const import Platform
 
 DOMAIN: Final = "latter"
 INTEGRATION_VERSION: Final = "2.2.0"
-PLATFORMS: Final[list[Platform]] = [Platform.SENSOR]
+PLATFORMS: Final[list[Platform]] = [Platform.SENSOR, Platform.BINARY_SENSOR]
 
 STORAGE_VERSION: Final = 1
 STORAGE_KEY_PREFIX: Final = "latter.runtime"
