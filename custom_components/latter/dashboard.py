@@ -19,7 +19,12 @@ from homeassistant.helpers import (
     entity_registry as er,
 )
 
-from .ble_engine import _iter_devices, get_discovered_ble_candidates
+from .ble_engine import (
+    _iter_devices,
+    get_all_areas_presence_summary,
+    get_ble_fabric,
+    get_discovered_ble_candidates,
+)
 from .backup_engine import (
     async_apply_profile_to_coordinators,
     async_create_vault_backup,
@@ -39,6 +44,7 @@ from .const import (
     API_COMPANION_API_PATH,
     API_COMPANION_UI_PATH,
     CONF_ALARM_ENTITY,
+    CONF_AREA_FUSION_CONFIG,
     CONF_AREA_HANDOFF,
     CONF_ART_SIZE,
     CONF_ASSIGNED_PERSON,
@@ -540,6 +546,7 @@ def _build_companion_state_payload(
         CONF_BLE_BEACON_UUID: coordinator.ble_beacon_uuid,
         CONF_BLE_TARGET_ADDRESS: coordinator.ble_target_address,
         CONF_BLE_AREA_OFFSETS: coordinator.ble_area_offsets,
+        CONF_AREA_FUSION_CONFIG: coordinator.get_opt(CONF_AREA_FUSION_CONFIG, {}) or {},
         CONF_PRESENCE_ENTITY: coordinator.presence_entity or "",
         CONF_ASSIGNED_PERSON: coordinator.assigned_person,
         CONF_ASSIGNED_ROLE: coordinator.assigned_role,
@@ -874,6 +881,7 @@ def _build_companion_state_payload(
             "ble_rssi_by_area": area_attrs.get("ble_rssi_by_area", {}),
             "ble_survey_rows": ble_survey_rows,
             "ble_scanners_map": area_attrs.get("ble_scanners_map", {}),
+            "area_presence_grid": get_all_areas_presence_summary(hass),
             "active_speaker": coordinator.active_speaker,
             "local_speaker": coordinator.local_speaker,
             "volume_entity": media_attrs.get("volume_entity", ""),
@@ -1028,6 +1036,29 @@ class LatterCompanionApiView(HomeAssistantView):
             await _async_save_and_broadcast_global_config(
                 self.hass, {CONF_BLE_AREA_OFFSETS: offsets}
             )
+            return web.json_response(
+                _build_companion_state_payload(self.hass, coordinator)
+            )
+
+        if cmd == "set_area_fusion_mode":
+            area_id = str(body.get("area_id") or "").strip()
+            mode_val = str(body.get("mode") or "auto_bayes").strip().lower()
+            if mode_val not in ("auto_bayes", "any_or", "ble_only", "ble_and_sensor"):
+                mode_val = "auto_bayes"
+            if area_id:
+                raw_fusion = coordinator.get_opt(CONF_AREA_FUSION_CONFIG, {})
+                fusion_cfg = dict(raw_fusion) if isinstance(raw_fusion, dict) else {}
+                cur_area_cfg = dict(fusion_cfg.get(area_id) or {}) if isinstance(fusion_cfg.get(area_id), dict) else {}
+                cur_area_cfg["mode"] = mode_val
+                if "threshold_pct" in body and body["threshold_pct"] is not None:
+                    cur_area_cfg["threshold_pct"] = max(20, min(95, int(body["threshold_pct"])))
+                if "sensors" in body and isinstance(body["sensors"], list):
+                    cur_area_cfg["sensors"] = [str(s).strip() for s in body["sensors"] if str(s or "").strip()]
+                fusion_cfg[area_id] = cur_area_cfg
+                await _async_save_and_broadcast_global_config(
+                    self.hass, {CONF_AREA_FUSION_CONFIG: fusion_cfg}
+                )
+                get_ble_fabric(self.hass).notify_occupancy_listeners()
             return web.json_response(
                 _build_companion_state_payload(self.hass, coordinator)
             )

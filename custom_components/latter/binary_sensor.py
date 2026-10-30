@@ -107,14 +107,23 @@ class LatterAreaBleOccupancyBinarySensor(BinarySensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return detailed occupant list and strongest signal telemetry for the area."""
+        """Return detailed occupant list, sensor fusion status, and strongest signal telemetry for the area."""
         occ = get_ble_fabric(self.hass).get_area_occupancy(self._area_id)
         return {
             "area_id": self._area_id,
             "area_name": self._area_name,
+            "floor_id": occ.get("floor_id"),
+            "fusion_mode": occ.get("fusion_mode", "auto_bayes"),
+            "confidence_pct": occ.get("confidence_pct", 0),
+            "ble_occupied": occ.get("ble_occupied", False),
+            "sensor_occupied": occ.get("sensor_occupied", False),
+            "active_sensors": occ.get("active_sensors", []),
             "tracker_count": occ["tracker_count"],
             "occupied_by": occ["occupied_by"],
+            "occupant_names": occ.get("occupant_names", []),
+            "persons": occ.get("persons", []),
             "closest_device": occ["closest_device"],
             "winning_rssi": occ["winning_rssi"],
             "closest_distance_m": occ["closest_distance_m"],
+            "closest_distance_ft": occ.get("closest_distance_ft"),
         }

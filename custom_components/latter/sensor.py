@@ -11,15 +11,17 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import area_registry as ar, device_registry as dr
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
+from .ble_engine import get_ble_fabric, get_ble_proxy_area_ids
 from .const import DOMAIN, INTEGRATION_VERSION, build_device_entity_id, normalize_device_slug
 from .coordinator import LatterCoordinator
 from .area_engine import find_esphome_device_id
 
 PARALLEL_UPDATES = 0
+DATA_CREATED_AREA_OCCUPANT_IDS = "created_area_occupant_ids"
 
 
 async def async_setup_entry(
@@ -55,6 +57,21 @@ async def async_setup_entry(
 
     domain_data = hass.data.setdefault(DOMAIN, {})
     registered_persons: set[str] = domain_data.setdefault("registered_person_sensors", set())
+    created_area_occupants: set[str] = domain_data.setdefault(DATA_CREATED_AREA_OCCUPANT_IDS, set())
+
+    area_reg = ar.async_get(hass)
+    proxy_areas = get_ble_proxy_area_ids(hass)
+    candidate_areas = proxy_areas or {a.id for a in area_reg.async_list_areas()}
+    for area_id in sorted(candidate_areas):
+        if area_id in created_area_occupants:
+            continue
+        area_entry = area_reg.async_get_area(area_id)
+        if area_entry is None:
+            continue
+        created_area_occupants.add(area_id)
+        entities.append(
+            LatterAreaOccupantsSensor(hass, coordinator, area_entry.id, area_entry.name)
+        )
 
     @callback
     def _async_ensure_person_sensors() -> None:
@@ -366,3 +383,94 @@ class LatterPersonBleDistanceSensor(_BaseLatterSensor):
         """Return person BLE distance attributes."""
         _, attrs = self.coordinator.get_person_area_and_distance(self._person_entity)
         return attrs
+
+
+class LatterAreaOccupantsSensor(SensorEntity):
+    """Exposes sensor.<area_slug>_occupants with live occupant names and Bayesian sensor fusion telemetry."""
+
+    _attr_has_entity_name = False
+    _attr_should_poll = False
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        coordinator: LatterCoordinator,
+        area_id: str,
+        area_name: str,
+    ) -> None:
+        """Initialize the per-area occupants sensor."""
+        self.hass = hass
+        self.coordinator = coordinator
+        self._area_id = area_id
+        self._area_name = area_name
+        a_slug = normalize_device_slug(area_id or area_name)
+        self._attr_name = f"{area_name} Occupants"
+        self._attr_unique_id = f"latter_area_occupants_{area_id}"
+        self._attr_suggested_area = area_name
+        self.entity_id = f"sensor.{a_slug}_occupants"
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return canonical Latter DeviceInfo."""
+        pretty_device = self.coordinator.device_slug.replace("_", " ").title()
+        return DeviceInfo(
+            identifiers={(DOMAIN, self.coordinator.entry.entry_id)},
+            name=pretty_device,
+            manufacturer="Lampton Labs",
+            model="Latter ESPHome Companion Middleware",
+            sw_version=INTEGRATION_VERSION,
+            configuration_url=self.coordinator.build_companion_url(),
+        )
+
+    async def async_added_to_hass(self) -> None:
+        """Subscribe to real-time updates from the shared Latter BLE Fabric."""
+        await super().async_added_to_hass()
+        fabric = get_ble_fabric(self.hass)
+        self.async_on_remove(
+            fabric.register_occupancy_listener(self._handle_occupancy_update)
+        )
+
+    @callback
+    def _handle_occupancy_update(self) -> None:
+        """Push updated occupant state to Home Assistant."""
+        self.async_write_ha_state()
+
+    @property
+    def icon(self) -> str:
+        """Return dynamic icon based on area occupancy."""
+        return "mdi:account-group" if self.native_value != "Empty" else "mdi:account-off-outline"
+
+    @property
+    def native_value(self) -> str:
+        """Return comma-separated occupant names, 'Occupied (Sensor)', or 'Empty'."""
+        occ = get_ble_fabric(self.hass).get_area_occupancy(self._area_id)
+        names = occ.get("occupant_names") or []
+        if names:
+            return ", ".join(names)
+        if occ.get("is_occupied"):
+            return "Occupied (Sensor)"
+        return "Empty"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return detailed occupant list, sensor fusion status, and signal attributes."""
+        occ = get_ble_fabric(self.hass).get_area_occupancy(self._area_id)
+        return {
+            "area_id": self._area_id,
+            "area_name": self._area_name,
+            "floor_id": occ.get("floor_id"),
+            "is_occupied": occ.get("is_occupied", False),
+            "occupant_count": len(occ.get("occupant_names") or []),
+            "occupant_names": occ.get("occupant_names", []),
+            "persons": occ.get("persons", []),
+            "occupied_by": occ.get("occupied_by", []),
+            "fusion_mode": occ.get("fusion_mode", "auto_bayes"),
+            "confidence_pct": occ.get("confidence_pct", 0),
+            "ble_occupied": occ.get("ble_occupied", False),
+            "sensor_occupied": occ.get("sensor_occupied", False),
+            "active_sensors": occ.get("active_sensors", []),
+            "closest_device": occ.get("closest_device"),
+            "winning_rssi": occ.get("winning_rssi"),
+            "closest_distance_m": occ.get("closest_distance_m"),
+            "closest_distance_ft": occ.get("closest_distance_ft"),
+        }

@@ -831,51 +831,259 @@ class LatterBleFabric:
         self._occupancy_listeners: list[Callable[[], None]] = []
         self._unsub_ble: Callable[[], None] | None = None
         self._unsub_poll: Callable[[], None] | None = None
+        self._unsub_sensor_events: Callable[[], None] | None = None
 
     @callback
     def register_occupancy_listener(
         self, listener: Callable[[], None]
     ) -> Callable[[], None]:
-        """Register a listener for real-time per-area BLE occupancy changes."""
+        """Register a listener for real-time per-area BLE & sensor-fused occupancy changes."""
         self._occupancy_listeners.append(listener)
+        if self._unsub_sensor_events is None:
+            self._unsub_sensor_events = self.hass.bus.async_listen(
+                "state_changed", self._async_on_ha_state_changed
+            )
 
         @callback
         def _unsub() -> None:
             if listener in self._occupancy_listeners:
                 self._occupancy_listeners.remove(listener)
+            if not self._occupancy_listeners and self._unsub_sensor_events is not None:
+                self._unsub_sensor_events()
+                self._unsub_sensor_events = None
 
         return _unsub
 
     @callback
+    def _async_on_ha_state_changed(self, event: Any) -> None:
+        """Trigger occupancy re-evaluation when a physical area binary_sensor changes state."""
+        data = getattr(event, "data", {}) or {}
+        ent_id = str(data.get("entity_id") or "")
+        if not ent_id.startswith("binary_sensor.") or "ble_occupancy" in ent_id:
+            return
+        new_st = data.get("new_state")
+        old_st = data.get("old_state")
+        if new_st is None or (old_st is not None and new_st.state == old_st.state):
+            return
+        dclass = str(new_st.attributes.get("device_class") or "").lower()
+        if dclass in ("occupancy", "presence", "motion", "moving", "door", "opening"):
+            self.notify_occupancy_listeners()
+
+    @callback
     def notify_occupancy_listeners(self) -> None:
-        """Notify all registered per-area BLE occupancy binary sensors."""
+        """Notify all registered per-area BLE occupancy and occupant sensors."""
         for listener in list(self._occupancy_listeners):
             listener()
 
     @callback
+    def _discover_area_fusion_sensors(
+        self, area_id: str, configured_sensors: list[str] | None = None
+    ) -> tuple[list[str], list[str], list[str], list[str], list[dict[str, str]]]:
+        """Return (occ_on, occ_off, motion_on, door_closed, available_sensors) for a Home Assistant Area."""
+        ent_reg = er.async_get(self.hass)
+        dev_reg = dr.async_get(self.hass)
+        explicit_set = {
+            str(s).strip()
+            for s in (configured_sensors or [])
+            if str(s or "").strip().startswith("binary_sensor.")
+        }
+
+        occ_on: list[str] = []
+        occ_off: list[str] = []
+        motion_on: list[str] = []
+        door_closed: list[str] = []
+        available: list[dict[str, str]] = []
+        seen_eids: set[str] = set()
+
+        for entry in _iter_entities(ent_reg):
+            if entry.disabled_by or entry.domain != "binary_sensor":
+                continue
+            eid = entry.entity_id
+            if "ble_occupancy" in eid or (
+                entry.unique_id and str(entry.unique_id).startswith("latter_area_ble_occupancy_")
+            ):
+                continue
+
+            ent_area = entry.area_id
+            if not ent_area and entry.device_id:
+                dev_obj = dev_reg.async_get(entry.device_id)
+                if dev_obj is not None:
+                    ent_area = dev_obj.area_id
+
+            if ent_area != area_id and eid not in explicit_set:
+                continue
+
+            st = self.hass.states.get(eid)
+            dclass = str(
+                (st.attributes.get("device_class") if st else "")
+                or entry.device_class
+                or entry.original_device_class
+                or ""
+            ).lower()
+            if dclass not in ("occupancy", "presence", "motion", "moving", "door", "opening") and eid not in explicit_set:
+                continue
+
+            seen_eids.add(eid)
+            state_str = str(st.state if st else "unknown").lower()
+            friendly = (
+                str(st.attributes.get("friendly_name") if st else "")
+                or entry.name
+                or entry.original_name
+                or eid
+            ).strip()
+            available.append(
+                {
+                    "entity_id": eid,
+                    "name": friendly,
+                    "device_class": dclass or "occupancy",
+                    "state": state_str,
+                }
+            )
+            if explicit_set and eid not in explicit_set:
+                continue
+
+            if dclass in ("occupancy", "presence") or (eid in explicit_set and dclass not in ("motion", "moving", "door", "opening")):
+                if state_str == "on":
+                    occ_on.append(eid)
+                elif state_str == "off":
+                    occ_off.append(eid)
+            elif dclass in ("motion", "moving"):
+                if state_str == "on":
+                    motion_on.append(eid)
+            elif dclass in ("door", "opening"):
+                if state_str == "off":
+                    door_closed.append(eid)
+
+        return occ_on, occ_off, motion_on, door_closed, available
+
+    @callback
     def get_area_occupancy(self, area_id: str) -> dict[str, Any]:
-        """Return aggregated BLE occupancy telemetry for a specific Home Assistant area_id."""
+        """Return deterministic & Bayesian fused BLE + physical sensor occupancy telemetry for an Area."""
+        area_reg = ar.async_get(self.hass)
+        area_obj = area_reg.async_get_area(area_id)
+        floor_id = getattr(area_obj, "floor_id", None) if area_obj else None
+
+        domain_data = self.hass.data.get("latter", {})
+        global_cfg = domain_data.get("global_config", {}) if isinstance(domain_data, dict) else {}
+        fusion_map = global_cfg.get("area_fusion_config", {}) if isinstance(global_cfg, dict) else {}
+        area_cfg = fusion_map.get(area_id, {}) if isinstance(fusion_map, dict) else {}
+        if not isinstance(area_cfg, dict):
+            area_cfg = {}
+
+        fusion_mode = str(area_cfg.get("mode") or "auto_bayes").strip().lower()
+        if fusion_mode not in ("auto_bayes", "any_or", "ble_only", "ble_and_sensor"):
+            fusion_mode = "auto_bayes"
+        threshold_pct = max(20, min(95, int(area_cfg.get("threshold_pct") or 50)))
+        configured_sensors = area_cfg.get("sensors") if isinstance(area_cfg.get("sensors"), list) else None
+
+        # Map device_slug -> coordinator for person & friendly-name resolution
+        coord_by_slug: dict[str, Any] = {}
+        if isinstance(domain_data, dict):
+            for val in domain_data.values():
+                c_slug = getattr(val, "device_slug", None)
+                if isinstance(c_slug, str) and c_slug:
+                    coord_by_slug[c_slug] = val
+
         occupants: list[str] = []
+        occupant_names: list[str] = []
+        persons: list[str] = []
         best_rssi: int | None = None
         closest_dev: str | None = None
         closest_dist_m: float | None = None
+        closest_dist_ft: float | None = None
+
         for tracker in self._trackers:
             if not tracker.is_away and tracker.current_area_id == area_id:
                 slug = tracker._raw_slug
                 occupants.append(slug)
+                coord = coord_by_slug.get(slug)
+                p_ent = str(getattr(coord, "assigned_person", "") or "").strip() if coord else ""
+                if p_ent and p_ent.startswith("person."):
+                    if p_ent not in persons:
+                        persons.append(p_ent)
+                    p_st = self.hass.states.get(p_ent)
+                    p_name = (
+                        str(p_st.attributes.get("friendly_name") or "").strip()
+                        if p_st
+                        else ""
+                    ) or p_ent.split(".", 1)[-1].replace("_", " ").title()
+                    if p_name not in occupant_names:
+                        occupant_names.append(p_name)
+                else:
+                    d_label = slug.replace("_", " ").replace("-", " ").title()
+                    if d_label not in occupant_names:
+                        occupant_names.append(d_label)
+
                 if tracker.winning_rssi is not None and (
                     best_rssi is None or tracker.winning_rssi > best_rssi
                 ):
                     best_rssi = tracker.winning_rssi
                     closest_dev = slug
                     closest_dist_m = tracker.winning_distance_m
+                    closest_dist_ft = tracker.winning_distance_ft
+
+        occ_on, occ_off, motion_on, door_closed, available_sensors = (
+            self._discover_area_fusion_sensors(area_id, configured_sensors)
+        )
+        active_sensors = occ_on + motion_on
+        ble_present = len(occupants) > 0
+        sensor_present = len(active_sensors) > 0
+
+        # Bayesian Posterior Occupancy Score (0..100%)
+        prob = 0.0
+        if ble_present:
+            if best_rssi is not None and best_rssi >= -68:
+                prob += 0.85
+            elif best_rssi is not None and best_rssi >= -80:
+                prob += 0.70
+            else:
+                prob += 0.54
+
+        if occ_on:
+            prob = max(prob, 0.78) + (0.18 if ble_present else 0.08)
+        elif occ_off and not motion_on and ble_present and (best_rssi is not None and best_rssi < -78):
+            # Dampen weak cross-wall BLE bleed-through when in-room mmWave explicitly reports clear
+            prob = max(0.0, prob - 0.18)
+
+        if motion_on:
+            prob = max(prob, 0.68) + (0.15 if (ble_present or occ_on) else 0.05)
+
+        if door_closed and (ble_present or sensor_present):
+            prob += 0.08
+
+        confidence_pct = int(round(max(0.0, min(1.0, prob)) * 100))
+
+        if fusion_mode == "ble_only":
+            is_occupied = ble_present
+            confidence_pct = max(confidence_pct, 85) if ble_present else 0
+        elif fusion_mode == "any_or":
+            is_occupied = ble_present or sensor_present
+            if is_occupied and confidence_pct < 60:
+                confidence_pct = 75
+        elif fusion_mode == "ble_and_sensor":
+            has_local_sensors = bool(occ_on or occ_off or motion_on)
+            is_occupied = ble_present and (sensor_present if has_local_sensors else True)
+        else:
+            # auto_bayes (default)
+            is_occupied = confidence_pct >= threshold_pct
+
         return {
-            "is_occupied": len(occupants) > 0,
+            "is_occupied": is_occupied,
+            "ble_occupied": ble_present,
+            "sensor_occupied": sensor_present,
+            "fusion_mode": fusion_mode,
+            "confidence_pct": confidence_pct,
             "tracker_count": len(occupants),
             "occupied_by": occupants,
+            "occupant_names": occupant_names,
+            "persons": persons,
+            "active_sensors": active_sensors,
+            "available_sensors": available_sensors,
             "closest_device": closest_dev,
             "winning_rssi": best_rssi,
             "closest_distance_m": closest_dist_m,
+            "closest_distance_ft": closest_dist_ft,
+            "floor_id": floor_id,
         }
 
     @callback
@@ -1004,16 +1212,66 @@ def get_ble_fabric(hass: HomeAssistant) -> LatterBleFabric:
     if "ble_fabric" not in domain_data:
         domain_data["ble_fabric"] = LatterBleFabric(hass)
     return domain_data["ble_fabric"]
+
+
+def get_all_areas_presence_summary(hass: HomeAssistant) -> list[dict[str, Any]]:
+    """Build live per-area presence, occupant names, confidence score, and fusion status for Latter Studio."""
+    area_reg = ar.async_get(hass)
+    fabric = get_ble_fabric(hass)
+    proxy_areas = get_ble_proxy_area_ids(hass)
+
+    rows: list[dict[str, Any]] = []
+    for area_entry in sorted(area_reg.async_list_areas(), key=lambda a: a.name.lower()):
+        occ = fabric.get_area_occupancy(area_entry.id)
+        has_proxy = area_entry.id in proxy_areas
+        has_sensors = len(occ["available_sensors"]) > 0
+        if not has_proxy and not has_sensors and not occ["is_occupied"]:
+            continue
+        rows.append(
+            {
+                "area_id": area_entry.id,
+                "area_name": area_entry.name,
+                "floor_id": getattr(area_entry, "floor_id", None) or "",
+                "has_ble_proxy": has_proxy,
+                "is_occupied": occ["is_occupied"],
+                "ble_occupied": occ["ble_occupied"],
+                "sensor_occupied": occ["sensor_occupied"],
+                "fusion_mode": occ["fusion_mode"],
+                "confidence_pct": occ["confidence_pct"],
+                "tracker_count": occ["tracker_count"],
+                "occupied_by": occ["occupied_by"],
+                "occupant_names": occ["occupant_names"],
+                "persons": occ["persons"],
+                "active_sensors": occ["active_sensors"],
+                "available_sensors": occ["available_sensors"],
+                "closest_device": occ["closest_device"] or "",
+                "winning_rssi": occ["winning_rssi"],
+                "closest_distance_m": occ["closest_distance_m"],
+                "closest_distance_ft": occ["closest_distance_ft"],
+            }
+        )
+
+    rows.sort(
+        key=lambda r: (
+            not r["is_occupied"],
+            -int(r["confidence_pct"] or 0),
+            r["area_name"].lower(),
+        )
+    )
+    return rows
+
+
 import re
 
 
 def get_discovered_ble_candidates(
     hass: HomeAssistant, onboarded_slugs: set[str], onboarded_addresses: set[str]
-) -> list[dict[str, str]]:
+) -> list[dict[str, Any]]:
     """Discover non-ESPHome BLE devices (private_ble_device, ibeacon, active BLE tags) available to track."""
-    candidates: list[dict[str, str]] = []
+    candidates: list[dict[str, Any]] = []
     seen_targets: set[str] = {a.lower() for a in onboarded_addresses if a}
     ent_reg = er.async_get(hass)
+    area_reg = ar.async_get(hass)
 
     # 1. Check private_ble_device & ibeacon entities in Home Assistant
     for entry in _iter_entities(ent_reg):
@@ -1040,20 +1298,35 @@ def get_discovered_ble_candidates(
                 continue
             seen_targets.add(entry.entity_id.lower())
             kind_lbl = "Private BLE (Phone/Watch)" if entry.platform == "private_ble_device" else "iBeacon Tracker"
+            rssi_val = st.attributes.get("rssi") if st else None
+            src_scanner = str(st.attributes.get("source") or "") if st else ""
+            a_id = _resolve_scanner_area_id(hass, src_scanner) if src_scanner else None
+            a_obj = area_reg.async_get_area(a_id) if a_id else None
             candidates.append(
                 {
                     "slug": cand_slug,
                     "title": friendly,
                     "target_address": entry.entity_id,
+                    "kind": kind_lbl,
+                    "rssi": int(rssi_val) if isinstance(rssi_val, (int, float)) else None,
+                    "area_name": a_obj.name if a_obj else "",
+                    "scanner": src_scanner,
                     "label": f"{friendly} [{kind_lbl}]",
                 }
             )
 
-    # 2. Check live Bluetooth scanner tables for named BLE devices / iBeacons
+    # 2. Check live Bluetooth scanner tables for named BLE devices / iBeacons (picking strongest proxy per MAC)
+    best_by_addr: dict[str, dict[str, Any]] = {}
     try:
         from homeassistant.components import bluetooth
 
         for scanner in bluetooth.async_current_scanners(hass):
+            source = str(getattr(scanner, "source", "") or "")
+            scanner_name = str(getattr(scanner, "name", "") or source)
+            a_id = _resolve_scanner_area_id(hass, source) if source else None
+            a_obj = area_reg.async_get_area(a_id) if a_id else None
+            area_name = a_obj.name if a_obj else ""
+
             dev_adv_map: dict[str, tuple[Any, Any]] = (
                 getattr(scanner, "discovered_devices_and_advertisement_data", {})
                 or {}
@@ -1075,19 +1348,39 @@ def get_discovered_ble_candidates(
                 cand_slug = re.sub(r"[^a-z0-9]+", "_", local_name.lower()).strip("_")
                 if not cand_slug or cand_slug in onboarded_slugs:
                     continue
-                seen_targets.add(addr_str.lower())
                 rssi = getattr(adv_data, "rssi", None)
-                rssi_str = f" ({rssi} dBm)" if rssi is not None else ""
-                candidates.append(
-                    {
+                if rssi is None:
+                    rssi = getattr(ble_dev, "rssi", None)
+                rssi_int = int(rssi) if rssi is not None else None
+                prev = best_by_addr.get(addr_str)
+                if prev is None or (
+                    rssi_int is not None
+                    and (prev["rssi"] is None or rssi_int > prev["rssi"])
+                ):
+                    rssi_str = f" ({rssi_int} dBm)" if rssi_int is not None else ""
+                    area_str = f" • {area_name}" if area_name else ""
+                    best_by_addr[addr_str] = {
                         "slug": cand_slug,
                         "title": local_name,
                         "target_address": addr_str,
-                        "label": f"{local_name} [{addr_str}]{rssi_str}",
+                        "kind": "Named BLE Device",
+                        "rssi": rssi_int,
+                        "area_name": area_name,
+                        "scanner": scanner_name,
+                        "label": f"{local_name} [{addr_str}]{rssi_str}{area_str}",
                     }
-                )
     except Exception:  # noqa: BLE001
         pass
 
-    candidates.sort(key=lambda x: x["title"].lower())
+    for addr_str, item in best_by_addr.items():
+        seen_targets.add(addr_str.lower())
+        candidates.append(item)
+
+    candidates.sort(
+        key=lambda x: (
+            x.get("rssi") is None,
+            -(x.get("rssi") if x.get("rssi") is not None else -999),
+            str(x.get("title") or "").lower(),
+        )
+    )
     return candidates[:40]

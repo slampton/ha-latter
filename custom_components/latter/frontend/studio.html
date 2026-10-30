@@ -1101,7 +1101,7 @@
         <span>Groups &amp; Profiles</span>
       </button>
       <button class="nav-btn" data-view="area_tracking" onclick="switchView('area_tracking', this)">
-        <span>BLE Calibration</span>
+        <span>BLE &amp; Area Presence</span>
       </button>
       <button class="nav-btn" data-view="system_admin" onclick="switchView('system_admin', this)">
         <span>Administration</span>
@@ -1445,12 +1445,22 @@
       </section>
 
       <!-- ================================================================== -->
-      <!-- SYSTEM TAB 5: BLE CALIBRATION                                      -->
+      <!-- SYSTEM TAB 5: BLE & AREA PRESENCE                                  -->
       <!-- ================================================================== -->
       <section id="view-area_tracking" class="hidden">
         <div class="page-header">
-          <h2>BLE Calibration</h2>
-          <p>Calibrate Bluetooth proxy signal offsets per area. Offsets apply globally across all mobile devices.</p>
+          <h2>BLE &amp; Area Presence</h2>
+          <p>Live Area occupancy, Bayesian BLE + mmWave/PIR sensor fusion, per-area signal calibration, and 1-click Bluetooth device adoption.</p>
+        </div>
+
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:14px;">
+            <div>
+              <h3 style="margin:0;">Live Area Presence &amp; Sensor Fusion</h3>
+              <p class="desc" style="margin:2px 0 0;">Real-time occupancy (<code>binary_sensor.&lt;area&gt;_ble_occupancy</code> &amp; <code>sensor.&lt;area&gt;_occupants</code>) combining BLE beacons with area occupancy/mmWave/PIR sensors.</p>
+            </div>
+          </div>
+          <div id="area-presence-grid-box" class="native-controls-box"></div>
         </div>
 
         <div class="card">
@@ -1470,6 +1480,17 @@
             </div>
           </div>
           <div id="rssi-container"></div>
+        </div>
+
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:14px;">
+            <div>
+              <h3 style="margin:0;">Discovered Nearby Bluetooth Devices (1-Click Adopt)</h3>
+              <p class="desc" style="margin:2px 0 0;">Adopt discovered phones/watches (<code>private_ble_device</code>), iBeacons, or named BLE tags into Latter Area tracking in one click.</p>
+            </div>
+            <button type="button" class="btn-secondary" style="padding:5px 12px;font-size:12px;" onclick="openAddDeviceModal(); switchAddDeviceTab('ble');">+ Manual BLE Address</button>
+          </div>
+          <div id="ble-adopt-table-box" class="native-controls-box"></div>
         </div>
       </section>
 
@@ -3237,6 +3258,8 @@ function onSelectBleSurveyDevice(slug) {
 
 function renderActiveSurveyDeviceBars() {
   if (!STATE) return;
+  renderAreaPresenceGrid();
+  renderDiscoveredBleTable();
   const allDevs = STATE.fleet_devices || [];
   const bleDevs = allDevs.filter(d => d.has_ble);
   const picker = document.getElementById("ble-survey-device-picker");
@@ -3268,6 +3291,130 @@ function renderActiveSurveyDeviceBars() {
     : (activeDev.is_current ? (STATE.live?.ble_packets_seen || 0) : 0);
 
   renderRssiBars(rows, pkts);
+}
+
+function renderAreaPresenceGrid() {
+  const box = document.getElementById("area-presence-grid-box");
+  if (!box) return;
+  const rows = STATE?.live?.area_presence_grid || [];
+  if (!rows.length) {
+    box.innerHTML = `<p class="desc" style="margin:0;">No BLE proxies or area occupancy sensors discovered yet.</p>`;
+    return;
+  }
+
+  const modeOptions = [
+    {val: "auto_bayes", label: "Auto Bayesian (BLE + Sensors)"},
+    {val: "any_or",     label: "Deterministic OR (BLE or Sensor)"},
+    {val: "ble_only",   label: "BLE Only"},
+    {val: "ble_and_sensor", label: "Strict AND (BLE + Sensor)"}
+  ];
+
+  box.innerHTML = rows.map(r => {
+    const isOcc = !!r.is_occupied;
+    const occNames = (r.occupant_names && r.occupant_names.length)
+      ? r.occupant_names.join(", ")
+      : (isOcc ? "Occupied (Sensor)" : "Empty");
+    const badgeStyle = isOcc
+      ? "background:rgba(46,204,113,0.18);color:var(--ok);border-color:rgba(46,204,113,0.4);"
+      : "opacity:0.75;";
+    const badgeTxt = isOcc ? `OCCUPIED • ${r.confidence_pct}%` : "CLEAR";
+    const sigParts = [];
+    if (r.winning_rssi !== null && r.winning_rssi !== undefined) {
+      const distTxt = r.closest_distance_ft ? ` (~${r.closest_distance_ft} ft)` : "";
+      sigParts.push(`BLE: ${r.winning_rssi} dBm${distTxt}`);
+    }
+    if (r.active_sensors && r.active_sensors.length) {
+      sigParts.push(`Active Sensors: ${r.active_sensors.length}`);
+    } else if (r.available_sensors && r.available_sensors.length) {
+      sigParts.push(`${r.available_sensors.length} Area Sensor${r.available_sensors.length > 1 ? 's' : ''} (Clear)`);
+    }
+    if (r.floor_id) {
+      sigParts.push(`Floor: ${r.floor_id}`);
+    }
+    const subTxt = sigParts.length ? sigParts.join(" • ") : "BLE Proxy Ready";
+    const curMode = r.fusion_mode || "auto_bayes";
+    const optsHtml = modeOptions.map(m =>
+      `<option value="${m.val}" ${m.val === curMode ? 'selected' : ''}>${m.label}</option>`
+    ).join("");
+
+    return `<div class="native-ctrl-row">
+      <div class="lbl">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <strong>${r.area_name}</strong>
+          <span class="state-badge" style="${badgeStyle}">${badgeTxt}</span>
+          <span style="font-size:12.5px;color:var(--text-strong);font-weight:500;">${occNames}</span>
+        </div>
+        <small>${subTxt}</small>
+      </div>
+      <div class="widget">
+        <select style="width:auto;min-width:210px;" onchange="setAreaFusionMode('${r.area_id}', this.value)">${optsHtml}</select>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+async function setAreaFusionMode(areaId, mode) {
+  const resp = await fetch(API_URL, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({command: "set_area_fusion_mode", area_id: areaId, mode})
+  });
+  if (resp.ok) {
+    applyStateToDom(await resp.json(), false);
+    showToast("Updated Area sensor fusion mode");
+  }
+}
+
+function renderDiscoveredBleTable() {
+  const box = document.getElementById("ble-adopt-table-box");
+  if (!box) return;
+  const cands = STATE?.discovered_ble_devices || [];
+  if (!cands.length) {
+    box.innerHTML = `<p class="desc" style="margin:0;">All discovered Private BLE and named Bluetooth devices are already adopted, or no additional nearby beacons were detected.</p>`;
+    return;
+  }
+
+  const persons = STATE?.catalog?.persons || [];
+  box.innerHTML = cands.map((c, idx) => {
+    const pOpts = [`<option value="">— Unassigned Person —</option>`].concat(
+      persons.map(p => `<option value="${p.id}">${p.friendly || p.name}</option>`)
+    ).join("");
+    const metaParts = [c.kind || "BLE Device", c.target_address];
+    if (c.rssi !== null && c.rssi !== undefined) metaParts.push(`${c.rssi} dBm`);
+    if (c.area_name) metaParts.push(`Nearest Area: ${c.area_name}`);
+
+    return `<div class="native-ctrl-row">
+      <div class="lbl">
+        <strong>${c.title}</strong>
+        <small>${metaParts.join(" • ")}</small>
+      </div>
+      <div class="widget" style="gap:8px;flex-wrap:wrap;">
+        <select id="ble-adopt-person-${idx}" style="width:auto;min-width:165px;">${pOpts}</select>
+        <button type="button" class="btn-primary" style="padding:5px 12px;font-size:12px;" onclick="quickAdoptBleCandidate(${idx})">+ Adopt</button>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+async function quickAdoptBleCandidate(idx) {
+  const cands = STATE?.discovered_ble_devices || [];
+  const cand = cands[idx];
+  if (!cand) return;
+  const assigned_person = document.getElementById(`ble-adopt-person-${idx}`)?.value || "";
+  const resp = await fetch(API_URL, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({
+      command: "add_ble_device",
+      name: cand.title,
+      target_address: cand.target_address,
+      assigned_person
+    })
+  });
+  if (resp.ok) {
+    applyStateToDom(await resp.json(), false);
+    showToast(`Adopted BLE device '${cand.title}'`);
+  }
 }
 
 async function autoCalibrateHere(areaId) {
