@@ -362,16 +362,8 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return resolved
 
     def get_device_info(self) -> DeviceInfo:
-        """Return canonical Latter DeviceInfo linked via via_device to the underlying ESPHome device."""
-        via_identifier: tuple[str, str] | None = None
+        """Return canonical Latter DeviceInfo linked via via_device_id to the underlying ESPHome device."""
         esp_dev_id = self.esphome_device_id
-        if esp_dev_id:
-            esp_dev = dr.async_get(self.hass).async_get(esp_dev_id)
-            if esp_dev and esp_dev.identifiers:
-                for ident in esp_dev.identifiers:
-                    if isinstance(ident, tuple) and len(ident) == 2 and ident[0] != DOMAIN:
-                        via_identifier = ident
-                        break
         pretty_device = self.device_slug.replace("_", " ").title()
         return DeviceInfo(
             identifiers={(DOMAIN, self.entry.entry_id)},
@@ -380,7 +372,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             model="Latter ESPHome Companion Middleware",
             sw_version=INTEGRATION_VERSION,
             configuration_url=self.build_companion_url(),
-            **({"via_device": via_identifier} if via_identifier else {}),
+            **({"via_device_id": esp_dev_id} if esp_dev_id else {}),
         )
 
     @property
