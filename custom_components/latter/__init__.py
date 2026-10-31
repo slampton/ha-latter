@@ -91,9 +91,6 @@ def is_latter_compatible_esphome_device(
         exact = f"{slug}{suffix}"
         if exact in esphome_services:
             return True
-        for svc_name in esphome_services:
-            if svc_name.endswith(suffix) and slug in svc_name:
-                return True
 
     # 2. Check ESPHome project namespace or Latter OTA update entity
     model_str = f"{device.model or ''} {device.sw_version or ''}".lower()

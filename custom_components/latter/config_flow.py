@@ -15,7 +15,13 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr, entity_registry as er, selector
 
 from .backup_engine import get_device_groups_and_profiles
-from .ble_engine import _iter_devices, _iter_entities
+from .ble_engine import _iter_devices
+from .identity import (
+    esphome_service,
+    find_device_entity_by_suffix,
+    get_bound_esphome_device,
+    read_device_hardware_manifest,
+)
 from .const import (
     CONF_ALARM_ENTITY,
     CONF_AREA_HANDOFF,
@@ -114,123 +120,74 @@ def _discover_default_alarm(hass: HomeAssistant) -> str | None:
     return None
 
 
-def _discover_default_speaker(hass: HomeAssistant, device_slug: str) -> str:
+def _discover_default_speaker(
+    hass: HomeAssistant,
+    device_slug: str,
+    esphome_device_id: str | None = None,
+) -> str:
     """Return the device's own on-device media_player entity if present, or empty string if speakerless."""
+    found = find_device_entity_by_suffix(
+        hass,
+        esphome_device_id,
+        "media_player",
+        ("", "_music", "_media_player"),
+        fallback_slug=device_slug,
+    )
+    if found:
+        return found
     slug_norm = normalize_device_slug(device_slug)
     for candidate in (f"media_player.{slug_norm}", f"media_player.{slug_norm}_music"):
         if hass.states.get(candidate) is not None:
             return candidate
-    ent_reg = er.async_get(hass)
-    for entry in _iter_entities(ent_reg):
-        if entry.domain == "media_player" and entry.platform == "esphome":
-            if slug_norm in entry.entity_id and not entry.disabled_by:
-                return entry.entity_id
     return ""
 
 
 def _detect_hardware_defaults(hass: HomeAssistant, slug: str) -> dict[str, Any]:
-    """Auto-detect screen shape, art_size (410x502 vs 466), archetype, area, and roaming BLE capability."""
+    """Auto-detect screen shape, art_size, archetype, area, and roaming BLE capability from the device's hardware manifest."""
     norm = normalize_device_slug(slug)
-    dev_reg = dr.async_get(hass)
     ent_reg = er.async_get(hass)
-    esphome_svcs = hass.services.async_services().get("esphome", {})
 
-    matched_dev: dr.DeviceEntry | None = None
-    for dev in _iter_devices(dev_reg):
-        d_name = str(dev.name_by_user or dev.name or "").strip()
-        if d_name and normalize_device_slug(d_name) == norm:
-            matched_dev = dev
-            break
-    if matched_dev is None:
-        from .area_engine import find_esphome_device_id
+    matched_dev = get_bound_esphome_device(hass, None, fallback_slug=norm)
+    dev_id = matched_dev.id if matched_dev else None
+    manifest = read_device_hardware_manifest(hass, dev_id, fallback_slug=norm)
 
-        found_id = find_esphome_device_id(hass, norm)
-        if found_id:
-            matched_dev = dev_reg.async_get(found_id)
-
-    model_meta = (
-        f"{matched_dev.model or ''} {matched_dev.sw_version or ''} {matched_dev.name or ''} {norm}".lower()
-        if matched_dev
-        else norm
+    has_native_slots = bool(
+        esphome_service(hass, dev_id, "set_browse_slots", fallback_slug=norm)
+        or esphome_service(hass, dev_id, "set_area_slots", fallback_slug=norm)
     )
 
-    has_native_slots = any(
-        (s.endswith("_set_browse_slots") or s.endswith("_set_area_slots")) and norm in s
-        for s in esphome_svcs
-    )
-
-    has_ble_beacon = False
-    if matched_dev:
+    has_ble_beacon = isinstance(manifest.get("beacon"), dict)
+    if not has_ble_beacon and matched_dev:
         for e in er.async_entries_for_device(ent_reg, matched_dev.id):
-            if "ble" in e.entity_id.lower() and "beacon" in e.entity_id.lower():
+            if e.entity_id.endswith("_ble_presence_beacon"):
                 has_ble_beacon = True
                 break
 
-    is_desk_4b = any(k in model_meta for k in ("desk_assistant", "desk-assistant", "4b", "720"))
-    is_remote_35 = any(k in model_meta for k in ("remote_assistant", "remote-assistant", "p4_35", "320x480", "3.5"))
-    is_mobile_216 = any(k in model_meta for k in ("mobile_assistant", "mobile-assistant", "216", "2.16", "480x480"))
-    is_watch_206 = "410x502" in model_meta or "206" in model_meta or "2.06" in model_meta
-    is_round_175 = "466x466" in model_meta or "175" in model_meta or "1.75" in model_meta
-
-    if is_desk_4b:
+    if manifest and "w" in manifest and "h" in manifest:
+        w = int(manifest.get("w") or 466)
+        h = int(manifest.get("h") or 466)
+        shape = str(manifest.get("shape") or ("circle" if w == h == 466 else "square"))
+        is_stationary = bool(int(manifest.get("stationary") or 0) == 1)
+        art_size: int | str = w if w == h else f"{w}x{h}"
+        profile = str(
+            manifest.get("profile")
+            or ("stationary_display" if is_stationary else "mobile_display")
+        )
         return {
-            CONF_DEVICE_PROFILE: "stationary_display",
-            CONF_DEVICE_GROUP: "wall_panels",
-            CONF_DISPLAY_SHAPE: "square",
-            CONF_ART_SIZE: 720,
+            CONF_DEVICE_PROFILE: profile,
+            CONF_DEVICE_GROUP: "wall_panels" if is_stationary else "handhelds",
+            CONF_DISPLAY_SHAPE: shape,
+            CONF_ART_SIZE: art_size,
             CONF_DEFAULT_PAGE_SIZE: DEFAULT_PAGE_SIZE,
-            CONF_NATIVE_BLE_TRACKING: False,
-            CONF_BLE_AUTO_SWITCH: False,
-            CONF_SYNC_DEVICE_AREA: False,
+            CONF_NATIVE_BLE_TRACKING: not is_stationary,
+            CONF_BLE_AUTO_SWITCH: not is_stationary,
+            CONF_SYNC_DEVICE_AREA: not is_stationary,
             CONF_AREA_HANDOFF: DEFAULT_AREA_HANDOFF,
-            CONF_DEFAULT_AREA: (matched_dev.area_id or "") if matched_dev else "",
+            CONF_DEFAULT_AREA: (matched_dev.area_id or "") if (matched_dev and is_stationary) else "",
             "dock_apps": DEFAULT_DOCK_APPS,
         }
 
-    if is_remote_35:
-        return {
-            CONF_DEVICE_PROFILE: "mobile_display",
-            CONF_DEVICE_GROUP: "handhelds",
-            CONF_DISPLAY_SHAPE: "square",
-            CONF_ART_SIZE: "320x480",
-            CONF_DEFAULT_PAGE_SIZE: DEFAULT_PAGE_SIZE,
-            CONF_NATIVE_BLE_TRACKING: True,
-            CONF_BLE_AUTO_SWITCH: True,
-            CONF_SYNC_DEVICE_AREA: True,
-            CONF_AREA_HANDOFF: DEFAULT_AREA_HANDOFF,
-            CONF_DEFAULT_AREA: "",
-            "dock_apps": DEFAULT_DOCK_APPS,
-        }
-
-    if is_mobile_216:
-        return {
-            CONF_DEVICE_PROFILE: "mobile_display",
-            CONF_DEVICE_GROUP: "handhelds",
-            CONF_DISPLAY_SHAPE: "square",
-            CONF_ART_SIZE: 480,
-            CONF_DEFAULT_PAGE_SIZE: DEFAULT_PAGE_SIZE,
-            CONF_NATIVE_BLE_TRACKING: True,
-            CONF_BLE_AUTO_SWITCH: True,
-            CONF_SYNC_DEVICE_AREA: True,
-            CONF_AREA_HANDOFF: DEFAULT_AREA_HANDOFF,
-            CONF_DEFAULT_AREA: "",
-        }
-
-    if is_watch_206:
-        return {
-            CONF_DEVICE_PROFILE: "mobile_display",
-            CONF_DEVICE_GROUP: "handhelds",
-            CONF_DISPLAY_SHAPE: "square",
-            CONF_ART_SIZE: "410x502",
-            CONF_DEFAULT_PAGE_SIZE: DEFAULT_PAGE_SIZE,
-            CONF_NATIVE_BLE_TRACKING: True,
-            CONF_BLE_AUTO_SWITCH: True,
-            CONF_SYNC_DEVICE_AREA: True,
-            CONF_AREA_HANDOFF: DEFAULT_AREA_HANDOFF,
-            CONF_DEFAULT_AREA: "",
-        }
-
-    if is_round_175 or has_native_slots:
+    if has_native_slots:
         return {
             CONF_DEVICE_PROFILE: "mobile_display",
             CONF_DEVICE_GROUP: "handhelds",
@@ -242,6 +199,7 @@ def _detect_hardware_defaults(hass: HomeAssistant, slug: str) -> dict[str, Any]:
             CONF_SYNC_DEVICE_AREA: True,
             CONF_AREA_HANDOFF: DEFAULT_AREA_HANDOFF,
             CONF_DEFAULT_AREA: "",
+            "dock_apps": DEFAULT_DOCK_APPS,
         }
 
     return {

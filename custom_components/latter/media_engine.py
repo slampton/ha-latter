@@ -14,48 +14,39 @@ from homeassistant.const import (
     STATE_UNKNOWN,
 )
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
 
-from .ble_engine import _iter_devices, _iter_entities
 from .browse_engine import (
     _get_mass_client,
     async_browse_media_items,
     is_music_assistant_player,
 )
 from .const import DOMAIN, normalize_device_slug
+from .identity import device_entities, find_device_entity_by_suffix, get_bound_esphome_device
 
 _LOGGER = logging.getLogger(__name__)
 
 
 def resolve_esphome_local_speaker(
-    hass: HomeAssistant, device_slug: str
+    hass: HomeAssistant, device_slug: str, esphome_device_id: str | None = None
 ) -> str:
-    """Resolve the on-device media_player entity for the ESPHome node, or '' if the device has no speaker."""
+    """Resolve the on-device media_player entity for the bound ESPHome node, or '' if the device has no speaker."""
+    dev_id = get_bound_esphome_device(hass, esphome_device_id, fallback_slug=device_slug)
+    if dev_id:
+        by_suffix = find_device_entity_by_suffix(
+            hass, dev_id, "media_player", ("music", "speaker", "media_player")
+        )
+        if by_suffix:
+            return by_suffix
+        for entry in device_entities(hass, dev_id, domain="media_player"):
+            if entry.platform == "esphome":
+                return entry.entity_id
+
     slug_norm = normalize_device_slug(device_slug)
     for cand in (f"media_player.{slug_norm}", f"media_player.{slug_norm}_music"):
         if hass.states.get(cand) is not None:
             return cand
-
-    ent_reg = er.async_get(hass)
-    dev_reg = dr.async_get(hass)
-
-    for entry in _iter_entities(ent_reg):
-        if entry.domain == "media_player" and entry.platform == "esphome":
-            if slug_norm in entry.entity_id and not entry.disabled_by:
-                return entry.entity_id
-
-    for dev in _iter_devices(dev_reg):
-        dev_name = (
-            str(dev.name_by_user or dev.name or "")
-            .lower()
-            .replace("-", "_")
-            .replace(" ", "_")
-        )
-        if slug_norm and slug_norm in dev_name:
-            for entry in er.async_entries_for_device(ent_reg, dev.id):
-                if entry.domain == "media_player" and not entry.disabled_by:
-                    return entry.entity_id
 
     return ""
 

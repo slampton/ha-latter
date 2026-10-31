@@ -439,7 +439,7 @@ def _resolve_coordinator_by_slug(hass: HomeAssistant, target_slug: str) -> Any |
     """Find a loaded LatterCoordinator by device slug or entry_id."""
     from .coordinator import resolve_coordinator
 
-    return resolve_coordinator(hass, target_slug, allow_fallback=False)
+    return resolve_coordinator(hass, target_slug)
 
 
 async def _async_push_go2rtc_or_onvif_backchannel(
@@ -855,7 +855,7 @@ async def async_execute_doorbell_intercom(
                     DOMAIN,
                     "notify",
                     {
-                        "device_slug": c.device_slug,
+                        "target_device": c.device_slug,
                         "title": f"Intercom: {caller_title}",
                         "message": "Tap Answer for 2-Way Call",
                         "priority": "critical",

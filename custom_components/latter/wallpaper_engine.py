@@ -183,7 +183,7 @@ def list_wallpaper_catalog(
     def _build_thumb_url(src_id: str) -> str:
         if sign_resource is None:
             return ""
-        sig = sign_resource(f"wallpaper:{src_id}")
+        sig = sign_resource(f"wallpaper:{src_id}|240|240|{wp_shape}")
         return (
             f"/api/latter/wallpaper/{slug}"
             f"?w=240&h=240&shape={wp_shape}&src={quote(src_id, safe='')}&sig={sig}"

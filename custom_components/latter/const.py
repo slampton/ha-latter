@@ -88,6 +88,7 @@ DEFAULT_WALLPAPER_CYCLE_MINUTES: Final = 0
 DEFAULT_ART_SIZE: Final = 466
 
 # Native Latter Services
+SERVICE_DEVICE_HELLO: Final = "device_hello"
 SERVICE_MUSIC_BROWSE: Final = "music_browse"
 SERVICE_SET_ACTIVE_SPEAKER: Final = "set_active_speaker"
 SERVICE_MEDIA_COMMAND: Final = "media_command"

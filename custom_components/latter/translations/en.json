@@ -111,6 +111,9 @@
     },
     "not_supported": {
       "message": "The requested action is not supported by this entity."
+    },
+    "unknown_target": {
+      "message": "Target Latter device '{target_device}' could not be resolved."
     }
   }
 }

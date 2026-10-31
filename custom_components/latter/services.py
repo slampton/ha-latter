@@ -12,18 +12,18 @@ import voluptuous as vol
 
 from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import HomeAssistant, ServiceCall, ServiceResponse, SupportsResponse
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv, device_registry as dr, issue_registry as ir
 from homeassistant.util import dt as dt_util
 
 from .browse_engine import async_browse_media_items, is_music_assistant_player
-from .calendar_engine import async_fetch_calendar_agenda
 from .media_engine import async_announce_on_targets, resolve_assist_satellite_entity
 from .const import (
     CONF_ALARM_ENTITY,
-    DEFAULT_PAGE_SIZE,
     DOMAIN,
     SERVICE_CALENDAR_CREATE_EVENT,
     SERVICE_CALENDAR_FETCH,
+    SERVICE_DEVICE_HELLO,
     SERVICE_DOORBELL_INTERCOM,
     SERVICE_INTERCOM_BROADCAST,
     SERVICE_MEDIA_COMMAND,
@@ -40,9 +40,9 @@ from .const import (
     SERVICE_SAVE_CUSTOM_COLOR,
     SERVICE_SET_ACTIVE_AREA,
     SERVICE_SET_ACTIVE_SPEAKER,
-    normalize_device_slug,
 )
 from .coordinator import LatterCoordinator, resolve_coordinator
+from .identity import esphome_service
 from .area_engine import (
     async_execute_area_action,
     get_area_entities,
@@ -140,8 +140,6 @@ WEBOSTV_BUTTON_MAP: dict[str, str] = {
 
 BASE_TARGET_FIELDS: dict[Any, Any] = {
     vol.Optional("target_device"): cv.string,
-    vol.Optional("device_slug"): cv.string,
-    vol.Optional("device_id"): vol.Any(cv.string, [cv.string]),
 }
 
 
@@ -163,49 +161,30 @@ def _parse_bool(val: Any, default: bool = False) -> bool:
 
 def _resolve_coordinator_from_call(
     hass: HomeAssistant, call: ServiceCall
-) -> LatterCoordinator | None:
-    """Resolve the target LatterCoordinator by target_device, device_slug, HA device_id, or single-instance fallback."""
-    raw_slug = call.data.get("device_slug") or call.data.get("target_device")
-    if raw_slug:
-        matched = resolve_coordinator(hass, str(raw_slug), allow_fallback=False)
-        if matched is not None:
-            return matched
-
-    raw_dev_id = call.data.get("device_id")
-    if raw_dev_id:
-        dev_id = raw_dev_id[0] if isinstance(raw_dev_id, list) else str(raw_dev_id)
-        matched = resolve_coordinator(hass, dev_id, allow_fallback=False)
-        if matched is not None:
-            return matched
-        dev = dr.async_get(hass).async_get(dev_id)
-        if dev:
-            for _dom, ident in dev.identifiers:
-                matched = resolve_coordinator(hass, ident, allow_fallback=False)
-                if matched is not None:
-                    return matched
-            dev_name = str(dev.name_by_user or dev.name or "")
-            if dev_name:
-                matched = resolve_coordinator(hass, dev_name, allow_fallback=False)
-                if matched is not None:
-                    return matched
-
-    return resolve_coordinator(hass, None, allow_fallback=True)
+) -> LatterCoordinator:
+    """Resolve the target LatterCoordinator strictly by target_device (or single-device default), raising ServiceValidationError on ambiguity."""
+    raw_target = call.data.get("target_device")
+    target_str = str(raw_target).strip() if raw_target is not None else ""
+    coord = resolve_coordinator(hass, target_str or None)
+    if coord is None:
+        raise ServiceValidationError(
+            f"Target Latter device '{target_str or 'unspecified'}' could not be resolved.",
+            translation_domain=DOMAIN,
+            translation_key="unknown_target",
+            translation_placeholders={
+                "target_device": target_str or "unspecified"
+            },
+        )
+    return coord
 
 
 def _resolve_esphome_action(
     hass: HomeAssistant, device_slug: str, suffix: str
 ) -> str | None:
-    """Resolve the registered esphome.<device_slug>_<suffix> service name strictly for the target device."""
-    esphome_services = hass.services.async_services().get("esphome", {})
-    exact = f"{device_slug}_{suffix}"
-    if exact in esphome_services:
-        return exact
-
-    for svc_name in esphome_services:
-        if svc_name.endswith(f"_{suffix}") and device_slug in svc_name:
-            return svc_name
-
-    return None
+    """Resolve the registered esphome.<node>_<suffix> service name via identity.esphome_service."""
+    coord = resolve_coordinator(hass, device_slug)
+    dev_id = coord.esphome_device_id if coord is not None else None
+    return esphome_service(hass, dev_id, suffix, fallback_slug=device_slug)
 
 
 _SLOT_PUSH_WARN_INTERVAL_S = 600.0
@@ -288,7 +267,7 @@ async def async_push_browse_slots(
                 err,
             )
         if count >= _SLOT_PUSH_REPAIR_THRESHOLD:
-            coord = resolve_coordinator(hass, device_slug, allow_fallback=False)
+            coord = resolve_coordinator(hass, device_slug)
             placeholders = {
                 "device_slug": device_slug,
                 "service_name": f"esphome.{esphome_action}",
@@ -372,21 +351,29 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     if hass.services.has_service(DOMAIN, SERVICE_MUSIC_BROWSE):
         return
 
+    async def _handle_device_hello(call: ServiceCall) -> None:
+        coord = _resolve_coordinator_from_call(hass, call)
+        contract = int(call.data.get("contract") or 3)
+        boot_id = str(call.data.get("boot_id") or "").strip()
+        manifest_raw = str(call.data.get("manifest") or "").strip()
+        await coord.async_handle_device_hello(
+            contract=contract,
+            boot_id=boot_id,
+            manifest_raw=manifest_raw,
+        )
+
     async def _handle_set_active_speaker(call: ServiceCall) -> None:
-        speaker = str(call.data.get("entity_id") or call.data.get("speaker") or "")
+        speaker = str(call.data.get("entity_id") or "").strip()
         transfer_queue = _parse_bool(call.data.get("transfer_queue"), default=True)
         coord = _resolve_coordinator_from_call(hass, call)
-        if coord and speaker:
+        if speaker:
             coord.async_set_active_speaker(speaker, transfer_queue=transfer_queue)
 
     async def _handle_media_command(call: ServiceCall) -> None:
         coord = _resolve_coordinator_from_call(hass, call)
-        if not coord:
-            return
-
         data = call.data
-        command = str(data.get("command") or data.get("action") or "toggle")
-        speaker = data.get("speaker") or data.get("entity_id")
+        command = str(data.get("command") or "toggle")
+        speaker = data.get("entity_id")
         raw_seek = data.get("seek_position")
         seek_pos = float(raw_seek) if raw_seek is not None and str(raw_seek).strip() != "" else None
         media_id = str(data.get("media_id") or "").strip() or None
@@ -405,17 +392,11 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     async def _handle_media_volume(call: ServiceCall) -> None:
         coord = _resolve_coordinator_from_call(hass, call)
         data = call.data
-        speaker = str(
-            data.get("entity_id")
-            or data.get("speaker")
-            or (coord.active_speaker if coord else "")
-        ).strip()
+        speaker = str(data.get("entity_id") or coord.active_speaker).strip()
         if not speaker:
             return
 
-        vol_target = (
-            coord.get_volume_target_entity(speaker) if coord else speaker
-        )
+        vol_target = coord.get_volume_target_entity(speaker)
         state_obj = hass.states.get(vol_target)
         target_domain = (
             state_obj.domain if state_obj else vol_target.split(".")[0]
@@ -491,8 +472,8 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
     async def _handle_set_active_area(call: ServiceCall) -> None:
         coord = _resolve_coordinator_from_call(hass, call)
-        area_val = str(call.data.get("area") or call.data.get("area_id") or "").strip()
-        if coord and area_val:
+        area_val = str(call.data.get("area_id") or "").strip()
+        if area_val:
             raw_handoff = call.data.get("handoff_media")
             handoff_val = (
                 _parse_bool(raw_handoff, default=coord.area_handoff_enabled)
@@ -636,27 +617,14 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     async def _handle_music_browse(call: ServiceCall) -> None:
         coord = _resolve_coordinator_from_call(hass, call)
         data = call.data
-        raw_target = data.get("device_slug") or data.get("target_device")
-        device_slug = (
-            coord.device_slug
-            if coord
-            else normalize_device_slug(str(raw_target or "esphome_device"))
-        )
+        device_slug = coord.device_slug
 
         mode = str(data.get("mode") or "speakers")
         page = int(data.get("page") or 1)
         page_size = int(data.get("page_size") or 5)
-        local_speaker = (
-            coord.local_speaker if coord else f"media_player.{device_slug}"
-        )
-        speaker = str(
-            data.get("speaker")
-            or (coord.active_speaker if coord else local_speaker)
-        )
-        last_speaker = str(
-            data.get("last_speaker")
-            or (coord.last_speaker if coord else speaker)
-        )
+        local_speaker = coord.local_speaker
+        speaker = str(data.get("speaker") or coord.active_speaker or local_speaker)
+        last_speaker = str(data.get("last_speaker") or coord.last_speaker or speaker)
         search = str(data.get("search") or "")
         album_sort = str(data.get("album_sort") or "name")
         artist_album_sort = str(data.get("artist_album_sort") or "year")
@@ -696,43 +664,31 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     async def _handle_area_browse(call: ServiceCall) -> None:
         coord = _resolve_coordinator_from_call(hass, call)
         data = call.data
-        raw_target = data.get("device_slug") or data.get("target_device")
-        device_slug = (
-            coord.device_slug
-            if coord
-            else normalize_device_slug(str(raw_target or "esphome_device"))
-        )
+        device_slug = coord.device_slug
 
         mode = str(data.get("mode") or "entities").strip().lower()
         page = int(data.get("page") or 1)
-        configured_ps = coord.default_page_size if coord else DEFAULT_PAGE_SIZE
+        configured_ps = coord.default_page_size
         default_ps = 5 if mode == "areas" else configured_ps
         page_size = int(data.get("page_size") or default_ps)
-        area_id = str(
-            data.get("area_id")
-            or (coord.active_area_id if coord else "")
-            or ""
-        )
+        area_id = str(data.get("area_id") or coord.active_area_id or "")
         domain_filter = str(data.get("domain_filter") or "all")
-        local_speaker = (
-            coord.local_speaker if coord else f"media_player.{device_slug}"
-        )
+        local_speaker = coord.local_speaker
 
-        if coord:
-            if mode == "entities":
-                coord.last_area_filter = domain_filter
-                coord.last_area_page = page
-            if area_id and area_id != coord.active_area_id:
-                coord.on_area_changed_push_slots = None
-                coord.async_set_active_area(
-                    area_id, handoff_media=False, sync_device_registry=False
-                )
-                coord.on_area_changed_push_slots = lambda c: async_push_active_area_entities(hass, c)
+        if mode == "entities":
+            coord.last_area_filter = domain_filter
+            coord.last_area_page = page
+        if area_id and area_id != coord.active_area_id:
+            coord.on_area_changed_push_slots = None
+            coord.async_set_active_area(
+                area_id, handoff_media=False, sync_device_registry=False
+            )
+            coord.on_area_changed_push_slots = lambda c: async_push_active_area_entities(hass, c)
 
         if mode == "areas":
             items = get_areas_summary(
                 hass,
-                active_area_id=coord.active_area_id if coord else area_id,
+                active_area_id=coord.active_area_id,
                 local_speaker=local_speaker,
                 device_slug=device_slug,
             )
@@ -740,13 +696,13 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         elif mode == "home":
             items = get_home_wide_entities(
                 hass,
-                configured_alarm_entity=coord.get_opt(CONF_ALARM_ENTITY) if coord else None,
+                configured_alarm_entity=coord.get_opt(CONF_ALARM_ENTITY),
             )
             slot_mode = "area_home"
         else:
             items = get_area_entities(
                 hass,
-                area_id=area_id or (coord.active_area_id if coord else None),
+                area_id=area_id or coord.active_area_id,
                 domain_filter=domain_filter,
                 local_speaker=local_speaker,
             )
@@ -804,22 +760,14 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     async def _handle_calendar_fetch(call: ServiceCall) -> None:
         coord = _resolve_coordinator_from_call(hass, call)
         data = call.data
-        raw_target = data.get("device_slug") or data.get("target_device")
-        device_slug = (
-            coord.device_slug
-            if coord
-            else normalize_device_slug(str(raw_target or "esphome_device"))
-        )
+        device_slug = coord.device_slug
 
         days = int(data.get("days") or 30)
         page = int(data.get("page") or 1)
         page_size = int(data.get("page_size") or 5)
 
-        if coord:
-            await coord.async_refresh_calendar_agenda(days=days)
-            items = coord.calendar_events
-        else:
-            _, items = await async_fetch_calendar_agenda(hass, [], days=days)
+        await coord.async_refresh_calendar_agenda(days=days)
+        items = coord.calendar_events
 
         await async_push_browse_slots(
             hass=hass,
@@ -958,16 +906,27 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
     hass.services.async_register(
         DOMAIN,
+        SERVICE_DEVICE_HELLO,
+        _handle_device_hello,
+        schema=vol.Schema(
+            {
+                **BASE_TARGET_FIELDS,
+                vol.Optional("contract", default=3): vol.Coerce(int),
+                vol.Optional("boot_id", default=""): cv.string,
+                vol.Optional("manifest", default=""): cv.string,
+            }
+        ),
+    )
+    hass.services.async_register(
+        DOMAIN,
         SERVICE_SET_ACTIVE_SPEAKER,
         _handle_set_active_speaker,
         schema=vol.Schema(
             {
                 **BASE_TARGET_FIELDS,
-                vol.Optional("entity_id"): cv.string,
-                vol.Optional("speaker"): cv.string,
+                vol.Required("entity_id"): cv.string,
                 vol.Optional("transfer_queue", default=True): vol.Any(bool, cv.string),
-            },
-            extra=vol.ALLOW_EXTRA,
+            }
         ),
     )
     hass.services.async_register(
@@ -978,15 +937,12 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             {
                 **BASE_TARGET_FIELDS,
                 vol.Optional("command", default="toggle"): cv.string,
-                vol.Optional("action"): cv.string,
-                vol.Optional("speaker"): cv.string,
                 vol.Optional("entity_id"): cv.string,
                 vol.Optional("seek_position"): vol.Any(vol.Coerce(float), cv.string),
                 vol.Optional("media_id"): cv.string,
                 vol.Optional("media_type"): cv.string,
                 vol.Optional("enqueue"): cv.string,
-            },
-            extra=vol.ALLOW_EXTRA,
+            }
         ),
     )
     hass.services.async_register(
@@ -997,11 +953,9 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             {
                 **BASE_TARGET_FIELDS,
                 vol.Optional("entity_id"): cv.string,
-                vol.Optional("speaker"): cv.string,
                 vol.Optional("action", default="set"): cv.string,
                 vol.Optional("volume_level"): vol.Any(vol.Coerce(float), cv.string),
-            },
-            extra=vol.ALLOW_EXTRA,
+            }
         ),
     )
     hass.services.async_register(
@@ -1011,11 +965,9 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         schema=vol.Schema(
             {
                 **BASE_TARGET_FIELDS,
-                vol.Optional("area"): cv.string,
-                vol.Optional("area_id"): cv.string,
+                vol.Required("area_id"): cv.string,
                 vol.Optional("handoff_media"): vol.Any(bool, cv.string),
-            },
-            extra=vol.ALLOW_EXTRA,
+            }
         ),
     )
     hass.services.async_register(
@@ -1028,8 +980,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 vol.Optional("slot", default=1): vol.Coerce(int),
                 vol.Optional("action", default="select_slot"): cv.string,
                 vol.Optional("command"): cv.string,
-            },
-            extra=vol.ALLOW_EXTRA,
+            }
         ),
     )
     hass.services.async_register(
@@ -1048,8 +999,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 vol.Optional("album_sort", default="name"): cv.string,
                 vol.Optional("artist_album_sort", default="year"): cv.string,
                 vol.Optional("podcast_sort", default="newest"): cv.string,
-            },
-            extra=vol.ALLOW_EXTRA,
+            }
         ),
     )
     hass.services.async_register(
@@ -1065,8 +1015,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 vol.Optional("page", default=1): vol.Coerce(int),
                 vol.Optional("page_size"): vol.Coerce(int),
                 vol.Optional("handoff_media"): vol.Any(bool, cv.string),
-            },
-            extra=vol.ALLOW_EXTRA,
+            }
         ),
     )
     hass.services.async_register(
@@ -1081,8 +1030,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 vol.Optional("action"): cv.string,
                 vol.Optional("level"): vol.Any(vol.Coerce(float), cv.string),
                 vol.Optional("code"): cv.string,
-            },
-            extra=vol.ALLOW_EXTRA,
+            }
         ),
     )
     hass.services.async_register(
@@ -1095,8 +1043,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 vol.Optional("days", default=7): vol.Coerce(int),
                 vol.Optional("page", default=1): vol.Coerce(int),
                 vol.Optional("page_size", default=5): vol.Coerce(int),
-            },
-            extra=vol.ALLOW_EXTRA,
+            }
         ),
     )
     hass.services.async_register(
@@ -1113,19 +1060,13 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 vol.Optional("in_minutes", default=15): vol.Any(vol.Coerce(int), cv.string),
                 vol.Optional("duration_minutes", default=30): vol.Any(vol.Coerce(int), cv.string),
                 vol.Optional("description"): cv.string,
-            },
-            extra=vol.ALLOW_EXTRA,
+            }
         ),
     )
     async def _handle_notify(call: ServiceCall) -> None:
         """Dispatch a toast notification, chime, and optional live camera peephole snapshot to one, occupied ('follow_me'), or all Latter displays."""
         data = call.data
-        raw_target = str(
-            data.get("target_device")
-            or data.get("device_slug")
-            or data.get("person_entity")
-            or ""
-        ).strip()
+        raw_target = str(data.get("target_device") or "").strip()
         target_low = raw_target.lower()
 
         all_coords = [
@@ -1187,7 +1128,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         priority = str(data.get("priority") or "normal").strip().lower()
         duration = int(data.get("duration") or 8)
         chime = _parse_bool(data.get("chime"), default=True)
-        is_announce = _parse_bool(data.get("announce") or data.get("speak"), default=False)
+        is_announce = _parse_bool(data.get("announce"), default=False)
         card_chime = False if is_announce else chime
         cam_ent = str(data.get("camera_entity") or "").strip() or None
 
@@ -1239,12 +1180,12 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         _handle_intercom_broadcast,
         schema=vol.Schema(
             {
+                **BASE_TARGET_FIELDS,
                 vol.Optional("message"): cv.string,
                 vol.Optional("media_url"): cv.string,
                 vol.Optional("target_speakers"): vol.Any(cv.string, [cv.string]),
                 vol.Optional("tts_entity"): cv.string,
-            },
-            extra=vol.ALLOW_EXTRA,
+            }
         ),
     )
     notify_schema = vol.Schema(
@@ -1255,9 +1196,9 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             vol.Optional("priority", default="normal"): cv.string,
             vol.Optional("duration", default=8): vol.Coerce(int),
             vol.Optional("chime", default=True): vol.Any(bool, cv.string),
+            vol.Optional("announce", default=False): vol.Any(bool, cv.string),
             vol.Optional("camera_entity"): cv.string,
-        },
-        extra=vol.ALLOW_EXTRA,
+        }
     )
     hass.services.async_register(
         DOMAIN,
@@ -1290,22 +1231,28 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         if store is not None:
             await store.async_save(global_cfg)
 
-        if coord is not None:
-            merged = {
-                **coord.entry.data,
-                **(coord.entry.options or {}),
-                CONF_CUSTOM_PALETTES: palettes,
-                CONF_DEVICE_CUSTOM_COLOR: raw_hex,
-            }
-            hass.config_entries.async_update_entry(
-                coord.entry, data=merged, options=merged
-            )
-            coord.async_notify_listeners()
+        merged = {
+            **coord.entry.data,
+            **(coord.entry.options or {}),
+            CONF_CUSTOM_PALETTES: palettes,
+            CONF_DEVICE_CUSTOM_COLOR: raw_hex,
+        }
+        hass.config_entries.async_update_entry(
+            coord.entry, data=merged, options=merged
+        )
+        coord.async_notify_listeners()
 
     hass.services.async_register(
         DOMAIN,
         SERVICE_SAVE_CUSTOM_COLOR,
         _handle_save_custom_color,
+        schema=vol.Schema(
+            {
+                **BASE_TARGET_FIELDS,
+                vol.Required("hex_color"): cv.string,
+                vol.Optional("name"): cv.string,
+            }
+        ),
     )
 
     async def _handle_doorbell_intercom(call: ServiceCall) -> ServiceResponse:
@@ -1313,8 +1260,6 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         from .doorbell_engine import async_execute_doorbell_intercom
 
         coord = _resolve_coordinator_from_call(hass, call)
-        if not coord:
-            return {"status": "error", "reason": "no_coordinator"}
         data = call.data
         action = str(data.get("action") or "listen_toggle").strip()
         cam_ent = str(data.get("camera_entity") or "").strip() or None
@@ -1352,8 +1297,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 vol.Optional("camera_index"): vol.Any(vol.Coerce(int), cv.string),
                 vol.Optional("message"): cv.string,
                 vol.Optional("anc_mode"): cv.string,
-            },
-            extra=vol.ALLOW_EXTRA,
+            }
         ),
         supports_response=SupportsResponse.OPTIONAL,
     )

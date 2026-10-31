@@ -232,19 +232,15 @@ class LatterCalendarAgendaSensor(_BaseLatterSensor):
 
     @property
     def native_value(self) -> str:
-        """Return semicolon-delimited upcoming agenda string."""
-        return self.coordinator.calendar_agenda_string
+        """Return semicolon-delimited upcoming agenda string (bounded <= 250 chars)."""
+        state, _ = self.coordinator.get_calendar_agenda_payload()
+        return state
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return structured upcoming event list."""
-        return {
-            "event_count": len(self.coordinator.calendar_events),
-            "events": self.coordinator.calendar_events,
-            "calendars": self.coordinator.calendar_entities,
-            "rev": self.coordinator.rev,
-            "payload": self.coordinator.calendar_agenda_string,
-        }
+        """Return structured upcoming event list and Protocol v3 payload."""
+        _, attrs = self.coordinator.get_calendar_agenda_payload()
+        return attrs
 
 
 class LatterRemoteConfigSensor(_BaseLatterSensor):

@@ -1,0 +1,237 @@
+{
+  "contract_version": 3,
+  "separator": "\u001f",
+  "record_separator": "\u001e",
+  "header": [
+    {
+      "index": 0,
+      "name": "version",
+      "cpp_enum": "HEADER_VERSION",
+      "type": "string",
+      "description": "Protocol version literal ('v3')"
+    },
+    {
+      "index": 1,
+      "name": "epoch",
+      "cpp_enum": "HEADER_EPOCH",
+      "type": "u32",
+      "description": "Coordinator session epoch (non-zero random u31; resets rev guards on change)"
+    },
+    {
+      "index": 2,
+      "name": "rev",
+      "cpp_enum": "HEADER_REV",
+      "type": "u32",
+      "description": "Per-domain monotonic revision counter (>= 1; bumped only when domain body changes)"
+    }
+  ],
+  "domains": {
+    "area_context": {
+      "entity_suffix": "area_context",
+      "cpp_enum_name": "AreaCtxField",
+      "description": "Active Area state, climate/security/cover summaries, camera/intercom directories, and alert banner",
+      "fields": [
+        {"index": 3, "name": "area_id", "cpp_enum": "AREA_ID", "type": "string", "description": "Active Home Assistant Area ID"},
+        {"index": 4, "name": "area_name", "cpp_enum": "AREA_NAME", "type": "string", "description": "Friendly display name of the active Area"},
+        {"index": 5, "name": "site_id", "cpp_enum": "SITE_ID", "type": "string", "description": "Active Site ID"},
+        {"index": 6, "name": "vpn_enabled", "cpp_enum": "VPN_ENABLED", "type": "bool", "description": "WireGuard roaming VPN enabled flag (0 or 1)"},
+        {"index": 7, "name": "vpn_client_ip", "cpp_enum": "VPN_CLIENT_IP", "type": "string", "description": "Assigned WireGuard client IP"},
+        {"index": 8, "name": "ble_closest_proxy", "cpp_enum": "BLE_CLOSEST_PROXY", "type": "string", "description": "Friendly name of closest Bluetooth proxy"},
+        {"index": 9, "name": "dock_apps", "cpp_enum": "DOCK_APPS", "type": "csv", "description": "Comma-separated Home Dock app IDs"},
+        {"index": 10, "name": "wallpaper_url", "cpp_enum": "WALLPAPER_URL", "type": "url", "description": "Signed HTTP URL for active wallpaper"},
+        {"index": 11, "name": "theme_color_hex", "cpp_enum": "THEME_COLOR_HEX", "type": "string", "description": "Active theme accent color (#RRGGBB)"},
+        {"index": 12, "name": "available_domains", "cpp_enum": "AVAILABLE_DOMAINS", "type": "csv", "description": "Comma-separated available Area domains"},
+        {"index": 13, "name": "area_temp", "cpp_enum": "AREA_TEMP", "type": "string", "description": "Formatted Area temperature"},
+        {"index": 14, "name": "area_humidity", "cpp_enum": "AREA_HUMIDITY", "type": "string", "description": "Formatted Area relative humidity"},
+        {"index": 15, "name": "lights_on", "cpp_enum": "LIGHTS_ON", "type": "u16", "description": "Count of active lights in Area"},
+        {"index": 16, "name": "covers_open", "cpp_enum": "COVERS_OPEN", "type": "u16", "description": "Count of open covers in Area"},
+        {"index": 17, "name": "alarm_entity", "cpp_enum": "ALARM_ENTITY", "type": "entity_id", "description": "Primary alarm control panel entity ID"},
+        {"index": 18, "name": "alarm_state", "cpp_enum": "ALARM_STATE", "type": "string", "description": "Primary alarm state"},
+        {"index": 19, "name": "thermostat_entity", "cpp_enum": "THERMOSTAT_ENTITY", "type": "entity_id", "description": "Primary climate entity ID"},
+        {"index": 20, "name": "thermostat_state", "cpp_enum": "THERMOSTAT_STATE", "type": "string", "description": "Primary climate state/HVAC mode"},
+        {"index": 21, "name": "thermostat_temp", "cpp_enum": "THERMOSTAT_TEMP", "type": "f32", "description": "Target thermostat setpoint temperature"},
+        {"index": 22, "name": "thermostat_current_temp", "cpp_enum": "THERMOSTAT_CURRENT_TEMP", "type": "f32", "description": "Current measured thermostat temperature"},
+        {"index": 23, "name": "lock_entity", "cpp_enum": "LOCK_ENTITY", "type": "entity_id", "description": "Primary lock entity ID"},
+        {"index": 24, "name": "lock_state", "cpp_enum": "LOCK_STATE", "type": "string", "description": "Primary lock state"},
+        {"index": 25, "name": "garage_entity", "cpp_enum": "GARAGE_ENTITY", "type": "entity_id", "description": "Primary garage cover entity ID"},
+        {"index": 26, "name": "garage_state", "cpp_enum": "GARAGE_STATE", "type": "string", "description": "Primary garage cover state"},
+        {"index": 27, "name": "vacuum_entity", "cpp_enum": "VACUUM_ENTITY", "type": "entity_id", "description": "Primary vacuum entity ID"},
+        {"index": 28, "name": "vacuum_state", "cpp_enum": "VACUUM_STATE", "type": "string", "description": "Primary vacuum state"},
+        {"index": 29, "name": "camera_snapshot_url", "cpp_enum": "CAMERA_SNAPSHOT_URL", "type": "url", "description": "Signed HTTP URL for primary camera snapshot"},
+        {"index": 30, "name": "cameras_summary", "cpp_enum": "CAMERAS_SUMMARY", "type": "records", "description": "0x1E-joined entity_id|name|area_id|snapshot_url camera records"},
+        {"index": 31, "name": "doorbell_talk_state", "cpp_enum": "DOORBELL_TALK_STATE", "type": "string", "description": "Doorbell talkback state"},
+        {"index": 32, "name": "intercom_targets_summary", "cpp_enum": "INTERCOM_TARGETS_SUMMARY", "type": "records", "description": "0x1E-joined target_id|label|kind intercom target records"},
+        {"index": 33, "name": "alert_id", "cpp_enum": "ALERT_ID", "type": "u32", "description": "Monotonic alert/notification identifier"},
+        {"index": 34, "name": "alert_title", "cpp_enum": "ALERT_TITLE", "type": "string", "description": "Alert banner title"},
+        {"index": 35, "name": "alert_message", "cpp_enum": "ALERT_MESSAGE", "type": "string", "description": "Alert banner message body"},
+        {"index": 36, "name": "alert_priority", "cpp_enum": "ALERT_PRIORITY", "type": "string", "description": "Alert priority level (info|normal|high|critical)"},
+        {"index": 37, "name": "alert_duration", "cpp_enum": "ALERT_DURATION", "type": "u16", "description": "Alert display duration in seconds"},
+        {"index": 38, "name": "alert_chime", "cpp_enum": "ALERT_CHIME", "type": "string", "description": "Alert RTTTL/chime preset name"},
+        {"index": 39, "name": "alert_camera_url", "cpp_enum": "ALERT_CAMERA_URL", "type": "url", "description": "Signed HTTP URL for alert camera snapshot"}
+      ]
+    },
+    "active_media": {
+      "entity_suffix": "active_media",
+      "cpp_enum_name": "MediaField",
+      "description": "Active media player state, metadata, timestamped playback progress, artwork URL, and speaker routing",
+      "fields": [
+        {"index": 3, "name": "state", "cpp_enum": "STATE", "type": "string", "description": "Playback state (playing|paused|idle|off)"},
+        {"index": 4, "name": "title", "cpp_enum": "TITLE", "type": "string", "description": "Track title"},
+        {"index": 5, "name": "artist", "cpp_enum": "ARTIST", "type": "string", "description": "Track artist"},
+        {"index": 6, "name": "album", "cpp_enum": "ALBUM", "type": "string", "description": "Album title"},
+        {"index": 7, "name": "duration", "cpp_enum": "DURATION", "type": "f32", "description": "Track duration in seconds"},
+        {"index": 8, "name": "position", "cpp_enum": "POSITION", "type": "f32", "description": "Track position in seconds at position_updated_at"},
+        {"index": 9, "name": "position_updated_at", "cpp_enum": "POSITION_UPDATED_AT", "type": "u32", "description": "Unix epoch seconds when position was sampled"},
+        {"index": 10, "name": "volume", "cpp_enum": "VOLUME", "type": "u16", "description": "Volume percentage (0..100)"},
+        {"index": 11, "name": "media_type", "cpp_enum": "MEDIA_TYPE", "type": "string", "description": "Media content type"},
+        {"index": 12, "name": "supported_features", "cpp_enum": "SUPPORTED_FEATURES", "type": "u32", "description": "Home Assistant MediaPlayerEntityFeature bitmask"},
+        {"index": 13, "name": "art_url", "cpp_enum": "ART_URL", "type": "url", "description": "Signed HTTP URL for album art proxy"},
+        {"index": 14, "name": "active_speaker", "cpp_enum": "ACTIVE_SPEAKER", "type": "entity_id", "description": "Active media_player entity ID"},
+        {"index": 15, "name": "speaker_name", "cpp_enum": "SPEAKER_NAME", "type": "string", "description": "Friendly name of active speaker"},
+        {"index": 16, "name": "last_speaker", "cpp_enum": "LAST_SPEAKER", "type": "entity_id", "description": "Previously active media_player entity ID"},
+        {"index": 17, "name": "local_speaker", "cpp_enum": "LOCAL_SPEAKER", "type": "entity_id", "description": "Device's own local media_player entity ID"},
+        {"index": 18, "name": "volume_entity", "cpp_enum": "VOLUME_ENTITY", "type": "entity_id", "description": "Entity ID used for volume control"},
+        {"index": 19, "name": "is_local", "cpp_enum": "IS_LOCAL", "type": "bool", "description": "1 if active_speaker is this device's own speaker, else 0"}
+      ]
+    },
+    "remote_config": {
+      "entity_suffix": "remote_config",
+      "cpp_enum_name": "RemoteField",
+      "description": "Universal TV/AV remote slot directory and active remote selection",
+      "fields": [
+        {"index": 3, "name": "active_slot", "cpp_enum": "ACTIVE_SLOT", "type": "u16", "description": "Currently selected 1-based remote slot index"},
+        {"index": 4, "name": "configured_count", "cpp_enum": "CONFIGURED_COUNT", "type": "u16", "description": "Number of configured remotes in active group"},
+        {"index": 5, "name": "slots_summary", "cpp_enum": "SLOTS_SUMMARY", "type": "records", "description": "0x1E-joined index|label|entity_id|kind|area_id|mac|state remote records"}
+      ]
+    },
+    "weather_forecast": {
+      "entity_suffix": "weather_forecast",
+      "cpp_enum_name": "WeatherField",
+      "description": "Current outdoor weather telemetry and 5-day daily forecast",
+      "fields": [
+        {"index": 3, "name": "condition", "cpp_enum": "CONDITION", "type": "string", "description": "Current weather condition slug"},
+        {"index": 4, "name": "temperature", "cpp_enum": "TEMPERATURE", "type": "f32", "description": "Current outdoor temperature"},
+        {"index": 5, "name": "humidity", "cpp_enum": "HUMIDITY", "type": "f32", "description": "Current outdoor relative humidity percentage"},
+        {"index": 6, "name": "wind_speed", "cpp_enum": "WIND_SPEED", "type": "f32", "description": "Current wind speed"},
+        {"index": 7, "name": "wind_bearing", "cpp_enum": "WIND_BEARING", "type": "string", "description": "Wind cardinal direction or bearing"},
+        {"index": 8, "name": "high", "cpp_enum": "HIGH", "type": "f32", "description": "Today's forecast high temperature"},
+        {"index": 9, "name": "low", "cpp_enum": "LOW", "type": "f32", "description": "Today's forecast low temperature"},
+        {"index": 10, "name": "forecast_5d", "cpp_enum": "FORECAST_5D", "type": "records", "description": "0x1E-joined day|cond|high|low 5-day forecast records"}
+      ]
+    },
+    "calendar_agenda": {
+      "entity_suffix": "calendar_agenda",
+      "cpp_enum_name": "CalendarField",
+      "description": "Upcoming calendar agenda events and next-event headline",
+      "fields": [
+        {"index": 3, "name": "summary", "cpp_enum": "SUMMARY", "type": "records", "description": "0x1E-joined time|title|location|all_day agenda records"},
+        {"index": 4, "name": "count", "cpp_enum": "COUNT", "type": "u16", "description": "Number of upcoming agenda events"},
+        {"index": 5, "name": "next_event", "cpp_enum": "NEXT_EVENT", "type": "string", "description": "Headline summary of the next upcoming event"}
+      ]
+    }
+  },
+  "device_actions": {
+    "latter_ping": {
+      "description": "No-op discovery marker action announcing Latter Protocol v3 compatibility and hardware manifest",
+      "variables": {}
+    },
+    "ui_input": {
+      "description": "Remote hardware navigation/input command (up|down|left|right|select|back|home|wake|sleep)",
+      "variables": {
+        "command": "string"
+      }
+    },
+    "set_browse_slots": {
+      "description": "Push paginated media/speaker/search browse slots to the device",
+      "variables": {
+        "contract": "int",
+        "mode": "string",
+        "page": "int",
+        "total_pages": "int",
+        "slots": "string"
+      }
+    },
+    "set_area_slots": {
+      "description": "Push paginated Area/Site entity control slots to the device",
+      "variables": {
+        "contract": "int",
+        "mode": "string",
+        "page": "int",
+        "total_pages": "int",
+        "slots": "string"
+      }
+    },
+    "show_notification": {
+      "description": "Wake display, show an on-screen alert banner, and optionally play an RTTTL chime or camera preview",
+      "variables": {
+        "title": "string",
+        "message": "string",
+        "priority": "string",
+        "duration_s": "int",
+        "chime": "string"
+      }
+    }
+  },
+  "services": {
+    "device_hello": {
+      "description": "Device-initiated handshake sent when Home Assistant connects to the ESPHome API",
+      "fields": ["target_device", "contract", "boot_id", "manifest"]
+    },
+    "music_browse": {
+      "description": "Browse speakers, favorites, playlists, artists, albums, tracks, radio, or search",
+      "fields": ["target_device", "mode", "page", "page_size", "speaker", "last_speaker", "search", "album_sort", "artist_album_sort", "podcast_sort"]
+    },
+    "set_active_speaker": {
+      "description": "Select the active media_player target for a Latter device",
+      "fields": ["target_device", "entity_id", "transfer_queue"]
+    },
+    "media_command": {
+      "description": "Execute transport, seek, queue, or play_media command on the active speaker",
+      "fields": ["target_device", "command", "entity_id", "seek_position", "media_id", "media_type", "enqueue"]
+    },
+    "media_volume": {
+      "description": "Adjust or set volume on the active speaker or volume override target",
+      "fields": ["target_device", "entity_id", "action", "volume_level"]
+    },
+    "area_browse": {
+      "description": "Browse Areas, Area domains, or paginated controllable entities",
+      "fields": ["target_device", "mode", "area_id", "domain_filter", "page", "page_size", "handoff_media"]
+    },
+    "area_action": {
+      "description": "Execute an explicit domain action on an Area or specific entity",
+      "fields": ["target_device", "entity_id", "area_id", "action", "level", "code"]
+    },
+    "set_active_area": {
+      "description": "Set the active Area context for a Latter device",
+      "fields": ["target_device", "area_id", "handoff_media"]
+    },
+    "remote_action": {
+      "description": "Send a TV/AV remote command or select active remote slot",
+      "fields": ["target_device", "slot", "action", "command"]
+    },
+    "calendar_fetch": {
+      "description": "Refresh upcoming calendar agenda events for a Latter device",
+      "fields": ["target_device", "days", "page", "page_size"]
+    },
+    "calendar_create_event": {
+      "description": "Create a new event on the primary configured calendar",
+      "fields": ["target_device", "calendar_entity", "summary", "start_date_time", "end_date_time", "in_minutes", "duration_minutes", "description"]
+    },
+    "intercom_broadcast": {
+      "description": "Broadcast a voice announcement across all, occupied, follow_me, or targeted speakers",
+      "fields": ["target_device", "message", "media_url", "target_speakers", "tts_entity"]
+    },
+    "doorbell_intercom": {
+      "description": "Control two-way doorbell talkback or trigger explicit lock actions during a doorbell event",
+      "fields": ["target_device", "action", "camera_entity", "camera_index", "message", "anc_mode"]
+    },
+    "save_custom_color": {
+      "description": "Save a custom RGB accent color from the on-device color wheel",
+      "fields": ["target_device", "hex_color", "name"]
+    },
+    "notify": {
+      "description": "Deliver a visual banner, chime, optional TTS announcement, and optional camera snapshot",
+      "fields": ["target_device", "title", "message", "priority", "duration", "chime", "announce", "camera_entity"]
+    }
+  }
+}

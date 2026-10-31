@@ -103,7 +103,7 @@ def _resolve_coordinator_by_target(
     hass: HomeAssistant, target_id_or_slug: str
 ) -> LatterCoordinator | None:
     """Resolve a LatterCoordinator by config entry_id or ESPHome device_slug."""
-    return resolve_coordinator(hass, target_id_or_slug, allow_fallback=False)
+    return resolve_coordinator(hass, target_id_or_slug)
 
 
 async def _async_serve_speaker_artwork(
@@ -112,12 +112,6 @@ async def _async_serve_speaker_artwork(
     coordinator: LatterCoordinator,
 ) -> web.Response:
     """Fetch active speaker artwork, transcode to Baseline JPEG (with RAM LRU cache), and serve over HTTP."""
-    if not coordinator.verify_resource(
-        "artwork",
-        sig=request.query.get("sig"),
-    ):
-        return web.Response(status=HTTPStatus.FORBIDDEN, text="Invalid signature")
-
     default_w, default_h = coordinator.art_dimensions
     try:
         width = max(32, min(1200, int(request.query.get("w") or default_w)))
@@ -126,6 +120,13 @@ async def _async_serve_speaker_artwork(
         width, height = default_w, default_h
 
     circular = request.query.get("mask") == "circle" or request.query.get("shape") == "circle"
+    shape_str = "circle" if circular else "square"
+
+    if not coordinator.verify_resource(
+        f"artwork|{width}|{height}|{shape_str}",
+        sig=request.query.get("sig"),
+    ):
+        return web.Response(status=HTTPStatus.FORBIDDEN, text="Invalid signature")
 
     state_obj = hass.states.get(coordinator.active_speaker)
     pic_path = None
@@ -172,7 +173,7 @@ async def _async_serve_speaker_artwork(
         return web.Response(
             body=cached_bytes,
             content_type="image/jpeg",
-            headers={"Cache-Control": "public, max-age=300", "X-Latter-Cache": "HIT"},
+            headers={"Cache-Control": "private, max-age=300", "X-Latter-Cache": "HIT"},
         )
 
     session = async_get_clientsession(hass)
@@ -210,7 +211,7 @@ async def _async_serve_speaker_artwork(
     return web.Response(
         body=jpeg_bytes,
         content_type="image/jpeg",
-        headers={"Cache-Control": "public, max-age=300", "X-Latter-Cache": "MISS"},
+        headers={"Cache-Control": "private, max-age=300", "X-Latter-Cache": "MISS"},
     )
 
 
@@ -254,12 +255,6 @@ class LatterWallpaperProxyView(HomeAssistantView):
         if not wp_source:
             return web.Response(status=HTTPStatus.NOT_FOUND, text="No wallpaper configured")
 
-        if not coordinator.verify_resource(
-            f"wallpaper:{wp_source}",
-            sig=request.query.get("sig"),
-        ):
-            return web.Response(status=HTTPStatus.FORBIDDEN, text="Invalid signature")
-
         default_w, default_h = coordinator.art_dimensions
         try:
             width = max(32, min(1200, int(request.query.get("w") or default_w)))
@@ -270,6 +265,13 @@ class LatterWallpaperProxyView(HomeAssistantView):
         is_circle = coordinator.display_shape == "circle"
         if request.query.get("shape") in ("circle", "square"):
             is_circle = request.query.get("shape") == "circle"
+        shape_str = "circle" if is_circle else "square"
+
+        if not coordinator.verify_resource(
+            f"wallpaper:{wp_source}|{width}|{height}|{shape_str}",
+            sig=request.query.get("sig"),
+        ):
+            return web.Response(status=HTTPStatus.FORBIDDEN, text="Invalid signature")
 
         darken_factor = 1.0 if wp_source.startswith("preset:") else 0.78
         cache_key = (f"wp:{wp_source}", width, height, is_circle, darken_factor)
@@ -279,7 +281,7 @@ class LatterWallpaperProxyView(HomeAssistantView):
             return web.Response(
                 body=cached_bytes,
                 content_type="image/jpeg",
-                headers={"Cache-Control": "public, max-age=300", "X-Latter-Cache": "HIT"},
+                headers={"Cache-Control": "private, max-age=300", "X-Latter-Cache": "HIT"},
             )
 
         raw_bytes: bytes | None = None
@@ -326,7 +328,7 @@ class LatterWallpaperProxyView(HomeAssistantView):
         return web.Response(
             body=jpeg_bytes,
             content_type="image/jpeg",
-            headers={"Cache-Control": "public, max-age=300", "X-Latter-Cache": "MISS"},
+            headers={"Cache-Control": "private, max-age=300", "X-Latter-Cache": "MISS"},
         )
 
 
@@ -353,18 +355,6 @@ class LatterCameraSnapshotView(HomeAssistantView):
         if not cam_entity or not cam_entity.startswith("camera."):
             return web.Response(status=HTTPStatus.NOT_FOUND, text="No camera entity specified")
 
-        if not coordinator.verify_resource(
-            f"camera:{cam_entity}",
-            sig=request.query.get("sig"),
-        ):
-            return web.Response(status=HTTPStatus.FORBIDDEN, text="Invalid signature")
-
-        allowed_cams = set(coordinator.camera_entities)
-        if coordinator.camera_entity:
-            allowed_cams.add(coordinator.camera_entity)
-        if cam_entity not in allowed_cams:
-            return web.Response(status=HTTPStatus.NOT_FOUND, text="Camera entity not in allow-list")
-
         default_w, default_h = coordinator.art_dimensions
         try:
             width = max(32, min(1200, int(request.query.get("w") or default_w)))
@@ -375,9 +365,24 @@ class LatterCameraSnapshotView(HomeAssistantView):
         is_circle = coordinator.display_shape == "circle"
         if request.query.get("shape") in ("circle", "square"):
             is_circle = request.query.get("shape") == "circle"
+        shape_str = "circle" if is_circle else "square"
+
+        if not coordinator.verify_resource(
+            f"camera:{cam_entity}|{width}|{height}|{shape_str}",
+            sig=request.query.get("sig"),
+        ):
+            return web.Response(status=HTTPStatus.FORBIDDEN, text="Invalid signature")
+
+        allowed_cams = set(coordinator.camera_entities)
+        if coordinator.camera_entity:
+            allowed_cams.add(coordinator.camera_entity)
+        if cam_entity not in allowed_cams:
+            return web.Response(status=HTTPStatus.NOT_FOUND, text="Camera entity not in allow-list")
 
         rot_str = (request.query.get("rot") or "0").strip()
-        rotate_deg = int(rot_str) if rot_str in ("90", "180", "270") else 0
+        if rot_str not in ("0", "90", "180", "270"):
+            return web.Response(status=HTTPStatus.BAD_REQUEST, text="Invalid rotation angle")
+        rotate_deg = int(rot_str)
 
         cam_cache_key = (cam_entity, width, height, is_circle, rotate_deg)
         now_mono = time.monotonic()
@@ -386,7 +391,7 @@ class LatterCameraSnapshotView(HomeAssistantView):
             return web.Response(
                 body=cached_cam[1],
                 content_type="image/jpeg",
-                headers={"Cache-Control": "no-store, max-age=0", "X-Latter-Cam-Cache": "HIT"},
+                headers={"Cache-Control": "private, no-store, max-age=0", "X-Latter-Cam-Cache": "HIT"},
             )
 
         try:
@@ -427,7 +432,7 @@ class LatterCameraSnapshotView(HomeAssistantView):
         return web.Response(
             body=jpeg_bytes,
             content_type="image/jpeg",
-            headers={"Cache-Control": "no-store, max-age=0", "X-Latter-Cam-Cache": "MISS"},
+            headers={"Cache-Control": "private, no-store, max-age=0", "X-Latter-Cam-Cache": "MISS"},
         )
 
 
@@ -641,12 +646,6 @@ class LatterMapSnapshotView(HomeAssistantView):
             return web.Response(status=HTTPStatus.NOT_FOUND, text="Unknown target device")
 
         query = str(request.query.get("q") or "").strip()
-        if not coordinator.verify_resource(
-            f"map:{query}",
-            sig=request.query.get("sig"),
-        ):
-            return web.Response(status=HTTPStatus.FORBIDDEN, text="Invalid signature")
-
         default_w, default_h = coordinator.art_dimensions
         try:
             width = max(128, min(768, int(request.query.get("w") or default_w)))
@@ -657,8 +656,14 @@ class LatterMapSnapshotView(HomeAssistantView):
         is_circle = (coordinator.display_shape == "circle") if coordinator else True
         if request.query.get("shape") in ("circle", "square"):
             is_circle = request.query.get("shape") == "circle"
+        shape_str = "circle" if is_circle else "square"
 
-        query = str(request.query.get("q") or "").strip()
+        if not coordinator.verify_resource(
+            f"map:{query}|{width}|{height}|{shape_str}",
+            sig=request.query.get("sig"),
+        ):
+            return web.Response(status=HTTPStatus.FORBIDDEN, text="Invalid signature")
+
         zoom = 15
         pan_x = 0
         pan_y = 0
@@ -678,7 +683,7 @@ class LatterMapSnapshotView(HomeAssistantView):
             return web.Response(
                 body=_MAP_JPEG_CACHE[cache_id],
                 content_type="image/jpeg",
-                headers={"Cache-Control": "public, max-age=600", "X-Latter-Cache": "HIT"},
+                headers={"Cache-Control": "private, max-age=600", "X-Latter-Cache": "HIT"},
             )
 
         coords = await self._async_resolve_coordinates(query)
@@ -775,5 +780,5 @@ class LatterMapSnapshotView(HomeAssistantView):
         return web.Response(
             body=jpeg_bytes,
             content_type="image/jpeg",
-            headers={"Cache-Control": "public, max-age=600", "X-Latter-Cache": "MISS"},
+            headers={"Cache-Control": "private, max-age=600", "X-Latter-Cache": "MISS"},
         )

@@ -1,13 +1,48 @@
+device_hello:
+  name: Device Hello (Protocol v3 Handshake)
+  description: Device-initiated handshake sent by an ESPHome Latter node on API connection to report its contract version, boot ID, and hardware manifest.
+  fields:
+    target_device:
+      name: Target Device
+      description: Latter device ID or ESPHome device slug.
+      required: true
+      selector:
+        device:
+          integration: latter
+    contract:
+      name: Protocol Contract Version
+      description: Protocol version reported by the firmware (3 for Protocol v3).
+      required: false
+      default: 3
+      selector:
+        number:
+          min: 1
+          max: 10
+          mode: box
+    boot_id:
+      name: Device Boot ID
+      description: Random 64-bit hex boot token generated once per cold boot.
+      required: false
+      selector:
+        text:
+    manifest:
+      name: Hardware Capability Manifest JSON
+      description: Compile-time hardware capability manifest JSON reported by the device.
+      required: false
+      selector:
+        text:
+
 music_browse:
   name: Music Browse
   description: Browse Music Assistant speakers, library, podcasts, queues, lyrics, and artist/album bios and push paginated slots to the ESPHome device.
   fields:
     target_device:
-      name: Target ESPHome Device
-      description: Optional ESPHome device slug (auto-resolved when running a single Latter device).
+      name: Target Device
+      description: Optional Latter device (auto-resolved when running a single Latter device).
       required: false
       selector:
-        text:
+        device:
+          integration: latter
     mode:
       name: Browse Mode
       description: Category, drill-down, or metadata reader mode to browse.
@@ -124,22 +159,24 @@ set_active_speaker:
       selector:
         boolean:
     target_device:
-      name: Target ESPHome Device
-      description: Optional ESPHome device slug when running multiple devices.
+      name: Target Device
+      description: Optional Latter device when running multiple devices.
       required: false
       selector:
-        text:
+        device:
+          integration: latter
 
 media_volume:
   name: Media Volume Control (With AVR Override Support)
   description: Adjust or set volume on the active speaker (automatically routing to a mapped AV Receiver volume entity if configured).
   fields:
     target_device:
-      name: Target ESPHome Device
-      description: Optional ESPHome device slug.
+      name: Target Device
+      description: Optional Latter device.
       required: false
       selector:
-        text:
+        device:
+          integration: latter
     entity_id:
       name: Speaker Entity Override
       description: Optional speaker entity_id (defaults to the device's active speaker).
@@ -173,12 +210,12 @@ set_active_area:
   name: Set Active Area (BLE Presence & Voice Sync)
   description: Switch the active area context by area_id or area name, sync the ESPHome device's HA area for area-aware Voice Assistant, and optionally hand off speaker/remote.
   fields:
-    area:
+    area_id:
       name: Area ID or Area Name
       description: Target Home Assistant area_id or friendly area name.
       required: true
       selector:
-        text:
+        area:
     handoff_media:
       name: Handoff Media Context
       description: Optional override for automatic area speaker & remote handoff.
@@ -186,11 +223,12 @@ set_active_area:
       selector:
         boolean:
     target_device:
-      name: Target ESPHome Device
-      description: Optional ESPHome device slug.
+      name: Target Device
+      description: Optional Latter device.
       required: false
       selector:
-        text:
+        device:
+          integration: latter
 
 remote_action:
   name: TV / Media Remote Slot Action
@@ -228,22 +266,24 @@ remote_action:
       selector:
         text:
     target_device:
-      name: Target ESPHome Device
-      description: Optional ESPHome device slug.
+      name: Target Device
+      description: Optional Latter device.
       required: false
       selector:
-        text:
+        device:
+          integration: latter
 
 area_browse:
   name: Area Browse
   description: Browse Home Assistant areas, curated area entities, or home-wide alarm entities and push paginated slots to the ESPHome device.
   fields:
     target_device:
-      name: Target ESPHome Device
-      description: Optional ESPHome device slug (auto-resolved when running a single Latter device).
+      name: Target Device
+      description: Optional Latter device (auto-resolved when running a single Latter device).
       required: false
       selector:
-        text:
+        device:
+          integration: latter
     mode:
       name: Browse Mode
       description: Browse areas list, entities inside an area, or home-wide alarm/entities.
@@ -310,11 +350,12 @@ area_action:
   description: Execute a normalized area control, light color/Kelvin, thermostat, lock, vacuum, or home security alarm action.
   fields:
     target_device:
-      name: Target ESPHome Device
-      description: Optional ESPHome device slug (auto-resolved when running a single Latter device).
+      name: Target Device
+      description: Optional Latter device (auto-resolved when running a single Latter device).
       required: false
       selector:
-        text:
+        device:
+          integration: latter
     entity_id:
       name: Target Entity
       description: Target entity_id (or whole_home.thermostat / whole_home.garage / whole_home.lock / whole_home.vacuum).
@@ -378,11 +419,12 @@ calendar_fetch:
   description: Refresh upcoming system calendar events and push a 5-slot agenda page to the ESPHome device.
   fields:
     target_device:
-      name: Target ESPHome Device
-      description: Optional ESPHome device slug (auto-resolved when running a single Latter device).
+      name: Target Device
+      description: Optional Latter device (auto-resolved when running a single Latter device).
       required: false
       selector:
-        text:
+        device:
+          integration: latter
     days:
       name: Lookahead Days
       description: Number of days ahead to query (default 30).
@@ -419,11 +461,12 @@ calendar_create_event:
   description: Create a new event or quick reminder on the primary system calendar and refresh the agenda sensor.
   fields:
     target_device:
-      name: Target ESPHome Device
-      description: Optional ESPHome device slug (auto-resolved when running a single Latter device).
+      name: Target Device
+      description: Optional Latter device (auto-resolved when running a single Latter device).
       required: false
       selector:
-        text:
+        device:
+          integration: latter
     calendar_entity:
       name: Calendar Entity
       description: Target calendar.* entity (defaults to primary configured calendar).
@@ -519,11 +562,12 @@ media_command:
   description: Execute playback controls (play, pause, toggle, next, previous, stop, seek, play_media, clear_queue) on the active speaker, automatically re-streaming the Music Assistant queue if the local ESPHome Sendspin buffer was emptied by a reboot or hibernate.
   fields:
     target_device:
-      name: Target ESPHome Device
-      description: Optional ESPHome device slug (auto-resolved when running a single Latter device).
+      name: Target Device
+      description: Optional Latter device (auto-resolved when running a single Latter device).
       required: false
       selector:
-        text:
+        device:
+          integration: latter
     command:
       name: Playback Command
       description: Media transport command to execute.
@@ -628,10 +672,11 @@ save_custom_color:
   fields:
     target_device:
       name: Target Device
-      description: Target ESPHome device slug (e.g. kitchen_display).
+      description: Target Latter device.
       required: false
       selector:
-        text:
+        device:
+          integration: latter
     hex_color:
       name: Hex Color
       description: 6-digit RGB hex color string (e.g. "#3898FF").
@@ -650,11 +695,12 @@ doorbell_intercom:
   description: Control live de-noised camera audio listening, two-way doorbell/SIP talkback, quick replies, 90° camera selection, and RFC 2833 DTMF / smart lock unlocking.
   fields:
     target_device:
-      name: Target ESPHome Device
-      description: Optional ESPHome device slug (auto-resolved when running a single Latter device).
+      name: Target Device
+      description: Optional Latter device (auto-resolved when running a single Latter device).
       required: false
       selector:
-        text:
+        device:
+          integration: latter
     action:
       name: Intercom Action
       description: Two-way audio or doorbell action to perform.

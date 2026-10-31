@@ -25,9 +25,10 @@ from homeassistant.helpers import (
     entity_registry as er,
 )
 
-from .ble_engine import _iter_devices, _iter_entities, get_ble_proxy_area_ids
+from .ble_engine import get_ble_proxy_area_ids
 from .browse_engine import is_music_assistant_player
 from .const import DOMAIN, normalize_device_slug
+from .identity import device_entities, get_bound_esphome_device
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -259,37 +260,11 @@ def find_esphome_device_id(
     device_slug: str,
     esphome_device_id: str | None = None,
 ) -> str | None:
-    """Find the Home Assistant device_id for the target ESPHome node."""
-    dev_reg = dr.async_get(hass)
-    ent_reg = er.async_get(hass)
-    if esphome_device_id and dev_reg.async_get(esphome_device_id) is not None:
-        return esphome_device_id
-
-    slug_norm = normalize_device_slug(device_slug)
-    domain_data = hass.data.get("latter", {})
-    for val in domain_data.values():
-        if getattr(val, "device_slug", None) == slug_norm and hasattr(val, "get_opt"):
-            stored_id = str(val.get_opt("esphome_device_id", "") or "").strip()
-            if stored_id and dev_reg.async_get(stored_id) is not None:
-                return stored_id
-
-    for dev in _iter_devices(dev_reg):
-        dev_name = str(dev.name_by_user or dev.name or "").strip()
-        if dev_name and normalize_device_slug(dev_name) == slug_norm:
-            if any(
-                e.platform == "esphome"
-                for e in er.async_entries_for_device(ent_reg, dev.id)
-            ):
-                return dev.id
-
-    prefix = f"{slug_norm}_"
-    for entry in _iter_entities(ent_reg):
-        if entry.platform == "esphome" and entry.device_id:
-            ent_obj_id = entry.entity_id.split(".", 1)[-1]
-            if ent_obj_id == slug_norm or ent_obj_id.startswith(prefix):
-                return entry.device_id
-
-    return None
+    """Find the Home Assistant device_id for the target ESPHome node via canonical identity resolution."""
+    dev = get_bound_esphome_device(
+        hass, esphome_device_id, fallback_slug=device_slug
+    )
+    return dev.id if dev is not None else None
 
 
 def _apply_ha_display_precision(
@@ -317,7 +292,6 @@ def get_esphome_device_entities(
     """Inspect and semantically group all entities belonging to any ESPHome device."""
     target_device_id = find_esphome_device_id(hass, device_slug)
     dev_reg = dr.async_get(hass)
-    ent_reg = er.async_get(hass)
 
     dev_meta: dict[str, str] = {
         "device_id": target_device_id or "",
@@ -343,18 +317,12 @@ def get_esphome_device_entities(
     }
     custom_sec_titles: dict[str, str] = {}
 
-    entries: list[er.RegistryEntry] = []
-    if target_device_id:
-        entries = er.async_entries_for_device(
-            ent_reg, target_device_id, include_disabled_entities=False
-        )
-    else:
-        slug_norm = normalize_device_slug(device_slug)
-        entries = [
-            e
-            for e in _iter_entities(ent_reg)
-            if e.platform == "esphome" and slug_norm in e.entity_id and not e.disabled_by
-        ]
+    entries: list[er.RegistryEntry] = device_entities(
+        hass,
+        target_device_id,
+        fallback_slug=device_slug,
+        include_disabled=False,
+    )
 
     dev_prefix = dev_meta["name"].strip()
     slug_words = device_slug.strip().replace("_", " ").replace("-", " ")

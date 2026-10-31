@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 import hashlib
 import hmac
 import logging
+import secrets
 import time
 from typing import Any
 
@@ -30,6 +31,7 @@ from homeassistant.helpers import (
     device_registry as dr,
 )
 from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.debounce import Debouncer
 from homeassistant.helpers.event import (
     async_call_later,
     async_track_state_change_event,
@@ -116,10 +118,15 @@ from .const import (
     FORECAST_REFRESH_INTERVAL_MINUTES,
     GLOBAL_CONFIG_KEYS,
     INTEGRATION_VERSION,
-    POSITION_UPDATE_INTERVAL_SECONDS,
     STORAGE_KEY_PREFIX,
     STORAGE_VERSION,
     normalize_device_slug,
+)
+from .identity import (
+    esphome_service,
+    find_device_entity_by_suffix,
+    get_bound_esphome_device,
+    read_device_hardware_manifest,
 )
 from .area_engine import (
     find_area_media_entities,
@@ -148,51 +155,49 @@ TRANSFER_HOLD_WINDOW_SECONDS = 4.5
 VOLUME_FEATURE_FLAGS = 4 | 8 | 1024  # VOLUME_SET | VOLUME_MUTE | VOLUME_STEP
 
 
-def _pack_v3_payload(*fields: Any) -> str:
-    """Pack domain state fields into an atomic Protocol v3 Unit-Separator ('\\x1f') string."""
-    return "\x1f".join(
-        ["v3"]
-        + [
-            str(f if f is not None else "").replace("\x1f", " ").replace("\x1e", " ")
-            for f in fields
-        ]
-    )
-
-
 def _get_esphome_device_current_area(
-    hass: HomeAssistant, device_slug: str
+    hass: HomeAssistant,
+    device_slug: str,
+    esphome_device_id: str | None = None,
 ) -> str | None:
     """Return the current area_id assigned to the ESPHome device in HA Device Registry."""
-    dev_id = find_esphome_device_id(hass, device_slug)
-    if not dev_id:
-        return None
-    dev = dr.async_get(hass).async_get(dev_id)
+    dev = get_bound_esphome_device(hass, esphome_device_id, fallback_slug=device_slug)
     return dev.area_id if dev and dev.area_id else None
 
 
 def resolve_coordinator(
     hass: HomeAssistant,
     target: str | None = None,
-    *,
-    allow_fallback: bool = False,
 ) -> LatterCoordinator | None:
-    """Resolve a loaded LatterCoordinator by entry_id, device_slug, or esphome_device_id."""
+    """Resolve a loaded LatterCoordinator by entry_id, device_id, or device_slug."""
     domain_data = hass.data.get(DOMAIN, {})
     coords = [v for v in domain_data.values() if isinstance(v, LatterCoordinator)]
     if not coords:
         return None
-    if target:
-        raw = str(target).strip()
-        norm = normalize_device_slug(raw)
-        for coord in coords:
+    if not target or not str(target).strip():
+        return coords[0] if len(coords) == 1 else None
+
+    raw = str(target).strip()
+    norm = normalize_device_slug(raw)
+    dev_reg = dr.async_get(hass)
+    target_dev = dev_reg.async_get(raw)
+
+    for coord in coords:
+        if (
+            coord.entry.entry_id == raw
+            or coord.device_slug == norm
+            or (coord.esphome_device_id and coord.esphome_device_id == raw)
+        ):
+            return coord
+        if target_dev is not None:
+            if (DOMAIN, coord.entry.entry_id) in target_dev.identifiers:
+                return coord
             if (
-                coord.entry.entry_id == raw
-                or coord.device_slug == norm
-                or (coord.esphome_device_id and coord.esphome_device_id == raw)
+                target_dev.via_device_id
+                and coord.esphome_device_id
+                and target_dev.via_device_id == coord.esphome_device_id
             ):
                 return coord
-    if allow_fallback:
-        return coords[0]
     return None
 
 
@@ -221,12 +226,30 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._cached_lan_base_url: str | None = None
         self._cached_esphome_device_id: str | None = None
         self._cached_hw_manifest: tuple[str, dict[str, Any]] | None = None
+        self._hello_manifest: dict[str, Any] = {}
+        self._last_boot_id: str = ""
+        self.epoch: int = secrets.randbits(31) or 1
+        self._domain_hashes: dict[str, str] = {}
+        self._domain_revs: dict[str, int] = {
+            "area_context": 1,
+            "active_media": 1,
+            "remote_config": 1,
+            "weather_forecast": 1,
+            "calendar_agenda": 1,
+        }
+        self._last_persisted_snapshot: dict[str, Any] | None = None
+        self._notify_debouncer: Debouncer[None] = Debouncer(
+            hass,
+            _LOGGER,
+            cooldown=0.2,
+            immediate=False,
+            function=self._async_debounced_notify,
+        )
         self._cached_media_payload: tuple[float, tuple[str, dict[str, Any]]] | None = None
         self._cached_area_payload: tuple[float, tuple[str, dict[str, Any]]] | None = None
         self._cached_remote_payload: tuple[float, tuple[str, dict[str, Any]]] | None = None
         self._unsub_core_config: Callable[[], None] | None = None
         self._unsub_speaker_state: Callable[[], None] | None = None
-        self._unsub_local_reconnect: Callable[[], None] | None = None
         self._unsub_play_interceptor: Callable[[], None] | None = None
         self._unsub_weather_state: Callable[[], None] | None = None
         self._unsub_alarm_state: Callable[[], None] | None = None
@@ -234,7 +257,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._unsub_remotes_state: Callable[[], None] | None = None
         self._unsub_area_entities_state: Callable[[], None] | None = None
         self._unsub_area_debounce: Callable[[], None] | None = None
-        self._unsub_position_timer: Callable[[], None] | None = None
         self._unsub_forecast_timer: Callable[[], None] | None = None
         self._unsub_calendar_timer: Callable[[], None] | None = None
         self._unsub_wallpaper_timer: Callable[[], None] | None = None
@@ -453,22 +475,13 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return str(self.get_opt(CONF_VPN_CLIENT_IP, "") or "").strip()
 
     def _read_device_hardware_manifest(self) -> dict[str, Any]:
-        """Read compile-time hardware capability manifest reported by sensor.<slug>_system_hardware_manifest."""
-        st = self.hass.states.get(f"sensor.{self.device_slug}_system_hardware_manifest")
-        if st is not None and st.state and st.state.startswith("{"):
-            raw_state = str(st.state)
-            if self._cached_hw_manifest is not None and self._cached_hw_manifest[0] == raw_state:
-                return self._cached_hw_manifest[1]
-            try:
-                import json
-
-                parsed = json.loads(raw_state)
-                if isinstance(parsed, dict):
-                    self._cached_hw_manifest = (raw_state, parsed)
-                    return parsed
-            except Exception:  # noqa: BLE001
-                pass
-        return {}
+        """Read compile-time hardware capability manifest reported by the bound ESPHome device."""
+        return read_device_hardware_manifest(
+            self.hass,
+            self._cached_esphome_device_id or str(self.get_opt(CONF_ESPHOME_DEVICE_ID, "") or "").strip(),
+            fallback_slug=self.device_slug,
+            cached_manifest=self._hello_manifest,
+        )
 
     @property
     def hardware_manifest(self) -> dict[str, Any]:
@@ -578,8 +591,10 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     @property
     def local_speaker(self) -> str:
-        """Automatically resolve the on-device media_player entity from device_slug."""
-        return _resolve_esphome_local_speaker(self.hass, self.device_slug)
+        """Automatically resolve the on-device media_player entity from the bound ESPHome device."""
+        return _resolve_esphome_local_speaker(
+            self.hass, self.device_slug, self.esphome_device_id
+        )
 
     @property
     def weather_entity(self) -> str | None:
@@ -930,11 +945,12 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return "none"
         base_url = self.get_lan_base_url()
         w, h = self.art_dimensions
-        sig = self.sign_resource(f"camera:{cam_ent}")
+        shape = self.display_shape
+        sig = self.sign_resource(f"camera:{cam_ent}|{w}|{h}|{shape}")
         v_tag = cache_bust or str(int(time.time()))
         return (
             f"{base_url}/api/latter/camera/{self.device_slug}"
-            f"?entity_id={cam_ent}&w={w}&h={h}&shape={self.display_shape}&sig={sig}&v={v_tag}"
+            f"?entity_id={cam_ent}&w={w}&h={h}&shape={shape}&sig={sig}&v={v_tag}"
         )
 
     def build_map_snapshot_url(self, location: str) -> str:
@@ -946,10 +962,11 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return "none"
         base_url = self.get_lan_base_url()
         w, h = self.art_dimensions
-        sig = self.sign_resource(f"map:{clean_loc}")
+        shape = self.display_shape
+        sig = self.sign_resource(f"map:{clean_loc}|{w}|{h}|{shape}")
         return (
             f"{base_url}/api/latter/map/{self.device_slug}"
-            f"?w={w}&h={h}&shape={self.display_shape}&q={quote_plus(clean_loc)}&sig={sig}"
+            f"?w={w}&h={h}&shape={shape}&q={quote_plus(clean_loc)}&sig={sig}"
         )
 
     @callback
@@ -995,48 +1012,55 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return "none"
         base_url = self.get_lan_base_url()
         w, h = self.art_dimensions
-        sig = self.sign_resource(f"wallpaper:{self.wallpaper_source}")
+        shape = self.display_shape
+        sig = self.sign_resource(f"wallpaper:{self.wallpaper_source}|{w}|{h}|{shape}")
         digest = hashlib.md5(
-            f"{self.wallpaper_source}|{self.display_shape}|{w}x{h}".encode("utf-8")
+            f"{self.wallpaper_source}|{shape}|{w}x{h}".encode("utf-8")
         ).hexdigest()[:10]
         return (
             f"{base_url}/api/latter/wallpaper/{self.device_slug}"
-            f"?w={w}&h={h}&shape={self.display_shape}&sig={sig}&v={digest}"
+            f"?w={w}&h={h}&shape={shape}&sig={sig}&v={digest}"
         )
 
     def build_proxy_art_url(self, cache_bust: str) -> str:
-        """Build the universal Baseline-JPEG artwork URL (/api/latter/artwork/<device_slug>?w=...&h=...&sig=...&v=...)."""
+        """Build the universal Baseline-JPEG artwork URL (/api/latter/artwork/<device_slug>?w=...&h=...&shape=...&sig=...&v=...)."""
         base_url = self.get_lan_base_url()
         w, h = self.art_dimensions
-        sig = self.sign_resource("artwork")
+        shape = self.display_shape
+        sig = self.sign_resource(f"artwork|{w}|{h}|{shape}")
         digest = hashlib.md5(cache_bust.encode("utf-8")).hexdigest()[:10]
         return (
             f"{base_url}/api/latter/artwork/{self.device_slug}"
-            f"?w={w}&h={h}&sig={sig}&v={digest}"
+            f"?w={w}&h={h}&shape={shape}&sig={sig}&v={digest}"
         )
+
+    def _build_persisted_snapshot(self) -> dict[str, Any]:
+        """Build the semantic runtime dictionary for change-gated Store persistence."""
+        return {
+            "rev": self.rev,
+            "alert_id": self.alert_id,
+            "active_speaker": self.active_speaker,
+            "last_speaker": self.last_speaker,
+            "active_area_id": self.active_area_id or "",
+            "active_remote_slot": self.active_remote_slot,
+            "current_wallpaper": self.current_wallpaper,
+            "last_media_uri": self.last_media_uri,
+            "last_media_type": self.last_media_type,
+            "last_media_title": self.last_media_title,
+            "last_media_artist": self.last_media_artist,
+            "last_media_album": self.last_media_album,
+            "last_media_duration": round(self.last_media_duration, 1),
+            "last_media_position": round(self.last_media_position, 1),
+        }
 
     @callback
     def _schedule_persist_runtime_state(self) -> None:
-        """Persist runtime speaker, area, remote slot, wallpaper, monotonic rev, alert_id, and last active track metadata to HA Store."""
-        self._store.async_delay_save(
-            lambda: {
-                "rev": self.rev,
-                "alert_id": self.alert_id,
-                "active_speaker": self.active_speaker,
-                "last_speaker": self.last_speaker,
-                "active_area_id": self.active_area_id or "",
-                "active_remote_slot": self.active_remote_slot,
-                "current_wallpaper": self.current_wallpaper,
-                "last_media_uri": self.last_media_uri,
-                "last_media_type": self.last_media_type,
-                "last_media_title": self.last_media_title,
-                "last_media_artist": self.last_media_artist,
-                "last_media_album": self.last_media_album,
-                "last_media_duration": self.last_media_duration,
-                "last_media_position": round(self.last_media_position, 1),
-            },
-            delay=1.5,
-        )
+        """Persist runtime state to HA Store only when semantic values change."""
+        snap = self._build_persisted_snapshot()
+        if snap == self._last_persisted_snapshot:
+            return
+        self._last_persisted_snapshot = dict(snap)
+        self._store.async_delay_save(self._build_persisted_snapshot, delay=1.5)
 
     async def async_setup(self) -> None:
         """Restore persisted state, set up subscriptions, start BLE tracker, and sync initial states."""
@@ -1070,12 +1094,16 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("Failed loading Latter runtime store: %s", err)
         self._structural_snapshot = self._capture_structural_snapshot()
+        self._last_persisted_snapshot = self._build_persisted_snapshot()
 
         local_spk = self.local_speaker
-        esphome_svcs = self.hass.services.async_services().get("esphome", {})
-        has_media_ui = bool(local_spk) or any(
-            s.endswith("_set_browse_slots") and self.device_slug in s
-            for s in esphome_svcs
+        has_media_ui = bool(local_spk) or bool(
+            esphome_service(
+                self.hass,
+                self.esphome_device_id,
+                "set_browse_slots",
+                fallback_slug=self.device_slug,
+            )
         )
         if not has_media_ui:
             # Headless / sensor-only device (e.g. Bed Presence): clear any accidentally inherited speaker
@@ -1107,13 +1135,12 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self.active_area_id = None
         elif not self.active_area_id:
             dev_area = _get_esphome_device_current_area(
-                self.hass, self.device_slug
+                self.hass, self.device_slug, self.esphome_device_id
             )
             if dev_area:
                 self.active_area_id = dev_area
 
         self._bind_speaker_listener()
-        self._bind_local_reconnect_listener()
         self._bind_weather_listener()
         self._bind_alarm_listener()
         self._bind_presence_listener()
@@ -1136,6 +1163,8 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 on_area_detected=self._async_on_native_ble_area_detected,
                 area_offsets=self.ble_area_offsets,
                 target_address=self.ble_target_address,
+                esphome_device_id=self.esphome_device_id,
+                manifest_beacon=self.hardware_manifest.get("beacon"),
             )
             self._ble_tracker.async_start()
 
@@ -1163,6 +1192,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     @callback
     def async_cleanup(self) -> None:
         """Clean up all Latter subscriptions and timers on entry unload."""
+        self._notify_debouncer.async_cancel()
         if self._ble_tracker is not None:
             self._ble_tracker.async_stop()
             self._ble_tracker = None
@@ -1170,7 +1200,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         for unsub in (
             self._unsub_core_config,
             self._unsub_speaker_state,
-            self._unsub_local_reconnect,
             self._unsub_play_interceptor,
             self._unsub_weather_state,
             self._unsub_alarm_state,
@@ -1178,7 +1207,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._unsub_remotes_state,
             self._unsub_area_entities_state,
             self._unsub_area_debounce,
-            self._unsub_position_timer,
             self._unsub_forecast_timer,
             self._unsub_calendar_timer,
             self._unsub_wallpaper_timer,
@@ -1189,7 +1217,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 unsub()
         self._unsub_core_config = None
         self._unsub_speaker_state = None
-        self._unsub_local_reconnect = None
         self._unsub_play_interceptor = None
         self._unsub_weather_state = None
         self._unsub_alarm_state = None
@@ -1197,7 +1224,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._unsub_remotes_state = None
         self._unsub_area_entities_state = None
         self._unsub_area_debounce = None
-        self._unsub_position_timer = None
         self._unsub_forecast_timer = None
         self._unsub_calendar_timer = None
         self._unsub_wallpaper_timer = None
@@ -1325,19 +1351,11 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             camera_entity=cam_ent,
         )
 
-        esphome_svcs = self.hass.services.async_services().get("esphome", {})
-        expected_svc = f"{self.device_slug}_show_notification"
-        esp_notify_svc = (
-            expected_svc
-            if expected_svc in esphome_svcs
-            else next(
-                (
-                    s
-                    for s in esphome_svcs
-                    if s.endswith("_show_notification") and self.device_slug in s
-                ),
-                None,
-            )
+        esp_notify_svc = esphome_service(
+            self.hass,
+            self.esphome_device_id,
+            "show_notification",
+            fallback_slug=self.device_slug,
         )
         if esp_notify_svc:
             self.entry.async_create_background_task(
@@ -1358,58 +1376,44 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 f"latter_doorbell_notify_{self.device_slug}",
             )
 
-    @callback
-    def _bind_local_reconnect_listener(self) -> None:
-        """Watch the ESPHome device's local media_player for unavailable -> online transitions (OTA / Hibernate wake)."""
-        if self._unsub_local_reconnect is not None:
-            self._unsub_local_reconnect()
-            self._unsub_local_reconnect = None
-
-        local_spk = self.local_speaker
-        if not local_spk:
-            return
-
-        self._unsub_local_reconnect = async_track_state_change_event(
-            self.hass,
-            [local_spk],
-            self._async_on_local_device_state_change,
-        )
-
-    @callback
-    def _async_on_local_device_state_change(
-        self, event: Event[EventStateChangedData]
+    async def async_handle_device_hello(
+        self,
+        contract: int,
+        boot_id: str,
+        manifest_raw: str,
     ) -> None:
-        """Trigger automatic full state resync when the ESPHome device reconnects from unavailable."""
-        old_state = event.data.get("old_state")
-        new_state = event.data.get("new_state")
-        if new_state is None:
-            return
+        """Handle device-initiated handshake on ESPHome API connection."""
+        if manifest_raw and manifest_raw.strip().startswith("{"):
+            try:
+                import json
 
-        if new_state.state in (STATE_PLAYING, STATE_BUFFERING):
-            self._local_needs_cold_resume = False
+                parsed = json.loads(manifest_raw)
+                if isinstance(parsed, dict) and "w" in parsed and "h" in parsed:
+                    self._hello_manifest = parsed
+                    self._cached_hw_manifest = (manifest_raw, parsed)
+                    if self._ble_tracker is not None:
+                        self._ble_tracker.update_manifest_beacon(
+                            parsed.get("beacon")
+                        )
+            except (ValueError, TypeError):
+                pass
 
-        was_offline = old_state is None or old_state.state in (
-            STATE_UNAVAILABLE,
-            STATE_UNKNOWN,
-        )
-        is_now_online = new_state.state not in (
-            STATE_UNAVAILABLE,
-            STATE_UNKNOWN,
-        )
-        if was_offline and is_now_online:
+        clean_boot_id = str(boot_id or "").strip()
+        is_new_boot = bool(clean_boot_id and clean_boot_id != self._last_boot_id)
+        if clean_boot_id:
+            self._last_boot_id = clean_boot_id
+        if is_new_boot:
             self._local_needs_cold_resume = True
-            _LOGGER.info(
-                "ESPHome device '%s' (%s) reconnected (%s -> %s); scheduling full state & slot resync",
-                self.device_slug,
-                event.data.get("entity_id"),
-                old_state.state if old_state else "none",
-                new_state.state,
-            )
-            self.entry.async_create_background_task(
-                self.hass,
-                self._async_handle_device_reconnect(),
-                f"latter_reconnect_{self.device_slug}",
-            )
+
+        _LOGGER.info(
+            "Received latter.device_hello from '%s' (contract=v%s, boot_id=%s, new_boot=%s)",
+            self.device_slug,
+            contract,
+            clean_boot_id or "none",
+            is_new_boot,
+        )
+        self.force_republish_all_domains()
+        await self._async_handle_device_reconnect()
 
     @callback
     def _enforce_local_speaker_if_remote_idle(self, reason: str) -> None:
@@ -1732,11 +1736,20 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return False
         if self.device_profile == "ble_beacon":
             return True
-        # For ESPHome displays, if connected to local Wi-Fi (not away), keep last area when sleeping in Standby
+        wifi_ent_id = find_device_entity_by_suffix(
+            self.hass,
+            self.esphome_device_id,
+            "sensor",
+            ("_wi_fi_signal", "_wifi_signal", "_ip_address"),
+        )
         wifi_st = (
-            self.hass.states.get(f"sensor.{self.device_slug}_wi_fi_signal")
-            or self.hass.states.get(f"sensor.{self.device_slug}_wifi_signal")
-            or self.hass.states.get(f"sensor.{self.device_slug}_ip_address")
+            self.hass.states.get(wifi_ent_id)
+            if wifi_ent_id
+            else (
+                self.hass.states.get(f"sensor.{self.device_slug}_wi_fi_signal")
+                or self.hass.states.get(f"sensor.{self.device_slug}_wifi_signal")
+                or self.hass.states.get(f"sensor.{self.device_slug}_ip_address")
+            )
         )
         if wifi_st is not None and wifi_st.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN, ""):
             return False
@@ -1853,15 +1866,70 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "source_device": best_c.device_slug,
         }
 
+    def _pack_domain_payload(self, domain: str, *fields: Any) -> tuple[int, str]:
+        """Pack domain fields with content-hashed per-domain revision ('v3\\x1f<epoch>\\x1f<rev>\\x1f...')."""
+        clean_fields = [
+            str(f if f is not None else "").replace("\x1f", " ").replace("\x1e", " ")
+            for f in fields
+        ]
+        body = "\x1f".join(clean_fields)
+        digest = hashlib.sha256(body.encode("utf-8")).hexdigest()[:16]
+        prev_digest = self._domain_hashes.get(domain)
+        cur_rev = self._domain_revs.get(domain, 0)
+        if prev_digest is None:
+            cur_rev = max(1, cur_rev)
+            self._domain_hashes[domain] = digest
+            self._domain_revs[domain] = cur_rev
+        elif prev_digest != digest:
+            cur_rev = max(1, cur_rev) + 1
+            self._domain_hashes[domain] = digest
+            self._domain_revs[domain] = cur_rev
+            self.rev = max(self.rev, cur_rev)
+        return cur_rev, f"v3\x1f{self.epoch}\x1f{cur_rev}\x1f{body}"
+
+    @callback
+    def force_republish_all_domains(self) -> None:
+        """Bump per-domain revisions across all 5 domains so a reconnected/rebooted device receives a full snapshot."""
+        for dom in (
+            "area_context",
+            "active_media",
+            "remote_config",
+            "weather_forecast",
+            "calendar_agenda",
+        ):
+            self._domain_revs[dom] = max(1, self._domain_revs.get(dom, 1)) + 1
+            self.rev = max(self.rev, self._domain_revs[dom])
+        self._cached_media_payload = None
+        self._cached_area_payload = None
+        self._cached_remote_payload = None
+        if self.weather_attributes and "condition" in self.weather_attributes:
+            w_rev, w_payload = self._pack_domain_payload(
+                "weather_forecast",
+                self.weather_attributes.get("condition", "unknown"),
+                self.weather_attributes.get("temperature", 0.0),
+                self.weather_attributes.get("humidity", 0.0),
+                self.weather_attributes.get("wind_speed", 0.0),
+                self.weather_attributes.get("wind_bearing", 0.0),
+                self.weather_attributes.get("high", 0.0),
+                self.weather_attributes.get("low", 0.0),
+                self.forecast_string,
+            )
+            self.weather_attributes["rev"] = w_rev
+            self.weather_attributes["payload"] = w_payload
+        self.async_update_listeners()
+
+    async def _async_debounced_notify(self) -> None:
+        """Flush coalesced coordinator listener updates."""
+        self.async_update_listeners()
+
     @callback
     def async_notify_listeners(self) -> None:
-        """Advance monotonic revision, invalidate per-tick payload caches, and notify all registered listeners."""
-        self.rev += 1
+        """Invalidate per-tick payload caches, schedule change-gated Store save, and coalesce listener updates."""
         self._cached_media_payload = None
         self._cached_area_payload = None
         self._cached_remote_payload = None
         self._schedule_persist_runtime_state()
-        self.async_update_listeners()
+        self._notify_debouncer.async_schedule_call()
 
     @callback
     def _notify_listeners(self) -> None:
@@ -2281,10 +2349,11 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         }
         if populated_count == 0 or not slots:
             attrs["slots_summary"] = "NONE"
-            attrs["rev"] = self.rev
-            attrs["payload"] = _pack_v3_payload(
-                self.rev, clamped_active, 0, "NONE"
+            rem_rev, rem_payload = self._pack_domain_payload(
+                "remote_config", clamped_active, 0, "NONE"
             )
+            attrs["rev"] = rem_rev
+            attrs["payload"] = rem_payload
             res = ("None", attrs)
             self._cached_remote_payload = (now_m, res)
             return res
@@ -2303,10 +2372,14 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         active_slot_data = slots[clamped_active - 1]
         state_str = active_slot_data["name"] if populated_count > 0 else "None"
         attrs["slots_summary"] = ";".join(summary_parts)
-        attrs["rev"] = self.rev
-        attrs["payload"] = _pack_v3_payload(
-            self.rev, clamped_active, populated_count, attrs["slots_summary"]
+        rem_rev, rem_payload = self._pack_domain_payload(
+            "remote_config",
+            clamped_active,
+            populated_count,
+            attrs["slots_summary"],
         )
+        attrs["rev"] = rem_rev
+        attrs["payload"] = rem_payload
         res = (state_str, attrs)
         self._cached_remote_payload = (now_m, res)
         return res
@@ -2448,8 +2521,8 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "hardware_manifest": self.hardware_manifest,
             "rev": self.rev,
         }
-        area_attrs["payload"] = _pack_v3_payload(
-            self.rev,
+        area_rev, area_payload = self._pack_domain_payload(
+            "area_context",
             area_attrs["area_id"],
             area_name,
             area_attrs["site_id"],
@@ -2480,7 +2553,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             area_attrs["cameras_summary"],
             area_attrs["doorbell_talk_state"],
             area_attrs["intercom_targets_summary"],
-            "",
             self.alert_id,
             self.alert_title,
             self.alert_message,
@@ -2489,6 +2561,8 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             1 if self.alert_chime else 0,
             self.alert_camera_url,
         )
+        area_attrs["rev"] = area_rev
+        area_attrs["payload"] = area_payload
         res = (area_name, area_attrs)
         self._cached_area_payload = (now_m, res)
         return res
@@ -2518,7 +2592,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             tracked,
             self._async_on_speaker_state_change,
         )
-        self._update_position_timer_state()
 
     @callback
     def _bind_alarm_listener(self) -> None:
@@ -2631,31 +2704,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self, event: Event[EventStateChangedData]
     ) -> None:
         """Handle target media_player state/attribute updates."""
-        self._update_position_timer_state()
-        self._notify_listeners()
-
-    @callback
-    def _update_position_timer_state(self) -> None:
-        """Idle-Guard: Run 15s position timer ONLY when speaker is playing/buffering."""
-        state_obj = self.hass.states.get(self.active_speaker)
-        is_active = state_obj is not None and state_obj.state in (
-            STATE_PLAYING,
-            STATE_BUFFERING,
-        )
-
-        if is_active and self._unsub_position_timer is None:
-            self._unsub_position_timer = async_track_time_interval(
-                self.hass,
-                self._async_on_position_tick,
-                timedelta(seconds=POSITION_UPDATE_INTERVAL_SECONDS),
-            )
-        elif not is_active and self._unsub_position_timer is not None:
-            self._unsub_position_timer()
-            self._unsub_position_timer = None
-
-    @callback
-    def _async_on_position_tick(self, _now: datetime) -> None:
-        """Tick media position while actively playing."""
         self._notify_listeners()
 
     def _read_volume_from_target(self, vol_target: str, fallback_attrs: dict[str, Any]) -> float:
@@ -2700,6 +2748,27 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             idle_dur = round(self.last_media_duration, 1)
             idle_pos = round(self.last_media_position, 1)
             idle_type = self.last_media_type or "music"
+            is_local_flag = 1 if (self.active_speaker and self.active_speaker == self.local_speaker) else 0
+            med_rev, med_payload = self._pack_domain_payload(
+                "active_media",
+                STATE_OFF,
+                idle_title,
+                idle_artist,
+                idle_album,
+                idle_dur,
+                idle_pos,
+                0,
+                70,
+                idle_type,
+                0,
+                "none",
+                self.active_speaker,
+                fallback_spk_name,
+                self.last_speaker,
+                self.local_speaker,
+                vol_target,
+                is_local_flag,
+            )
             res = (
                 STATE_OFF,
                 {
@@ -2708,6 +2777,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "album": idle_album,
                     "duration": idle_dur,
                     "position": idle_pos,
+                    "position_updated_at": 0,
                     "volume": 0.7,
                     "media_type": idle_type,
                     "supported_features": 0,
@@ -2717,25 +2787,9 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "last_speaker": self.last_speaker,
                     "local_speaker": self.local_speaker,
                     "volume_entity": vol_target,
-                    "rev": self.rev,
-                    "payload": _pack_v3_payload(
-                        self.rev,
-                        STATE_OFF,
-                        idle_title,
-                        idle_artist,
-                        idle_album,
-                        idle_dur,
-                        idle_pos,
-                        0.7,
-                        idle_type,
-                        0,
-                        "none",
-                        self.active_speaker,
-                        fallback_spk_name,
-                        self.last_speaker,
-                        self.local_speaker,
-                        vol_target,
-                    ),
+                    "is_local": bool(is_local_flag),
+                    "rev": med_rev,
+                    "payload": med_payload,
                 },
             )
             self._cached_media_payload = (now_m, res)
@@ -2882,9 +2936,46 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         speaker_name = str(attrs.get("friendly_name") or fallback_spk_name)
 
+        raw_updated_at = attrs.get("media_position_updated_at") or m_attrs.get(
+            "media_position_updated_at"
+        )
+        if isinstance(raw_updated_at, datetime):
+            pos_updated_at = int(raw_updated_at.timestamp())
+        elif raw_updated_at:
+            parsed_ua = dt_util.parse_datetime(str(raw_updated_at))
+            pos_updated_at = int(parsed_ua.timestamp()) if parsed_ua else 0
+        else:
+            pos_updated_at = 0
+
+        is_local_flag = (
+            1
+            if (self.active_speaker and self.active_speaker == self.local_speaker)
+            else 0
+        )
         dur_r = round(duration, 1)
         pos_r = round(position, 1)
         vol_r = round(volume, 2)
+        vol_pct = int(round(max(0.0, min(1.0, volume)) * 100.0))
+        med_rev, med_payload = self._pack_domain_payload(
+            "active_media",
+            state,
+            title,
+            artist,
+            album,
+            dur_r,
+            pos_r,
+            pos_updated_at,
+            vol_pct,
+            media_type,
+            supported_features,
+            art_url,
+            self.active_speaker,
+            speaker_name,
+            self.last_speaker,
+            self.local_speaker,
+            vol_target,
+            is_local_flag,
+        )
         res = (
             state,
             {
@@ -2893,6 +2984,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "album": album,
                 "duration": dur_r,
                 "position": pos_r,
+                "position_updated_at": pos_updated_at,
                 "volume": vol_r,
                 "media_type": media_type,
                 "supported_features": supported_features,
@@ -2902,25 +2994,9 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "last_speaker": self.last_speaker,
                 "local_speaker": self.local_speaker,
                 "volume_entity": vol_target,
-                "rev": self.rev,
-                "payload": _pack_v3_payload(
-                    self.rev,
-                    state,
-                    title,
-                    artist,
-                    album,
-                    dur_r,
-                    pos_r,
-                    vol_r,
-                    media_type,
-                    supported_features,
-                    art_url,
-                    self.active_speaker,
-                    speaker_name,
-                    self.last_speaker,
-                    self.local_speaker,
-                    vol_target,
-                ),
+                "is_local": bool(is_local_flag),
+                "rev": med_rev,
+                "payload": med_payload,
             },
         )
         self._cached_media_payload = (now_m, res)
@@ -3004,6 +3080,31 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.calendar_events = events
         self._notify_listeners()
 
+    def get_calendar_agenda_payload(self) -> tuple[str, dict[str, Any]]:
+        """Compute short state (<= 255 chars) and Protocol v3 payload for sensor.<device_slug>_calendar_agenda."""
+        summary = self.calendar_agenda_string or "NONE"
+        count = len(self.calendar_events)
+        next_event = (
+            str(self.calendar_events[0].get("name") or "NONE")
+            if self.calendar_events
+            else "NONE"
+        )
+        cal_rev, cal_payload = self._pack_domain_payload(
+            "calendar_agenda",
+            summary,
+            count,
+            next_event,
+        )
+        short_state = summary[:250] if len(summary) > 250 else summary
+        return short_state, {
+            "event_count": count,
+            "next_event": next_event,
+            "events": self.calendar_events,
+            "calendars": self.calendar_entities,
+            "rev": cal_rev,
+            "payload": cal_payload,
+        }
+
     async def async_refresh_weather_forecast(self) -> None:
         """Fetch daily weather forecast via weather.get_forecasts and format semicolon string."""
         weather_ent = self.weather_entity
@@ -3071,6 +3172,17 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         wb_r = round(wind_bearing, 1)
         hi_r = round(high, 1)
         lo_r = round(low, 1)
+        w_rev, w_payload = self._pack_domain_payload(
+            "weather_forecast",
+            cond_str,
+            temp_r,
+            hum_r,
+            ws_r,
+            wb_r,
+            hi_r,
+            lo_r,
+            self.forecast_string,
+        )
         self.weather_attributes = {
             "condition": cond_str,
             "temperature": temp_r,
@@ -3080,17 +3192,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "high": hi_r,
             "low": lo_r,
             "weather_entity": weather_ent,
-            "rev": self.rev,
-            "payload": _pack_v3_payload(
-                self.rev,
-                cond_str,
-                temp_r,
-                hum_r,
-                ws_r,
-                wb_r,
-                hi_r,
-                lo_r,
-                self.forecast_string,
-            ),
+            "rev": w_rev,
+            "payload": w_payload,
         }
         self._notify_listeners()

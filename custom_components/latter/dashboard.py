@@ -123,6 +123,7 @@ from .const import (
     normalize_device_slug,
 )
 from .coordinator import LatterCoordinator
+from .identity import esphome_service
 from .repairs import async_audit_coordinator_health
 from .area_engine import (
     async_execute_area_action,
@@ -401,7 +402,7 @@ def _build_companion_state_payload(
         elif domain == "camera":
             cam_item: dict[str, Any] = dict(item)
             if ent_id in allowed_cams_set:
-                cam_sig = coordinator.sign_resource(f"camera:{ent_id}")
+                cam_sig = coordinator.sign_resource(f"camera:{ent_id}|320|180|square")
                 cam_item["preview_url"] = (
                     f"/api/latter/camera/{coordinator.device_slug}"
                     f"?entity_id={quote(ent_id, safe='')}&w=320&h=180&shape=square&sig={cam_sig}"
@@ -453,14 +454,20 @@ def _build_companion_state_payload(
         display_shape=coordinator.display_shape,
     )
 
-    esphome_svcs = hass.services.async_services().get("esphome", {})
     slug = coordinator.device_slug
-    has_native_slots = any(
-        (s.endswith("_set_browse_slots") or s.endswith("_set_area_slots")) and slug in s
-        for s in esphome_svcs
+    has_native_slots = bool(
+        esphome_service(
+            hass, coordinator.esphome_device_id, "set_browse_slots", fallback_slug=slug
+        )
+        or esphome_service(
+            hass, coordinator.esphome_device_id, "set_area_slots", fallback_slug=slug
+        )
+        or coordinator.hardware_manifest
     )
-    has_mixin_ping = any(
-        s.endswith("_latter_ping") and slug in s for s in esphome_svcs
+    has_mixin_ping = bool(
+        esphome_service(
+            hass, coordinator.esphome_device_id, "latter_ping", fallback_slug=slug
+        )
     )
 
     sec_ids = {s.get("id") for s in esphome_inspector.get("sections", []) if s.get("count", 0) > 0}
@@ -495,16 +502,11 @@ def _build_companion_state_payload(
         dev_tier = 3
         dev_tier_label = "Tier 3: Bridged Device"
 
-    dev_model_meta = (
-        f"{esphome_inspector.get('device', {}).get('model', '')} "
-        f"{esphome_inspector.get('device', {}).get('sw_version', '')} "
-        f"{coordinator.art_size} {slug}"
-    ).lower()
-    is_no_imu_hw = any(k in dev_model_meta for k in ("p4_35", "p4-35", "p4_4b", "p4-4b", "320x480", "720"))
-    has_imu = (not is_no_imu_hw) and (
-        has_native_slots
-        or any("imu" in str(it.get("entity_id") or "").lower() for it in all_esp_items)
-    )
+    hw_manifest = coordinator.hardware_manifest
+    if "imu" in hw_manifest:
+        has_imu = bool(hw_manifest.get("imu"))
+    else:
+        has_imu = any("imu" in str(it.get("entity_id") or "").lower() for it in all_esp_items)
     device_capabilities = {
         "tier": dev_tier,
         "tier_label": dev_tier_label,
@@ -650,18 +652,24 @@ def _build_companion_state_payload(
         c_area_name, c_area_attrs = c.get_area_context_payload()
         c_media_state, _ = c.get_active_media_payload()
         c_grp = c.device_group
-        c_has_audio = bool(c.local_speaker) or any(
-            s.endswith("_set_browse_slots") and c.device_slug in s
-            for s in esphome_svcs
+        c_manifest = c.hardware_manifest
+        c_has_native_svc = bool(
+            esphome_service(
+                hass, c.esphome_device_id, "set_browse_slots", fallback_slug=c.device_slug
+            )
+            or esphome_service(
+                hass, c.esphome_device_id, "set_area_slots", fallback_slug=c.device_slug
+            )
+            or esphome_service(
+                hass, c.esphome_device_id, "show_notification", fallback_slug=c.device_slug
+            )
+            or c_manifest
         )
+        c_has_audio = bool(c.local_speaker) or c_has_native_svc
         c_has_ble = bool(
             c.native_ble_tracking_enabled
             or c._ble_tracker is not None
-            or any(
-                (s.endswith("_set_browse_slots") or s.endswith("_set_area_slots"))
-                and c.device_slug in s
-                for s in esphome_svcs
-            )
+            or c_has_native_svc
             or hass.states.get(f"switch.{c.device_slug}_area_ble_presence_beacon") is not None
             or hass.states.get(f"switch.{c.device_slug}_ble_presence_beacon") is not None
         )
@@ -701,42 +709,32 @@ def _build_companion_state_payload(
             except ValueError:
                 c_wifi_val = None
 
-        c_dev_id = find_esphome_device_id(hass, c.device_slug)
+        c_dev_id = c.esphome_device_id or find_esphome_device_id(hass, c.device_slug)
         c_dev_entry = dev_reg.async_get(c_dev_id) if c_dev_id else None
         raw_model = str((c_dev_entry.model if c_dev_entry else "") or "").strip()
-        m_low = f"{raw_model} {c.device_slug}".lower()
         c_is_latter_native = bool(
             c.device_profile != "ble_beacon"
             and (
-                any(
-                    (
-                        s.endswith("_set_browse_slots")
-                        or s.endswith("_set_area_slots")
-                        or s.endswith("_show_notification")
-                    )
-                    and c.device_slug in s
-                    for s in esphome_svcs
-                )
+                c_has_native_svc
                 or hass.states.get(f"update.{c.device_slug}_project_firmware") is not None
-                or "latter" in m_low
+                or "latter" in raw_model.lower()
             )
         )
+        c_w = int(c_manifest.get("w") or 0)
+        c_h = int(c_manifest.get("h") or 0)
+        c_board = str(c_manifest.get("board") or "").strip()
         if c.device_profile == "ble_beacon":
             c_model_label = (
                 "Private BLE (Phone/Watch)"
                 if "private_ble" in c.ble_target_address or "." in c.ble_target_address
                 else "BLE Beacon / Tag"
             )
-        elif "175" in m_low or "466x466" in m_low:
-            c_model_label = 'Round Display 1.75"'
-        elif "206" in m_low or "410x502" in m_low:
-            c_model_label = 'Wearable Display 2.06"'
-        elif "216" in m_low or "mobile_assistant" in m_low or "mobile-assistant" in m_low:
-            c_model_label = 'Mobile Assistant 2.16"'
-        elif "p4_35" in m_low or "p4-35" in m_low or "remote_assistant" in m_low or "remote-assistant" in m_low:
-            c_model_label = 'Remote Assistant 3.5" P4'
-        elif "4b" in m_low or "desk_assistant" in m_low or "desk-assistant" in m_low:
-            c_model_label = 'Desk Assistant 4.0" P4'
+        elif c_w > 0 and c_h > 0:
+            c_model_label = (
+                f"{raw_model} ({c_w}x{c_h})"
+                if raw_model
+                else f"Latter Display ({c_w}x{c_h}{f' {c_board}' if c_board else ''})"
+            )
         else:
             c_model_label = raw_model or "ESPHome Node"
 

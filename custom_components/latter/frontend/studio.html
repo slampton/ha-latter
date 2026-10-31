@@ -4184,82 +4184,28 @@ function renderYamlGenerator() {
   if (!box) return;
   const slug = (document.getElementById("cfg-device_slug")?.value || STATE?.config?.device_slug || "esphome_device").trim().toLowerCase().replace(/-/g, "_");
   const nodeHyphen = slug.replace(/_/g, "-");
-  const uuid = (document.getElementById("cfg-ble_beacon_uuid")?.value || STATE?.config?.ble_beacon_uuid || "4C415454-4552-434F-5245-000000000220").trim();
 
-  const incSensors = document.getElementById("yg-sensors")?.checked;
   const incBrowse = document.getElementById("yg-browse")?.checked;
   const incArea = document.getElementById("yg-area")?.checked;
   const incBle = document.getElementById("yg-ble")?.checked;
-  const incActions = document.getElementById("yg-actions")?.checked;
+
+  const files = ["mixins/latter_presence_node.yaml"];
+  if (incBle) files.push("mixins/latter_ble_proxy.yaml");
+  if (incBrowse || incArea) files.push("modules/latter_client.yaml");
 
   const lines = [
-    `# Latter v2.2+ ESPHome Companion Wire Snippet for '${nodeHyphen}' (slug: ${slug})`,
-    `esphome:`,
+    `# Latter Protocol v3 ESPHome Package Reference for '${nodeHyphen}'`,
+    `# Full wire contract & mixin documentation: https://github.com/slampton/esphome-latter-core/blob/main/DEVICE_CONTRACT.md`,
+    `substitutions:`,
     `  name: ${nodeHyphen}`,
-    ``
+    ``,
+    `packages:`,
+    `  latter_sdk:`,
+    `    url: https://github.com/slampton/esphome-latter-core`,
+    `    ref: main`,
+    `    files:`,
+    ...files.map((f) => `      - ${f}`)
   ];
-
-  if (incBrowse || incArea) {
-    lines.push(`api:`);
-    lines.push(`  actions:`);
-    if (incBrowse) {
-      lines.push(`    - action: set_browse_slots`);
-      lines.push(`      variables:`);
-      lines.push(`        contract: int`);
-      lines.push(`        mode: string`);
-      lines.push(`        page: int`);
-      lines.push(`        total_pages: int`);
-      lines.push(`        slots: string`);
-    }
-    if (incArea) {
-      lines.push(`    - action: set_area_slots`);
-      lines.push(`      variables:`);
-      lines.push(`        contract: int`);
-      lines.push(`        mode: string`);
-      lines.push(`        page: int`);
-      lines.push(`        total_pages: int`);
-      lines.push(`        slots: string`);
-    }
-    lines.push(``);
-  }
-
-  if (incSensors) {
-    lines.push(`text_sensor:`);
-    lines.push(`  - platform: homeassistant`);
-    lines.push(`    id: latter_active_media`);
-    lines.push(`    entity_id: sensor.${slug}_active_media`);
-    lines.push(`  - platform: homeassistant`);
-    lines.push(`    id: latter_area_context`);
-    lines.push(`    entity_id: sensor.${slug}_area_context`);
-    lines.push(`  - platform: homeassistant`);
-    lines.push(`    id: latter_weather_forecast`);
-    lines.push(`    entity_id: sensor.${slug}_weather_forecast`);
-    lines.push(`  - platform: homeassistant`);
-    lines.push(`    id: latter_remote_config`);
-    lines.push(`    entity_id: sensor.${slug}_remote_config`);
-    lines.push(`  - platform: homeassistant`);
-    lines.push(`    id: latter_calendar_agenda`);
-    lines.push(`    entity_id: sensor.${slug}_calendar_agenda`);
-    lines.push(``);
-  }
-
-  if (incBle) {
-    lines.push(`esp32_ble_beacon:`);
-    lines.push(`  type: iBeacon`);
-    lines.push(`  uuid: "${uuid}"`);
-    lines.push(`  major: 1`);
-    lines.push(`  minor: 1`);
-    lines.push(``);
-  }
-
-  if (incActions) {
-    lines.push(`# Example Outbound Latter Actions:`);
-    lines.push(`# - homeassistant.action:`);
-    lines.push(`#     action: latter.area_browse`);
-    lines.push(`#     data:`);
-    lines.push(`#       device_slug: "${slug}"`);
-    lines.push(`#       mode: "entities"`);
-  }
 
   box.textContent = lines.join("\n");
 }

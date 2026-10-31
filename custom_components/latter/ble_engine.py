@@ -16,6 +16,10 @@ from homeassistant.helpers import (
 from homeassistant.helpers.event import async_track_time_interval
 
 from .const import normalize_device_slug
+from .identity import (
+    get_bound_esphome_device,
+    read_device_hardware_manifest,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -83,39 +87,28 @@ def _int_to_mac(mac_int: int) -> str:
 
 
 def _discover_target_device_macs(
-    hass: HomeAssistant, device_slug: str
+    hass: HomeAssistant,
+    device_slug: str,
+    esphome_device_id: str | None = None,
 ) -> set[int]:
-    """Find known Wi-Fi/BLE MAC address integers for the target ESPHome device."""
-    dev_reg = dr.async_get(hass)
-    ent_reg = er.async_get(hass)
-    slug_norm = device_slug.strip().lower().replace("-", "_")
-
-    target_dev_id: str | None = None
-    for entry in _iter_entities(ent_reg):
-        if entry.platform == "esphome" and slug_norm in entry.entity_id:
-            if entry.device_id:
-                target_dev_id = entry.device_id
-                break
+    """Find known Wi-Fi/BLE MAC address integers for the bound ESPHome device."""
+    dev = get_bound_esphome_device(
+        hass, esphome_device_id, fallback_slug=device_slug
+    )
+    if dev is None:
+        return set()
 
     mac_ints: set[int] = set()
-    for dev in _iter_devices(dev_reg):
-        dev_name = (
-            str(dev.name_by_user or dev.name or "")
-            .lower()
-            .replace("-", "_")
-            .replace(" ", "_")
-        )
-        if dev.id == target_dev_id or (slug_norm and slug_norm in dev_name):
-            for _conn_type, conn_val in dev.connections:
-                m_int = _mac_to_int(str(conn_val))
-                if m_int is not None:
-                    for offset in (-2, -1, 0, 1, 2):
-                        mac_ints.add(m_int + offset)
-            for _domain, ident_val in dev.identifiers:
-                m_int = _mac_to_int(str(ident_val))
-                if m_int is not None:
-                    for offset in (-2, -1, 0, 1, 2):
-                        mac_ints.add(m_int + offset)
+    for _conn_type, conn_val in dev.connections:
+        m_int = _mac_to_int(str(conn_val))
+        if m_int is not None:
+            for offset in (-2, -1, 0, 1, 2):
+                mac_ints.add(m_int + offset)
+    for _domain, ident_val in dev.identifiers:
+        m_int = _mac_to_int(str(ident_val))
+        if m_int is not None:
+            for offset in (-2, -1, 0, 1, 2):
+                mac_ints.add(m_int + offset)
     return mac_ints
 
 
@@ -295,6 +288,8 @@ class LatterNativeBleTracker:
         on_area_detected: Callable[[str, str], None],
         area_offsets: dict[str, float] | None = None,
         target_address: str = "",
+        esphome_device_id: str | None = None,
+        manifest_beacon: dict[str, Any] | None = None,
     ) -> None:
         """Initialize the native BLE proxy area tracker."""
         self.hass = hass
@@ -302,6 +297,10 @@ class LatterNativeBleTracker:
         self._target_address = str(target_address or "").strip()
         self._device_slug = device_slug.lower().replace("_", "-")
         self._raw_slug = device_slug
+        self._esphome_device_id: str | None = esphome_device_id
+        self._manifest_beacon: dict[str, Any] = (
+            dict(manifest_beacon) if isinstance(manifest_beacon, dict) else {}
+        )
         self._on_area_detected = on_area_detected
         self._area_offsets: dict[str, float] = {
             str(k): float(v) for k, v in (area_offsets or {}).items()
@@ -401,15 +400,31 @@ class LatterNativeBleTracker:
             self._on_area_detected("away", "")
             get_ble_fabric(self.hass).notify_occupancy_listeners()
 
-    def _resolve_hardware_meta(self) -> str:
-        """Return combined lowercase hardware model, sw_version, and slug metadata from HA Device Registry."""
-        dev_reg = dr.async_get(self.hass)
-        slug_norm = self._raw_slug.lower().replace("-", "_")
-        for dev in _iter_devices(dev_reg):
-            d_name = str(dev.name_by_user or dev.name or "").strip().lower().replace("-", "_").replace(" ", "_")
-            if slug_norm and slug_norm in d_name:
-                return f"{dev.model or ''} {dev.sw_version or ''} {d_name} {slug_norm}".lower()
-        return slug_norm
+    @callback
+    def update_manifest_beacon(self, beacon: dict[str, Any] | None) -> None:
+        """Update cached hardware manifest beacon metadata (uuid, major, minor) from device_hello."""
+        if isinstance(beacon, dict):
+            self._manifest_beacon = dict(beacon)
+            u_raw = str(beacon.get("uuid") or "").strip()
+            if len(_normalize_uuid_hex(u_raw)) == 32 and not self._target_address:
+                self._target_uuid_hex = _normalize_uuid_hex(u_raw)
+
+    def _resolve_beacon_minor(self) -> int | None:
+        """Return expected iBeacon minor ID from the device's hardware manifest."""
+        beacon_cfg = self._manifest_beacon
+        if not beacon_cfg:
+            hw = read_device_hardware_manifest(
+                self.hass, self._esphome_device_id, fallback_slug=self._raw_slug
+            )
+            if isinstance(hw.get("beacon"), dict):
+                beacon_cfg = hw["beacon"]
+                self._manifest_beacon = dict(beacon_cfg)
+        if isinstance(beacon_cfg, dict) and beacon_cfg.get("minor") is not None:
+            try:
+                return int(beacon_cfg["minor"])
+            except (ValueError, TypeError):
+                return None
+        return None
 
     @property
     def target_macs_formatted(self) -> list[str]:
@@ -442,7 +457,7 @@ class LatterNativeBleTracker:
         self.current_area_id = None
         self._last_switch_monotonic = 0.0
         self._target_mac_ints = _discover_target_device_macs(
-            self.hass, self._raw_slug
+            self.hass, self._raw_slug, self._esphome_device_id
         )
 
     @callback
@@ -450,7 +465,7 @@ class LatterNativeBleTracker:
         """Register this tracker with the singleton LatterBleFabric."""
         self.async_stop()
         self._target_mac_ints = _discover_target_device_macs(
-            self.hass, self._raw_slug
+            self.hass, self._raw_slug, self._esphome_device_id
         )
         fabric = get_ble_fabric(self.hass)
         fabric.register_tracker(self)
@@ -605,25 +620,14 @@ class LatterNativeBleTracker:
             elif self._target_uuid_hex in apple_bytes.hex().lower():
                 uuid_matched = True
             if uuid_matched:
-                hw_meta = self._resolve_hardware_meta()
-                expected_minor = (
-                    4 if any(k in hw_meta for k in ("p4_35", "p4-35", "320x480", "remote_assistant"))
-                    else 3 if any(k in hw_meta for k in ("216", "480x480", "mobile_assistant"))
-                    else 2 if any(k in hw_meta for k in ("206", "410x502", "s3_206"))
-                    else 5 if any(k in hw_meta for k in ("p4_4b", "p4-4b", "4b", "720x720", "desk_assistant"))
-                    else 1 if any(k in hw_meta for k in ("175", "466x466", "s3_175c"))
-                    else None
-                )
+                expected_minor = self._resolve_beacon_minor()
                 if minor_val is not None and expected_minor is not None:
-                    if minor_val == expected_minor and minor_val >= 2:
+                    if minor_val == expected_minor and minor_val >= 1:
                         return True
-                    if minor_val >= 2 and minor_val != expected_minor:
+                    if minor_val >= 1 and minor_val != expected_minor:
                         return False
-                if any(k in hw_meta for k in ("p4", "esp32p4", "320x480", "720x720", "remote_assistant", "desk_assistant")):
-                    # On ESP32-P4 + ESP32-C6 boards, the C6 co-processor has its own factory BLE MAC
+                if self._target_mac_ints and adv_int is not None and adv_int in self._target_mac_ints:
                     return True
-                if self._target_mac_ints and adv_int is not None:
-                    return adv_int in self._target_mac_ints
                 return True
 
         return False
@@ -647,7 +651,7 @@ class LatterNativeBleTracker:
         if not self._target_mac_ints and (now_mono - self._last_mac_discovery_mono) >= 30.0:
             self._last_mac_discovery_mono = now_mono
             self._target_mac_ints = _discover_target_device_macs(
-                self.hass, self._raw_slug
+                self.hass, self._raw_slug, self._esphome_device_id
             )
 
         try:
@@ -755,7 +759,7 @@ class LatterNativeBleTracker:
 
         if not self._target_mac_ints and self.packets_seen <= 3:
             self._target_mac_ints = _discover_target_device_macs(
-                self.hass, self._raw_slug
+                self.hass, self._raw_slug, self._esphome_device_id
             )
 
         if self._scanner_area_cache.get(source) is None:
@@ -1259,7 +1263,7 @@ class LatterBleFabric:
             ):
                 tracker._last_mac_discovery_mono = now_mono_check
                 tracker._target_mac_ints = _discover_target_device_macs(
-                    self.hass, tracker._raw_slug
+                    self.hass, tracker._raw_slug, tracker._esphome_device_id
                 )
         try:
             from homeassistant.components import bluetooth
