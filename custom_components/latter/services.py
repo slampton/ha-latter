@@ -847,7 +847,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 and is_music_assistant_player(hass, s)
             ]
             if follow_me_mode:
-                from .ble_engine import get_ble_fabric
+                from .ble_engine import _iter_entities, get_ble_fabric
                 from homeassistant.helpers import entity_registry as er
 
                 fabric = get_ble_fabric(hass)
@@ -858,7 +858,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                     if isinstance(c, LatterCoordinator) and c.active_area_id:
                         if fabric.get_area_occupancy(c.active_area_id).get("is_occupied"):
                             occupied_areas.add(c.active_area_id)
-                for reg_e in ent_reg.entities.values():
+                for reg_e in _iter_entities(ent_reg):
                     a_id = reg_e.area_id or (
                         dev_reg.async_get(reg_e.device_id).area_id
                         if reg_e.device_id and dev_reg.async_get(reg_e.device_id)

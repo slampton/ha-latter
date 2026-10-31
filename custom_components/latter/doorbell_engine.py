@@ -1073,7 +1073,9 @@ def resolve_doorbell_ring_entities(
         event_matches: list[str] = []
         binary_matches: list[str] = []
 
-        for reg_ent in ent_reg.entities.values():
+        from .ble_engine import _iter_entities
+
+        for reg_ent in _iter_entities(ent_reg):
             if reg_ent.disabled_by is not None:
                 continue
             domain = reg_ent.domain

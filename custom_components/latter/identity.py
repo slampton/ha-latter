@@ -52,11 +52,12 @@ def get_bound_esphome_device(
         dev = dev_reg.async_get(explicit_id)
         if dev is not None:
             # If the caller passed a Latter DeviceEntry ID, follow via_device_id to the ESPHome device
-            is_latter_only = any(ident[0] == DOMAIN for ident in dev.identifiers) and not any(
-                (ce := hass.config_entries.async_get_entry(cid)) is not None and ce.domain == "esphome"
-                for cid in dev.config_entries
+            is_esphome_dev = any(
+                d.id == dev.id
+                for ce in hass.config_entries.async_entries("esphome")
+                for d in dr.async_entries_for_config_entry(dev_reg, ce.entry_id)
             )
-            if is_latter_only and dev.via_device_id:
+            if any(ident[0] == DOMAIN for ident in dev.identifiers) and not is_esphome_dev and dev.via_device_id:
                 via_dev = dev_reg.async_get(dev.via_device_id)
                 if via_dev is not None:
                     return via_dev
@@ -72,22 +73,12 @@ def get_bound_esphome_device(
         if dev is not None:
             return dev
 
-    for dev in dev_reg.devices.values():
-        is_esphome = any(
-            (ce := hass.config_entries.async_get_entry(cid)) is not None
-            and ce.domain == "esphome"
-            for cid in dev.config_entries
-        )
-        if not is_esphome:
-            continue
-        for cid in dev.config_entries:
-            ce = hass.config_entries.async_get_entry(cid)
-            if ce is not None and ce.domain == "esphome":
-                node_name = str(ce.data.get("device_name") or ce.title or "")
-                if node_name and normalize_device_slug(node_name) == slug:
-                    return dev
-        if dev.name and normalize_device_slug(dev.name) == slug:
-            return dev
+    for ce in hass.config_entries.async_entries("esphome"):
+        node_name = str(ce.data.get("device_name") or ce.title or "")
+        entry_matches = bool(node_name and normalize_device_slug(node_name) == slug)
+        for dev in dr.async_entries_for_config_entry(dev_reg, ce.entry_id):
+            if entry_matches or (dev.name and normalize_device_slug(dev.name) == slug):
+                return dev
 
     return None
 
@@ -149,9 +140,12 @@ def esphome_node_name(
     if device_or_id:
         dev = get_bound_esphome_device(hass, device_or_id, fallback_slug=fallback_slug)
         if dev is not None:
-            for cid in dev.config_entries:
-                ce = hass.config_entries.async_get_entry(cid)
-                if ce is not None and ce.domain == "esphome":
+            dev_reg = dr.async_get(hass)
+            for ce in hass.config_entries.async_entries("esphome"):
+                if any(
+                    d.id == dev.id
+                    for d in dr.async_entries_for_config_entry(dev_reg, ce.entry_id)
+                ):
                     dev_name = str(ce.data.get("device_name") or "").strip()
                     if dev_name:
                         return normalize_device_slug(dev_name)
