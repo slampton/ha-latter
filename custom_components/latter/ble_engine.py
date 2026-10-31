@@ -656,7 +656,12 @@ class LatterNativeBleTracker:
                 if not source:
                     continue
 
-                timestamps: dict[str, float] = getattr(scanner, "timestamps", {}) or {}
+                timestamps: dict[str, float] = (
+                    getattr(scanner, "discovered_device_timestamps", None)
+                    or getattr(scanner, "_previous_seen_timestamps", None)
+                    or getattr(scanner, "timestamps", None)
+                    or {}
+                )
 
                 dev_adv_map: dict[str, tuple[Any, Any]] = getattr(
                     scanner, "discovered_devices_and_advertisement_data", {}
@@ -1137,9 +1142,7 @@ class LatterBleFabric:
         try:
             from homeassistant.components import bluetooth
 
-            matcher = bluetooth.BluetoothCallbackMatcher(
-                manufacturer_id=APPLE_COMPANY_ID
-            )
+            matcher = bluetooth.BluetoothCallbackMatcher()
             unsub_ibeacon_ble = bluetooth.async_register_callback(
                 self.hass,
                 self._async_on_shared_ble_advertisement,
@@ -1225,7 +1228,12 @@ class LatterBleFabric:
                 scanner_name = str(getattr(scanner, "name", "") or source)
                 if not source:
                     continue
-                timestamps: dict[str, float] = getattr(scanner, "timestamps", {}) or {}
+                timestamps: dict[str, float] = (
+                    getattr(scanner, "discovered_device_timestamps", None)
+                    or getattr(scanner, "_previous_seen_timestamps", None)
+                    or getattr(scanner, "timestamps", None)
+                    or {}
+                )
                 dev_adv_map: dict[str, tuple[Any, Any]] = (
                     getattr(scanner, "discovered_devices_and_advertisement_data", {})
                     or {}

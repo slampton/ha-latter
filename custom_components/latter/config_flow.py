@@ -50,20 +50,18 @@ def _resolve_esphome_device_and_unique_id(
     hass: HomeAssistant, slug: str
 ) -> tuple[dr.DeviceEntry | None, str]:
     """Resolve the HA DeviceEntry and canonical unique_id (MAC-backed when available) for a slug."""
+    from .area_engine import find_esphome_device_id
+
     norm = normalize_device_slug(slug)
+    dev_reg = dr.async_get(hass)
+    found_id = find_esphome_device_id(hass, norm)
+    matched_dev = dev_reg.async_get(found_id) if found_id else None
+
     for entry in hass.config_entries.async_entries(DOMAIN):
         if normalize_device_slug(str(entry.data.get(CONF_DEVICE_SLUG, ""))) == norm and entry.unique_id:
             dev_id = str(entry.data.get(CONF_ESPHOME_DEVICE_ID, "") or "")
-            dev = dr.async_get(hass).async_get(dev_id) if dev_id else None
+            dev = dev_reg.async_get(dev_id) if dev_id else matched_dev
             return dev, entry.unique_id
-
-    dev_reg = dr.async_get(hass)
-    matched_dev: dr.DeviceEntry | None = None
-    for dev in _iter_devices(dev_reg):
-        d_name = str(dev.name_by_user or dev.name or "").strip()
-        if d_name and normalize_device_slug(d_name) == norm:
-            matched_dev = dev
-            break
 
     if matched_dev is not None:
         for _ctype, cval in matched_dev.connections:
@@ -144,6 +142,12 @@ def _detect_hardware_defaults(hass: HomeAssistant, slug: str) -> dict[str, Any]:
         if d_name and normalize_device_slug(d_name) == norm:
             matched_dev = dev
             break
+    if matched_dev is None:
+        from .area_engine import find_esphome_device_id
+
+        found_id = find_esphome_device_id(hass, norm)
+        if found_id:
+            matched_dev = dev_reg.async_get(found_id)
 
     model_meta = (
         f"{matched_dev.model or ''} {matched_dev.sw_version or ''} {matched_dev.name or ''} {norm}".lower()

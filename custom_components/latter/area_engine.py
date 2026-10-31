@@ -266,10 +266,10 @@ def find_esphome_device_id(
     slug_norm = normalize_device_slug(device_slug)
     domain_data = hass.data.get("latter", {})
     for val in domain_data.values():
-        if getattr(val, "device_slug", None) == slug_norm:
-            stored_id = getattr(val, "esphome_device_id", None)
+        if getattr(val, "device_slug", None) == slug_norm and hasattr(val, "get_opt"):
+            stored_id = str(val.get_opt("esphome_device_id", "") or "").strip()
             if stored_id and dev_reg.async_get(stored_id) is not None:
-                return str(stored_id)
+                return stored_id
 
     for dev in _iter_devices(dev_reg):
         dev_name = str(dev.name_by_user or dev.name or "").strip()

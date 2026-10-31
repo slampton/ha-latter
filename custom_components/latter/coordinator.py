@@ -210,6 +210,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
 
         self._cached_lan_base_url: str | None = None
+        self._cached_esphome_device_id: str | None = None
         self._cached_hw_manifest: tuple[str, dict[str, Any]] | None = None
         self._cached_media_payload: tuple[float, tuple[str, dict[str, Any]]] | None = None
         self._cached_area_payload: tuple[float, tuple[str, dict[str, Any]]] | None = None
@@ -330,27 +331,35 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     @property
     def device_slug(self) -> str:
-        """Return normalized ESPHome device slug, auto-healing from unique_id if options were blanked."""
+        """Return normalized ESPHome device slug, auto-healing from entry data or legacy unique_id if options were blanked."""
         raw = str(self.get_opt(CONF_DEVICE_SLUG, "") or "").strip()
         norm = normalize_device_slug(raw) if raw else "esphome_device"
         if norm == "esphome_device":
-            uid = str(self.entry.unique_id or "")
-            if uid.startswith(f"{DOMAIN}_"):
-                recovered = normalize_device_slug(uid.removeprefix(f"{DOMAIN}_"))
-                if recovered and recovered != "esphome_device":
-                    return recovered
             orig_slug = str(self.entry.data.get(CONF_DEVICE_SLUG, "") or "").strip()
             if orig_slug and orig_slug != "esphome_device":
                 return normalize_device_slug(orig_slug)
+            uid = str(self.entry.unique_id or "")
+            if uid.startswith(f"{DOMAIN}_") and ":" not in uid:
+                recovered = normalize_device_slug(uid.removeprefix(f"{DOMAIN}_"))
+                if recovered and recovered != "esphome_device":
+                    return recovered
         return norm
 
     @property
     def esphome_device_id(self) -> str | None:
         """Return the Home Assistant Device Registry ID for the underlying ESPHome device."""
+        dev_reg = dr.async_get(self.hass)
+        if (
+            self._cached_esphome_device_id
+            and dev_reg.async_get(self._cached_esphome_device_id) is not None
+        ):
+            return self._cached_esphome_device_id
         stored = str(self.get_opt(CONF_ESPHOME_DEVICE_ID, "") or "").strip()
-        return find_esphome_device_id(
+        resolved = find_esphome_device_id(
             self.hass, self.device_slug, stored or None
         )
+        self._cached_esphome_device_id = resolved
+        return resolved
 
     def get_device_info(self) -> DeviceInfo:
         """Return canonical Latter DeviceInfo linked via via_device to the underlying ESPHome device."""
@@ -359,7 +368,10 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if esp_dev_id:
             esp_dev = dr.async_get(self.hass).async_get(esp_dev_id)
             if esp_dev and esp_dev.identifiers:
-                via_identifier = next(iter(esp_dev.identifiers))
+                for ident in esp_dev.identifiers:
+                    if isinstance(ident, tuple) and len(ident) == 2 and ident[0] != DOMAIN:
+                        via_identifier = ident
+                        break
         pretty_device = self.device_slug.replace("_", " ").title()
         return DeviceInfo(
             identifiers={(DOMAIN, self.entry.entry_id)},
@@ -1007,13 +1019,21 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         true_slug = self.device_slug
         saved_opt_slug = str((self.entry.options or {}).get(CONF_DEVICE_SLUG, "") or "").strip()
         saved_data_slug = str(self.entry.data.get(CONF_DEVICE_SLUG, "") or "").strip()
-        if true_slug != "esphome_device" and (
-            saved_opt_slug in ("", "esphome_device") or saved_data_slug in ("", "esphome_device")
+        resolved_esp_id = self.esphome_device_id or ""
+        saved_esp_id = str(self.get_opt(CONF_ESPHOME_DEVICE_ID, "") or "").strip()
+        if (
+            true_slug != "esphome_device"
+            and (
+                saved_opt_slug in ("", "esphome_device")
+                or saved_data_slug in ("", "esphome_device")
+                or (resolved_esp_id and not saved_esp_id)
+            )
         ):
             healed = {
                 **self.entry.data,
                 **(self.entry.options or {}),
                 CONF_DEVICE_SLUG: true_slug,
+                **({CONF_ESPHOME_DEVICE_ID: resolved_esp_id} if resolved_esp_id else {}),
             }
             self.hass.config_entries.async_update_entry(
                 self.entry,

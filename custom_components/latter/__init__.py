@@ -35,7 +35,6 @@ from .const import (
     GLOBAL_CONFIG_KEYS,
     GLOBAL_STORAGE_KEY,
     INTEGRATION_VERSION,
-    LATTER_DATA_KEY,
     PLATFORMS,
     STORAGE_VERSION,
     normalize_device_slug,
@@ -108,7 +107,7 @@ async def _async_ensure_global_store(
     hass: HomeAssistant, seed_entry: ConfigEntry | None = None
 ) -> dict[str, Any]:
     """Load or initialize the shared Site configuration store (`.storage/latter.site`)."""
-    domain_data = hass.data.setdefault(LATTER_DATA_KEY, {})
+    domain_data = hass.data.setdefault(DOMAIN, {})
     if DATA_GLOBAL_STORE not in domain_data:
         store: Store[dict[str, Any]] = Store(
             hass, STORAGE_VERSION, GLOBAL_STORAGE_KEY
@@ -148,11 +147,16 @@ async def _async_ensure_global_store(
 def _async_scan_all_esphome_devices_for_discovery(hass: HomeAssistant) -> None:
     """Self-heal crashed flows, abort non-Latter discovery flows, and discover Latter-compatible ESPHome devices."""
     dev_reg = dr.async_get(hass)
-    devices_by_slug: dict[str, dr.DeviceEntry] = {}
+    devices_by_uid: dict[str, tuple[dr.DeviceEntry, str]] = {}
     for dev in _iter_devices(dev_reg):
         dev_name = str(dev.name_by_user or dev.name or "").strip()
         if dev_name:
-            devices_by_slug[_slugify_device_name(dev_name)] = dev
+            slug = _slugify_device_name(dev_name)
+            if slug:
+                devices_by_uid[f"{DOMAIN}_{slug}"] = (dev, slug)
+                for _ctype, cval in dev.connections:
+                    if cval:
+                        devices_by_uid[f"{DOMAIN}_{dr.format_mac(str(cval))}"] = (dev, slug)
 
     # 1. Clean up only crashed flows (step_id is None) or unsupported discovery flows
     for flow in list(hass.config_entries.flow.async_progress_by_handler(DOMAIN)):
@@ -166,11 +170,10 @@ def _async_scan_all_esphome_devices_for_discovery(hass: HomeAssistant) -> None:
         if ctx.get("source") != SOURCE_INTEGRATION_DISCOVERY:
             continue
         unique_id = str(ctx.get("unique_id") or "")
-        flow_slug = unique_id.removeprefix(f"{DOMAIN}_") if unique_id.startswith(f"{DOMAIN}_") else ""
-        if not flow_slug:
+        if not unique_id.startswith(f"{DOMAIN}_"):
             continue
-        dev = devices_by_slug.get(flow_slug)
-        if dev is None or not is_latter_compatible_esphome_device(hass, dev, flow_slug):
+        pair = devices_by_uid.get(unique_id)
+        if pair is None or not is_latter_compatible_esphome_device(hass, pair[0], pair[1]):
             hass.config_entries.flow.async_abort(fid)
 
     # 2. Trigger discovery for any unconfigured Latter-compatible ESPHome devices
