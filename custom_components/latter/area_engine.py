@@ -830,7 +830,7 @@ def get_whole_home_summary(
     out: dict[str, Any] = {
         "thermostat_entity": "",
         "thermostat_state": "off",
-        "thermostat_temp": 71,
+        "thermostat_temp": None,
         "thermostat_current_temp": None,
         "lock_entity": "",
         "lock_state": "locked",

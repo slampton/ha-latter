@@ -149,6 +149,15 @@ class TestProtocolV3Contract(unittest.TestCase):
         self.assertEqual(parsed["v"], 2)
         self.assertEqual(parsed["minor"], 5)
 
+    def test_show_notification_includes_alert_id(self) -> None:
+        """show_notification device action must include alert_id for deduplication."""
+        notif_vars = (
+            self.schema.get("device_actions", {})
+            .get("show_notification", {})
+            .get("variables", {})
+        )
+        self.assertEqual(notif_vars.get("alert_id"), "int")
+
 
 if __name__ == "__main__":
     unittest.main()

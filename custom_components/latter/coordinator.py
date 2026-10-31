@@ -302,15 +302,28 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._transfer_hold_duration: float = 0.0
 
         # Cached weather forecast state & attributes
+        init_w_rev, init_w_payload = self._pack_domain_payload(
+            "weather_forecast",
+            "unknown",
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            "NONE",
+        )
         self.forecast_string: str = "NONE"
         self.weather_attributes: dict[str, Any] = {
             "condition": "unknown",
-            "temperature": 0.0,
-            "humidity": 0.0,
-            "wind_speed": 0.0,
-            "wind_bearing": 0.0,
-            "high": 0.0,
-            "low": 0.0,
+            "temperature": None,
+            "humidity": None,
+            "wind_speed": None,
+            "wind_bearing": None,
+            "high": None,
+            "low": None,
+            "rev": init_w_rev,
+            "payload": init_w_payload,
         }
 
         # Cached calendar agenda state & attributes
@@ -1370,6 +1383,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         "duration": 20,
                         "chime": True,
                         "camera_url": self.alert_camera_url,
+                        "alert_id": self.alert_id,
                     },
                     blocking=False,
                 ),
@@ -1491,16 +1505,15 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return
 
         local_spk = self.local_speaker
-        if local_spk not in targets and f"media_player.{self.device_slug}" not in targets:
+        if not local_spk or local_spk not in targets:
             return
 
-        target_spk = local_spk if local_spk in targets else f"media_player.{self.device_slug}"
-        state_obj = self.hass.states.get(target_spk)
+        state_obj = self.hass.states.get(local_spk)
         if state_obj is not None and state_obj.state in (STATE_IDLE, STATE_OFF):
             self._resuming_guard_until = time.monotonic() + 3.0
             self.entry.async_create_background_task(
                 self.hass,
-                self._async_resume_idle_speaker_queue(target_spk),
+                self._async_resume_idle_speaker_queue(local_spk),
                 f"latter_cold_resume_{self.device_slug}",
             )
 
@@ -1660,9 +1673,8 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 {ATTR_ENTITY_ID: target_spk},
                 blocking=False,
             )
-            is_local = target_spk in (
-                self.local_speaker,
-                f"media_player.{self.device_slug}",
+            is_local = bool(
+                self.local_speaker and target_spk == self.local_speaker
             )
             if is_local and self._local_needs_cold_resume and cur_state in (
                 STATE_IDLE,
@@ -1950,9 +1962,8 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         tgt_state = self.hass.states.get(target_speaker)
         src_is_ma = bool(src_state and is_music_assistant_player(self.hass, src_state))
         tgt_is_ma = bool(tgt_state and is_music_assistant_player(self.hass, tgt_state))
-        is_from_local = source_speaker in (
-            self.local_speaker,
-            f"media_player.{self.device_slug}",
+        is_from_local = bool(
+            self.local_speaker and source_speaker == self.local_speaker
         )
 
         transferred_via_ma = False
@@ -2062,15 +2073,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         speaker_entity_id = speaker_entity_id.strip()
         if not speaker_entity_id:
             return
-        if (
-            self.local_speaker
-            and speaker_entity_id
-            in (
-                f"media_player.{self.device_slug}",
-                f"media_player.{self.device_slug}_music",
-            )
-        ):
-            speaker_entity_id = self.local_speaker
 
         prev_speaker = self.active_speaker
         if speaker_entity_id != prev_speaker:
@@ -2706,8 +2708,10 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Handle target media_player state/attribute updates."""
         self._notify_listeners()
 
-    def _read_volume_from_target(self, vol_target: str, fallback_attrs: dict[str, Any]) -> float:
-        """Read normalized 0.0..1.0 volume from media_player, number, or input_number."""
+    def _read_volume_from_target(
+        self, vol_target: str, fallback_attrs: dict[str, Any]
+    ) -> float | None:
+        """Read normalized 0.0..1.0 volume from media_player, number, or input_number, or None when unknown."""
         vol_state = self.hass.states.get(vol_target)
         if vol_state is not None and vol_state.state not in ("unavailable", "unknown"):
             if vol_state.domain in ("number", "input_number"):
@@ -2726,7 +2730,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         if fallback_attrs.get("volume_level") is not None:
             return float(fallback_attrs["volume_level"])
-        return 0.7
+        return None
 
     def get_active_media_payload(self) -> tuple[str, dict[str, Any]]:
         """Compute state and attributes for sensor.<device_slug>_active_media."""
@@ -2748,6 +2752,13 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             idle_dur = round(self.last_media_duration, 1)
             idle_pos = round(self.last_media_position, 1)
             idle_type = self.last_media_type or "music"
+            idle_vol = self._read_volume_from_target(vol_target, {})
+            idle_vol_r = round(idle_vol, 2) if idle_vol is not None else None
+            idle_vol_pct = (
+                int(round(max(0.0, min(1.0, idle_vol)) * 100.0))
+                if idle_vol is not None
+                else None
+            )
             is_local_flag = 1 if (self.active_speaker and self.active_speaker == self.local_speaker) else 0
             med_rev, med_payload = self._pack_domain_payload(
                 "active_media",
@@ -2758,7 +2769,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 idle_dur,
                 idle_pos,
                 0,
-                70,
+                idle_vol_pct,
                 idle_type,
                 0,
                 "none",
@@ -2778,7 +2789,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "duration": idle_dur,
                     "position": idle_pos,
                     "position_updated_at": 0,
-                    "volume": 0.7,
+                    "volume": idle_vol_r,
                     "media_type": idle_type,
                     "supported_features": 0,
                     "art_url": "none",
@@ -2954,8 +2965,12 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         dur_r = round(duration, 1)
         pos_r = round(position, 1)
-        vol_r = round(volume, 2)
-        vol_pct = int(round(max(0.0, min(1.0, volume)) * 100.0))
+        vol_r = round(volume, 2) if volume is not None else None
+        vol_pct = (
+            int(round(max(0.0, min(1.0, volume)) * 100.0))
+            if volume is not None
+            else None
+        )
         med_rev, med_payload = self._pack_domain_payload(
             "active_media",
             state,
@@ -3116,10 +3131,19 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return
 
         attrs = state_obj.attributes
-        temp = float(attrs.get("temperature") or 0.0)
-        humidity = float(attrs.get("humidity") or 0.0)
-        wind_speed = float(attrs.get("wind_speed") or 0.0)
-        wind_bearing = float(attrs.get("wind_bearing") or 0.0)
+
+        def _opt_float(val: Any) -> float | None:
+            if val is None:
+                return None
+            try:
+                return round(float(val), 1)
+            except (ValueError, TypeError):
+                return None
+
+        temp_r = _opt_float(attrs.get("temperature"))
+        hum_r = _opt_float(attrs.get("humidity"))
+        ws_r = _opt_float(attrs.get("wind_speed"))
+        wb_r = _opt_float(attrs.get("wind_bearing"))
 
         forecasts: list[dict[str, Any]] = []
         if self.hass.services.has_service("weather", "get_forecasts"):
@@ -3139,18 +3163,24 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if not forecasts and isinstance(attrs.get("forecast"), list):
             forecasts = attrs.get("forecast")
 
-        high = temp
-        low = temp
+        hi_r = temp_r
+        lo_r = temp_r
         segments: list[str] = []
 
         for idx, item in enumerate(forecasts[:5]):
-            f_high = item.get("temperature", temp)
-            f_low = item.get("templow", f_high)
+            f_high = _opt_float(item.get("temperature"))
+            if f_high is None:
+                f_high = temp_r
+            f_low = _opt_float(item.get("templow"))
+            if f_low is None:
+                f_low = f_high
             f_cond = str(item.get("condition") or state_obj.state or "sunny")
 
             if idx == 0:
-                high = float(f_high if f_high is not None else temp)
-                low = float(f_low if f_low is not None else temp)
+                if f_high is not None:
+                    hi_r = f_high
+                if f_low is not None:
+                    lo_r = f_low
 
             dt_raw = item.get("datetime")
             day_label = "DAY"
@@ -3160,18 +3190,12 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     local_dt = dt_util.as_local(parsed)
                     day_label = DAY_ABBR[local_dt.weekday()]
 
-            h_int = int(round(float(f_high if f_high is not None else temp)))
-            l_int = int(round(float(f_low if f_low is not None else h_int)))
+            h_int = int(round(f_high)) if f_high is not None else 0
+            l_int = int(round(f_low)) if f_low is not None else h_int
             segments.append(f"{day_label}:{h_int}:{l_int}:{f_cond}")
 
         self.forecast_string = ";".join(segments) if segments else "NONE"
         cond_str = str(state_obj.state)
-        temp_r = round(temp, 1)
-        hum_r = round(humidity, 1)
-        ws_r = round(wind_speed, 1)
-        wb_r = round(wind_bearing, 1)
-        hi_r = round(high, 1)
-        lo_r = round(low, 1)
         w_rev, w_payload = self._pack_domain_payload(
             "weather_forecast",
             cond_str,

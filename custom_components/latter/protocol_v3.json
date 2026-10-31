@@ -164,6 +164,7 @@
     "show_notification": {
       "description": "Wake display, show an on-screen alert banner, and optionally play an RTTTL chime or camera preview",
       "variables": {
+        "alert_id": "int",
         "title": "string",
         "message": "string",
         "priority": "string",

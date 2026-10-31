@@ -174,9 +174,12 @@ class LatterActiveMediaSensor(_BaseLatterSensor):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return media attributes."""
+        """Return Protocol v3 active_media payload and revision."""
         _, attrs = self.coordinator.get_active_media_payload()
-        return attrs
+        return {
+            "payload": attrs.get("payload", ""),
+            "rev": attrs.get("rev", 0),
+        }
 
 
 class LatterWeatherForecastSensor(_BaseLatterSensor):
@@ -195,8 +198,12 @@ class LatterWeatherForecastSensor(_BaseLatterSensor):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return current weather attributes."""
-        return self.coordinator.weather_attributes
+        """Return Protocol v3 weather_forecast payload and revision."""
+        attrs = self.coordinator.weather_attributes
+        return {
+            "payload": attrs.get("payload", ""),
+            "rev": attrs.get("rev", 0),
+        }
 
 
 class LatterAreaContextSensor(_BaseLatterSensor):
@@ -216,9 +223,12 @@ class LatterAreaContextSensor(_BaseLatterSensor):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return area entity summary, telemetry, and alarm state."""
+        """Return Protocol v3 area_context payload and revision."""
         _, attrs = self.coordinator.get_area_context_payload()
-        return attrs
+        return {
+            "payload": attrs.get("payload", ""),
+            "rev": attrs.get("rev", 0),
+        }
 
 
 class LatterCalendarAgendaSensor(_BaseLatterSensor):
@@ -238,9 +248,12 @@ class LatterCalendarAgendaSensor(_BaseLatterSensor):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return structured upcoming event list and Protocol v3 payload."""
+        """Return Protocol v3 calendar_agenda payload and revision."""
         _, attrs = self.coordinator.get_calendar_agenda_payload()
-        return attrs
+        return {
+            "payload": attrs.get("payload", ""),
+            "rev": attrs.get("rev", 0),
+        }
 
 
 class LatterRemoteConfigSensor(_BaseLatterSensor):
@@ -260,9 +273,12 @@ class LatterRemoteConfigSensor(_BaseLatterSensor):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return slot_1..4 names, remote_entity, media_player_entity, and states."""
+        """Return Protocol v3 remote_config payload and revision."""
         _, attrs = self.coordinator.get_remote_config_payload()
-        return attrs
+        return {
+            "payload": attrs.get("payload", ""),
+            "rev": attrs.get("rev", 0),
+        }
 
 class LatterCurrentAreaSensor(_BaseLatterSensor):
     """Exposes sensor.<device_slug>_current_area with live area name or 'Away'."""
