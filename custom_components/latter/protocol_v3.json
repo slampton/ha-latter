@@ -125,7 +125,7 @@
       "description": "Upcoming calendar agenda events and next-event headline",
       "fields": [
         {"index": 3, "name": "summary", "cpp_enum": "SUMMARY", "type": "records", "description": "0x1E-joined time|title|location|all_day agenda records"},
-        {"index": 4, "name": "count", "cpp_enum": "COUNT", "type": "u16", "description": "Number of upcoming agenda events"},
+        {"index": 4, "name": "count", "cpp_enum": "EVENT_COUNT", "type": "u16", "description": "Number of upcoming agenda events"},
         {"index": 5, "name": "next_event", "cpp_enum": "NEXT_EVENT", "type": "string", "description": "Headline summary of the next upcoming event"}
       ]
     }
