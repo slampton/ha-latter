@@ -1,22 +1,26 @@
 rules:
   # Bronze
   action-setup: done
-  appropriate-polling: done
+  appropriate-polling:
+    status: exempt
+    comment: Event-driven local push middleware for ESPHome and Home Assistant state changes.
   brands: done
   common-modules: done
   config-flow: done
-  config-flow-test-coverage: done
+  config-flow-test-coverage: todo
   dependency-transparency: done
   docs-actions: done
+  docs-conditions: todo
   docs-high-level-description: done
   docs-installation-instructions: done
   docs-removal-instructions: done
+  docs-triggers: todo
   entity-event-setup: done
   entity-unique-id: done
-  has-entity-name: done
-  runtime-data: done
-  test-before-configure: done
-  test-before-setup: done
+  has-entity-name: todo
+  runtime-data: todo
+  test-before-configure: todo
+  test-before-setup: todo
   unique-config-entry: done
 
   # Silver
@@ -24,19 +28,19 @@ rules:
   config-entry-unloading: done
   docs-configuration-parameters: done
   docs-installation-parameters: done
-  entity-unavailable: done
+  entity-unavailable: todo
   integration-owner: done
-  log-when-unavailable: done
+  log-when-unavailable: todo
   parallel-updates: done
   reauthentication-flow:
     status: exempt
-    comment: Local push ESPHome middleware; authentication is managed by the ESPHome integration and signed local tokens.
-  test-coverage: done
+    comment: Local push ESPHome middleware; authentication is managed by the ESPHome integration and signed local resource signatures.
+  test-coverage: todo
 
   # Gold
   devices: done
   diagnostics: done
-  discovery: done
+  discovery: todo
   discovery-update-info: done
   docs-data-update: done
   docs-examples: done
@@ -45,18 +49,23 @@ rules:
   docs-supported-functions: done
   docs-troubleshooting: done
   docs-use-cases: done
-  dynamic-devices: done
-  entity-category: done
+  dynamic-devices: todo
+  entity-category: todo
   entity-device-class: done
   entity-disabled-by-default: done
-  entity-translations: done
+  entity-translations: todo
   exception-translations: done
-  icon-translations: done
+  icon-translations: todo
   reconfiguration-flow: done
   repair-issues: done
-  stale-devices: done
+  stale-devices: todo
 
   # Platinum
-  async-dependency: done
-  inject-websession: done
-  strict-typing: done
+  async-dependency:
+    status: exempt
+    comment: Integration coordinates Home Assistant core platforms and local ESPHome services without an external device library.
+  inject-websession:
+    status: exempt
+    comment: Integration does not use an external API client library; local HTTP proxy views use Home Assistant's shared aiohttp session.
+  strict-typing: todo
+

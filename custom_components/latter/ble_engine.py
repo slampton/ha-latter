@@ -1376,9 +1376,6 @@ def get_all_areas_presence_summary(hass: HomeAssistant) -> list[dict[str, Any]]:
     return rows
 
 
-import re
-
-
 def get_discovered_ble_candidates(
     hass: HomeAssistant, onboarded_slugs: set[str], onboarded_addresses: set[str]
 ) -> list[dict[str, Any]]:

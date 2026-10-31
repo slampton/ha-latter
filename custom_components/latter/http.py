@@ -22,8 +22,6 @@ from .const import (
     API_CAMERA_PROXY_PATH,
     API_MAP_PROXY_PATH,
     API_WALLPAPER_PROXY_PATH,
-    DOMAIN,
-    normalize_device_slug,
 )
 from .coordinator import LatterCoordinator, resolve_coordinator
 from .media_engine import resolve_ma_counterpart_entity

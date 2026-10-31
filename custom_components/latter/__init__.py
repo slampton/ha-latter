@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import re
 import secrets
 import time
 from typing import Any
@@ -363,8 +362,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: LatterConfigEntry) -> None:
-    """Reload config entry when options are updated."""
-    await hass.config_entries.async_reload(entry.entry_id)
+    """Apply updated options in-place, or reload the config entry if structural keys changed."""
+    coordinator: LatterCoordinator | None = getattr(
+        entry, "runtime_data", None
+    ) or hass.data.get(DOMAIN, {}).get(entry.entry_id)
+    if coordinator is None or coordinator.has_structural_changes():
+        await hass.config_entries.async_reload(entry.entry_id)
+        return
+    await coordinator.async_apply_options()
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bool:

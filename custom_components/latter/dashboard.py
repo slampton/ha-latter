@@ -110,7 +110,6 @@ from .const import (
     CONF_WALLPAPER_SOURCE,
     CONF_WEATHER_ENTITY,
     CONF_WEB_THEME,
-    DEFAULT_SITE_ID,
     DATA_GLOBAL_CONFIG,
     DATA_GLOBAL_STORE,
     DEFAULT_ART_SIZE,
@@ -1313,6 +1312,9 @@ class LatterCompanionApiView(HomeAssistantView):
                     CONF_WALLPAPER_SOURCE: new_source,
                     CONF_WALLPAPER_FAVORITES: favs,
                 }
+                coordinator.current_wallpaper = new_source
+                coordinator._configured_wallpaper_source = new_source
+                coordinator._schedule_persist_runtime_state()
                 self.hass.config_entries.async_update_entry(
                     coordinator.entry, data=merged_wp, options=merged_wp
                 )
@@ -1328,6 +1330,9 @@ class LatterCompanionApiView(HomeAssistantView):
                 **(coordinator.entry.options or {}),
                 CONF_WALLPAPER_SOURCE: source_id,
             }
+            coordinator.current_wallpaper = source_id
+            coordinator._configured_wallpaper_source = source_id
+            coordinator._schedule_persist_runtime_state()
             self.hass.config_entries.async_update_entry(
                 coordinator.entry, data=merged_sel, options=merged_sel
             )
@@ -1378,6 +1383,9 @@ class LatterCompanionApiView(HomeAssistantView):
                     CONF_WALLPAPER_SOURCE: new_active,
                     CONF_WALLPAPER_FAVORITES: favs,
                 }
+                coordinator.current_wallpaper = new_active
+                coordinator._configured_wallpaper_source = new_active
+                coordinator._schedule_persist_runtime_state()
                 self.hass.config_entries.async_update_entry(
                     coordinator.entry, data=merged_del, options=merged_del
                 )

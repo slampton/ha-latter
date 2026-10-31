@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from typing import Any
 import voluptuous as vol
 
@@ -263,7 +262,13 @@ def _apply_onboarding_profile_and_defaults(
     hass: HomeAssistant, user_input: dict[str, Any], existing: dict[str, Any] | None = None
 ) -> dict[str, Any]:
     """Merge auto-detected hardware defaults, roaming flag, optional Profile, and global system defaults."""
-    slug = normalize_device_slug(str(user_input.get(CONF_DEVICE_SLUG) or "esphome_device"))
+    slug = normalize_device_slug(
+        str(
+            user_input.get(CONF_DEVICE_SLUG)
+            or (existing or {}).get(CONF_DEVICE_SLUG)
+            or "esphome_device"
+        )
+    )
     hw_defaults = _detect_hardware_defaults(hass, slug)
     matched_dev, _uid = _resolve_esphome_device_and_unique_id(hass, slug)
 
@@ -324,8 +329,13 @@ def _apply_onboarding_profile_and_defaults(
     return merged
 
 
-def _build_schema(hass: HomeAssistant, current: dict[str, Any]) -> vol.Schema:
-    """Build the clean 3-field onboarding schema (Device Slug, Profile, Roaming Toggle)."""
+def _build_schema(
+    hass: HomeAssistant,
+    current: dict[str, Any],
+    *,
+    include_device_slug: bool = True,
+) -> vol.Schema:
+    """Build the onboarding/options schema."""
     default_slug = str(current.get(CONF_DEVICE_SLUG) or _discover_esphome_slug(hass))
     hw_defs = _detect_hardware_defaults(hass, default_slug)
     is_roaming_default = bool(
@@ -365,18 +375,24 @@ def _build_schema(hass: HomeAssistant, current: dict[str, Any]) -> vol.Schema:
                 )
             )
 
-    schema_dict: dict[Any, Any] = {
-        vol.Required(CONF_DEVICE_SLUG, default=default_slug): selector.TextSelector(),
-        vol.Required(CONF_APPLY_PROFILE, default="auto"): selector.SelectSelector(
-            selector.SelectSelectorConfig(
-                options=profile_options,
-                mode=selector.SelectSelectorMode.DROPDOWN,
-            )
-        ),
+    schema_dict: dict[Any, Any] = {}
+    if include_device_slug:
+        schema_dict[
+            vol.Required(CONF_DEVICE_SLUG, default=default_slug)
+        ] = selector.TextSelector()
+    schema_dict[
+        vol.Required(CONF_APPLY_PROFILE, default="auto")
+    ] = selector.SelectSelector(
+        selector.SelectSelectorConfig(
+            options=profile_options,
+            mode=selector.SelectSelectorMode.DROPDOWN,
+        )
+    )
+    schema_dict[
         vol.Required(
             CONF_NATIVE_BLE_TRACKING, default=is_roaming_default
-        ): selector.BooleanSelector(),
-    }
+        )
+    ] = selector.BooleanSelector()
 
     return vol.Schema(schema_dict)
 
@@ -525,22 +541,22 @@ class LatterConfigFlow(ConfigFlow, domain=DOMAIN):
     ) -> ConfigFlowResult:
         """Handle a reconfiguration flow initialized by the user."""
         reconfigure_entry = self._get_reconfigure_entry()
-        current = (
-            dict(reconfigure_entry.options)
-            if reconfigure_entry.options
-            else dict(reconfigure_entry.data)
-        )
+        current = {
+            **reconfigure_entry.data,
+            **(reconfigure_entry.options or {}),
+        }
         if user_input is not None:
             merged_data = _apply_onboarding_profile_and_defaults(
                 self.hass, user_input, existing=current
             )
             slug = merged_data[CONF_DEVICE_SLUG]
             _dev, target_uid = _resolve_esphome_device_and_unique_id(self.hass, slug)
-            await self.async_set_unique_id(reconfigure_entry.unique_id or target_uid)
-            self._abort_if_unique_id_mismatch()
-            return self.async_update_and_abort(
+            await self.async_set_unique_id(target_uid)
+            self._abort_if_unique_id_mismatch(reason="wrong_device")
+            return self.async_update_reload_and_abort(
                 reconfigure_entry,
                 data_updates=merged_data,
+                options={**(reconfigure_entry.options or {}), **merged_data},
             )
 
         return self.async_show_form(
@@ -562,21 +578,19 @@ class LatterOptionsFlowHandler(OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Manage the options."""
-        current = (
-            dict(self.config_entry.options)
-            if self.config_entry.options
-            else dict(self.config_entry.data)
-        )
+        current = {
+            **self.config_entry.data,
+            **(self.config_entry.options or {}),
+        }
         if user_input is not None:
             merged_data = _apply_onboarding_profile_and_defaults(
                 self.hass, user_input, existing=current
-            )
-            self.hass.config_entries.async_update_entry(
-                self.config_entry, data=merged_data, options=merged_data
             )
             return self.async_create_entry(title="", data=merged_data)
 
         return self.async_show_form(
             step_id="init",
-            data_schema=_build_schema(self.hass, current),
+            data_schema=_build_schema(
+                self.hass, current, include_device_slug=False
+            ),
         )

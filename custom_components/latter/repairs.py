@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Any
-import voluptuous as vol
-
 from homeassistant.components.repairs import ConfirmRepairFlow, RepairsFlow
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er, issue_registry as ir

@@ -8,7 +8,6 @@ from datetime import datetime, timedelta
 import hashlib
 import hmac
 import logging
-import re
 import time
 from typing import Any
 
@@ -311,6 +310,56 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.doorbell_anc_mode: str = str(
             self.get_opt(CONF_DOORBELL_ANC_MODE, DEFAULT_DOORBELL_ANC_MODE) or DEFAULT_DOORBELL_ANC_MODE
         )
+        self._configured_wallpaper_source: str = str(
+            self.get_opt(CONF_WALLPAPER_SOURCE, "") or ""
+        ).strip()
+        self.current_wallpaper: str = ""
+        self._structural_snapshot: dict[str, Any] = self._capture_structural_snapshot()
+
+    def _capture_structural_snapshot(self) -> dict[str, Any]:
+        """Capture a snapshot of structural config keys that require an entry reload when changed."""
+        return {
+            CONF_DEVICE_SLUG: self.device_slug,
+            CONF_ESPHOME_DEVICE_ID: str(self.get_opt(CONF_ESPHOME_DEVICE_ID, "") or "").strip(),
+            CONF_DEVICE_PROFILE: self.device_profile,
+            CONF_NATIVE_BLE_TRACKING: self.native_ble_tracking_enabled,
+            CONF_BLE_BEACON_UUID: self.ble_beacon_uuid,
+            CONF_BLE_TARGET_ADDRESS: self.ble_target_address,
+            CONF_ASSIGNED_PERSON: self.assigned_person,
+        }
+
+    def has_structural_changes(self) -> bool:
+        """Return True if any structural config key changed since setup."""
+        return self._capture_structural_snapshot() != self._structural_snapshot
+
+    async def async_apply_options(self) -> None:
+        """Apply updated config entry options in-place without reloading the entry."""
+        new_conf_wp = str(self.get_opt(CONF_WALLPAPER_SOURCE, "") or "").strip()
+        if new_conf_wp != self._configured_wallpaper_source:
+            self._configured_wallpaper_source = new_conf_wp
+            self.current_wallpaper = new_conf_wp
+            self._schedule_persist_runtime_state()
+        elif self.current_wallpaper and self.wallpaper_favorites and self.current_wallpaper not in self.wallpaper_favorites and self.current_wallpaper != new_conf_wp:
+            self.current_wallpaper = new_conf_wp
+            self._schedule_persist_runtime_state()
+
+        self.doorbell_anc_mode = str(
+            self.get_opt(CONF_DOORBELL_ANC_MODE, DEFAULT_DOORBELL_ANC_MODE)
+            or DEFAULT_DOORBELL_ANC_MODE
+        )
+        if self._ble_tracker is not None:
+            self._ble_tracker.set_area_offsets(self.ble_area_offsets)
+        self._bind_speaker_listener()
+        self._bind_weather_listener()
+        self._bind_alarm_listener()
+        self._bind_presence_listener()
+        self._bind_remotes_listener()
+        self._bind_area_entities_listener()
+        self._bind_doorbell_ring_listener()
+        self._bind_wallpaper_cycle_timer()
+        await self.async_refresh_weather_forecast()
+        await self.async_refresh_calendar_agenda()
+        self._notify_listeners()
 
     def get_opt(self, key: str, default: Any = None) -> Any:
         """Retrieve a setting, prioritizing System-Wide config for shared keys and entry options/data for device keys."""
@@ -473,7 +522,9 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     @property
     def wallpaper_source(self) -> str:
-        """Return configured photo wallpaper URL, preset ID, or /local/ path."""
+        """Return active runtime wallpaper or configured photo wallpaper URL, preset ID, or /local/ path."""
+        if self.current_wallpaper:
+            return self.current_wallpaper
         return str(self.get_opt(CONF_WALLPAPER_SOURCE, "") or "").strip()
 
     @property
@@ -966,7 +1017,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     @callback
     def _schedule_persist_runtime_state(self) -> None:
-        """Persist runtime speaker, area, remote slot, monotonic rev, alert_id, and last active track metadata to HA Store."""
+        """Persist runtime speaker, area, remote slot, wallpaper, monotonic rev, alert_id, and last active track metadata to HA Store."""
         self._store.async_delay_save(
             lambda: {
                 "rev": self.rev,
@@ -975,6 +1026,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "last_speaker": self.last_speaker,
                 "active_area_id": self.active_area_id or "",
                 "active_remote_slot": self.active_remote_slot,
+                "current_wallpaper": self.current_wallpaper,
                 "last_media_uri": self.last_media_uri,
                 "last_media_type": self.last_media_type,
                 "last_media_title": self.last_media_title,
@@ -988,31 +1040,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def async_setup(self) -> None:
         """Restore persisted state, set up subscriptions, start BLE tracker, and sync initial states."""
-        true_slug = self.device_slug
-        saved_opt_slug = str((self.entry.options or {}).get(CONF_DEVICE_SLUG, "") or "").strip()
-        saved_data_slug = str(self.entry.data.get(CONF_DEVICE_SLUG, "") or "").strip()
-        resolved_esp_id = self.esphome_device_id or ""
-        saved_esp_id = str(self.get_opt(CONF_ESPHOME_DEVICE_ID, "") or "").strip()
-        if (
-            true_slug != "esphome_device"
-            and (
-                saved_opt_slug in ("", "esphome_device")
-                or saved_data_slug in ("", "esphome_device")
-                or (resolved_esp_id and not saved_esp_id)
-            )
-        ):
-            healed = {
-                **self.entry.data,
-                **(self.entry.options or {}),
-                CONF_DEVICE_SLUG: true_slug,
-                **({CONF_ESPHOME_DEVICE_ID: resolved_esp_id} if resolved_esp_id else {}),
-            }
-            self.hass.config_entries.async_update_entry(
-                self.entry,
-                title=true_slug.replace("_", " ").title(),
-                data=healed,
-                options=healed,
-            )
         try:
             stored = await self._store.async_load()
             if isinstance(stored, dict):
@@ -1030,6 +1057,9 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 saved_slot = stored.get("active_remote_slot")
                 if isinstance(saved_slot, int) and 1 <= saved_slot <= 10:
                     self.active_remote_slot = saved_slot
+                saved_wp = str(stored.get("current_wallpaper") or "").strip()
+                if saved_wp:
+                    self.current_wallpaper = saved_wp
                 self.last_media_uri = str(stored.get("last_media_uri") or "")
                 self.last_media_type = str(stored.get("last_media_type") or "music")
                 self.last_media_title = str(stored.get("last_media_title") or "")
@@ -1039,6 +1069,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self.last_media_position = float(stored.get("last_media_position") or 0.0)
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("Failed loading Latter runtime store: %s", err)
+        self._structural_snapshot = self._capture_structural_snapshot()
 
         local_spk = self.local_speaker
         esphome_svcs = self.hass.services.async_services().get("esphome", {})
@@ -2949,15 +2980,8 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             idx = (favs.index(cur) + 1) % len(favs)
         except ValueError:
             idx = 0
-        next_wp = favs[idx]
-        merged = {
-            **self.entry.data,
-            **(self.entry.options or {}),
-            CONF_WALLPAPER_SOURCE: next_wp,
-        }
-        self.hass.config_entries.async_update_entry(
-            self.entry, data=merged, options=merged
-        )
+        self.current_wallpaper = favs[idx]
+        self._schedule_persist_runtime_state()
         self._notify_listeners()
 
     async def _async_periodic_calendar_refresh(self, _now: datetime) -> None:

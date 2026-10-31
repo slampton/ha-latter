@@ -29,16 +29,16 @@
       "already_configured": "This ESPHome device is already configured in Latter.",
       "not_supported": "This device does not announce Latter companion actions.",
       "reconfigure_successful": "Device configuration updated.",
-      "unique_id_mismatch": "The device slug does not match the existing configuration entry."
+      "unique_id_mismatch": "The device slug does not match the existing configuration entry.",
+      "wrong_device": "The selected ESPHome device does not match this configuration entry."
     }
   },
   "options": {
     "step": {
       "init": {
         "title": "Latter Device Options",
-        "description": "Update device identity, profile, or roaming behavior. For full system and device controls, open the Latter Studio from the Home Assistant sidebar.",
+        "description": "Update configuration profile or roaming behavior. For full system and device controls, open the Latter Studio from the Home Assistant sidebar.",
         "data": {
-          "device_slug": "ESPHome Device Name / Slug",
           "apply_profile": "Configuration Profile",
           "native_ble_tracking": "This device roams (not fixed to a single Area)"
         }
