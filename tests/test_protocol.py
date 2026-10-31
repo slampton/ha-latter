@@ -127,9 +127,27 @@ class TestProtocolV3Contract(unittest.TestCase):
         # Reconnect / device_hello -> resets rev to 1
         packer.force_republish_all_domains()
         _, rev_after_reset = packer.pack_domain_payload(
-            "remote_config", ["g1", "Living", "remote.tv", "on", "HDMI 1", "HDMI 1,HDMI 2"]
+            "remote_config", ["0", "2", "Apple TV\x1eremote.apple_tv"]
         )
         self.assertEqual(rev_after_reset, 1)
+
+    def test_hardware_manifest_state_json_within_ha_255_char_limit(self) -> None:
+        """The System: Hardware Manifest entity state string must never exceed HA's 255-char MAX_STATE_LENGTH."""
+        longest_state_json = (
+            '{"v":2,"contract":3,"board":"waveshare_p4_4b",'
+            '"w":720,"h":720,"shape":"square",'
+            '"display":1,"touch":1,"audio":1,"mic":1,"spk":1,'
+            '"imu":0,"battery":0,"stationary":1,"wearable":0,'
+            '"ips":1,"chip":"ESP32-P4","psram_mb":32,"minor":5}'
+        )
+        self.assertLessEqual(
+            len(longest_state_json),
+            255,
+            f"Hardware manifest state JSON is {len(longest_state_json)} chars (> 255 limit)",
+        )
+        parsed = json.loads(longest_state_json)
+        self.assertEqual(parsed["v"], 2)
+        self.assertEqual(parsed["minor"], 5)
 
 
 if __name__ == "__main__":

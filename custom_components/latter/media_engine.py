@@ -32,14 +32,14 @@ def resolve_esphome_local_speaker(
     hass: HomeAssistant, device_slug: str, esphome_device_id: str | None = None
 ) -> str:
     """Resolve the on-device media_player entity for the bound ESPHome node, or '' if the device has no speaker."""
-    dev_id = get_bound_esphome_device(hass, esphome_device_id, fallback_slug=device_slug)
-    if dev_id:
+    dev = get_bound_esphome_device(hass, esphome_device_id, fallback_slug=device_slug)
+    if dev is not None:
         by_suffix = find_device_entity_by_suffix(
-            hass, dev_id, "media_player", ("music", "speaker", "media_player")
+            hass, dev.id, "media_player", ("_music", "_speaker", "_media_player")
         )
         if by_suffix:
             return by_suffix
-        for entry in device_entities(hass, dev_id, domain="media_player"):
+        for entry in device_entities(hass, dev.id, domain="media_player"):
             if entry.platform == "esphome":
                 return entry.entity_id
 
