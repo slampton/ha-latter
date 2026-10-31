@@ -87,27 +87,35 @@ def device_entities(
     hass: HomeAssistant,
     device_or_id: dr.DeviceEntry | str | None,
     domain: str | None = None,
+    fallback_slug: str = "",
+    include_disabled: bool = False,
 ) -> list[er.RegistryEntry]:
-    """Return all enabled entity registry entries belonging to the bound ESPHome device."""
-    if not device_or_id:
-        return []
+    """Return all entity registry entries belonging to the bound ESPHome device."""
     ent_reg = er.async_get(hass)
     dev_reg = dr.async_get(hass)
+    dev: dr.DeviceEntry | None = None
+    target_id = ""
+
     if isinstance(device_or_id, dr.DeviceEntry):
-        dev: dr.DeviceEntry | None = device_or_id
+        dev = device_or_id
         target_id = dev.id
-    else:
-        target_id = str(device_or_id).strip()
-        if not target_id:
-            return []
+    elif isinstance(device_or_id, str) and device_or_id.strip():
+        target_id = device_or_id.strip()
         dev = dev_reg.async_get(target_id)
+    elif fallback_slug:
+        dev = get_bound_esphome_device(hass, None, fallback_slug=fallback_slug)
+        if dev is not None:
+            target_id = dev.id
+
+    if not target_id:
+        return []
     if dev is not None and dev.via_device_id and any(i[0] == DOMAIN for i in dev.identifiers):
         target_id = dev.via_device_id
 
     entries = [
         e
         for e in er.async_entries_for_device(ent_reg, target_id)
-        if not e.disabled_by
+        if include_disabled or not e.disabled_by
     ]
     if domain:
         return [e for e in entries if e.domain == domain]
@@ -118,10 +126,13 @@ def find_device_entity_by_suffix(
     hass: HomeAssistant,
     device_or_id: dr.DeviceEntry | str | None,
     domain: str,
-    suffixes: tuple[str, ...],
+    suffixes: tuple[str, ...] | list[str],
+    fallback_slug: str = "",
 ) -> str | None:
     """Find an enabled entity on the bound device in `domain` matching one of `suffixes` in priority order."""
-    entries = device_entities(hass, device_or_id, domain=domain)
+    entries = device_entities(
+        hass, device_or_id, domain=domain, fallback_slug=fallback_slug
+    )
     if not entries:
         return None
     for sfx in suffixes:
