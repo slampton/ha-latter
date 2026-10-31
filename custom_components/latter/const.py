@@ -10,7 +10,7 @@ from homeassistant.util.hass_dict import HassKey
 
 DOMAIN: Final = "latter"
 LATTER_DATA_KEY: HassKey[dict[str, Any]] = HassKey(DOMAIN)
-INTEGRATION_VERSION: Final = "2.2.0"
+INTEGRATION_VERSION: Final = "2.2.1"
 PLATFORMS: Final[list[Platform]] = [Platform.SENSOR, Platform.BINARY_SENSOR]
 
 STORAGE_VERSION: Final = 1
