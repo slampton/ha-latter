@@ -970,24 +970,34 @@ class LatterBleFabric:
         motion_on: list[str] = []
         door_closed: list[str] = []
         available: list[dict[str, str]] = []
+        candidate_entries: list[er.RegistryEntry] = []
         seen_eids: set[str] = set()
 
-        for entry in _iter_entities(ent_reg):
+        for entry in er.async_entries_for_area(ent_reg, area_id):
+            if entry.entity_id not in seen_eids:
+                seen_eids.add(entry.entity_id)
+                candidate_entries.append(entry)
+
+        for dev in dr.async_entries_for_area(dev_reg, area_id):
+            for entry in er.async_entries_for_device(ent_reg, dev.id):
+                if not entry.area_id and entry.entity_id not in seen_eids:
+                    seen_eids.add(entry.entity_id)
+                    candidate_entries.append(entry)
+
+        for eid in explicit_set:
+            if eid not in seen_eids:
+                entry = ent_reg.async_get(eid)
+                if entry is not None:
+                    seen_eids.add(eid)
+                    candidate_entries.append(entry)
+
+        for entry in candidate_entries:
             if entry.disabled_by or entry.domain != "binary_sensor":
                 continue
             eid = entry.entity_id
             if "ble_occupancy" in eid or (
                 entry.unique_id and str(entry.unique_id).startswith("latter_area_ble_occupancy_")
             ):
-                continue
-
-            ent_area = entry.area_id
-            if not ent_area and entry.device_id:
-                dev_obj = dev_reg.async_get(entry.device_id)
-                if dev_obj is not None:
-                    ent_area = dev_obj.area_id
-
-            if ent_area != area_id and eid not in explicit_set:
                 continue
 
             st = self.hass.states.get(eid)
@@ -1000,7 +1010,6 @@ class LatterBleFabric:
             if dclass not in ("occupancy", "presence", "motion", "moving", "door", "opening") and eid not in explicit_set:
                 continue
 
-            seen_eids.add(eid)
             state_str = str(st.state if st else "unknown").lower()
             friendly = (
                 str(st.attributes.get("friendly_name") if st else "")

@@ -86,6 +86,13 @@ class LatterAreaBleOccupancyBinarySensor(BinarySensorEntity):
         self._attr_name = f"{area_name} BLE Occupancy"
         self._attr_unique_id = f"latter_area_ble_occupancy_{area_id}"
         self._attr_suggested_area = area_name
+        self._cached_occ: dict[str, Any] | None = None
+
+    def _get_occ(self) -> dict[str, Any]:
+        """Return cached or freshly evaluated occupancy snapshot for this Area."""
+        if self._cached_occ is None:
+            self._cached_occ = get_ble_fabric(self.hass).get_area_occupancy(self._area_id)
+        return self._cached_occ
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -96,6 +103,7 @@ class LatterAreaBleOccupancyBinarySensor(BinarySensorEntity):
         """Subscribe to real-time updates from the shared Latter BLE Fabric."""
         await super().async_added_to_hass()
         fabric = get_ble_fabric(self.hass)
+        self._cached_occ = fabric.get_area_occupancy(self._area_id)
         self.async_on_remove(
             fabric.register_occupancy_listener(self._handle_occupancy_update)
         )
@@ -103,18 +111,19 @@ class LatterAreaBleOccupancyBinarySensor(BinarySensorEntity):
     @callback
     def _handle_occupancy_update(self) -> None:
         """Push updated occupancy state to Home Assistant."""
+        self._cached_occ = get_ble_fabric(self.hass).get_area_occupancy(self._area_id)
         self.async_write_ha_state()
 
     @property
     def is_on(self) -> bool:
         """Return True if any tracked BLE beacon or device is currently in this area."""
-        occ = get_ble_fabric(self.hass).get_area_occupancy(self._area_id)
+        occ = self._get_occ()
         return bool(occ["is_occupied"])
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return detailed occupant list, sensor fusion status, and strongest signal telemetry for the area."""
-        occ = get_ble_fabric(self.hass).get_area_occupancy(self._area_id)
+        occ = self._get_occ()
         return {
             "area_id": self._area_id,
             "area_name": self._area_name,
