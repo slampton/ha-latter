@@ -23,7 +23,7 @@ from .browse_engine import (
     async_browse_media_items,
     is_music_assistant_player,
 )
-from .const import normalize_device_slug
+from .const import DOMAIN, normalize_device_slug
 
 _LOGGER = logging.getLogger(__name__)
 
