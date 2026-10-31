@@ -150,6 +150,17 @@ TRANSFER_HOLD_WINDOW_SECONDS = 4.5
 VOLUME_FEATURE_FLAGS = 4 | 8 | 1024  # VOLUME_SET | VOLUME_MUTE | VOLUME_STEP
 
 
+def _pack_v3_payload(*fields: Any) -> str:
+    """Pack domain state fields into an atomic Protocol v3 Unit-Separator ('\\x1f') string."""
+    return "\x1f".join(
+        ["v3"]
+        + [
+            str(f if f is not None else "").replace("\x1f", " ").replace("\x1e", " ")
+            for f in fields
+        ]
+    )
+
+
 def _get_esphome_device_current_area(
     hass: HomeAssistant, device_slug: str
 ) -> str | None:
@@ -285,6 +296,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.calendar_events: list[dict[str, Any]] = []
 
         # Smart Device Notification & Camera Peephole Alert State
+        self.rev: int = 1
         self.alert_id: int = 0
         self.alert_title: str = ""
         self.alert_message: str = ""
@@ -958,6 +970,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "camera_url": self.alert_camera_url,
             },
         )
+        self._schedule_persist_runtime_state()
         self._notify_listeners()
 
     def build_wallpaper_url(self) -> str:
@@ -988,9 +1001,11 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     @callback
     def _schedule_persist_runtime_state(self) -> None:
-        """Persist runtime speaker, area, remote slot, and last active track metadata to HA Store."""
+        """Persist runtime speaker, area, remote slot, monotonic rev, alert_id, and last active track metadata to HA Store."""
         self._store.async_delay_save(
             lambda: {
+                "rev": self.rev,
+                "alert_id": self.alert_id,
                 "active_speaker": self.active_speaker,
                 "last_speaker": self.last_speaker,
                 "active_area_id": self.active_area_id or "",
@@ -1036,6 +1051,8 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         try:
             stored = await self._store.async_load()
             if isinstance(stored, dict):
+                self.rev = max(1, int(stored.get("rev") or 1))
+                self.alert_id = max(0, int(stored.get("alert_id") or 0))
                 saved_spk = str(stored.get("active_speaker") or "").strip()
                 if saved_spk:
                     self.active_speaker = saved_spk
@@ -1451,9 +1468,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._notify_listeners()
         if self.on_area_changed_push_slots is not None:
             await self.on_area_changed_push_slots(self)
-        await asyncio.sleep(2.0)
-        if self.on_area_changed_push_slots is not None:
-            await self.on_area_changed_push_slots(self)
 
     @callback
     def _async_on_service_call_event(self, event: Event) -> None:
@@ -1837,10 +1851,12 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     @callback
     def async_notify_listeners(self) -> None:
-        """Invalidate per-tick payload caches and notify all registered CoordinatorEntity / callback listeners."""
+        """Advance monotonic revision, invalidate per-tick payload caches, and notify all registered listeners."""
+        self.rev += 1
         self._cached_media_payload = None
         self._cached_area_payload = None
         self._cached_remote_payload = None
+        self._schedule_persist_runtime_state()
         self.async_update_listeners()
 
     @callback
@@ -2219,6 +2235,10 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         }
         if populated_count == 0 or not slots:
             attrs["slots_summary"] = "NONE"
+            attrs["rev"] = self.rev
+            attrs["payload"] = _pack_v3_payload(
+                self.rev, clamped_active, 0, "NONE"
+            )
             res = ("None", attrs)
             self._cached_remote_payload = (now_m, res)
             return res
@@ -2237,6 +2257,10 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         active_slot_data = slots[clamped_active - 1]
         state_str = active_slot_data["name"] if populated_count > 0 else "None"
         attrs["slots_summary"] = ";".join(summary_parts)
+        attrs["rev"] = self.rev
+        attrs["payload"] = _pack_v3_payload(
+            self.rev, clamped_active, populated_count, attrs["slots_summary"]
+        )
         res = (state_str, attrs)
         self._cached_remote_payload = (now_m, res)
         return res
@@ -2381,7 +2405,48 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "theme_color_hex": self.device_custom_color,
             "custom_palettes": self.custom_palettes,
             "hardware_manifest": self.hardware_manifest,
+            "rev": self.rev,
         }
+        area_attrs["payload"] = _pack_v3_payload(
+            self.rev,
+            area_attrs["area_id"],
+            area_name,
+            area_attrs["site_id"],
+            1 if self.vpn_enabled else 0,
+            area_attrs["vpn_client_ip"],
+            area_attrs["ble_closest_proxy"],
+            area_attrs["dock_apps"],
+            area_attrs["wallpaper_url"],
+            area_attrs["theme_color_hex"],
+            area_attrs["area_temp"],
+            area_attrs["area_humidity"],
+            lights_on,
+            covers_open,
+            area_attrs["alarm_entity"],
+            area_attrs["alarm_state"],
+            area_attrs["thermostat_entity"],
+            area_attrs["thermostat_state"],
+            area_attrs["thermostat_temp"],
+            area_attrs["thermostat_current_temp"],
+            area_attrs["lock_entity"],
+            area_attrs["lock_state"],
+            area_attrs["garage_entity"],
+            area_attrs["garage_state"],
+            area_attrs["vacuum_entity"],
+            area_attrs["vacuum_state"],
+            area_attrs["camera_snapshot_url"],
+            area_attrs["cameras_summary"],
+            area_attrs["doorbell_talk_state"],
+            area_attrs["intercom_targets_summary"],
+            area_attrs["custom_bindings_summary"],
+            self.alert_id,
+            self.alert_title,
+            self.alert_message,
+            self.alert_priority,
+            self.alert_duration,
+            1 if self.alert_chime else 0,
+            self.alert_camera_url,
+        )
         res = (area_name, area_attrs)
         self._cached_area_payload = (now_m, res)
         return res
@@ -2582,16 +2647,22 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
 
         if state_obj is None or state_obj.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+            idle_title = self.last_media_title or "Idle"
+            idle_artist = self.last_media_artist or "None"
+            idle_album = self.last_media_album or "None"
+            idle_dur = round(self.last_media_duration, 1)
+            idle_pos = round(self.last_media_position, 1)
+            idle_type = self.last_media_type or "music"
             res = (
                 STATE_OFF,
                 {
-                    "title": self.last_media_title or "Idle",
-                    "artist": self.last_media_artist or "None",
-                    "album": self.last_media_album or "None",
-                    "duration": round(self.last_media_duration, 1),
-                    "position": round(self.last_media_position, 1),
+                    "title": idle_title,
+                    "artist": idle_artist,
+                    "album": idle_album,
+                    "duration": idle_dur,
+                    "position": idle_pos,
                     "volume": 0.7,
-                    "media_type": self.last_media_type or "music",
+                    "media_type": idle_type,
                     "supported_features": 0,
                     "art_url": "none",
                     "active_speaker": self.active_speaker,
@@ -2599,6 +2670,25 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "last_speaker": self.last_speaker,
                     "local_speaker": self.local_speaker,
                     "volume_entity": vol_target,
+                    "rev": self.rev,
+                    "payload": _pack_v3_payload(
+                        self.rev,
+                        STATE_OFF,
+                        idle_title,
+                        idle_artist,
+                        idle_album,
+                        idle_dur,
+                        idle_pos,
+                        0.7,
+                        idle_type,
+                        0,
+                        "none",
+                        self.active_speaker,
+                        fallback_spk_name,
+                        self.last_speaker,
+                        self.local_speaker,
+                        vol_target,
+                    ),
                 },
             )
             self._cached_media_payload = (now_m, res)
@@ -2737,15 +2827,18 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         speaker_name = str(attrs.get("friendly_name") or fallback_spk_name)
 
+        dur_r = round(duration, 1)
+        pos_r = round(position, 1)
+        vol_r = round(volume, 2)
         res = (
             state,
             {
                 "title": title,
                 "artist": artist,
                 "album": album,
-                "duration": round(duration, 1),
-                "position": round(position, 1),
-                "volume": round(volume, 2),
+                "duration": dur_r,
+                "position": pos_r,
+                "volume": vol_r,
                 "media_type": media_type,
                 "supported_features": supported_features,
                 "art_url": art_url,
@@ -2754,6 +2847,25 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "last_speaker": self.last_speaker,
                 "local_speaker": self.local_speaker,
                 "volume_entity": vol_target,
+                "rev": self.rev,
+                "payload": _pack_v3_payload(
+                    self.rev,
+                    state,
+                    title,
+                    artist,
+                    album,
+                    dur_r,
+                    pos_r,
+                    vol_r,
+                    media_type,
+                    supported_features,
+                    art_url,
+                    self.active_speaker,
+                    speaker_name,
+                    self.last_speaker,
+                    self.local_speaker,
+                    vol_target,
+                ),
             },
         )
         self._cached_media_payload = (now_m, res)
@@ -2904,14 +3016,33 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             segments.append(f"{day_label}:{h_int}:{l_int}:{f_cond}")
 
         self.forecast_string = ";".join(segments) if segments else "NONE"
+        cond_str = str(state_obj.state)
+        temp_r = round(temp, 1)
+        hum_r = round(humidity, 1)
+        ws_r = round(wind_speed, 1)
+        wb_r = round(wind_bearing, 1)
+        hi_r = round(high, 1)
+        lo_r = round(low, 1)
         self.weather_attributes = {
-            "condition": str(state_obj.state),
-            "temperature": round(temp, 1),
-            "humidity": round(humidity, 1),
-            "wind_speed": round(wind_speed, 1),
-            "wind_bearing": round(wind_bearing, 1),
-            "high": round(high, 1),
-            "low": round(low, 1),
+            "condition": cond_str,
+            "temperature": temp_r,
+            "humidity": hum_r,
+            "wind_speed": ws_r,
+            "wind_bearing": wb_r,
+            "high": hi_r,
+            "low": lo_r,
             "weather_entity": weather_ent,
+            "rev": self.rev,
+            "payload": _pack_v3_payload(
+                self.rev,
+                cond_str,
+                temp_r,
+                hum_r,
+                ws_r,
+                wb_r,
+                hi_r,
+                lo_r,
+                self.forecast_string,
+            ),
         }
         self._notify_listeners()

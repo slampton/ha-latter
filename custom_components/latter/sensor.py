@@ -128,6 +128,8 @@ class _BaseLatterSensor(SensorEntity):
             "entities_summary",
             "events",
             "hardware_manifest",
+            "payload",
+            "rev",
             "slots_summary",
             "wallpaper_url",
         }
@@ -244,6 +246,8 @@ class LatterCalendarAgendaSensor(_BaseLatterSensor):
             "event_count": len(self.coordinator.calendar_events),
             "events": self.coordinator.calendar_events,
             "calendars": self.coordinator.calendar_entities,
+            "rev": self.coordinator.rev,
+            "payload": self.coordinator.calendar_agenda_string,
         }
 
 

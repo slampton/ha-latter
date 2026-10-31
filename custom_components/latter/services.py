@@ -210,25 +210,27 @@ def _resolve_esphome_action(
 
 def _detect_esphome_slot_capacity(
     hass: HomeAssistant, esphome_action: str | None, default_slots: int = 5
-) -> int:
-    """Inspect the ESPHome service schema to see how many sN_name slots the firmware action accepts (supports 1..20)."""
+) -> tuple[int, bool]:
+    """Inspect the ESPHome service schema and return (slot_capacity, is_contract_v3)."""
     if not esphome_action:
-        return default_slots
+        return default_slots, False
     try:
         esphome_services = hass.services.async_services().get("esphome", {})
         svc_obj = esphome_services.get(esphome_action)
         schema = getattr(svc_obj, "schema", None)
         if schema is not None and hasattr(schema, "schema") and isinstance(schema.schema, dict):
             keys = {str(k) for k in schema.schema}
+            if "slots" in keys:
+                return default_slots, True
             max_slot = 0
             for idx in range(1, 21):
                 if f"s{idx}_name" in keys:
                     max_slot = idx
             if max_slot > 0:
-                return max_slot
+                return max_slot, False
     except Exception:  # noqa: BLE001
         pass
-    return default_slots
+    return default_slots, False
 
 
 async def async_push_browse_slots(
@@ -240,7 +242,7 @@ async def async_push_browse_slots(
     items: list[dict[str, Any]],
     preferred_suffix: str = "set_browse_slots",
 ) -> None:
-    """Paginate items for any GUI page_size (1..20) and push to esphome.<slug>_<suffix>."""
+    """Paginate items for any GUI page_size (1..20) and push to esphome.<slug>_<suffix> (Contract v3 or positional)."""
     esphome_action = _resolve_esphome_action(hass, device_slug, preferred_suffix)
     include_levels = preferred_suffix == "set_area_slots" and esphome_action is not None
 
@@ -249,8 +251,16 @@ async def async_push_browse_slots(
             hass, device_slug, "set_browse_slots"
         )
 
-    default_cap = 3 if include_levels else 5
-    slot_capacity = _detect_esphome_slot_capacity(
+    coord = resolve_coordinator(hass, device_slug, allow_fallback=False)
+    manifest_slots = 0
+    if coord is not None:
+        try:
+            manifest_slots = int(coord.hardware_manifest.get("slot_count") or 0)
+        except (ValueError, TypeError):
+            manifest_slots = 0
+
+    default_cap = manifest_slots if manifest_slots >= 1 else (3 if include_levels else 5)
+    slot_capacity, is_contract_v3 = _detect_esphome_slot_capacity(
         hass, esphome_action, default_slots=default_cap
     )
     eff_page_size = max(1, min(slot_capacity, int(page_size)))
@@ -260,30 +270,46 @@ async def async_push_browse_slots(
     start_idx = (page - 1) * eff_page_size
     page_slice = items[start_idx : start_idx + eff_page_size]
 
-    payload: dict[str, Any] = {
-        "mode": str(mode),
-        "page": int(page),
-        "total_pages": int(total_pages),
-        "has_prev": bool(page > 1),
-        "has_next": bool(page < total_pages),
-    }
-
-    for idx in range(1, slot_capacity + 1):
-        if idx <= len(page_slice):
-            slot = page_slice[idx - 1]
-            payload[f"s{idx}_name"] = str(slot.get("name", ""))[:64]
-            payload[f"s{idx}_id"] = str(slot.get("id", ""))[:255]
-            payload[f"s{idx}_type"] = str(slot.get("type", mode))[:32]
-            payload[f"s{idx}_active"] = bool(slot.get("active", False))
-            if include_levels:
-                payload[f"s{idx}_level"] = int(slot.get("level", -1))
-        else:
-            payload[f"s{idx}_name"] = ""
-            payload[f"s{idx}_id"] = ""
-            payload[f"s{idx}_type"] = ""
-            payload[f"s{idx}_active"] = False
-            if include_levels:
-                payload[f"s{idx}_level"] = -1
+    if is_contract_v3:
+        packed_rows: list[str] = []
+        for slot in page_slice:
+            s_name = str(slot.get("name", ""))[:64].replace("\x1f", " ").replace("\x1e", " ")
+            s_id = str(slot.get("id", ""))[:255].replace("\x1f", " ").replace("\x1e", " ")
+            s_type = str(slot.get("type", mode))[:32].replace("\x1f", " ").replace("\x1e", " ")
+            s_act = 1 if bool(slot.get("active", False)) else 0
+            s_lvl = int(slot.get("level", -1)) if include_levels else -1
+            packed_rows.append(f"{s_name}\x1f{s_id}\x1f{s_type}\x1f{s_act}\x1f{s_lvl}")
+        payload: dict[str, Any] = {
+            "contract": 3,
+            "mode": str(mode),
+            "page": int(page),
+            "total": int(total_pages),
+            "slots": "\x1e".join(packed_rows),
+        }
+    else:
+        payload = {
+            "mode": str(mode),
+            "page": int(page),
+            "total_pages": int(total_pages),
+            "has_prev": bool(page > 1),
+            "has_next": bool(page < total_pages),
+        }
+        for idx in range(1, slot_capacity + 1):
+            if idx <= len(page_slice):
+                slot = page_slice[idx - 1]
+                payload[f"s{idx}_name"] = str(slot.get("name", ""))[:64]
+                payload[f"s{idx}_id"] = str(slot.get("id", ""))[:255]
+                payload[f"s{idx}_type"] = str(slot.get("type", mode))[:32]
+                payload[f"s{idx}_active"] = bool(slot.get("active", False))
+                if include_levels:
+                    payload[f"s{idx}_level"] = int(slot.get("level", -1))
+            else:
+                payload[f"s{idx}_name"] = ""
+                payload[f"s{idx}_id"] = ""
+                payload[f"s{idx}_type"] = ""
+                payload[f"s{idx}_active"] = False
+                if include_levels:
+                    payload[f"s{idx}_level"] = -1
 
     if esphome_action is None:
         _LOGGER.debug(
