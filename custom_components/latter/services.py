@@ -16,6 +16,7 @@ from homeassistant.util import dt as dt_util
 
 from .browse_engine import async_browse_media_items, is_music_assistant_player
 from .calendar_engine import async_fetch_calendar_agenda
+from .media_engine import async_announce_on_targets, resolve_assist_satellite_entity
 from .const import (
     CONF_ALARM_ENTITY,
     DEFAULT_PAGE_SIZE,
@@ -1023,65 +1024,14 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         if not speakers:
             return
 
-        if media_url:
-            ma_speakers = [
-                s for s in speakers
-                if hass.states.get(s) and is_music_assistant_player(hass, hass.states.get(s))
-            ]
-            other_speakers = [s for s in speakers if s not in ma_speakers]
-
-            if ma_speakers and hass.services.has_service("music_assistant", "play_announcement"):
-                await hass.services.async_call(
-                    "music_assistant",
-                    "play_announcement",
-                    {
-                        ATTR_ENTITY_ID: ma_speakers,
-                        "url": media_url,
-                    },
-                    blocking=False,
-                )
-            else:
-                other_speakers = speakers
-
-            if other_speakers:
-                await hass.services.async_call(
-                    "media_player",
-                    "play_media",
-                    {
-                        ATTR_ENTITY_ID: other_speakers,
-                        "media_content_id": media_url,
-                        "media_content_type": "music",
-                        "announce": True,
-                    },
-                    blocking=False,
-                )
-            return
-
-        if message:
-            if not tts_entity:
-                tts_states = hass.states.async_all("tts")
-                if tts_states:
-                    tts_entity = tts_states[0].entity_id
-
-            if tts_entity and hass.services.has_service("tts", "speak"):
-                await hass.services.async_call(
-                    "tts",
-                    "speak",
-                    {
-                        ATTR_ENTITY_ID: tts_entity,
-                        "media_player_entity_id": speakers,
-                        "message": message,
-                        "cache": False,
-                    },
-                    blocking=False,
-                )
-            elif hass.services.has_service("tts", "cloud_say"):
-                await hass.services.async_call(
-                    "tts",
-                    "cloud_say",
-                    {ATTR_ENTITY_ID: speakers, "message": message},
-                    blocking=False,
-                )
+        await async_announce_on_targets(
+            hass,
+            speakers=speakers,
+            message=message,
+            media_url=media_url,
+            tts_entity=tts_entity,
+            blocking=False,
+        )
 
     hass.services.async_register(
         DOMAIN,
@@ -1360,6 +1310,17 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                     )
                 except Exception as err:  # noqa: BLE001
                     _LOGGER.debug("Direct esphome.%s call skipped: %s", esp_notify_svc, err)
+
+            if _parse_bool(data.get("announce") or data.get("speak"), default=False) and message:
+                sat_ent = resolve_assist_satellite_entity(hass, coord.local_speaker, coord)
+                target_list = [sat_ent] if sat_ent else ([coord.local_speaker] if coord.local_speaker else [])
+                if target_list:
+                    await async_announce_on_targets(
+                        hass,
+                        speakers=target_list,
+                        message=message,
+                        blocking=False,
+                    )
 
     hass.services.async_register(
         DOMAIN,

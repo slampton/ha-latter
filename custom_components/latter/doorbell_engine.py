@@ -32,6 +32,7 @@ from .const import (
 )
 from .http import LatterCameraSnapshotView
 from .area_engine import resolve_entity_area_id
+from .media_engine import async_announce_on_targets
 from .sip_engine import get_sip_engine
 
 _LOGGER = logging.getLogger(__name__)
@@ -738,20 +739,15 @@ async def async_play_talkback_clip_to_doorbell(
             f"?v={int(time.time() * 1000)}&sig={sig}"
         )
         try:
-            await hass.services.async_call(
-                "media_player",
-                "play_media",
-                {
-                    ATTR_ENTITY_ID: talkback_mp,
-                    "media_content_id": clip_url,
-                    "media_content_type": "music",
-                    "announce": True,
-                },
+            await async_announce_on_targets(
+                hass,
+                speakers=[talkback_mp],
+                media_url=clip_url,
                 blocking=False,
             )
             return True
         except Exception as err:  # noqa: BLE001
-            _LOGGER.debug("Doorbell talkback play_media failed on %s: %s", talkback_mp, err)
+            _LOGGER.debug("Doorbell talkback announce failed on %s: %s", talkback_mp, err)
 
     if cam_ent and wav_bytes:
         if await _async_push_go2rtc_or_onvif_backchannel(hass, cam_ent, wav_bytes):
@@ -971,34 +967,16 @@ async def async_execute_doorbell_intercom(
             tts_states = hass.states.async_all("tts")
             tts_ent = tts_states[0].entity_id if tts_states else ""
 
-            if tts_ent and hass.services.has_service("tts", "speak"):
-                try:
-                    await hass.services.async_call(
-                        "tts",
-                        "speak",
-                        {
-                            ATTR_ENTITY_ID: tts_ent,
-                            "media_player_entity_id": [talkback_mp],
-                            "message": stabilized_msg,
-                            "cache": False,
-                        },
-                        blocking=True,
-                    )
-                except Exception as err:  # noqa: BLE001
-                    _LOGGER.debug("tts.speak to doorbell %s failed: %s", talkback_mp, err)
-            elif hass.services.has_service("tts", "cloud_say"):
-                try:
-                    await hass.services.async_call(
-                        "tts",
-                        "cloud_say",
-                        {
-                            ATTR_ENTITY_ID: talkback_mp,
-                            "message": stabilized_msg,
-                        },
-                        blocking=True,
-                    )
-                except Exception as err:  # noqa: BLE001
-                    _LOGGER.debug("tts.cloud_say to doorbell %s failed: %s", talkback_mp, err)
+            try:
+                await async_announce_on_targets(
+                    hass,
+                    speakers=[talkback_mp],
+                    message=stabilized_msg,
+                    tts_entity=tts_ent,
+                    blocking=True,
+                )
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.debug("Doorbell TTS announce to %s failed: %s", talkback_mp, err)
 
         est_duration = max(2.2, min(8.0, len(spoken_text) * 0.085 + 1.2))
         dsp.record_talkback_activity()

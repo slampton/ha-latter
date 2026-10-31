@@ -325,3 +325,153 @@ async def async_play_media_with_ma_fallback(
         },
         blocking=False,
     )
+
+
+def resolve_assist_satellite_entity(
+    hass: HomeAssistant,
+    speaker_or_device_id: str | None = None,
+    coordinator: Any = None,
+) -> str | None:
+    """Resolve an assist_satellite.* entity for a speaker entity, HA device_id, or LatterCoordinator."""
+    ent_reg = er.async_get(hass)
+    cand_dev_ids: list[str] = []
+
+    if coordinator is not None:
+        esp_dev_id = getattr(coordinator, "esphome_device_id", None)
+        if esp_dev_id:
+            cand_dev_ids.append(str(esp_dev_id))
+
+    target = str(speaker_or_device_id or "").strip()
+    if target.startswith("assist_satellite."):
+        st = hass.states.get(target)
+        if st is not None and st.state not in ("unavailable", "unknown"):
+            return target
+
+    if target.startswith("media_player."):
+        reg_ent = ent_reg.async_get(target)
+        if reg_ent and reg_ent.device_id and reg_ent.device_id not in cand_dev_ids:
+            cand_dev_ids.append(reg_ent.device_id)
+        for val in hass.data.get(DOMAIN, {}).values():
+            if getattr(val, "local_speaker", None) == target or getattr(val, "active_speaker", None) == target:
+                c_dev_id = getattr(val, "esphome_device_id", None)
+                if c_dev_id and str(c_dev_id) not in cand_dev_ids:
+                    cand_dev_ids.append(str(c_dev_id))
+    elif target and "." not in target and target not in cand_dev_ids:
+        cand_dev_ids.append(target)
+
+    for dev_id in cand_dev_ids:
+        for entry in er.async_entries_for_device(ent_reg, dev_id):
+            if entry.domain == "assist_satellite" and not entry.disabled_by:
+                st = hass.states.get(entry.entity_id)
+                if st is not None and st.state not in ("unavailable", "unknown"):
+                    return entry.entity_id
+    return None
+
+
+async def async_announce_on_targets(
+    hass: HomeAssistant,
+    speakers: list[str],
+    message: str = "",
+    media_url: str = "",
+    tts_entity: str = "",
+    blocking: bool = False,
+) -> None:
+    """Route announcements through assist_satellite.announce first, falling back to media_player/tts for non-satellites."""
+    if not speakers or (not message and not media_url):
+        return
+
+    satellites: list[str] = []
+    fallback_speakers: list[str] = []
+    has_sat_announce = hass.services.has_service("assist_satellite", "announce")
+
+    for spk in speakers:
+        sat_ent = resolve_assist_satellite_entity(hass, spk) if has_sat_announce else None
+        if sat_ent:
+            if sat_ent not in satellites:
+                satellites.append(sat_ent)
+        elif spk not in fallback_speakers:
+            fallback_speakers.append(spk)
+
+    if satellites and has_sat_announce:
+        sat_payload: dict[str, Any] = {ATTR_ENTITY_ID: satellites}
+        if media_url:
+            sat_payload["media_id"] = media_url
+        else:
+            sat_payload["message"] = message
+        try:
+            await hass.services.async_call(
+                "assist_satellite",
+                "announce",
+                sat_payload,
+                blocking=blocking,
+            )
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("assist_satellite.announce failed on %s, falling back: %s", satellites, err)
+            for spk in speakers:
+                if spk not in fallback_speakers:
+                    fallback_speakers.append(spk)
+
+    if not fallback_speakers:
+        return
+
+    if media_url:
+        ma_speakers = [
+            s
+            for s in fallback_speakers
+            if hass.states.get(s) and is_music_assistant_player(hass, hass.states.get(s))
+        ]
+        other_speakers = [s for s in fallback_speakers if s not in ma_speakers]
+
+        if ma_speakers and hass.services.has_service("music_assistant", "play_announcement"):
+            await hass.services.async_call(
+                "music_assistant",
+                "play_announcement",
+                {
+                    ATTR_ENTITY_ID: ma_speakers,
+                    "url": media_url,
+                },
+                blocking=blocking,
+            )
+        else:
+            other_speakers = fallback_speakers
+
+        if other_speakers:
+            await hass.services.async_call(
+                "media_player",
+                "play_media",
+                {
+                    ATTR_ENTITY_ID: other_speakers,
+                    "media_content_id": media_url,
+                    "media_content_type": "music",
+                    "announce": True,
+                },
+                blocking=blocking,
+            )
+        return
+
+    if message:
+        if not tts_entity:
+            tts_states = hass.states.async_all("tts")
+            if tts_states:
+                tts_entity = tts_states[0].entity_id
+
+        if tts_entity and hass.services.has_service("tts", "speak"):
+            await hass.services.async_call(
+                "tts",
+                "speak",
+                {
+                    ATTR_ENTITY_ID: tts_entity,
+                    "media_player_entity_id": fallback_speakers,
+                    "message": message,
+                    "cache": False,
+                },
+                blocking=blocking,
+            )
+        elif hass.services.has_service("tts", "cloud_say"):
+            await hass.services.async_call(
+                "tts",
+                "cloud_say",
+                {ATTR_ENTITY_ID: fallback_speakers, "message": message},
+                blocking=blocking,
+            )
+
