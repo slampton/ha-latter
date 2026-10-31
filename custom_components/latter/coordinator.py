@@ -1968,6 +1968,15 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         speaker_entity_id = speaker_entity_id.strip()
         if not speaker_entity_id:
             return
+        if (
+            self.local_speaker
+            and speaker_entity_id
+            in (
+                f"media_player.{self.device_slug}",
+                f"media_player.{self.device_slug}_music",
+            )
+        ):
+            speaker_entity_id = self.local_speaker
 
         prev_speaker = self.active_speaker
         if speaker_entity_id != prev_speaker:
@@ -2444,6 +2453,11 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         vol_target = self.get_volume_target_entity(self.active_speaker)
         if vol_target and vol_target != self.active_speaker:
             tracked.append(vol_target)
+        ma_counterpart = _resolve_ma_counterpart_entity(
+            self.hass, self.active_speaker, self.device_slug
+        )
+        if ma_counterpart and ma_counterpart not in tracked:
+            tracked.append(ma_counterpart)
 
         self._unsub_speaker_state = async_track_state_change_event(
             self.hass,
@@ -2695,26 +2709,31 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         duration = float(attrs.get("media_duration") or 0)
         position = _interpolate_speaker_position(state_obj)
 
-        # When playing on the local ESPHome Sendspin speaker, media_player.<slug> often omits media_title in HA;
-        # fall back to the Music Assistant counterpart entity or the ESPHome Now Playing text_sensors!
-        if title == "Idle":
-            ma_counterpart = _resolve_ma_counterpart_entity(
-                self.hass, self.active_speaker, self.device_slug
+        # When playing on the local ESPHome Sendspin speaker, media_player.<slug>_music often omits media_title
+        # and entity_picture in HA; fall back to the Music Assistant counterpart entity or ESPHome text_sensors.
+        ma_counterpart = _resolve_ma_counterpart_entity(
+            self.hass, self.active_speaker, self.device_slug
+        )
+        ma_st = (
+            self.hass.states.get(ma_counterpart)
+            if ma_counterpart and ma_counterpart != self.active_speaker
+            else None
+        )
+        m_attrs: dict[str, Any] = dict(ma_st.attributes) if ma_st is not None else {}
+
+        if title == "Idle" and m_attrs.get("media_title"):
+            title = str(m_attrs.get("media_title") or title)
+            artist = str(
+                m_attrs.get("media_artist")
+                or m_attrs.get("media_series_title")
+                or m_attrs.get("media_album_artist")
+                or artist
             )
-            if ma_counterpart and ma_counterpart != self.active_speaker:
-                ma_st = self.hass.states.get(ma_counterpart)
-                if ma_st is not None and ma_st.attributes.get("media_title"):
-                    m_attrs = ma_st.attributes
-                    title = str(m_attrs.get("media_title") or title)
-                    artist = str(
-                        m_attrs.get("media_artist")
-                        or m_attrs.get("media_series_title")
-                        or m_attrs.get("media_album_artist")
-                        or artist
-                    )
-                    album = str(m_attrs.get("media_album_name") or album)
-                    duration = float(m_attrs.get("media_duration") or duration)
-                    position = _interpolate_speaker_position(ma_st) or position
+            album = str(m_attrs.get("media_album_name") or album)
+        if duration <= 0 and m_attrs.get("media_duration"):
+            duration = float(m_attrs.get("media_duration") or duration)
+        if position <= 0 and ma_st is not None:
+            position = _interpolate_speaker_position(ma_st) or position
 
         if title == "Idle" and self.active_speaker == self.local_speaker:
             t_st = self.hass.states.get(f"sensor.{self.device_slug}_now_playing_title")
@@ -2786,11 +2805,14 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             attrs.get("entity_picture_local")
             or attrs.get("entity_picture")
             or attrs.get("media_image_url")
+            or m_attrs.get("entity_picture_local")
+            or m_attrs.get("entity_picture")
+            or m_attrs.get("media_image_url")
             or ""
         )
         track_key = f"{title}|{artist}|{album}"
 
-        if self.active_speaker == self.local_speaker or state == STATE_OFF or title == "Idle":
+        if state == STATE_OFF or title == "Idle":
             art_url = "none"
         elif raw_pic:
             self.last_valid_raw_pic = raw_pic

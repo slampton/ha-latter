@@ -26,6 +26,7 @@ from .const import (
     normalize_device_slug,
 )
 from .coordinator import LatterCoordinator, resolve_coordinator
+from .media_engine import resolve_ma_counterpart_entity
 from .wallpaper_engine import render_builtin_preset_bytes
 
 _LOGGER = logging.getLogger(__name__)
@@ -137,6 +138,19 @@ async def _async_serve_speaker_artwork(
             or attrs.get("entity_picture")
             or attrs.get("media_image_url")
         )
+    if not pic_path:
+        ma_counterpart = resolve_ma_counterpart_entity(
+            hass, coordinator.active_speaker, coordinator.device_slug
+        )
+        if ma_counterpart and ma_counterpart != coordinator.active_speaker:
+            ma_st = hass.states.get(ma_counterpart)
+            if ma_st is not None:
+                m_attrs = ma_st.attributes
+                pic_path = (
+                    m_attrs.get("entity_picture_local")
+                    or m_attrs.get("entity_picture")
+                    or m_attrs.get("media_image_url")
+                )
     if not pic_path and coordinator.last_valid_raw_pic:
         pic_path = coordinator.last_valid_raw_pic
 
