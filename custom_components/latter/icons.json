@@ -61,7 +61,7 @@
     "intercom_broadcast": {
       "service": "mdi:bullhorn"
     },
-    "notify_device": {
+    "notify": {
       "service": "mdi:bell-ring"
     },
     "save_custom_color": {

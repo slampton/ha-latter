@@ -170,8 +170,8 @@ def _detect_hardware_defaults(hass: HomeAssistant, slug: str) -> dict[str, Any]:
     is_desk_4b = any(k in model_meta for k in ("desk_assistant", "desk-assistant", "4b", "720"))
     is_remote_35 = any(k in model_meta for k in ("remote_assistant", "remote-assistant", "p4_35", "320x480", "3.5"))
     is_mobile_216 = any(k in model_meta for k in ("mobile_assistant", "mobile-assistant", "216", "2.16", "480x480"))
-    is_watch_206 = "wrist" in model_meta or "206" in model_meta or "2.06" in model_meta
-    is_round_175 = "pocket" in model_meta or "175" in model_meta or "1.75" in model_meta
+    is_watch_206 = "410x502" in model_meta or "206" in model_meta or "2.06" in model_meta
+    is_round_175 = "466x466" in model_meta or "175" in model_meta or "1.75" in model_meta
 
     if is_desk_4b:
         return {
@@ -262,7 +262,7 @@ def _detect_hardware_defaults(hass: HomeAssistant, slug: str) -> dict[str, Any]:
 def _apply_onboarding_profile_and_defaults(
     hass: HomeAssistant, user_input: dict[str, Any], existing: dict[str, Any] | None = None
 ) -> dict[str, Any]:
-    """Merge auto-detected hardware defaults, roaming flag, optional Profile, and global household defaults."""
+    """Merge auto-detected hardware defaults, roaming flag, optional Profile, and global system defaults."""
     slug = normalize_device_slug(str(user_input.get(CONF_DEVICE_SLUG) or "esphome_device"))
     hw_defaults = _detect_hardware_defaults(hass, slug)
     matched_dev, _uid = _resolve_esphome_device_and_unique_id(hass, slug)
@@ -309,7 +309,7 @@ def _apply_onboarding_profile_and_defaults(
         if not is_roaming and merged.get(CONF_DEVICE_PROFILE) == "mobile_display":
             merged[CONF_DEVICE_PROFILE] = "stationary_display"
 
-    # Seed global household weather & alarm if not yet configured anywhere
+    # Seed global system weather & alarm if not yet configured anywhere
     domain_data = hass.data.get(DOMAIN, {})
     global_cfg = domain_data.get(DATA_GLOBAL_CONFIG, {})
     if not global_cfg.get(CONF_WEATHER_ENTITY) and not merged.get(CONF_WEATHER_ENTITY):

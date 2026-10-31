@@ -121,7 +121,7 @@ DEFAULT_DEVICE_GROUPS: list[dict[str, str]] = [
     {"id": "unassigned", "name": "Unassigned / General", "description": "Default group with no assumed profile or hardware settings"},
     {"id": "handhelds", "name": "Handheld Displays", "description": "Battery-powered mobile smart displays"},
     {"id": "bedrooms", "name": "Bedrooms", "description": "Nightstand & bedroom companion devices"},
-    {"id": "common_areas", "name": "Common Areas", "description": "Living room, kitchen & family room devices"},
+    {"id": "common_areas", "name": "Common Areas", "description": "Main living, kitchen & common area devices"},
     {"id": "wall_panels", "name": "Wall Panels", "description": "Stationary mounted control panels"},
     {"id": "sensors", "name": "Presence & Area Sensors", "description": "Headless mmWave, PIR, bed & environmental sensor nodes"},
 ]
@@ -590,7 +590,7 @@ async def async_restore_backup_bundle(
 
 
 def get_device_groups_and_profiles(hass: HomeAssistant) -> tuple[list[dict[str, str]], list[dict[str, Any]]]:
-    """Return (device_groups, saved_profiles) from Global Household Config, seeded with defaults."""
+    """Return (device_groups, saved_profiles) from Global System Config, seeded with defaults."""
     domain_data = hass.data.get(DOMAIN, {})
     global_cfg = domain_data.get(DATA_GLOBAL_CONFIG) or {}
 

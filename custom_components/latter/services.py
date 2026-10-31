@@ -29,7 +29,6 @@ from .const import (
     SERVICE_MEDIA_VOLUME,
     SERVICE_MUSIC_BROWSE,
     SERVICE_NOTIFY,
-    SERVICE_NOTIFY_DEVICE,
     SERVICE_REMOTE_ACTION,
     CONF_CUSTOM_PALETTES,
     CONF_DEVICE_CUSTOM_COLOR,
@@ -1208,7 +1207,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             extra=vol.ALLOW_EXTRA,
         ),
     )
-    async def _handle_notify_device(call: ServiceCall) -> None:
+    async def _handle_notify(call: ServiceCall) -> None:
         """Dispatch a toast notification, chime, and optional live camera peephole snapshot to one, occupied ('follow_me'), or all Latter displays."""
         data = call.data
         raw_target = str(
@@ -1351,13 +1350,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN,
         SERVICE_NOTIFY,
-        _handle_notify_device,
-        schema=notify_schema,
-    )
-    hass.services.async_register(
-        DOMAIN,
-        SERVICE_NOTIFY_DEVICE,
-        _handle_notify_device,
+        _handle_notify,
         schema=notify_schema,
     )
 

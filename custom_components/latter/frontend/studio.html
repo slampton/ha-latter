@@ -1425,7 +1425,7 @@
             <div class="form-grid-2" style="margin-bottom:12px;">
               <div>
                 <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px;">Category</label>
-                <select id="group-ctrl-cat-filter" onchange="renderFleetOverview(STATE.fleet_devices, STATE.fleet_controls, STATE.config)">
+                <select id="group-ctrl-cat-filter" onchange="renderFleetOverview(STATE.system_devices, STATE.system_controls, STATE.config)">
                   <option value="display">Display &amp; Appearance</option>
                   <option value="sleep">Sleep &amp; Wake</option>
                   <option value="voice">Voice Assistant</option>
@@ -1436,7 +1436,7 @@
               </div>
               <div>
                 <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px;">Target Devices</label>
-                <select id="group-ctrl-filter" onchange="renderFleetOverview(STATE.fleet_devices, STATE.fleet_controls, STATE.config)"></select>
+                <select id="group-ctrl-filter" onchange="renderFleetOverview(STATE.system_devices, STATE.system_controls, STATE.config)"></select>
               </div>
             </div>
             <div id="fleet-controls-list" class="native-controls-box"></div>
@@ -1561,7 +1561,7 @@
 
           <div class="card">
             <h3>Notification Tester</h3>
-            <p class="desc">Send a test on-screen alert (<code>latter.notify_device</code>) to a specific device.</p>
+            <p class="desc">Send a test on-screen alert (<code>latter.notify</code>) to a specific device.</p>
             <div class="field">
               <label>Target Device</label>
               <select id="test-alert-device"></select>
@@ -2623,7 +2623,7 @@ function setScope(scope, targetView=null) {
     switchView(targetView || "dashboard", null);
   }
   if (STATE) {
-    renderFleetOverview(STATE.fleet_devices, STATE.fleet_controls, STATE.config);
+    renderFleetOverview(STATE.system_devices, STATE.system_controls, STATE.config);
   }
 }
 
@@ -3206,7 +3206,7 @@ async function fleetSelect(entityIds, option) {
   const resp = await fetch(API_URL, {
     method: "POST",
     headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({command: "fleet_entity_action", entity_ids: entityIds, option})
+    body: JSON.stringify({command: "system_entity_action", entity_ids: entityIds, option})
   });
   if (resp.ok) {
     applyStateToDom(await resp.json(), false);
@@ -3218,7 +3218,7 @@ async function fleetToggle(entityIds, action) {
   const resp = await fetch(API_URL, {
     method: "POST",
     headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({command: "fleet_entity_action", entity_ids: entityIds, action})
+    body: JSON.stringify({command: "system_entity_action", entity_ids: entityIds, action})
   });
   if (resp.ok) {
     applyStateToDom(await resp.json(), false);
@@ -3230,7 +3230,7 @@ async function fleetNumber(entityIds, level) {
   const resp = await fetch(API_URL, {
     method: "POST",
     headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({command: "fleet_entity_action", entity_ids: entityIds, level})
+    body: JSON.stringify({command: "system_entity_action", entity_ids: entityIds, level})
   });
   if (resp.ok) {
     applyStateToDom(await resp.json(), false);
@@ -3262,7 +3262,7 @@ function renderActiveSurveyDeviceBars() {
   if (!STATE) return;
   renderAreaPresenceGrid();
   renderDiscoveredBleTable();
-  const allDevs = STATE.fleet_devices || [];
+  const allDevs = STATE.system_devices || [];
   const bleDevs = allDevs.filter(d => d.has_ble);
   const picker = document.getElementById("ble-survey-device-picker");
 
@@ -4107,7 +4107,7 @@ function toggleRemoteInGroup(gIdx, entId) {
 function renderDeviceRemoteAssignments() {
   const box = document.getElementById("device-remote-assignments-list");
   if (!box) return;
-  const devs = (STATE?.fleet_devices || []).filter(d => d.device_profile !== "ble_beacon" && d.device_profile !== "headless_node");
+  const devs = (STATE?.system_devices || []).filter(d => d.device_profile !== "ble_beacon" && d.device_profile !== "headless_node");
   if (!devs.length) {
     box.innerHTML = `<p style="color:var(--muted);font-size:12.5px;margin:0;">No display devices onboarded.</p>`;
     return;
@@ -4646,14 +4646,14 @@ function toggleDeviceTableSort(col) {
     DEVICE_SORT_ASC = true;
   }
   if (STATE) {
-    renderFleetOverview(STATE.fleet_devices, STATE.fleet_controls, STATE.config);
+    renderFleetOverview(STATE.system_devices, STATE.system_controls, STATE.config);
   }
 }
 
 function onFilterDeviceCategory(val) {
   DEVICE_CATEGORY_FILTER = val || "all";
   if (STATE) {
-    renderFleetOverview(STATE.fleet_devices, STATE.fleet_controls, STATE.config);
+    renderFleetOverview(STATE.system_devices, STATE.system_controls, STATE.config);
   }
 }
 
@@ -4900,7 +4900,7 @@ function applyStateToDom(data, forceFormUpdate=false) {
   document.getElementById("nav-btn-power")?.classList.toggle("hidden", !showPower);
 
   // Extract live Battery, Wi-Fi/BLE & IP/Target from current device's fleet entry
-  const curFleet = (data.fleet_devices || []).find(d => d.is_current) || {};
+  const curFleet = (data.system_devices || []).find(d => d.is_current) || {};
   const isBleOnly = cfg.device_profile === "ble_beacon";
   const isStationary = cfg.device_profile === "stationary_display";
   const winBleRow = (live.ble_survey_rows || []).find(r => r.is_winner);
@@ -4966,7 +4966,7 @@ function applyStateToDom(data, forceFormUpdate=false) {
   const activeEl = document.activeElement;
   if (!activeEl || !["SELECT", "INPUT"].includes(activeEl.tagName)) {
     renderCohesiveDeviceSections();
-    renderFleetOverview(data.fleet_devices, data.fleet_controls, cfg);
+    renderFleetOverview(data.system_devices, data.system_controls, cfg);
   }
 
   if (!INITIAL_FORM_LOADED || forceFormUpdate) {
@@ -4974,7 +4974,7 @@ function applyStateToDom(data, forceFormUpdate=false) {
     populateThemeDropdowns(data.ha_themes, cfg.web_theme || "ha_auto");
     applyTheme(cfg.web_theme || "ha_auto");
     renderCohesiveDeviceSections();
-    renderFleetOverview(data.fleet_devices, data.fleet_controls, cfg);
+    renderFleetOverview(data.system_devices, data.system_controls, cfg);
 
     document.getElementById("cfg-device_slug").value = cfg.device_slug || "";
     document.getElementById("cfg-companion_base_url").value = cfg.companion_base_url || "";

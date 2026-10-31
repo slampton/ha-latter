@@ -1,4 +1,4 @@
-"""Server-Side Web Companion Studio & REST API for Latter (Global Household + Fleet + Per-Device)."""
+"""Server-Side Web Companion Studio & REST API for Latter (Global System + Per-Device)."""
 
 from __future__ import annotations
 
@@ -283,7 +283,7 @@ def _get_all_coordinators(hass: HomeAssistant) -> list[LatterCoordinator]:
 async def _async_save_and_broadcast_global_config(
     hass: HomeAssistant, updates: dict[str, Any]
 ) -> None:
-    """Persist updates to `.storage/latter.household` and broadcast to all loaded device coordinators."""
+    """Persist updates to `.storage/latter.system` and broadcast to all loaded device coordinators."""
     domain_data = hass.data.setdefault(DOMAIN, {})
     global_cfg: dict[str, Any] = domain_data.setdefault(DATA_GLOBAL_CONFIG, {})
     global_cfg.update(updates)
@@ -294,8 +294,8 @@ async def _async_save_and_broadcast_global_config(
         await coord.async_on_global_config_updated()
 
 
-def _build_fleet_shared_controls(hass: HomeAssistant) -> list[dict[str, Any]]:
-    """Discover shared ESPHome select/switch/number controls across all onboarded devices for 1-click Fleet Sync."""
+def _build_system_shared_controls(hass: HomeAssistant) -> list[dict[str, Any]]:
+    """Discover shared ESPHome select/switch/number controls across all onboarded devices for 1-click System Sync."""
     coords = _get_all_coordinators(hass)
     by_label: dict[str, dict[str, Any]] = {}
     for coord in coords:
@@ -654,7 +654,7 @@ def _build_companion_state_payload(
     dev_reg = dr.async_get(hass)
     ent_reg = er.async_get(hass)
 
-    fleet_devices: list[dict[str, Any]] = []
+    system_devices: list[dict[str, Any]] = []
     for c in _get_all_coordinators(hass):
         c_area_name, c_area_attrs = c.get_area_context_payload()
         c_media_state, _ = c.get_active_media_payload()
@@ -736,10 +736,10 @@ def _build_companion_state_payload(
                 if "private_ble" in c.ble_target_address or "." in c.ble_target_address
                 else "BLE Beacon / Tag"
             )
-        elif "175" in m_low or "pocket" in m_low:
-            c_model_label = 'Pocket Assistant 1.75"'
-        elif "206" in m_low or "wrist" in m_low:
-            c_model_label = 'Wrist Assist 2.06"'
+        elif "175" in m_low or "466x466" in m_low:
+            c_model_label = 'Round Display 1.75"'
+        elif "206" in m_low or "410x502" in m_low:
+            c_model_label = 'Wearable Display 2.06"'
         elif "216" in m_low or "mobile_assistant" in m_low or "mobile-assistant" in m_low:
             c_model_label = 'Mobile Assistant 2.16"'
         elif "p4_35" in m_low or "p4-35" in m_low or "remote_assistant" in m_low or "remote-assistant" in m_low:
@@ -787,7 +787,7 @@ def _build_companion_state_payload(
                 else ("Online" if c_is_online else "Offline")
             )
 
-        fleet_devices.append(
+        system_devices.append(
             {
                 "entry_id": c.entry.entry_id,
                 "device_slug": c.device_slug,
@@ -886,14 +886,14 @@ def _build_companion_state_payload(
         "capabilities": device_capabilities,
         "internal_logs": internal_logs,
         "health_warnings": health_warnings,
-        "fleet_devices": fleet_devices,
+        "system_devices": system_devices,
         "unbridged_devices": unbridged_devices,
         "discovered_ble_devices": get_discovered_ble_candidates(
             hass,
             onboarded_slugs,
             {c.ble_target_address for c in _get_all_coordinators(hass) if c.ble_target_address},
         ),
-        "fleet_controls": _build_fleet_shared_controls(hass),
+        "system_controls": _build_system_shared_controls(hass),
         "device_groups": device_groups,
         "saved_profiles": saved_profiles,
         "vault_backups": vault_summaries,
@@ -1035,7 +1035,7 @@ class LatterCompanionApiView(HomeAssistantView):
         return web.json_response(payload)
 
     async def post(self, request: web.Request, entry_id: str) -> web.Response:
-        """Save updated configuration, manage wallpapers, or execute a live entity/device/fleet action."""
+        """Save updated configuration, manage wallpapers, or execute a live entity/device/system action."""
         coordinator = self._resolve_coordinator(request, entry_id)
         if coordinator is None:
             return web.json_response(
@@ -1153,7 +1153,7 @@ class LatterCompanionApiView(HomeAssistantView):
                 _build_companion_state_payload(self.hass, coordinator)
             )
 
-        if cmd == "fleet_entity_action":
+        if cmd == "system_entity_action":
             entity_ids = body.get("entity_ids") or []
             action = str(body.get("action") or "toggle").strip()
             level = body.get("level")
@@ -1200,7 +1200,7 @@ class LatterCompanionApiView(HomeAssistantView):
             cam_ent = coordinator.camera_entity if inc_cam else None
             await self.hass.services.async_call(
                 DOMAIN,
-                "notify_device",
+                "notify",
                 {
                     "target_device": target_slug,
                     "title": title,

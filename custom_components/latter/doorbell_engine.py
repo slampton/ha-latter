@@ -843,7 +843,7 @@ async def async_execute_doorbell_intercom(
             if target_str in ("all", "", c.device_slug):
                 await hass.services.async_call(
                     DOMAIN,
-                    "notify_device",
+                    "notify",
                     {
                         "device_slug": c.device_slug,
                         "title": f"Intercom: {caller_title}",

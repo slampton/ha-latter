@@ -455,7 +455,7 @@ class LatterSipEngine:
             if hasattr(val, "device_slug") and hasattr(val, "camera_entity"):
                 await self.hass.services.async_call(
                     DOMAIN,
-                    "notify_device",
+                    "notify",
                     {
                         "device_slug": val.device_slug,
                         "title": f"SIP Call: {self.remote_caller}",

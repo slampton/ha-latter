@@ -605,9 +605,9 @@ class LatterNativeBleTracker:
                 expected_minor = (
                     4 if any(k in hw_meta for k in ("p4_35", "p4-35", "320x480", "remote_assistant"))
                     else 3 if any(k in hw_meta for k in ("216", "480x480", "mobile_assistant"))
-                    else 2 if any(k in hw_meta for k in ("206", "410x502", "wrist_assist"))
+                    else 2 if any(k in hw_meta for k in ("206", "410x502", "s3_206"))
                     else 5 if any(k in hw_meta for k in ("p4_4b", "p4-4b", "4b", "720x720", "desk_assistant"))
-                    else 1 if any(k in hw_meta for k in ("175", "466x466", "pocket_assistant"))
+                    else 1 if any(k in hw_meta for k in ("175", "466x466", "s3_175c"))
                     else None
                 )
                 if minor_val is not None and expected_minor is not None:

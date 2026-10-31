@@ -661,65 +661,6 @@ notify:
         entity:
           domain: camera
 
-notify_device:
-  name: Send Smart Device Notification / Camera Peephole Alert
-  description: Dispatch an on-screen toast alert, optional chime, and optional live camera peephole snapshot to a specific device, occupied Areas ('follow_me' / 'occupied_areas'), a target person ('person.<slug>'), or all displays ('all').
-  fields:
-    target_device:
-      name: Target Device / Follow-Me Routing
-      description: ESPHome device slug, 'follow_me' / 'occupied_areas' (occupied Areas only), 'all' (all displays), or a 'person.*' entity ID.
-      required: false
-      selector:
-        text:
-    title:
-      name: Alert Title
-      description: Short heading for the notification banner (e.g., Front Doorbell, Laundry).
-      required: false
-      default: "Notification"
-      selector:
-        text:
-    message:
-      name: Alert Message
-      description: Body text of the notification (e.g., Someone is at the front door).
-      required: true
-      selector:
-        text:
-    priority:
-      name: Priority Level
-      description: Visual urgency of the alert (normal, warning, critical).
-      required: false
-      default: "normal"
-      selector:
-        select:
-          options:
-            - "normal"
-            - "warning"
-            - "critical"
-    duration:
-      name: Display Duration (Seconds)
-      description: How many seconds to show the alert overlay on screen.
-      required: false
-      default: 8
-      selector:
-        number:
-          min: 2
-          max: 60
-          mode: slider
-    chime:
-      name: Play Chime
-      description: Play an alert chime on the device speaker when the notification arrives.
-      required: false
-      default: true
-      selector:
-        boolean:
-    camera_entity:
-      name: Camera Entity (Optional Peephole Snapshot)
-      description: Optional camera.* entity to transcode and display alongside the notification.
-      required: false
-      selector:
-        entity:
-          domain: camera
-
 save_custom_color:
   name: Save Custom Color Profile
   description: Save a custom hex color from the on-device or Studio Color Wheel into the System-Wide Color Library and apply it to the target device.
