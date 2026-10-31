@@ -1070,6 +1070,9 @@ def resolve_doorbell_ring_entities(
                 cam_slug = cam_slug[: -len(suffix)]
                 break
 
+        event_matches: list[str] = []
+        binary_matches: list[str] = []
+
         for reg_ent in ent_reg.entities.values():
             if reg_ent.disabled_by is not None:
                 continue
@@ -1098,6 +1101,14 @@ def resolve_doorbell_ring_entities(
             if any(k in meta_low for k in ring_keywords) and not any(
                 ex in eid_low for ex in exclude_keywords
             ):
-                ring_to_cam[reg_ent.entity_id] = cam_ent
+                if domain == "event":
+                    event_matches.append(reg_ent.entity_id)
+                else:
+                    binary_matches.append(reg_ent.entity_id)
+
+        # Prefer HA 2026.11+ event.* doorbell entities over deprecated binary_sensor.* doorbell entities
+        chosen_entities = event_matches if event_matches else binary_matches
+        for ent_id in chosen_entities:
+            ring_to_cam[ent_id] = cam_ent
 
     return ring_to_cam

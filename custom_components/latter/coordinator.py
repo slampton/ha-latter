@@ -1294,6 +1294,10 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return
         if old_state.state == new_state.state:
             return
+        if entity_id.startswith("event."):
+            ev_dt = dt_util.parse_datetime(new_state.state)
+            if ev_dt is None or abs((dt_util.utcnow() - ev_dt).total_seconds()) > 15.0:
+                return
 
         cam_ent = self._doorbell_ring_map.get(entity_id) or self.camera_entity
         if not cam_ent:

@@ -1,7 +1,6 @@
 {
   "name": "Latter",
-  "homeassistant": "2026.11.0",
-  "zip_release": true,
-  "filename": "latter.zip"
+  "homeassistant": "2026.10.0"
 }
+
 
