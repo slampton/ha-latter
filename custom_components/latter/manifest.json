@@ -6,6 +6,7 @@
     "bluetooth",
     "bluetooth_adapters",
     "camera",
+    "ffmpeg",
     "go2rtc"
   ],
   "categories": [
