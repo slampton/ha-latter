@@ -127,12 +127,6 @@ def resolve_doorbell_talkback_target(
 
     area_id = resolve_entity_area_id(hass, cam_ent) or ""
     info["area_id"] = area_id
-    if area_id and not info["lock_entity"]:
-        for lock_st in hass.states.async_all("lock"):
-            if lock_st.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN):
-                if resolve_entity_area_id(hass, lock_st.entity_id) == area_id:
-                    info["lock_entity"] = lock_st.entity_id
-                    break
 
     return info
 
@@ -821,16 +815,16 @@ async def async_execute_doorbell_intercom(
     )
     local_spk = coordinator.local_speaker
 
-    # 1. Door / Gate Unlock (Triggers paired HA lock.* entity AND sends SIP RFC 2833 DTMF tones!)
-    if act in ("unlock_door", "dtmf_unlock", "send_dtmf"):
+    # 1. Door / Gate Unlock (Acts ONLY on an explicitly configured lock entity)
+    if act == "unlock_door":
         lock_ent = target_info.get("lock_entity") or coordinator.lock_entity
         if lock_ent and hass.states.get(lock_ent) is not None:
-            try:
-                await hass.services.async_call(
-                    "lock", "unlock", {ATTR_ENTITY_ID: lock_ent}, blocking=False
-                )
-            except Exception as err:  # noqa: BLE001
-                _LOGGER.debug("Lock unlock failed on %s: %s", lock_ent, err)
+            await hass.services.async_call(
+                "lock", "unlock", {ATTR_ENTITY_ID: lock_ent}, blocking=True
+            )
+        return target_info
+
+    if act in ("dtmf_unlock", "send_dtmf"):
         await sip.async_send_dtmf(message if message else None)
         return target_info
 

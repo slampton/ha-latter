@@ -68,8 +68,6 @@ from .const import (
     CONF_BLE_AREA_OFFSETS,
     CONF_CALENDAR_ENTITIES,
     CONF_COMPANION_BASE_URL,
-    CONF_CUSTOM_BINDINGS,
-    CONF_CUSTOM_ENTITIES,
     CONF_CUSTOM_PALETTES,
     CONF_DEVICE_CUSTOM_COLOR,
     CONF_DOORBELL_ANC_MODE,
@@ -94,12 +92,14 @@ from .const import (
     CONF_REMOTE_GROUPS,
     CONF_REMOTES_LIST,
     DEFAULT_DEVICE_REMOTE_GROUP,
+    CONF_AREA_FOLLOW_DWELL_S,
     CONF_SYNC_DEVICE_AREA,
     CONF_VOLUME_OVERRIDES,
     CONF_WALLPAPER_CYCLE_MINUTES,
     CONF_WALLPAPER_FAVORITES,
     CONF_WALLPAPER_SOURCE,
     CONF_WEATHER_ENTITY,
+    DEFAULT_AREA_FOLLOW_DWELL_S,
     DEFAULT_AREA_HANDOFF,
     DEFAULT_ART_SIZE,
     DEFAULT_BLE_AUTO_SWITCH,
@@ -131,7 +131,6 @@ from .area_engine import (
     get_home_alarm_summary,
     get_whole_home_summary,
     match_area_by_name_or_id,
-    protect_handheld_sensors_from_area_dashboards,
     resolve_remote_slot_pair,
     sync_esphome_device_area,
 )
@@ -241,6 +240,8 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._unsub_calendar_timer: Callable[[], None] | None = None
         self._unsub_wallpaper_timer: Callable[[], None] | None = None
         self._unsub_doorbell_ring_state: Callable[[], None] | None = None
+        self._unsub_area_follow_dwell: Callable[[], None] | None = None
+        self._pending_follow_area_id: str | None = None
         self._doorbell_ring_map: dict[str, str] = {}
         self._doorbell_ring_cooldown_until: dict[str, float] = {}
         self._ble_tracker: LatterNativeBleTracker | None = None
@@ -525,42 +526,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return "#3898FF"
 
     @property
-    def custom_bindings(self) -> list[dict[str, str]]:
-        """Return universal hardware trigger / slot bindings configured in the Web Companion."""
-        val = self.get_opt(CONF_CUSTOM_BINDINGS, [])
-        return list(val) if isinstance(val, list) else []
-
-    def _build_custom_bindings_summary(self) -> str:
-        """Build a semicolon-delimited summary ('slot|Friendly Name|action;...') for all Pinned Entities & Scripts."""
-        rows: list[str] = []
-        if self.custom_entities:
-            for idx, ent_id in enumerate(self.custom_entities[:30], start=1):
-                st = self.hass.states.get(ent_id)
-                friendly = (
-                    str(st.attributes.get("friendly_name") if st else "")
-                    or ent_id.split(".", 1)[-1].replace("_", " ").title()
-                )
-                friendly = friendly.replace(";", "").replace("|", "")[:32]
-                rows.append(f"{ent_id}|{friendly}|toggle")
-        elif self.custom_bindings:
-            for b in self.custom_bindings[:30]:
-                if not isinstance(b, dict):
-                    continue
-                slot_id = str(b.get("slot") or "").strip().replace(";", "").replace("|", "")
-                ent_id = str(b.get("entity_id") or "").strip()
-                act = str(b.get("action") or "toggle").strip()
-                if not slot_id or not ent_id:
-                    continue
-                st = self.hass.states.get(ent_id)
-                friendly = (
-                    str(st.attributes.get("friendly_name") if st else "")
-                    or ent_id.split(".", 1)[-1].replace("_", " ").title()
-                )
-                friendly = friendly.replace(";", "").replace("|", "")[:32]
-                rows.append(f"{slot_id}|{friendly}|{act}")
-        return ";".join(rows) if rows else "NONE"
-
-    @property
     def local_speaker(self) -> str:
         """Automatically resolve the on-device media_player entity from device_slug."""
         return _resolve_esphome_local_speaker(self.hass, self.device_slug)
@@ -731,9 +696,37 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return bool(self.get_opt(CONF_BLE_AUTO_SWITCH, DEFAULT_BLE_AUTO_SWITCH))
 
     @property
+    def is_roaming_device(self) -> bool:
+        """Return True only for portable/roaming displays (stationary == 0 in hardware manifest)."""
+        hw = self.hardware_manifest
+        if "stationary" in hw:
+            try:
+                return int(hw.get("stationary")) == 0
+            except (ValueError, TypeError):
+                pass
+        return self.device_profile in ("mobile_display", "wearable_display")
+
+    @property
     def sync_device_area_enabled(self) -> bool:
-        """Return True if active area should sync to ESPHome Device Registry for Voice Assistant."""
+        """Return True if Voice Follows Me is enabled and this is a roaming device."""
+        if not self.is_roaming_device:
+            return False
         return bool(self.get_opt(CONF_SYNC_DEVICE_AREA, DEFAULT_SYNC_DEVICE_AREA))
+
+    @property
+    def area_follow_dwell_s(self) -> int:
+        """Return required stability dwell time in seconds before BLE moves update ESPHome Device Area."""
+        try:
+            return max(
+                0,
+                int(
+                    self.get_opt(
+                        CONF_AREA_FOLLOW_DWELL_S, DEFAULT_AREA_FOLLOW_DWELL_S
+                    )
+                ),
+            )
+        except (ValueError, TypeError):
+            return DEFAULT_AREA_FOLLOW_DWELL_S
 
     @property
     def volume_overrides(self) -> dict[str, str]:
@@ -758,12 +751,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def calendar_entities(self) -> list[str]:
         """Return configured calendar entity_ids."""
         val = self.get_opt(CONF_CALENDAR_ENTITIES, [])
-        return list(val) if isinstance(val, (list, tuple)) else []
-
-    @property
-    def custom_entities(self) -> list[str]:
-        """Return user-pinned custom entities for this device."""
-        val = self.get_opt(CONF_CUSTOM_ENTITIES, [])
         return list(val) if isinstance(val, (list, tuple)) else []
 
     @property
@@ -1072,11 +1059,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if not self.last_speaker:
                 self.last_speaker = self.active_speaker
 
-        if self.device_profile != "ble_beacon":
-            protect_handheld_sensors_from_area_dashboards(
-                self.hass, self.device_slug, self.device_profile
-            )
-
         proxy_areas = get_ble_proxy_area_ids(self.hass)
 
         pres_ent = self.presence_entity
@@ -1169,6 +1151,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._unsub_calendar_timer,
             self._unsub_wallpaper_timer,
             self._unsub_doorbell_ring_state,
+            self._unsub_area_follow_dwell,
         ):
             if unsub is not None:
                 unsub()
@@ -1187,6 +1170,8 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._unsub_calendar_timer = None
         self._unsub_wallpaper_timer = None
         self._unsub_doorbell_ring_state = None
+        self._unsub_area_follow_dwell = None
+        self._pending_follow_area_id = None
         self._listeners.clear()
 
     @callback
@@ -1200,7 +1185,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.hass,
             area_id=self.active_area_id,
             domain_filter="all",
-            custom_entities=self.custom_entities,
             local_speaker=self.local_speaker,
         )
         tracked_ids = [str(it["id"]) for it in area_items if it.get("id")]
@@ -1769,6 +1753,10 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     ) -> None:
         """Handle area transition or Away timeout detected by Latter's BLE proxy tracker."""
         if area_id == "away":
+            if self._unsub_area_follow_dwell is not None:
+                self._unsub_area_follow_dwell()
+                self._unsub_area_follow_dwell = None
+            self._pending_follow_area_id = None
             self._notify_listeners()
             return
         if not self.ble_auto_switch_enabled:
@@ -1783,7 +1771,10 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self.active_area_id,
             )
             self.async_set_active_area(
-                area_id, handoff_media=False, sync_device_registry=True
+                area_id,
+                handoff_media=False,
+                sync_device_registry=True,
+                ble_driven=True,
             )
         else:
             self._notify_listeners()
@@ -2039,6 +2030,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         area_id_or_name: str,
         handoff_media: bool | None = None,
         sync_device_registry: bool = False,
+        ble_driven: bool = False,
     ) -> None:
         """Switch active area, persist to Store, sync ESPHome device area, and hand off media."""
         matched_id = match_area_by_name_or_id(self.hass, area_id_or_name)
@@ -2059,13 +2051,45 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 },
             )
 
-        if sync_device_registry and self.sync_device_area_enabled:
-            sync_esphome_device_area(
-                self.hass,
-                self.device_slug,
-                matched_id,
-                require_ble_proxy_area=True,
-            )
+        if self._unsub_area_follow_dwell is not None:
+            self._unsub_area_follow_dwell()
+            self._unsub_area_follow_dwell = None
+        self._pending_follow_area_id = None
+
+        esp_dev_id = self.esphome_device_id
+        if sync_device_registry and self.sync_device_area_enabled and esp_dev_id:
+            dwell_s = self.area_follow_dwell_s
+            if ble_driven and dwell_s > 0:
+                self._pending_follow_area_id = matched_id
+
+                @callback
+                def _commit_dwell_sync(_now: datetime) -> None:
+                    self._unsub_area_follow_dwell = None
+                    if (
+                        self._pending_follow_area_id == matched_id
+                        and self.active_area_id == matched_id
+                        and not self.is_device_away()
+                        and self.sync_device_area_enabled
+                        and self.esphome_device_id
+                    ):
+                        self._pending_follow_area_id = None
+                        sync_esphome_device_area(
+                            self.hass,
+                            self.esphome_device_id,
+                            matched_id,
+                            require_ble_proxy_area=True,
+                        )
+
+                self._unsub_area_follow_dwell = async_call_later(
+                    self.hass, float(dwell_s), _commit_dwell_sync
+                )
+            else:
+                sync_esphome_device_area(
+                    self.hass,
+                    esp_dev_id,
+                    matched_id,
+                    require_ble_proxy_area=ble_driven,
+                )
 
         media_map = find_area_media_entities(
             self.hass, matched_id, self.local_speaker
@@ -2277,13 +2301,11 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.hass,
             area_id=self.active_area_id,
             domain_filter="all",
-            custom_entities=self.custom_entities,
             local_speaker=self.local_speaker,
         )
         avail_domains = get_area_available_domains(
             self.hass,
             area_id=self.active_area_id,
-            custom_entities=self.custom_entities,
             local_speaker=self.local_speaker,
         )
         lights_on = sum(
@@ -2386,9 +2408,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "alert_duration": self.alert_duration,
             "alert_chime": self.alert_chime,
             "alert_camera_url": self.alert_camera_url,
-            "custom_entities": self.custom_entities,
-            "custom_bindings": self.custom_bindings,
-            "custom_bindings_summary": self._build_custom_bindings_summary(),
             "theme_color_hex": self.device_custom_color,
             "custom_palettes": self.custom_palettes,
             "hardware_manifest": self.hardware_manifest,
@@ -2426,7 +2445,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             area_attrs["cameras_summary"],
             area_attrs["doorbell_talk_state"],
             area_attrs["intercom_targets_summary"],
-            area_attrs["custom_bindings_summary"],
+            "",
             self.alert_id,
             self.alert_title,
             self.alert_message,
@@ -2567,7 +2586,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 matched_area,
             )
             self.async_set_active_area(
-                matched_area, sync_device_registry=True
+                matched_area, sync_device_registry=True, ble_driven=True
             )
         else:
             self._notify_listeners()

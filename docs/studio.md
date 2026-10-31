@@ -22,7 +22,6 @@ Settings here live in `.storage/latter.site` and apply to every device.
 | **Whole-Home Entities** | Weather provider, alarm panel, primary thermostat, entry lock, garage door, and robot vacuum. These drive the on-device weather page and Whole-Home Hub. |
 | **Cameras & Doorbell Two-Way Audio** | Up to 10 cameras for the on-device camera carousel and doorbell popups. Talkback and SIP settings are here too; both are experimental. |
 | **Calendars** | Calendars merged into the on-device agenda. Duplicate events across calendars are removed, and events with a location get a map. |
-| **Pinned Area Entities** | Entities shown at the top of Area Control in every area. |
 
 ### Media & Remotes
 | Card | What it does |

@@ -33,7 +33,6 @@ This sensor is the main channel from Home Assistant to the device. It has about 
 | Notification | `alert_id` (increments with each notification), `alert_title`, `alert_message`, `alert_priority`, `alert_duration`, `alert_chime`, `alert_camera_url` |
 | Appearance | `wallpaper_url`, `theme_color_hex`, `dock_apps` |
 | Cameras and doorbell | `camera_snapshot_url`, `cameras_summary`, `doorbell_talk_state`, `intercom_targets_summary` |
-| Bindings | `custom_bindings_summary` |
 | Presence | `ble_closest_proxy`, `ble_rssi_by_area`, `ble_scanners_map` |
 | VPN | `vpn_enabled`, `vpn_client_ip` |
 | Hardware | `hardware_manifest` (parsed from the device; see [device protocol](https://github.com/slampton/esphome-latter-core/blob/main/docs/device-protocol.md#2-hardware-manifest)) |
@@ -79,9 +78,6 @@ Latter fires this on the Home Assistant event bus.
 
 ---
 
-## Changes Latter makes to other entities
+## Voice Follows Me (Device Area Sync)
 
-On onboarded ESPHome devices, Latter changes some entities it doesn't own:
-- **Internal-looking controls:** `light` and `switch` entities that look like internal hardware controls are hidden, set to category `config`, and un-exposed from voice assistants. → [Details and how to undo it](../existing-esphome.md#bridging-a-device-no-yaml-changes)
-- **Sensors on roaming displays:** temperature and humidity sensors are set to `diagnostic`, so they don't appear as area climate readings.
-- **The device's Area:** roaming devices have their Home Assistant Area updated as they move.
+Latter never modifies entities owned by other integrations. On roaming displays (`stationary == 0` in the hardware manifest) with **Voice Follows Me** enabled, Latter updates only the bound ESPHome device's Home Assistant Area after the device has remained in the new Area for the configured dwell period (`area_follow_dwell_s`, default 10 s), so area-less Assist voice commands target the room you are standing in.

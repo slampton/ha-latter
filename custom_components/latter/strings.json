@@ -92,6 +92,25 @@
           }
         }
       }
+    },
+    "slot_push_failing": {
+      "title": "Slot push failing for {device_slug}",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Verify ESPHome connection and firmware for {device_slug}",
+            "description": "Latter failed to push browse or area slots to **{device_slug}** 5 consecutive times ({service_name}: {error}). Verify that the ESPHome device is online and running matching Protocol v3 firmware."
+          }
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "explicit_action_required": {
+      "message": "Lock and alarm actions require an explicit command (lock, unlock, open, arm_home, arm_away, arm_night, or disarm); toggle is not permitted."
+    },
+    "not_supported": {
+      "message": "The requested action is not supported by this entity."
     }
   }
 }

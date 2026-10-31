@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import re
 import secrets
+import time
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry, SOURCE_INTEGRATION_DISCOVERY
@@ -305,6 +306,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
                 return
             dev_reg = dr.async_get(hass)
             dev = dev_reg.async_get(dev_id)
+            own_writes = domain_data.get("_own_area_writes")
+            if isinstance(own_writes, dict) and dev_id in own_writes:
+                expected_area, write_ts = own_writes[dev_id]
+                if (
+                    (time.monotonic() - float(write_ts)) < 2.0
+                    and dev is not None
+                    and dev.area_id == expected_area
+                ):
+                    own_writes.pop(dev_id, None)
+                    return
             if dev is not None:
                 _async_check_esphome_device_for_discovery(hass, dev)
 

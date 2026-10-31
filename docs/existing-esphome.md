@@ -22,17 +22,6 @@ The device is added as a headless node with BLE tracking off. What you get:
 
 What you don't get: area tracking, the `latter.*` slot services, or anything that needs the device to call Home Assistant. Those require Latter firmware or mixins.
 
-> [!WARNING]
-> **Latter hides some entities on onboarded devices.** This applies to every onboarded ESPHome device, bridged ones included.
->
-> **What gets hidden:** `light` and `switch` entities that look like internal hardware controls. A name matches if it contains a keyword such as `backlight`, `display`, `screen`, `status_led`, `restart`, `mmwave`, `ld2410`, `buzzer`, or `child_lock`, or if its friendly name starts with a prefix such as `System:` or `Display:`.
->
-> **What Latter does to them:** sets the entity category to `config`, hides the entity, and un-exposes it from Assist, Alexa, and Google Assistant. This stops "turn off all the lights" from switching off a panel's backlight.
->
-> **What this means for you:** a real load whose name contains one of these words, such as "Screen Porch Light", will be hidden too. To restore it, edit the entity in **Settings → Entities**: un-hide it, set its category back, and re-expose it under **Settings → Voice assistants**.
->
-> On Latter firmware displays, *every* light and switch is treated this way, because none of them control loads in an area.
-
 ---
 
 ## Adding a mixin

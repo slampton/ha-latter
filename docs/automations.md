@@ -122,15 +122,3 @@ actions:
       area: kitchen
       handoff_media: true    # move the active speaker to one in the new area
 ```
-
-## Run a Studio-configured binding
-
-Bindings are entities or actions you've mapped in Studio. They also show up in the device's **Macros** tool.
-
-```yaml
-actions:
-  - action: latter.trigger_binding
-    data:
-      target_device: pocket_assistant
-      slot: macro_1
-```

@@ -45,14 +45,13 @@ CONF_ASSIGNED_ROLE: Final = "assigned_role"
 DEFAULT_ASSIGNED_ROLE: Final = "admin"
 CONF_BLE_AUTO_SWITCH: Final = "ble_auto_switch"
 CONF_SYNC_DEVICE_AREA: Final = "sync_device_area"
+CONF_AREA_FOLLOW_DWELL_S: Final = "area_follow_dwell_s"
 CONF_AREA_HANDOFF: Final = "area_handoff"
 CONF_REMOTES_LIST: Final = "remotes_list"
 CONF_REMOTE_GROUPS: Final = "remote_groups"
 CONF_DEVICE_REMOTE_GROUP: Final = "device_remote_group"
 DEFAULT_DEVICE_REMOTE_GROUP: Final = "area_auto"
 CONF_CALENDAR_ENTITIES: Final = "calendar_entities"
-CONF_CUSTOM_ENTITIES: Final = "custom_entities"
-CONF_CUSTOM_BINDINGS: Final = "custom_bindings"
 CONF_DOCK_APPS: Final = "dock_apps"
 CONF_WALLPAPER_SOURCE: Final = "wallpaper_source"
 CONF_WALLPAPER_FAVORITES: Final = "wallpaper_favorites"
@@ -82,6 +81,7 @@ DEFAULT_NATIVE_BLE_TRACKING: Final = True
 DEFAULT_BLE_BEACON_UUID: Final = "4C415454-4552-434F-5245-000000000220"
 DEFAULT_BLE_AUTO_SWITCH: Final = True
 DEFAULT_SYNC_DEVICE_AREA: Final = True
+DEFAULT_AREA_FOLLOW_DWELL_S: Final = 10
 DEFAULT_AREA_HANDOFF: Final = False
 DEFAULT_DOCK_APPS: Final = "music,alarm,area,remote,games,tools"
 DEFAULT_WALLPAPER_CYCLE_MINUTES: Final = 0
@@ -96,7 +96,6 @@ SERVICE_AREA_BROWSE: Final = "area_browse"
 SERVICE_AREA_ACTION: Final = "area_action"
 SERVICE_SET_ACTIVE_AREA: Final = "set_active_area"
 SERVICE_REMOTE_ACTION: Final = "remote_action"
-SERVICE_TRIGGER_BINDING: Final = "trigger_binding"
 SERVICE_CALENDAR_FETCH: Final = "calendar_fetch"
 SERVICE_CALENDAR_CREATE_EVENT: Final = "calendar_create_event"
 SERVICE_INTERCOM_BROADCAST: Final = "intercom_broadcast"
@@ -177,8 +176,6 @@ GLOBAL_CONFIG_KEYS: Final[tuple[str, ...]] = (
     CONF_REMOTES_LIST,
     CONF_REMOTE_GROUPS,
     CONF_CALENDAR_ENTITIES,
-    CONF_CUSTOM_ENTITIES,
-    CONF_CUSTOM_BINDINGS,
     CONF_CUSTOM_PALETTES,
     CONF_DOORBELL_ANC_MODE,
     CONF_SIP_ENABLED,

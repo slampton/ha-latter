@@ -44,6 +44,7 @@ from .const import (
     API_COMPANION_API_PATH,
     API_COMPANION_UI_PATH,
     CONF_ALARM_ENTITY,
+    CONF_AREA_FOLLOW_DWELL_S,
     CONF_AREA_FUSION_CONFIG,
     CONF_AREA_HANDOFF,
     CONF_ART_SIZE,
@@ -61,8 +62,6 @@ from .const import (
     CONF_THERMOSTAT_ENTITY,
     CONF_VACUUM_ENTITY,
     CONF_COMPANION_BASE_URL,
-    CONF_CUSTOM_BINDINGS,
-    CONF_CUSTOM_ENTITIES,
     CONF_CUSTOM_PALETTES,
     CONF_DEVICE_CUSTOM_COLOR,
     CONF_DOORBELL_ANC_MODE,
@@ -372,7 +371,6 @@ def _build_companion_state_payload(
     calendars_list: list[dict[str, str]] = []
     persons_list: list[dict[str, str]] = []
     presence_sensors: list[dict[str, str]] = []
-    bindable_entities: list[dict[str, str]] = []
 
     allowed_cams_set = set(coordinator.camera_entities)
     if coordinator.camera_entity:
@@ -435,23 +433,6 @@ def _build_companion_state_payload(
         elif domain in ("sensor", "device_tracker", "input_text"):
             presence_sensors.append(item)
 
-        if domain in (
-            "light",
-            "scene",
-            "cover",
-            "fan",
-            "switch",
-            "climate",
-            "script",
-            "automation",
-            "button",
-            "input_boolean",
-            "lock",
-            "alarm_control_panel",
-            "media_player",
-        ):
-            bindable_entities.append(item)
-
     _, area_attrs = coordinator.get_area_context_payload()
     media_state, media_attrs = coordinator.get_active_media_payload()
     _, remote_attrs = coordinator.get_remote_config_payload()
@@ -462,7 +443,6 @@ def _build_companion_state_payload(
         hass,
         area_id=coordinator.active_area_id,
         domain_filter="all",
-        custom_entities=coordinator.custom_entities,
         local_speaker=coordinator.local_speaker,
     )
     wallpapers_catalog = list_wallpaper_catalog(
@@ -536,6 +516,7 @@ def _build_companion_state_payload(
         "has_audio": has_audio,
         "has_ble_beacon": has_native_slots or has_ble_beacon_entity,
         "has_vpn_mixin": has_vpn_entities or coordinator.vpn_enabled,
+        "is_roaming_device": coordinator.is_roaming_device,
         "total_entities": len(all_esp_items),
     }
 
@@ -571,6 +552,7 @@ def _build_companion_state_payload(
         CONF_ASSIGNED_ROLE: coordinator.assigned_role,
         CONF_BLE_AUTO_SWITCH: coordinator.ble_auto_switch_enabled,
         CONF_SYNC_DEVICE_AREA: coordinator.sync_device_area_enabled,
+        CONF_AREA_FOLLOW_DWELL_S: coordinator.area_follow_dwell_s,
         CONF_AREA_HANDOFF: coordinator.area_handoff_enabled,
         CONF_ALARM_ENTITY: coordinator.get_opt(CONF_ALARM_ENTITY, "")
         or coordinator.alarm_entity
@@ -586,8 +568,6 @@ def _build_companion_state_payload(
         CONF_DEVICE_REMOTE_GROUP: coordinator.device_remote_group,
         CONF_WEATHER_ENTITY: coordinator.weather_entity or "",
         CONF_CALENDAR_ENTITIES: coordinator.calendar_entities,
-        CONF_CUSTOM_ENTITIES: coordinator.custom_entities,
-        CONF_CUSTOM_BINDINGS: coordinator.custom_bindings,
         CONF_CUSTOM_PALETTES: coordinator.custom_palettes,
         CONF_DEVICE_CUSTOM_COLOR: coordinator.device_custom_color,
         CONF_DOORBELL_ANC_MODE: str(
@@ -1007,7 +987,6 @@ def _build_companion_state_payload(
             "calendars": calendars_list,
             "persons": persons_list,
             "presence_sensors": presence_sensors,
-            "bindable_entities": bindable_entities,
         },
     }
 
@@ -1427,7 +1406,7 @@ class LatterCompanionApiView(HomeAssistantView):
                 _build_companion_state_payload(self.hass, coordinator, uid=uid)
             )
 
-        if cmd in ("test_binding", "esphome_entity_action", "area_card_action"):
+        if cmd in ("esphome_entity_action", "area_card_action"):
             entity_id = str(body.get("entity_id") or "").strip()
             action = str(body.get("action") or "toggle").strip()
             level = body.get("level")
@@ -1497,6 +1476,7 @@ class LatterCompanionApiView(HomeAssistantView):
                 CONF_ASSIGNED_ROLE,
                 CONF_BLE_AUTO_SWITCH,
                 CONF_SYNC_DEVICE_AREA,
+                CONF_AREA_FOLLOW_DWELL_S,
                 CONF_AREA_HANDOFF,
                 CONF_DOCK_APPS,
                 CONF_WALLPAPER_SOURCE,

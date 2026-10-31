@@ -141,19 +141,12 @@ Sends a page of areas or entities to the device. `entities` and `home` pages use
 | Field | Type | Default | Notes |
 | :--- | :--- | :--- | :--- |
 | `entity_id` | string | — | Any entity, or one of `whole_home.thermostat`, `whole_home.lock`, `whole_home.garage`, `whole_home.vacuum`, which resolve to the entities configured in Studio |
-| `action` | string | `toggle` | `toggle`, `turn_on`, `turn_off`, `set_level`, `set_color`, `set_kelvin`, `step_up`, `step_down`, `arm_home`, `arm_away`, `arm_night`, `arm_vacation`, `disarm`, `heat`, `cool`, `auto`, `off`, `lock`, `unlock`, `start`, `pause`, `dock` |
+| `action` | string | — | `toggle`, `turn_on`, `turn_off`, `set_level`, `set_color`, `set_kelvin`, `step_up`, `step_down`, `arm_home`, `arm_away`, `arm_night`, `disarm`, `heat`, `cool`, `auto`, `off`, `lock`, `unlock`, `open`, `start`, `pause`, `dock` (`lock` and `alarm_control_panel` require an explicit verb; `toggle` is rejected) |
 | `level` | number | — | 0–100 for brightness, position, and fan speed; Kelvin for `set_kelvin` |
 | `code` | string | — | Alarm PIN, or `#RRGGBB` for `set_color` |
 | `area_id` | area | — | |
 
-Alarm actions with no `entity_id` use the alarm panel configured in Studio.
-
-### `latter.trigger_binding`
-| Field | Type | Notes |
-| :--- | :--- | :--- |
-| `slot` | string | **Required.** An entity ID, a binding name from Studio, or `macro_N`. |
-| `action` | `toggle` \| `turn_on` \| `turn_off` \| `step_up` \| `step_down` \| `set_level` | |
-| `level` | 0–100 | |
+Alarm actions with no `entity_id` use the alarm panel configured in Studio. `lock` (`lock`, `unlock`, `open`) and `alarm_control_panel` (`arm_home`, `arm_away`, `arm_night`, `disarm`) require an explicit action verb and never accept `toggle`.
 
 ---
 

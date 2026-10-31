@@ -4,18 +4,21 @@ from __future__ import annotations
 
 import logging
 import re
+import time
 from typing import Any
 
+from homeassistant.components.lock import LockEntityFeature
 from homeassistant.const import (
     ATTR_ENTITY_ID,
-    EntityCategory,
     STATE_ON,
     STATE_OPEN,
     STATE_PLAYING,
     STATE_UNAVAILABLE,
     STATE_UNKNOWN,
+    EntityCategory,
 )
 from homeassistant.core import HomeAssistant, State
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import (
     area_registry as ar,
     device_registry as dr,
@@ -24,7 +27,7 @@ from homeassistant.helpers import (
 
 from .ble_engine import _iter_devices, _iter_entities, get_ble_proxy_area_ids
 from .browse_engine import is_music_assistant_player
-from .const import normalize_device_slug
+from .const import DOMAIN, normalize_device_slug
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -81,7 +84,6 @@ def classify_esphome_entity_section(
 ) -> tuple[str, str | None]:
     """Classify an ESPHome entity into a focused section; returns (section_id, custom_section_title_or_None)."""
     name_clean = friendly_name.strip()
-    text = f"{entity_id} {name_clean}".lower()
     dev_cls = device_class.lower()
 
     # 1. Explicit "Prefix: Name" Convention (Highest Priority)
@@ -491,174 +493,14 @@ def get_esphome_device_entities(
     }
 
 
-INTERNAL_DEVICE_CONTROL_KEYWORDS: tuple[str, ...] = (
-    "backlight",
-    "display",
-    "screen",
-    "lcd",
-    "oled",
-    "amoled",
-    "status_led",
-    "indicator",
-    "onboard_led",
-    "speaker_enable",
-    "speaker_amp",
-    "pa_enable",
-    "mic_mute",
-    "microphone",
-    "wake_word",
-    "ble_presence",
-    "ble_beacon",
-    "ibeacon",
-    "bluetooth_proxy",
-    "vpn_",
-    "wireguard",
-    "shortcut_",
-    "sleep_",
-    "screensaver",
-    "stay_awake",
-    "hold_crown",
-    "game_sound",
-    "area_media_handoff",
-    "show_all_category",
-    "wake_greeting",
-    "weather_background",
-    "speaker_shortcut",
-    "library_shortcut",
-    "engineering_mode",
-    "telemetry_profiler",
-    "ld2410",
-    "ld2420",
-    "ld2450",
-    "mmwave",
-    "radar_",
-    "buzzer",
-    "beeper",
-    "child_lock",
-    "restart",
-    "reboot",
-    "safe_mode",
-)
-
-
-def _is_internal_device_control_entity(
-    entity_id: str, friendly_name: str, is_companion_display: bool = False
-) -> bool:
-    """Return True if a light or switch is an internal ESPHome hardware/UI control rather than an area load."""
-    if is_companion_display:
-        return True
-    ent_suffix = entity_id.split(".", 1)[-1].lower()
-    haystack = f"{ent_suffix} {friendly_name.lower()}"
-    if ":" in friendly_name:
-        prefix = friendly_name.split(":", 1)[0].strip().lower()
-        if prefix in (
-            "home",
-            "display",
-            "sleep & wake",
-            "sleep",
-            "wake",
-            "voice",
-            "sound",
-            "music",
-            "area",
-            "remote",
-            "system",
-            "actions",
-        ):
-            return True
-    return any(k in haystack for k in INTERNAL_DEVICE_CONTROL_KEYWORDS)
-
-
-def _unexpose_entity_from_voice_assistants(
-    hass: HomeAssistant, entity_id: str
-) -> None:
-    """Unexpose an internal device backlight or hardware switch from Assist/Alexa/Google area commands."""
-    try:
-        from homeassistant.components.homeassistant.exposed_entities import (
-            async_expose_entity,
-        )
-
-        for assistant in ("conversation", "cloud.alexa", "cloud.google_assistant"):
-            try:
-                async_expose_entity(hass, assistant, entity_id, False)
-            except Exception:  # noqa: BLE001
-                pass
-    except Exception:  # noqa: BLE001
-        pass
-
-
-def protect_handheld_sensors_from_area_dashboards(
-    hass: HomeAssistant, device_slug: str, device_profile: str = "mobile_display"
-) -> None:
-    """Shield internal device backlights, hardware switches, and mobile sensors from Area dashboards and Assist area commands."""
-    target_device_id = find_esphome_device_id(hass, device_slug)
-    if not target_device_id:
-        return
-
-    ent_reg = er.async_get(hass)
-    esphome_svcs = hass.services.async_services().get("esphome", {})
-    slug_norm = normalize_device_slug(device_slug)
-    is_companion_display = (
-        device_profile in ("mobile_display", "stationary_display")
-        or any(
-            (s.endswith("_set_browse_slots") or s.endswith("_set_area_slots"))
-            and slug_norm in s
-            for s in esphome_svcs
-        )
-    )
-
-    for entry in er.async_entries_for_device(ent_reg, target_device_id):
-        state_obj = hass.states.get(entry.entity_id)
-        friendly = str(
-            (state_obj.attributes.get("friendly_name") if state_obj else None)
-            or entry.name
-            or entry.original_name
-            or entry.entity_id
-        )
-
-        # 1. On mobile displays, mark onboard temperature/humidity sensors as DIAGNOSTIC
-        if entry.domain == "sensor" and device_profile == "mobile_display":
-            dev_class = (
-                str(state_obj.attributes.get("device_class") or "").lower()
-                if state_obj
-                else str(entry.original_device_class or "").lower()
-            )
-            if dev_class in ("temperature", "humidity") and entry.entity_category is None:
-                ent_reg.async_update_entity(
-                    entry.entity_id,
-                    entity_category=EntityCategory.DIAGNOSTIC,
-                )
-            continue
-
-        # 2. On ANY onboarded ESPHome device (native display or bridged node), shield internal
-        #    backlights (light.*) and internal hardware/config switches (switch.*) from Area
-        #    area commands ("Turn off all lights" / "Turn off everything") and Area cards
-        if entry.domain in ("light", "switch"):
-            if _is_internal_device_control_entity(
-                entry.entity_id, friendly, is_companion_display=is_companion_display
-            ):
-                updates: dict[str, Any] = {}
-                if entry.entity_category is None:
-                    updates["entity_category"] = EntityCategory.CONFIG
-                if entry.hidden_by is None:
-                    updates["hidden_by"] = er.RegistryEntryHider.INTEGRATION
-                if updates:
-                    ent_reg.async_update_entity(entry.entity_id, **updates)
-                    _LOGGER.info(
-                        "Shielded internal device entity '%s' (CONFIG + Hidden from Area controls)",
-                        entry.entity_id,
-                    )
-                _unexpose_entity_from_voice_assistants(hass, entry.entity_id)
-
-
 def sync_esphome_device_area(
     hass: HomeAssistant,
-    device_slug: str,
+    esphome_device_id: str,
     area_id: str,
     require_ble_proxy_area: bool = True,
 ) -> None:
-    """Update the ESPHome device's area_id in HA Device Registry ONLY for valid areas."""
-    if not area_id:
+    """Update the bound ESPHome device's area_id in HA Device Registry ONLY for valid areas."""
+    if not esphome_device_id or not area_id:
         return
 
     if require_ble_proxy_area:
@@ -670,20 +512,19 @@ def sync_esphome_device_area(
             )
             return
 
-    protect_handheld_sensors_from_area_dashboards(hass, device_slug)
-
-    target_device_id = find_esphome_device_id(hass, device_slug)
-    if target_device_id:
-        dev_reg = dr.async_get(hass)
-        dev = dev_reg.async_get(target_device_id)
-        if dev and dev.area_id != area_id:
-            dev_reg.async_update_device(target_device_id, area_id=area_id)
-            _LOGGER.debug(
-                "Synced ESPHome device '%s' (id=%s) to area_id='%s' for area-aware Voice Assistant",
-                device_slug,
-                target_device_id,
-                area_id,
-            )
+    dev_reg = dr.async_get(hass)
+    dev = dev_reg.async_get(esphome_device_id)
+    if dev and dev.area_id != area_id:
+        own_writes: dict[str, tuple[str, float]] = hass.data.setdefault(
+            DOMAIN, {}
+        ).setdefault("_own_area_writes", {})
+        own_writes[esphome_device_id] = (area_id, time.monotonic())
+        dev_reg.async_update_device(esphome_device_id, area_id=area_id)
+        _LOGGER.debug(
+            "Synced bound ESPHome device id=%s to area_id='%s' for area-aware Voice Assistant",
+            esphome_device_id,
+            area_id,
+        )
 
 
 def resolve_remote_slot_pair(
@@ -789,10 +630,9 @@ def _is_curated_area_entity(
 
     domain = state_obj.domain
     attrs = state_obj.attributes
-    friendly = str(attrs.get("friendly_name") or state_obj.entity_id)
     dev_class = str(attrs.get("device_class") or "").lower()
 
-    # Never include a companion display's own backlight/switches or ESPHome internal hardware controls in Area Control
+    # Never include a companion display's own entities in Area Control
     if domain in ("light", "switch", "fan", "cover"):
         comp_dev_ids, comp_slugs = _get_companion_display_device_ids_and_slugs(
             hass, local_speaker
@@ -803,10 +643,6 @@ def _is_curated_area_entity(
                 state_obj.entity_id.startswith(f"{domain}.{s}_") for s in comp_slugs
             )
         )
-        if domain in ("light", "switch") and _is_internal_device_control_entity(
-            state_obj.entity_id, friendly, is_companion_display=is_comp_dev
-        ):
-            return False
         if is_comp_dev:
             return False
 
@@ -1105,11 +941,9 @@ def get_whole_home_summary(
 def get_home_wide_entities(
     hass: HomeAssistant,
     configured_alarm_entity: str | None = None,
-    custom_entities: list[str] | None = None,
 ) -> list[dict[str, Any]]:
-    """Return home-wide security alarm, scenes, and user-pinned entities (`mode='home'`)."""
+    """Return home-wide security alarm entities (`mode='home'`)."""
     items: list[dict[str, Any]] = []
-    seen_ids: set[str] = set()
 
     alarm_info = get_home_alarm_summary(hass, configured_alarm_entity)
     if alarm_info["entity_id"]:
@@ -1125,25 +959,6 @@ def get_home_wide_entities(
                     "level": -1,
                 }
             )
-            seen_ids.add(state_obj.entity_id)
-
-    for ent_id in custom_entities or []:
-        if ent_id in seen_ids:
-            continue
-        state_obj = hass.states.get(ent_id)
-        if state_obj is None or state_obj.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
-            continue
-        is_active = state_obj.state in (STATE_ON, STATE_OPEN, STATE_PLAYING)
-        items.append(
-            {
-                "name": format_entity_slot_name(state_obj),
-                "id": ent_id,
-                "type": state_obj.domain,
-                "active": is_active,
-                "level": get_entity_level(state_obj),
-            }
-        )
-        seen_ids.add(ent_id)
 
     return items
 
@@ -1243,7 +1058,6 @@ def _parse_domain_filter(domain_filter: str) -> tuple[str, ...]:
 def get_area_available_domains(
     hass: HomeAssistant,
     area_id: str | None,
-    custom_entities: list[str] | None = None,
     local_speaker: str = "",
 ) -> str:
     """Return comma-separated canonical area categories ('scene,light,cover,fan,switch') present in the active area."""
@@ -1251,7 +1065,6 @@ def get_area_available_domains(
         hass,
         area_id=area_id,
         domain_filter="all",
-        custom_entities=custom_entities,
         local_speaker=local_speaker,
     )
     present_types = {str(it.get("type") or "") for it in all_items}
@@ -1277,7 +1090,6 @@ def get_area_entities(
     hass: HomeAssistant,
     area_id: str | None,
     domain_filter: str = "all",
-    custom_entities: list[str] | None = None,
     local_speaker: str = "",
 ) -> list[dict[str, Any]]:
     """Return curated controllable entities for a specific area (supports single or comma-separated domain_filter)."""
@@ -1286,9 +1098,6 @@ def get_area_entities(
     area_name = area_entry.name if area_entry else ""
 
     allowed_domains = _parse_domain_filter(domain_filter)
-    is_all_filter = domain_filter.strip().lower() in ("", "all")
-
-    pinned_set = set(custom_entities or [])
     items: list[dict[str, Any]] = []
 
     domain_priority = {
@@ -1306,18 +1115,13 @@ def get_area_entities(
         if state_obj.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
             continue
 
-        is_pinned = ent_id in pinned_set
         ent_area = resolve_entity_area_id(hass, ent_id)
-
-        if area_id and ent_area != area_id and not is_pinned:
+        if area_id and ent_area != area_id:
             continue
 
-        if not is_pinned:
-            if state_obj.domain not in allowed_domains:
-                continue
-            if not _is_curated_area_entity(hass, state_obj, local_speaker):
-                continue
-        elif not is_all_filter and state_obj.domain not in allowed_domains:
+        if state_obj.domain not in allowed_domains:
+            continue
+        if not _is_curated_area_entity(hass, state_obj, local_speaker):
             continue
 
         is_active = state_obj.state in (
@@ -1337,7 +1141,7 @@ def get_area_entities(
                 "type": state_obj.domain,
                 "active": is_active,
                 "level": level,
-                "_prio": 0 if is_pinned else domain_priority.get(state_obj.domain, 99),
+                "_prio": domain_priority.get(state_obj.domain, 99),
             }
         )
 
@@ -1411,6 +1215,8 @@ async def async_execute_area_action(
 
     domain = state_obj.domain
     action = action.strip().lower()
+    if not action and domain not in ("alarm_control_panel", "lock"):
+        action = "toggle"
     cur_level = max(0, get_entity_level(state_obj))
 
     if domain == "button":
@@ -1456,24 +1262,19 @@ async def async_execute_area_action(
             "arm_home": "alarm_arm_home",
             "arm_away": "alarm_arm_away",
             "arm_night": "alarm_arm_night",
-            "arm_vacation": "alarm_arm_vacation",
             "disarm": "alarm_disarm",
-            "turn_on": "alarm_arm_home",
-            "turn_off": "alarm_disarm",
         }
-        if action == "toggle":
-            svc = (
-                "alarm_disarm"
-                if state_obj.state != "disarmed"
-                else "alarm_arm_home"
+        svc = svc_map.get(action)
+        if svc is None:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="explicit_action_required",
             )
-        else:
-            svc = svc_map.get(action, "alarm_arm_home")
         payload: dict[str, Any] = {ATTR_ENTITY_ID: entity_id}
         if code:
             payload["code"] = str(code)
         await hass.services.async_call(
-            "alarm_control_panel", svc, payload, blocking=False
+            "alarm_control_panel", svc, payload, blocking=True
         )
         return
 
@@ -1521,8 +1322,21 @@ async def async_execute_area_action(
         return
 
     if domain == "lock":
-        svc_l = "unlock" if (action == "unlock" or (action == "toggle" and state_obj.state == "locked")) else "lock"
-        await hass.services.async_call("lock", svc_l, {ATTR_ENTITY_ID: entity_id}, blocking=False)
+        if action not in ("lock", "unlock", "open"):
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="explicit_action_required",
+            )
+        if action == "open":
+            supported = int(state_obj.attributes.get("supported_features") or 0)
+            if not (supported & LockEntityFeature.OPEN):
+                raise ServiceValidationError(
+                    translation_domain=DOMAIN,
+                    translation_key="not_supported",
+                )
+        await hass.services.async_call(
+            "lock", action, {ATTR_ENTITY_ID: entity_id}, blocking=True
+        )
         return
 
     if domain == "vacuum":

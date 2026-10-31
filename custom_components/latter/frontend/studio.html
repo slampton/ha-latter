@@ -944,17 +944,6 @@
     justify-content: center;
     margin-top: auto;
   }
-  .binding-row {
-    display: grid;
-    grid-template-columns: 1fr 1.6fr 0.9fr auto auto;
-    gap: 8px;
-    align-items: center;
-    margin-bottom: 8px;
-    background: var(--input-bg);
-    padding: 9px;
-    border-radius: 8px;
-    border: 1px solid var(--border);
-  }
   .chip-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
   .chip {
     background: var(--input-bg);
@@ -1040,7 +1029,6 @@
     .content-wrap { padding: 14px 12px 72px; }
     .grid-2 { grid-template-columns: 1fr; }
     .hero-stats { grid-template-columns: 1fr; }
-    .binding-row { grid-template-columns: 1fr; }
     .native-ctrl-row {
       flex-direction: column;
       align-items: stretch;
@@ -1198,9 +1186,6 @@
             <div class="summary-row clickable" onclick="openSystemSection('household', 'card-calendars')">
               <span>Calendars</span><strong id="sys-sum-calendars">0</strong>
             </div>
-            <div class="summary-row clickable" onclick="openSystemSection('household', 'card-pinned')">
-              <span>Pinned Area Entities</span><strong id="sys-sum-pinned">0</strong>
-            </div>
             <div class="summary-row clickable" onclick="openSystemSection('fleet_sync', '')">
               <span>Groups &amp; Saved Profiles</span><strong id="sys-sum-groups-profiles">0</strong>
             </div>
@@ -1209,12 +1194,12 @@
       </section>
 
       <!-- ================================================================== -->
-      <!-- SYSTEM TAB 2: SHARED ENTITIES (WHOLE-HOME, CAMERAS, CALENDARS, PINS)-->
+      <!-- SYSTEM TAB 2: SHARED ENTITIES (WHOLE-HOME, CAMERAS, CALENDARS)     -->
       <!-- ================================================================== -->
       <section id="view-household" class="hidden">
         <div class="page-header">
           <h2>Shared Entities</h2>
-          <p>Select shared system entities, cameras, calendars, and pinned area controls.</p>
+          <p>Select shared system entities, cameras, and calendars.</p>
         </div>
 
         <div class="grid-2">
@@ -1333,14 +1318,6 @@
             <p class="desc">Add family calendars (<code>calendar.*</code>) to aggregate upcoming events in the Agenda tool and Home screen.</p>
             <div id="calendars-list"></div>
             <button type="button" class="btn-secondary" onclick="addCalendarRow(''); markDirty();">+ Add Calendar</button>
-          </div>
-
-          <!-- CARD 4: PINNED AREA ENTITIES -->
-          <div class="card" id="card-pinned">
-            <h3>Pinned Area Entities</h3>
-            <p class="desc">Pin favorite scenes, scripts, lights, or switches to appear in Area Control and the on-device Macros tool.</p>
-            <div id="pinned-entities-list"></div>
-            <button type="button" class="btn-secondary" onclick="addPinnedEntityRow(''); markDirty();">+ Add Pinned Entity</button>
           </div>
         </div>
       </section>
@@ -1895,8 +1872,8 @@
             <p class="desc">Configure wake word operating mode, active wake word model, and visual profile.</p>
             <div id="embedded-voice-primary" class="native-controls-box" style="margin-bottom:10px;"></div>
 
-            <div class="toggle-row" style="margin-bottom:10px;">
-              <span>Sync Active Area to Home Assistant Device Area</span>
+            <div class="toggle-row" id="row-sync-device-area" style="margin-bottom:10px;">
+              <span>Voice Follows Me (Sync Active Area to Device Area)</span>
               <input type="checkbox" id="cfg-sync_device_area" onchange="markDirty()">
             </div>
 
@@ -2169,7 +2146,6 @@ const API_URL = window.location.pathname + "/api" + window.location.search;
 const esc = (s) => String(s ?? "").replace(/[&<>"'`]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;","`":"&#96;"}[c]));
 const jsArg = (v) => esc(JSON.stringify(v));
 let STATE = null;
-let PINNED = [];
 let CALENDARS = [];
 let IS_DIRTY = false;
 let INITIAL_FORM_LOADED = false;
@@ -3053,13 +3029,11 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
   const volCnt = Array.isArray(cfg?.volume_overrides) ? cfg.volume_overrides.length : 0;
   const camCnt = Array.isArray(cfg?.camera_entities) ? cfg.camera_entities.filter(Boolean).length : (cfg?.camera_entity ? 1 : 0);
   const calCnt = Array.isArray(cfg?.calendar_entities) ? cfg.calendar_entities.filter(Boolean).length : 0;
-  const pinCnt = Array.isArray(cfg?.custom_entities) ? cfg.custom_entities.filter(Boolean).length : 0;
 
   setSysTxt("sys-sum-remotes", remCnt);
   setSysTxt("sys-sum-vol", volCnt);
   setSysTxt("sys-sum-cameras", camCnt);
   setSysTxt("sys-sum-calendars", calCnt);
-  setSysTxt("sys-sum-pinned", pinCnt);
   setSysTxt("sys-sum-groups-profiles", `${groups.length} groups / ${profiles.length} profiles`);
 
   const alertDevSel = document.getElementById("test-alert-device");
@@ -3988,24 +3962,6 @@ function addCalendarRow(entityId="") {
   list.appendChild(row);
 }
 
-function addPinnedEntityRow(entityId="") {
-  const list = document.getElementById("pinned-entities-list");
-  if (!list) return;
-  const row = document.createElement("div");
-  row.className = "native-ctrl-row pinned-row-item";
-  row.style.marginBottom = "8px";
-  const pinOptions = (STATE?.catalog?.bindable_entities || []).map(e =>
-    `<option value="${esc(e.id)}" ${e.id === entityId ? 'selected' : ''}>${esc(e.name)}</option>`
-  ).join("");
-  row.innerHTML = `
-    <div style="flex:1;min-width:0;">
-      <select class="pin-ent-sel" style="width:100%;max-width:none;" onchange="markDirty()"><option value="">— Select Entity, Scene, or Script —</option>${pinOptions}</select>
-    </div>
-    <button type="button" class="btn-danger" title="Remove Pinned Entity" onclick="this.parentElement.remove(); markDirty();">✕</button>
-  `;
-  list.appendChild(row);
-}
-
 let REMOTE_GROUPS_STATE = [];
 
 function getInventoryRemoteIds() {
@@ -4223,48 +4179,11 @@ function addVolumeOverrideRow(speaker="", target="") {
   list.appendChild(row);
 }
 
-function addBindingRow(slot="", entity_id="", action="toggle") {
-  const list = document.getElementById("bindings-list");
-  const row = document.createElement("div");
-  row.className = "binding-row";
-  const entOptions = (STATE?.catalog?.bindable_entities || []).map(e =>
-    `<option value="${esc(e.id)}" ${e.id === entity_id ? 'selected' : ''}>${esc(e.name)}</option>`
-  ).join("");
-  row.innerHTML = `
-    <input type="text" class="b-slot" placeholder="Slot ID (e.g. macro_1)" value="${esc(slot)}" oninput="markDirty()">
-    <select class="b-ent" onchange="markDirty()"><option value="">— Target Entity —</option>${entOptions}</select>
-    <select class="b-act" onchange="markDirty()">
-      <option value="toggle" ${action==='toggle'?'selected':''}>Toggle</option>
-      <option value="turn_on" ${action==='turn_on'?'selected':''}>Turn On</option>
-      <option value="turn_off" ${action==='turn_off'?'selected':''}>Turn Off</option>
-      <option value="step_up" ${action==='step_up'?'selected':''}>Step Up (+10%)</option>
-      <option value="step_down" ${action==='step_down'?'selected':''}>Step Down (-10%)</option>
-    </select>
-    <button class="btn-secondary" onclick="testBindingRow(this)">Test</button>
-    <button class="btn-danger" onclick="this.parentElement.remove(); markDirty();">✕</button>
-  `;
-  list.appendChild(row);
-}
-
-async function testBindingRow(btn) {
-  const row = btn.parentElement;
-  const entity_id = row.querySelector(".b-ent").value;
-  const action = row.querySelector(".b-act").value;
-  if (!entity_id) return;
-  await fetch(API_URL, {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({command: "test_binding", entity_id, action})
-  });
-  showToast("Triggered " + action + " on " + entity_id);
-}
-
 function renderYamlGenerator() {
   const box = document.getElementById("yaml-gen-output");
   if (!box) return;
   const slug = (document.getElementById("cfg-device_slug")?.value || STATE?.config?.device_slug || "esphome_device").trim().toLowerCase().replace(/-/g, "_");
   const nodeHyphen = slug.replace(/_/g, "-");
-  const areaSlots = Math.max(1, Math.min(20, parseInt(document.getElementById("cfg-default_page_size")?.value || STATE?.config?.default_page_size || 3, 10)));
   const uuid = (document.getElementById("cfg-ble_beacon_uuid")?.value || STATE?.config?.ble_beacon_uuid || "4C415454-4552-434F-5245-000000000220").trim();
 
   const incSensors = document.getElementById("yg-sensors")?.checked;
@@ -4286,33 +4205,20 @@ function renderYamlGenerator() {
     if (incBrowse) {
       lines.push(`    - action: set_browse_slots`);
       lines.push(`      variables:`);
+      lines.push(`        contract: int`);
       lines.push(`        mode: string`);
       lines.push(`        page: int`);
       lines.push(`        total_pages: int`);
-      lines.push(`        has_prev: bool`);
-      lines.push(`        has_next: bool`);
-      for (let i = 1; i <= 5; i++) {
-        lines.push(`        s${i}_name: string`);
-        lines.push(`        s${i}_id: string`);
-        lines.push(`        s${i}_type: string`);
-        lines.push(`        s${i}_active: bool`);
-      }
+      lines.push(`        slots: string`);
     }
     if (incArea) {
       lines.push(`    - action: set_area_slots`);
       lines.push(`      variables:`);
+      lines.push(`        contract: int`);
       lines.push(`        mode: string`);
       lines.push(`        page: int`);
       lines.push(`        total_pages: int`);
-      lines.push(`        has_prev: bool`);
-      lines.push(`        has_next: bool`);
-      for (let i = 1; i <= areaSlots; i++) {
-        lines.push(`        s${i}_name: string`);
-        lines.push(`        s${i}_id: string`);
-        lines.push(`        s${i}_type: string`);
-        lines.push(`        s${i}_active: bool`);
-        lines.push(`        s${i}_level: int`);
-      }
+      lines.push(`        slots: string`);
     }
     lines.push(``);
   }
@@ -5000,6 +4906,10 @@ function applyStateToDom(data, forceFormUpdate=false) {
     document.getElementById("cfg-native_ble_tracking").checked = !!cfg.native_ble_tracking;
     document.getElementById("cfg-ble_auto_switch").checked = !!cfg.ble_auto_switch;
     document.getElementById("cfg-sync_device_area").checked = !!cfg.sync_device_area;
+    const syncAreaRow = document.getElementById("row-sync-device-area");
+    if (syncAreaRow) {
+      syncAreaRow.classList.toggle("hidden", STATE?.capabilities?.is_roaming_device === false);
+    }
     document.getElementById("cfg-area_handoff").checked = !!cfg.area_handoff;
     document.getElementById("cfg-ble_beacon_uuid").value = cfg.ble_beacon_uuid || "";
     if (document.getElementById("cfg-ble_target_address")) {
@@ -5080,18 +4990,6 @@ function applyStateToDom(data, forceFormUpdate=false) {
       calItems.forEach(cId => addCalendarRow(cId));
     }
 
-    const pinListEl = document.getElementById("pinned-entities-list");
-    if (pinListEl) {
-      pinListEl.innerHTML = "";
-      const pinItems = Array.isArray(cfg.custom_entities) ? cfg.custom_entities.filter(Boolean) : [];
-      pinItems.forEach(pId => addPinnedEntityRow(pId));
-    }
-
-    const bList = document.getElementById("bindings-list");
-    if (bList) {
-      bList.innerHTML = "";
-      (cfg.custom_bindings || []).forEach(b => addBindingRow(b.slot, b.entity_id, b.action));
-    }
     renderYamlGenerator();
     clearDirty();
   }
@@ -5131,14 +5029,6 @@ async function quickSwitchSpeaker(speakerId) {
 }
 
 async function saveAllConfig() {
-  const bindings = [];
-  document.querySelectorAll("#bindings-list .binding-row").forEach(row => {
-    const slot = row.querySelector(".b-slot").value.trim();
-    const entity_id = row.querySelector(".b-ent").value.trim();
-    const action = row.querySelector(".b-act").value.trim();
-    if (slot && entity_id) bindings.push({slot, entity_id, action});
-  });
-
   const volumeOverrides = [];
   document.querySelectorAll("#volume-overrides-list .vol-override-row").forEach(row => {
     const speaker = row.querySelector(".vo-spk")?.value?.trim() || "";
@@ -5162,12 +5052,6 @@ async function saveAllConfig() {
   document.querySelectorAll("#calendars-list .calendar-row-item").forEach(row => {
     const calEnt = row.querySelector(".cal-ent-sel")?.value?.trim() || "";
     if (calEnt && !calendarEntities.includes(calEnt)) calendarEntities.push(calEnt);
-  });
-
-  const pinnedEntities = [];
-  document.querySelectorAll("#pinned-entities-list .pinned-row-item").forEach(row => {
-    const pEnt = row.querySelector(".pin-ent-sel")?.value?.trim() || "";
-    if (pEnt && !pinnedEntities.includes(pEnt)) pinnedEntities.push(pEnt);
   });
 
   const config = {
@@ -5223,8 +5107,6 @@ async function saveAllConfig() {
     wallpaper_cycle_minutes: parseInt(document.getElementById("cfg-wallpaper_cycle_minutes").value, 10) || 0,
     art_size: document.getElementById("cfg-art_size").value.includes("x") ? document.getElementById("cfg-art_size").value : (parseInt(document.getElementById("cfg-art_size").value, 10) || 466),
     calendar_entities: calendarEntities,
-    custom_entities: pinnedEntities,
-    custom_bindings: bindings,
     custom_palettes: Array.isArray((STATE?.config || {}).custom_palettes) ? STATE.config.custom_palettes : [],
     device_custom_color: (STATE?.config || {}).device_custom_color || "#3898FF",
     doorbell_anc_mode: document.getElementById("cfg-doorbell_anc_mode")?.value || "ultra",

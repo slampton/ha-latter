@@ -49,9 +49,6 @@
     "remote_action": {
       "service": "mdi:remote-tv"
     },
-    "trigger_binding": {
-      "service": "mdi:gesture-tap-button"
-    },
     "calendar_fetch": {
       "service": "mdi:calendar-sync"
     },

@@ -1,4 +1,4 @@
-"""Service registration for Latter (Universal ESPHome Pagination, Area Control, BLE Area Sync, TV Remote, Trigger Bindings, Calendar, Intercom)."""
+"""Service registration for Latter (Universal ESPHome Pagination, Area Control, BLE Area Sync, TV Remote, Calendar, Intercom)."""
 
 from __future__ import annotations
 
@@ -6,12 +6,13 @@ import asyncio
 from datetime import timedelta
 import logging
 import math
+import time
 from typing import Any
 import voluptuous as vol
 
 from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import HomeAssistant, ServiceCall, ServiceResponse, SupportsResponse
-from homeassistant.helpers import config_validation as cv, device_registry as dr
+from homeassistant.helpers import config_validation as cv, device_registry as dr, issue_registry as ir
 from homeassistant.util import dt as dt_util
 
 from .browse_engine import async_browse_media_items, is_music_assistant_player
@@ -39,7 +40,6 @@ from .const import (
     SERVICE_SAVE_CUSTOM_COLOR,
     SERVICE_SET_ACTIVE_AREA,
     SERVICE_SET_ACTIVE_SPEAKER,
-    SERVICE_TRIGGER_BINDING,
     normalize_device_slug,
 )
 from .coordinator import LatterCoordinator, resolve_coordinator
@@ -208,29 +208,8 @@ def _resolve_esphome_action(
     return None
 
 
-def _detect_esphome_slot_capacity(
-    hass: HomeAssistant, esphome_action: str | None, default_slots: int = 5
-) -> tuple[int, bool]:
-    """Inspect the ESPHome service schema and return (slot_capacity, is_contract_v3)."""
-    if not esphome_action:
-        return default_slots, False
-    try:
-        esphome_services = hass.services.async_services().get("esphome", {})
-        svc_obj = esphome_services.get(esphome_action)
-        schema = getattr(svc_obj, "schema", None)
-        if schema is not None and hasattr(schema, "schema") and isinstance(schema.schema, dict):
-            keys = {str(k) for k in schema.schema}
-            if "slots" in keys:
-                return default_slots, True
-            max_slot = 0
-            for idx in range(1, 21):
-                if f"s{idx}_name" in keys:
-                    max_slot = idx
-            if max_slot > 0:
-                return max_slot, False
-    except Exception:  # noqa: BLE001
-        pass
-    return default_slots, False
+_SLOT_PUSH_WARN_INTERVAL_S = 600.0
+_SLOT_PUSH_REPAIR_THRESHOLD = 5
 
 
 async def async_push_browse_slots(
@@ -242,7 +221,7 @@ async def async_push_browse_slots(
     items: list[dict[str, Any]],
     preferred_suffix: str = "set_browse_slots",
 ) -> None:
-    """Paginate items for any GUI page_size (1..20) and push to esphome.<slug>_<suffix> (Contract v3 or positional)."""
+    """Paginate items and push to esphome.<slug>_<suffix> using the canonical Protocol v3 packed slot contract."""
     esphome_action = _resolve_esphome_action(hass, device_slug, preferred_suffix)
     include_levels = preferred_suffix == "set_area_slots" and esphome_action is not None
 
@@ -251,18 +230,7 @@ async def async_push_browse_slots(
             hass, device_slug, "set_browse_slots"
         )
 
-    coord = resolve_coordinator(hass, device_slug, allow_fallback=False)
-    manifest_slots = 0
-    if coord is not None:
-        try:
-            manifest_slots = int(coord.hardware_manifest.get("slot_count") or 0)
-        except (ValueError, TypeError):
-            manifest_slots = 0
-
-    default_cap = manifest_slots if manifest_slots >= 1 else (3 if include_levels else 5)
-    slot_capacity, is_contract_v3 = _detect_esphome_slot_capacity(
-        hass, esphome_action, default_slots=default_cap
-    )
+    slot_capacity = 3 if include_levels else 5
     eff_page_size = max(1, min(slot_capacity, int(page_size)))
     total_items = len(items)
     total_pages = max(1, math.ceil(total_items / eff_page_size))
@@ -270,46 +238,22 @@ async def async_push_browse_slots(
     start_idx = (page - 1) * eff_page_size
     page_slice = items[start_idx : start_idx + eff_page_size]
 
-    if is_contract_v3:
-        packed_rows: list[str] = []
-        for slot in page_slice:
-            s_name = str(slot.get("name", ""))[:64].replace("\x1f", " ").replace("\x1e", " ")
-            s_id = str(slot.get("id", ""))[:255].replace("\x1f", " ").replace("\x1e", " ")
-            s_type = str(slot.get("type", mode))[:32].replace("\x1f", " ").replace("\x1e", " ")
-            s_act = 1 if bool(slot.get("active", False)) else 0
-            s_lvl = int(slot.get("level", -1)) if include_levels else -1
-            packed_rows.append(f"{s_name}\x1f{s_id}\x1f{s_type}\x1f{s_act}\x1f{s_lvl}")
-        payload: dict[str, Any] = {
-            "contract": 3,
-            "mode": str(mode),
-            "page": int(page),
-            "total": int(total_pages),
-            "slots": "\x1e".join(packed_rows),
-        }
-    else:
-        payload = {
-            "mode": str(mode),
-            "page": int(page),
-            "total_pages": int(total_pages),
-            "has_prev": bool(page > 1),
-            "has_next": bool(page < total_pages),
-        }
-        for idx in range(1, slot_capacity + 1):
-            if idx <= len(page_slice):
-                slot = page_slice[idx - 1]
-                payload[f"s{idx}_name"] = str(slot.get("name", ""))[:64]
-                payload[f"s{idx}_id"] = str(slot.get("id", ""))[:255]
-                payload[f"s{idx}_type"] = str(slot.get("type", mode))[:32]
-                payload[f"s{idx}_active"] = bool(slot.get("active", False))
-                if include_levels:
-                    payload[f"s{idx}_level"] = int(slot.get("level", -1))
-            else:
-                payload[f"s{idx}_name"] = ""
-                payload[f"s{idx}_id"] = ""
-                payload[f"s{idx}_type"] = ""
-                payload[f"s{idx}_active"] = False
-                if include_levels:
-                    payload[f"s{idx}_level"] = -1
+    packed_rows: list[str] = []
+    for slot in page_slice:
+        s_name = str(slot.get("name", ""))[:64].replace("\x1f", " ").replace("\x1e", " ")
+        s_id = str(slot.get("id", ""))[:255].replace("\x1f", " ").replace("\x1e", " ")
+        s_type = str(slot.get("type", mode))[:32].replace("\x1f", " ").replace("\x1e", " ")
+        s_act = 1 if bool(slot.get("active", False)) else 0
+        s_lvl = int(slot.get("level", -1)) if include_levels else -1
+        packed_rows.append(f"{s_name}\x1f{s_id}\x1f{s_type}\x1f{s_act}\x1f{s_lvl}")
+
+    payload: dict[str, Any] = {
+        "contract": 3,
+        "mode": str(mode),
+        "page": int(page),
+        "total_pages": int(total_pages),
+        "slots": "\x1e".join(packed_rows),
+    }
 
     if esphome_action is None:
         _LOGGER.debug(
@@ -319,17 +263,58 @@ async def async_push_browse_slots(
         )
         return
 
+    domain_data = hass.data.setdefault(DOMAIN, {})
+    fail_counts: dict[str, int] = domain_data.setdefault("_slot_push_failures", {})
+    last_warn_ts: dict[str, float] = domain_data.setdefault("_slot_push_last_warn", {})
+    issue_id = f"slot_push_failing_{device_slug}"
+
     try:
         await hass.services.async_call(
             "esphome", esphome_action, payload, blocking=True
         )
+        if fail_counts.pop(device_slug, 0) >= _SLOT_PUSH_REPAIR_THRESHOLD:
+            ir.async_delete_issue(hass, DOMAIN, issue_id)
     except Exception as err:  # noqa: BLE001
-        _LOGGER.debug(
-            "Skipped %s push for '%s' (device hibernating or handshaking): %s",
-            esphome_action,
-            device_slug,
-            err,
-        )
+        count = fail_counts.get(device_slug, 0) + 1
+        fail_counts[device_slug] = count
+        now_m = time.monotonic()
+        if now_m - last_warn_ts.get(device_slug, -_SLOT_PUSH_WARN_INTERVAL_S) >= _SLOT_PUSH_WARN_INTERVAL_S:
+            last_warn_ts[device_slug] = now_m
+            _LOGGER.warning(
+                "Failed to push %s slots to '%s' (consecutive failures=%d): %s",
+                esphome_action,
+                device_slug,
+                count,
+                err,
+            )
+        if count >= _SLOT_PUSH_REPAIR_THRESHOLD:
+            coord = resolve_coordinator(hass, device_slug, allow_fallback=False)
+            placeholders = {
+                "device_slug": device_slug,
+                "service_name": f"esphome.{esphome_action}",
+                "error": str(err)[:160],
+            }
+            try:
+                ir.async_create_issue(
+                    hass,
+                    DOMAIN,
+                    issue_id,
+                    is_fixable=True,
+                    severity=ir.IssueSeverity.WARNING,
+                    translation_key="slot_push_failing",
+                    translation_placeholders=placeholders,
+                    config_entry_id=coord.entry.entry_id if coord else None,
+                )
+            except TypeError:
+                ir.async_create_issue(
+                    hass,
+                    DOMAIN,
+                    issue_id,
+                    is_fixable=True,
+                    severity=ir.IssueSeverity.WARNING,
+                    translation_key="slot_push_failing",
+                    translation_placeholders=placeholders,
+                )
 
 
 def _is_esphome_device_online(hass: HomeAssistant, coord: LatterCoordinator) -> bool:
@@ -364,7 +349,6 @@ async def async_push_active_area_entities(
         hass,
         area_id=coord.active_area_id,
         domain_filter=coord.last_area_filter or "all",
-        custom_entities=coord.custom_entities,
         local_speaker=coord.local_speaker,
     )
     await async_push_browse_slots(
@@ -416,63 +400,6 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             media_id=media_id,
             media_type=media_type,
             enqueue=enqueue,
-        )
-
-    async def _handle_trigger_binding(call: ServiceCall) -> None:
-        coord = _resolve_coordinator_from_call(hass, call)
-        if not coord:
-            return
-
-        data = call.data
-        slot_raw = str(data.get("slot") or "").strip()
-        slot_key = slot_raw.lower()
-        if not slot_key:
-            return
-
-        bindings = coord.custom_bindings
-        matched: dict[str, Any] | None = None
-        if "." in slot_raw and hass.states.get(slot_raw) is not None:
-            matched = {"slot": slot_raw, "entity_id": slot_raw, "action": "toggle"}
-
-        if matched is None:
-            for binding in bindings:
-                b_slot = str(binding.get("slot") or "").strip().lower()
-                if b_slot == slot_key:
-                    matched = binding
-                    break
-
-        if matched is None and slot_key.startswith("macro_"):
-            try:
-                idx = int(slot_key.split("_", 1)[1]) - 1
-                if 0 <= idx < len(coord.custom_entities):
-                    matched = {
-                        "slot": slot_key,
-                        "entity_id": coord.custom_entities[idx],
-                        "action": "toggle",
-                    }
-                elif 0 <= idx < len(bindings):
-                    matched = bindings[idx]
-            except ValueError:
-                pass
-
-        if matched is not None:
-            ent_id = str(matched.get("entity_id") or "").strip()
-            action = str(
-                data.get("action") or matched.get("action") or "toggle"
-            ).strip()
-            raw_lvl = data.get("level")
-            lvl = int(float(raw_lvl)) if raw_lvl is not None else None
-            if ent_id:
-                await async_execute_area_action(
-                    hass, entity_id=ent_id, action=action, level=lvl
-                )
-                coord.async_notify_listeners()
-            return
-
-        _LOGGER.debug(
-            "No custom binding found for slot '%s' on device '%s'",
-            slot_key,
-            coord.device_slug,
         )
 
     async def _handle_media_volume(call: ServiceCall) -> None:
@@ -814,7 +741,6 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             items = get_home_wide_entities(
                 hass,
                 configured_alarm_entity=coord.get_opt(CONF_ALARM_ENTITY) if coord else None,
-                custom_entities=coord.custom_entities if coord else None,
             )
             slot_mode = "area_home"
         else:
@@ -822,7 +748,6 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 hass,
                 area_id=area_id or (coord.active_area_id if coord else None),
                 domain_filter=domain_filter,
-                custom_entities=coord.custom_entities if coord else None,
                 local_speaker=local_speaker,
             )
             slot_mode = f"area_{domain_filter}"
@@ -851,12 +776,11 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             )
 
         entity_id = str(data.get("entity_id") or "").strip()
-        action = str(data.get("action") or "toggle").strip().lower()
+        action = str(data.get("action") or "").strip().lower()
         if not entity_id and coord and action in (
             "arm_home",
             "arm_away",
             "arm_night",
-            "arm_vacation",
             "disarm",
         ):
             entity_id = coord.alarm_entity or ""
@@ -1067,20 +991,6 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     )
     hass.services.async_register(
         DOMAIN,
-        SERVICE_TRIGGER_BINDING,
-        _handle_trigger_binding,
-        schema=vol.Schema(
-            {
-                **BASE_TARGET_FIELDS,
-                vol.Required("slot"): cv.string,
-                vol.Optional("action"): cv.string,
-                vol.Optional("level"): vol.Any(vol.Coerce(float), cv.string),
-            },
-            extra=vol.ALLOW_EXTRA,
-        ),
-    )
-    hass.services.async_register(
-        DOMAIN,
         SERVICE_MEDIA_VOLUME,
         _handle_media_volume,
         schema=vol.Schema(
@@ -1168,7 +1078,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 **BASE_TARGET_FIELDS,
                 vol.Optional("entity_id"): cv.string,
                 vol.Optional("area_id"): cv.string,
-                vol.Optional("action", default="toggle"): cv.string,
+                vol.Optional("action"): cv.string,
                 vol.Optional("level"): vol.Any(vol.Coerce(float), cv.string),
                 vol.Optional("code"): cv.string,
             },

@@ -25,7 +25,8 @@ EMA_ALPHA = 0.50
 HYSTERESIS_DB = 5.0
 FAST_OVERRIDE_DB = 8.0
 CROSS_FLOOR_ATTENUATION_DB = 6.0
-STALE_PROXY_SECONDS = 25.0
+STALE_PROXY_SECONDS = 12.0
+SILENCE_DECAY_DB_PER_S = 1.5
 SURVEY_RETENTION_SECONDS = 180.0
 WAKE_GAP_SECONDS = 8.0
 MIN_HOLD_SECONDS = 4.0
@@ -315,6 +316,7 @@ class LatterNativeBleTracker:
         # raw_source -> (rssi, last_seen_monotonic) for unmapped proxy diagnostics
         self._unmapped_rssi: dict[str, tuple[int, float]] = {}
         self._scanner_area_cache: dict[str, str | None] = {}
+        self._last_adv_ts_by_scanner: dict[str, float] = {}
         self._target_mac_ints: set[int] = set()
         self._last_mac_discovery_mono: float = 0.0
         self._matched_ble_addresses: dict[str, float] = {}
@@ -436,6 +438,7 @@ class LatterNativeBleTracker:
         self._area_rssi.clear()
         self._unmapped_rssi.clear()
         self._scanner_area_cache.clear()
+        self._last_adv_ts_by_scanner.clear()
         self.current_area_id = None
         self._last_switch_monotonic = 0.0
         self._target_mac_ints = _discover_target_device_macs(
@@ -467,6 +470,7 @@ class LatterNativeBleTracker:
         self._area_raw_rssi.clear()
         self._unmapped_rssi.clear()
         self._scanner_area_cache.clear()
+        self._last_adv_ts_by_scanner.clear()
 
     def get_live_rssi_summary(self) -> dict[str, int]:
         """Return a snapshot of area_name -> smoothed effective RSSI (dBm) for sensor attributes."""
@@ -697,7 +701,11 @@ class LatterNativeBleTracker:
                         rssi = getattr(ble_dev, "rssi", None)
                     if rssi is not None and int(rssi) > -100:
                         self._ingest_proxy_observation(
-                            source, int(rssi), obs_mono, scanner_name
+                            source,
+                            int(rssi),
+                            obs_mono,
+                            scanner_name,
+                            from_poll=last_ts is not None,
                         )
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("BLE scanner table poll error: %s", err)
@@ -715,19 +723,34 @@ class LatterNativeBleTracker:
         if rssi is None or not source or int(rssi) <= -100:
             return
 
-        self._ingest_proxy_observation(source, int(rssi), time.monotonic(), source)
+        adv_ts = getattr(service_info, "time", None)
+        obs_mono = float(adv_ts) if adv_ts is not None else time.monotonic()
+        self._ingest_proxy_observation(source, int(rssi), obs_mono, source)
 
     @callback
     def _ingest_proxy_observation(
-        self, source: str, rssi: int, obs_time: float, scanner_name: str = ""
+        self,
+        source: str,
+        rssi: int,
+        obs_time: float,
+        scanner_name: str = "",
+        *,
+        from_poll: bool = False,
     ) -> None:
         """Ingest a (scanner_source, rssi) observation and evaluate area transitions."""
         now = time.monotonic()
+        prev_adv_ts = self._last_adv_ts_by_scanner.get(source)
+        if from_poll and prev_adv_ts is not None and obs_time <= (prev_adv_ts + 1e-4):
+            self._evaluate_best_area(now, "")
+            return
+
+        self._last_adv_ts_by_scanner[source] = obs_time
         just_woke_from_standby = (
             self.last_packet_monotonic > 0.0
-            and (now - self.last_packet_monotonic) >= WAKE_GAP_SECONDS
+            and (obs_time - self.last_packet_monotonic) >= WAKE_GAP_SECONDS
         )
-        self.last_packet_monotonic = now
+        if obs_time > self.last_packet_monotonic:
+            self.last_packet_monotonic = obs_time
         self.packets_seen += 1
 
         if not self._target_mac_ints and self.packets_seen <= 3:
@@ -753,7 +776,7 @@ class LatterNativeBleTracker:
 
         raw_f = float(rssi)
         prev_raw = self._area_raw_rssi.get(area_id)
-        if prev_raw is None or (now - prev_raw[1]) > STALE_PROXY_SECONDS:
+        if prev_raw is None or (obs_time - prev_raw[1]) > STALE_PROXY_SECONDS:
             raw_ema = raw_f
         else:
             raw_ema = (EMA_ALPHA * raw_f) + ((1.0 - EMA_ALPHA) * prev_raw[0])
@@ -768,7 +791,7 @@ class LatterNativeBleTracker:
 
     @callback
     def _evaluate_best_area(self, now: float, latest_source: str = "") -> None:
-        """Evaluate fresh effective RSSI scores across all areas (with multi-story floor attenuation) and trigger area switch if needed."""
+        """Evaluate fresh effective RSSI scores across all areas (with silence decay and multi-story floor attenuation)."""
         raw_fresh_areas = {
             k: (val, ts)
             for k, (val, ts) in self._area_rssi.items()
@@ -786,7 +809,9 @@ class LatterNativeBleTracker:
 
         fresh_areas: dict[str, tuple[float, float]] = {}
         for k, (val, ts) in raw_fresh_areas.items():
-            adj_val = val
+            age_s = max(0.0, now - ts)
+            silence_penalty = SILENCE_DECAY_DB_PER_S * max(0.0, age_s - 2.0)
+            adj_val = val - silence_penalty
             if cur_floor_id and k != self.current_area_id:
                 cand_entry = area_reg.async_get_area(k)
                 cand_floor_id = getattr(cand_entry, "floor_id", None) if cand_entry else None
@@ -794,9 +819,12 @@ class LatterNativeBleTracker:
                     adj_val -= CROSS_FLOOR_ATTENUATION_DB
             fresh_areas[k] = (adj_val, ts)
 
-        best_area, (best_ema, _) = max(
+        best_area, (best_ema, best_ts) = max(
             fresh_areas.items(), key=lambda item: item[1][0]
         )
+        best_age_s = max(0.0, now - best_ts)
+        if best_ema < -88.0:
+            return
         self.is_away = False
 
         def _update_winner_metrics(win_area: str) -> None:
@@ -809,14 +837,20 @@ class LatterNativeBleTracker:
                 self.winning_distance_ft = round(d_m * 3.28084, 1)
 
         if self.current_area_id is None:
-            if best_ema >= -88.0 or len(fresh_areas) >= 1:
-                self.current_area_id = best_area
-                _update_winner_metrics(best_area)
-                if latest_source:
-                    self.closest_scanner = latest_source
-                self._last_switch_monotonic = now
-                self._on_area_detected(best_area, self.closest_scanner)
-                get_ble_fabric(self.hass).notify_occupancy_listeners()
+            self.current_area_id = best_area
+            _update_winner_metrics(best_area)
+            if latest_source:
+                self.closest_scanner = latest_source
+            self._last_switch_monotonic = now
+            _LOGGER.debug(
+                "BLE initial area lock (%s): area=%s best_ema=%.1fdBm age=%.1fs",
+                self._raw_slug,
+                best_area,
+                best_ema,
+                best_age_s,
+            )
+            self._on_area_detected(best_area, self.closest_scanner)
+            get_ble_fabric(self.hass).notify_occupancy_listeners()
             return
 
         if best_area == self.current_area_id:
@@ -828,6 +862,15 @@ class LatterNativeBleTracker:
         cur_entry = fresh_areas.get(self.current_area_id)
         cur_ema = cur_entry[0] if cur_entry is not None else -100.0
         delta_db = best_ema - cur_ema
+        _LOGGER.debug(
+            "BLE area candidate (%s): area=%s best_ema=%.1fdBm runner_up_ema=%.1fdBm delta=%.1fdB age=%.1fs",
+            self._raw_slug,
+            best_area,
+            best_ema,
+            cur_ema,
+            delta_db,
+            best_age_s,
+        )
 
         if delta_db >= FAST_OVERRIDE_DB:
             self.current_area_id = best_area
@@ -1268,7 +1311,11 @@ class LatterBleFabric:
                         if tracker._matches_raw_adv(addr_str, local_name, mfg_data):
                             tracker._record_matched_ble_address(addr_str)
                             tracker._ingest_proxy_observation(
-                                source, int(rssi), obs_mono, scanner_name
+                                source,
+                                int(rssi),
+                                obs_mono,
+                                scanner_name,
+                                from_poll=last_ts is not None,
                             )
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("Shared BLE Fabric scanner poll error: %s", err)
