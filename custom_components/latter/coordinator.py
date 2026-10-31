@@ -2418,6 +2418,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             area_attrs["dock_apps"],
             area_attrs["wallpaper_url"],
             area_attrs["theme_color_hex"],
+            area_attrs["available_domains"],
             area_attrs["area_temp"],
             area_attrs["area_humidity"],
             lights_on,
