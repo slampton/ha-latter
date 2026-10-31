@@ -1160,8 +1160,9 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("Repairs audit skipped: %s", err)
 
-    async def async_shutdown(self) -> None:
-        """Clean up all subscriptions and timers."""
+    @callback
+    def async_cleanup(self) -> None:
+        """Clean up all Latter subscriptions and timers on entry unload."""
         if self._ble_tracker is not None:
             self._ble_tracker.async_stop()
             self._ble_tracker = None
@@ -1203,7 +1204,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._unsub_doorbell_ring_state = None
         self._unsub_area_follow_dwell = None
         self._pending_follow_area_id = None
-        self._listeners.clear()
 
     @callback
     def _bind_area_entities_listener(self) -> None:

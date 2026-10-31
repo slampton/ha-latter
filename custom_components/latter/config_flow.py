@@ -553,7 +553,7 @@ class LatterConfigFlow(ConfigFlow, domain=DOMAIN):
             _dev, target_uid = _resolve_esphome_device_and_unique_id(self.hass, slug)
             await self.async_set_unique_id(target_uid)
             self._abort_if_unique_id_mismatch(reason="wrong_device")
-            return self.async_update_reload_and_abort(
+            return self.async_update_and_abort(
                 reconfigure_entry,
                 data_updates=merged_data,
                 options={**(reconfigure_entry.options or {}), **merged_data},

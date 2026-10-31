@@ -362,12 +362,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: LatterConfigEntry) -> None:
-    """Apply updated options in-place, or reload the config entry if structural keys changed."""
+    """Apply updated options in-place, or schedule a config entry reload if structural keys changed."""
     coordinator: LatterCoordinator | None = getattr(
         entry, "runtime_data", None
     ) or hass.data.get(DOMAIN, {}).get(entry.entry_id)
     if coordinator is None or coordinator.has_structural_changes():
-        await hass.config_entries.async_reload(entry.entry_id)
+        hass.config_entries.async_schedule_reload(entry.entry_id)
         return
     await coordinator.async_apply_options()
 
@@ -380,7 +380,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> b
             entry.entry_id, None
         )
         if coordinator is not None:
-            await coordinator.async_shutdown()
+            coordinator.async_cleanup()
         remaining = [
             v for v in hass.data.get(DOMAIN, {}).values() if isinstance(v, LatterCoordinator)
         ]
