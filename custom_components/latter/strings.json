@@ -10,7 +10,7 @@
           "native_ble_tracking": "This device roams (not fixed to a single Area)"
         },
         "data_description": {
-          "device_slug": "The normalized name of your ESPHome device (for example: pocket_assistant or wrist_assist).",
+          "device_slug": "The normalized name of your ESPHome device (for example: kitchen_display).",
           "apply_profile": "Auto-detect screen geometry and capabilities from hardware, or apply a saved Latter profile.",
           "native_ble_tracking": "Enable for portable/wearable devices that move area-to-area. Uncheck for stationary area devices."
         }

@@ -383,7 +383,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             manufacturer="Lampton Labs",
             model="Latter ESPHome Companion Middleware",
             sw_version=INTEGRATION_VERSION,
-            configuration_url=self.build_companion_url(),
+            configuration_url="homeassistant://latter",
             **({"via_device_id": esp_dev_id} if esp_dev_id else {}),
         )
 
@@ -808,23 +808,11 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         except ValueError:
             return DEFAULT_ART_SIZE, DEFAULT_ART_SIZE
 
-    def get_signed_token(self) -> str:
-        """Generate an HMAC-SHA256 token for this config entry's companion UI."""
-        return hmac.new(
-            self._hmac_secret,
-            self.entry.entry_id.encode("utf-8"),
-            hashlib.sha256,
-        ).hexdigest()[:32]
+    _SIG_BUCKET_S = 86400
 
-    def verify_token(self, token: str | None) -> bool:
-        """Verify an incoming query token in constant time."""
-        if not token:
-            return False
-        return hmac.compare_digest(token, self.get_signed_token())
-
-    def sign_resource(self, resource: str, ttl_s: int = 604800) -> str:
+    def sign_resource(self, resource: str, ttl_s: int = 7 * 86400) -> str:
         """Generate a time-bounded, resource-scoped HMAC-SHA256 signature."""
-        exp = int(time.time()) + ttl_s
+        exp = ((int(time.time()) + ttl_s) // self._SIG_BUCKET_S + 1) * self._SIG_BUCKET_S
         msg = f"{self.entry.entry_id}|{resource}|{exp}".encode("utf-8")
         mac = hmac.new(self._hmac_secret, msg, hashlib.sha256).hexdigest()[:32]
         return f"{exp}.{mac}"
@@ -833,22 +821,19 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self,
         resource: str,
         sig: str | None = None,
-        token: str | None = None,
     ) -> bool:
-        """Verify a resource-scoped expiring signature or a valid entry companion token."""
-        if sig:
-            try:
-                exp_s, mac = sig.split(".", 1)
-                if int(exp_s) < int(time.time()):
-                    return False
-            except ValueError:
+        """Verify a resource-scoped expiring signature."""
+        if not sig:
+            return False
+        try:
+            exp_s, mac = sig.split(".", 1)
+            if int(exp_s) < int(time.time()):
                 return False
-            msg = f"{self.entry.entry_id}|{resource}|{exp_s}".encode("utf-8")
-            expected = hmac.new(self._hmac_secret, msg, hashlib.sha256).hexdigest()[:32]
-            return hmac.compare_digest(mac, expected)
-        if token:
-            return self.verify_token(token)
-        return False
+        except ValueError:
+            return False
+        msg = f"{self.entry.entry_id}|{resource}|{exp_s}".encode("utf-8")
+        expected = hmac.new(self._hmac_secret, msg, hashlib.sha256).hexdigest()[:32]
+        return hmac.compare_digest(mac, expected)
 
     def get_lan_base_url(self) -> str:
         """Resolve the numeric-IP LAN HTTP base URL and actual active HTTP port for ESP32 online_image clients."""
@@ -897,13 +882,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Invalidate cached LAN base URL when Home Assistant core network configuration updates."""
         self._cached_lan_base_url = None
         self.async_notify_listeners()
-
-    def build_companion_url(self) -> str:
-        """Build the authenticated Web Companion Studio URL, preferring the active browser origin or local LAN URL."""
-        learned_base = str(self.hass.data.get(DOMAIN, {}).get("last_browser_base_url") or "").strip()
-        base_url = self.companion_base_url or learned_base or self.get_lan_base_url()
-        token = self.get_signed_token()
-        return f"{base_url.rstrip('/')}/api/latter/companion/{self.entry.entry_id}?token={token}"
 
     def build_camera_snapshot_url(
         self, camera_entity_id: str | None = None, cache_bust: str = ""

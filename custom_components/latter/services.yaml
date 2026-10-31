@@ -667,7 +667,7 @@ save_custom_color:
   fields:
     target_device:
       name: Target Device
-      description: Target ESPHome device slug (e.g. pocket-assistant).
+      description: Target ESPHome device slug (e.g. kitchen_display).
       required: false
       selector:
         text:

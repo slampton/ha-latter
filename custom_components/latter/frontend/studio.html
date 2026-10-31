@@ -1252,7 +1252,7 @@
             </div>
           </div>
 
-          <!-- CARD 2: CAMERAS & UNIFI TWO-WAY DOORBELL AUDIO -->
+          <!-- CARD 2: CAMERAS & TWO-WAY DOORBELL AUDIO -->
           <div class="card" id="card-cameras">
             <h3>Cameras &amp; Doorbell Two-Way Audio</h3>
             <p class="desc">Add up to 10 <code>camera.*</code> entities for the on-device Camera Carousel and two-way doorbell intercom.</p>
@@ -1260,7 +1260,7 @@
               <label>Doorbell Noise &amp; Echo Cancellation (ANC + NLMS AEC)</label>
               <div class="input-action-row">
                 <select id="cfg-doorbell_anc_mode" onchange="markDirty()">
-                  <option value="ultra">Ultra ANC + NLMS Echo Cancel (UniFi Protect Optimized)</option>
+                  <option value="ultra">Ultra ANC + NLMS Echo Cancel (High-Rejection)</option>
                   <option value="balanced">Balanced Spectral ANC</option>
                   <option value="raw">Raw Audio Passthrough</option>
                 </select>
@@ -1274,7 +1274,7 @@
               <summary>SIP / VoIP Intercom &amp; Gate DTMF Settings</summary>
               <div class="details-body">
                 <div class="toggle-row" style="margin-bottom:10px;">
-                  <span>Enable SIP / RTP VoIP Client (PBX or Peer-to-Peer DoorBird / 2N / UniFi)</span>
+                  <span>Enable SIP / RTP VoIP Client (PBX or Peer-to-Peer Doorbell Intercom)</span>
                   <input type="checkbox" id="cfg-sip_enabled" onchange="markDirty()">
                 </div>
                 <div class="form-grid-2">
@@ -2166,6 +2166,8 @@
 
 <script>
 const API_URL = window.location.pathname + "/api" + window.location.search;
+const esc = (s) => String(s ?? "").replace(/[&<>"'`]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;","`":"&#96;"}[c]));
+const jsArg = (v) => esc(JSON.stringify(v));
 let STATE = null;
 let PINNED = [];
 let CALENDARS = [];
@@ -2538,7 +2540,7 @@ function updateUnifiedPageTitle(viewId) {
   const baseTitle = VIEW_TITLES[CURRENT_VIEW_ID] || "Overview";
   if (CURRENT_SCOPE === "device" && DEVICE_SELECTED && CURRENT_VIEW_ID !== "select_device_prompt") {
     const devTitle = STATE?.esphome?.device?.name || STATE?.title || "Device";
-    titleEl.innerHTML = `<span>${baseTitle}</span><span class="header-device-sub">&mdash; ${devTitle}</span>`;
+    titleEl.innerHTML = `<span>${esc(baseTitle)}</span><span class="header-device-sub">&mdash; ${esc(devTitle)}</span>`;
   } else {
     titleEl.textContent = baseTitle;
   }
@@ -2666,8 +2668,8 @@ function switchFleetDevice(companionUrl) {
     setScope("device", "select_device_prompt");
     return;
   }
-  const curBase = window.location.pathname + "?token=" + (URL_PARAMS.get("token") || "");
-  if (companionUrl === curBase || companionUrl === window.location.pathname + window.location.search) {
+  const curBase = window.location.pathname + "?uid=" + encodeURIComponent(URL_PARAMS.get("uid") || "") + "&sig=" + encodeURIComponent(URL_PARAMS.get("sig") || "");
+  if (companionUrl === curBase || companionUrl === window.location.pathname + window.location.search || companionUrl.startsWith(window.location.pathname + "?")) {
     selectCurrentDevice();
   } else {
     window.location.href = companionUrl;
@@ -2723,10 +2725,10 @@ function renderDockPillsFromInput() {
     const actIdx = activeTokens.indexOf(tok);
     const canLeft = isEn && actIdx > 0;
     const canRight = isEn && actIdx < activeTokens.length - 1;
-    return `<div class="dock-pill ${isEn ? 'enabled' : ''}" onclick="toggleDockAppToken('${tok}')">
-      ${canLeft ? `<span class="move-arrow" title="Move Left" onclick="event.stopPropagation(); moveDockAppToken('${tok}', -1)">◀</span>` : ''}
-      <span>${isEn ? '✓ ' : '+ '}${meta ? meta.label : tok}</span>
-      ${canRight ? `<span class="move-arrow" title="Move Right" onclick="event.stopPropagation(); moveDockAppToken('${tok}', 1)">▶</span>` : ''}
+    return `<div class="dock-pill ${isEn ? 'enabled' : ''}" onclick="toggleDockAppToken(${jsArg(tok)})">
+      ${canLeft ? `<span class="move-arrow" title="Move Left" onclick="event.stopPropagation(); moveDockAppToken(${jsArg(tok)}, -1)">◀</span>` : ''}
+      <span>${isEn ? '✓ ' : '+ '}${esc(meta ? meta.label : tok)}</span>
+      ${canRight ? `<span class="move-arrow" title="Move Right" onclick="event.stopPropagation(); moveDockAppToken(${jsArg(tok)}, 1)">▶</span>` : ''}
     </div>`;
   }).join("");
 }
@@ -2799,7 +2801,7 @@ function renderRssiBars(surveyRows, packetsSeen) {
   if (!box) return;
   const rows = surveyRows || [];
   if (!rows.length) {
-    box.innerHTML = `<p class="desc">No Bluetooth proxies discovered yet (Packets seen: ${packetsSeen || 0}).</p>`;
+    box.innerHTML = `<p class="desc">No Bluetooth proxies discovered yet (Packets seen: ${esc(packetsSeen || 0)}).</p>`;
     return;
   }
   box.innerHTML = rows.map(r => {
@@ -2809,11 +2811,11 @@ function renderRssiBars(surveyRows, packetsSeen) {
     const offSign = r.offset_db > 0 ? `+${r.offset_db}` : `${r.offset_db}`;
     const ageText = hasSignal ? `${r.age_seconds}s ago` : "No signal yet";
     const distText = (hasSignal && r.distance_m != null)
-      ? ` &bull; Distance: <strong style="color:var(--text-strong);">~${r.distance_m}m (${r.distance_ft}ft)</strong>`
+      ? ` &bull; Distance: <strong style="color:var(--text-strong);">~${esc(r.distance_m)}m (${esc(r.distance_ft)}ft)</strong>`
       : "";
     const sigText = hasSignal
-      ? `Raw: <strong>${r.raw_rssi} dBm</strong> &bull; Offset: <strong>${offSign} dB</strong> &rarr; Effective: <strong style="color:var(--accent);">${r.effective_rssi} dBm</strong>${distText}`
-      : `Offset: <strong>${offSign} dB</strong> &bull; Waiting for beacon packet...`;
+      ? `Raw: <strong>${esc(r.raw_rssi)} dBm</strong> &bull; Offset: <strong>${esc(offSign)} dB</strong> &rarr; Effective: <strong style="color:var(--accent);">${esc(r.effective_rssi)} dBm</strong>${distText}`
+      : `Offset: <strong>${esc(offSign)} dB</strong> &bull; Waiting for beacon packet...`;
     const winBadge = r.is_winner
       ? `<span class="state-badge" style="border-color:var(--success);color:var(--success);margin-left:6px;">ACTIVE</span>`
       : "";
@@ -2821,16 +2823,16 @@ function renderRssiBars(surveyRows, packetsSeen) {
     return `<div style="background:var(--input-bg);border:1px solid ${r.is_winner ? 'var(--accent)' : 'var(--border)'};border-radius:10px;padding:11px 13px;margin-bottom:8px;">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:6px;">
         <div>
-          <strong style="color:var(--text-strong);font-size:13.5px;font-weight:500;">${r.area_name}</strong>
-          <small style="color:var(--muted);margin-left:6px;">(${r.scanner} &bull; ${ageText})</small>
+          <strong style="color:var(--text-strong);font-size:13.5px;font-weight:500;">${esc(r.area_name)}</strong>
+          <small style="color:var(--muted);margin-left:6px;">(${esc(r.scanner)} &bull; ${esc(ageText)})</small>
           ${winBadge}
         </div>
         <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">
-          <button class="btn-secondary" style="padding:4px 8px;font-size:12px;" onclick="setBleOffset('${r.area_id}', ${Number(r.offset_db) - 1})">-1 dB</button>
-          <span class="state-badge" style="min-width:52px;text-align:center;">${offSign} dB</span>
-          <button class="btn-secondary" style="padding:4px 8px;font-size:12px;" onclick="setBleOffset('${r.area_id}', ${Number(r.offset_db) + 1})">+1 dB</button>
-          ${r.offset_db !== 0 ? `<button class="btn-danger" style="padding:4px 7px;font-size:11.5px;" title="Reset to 0 dB" onclick="setBleOffset('${r.area_id}', 0)">0</button>` : ''}
-          <button class="btn-secondary" style="padding:4px 10px;font-size:12px;border-color:var(--accent);color:var(--accent);" onclick="autoCalibrateHere('${r.area_id}')">Calibrate Current Area</button>
+          <button class="btn-secondary" style="padding:4px 8px;font-size:12px;" onclick="setBleOffset(${jsArg(r.area_id)}, ${Number(r.offset_db) - 1})">-1 dB</button>
+          <span class="state-badge" style="min-width:52px;text-align:center;">${esc(offSign)} dB</span>
+          <button class="btn-secondary" style="padding:4px 8px;font-size:12px;" onclick="setBleOffset(${jsArg(r.area_id)}, ${Number(r.offset_db) + 1})">+1 dB</button>
+          ${r.offset_db !== 0 ? `<button class="btn-danger" style="padding:4px 7px;font-size:11.5px;" title="Reset to 0 dB" onclick="setBleOffset(${jsArg(r.area_id)}, 0)">0</button>` : ''}
+          <button class="btn-secondary" style="padding:4px 10px;font-size:12px;border-color:var(--accent);color:var(--accent);" onclick="autoCalibrateHere(${jsArg(r.area_id)})">Calibrate Current Area</button>
         </div>
       </div>
       <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">${sigText}</div>
@@ -2855,7 +2857,7 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
   if (picker && fleetDevices) {
     const placeholder = `<option value="" ${!DEVICE_SELECTED ? 'selected' : ''}>— Select a Device —</option>`;
     picker.innerHTML = placeholder + fleetDevices.map(d =>
-      `<option value="${d.companion_url}" ${(DEVICE_SELECTED && d.is_current) ? 'selected' : ''}>${d.title}</option>`
+      `<option value="${esc(d.companion_url)}" ${(DEVICE_SELECTED && d.is_current) ? 'selected' : ''}>${esc(d.title)}</option>`
     ).join("");
   }
 
@@ -2863,7 +2865,7 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
   if (quickProfSel && profiles.length) {
     const prevP = quickProfSel.value;
     quickProfSel.innerHTML = profiles.map(p =>
-      `<option value="${p.id}" ${p.id === prevP ? 'selected' : ''}>${p.name}</option>`
+      `<option value="${esc(p.id)}" ${p.id === prevP ? 'selected' : ''}>${esc(p.name)}</option>`
     ).join("");
   }
 
@@ -2871,7 +2873,7 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
   if (devGrpSel && groups.length) {
     const curGrp = cfg?.device_group || "handhelds";
     devGrpSel.innerHTML = groups.map(g =>
-      `<option value="${g.id}" ${g.id === curGrp ? 'selected' : ''}>Group: ${g.name}</option>`
+      `<option value="${esc(g.id)}" ${g.id === curGrp ? 'selected' : ''}>Group: ${esc(g.name)}</option>`
     ).join("");
   }
 
@@ -2891,7 +2893,7 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
   if (profScopeSel) {
     const prevVal = profScopeSel.value || "current";
     profScopeSel.innerHTML = targetScopes.map(o =>
-      `<option value="${o.id}" ${o.id === prevVal ? 'selected' : ''}>${o.name}</option>`
+      `<option value="${esc(o.id)}" ${o.id === prevVal ? 'selected' : ''}>${esc(o.name)}</option>`
     ).join("");
   }
 
@@ -2909,7 +2911,7 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
     filterOpts.push({id: "arch:mobile_display", name: "Type: Mobile Displays"});
     filterOpts.push({id: "arch:stationary_display", name: "Type: Stationary Displays"});
     grpFilterSel.innerHTML = filterOpts.map(o =>
-      `<option value="${o.id}" ${o.id === activeFilter ? 'selected' : ''}>${o.name}</option>`
+      `<option value="${esc(o.id)}" ${o.id === activeFilter ? 'selected' : ''}>${esc(o.name)}</option>`
     ).join("");
   }
 
@@ -2939,7 +2941,7 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
       }
     });
     catSel.innerHTML = baseOpts.map(o =>
-      `<option value="${o.id}" ${o.id === DEVICE_CATEGORY_FILTER ? 'selected' : ''}>${o.label}</option>`
+      `<option value="${esc(o.id)}" ${o.id === DEVICE_CATEGORY_FILTER ? 'selected' : ''}>${esc(o.label)}</option>`
     ).join("");
   }
   const cat = DEVICE_CATEGORY_FILTER || "all";
@@ -2987,18 +2989,18 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
   const tableRowsHtml = filteredDevices.map(d => {
     const actAction = d.is_current
       ? `selectCurrentDevice()`
-      : `switchFleetDevice('${d.companion_url}')`;
+      : `switchFleetDevice(${jsArg(d.companion_url)})`;
     const st = d.status_label || "Online";
     const dotCls = st === "Update Available" ? "update" : (st === "Offline" ? "offline" : "online");
     const areaVal = d.area_label || "Roaming";
     const grpVal = d.device_group_name || "Unassigned";
     const mdlVal = d.model_label || "ESPHome Node";
     return `<tr onclick="${actAction}">
-      <td class="col-name">${d.title}</td>
-      <td>${mdlVal}</td>
-      <td>${areaVal}</td>
-      <td>${grpVal}</td>
-      <td><span class="status-dot ${dotCls}"></span>${st}</td>
+      <td class="col-name">${esc(d.title)}</td>
+      <td>${esc(mdlVal)}</td>
+      <td>${esc(areaVal)}</td>
+      <td>${esc(grpVal)}</td>
+      <td><span class="status-dot ${dotCls}"></span>${esc(st)}</td>
       <td style="text-align:right;color:var(--muted);font-size:16px;">›</td>
     </tr>`;
   }).join("");
@@ -3064,7 +3066,7 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
   if (alertDevSel && fleetDevices && fleetDevices.length) {
     const prevTarget = alertDevSel.value || (STATE?.config?.device_slug || fleetDevices[0].device_slug);
     const devOpts = fleetDevices.map(d =>
-      `<option value="${d.device_slug}" ${d.device_slug === prevTarget ? 'selected' : ''}>${d.title} (${d.device_slug})</option>`
+      `<option value="${esc(d.device_slug)}" ${d.device_slug === prevTarget ? 'selected' : ''}>${esc(d.title)} (${esc(d.device_slug)})</option>`
     );
     if (fleetDevices.length > 1) {
       devOpts.push(`<option value="follow_me" ${prevTarget === 'follow_me' ? 'selected' : ''}>Follow-Me (Occupied Areas Only)</option>`);
@@ -3085,12 +3087,12 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
         const isBuiltin = String(p.id || "").startsWith("preset_");
         return `<div class="native-ctrl-row">
           <div class="lbl">
-            ${p.name} <span class="state-badge" style="margin-left:6px;">${ctrlCnt} controls</span>
-            <small>${p.description || ''}</small>
+            ${esc(p.name)} <span class="state-badge" style="margin-left:6px;">${ctrlCnt} controls</span>
+            <small>${esc(p.description || '')}</small>
           </div>
           <div class="widget">
-            <button class="btn-primary" onclick="applySavedProfile('${p.id}')">Apply</button>
-            ${!isBuiltin ? `<button class="btn-danger" onclick="deleteSavedProfile('${p.id}')">✕</button>` : ''}
+            <button class="btn-primary" onclick="applySavedProfile(${jsArg(p.id)})">Apply</button>
+            ${!isBuiltin ? `<button class="btn-danger" onclick="deleteSavedProfile(${jsArg(p.id)})">✕</button>` : ''}
           </div>
         </div>`;
       }).join("");
@@ -3105,11 +3107,11 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
       const isDefault = ["unassigned", "handhelds", "bedrooms", "common_areas", "wall_panels", "sensors"].includes(g.id);
       return `<div class="native-ctrl-row">
         <div class="lbl">
-          ${g.name} <span class="state-badge" style="margin-left:6px;">${members.length}</span>
-          <small>${g.description || ''} &bull; Devices: <strong>${memNames}</strong></small>
+          ${esc(g.name)} <span class="state-badge" style="margin-left:6px;">${members.length}</span>
+          <small>${esc(g.description || '')} &bull; Devices: <strong>${esc(memNames)}</strong></small>
         </div>
         <div class="widget">
-          ${!isDefault ? `<button class="btn-danger" onclick="deleteDeviceGroup('${g.id}')">✕</button>` : ''}
+          ${!isDefault ? `<button class="btn-danger" onclick="deleteDeviceGroup(${jsArg(g.id)})">✕</button>` : ''}
         </div>
       </div>`;
     }).join("");
@@ -3130,27 +3132,27 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
           return true;
         });
         if (!matchingTargets.length) return "";
-        const entIdsJson = JSON.stringify(matchingTargets.map(t => t.entity_id)).replace(/"/g, "&quot;");
+        const entIdsArg = jsArg(matchingTargets.map(t => t.entity_id));
         const devCount = matchingTargets.length;
         const curState = matchingTargets[0].state ?? fc.state;
-        let widget = `<span class="state-badge">${curState}</span>`;
+        let widget = `<span class="state-badge">${esc(curState)}</span>`;
         if (fc.domain === "select" && fc.options && fc.options.length) {
-          const opts = fc.options.map(o => `<option value="${o}" ${o===curState?'selected':''}>${o}</option>`).join("");
-          widget = `<select onchange="fleetSelect(${entIdsJson}, this.value)">${opts}</select>`;
+          const opts = fc.options.map(o => `<option value="${esc(o)}" ${o===curState?'selected':''}>${esc(o)}</option>`).join("");
+          widget = `<select onchange="fleetSelect(${entIdsArg}, this.value)">${opts}</select>`;
         } else if (fc.domain === "switch") {
           const isOn = curState === "on";
-          widget = `<button class="${isOn ? 'btn-primary' : 'btn-secondary'}" onclick="fleetToggle(${entIdsJson}, '${isOn ? 'turn_off' : 'turn_on'}')">${isOn ? 'ON' : 'OFF'}</button>`;
+          widget = `<button class="${isOn ? 'btn-primary' : 'btn-secondary'}" onclick="fleetToggle(${entIdsArg}, ${jsArg(isOn ? 'turn_off' : 'turn_on')})">${isOn ? 'ON' : 'OFF'}</button>`;
         } else if (fc.domain === "number") {
           const minV = fc.min ?? 0;
           const maxV = fc.max ?? 100;
           const stepV = fc.step ?? 1;
           const numVal = parseFloat(curState) || 0;
-          widget = `<input type="range" min="${minV}" max="${maxV}" step="${stepV}" value="${numVal}" onchange="fleetNumber(${entIdsJson}, this.value)"><span class="state-badge">${curState} ${fc.unit || ''}</span>`;
+          widget = `<input type="range" min="${esc(minV)}" max="${esc(maxV)}" step="${esc(stepV)}" value="${esc(numVal)}" onchange="fleetNumber(${entIdsArg}, this.value)"><span class="state-badge">${esc(curState)} ${esc(fc.unit || '')}</span>`;
         }
         return `<div class="native-ctrl-row">
           <div class="lbl">
-            ${fc.name}
-            <small>${fc.section_title} &bull; ${devCount} device${devCount > 1 ? 's' : ''}</small>
+            ${esc(fc.name)}
+            <small>${esc(fc.section_title)} &bull; ${devCount} device${devCount > 1 ? 's' : ''}</small>
           </div>
           <div class="widget">${widget}</div>
         </div>`;
@@ -3167,18 +3169,18 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
       vBox.innerHTML = backups.map(b => {
         const isSys = b.scope === "system";
         const scopeBadge = isSys
-          ? `<span class="state-badge">SYSTEM (${b.device_count})</span>`
-          : `<span class="state-badge">DEVICE: ${b.target_device}</span>`;
+          ? `<span class="state-badge">SYSTEM (${esc(b.device_count)})</span>`
+          : `<span class="state-badge">DEVICE: ${esc(b.target_device)}</span>`;
         const tsClean = (b.created_at || "").replace("T", " ").slice(0, 19);
         return `<div class="native-ctrl-row">
           <div class="lbl">
-            ${b.name} ${scopeBadge}
-            <small>${tsClean} &bull; ${b.control_count || 0} ESPHome settings &bull; v${b.version || ''}</small>
+            ${esc(b.name)} ${scopeBadge}
+            <small>${esc(tsClean)} &bull; ${esc(b.control_count || 0)} ESPHome settings &bull; v${esc(b.version || '')}</small>
           </div>
           <div class="widget">
-            <button class="btn-primary" onclick="restoreVaultSnapshot('${b.id}', '${b.name.replace(/'/g, "")}')">Restore</button>
-            <button class="btn-secondary" onclick="downloadVaultSnapshot('${b.id}')">Download</button>
-            <button class="btn-danger" onclick="deleteVaultSnapshot('${b.id}')">✕</button>
+            <button class="btn-primary" onclick="restoreVaultSnapshot(${jsArg(b.id)}, ${jsArg(b.name || '')})">Restore</button>
+            <button class="btn-secondary" onclick="downloadVaultSnapshot(${jsArg(b.id)})">Download</button>
+            <button class="btn-danger" onclick="deleteVaultSnapshot(${jsArg(b.id)})">✕</button>
           </div>
         </div>`;
       }).join("");
@@ -3281,7 +3283,7 @@ function renderActiveSurveyDeviceBars() {
 
   if (picker) {
     picker.innerHTML = bleDevs.map(d =>
-      `<option value="${d.device_slug}" ${d.device_slug === SELECTED_SURVEY_SLUG ? 'selected' : ''}>${d.title} (${d.active_area_name})</option>`
+      `<option value="${esc(d.device_slug)}" ${d.device_slug === SELECTED_SURVEY_SLUG ? 'selected' : ''}>${esc(d.title)} (${esc(d.active_area_name)})</option>`
     ).join("");
   }
 
@@ -3336,20 +3338,20 @@ function renderAreaPresenceGrid() {
     const subTxt = sigParts.length ? sigParts.join(" • ") : "BLE Proxy Ready";
     const curMode = r.fusion_mode || "auto_bayes";
     const optsHtml = modeOptions.map(m =>
-      `<option value="${m.val}" ${m.val === curMode ? 'selected' : ''}>${m.label}</option>`
+      `<option value="${esc(m.val)}" ${m.val === curMode ? 'selected' : ''}>${esc(m.label)}</option>`
     ).join("");
 
     return `<div class="native-ctrl-row">
       <div class="lbl">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-          <strong>${r.area_name}</strong>
-          <span class="state-badge" style="${badgeStyle}">${badgeTxt}</span>
-          <span style="font-size:12.5px;color:var(--text-strong);font-weight:500;">${occNames}</span>
+          <strong>${esc(r.area_name)}</strong>
+          <span class="state-badge" style="${badgeStyle}">${esc(badgeTxt)}</span>
+          <span style="font-size:12.5px;color:var(--text-strong);font-weight:500;">${esc(occNames)}</span>
         </div>
-        <small>${subTxt}</small>
+        <small>${esc(subTxt)}</small>
       </div>
       <div class="widget">
-        <select style="width:auto;min-width:210px;" onchange="setAreaFusionMode('${r.area_id}', this.value)">${optsHtml}</select>
+        <select style="width:auto;min-width:210px;" onchange="setAreaFusionMode(${jsArg(r.area_id)}, this.value)">${optsHtml}</select>
       </div>
     </div>`;
   }).join("");
@@ -3379,7 +3381,7 @@ function renderDiscoveredBleTable() {
   const persons = STATE?.catalog?.persons || [];
   box.innerHTML = cands.map((c, idx) => {
     const pOpts = [`<option value="">— Unassigned Person —</option>`].concat(
-      persons.map(p => `<option value="${p.id}">${p.friendly || p.name}</option>`)
+      persons.map(p => `<option value="${esc(p.id)}">${esc(p.friendly || p.name)}</option>`)
     ).join("");
     const metaParts = [c.kind || "BLE Device", c.target_address];
     if (c.rssi !== null && c.rssi !== undefined) metaParts.push(`${c.rssi} dBm`);
@@ -3387,8 +3389,8 @@ function renderDiscoveredBleTable() {
 
     return `<div class="native-ctrl-row">
       <div class="lbl">
-        <strong>${c.title}</strong>
-        <small>${metaParts.join(" • ")}</small>
+        <strong>${esc(c.title)}</strong>
+        <small>${esc(metaParts.join(" • "))}</small>
       </div>
       <div class="widget" style="gap:8px;flex-wrap:wrap;">
         <select id="ble-adopt-person-${idx}" style="width:auto;min-width:165px;">${pOpts}</select>
@@ -3444,10 +3446,15 @@ function renderCameraPreview(camEntityId) {
     box.style.display = "none";
     return;
   }
+  const camObj = (STATE?.catalog?.cameras || []).find(c => c.id === camEntityId);
+  if (!camObj || !camObj.preview_url) {
+    box.style.display = "none";
+    showToast("Save configuration first to preview this camera");
+    return;
+  }
   PREVIEW_CAMERA_ENTITY = camEntityId;
-  const slug = STATE?.config?.device_slug || "esphome_device";
   if (lbl) lbl.textContent = `Preview: ${camEntityId}`;
-  img.src = `/api/latter/camera/${slug}?entity_id=${encodeURIComponent(camEntityId)}&w=320&h=180&shape=square&v=${Date.now()}`;
+  img.src = camObj.preview_url;
   box.style.display = "flex";
 }
 
@@ -3516,10 +3523,10 @@ function renderLiveAreaCards(cards, areaName) {
     return;
   }
   box.innerHTML = cards.map(c => `
-    <div class="area-mini-card ${c.active ? 'on' : ''}" onclick="toggleAreaCard('${c.id}')">
+    <div class="area-mini-card ${c.active ? 'on' : ''}" onclick="toggleAreaCard(${jsArg(c.id)})">
       <div style="min-width:0;padding-right:8px;">
-        <strong style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${c.name}</strong>
-        <small>${c.type}</small>
+        <strong style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(c.name)}</strong>
+        <small>${esc(c.type)}</small>
       </div>
       <span class="state-badge">${c.active ? 'ON' : 'OFF'}</span>
     </div>
@@ -3540,36 +3547,36 @@ async function toggleAreaCard(entity_id) {
 
 function renderNativeControlRow(item, showEntityId=false) {
   const stateText = `${item.state}${item.unit ? ' ' + item.unit : ''}`;
-  let widgetHtml = `<span class="state-badge">${stateText}</span>`;
+  let widgetHtml = `<span class="state-badge">${esc(stateText)}</span>`;
 
   if (item.domain === "button") {
-    widgetHtml = `<button class="btn-secondary" style="padding:5px 12px;font-size:12px;" onclick="espAction('${item.entity_id}', 'press')">Run</button>`;
+    widgetHtml = `<button class="btn-secondary" style="padding:5px 12px;font-size:12px;" onclick="espAction(${jsArg(item.entity_id)}, 'press')">Run</button>`;
   } else if (item.domain === "update") {
     const hasUpd = item.state === "on";
     widgetHtml = hasUpd
-      ? `<button class="btn-primary" style="padding:5px 12px;font-size:12px;" onclick="espAction('${item.entity_id}', 'install')">Install Update</button>`
-      : `<span class="state-badge">Up to date</span><button class="btn-secondary" style="padding:4px 10px;font-size:11.5px;" onclick="espAction('${item.entity_id}', 'check')">Check</button>`;
+      ? `<button class="btn-primary" style="padding:5px 12px;font-size:12px;" onclick="espAction(${jsArg(item.entity_id)}, 'install')">Install Update</button>`
+      : `<span class="state-badge">Up to date</span><button class="btn-secondary" style="padding:4px 10px;font-size:11.5px;" onclick="espAction(${jsArg(item.entity_id)}, 'check')">Check</button>`;
   } else if (item.domain === "switch" || item.domain === "light" || item.domain === "fan") {
     const isOn = item.state === "on";
-    widgetHtml = `<button class="${isOn ? 'btn-primary' : 'btn-secondary'}" style="padding:5px 12px;font-size:12px;" onclick="espAction('${item.entity_id}', 'toggle')">${isOn ? 'ON' : 'OFF'}</button>`;
+    widgetHtml = `<button class="${isOn ? 'btn-primary' : 'btn-secondary'}" style="padding:5px 12px;font-size:12px;" onclick="espAction(${jsArg(item.entity_id)}, 'toggle')">${isOn ? 'ON' : 'OFF'}</button>`;
   } else if (item.domain === "select" && item.options && item.options.length) {
-    const opts = item.options.map(o => `<option value="${o}" ${o===item.state?'selected':''}>${o}</option>`).join("");
-    widgetHtml = `<select onchange="espSelect('${item.entity_id}', this.value)">${opts}</select>`;
+    const opts = item.options.map(o => `<option value="${esc(o)}" ${o===item.state?'selected':''}>${esc(o)}</option>`).join("");
+    widgetHtml = `<select onchange="espSelect(${jsArg(item.entity_id)}, this.value)">${opts}</select>`;
   } else if (item.domain === "number") {
     const minV = item.min ?? 0;
     const maxV = item.max ?? 100;
     const stepV = item.step ?? 1;
     const numVal = parseFloat(item.state) || 0;
     widgetHtml = `
-      <input type="range" min="${minV}" max="${maxV}" step="${stepV}" value="${numVal}" onchange="espNumber('${item.entity_id}', this.value)">
-      <span class="state-badge">${stateText}</span>
+      <input type="range" min="${esc(minV)}" max="${esc(maxV)}" step="${esc(stepV)}" value="${esc(numVal)}" onchange="espNumber(${jsArg(item.entity_id)}, this.value)">
+      <span class="state-badge">${esc(stateText)}</span>
     `;
   }
 
   return `<div class="native-ctrl-row">
     <div class="lbl">
-      ${item.name}
-      ${showEntityId ? `<small>${item.entity_id}</small>` : ''}
+      ${esc(item.name)}
+      ${showEntityId ? `<small>${esc(item.entity_id)}</small>` : ''}
     </div>
     <div class="widget">${widgetHtml}</div>
   </div>`;
@@ -3675,7 +3682,7 @@ function renderCohesiveDeviceSections() {
       pwrWrap.classList.remove("hidden");
       pwrSel.dataset.ent = pwrProfItem.entity_id;
       pwrSel.innerHTML = pwrProfItem.options.map(o =>
-        `<option value="${o}" ${o === pwrProfItem.state ? 'selected' : ''}>${o}</option>`
+        `<option value="${esc(o)}" ${o === pwrProfItem.state ? 'selected' : ''}>${esc(o)}</option>`
       ).join("");
     } else {
       pwrWrap.classList.add("hidden");
@@ -3739,7 +3746,7 @@ function renderCohesiveDeviceSections() {
   if (qaBox) {
     qaBox.innerHTML = actionItems.length
       ? actionItems.map(it =>
-          `<button class="btn-chip" onclick="espAction('${it.entity_id}', 'press')">${it.name}</button>`
+          `<button class="btn-chip" onclick="espAction(${jsArg(it.entity_id)}, 'press')">${esc(it.name)}</button>`
         ).join("")
       : `<span style="color:var(--muted);font-size:12.5px;">No quick action buttons exposed by this device.</span>`;
   }
@@ -3804,18 +3811,17 @@ function renderWallpaperGallery(wallpapers, slug, shape) {
   if (!box) return;
   const shapeClass = shape === "square" ? "square" : "circle";
   box.innerHTML = (wallpapers || []).map(wp => {
-    const encSrc = encodeURIComponent(wp.id);
-    const thumbUrl = `/api/latter/wallpaper/${slug}?w=240&h=240&shape=${shapeClass}&src=${encSrc}`;
+    const thumbUrl = wp.thumb_url || "";
     const starLabel = wp.favorite ? "★ Fav" : "☆ Fav";
     const delBtn = wp.deletable
-      ? `<button class="btn-danger" style="padding:5px 8px;" onclick="deleteWallpaper('${wp.id}')">✕</button>`
+      ? `<button class="btn-danger" style="padding:5px 8px;" onclick="deleteWallpaper(${jsArg(wp.id)})">✕</button>`
       : "";
     return `<div class="wp-card ${wp.active ? 'active' : ''}">
-      <img class="wp-thumb ${shapeClass}" src="${thumbUrl}" loading="lazy" alt="${wp.name}">
-      <div class="wp-title">${wp.name}</div>
+      <img class="wp-thumb ${shapeClass}" src="${esc(thumbUrl)}" loading="lazy" alt="${esc(wp.name)}">
+      <div class="wp-title">${esc(wp.name)}</div>
       <div class="wp-actions">
-        <button class="${wp.active ? 'btn-primary' : 'btn-secondary'}" style="padding:5px 10px;font-size:12px;" onclick="selectWallpaperSource('${wp.id}')">${wp.active ? 'Active' : 'Use'}</button>
-        <button class="${wp.favorite ? 'btn-primary' : 'btn-secondary'}" style="padding:5px 10px;font-size:12px;" onclick="toggleWallpaperFav('${wp.id}')">${starLabel}</button>
+        <button class="${wp.active ? 'btn-primary' : 'btn-secondary'}" style="padding:5px 10px;font-size:12px;" onclick="selectWallpaperSource(${jsArg(wp.id)})">${wp.active ? 'Active' : 'Use'}</button>
+        <button class="${wp.favorite ? 'btn-primary' : 'btn-secondary'}" style="padding:5px 10px;font-size:12px;" onclick="toggleWallpaperFav(${jsArg(wp.id)})">${starLabel}</button>
         ${delBtn}
       </div>
     </div>`;
@@ -3946,14 +3952,14 @@ function addCameraRow(entityId="") {
   row.className = "native-ctrl-row camera-row-item";
   row.style.marginBottom = "8px";
   const camOptions = (STATE?.catalog?.cameras || []).map(c =>
-    `<option value="${c.id}" ${c.id === entityId ? 'selected' : ''}>${c.name}</option>`
+    `<option value="${esc(c.id)}" ${c.id === entityId ? 'selected' : ''}>${esc(c.name)}</option>`
   ).join("");
   const slotTitle = existingCount === 0
     ? "Camera 1 (Primary / Default Notification Camera)"
     : `Camera ${existingCount + 1}`;
   row.innerHTML = `
     <div style="flex:1;min-width:0;">
-      <small class="cam-slot-lbl" style="color:var(--muted);display:block;margin-bottom:3px;font-size:11px;font-weight:500;">${slotTitle}</small>
+      <small class="cam-slot-lbl" style="color:var(--muted);display:block;margin-bottom:3px;font-size:11px;font-weight:500;">${esc(slotTitle)}</small>
       <select class="cam-ent-sel" style="width:100%;max-width:none;" onchange="markDirty()"><option value="">— Select Camera —</option>${camOptions}</select>
     </div>
     <div style="display:flex;gap:6px;align-items:center;">
@@ -3971,7 +3977,7 @@ function addCalendarRow(entityId="") {
   row.className = "native-ctrl-row calendar-row-item";
   row.style.marginBottom = "8px";
   const calOptions = (STATE?.catalog?.calendars || []).map(c =>
-    `<option value="${c.id}" ${c.id === entityId ? 'selected' : ''}>${c.name}</option>`
+    `<option value="${esc(c.id)}" ${c.id === entityId ? 'selected' : ''}>${esc(c.name)}</option>`
   ).join("");
   row.innerHTML = `
     <div style="flex:1;min-width:0;">
@@ -3989,7 +3995,7 @@ function addPinnedEntityRow(entityId="") {
   row.className = "native-ctrl-row pinned-row-item";
   row.style.marginBottom = "8px";
   const pinOptions = (STATE?.catalog?.bindable_entities || []).map(e =>
-    `<option value="${e.id}" ${e.id === entityId ? 'selected' : ''}>${e.name}</option>`
+    `<option value="${esc(e.id)}" ${e.id === entityId ? 'selected' : ''}>${esc(e.name)}</option>`
   ).join("");
   row.innerHTML = `
     <div style="flex:1;min-width:0;">
@@ -4028,7 +4034,7 @@ function renderRemoteGroupsEditor() {
   } else {
     box.innerHTML = REMOTE_GROUPS_STATE.map((grp, gIdx) => {
       const areaOpts = [`<option value="">— No Area (Static Device Assignment Only) —</option>`].concat(
-        areas.map(a => `<option value="${a.id}" ${a.id === grp.area_id ? 'selected' : ''}>Area: ${a.name}</option>`)
+        areas.map(a => `<option value="${esc(a.id)}" ${a.id === grp.area_id ? 'selected' : ''}>Area: ${esc(a.name)}</option>`)
       ).join("");
       const selectedRems = Array.isArray(grp.remotes) ? grp.remotes : [];
       const orderedPool = selectedRems.filter(id => invIds.includes(id)).concat(invIds.filter(id => !selectedRems.includes(id)));
@@ -4037,8 +4043,8 @@ function renderRemoteGroupsEditor() {
             const isEn = selectedRems.includes(entId);
             const pos = selectedRems.indexOf(entId);
             const badge = isEn ? (pos === 0 ? "★ Primary: " : `#${pos + 1}: `) : "+ ";
-            return `<div class="dock-pill ${isEn ? 'enabled' : ''}" onclick="toggleRemoteInGroup(${gIdx}, '${entId}')">
-              <span>${badge}${getRemoteFriendlyLabel(entId)}</span>
+            return `<div class="dock-pill ${isEn ? 'enabled' : ''}" onclick="toggleRemoteInGroup(${gIdx}, ${jsArg(entId)})">
+              <span>${esc(badge)}${esc(getRemoteFriendlyLabel(entId))}</span>
             </div>`;
           }).join("")
         : `<span style="color:var(--muted);font-size:12px;">Add remotes to the System Remote Inventory above first.</span>`;
@@ -4047,7 +4053,7 @@ function renderRemoteGroupsEditor() {
         <div class="form-grid-2" style="margin-bottom:10px;">
           <div>
             <small style="color:var(--muted);display:block;margin-bottom:3px;font-size:11px;">Group Name</small>
-            <input type="text" value="${(grp.name || '').replace(/"/g, '&quot;')}" placeholder="e.g. Living Room AV" oninput="updateRemoteGroupField(${gIdx}, 'name', this.value)">
+            <input type="text" value="${esc(grp.name || '')}" placeholder="e.g. Living Room AV" oninput="updateRemoteGroupField(${gIdx}, 'name', this.value)">
           </div>
           <div style="display:flex;gap:8px;align-items:flex-end;">
             <div style="flex:1;">
@@ -4117,17 +4123,17 @@ function renderDeviceRemoteAssignments() {
     const opts = [
       `<option value="area_auto" ${curMode === 'area_auto' ? 'selected' : ''}>Follow Active Area (Hide Remote App When Area Has None)</option>`,
       ...REMOTE_GROUPS_STATE.map(g =>
-        `<option value="group:${g.id}" ${curMode === ('group:' + g.id) ? 'selected' : ''}>Static Group: ${g.name}</option>`
+        `<option value="${esc('group:' + g.id)}" ${curMode === ('group:' + g.id) ? 'selected' : ''}>Static Group: ${esc(g.name)}</option>`
       ),
       `<option value="all" ${curMode === 'all' ? 'selected' : ''}>All System Remotes</option>`
     ].join("");
     return `<div class="native-ctrl-row">
       <div class="lbl">
-        ${d.title}
-        <small>Active Area: ${d.active_area_name || 'Unassigned'}</small>
+        ${esc(d.title)}
+        <small>Active Area: ${esc(d.active_area_name || 'Unassigned')}</small>
       </div>
       <div class="widget">
-        <select onchange="assignDeviceRemoteGroup('${d.device_slug}', this.value)">${opts}</select>
+        <select onchange="assignDeviceRemoteGroup(${jsArg(d.device_slug)}, this.value)">${opts}</select>
       </div>
     </div>`;
   }).join("");
@@ -4169,14 +4175,14 @@ function addRemoteControlRow(entityId="") {
   row.className = "native-ctrl-row remote-row-item";
   row.style.marginBottom = "8px";
   const remOptions = (STATE?.catalog?.remotes || []).map(r =>
-    `<option value="${r.id}" ${r.id === entityId ? 'selected' : ''}>${r.name}</option>`
+    `<option value="${esc(r.id)}" ${r.id === entityId ? 'selected' : ''}>${esc(r.name)}</option>`
   ).join("");
   const slotTitle = existingCount === 0
     ? "Slot 1 (Primary Power Target)"
     : `Slot ${existingCount + 1}`;
   row.innerHTML = `
     <div style="flex:1;min-width:0;">
-      <small class="rem-slot-lbl" style="color:var(--muted);display:block;margin-bottom:3px;font-size:11px;font-weight:500;">${slotTitle}</small>
+      <small class="rem-slot-lbl" style="color:var(--muted);display:block;margin-bottom:3px;font-size:11px;font-weight:500;">${esc(slotTitle)}</small>
       <select class="rem-ent-sel" style="width:100%;max-width:none;" onchange="markDirty(); renderRemoteGroupsEditor();"><option value="">— Select Remote or Media Player —</option>${remOptions}</select>
     </div>
     <button type="button" class="btn-danger" title="Remove Remote" onclick="this.parentElement.remove(); renumberRemoteControlRows(); markDirty();">✕</button>
@@ -4196,10 +4202,10 @@ function addVolumeOverrideRow(speaker="", target="") {
   row.className = "native-ctrl-row vol-override-row";
   row.style.marginBottom = "8px";
   const spkOptions = (STATE?.catalog?.ma_speakers || []).map(s =>
-    `<option value="${s.id}" ${s.id === speaker ? 'selected' : ''}>${s.name}</option>`
+    `<option value="${esc(s.id)}" ${s.id === speaker ? 'selected' : ''}>${esc(s.name)}</option>`
   ).join("");
   const tgtOptions = (STATE?.catalog?.volume_targets || []).map(t =>
-    `<option value="${t.id}" ${t.id === target ? 'selected' : ''}>${t.name}</option>`
+    `<option value="${esc(t.id)}" ${t.id === target ? 'selected' : ''}>${esc(t.name)}</option>`
   ).join("");
   row.innerHTML = `
     <div class="form-grid-2" style="flex:1;min-width:0;">
@@ -4222,10 +4228,10 @@ function addBindingRow(slot="", entity_id="", action="toggle") {
   const row = document.createElement("div");
   row.className = "binding-row";
   const entOptions = (STATE?.catalog?.bindable_entities || []).map(e =>
-    `<option value="${e.id}" ${e.id === entity_id ? 'selected' : ''}>${e.name}</option>`
+    `<option value="${esc(e.id)}" ${e.id === entity_id ? 'selected' : ''}>${esc(e.name)}</option>`
   ).join("");
   row.innerHTML = `
-    <input type="text" class="b-slot" placeholder="Slot ID (e.g. macro_1)" value="${slot}" oninput="markDirty()">
+    <input type="text" class="b-slot" placeholder="Slot ID (e.g. macro_1)" value="${esc(slot)}" oninput="markDirty()">
     <select class="b-ent" onchange="markDirty()"><option value="">— Target Entity —</option>${entOptions}</select>
     <select class="b-act" onchange="markDirty()">
       <option value="toggle" ${action==='toggle'?'selected':''}>Toggle</option>
@@ -4499,7 +4505,7 @@ function ensureAddDeviceModal() {
         </div>
         <div class="field">
           <label>Device Name</label>
-          <input type="text" id="ble-custom-name" placeholder="e.g. Sean iPhone, Thu Apple Watch, Keys">
+          <input type="text" id="ble-custom-name" placeholder="e.g. Phone, Watch, Keys">
         </div>
         <div class="field">
           <label>BLE MAC Address, Entity ID (private_ble_device), or iBeacon UUID</label>
@@ -4559,7 +4565,7 @@ function openAddDeviceModal() {
     emptyMsg?.classList.add("hidden");
     if (picker) {
       picker.innerHTML = unbridged.map(u =>
-        `<option value="${u.slug}" data-area="${u.area_id || ''}">${u.name}</option>`
+        `<option value="${esc(u.slug)}" data-area="${esc(u.area_id || '')}">${esc(u.name)}</option>`
       ).join("");
     }
   } else {
@@ -4570,7 +4576,7 @@ function openAddDeviceModal() {
   const blePicker = document.getElementById("ble-candidate-picker");
   if (blePicker) {
     const opts = [`<option value="">— Select Discovered BLE Device or Enter Below —</option>`].concat(
-      bleCands.map(c => `<option value="${c.target_address}">${c.label}</option>`)
+      bleCands.map(c => `<option value="${esc(c.target_address)}">${esc(c.label)}</option>`)
     );
     blePicker.innerHTML = opts.join("");
   }
@@ -5426,12 +5432,12 @@ function renderCustomColorPalettes() {
   if (sel) {
     let optsHtml = "";
     if (pals.length === 0) {
-      optsHtml += `<option value="${curHex}">Active Custom (${curHex})</option>`;
+      optsHtml += `<option value="${esc(curHex)}">Active Custom (${esc(curHex)})</option>`;
     } else {
       for (const p of pals) {
         const h = (p.hex || "").toUpperCase();
         const selAttr = (h === curHex) ? "selected" : "";
-        optsHtml += `<option value="${h}" ${selAttr}>${p.name || h} (${h})</option>`;
+        optsHtml += `<option value="${esc(h)}" ${selAttr}>${esc(p.name || h)} (${esc(h)})</option>`;
       }
     }
     optsHtml += `<option value="__new__">+ Create New Color (Wheel)...</option>`;
@@ -5447,11 +5453,11 @@ function renderCustomColorPalettes() {
         const h = (p.hex || "").toUpperCase();
         return `
           <div style="display:inline-flex;align-items:center;gap:8px;padding:5px 11px;border-radius:18px;background:var(--input-bg);border:1px solid var(--border);">
-            <span style="width:14px;height:14px;border-radius:50%;background:${h};border:1px solid #fff;"></span>
-            <strong style="font-size:12.5px;font-weight:500;">${p.name || h}</strong>
-            <code style="font-size:11px;opacity:0.75;">${h}</code>
-            <button type="button" class="btn-secondary" style="padding:2px 8px;font-size:11px;" onclick="applyDeviceCustomColor('${h}', true)">Apply</button>
-            <button type="button" class="btn-secondary" style="padding:2px 6px;font-size:11px;color:var(--danger);" onclick="deleteCustomPalette('${h}')">&times;</button>
+            <span style="width:14px;height:14px;border-radius:50%;background:${esc(h)};border:1px solid #fff;"></span>
+            <strong style="font-size:12.5px;font-weight:500;">${esc(p.name || h)}</strong>
+            <code style="font-size:11px;opacity:0.75;">${esc(h)}</code>
+            <button type="button" class="btn-secondary" style="padding:2px 8px;font-size:11px;" onclick="applyDeviceCustomColor(${jsArg(h)}, true)">Apply</button>
+            <button type="button" class="btn-secondary" style="padding:2px 6px;font-size:11px;color:var(--danger);" onclick="deleteCustomPalette(${jsArg(h)})">&times;</button>
           </div>
         `;
       }).join("");

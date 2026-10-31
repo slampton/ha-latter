@@ -261,7 +261,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
         try:
             from homeassistant.components import frontend
             frontend.add_extra_js_url(hass, "/api/latter/brand/sidebar_icon.js")
-            panel_token = get_studio_panel_token(domain_data[DATA_HMAC_SECRET])
+            panel_token = get_studio_panel_token(hass)
             frontend.async_register_built_in_panel(
                 hass,
                 component_name="iframe",
@@ -343,11 +343,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
 
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     _LOGGER.info(
-        "Latter v%s initialized for ESPHome device '%s' (active_speaker: %s, companion_url: %s)",
+        "Latter v%s initialized for ESPHome device '%s' (active_speaker: %s)",
         INTEGRATION_VERSION,
         coordinator.device_slug,
         coordinator.active_speaker,
-        coordinator.build_companion_url(),
     )
     return True
 

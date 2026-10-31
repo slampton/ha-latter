@@ -1,4 +1,4 @@
-"""Universal Doorbell Two-Way Audio (UniFi, go2rtc, ONVIF, SIP), 90° Landscape Proxy & 4-Stage ANC+AEC DSP Engine."""
+"""Universal Doorbell Two-Way Audio (go2rtc, ONVIF, SIP), 90° Landscape Proxy & 4-Stage ANC+AEC DSP Engine."""
 
 from __future__ import annotations
 
@@ -47,7 +47,7 @@ def resolve_doorbell_talkback_target(
     camera_entity_id: str | None,
     volume_overrides: dict[str, str] | None = None,
 ) -> dict[str, Any]:
-    """Auto-discover the talkback media_player (UniFi Protect), ONVIF/go2rtc stream, and area lock for a camera."""
+    """Auto-discover the talkback media_player, ONVIF/go2rtc stream, and area lock for a camera."""
     info: dict[str, Any] = {
         "camera_entity": "",
         "friendly_name": "Camera",
@@ -367,7 +367,7 @@ class LatterAudioDspPipeline:
         prepend_unifi_preroll: bool = True,
         apply_aec: bool = False,
     ) -> array[int]:
-        """Run the full 4-stage DSP pipeline and optionally prepend the 250ms UniFi talkback stabilizer."""
+        """Run the full 4-stage DSP pipeline and optionally prepend the 250ms talkback stabilizer."""
         stage1 = self.biquad_highpass_120hz(pcm_samples, sample_rate)
         stage2 = self.nlms_echo_cancel(stage1) if apply_aec else stage1
         stage3 = self.wiener_spectral_denoise(stage2, sample_rate, anc_mode)
@@ -510,7 +510,6 @@ class LatterCameraAudioStreamView(HomeAssistantView):
         if not coord.verify_resource(
             f"camera_audio:{cam_ent}",
             sig=request.query.get("sig"),
-            token=request.query.get("token"),
         ):
             return web.Response(status=HTTPStatus.FORBIDDEN, text="Invalid or missing signature")
 
@@ -635,7 +634,7 @@ class LatterCameraAudioStreamView(HomeAssistantView):
 
 
 class LatterDoorbellTalkbackView(HomeAssistantView):
-    """Serves and ingests DSP-processed, pre-roll-stabilized talkback audio for UniFi, go2rtc, ONVIF & SIP."""
+    """Serves and ingests DSP-processed, pre-roll-stabilized talkback audio for camera speakers, go2rtc, ONVIF & SIP."""
 
     requires_auth = False
     url = API_DOORBELL_TALKBACK_PATH
@@ -652,7 +651,6 @@ class LatterDoorbellTalkbackView(HomeAssistantView):
         if coord is None or not coord.verify_resource(
             "talkback",
             sig=request.query.get("sig"),
-            token=request.query.get("token"),
         ):
             return web.Response(status=HTTPStatus.FORBIDDEN, text="Invalid or missing signature")
 
@@ -669,23 +667,47 @@ class LatterDoorbellTalkbackView(HomeAssistantView):
         )
 
     async def post(self, request: web.Request, target_device: str) -> web.Response:
-        """Ingest raw PCM16 or WAV talkback audio (requires valid Latter token or HA Bearer token)."""
-        from .dashboard import verify_studio_panel_token
+        """Ingest raw PCM16 or WAV talkback audio (requires admin HA user or valid talkback:<camera_entity> signature)."""
+        coord = _resolve_coordinator_by_slug(self.hass, target_device)
+        if coord is None:
+            return web.json_response(
+                {"error": "Unknown target device"}, status=HTTPStatus.NOT_FOUND
+            )
 
-        token = request.query.get("token") or request.headers.get("X-Latter-Token")
-        authed = verify_studio_panel_token(self.hass, token)
-        if not authed:
+        cam_ent = (
+            request.query.get("camera_entity")
+            or coord.active_carousel_camera
+            or coord.camera_entity
+            or ""
+        ).strip()
+        allowed_cams = set(coord.camera_entities)
+        if coord.camera_entity:
+            allowed_cams.add(coord.camera_entity)
+        if coord.active_carousel_camera:
+            allowed_cams.add(coord.active_carousel_camera)
+        if not cam_ent or cam_ent not in allowed_cams:
+            return web.json_response(
+                {"error": "Camera entity not configured for this device"},
+                status=HTTPStatus.FORBIDDEN,
+            )
+
+        user = request.get("hass_user")
+        if user is None:
             auth_hdr = request.headers.get("Authorization", "")
             if auth_hdr.startswith("Bearer "):
                 bearer = auth_hdr.removeprefix("Bearer ").strip()
                 rt = await self.hass.auth.async_validate_access_token(bearer)
-                authed = rt is not None
-        if not authed:
+                if rt is not None:
+                    user = rt.user
+
+        is_admin_user = bool(user is not None and user.is_active and user.is_admin)
+        sig = request.query.get("sig") or request.headers.get("X-Latter-Sig")
+        has_valid_sig = coord.verify_resource(f"talkback:{cam_ent}", sig=sig)
+        if not is_admin_user and not has_valid_sig:
             return web.json_response(
-                {"error": "Unauthorized"}, status=HTTPStatus.FORBIDDEN
+                {"error": "Forbidden"}, status=HTTPStatus.FORBIDDEN
             )
 
-        coord = _resolve_coordinator_by_slug(self.hass, target_device)
         raw_bytes = await request.read()
         if not raw_bytes:
             return web.json_response(
@@ -694,13 +716,8 @@ class LatterDoorbellTalkbackView(HomeAssistantView):
 
         anc_mode = (
             request.query.get("anc")
-            or (coord.doorbell_anc_mode if coord else "ultra")
+            or coord.doorbell_anc_mode
             or "ultra"
-        )
-        cam_ent = (
-            request.query.get("camera_entity")
-            or (coord.active_carousel_camera if coord else "")
-            or (coord.camera_entity if coord else "")
         )
 
         dsp = get_dsp_pipeline(self.hass)
@@ -713,8 +730,7 @@ class LatterDoorbellTalkbackView(HomeAssistantView):
         clips: dict[str, bytes] = domain_data.setdefault("talkback_clips", {})
         clips[norm] = wav_bytes
 
-        if coord is not None:
-            await async_play_talkback_clip_to_doorbell(self.hass, coord, cam_ent, wav_bytes)
+        await async_play_talkback_clip_to_doorbell(self.hass, coord, cam_ent, wav_bytes)
 
         return web.json_response({"status": "ok", "bytes": len(wav_bytes)})
 
@@ -725,7 +741,7 @@ async def async_play_talkback_clip_to_doorbell(
     camera_entity_id: str | None = None,
     wav_bytes: bytes | None = None,
 ) -> bool:
-    """Stream the stored DSP-stabilized talkback WAV clip to UniFi speaker, go2rtc, or SIP."""
+    """Stream the stored DSP-stabilized talkback WAV clip to camera speaker, go2rtc, or SIP."""
     cam_ent = camera_entity_id or coordinator.active_carousel_camera or coordinator.camera_entity
     target_info = resolve_doorbell_talkback_target(
         hass, cam_ent, coordinator.volume_overrides

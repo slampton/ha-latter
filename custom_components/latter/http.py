@@ -116,7 +116,6 @@ async def _async_serve_speaker_artwork(
     if not coordinator.verify_resource(
         "artwork",
         sig=request.query.get("sig"),
-        token=request.query.get("token"),
     ):
         return web.Response(status=HTTPStatus.FORBIDDEN, text="Invalid signature")
 
@@ -246,7 +245,6 @@ class LatterWallpaperProxyView(HomeAssistantView):
         if not coordinator.verify_resource(
             f"wallpaper:{wp_source}",
             sig=request.query.get("sig"),
-            token=request.query.get("token"),
         ):
             return web.Response(status=HTTPStatus.FORBIDDEN, text="Invalid signature")
 
@@ -346,7 +344,6 @@ class LatterCameraSnapshotView(HomeAssistantView):
         if not coordinator.verify_resource(
             f"camera:{cam_entity}",
             sig=request.query.get("sig"),
-            token=request.query.get("token"),
         ):
             return web.Response(status=HTTPStatus.FORBIDDEN, text="Invalid signature")
 
@@ -553,13 +550,22 @@ class LatterMapSnapshotView(HomeAssistantView):
         """Initialize the map snapshot view."""
         self.hass = hass
 
-    async def _async_resolve_coordinates(self, query: str) -> tuple[float, float]:
+    async def _async_resolve_coordinates(
+        self, query: str
+    ) -> tuple[float, float] | None:
         """Resolve an address string, 'lat,lon', or HA zone name to (lat, lon)."""
         q_clean = query.strip()
+        has_home_coords = bool(
+            self.hass.config.latitude is not None
+            and self.hass.config.longitude is not None
+            and (self.hass.config.latitude != 0 or self.hass.config.longitude != 0)
+        )
         if not q_clean:
-            return float(self.hass.config.latitude or 37.8044), float(
-                self.hass.config.longitude or -122.2712
-            )
+            if has_home_coords:
+                return float(self.hass.config.latitude), float(
+                    self.hass.config.longitude
+                )
+            return None
 
         cache_key = q_clean.lower()
         if cache_key in _MAP_GEOCODE_CACHE:
@@ -610,9 +616,11 @@ class LatterMapSnapshotView(HomeAssistantView):
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("Nominatim geocode fallback for '%s': %s", q_clean, err)
 
-        return float(self.hass.config.latitude or 37.8044), float(
-            self.hass.config.longitude or -122.2712
-        )
+        if has_home_coords:
+            return float(self.hass.config.latitude), float(
+                self.hass.config.longitude
+            )
+        return None
 
     async def get(self, request: web.Request, target_device: str) -> web.Response:
         """Handle GET /api/latter/map/{target_device}?q=...&z=15&pan_x=0&pan_y=0&w=466&h=466"""
@@ -624,7 +632,6 @@ class LatterMapSnapshotView(HomeAssistantView):
         if not coordinator.verify_resource(
             f"map:{query}",
             sig=request.query.get("sig"),
-            token=request.query.get("token"),
         ):
             return web.Response(status=HTTPStatus.FORBIDDEN, text="Invalid signature")
 
@@ -662,12 +669,28 @@ class LatterMapSnapshotView(HomeAssistantView):
                 headers={"Cache-Control": "public, max-age=600", "X-Latter-Cache": "HIT"},
             )
 
-        lat, lon = await self._async_resolve_coordinates(query)
-        home_lat = float(self.hass.config.latitude or 37.8044)
-        home_lon = float(self.hass.config.longitude or -122.2712)
+        coords = await self._async_resolve_coordinates(query)
+        if coords is None:
+            return web.Response(
+                status=HTTPStatus.NOT_FOUND,
+                text="Map coordinates unavailable (Home Assistant latitude/longitude not configured)",
+            )
+        lat, lon = coords
+        has_home_coords = bool(
+            self.hass.config.latitude is not None
+            and self.hass.config.longitude is not None
+            and (self.hass.config.latitude != 0 or self.hass.config.longitude != 0)
+        )
 
         event_tx, event_ty = _latlon_to_tile_xy(lat, lon, zoom)
-        home_tx, home_ty = _latlon_to_tile_xy(home_lat, home_lon, zoom)
+        if has_home_coords:
+            home_tx, home_ty = _latlon_to_tile_xy(
+                float(self.hass.config.latitude),
+                float(self.hass.config.longitude),
+                zoom,
+            )
+        else:
+            home_tx, home_ty = -9999.0, -9999.0
 
         # Each pan step shifts the viewport by 0.62 tiles (~158px)
         view_tx = event_tx + (pan_x * 0.62)

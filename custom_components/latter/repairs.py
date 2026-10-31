@@ -91,7 +91,6 @@ def async_audit_coordinator_health(
             {
                 "device_slug": slug,
                 "missing_list": ", ".join(missing_labels),
-                "companion_url": coordinator.build_companion_url(),
             },
         )
     else:

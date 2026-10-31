@@ -5,11 +5,11 @@ from __future__ import annotations
 from http import HTTPStatus
 import logging
 from pathlib import Path
+import re
 from typing import Any
+from urllib.parse import quote
 
 from aiohttp import web
-
-import re
 
 from homeassistant.components.http import HomeAssistantView
 from homeassistant.core import HomeAssistant
@@ -60,7 +60,6 @@ from .const import (
     CONF_LOCK_ENTITY,
     CONF_THERMOSTAT_ENTITY,
     CONF_VACUUM_ENTITY,
-    DATA_HMAC_SECRET,
     CONF_COMPANION_BASE_URL,
     CONF_CUSTOM_BINDINGS,
     CONF_CUSTOM_ENTITIES,
@@ -117,7 +116,6 @@ from .const import (
     DATA_GLOBAL_STORE,
     DEFAULT_ART_SIZE,
     DEFAULT_DEVICE_PROFILE,
-    DEFAULT_DISPLAY_SHAPE,
     DEFAULT_PAGE_SIZE,
     DEFAULT_WALLPAPER_CYCLE_MINUTES,
     DEFAULT_WEB_THEME,
@@ -352,6 +350,7 @@ def _build_companion_state_payload(
     coordinator: LatterCoordinator,
     *,
     include_vpn_secrets: bool = False,
+    uid: str = "",
 ) -> dict[str, Any]:
     """Build the JSON payload consumed by the Latter Web Companion Studio."""
     area_reg = ar.async_get(hass)
@@ -364,7 +363,7 @@ def _build_companion_state_payload(
     remotes_list: list[dict[str, str]] = []
     volume_targets: list[dict[str, str]] = []
     alarms_list: list[dict[str, str]] = []
-    cameras_list: list[dict[str, str]] = []
+    cameras_list: list[dict[str, Any]] = []
     climates_list: list[dict[str, str]] = []
     locks_list: list[dict[str, str]] = []
     garages_list: list[dict[str, str]] = []
@@ -374,6 +373,10 @@ def _build_companion_state_payload(
     persons_list: list[dict[str, str]] = []
     presence_sensors: list[dict[str, str]] = []
     bindable_entities: list[dict[str, str]] = []
+
+    allowed_cams_set = set(coordinator.camera_entities)
+    if coordinator.camera_entity:
+        allowed_cams_set.add(coordinator.camera_entity)
 
     for state_obj in sorted(
         hass.states.async_all(), key=lambda s: s.entity_id
@@ -399,7 +402,14 @@ def _build_companion_state_payload(
         elif domain == "alarm_control_panel":
             alarms_list.append(item)
         elif domain == "camera":
-            cameras_list.append(item)
+            cam_item: dict[str, Any] = dict(item)
+            if ent_id in allowed_cams_set:
+                cam_sig = coordinator.sign_resource(f"camera:{ent_id}")
+                cam_item["preview_url"] = (
+                    f"/api/latter/camera/{coordinator.device_slug}"
+                    f"?entity_id={quote(ent_id, safe='')}&w=320&h=180&shape=square&sig={cam_sig}"
+                )
+            cameras_list.append(cam_item)
         elif domain == "climate":
             climates_list.append(item)
         elif domain == "lock":
@@ -460,6 +470,8 @@ def _build_companion_state_payload(
         coordinator.device_slug,
         coordinator.wallpaper_source,
         coordinator.wallpaper_favorites,
+        sign_resource=coordinator.sign_resource,
+        display_shape=coordinator.display_shape,
     )
 
     esphome_svcs = hass.services.async_services().get("esphome", {})
@@ -820,7 +832,12 @@ def _build_companion_state_payload(
                 "ble_survey_rows": c_survey_rows,
                 "ble_packets_seen": c_packets_seen,
                 "ble_closest_proxy": c_area_attrs.get("ble_closest_proxy", ""),
-                "companion_url": f"/api/latter/companion/{c.entry.entry_id}?token={c.get_signed_token()}",
+                "companion_url": (
+                    f"/api/latter/companion/{c.entry.entry_id}"
+                    f"?uid={quote(uid, safe='')}&sig={c.sign_resource(f'studio|{uid}', ttl_s=8 * 3600)}"
+                    if uid
+                    else f"/api/latter/companion/{c.entry.entry_id}"
+                ),
                 "is_current": c.entry.entry_id == coordinator.entry.entry_id,
             }
         )
@@ -1006,21 +1023,35 @@ class LatterCompanionApiView(HomeAssistantView):
         """Initialize the API view."""
         self.hass = hass
 
-    def _resolve_coordinator(
+    async def _async_resolve_coordinator(
         self, request: web.Request, entry_id: str
-    ) -> LatterCoordinator | None:
+    ) -> tuple[LatterCoordinator | None, str]:
         domain_data = self.hass.data.get(DOMAIN, {})
         coordinator: LatterCoordinator | None = domain_data.get(entry_id)
         if not isinstance(coordinator, LatterCoordinator):
-            return None
-        token = request.query.get("token") or request.headers.get("X-Latter-Token")
-        if not coordinator.verify_token(token):
-            return None
-        return coordinator
+            return None, ""
+        uid = (
+            request.query.get("uid")
+            or request.headers.get("X-Latter-Uid")
+            or ""
+        ).strip()
+        sig = (
+            request.query.get("sig")
+            or request.headers.get("X-Latter-Sig")
+            or ""
+        ).strip()
+        if not uid or not sig:
+            return None, ""
+        if not coordinator.verify_resource(f"studio|{uid}", sig=sig):
+            return None, ""
+        user = await self.hass.auth.async_get_user(uid)
+        if user is None or not user.is_active or not user.is_admin:
+            return None, ""
+        return coordinator, uid
 
     async def get(self, request: web.Request, entry_id: str) -> web.Response:
         """Return live state, configuration, ESPHome device inspector, and entity catalog."""
-        coordinator = self._resolve_coordinator(request, entry_id)
+        coordinator, uid = await self._async_resolve_coordinator(request, entry_id)
         if coordinator is None:
             return web.json_response(
                 {"error": "Unauthorized or unknown entry"},
@@ -1031,12 +1062,12 @@ class LatterCompanionApiView(HomeAssistantView):
         _async_scan_all_esphome_devices_for_discovery(self.hass)
         await async_refresh_wallpaper_cache(self.hass, coordinator.device_slug)
         await async_list_vault_backups(self.hass)
-        payload = _build_companion_state_payload(self.hass, coordinator)
+        payload = _build_companion_state_payload(self.hass, coordinator, uid=uid)
         return web.json_response(payload)
 
     async def post(self, request: web.Request, entry_id: str) -> web.Response:
         """Save updated configuration, manage wallpapers, or execute a live entity/device/system action."""
-        coordinator = self._resolve_coordinator(request, entry_id)
+        coordinator, uid = await self._async_resolve_coordinator(request, entry_id)
         if coordinator is None:
             return web.json_response(
                 {"error": "Unauthorized or unknown entry"},
@@ -1064,7 +1095,7 @@ class LatterCompanionApiView(HomeAssistantView):
                 self.hass, {CONF_BLE_AREA_OFFSETS: offsets}
             )
             return web.json_response(
-                _build_companion_state_payload(self.hass, coordinator)
+                _build_companion_state_payload(self.hass, coordinator, uid=uid)
             )
 
         if cmd == "set_area_fusion_mode":
@@ -1087,7 +1118,7 @@ class LatterCompanionApiView(HomeAssistantView):
                 )
                 get_ble_fabric(self.hass).notify_occupancy_listeners()
             return web.json_response(
-                _build_companion_state_payload(self.hass, coordinator)
+                _build_companion_state_payload(self.hass, coordinator, uid=uid)
             )
 
         if cmd == "auto_calibrate_here":
@@ -1150,7 +1181,7 @@ class LatterCompanionApiView(HomeAssistantView):
                     target_area_id, handoff_media=False, sync_device_registry=True
                 )
             return web.json_response(
-                _build_companion_state_payload(self.hass, coordinator)
+                _build_companion_state_payload(self.hass, coordinator, uid=uid)
             )
 
         if cmd == "system_entity_action":
@@ -1169,7 +1200,7 @@ class LatterCompanionApiView(HomeAssistantView):
                             option=str(option) if option is not None else None,
                         )
             return web.json_response(
-                _build_companion_state_payload(self.hass, coordinator)
+                _build_companion_state_payload(self.hass, coordinator, uid=uid)
             )
 
         if cmd == "test_doorbell_talkback":
@@ -1188,7 +1219,7 @@ class LatterCompanionApiView(HomeAssistantView):
                 anc_mode=anc,
             )
             return web.json_response(
-                _build_companion_state_payload(self.hass, coordinator)
+                _build_companion_state_payload(self.hass, coordinator, uid=uid)
             )
 
         if cmd == "send_test_notification":
@@ -1212,7 +1243,7 @@ class LatterCompanionApiView(HomeAssistantView):
                 blocking=True,
             )
             return web.json_response(
-                _build_companion_state_payload(self.hass, coordinator)
+                _build_companion_state_payload(self.hass, coordinator, uid=uid)
             )
 
         if cmd == "generate_vpn_keys":
@@ -1244,7 +1275,7 @@ class LatterCompanionApiView(HomeAssistantView):
             coordinator.async_notify_listeners()
             return web.json_response(
                 _build_companion_state_payload(
-                    self.hass, coordinator, include_vpn_secrets=True
+                    self.hass, coordinator, include_vpn_secrets=True, uid=uid
                 )
             )
 
@@ -1262,7 +1293,7 @@ class LatterCompanionApiView(HomeAssistantView):
                             blocking=False,
                         )
             return web.json_response(
-                _build_companion_state_payload(self.hass, coordinator)
+                _build_companion_state_payload(self.hass, coordinator, uid=uid)
             )
 
         if cmd == "set_theme":
@@ -1271,7 +1302,7 @@ class LatterCompanionApiView(HomeAssistantView):
                 self.hass, {CONF_WEB_THEME: theme_val}
             )
             return web.json_response(
-                _build_companion_state_payload(self.hass, coordinator)
+                _build_companion_state_payload(self.hass, coordinator, uid=uid)
             )
 
         if cmd == "activate_remote_slot":
@@ -1280,7 +1311,7 @@ class LatterCompanionApiView(HomeAssistantView):
             coordinator._schedule_persist_runtime_state()
             coordinator.async_notify_listeners()
             return web.json_response(
-                _build_companion_state_payload(self.hass, coordinator)
+                _build_companion_state_payload(self.hass, coordinator, uid=uid)
             )
 
         if cmd == "upload_wallpaper":
@@ -1308,7 +1339,7 @@ class LatterCompanionApiView(HomeAssistantView):
                 )
                 coordinator.async_notify_listeners()
             return web.json_response(
-                _build_companion_state_payload(self.hass, coordinator)
+                _build_companion_state_payload(self.hass, coordinator, uid=uid)
             )
 
         if cmd == "select_wallpaper":
@@ -1323,7 +1354,7 @@ class LatterCompanionApiView(HomeAssistantView):
             )
             coordinator.async_notify_listeners()
             return web.json_response(
-                _build_companion_state_payload(self.hass, coordinator)
+                _build_companion_state_payload(self.hass, coordinator, uid=uid)
             )
 
         if cmd == "toggle_wallpaper_favorite":
@@ -1344,7 +1375,7 @@ class LatterCompanionApiView(HomeAssistantView):
             coordinator._bind_wallpaper_cycle_timer()
             coordinator.async_notify_listeners()
             return web.json_response(
-                _build_companion_state_payload(self.hass, coordinator)
+                _build_companion_state_payload(self.hass, coordinator, uid=uid)
             )
 
         if cmd == "delete_wallpaper":
@@ -1373,7 +1404,7 @@ class LatterCompanionApiView(HomeAssistantView):
                 )
                 coordinator.async_notify_listeners()
             return web.json_response(
-                _build_companion_state_payload(self.hass, coordinator)
+                _build_companion_state_payload(self.hass, coordinator, uid=uid)
             )
 
         if cmd == "set_active_area":
@@ -1385,7 +1416,7 @@ class LatterCompanionApiView(HomeAssistantView):
                     sync_device_registry=bool(body.get("sync_device", False)),
                 )
             return web.json_response(
-                _build_companion_state_payload(self.hass, coordinator)
+                _build_companion_state_payload(self.hass, coordinator, uid=uid)
             )
 
         if cmd == "set_active_speaker":
@@ -1393,7 +1424,7 @@ class LatterCompanionApiView(HomeAssistantView):
             if speaker_id:
                 coordinator.async_set_active_speaker(speaker_id, transfer_queue=True)
             return web.json_response(
-                _build_companion_state_payload(self.hass, coordinator)
+                _build_companion_state_payload(self.hass, coordinator, uid=uid)
             )
 
         if cmd in ("test_binding", "esphome_entity_action", "area_card_action"):
@@ -1410,7 +1441,7 @@ class LatterCompanionApiView(HomeAssistantView):
                     option=str(option) if option is not None else None,
                 )
             return web.json_response(
-                _build_companion_state_payload(self.hass, coordinator)
+                _build_companion_state_payload(self.hass, coordinator, uid=uid)
             )
 
         if cmd == "save_config":
@@ -1530,7 +1561,7 @@ class LatterCompanionApiView(HomeAssistantView):
             coordinator._bind_wallpaper_cycle_timer()
             coordinator.async_notify_listeners()
             return web.json_response(
-                _build_companion_state_payload(self.hass, coordinator)
+                _build_companion_state_payload(self.hass, coordinator, uid=uid)
             )
 
         if cmd == "log_client_error":
@@ -1543,7 +1574,7 @@ class LatterCompanionApiView(HomeAssistantView):
             self.hass.data.setdefault(DOMAIN, {})["internal_logs"] = []
             log_studio_event(self.hass, "INFO", "studio", "Cleared internal diagnostic log")
             return web.json_response(
-                _build_companion_state_payload(self.hass, coordinator)
+                _build_companion_state_payload(self.hass, coordinator, uid=uid)
             )
 
         if cmd == "remove_device":
@@ -1566,7 +1597,7 @@ class LatterCompanionApiView(HomeAssistantView):
                 c for c in all_coords if c.entry.entry_id != target_coord.entry.entry_id
             ]
             redirect_url = (
-                f"/api/latter/companion/{remaining[0].entry.entry_id}?token={remaining[0].get_signed_token()}&scope=system"
+                f"/api/latter/companion/{remaining[0].entry.entry_id}?uid={quote(uid, safe='')}&sig={remaining[0].sign_resource(f'studio|{uid}', ttl_s=8 * 3600)}&scope=system"
                 if remaining
                 else "/config/integrations/integration/latter"
             )
@@ -1577,7 +1608,7 @@ class LatterCompanionApiView(HomeAssistantView):
             )
             if remaining and coordinator.entry.entry_id != target_coord.entry.entry_id:
                 return web.json_response(
-                    _build_companion_state_payload(self.hass, coordinator)
+                    _build_companion_state_payload(self.hass, coordinator, uid=uid)
                 )
             return web.json_response({"removed": True, "redirect_url": redirect_url})
 
@@ -1609,7 +1640,7 @@ class LatterCompanionApiView(HomeAssistantView):
                         },
                     )
             return web.json_response(
-                _build_companion_state_payload(self.hass, coordinator)
+                _build_companion_state_payload(self.hass, coordinator, uid=uid)
             )
 
         if cmd == "bridge_esphome_device":
@@ -1638,7 +1669,7 @@ class LatterCompanionApiView(HomeAssistantView):
                         },
                     )
             return web.json_response(
-                _build_companion_state_payload(self.hass, coordinator)
+                _build_companion_state_payload(self.hass, coordinator, uid=uid)
             )
 
         if cmd == "set_device_remote_group":
@@ -1657,7 +1688,7 @@ class LatterCompanionApiView(HomeAssistantView):
                     c.async_notify_listeners()
                     break
             return web.json_response(
-                _build_companion_state_payload(self.hass, coordinator)
+                _build_companion_state_payload(self.hass, coordinator, uid=uid)
             )
 
         if cmd == "set_device_group":
@@ -1676,7 +1707,7 @@ class LatterCompanionApiView(HomeAssistantView):
                     c.async_notify_listeners()
                     break
             return web.json_response(
-                _build_companion_state_payload(self.hass, coordinator)
+                _build_companion_state_payload(self.hass, coordinator, uid=uid)
             )
 
         if cmd == "create_device_group":
@@ -1697,7 +1728,7 @@ class LatterCompanionApiView(HomeAssistantView):
                         self.hass, {CONF_DEVICE_GROUPS: groups}
                     )
             return web.json_response(
-                _build_companion_state_payload(self.hass, coordinator)
+                _build_companion_state_payload(self.hass, coordinator, uid=uid)
             )
 
         if cmd == "delete_device_group":
@@ -1708,7 +1739,7 @@ class LatterCompanionApiView(HomeAssistantView):
                 self.hass, {CONF_DEVICE_GROUPS: groups}
             )
             return web.json_response(
-                _build_companion_state_payload(self.hass, coordinator)
+                _build_companion_state_payload(self.hass, coordinator, uid=uid)
             )
 
         if cmd == "capture_profile":
@@ -1724,7 +1755,7 @@ class LatterCompanionApiView(HomeAssistantView):
                 self.hass, {CONF_SAVED_PROFILES: profiles[:30]}
             )
             return web.json_response(
-                _build_companion_state_payload(self.hass, coordinator)
+                _build_companion_state_payload(self.hass, coordinator, uid=uid)
             )
 
         if cmd == "delete_profile":
@@ -1735,7 +1766,7 @@ class LatterCompanionApiView(HomeAssistantView):
                 self.hass, {CONF_SAVED_PROFILES: profiles}
             )
             return web.json_response(
-                _build_companion_state_payload(self.hass, coordinator)
+                _build_companion_state_payload(self.hass, coordinator, uid=uid)
             )
 
         if cmd == "apply_profile":
@@ -1757,7 +1788,7 @@ class LatterCompanionApiView(HomeAssistantView):
                     targets = [coordinator]
                 await async_apply_profile_to_coordinators(self.hass, prof, targets)
             return web.json_response(
-                _build_companion_state_payload(self.hass, coordinator)
+                _build_companion_state_payload(self.hass, coordinator, uid=uid)
             )
 
         if cmd == "create_vault_backup":
@@ -1773,7 +1804,7 @@ class LatterCompanionApiView(HomeAssistantView):
                 include_vpn_secrets=inc_vpn,
             )
             return web.json_response(
-                _build_companion_state_payload(self.hass, coordinator)
+                _build_companion_state_payload(self.hass, coordinator, uid=uid)
             )
 
         if cmd == "export_backup_json":
@@ -1817,7 +1848,7 @@ class LatterCompanionApiView(HomeAssistantView):
             )
             await async_list_vault_backups(self.hass)
             return web.json_response(
-                _build_companion_state_payload(self.hass, coordinator)
+                _build_companion_state_payload(self.hass, coordinator, uid=uid)
             )
 
         if cmd == "delete_vault_backup":
@@ -1825,7 +1856,7 @@ class LatterCompanionApiView(HomeAssistantView):
             if b_id:
                 await async_delete_vault_backup(self.hass, b_id)
             return web.json_response(
-                _build_companion_state_payload(self.hass, coordinator)
+                _build_companion_state_payload(self.hass, coordinator, uid=uid)
             )
 
         return web.json_response(
@@ -1836,28 +1867,27 @@ class LatterCompanionApiView(HomeAssistantView):
 _STUDIO_HTML_PATH = Path(__file__).parent / "frontend" / "studio.html"
 
 
-def get_studio_panel_token(hmac_secret: bytes) -> str:
-    """Generate an HMAC-SHA256 token for the Home Assistant sidebar panel."""
-    import hashlib
-    import hmac
+def get_studio_panel_token(hass: HomeAssistant) -> str:
+    """Return the per-boot in-memory random token for the Home Assistant sidebar panel."""
+    import secrets
 
-    return hmac.new(hmac_secret, b"latter_studio_panel", hashlib.sha256).hexdigest()[:32]
+    domain_data = hass.data.setdefault(DOMAIN, {})
+    tok = domain_data.get("studio_panel_token")
+    if not isinstance(tok, str) or not tok:
+        tok = secrets.token_urlsafe(32)
+        domain_data["studio_panel_token"] = tok
+    return tok
 
 
 def verify_studio_panel_token(hass: HomeAssistant, token: str | None) -> bool:
-    """Verify a studio panel token or any active device coordinator token in constant time."""
+    """Verify the per-boot in-memory studio panel token in constant time."""
     import hmac
 
     if not token:
         return False
-    secret = hass.data.get(DOMAIN, {}).get(DATA_HMAC_SECRET)
-    if isinstance(secret, bytes):
-        expected = get_studio_panel_token(secret)
-        if hmac.compare_digest(token, expected):
-            return True
-    for coord in _get_all_coordinators(hass):
-        if coord.verify_token(token):
-            return True
+    expected = hass.data.get(DOMAIN, {}).get("studio_panel_token")
+    if isinstance(expected, str) and expected:
+        return hmac.compare_digest(token, expected)
     return False
 
 
@@ -1890,7 +1920,7 @@ _STUDIO_AUTH_BOOTSTRAP_HTML = """<!DOCTYPE html>
     }
     throw new Error("Invalid redirect response");
   } catch (_err) {
-    document.getElementById("msg").textContent = "403 Forbidden: Please open Latter from the Home Assistant sidebar or Device 'Visit' button.";
+    document.getElementById("msg").textContent = "403 Forbidden: Admin privileges required.";
   }
 })();
 </script>
@@ -1917,11 +1947,19 @@ class LatterCompanionDashboardView(HomeAssistantView):
         if not isinstance(coordinator, LatterCoordinator):
             return web.Response(status=HTTPStatus.NOT_FOUND, text="Unknown Latter entry")
 
-        token = request.query.get("token")
-        if not coordinator.verify_token(token):
+        uid = (request.query.get("uid") or "").strip()
+        sig = (request.query.get("sig") or "").strip()
+        if not uid or not sig or not coordinator.verify_resource(f"studio|{uid}", sig=sig):
             return web.Response(
                 status=HTTPStatus.FORBIDDEN,
-                text="Invalid or missing Latter companion token. Open via the 'Visit' link on the Latter or ESPHome device page in Home Assistant.",
+                text="Invalid or missing Latter Studio signature. Open via the Home Assistant sidebar or the 'Visit' link on the device page.",
+            )
+
+        user = await self.hass.auth.async_get_user(uid)
+        if user is None or not user.is_active or not user.is_admin:
+            return web.Response(
+                status=HTTPStatus.FORBIDDEN,
+                text="Admin privileges required.",
             )
 
         html_body = await self.hass.async_add_executor_job(
@@ -1945,48 +1983,74 @@ class LatterStudioRootView(HomeAssistantView):
         """Initialize the master Studio redirector view."""
         self.hass = hass
 
+    async def _async_resolve_request_user(self, request: web.Request) -> Any:
+        """Resolve an authenticated Home Assistant user from request context or Bearer header."""
+        user = request.get("hass_user")
+        if user is None:
+            auth_hdr = request.headers.get("Authorization", "")
+            if auth_hdr.startswith("Bearer "):
+                bearer = auth_hdr.removeprefix("Bearer ").strip()
+                refresh_token = await self.hass.auth.async_validate_access_token(bearer)
+                if refresh_token is not None:
+                    user = refresh_token.user
+        return user
+
     async def get(self, request: web.Request) -> web.Response:
-        """Redirect to the Studio view ONLY if a valid panel token or authenticated HA session is present."""
+        """Redirect to the Studio view ONLY if an authenticated admin session or valid panel bootstrap token is present."""
         coords = _get_all_coordinators(self.hass)
         if not coords:
             return web.Response(
                 status=HTTPStatus.NOT_FOUND,
                 text="No Latter devices configured yet. Add an ESPHome device under Settings -> Devices & Services -> Latter.",
             )
-        token = request.query.get("token")
-        if not verify_studio_panel_token(self.hass, token) and request.get("hass_user") is None:
-            return web.Response(
-                body=_STUDIO_AUTH_BOOTSTRAP_HTML,
-                content_type="text/html",
-                charset="utf-8",
+        user = await self._async_resolve_request_user(request)
+        if user is not None:
+            if not user.is_active or not user.is_admin:
+                return web.json_response(
+                    {"error": "Admin privileges required"},
+                    status=HTTPStatus.FORBIDDEN,
+                )
+            primary = coords[0]
+            scope = request.query.get("scope") or "system"
+            sig = primary.sign_resource(f"studio|{user.id}", ttl_s=8 * 3600)
+            target_url = (
+                f"/api/latter/companion/{primary.entry.entry_id}"
+                f"?uid={quote(user.id, safe='')}&sig={sig}&scope={quote(scope, safe='')}"
             )
-        primary = coords[0]
-        scope = request.query.get("scope") or "system"
-        dev_token = primary.get_signed_token()
-        target_url = f"/api/latter/companion/{primary.entry.entry_id}?token={dev_token}&scope={scope}"
-        raise web.HTTPFound(location=target_url)
+            raise web.HTTPFound(location=target_url)
+
+        token = request.query.get("token")
+        if not verify_studio_panel_token(self.hass, token):
+            return web.json_response(
+                {"error": "Admin privileges required"},
+                status=HTTPStatus.FORBIDDEN,
+            )
+        return web.Response(
+            body=_STUDIO_AUTH_BOOTSTRAP_HTML,
+            content_type="text/html",
+            charset="utf-8",
+        )
 
     async def post(self, request: web.Request) -> web.Response:
-        """Exchange a valid Home Assistant Bearer token for a signed Studio redirect URL."""
+        """Exchange a valid admin Home Assistant Bearer token for a signed Studio redirect URL."""
         coords = _get_all_coordinators(self.hass)
         if not coords:
             return web.json_response({"error": "No devices"}, status=HTTPStatus.NOT_FOUND)
 
-        auth_hdr = request.headers.get("Authorization", "")
-        user = request.get("hass_user")
-        if user is None and auth_hdr.startswith("Bearer "):
-            bearer = auth_hdr.removeprefix("Bearer ").strip()
-            refresh_token = await self.hass.auth.async_validate_access_token(bearer)
-            if refresh_token is not None:
-                user = refresh_token.user
-
-        if user is None:
-            return web.json_response({"error": "Unauthorized"}, status=HTTPStatus.FORBIDDEN)
+        user = await self._async_resolve_request_user(request)
+        if user is None or not user.is_active or not user.is_admin:
+            return web.json_response(
+                {"error": "Admin privileges required"},
+                status=HTTPStatus.FORBIDDEN,
+            )
 
         primary = coords[0]
         scope = request.query.get("scope") or "system"
-        dev_token = primary.get_signed_token()
-        target_url = f"/api/latter/companion/{primary.entry.entry_id}?token={dev_token}&scope={scope}"
+        sig = primary.sign_resource(f"studio|{user.id}", ttl_s=8 * 3600)
+        target_url = (
+            f"/api/latter/companion/{primary.entry.entry_id}"
+            f"?uid={quote(user.id, safe='')}&sig={sig}&scope={quote(scope, safe='')}"
+        )
         return web.json_response({"redirect_url": target_url})
 
 

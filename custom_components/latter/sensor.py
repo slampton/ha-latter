@@ -118,7 +118,6 @@ class _BaseLatterSensor(SensorEntity):
             "camera_entities",
             "cameras_summary",
             "camera_snapshot_url",
-            "companion_url",
             "doorbell_speakers_map",
             "intercom_targets_summary",
             "custom_bindings",
@@ -220,7 +219,7 @@ class LatterAreaContextSensor(_BaseLatterSensor):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return area entity summary, telemetry, alarm state, and companion_url."""
+        """Return area entity summary, telemetry, and alarm state."""
         _, attrs = self.coordinator.get_area_context_payload()
         return attrs
 

@@ -7,9 +7,11 @@ import hashlib
 import io
 import logging
 import math
+from collections.abc import Callable
 from pathlib import Path
 import re
 from typing import Any
+from urllib.parse import quote
 
 from PIL import Image, ImageDraw, ImageOps
 
@@ -168,10 +170,24 @@ def list_wallpaper_catalog(
     device_slug: str,
     active_source: str,
     favorites: list[str],
+    *,
+    sign_resource: Callable[[str], str] | None = None,
+    display_shape: str = "circle",
 ) -> list[dict[str, Any]]:
     """Return built-in AMOLED presets + cached uploaded wallpapers in `/config/www/latter_wallpapers/<slug>`."""
     fav_set = set(favorites or [])
     items: list[dict[str, Any]] = []
+    slug = normalize_device_slug(device_slug)
+    wp_shape = "square" if display_shape == "square" else "circle"
+
+    def _build_thumb_url(src_id: str) -> str:
+        if sign_resource is None:
+            return ""
+        sig = sign_resource(f"wallpaper:{src_id}")
+        return (
+            f"/api/latter/wallpaper/{slug}"
+            f"?w=240&h=240&shape={wp_shape}&src={quote(src_id, safe='')}&sig={sig}"
+        )
 
     for preset in BUILTIN_WALLPAPER_PRESETS:
         pid = preset["id"]
@@ -183,10 +199,10 @@ def list_wallpaper_catalog(
                 "active": pid == active_source,
                 "favorite": pid in fav_set,
                 "deletable": False,
+                "thumb_url": _build_thumb_url(pid),
             }
         )
 
-    slug = normalize_device_slug(device_slug)
     cached_files = _WALLPAPER_FILES_CACHE.get(slug)
     if cached_files is None:
         wp_dir = get_device_wallpaper_dir(hass, slug)
@@ -204,6 +220,7 @@ def list_wallpaper_catalog(
                 "active": source_id == active_source,
                 "favorite": source_id in fav_set,
                 "deletable": True,
+                "thumb_url": _build_thumb_url(source_id),
             }
         )
 
