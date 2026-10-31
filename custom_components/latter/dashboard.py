@@ -27,10 +27,6 @@ from .ble_engine import (
 )
 from .backup_engine import (
     async_apply_profile_to_coordinators,
-    async_create_vault_backup,
-    async_delete_vault_backup,
-    async_get_vault_backup,
-    async_list_vault_backups,
     async_restore_backup_bundle,
     build_backup_bundle,
     capture_profile_from_coordinator,
@@ -65,17 +61,7 @@ from .const import (
     CONF_CUSTOM_PALETTES,
     CONF_DEVICE_CUSTOM_COLOR,
     CONF_DOORBELL_ANC_MODE,
-    CONF_SIP_DTMF_CODE,
-    CONF_SIP_ENABLED,
-    CONF_SIP_EXTENSION,
-    CONF_SIP_PASSWORD,
-    CONF_SIP_PORT,
-    CONF_SIP_SERVER,
-    CONF_SIP_SPEED_DIALS,
-    CONF_SIP_USERNAME,
     DEFAULT_DOORBELL_ANC_MODE,
-    DEFAULT_SIP_DTMF_CODE,
-    DEFAULT_SIP_PORT,
     CONF_DEFAULT_AREA,
     CONF_DEFAULT_PAGE_SIZE,
     CONF_DEFAULT_SPEAKER,
@@ -575,21 +561,6 @@ def _build_companion_state_payload(
             coordinator.get_opt(CONF_DOORBELL_ANC_MODE, coordinator.doorbell_anc_mode)
             or DEFAULT_DOORBELL_ANC_MODE
         ),
-        CONF_SIP_ENABLED: bool(coordinator.get_opt(CONF_SIP_ENABLED, False)),
-        CONF_SIP_SERVER: str(coordinator.get_opt(CONF_SIP_SERVER, "") or ""),
-        CONF_SIP_PORT: int(coordinator.get_opt(CONF_SIP_PORT, DEFAULT_SIP_PORT) or DEFAULT_SIP_PORT),
-        CONF_SIP_USERNAME: str(coordinator.get_opt(CONF_SIP_USERNAME, "latter") or "latter"),
-        CONF_SIP_PASSWORD: (
-            _SECRET_MASK
-            if str(coordinator.get_opt(CONF_SIP_PASSWORD, "") or "")
-            else ""
-        ),
-        "has_sip_password": bool(
-            str(coordinator.get_opt(CONF_SIP_PASSWORD, "") or "")
-        ),
-        CONF_SIP_EXTENSION: str(coordinator.get_opt(CONF_SIP_EXTENSION, "101") or "101"),
-        CONF_SIP_DTMF_CODE: str(coordinator.get_opt(CONF_SIP_DTMF_CODE, DEFAULT_SIP_DTMF_CODE) or DEFAULT_SIP_DTMF_CODE),
-        CONF_SIP_SPEED_DIALS: str(coordinator.get_opt(CONF_SIP_SPEED_DIALS, "") or ""),
         CONF_DOCK_APPS: coordinator.dock_apps_csv,
         CONF_WALLPAPER_SOURCE: coordinator.wallpaper_source,
         CONF_WALLPAPER_FAVORITES: coordinator.wallpaper_favorites,
@@ -819,32 +790,6 @@ def _build_companion_state_payload(
             }
         )
 
-    vault_backups = hass.data.get(DOMAIN, {}).get("backups_data", {}).get("snapshots", [])
-    vault_summaries: list[dict[str, Any]] = []
-    for s in vault_backups:
-        if isinstance(s, dict) and s.get("id"):
-            dev_obj = s.get("device") or {}
-            ctrl_cnt = (
-                len(dev_obj.get("esphome_controls") or {})
-                if s.get("scope") == "device"
-                else sum(
-                    len((d or {}).get("esphome_controls") or {})
-                    for d in (s.get("devices") or {}).values()
-                )
-            )
-            vault_summaries.append(
-                {
-                    "id": s["id"],
-                    "name": s.get("name", s["id"]),
-                    "scope": s.get("scope", "device"),
-                    "created_at": s.get("created_at", ""),
-                    "target_device": s.get("target_device", ""),
-                    "device_count": int(s.get("device_count") or 1),
-                    "control_count": ctrl_cnt,
-                    "version": s.get("version", INTEGRATION_VERSION),
-                }
-            )
-
     onboarded_slugs = {c.device_slug for c in _get_all_coordinators(hass)}
     unbridged_devices: list[dict[str, str]] = []
     seen_unbridged: set[str] = set()
@@ -890,7 +835,6 @@ def _build_companion_state_payload(
         "system_controls": _build_system_shared_controls(hass),
         "device_groups": device_groups,
         "saved_profiles": saved_profiles,
-        "vault_backups": vault_summaries,
         "config": config_data,
         "esphome": esphome_inspector,
         "wallpapers": wallpapers_catalog,
@@ -1033,11 +977,7 @@ class LatterCompanionApiView(HomeAssistantView):
                 {"error": "Unauthorized or unknown entry"},
                 status=HTTPStatus.FORBIDDEN,
             )
-        from . import _async_scan_all_esphome_devices_for_discovery
-
-        _async_scan_all_esphome_devices_for_discovery(self.hass)
         await async_refresh_wallpaper_cache(self.hass, coordinator.device_slug)
-        await async_list_vault_backups(self.hass)
         payload = _build_companion_state_payload(self.hass, coordinator, uid=uid)
         return web.json_response(payload)
 
@@ -1076,9 +1016,11 @@ class LatterCompanionApiView(HomeAssistantView):
 
         if cmd == "set_area_fusion_mode":
             area_id = str(body.get("area_id") or "").strip()
-            mode_val = str(body.get("mode") or "auto_bayes").strip().lower()
-            if mode_val not in ("auto_bayes", "any_or", "ble_only", "ble_and_sensor"):
-                mode_val = "auto_bayes"
+            mode_val = str(body.get("mode") or "weighted").strip().lower()
+            if mode_val == "auto_bayes":
+                mode_val = "weighted"
+            if mode_val not in ("weighted", "any_or", "ble_only", "ble_and_sensor"):
+                mode_val = "weighted"
             if area_id:
                 raw_fusion = coordinator.get_opt(CONF_AREA_FUSION_CONFIG, {})
                 fusion_cfg = dict(raw_fusion) if isinstance(raw_fusion, dict) else {}
@@ -1281,15 +1223,6 @@ class LatterCompanionApiView(HomeAssistantView):
                 _build_companion_state_payload(self.hass, coordinator, uid=uid)
             )
 
-        if cmd == "activate_remote_slot":
-            slot_num = max(1, min(10, int(body.get("slot") or 1)))
-            coordinator.active_remote_slot = slot_num
-            coordinator._schedule_persist_runtime_state()
-            coordinator.async_notify_listeners()
-            return web.json_response(
-                _build_companion_state_payload(self.hass, coordinator, uid=uid)
-            )
-
         if cmd == "upload_wallpaper":
             filename = str(body.get("filename") or "wallpaper.jpg")
             data_b64 = str(body.get("data_b64") or "")
@@ -1392,27 +1325,7 @@ class LatterCompanionApiView(HomeAssistantView):
                 _build_companion_state_payload(self.hass, coordinator, uid=uid)
             )
 
-        if cmd == "set_active_area":
-            area_id = str(body.get("area_id") or "")
-            if area_id:
-                coordinator.async_set_active_area(
-                    area_id,
-                    handoff_media=False,
-                    sync_device_registry=bool(body.get("sync_device", False)),
-                )
-            return web.json_response(
-                _build_companion_state_payload(self.hass, coordinator, uid=uid)
-            )
-
-        if cmd == "set_active_speaker":
-            speaker_id = str(body.get("speaker") or "").strip()
-            if speaker_id:
-                coordinator.async_set_active_speaker(speaker_id, transfer_queue=True)
-            return web.json_response(
-                _build_companion_state_payload(self.hass, coordinator, uid=uid)
-            )
-
-        if cmd in ("esphome_entity_action", "area_card_action"):
+        if cmd == "esphome_entity_action":
             entity_id = str(body.get("entity_id") or "").strip()
             action = str(body.get("action") or "toggle").strip()
             level = body.get("level")
@@ -1527,8 +1440,6 @@ class LatterCompanionApiView(HomeAssistantView):
             for k in GLOBAL_CONFIG_KEYS:
                 if k in incoming_cfg:
                     val = incoming_cfg[k]
-                    if k == CONF_SIP_PASSWORD and val == _SECRET_MASK:
-                        continue
                     if k == CONF_WEB_THEME:
                         val = _normalize_web_theme(val)
                     global_updates[k] = val
@@ -1541,9 +1452,6 @@ class LatterCompanionApiView(HomeAssistantView):
                 await _async_save_and_broadcast_global_config(
                     self.hass, global_updates
                 )
-                from .sip_engine import get_sip_engine
-
-                await get_sip_engine(self.hass).async_start_or_reload()
             coordinator._bind_wallpaper_cycle_timer()
             coordinator.async_notify_listeners()
             return web.json_response(
@@ -1677,25 +1585,6 @@ class LatterCompanionApiView(HomeAssistantView):
                 _build_companion_state_payload(self.hass, coordinator, uid=uid)
             )
 
-        if cmd == "set_device_group":
-            target_slug = str(body.get("device_slug") or coordinator.device_slug).strip()
-            group_id = str(body.get("device_group") or DEFAULT_DEVICE_GROUP).strip()
-            for c in _get_all_coordinators(self.hass):
-                if c.device_slug == target_slug:
-                    merged_grp: dict[str, Any] = {
-                        **c.entry.data,
-                        **(c.entry.options or {}),
-                        CONF_DEVICE_GROUP: group_id,
-                    }
-                    self.hass.config_entries.async_update_entry(
-                        c.entry, data=merged_grp, options=merged_grp
-                    )
-                    c.async_notify_listeners()
-                    break
-            return web.json_response(
-                _build_companion_state_payload(self.hass, coordinator, uid=uid)
-            )
-
         if cmd == "create_device_group":
             g_name = str(body.get("name") or "").strip()
             g_desc = str(body.get("description") or "").strip()
@@ -1777,51 +1666,23 @@ class LatterCompanionApiView(HomeAssistantView):
                 _build_companion_state_payload(self.hass, coordinator, uid=uid)
             )
 
-        if cmd == "create_vault_backup":
+        if cmd == "export_backup_json":
             b_scope = str(body.get("scope") or "device").strip()
-            b_name = str(body.get("name") or "").strip()
-            inc_vpn = bool(body.get("include_vpn_secrets", True))
-            await async_create_vault_backup(
-                self.hass,
+            inc_vpn = bool(body.get("include_vpn_secrets", False))
+            bundle = build_backup_bundle(
+                hass=self.hass,
                 scope=b_scope,
                 coordinators=_get_all_coordinators(self.hass),
                 target_coordinator=coordinator,
-                name=b_name,
                 include_vpn_secrets=inc_vpn,
             )
-            return web.json_response(
-                _build_companion_state_payload(self.hass, coordinator, uid=uid)
-            )
-
-        if cmd == "export_backup_json":
-            b_scope = str(body.get("scope") or "device").strip()
-            b_id = str(body.get("backup_id") or "").strip()
-            inc_vpn = bool(body.get("include_vpn_secrets", True))
-            if b_id:
-                bundle = await async_get_vault_backup(self.hass, b_id)
-                if bundle is None:
-                    return web.json_response(
-                        {"error": "Backup snapshot not found"},
-                        status=HTTPStatus.NOT_FOUND,
-                    )
-            else:
-                bundle = build_backup_bundle(
-                    hass=self.hass,
-                    scope=b_scope,
-                    coordinators=_get_all_coordinators(self.hass),
-                    target_coordinator=coordinator,
-                    include_vpn_secrets=inc_vpn,
-                )
             return web.json_response({"bundle": bundle})
 
         if cmd == "restore_backup":
-            b_id = str(body.get("backup_id") or "").strip()
             bundle = body.get("bundle")
-            if b_id and not isinstance(bundle, dict):
-                bundle = await async_get_vault_backup(self.hass, b_id)
             if not isinstance(bundle, dict):
                 return web.json_response(
-                    {"error": "Valid backup bundle or backup_id required"},
+                    {"error": "Valid backup bundle required"},
                     status=HTTPStatus.BAD_REQUEST,
                 )
             restore_esp = bool(body.get("restore_esphome_entities", True))
@@ -1832,15 +1693,6 @@ class LatterCompanionApiView(HomeAssistantView):
                 target_coordinator=coordinator,
                 restore_esphome_entities=restore_esp,
             )
-            await async_list_vault_backups(self.hass)
-            return web.json_response(
-                _build_companion_state_payload(self.hass, coordinator, uid=uid)
-            )
-
-        if cmd == "delete_vault_backup":
-            b_id = str(body.get("backup_id") or "").strip()
-            if b_id:
-                await async_delete_vault_backup(self.hass, b_id)
             return web.json_response(
                 _build_companion_state_payload(self.hass, coordinator, uid=uid)
             )

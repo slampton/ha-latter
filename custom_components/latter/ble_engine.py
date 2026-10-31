@@ -25,6 +25,7 @@ _LOGGER = logging.getLogger(__name__)
 
 APPLE_COMPANY_ID = 0x004C
 IBEACON_PREFIX = b"\x02\x15"
+_UNMAPPED = "__unmapped__"
 EMA_ALPHA = 0.50
 HYSTERESIS_DB = 5.0
 FAST_OVERRIDE_DB = 8.0
@@ -409,8 +410,8 @@ class LatterNativeBleTracker:
             if len(_normalize_uuid_hex(u_raw)) == 32 and not self._target_address:
                 self._target_uuid_hex = _normalize_uuid_hex(u_raw)
 
-    def _resolve_beacon_minor(self) -> int | None:
-        """Return expected iBeacon minor ID from the device's hardware manifest."""
+    def _resolve_beacon_major_minor(self) -> tuple[int | None, int | None]:
+        """Return expected iBeacon (major, minor) IDs from the device's hardware manifest."""
         beacon_cfg = self._manifest_beacon
         if not beacon_cfg:
             hw = read_device_hardware_manifest(
@@ -419,12 +420,25 @@ class LatterNativeBleTracker:
             if isinstance(hw.get("beacon"), dict):
                 beacon_cfg = hw["beacon"]
                 self._manifest_beacon = dict(beacon_cfg)
-        if isinstance(beacon_cfg, dict) and beacon_cfg.get("minor") is not None:
-            try:
-                return int(beacon_cfg["minor"])
-            except (ValueError, TypeError):
-                return None
-        return None
+        major_val: int | None = None
+        minor_val: int | None = None
+        if isinstance(beacon_cfg, dict):
+            if beacon_cfg.get("major") is not None:
+                try:
+                    major_val = int(beacon_cfg["major"])
+                except (ValueError, TypeError):
+                    major_val = None
+            if beacon_cfg.get("minor") is not None:
+                try:
+                    minor_val = int(beacon_cfg["minor"])
+                except (ValueError, TypeError):
+                    minor_val = None
+        return major_val, minor_val
+
+    def _resolve_beacon_minor(self) -> int | None:
+        """Return expected iBeacon minor ID from the device's hardware manifest."""
+        _major, minor = self._resolve_beacon_major_minor()
+        return minor
 
     @property
     def target_macs_formatted(self) -> list[str]:
@@ -606,21 +620,32 @@ class LatterNativeBleTracker:
         if adv_name and self._device_slug in adv_name:
             return True
 
-        # 3. Apple iBeacon UUID + Minor ID match (supports ESP32-P4 + ESP32-C6 where the C6 BLE MAC
+        # 3. Apple iBeacon UUID + Major/Minor ID match (supports ESP32-P4 + ESP32-C6 where the C6 BLE MAC
         #    differs from the P4 host MAC in HA Device Registry)
         apple_bytes = mfg_data.get(APPLE_COMPANY_ID)
         if apple_bytes and len(apple_bytes) >= 18:
             uuid_matched = False
+            major_val: int | None = None
             minor_val: int | None = None
             if len(apple_bytes) >= 20 and apple_bytes[:2] == IBEACON_PREFIX:
                 uuid_hex = apple_bytes[2:18].hex().lower()
                 uuid_matched = uuid_hex == self._target_uuid_hex
+                if len(apple_bytes) >= 20:
+                    major_val = (apple_bytes[18] << 8) | apple_bytes[19]
                 if len(apple_bytes) >= 22:
                     minor_val = (apple_bytes[20] << 8) | apple_bytes[21]
             elif self._target_uuid_hex in apple_bytes.hex().lower():
                 uuid_matched = True
             if uuid_matched:
-                expected_minor = self._resolve_beacon_minor()
+                expected_major, expected_minor = self._resolve_beacon_major_minor()
+                if (
+                    major_val is not None
+                    and expected_major is not None
+                    and expected_major >= 1
+                    and major_val >= 1
+                    and major_val != expected_major
+                ):
+                    return False
                 if minor_val is not None and expected_minor is not None:
                     if minor_val == expected_minor and minor_val >= 1:
                         return True
@@ -643,76 +668,6 @@ class LatterNativeBleTracker:
         if matched and adv_address:
             self._record_matched_ble_address(adv_address)
         return matched
-
-    @callback
-    def _async_poll_scanner_tables(self, _now: datetime) -> None:
-        """Poll each ESPHome BLE Proxy's live advertisement table to bypass habluetooth static-iBeacon deduplication."""
-        now_mono = time.monotonic()
-        if not self._target_mac_ints and (now_mono - self._last_mac_discovery_mono) >= 30.0:
-            self._last_mac_discovery_mono = now_mono
-            self._target_mac_ints = _discover_target_device_macs(
-                self.hass, self._raw_slug, self._esphome_device_id
-            )
-
-        try:
-            from homeassistant.components import bluetooth
-
-            scanners = bluetooth.async_current_scanners(self.hass)
-            for scanner in scanners:
-                source = str(getattr(scanner, "source", "") or "")
-                scanner_name = str(getattr(scanner, "name", "") or source)
-                if not source:
-                    continue
-
-                timestamps: dict[str, float] = (
-                    getattr(scanner, "discovered_device_timestamps", None)
-                    or getattr(scanner, "_previous_seen_timestamps", None)
-                    or getattr(scanner, "timestamps", None)
-                    or {}
-                )
-
-                dev_adv_map: dict[str, tuple[Any, Any]] = getattr(
-                    scanner, "discovered_devices_and_advertisement_data", {}
-                ) or {}
-
-                for addr, pair in dev_adv_map.items():
-                    if not isinstance(pair, tuple) or len(pair) != 2:
-                        continue
-                    ble_dev, adv_data = pair
-                    last_ts = timestamps.get(addr)
-                    if last_ts is None:
-                        svc_info = bluetooth.async_last_service_info(
-                            self.hass, str(addr), connectable=False
-                        )
-                        if svc_info is not None:
-                            last_ts = getattr(svc_info, "time", None)
-                    obs_mono = float(last_ts) if last_ts is not None else now_mono
-                    if last_ts is not None and (now_mono - obs_mono) > SURVEY_RETENTION_SECONDS:
-                        continue
-
-                    mfg_data = getattr(adv_data, "manufacturer_data", {}) or {}
-                    local_name = str(
-                        getattr(adv_data, "local_name", "")
-                        or getattr(ble_dev, "name", "")
-                        or ""
-                    )
-                    if not self._matches_raw_adv(str(addr), local_name, mfg_data):
-                        continue
-
-                    self._record_matched_ble_address(str(addr))
-                    rssi = getattr(adv_data, "rssi", None)
-                    if rssi is None:
-                        rssi = getattr(ble_dev, "rssi", None)
-                    if rssi is not None and int(rssi) > -100:
-                        self._ingest_proxy_observation(
-                            source,
-                            int(rssi),
-                            obs_mono,
-                            scanner_name,
-                            from_poll=last_ts is not None,
-                        )
-        except Exception as err:  # noqa: BLE001
-            _LOGGER.debug("BLE scanner table poll error: %s", err)
 
     @callback
     def _async_on_ble_advertisement(
@@ -762,11 +717,13 @@ class LatterNativeBleTracker:
                 self.hass, self._raw_slug, self._esphome_device_id
             )
 
-        if self._scanner_area_cache.get(source) is None:
+        cached_area = self._scanner_area_cache.get(source)
+        if cached_area is None:
             resolved_area = _resolve_scanner_area_id(self.hass, source)
-            self._scanner_area_cache[source] = resolved_area
+            cached_area = resolved_area if resolved_area else _UNMAPPED
+            self._scanner_area_cache[source] = cached_area
 
-        area_id = self._scanner_area_cache.get(source)
+        area_id = None if cached_area == _UNMAPPED else cached_area
         if not area_id:
             self._unmapped_rssi[source] = (int(rssi), obs_time)
             return
@@ -898,6 +855,12 @@ class LatterNativeBleTracker:
             self._on_area_detected(best_area, self.closest_scanner)
             get_ble_fabric(self.hass).notify_occupancy_listeners()
 
+from .area_engine import (  # noqa: E402
+    evaluate_area_sensor_fusion,
+    invalidate_area_fusion_index,
+)
+
+
 class LatterBleFabric:
     """Domain-level singleton Bluetooth scanner fabric shared across all Latter & generic BLE trackers."""
 
@@ -909,6 +872,13 @@ class LatterBleFabric:
         self._unsub_ble: Callable[[], None] | None = None
         self._unsub_poll: Callable[[], None] | None = None
         self._unsub_sensor_events: Callable[[], None] | None = None
+
+    @callback
+    def _invalidate_caches(self, _event: Any = None) -> None:
+        """Invalidate scanner-to-area caches and area sensor fusion index on registry changes."""
+        for tracker in self._trackers:
+            tracker._scanner_area_cache.clear()
+        invalidate_area_fusion_index(self.hass)
 
     @callback
     def register_occupancy_listener(
@@ -953,114 +923,13 @@ class LatterBleFabric:
             listener()
 
     @callback
-    def _discover_area_fusion_sensors(
-        self, area_id: str, configured_sensors: list[str] | None = None
-    ) -> tuple[list[str], list[str], list[str], list[str], list[dict[str, str]]]:
-        """Return (occ_on, occ_off, motion_on, door_closed, available_sensors) for a Home Assistant Area."""
-        ent_reg = er.async_get(self.hass)
-        dev_reg = dr.async_get(self.hass)
-        explicit_set = {
-            str(s).strip()
-            for s in (configured_sensors or [])
-            if str(s or "").strip().startswith("binary_sensor.")
-        }
-
-        occ_on: list[str] = []
-        occ_off: list[str] = []
-        motion_on: list[str] = []
-        door_closed: list[str] = []
-        available: list[dict[str, str]] = []
-        candidate_entries: list[er.RegistryEntry] = []
-        seen_eids: set[str] = set()
-
-        for entry in er.async_entries_for_area(ent_reg, area_id):
-            if entry.entity_id not in seen_eids:
-                seen_eids.add(entry.entity_id)
-                candidate_entries.append(entry)
-
-        for dev in dr.async_entries_for_area(dev_reg, area_id):
-            for entry in er.async_entries_for_device(ent_reg, dev.id):
-                if not entry.area_id and entry.entity_id not in seen_eids:
-                    seen_eids.add(entry.entity_id)
-                    candidate_entries.append(entry)
-
-        for eid in explicit_set:
-            if eid not in seen_eids:
-                entry = ent_reg.async_get(eid)
-                if entry is not None:
-                    seen_eids.add(eid)
-                    candidate_entries.append(entry)
-
-        for entry in candidate_entries:
-            if entry.disabled_by or entry.domain != "binary_sensor":
-                continue
-            eid = entry.entity_id
-            if "ble_occupancy" in eid or (
-                entry.unique_id and str(entry.unique_id).startswith("latter_area_ble_occupancy_")
-            ):
-                continue
-
-            st = self.hass.states.get(eid)
-            dclass = str(
-                (st.attributes.get("device_class") if st else "")
-                or entry.device_class
-                or entry.original_device_class
-                or ""
-            ).lower()
-            if dclass not in ("occupancy", "presence", "motion", "moving", "door", "opening") and eid not in explicit_set:
-                continue
-
-            state_str = str(st.state if st else "unknown").lower()
-            friendly = (
-                str(st.attributes.get("friendly_name") if st else "")
-                or entry.name
-                or entry.original_name
-                or eid
-            ).strip()
-            available.append(
-                {
-                    "entity_id": eid,
-                    "name": friendly,
-                    "device_class": dclass or "occupancy",
-                    "state": state_str,
-                }
-            )
-            if explicit_set and eid not in explicit_set:
-                continue
-
-            if dclass in ("occupancy", "presence") or (eid in explicit_set and dclass not in ("motion", "moving", "door", "opening")):
-                if state_str == "on":
-                    occ_on.append(eid)
-                elif state_str == "off":
-                    occ_off.append(eid)
-            elif dclass in ("motion", "moving"):
-                if state_str == "on":
-                    motion_on.append(eid)
-            elif dclass in ("door", "opening"):
-                if state_str == "off":
-                    door_closed.append(eid)
-
-        return occ_on, occ_off, motion_on, door_closed, available
-
-    @callback
     def get_area_occupancy(self, area_id: str) -> dict[str, Any]:
-        """Return deterministic & Bayesian fused BLE + physical sensor occupancy telemetry for an Area."""
+        """Return deterministic & weighted fused BLE + physical sensor occupancy telemetry for an Area."""
         area_reg = ar.async_get(self.hass)
         area_obj = area_reg.async_get_area(area_id)
         floor_id = getattr(area_obj, "floor_id", None) if area_obj else None
 
         domain_data = self.hass.data.get("latter", {})
-        global_cfg = domain_data.get("global_config", {}) if isinstance(domain_data, dict) else {}
-        fusion_map = global_cfg.get("area_fusion_config", {}) if isinstance(global_cfg, dict) else {}
-        area_cfg = fusion_map.get(area_id, {}) if isinstance(fusion_map, dict) else {}
-        if not isinstance(area_cfg, dict):
-            area_cfg = {}
-
-        fusion_mode = str(area_cfg.get("mode") or "auto_bayes").strip().lower()
-        if fusion_mode not in ("auto_bayes", "any_or", "ble_only", "ble_and_sensor"):
-            fusion_mode = "auto_bayes"
-        threshold_pct = max(20, min(95, int(area_cfg.get("threshold_pct") or 50)))
-        configured_sensors = area_cfg.get("sensors") if isinstance(area_cfg.get("sensors"), list) else None
 
         # Map device_slug -> coordinator for person & friendly-name resolution
         coord_by_slug: dict[str, Any] = {}
@@ -1108,63 +977,26 @@ class LatterBleFabric:
                     closest_dist_m = tracker.winning_distance_m
                     closest_dist_ft = tracker.winning_distance_ft
 
-        occ_on, occ_off, motion_on, door_closed, available_sensors = (
-            self._discover_area_fusion_sensors(area_id, configured_sensors)
-        )
-        active_sensors = occ_on + motion_on
         ble_present = len(occupants) > 0
-        sensor_present = len(active_sensors) > 0
-
-        # Bayesian Posterior Occupancy Score (0..100%)
-        prob = 0.0
-        if ble_present:
-            if best_rssi is not None and best_rssi >= -68:
-                prob += 0.85
-            elif best_rssi is not None and best_rssi >= -80:
-                prob += 0.70
-            else:
-                prob += 0.54
-
-        if occ_on:
-            prob = max(prob, 0.78) + (0.18 if ble_present else 0.08)
-        elif occ_off and not motion_on and ble_present and (best_rssi is not None and best_rssi < -78):
-            # Dampen weak cross-wall BLE bleed-through when in-room mmWave explicitly reports clear
-            prob = max(0.0, prob - 0.18)
-
-        if motion_on:
-            prob = max(prob, 0.68) + (0.15 if (ble_present or occ_on) else 0.05)
-
-        if door_closed and (ble_present or sensor_present):
-            prob += 0.08
-
-        confidence_pct = int(round(max(0.0, min(1.0, prob)) * 100))
-
-        if fusion_mode == "ble_only":
-            is_occupied = ble_present
-            confidence_pct = max(confidence_pct, 85) if ble_present else 0
-        elif fusion_mode == "any_or":
-            is_occupied = ble_present or sensor_present
-            if is_occupied and confidence_pct < 60:
-                confidence_pct = 75
-        elif fusion_mode == "ble_and_sensor":
-            has_local_sensors = bool(occ_on or occ_off or motion_on)
-            is_occupied = ble_present and (sensor_present if has_local_sensors else True)
-        else:
-            # auto_bayes (default)
-            is_occupied = confidence_pct >= threshold_pct
+        fused = evaluate_area_sensor_fusion(
+            self.hass,
+            area_id,
+            ble_present=ble_present,
+            best_rssi=best_rssi,
+        )
 
         return {
-            "is_occupied": is_occupied,
-            "ble_occupied": ble_present,
-            "sensor_occupied": sensor_present,
-            "fusion_mode": fusion_mode,
-            "confidence_pct": confidence_pct,
+            "is_occupied": fused["is_occupied"],
+            "ble_occupied": fused["ble_occupied"],
+            "sensor_occupied": fused["sensor_occupied"],
+            "fusion_mode": fused["fusion_mode"],
+            "confidence_pct": fused["confidence_pct"],
             "tracker_count": len(occupants),
             "occupied_by": occupants,
             "occupant_names": occupant_names,
             "persons": persons,
-            "active_sensors": active_sensors,
-            "available_sensors": available_sensors,
+            "active_sensors": fused["active_sensors"],
+            "available_sensors": fused["available_sensors"],
             "closest_device": closest_dev,
             "winning_rssi": best_rssi,
             "closest_distance_m": closest_dist_m,
@@ -1180,7 +1012,7 @@ class LatterBleFabric:
         if len(self._trackers) == 1 and self._unsub_poll is None:
             self._async_start_fabric()
         else:
-            tracker._async_poll_scanner_tables(datetime.now())
+            self._async_poll_all_scanners_once(datetime.now())
         self.notify_occupancy_listeners()
 
     @callback
@@ -1198,21 +1030,36 @@ class LatterBleFabric:
         try:
             from homeassistant.components import bluetooth
 
-            matcher = bluetooth.BluetoothCallbackMatcher()
+            ibeacon_matcher = bluetooth.BluetoothCallbackMatcher(
+                manufacturer_id=APPLE_COMPANY_ID,
+                manufacturer_data_start=[0x02, 0x15],
+            )
             unsub_ibeacon_ble = bluetooth.async_register_callback(
                 self.hass,
                 self._async_on_shared_ble_advertisement,
-                matcher,
+                ibeacon_matcher,
                 bluetooth.BluetoothScanningMode.PASSIVE,
             )
             unsub_bus = self.hass.bus.async_listen(
                 "esphome.ibeacon_seen", self._async_on_esphome_ibeacon_event
+            )
+            unsub_dev_reg = self.hass.bus.async_listen(
+                dr.EVENT_DEVICE_REGISTRY_UPDATED, self._invalidate_caches
+            )
+            unsub_ent_reg = self.hass.bus.async_listen(
+                er.EVENT_ENTITY_REGISTRY_UPDATED, self._invalidate_caches
+            )
+            unsub_area_reg = self.hass.bus.async_listen(
+                ar.EVENT_AREA_REGISTRY_UPDATED, self._invalidate_caches
             )
 
             @callback
             def _unsub_combined() -> None:
                 unsub_ibeacon_ble()
                 unsub_bus()
+                unsub_dev_reg()
+                unsub_ent_reg()
+                unsub_area_reg()
 
             self._unsub_ble = _unsub_combined
             self._unsub_poll = async_track_time_interval(
@@ -1286,7 +1133,6 @@ class LatterBleFabric:
                     continue
                 timestamps: dict[str, float] = (
                     getattr(scanner, "discovered_device_timestamps", None)
-                    or getattr(scanner, "_previous_seen_timestamps", None)
                     or getattr(scanner, "timestamps", None)
                     or {}
                 )

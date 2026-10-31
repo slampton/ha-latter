@@ -273,27 +273,16 @@ async def async_push_browse_slots(
                 "service_name": f"esphome.{esphome_action}",
                 "error": str(err)[:160],
             }
-            try:
-                ir.async_create_issue(
-                    hass,
-                    DOMAIN,
-                    issue_id,
-                    is_fixable=True,
-                    severity=ir.IssueSeverity.WARNING,
-                    translation_key="slot_push_failing",
-                    translation_placeholders=placeholders,
-                    config_entry_id=coord.entry.entry_id if coord else None,
-                )
-            except TypeError:
-                ir.async_create_issue(
-                    hass,
-                    DOMAIN,
-                    issue_id,
-                    is_fixable=True,
-                    severity=ir.IssueSeverity.WARNING,
-                    translation_key="slot_push_failing",
-                    translation_placeholders=placeholders,
-                )
+            ir.async_create_issue(
+                hass,
+                DOMAIN,
+                issue_id,
+                is_fixable=True,
+                severity=ir.IssueSeverity.WARNING,
+                translation_key="slot_push_failing",
+                translation_placeholders=placeholders,
+                config_entry_id=coord.entry.entry_id if coord else None,
+            )
 
 
 def _is_esphome_device_online(hass: HomeAssistant, coord: LatterCoordinator) -> bool:

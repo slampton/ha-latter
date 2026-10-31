@@ -398,48 +398,6 @@ class LatterConfigFlow(ConfigFlow, domain=DOMAIN):
         self._discovered_slug: str = ""
         self._discovered_name: str = ""
 
-    async def async_step_zeroconf(
-        self, discovery_info: Any
-    ) -> ConfigFlowResult:
-        """Handle Zeroconf mDNS auto-discovery of Latter-compatible ESPHome devices."""
-        from . import is_latter_compatible_esphome_device
-
-        raw_name = (
-            str(discovery_info.properties.get("friendly_name") or "")
-            or str(discovery_info.properties.get("name") or "")
-            or discovery_info.name.split(".", 1)[0]
-        ).strip()
-        node_name = (
-            str(discovery_info.properties.get("name") or "")
-            or discovery_info.hostname.split(".", 1)[0]
-            or raw_name
-        ).strip()
-        slug = normalize_device_slug(node_name)
-        if not slug or "proxy" in slug or "proxy" in raw_name.lower():
-            return self.async_abort(reason="not_supported")
-
-        dev_reg = dr.async_get(self.hass)
-        matched_dev: dr.DeviceEntry | None = None
-        for dev in _iter_devices(dev_reg):
-            d_name = str(dev.name_by_user or dev.name or "").strip()
-            if normalize_device_slug(d_name) == slug:
-                matched_dev = dev
-                break
-
-        if matched_dev is None or not is_latter_compatible_esphome_device(
-            self.hass, matched_dev, slug
-        ):
-            return self.async_abort(reason="not_supported")
-
-        _dev, target_uid = _resolve_esphome_device_and_unique_id(self.hass, slug)
-        await self.async_set_unique_id(target_uid)
-        self._abort_if_unique_id_configured()
-
-        self._discovered_slug = slug
-        self._discovered_name = _format_clean_device_title(self.hass, slug, raw_name)
-        self.context["title_placeholders"] = {"name": self._discovered_name}
-        return await self.async_step_user()
-
     async def async_step_integration_discovery(
         self, discovery_info: dict[str, Any]
     ) -> ConfigFlowResult:

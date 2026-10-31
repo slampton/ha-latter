@@ -58,7 +58,6 @@ from .http import (
     LatterMapSnapshotView,
     LatterWallpaperProxyView,
 )
-from .sip_engine import get_sip_engine
 from .services import async_push_active_area_entities, async_setup_services
 
 _LOGGER = logging.getLogger(__name__)
@@ -86,7 +85,7 @@ def is_latter_compatible_esphome_device(
 ) -> bool:
     """Return True ONLY if the ESPHome device implements the Latter API contract or Latter project namespace."""
     # 1. Check registered ESPHome API contract actions (_set_browse_slots, _set_area_slots, _show_notification, _latter_ping)
-    esphome_services = hass.services.async_services().get("esphome", {})
+    esphome_services = hass.services.async_services_for_domain("esphome")
     for suffix in LATTER_CONTRACT_ACTION_SUFFIXES:
         exact = f"{slug}{suffix}"
         if exact in esphome_services:
@@ -223,9 +222,65 @@ def _async_check_esphome_device_for_discovery(
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up the Latter domain, register services, and scan for Latter-compatible ESPHome devices."""
-    hass.data.setdefault(DOMAIN, {})
+    domain_data = hass.data.setdefault(DOMAIN, {})
     await _async_ensure_global_store(hass)
     await async_setup_services(hass)
+
+    @callback
+    def _schedule_debounced_discovery_scan(delay_s: float = 2.0) -> None:
+        prev_timer = domain_data.pop("_unsub_delayed_scan", None)
+        if callable(prev_timer):
+            prev_timer()
+
+        @callback
+        def _delayed_scan(_now: Any) -> None:
+            domain_data.pop("_unsub_delayed_scan", None)
+            _async_scan_all_esphome_devices_for_discovery(hass)
+
+        domain_data["_unsub_delayed_scan"] = async_call_later(
+            hass, delay_s, _delayed_scan
+        )
+
+    if DATA_DISCOVERY_UNSUB not in domain_data:
+        @callback
+        def _on_device_registry_updated(event: Event) -> None:
+            if event.data.get("action") not in ("create", "update"):
+                return
+            dev_id = event.data.get("device_id")
+            if not dev_id:
+                return
+            dev_reg = dr.async_get(hass)
+            dev = dev_reg.async_get(dev_id)
+            own_writes = domain_data.get("_own_area_writes")
+            if isinstance(own_writes, dict) and dev_id in own_writes:
+                expected_area, write_ts = own_writes[dev_id]
+                if (
+                    (time.monotonic() - float(write_ts)) < 2.0
+                    and dev is not None
+                    and dev.area_id == expected_area
+                ):
+                    own_writes.pop(dev_id, None)
+                    return
+            if dev is not None:
+                _async_check_esphome_device_for_discovery(hass, dev)
+                _schedule_debounced_discovery_scan(5.0)
+
+        @callback
+        def _on_service_registered(event: Event) -> None:
+            if event.data.get("domain") != "esphome":
+                return
+            svc = str(event.data.get("service") or "")
+            if any(svc.endswith(sfx) for sfx in LATTER_CONTRACT_ACTION_SUFFIXES):
+                _schedule_debounced_discovery_scan(1.0)
+
+        unsub_dev = hass.bus.async_listen(
+            dr.EVENT_DEVICE_REGISTRY_UPDATED, _on_device_registry_updated
+        )
+        unsub_svc = hass.bus.async_listen(
+            EVENT_SERVICE_REGISTERED, _on_service_registered
+        )
+        domain_data[DATA_DISCOVERY_UNSUB] = (unsub_dev, unsub_svc)
+
     @callback
     def _on_ha_started(_ev: Event) -> None:
         _async_scan_all_esphome_devices_for_discovery(hass)
@@ -272,8 +327,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("Sidebar panel registration skipped: %s", err)
 
-    await get_sip_engine(hass).async_start_or_reload()
-
     coordinator = LatterCoordinator(
         hass=hass,
         entry=entry,
@@ -289,60 +342,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
     clean_title = coordinator.device_slug.replace("_", " ").title()
     if entry.title.lower().startswith("latter (") or entry.title != clean_title:
         hass.config_entries.async_update_entry(entry, title=clean_title)
-
-    hass.loop.call_soon(_async_scan_all_esphome_devices_for_discovery, hass)
-
-    if DATA_DISCOVERY_UNSUB not in domain_data:
-        @callback
-        def _on_device_registry_updated(event: Event) -> None:
-            if event.data.get("action") not in ("create", "update"):
-                return
-            dev_id = event.data.get("device_id")
-            if not dev_id:
-                return
-            dev_reg = dr.async_get(hass)
-            dev = dev_reg.async_get(dev_id)
-            own_writes = domain_data.get("_own_area_writes")
-            if isinstance(own_writes, dict) and dev_id in own_writes:
-                expected_area, write_ts = own_writes[dev_id]
-                if (
-                    (time.monotonic() - float(write_ts)) < 2.0
-                    and dev is not None
-                    and dev.area_id == expected_area
-                ):
-                    own_writes.pop(dev_id, None)
-                    return
-            if dev is not None:
-                _async_check_esphome_device_for_discovery(hass, dev)
-
-                prev_timer = domain_data.pop("_unsub_delayed_scan", None)
-                if callable(prev_timer):
-                    prev_timer()
-
-                @callback
-                def _delayed_scan(_now: Any) -> None:
-                    domain_data.pop("_unsub_delayed_scan", None)
-                    _async_scan_all_esphome_devices_for_discovery(hass)
-
-                domain_data["_unsub_delayed_scan"] = async_call_later(
-                    hass, 5.0, _delayed_scan
-                )
-
-        @callback
-        def _on_service_registered(event: Event) -> None:
-            if event.data.get("domain") != "esphome":
-                return
-            svc = str(event.data.get("service") or "")
-            if any(svc.endswith(sfx) for sfx in LATTER_CONTRACT_ACTION_SUFFIXES):
-                _async_scan_all_esphome_devices_for_discovery(hass)
-
-        unsub_dev = hass.bus.async_listen(
-            dr.EVENT_DEVICE_REGISTRY_UPDATED, _on_device_registry_updated
-        )
-        unsub_svc = hass.bus.async_listen(
-            EVENT_SERVICE_REGISTERED, _on_service_registered
-        )
-        domain_data[DATA_DISCOVERY_UNSUB] = (unsub_dev, unsub_svc)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
@@ -378,17 +377,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> b
         )
         if coordinator is not None:
             coordinator.async_cleanup()
-        remaining = [
-            v for v in hass.data.get(DOMAIN, {}).values() if isinstance(v, LatterCoordinator)
-        ]
-        if not remaining:
-            delayed_unsub = hass.data.get(DOMAIN, {}).pop("_unsub_delayed_scan", None)
-            if callable(delayed_unsub):
-                delayed_unsub()
-            for unsub in hass.data.get(DOMAIN, {}).pop(DATA_DISCOVERY_UNSUB, ()):
-                unsub()
-            if "sip_engine" in hass.data.get(DOMAIN, {}):
-                hass.data[DOMAIN]["sip_engine"].async_stop()
     return unload_ok
 
 

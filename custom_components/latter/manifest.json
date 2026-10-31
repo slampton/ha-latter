@@ -1,7 +1,13 @@
 {
   "domain": "latter",
   "name": "Latter",
-  "after_dependencies": ["bluetooth", "camera", "frontend"],
+  "after_dependencies": [
+    "assist_pipeline",
+    "bluetooth",
+    "bluetooth_adapters",
+    "camera",
+    "go2rtc"
+  ],
   "categories": [
     "ai_voice.voice_assistants",
     "diy_makers.boards_hardware",
@@ -9,7 +15,7 @@
   ],
   "codeowners": ["@slampton"],
   "config_flow": true,
-  "dependencies": ["http"],
+  "dependencies": ["frontend", "http"],
   "documentation": "https://github.com/slampton/ha-latter",
   "integration_type": "device",
   "iot_class": "local_push",

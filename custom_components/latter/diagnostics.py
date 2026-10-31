@@ -20,9 +20,6 @@ TO_REDACT: set[str] = {
     "companion_url",
     "hmac_secret_hex",
     "mac",
-    "sip_password",
-    "sip_server",
-    "sip_username",
     "vpn_client_ip",
     "vpn_endpoint",
     "vpn_preshared_key",
@@ -65,6 +62,7 @@ async def async_get_config_entry_diagnostics(
             "active_area_id": coordinator.active_area_id,
             "active_remote_slot": coordinator.active_remote_slot,
             "volume_overrides": coordinator.volume_overrides,
+            "last_area_follow_write": coordinator.last_area_follow_write,
         },
         "sensors": {
             "active_media": {"state": media_state, "attributes": media_attrs},

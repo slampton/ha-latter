@@ -349,6 +349,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.get_opt(CONF_WALLPAPER_SOURCE, "") or ""
         ).strip()
         self.current_wallpaper: str = ""
+        self.last_area_follow_write: dict[str, Any] | None = None
         self._structural_snapshot: dict[str, Any] = self._capture_structural_snapshot()
 
     def _capture_structural_snapshot(self) -> dict[str, Any]:
@@ -645,7 +646,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return cleaned[:10]
 
     def _build_intercom_targets_summary(self) -> str:
-        """Build semicolon-delimited 'target_id|Friendly Label;...' for Area-to-Area & SIP Speed-Dial calling."""
+        """Build semicolon-delimited 'target_id|Friendly Label;...' for Area-to-Area intercom calling."""
         rows: list[str] = ["all|Call All Areas"]
         domain_data = self.hass.data.get(DOMAIN, {})
         for val in domain_data.values():
@@ -653,17 +654,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 if val.device_slug != self.device_slug:
                     title = val.device_slug.replace("_", " ").title()[:24]
                     rows.append(f"{val.device_slug}|Call: {title}")
-        raw_sd = str(self.get_opt("sip_speed_dials") or "").strip()
-        if raw_sd:
-            for item in raw_sd.split(","):
-                item = item.strip()
-                if not item:
-                    continue
-                if "|" in item:
-                    lbl, uri = item.split("|", 1)
-                    rows.append(f"{uri.strip()}|SIP: {lbl.strip()[:22]}")
-                else:
-                    rows.append(f"sip:{item}|SIP: {item[:22]}")
         return ";".join(rows[:10])
 
     @property
@@ -722,13 +712,11 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     @property
     def ble_beacon_uuid(self) -> str:
-        """Return the iBeacon UUID broadcast by the device (migrating pre-v2.2 default UUIDs automatically)."""
+        """Return the iBeacon UUID broadcast by the device."""
         raw = str(
             self.get_opt(CONF_BLE_BEACON_UUID, DEFAULT_BLE_BEACON_UUID)
         ).strip()
-        if not raw or raw.upper().startswith("504F434B-"):
-            return DEFAULT_BLE_BEACON_UUID
-        return raw
+        return raw or DEFAULT_BLE_BEACON_UUID
 
     @property
     def ble_target_address(self) -> str:
@@ -2178,23 +2166,27 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         and self.esphome_device_id
                     ):
                         self._pending_follow_area_id = None
-                        sync_esphome_device_area(
+                        rec = sync_esphome_device_area(
                             self.hass,
                             self.esphome_device_id,
                             matched_id,
                             require_ble_proxy_area=True,
                         )
+                        if rec is not None:
+                            self.last_area_follow_write = rec
 
                 self._unsub_area_follow_dwell = async_call_later(
                     self.hass, float(dwell_s), _commit_dwell_sync
                 )
             else:
-                sync_esphome_device_area(
+                rec = sync_esphome_device_area(
                     self.hass,
                     esp_dev_id,
                     matched_id,
                     require_ble_proxy_area=ble_driven,
                 )
+                if rec is not None:
+                    self.last_area_follow_write = rec
 
         media_map = find_area_media_entities(
             self.hass, matched_id, self.local_speaker

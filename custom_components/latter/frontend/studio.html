@@ -1255,49 +1255,6 @@
             <div id="cameras-list"></div>
             <button type="button" class="btn-secondary" id="btn-add-camera" onclick="addCameraRow(''); markDirty();">+ Add Camera</button>
 
-            <details class="ha-details" style="margin-top:14px;margin-bottom:0;">
-              <summary>SIP / VoIP Intercom &amp; Gate DTMF Settings</summary>
-              <div class="details-body">
-                <div class="toggle-row" style="margin-bottom:10px;">
-                  <span>Enable SIP / RTP VoIP Client (PBX or Peer-to-Peer Doorbell Intercom)</span>
-                  <input type="checkbox" id="cfg-sip_enabled" onchange="markDirty()">
-                </div>
-                <div class="form-grid-2">
-                  <div class="field">
-                    <label>SIP Server / PBX Host (Blank = Peer-to-Peer)</label>
-                    <input type="text" id="cfg-sip_server" placeholder="192.168.1.10 or pbx.local" oninput="markDirty()">
-                  </div>
-                  <div class="field">
-                    <label>SIP Port &amp; Extension</label>
-                    <div class="form-grid-2">
-                      <input type="number" id="cfg-sip_port" value="5060" placeholder="5060" oninput="markDirty()">
-                      <input type="text" id="cfg-sip_extension" placeholder="101" oninput="markDirty()">
-                    </div>
-                  </div>
-                </div>
-                <div class="form-grid-2">
-                  <div class="field">
-                    <label>SIP Auth Username</label>
-                    <input type="text" id="cfg-sip_username" placeholder="101" oninput="markDirty()">
-                  </div>
-                  <div class="field">
-                    <label>SIP Auth Password</label>
-                    <input type="text" id="cfg-sip_password" placeholder="Password" oninput="markDirty()">
-                  </div>
-                </div>
-                <div class="form-grid-2">
-                  <div class="field">
-                    <label>Gate / Door Strike DTMF Unlock Code (RFC 2833)</label>
-                    <input type="text" id="cfg-sip_dtmf_code" value="#9" placeholder="#9" oninput="markDirty()">
-                  </div>
-                  <div class="field">
-                    <label>SIP Speed-Dials (Label|sip:ext@host, ...)</label>
-                    <input type="text" id="cfg-sip_speed_dials" placeholder="Front Gate|sip:201@192.168.1.20" oninput="markDirty()">
-                  </div>
-                </div>
-              </div>
-            </details>
-
             <div id="cam-preview-box" style="display:none;flex-direction:column;gap:8px;margin-top:14px;padding:12px;background:var(--input-bg);border:1px solid var(--border);border-radius:10px;">
               <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
                 <strong id="cam-preview-label" style="font-size:13px;font-weight:500;color:var(--text-strong);">Camera Snapshot Preview</strong>
@@ -1427,7 +1384,7 @@
       <section id="view-area_tracking" class="hidden">
         <div class="page-header">
           <h2>BLE &amp; Area Presence</h2>
-          <p>Live Area occupancy, Bayesian BLE + mmWave/PIR sensor fusion, per-area signal calibration, and 1-click Bluetooth device adoption.</p>
+          <p>Live Area occupancy, weighted BLE + mmWave/PIR sensor fusion, per-area signal calibration, and 1-click Bluetooth device adoption.</p>
         </div>
 
         <div class="card">
@@ -1482,8 +1439,8 @@
 
         <div class="grid-2">
           <div class="card">
-            <h3>Create or Export Backup</h3>
-            <p class="desc">Save system settings, entity mappings, BLE area offsets, and live ESPHome device preferences.</p>
+            <h3>Export Settings (.JSON)</h3>
+            <p class="desc">Download a portable JSON bundle of your system settings, entity mappings, BLE area offsets, and live ESPHome device preferences. (Full system backups are handled automatically by Home Assistant's native Backup system.)</p>
             <div class="field">
               <label>Backup Scope</label>
               <select id="bkp-scope-select">
@@ -1491,17 +1448,12 @@
                 <option value="device">Active Device Only</option>
               </select>
             </div>
-            <div class="field">
-              <label>Backup Label (Optional)</label>
-              <input type="text" id="bkp-label-input" placeholder="e.g. Baseline Config">
-            </div>
             <div class="toggle-row" style="margin-bottom:12px;">
               <span>Include WireGuard Private Keys</span>
-              <input type="checkbox" id="bkp-include-vpn" checked>
+              <input type="checkbox" id="bkp-include-vpn">
             </div>
             <div class="quick-actions-row">
-              <button class="btn-primary" onclick="createVaultSnapshot()">Save Local Backup</button>
-              <button class="btn-secondary" onclick="exportBackupToComputer('')">Download .JSON</button>
+              <button class="btn-primary" onclick="exportBackupToComputer('')">Download .JSON</button>
             </div>
           </div>
 
@@ -1518,12 +1470,6 @@
             </div>
             <button class="btn-primary" onclick="restoreFromUploadedFile()">Upload &amp; Restore</button>
           </div>
-        </div>
-
-        <div class="card">
-          <h3>Saved Local Backups</h3>
-          <p class="desc">Restore a saved backup in one click, download a JSON copy, or remove old snapshots.</p>
-          <div id="vault-backups-list" class="native-controls-box"></div>
         </div>
 
         <div class="grid-2">
@@ -1757,7 +1703,6 @@
             <div class="summary-row" id="dash-row-ble-proxy"><span>Nearest BLE Proxy</span><strong id="dash-ble-proxy">--</strong></div>
             <div class="summary-row"><span>Device Group</span><strong id="st-group">Unassigned</strong></div>
             <div class="quick-actions-row" style="margin-top:16px;">
-              <button class="btn-chip" onclick="createDeviceQuickBackup()">Save Device Backup</button>
               <button class="btn-chip" onclick="exportBackupToComputer('device')">Download .JSON</button>
               <button class="btn-chip" onclick="navigateToView('system')">Administration &amp; Logs</button>
             </div>
@@ -2324,35 +2269,6 @@ function trySyncFromParentHaFrame() {
   }
 }
 
-function formatFriendlyState(raw) {
-  if (raw === null || raw === undefined) return "--";
-  const s = String(raw).trim();
-  if (!s || s.toLowerCase() === "unknown" || s.toLowerCase() === "unavailable" || s.toLowerCase() === "none") {
-    return "--";
-  }
-  const map = {
-    "clear-night": "Clear Night",
-    "clearnight": "Clear Night",
-    "clear-day": "Clear Day",
-    "clearday": "Clear Day",
-    "partlycloudy": "Partly Cloudy",
-    "partly-cloudy": "Partly Cloudy",
-    "mostlysunny": "Mostly Sunny",
-    "snowy-rainy": "Snowy Rainy",
-    "lightning-rainy": "Thunderstorm",
-    "armed_home": "Armed Home",
-    "armed_away": "Armed Away",
-    "armed_night": "Armed Night",
-    "armed_vacation": "Armed Vacation",
-    "heat_cool": "Heat / Cool"
-  };
-  const low = s.toLowerCase();
-  if (map[low]) return map[low];
-  return low
-    .replace(/[_-]+/g, " ")
-    .replace(/\b\w/g, c => c.toUpperCase());
-}
-
 function populateThemeDropdowns(_haThemes, selectedPref) {
   document.querySelectorAll("[data-theme-btn]").forEach(btn => {
     btn.classList.toggle("active", btn.getAttribute("data-theme-btn") === selectedPref);
@@ -2823,7 +2739,6 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
 
   const groups = STATE?.device_groups || [];
   const profiles = STATE?.saved_profiles || [];
-  const backups = STATE?.vault_backups || [];
   const live = STATE?.live || {};
 
   const profDevLbl = document.getElementById("prof-active-dev-label");
@@ -3135,32 +3050,6 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
     }
   }
 
-  const vBox = document.getElementById("vault-backups-list");
-  if (vBox) {
-    if (!backups.length) {
-      vBox.innerHTML = `<p class="desc">No local backups saved yet.</p>`;
-    } else {
-      vBox.innerHTML = backups.map(b => {
-        const isSys = b.scope === "system";
-        const scopeBadge = isSys
-          ? `<span class="state-badge">SYSTEM (${esc(b.device_count)})</span>`
-          : `<span class="state-badge">DEVICE: ${esc(b.target_device)}</span>`;
-        const tsClean = (b.created_at || "").replace("T", " ").slice(0, 19);
-        return `<div class="native-ctrl-row">
-          <div class="lbl">
-            ${esc(b.name)} ${scopeBadge}
-            <small>${esc(tsClean)} &bull; ${esc(b.control_count || 0)} ESPHome settings &bull; v${esc(b.version || '')}</small>
-          </div>
-          <div class="widget">
-            <button class="btn-primary" onclick="restoreVaultSnapshot(${jsArg(b.id)}, ${jsArg(b.name || '')})">Restore</button>
-            <button class="btn-secondary" onclick="downloadVaultSnapshot(${jsArg(b.id)})">Download</button>
-            <button class="btn-danger" onclick="deleteVaultSnapshot(${jsArg(b.id)})">✕</button>
-          </div>
-        </div>`;
-      }).join("");
-    }
-  }
-
   (void 0);
 }
 
@@ -3281,7 +3170,7 @@ function renderAreaPresenceGrid() {
   }
 
   const modeOptions = [
-    {val: "auto_bayes", label: "Auto Bayesian (BLE + Sensors)"},
+    {val: "weighted", label: "Weighted (BLE + Sensors)"},
     {val: "any_or",     label: "Deterministic OR (BLE or Sensor)"},
     {val: "ble_only",   label: "BLE Only"},
     {val: "ble_and_sensor", label: "Strict AND (BLE + Sensor)"}
@@ -3310,7 +3199,8 @@ function renderAreaPresenceGrid() {
       sigParts.push(`Floor: ${r.floor_id}`);
     }
     const subTxt = sigParts.length ? sigParts.join(" • ") : "BLE Proxy Ready";
-    const curMode = r.fusion_mode || "auto_bayes";
+    const rawMode = r.fusion_mode || "weighted";
+    const curMode = rawMode === "auto_bayes" ? "weighted" : rawMode;
     const optsHtml = modeOptions.map(m =>
       `<option value="${esc(m.val)}" ${m.val === curMode ? 'selected' : ''}>${esc(m.label)}</option>`
     ).join("");
@@ -3482,40 +3372,6 @@ async function sendTestNotification() {
   if (resp.ok) {
     applyStateToDom(await resp.json(), false);
     showToast(`Sent notification to ${target_device}`);
-  }
-}
-
-function renderLiveAreaCards(cards, areaName) {
-  const box = document.getElementById("live-area-cards");
-  const cntEl = document.getElementById("st-card-count");
-  const areaEl = document.getElementById("st-area-cards-area");
-  if (areaEl) areaEl.textContent = areaName || "Home";
-  if (cntEl) cntEl.textContent = String((cards || []).length);
-  if (!box) return;
-  if (!cards || !cards.length) {
-    box.innerHTML = `<p class="desc" style="margin:0;">No controllable area entities found in this area.</p>`;
-    return;
-  }
-  box.innerHTML = cards.map(c => `
-    <div class="area-mini-card ${c.active ? 'on' : ''}" onclick="toggleAreaCard(${jsArg(c.id)})">
-      <div style="min-width:0;padding-right:8px;">
-        <strong style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(c.name)}</strong>
-        <small>${esc(c.type)}</small>
-      </div>
-      <span class="state-badge">${c.active ? 'ON' : 'OFF'}</span>
-    </div>
-  `).join("");
-}
-
-async function toggleAreaCard(entity_id) {
-  const resp = await fetch(API_URL, {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({command: "area_card_action", entity_id, action: "toggle"})
-  });
-  if (resp.ok) {
-    applyStateToDom(await resp.json(), false);
-    showToast(`Toggled ${entity_id}`);
   }
 }
 
@@ -3765,18 +3621,6 @@ function renderRawEntityList() {
   const box = document.getElementById("raw-entity-items");
   if (box) {
     box.innerHTML = allItems.map(it => renderNativeControlRow(it, true)).join("");
-  }
-}
-
-async function activateRemoteSlot(slotNum) {
-  const resp = await fetch(API_URL, {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({command: "activate_remote_slot", slot: slotNum})
-  });
-  if (resp.ok) {
-    applyStateToDom(await resp.json(), false);
-    showToast(`Active remote set to Slot ${slotNum}`);
   }
 }
 
@@ -4515,18 +4359,6 @@ function onFilterDeviceCategory(val) {
   }
 }
 
-async function assignDeviceGroup(deviceSlug, groupId) {
-  const resp = await fetch(API_URL, {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({command: "set_device_group", device_slug: deviceSlug, device_group: groupId})
-  });
-  if (resp.ok) {
-    applyStateToDom(await resp.json(), false);
-    showToast(`Assigned ${deviceSlug} to group '${groupId}'`);
-  }
-}
-
 async function createDeviceGroup() {
   const nameEl = document.getElementById("new-group-name");
   const descEl = document.getElementById("new-group-desc");
@@ -4602,35 +4434,6 @@ async function deleteSavedProfile(profileId) {
   }
 }
 
-async function createVaultSnapshot() {
-  const scope = document.getElementById("bkp-scope-select")?.value || "system";
-  const name = (document.getElementById("bkp-label-input")?.value || "").trim();
-  const incVpn = document.getElementById("bkp-include-vpn")?.checked ?? true;
-  const resp = await fetch(API_URL, {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({command: "create_vault_backup", scope, name, include_vpn_secrets: incVpn})
-  });
-  if (resp.ok) {
-    const lblEl = document.getElementById("bkp-label-input");
-    if (lblEl) lblEl.value = "";
-    applyStateToDom(await resp.json(), false);
-    showToast(`Saved ${scope} backup`);
-  }
-}
-
-async function createDeviceQuickBackup() {
-  const resp = await fetch(API_URL, {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({command: "create_vault_backup", scope: "device", name: "", include_vpn_secrets: true})
-  });
-  if (resp.ok) {
-    applyStateToDom(await resp.json(), false);
-    showToast("Saved device backup");
-  }
-}
-
 function triggerJsonDownload(bundle) {
   const dateStr = new Date().toISOString().slice(0, 10);
   const slugPart = bundle.scope === "system" ? "system" : `device-${bundle.target_device || 'esphome'}`;
@@ -4650,7 +4453,7 @@ function triggerJsonDownload(bundle) {
 
 async function exportBackupToComputer(overrideScope) {
   const scope = overrideScope || document.getElementById("bkp-scope-select")?.value || "system";
-  const incVpn = document.getElementById("bkp-include-vpn")?.checked ?? true;
+  const incVpn = document.getElementById("bkp-include-vpn")?.checked ?? false;
   const resp = await fetch(API_URL, {
     method: "POST",
     headers: {"Content-Type": "application/json"},
@@ -4662,46 +4465,6 @@ async function exportBackupToComputer(overrideScope) {
       triggerJsonDownload(data.bundle);
       showToast(`Downloaded ${scope} backup .JSON`);
     }
-  }
-}
-
-async function downloadVaultSnapshot(backupId) {
-  const resp = await fetch(API_URL, {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({command: "export_backup_json", backup_id: backupId})
-  });
-  if (resp.ok) {
-    const data = await resp.json();
-    if (data.bundle) {
-      triggerJsonDownload(data.bundle);
-      showToast("Downloaded backup .JSON");
-    }
-  }
-}
-
-async function restoreVaultSnapshot(backupId, label) {
-  const restoreEsp = document.getElementById("bkp-restore-esp")?.checked ?? true;
-  const resp = await fetch(API_URL, {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({command: "restore_backup", backup_id: backupId, restore_esphome_entities: restoreEsp})
-  });
-  if (resp.ok) {
-    applyStateToDom(await resp.json(), true);
-    showToast(`Restored backup '${label}'`);
-  }
-}
-
-async function deleteVaultSnapshot(backupId) {
-  const resp = await fetch(API_URL, {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({command: "delete_vault_backup", backup_id: backupId})
-  });
-  if (resp.ok) {
-    applyStateToDom(await resp.json(), false);
-    showToast("Deleted backup");
   }
 }
 
@@ -4869,16 +4632,6 @@ function applyStateToDom(data, forceFormUpdate=false) {
     if (document.getElementById("cfg-doorbell_anc_mode")) {
       document.getElementById("cfg-doorbell_anc_mode").value = cfg.doorbell_anc_mode || "ultra";
     }
-    if (document.getElementById("cfg-sip_enabled")) {
-      document.getElementById("cfg-sip_enabled").checked = !!cfg.sip_enabled;
-      document.getElementById("cfg-sip_server").value = cfg.sip_server || "";
-      document.getElementById("cfg-sip_port").value = cfg.sip_port || 5060;
-      document.getElementById("cfg-sip_username").value = cfg.sip_username || "latter";
-      document.getElementById("cfg-sip_password").value = cfg.sip_password || "";
-      document.getElementById("cfg-sip_extension").value = cfg.sip_extension || "101";
-      document.getElementById("cfg-sip_dtmf_code").value = cfg.sip_dtmf_code || "#9";
-      document.getElementById("cfg-sip_speed_dials").value = cfg.sip_speed_dials || "";
-    }
 
     populateSelect("cfg-default_area", cat.areas, cfg.default_area);
     populateSelect("cfg-presence_entity", cat.presence_sensors, cfg.presence_entity);
@@ -4947,30 +4700,6 @@ async function refreshState(forceForm=false) {
   if (resp.ok) {
     const data = await resp.json();
     applyStateToDom(data, forceForm);
-  }
-}
-
-async function quickSwitchArea(areaId) {
-  const resp = await fetch(API_URL, {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({command: "set_active_area", area_id: areaId})
-  });
-  if (resp.ok) {
-    applyStateToDom(await resp.json(), false);
-    showToast("Switched active area");
-  }
-}
-
-async function quickSwitchSpeaker(speakerId) {
-  const resp = await fetch(API_URL, {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({command: "set_active_speaker", speaker: speakerId})
-  });
-  if (resp.ok) {
-    applyStateToDom(await resp.json(), false);
-    showToast("Switched active speaker");
   }
 }
 
@@ -5056,14 +4785,6 @@ async function saveAllConfig() {
     custom_palettes: Array.isArray((STATE?.config || {}).custom_palettes) ? STATE.config.custom_palettes : [],
     device_custom_color: (STATE?.config || {}).device_custom_color || "#3898FF",
     doorbell_anc_mode: document.getElementById("cfg-doorbell_anc_mode")?.value || "ultra",
-    sip_enabled: !!document.getElementById("cfg-sip_enabled")?.checked,
-    sip_server: document.getElementById("cfg-sip_server")?.value?.trim() || "",
-    sip_port: parseInt(document.getElementById("cfg-sip_port")?.value || "5060", 10) || 5060,
-    sip_username: document.getElementById("cfg-sip_username")?.value?.trim() || "latter",
-    sip_password: document.getElementById("cfg-sip_password")?.value?.trim() || "",
-    sip_extension: document.getElementById("cfg-sip_extension")?.value?.trim() || "101",
-    sip_dtmf_code: document.getElementById("cfg-sip_dtmf_code")?.value?.trim() || "#9",
-    sip_speed_dials: document.getElementById("cfg-sip_speed_dials")?.value?.trim() || "",
   };
 
   const resp = await fetch(API_URL, {

@@ -58,27 +58,16 @@ def async_audit_coordinator_health(
     def _create_scoped_issue(
         issue_id: str, translation_key: str, placeholders: dict[str, str]
     ) -> None:
-        try:
-            ir.async_create_issue(
-                hass,
-                DOMAIN,
-                issue_id,
-                is_fixable=True,
-                severity=ir.IssueSeverity.WARNING,
-                translation_key=translation_key,
-                translation_placeholders=placeholders,
-                config_entry_id=entry_id,
-            )
-        except TypeError:
-            ir.async_create_issue(
-                hass,
-                DOMAIN,
-                issue_id,
-                is_fixable=True,
-                severity=ir.IssueSeverity.WARNING,
-                translation_key=translation_key,
-                translation_placeholders=placeholders,
-            )
+        ir.async_create_issue(
+            hass,
+            DOMAIN,
+            issue_id,
+            is_fixable=True,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key=translation_key,
+            translation_placeholders=placeholders,
+            config_entry_id=entry_id,
+        )
 
     missing_issue_id = f"missing_mapped_entity_{entry_id}"
     if missing_labels:

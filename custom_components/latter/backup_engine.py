@@ -1,4 +1,4 @@
-"""System & Device Backup/Restore Vault and Reusable Device Profiles Engine for Latter."""
+"""System & Device JSON Export/Import and Reusable Device Profiles Engine for Latter."""
 
 from __future__ import annotations
 
@@ -9,11 +9,9 @@ import secrets
 from typing import Any
 
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .const import (
-    BACKUPS_STORAGE_KEY,
     CONF_AREA_HANDOFF,
     CONF_ART_SIZE,
     CONF_ASSIGNED_PERSON,
@@ -45,20 +43,16 @@ from .const import (
     CONF_WALLPAPER_CYCLE_MINUTES,
     CONF_WALLPAPER_FAVORITES,
     CONF_WALLPAPER_SOURCE,
-    DATA_BACKUPS_STORE,
     DATA_GLOBAL_CONFIG,
     DATA_GLOBAL_STORE,
     DEFAULT_DEVICE_GROUP,
     DOMAIN,
     GLOBAL_CONFIG_KEYS,
     INTEGRATION_VERSION,
-    STORAGE_VERSION,
 )
 from .area_engine import async_execute_area_action, get_esphome_device_entities
 
 _LOGGER = logging.getLogger(__name__)
-
-MAX_VAULT_BACKUPS = 25
 
 DEVICE_CONFIG_EXPORT_KEYS: tuple[str, ...] = (
     CONF_DEVICE_SLUG,
@@ -291,21 +285,8 @@ async def apply_esphome_controls_to_device(
     return applied
 
 
-async def _async_get_backups_store(hass: HomeAssistant) -> tuple[Store[dict[str, Any]], dict[str, Any]]:
-    """Load or initialize the In-Integration Backup Vault (`.storage/latter.backups`)."""
-    domain_data = hass.data.setdefault(DOMAIN, {})
-    if DATA_BACKUPS_STORE not in domain_data:
-        store: Store[dict[str, Any]] = Store(hass, STORAGE_VERSION, BACKUPS_STORAGE_KEY)
-        domain_data[DATA_BACKUPS_STORE] = store
-        loaded = await store.async_load()
-        domain_data["backups_data"] = (
-            loaded if isinstance(loaded, dict) and "snapshots" in loaded else {"snapshots": []}
-        )
-    return domain_data[DATA_BACKUPS_STORE], domain_data["backups_data"]
-
-
 def _serialize_device_snapshot(
-    hass: HomeAssistant, coordinator: Any, include_vpn_secrets: bool = True
+    hass: HomeAssistant, coordinator: Any, include_vpn_secrets: bool = False
 ) -> dict[str, Any]:
     """Build a portable dictionary snapshot of a single device's Latter config & live ESPHome controls."""
     dev_cfg: dict[str, Any] = {}
@@ -336,7 +317,7 @@ def build_backup_bundle(
     coordinators: list[Any],
     target_coordinator: Any | None = None,
     name: str = "",
-    include_vpn_secrets: bool = True,
+    include_vpn_secrets: bool = False,
 ) -> dict[str, Any]:
     """Construct a complete, portable JSON backup bundle for 'system' or 'device' scope."""
     now_iso = dt_util.now().isoformat(timespec="seconds")
@@ -359,7 +340,7 @@ def build_backup_bundle(
         label = name.strip() or f"System Backup ({dt_util.now().strftime('%Y-%m-%d %H:%M')})"
         return {
             "id": backup_id,
-            "schema": "latter.backup.v1",
+            "schema": "latter.backup.v2",
             "version": INTEGRATION_VERSION,
             "scope": "system",
             "name": label,
@@ -383,7 +364,7 @@ def build_backup_bundle(
     )
     return {
         "id": backup_id,
-        "schema": "latter.backup.v1",
+        "schema": "latter.backup.v2",
         "version": INTEGRATION_VERSION,
         "scope": "device",
         "name": label,
@@ -393,81 +374,6 @@ def build_backup_bundle(
         "include_vpn_secrets": bool(include_vpn_secrets),
         "device": dev_snap,
     }
-
-
-async def async_list_vault_backups(hass: HomeAssistant) -> list[dict[str, Any]]:
-    """Return metadata summaries for all snapshots stored in the In-Integration Vault."""
-    _store, data = await _async_get_backups_store(hass)
-    snaps = data.get("snapshots") or []
-    summaries: list[dict[str, Any]] = []
-    for s in snaps:
-        if not isinstance(s, dict) or not s.get("id"):
-            continue
-        dev_obj = s.get("device") or {}
-        ctrl_count = len(dev_obj.get("esphome_controls") or {}) if s.get("scope") == "device" else sum(
-            len((d or {}).get("esphome_controls") or {}) for d in (s.get("devices") or {}).values()
-        )
-        summaries.append(
-            {
-                "id": s["id"],
-                "name": s.get("name", s["id"]),
-                "scope": s.get("scope", "device"),
-                "created_at": s.get("created_at", ""),
-                "target_device": s.get("target_device", ""),
-                "device_count": int(s.get("device_count") or 1),
-                "control_count": ctrl_count,
-                "version": s.get("version", INTEGRATION_VERSION),
-            }
-        )
-    return summaries
-
-
-async def async_create_vault_backup(
-    hass: HomeAssistant,
-    scope: str,
-    coordinators: list[Any],
-    target_coordinator: Any | None = None,
-    name: str = "",
-    include_vpn_secrets: bool = True,
-) -> dict[str, Any]:
-    """Create a new System or Device snapshot and save it to `.storage/latter.backups`."""
-    store, data = await _async_get_backups_store(hass)
-    bundle = build_backup_bundle(
-        hass=hass,
-        scope=scope,
-        coordinators=coordinators,
-        target_coordinator=target_coordinator,
-        name=name,
-        include_vpn_secrets=include_vpn_secrets,
-    )
-    snaps: list[dict[str, Any]] = list(data.get("snapshots") or [])
-    snaps.insert(0, bundle)
-    data["snapshots"] = snaps[:MAX_VAULT_BACKUPS]
-    await store.async_save(data)
-    return bundle
-
-
-async def async_get_vault_backup(hass: HomeAssistant, backup_id: str) -> dict[str, Any] | None:
-    """Retrieve a full backup bundle from `.storage/latter.backups` by ID."""
-    _store, data = await _async_get_backups_store(hass)
-    for s in data.get("snapshots") or []:
-        if isinstance(s, dict) and s.get("id") == backup_id:
-            return s
-    return None
-
-
-async def async_delete_vault_backup(hass: HomeAssistant, backup_id: str) -> bool:
-    """Delete a snapshot from `.storage/latter.backups`."""
-    store, data = await _async_get_backups_store(hass)
-    before = len(data.get("snapshots") or [])
-    data["snapshots"] = [
-        s for s in (data.get("snapshots") or [])
-        if isinstance(s, dict) and s.get("id") != backup_id
-    ]
-    if len(data["snapshots"]) != before:
-        await store.async_save(data)
-        return True
-    return False
 
 
 async def _async_apply_device_snapshot_to_coordinator(
@@ -518,8 +424,11 @@ async def async_restore_backup_bundle(
     target_coordinator: Any | None = None,
     restore_esphome_entities: bool = True,
 ) -> dict[str, Any]:
-    """Restore a System or Device backup bundle (from Vault or uploaded Computer JSON file)."""
-    if not isinstance(bundle, dict) or bundle.get("schema") != "latter.backup.v1":
+    """Restore a System or Device backup bundle (from uploaded Computer JSON file)."""
+    if not isinstance(bundle, dict) or bundle.get("schema") not in (
+        "latter.backup.v1",
+        "latter.backup.v2",
+    ):
         raise ValueError("Invalid Latter backup bundle schema")
 
     scope = str(bundle.get("scope") or "device")

@@ -128,7 +128,7 @@ class LatterAreaBleOccupancyBinarySensor(BinarySensorEntity):
             "area_id": self._area_id,
             "area_name": self._area_name,
             "floor_id": occ.get("floor_id"),
-            "fusion_mode": occ.get("fusion_mode", "auto_bayes"),
+            "fusion_mode": occ.get("fusion_mode", "weighted"),
             "confidence_pct": occ.get("confidence_pct", 0),
             "ble_occupied": occ.get("ble_occupied", False),
             "sensor_occupied": occ.get("sensor_occupied", False),

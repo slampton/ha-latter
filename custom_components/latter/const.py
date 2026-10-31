@@ -60,19 +60,9 @@ CONF_ART_SIZE: Final = "art_size"
 CONF_CUSTOM_PALETTES: Final = "custom_palettes"
 CONF_DEVICE_CUSTOM_COLOR: Final = "device_custom_color"
 CONF_DOORBELL_ANC_MODE: Final = "doorbell_anc_mode"
-CONF_SIP_ENABLED: Final = "sip_enabled"
-CONF_SIP_SERVER: Final = "sip_server"
-CONF_SIP_PORT: Final = "sip_port"
-CONF_SIP_USERNAME: Final = "sip_username"
-CONF_SIP_PASSWORD: Final = "sip_password"
-CONF_SIP_EXTENSION: Final = "sip_extension"
-CONF_SIP_DTMF_CODE: Final = "sip_dtmf_code"
-CONF_SIP_SPEED_DIALS: Final = "sip_speed_dials"
 
 # Defaults
 DEFAULT_DOORBELL_ANC_MODE: Final = "ultra"
-DEFAULT_SIP_PORT: Final = 5060
-DEFAULT_SIP_DTMF_CODE: Final = "#9"
 DEFAULT_DEVICE_PROFILE: Final = "mobile_display"
 DEFAULT_DISPLAY_SHAPE: Final = "circle"
 DEFAULT_PAGE_SIZE: Final = 3
@@ -126,15 +116,12 @@ CALENDAR_REFRESH_INTERVAL_MINUTES: Final = 15
 
 
 GLOBAL_STORAGE_KEY: Final = "latter.site"
-BACKUPS_STORAGE_KEY: Final = "latter.backups"
 DATA_GLOBAL_CONFIG: Final = "global_config"
 DATA_GLOBAL_STORE: Final = "global_store"
-DATA_BACKUPS_STORE: Final = "backups_store"
 
 # Multi-Site, Device Groups, Reusable Profiles & Roaming WireGuard VPN Keys
 CONF_SITE_ID: Final = "site_id"
 DEFAULT_SITE_ID: Final = "primary"
-CONF_SITES_REGISTRY: Final = "sites"
 CONF_DEVICE_GROUP: Final = "device_group"
 DEFAULT_DEVICE_GROUP: Final = "unassigned"
 CONF_DEVICE_GROUPS: Final = "device_groups"
@@ -152,13 +139,8 @@ CONF_VPN_PUBLIC_KEY: Final = "vpn_public_key"
 CONF_VPN_PRESHARED_KEY: Final = "vpn_preshared_key"
 CONF_VPN_HOTSPOT_SSID: Final = "vpn_hotspot_ssid"
 
-# Forward-Compatible Extensibility Envelopes (v2.2+ -> v3.0 Site-to-Site, RBAC, Identity & Tile-Grid GUI)
-CONF_CAPABILITIES_MANIFEST: Final = "capabilities_manifest"
-CONF_GUI_LAYOUT: Final = "gui_layout"
-CONF_FEDERATION_CONFIG: Final = "federation_config"
+# Area Sensor Fusion & Event Bus
 CONF_AREA_FUSION_CONFIG: Final = "area_fusion_config"
-CONF_RBAC_POLICY: Final = "rbac_policy"
-CONF_IDENTITY_PROFILES: Final = "identity_profiles"
 EVENT_LATTER: Final = "latter_event"
 
 GLOBAL_CONFIG_KEYS: Final[tuple[str, ...]] = (
@@ -179,25 +161,13 @@ GLOBAL_CONFIG_KEYS: Final[tuple[str, ...]] = (
     CONF_CALENDAR_ENTITIES,
     CONF_CUSTOM_PALETTES,
     CONF_DOORBELL_ANC_MODE,
-    CONF_SIP_ENABLED,
-    CONF_SIP_SERVER,
-    CONF_SIP_PORT,
-    CONF_SIP_USERNAME,
-    CONF_SIP_PASSWORD,
-    CONF_SIP_EXTENSION,
-    CONF_SIP_DTMF_CODE,
-    CONF_SIP_SPEED_DIALS,
-    CONF_SITES_REGISTRY,
     CONF_DEVICE_GROUPS,
     CONF_SAVED_PROFILES,
     CONF_VPN_ENDPOINT,
     CONF_VPN_SERVER_PUBLIC_KEY,
     CONF_VPN_SUBNET,
     CONF_VPN_HA_IP,
-    CONF_FEDERATION_CONFIG,
     CONF_AREA_FUSION_CONFIG,
-    CONF_RBAC_POLICY,
-    CONF_IDENTITY_PROFILES,
 )
 
 

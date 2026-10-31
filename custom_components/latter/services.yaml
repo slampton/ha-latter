@@ -691,8 +691,8 @@ save_custom_color:
         text:
 
 doorbell_intercom:
-  name: Doorbell & SIP Two-Way Intercom Action
-  description: Control live de-noised camera audio listening, two-way doorbell/SIP talkback, quick replies, 90° camera selection, and RFC 2833 DTMF / smart lock unlocking.
+  name: Doorbell & Two-Way Intercom Action
+  description: Control live de-noised camera audio listening, two-way doorbell talkback, quick replies, 90° camera selection, and smart lock unlocking.
   fields:
     target_device:
       name: Target Device
@@ -735,8 +735,8 @@ doorbell_intercom:
           max: 9
           mode: box
     message:
-      name: Spoken Message / SIP Target URI / DTMF Digits
-      description: Message to speak to the doorbell speaker, target device/SIP URI for call_target, or DTMF digits for unlock_door.
+      name: Spoken Message / Target Device
+      description: Message to speak to the doorbell speaker or target device for call_target.
       required: false
       selector:
         text:

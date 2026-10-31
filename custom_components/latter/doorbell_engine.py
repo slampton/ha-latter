@@ -1,14 +1,11 @@
-"""Universal Doorbell Two-Way Audio (go2rtc, ONVIF, SIP), 90° Landscape Proxy & 4-Stage ANC+AEC DSP Engine."""
+"""Universal Doorbell Two-Way Audio (go2rtc, ONVIF), 90° Landscape Proxy & FFmpeg ANC Filterchain Engine."""
 
 from __future__ import annotations
 
-from array import array
 import asyncio
-from collections import deque
 from http import HTTPStatus
 import io
 import logging
-import math
 import shutil
 import time
 from typing import Any
@@ -33,13 +30,24 @@ from .const import (
 from .http import LatterCameraSnapshotView
 from .area_engine import resolve_entity_area_id
 from .media_engine import async_announce_on_targets
-from .sip_engine import get_sip_engine
 
 _LOGGER = logging.getLogger(__name__)
 
 UNIFI_PREROLL_MS: int = 250
 TALKBACK_ECHO_GUARD_SECONDS: float = 0.75
 _FFMPEG_STREAM_SEMAPHORE = asyncio.Semaphore(2)
+
+
+def _build_silence_wav(duration_ms: int = UNIFI_PREROLL_MS, sample_rate: int = 16000) -> bytes:
+    """Build a short PCM16 mono silent WAV buffer."""
+    num_samples = max(160, int(sample_rate * (duration_ms / 1000.0)))
+    out_io = io.BytesIO()
+    with wave.open(out_io, "wb") as wf_out:
+        wf_out.setnchannels(1)
+        wf_out.setsampwidth(2)
+        wf_out.setframerate(sample_rate)
+        wf_out.writeframes(b"\x00\x00" * num_samples)
+    return out_io.getvalue()
 
 
 def resolve_doorbell_talkback_target(
@@ -143,18 +151,15 @@ class LatterRotatableCameraSnapshotView(LatterCameraSnapshotView):
 
 
 class LatterAudioDspPipeline:
-    """4-Stage Leading-Class Audio DSP Pipeline (Biquad Wind Filter + Wiener ANC + NLMS AEC + Soft-Knee AGC)."""
+    """FFmpeg ANC Filtergraph Builder and Talkback Echo-Guard Timing Pipeline."""
 
     def __init__(self) -> None:
-        """Initialize the adaptive NLMS echo reference ring buffer and DSP state."""
-        self._ref_ring: deque[int] = deque(maxlen=16000)
+        """Initialize the talkback echo-guard state."""
         self._last_talkback_mono: float = 0.0
 
-    def record_talkback_activity(self, pcm_samples: array[int] | None = None) -> None:
-        """Record outbound talkback samples and timestamp for the NLMS echo canceller & guard."""
+    def record_talkback_activity(self) -> None:
+        """Record outbound talkback timestamp for the acoustic echo guard."""
         self._last_talkback_mono = time.monotonic()
-        if pcm_samples:
-            self._ref_ring.extend(pcm_samples[-8000:])
 
     def is_in_echo_guard_window(self) -> bool:
         """Return True if outbound talkback is active or within the 750ms acoustic tail window."""
@@ -180,251 +185,6 @@ class LatterAudioDspPipeline:
             "acompressor=threshold=-20dB:ratio=3.2:attack=4:release=75:makeup=2,"
             "alimiter=limit=0.89"
         )
-
-    @staticmethod
-    def biquad_highpass_120hz(samples: array[int], sample_rate: int = 16000) -> array[int]:
-        """Stage 1: 2nd-order Butterworth High-Pass Filter (fc=120Hz, Q=0.7071) removing wind & street rumble."""
-        if not samples:
-            return samples
-        fc = 120.0
-        w0 = 2.0 * math.pi * fc / max(8000.0, float(sample_rate))
-        cos_w0 = math.cos(w0)
-        sin_w0 = math.sin(w0)
-        alpha = sin_w0 / (2.0 * 0.70710678)
-
-        b0 = (1.0 + cos_w0) * 0.5
-        b1 = -(1.0 + cos_w0)
-        b2 = (1.0 + cos_w0) * 0.5
-        a0 = 1.0 + alpha
-        a1 = -2.0 * cos_w0
-        a2 = 1.0 - alpha
-
-        b0 /= a0
-        b1 /= a0
-        b2 /= a0
-        a1 /= a0
-        a2 /= a0
-
-        out = array("h", [0] * len(samples))
-        z1 = 0.0
-        z2 = 0.0
-        for i, x_int in enumerate(samples):
-            x = float(x_int)
-            y = b0 * x + z1
-            z1 = b1 * x - a1 * y + z2
-            z2 = b2 * x - a2 * y
-            if y > 32767.0:
-                y = 32767.0
-            elif y < -32768.0:
-                y = -32768.0
-            out[i] = int(y)
-        return out
-
-    @staticmethod
-    def wiener_spectral_denoise(
-        samples: array[int], sample_rate: int = 16000, anc_mode: str = "ultra"
-    ) -> array[int]:
-        """Stage 2: Minimum-Statistics Envelope Wiener Noise Gate + Speech Formant Pre-Emphasis."""
-        if not samples or anc_mode == "raw":
-            return samples
-
-        frame_len = max(64, int(sample_rate * 0.020))
-        atten_floor = 0.14 if anc_mode == "ultra" else 0.28
-        out = array("h", [0] * len(samples))
-
-        min_rms = 99999.0
-        n_total = len(samples)
-        for start in range(0, n_total, frame_len):
-            end = min(n_total, start + frame_len)
-            if end - start < 16:
-                break
-            acc = 0.0
-            for k in range(start, end):
-                v = float(samples[k])
-                acc += v * v
-            rms = math.sqrt(acc / float(end - start))
-            if rms > 8.0 and rms < min_rms:
-                min_rms = rms
-        noise_est = min(650.0, max(35.0, min_rms * 1.35)) if min_rms < 99999.0 else 140.0
-
-        smooth_gain = 1.0
-        prev_sample = 0.0
-        for start in range(0, n_total, frame_len):
-            end = min(n_total, start + frame_len)
-            acc = 0.0
-            for k in range(start, end):
-                v = float(samples[k])
-                acc += v * v
-            frame_rms = math.sqrt(acc / float(max(1, end - start)))
-
-            if frame_rms < noise_est:
-                noise_est = 0.85 * noise_est + 0.15 * frame_rms
-            else:
-                noise_est = 0.995 * noise_est + 0.005 * frame_rms
-
-            snr_prio = max(0.0, (frame_rms * frame_rms) - (noise_est * noise_est)) / (
-                (noise_est * noise_est) + 1.0
-            )
-            target_gain = max(atten_floor, min(1.0, snr_prio / (1.0 + snr_prio)))
-
-            for k in range(start, end):
-                smooth_gain = 0.92 * smooth_gain + 0.08 * target_gain
-                raw_x = float(samples[k])
-                emph = raw_x - 0.18 * prev_sample
-                prev_sample = raw_x
-                val = emph * smooth_gain
-                if val > 32767.0:
-                    val = 32767.0
-                elif val < -32768.0:
-                    val = -32768.0
-                out[k] = int(val)
-        return out
-
-    def nlms_echo_cancel(self, mic_samples: array[int]) -> array[int]:
-        """Stage 3: Normalized Least Mean Squares (NLMS) Acoustic Echo Canceller."""
-        if not mic_samples or not self._ref_ring:
-            return mic_samples
-
-        in_guard = self.is_in_echo_guard_window()
-        ref_list = list(self._ref_ring)
-        ref_len = len(ref_list)
-        if ref_len < 32:
-            return mic_samples
-
-        taps = 32
-        w = [0.0] * taps
-        mu = 0.18
-        eps = 1000.0
-        duck_factor = 0.12 if in_guard else 0.85
-        out = array("h", [0] * len(mic_samples))
-
-        for i, d_int in enumerate(mic_samples):
-            d = float(d_int)
-            r_idx = i % (ref_len - taps)
-            y_est = 0.0
-            norm_x = eps
-            for k in range(taps):
-                rk = float(ref_list[r_idx + k])
-                y_est += w[k] * rk
-                norm_x += rk * rk
-            err = (d - y_est) * duck_factor
-            step = (mu * err) / norm_x
-            for k in range(taps):
-                w[k] += step * float(ref_list[r_idx + k])
-            if err > 32767.0:
-                err = 32767.0
-            elif err < -32768.0:
-                err = -32768.0
-            out[i] = int(err)
-        return out
-
-    @staticmethod
-    def soft_knee_agc_limiter(
-        samples: array[int], target_rms: float = 7200.0, max_peak: float = 29500.0
-    ) -> array[int]:
-        """Stage 4: Lookahead Soft-Knee Dynamic Range Compressor & Brickwall Limiter."""
-        if not samples:
-            return samples
-        acc = 0.0
-        active_cnt = 0
-        for s in samples:
-            if abs(s) > 180:
-                acc += float(s) * float(s)
-                active_cnt += 1
-        cur_rms = math.sqrt(acc / float(max(1, active_cnt))) if active_cnt > 32 else 1000.0
-        makeup_gain = max(0.75, min(3.8, target_rms / max(250.0, cur_rms)))
-
-        out = array("h", [0] * len(samples))
-        env_gain = makeup_gain
-        for i, s in enumerate(samples):
-            val = float(s) * env_gain
-            abs_v = abs(val)
-            if abs_v > max_peak:
-                desired = makeup_gain * (max_peak / abs_v)
-                env_gain = 0.70 * env_gain + 0.30 * desired
-                val = float(s) * env_gain
-            else:
-                env_gain = 0.995 * env_gain + 0.005 * makeup_gain
-
-            if val > 28000.0:
-                val = 28000.0 + 4700.0 * math.tanh((val - 28000.0) / 4700.0)
-            elif val < -28000.0:
-                val = -28000.0 - 4700.0 * math.tanh((-val - 28000.0) / 4700.0)
-            out[i] = int(max(-32768.0, min(32767.0, val)))
-        return out
-
-    def process_pcm16_frames(
-        self,
-        pcm_samples: array[int],
-        sample_rate: int = 16000,
-        anc_mode: str = "ultra",
-        prepend_unifi_preroll: bool = True,
-        apply_aec: bool = False,
-    ) -> array[int]:
-        """Run the full 4-stage DSP pipeline and optionally prepend the 250ms talkback stabilizer."""
-        stage1 = self.biquad_highpass_120hz(pcm_samples, sample_rate)
-        stage2 = self.nlms_echo_cancel(stage1) if apply_aec else stage1
-        stage3 = self.wiener_spectral_denoise(stage2, sample_rate, anc_mode)
-        stage4 = self.soft_knee_agc_limiter(stage3)
-
-        if prepend_unifi_preroll:
-            preroll_samples = int(sample_rate * (UNIFI_PREROLL_MS / 1000.0))
-            preroll = array("h", [0] * preroll_samples)
-            return preroll + stage4
-        return stage4
-
-    def process_wav_bytes(
-        self,
-        raw_bytes: bytes,
-        anc_mode: str = "ultra",
-        prepend_unifi_preroll: bool = True,
-    ) -> bytes:
-        """Process a WAV or raw PCM16 buffer through the 4-stage DSP pipeline and return valid WAV bytes."""
-        sample_rate = 16000
-        pcm_samples = array("h")
-        try:
-            with wave.open(io.BytesIO(raw_bytes), "rb") as wf:
-                sample_rate = wf.getframerate() or 16000
-                n_ch = wf.getnchannels()
-                sampwidth = wf.getsampwidth()
-                frames = wf.readframes(wf.getnframes())
-                if sampwidth == 2:
-                    raw_arr = array("h")
-                    raw_arr.frombytes(frames[: len(frames) - (len(frames) % 2)])
-                    if n_ch == 2:
-                        pcm_samples = array(
-                            "h",
-                            [
-                                int((raw_arr[i] + raw_arr[i + 1]) // 2)
-                                for i in range(0, len(raw_arr) - 1, 2)
-                            ],
-                        )
-                    else:
-                        pcm_samples = raw_arr
-        except Exception:  # noqa: BLE001
-            trimmed = raw_bytes[: len(raw_bytes) - (len(raw_bytes) % 2)]
-            if trimmed:
-                pcm_samples.frombytes(trimmed)
-
-        if not pcm_samples:
-            pcm_samples = array("h", [0] * 3200)
-
-        processed = self.process_pcm16_frames(
-            pcm_samples,
-            sample_rate=sample_rate,
-            anc_mode=anc_mode,
-            prepend_unifi_preroll=prepend_unifi_preroll,
-            apply_aec=False,
-        )
-        self.record_talkback_activity(processed)
-
-        out_io = io.BytesIO()
-        with wave.open(out_io, "wb") as wf_out:
-            wf_out.setnchannels(1)
-            wf_out.setsampwidth(2)
-            wf_out.setframerate(sample_rate)
-            wf_out.writeframes(processed.tobytes())
-        return out_io.getvalue()
 
 
 def get_dsp_pipeline(hass: HomeAssistant) -> LatterAudioDspPipeline:
@@ -530,29 +290,18 @@ class LatterCameraAudioStreamView(HomeAssistantView):
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("camera.async_get_stream_source(%s) failed: %s", cam_ent, err)
 
-        sip = get_sip_engine(self.hass)
         dsp = get_dsp_pipeline(self.hass)
 
-        # If an active SIP call is in progress with RTP audio arriving and no RTSP camera stream is used,
-        # drain and DSP-process the live SIP RTP ring buffer into a WAV stream for the ESPHome speaker!
-        if sip.call_state == "in_call" and sip._inbound_pcm_ring and not stream_url:
-            raw_pcm = array("h", list(sip._inbound_pcm_ring))
-            sip._inbound_pcm_ring.clear()
-            clean_pcm = await self.hass.async_add_executor_job(
-                dsp.process_pcm16_frames, raw_pcm, 16000, anc_mode, False, True
-            )
-            out_io = io.BytesIO()
-            with wave.open(out_io, "wb") as wf_out:
-                wf_out.setnchannels(1)
-                wf_out.setsampwidth(2)
-                wf_out.setframerate(16000)
-                wf_out.writeframes(clean_pcm.tobytes())
-            return web.Response(body=out_io.getvalue(), content_type="audio/wav")
+        ffmpeg_bin: str | None = None
+        try:
+            from homeassistant.components.ffmpeg import get_ffmpeg_manager
 
-        ffmpeg_bin = shutil.which("ffmpeg")
+            ffmpeg_bin = get_ffmpeg_manager(self.hass).binary
+        except Exception:  # noqa: BLE001
+            ffmpeg_bin = shutil.which("ffmpeg")
+
         if not stream_url or not ffmpeg_bin:
-            wav_bytes = dsp.process_wav_bytes(b"", anc_mode=anc_mode, prepend_unifi_preroll=True)
-            return web.Response(body=wav_bytes, content_type="audio/wav")
+            return web.Response(body=_build_silence_wav(), content_type="audio/wav")
 
         if _FFMPEG_STREAM_SEMAPHORE.locked():
             return web.Response(
@@ -621,6 +370,7 @@ class LatterCameraAudioStreamView(HomeAssistantView):
                 if proc is not None and proc.returncode is None:
                     try:
                         proc.terminate()
+                        await proc.wait()
                     except ProcessLookupError:
                         pass
 
@@ -628,7 +378,7 @@ class LatterCameraAudioStreamView(HomeAssistantView):
 
 
 class LatterDoorbellTalkbackView(HomeAssistantView):
-    """Serves and ingests DSP-processed, pre-roll-stabilized talkback audio for camera speakers, go2rtc, ONVIF & SIP."""
+    """Serves and ingests talkback audio for camera speakers, go2rtc & ONVIF."""
 
     requires_auth = False
     url = API_DOORBELL_TALKBACK_PATH
@@ -639,7 +389,7 @@ class LatterDoorbellTalkbackView(HomeAssistantView):
         self.hass = hass
 
     async def get(self, request: web.Request, target_device: str) -> web.Response:
-        """Serve the latest DSP-stabilized talkback WAV clip for media_player.<doorbell>_speaker."""
+        """Serve the latest talkback WAV clip for media_player.<doorbell>_speaker."""
         norm = normalize_device_slug(target_device.removesuffix(".wav"))
         coord = _resolve_coordinator_by_slug(self.hass, norm)
         if coord is None or not coord.verify_resource(
@@ -652,8 +402,7 @@ class LatterDoorbellTalkbackView(HomeAssistantView):
         clips: dict[str, bytes] = domain_data.setdefault("talkback_clips", {})
         wav_bytes = clips.get(norm)
         if not wav_bytes:
-            dsp = get_dsp_pipeline(self.hass)
-            wav_bytes = dsp.process_wav_bytes(b"", anc_mode="ultra", prepend_unifi_preroll=True)
+            wav_bytes = _build_silence_wav()
         return web.Response(
             body=wav_bytes,
             content_type="audio/wav",
@@ -708,25 +457,17 @@ class LatterDoorbellTalkbackView(HomeAssistantView):
                 {"error": "Empty audio payload"}, status=HTTPStatus.BAD_REQUEST
             )
 
-        anc_mode = (
-            request.query.get("anc")
-            or coord.doorbell_anc_mode
-            or "ultra"
-        )
-
         dsp = get_dsp_pipeline(self.hass)
-        wav_bytes = await self.hass.async_add_executor_job(
-            dsp.process_wav_bytes, raw_bytes, anc_mode, True
-        )
+        dsp.record_talkback_activity()
 
         norm = normalize_device_slug(target_device.removesuffix(".wav"))
         domain_data = self.hass.data.setdefault(DOMAIN, {})
         clips: dict[str, bytes] = domain_data.setdefault("talkback_clips", {})
-        clips[norm] = wav_bytes
+        clips[norm] = raw_bytes
 
-        await async_play_talkback_clip_to_doorbell(self.hass, coord, cam_ent, wav_bytes)
+        await async_play_talkback_clip_to_doorbell(self.hass, coord, cam_ent, raw_bytes)
 
-        return web.json_response({"status": "ok", "bytes": len(wav_bytes)})
+        return web.json_response({"status": "ok", "bytes": len(raw_bytes)})
 
 
 async def async_play_talkback_clip_to_doorbell(
@@ -735,7 +476,7 @@ async def async_play_talkback_clip_to_doorbell(
     camera_entity_id: str | None = None,
     wav_bytes: bytes | None = None,
 ) -> bool:
-    """Stream the stored DSP-stabilized talkback WAV clip to camera speaker, go2rtc, or SIP."""
+    """Stream the stored talkback WAV clip to camera speaker or go2rtc/ONVIF backchannel."""
     cam_ent = camera_entity_id or coordinator.active_carousel_camera or coordinator.camera_entity
     target_info = resolve_doorbell_talkback_target(
         hass, cam_ent, coordinator.volume_overrides
@@ -763,18 +504,6 @@ async def async_play_talkback_clip_to_doorbell(
         if await _async_push_go2rtc_or_onvif_backchannel(hass, cam_ent, wav_bytes):
             return True
 
-    sip = get_sip_engine(hass)
-    if sip.call_state == "in_call" and wav_bytes:
-        try:
-            with wave.open(io.BytesIO(wav_bytes), "rb") as wf:
-                frames = wf.readframes(wf.getnframes())
-                pcm_arr = array("h")
-                pcm_arr.frombytes(frames[: len(frames) - (len(frames) % 2)])
-                await sip.async_stream_pcm16_to_rtp(pcm_arr)
-                return True
-        except Exception as err:  # noqa: BLE001
-            _LOGGER.debug("SIP RTP talkback stream error: %s", err)
-
     return False
 
 
@@ -787,10 +516,9 @@ async def async_execute_doorbell_intercom(
     anc_mode: str | None = None,
     camera_index: int | None = None,
 ) -> dict[str, Any]:
-    """Execute a unified two-way doorbell, SIP, or area-to-area intercom command."""
+    """Execute a unified two-way doorbell or area-to-area intercom command."""
     act = (action or "listen_toggle").strip().lower()
     dsp = get_dsp_pipeline(hass)
-    sip = get_sip_engine(hass)
 
     if anc_mode and anc_mode.strip().lower() in ("ultra", "balanced", "raw"):
         coordinator.doorbell_anc_mode = anc_mode.strip().lower()
@@ -824,19 +552,9 @@ async def async_execute_doorbell_intercom(
             )
         return target_info
 
-    if act in ("dtmf_unlock", "send_dtmf"):
-        await sip.async_send_dtmf(message if message else None)
-        return target_info
-
-    # 2. Area-to-Area Device Call or Outbound SIP Speed-Dial Call
+    # 2. Area-to-Area Device Call
     if act == "call_target":
         target_str = (message or "").strip()
-        if target_str.startswith("sip:") or "@" in target_str:
-            sip.dial_sip_uri(target_str)
-            coordinator.doorbell_talk_state = "listening"
-            coordinator.async_notify_listeners()
-            return target_info
-
         # Area-to-Area Call to another Latter display (or 'all' displays)
         domain_data = hass.data.get(DOMAIN, {})
         all_coords = [v for v in domain_data.values() if hasattr(v, "device_slug")]
@@ -888,8 +606,6 @@ async def async_execute_doorbell_intercom(
         )
 
     if act == "listen_stop":
-        if sip.call_state != "idle":
-            sip.hangup_call()
         coordinator.doorbell_talk_state = "idle"
         coordinator.async_notify_listeners()
         if local_spk:
@@ -905,8 +621,6 @@ async def async_execute_doorbell_intercom(
         return target_info
 
     if act == "listen_start":
-        if sip.call_state == "ringing":
-            sip.answer_incoming_call()
         if not local_spk or not cam_ent:
             return target_info
         coordinator.doorbell_talk_state = "listening"
