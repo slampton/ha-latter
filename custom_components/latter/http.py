@@ -25,7 +25,7 @@ from .const import (
     DOMAIN,
     normalize_device_slug,
 )
-from .coordinator import LatterCoordinator
+from .coordinator import LatterCoordinator, resolve_coordinator
 from .wallpaper_engine import render_builtin_preset_bytes
 
 _LOGGER = logging.getLogger(__name__)
@@ -104,19 +104,7 @@ def _resolve_coordinator_by_target(
     hass: HomeAssistant, target_id_or_slug: str
 ) -> LatterCoordinator | None:
     """Resolve a LatterCoordinator by config entry_id or ESPHome device_slug."""
-    domain_data = hass.data.get(DOMAIN, {})
-    direct = domain_data.get(target_id_or_slug)
-    if isinstance(direct, LatterCoordinator):
-        return direct
-
-    norm_slug = normalize_device_slug(target_id_or_slug)
-    coordinators = [
-        v for v in domain_data.values() if isinstance(v, LatterCoordinator)
-    ]
-    for coord in coordinators:
-        if coord.device_slug == norm_slug:
-            return coord
-    return coordinators[0] if len(coordinators) == 1 else None
+    return resolve_coordinator(hass, target_id_or_slug, allow_fallback=False)
 
 
 async def _async_serve_speaker_artwork(

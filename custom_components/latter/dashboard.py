@@ -124,6 +124,7 @@ from .const import (
     DOMAIN,
     GLOBAL_CONFIG_KEYS,
     INTEGRATION_VERSION,
+    normalize_device_slug,
 )
 from .coordinator import LatterCoordinator
 from .repairs import async_audit_coordinator_health
@@ -132,10 +133,10 @@ from .area_engine import (
     find_esphome_device_id,
     get_area_entities,
     get_esphome_device_entities,
-    inject_esphome_visit_link,
 )
 from .vpn_engine import allocate_next_tunnel_ip, build_wireguard_provisioning_snippets, generate_wireguard_keypair
 from .wallpaper_engine import (
+    async_refresh_wallpaper_cache,
     delete_uploaded_wallpaper,
     list_wallpaper_catalog,
     save_uploaded_wallpaper,
@@ -1028,6 +1029,7 @@ class LatterCompanionApiView(HomeAssistantView):
         from . import _async_scan_all_esphome_devices_for_discovery
 
         _async_scan_all_esphome_devices_for_discovery(self.hass)
+        await async_refresh_wallpaper_cache(self.hass, coordinator.device_slug)
         await async_list_vault_backups(self.hass)
         payload = _build_companion_state_payload(self.hass, coordinator)
         return web.json_response(payload)
@@ -1239,7 +1241,7 @@ class LatterCompanionApiView(HomeAssistantView):
                 await _async_save_and_broadcast_global_config(
                     self.hass, {CONF_VPN_HA_IP: server_ip, CONF_VPN_SUBNET: subnet}
                 )
-            coordinator._notify_listeners()
+            coordinator.async_notify_listeners()
             return web.json_response(
                 _build_companion_state_payload(
                     self.hass, coordinator, include_vpn_secrets=True
@@ -1276,7 +1278,7 @@ class LatterCompanionApiView(HomeAssistantView):
             slot_num = max(1, min(10, int(body.get("slot") or 1)))
             coordinator.active_remote_slot = slot_num
             coordinator._schedule_persist_runtime_state()
-            coordinator._notify_listeners()
+            coordinator.async_notify_listeners()
             return web.json_response(
                 _build_companion_state_payload(self.hass, coordinator)
             )
@@ -1304,7 +1306,7 @@ class LatterCompanionApiView(HomeAssistantView):
                 self.hass.config_entries.async_update_entry(
                     coordinator.entry, data=merged_wp, options=merged_wp
                 )
-                coordinator._notify_listeners()
+                coordinator.async_notify_listeners()
             return web.json_response(
                 _build_companion_state_payload(self.hass, coordinator)
             )
@@ -1319,7 +1321,7 @@ class LatterCompanionApiView(HomeAssistantView):
             self.hass.config_entries.async_update_entry(
                 coordinator.entry, data=merged_sel, options=merged_sel
             )
-            coordinator._notify_listeners()
+            coordinator.async_notify_listeners()
             return web.json_response(
                 _build_companion_state_payload(self.hass, coordinator)
             )
@@ -1340,7 +1342,7 @@ class LatterCompanionApiView(HomeAssistantView):
                 coordinator.entry, data=merged_fav, options=merged_fav
             )
             coordinator._bind_wallpaper_cycle_timer()
-            coordinator._notify_listeners()
+            coordinator.async_notify_listeners()
             return web.json_response(
                 _build_companion_state_payload(self.hass, coordinator)
             )
@@ -1369,7 +1371,7 @@ class LatterCompanionApiView(HomeAssistantView):
                 self.hass.config_entries.async_update_entry(
                     coordinator.entry, data=merged_del, options=merged_del
                 )
-                coordinator._notify_listeners()
+                coordinator.async_notify_listeners()
             return web.json_response(
                 _build_companion_state_payload(self.hass, coordinator)
             )
@@ -1485,7 +1487,7 @@ class LatterCompanionApiView(HomeAssistantView):
                     if k in (CONF_VPN_PRIVATE_KEY, CONF_VPN_PRESHARED_KEY) and val == _SECRET_MASK:
                         continue
                     if k == CONF_DEVICE_SLUG:
-                        clean_s = str(val or "").strip().lower().replace("-", "_").replace(" ", "_")
+                        clean_s = normalize_device_slug(str(val or ""))
                         if not clean_s or clean_s == "esphome_device":
                             val = coordinator.device_slug
                         else:
@@ -1525,13 +1527,8 @@ class LatterCompanionApiView(HomeAssistantView):
                 from .sip_engine import get_sip_engine
 
                 await get_sip_engine(self.hass).async_start_or_reload()
-            inject_esphome_visit_link(
-                self.hass,
-                coordinator.device_slug,
-                coordinator.build_companion_url(),
-            )
             coordinator._bind_wallpaper_cycle_timer()
-            coordinator._notify_listeners()
+            coordinator.async_notify_listeners()
             return web.json_response(
                 _build_companion_state_payload(self.hass, coordinator)
             )
@@ -1588,7 +1585,7 @@ class LatterCompanionApiView(HomeAssistantView):
             raw_name = str(body.get("name") or body.get("device_slug") or "ble_device").strip()
             target_addr = str(body.get("target_address") or "").strip()
             assigned_person = str(body.get("assigned_person") or "").strip()
-            target_slug = re.sub(r"[^a-z0-9]+", "_", raw_name.lower()).strip("_") or "ble_device"
+            target_slug = normalize_device_slug(raw_name) if raw_name else "ble_device"
             if target_slug and target_addr:
                 existing = [
                     c for c in _get_all_coordinators(self.hass)
@@ -1657,7 +1654,7 @@ class LatterCompanionApiView(HomeAssistantView):
                     self.hass.config_entries.async_update_entry(
                         c.entry, data=merged_rg, options=merged_rg
                     )
-                    c._notify_listeners()
+                    c.async_notify_listeners()
                     break
             return web.json_response(
                 _build_companion_state_payload(self.hass, coordinator)
@@ -1676,7 +1673,7 @@ class LatterCompanionApiView(HomeAssistantView):
                     self.hass.config_entries.async_update_entry(
                         c.entry, data=merged_grp, options=merged_grp
                     )
-                    c._notify_listeners()
+                    c.async_notify_listeners()
                     break
             return web.json_response(
                 _build_companion_state_payload(self.hass, coordinator)

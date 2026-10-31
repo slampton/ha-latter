@@ -442,16 +442,9 @@ def get_dsp_pipeline(hass: HomeAssistant) -> LatterAudioDspPipeline:
 
 def _resolve_coordinator_by_slug(hass: HomeAssistant, target_slug: str) -> Any | None:
     """Find a loaded LatterCoordinator by device slug or entry_id."""
-    domain_data = hass.data.get(DOMAIN, {})
-    norm = normalize_device_slug(target_slug)
-    for k, val in domain_data.items():
-        if hasattr(val, "device_slug"):
-            if k == target_slug or val.device_slug == norm:
-                return val
-    for val in domain_data.values():
-        if hasattr(val, "device_slug"):
-            return val
-    return None
+    from .coordinator import resolve_coordinator
+
+    return resolve_coordinator(hass, target_slug, allow_fallback=False)
 
 
 async def _async_push_go2rtc_or_onvif_backchannel(
@@ -835,7 +828,7 @@ async def async_execute_doorbell_intercom(
         if target_str.startswith("sip:") or "@" in target_str:
             sip.dial_sip_uri(target_str)
             coordinator.doorbell_talk_state = "listening"
-            coordinator._notify_listeners()
+            coordinator.async_notify_listeners()
             return target_info
 
         # Area-to-Area Call to another Latter display (or 'all' displays)
@@ -867,18 +860,18 @@ async def async_execute_doorbell_intercom(
                     blocking=False,
                 )
         coordinator.doorbell_talk_state = "listening"
-        coordinator._notify_listeners()
+        coordinator.async_notify_listeners()
         return target_info
 
     if act == "select_camera":
-        coordinator._notify_listeners()
+        coordinator.async_notify_listeners()
         return target_info
 
     if act == "set_anc_mode":
         if coordinator.doorbell_talk_state == "listening" and local_spk and cam_ent:
             act = "listen_start"
         else:
-            coordinator._notify_listeners()
+            coordinator.async_notify_listeners()
             return target_info
 
     if act == "listen_toggle":
@@ -892,7 +885,7 @@ async def async_execute_doorbell_intercom(
         if sip.call_state != "idle":
             sip.hangup_call()
         coordinator.doorbell_talk_state = "idle"
-        coordinator._notify_listeners()
+        coordinator.async_notify_listeners()
         if local_spk:
             try:
                 await hass.services.async_call(
@@ -911,7 +904,7 @@ async def async_execute_doorbell_intercom(
         if not local_spk or not cam_ent:
             return target_info
         coordinator.doorbell_talk_state = "listening"
-        coordinator._notify_listeners()
+        coordinator.async_notify_listeners()
         base_url = coordinator.get_lan_base_url()
         sig = coordinator.sign_resource(f"camera_audio:{cam_ent}", ttl_s=3600)
         stream_url = (
@@ -943,7 +936,7 @@ async def async_execute_doorbell_intercom(
         was_listening = coordinator.doorbell_talk_state == "listening"
         coordinator.doorbell_talk_state = "talking"
         dsp.record_talkback_activity()
-        coordinator._notify_listeners()
+        coordinator.async_notify_listeners()
 
         if local_spk and was_listening:
             try:
@@ -1019,9 +1012,13 @@ async def async_execute_doorbell_intercom(
                 )
             else:
                 coordinator.doorbell_talk_state = "idle"
-                coordinator._notify_listeners()
+                coordinator.async_notify_listeners()
 
-        hass.async_create_task(_post_talkback_restore())
+        coordinator.entry.async_create_background_task(
+            hass,
+            _post_talkback_restore(),
+            f"latter_doorbell_talkback_{coordinator.device_slug}",
+        )
         return target_info
 
     return target_info

@@ -11,14 +11,13 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers import area_registry as ar, device_registry as dr
+from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .ble_engine import get_ble_fabric, get_ble_proxy_area_ids
-from .const import DOMAIN, INTEGRATION_VERSION, build_device_entity_id, normalize_device_slug
+from .const import DOMAIN, build_device_entity_id, normalize_device_slug
 from .coordinator import LatterCoordinator
-from .area_engine import find_esphome_device_id
 
 PARALLEL_UPDATES = 0
 DATA_CREATED_AREA_OCCUPANT_IDS = "created_area_occupant_ids"
@@ -58,6 +57,8 @@ async def async_setup_entry(
     domain_data = hass.data.setdefault(DOMAIN, {})
     registered_persons: set[str] = domain_data.setdefault("registered_person_sensors", set())
     created_area_occupants: set[str] = domain_data.setdefault(DATA_CREATED_AREA_OCCUPANT_IDS, set())
+    entry_area_ids: set[str] = set()
+    entry_persons: set[str] = set()
 
     area_reg = ar.async_get(hass)
     proxy_areas = get_ble_proxy_area_ids(hass)
@@ -69,6 +70,7 @@ async def async_setup_entry(
         if area_entry is None:
             continue
         created_area_occupants.add(area_id)
+        entry_area_ids.add(area_id)
         entities.append(
             LatterAreaOccupantsSensor(hass, coordinator, area_entry.id, area_entry.name)
         )
@@ -78,6 +80,7 @@ async def async_setup_entry(
         person_ent = coordinator.assigned_person
         if person_ent and person_ent.startswith("person.") and person_ent not in registered_persons:
             registered_persons.add(person_ent)
+            entry_persons.add(person_ent)
             async_add_entities(
                 [
                     LatterPersonCurrentAreaSensor(coordinator, person_ent),
@@ -85,7 +88,13 @@ async def async_setup_entry(
                 ]
             )
 
+    @callback
+    def _cleanup_entry_tracked_ids() -> None:
+        created_area_occupants.difference_update(entry_area_ids)
+        registered_persons.difference_update(entry_persons)
+
     _async_ensure_person_sensors()
+    entry.async_on_unload(_cleanup_entry_tracked_ids)
     entry.async_on_unload(
         coordinator.async_add_listener(_async_ensure_person_sensors)
     )
@@ -136,15 +145,7 @@ class _BaseLatterSensor(SensorEntity):
     @property
     def device_info(self) -> DeviceInfo:
         """Return canonical Latter DeviceInfo so every config entry has an expandable Device card in Home Assistant."""
-        pretty_device = self.coordinator.device_slug.replace("_", " ").title()
-        return DeviceInfo(
-            identifiers={(DOMAIN, self.coordinator.entry.entry_id)},
-            name=pretty_device,
-            manufacturer="Lampton Labs",
-            model="Latter ESPHome Companion Middleware",
-            sw_version=INTEGRATION_VERSION,
-            configuration_url=self.coordinator.build_companion_url(),
-        )
+        return self.coordinator.get_device_info()
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to coordinator updates."""
@@ -413,15 +414,7 @@ class LatterAreaOccupantsSensor(SensorEntity):
     @property
     def device_info(self) -> DeviceInfo:
         """Return canonical Latter DeviceInfo."""
-        pretty_device = self.coordinator.device_slug.replace("_", " ").title()
-        return DeviceInfo(
-            identifiers={(DOMAIN, self.coordinator.entry.entry_id)},
-            name=pretty_device,
-            manufacturer="Lampton Labs",
-            model="Latter ESPHome Companion Middleware",
-            sw_version=INTEGRATION_VERSION,
-            configuration_url=self.coordinator.build_companion_url(),
-        )
+        return self.coordinator.get_device_info()
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to real-time updates from the shared Latter BLE Fabric."""

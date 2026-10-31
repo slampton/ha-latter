@@ -253,67 +253,41 @@ def match_area_by_name_or_id(
 
 
 def find_esphome_device_id(
-    hass: HomeAssistant, device_slug: str
+    hass: HomeAssistant,
+    device_slug: str,
+    esphome_device_id: str | None = None,
 ) -> str | None:
     """Find the Home Assistant device_id for the target ESPHome node."""
     dev_reg = dr.async_get(hass)
     ent_reg = er.async_get(hass)
-    slug_norm = normalize_device_slug(device_slug)
+    if esphome_device_id and dev_reg.async_get(esphome_device_id) is not None:
+        return esphome_device_id
 
-    for entry in _iter_entities(ent_reg):
-        if entry.platform == "esphome" and slug_norm in entry.entity_id:
-            if entry.device_id:
-                return entry.device_id
+    slug_norm = normalize_device_slug(device_slug)
+    domain_data = hass.data.get("latter", {})
+    for val in domain_data.values():
+        if getattr(val, "device_slug", None) == slug_norm:
+            stored_id = getattr(val, "esphome_device_id", None)
+            if stored_id and dev_reg.async_get(stored_id) is not None:
+                return str(stored_id)
 
     for dev in _iter_devices(dev_reg):
-        dev_name = (
-            str(dev.name_by_user or dev.name or "")
-            .lower()
-            .replace("-", "_")
-            .replace(" ", "_")
-        )
-        if slug_norm and slug_norm in dev_name:
-            return dev.id
+        dev_name = str(dev.name_by_user or dev.name or "").strip()
+        if dev_name and normalize_device_slug(dev_name) == slug_norm:
+            if any(
+                e.platform == "esphome"
+                for e in er.async_entries_for_device(ent_reg, dev.id)
+            ):
+                return dev.id
+
+    prefix = f"{slug_norm}_"
+    for entry in _iter_entities(ent_reg):
+        if entry.platform == "esphome" and entry.device_id:
+            ent_obj_id = entry.entity_id.split(".", 1)[-1]
+            if ent_obj_id == slug_norm or ent_obj_id.startswith(prefix):
+                return entry.device_id
 
     return None
-
-
-def inject_esphome_visit_link(
-    hass: HomeAssistant, device_slug: str, companion_url: str
-) -> None:
-    """Set configuration_url on the native ESPHome device entry so its 'Visit' button opens Latter Studio."""
-    target_device_id = find_esphome_device_id(hass, device_slug)
-    if not target_device_id:
-        return
-    dev_reg = dr.async_get(hass)
-    dev = dev_reg.async_get(target_device_id)
-    if dev and dev.configuration_url != companion_url:
-        dev_reg.async_update_device(
-            target_device_id, configuration_url=companion_url
-        )
-        _LOGGER.info(
-            "Linked ESPHome device '%s' 'Visit' button to Latter Web Companion Studio",
-            device_slug,
-        )
-
-
-def inject_hacs_update_brand_icon(hass: HomeAssistant) -> None:
-    """Ensure any HACS update.*latter* entity uses the local /api/latter/brand/icon.png instead of brands.home-assistant.io."""
-    target_pic = "/api/latter/brand/icon.png"
-    for state_obj in hass.states.async_all("update"):
-        ent_id = state_obj.entity_id.lower()
-        friendly = str(state_obj.attributes.get("friendly_name") or "").lower()
-        if "latter" not in ent_id and "latter" not in friendly:
-            continue
-        pic = str(state_obj.attributes.get("entity_picture") or "")
-        if pic != target_pic:
-            new_attrs = dict(state_obj.attributes)
-            new_attrs["entity_picture"] = target_pic
-            hass.states.async_set(
-                state_obj.entity_id,
-                state_obj.state,
-                new_attrs,
-            )
 
 
 def _apply_ha_display_precision(

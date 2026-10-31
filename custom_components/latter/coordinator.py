@@ -16,6 +16,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     ATTR_ENTITY_ID,
     EVENT_CALL_SERVICE,
+    EVENT_CORE_CONFIG_UPDATE,
     STATE_BUFFERING,
     STATE_IDLE,
     STATE_OFF,
@@ -28,8 +29,8 @@ from homeassistant.core import Event, EventStateChangedData, HomeAssistant, call
 from homeassistant.helpers import (
     area_registry as ar,
     device_registry as dr,
-    entity_registry as er,
 )
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.event import (
     async_call_later,
     async_track_state_change_event,
@@ -37,16 +38,15 @@ from homeassistant.helpers.event import (
 )
 from homeassistant.helpers.network import get_url
 from homeassistant.helpers.storage import Store
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
 from .ble_engine import (
     LatterNativeBleTracker,
-    _iter_devices,
-    _iter_entities,
     get_all_scanners_diagnostic_map,
     get_ble_proxy_area_ids,
 )
-from .browse_engine import _get_mass_client, is_music_assistant_player
+from .browse_engine import is_music_assistant_player
 from .calendar_engine import async_fetch_calendar_agenda
 from .const import (
     CALENDAR_REFRESH_INTERVAL_MINUTES,
@@ -80,18 +80,11 @@ from .const import (
     CONF_DEVICE_GROUP,
     CONF_DEVICE_PROFILE,
     CONF_DEVICE_SLUG,
+    CONF_ESPHOME_DEVICE_ID,
     DEFAULT_DEVICE_GROUP,
     CONF_SITE_ID,
     CONF_VPN_CLIENT_IP,
     CONF_VPN_ENABLED,
-    CONF_VPN_ENDPOINT,
-    CONF_VPN_HA_IP,
-    CONF_VPN_HOTSPOT_SSID,
-    CONF_VPN_PRESHARED_KEY,
-    CONF_VPN_PRIVATE_KEY,
-    CONF_VPN_PUBLIC_KEY,
-    CONF_VPN_SERVER_PUBLIC_KEY,
-    CONF_VPN_SUBNET,
     DEFAULT_SITE_ID,
     CONF_DISPLAY_SHAPE,
     CONF_DOCK_APPS,
@@ -123,6 +116,7 @@ from .const import (
     EVENT_LATTER,
     FORECAST_REFRESH_INTERVAL_MINUTES,
     GLOBAL_CONFIG_KEYS,
+    INTEGRATION_VERSION,
     POSITION_UPDATE_INTERVAL_SECONDS,
     STORAGE_KEY_PREFIX,
     STORAGE_VERSION,
@@ -130,10 +124,10 @@ from .const import (
 )
 from .area_engine import (
     find_area_media_entities,
+    find_esphome_device_id,
     get_area_available_domains,
     get_area_climate_telemetry,
     get_area_entities,
-    get_areas_summary,
     get_home_alarm_summary,
     get_whole_home_summary,
     match_area_by_name_or_id,
@@ -160,21 +154,40 @@ def _get_esphome_device_current_area(
     hass: HomeAssistant, device_slug: str
 ) -> str | None:
     """Return the current area_id assigned to the ESPHome device in HA Device Registry."""
-    dev_reg = dr.async_get(hass)
-    slug_norm = normalize_device_slug(device_slug)
-    for dev in _iter_devices(dev_reg):
-        dev_name = (
-            str(dev.name_by_user or dev.name or "")
-            .lower()
-            .replace("-", "_")
-            .replace(" ", "_")
-        )
-        if slug_norm and slug_norm in dev_name and dev.area_id:
-            return dev.area_id
+    dev_id = find_esphome_device_id(hass, device_slug)
+    if not dev_id:
+        return None
+    dev = dr.async_get(hass).async_get(dev_id)
+    return dev.area_id if dev and dev.area_id else None
+
+
+def resolve_coordinator(
+    hass: HomeAssistant,
+    target: str | None = None,
+    *,
+    allow_fallback: bool = False,
+) -> LatterCoordinator | None:
+    """Resolve a loaded LatterCoordinator by entry_id, device_slug, or esphome_device_id."""
+    domain_data = hass.data.get(DOMAIN, {})
+    coords = [v for v in domain_data.values() if isinstance(v, LatterCoordinator)]
+    if not coords:
+        return None
+    if target:
+        raw = str(target).strip()
+        norm = normalize_device_slug(raw)
+        for coord in coords:
+            if (
+                coord.entry.entry_id == raw
+                or coord.device_slug == norm
+                or (coord.esphome_device_id and coord.esphome_device_id == raw)
+            ):
+                return coord
+    if allow_fallback:
+        return coords[0]
     return None
 
 
-class LatterCoordinator:
+class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Manages active speaker, BLE area context, 4-slot remotes, custom bindings, wallpapers, alarm, calendar, and weather."""
 
     def __init__(
@@ -184,14 +197,24 @@ class LatterCoordinator:
         hmac_secret: bytes,
     ) -> None:
         """Initialize the Latter coordinator."""
-        self.hass = hass
+        super().__init__(
+            hass,
+            _LOGGER,
+            name=f"{DOMAIN}_{entry.entry_id}",
+            config_entry=entry,
+        )
         self.entry = entry
         self._hmac_secret = hmac_secret
         self._store: Store[dict[str, Any]] = Store(
             hass, STORAGE_VERSION, f"{STORAGE_KEY_PREFIX}.{entry.entry_id}"
         )
 
-        self._listeners: list[Callable[[], None]] = []
+        self._cached_lan_base_url: str | None = None
+        self._cached_hw_manifest: tuple[str, dict[str, Any]] | None = None
+        self._cached_media_payload: tuple[float, tuple[str, dict[str, Any]]] | None = None
+        self._cached_area_payload: tuple[float, tuple[str, dict[str, Any]]] | None = None
+        self._cached_remote_payload: tuple[float, tuple[str, dict[str, Any]]] | None = None
+        self._unsub_core_config: Callable[[], None] | None = None
         self._unsub_speaker_state: Callable[[], None] | None = None
         self._unsub_local_reconnect: Callable[[], None] | None = None
         self._unsub_play_interceptor: Callable[[], None] | None = None
@@ -322,6 +345,33 @@ class LatterCoordinator:
         return norm
 
     @property
+    def esphome_device_id(self) -> str | None:
+        """Return the Home Assistant Device Registry ID for the underlying ESPHome device."""
+        stored = str(self.get_opt(CONF_ESPHOME_DEVICE_ID, "") or "").strip()
+        return find_esphome_device_id(
+            self.hass, self.device_slug, stored or None
+        )
+
+    def get_device_info(self) -> DeviceInfo:
+        """Return canonical Latter DeviceInfo linked via via_device to the underlying ESPHome device."""
+        via_identifier: tuple[str, str] | None = None
+        esp_dev_id = self.esphome_device_id
+        if esp_dev_id:
+            esp_dev = dr.async_get(self.hass).async_get(esp_dev_id)
+            if esp_dev and esp_dev.identifiers:
+                via_identifier = next(iter(esp_dev.identifiers))
+        pretty_device = self.device_slug.replace("_", " ").title()
+        return DeviceInfo(
+            identifiers={(DOMAIN, self.entry.entry_id)},
+            name=pretty_device,
+            manufacturer="Lampton Labs",
+            model="Latter ESPHome Companion Middleware",
+            sw_version=INTEGRATION_VERSION,
+            configuration_url=self.build_companion_url(),
+            **({"via_device": via_identifier} if via_identifier else {}),
+        )
+
+    @property
     def site_id(self) -> str:
         """Return the logical site identifier for this device (defaults to 'primary' for single-site homes)."""
         return str(self.get_opt(CONF_SITE_ID, DEFAULT_SITE_ID) or DEFAULT_SITE_ID).strip()
@@ -338,20 +388,20 @@ class LatterCoordinator:
 
     def _read_device_hardware_manifest(self) -> dict[str, Any]:
         """Read compile-time hardware capability manifest reported by sensor.<slug>_system_hardware_manifest."""
-        for cand in (
-            f"sensor.{self.device_slug}_system_hardware_manifest",
-            f"sensor.{self.device_slug}_hardware_manifest",
-        ):
-            st = self.hass.states.get(cand)
-            if st is not None and st.state and st.state.startswith("{"):
-                try:
-                    import json
+        st = self.hass.states.get(f"sensor.{self.device_slug}_system_hardware_manifest")
+        if st is not None and st.state and st.state.startswith("{"):
+            raw_state = str(st.state)
+            if self._cached_hw_manifest is not None and self._cached_hw_manifest[0] == raw_state:
+                return self._cached_hw_manifest[1]
+            try:
+                import json
 
-                    parsed = json.loads(st.state)
-                    if isinstance(parsed, dict):
-                        return parsed
-                except Exception:  # noqa: BLE001
-                    pass
+                parsed = json.loads(raw_state)
+                if isinstance(parsed, dict):
+                    self._cached_hw_manifest = (raw_state, parsed)
+                    return parsed
+            except Exception:  # noqa: BLE001
+                pass
         return {}
 
     @property
@@ -786,6 +836,9 @@ class LatterCoordinator:
 
     def get_lan_base_url(self) -> str:
         """Resolve the numeric-IP LAN HTTP base URL and actual active HTTP port for ESP32 online_image clients."""
+        if self._cached_lan_base_url:
+            return self._cached_lan_base_url
+
         import socket
         from urllib.parse import urlparse
 
@@ -817,8 +870,17 @@ class LatterCoordinator:
             (scheme == "http" and int(port) == 80)
             or (scheme == "https" and int(port) == 443)
         ):
-            return f"{scheme}://{host}:{int(port)}"
-        return f"{scheme}://{host}"
+            resolved = f"{scheme}://{host}:{int(port)}"
+        else:
+            resolved = f"{scheme}://{host}"
+        self._cached_lan_base_url = resolved
+        return resolved
+
+    @callback
+    def _async_on_core_config_update(self, _event: Event) -> None:
+        """Invalidate cached LAN base URL when Home Assistant core network configuration updates."""
+        self._cached_lan_base_url = None
+        self.async_notify_listeners()
 
     def build_companion_url(self) -> str:
         """Build the authenticated Web Companion Studio URL, preferring the active browser origin or local LAN URL."""
@@ -1039,6 +1101,9 @@ class LatterCoordinator:
         self._bind_area_entities_listener()
         self._bind_doorbell_ring_listener()
 
+        self._unsub_core_config = self.hass.bus.async_listen(
+            EVENT_CORE_CONFIG_UPDATE, self._async_on_core_config_update
+        )
         self._unsub_play_interceptor = self.hass.bus.async_listen(
             EVENT_CALL_SERVICE, self._async_on_service_call_event
         )
@@ -1082,6 +1147,7 @@ class LatterCoordinator:
             self._ble_tracker = None
 
         for unsub in (
+            self._unsub_core_config,
             self._unsub_speaker_state,
             self._unsub_local_reconnect,
             self._unsub_play_interceptor,
@@ -1099,6 +1165,7 @@ class LatterCoordinator:
         ):
             if unsub is not None:
                 unsub()
+        self._unsub_core_config = None
         self._unsub_speaker_state = None
         self._unsub_local_reconnect = None
         self._unsub_play_interceptor = None
@@ -1153,8 +1220,10 @@ class LatterCoordinator:
         def _push_area_update(_now: datetime) -> None:
             self._unsub_area_debounce = None
             if self.on_area_changed_push_slots is not None:
-                self.hass.async_create_task(
-                    self.on_area_changed_push_slots(self)
+                self.entry.async_create_background_task(
+                    self.hass,
+                    self.on_area_changed_push_slots(self),
+                    f"latter_area_slots_{self.device_slug}",
                 )
 
         self._unsub_area_debounce = async_call_later(
@@ -1245,7 +1314,8 @@ class LatterCoordinator:
             )
         )
         if esp_notify_svc:
-            self.hass.async_create_task(
+            self.entry.async_create_background_task(
+                self.hass,
                 self.hass.services.async_call(
                     "esphome",
                     esp_notify_svc,
@@ -1258,7 +1328,8 @@ class LatterCoordinator:
                         "camera_url": self.alert_camera_url,
                     },
                     blocking=False,
-                )
+                ),
+                f"latter_doorbell_notify_{self.device_slug}",
             )
 
     @callback
@@ -1308,7 +1379,11 @@ class LatterCoordinator:
                 old_state.state if old_state else "none",
                 new_state.state,
             )
-            self.hass.async_create_task(self._async_handle_device_reconnect())
+            self.entry.async_create_background_task(
+                self.hass,
+                self._async_handle_device_reconnect(),
+                f"latter_reconnect_{self.device_slug}",
+            )
 
     @callback
     def _enforce_local_speaker_if_remote_idle(self, reason: str) -> None:
@@ -1335,9 +1410,7 @@ class LatterCoordinator:
             self._schedule_persist_runtime_state()
 
     async def _async_handle_device_reconnect(self) -> None:
-        """Reset idle remote speaker, re-assert Visit link, sync BLE area lock, and push active area slots after ESPHome boot/wake."""
-        from .area_engine import inject_esphome_visit_link
-        inject_esphome_visit_link(self.hass, self.device_slug, self.build_companion_url())
+        """Reset idle remote speaker, sync BLE area lock, and push active area slots after ESPHome boot/wake."""
         self._enforce_local_speaker_if_remote_idle("device_reconnect")
         if self._ble_tracker is not None:
             self._ble_tracker.reset_for_device_wake()
@@ -1398,8 +1471,10 @@ class LatterCoordinator:
         state_obj = self.hass.states.get(target_spk)
         if state_obj is not None and state_obj.state in (STATE_IDLE, STATE_OFF):
             self._resuming_guard_until = time.monotonic() + 3.0
-            self.hass.async_create_task(
-                self._async_resume_idle_speaker_queue(target_spk)
+            self.entry.async_create_background_task(
+                self.hass,
+                self._async_resume_idle_speaker_queue(target_spk),
+                f"latter_cold_resume_{self.device_slug}",
             )
 
     async def _async_find_queue_resume_item(
@@ -1711,17 +1786,10 @@ class LatterCoordinator:
 
     @callback
     def async_add_listener(
-        self, update_callback: Callable[[], None]
+        self, update_callback: Callable[[], None], context: Any = None
     ) -> Callable[[], None]:
-        """Register an entity state update callback."""
-        self._listeners.append(update_callback)
-
-        @callback
-        def _remove() -> None:
-            if update_callback in self._listeners:
-                self._listeners.remove(update_callback)
-
-        return _remove
+        """Register an entity state update callback via DataUpdateCoordinator."""
+        return super().async_add_listener(update_callback, context)
 
     def get_person_area_and_distance(self, person_entity: str) -> tuple[str, dict[str, Any]]:
         """Resolve the freshest area and BLE distance across all Latter devices carried by a person."""
@@ -1756,10 +1824,17 @@ class LatterCoordinator:
         }
 
     @callback
+    def async_notify_listeners(self) -> None:
+        """Invalidate per-tick payload caches and notify all registered CoordinatorEntity / callback listeners."""
+        self._cached_media_payload = None
+        self._cached_area_payload = None
+        self._cached_remote_payload = None
+        self.async_update_listeners()
+
+    @callback
     def _notify_listeners(self) -> None:
         """Notify all registered sensors of a state update."""
-        for update_callback in list(self._listeners):
-            update_callback()
+        self.async_notify_listeners()
 
     async def _async_execute_ma_queue_transfer(
         self,
@@ -1842,36 +1917,40 @@ class LatterCoordinator:
             except Exception as err:  # noqa: BLE001
                 _LOGGER.debug("Fallback play_media handoff failed: %s", err)
 
-        await asyncio.sleep(1.2)
-        updated_tgt = self.hass.states.get(target_speaker)
-        if updated_tgt is None:
-            return
+        try:
+            async with asyncio.timeout(4.5):
+                await asyncio.sleep(1.2)
+                updated_tgt = self.hass.states.get(target_speaker)
+                if updated_tgt is None:
+                    return
 
-        if was_playing and updated_tgt.state in (STATE_PAUSED, STATE_IDLE):
-            try:
-                await self.hass.services.async_call(
-                    "media_player",
-                    "media_play",
-                    {ATTR_ENTITY_ID: target_speaker},
-                    blocking=False,
-                )
-            except Exception:  # noqa: BLE001
-                pass
+                if was_playing and updated_tgt.state in (STATE_PAUSED, STATE_IDLE):
+                    try:
+                        await self.hass.services.async_call(
+                            "media_player",
+                            "media_play",
+                            {ATTR_ENTITY_ID: target_speaker},
+                            blocking=False,
+                        )
+                    except Exception:  # noqa: BLE001
+                        pass
 
-        tgt_pos = float(updated_tgt.attributes.get("media_position") or 0.0)
-        if handoff_position > 5.0 and abs(tgt_pos - handoff_position) > 4.0:
-            try:
-                await self.hass.services.async_call(
-                    "media_player",
-                    "media_seek",
-                    {
-                        ATTR_ENTITY_ID: target_speaker,
-                        "seek_position": round(handoff_position, 1),
-                    },
-                    blocking=False,
-                )
-            except Exception as err:  # noqa: BLE001
-                _LOGGER.debug("Position handoff media_seek failed: %s", err)
+                tgt_pos = float(updated_tgt.attributes.get("media_position") or 0.0)
+                if handoff_position > 5.0 and abs(tgt_pos - handoff_position) > 4.0:
+                    try:
+                        await self.hass.services.async_call(
+                            "media_player",
+                            "media_seek",
+                            {
+                                ATTR_ENTITY_ID: target_speaker,
+                                "seek_position": round(handoff_position, 1),
+                            },
+                            blocking=False,
+                        )
+                    except Exception as err:  # noqa: BLE001
+                        _LOGGER.debug("Position handoff media_seek failed: %s", err)
+        except TimeoutError:
+            _LOGGER.debug("Queue transfer handoff timed out for %s", target_speaker)
 
         self._notify_listeners()
 
@@ -1912,7 +1991,8 @@ class LatterCoordinator:
                 if transfer_queue:
                     media_cid = str(p_attrs.get("media_content_id") or self.last_media_uri or "")
                     media_ctype = str(p_attrs.get("media_content_type") or self.last_media_type or "music")
-                    self.hass.async_create_task(
+                    self.entry.async_create_background_task(
+                        self.hass,
                         self._async_execute_ma_queue_transfer(
                             source_speaker=prev_speaker,
                             target_speaker=speaker_entity_id,
@@ -1920,7 +2000,8 @@ class LatterCoordinator:
                             handoff_position=handoff_pos,
                             media_content_id=media_cid,
                             media_content_type=media_ctype,
-                        )
+                        ),
+                        f"latter_queue_transfer_{self.device_slug}",
                     )
 
             self.last_speaker = prev_speaker
@@ -2005,8 +2086,10 @@ class LatterCoordinator:
             self._notify_listeners()
 
         if self.on_area_changed_push_slots is not None:
-            self.hass.async_create_task(
-                self.on_area_changed_push_slots(self)
+            self.entry.async_create_background_task(
+                self.hass,
+                self.on_area_changed_push_slots(self),
+                f"latter_area_change_slots_{self.device_slug}",
             )
 
     @property
@@ -2108,6 +2191,9 @@ class LatterCoordinator:
 
     def get_remote_config_payload(self) -> tuple[str, dict[str, Any]]:
         """Compute state and attributes for sensor.<device_slug>_remote_config (supports 0..10 slots)."""
+        now_m = time.monotonic()
+        if self._cached_remote_payload is not None and (now_m - self._cached_remote_payload[0]) < 0.05:
+            return self._cached_remote_payload[1]
         slots = self.get_remote_slots()
         populated_count = sum(
             1 for s in slots if s["remote_entity"] or s["media_player_entity"]
@@ -2121,7 +2207,9 @@ class LatterCoordinator:
         }
         if populated_count == 0 or not slots:
             attrs["slots_summary"] = "NONE"
-            return "None", attrs
+            res = ("None", attrs)
+            self._cached_remote_payload = (now_m, res)
+            return res
 
         summary_parts: list[str] = []
         for idx, slot in enumerate(slots, start=1):
@@ -2137,10 +2225,15 @@ class LatterCoordinator:
         active_slot_data = slots[clamped_active - 1]
         state_str = active_slot_data["name"] if populated_count > 0 else "None"
         attrs["slots_summary"] = ";".join(summary_parts)
-        return state_str, attrs
+        res = (state_str, attrs)
+        self._cached_remote_payload = (now_m, res)
+        return res
 
     def get_area_context_payload(self) -> tuple[str, dict[str, Any]]:
         """Compute state and attributes for sensor.<device_slug>_area_context."""
+        now_m = time.monotonic()
+        if self._cached_area_payload is not None and (now_m - self._cached_area_payload[0]) < 0.05:
+            return self._cached_area_payload[1]
         area_reg = ar.async_get(self.hass)
         explicit_default = str(self.get_opt(CONF_DEFAULT_AREA) or "").strip()
         has_ble_lock = bool(
@@ -2206,7 +2299,7 @@ class LatterCoordinator:
         else:
             pres_state = "none"
 
-        return area_name, {
+        area_attrs = {
             "site_id": self.site_id,
             "area_id": self.active_area_id or "",
             "area_name": area_name,
@@ -2277,6 +2370,9 @@ class LatterCoordinator:
             "custom_palettes": self.custom_palettes,
             "hardware_manifest": self.hardware_manifest,
         }
+        res = (area_name, area_attrs)
+        self._cached_area_payload = (now_m, res)
+        return res
 
     @callback
     def _bind_speaker_listener(self) -> None:
@@ -2462,6 +2558,9 @@ class LatterCoordinator:
 
     def get_active_media_payload(self) -> tuple[str, dict[str, Any]]:
         """Compute state and attributes for sensor.<device_slug>_active_media."""
+        now_m = time.monotonic()
+        if self._cached_media_payload is not None and (now_m - self._cached_media_payload[0]) < 0.05:
+            return self._cached_media_payload[1]
         state_obj = self.hass.states.get(self.active_speaker)
         vol_target = self.get_volume_target_entity(self.active_speaker)
         fallback_spk_name = (
@@ -2471,22 +2570,27 @@ class LatterCoordinator:
         )
 
         if state_obj is None or state_obj.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
-            return STATE_OFF, {
-                "title": self.last_media_title or "Idle",
-                "artist": self.last_media_artist or "None",
-                "album": self.last_media_album or "None",
-                "duration": round(self.last_media_duration, 1),
-                "position": round(self.last_media_position, 1),
-                "volume": 0.7,
-                "media_type": self.last_media_type or "music",
-                "supported_features": 0,
-                "art_url": "none",
-                "active_speaker": self.active_speaker,
-                "speaker_name": fallback_spk_name,
-                "last_speaker": self.last_speaker,
-                "local_speaker": self.local_speaker,
-                "volume_entity": vol_target,
-            }
+            res = (
+                STATE_OFF,
+                {
+                    "title": self.last_media_title or "Idle",
+                    "artist": self.last_media_artist or "None",
+                    "album": self.last_media_album or "None",
+                    "duration": round(self.last_media_duration, 1),
+                    "position": round(self.last_media_position, 1),
+                    "volume": 0.7,
+                    "media_type": self.last_media_type or "music",
+                    "supported_features": 0,
+                    "art_url": "none",
+                    "active_speaker": self.active_speaker,
+                    "speaker_name": fallback_spk_name,
+                    "last_speaker": self.last_speaker,
+                    "local_speaker": self.local_speaker,
+                    "volume_entity": vol_target,
+                },
+            )
+            self._cached_media_payload = (now_m, res)
+            return res
 
         state = state_obj.state
         if state not in (
@@ -2621,22 +2725,27 @@ class LatterCoordinator:
 
         speaker_name = str(attrs.get("friendly_name") or fallback_spk_name)
 
-        return state, {
-            "title": title,
-            "artist": artist,
-            "album": album,
-            "duration": round(duration, 1),
-            "position": round(position, 1),
-            "volume": round(volume, 2),
-            "media_type": media_type,
-            "supported_features": supported_features,
-            "art_url": art_url,
-            "active_speaker": self.active_speaker,
-            "speaker_name": speaker_name,
-            "last_speaker": self.last_speaker,
-            "local_speaker": self.local_speaker,
-            "volume_entity": vol_target,
-        }
+        res = (
+            state,
+            {
+                "title": title,
+                "artist": artist,
+                "album": album,
+                "duration": round(duration, 1),
+                "position": round(position, 1),
+                "volume": round(volume, 2),
+                "media_type": media_type,
+                "supported_features": supported_features,
+                "art_url": art_url,
+                "active_speaker": self.active_speaker,
+                "speaker_name": speaker_name,
+                "last_speaker": self.last_speaker,
+                "local_speaker": self.local_speaker,
+                "volume_entity": vol_target,
+            },
+        )
+        self._cached_media_payload = (now_m, res)
+        return res
 
     @callback
     def _bind_weather_listener(self) -> None:
@@ -2660,7 +2769,11 @@ class LatterCoordinator:
         self, event: Event[EventStateChangedData]
     ) -> None:
         """Update current weather attributes and refresh forecast."""
-        self.hass.async_create_task(self.async_refresh_weather_forecast())
+        self.entry.async_create_background_task(
+            self.hass,
+            self.async_refresh_weather_forecast(),
+            f"latter_weather_refresh_{self.device_slug}",
+        )
 
     async def _async_periodic_weather_refresh(self, _now: datetime) -> None:
         """Refresh 5-day weather forecast every 30 minutes."""

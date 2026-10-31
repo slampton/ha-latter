@@ -15,6 +15,8 @@ from homeassistant.helpers import (
 )
 from homeassistant.helpers.event import async_track_time_interval
 
+from .const import normalize_device_slug
+
 _LOGGER = logging.getLogger(__name__)
 
 APPLE_COMPANY_ID = 0x004C
@@ -314,7 +316,8 @@ class LatterNativeBleTracker:
         self._unmapped_rssi: dict[str, tuple[int, float]] = {}
         self._scanner_area_cache: dict[str, str | None] = {}
         self._target_mac_ints: set[int] = set()
-        self._matched_ble_addresses: set[str] = set()
+        self._last_mac_discovery_mono: float = 0.0
+        self._matched_ble_addresses: dict[str, float] = {}
         self.current_area_id: str | None = None
         self.closest_scanner: str = ""
         self.packets_seen: int = 0
@@ -327,6 +330,16 @@ class LatterNativeBleTracker:
         self._seed_explicit_target_address()
 
     @callback
+    def _record_matched_ble_address(self, addr: str) -> None:
+        """Record a matched BLE address with a monotonic timestamp, bounding cache size to 64 entries."""
+        if not addr:
+            return
+        self._matched_ble_addresses[addr] = time.monotonic()
+        if len(self._matched_ble_addresses) > 64:
+            oldest = min(self._matched_ble_addresses, key=self._matched_ble_addresses.get)
+            self._matched_ble_addresses.pop(oldest, None)
+
+    @callback
     def _seed_explicit_target_address(self) -> None:
         """Seed MAC, iBeacon UUID, or dynamic private_ble_device address from _target_address."""
         t_addr = self._target_address
@@ -336,7 +349,7 @@ class LatterNativeBleTracker:
         m_int = _mac_to_int(t_addr)
         if m_int is not None:
             self._target_mac_ints.add(m_int)
-            self._matched_ble_addresses.add(_int_to_mac(m_int))
+            self._record_matched_ble_address(_int_to_mac(m_int))
             return
         # 2. Home Assistant entity (private_ble_device or ibeacon tracker)
         if "." in t_addr:
@@ -349,7 +362,7 @@ class LatterNativeBleTracker:
                     or ""
                 ).strip()
                 if cur_mac:
-                    self._matched_ble_addresses.add(cur_mac.upper())
+                    self._record_matched_ble_address(cur_mac.upper())
                     c_int = _mac_to_int(cur_mac)
                     if c_int is not None:
                         self._target_mac_ints.add(c_int)
@@ -365,6 +378,13 @@ class LatterNativeBleTracker:
     @callback
     def check_away_timeout(self, now_mono: float) -> None:
         """Transition tracker to Away if no BLE packet has been received within AWAY_TIMEOUT_SECONDS."""
+        stale_addrs = [
+            a
+            for a, ts in self._matched_ble_addresses.items()
+            if (now_mono - ts) > SURVEY_RETENTION_SECONDS
+        ]
+        for a in stale_addrs:
+            self._matched_ble_addresses.pop(a, None)
         self._seed_explicit_target_address()
         if (
             not self.is_away
@@ -613,13 +633,15 @@ class LatterNativeBleTracker:
         adv_name = str(getattr(service_info, "name", "") or "")
         matched = self._matches_raw_adv(adv_address, adv_name, mfg_data)
         if matched and adv_address:
-            self._matched_ble_addresses.add(adv_address)
+            self._record_matched_ble_address(adv_address)
         return matched
 
     @callback
     def _async_poll_scanner_tables(self, _now: datetime) -> None:
         """Poll each ESPHome BLE Proxy's live advertisement table to bypass habluetooth static-iBeacon deduplication."""
-        if not self._target_mac_ints:
+        now_mono = time.monotonic()
+        if not self._target_mac_ints and (now_mono - self._last_mac_discovery_mono) >= 30.0:
+            self._last_mac_discovery_mono = now_mono
             self._target_mac_ints = _discover_target_device_macs(
                 self.hass, self._raw_slug
             )
@@ -627,7 +649,6 @@ class LatterNativeBleTracker:
         try:
             from homeassistant.components import bluetooth
 
-            now_mono = time.monotonic()
             scanners = bluetooth.async_current_scanners(self.hass)
             for scanner in scanners:
                 source = str(getattr(scanner, "source", "") or "")
@@ -635,9 +656,7 @@ class LatterNativeBleTracker:
                 if not source:
                     continue
 
-                timestamps: dict[str, float] = getattr(
-                    scanner, "_previous_seen_timestamps", {}
-                ) or getattr(scanner, "timestamps", {}) or {}
+                timestamps: dict[str, float] = getattr(scanner, "timestamps", {}) or {}
 
                 dev_adv_map: dict[str, tuple[Any, Any]] = getattr(
                     scanner, "discovered_devices_and_advertisement_data", {}
@@ -648,6 +667,12 @@ class LatterNativeBleTracker:
                         continue
                     ble_dev, adv_data = pair
                     last_ts = timestamps.get(addr)
+                    if last_ts is None:
+                        svc_info = bluetooth.async_last_service_info(
+                            self.hass, str(addr), connectable=False
+                        )
+                        if svc_info is not None:
+                            last_ts = getattr(svc_info, "time", None)
                     obs_mono = float(last_ts) if last_ts is not None else now_mono
                     if last_ts is not None and (now_mono - obs_mono) > SURVEY_RETENTION_SECONDS:
                         continue
@@ -661,7 +686,7 @@ class LatterNativeBleTracker:
                     if not self._matches_raw_adv(str(addr), local_name, mfg_data):
                         continue
 
-                    self._matched_ble_addresses.add(str(addr))
+                    self._record_matched_ble_address(str(addr))
                     rssi = getattr(adv_data, "rssi", None)
                     if rssi is None:
                         rssi = getattr(ble_dev, "rssi", None)
@@ -1108,16 +1133,29 @@ class LatterBleFabric:
 
     @callback
     def _async_start_fabric(self) -> None:
-        """Start the single shared Bluetooth advertisement callback and 2s scanner poll timer."""
+        """Start the single shared passive Bluetooth advertisement callback, esphome.ibeacon_seen listener, and 2s scanner poll timer."""
         try:
             from homeassistant.components import bluetooth
 
-            self._unsub_ble = bluetooth.async_register_callback(
+            matcher = bluetooth.BluetoothCallbackMatcher(
+                manufacturer_id=APPLE_COMPANY_ID
+            )
+            unsub_ibeacon_ble = bluetooth.async_register_callback(
                 self.hass,
                 self._async_on_shared_ble_advertisement,
-                {},
-                bluetooth.BluetoothScanningMode.ACTIVE,
+                matcher,
+                bluetooth.BluetoothScanningMode.PASSIVE,
             )
+            unsub_bus = self.hass.bus.async_listen(
+                "esphome.ibeacon_seen", self._async_on_esphome_ibeacon_event
+            )
+
+            @callback
+            def _unsub_combined() -> None:
+                unsub_ibeacon_ble()
+                unsub_bus()
+
+            self._unsub_ble = _unsub_combined
             self._unsub_poll = async_track_time_interval(
                 self.hass,
                 self._async_poll_all_scanners_once,
@@ -1126,6 +1164,22 @@ class LatterBleFabric:
             self._async_poll_all_scanners_once(datetime.now())
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("Shared BLE Fabric startup skipped: %s", err)
+
+    @callback
+    def _async_on_esphome_ibeacon_event(self, event: Any) -> None:
+        """Ingest custom esphome.ibeacon_seen bus events emitted by ESPHome BLE proxies."""
+        data = getattr(event, "data", {}) or {}
+        source = str(data.get("source") or data.get("scanner") or "").strip()
+        uuid_raw = _normalize_uuid_hex(str(data.get("uuid") or ""))
+        rssi = data.get("rssi")
+        if not source or rssi is None or int(rssi) <= -100:
+            return
+        now_mono = time.monotonic()
+        for tracker in list(self._trackers):
+            if uuid_raw and uuid_raw == tracker._target_uuid_hex:
+                tracker._ingest_proxy_observation(
+                    source, int(rssi), now_mono, source
+                )
 
     @callback
     def _async_stop_fabric(self) -> None:
@@ -1153,7 +1207,11 @@ class LatterBleFabric:
         now_mono_check = time.monotonic()
         for tracker in list(self._trackers):
             tracker.check_away_timeout(now_mono_check)
-            if not tracker._target_mac_ints:
+            if (
+                not tracker._target_mac_ints
+                and (now_mono_check - tracker._last_mac_discovery_mono) >= 30.0
+            ):
+                tracker._last_mac_discovery_mono = now_mono_check
                 tracker._target_mac_ints = _discover_target_device_macs(
                     self.hass, tracker._raw_slug
                 )
@@ -1167,11 +1225,7 @@ class LatterBleFabric:
                 scanner_name = str(getattr(scanner, "name", "") or source)
                 if not source:
                     continue
-                timestamps: dict[str, float] = (
-                    getattr(scanner, "_previous_seen_timestamps", {})
-                    or getattr(scanner, "timestamps", {})
-                    or {}
-                )
+                timestamps: dict[str, float] = getattr(scanner, "timestamps", {}) or {}
                 dev_adv_map: dict[str, tuple[Any, Any]] = (
                     getattr(scanner, "discovered_devices_and_advertisement_data", {})
                     or {}
@@ -1181,6 +1235,12 @@ class LatterBleFabric:
                         continue
                     ble_dev, adv_data = pair
                     last_ts = timestamps.get(addr)
+                    if last_ts is None:
+                        svc_info = bluetooth.async_last_service_info(
+                            self.hass, str(addr), connectable=False
+                        )
+                        if svc_info is not None:
+                            last_ts = getattr(svc_info, "time", None)
                     obs_mono = float(last_ts) if last_ts is not None else now_mono
                     if last_ts is not None and (now_mono - obs_mono) > SURVEY_RETENTION_SECONDS:
                         continue
@@ -1198,7 +1258,7 @@ class LatterBleFabric:
                     addr_str = str(addr)
                     for tracker in list(self._trackers):
                         if tracker._matches_raw_adv(addr_str, local_name, mfg_data):
-                            tracker._matched_ble_addresses.add(addr_str)
+                            tracker._record_matched_ble_address(addr_str)
                             tracker._ingest_proxy_observation(
                                 source, int(rssi), obs_mono, scanner_name
                             )
@@ -1293,8 +1353,8 @@ def get_discovered_ble_candidates(
             for suffix in (" Estimated Distance", "Signal Strength"):
                 if friendly.endswith(suffix):
                     friendly = friendly[: -len(suffix)].strip()
-            cand_slug = re.sub(r"[^a-z0-9]+", "_", friendly.lower()).strip("_")
-            if not cand_slug or cand_slug in onboarded_slugs or entry.entity_id.lower() in seen_targets:
+            cand_slug = normalize_device_slug(friendly)
+            if not cand_slug or cand_slug == "esphome_device" or cand_slug in onboarded_slugs or entry.entity_id.lower() in seen_targets:
                 continue
             seen_targets.add(entry.entity_id.lower())
             kind_lbl = "Private BLE (Phone/Watch)" if entry.platform == "private_ble_device" else "iBeacon Tracker"
@@ -1345,8 +1405,8 @@ def get_discovered_ble_candidates(
                 ).strip()
                 if not local_name or local_name.replace(":", "").replace("-", "").upper() == addr_str.replace(":", ""):
                     continue
-                cand_slug = re.sub(r"[^a-z0-9]+", "_", local_name.lower()).strip("_")
-                if not cand_slug or cand_slug in onboarded_slugs:
+                cand_slug = normalize_device_slug(local_name)
+                if not cand_slug or cand_slug == "esphome_device" or cand_slug in onboarded_slugs:
                     continue
                 rssi = getattr(adv_data, "rssi", None)
                 if rssi is None:

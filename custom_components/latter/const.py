@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Final
+import re
+from typing import Any, Final
 
 from homeassistant.const import Platform
+from homeassistant.util.hass_dict import HassKey
 
 DOMAIN: Final = "latter"
+LATTER_DATA_KEY: HassKey[dict[str, Any]] = HassKey(DOMAIN)
 INTEGRATION_VERSION: Final = "2.2.0"
 PLATFORMS: Final[list[Platform]] = [Platform.SENSOR, Platform.BINARY_SENSOR]
 
@@ -15,6 +18,7 @@ STORAGE_KEY_PREFIX: Final = "latter.runtime"
 
 # Config & Options keys
 CONF_DEVICE_SLUG: Final = "device_slug"
+CONF_ESPHOME_DEVICE_ID: Final = "esphome_device_id"
 CONF_DEVICE_PROFILE: Final = "device_profile"
 CONF_DISPLAY_SHAPE: Final = "display_shape"
 CONF_DEFAULT_PAGE_SIZE: Final = "default_page_size"
@@ -202,7 +206,7 @@ GLOBAL_CONFIG_KEYS: Final[tuple[str, ...]] = (
 
 def normalize_device_slug(raw_slug: str) -> str:
     """Normalize an ESPHome device name or slug to lowercase underscore format."""
-    norm = raw_slug.strip().lower().replace("-", "_").replace(" ", "_")
+    norm = re.sub(r"[^a-z0-9]+", "_", raw_slug.strip().lower()).strip("_")
     return norm or "esphome_device"
 
 

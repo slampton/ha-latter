@@ -42,7 +42,7 @@ from .const import (
     SERVICE_TRIGGER_BINDING,
     normalize_device_slug,
 )
-from .coordinator import LatterCoordinator
+from .coordinator import LatterCoordinator, resolve_coordinator
 from .area_engine import (
     async_execute_area_action,
     get_area_entities,
@@ -165,35 +165,31 @@ def _resolve_coordinator_from_call(
     hass: HomeAssistant, call: ServiceCall
 ) -> LatterCoordinator | None:
     """Resolve the target LatterCoordinator by target_device, device_slug, HA device_id, or single-instance fallback."""
-    domain_data = hass.data.get(DOMAIN, {})
-    coordinators = [
-        v for v in domain_data.values() if isinstance(v, LatterCoordinator)
-    ]
-    if not coordinators:
-        return None
-
     raw_slug = call.data.get("device_slug") or call.data.get("target_device")
     if raw_slug:
-        norm = normalize_device_slug(str(raw_slug))
-        for coord in coordinators:
-            if coord.device_slug == norm:
-                return coord
+        matched = resolve_coordinator(hass, str(raw_slug), allow_fallback=False)
+        if matched is not None:
+            return matched
 
     raw_dev_id = call.data.get("device_id")
     if raw_dev_id:
         dev_id = raw_dev_id[0] if isinstance(raw_dev_id, list) else str(raw_dev_id)
-        dev_reg = dr.async_get(hass)
-        dev = dev_reg.async_get(dev_id)
+        matched = resolve_coordinator(hass, dev_id, allow_fallback=False)
+        if matched is not None:
+            return matched
+        dev = dr.async_get(hass).async_get(dev_id)
         if dev:
             for _dom, ident in dev.identifiers:
-                if ident in domain_data and isinstance(domain_data[ident], LatterCoordinator):
-                    return domain_data[ident]
-            dev_slug = normalize_device_slug(str(dev.name_by_user or dev.name or ""))
-            for coord in coordinators:
-                if coord.device_slug == dev_slug:
-                    return coord
+                matched = resolve_coordinator(hass, ident, allow_fallback=False)
+                if matched is not None:
+                    return matched
+            dev_name = str(dev.name_by_user or dev.name or "")
+            if dev_name:
+                matched = resolve_coordinator(hass, dev_name, allow_fallback=False)
+                if matched is not None:
+                    return matched
 
-    return coordinators[0]
+    return resolve_coordinator(hass, None, allow_fallback=True)
 
 
 def _resolve_esphome_action(
@@ -319,11 +315,16 @@ def _is_esphome_device_online(hass: HomeAssistant, coord: LatterCoordinator) -> 
         st = hass.states.get(local_spk)
         if st is not None:
             return st.state not in ("unavailable", "unknown")
-    slug = coord.device_slug
-    for st in hass.states.async_all():
-        if slug in st.entity_id and not st.entity_id.startswith(f"sensor.{slug}_"):
-            if st.state not in ("unavailable", "unknown"):
-                return True
+    esp_dev_id = coord.esphome_device_id
+    if esp_dev_id:
+        from homeassistant.helpers import entity_registry as er
+
+        ent_reg = er.async_get(hass)
+        for entry in er.async_entries_for_device(ent_reg, esp_dev_id):
+            if entry.platform == "esphome":
+                st = hass.states.get(entry.entity_id)
+                if st is not None and st.state not in ("unavailable", "unknown"):
+                    return True
     return False
 
 
@@ -439,7 +440,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 await async_execute_area_action(
                     hass, entity_id=ent_id, action=action, level=lvl
                 )
-                coord._notify_listeners()
+                coord.async_notify_listeners()
             return
 
         _LOGGER.debug(
@@ -563,7 +564,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         if slot_num != coord.active_remote_slot:
             coord.active_remote_slot = slot_num
             coord._schedule_persist_runtime_state()
-            coord._notify_listeners()
+            coord.async_notify_listeners()
 
         action = str(data.get("action") or "").strip().lower()
         raw_cmd = str(data.get("command") or action).strip()
@@ -847,7 +848,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             )
             if coord:
                 await asyncio.sleep(0.15)
-                coord._notify_listeners()
+                coord.async_notify_listeners()
                 await async_push_active_area_entities(hass, coord)
 
     async def _handle_calendar_fetch(call: ServiceCall) -> None:
@@ -1407,7 +1408,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             hass.config_entries.async_update_entry(
                 coord.entry, data=merged, options=merged
             )
-            coord._notify_listeners()
+            coord.async_notify_listeners()
 
     hass.services.async_register(
         DOMAIN,

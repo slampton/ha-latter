@@ -138,13 +138,38 @@ def render_builtin_preset_bytes(
     return buf.getvalue()
 
 
+_WALLPAPER_FILES_CACHE: dict[str, list[tuple[str, str]]] = {}
+
+
+def _scan_wallpaper_dir_sync(wp_dir: Path, slug: str) -> list[tuple[str, str]]:
+    """Scan uploaded wallpaper files in a worker thread and update the in-memory cache."""
+    entries: list[tuple[str, str]] = []
+    if wp_dir.is_dir():
+        for file_path in sorted(wp_dir.glob("*"), key=lambda p: p.name.lower()):
+            if file_path.suffix.lower() not in (".jpg", ".jpeg", ".png", ".webp"):
+                continue
+            source_id = f"/local/latter_wallpapers/{slug}/{file_path.name}"
+            entries.append((source_id, file_path.name))
+    _WALLPAPER_FILES_CACHE[slug] = entries
+    return entries
+
+
+async def async_refresh_wallpaper_cache(
+    hass: HomeAssistant, device_slug: str
+) -> None:
+    """Populate the uploaded wallpaper file cache in the executor without blocking the event loop."""
+    slug = normalize_device_slug(device_slug)
+    wp_dir = get_device_wallpaper_dir(hass, slug)
+    await hass.async_add_executor_job(_scan_wallpaper_dir_sync, wp_dir, slug)
+
+
 def list_wallpaper_catalog(
     hass: HomeAssistant,
     device_slug: str,
     active_source: str,
     favorites: list[str],
 ) -> list[dict[str, Any]]:
-    """Return built-in AMOLED presets + uploaded wallpapers in `/config/www/latter_wallpapers/<slug>`."""
+    """Return built-in AMOLED presets + cached uploaded wallpapers in `/config/www/latter_wallpapers/<slug>`."""
     fav_set = set(favorites or [])
     items: list[dict[str, Any]] = []
 
@@ -161,24 +186,26 @@ def list_wallpaper_catalog(
             }
         )
 
-    wp_dir = get_device_wallpaper_dir(hass, device_slug)
-    if wp_dir.is_dir():
-        slug = normalize_device_slug(device_slug)
-        for file_path in sorted(wp_dir.glob("*"), key=lambda p: p.name.lower()):
-            if file_path.suffix.lower() not in (".jpg", ".jpeg", ".png", ".webp"):
-                continue
-            source_id = f"/local/latter_wallpapers/{slug}/{file_path.name}"
-            items.append(
-                {
-                    "id": source_id,
-                    "name": file_path.stem.replace("_", " ").title(),
-                    "filename": file_path.name,
-                    "kind": "uploaded",
-                    "active": source_id == active_source,
-                    "favorite": source_id in fav_set,
-                    "deletable": True,
-                }
-            )
+    slug = normalize_device_slug(device_slug)
+    cached_files = _WALLPAPER_FILES_CACHE.get(slug)
+    if cached_files is None:
+        wp_dir = get_device_wallpaper_dir(hass, slug)
+        hass.async_add_executor_job(_scan_wallpaper_dir_sync, wp_dir, slug)
+        cached_files = []
+
+    for source_id, fname in cached_files:
+        stem = Path(fname).stem
+        items.append(
+            {
+                "id": source_id,
+                "name": stem.replace("_", " ").title(),
+                "filename": fname,
+                "kind": "uploaded",
+                "active": source_id == active_source,
+                "favorite": source_id in fav_set,
+                "deletable": True,
+            }
+        )
 
     return items
 
@@ -212,6 +239,7 @@ def save_uploaded_wallpaper(
         fitted.save(out_path, format="JPEG", quality=92, optimize=True, progressive=False)
 
     slug = normalize_device_slug(device_slug)
+    _scan_wallpaper_dir_sync(wp_dir, slug)
     return f"/local/latter_wallpapers/{slug}/{out_name}"
 
 
@@ -226,8 +254,10 @@ def delete_uploaded_wallpaper(
     if not source_id.startswith(prefix):
         return False
     fname = Path(source_id[len(prefix) :]).name
-    target = get_device_wallpaper_dir(hass, device_slug) / fname
+    wp_dir = get_device_wallpaper_dir(hass, device_slug)
+    target = wp_dir / fname
     if target.is_file():
         target.unlink()
+        _scan_wallpaper_dir_sync(wp_dir, slug)
         return True
     return False

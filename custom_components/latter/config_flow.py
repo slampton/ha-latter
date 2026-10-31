@@ -29,6 +29,7 @@ from .const import (
     CONF_DEVICE_PROFILE,
     CONF_DEVICE_SLUG,
     CONF_DISPLAY_SHAPE,
+    CONF_ESPHOME_DEVICE_ID,
     CONF_NATIVE_BLE_TRACKING,
     CONF_SYNC_DEVICE_AREA,
     CONF_WEATHER_ENTITY,
@@ -36,12 +37,39 @@ from .const import (
     DEFAULT_AREA_HANDOFF,
     DEFAULT_ART_SIZE,
     DEFAULT_DEVICE_GROUP,
+    DEFAULT_DOCK_APPS,
     DEFAULT_PAGE_SIZE,
     DOMAIN,
     normalize_device_slug,
 )
 
 CONF_APPLY_PROFILE = "apply_profile"
+
+
+def _resolve_esphome_device_and_unique_id(
+    hass: HomeAssistant, slug: str
+) -> tuple[dr.DeviceEntry | None, str]:
+    """Resolve the HA DeviceEntry and canonical unique_id (MAC-backed when available) for a slug."""
+    norm = normalize_device_slug(slug)
+    for entry in hass.config_entries.async_entries(DOMAIN):
+        if normalize_device_slug(str(entry.data.get(CONF_DEVICE_SLUG, ""))) == norm and entry.unique_id:
+            dev_id = str(entry.data.get(CONF_ESPHOME_DEVICE_ID, "") or "")
+            dev = dr.async_get(hass).async_get(dev_id) if dev_id else None
+            return dev, entry.unique_id
+
+    dev_reg = dr.async_get(hass)
+    matched_dev: dr.DeviceEntry | None = None
+    for dev in _iter_devices(dev_reg):
+        d_name = str(dev.name_by_user or dev.name or "").strip()
+        if d_name and normalize_device_slug(d_name) == norm:
+            matched_dev = dev
+            break
+
+    if matched_dev is not None:
+        for _ctype, cval in matched_dev.connections:
+            if cval:
+                return matched_dev, f"{DOMAIN}_{dr.format_mac(str(cval))}"
+    return matched_dev, f"{DOMAIN}_{norm}"
 
 
 def _discover_esphome_slug(hass: HomeAssistant) -> str:
@@ -66,8 +94,8 @@ def _discover_esphome_slug(hass: HomeAssistant) -> str:
             continue
         dev_name = str(dev.name_by_user or dev.name or "").strip()
         if dev_name and "proxy" not in dev_name.lower():
-            slug = re.sub(r"[^a-z0-9]+", "_", dev_name.lower()).strip("_")
-            if slug and slug not in configured_slugs:
+            slug = normalize_device_slug(dev_name)
+            if slug and slug != "esphome_device" and slug not in configured_slugs:
                 return slug
 
     return "esphome_device"
@@ -233,6 +261,7 @@ def _apply_onboarding_profile_and_defaults(
     """Merge auto-detected hardware defaults, roaming flag, optional Profile, and global household defaults."""
     slug = normalize_device_slug(str(user_input.get(CONF_DEVICE_SLUG) or "esphome_device"))
     hw_defaults = _detect_hardware_defaults(hass, slug)
+    matched_dev, _uid = _resolve_esphome_device_and_unique_id(hass, slug)
 
     passthrough_keys = (
         "device_profile",
@@ -240,6 +269,7 @@ def _apply_onboarding_profile_and_defaults(
         "ble_target_address",
         "assigned_person",
         "default_area",
+        CONF_ESPHOME_DEVICE_ID,
     )
     extra_init = {
         k: user_input[k]
@@ -252,6 +282,8 @@ def _apply_onboarding_profile_and_defaults(
         **extra_init,
         CONF_DEVICE_SLUG: slug,
     }
+    if matched_dev is not None and not merged.get(CONF_ESPHOME_DEVICE_ID):
+        merged[CONF_ESPHOME_DEVICE_ID] = matched_dev.id
 
     if not merged.get(CONF_DEFAULT_SPEAKER):
         merged[CONF_DEFAULT_SPEAKER] = _discover_default_speaker(hass, slug)
@@ -349,14 +381,15 @@ def _abort_competing_flows_for_slug(
     hass: HomeAssistant, slug: str, keep_flow_id: str | None = None
 ) -> None:
     """Abort any background discovery flow for the same slug when the user submits a manual setup flow."""
-    target_uid = f"{DOMAIN}_{normalize_device_slug(slug)}"
+    _dev, target_uid = _resolve_esphome_device_and_unique_id(hass, slug)
+    legacy_uid = f"{DOMAIN}_{normalize_device_slug(slug)}"
     for flow in list(hass.config_entries.flow.async_progress_by_handler(DOMAIN)):
         fid = flow.get("flow_id")
         if not fid or fid == keep_flow_id:
             continue
         ctx = flow.get("context") or {}
         if flow.get("step_id") is None or (
-            ctx.get("unique_id") == target_uid
+            ctx.get("unique_id") in (target_uid, legacy_uid)
             and ctx.get("source") != "user"
         ):
             hass.config_entries.flow.async_abort(fid)
@@ -420,7 +453,8 @@ class LatterConfigFlow(ConfigFlow, domain=DOMAIN):
         ):
             return self.async_abort(reason="not_supported")
 
-        await self.async_set_unique_id(f"{DOMAIN}_{slug}")
+        _dev, target_uid = _resolve_esphome_device_and_unique_id(self.hass, slug)
+        await self.async_set_unique_id(target_uid)
         self._abort_if_unique_id_configured()
 
         self._discovered_slug = slug
@@ -436,7 +470,8 @@ class LatterConfigFlow(ConfigFlow, domain=DOMAIN):
         if not slug:
             return self.async_abort(reason="already_configured")
 
-        await self.async_set_unique_id(f"{DOMAIN}_{slug}")
+        _dev, target_uid = _resolve_esphome_device_and_unique_id(self.hass, slug)
+        await self.async_set_unique_id(target_uid)
         self._abort_if_unique_id_configured()
 
         self._discovered_slug = slug
@@ -459,8 +494,9 @@ class LatterConfigFlow(ConfigFlow, domain=DOMAIN):
             _abort_competing_flows_for_slug(
                 self.hass, slug, keep_flow_id=self.flow_id
             )
-            if self.unique_id != f"{DOMAIN}_{slug}":
-                await self.async_set_unique_id(f"{DOMAIN}_{slug}")
+            _dev, target_uid = _resolve_esphome_device_and_unique_id(self.hass, slug)
+            if self.unique_id != target_uid:
+                await self.async_set_unique_id(target_uid)
             self._abort_if_unique_id_configured()
 
             clean_title = _format_clean_device_title(
@@ -495,7 +531,8 @@ class LatterConfigFlow(ConfigFlow, domain=DOMAIN):
                 self.hass, user_input, existing=current
             )
             slug = merged_data[CONF_DEVICE_SLUG]
-            await self.async_set_unique_id(f"{DOMAIN}_{slug}")
+            _dev, target_uid = _resolve_esphome_device_and_unique_id(self.hass, slug)
+            await self.async_set_unique_id(reconfigure_entry.unique_id or target_uid)
             self._abort_if_unique_id_mismatch()
             return self.async_update_and_abort(
                 reconfigure_entry,

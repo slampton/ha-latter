@@ -502,7 +502,7 @@ async def _async_apply_device_snapshot_to_coordinator(
 
     coord._bind_wallpaper_cycle_timer()
     coord._schedule_persist_runtime_state()
-    coord._notify_listeners()
+    coord.async_notify_listeners()
 
     applied_controls = 0
     if restore_esphome_entities and isinstance(dev_snap.get("esphome_controls"), dict):
@@ -657,7 +657,7 @@ async def async_apply_profile_to_coordinators(
             coord.entry, data=merged, options=merged
         )
         coord._bind_wallpaper_cycle_timer()
-        coord._notify_listeners()
+        coord.async_notify_listeners()
         updated_devices += 1
         if isinstance(esp_ctrls, dict) and esp_ctrls:
             updated_controls += await apply_esphome_controls_to_device(
@@ -667,7 +667,7 @@ async def async_apply_profile_to_coordinators(
     if updated_controls > 0:
         await asyncio.sleep(0.2)
         for coord in targets:
-            coord._notify_listeners()
+            coord.async_notify_listeners()
 
     return {
         "updated_devices": updated_devices,

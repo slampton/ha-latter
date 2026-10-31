@@ -11,7 +11,6 @@ from homeassistant.config_entries import ConfigEntry, SOURCE_INTEGRATION_DISCOVE
 from homeassistant.const import (
     EVENT_HOMEASSISTANT_STARTED,
     EVENT_SERVICE_REGISTERED,
-    EVENT_STATE_CHANGED,
 )
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers import (
@@ -27,6 +26,7 @@ from homeassistant.helpers.typing import ConfigType
 from .ble_engine import _iter_devices
 from .const import (
     CONF_DEVICE_SLUG,
+    CONF_ESPHOME_DEVICE_ID,
     DATA_DISCOVERY_UNSUB,
     DATA_GLOBAL_CONFIG,
     DATA_GLOBAL_STORE,
@@ -35,8 +35,10 @@ from .const import (
     GLOBAL_CONFIG_KEYS,
     GLOBAL_STORAGE_KEY,
     INTEGRATION_VERSION,
+    LATTER_DATA_KEY,
     PLATFORMS,
     STORAGE_VERSION,
+    normalize_device_slug,
 )
 from .coordinator import LatterCoordinator
 from .dashboard import (
@@ -58,8 +60,7 @@ from .http import (
     LatterWallpaperProxyView,
 )
 from .sip_engine import get_sip_engine
-from .area_engine import inject_esphome_visit_link, inject_hacs_update_brand_icon
-from .services import async_setup_services
+from .services import async_push_active_area_entities, async_setup_services
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -77,7 +78,8 @@ LATTER_CONTRACT_ACTION_SUFFIXES: tuple[str, ...] = (
 
 def _slugify_device_name(name: str) -> str:
     """Convert an ESPHome device name into a normalized slug."""
-    return re.sub(r"[^a-z0-9]+", "_", name.strip().lower()).strip("_")
+    val = normalize_device_slug(name)
+    return "" if val == "esphome_device" and name.strip().lower() != "esphome_device" else val
 
 
 def is_latter_compatible_esphome_device(
@@ -105,8 +107,8 @@ def is_latter_compatible_esphome_device(
 async def _async_ensure_global_store(
     hass: HomeAssistant, seed_entry: ConfigEntry | None = None
 ) -> dict[str, Any]:
-    """Load or initialize the shared Site configuration store (`.storage/latter.site`), migrating legacy `.storage/latter.household` if present."""
-    domain_data = hass.data.setdefault(DOMAIN, {})
+    """Load or initialize the shared Site configuration store (`.storage/latter.site`)."""
+    domain_data = hass.data.setdefault(LATTER_DATA_KEY, {})
     if DATA_GLOBAL_STORE not in domain_data:
         store: Store[dict[str, Any]] = Store(
             hass, STORAGE_VERSION, GLOBAL_STORAGE_KEY
@@ -197,10 +199,18 @@ def _async_check_esphome_device_for_discovery(
     if not is_latter_compatible_esphome_device(hass, device, slug):
         return
 
+    mac_uid = ""
+    for _ctype, cval in device.connections:
+        if cval:
+            mac_uid = f"{DOMAIN}_{dr.format_mac(str(cval))}"
+            break
+
     for entry in hass.config_entries.async_entries(DOMAIN):
-        if entry.unique_id == f"{DOMAIN}_{slug}":
+        if entry.unique_id in (f"{DOMAIN}_{slug}", mac_uid) and entry.unique_id:
             return
-        if str(entry.data.get(CONF_DEVICE_SLUG, "")).lower() == slug:
+        if entry.data.get(CONF_ESPHOME_DEVICE_ID) == device.id:
+            return
+        if normalize_device_slug(str(entry.data.get(CONF_DEVICE_SLUG, ""))) == slug:
             return
 
     discovery_flow.async_create_flow(
@@ -269,6 +279,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
         entry=entry,
         hmac_secret=domain_data[DATA_HMAC_SECRET],
     )
+    coordinator.on_area_changed_push_slots = (
+        lambda c: async_push_active_area_entities(hass, c)
+    )
     await coordinator.async_setup()
     entry.runtime_data = coordinator
     domain_data[entry.entry_id] = coordinator
@@ -277,10 +290,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
     if entry.title.lower().startswith("latter (") or entry.title != clean_title:
         hass.config_entries.async_update_entry(entry, title=clean_title)
 
-    inject_esphome_visit_link(
-        hass, coordinator.device_slug, coordinator.build_companion_url()
-    )
-    inject_hacs_update_brand_icon(hass)
     hass.loop.call_soon(_async_scan_all_esphome_devices_for_discovery, hass)
 
     if DATA_DISCOVERY_UNSUB not in domain_data:
@@ -295,20 +304,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
             dev = dev_reg.async_get(dev_id)
             if dev is not None:
                 _async_check_esphome_device_for_discovery(hass, dev)
-                dev_name = str(dev.name_by_user or dev.name or "").strip()
-                if dev_name:
-                    upd_slug = _slugify_device_name(dev_name)
-                    for val in domain_data.values():
-                        if isinstance(val, LatterCoordinator) and val.device_slug == upd_slug:
-                            inject_esphome_visit_link(
-                                hass, val.device_slug, val.build_companion_url()
-                            )
+
+                prev_timer = domain_data.pop("_unsub_delayed_scan", None)
+                if callable(prev_timer):
+                    prev_timer()
 
                 @callback
                 def _delayed_scan(_now: Any) -> None:
+                    domain_data.pop("_unsub_delayed_scan", None)
                     _async_scan_all_esphome_devices_for_discovery(hass)
 
-                async_call_later(hass, 5.0, _delayed_scan)
+                domain_data["_unsub_delayed_scan"] = async_call_later(
+                    hass, 5.0, _delayed_scan
+                )
 
         @callback
         def _on_service_registered(event: Event) -> None:
@@ -318,33 +326,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
             if any(svc.endswith(sfx) for sfx in LATTER_CONTRACT_ACTION_SUFFIXES):
                 _async_scan_all_esphome_devices_for_discovery(hass)
 
-        @callback
-        def _on_update_entity_state_changed(event: Event) -> None:
-            ent_id = str(event.data.get("entity_id") or "")
-            if ent_id.startswith("update."):
-                new_st = event.data.get("new_state")
-                if new_st is not None:
-                    friendly = str(new_st.attributes.get("friendly_name") or "").lower()
-                    if "latter" in ent_id.lower() or "latter" in friendly:
-                        pic = str(new_st.attributes.get("entity_picture") or "")
-                        if pic != "/api/latter/brand/icon.png":
-                            inject_hacs_update_brand_icon(hass)
-
         unsub_dev = hass.bus.async_listen(
             dr.EVENT_DEVICE_REGISTRY_UPDATED, _on_device_registry_updated
         )
         unsub_svc = hass.bus.async_listen(
             EVENT_SERVICE_REGISTERED, _on_service_registered
         )
-        unsub_upd = hass.bus.async_listen(
-            EVENT_STATE_CHANGED, _on_update_entity_state_changed
-        )
-        domain_data[DATA_DISCOVERY_UNSUB] = (unsub_dev, unsub_svc, unsub_upd)
+        domain_data[DATA_DISCOVERY_UNSUB] = (unsub_dev, unsub_svc)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    await async_setup_services(hass)
 
-    coordinator._notify_listeners()
+    coordinator.async_notify_listeners()
 
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     _LOGGER.info(
@@ -374,8 +366,14 @@ async def async_unload_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> b
         remaining = [
             v for v in hass.data.get(DOMAIN, {}).values() if isinstance(v, LatterCoordinator)
         ]
-        if not remaining and "sip_engine" in hass.data.get(DOMAIN, {}):
-            hass.data[DOMAIN]["sip_engine"].async_stop()
+        if not remaining:
+            delayed_unsub = hass.data.get(DOMAIN, {}).pop("_unsub_delayed_scan", None)
+            if callable(delayed_unsub):
+                delayed_unsub()
+            for unsub in hass.data.get(DOMAIN, {}).pop(DATA_DISCOVERY_UNSUB, ()):
+                unsub()
+            if "sip_engine" in hass.data.get(DOMAIN, {}):
+                hass.data[DOMAIN]["sip_engine"].async_stop()
     return unload_ok
 
 
