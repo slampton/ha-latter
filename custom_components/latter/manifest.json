@@ -1,7 +1,7 @@
 {
   "domain": "latter",
   "name": "Latter",
-  "after_dependencies": ["bluetooth", "camera", "esphome", "frontend", "music_assistant"],
+  "after_dependencies": ["bluetooth", "camera", "frontend"],
   "categories": [
     "ai_voice.voice_assistants",
     "diy_makers.boards_hardware",
@@ -14,7 +14,6 @@
   "integration_type": "device",
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/slampton/ha-latter/issues",
-  "loggers": ["custom_components.latter"],
-  "requirements": ["Pillow>=11.0"],
+  "requirements": [],
   "version": "2.2.0"
 }
