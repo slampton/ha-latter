@@ -63,6 +63,7 @@ from ..const import (
     CONF_WALLPAPER_CYCLE_MINUTES,
     CONF_WALLPAPER_FAVORITES,
     CONF_WALLPAPER_SOURCE,
+    DATA_GLOBAL_CONFIG,
     DEFAULT_ART_SIZE,
     DEFAULT_DEVICE_GROUP,
     DEFAULT_PAGE_SIZE,
@@ -539,22 +540,27 @@ async def _async_execute_studio_command(
                     val = max(0, int(val or DEFAULT_WALLPAPER_CYCLE_MINUTES))
                 merged_device[k] = val
 
+        for gk in GLOBAL_CONFIG_KEYS:
+            merged_device.pop(gk, None)
+
+        current_global = hass.data.get(DOMAIN, {}).get(DATA_GLOBAL_CONFIG, {}) or {}
+        for k in GLOBAL_CONFIG_KEYS:
+            if k in incoming_cfg and incoming_cfg[k] != current_global.get(k):
+                global_updates[k] = incoming_cfg[k]
+
+        if merged_device != dict(coordinator.device_data):
+            coordinator.update_device_config(merged_device)
+            await coordinator.async_apply_options()
+        if global_updates:
+            await async_save_and_broadcast_global_config(hass, global_updates)
+        coordinator._bind_wallpaper_cycle_timer()
+        coordinator.async_notify_listeners()
         log_studio_event(
             hass,
             "INFO",
             coordinator.device_slug,
             f"Saved configuration for '{merged_device.get(CONF_DEVICE_SLUG, coordinator.device_slug)}'",
         )
-
-        for k in GLOBAL_CONFIG_KEYS:
-            if k in incoming_cfg:
-                global_updates[k] = incoming_cfg[k]
-
-        coordinator.update_device_config(merged_device)
-        if global_updates:
-            await async_save_and_broadcast_global_config(hass, global_updates)
-        coordinator._bind_wallpaper_cycle_timer()
-        coordinator.async_notify_listeners()
 
     elif cmd == "log_client_error":
         msg = str(body.get("message") or "Unknown client error")
@@ -939,6 +945,7 @@ async def ws_handle_command(
         connection.send_error(msg["id"], "forbidden", str(err))
         return
     except Exception as err:  # noqa: BLE001
+        _LOGGER.exception("Latter Studio command '%s' failed: %s", cmd, err)
         connection.send_error(msg["id"], "command_failed", str(err))
         return
 

@@ -71,6 +71,7 @@ def async_audit_coordinator_health(
         )
 
     missing_issue_id = f"missing_mapped_entity_{sub_id}"
+    ir.async_delete_issue(hass, DOMAIN, f"link_ma_player_{slug}")
     if missing_labels:
         _create_scoped_issue(
             missing_issue_id,

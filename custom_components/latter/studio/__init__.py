@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-import time
 
 from homeassistant.components import frontend, panel_custom
 from homeassistant.components.http import StaticPathConfig
@@ -40,39 +39,40 @@ async def async_register_studio_panel(hass: HomeAssistant) -> None:
     async_register_studio_ws_commands(hass)
 
     frontend_dir = Path(__file__).parent.parent / "frontend"
-    cache_tag = f"{INTEGRATION_VERSION.replace('.', '_')}_{int(time.time())}"
+    cache_tag = INTEGRATION_VERSION.replace(".", "_")
     versioned_prefix = f"{STATIC_URL_PREFIX}_{cache_tag}"
 
-    static_configs = [
-        StaticPathConfig(
-            versioned_prefix,
-            str(frontend_dir),
-            cache_headers=False,
-        )
-    ]
+    static_configs: list[StaticPathConfig] = []
+    registered_prefixes: set[str] = domain_data.setdefault(
+        "_studio_static_prefixes", set()
+    )
+    for prefix in (versioned_prefix, STATIC_URL_PREFIX, "/latter_static"):
+        if prefix not in registered_prefixes:
+            registered_prefixes.add(prefix)
+            static_configs.append(
+                StaticPathConfig(
+                    prefix,
+                    str(frontend_dir),
+                    cache_headers=False,
+                )
+            )
     if not domain_data.get("_studio_static_registered"):
         domain_data["_studio_static_registered"] = True
-        static_configs.extend(
-            [
-                StaticPathConfig(
-                    STATIC_URL_PREFIX,
-                    str(frontend_dir),
-                    cache_headers=False,
-                ),
-                StaticPathConfig(
-                    "/latter_static",
-                    str(frontend_dir),
-                    cache_headers=False,
-                ),
-            ]
-        )
         frontend.add_extra_js_url(hass, "/api/latter/brand/sidebar_icon.js")
 
-    await hass.http.async_register_static_paths(static_configs)
+    if static_configs:
+        await hass.http.async_register_static_paths(static_configs)
 
     module_url = f"{versioned_prefix}/latter-studio.js?v={cache_tag}"
+    panels = hass.data.get("frontend_panels", {})
+    if (
+        domain_data.get("_registered_panel_url") == module_url
+        and "latter" in panels
+    ):
+        return
     try:
-        frontend.async_remove_panel(hass, "latter", warn_if_unknown=False)
+        if "latter" in panels:
+            frontend.async_remove_panel(hass, "latter", warn_if_unknown=False)
         await panel_custom.async_register_panel(
             hass,
             frontend_url_path="latter",
@@ -83,6 +83,7 @@ async def async_register_studio_panel(hass: HomeAssistant) -> None:
             require_admin=True,
             embed_iframe=False,
         )
+        domain_data["_registered_panel_url"] = module_url
         log_studio_event(
             hass,
             "INFO",
@@ -94,7 +95,10 @@ async def async_register_studio_panel(hass: HomeAssistant) -> None:
 
 
 def async_unregister_studio_panel(hass: HomeAssistant) -> None:
-    """Remove the Latter Studio custom panel when the integration unloads."""
+    """Remove the Latter Studio custom panel when the integration is removed."""
+    domain_data = hass.data.get(DOMAIN, {})
+    if isinstance(domain_data, dict):
+        domain_data.pop("_registered_panel_url", None)
     try:
         frontend.async_remove_panel(hass, "latter", warn_if_unknown=False)
     except Exception as err:  # noqa: BLE001

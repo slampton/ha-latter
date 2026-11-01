@@ -305,15 +305,16 @@ def _apply_onboarding_profile_and_defaults(
 
     # Seed global system weather & alarm if not yet configured anywhere
     domain_data = hass.data.get(DOMAIN, {})
-    global_cfg = domain_data.get(DATA_GLOBAL_CONFIG, {})
-    if not global_cfg.get(CONF_WEATHER_ENTITY) and not merged.get(CONF_WEATHER_ENTITY):
-        def_w = _discover_default_weather(hass)
-        if def_w:
-            merged[CONF_WEATHER_ENTITY] = def_w
-    if not global_cfg.get(CONF_ALARM_ENTITY) and not merged.get(CONF_ALARM_ENTITY):
-        def_a = _discover_default_alarm(hass)
-        if def_a:
-            merged[CONF_ALARM_ENTITY] = def_a
+    global_cfg = domain_data.get(DATA_GLOBAL_CONFIG)
+    if isinstance(global_cfg, dict):
+        if CONF_WEATHER_ENTITY not in global_cfg:
+            def_w = _discover_default_weather(hass)
+            if def_w:
+                global_cfg[CONF_WEATHER_ENTITY] = def_w
+        if CONF_ALARM_ENTITY not in global_cfg:
+            def_a = _discover_default_alarm(hass)
+            if def_a:
+                global_cfg[CONF_ALARM_ENTITY] = def_a
 
     return merged
 

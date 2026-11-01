@@ -271,44 +271,35 @@ def resolve_ma_counterpart_entity(
                 matched_entity = c_entry.entity_id
                 break
 
+    # Pass 1c: Exact entity_id match against MA player unique_id / device identifiers
+    if matched_entity is None and speaker_entity_id:
+        spk_lower = speaker_entity_id.lower()
+        for c_entry, c_dev in ma_candidates:
+            uid_lower = str(c_entry.unique_id or "").strip().lower()
+            if uid_lower == spk_lower:
+                matched_entity = c_entry.entity_id
+                break
+            if c_dev is not None:
+                for _dom, ident_val in c_dev.identifiers:
+                    if str(ident_val or "").strip().lower() == spk_lower:
+                        matched_entity = c_entry.entity_id
+                        break
+                if matched_entity is not None:
+                    break
+
     eff_slug = slug_norm or (
         str(getattr(resolved_coord, "device_slug", "") or "")
         if resolved_coord is not None
         else ""
     )
+    if eff_slug:
+        ir.async_delete_issue(hass, DOMAIN, f"link_ma_player_{eff_slug}")
 
     if matched_entity is not None:
         cache[cache_key] = matched_entity
-        if eff_slug:
-            ir.async_delete_issue(hass, DOMAIN, f"link_ma_player_{eff_slug}")
         return matched_entity
 
     cache[cache_key] = None
-    if (
-        eff_slug
-        and hass.config_entries.async_entries("music_assistant")
-        and (
-            resolved_coord is None
-            or speaker_entity_id == getattr(resolved_coord, "local_speaker", None)
-        )
-    ):
-        ir.async_create_issue(
-            hass,
-            DOMAIN,
-            f"link_ma_player_{eff_slug}",
-            is_fixable=True,
-            severity=ir.IssueSeverity.WARNING,
-            translation_key="link_ma_player",
-            translation_placeholders={
-                "device_slug": eff_slug,
-                "speaker_entity": speaker_entity_id,
-            },
-            config_entry_id=(
-                resolved_coord.entry.entry_id
-                if resolved_coord is not None and hasattr(resolved_coord, "entry")
-                else None
-            ),
-        )
     return None
 
 

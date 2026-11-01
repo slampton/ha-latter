@@ -1862,6 +1862,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root">
               <label>Device Type</label>
               <select id="cfg-device_profile" onchange="markDirty()">
                 <option value="mobile_display">Mobile Display</option>
+                <option value="wearable_display">Wearable Display</option>
                 <option value="stationary_display">Stationary Display</option>
                 <option value="headless_node">Headless / Sensor Node</option>
                 <option value="ble_beacon">BLE Phone / Watch / Tag</option>
@@ -2054,6 +2055,7 @@ let SHADOW_ROOT = null;
 let HOST_ELEMENT = null;
 let ACTIVE_SUBENTRY_ID = "";
 let WS_UNSUB = null;
+let SUB_GEN = 0;
 
 function getStudioActiveElement() {
   if (SHADOW_ROOT && SHADOW_ROOT.activeElement) {
@@ -2420,14 +2422,11 @@ async function switchSystemDevice(targetRef) {
   const changed = ACTIVE_SUBENTRY_ID !== subId;
   ACTIVE_SUBENTRY_ID = subId;
   DEVICE_SELECTED = true;
-  try {
-    window.history.replaceState(null, "", `/latter/devices/${encodeURIComponent(subId)}`);
-  } catch (_e) {}
   if (changed || !STATE) {
     INITIAL_FORM_LOADED = false;
     await refreshState(true);
     if (HOST_ELEMENT && typeof HOST_ELEMENT._resubscribe === "function") {
-      HOST_ELEMENT._resubscribe();
+      await HOST_ELEMENT._resubscribe(false);
     }
   } else {
     applyStateToDom(STATE, true);
@@ -4371,7 +4370,7 @@ function applyStateToDom(data, forceFormUpdate=false) {
     if (doc.getElementById("cfg-assigned_role")) {
       doc.getElementById("cfg-assigned_role").value = cfg.assigned_role || "admin";
     }
-    populateSelect("cfg-default_speaker", cat.ma_speakers, cfg.default_speaker, false);
+    populateSelect("cfg-default_speaker", cat.ma_speakers, cfg.default_speaker, true);
     const voListEl = doc.getElementById("volume-overrides-list");
     if (voListEl) {
       voListEl.innerHTML = "";
@@ -4471,33 +4470,34 @@ async function saveAllConfig() {
     if (calEnt && !calendarEntities.includes(calEnt)) calendarEntities.push(calEnt);
   });
 
+  const artVal = String(doc.getElementById("cfg-art_size")?.value || "466");
   const config = {
-    device_slug: doc.getElementById("cfg-device_slug").value.trim(),
-    companion_base_url: doc.getElementById("cfg-companion_base_url").value.trim(),
-    vpn_endpoint: doc.getElementById("cfg-vpn_endpoint").value.trim(),
-    vpn_server_public_key: doc.getElementById("cfg-vpn_server_public_key").value.trim(),
-    vpn_subnet: doc.getElementById("cfg-vpn_subnet").value.trim(),
-    vpn_ha_ip: doc.getElementById("cfg-vpn_ha_ip").value.trim(),
-    vpn_enabled: doc.getElementById("cfg-vpn_enabled").checked,
-    vpn_client_ip: doc.getElementById("cfg-vpn_client_ip").value.trim(),
-    vpn_hotspot_ssid: doc.getElementById("cfg-vpn_hotspot_ssid").value.trim(),
-    vpn_public_key: doc.getElementById("cfg-vpn_public_key").value.trim(),
-    vpn_private_key: doc.getElementById("cfg-vpn_private_key").value.trim(),
-    vpn_preshared_key: doc.getElementById("cfg-vpn_preshared_key").value.trim(),
-    device_profile: doc.getElementById("cfg-device_profile").value,
+    device_slug: doc.getElementById("cfg-device_slug")?.value?.trim() || (STATE?.config?.device_slug || ""),
+    companion_base_url: doc.getElementById("cfg-companion_base_url")?.value?.trim() || "",
+    vpn_endpoint: doc.getElementById("cfg-vpn_endpoint")?.value?.trim() || "",
+    vpn_server_public_key: doc.getElementById("cfg-vpn_server_public_key")?.value?.trim() || "",
+    vpn_subnet: doc.getElementById("cfg-vpn_subnet")?.value?.trim() || "",
+    vpn_ha_ip: doc.getElementById("cfg-vpn_ha_ip")?.value?.trim() || "",
+    vpn_enabled: Boolean(doc.getElementById("cfg-vpn_enabled")?.checked),
+    vpn_client_ip: doc.getElementById("cfg-vpn_client_ip")?.value?.trim() || "",
+    vpn_hotspot_ssid: doc.getElementById("cfg-vpn_hotspot_ssid")?.value?.trim() || "",
+    vpn_public_key: doc.getElementById("cfg-vpn_public_key")?.value?.trim() || "",
+    vpn_private_key: doc.getElementById("cfg-vpn_private_key")?.value?.trim() || "",
+    vpn_preshared_key: doc.getElementById("cfg-vpn_preshared_key")?.value?.trim() || "",
+    device_profile: doc.getElementById("cfg-device_profile")?.value || (STATE?.config?.device_profile || "mobile_display"),
     device_group: doc.getElementById("cfg-device_group")?.value || "handhelds",
-    display_shape: doc.getElementById("cfg-display_shape").value,
-    default_page_size: parseInt(doc.getElementById("cfg-default_page_size").value, 10) || 3,
-    native_ble_tracking: doc.getElementById("cfg-native_ble_tracking").checked,
-    ble_auto_switch: doc.getElementById("cfg-ble_auto_switch").checked,
-    sync_device_area: doc.getElementById("cfg-sync_device_area").checked,
-    area_handoff: doc.getElementById("cfg-area_handoff").checked,
-    ble_beacon_uuid: doc.getElementById("cfg-ble_beacon_uuid").value.trim(),
+    display_shape: doc.getElementById("cfg-display_shape")?.value || (STATE?.config?.display_shape || "round"),
+    default_page_size: parseInt(doc.getElementById("cfg-default_page_size")?.value || "3", 10) || 3,
+    native_ble_tracking: Boolean(doc.getElementById("cfg-native_ble_tracking")?.checked),
+    ble_auto_switch: Boolean(doc.getElementById("cfg-ble_auto_switch")?.checked),
+    sync_device_area: Boolean(doc.getElementById("cfg-sync_device_area")?.checked),
+    area_handoff: Boolean(doc.getElementById("cfg-area_handoff")?.checked),
+    ble_beacon_uuid: doc.getElementById("cfg-ble_beacon_uuid")?.value?.trim() || "",
     ble_target_address: doc.getElementById("cfg-ble_target_address")?.value?.trim() || "",
-    presence_entity: doc.getElementById("cfg-presence_entity").value,
-    assigned_person: doc.getElementById("cfg-assigned_person")?.value || "",
+    presence_entity: doc.getElementById("cfg-presence_entity")?.value ?? "",
+    assigned_person: doc.getElementById("cfg-assigned_person")?.value ?? "",
     assigned_role: doc.getElementById("cfg-assigned_role")?.value || "admin",
-    default_speaker: doc.getElementById("cfg-default_speaker").value,
+    default_speaker: doc.getElementById("cfg-default_speaker")?.value ?? "",
     volume_overrides: volumeOverrides,
     vol_speaker_1: volumeOverrides[0]?.speaker || "",
     vol_target_1: volumeOverrides[0]?.target || "",
@@ -4509,29 +4509,46 @@ async function saveAllConfig() {
     remote_2: remotesList[1] || "",
     remote_3: remotesList[2] || "",
     remote_4: remotesList[3] || "",
-    alarm_entity: doc.getElementById("cfg-alarm_entity").value,
+    alarm_entity: doc.getElementById("cfg-alarm_entity")?.value ?? "",
     camera_entity: cameraEntities[0] || "",
     camera_entities: cameraEntities,
-    weather_entity: doc.getElementById("cfg-weather_entity").value,
-    thermostat_entity: doc.getElementById("cfg-thermostat_entity")?.value || "",
-    lock_entity: doc.getElementById("cfg-lock_entity")?.value || "",
-    garage_entity: doc.getElementById("cfg-garage_entity")?.value || "",
-    vacuum_entity: doc.getElementById("cfg-vacuum_entity")?.value || "",
-    default_area: doc.getElementById("cfg-default_area").value,
-    dock_apps: doc.getElementById("cfg-dock_apps").value.trim(),
-    wallpaper_source: doc.getElementById("cfg-wallpaper_source").value.trim(),
-    wallpaper_cycle_minutes: parseInt(doc.getElementById("cfg-wallpaper_cycle_minutes").value, 10) || 0,
-    art_size: doc.getElementById("cfg-art_size").value.includes("x") ? doc.getElementById("cfg-art_size").value : (parseInt(doc.getElementById("cfg-art_size").value, 10) || 466),
+    weather_entity: doc.getElementById("cfg-weather_entity")?.value ?? "",
+    thermostat_entity: doc.getElementById("cfg-thermostat_entity")?.value ?? "",
+    lock_entity: doc.getElementById("cfg-lock_entity")?.value ?? "",
+    garage_entity: doc.getElementById("cfg-garage_entity")?.value ?? "",
+    vacuum_entity: doc.getElementById("cfg-vacuum_entity")?.value ?? "",
+    default_area: doc.getElementById("cfg-default_area")?.value ?? "",
+    dock_apps: doc.getElementById("cfg-dock_apps")?.value?.trim() || "",
+    wallpaper_source: doc.getElementById("cfg-wallpaper_source")?.value?.trim() || "",
+    wallpaper_cycle_minutes: parseInt(doc.getElementById("cfg-wallpaper_cycle_minutes")?.value || "0", 10) || 0,
+    art_size: artVal.includes("x") ? artVal : (parseInt(artVal, 10) || 466),
     calendar_entities: calendarEntities,
     custom_palettes: Array.isArray((STATE?.config || {}).custom_palettes) ? STATE.config.custom_palettes : [],
     device_custom_color: (STATE?.config || {}).device_custom_color || "#3898FF",
     doorbell_anc_mode: doc.getElementById("cfg-doorbell_anc_mode")?.value || "ultra",
   };
 
-  const data = await callStudioCommand({command: "save_config", config});
-  if (data) {
-    applyStateToDom(data, true);
-    showToast("Saved configuration");
+  const btn = doc.getElementById("btn-save-changes");
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Saving...";
+  }
+  try {
+    const data = await callStudioCommand({command: "save_config", config});
+    if (data) {
+      applyStateToDom(data, true);
+      showToast("Saved configuration");
+    } else if (btn) {
+      btn.disabled = false;
+      btn.textContent = "Save Changes";
+    }
+  } catch (err) {
+    console.error("Latter Studio save_config failed:", err);
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "Save Changes";
+    }
+    showToast(`Save failed: ${err?.message || err || "Unknown error"}`);
   }
 }
 
@@ -4962,24 +4979,22 @@ class LatterStudio extends HTMLElement {
       DEVICE_SELECTED = true;
       setScope("device", "dashboard");
       if (this._hass) {
-        refreshState(true);
-        this._resubscribe();
+        this._resubscribe(true);
       }
     } else if (querySub) {
       ACTIVE_SUBENTRY_ID = querySub;
       DEVICE_SELECTED = true;
       setScope("device", "dashboard");
       if (this._hass) {
-        refreshState(true);
-        this._resubscribe();
+        this._resubscribe(true);
       }
-    } else {
-      DEVICE_SELECTED = false;
+    } else if (!DEVICE_SELECTED) {
       setScope("system", "system_overview");
     }
   }
 
   _teardownSubscription() {
+    SUB_GEN += 1;
     if (typeof WS_UNSUB === "function") {
       try {
         WS_UNSUB();
@@ -4989,29 +5004,48 @@ class LatterStudio extends HTMLElement {
     this._subscribedSubentryId = null;
   }
 
-  _resubscribe() {
+  _resubscribe(doRefresh=false) {
     this._teardownSubscription();
-    this._ensureSubscription();
+    return this._ensureSubscription(doRefresh);
   }
 
-  async _ensureSubscription() {
+  async _ensureSubscription(doRefresh=true) {
     if (!this._hass || !this._hass.connection) return;
-    await refreshState(true);
+    const myGen = ++SUB_GEN;
+    const targetSubId = ACTIVE_SUBENTRY_ID || null;
+    if (doRefresh || !STATE) {
+      await refreshState(true);
+    }
+    if (myGen !== SUB_GEN) return;
     try {
-      const unsubPromise = this._hass.connection.subscribeMessage(
+      const unsub = await this._hass.connection.subscribeMessage(
         (eventPayload) => {
-          if (eventPayload && !IS_DIRTY) {
-            applyStateToDom(eventPayload, false);
+          if (myGen !== SUB_GEN || !eventPayload || IS_DIRTY) return;
+          if (
+            ACTIVE_SUBENTRY_ID &&
+            eventPayload.subentry_id &&
+            eventPayload.subentry_id !== ACTIVE_SUBENTRY_ID
+          ) {
+            return;
           }
+          applyStateToDom(eventPayload, false);
         },
         {
           type: "latter/system/subscribe",
-          subentry_id: ACTIVE_SUBENTRY_ID || null,
+          subentry_id: targetSubId,
           studio_rev: 2
         }
       );
-      WS_UNSUB = await unsubPromise;
-      this._subscribedSubentryId = ACTIVE_SUBENTRY_ID || "";
+      if (myGen !== SUB_GEN) {
+        if (typeof unsub === "function") {
+          try {
+            unsub();
+          } catch (_e) {}
+        }
+        return;
+      }
+      WS_UNSUB = unsub;
+      this._subscribedSubentryId = targetSubId || "";
     } catch (err) {
       console.warn("Latter Studio WS subscription fallback to polling:", err);
       toggleSurveyFastMode(false);

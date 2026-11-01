@@ -371,11 +371,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return {
             CONF_DEVICE_SLUG: self.device_slug,
             CONF_ESPHOME_DEVICE_ID: str(self.get_opt(CONF_ESPHOME_DEVICE_ID, "") or "").strip(),
-            CONF_DEVICE_PROFILE: self.device_profile,
-            CONF_NATIVE_BLE_TRACKING: self.native_ble_tracking_enabled,
-            CONF_BLE_BEACON_UUID: self.ble_beacon_uuid,
-            CONF_BLE_TARGET_ADDRESS: self.ble_target_address,
-            CONF_ASSIGNED_PERSON: self.assigned_person,
+            "is_ble_beacon": self.device_profile == "ble_beacon",
         }
 
     def has_structural_changes(self) -> bool:
@@ -397,8 +393,31 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.get_opt(CONF_DOORBELL_ANC_MODE, DEFAULT_DOORBELL_ANC_MODE)
             or DEFAULT_DOORBELL_ANC_MODE
         )
-        if self._ble_tracker is not None:
-            self._ble_tracker.set_area_offsets(self.ble_area_offsets)
+        if self.native_ble_tracking_enabled:
+            if self._ble_tracker is not None:
+                if (
+                    self._ble_tracker.beacon_uuid != self.ble_beacon_uuid
+                    or self._ble_tracker.target_address != self.ble_target_address
+                ):
+                    self._ble_tracker.async_stop()
+                    self._ble_tracker = None
+                else:
+                    self._ble_tracker.set_area_offsets(self.ble_area_offsets)
+            if self._ble_tracker is None:
+                self._ble_tracker = LatterNativeBleTracker(
+                    hass=self.hass,
+                    beacon_uuid=self.ble_beacon_uuid,
+                    device_slug=self.device_slug,
+                    on_area_detected=self._async_on_native_ble_area_detected,
+                    area_offsets=self.ble_area_offsets,
+                    target_address=self.ble_target_address,
+                    esphome_device_id=self.esphome_device_id,
+                    manifest_beacon=self.hardware_manifest.get("beacon"),
+                )
+                self._ble_tracker.async_start()
+        elif self._ble_tracker is not None:
+            self._ble_tracker.async_stop()
+            self._ble_tracker = None
         self._bind_speaker_listener()
         self._bind_weather_listener()
         self._bind_alarm_listener()
@@ -407,8 +426,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._bind_area_entities_listener()
         self._bind_doorbell_ring_listener()
         self._bind_wallpaper_cycle_timer()
-        await self.async_refresh_weather_forecast()
-        await self.async_refresh_calendar_agenda()
         self._notify_listeners()
 
     @property
@@ -445,10 +462,12 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Retrieve a setting, prioritizing System-Wide config for shared keys and subentry/entry data for device keys."""
         domain_data = self.hass.data.get(DOMAIN, {})
         global_cfg = domain_data.get(DATA_GLOBAL_CONFIG)
-        if key in GLOBAL_CONFIG_KEYS and isinstance(global_cfg, dict) and key in global_cfg:
-            val = global_cfg[key]
-            if val is not None and val != "":
-                return val
+        if key in GLOBAL_CONFIG_KEYS:
+            if isinstance(global_cfg, dict) and key in global_cfg:
+                val = global_cfg[key]
+                if val is not None:
+                    return val
+            return default
         if self.subentry is not None:
             live_sub = self.entry.subentries.get(self.subentry.subentry_id)
             if live_sub is not None:
@@ -463,7 +482,9 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return global_cfg[key]
         return default
 
-    async def async_on_global_config_updated(self) -> None:
+    async def async_on_global_config_updated(
+        self, changed_keys: set[str] | None = None
+    ) -> None:
         """Refresh listeners, BLE offsets, weather, and calendar when System-Wide config changes."""
         if self._ble_tracker is not None:
             self._ble_tracker.set_area_offsets(self.ble_area_offsets)
@@ -473,8 +494,10 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._bind_remotes_listener()
         self._bind_area_entities_listener()
         self._bind_doorbell_ring_listener()
-        await self.async_refresh_weather_forecast()
-        await self.async_refresh_calendar_agenda()
+        if changed_keys is None or CONF_WEATHER_ENTITY in changed_keys:
+            await self.async_refresh_weather_forecast()
+        if changed_keys is None or CONF_CALENDAR_ENTITIES in changed_keys:
+            await self.async_refresh_calendar_agenda()
         self._notify_listeners()
 
     @property
@@ -2712,6 +2735,33 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     async def async_refresh_weather_forecast(self) -> None:
         """Fetch daily weather forecast via weather.get_forecasts and format semicolon string."""
         weather_ent = self.weather_entity
+        if not weather_ent:
+            self.forecast_string = "NONE"
+            w_rev, w_payload = self._pack_domain_payload(
+                "weather_forecast",
+                "unknown",
+                "0.0",
+                "0",
+                "0.0",
+                "0",
+                "0.0",
+                "0.0",
+                "NONE",
+            )
+            self.weather_attributes = {
+                "condition": "unknown",
+                "temperature": 0.0,
+                "humidity": 0,
+                "wind_speed": 0.0,
+                "wind_bearing": 0,
+                "high": 0.0,
+                "low": 0.0,
+                "weather_entity": "",
+                "rev": w_rev,
+                "payload": w_payload,
+            }
+            self._notify_listeners()
+            return
         snap = await async_fetch_weather_snapshot(self.hass, weather_ent)
         if snap is None:
             return

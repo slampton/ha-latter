@@ -141,11 +141,25 @@ async def _async_ensure_global_store(
             if k not in global_cfg and k in merged_entry and merged_entry[k] not in (None, "", [], {}):
                 global_cfg[k] = merged_entry[k]
                 changed = True
-        for sub in seed_entry.subentries.values():
+        for sub in list(seed_entry.subentries.values()):
+            sub_changed = False
+            clean_sub_data = dict(sub.data)
             for k in GLOBAL_CONFIG_KEYS:
-                if k not in global_cfg and k in sub.data and sub.data[k] not in (None, "", [], {}):
-                    global_cfg[k] = sub.data[k]
-                    changed = True
+                if k in clean_sub_data:
+                    if k not in global_cfg and clean_sub_data[k] not in (None, "", [], {}):
+                        global_cfg[k] = clean_sub_data[k]
+                        changed = True
+                    clean_sub_data.pop(k, None)
+                    sub_changed = True
+            if sub_changed:
+                hass.config_entries.async_update_subentry(
+                    seed_entry, sub, data=clean_sub_data
+                )
+        if seed_entry.options and any(k in seed_entry.options for k in GLOBAL_CONFIG_KEYS):
+            clean_opts = {
+                k: v for k, v in seed_entry.options.items() if k not in GLOBAL_CONFIG_KEYS
+            }
+            hass.config_entries.async_update_entry(seed_entry, options=clean_opts)
     if changed:
         await domain_data[DATA_GLOBAL_STORE].async_save(global_cfg)
 
@@ -566,7 +580,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> b
 
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
-        async_unregister_studio_panel(hass)
         clear_ma_counterpart_cache(hass)
         domain_data = hass.data.get(DOMAIN, {})
         sys_obj = get_latter_system(hass)
@@ -580,7 +593,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> b
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> None:
-    """Re-trigger discovery scan when the Latter System entry is removed."""
+    """Unregister Studio panel and re-trigger discovery scan when the Latter System entry is removed."""
+    async_unregister_studio_panel(hass)
     _async_scan_all_esphome_devices_for_discovery(hass)
 
 

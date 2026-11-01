@@ -88,7 +88,6 @@ from ..const import (
     CONF_WEATHER_ENTITY,
     DATA_GLOBAL_CONFIG,
     DATA_GLOBAL_STORE,
-    DEFAULT_DEVICE_PROFILE,
     DEFAULT_DOORBELL_ANC_MODE,
     DOMAIN,
     INTEGRATION_VERSION,
@@ -228,14 +227,17 @@ async def async_save_and_broadcast_global_config(
     hass: HomeAssistant, updates: dict[str, Any]
 ) -> None:
     """Persist updates to `.storage/latter.site` and broadcast to all loaded device coordinators."""
+    if not updates:
+        return
     domain_data = hass.data.setdefault(DOMAIN, {})
     global_cfg: dict[str, Any] = domain_data.setdefault(DATA_GLOBAL_CONFIG, {})
+    changed_keys = {k for k, v in updates.items() if global_cfg.get(k) != v}
     global_cfg.update(updates)
     store = domain_data.get(DATA_GLOBAL_STORE)
     if store is not None:
         await store.async_save(global_cfg)
     for coord in _get_all_coordinators(hass):
-        await coord.async_on_global_config_updated()
+        await coord.async_on_global_config_updated(changed_keys or set(updates.keys()))
 
 
 def _build_system_shared_controls(hass: HomeAssistant) -> list[dict[str, Any]]:
@@ -518,15 +520,13 @@ def build_studio_state_payload(
 
     config_data = {
         CONF_DEVICE_SLUG: coordinator.device_slug,
-        CONF_DEVICE_PROFILE: coordinator.get_opt(
-            CONF_DEVICE_PROFILE, DEFAULT_DEVICE_PROFILE
-        ),
+        CONF_DEVICE_PROFILE: coordinator.device_profile,
         CONF_DEVICE_GROUP: coordinator.device_group,
         CONF_DISPLAY_SHAPE: coordinator.display_shape,
         CONF_DEFAULT_PAGE_SIZE: coordinator.default_page_size,
         CONF_COMPANION_BASE_URL: coordinator.companion_base_url,
-        CONF_DEFAULT_SPEAKER: coordinator.get_opt(
-            CONF_DEFAULT_SPEAKER, coordinator.active_speaker
+        CONF_DEFAULT_SPEAKER: str(
+            coordinator.get_opt(CONF_DEFAULT_SPEAKER, "") or ""
         ),
         CONF_VOLUME_OVERRIDES: [
             {"speaker": k, "target": v}
@@ -546,9 +546,9 @@ def build_studio_state_payload(
         CONF_SYNC_DEVICE_AREA: coordinator.sync_device_area_enabled,
         CONF_AREA_FOLLOW_DWELL_S: coordinator.area_follow_dwell_s,
         CONF_AREA_HANDOFF: coordinator.area_handoff_enabled,
-        CONF_ALARM_ENTITY: coordinator.get_opt(CONF_ALARM_ENTITY, "")
-        or coordinator.alarm_entity
-        or "",
+        CONF_ALARM_ENTITY: str(
+            coordinator.get_opt(CONF_ALARM_ENTITY, "") or ""
+        ),
         CONF_CAMERA_ENTITY: coordinator.camera_entity or "",
         CONF_CAMERA_ENTITIES: coordinator.camera_entities,
         CONF_THERMOSTAT_ENTITY: coordinator.thermostat_entity or "",
