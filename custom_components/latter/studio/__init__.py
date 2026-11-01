@@ -21,7 +21,7 @@ from .payload import (
 
 _LOGGER = logging.getLogger(__name__)
 
-STATIC_URL_PREFIX = "/latter_static"
+STATIC_URL_PREFIX = "/latter_ui"
 
 __all__ = [
     "LatterBrandIconView",
