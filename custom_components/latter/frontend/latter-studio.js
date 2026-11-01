@@ -4431,7 +4431,8 @@ async function refreshState(forceForm=false) {
   try {
     const data = await HASS_REF.callWS({
       type: "latter/system/get_state",
-      subentry_id: ACTIVE_SUBENTRY_ID || null
+      subentry_id: ACTIVE_SUBENTRY_ID || null,
+      studio_rev: 2
     });
     if (data) {
       if (!ACTIVE_SUBENTRY_ID && data.subentry_id) {
@@ -5005,7 +5006,8 @@ class LatterStudio extends HTMLElement {
         },
         {
           type: "latter/system/subscribe",
-          subentry_id: ACTIVE_SUBENTRY_ID || null
+          subentry_id: ACTIVE_SUBENTRY_ID || null,
+          studio_rev: 2
         }
       );
       WS_UNSUB = await unsubPromise;

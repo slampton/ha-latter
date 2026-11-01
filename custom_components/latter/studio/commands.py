@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import Any
 
@@ -86,6 +87,8 @@ from .payload import (
     log_studio_event,
     resolve_target_coordinator,
 )
+
+_LOGGER = logging.getLogger(__name__)
 
 
 async def _async_execute_studio_command(
@@ -799,6 +802,7 @@ async def _async_execute_studio_command(
         vol.Required("type"): "latter/system/get_state",
         vol.Optional("subentry_id"): vol.Any(str, None),
         vol.Optional("device_slug"): vol.Any(str, None),
+        vol.Optional("studio_rev"): vol.Any(int, None),
     }
 )
 @websocket_api.async_response
@@ -808,6 +812,12 @@ async def ws_handle_get_state(
     msg: dict[str, Any],
 ) -> None:
     """Return the current Latter Studio state payload."""
+    if msg.get("studio_rev") != 2:
+        _LOGGER.warning(
+            "Ignoring get_state from stale cached Studio JS client (missing studio_rev=2) — refresh browser cache or close stale /latter tab"
+        )
+        connection.send_result(msg["id"], None)
+        return
     coord = resolve_target_coordinator(
         hass,
         subentry_id=msg.get("subentry_id"),
@@ -827,6 +837,7 @@ async def ws_handle_get_state(
         vol.Required("type"): "latter/system/subscribe",
         vol.Optional("subentry_id"): vol.Any(str, None),
         vol.Optional("device_slug"): vol.Any(str, None),
+        vol.Optional("studio_rev"): vol.Any(int, None),
     }
 )
 @websocket_api.async_response
@@ -836,6 +847,12 @@ async def ws_handle_subscribe(
     msg: dict[str, Any],
 ) -> None:
     """Subscribe to live Latter Studio state & BLE survey updates."""
+    if msg.get("studio_rev") != 2:
+        _LOGGER.warning(
+            "Ignoring subscribe from stale cached Studio JS client (missing studio_rev=2) — refresh browser cache or close stale /latter tab"
+        )
+        connection.send_result(msg["id"], None)
+        return
     sub_id = msg.get("subentry_id")
     dev_slug = msg.get("device_slug")
     unsubs: list[Any] = []
