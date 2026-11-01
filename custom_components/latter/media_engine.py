@@ -13,19 +13,131 @@ from homeassistant.const import (
     STATE_UNAVAILABLE,
     STATE_UNKNOWN,
 )
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers import entity_registry as er
+from homeassistant.core import Event, HomeAssistant, callback
+from homeassistant.exceptions import ServiceValidationError
+from homeassistant.helpers import (
+    device_registry as dr,
+    entity_registry as er,
+    issue_registry as ir,
+)
 from homeassistant.util import dt as dt_util
 
 from .browse_engine import (
-    _get_mass_client,
     async_browse_media_items,
     is_music_assistant_player,
 )
 from .const import DOMAIN, normalize_device_slug
-from .identity import device_entities, find_device_entity_by_suffix, get_bound_esphome_device
+from .identity import (
+    device_entities,
+    find_device_entity_by_suffix,
+    get_bound_esphome_device,
+)
 
 _LOGGER = logging.getLogger(__name__)
+
+_MAC_TOKEN_RE = re.compile(
+    r"(?:^|[^0-9a-fA-F])((?:[0-9a-fA-F]{2}[:\-]){5}[0-9a-fA-F]{2}|[0-9a-fA-F]{12})(?:$|[^0-9a-fA-F])"
+)
+_KNOWN_URI_MEDIA_TYPES: frozenset[str] = frozenset(
+    {
+        "artist",
+        "album",
+        "playlist",
+        "track",
+        "radio",
+        "podcast",
+        "audiobook",
+        "podcast_episode",
+    }
+)
+
+
+def _extract_macs_from_string(raw: str | None) -> set[str]:
+    """Extract normalized MAC addresses from an identifier, connection value, or unique_id."""
+    if not raw:
+        return set()
+    out: set[str] = set()
+    for match in _MAC_TOKEN_RE.finditer(str(raw)):
+        token = match.group(1)
+        if token:
+            out.add(dr.format_mac(token))
+    return out
+
+
+def _extract_macs_from_device_or_entry(
+    dev: dr.DeviceEntry | None, ent: er.RegistryEntry | None = None
+) -> set[str]:
+    """Collect all normalized MAC addresses associated with a DeviceEntry and/or RegistryEntry."""
+    macs: set[str] = set()
+    if dev is not None:
+        for _conn_type, conn_val in dev.connections:
+            if conn_val:
+                macs.update(_extract_macs_from_string(str(conn_val)))
+        for _ident_domain, ident_val in dev.identifiers:
+            if ident_val:
+                macs.update(_extract_macs_from_string(str(ident_val)))
+    if ent is not None and ent.unique_id:
+        macs.update(_extract_macs_from_string(str(ent.unique_id)))
+    return macs
+
+
+@callback
+def clear_ma_counterpart_cache(hass: HomeAssistant) -> None:
+    """Clear the cached speaker -> Music Assistant counterpart mapping and unsubscribe listeners on unload."""
+    domain_data = hass.data.get(DOMAIN)
+    if not isinstance(domain_data, dict):
+        return
+    cache = domain_data.get("_ma_counterpart_cache")
+    if isinstance(cache, dict):
+        cache.clear()
+    unsubs = domain_data.pop("_ma_cache_unsubs", None)
+    if isinstance(unsubs, (list, tuple)):
+        for unsub in unsubs:
+            if callable(unsub):
+                unsub()
+
+
+@callback
+def _ensure_ma_cache_listeners(hass: HomeAssistant) -> None:
+    """Subscribe once to entity and device registry updates to invalidate the MA counterpart cache."""
+    domain_data = hass.data.setdefault(DOMAIN, {})
+    if "_ma_cache_unsubs" in domain_data:
+        return
+
+    @callback
+    def _on_registry_updated(_event: Event) -> None:
+        cache = domain_data.get("_ma_counterpart_cache")
+        if isinstance(cache, dict):
+            cache.clear()
+
+    unsub_ent = hass.bus.async_listen(
+        er.EVENT_ENTITY_REGISTRY_UPDATED, _on_registry_updated
+    )
+    unsub_dev = hass.bus.async_listen(
+        dr.EVENT_DEVICE_REGISTRY_UPDATED, _on_registry_updated
+    )
+    domain_data["_ma_cache_unsubs"] = (unsub_ent, unsub_dev)
+
+
+def _parse_media_uri_type(media_id: str) -> str:
+    """Extract canonical media_type from a provider://type/id URI without substring guessing."""
+    raw = str(media_id or "").strip()
+    if "://" not in raw:
+        return ""
+    scheme, rest = raw.split("://", 1)
+    if scheme.lower() in ("http", "https", "rtsp", "rtsps", "media-source"):
+        return ""
+    type_segment = rest.split("/", 1)[0].strip().lower()
+    if (
+        type_segment.endswith("s")
+        and type_segment[:-1] in _KNOWN_URI_MEDIA_TYPES
+    ):
+        type_segment = type_segment[:-1]
+    if type_segment == "podcast_episode":
+        return "track"
+    if type_segment in _KNOWN_URI_MEDIA_TYPES:
+        return type_segment
+    return ""
 
 
 def resolve_esphome_local_speaker(
@@ -52,77 +164,151 @@ def resolve_esphome_local_speaker(
 
 
 def resolve_ma_counterpart_entity(
-    hass: HomeAssistant, speaker_entity_id: str, device_slug: str
+    hass: HomeAssistant, speaker_entity_id: str, device_slug: str = ""
 ) -> str | None:
-    """Find the Music Assistant media_player entity corresponding to a target speaker (or device slug fallback)."""
-    state_obj = hass.states.get(speaker_entity_id)
-    if state_obj and is_music_assistant_player(hass, state_obj):
-        return speaker_entity_id
+    """Find the Music Assistant media_player entity corresponding to a target speaker by exact device_id or MAC."""
+    if not speaker_entity_id:
+        return None
 
     ent_reg = er.async_get(hass)
-    spk_entry = ent_reg.async_get(speaker_entity_id) if speaker_entity_id else None
-    spk_dev_id = spk_entry.device_id if spk_entry else None
+    spk_entry = ent_reg.async_get(speaker_entity_id)
+    if spk_entry is not None and spk_entry.platform == "music_assistant":
+        return speaker_entity_id
 
-    spk_short = speaker_entity_id.replace("media_player.", "").lower()
-    core_slug = re.sub(r"(_media_player|_music|_speaker|_ma|_mass)$", "", spk_short)
-    core_slug_no_prefix = re.sub(r"^latter_", "", core_slug)
+    _ensure_ma_cache_listeners(hass)
+    domain_data = hass.data.setdefault(DOMAIN, {})
+    cache: dict[str, str | None] = domain_data.setdefault(
+        "_ma_counterpart_cache", {}
+    )
+    slug_norm = normalize_device_slug(device_slug) if device_slug else ""
+    cache_key = f"{speaker_entity_id}|{slug_norm}"
+    if cache_key in cache:
+        cached_ent = cache[cache_key]
+        if cached_ent is None or ent_reg.async_get(cached_ent) is not None:
+            return cached_ent
 
-    slug_norm = normalize_device_slug(device_slug)
-    slug_no_prefix = re.sub(r"^latter_", "", slug_norm)
+    dev_reg = dr.async_get(hass)
+    target_dev_ids: set[str] = set()
+    target_macs: set[str] = set()
+    resolved_coord: Any = None
 
-    ma_candidates: list[tuple[str, str, str | None]] = []
-    for candidate in hass.states.async_all("media_player"):
-        if not is_music_assistant_player(hass, candidate):
-            continue
-        c_entry = ent_reg.async_get(candidate.entity_id)
-        c_dev_id = c_entry.device_id if c_entry else None
-        cid_low = candidate.entity_id.lower()
-        friendly_low = (
-            str(
-                candidate.attributes.get("friendly_name")
-                or (c_entry.original_name if c_entry else "")
-                or ""
-            )
-            .lower()
-            .replace("-", "_")
-            .replace(" ", "_")
+    for val in domain_data.values():
+        if hasattr(val, "device_slug"):
+            if getattr(val, "local_speaker", None) == speaker_entity_id or (
+                slug_norm and getattr(val, "device_slug", None) == slug_norm
+            ):
+                resolved_coord = val
+                break
+
+    if spk_entry is not None:
+        if spk_entry.device_id:
+            target_dev_ids.add(spk_entry.device_id)
+        spk_dev = (
+            dev_reg.async_get(spk_entry.device_id)
+            if spk_entry.device_id
+            else None
         )
-        # Prefer available/online MA players over unavailable ones
-        if candidate.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
-            ma_candidates.append((cid_low, friendly_low, c_dev_id))
-        else:
-            ma_candidates.insert(0, (cid_low, friendly_low, c_dev_id))
+        target_macs.update(
+            _extract_macs_from_device_or_entry(spk_dev, spk_entry)
+        )
 
-    # Pass 1: Match the target speaker_entity_id specifically (device_id, entity_id, or friendly_name)
-    for cid_low, friendly_low, c_dev_id in ma_candidates:
-        if spk_dev_id and c_dev_id and spk_dev_id == c_dev_id:
-            return cid_low
-        if (
-            (spk_short and (spk_short in cid_low or spk_short in friendly_low))
-            or (core_slug and (core_slug in cid_low or core_slug in friendly_low))
-            or (
-                core_slug_no_prefix
-                and len(core_slug_no_prefix) >= 4
-                and (
-                    core_slug_no_prefix in cid_low
-                    or core_slug_no_prefix in friendly_low
-                )
-            )
-        ):
-            return cid_low
+    if resolved_coord is not None and (
+        speaker_entity_id == getattr(resolved_coord, "local_speaker", None)
+        or spk_entry is None
+    ):
+        esp_dev_id = getattr(resolved_coord, "esphome_device_id", None)
+        if esp_dev_id:
+            target_dev_ids.add(str(esp_dev_id))
+        coord_mac = getattr(resolved_coord, "device_mac", None)
+        if coord_mac:
+            target_macs.add(dr.format_mac(str(coord_mac)))
 
-    # Pass 2: Fallback to matching device_slug if target_spk is the local companion speaker
-    for cid_low, friendly_low, _c_dev_id in ma_candidates:
-        if (
-            (slug_norm and (slug_norm in cid_low or slug_norm in friendly_low))
-            or (
-                slug_no_prefix
-                and len(slug_no_prefix) >= 4
-                and (slug_no_prefix in cid_low or slug_no_prefix in friendly_low)
-            )
-        ):
-            return cid_low
+    if slug_norm and not target_dev_ids:
+        esp_dev = get_bound_esphome_device(hass, None, fallback_slug=slug_norm)
+        if esp_dev is not None:
+            target_dev_ids.add(esp_dev.id)
 
+    for did in list(target_dev_ids):
+        d_obj = dev_reg.async_get(did)
+        if d_obj is not None:
+            if d_obj.via_device_id:
+                target_dev_ids.add(d_obj.via_device_id)
+            target_macs.update(_extract_macs_from_device_or_entry(d_obj, None))
+
+    ma_candidates: list[tuple[er.RegistryEntry, dr.DeviceEntry | None]] = []
+    for ma_cfg in hass.config_entries.async_entries("music_assistant"):
+        for entry in er.async_entries_for_config_entry(ent_reg, ma_cfg.entry_id):
+            if (
+                entry.domain != "media_player"
+                or entry.platform != "music_assistant"
+                or entry.disabled_by
+            ):
+                continue
+            c_dev = dev_reg.async_get(entry.device_id) if entry.device_id else None
+            st = hass.states.get(entry.entity_id)
+            if st is not None and st.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+                ma_candidates.insert(0, (entry, c_dev))
+            else:
+                ma_candidates.append((entry, c_dev))
+
+    matched_entity: str | None = None
+
+    # Pass 1a: Exact device_id match in the entity/device registry
+    if target_dev_ids:
+        for c_entry, c_dev in ma_candidates:
+            if c_entry.device_id and (
+                c_entry.device_id in target_dev_ids
+                or (c_dev is not None and c_dev.via_device_id in target_dev_ids)
+            ):
+                matched_entity = c_entry.entity_id
+                break
+
+    # Pass 1b: Exact MAC / player_id match
+    if matched_entity is None and target_macs:
+        for c_entry, c_dev in ma_candidates:
+            cand_macs = _extract_macs_from_device_or_entry(c_dev, c_entry)
+            if target_macs & cand_macs:
+                matched_entity = c_entry.entity_id
+                break
+
+    eff_slug = slug_norm or (
+        str(getattr(resolved_coord, "device_slug", "") or "")
+        if resolved_coord is not None
+        else ""
+    )
+
+    if matched_entity is not None:
+        cache[cache_key] = matched_entity
+        if eff_slug:
+            ir.async_delete_issue(hass, DOMAIN, f"link_ma_player_{eff_slug}")
+        return matched_entity
+
+    cache[cache_key] = None
+    if (
+        eff_slug
+        and hass.config_entries.async_entries("music_assistant")
+        and (
+            resolved_coord is None
+            or speaker_entity_id == getattr(resolved_coord, "local_speaker", None)
+        )
+    ):
+        ir.async_create_issue(
+            hass,
+            DOMAIN,
+            f"link_ma_player_{eff_slug}",
+            is_fixable=True,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="link_ma_player",
+            translation_placeholders={
+                "device_slug": eff_slug,
+                "speaker_entity": speaker_entity_id,
+            },
+            config_entry_id=(
+                resolved_coord.entry.entry_id
+                if resolved_coord is not None and hasattr(resolved_coord, "entry")
+                else None
+            ),
+        )
     return None
 
 
@@ -151,29 +337,11 @@ async def async_find_queue_resume_item(
     last_media_uri: str,
     last_media_position: float,
 ) -> tuple[str, float]:
-    """Query Music Assistant (controller or get_queue) for the current queue item URI and position, falling back to persisted store."""
-    ma_entity = (
-        resolve_ma_counterpart_entity(hass, speaker_entity_id, device_slug)
-        or speaker_entity_id
+    """Query Music Assistant get_queue for the current queue item URI and position, falling back to persisted store."""
+    ma_entity = resolve_ma_counterpart_entity(
+        hass, speaker_entity_id, device_slug
     )
-
-    mass = _get_mass_client(hass)
-    if mass is not None and hasattr(mass, "player_queues"):
-        try:
-            for q in mass.player_queues.all() if callable(getattr(mass.player_queues, "all", None)) else []:
-                q_dict = q.to_dict() if hasattr(q, "to_dict") else {}
-                q_name = str(q_dict.get("display_name") or "").lower().replace("-", "_")
-                if device_slug in q_name or q_dict.get("queue_id") in ma_entity:
-                    cur_item = q_dict.get("current_item") or {}
-                    media_item = cur_item.get("media_item") or {}
-                    uri = str(media_item.get("uri") or cur_item.get("uri") or "")
-                    pos = float(q_dict.get("elapsed_time") or last_media_position or 0.0)
-                    if uri:
-                        return uri, pos
-        except Exception as err:  # noqa: BLE001
-            _LOGGER.debug("Direct mass.player_queues resume lookup failed: %s", err)
-
-    if hass.services.has_service("music_assistant", "get_queue"):
+    if ma_entity and hass.services.has_service("music_assistant", "get_queue"):
         try:
             resp = await hass.services.async_call(
                 "music_assistant",
@@ -215,25 +383,21 @@ async def async_play_media_with_ma_fallback(
     media_type: str | None = None,
     enqueue: str | None = None,
 ) -> None:
-    """Play media via Music Assistant (expanding artist/album containers into tracks when needed) or fallback to media_player.play_media."""
+    """Play media via Music Assistant (expanding artist/album containers into tracks when needed)."""
     ma_target = resolve_ma_counterpart_entity(hass, target_spk, device_slug)
-    play_entity = ma_target or target_spk
+    ent_reg = er.async_get(hass)
+    spk_entry = ent_reg.async_get(target_spk) if target_spk else None
+    is_esphome_sendspin = bool(spk_entry and spk_entry.platform == "esphome")
+
     eff_type = (media_type or "").strip().lower()
     if not eff_type or eff_type == "music":
-        if "artist" in media_id.lower():
-            eff_type = "artist"
-        elif "album" in media_id.lower():
-            eff_type = "album"
-        elif "playlist" in media_id.lower():
-            eff_type = "playlist"
-        elif "track" in media_id.lower():
-            eff_type = "track"
-        elif "radio" in media_id.lower():
-            eff_type = "radio"
+        parsed_uri_type = _parse_media_uri_type(media_id)
+        if parsed_uri_type:
+            eff_type = parsed_uri_type
 
-    if hass.services.has_service("music_assistant", "play_media"):
+    if ma_target and hass.services.has_service("music_assistant", "play_media"):
         payload: dict[str, Any] = {
-            ATTR_ENTITY_ID: play_entity,
+            ATTR_ENTITY_ID: ma_target,
             "media_id": media_id,
         }
         if eff_type:
@@ -250,11 +414,10 @@ async def async_play_media_with_ma_fallback(
                 "music_assistant.play_media(%s, %s) on %s failed: %s",
                 media_id,
                 eff_type,
-                play_entity,
+                ma_target,
                 err,
             )
-            # If artist or album container playback failed (e.g., native Sendspin player or MA container resolution),
-            # resolve the first playable album/track from the browse engine and play it.
+            # If artist or album container playback failed, resolve playable tracks from the browse engine and enqueue them.
             if eff_type in ("artist", "album"):
                 try:
                     resolved_id = ""
@@ -290,7 +453,7 @@ async def async_play_media_with_ma_fallback(
                                 "music_assistant",
                                 "play_media",
                                 {
-                                    ATTR_ENTITY_ID: play_entity,
+                                    ATTR_ENTITY_ID: ma_target,
                                     "media_id": track_uris,
                                     "media_type": "track",
                                     "enqueue": enqueue or "replace",
@@ -306,11 +469,19 @@ async def async_play_media_with_ma_fallback(
                         inner_err,
                     )
 
+    if is_esphome_sendspin or not ma_target:
+        if is_esphome_sendspin:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="ma_counterpart_required",
+                translation_placeholders={"speaker": target_spk},
+            )
+
     await hass.services.async_call(
         "media_player",
         "play_media",
         {
-            ATTR_ENTITY_ID: play_entity,
+            ATTR_ENTITY_ID: target_spk,
             "media_content_id": media_id,
             "media_content_type": eff_type or "music",
         },
@@ -343,7 +514,20 @@ def resolve_assist_satellite_entity(
         if reg_ent and reg_ent.device_id and reg_ent.device_id not in cand_dev_ids:
             cand_dev_ids.append(reg_ent.device_id)
         for val in hass.data.get(DOMAIN, {}).values():
-            if getattr(val, "local_speaker", None) == target or getattr(val, "active_speaker", None) == target:
+            if not hasattr(val, "device_slug"):
+                continue
+            local_spk = getattr(val, "local_speaker", None)
+            if (
+                local_spk == target
+                or getattr(val, "active_speaker", None) == target
+                or (
+                    local_spk
+                    and resolve_ma_counterpart_entity(
+                        hass, str(local_spk), str(getattr(val, "device_slug", ""))
+                    )
+                    == target
+                )
+            ):
                 c_dev_id = getattr(val, "esphome_device_id", None)
                 if c_dev_id and str(c_dev_id) not in cand_dev_ids:
                     cand_dev_ids.append(str(c_dev_id))
@@ -367,21 +551,43 @@ async def async_announce_on_targets(
     tts_entity: str = "",
     blocking: bool = False,
 ) -> None:
-    """Route announcements through assist_satellite.announce first, falling back to media_player/tts for non-satellites."""
+    """Route announcements through assist_satellite.announce first, deduplicating by physical device_id."""
     if not speakers or (not message and not media_url):
         return
 
+    ent_reg = er.async_get(hass)
     satellites: list[str] = []
     fallback_speakers: list[str] = []
+    seen_device_ids: set[str] = set()
     has_sat_announce = hass.services.has_service("assist_satellite", "announce")
 
     for spk in speakers:
-        sat_ent = resolve_assist_satellite_entity(hass, spk) if has_sat_announce else None
+        if not spk:
+            continue
+        sat_ent = (
+            resolve_assist_satellite_entity(hass, spk)
+            if has_sat_announce
+            else None
+        )
         if sat_ent:
+            sat_reg = ent_reg.async_get(sat_ent)
+            sat_dev_id = sat_reg.device_id if sat_reg and sat_reg.device_id else sat_ent
+            if sat_dev_id in seen_device_ids:
+                continue
+            seen_device_ids.add(sat_dev_id)
+            spk_reg = ent_reg.async_get(spk)
+            if spk_reg and spk_reg.device_id:
+                seen_device_ids.add(spk_reg.device_id)
             if sat_ent not in satellites:
                 satellites.append(sat_ent)
-        elif spk not in fallback_speakers:
-            fallback_speakers.append(spk)
+        else:
+            spk_reg = ent_reg.async_get(spk)
+            spk_dev_id = spk_reg.device_id if spk_reg and spk_reg.device_id else spk
+            if spk_dev_id in seen_device_ids:
+                continue
+            seen_device_ids.add(spk_dev_id)
+            if spk not in fallback_speakers:
+                fallback_speakers.append(spk)
 
     if satellites and has_sat_announce:
         sat_payload: dict[str, Any] = {ATTR_ENTITY_ID: satellites}
@@ -399,7 +605,7 @@ async def async_announce_on_targets(
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("assist_satellite.announce failed on %s, falling back: %s", satellites, err)
             for spk in speakers:
-                if spk not in fallback_speakers:
+                if spk and not spk.startswith("assist_satellite.") and spk not in fallback_speakers:
                     fallback_speakers.append(spk)
 
     if not fallback_speakers:
@@ -456,13 +662,6 @@ async def async_announce_on_targets(
                     "message": message,
                     "cache": False,
                 },
-                blocking=blocking,
-            )
-        elif hass.services.has_service("tts", "cloud_say"):
-            await hass.services.async_call(
-                "tts",
-                "cloud_say",
-                {ATTR_ENTITY_ID: fallback_speakers, "message": message},
                 blocking=blocking,
             )
 

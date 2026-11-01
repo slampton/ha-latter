@@ -148,11 +148,25 @@
           }
         }
       }
+    },
+    "link_ma_player": {
+      "title": "Music Assistant player not linked for {device_slug}",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Link Music Assistant player for {device_slug}",
+            "description": "No Music Assistant player matching the device ID or MAC address of **{speaker_entity}** on **{device_slug}** was found. Verify that the Sendspin player is enabled in Music Assistant or select the default speaker in Latter Studio."
+          }
+        }
+      }
     }
   },
   "exceptions": {
     "explicit_action_required": {
       "message": "Lock and alarm actions require an explicit command (lock, unlock, open, arm_home, arm_away, arm_night, or disarm); toggle is not permitted."
+    },
+    "ma_counterpart_required": {
+      "message": "Music Assistant counterpart player is required to play library media on {speaker}."
     },
     "not_supported": {
       "message": "The requested action is not supported by this entity."

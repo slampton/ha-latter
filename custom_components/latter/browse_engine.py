@@ -33,12 +33,7 @@ def is_music_assistant_player(hass: HomeAssistant, state_obj: State) -> bool:
     """Return True if the media_player entity is provided by Music Assistant."""
     ent_reg = er.async_get(hass)
     entry = ent_reg.async_get(state_obj.entity_id)
-    if entry is not None and entry.platform == "music_assistant":
-        return True
-    attrs = state_obj.attributes
-    if "mass_player_id" in attrs or "mass_player_type" in attrs:
-        return True
-    return False
+    return entry is not None and entry.platform == "music_assistant"
 
 
 def _get_ma_config_entry_id(hass: HomeAssistant) -> str | None:
@@ -50,46 +45,6 @@ def _get_ma_config_entry_id(hass: HomeAssistant) -> str | None:
     if entries:
         return entries[0].entry_id
     return None
-
-
-def _get_mass_client(hass: HomeAssistant) -> Any | None:
-    """Retrieve the in-process MusicAssistantClient instance from HA."""
-    entries = hass.config_entries.async_entries("music_assistant")
-    for entry in entries:
-        runtime_data = getattr(entry, "runtime_data", None)
-        if runtime_data is not None:
-            mass = getattr(runtime_data, "mass", runtime_data)
-            if mass is not None:
-                return mass
-
-    ma_data = hass.data.get("music_assistant", {})
-    if isinstance(ma_data, dict):
-        for val in ma_data.values():
-            mass = getattr(val, "mass", val)
-            if hasattr(mass, "player_queues") or hasattr(mass, "music"):
-                return mass
-    return None
-
-
-def _find_ma_media_player_entity(
-    hass: HomeAssistant, preferred_speaker: str
-) -> str | None:
-    """Return a Music Assistant media_player entity_id capable of browsing MA URIs."""
-    pref_state = hass.states.get(preferred_speaker)
-    if (
-        pref_state is not None
-        and pref_state.state not in ("unavailable", "unknown")
-        and is_music_assistant_player(hass, pref_state)
-    ):
-        return preferred_speaker
-
-    for state_obj in hass.states.async_all("media_player"):
-        if state_obj.state in ("unavailable", "unknown"):
-            continue
-        if is_music_assistant_player(hass, state_obj):
-            return state_obj.entity_id
-
-    return preferred_speaker
 
 
 def _extract_item_dict(raw: Any) -> dict[str, Any]:
@@ -147,27 +102,19 @@ def _extract_artist_name(item: dict[str, Any]) -> str:
     return ""
 
 
-def _parse_uri(uri: str) -> tuple[str, str]:
-    """Extract (provider, item_id) from a URI like library://album/123 or provider://type/id."""
-    if "://" in uri:
-        provider, rest = uri.split("://", 1)
-        if "/" in rest:
-            _media_type, item_id = rest.split("/", 1)
-            return provider, item_id
-    return "library", uri
-
-
 async def _browse_ma_media_children(
     hass: HomeAssistant,
     speaker: str,
     media_content_type: str,
     media_content_id: str,
 ) -> list[dict[str, Any]]:
-    """Use Home Assistant's media_player.browse_media on a Music Assistant player to get child items."""
+    """Use Home Assistant's media_player.browse_media on the speaker's Music Assistant counterpart to get child items."""
     if not hass.services.has_service("media_player", "browse_media"):
         return []
 
-    ma_entity = _find_ma_media_player_entity(hass, speaker)
+    from .media_engine import resolve_ma_counterpart_entity
+
+    ma_entity = resolve_ma_counterpart_entity(hass, speaker, "")
     if not ma_entity:
         return []
 
@@ -208,7 +155,7 @@ async def _call_ma_get_library(
     limit: int = 500,
     order_by: str | None = None,
 ) -> list[dict[str, Any]]:
-    """Call music_assistant.get_library with automatic schema fallback and in-process MASS controller fallback."""
+    """Call music_assistant.get_library with automatic schema fallback."""
     if hass.services.has_service("music_assistant", "get_library"):
         base_payload: dict[str, Any] = {
             "config_entry_id": config_entry_id,
@@ -247,38 +194,6 @@ async def _call_ma_get_library(
                     "music_assistant.get_library(%s, order_by=%s) attempt failed: %s",
                     media_type,
                     payload.get("order_by"),
-                    err,
-                )
-
-    # Fallback: Query in-process MusicAssistantClient controller directly
-    mass = _get_mass_client(hass)
-    if mass is not None and hasattr(mass, "music"):
-        ctrl_map = {
-            "playlist": "playlists",
-            "artist": "artists",
-            "album": "albums",
-            "track": "tracks",
-            "radio": "radio",
-            "podcast": "podcasts",
-            "audiobook": "audiobooks",
-        }
-        ctrl_name = ctrl_map.get(media_type)
-        ctrl = getattr(mass.music, ctrl_name, None) if ctrl_name else None
-        if ctrl is not None and hasattr(ctrl, "library_items"):
-            try:
-                kwargs: dict[str, Any] = {"limit": limit}
-                if favorite is not None:
-                    kwargs["favorite"] = favorite
-                if search:
-                    kwargs["search"] = search
-                res = await ctrl.library_items(**kwargs)
-                raw_list = getattr(res, "items", res) if res is not None else []
-                if isinstance(raw_list, list):
-                    return [_extract_item_dict(x) for x in raw_list]
-            except Exception as err:  # noqa: BLE001
-                _LOGGER.warning(
-                    "In-process MASS library_items(%s) fallback failed: %s",
-                    media_type,
                     err,
                 )
 
@@ -470,20 +385,7 @@ async def _browse_artist_albums(
         if not artist_uri and artists:
             artist_uri = str(artists[0].get("uri") or "")
 
-    mass = _get_mass_client(hass)
-    if mass is not None and artist_uri and hasattr(mass, "music"):
-        provider, item_id = _parse_uri(artist_uri)
-        try:
-            if hasattr(mass.music, "get_artist_albums"):
-                raw_albums = await mass.music.get_artist_albums(item_id, provider)
-                filtered = [_extract_item_dict(a) for a in (raw_albums or [])]
-            elif hasattr(mass.music, "artists") and hasattr(mass.music.artists, "albums"):
-                raw_albums = await mass.music.artists.albums(item_id, provider)
-                filtered = [_extract_item_dict(a) for a in (raw_albums or [])]
-        except Exception as err:  # noqa: BLE001
-            _LOGGER.debug("Direct MA get_artist_albums failed: %s", err)
-
-    if not filtered and artist_uri:
+    if artist_uri:
         children = await _browse_ma_media_children(
             hass, speaker, "artist", artist_uri
         )
@@ -579,20 +481,7 @@ async def _browse_album_tracks(
         if not album_uri and matched_albums:
             album_uri = str(matched_albums[0].get("uri") or "")
 
-    mass = _get_mass_client(hass)
-    if mass is not None and album_uri and hasattr(mass, "music"):
-        provider, item_id = _parse_uri(album_uri)
-        try:
-            if hasattr(mass.music, "get_album_tracks"):
-                raw_tracks = await mass.music.get_album_tracks(item_id, provider)
-                tracks = [_extract_item_dict(t) for t in (raw_tracks or [])]
-            elif hasattr(mass.music, "albums") and hasattr(mass.music.albums, "tracks"):
-                raw_tracks = await mass.music.albums.tracks(item_id, provider)
-                tracks = [_extract_item_dict(t) for t in (raw_tracks or [])]
-        except Exception as err:  # noqa: BLE001
-            _LOGGER.debug("Direct MA get_album_tracks(%s) failed: %s", album_uri, err)
-
-    if not tracks and album_uri:
+    if album_uri:
         children = await _browse_ma_media_children(
             hass, speaker, "album", album_uri
         )
@@ -657,70 +546,41 @@ async def _browse_active_queue(
     current_track_title: str,
 ) -> list[dict[str, Any]]:
     """Fetch upcoming queue items natively from Music Assistant 2.10.8+."""
+    from .media_engine import resolve_ma_counterpart_entity
+
+    ma_target = resolve_ma_counterpart_entity(hass, speaker, "")
+    if not ma_target or not hass.services.has_service("music_assistant", "get_queue"):
+        return []
+
     raw_queue_items: list[dict[str, Any]] = []
-
-    mass = _get_mass_client(hass)
-    state_obj = hass.states.get(speaker)
-    if mass is not None and hasattr(mass, "player_queues"):
-        try:
-            queue_id = None
-            if state_obj:
-                queue_id = state_obj.attributes.get("mass_player_id")
-            if not queue_id and hasattr(mass, "players"):
-                all_players = (
-                    mass.players.all()
-                    if callable(getattr(mass.players, "all", None))
-                    else getattr(mass.players, "players", [])
+    try:
+        resp = await hass.services.async_call(
+            "music_assistant",
+            "get_queue",
+            {ATTR_ENTITY_ID: ma_target},
+            blocking=True,
+            return_response=True,
+        )
+        if isinstance(resp, dict):
+            q_data = resp.get(ma_target) or resp
+            if isinstance(q_data, dict):
+                items_candidate = (
+                    q_data.get("items")
+                    or q_data.get("queue_items")
+                    or q_data.get("next_item")
                 )
-                for player in all_players:
-                    p_dict = _extract_item_dict(player)
-                    p_name = str(p_dict.get("display_name") or p_dict.get("name") or "")
-                    if state_obj and p_name.lower() == str(
-                        state_obj.attributes.get("friendly_name", "")
-                    ).lower():
-                        queue_id = p_dict.get("player_id")
-                        break
-            if queue_id:
-                if hasattr(mass.player_queues, "get_queue_items"):
-                    q_items = await mass.player_queues.get_queue_items(queue_id, limit=100)
-                elif hasattr(mass.player_queues, "items"):
-                    q_items = await mass.player_queues.items(queue_id, limit=100)
-                else:
-                    q_items = []
-                raw_queue_items = [_extract_item_dict(x) for x in (q_items or [])]
-        except Exception as err:  # noqa: BLE001
-            _LOGGER.debug("Direct mass.player_queues failed: %s", err)
-
-    if not raw_queue_items and hass.services.has_service("music_assistant", "get_queue"):
-        ma_target = _find_ma_media_player_entity(hass, speaker) or speaker
-        try:
-            resp = await hass.services.async_call(
-                "music_assistant",
-                "get_queue",
-                {ATTR_ENTITY_ID: ma_target},
-                blocking=True,
-                return_response=True,
-            )
-            if isinstance(resp, dict):
-                q_data = resp.get(ma_target) or resp
-                if isinstance(q_data, dict):
-                    items_candidate = (
-                        q_data.get("items")
-                        or q_data.get("queue_items")
-                        or q_data.get("next_item")
-                    )
-                    if isinstance(items_candidate, list):
-                        raw_queue_items = [
-                            _extract_item_dict(x) for x in items_candidate
-                        ]
-                    elif isinstance(items_candidate, dict):
-                        raw_queue_items = [_extract_item_dict(items_candidate)]
-                        if isinstance(q_data.get("current_item"), dict):
-                            raw_queue_items.insert(
-                                0, _extract_item_dict(q_data["current_item"])
-                            )
-        except Exception as err:  # noqa: BLE001
-            _LOGGER.debug("music_assistant.get_queue failed: %s", err)
+                if isinstance(items_candidate, list):
+                    raw_queue_items = [
+                        _extract_item_dict(x) for x in items_candidate
+                    ]
+                elif isinstance(items_candidate, dict):
+                    raw_queue_items = [_extract_item_dict(items_candidate)]
+                    if isinstance(q_data.get("current_item"), dict):
+                        raw_queue_items.insert(
+                            0, _extract_item_dict(q_data["current_item"])
+                        )
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.debug("music_assistant.get_queue failed: %s", err)
 
     cur_lower = current_track_title.strip().lower()
     results: list[dict[str, Any]] = []
@@ -792,25 +652,9 @@ async def _browse_podcast_episodes(
     if not podcast_uri:
         podcast_uri = podcast_ref
 
-    raw_episodes: list[dict[str, Any]] = []
-
-    mass = _get_mass_client(hass)
-    if mass is not None and hasattr(mass, "music"):
-        provider, item_id = _parse_uri(podcast_uri)
-        try:
-            if hasattr(mass.music, "get_podcast_episodes"):
-                eps = await mass.music.get_podcast_episodes(item_id, provider)
-                raw_episodes = [_extract_item_dict(e) for e in (eps or [])]
-            elif hasattr(mass.music, "podcasts") and hasattr(mass.music.podcasts, "episodes"):
-                eps = await mass.music.podcasts.episodes(item_id, provider)
-                raw_episodes = [_extract_item_dict(e) for e in (eps or [])]
-        except Exception as err:  # noqa: BLE001
-            _LOGGER.debug("Direct MA get_podcast_episodes(%s) failed: %s", podcast_uri, err)
-
-    if not raw_episodes:
-        raw_episodes = await _browse_ma_media_children(
-            hass, speaker, "podcast", podcast_uri
-        )
+    raw_episodes = await _browse_ma_media_children(
+        hass, speaker, "podcast", podcast_uri
+    )
 
     has_positions = any(
         x.get("position") is not None or x.get("track_number") is not None
@@ -1017,19 +861,23 @@ async def _browse_track_lyrics_or_bio(
         desc = str(meta.get("description") or "").strip()
         return lyr, desc
 
-    # 1. Query Music Assistant in-process queues, library controllers, and metadata provider
-    mass = _get_mass_client(hass)
-    if mass is not None:
+    # 1. Query Music Assistant via public get_queue and get_library services
+    from .media_engine import resolve_ma_counterpart_entity
+
+    ma_target = resolve_ma_counterpart_entity(hass, speaker, "")
+    if ma_target and hass.services.has_service("music_assistant", "get_queue"):
         try:
-            if hasattr(mass, "player_queues"):
-                queues = (
-                    mass.player_queues.all()
-                    if callable(getattr(mass.player_queues, "all", None))
-                    else []
-                )
-                for q in queues:
-                    q_dict = _extract_item_dict(q)
-                    cur_item = q_dict.get("current_item") or {}
+            resp = await hass.services.async_call(
+                "music_assistant",
+                "get_queue",
+                {ATTR_ENTITY_ID: ma_target},
+                blocking=True,
+                return_response=True,
+            )
+            if isinstance(resp, dict):
+                q_data = resp.get(ma_target) or resp
+                if isinstance(q_data, dict):
+                    cur_item = q_data.get("current_item") or {}
                     m_item = (
                         cur_item.get("media_item")
                         if isinstance(cur_item, dict)
@@ -1041,81 +889,51 @@ async def _browse_track_lyrics_or_bio(
                             raw_lyrics = lyr
                         if desc and not raw_album_bio:
                             raw_album_bio = desc
-
-            if hasattr(mass, "music"):
-                # Search Track in MA Library
-                if not raw_lyrics and clean_title and hasattr(mass.music, "tracks"):
-                    t_ctrl = mass.music.tracks
-                    if hasattr(t_ctrl, "library_items"):
-                        t_res = await t_ctrl.library_items(search=clean_title, limit=10)
-                        t_list = getattr(t_res, "items", t_res) if t_res is not None else []
-                        for trk in (t_list if isinstance(t_list, list) else []):
-                            lyr, _ = _extract_meta_strings(trk)
-                            if not lyr and hasattr( t_ctrl, "get_item" ):
-                                try:
-                                    full_t = await t_ctrl.get_item(
-                                        getattr(trk, "item_id", ""),
-                                        getattr(trk, "provider", "library"),
-                                    )
-                                    lyr, _ = _extract_meta_strings(full_t)
-                                except Exception:  # noqa: BLE001
-                                    pass
-                            if not lyr and hasattr(mass, "metadata") and hasattr(mass.metadata, "get_track_lyrics"):
-                                try:
-                                    res_l = await mass.metadata.get_track_lyrics(trk)
-                                    if isinstance(res_l, tuple) and res_l[0]:
-                                        lyr = str(res_l[0]).strip()
-                                    elif isinstance(res_l, str) and res_l.strip():
-                                        lyr = res_l.strip()
-                                except Exception:  # noqa: BLE001
-                                    pass
-                            if lyr:
-                                raw_lyrics = lyr
-                                break
-
-                # Search Artist in MA Library for Artist Bio
-                if artist and artist != "None" and hasattr(mass.music, "artists"):
-                    ar_ctrl = mass.music.artists
-                    if hasattr(ar_ctrl, "library_items"):
-                        ar_res = await ar_ctrl.library_items(search=artist, limit=5)
-                        ar_list = getattr(ar_res, "items", ar_res) if ar_res is not None else []
-                        for ar_obj in (ar_list if isinstance(ar_list, list) else []):
-                            _, desc = _extract_meta_strings(ar_obj)
-                            if not desc and hasattr(ar_ctrl, "get_item"):
-                                try:
-                                    full_ar = await ar_ctrl.get_item(
-                                        getattr(ar_obj, "item_id", ""),
-                                        getattr(ar_obj, "provider", "library"),
-                                    )
-                                    _, desc = _extract_meta_strings(full_ar)
-                                except Exception:  # noqa: BLE001
-                                    pass
-                            if desc:
-                                raw_artist_bio = desc
-                                break
-
-                # Search Album in MA Library for Album Bio
-                if clean_album and clean_album != "None" and hasattr(mass.music, "albums"):
-                    al_ctrl = mass.music.albums
-                    if hasattr(al_ctrl, "library_items"):
-                        al_res = await al_ctrl.library_items(search=clean_album, limit=5)
-                        al_list = getattr(al_res, "items", al_res) if al_res is not None else []
-                        for al_obj in (al_list if isinstance(al_list, list) else []):
-                            _, desc = _extract_meta_strings(al_obj)
-                            if not desc and hasattr(al_ctrl, "get_item"):
-                                try:
-                                    full_al = await al_ctrl.get_item(
-                                        getattr(al_obj, "item_id", ""),
-                                        getattr(al_obj, "provider", "library"),
-                                    )
-                                    _, desc = _extract_meta_strings(full_al)
-                                except Exception:  # noqa: BLE001
-                                    pass
-                            if desc:
-                                raw_album_bio = desc
-                                break
         except Exception as err:  # noqa: BLE001
-            _LOGGER.debug("MA direct lyrics/bio lookup error: %s", err)
+            _LOGGER.debug("music_assistant.get_queue lyrics/bio lookup failed: %s", err)
+
+    if config_entry_id:
+        if not raw_lyrics and clean_title:
+            tracks = await _call_ma_get_library(
+                hass,
+                config_entry_id=config_entry_id,
+                media_type="track",
+                search=clean_title,
+                limit=10,
+            )
+            for trk in tracks:
+                lyr, _ = _extract_meta_strings(trk)
+                if lyr:
+                    raw_lyrics = lyr
+                    break
+
+        if not raw_artist_bio and artist and artist != "None":
+            artists = await _call_ma_get_library(
+                hass,
+                config_entry_id=config_entry_id,
+                media_type="artist",
+                search=artist,
+                limit=5,
+            )
+            for ar_obj in artists:
+                _, desc = _extract_meta_strings(ar_obj)
+                if desc:
+                    raw_artist_bio = desc
+                    break
+
+        if not raw_album_bio and clean_album and clean_album != "None":
+            albums = await _call_ma_get_library(
+                hass,
+                config_entry_id=config_entry_id,
+                media_type="album",
+                search=clean_album,
+                limit=5,
+            )
+            for al_obj in albums:
+                _, desc = _extract_meta_strings(al_obj)
+                if desc:
+                    raw_album_bio = desc
+                    break
 
     session = async_get_clientsession(hass)
     timeout = aiohttp.ClientTimeout(total=5.0)

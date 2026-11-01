@@ -58,6 +58,7 @@ from .http import (
     LatterWallpaperProxyView,
 )
 from .identity import get_bound_esphome_device
+from .media_engine import clear_ma_counterpart_cache
 from .services import async_push_active_area_entities, async_setup_services
 from .studio import (
     LatterBrandIconView,
@@ -566,6 +567,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> b
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
         async_unregister_studio_panel(hass)
+        clear_ma_counterpart_cache(hass)
         domain_data = hass.data.get(DOMAIN, {})
         sys_obj = get_latter_system(hass)
         if sys_obj is not None:

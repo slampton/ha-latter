@@ -63,16 +63,15 @@ async def async_execute_ma_queue_transfer(
     media_content_type: str,
 ) -> None:
     """Execute Music Assistant 2.10.8+ queue transfer, quiesce local Sendspin speaker, and verify position handoff."""
-    src_state = hass.states.get(source_speaker)
-    tgt_state = hass.states.get(target_speaker)
-    src_is_ma = bool(src_state and is_music_assistant_player(hass, src_state))
-    tgt_is_ma = bool(tgt_state and is_music_assistant_player(hass, tgt_state))
+    src_ma = resolve_ma_counterpart_entity(hass, source_speaker, "")
+    tgt_ma = resolve_ma_counterpart_entity(hass, target_speaker, "")
     is_from_local = bool(local_speaker and source_speaker == local_speaker)
 
     transferred_via_ma = False
     if (
-        src_is_ma
-        and tgt_is_ma
+        src_ma
+        and tgt_ma
+        and src_ma != tgt_ma
         and hass.services.has_service("music_assistant", "transfer_queue")
     ):
         try:
@@ -80,8 +79,8 @@ async def async_execute_ma_queue_transfer(
                 "music_assistant",
                 "transfer_queue",
                 {
-                    ATTR_ENTITY_ID: target_speaker,
-                    "source_player": source_speaker,
+                    ATTR_ENTITY_ID: tgt_ma,
+                    "source_player": src_ma,
                     "auto_play": bool(was_playing),
                 },
                 blocking=True,
@@ -110,12 +109,12 @@ async def async_execute_ma_queue_transfer(
                     {ATTR_ENTITY_ID: source_speaker},
                     blocking=False,
                 )
-            if tgt_is_ma and hass.services.has_service("music_assistant", "play_media"):
+            if tgt_ma and hass.services.has_service("music_assistant", "play_media"):
                 await hass.services.async_call(
                     "music_assistant",
                     "play_media",
                     {
-                        ATTR_ENTITY_ID: target_speaker,
+                        ATTR_ENTITY_ID: tgt_ma,
                         "media_id": media_content_id,
                         "enqueue": "replace",
                     },

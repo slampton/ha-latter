@@ -809,7 +809,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         if coord:
             await coord.async_refresh_calendar_agenda()
 
-    async def _handle_intercom_broadcast(call: ServiceCall) -> None:
+    async def _handle_intercom_broadcast(call: ServiceCall) -> ServiceResponse:
         data = call.data
         message = str(data.get("message") or "").strip()
         media_url = str(data.get("media_url") or "").strip()
@@ -836,10 +836,11 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 and is_music_assistant_player(hass, s)
             ]
             if follow_me_mode:
-                from .ble_engine import _iter_entities, get_ble_fabric
-                from homeassistant.helpers import entity_registry as er
+                from homeassistant.helpers import area_registry as ar, entity_registry as er
+                from .ble_engine import get_ble_fabric
 
                 fabric = get_ble_fabric(hass)
+                area_reg = ar.async_get(hass)
                 ent_reg = er.async_get(hass)
                 dev_reg = dr.async_get(hass)
                 occupied_areas: set[str] = set()
@@ -847,17 +848,34 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                     if isinstance(c, LatterCoordinator) and c.active_area_id:
                         if fabric.get_area_occupancy(c.active_area_id).get("is_occupied"):
                             occupied_areas.add(c.active_area_id)
-                for reg_e in _iter_entities(ent_reg):
-                    a_id = reg_e.area_id or (
-                        dev_reg.async_get(reg_e.device_id).area_id
-                        if reg_e.device_id and dev_reg.async_get(reg_e.device_id)
-                        else None
-                    )
-                    if a_id and fabric.get_area_occupancy(a_id).get("is_occupied"):
-                        occupied_areas.add(a_id)
+                for area_entry in area_reg.async_list_areas():
+                    if fabric.get_area_occupancy(area_entry.id).get("is_occupied"):
+                        occupied_areas.add(area_entry.id)
 
                 matched_speakers: list[str] = []
+                seen_dev_ids: set[str] = set()
                 if occupied_areas:
+                    for c in hass.data.get(DOMAIN, {}).values():
+                        if (
+                            isinstance(c, LatterCoordinator)
+                            and c.active_area_id in occupied_areas
+                        ):
+                            for cand_spk in (c.active_speaker, c.local_speaker):
+                                if not cand_spk or cand_spk in matched_speakers:
+                                    continue
+                                st_s = hass.states.get(cand_spk)
+                                if not st_s or st_s.state in ("unavailable", "unknown"):
+                                    continue
+                                e_entry = ent_reg.async_get(cand_spk)
+                                dev_key = (
+                                    e_entry.device_id
+                                    if e_entry and e_entry.device_id
+                                    else (c.esphome_device_id or cand_spk)
+                                )
+                                if dev_key in seen_dev_ids:
+                                    continue
+                                seen_dev_ids.add(dev_key)
+                                matched_speakers.append(cand_spk)
                     for spk_id in all_online_speakers:
                         e_entry = ent_reg.async_get(spk_id)
                         spk_area = e_entry.area_id if e_entry else None
@@ -866,23 +884,31 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                             if d_entry:
                                 spk_area = d_entry.area_id
                         if spk_area in occupied_areas:
-                            matched_speakers.append(spk_id)
-                    for c in hass.data.get(DOMAIN, {}).values():
-                        if (
-                            isinstance(c, LatterCoordinator)
-                            and c.active_area_id in occupied_areas
-                        ):
-                            for cand_spk in (c.active_speaker, c.local_speaker):
-                                if cand_spk and cand_spk not in matched_speakers:
-                                    st_s = hass.states.get(cand_spk)
-                                    if st_s and st_s.state not in ("unavailable", "unknown"):
-                                        matched_speakers.append(cand_spk)
-                speakers = matched_speakers or all_online_speakers
+                            dev_key = (
+                                e_entry.device_id
+                                if e_entry and e_entry.device_id
+                                else spk_id
+                            )
+                            if dev_key not in seen_dev_ids and spk_id not in matched_speakers:
+                                seen_dev_ids.add(dev_key)
+                                matched_speakers.append(spk_id)
+
+                if not matched_speakers:
+                    return {
+                        "delivered": False,
+                        "reason": "no_occupied_areas",
+                        "targets": [],
+                    }
+                speakers = matched_speakers
             else:
                 speakers = all_online_speakers
 
         if not speakers:
-            return
+            return {
+                "delivered": False,
+                "reason": "no_targets",
+                "targets": [],
+            }
 
         await async_announce_on_targets(
             hass,
@@ -892,6 +918,10 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             tts_entity=tts_entity,
             blocking=False,
         )
+        return {
+            "delivered": True,
+            "targets": speakers,
+        }
 
     hass.services.async_register(
         DOMAIN,
@@ -1103,7 +1133,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                         target_coords.append(c)
 
             if not target_coords:
-                target_coords = list(all_coords)
+                return
         else:
             single = _resolve_coordinator_from_call(hass, call)
             if single:
@@ -1177,6 +1207,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 vol.Optional("tts_entity"): cv.string,
             }
         ),
+        supports_response=SupportsResponse.OPTIONAL,
     )
     notify_schema = vol.Schema(
         {
