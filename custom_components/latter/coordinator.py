@@ -987,6 +987,8 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         try:
             hw_w = int(hw.get("w") or 0)
             hw_h = int(hw.get("h") or 0)
+            if hw_w >= 640 and hw_h >= 640:
+                return hw_w // 2, hw_h // 2
             if hw_w >= 64 and hw_h >= 64:
                 return max(64, min(1920, hw_w)), max(64, min(1920, hw_h))
         except (ValueError, TypeError):

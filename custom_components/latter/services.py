@@ -425,7 +425,19 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             )
             return
 
-        if action == "up":
+        supports_vol_set = bool(
+            state_obj is not None and state_obj.attributes.get("volume_level") is not None
+        )
+        if action in ("up", "down") and parsed_lvl is not None and supports_vol_set:
+            lvl = parsed_lvl / 100.0 if parsed_lvl > 1.0 else parsed_lvl
+            lvl = max(0.0, min(1.0, lvl))
+            await hass.services.async_call(
+                "media_player",
+                "volume_set",
+                {ATTR_ENTITY_ID: vol_target, "volume_level": round(lvl, 2)},
+                blocking=False,
+            )
+        elif action == "up":
             await hass.services.async_call(
                 "media_player",
                 "volume_up",
