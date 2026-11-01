@@ -749,12 +749,12 @@ def _build_companion_state_payload(
 
         system_devices.append(
             {
-                "entry_id": c.entry.entry_id,
+                "entry_id": c.subentry_id,
                 "device_slug": c.device_slug,
                 "title": (
                     str(c_dev_entry.name_by_user or c_dev_entry.name).strip()
                     if c_dev_entry and (c_dev_entry.name_by_user or c_dev_entry.name)
-                    else c.device_slug.replace("_", " ").title()
+                    else c.device_title
                 ),
                 "model_label": c_model_label,
                 "has_assigned_area": c_has_assigned_area,
@@ -781,12 +781,12 @@ def _build_companion_state_payload(
                 "ble_packets_seen": c_packets_seen,
                 "ble_closest_proxy": c_area_attrs.get("ble_closest_proxy", ""),
                 "companion_url": (
-                    f"/api/latter/companion/{c.entry.entry_id}"
+                    f"/api/latter/companion/{c.subentry_id}"
                     f"?uid={quote(uid, safe='')}&sig={c.sign_resource(f'studio|{uid}', ttl_s=8 * 3600)}"
                     if uid
-                    else f"/api/latter/companion/{c.entry.entry_id}"
+                    else f"/api/latter/companion/{c.subentry_id}"
                 ),
-                "is_current": c.entry.entry_id == coordinator.entry.entry_id,
+                "is_current": c.subentry_id == coordinator.subentry_id,
             }
         )
 
@@ -819,8 +819,8 @@ def _build_companion_state_payload(
     internal_logs = _get_combined_system_and_studio_logs(hass)
 
     return {
-        "entry_id": coordinator.entry.entry_id,
-        "title": coordinator.device_slug.replace("_", " ").title(),
+        "entry_id": coordinator.subentry_id,
+        "title": coordinator.device_title,
         "version": INTEGRATION_VERSION,
         "capabilities": device_capabilities,
         "internal_logs": internal_logs,
@@ -1170,22 +1170,19 @@ class LatterCompanionApiView(HomeAssistantView):
             used_ips = [
                 c.vpn_client_ip
                 for c in _get_all_coordinators(self.hass)
-                if c.entry.entry_id != coordinator.entry.entry_id and c.vpn_client_ip
+                if c.subentry_id != coordinator.subentry_id and c.vpn_client_ip
             ]
             server_ip, next_client_ip = allocate_next_tunnel_ip(subnet, used_ips)
             client_ip = coordinator.vpn_client_ip or next_client_ip
             merged_vpn: dict[str, Any] = {
-                **coordinator.entry.data,
-                **(coordinator.entry.options or {}),
+                **coordinator.device_data,
                 CONF_VPN_ENABLED: True,
                 CONF_VPN_CLIENT_IP: client_ip,
                 CONF_VPN_PRIVATE_KEY: keys["private_key"],
                 CONF_VPN_PUBLIC_KEY: keys["public_key"],
                 CONF_VPN_PRESHARED_KEY: keys["preshared_key"],
             }
-            self.hass.config_entries.async_update_entry(
-                coordinator.entry, data=merged_vpn, options=merged_vpn
-            )
+            coordinator.update_device_config(merged_vpn)
             if not coordinator.get_opt(CONF_VPN_HA_IP):
                 await _async_save_and_broadcast_global_config(
                     self.hass, {CONF_VPN_HA_IP: server_ip, CONF_VPN_SUBNET: subnet}
@@ -1238,17 +1235,14 @@ class LatterCompanionApiView(HomeAssistantView):
                 if new_source not in favs:
                     favs.append(new_source)
                 merged_wp: dict[str, Any] = {
-                    **coordinator.entry.data,
-                    **(coordinator.entry.options or {}),
+                    **coordinator.device_data,
                     CONF_WALLPAPER_SOURCE: new_source,
                     CONF_WALLPAPER_FAVORITES: favs,
                 }
                 coordinator.current_wallpaper = new_source
                 coordinator._configured_wallpaper_source = new_source
                 coordinator._schedule_persist_runtime_state()
-                self.hass.config_entries.async_update_entry(
-                    coordinator.entry, data=merged_wp, options=merged_wp
-                )
+                coordinator.update_device_config(merged_wp)
                 coordinator.async_notify_listeners()
             return web.json_response(
                 _build_companion_state_payload(self.hass, coordinator, uid=uid)
@@ -1257,16 +1251,13 @@ class LatterCompanionApiView(HomeAssistantView):
         if cmd == "select_wallpaper":
             source_id = str(body.get("source_id") or "").strip()
             merged_sel: dict[str, Any] = {
-                **coordinator.entry.data,
-                **(coordinator.entry.options or {}),
+                **coordinator.device_data,
                 CONF_WALLPAPER_SOURCE: source_id,
             }
             coordinator.current_wallpaper = source_id
             coordinator._configured_wallpaper_source = source_id
             coordinator._schedule_persist_runtime_state()
-            self.hass.config_entries.async_update_entry(
-                coordinator.entry, data=merged_sel, options=merged_sel
-            )
+            coordinator.update_device_config(merged_sel)
             coordinator.async_notify_listeners()
             return web.json_response(
                 _build_companion_state_payload(self.hass, coordinator, uid=uid)
@@ -1280,13 +1271,10 @@ class LatterCompanionApiView(HomeAssistantView):
             elif source_id:
                 favs.append(source_id)
             merged_fav: dict[str, Any] = {
-                **coordinator.entry.data,
-                **(coordinator.entry.options or {}),
+                **coordinator.device_data,
                 CONF_WALLPAPER_FAVORITES: favs,
             }
-            self.hass.config_entries.async_update_entry(
-                coordinator.entry, data=merged_fav, options=merged_fav
-            )
+            coordinator.update_device_config(merged_fav)
             coordinator._bind_wallpaper_cycle_timer()
             coordinator.async_notify_listeners()
             return web.json_response(
@@ -1309,17 +1297,14 @@ class LatterCompanionApiView(HomeAssistantView):
                     else coordinator.wallpaper_source
                 )
                 merged_del: dict[str, Any] = {
-                    **coordinator.entry.data,
-                    **(coordinator.entry.options or {}),
+                    **coordinator.device_data,
                     CONF_WALLPAPER_SOURCE: new_active,
                     CONF_WALLPAPER_FAVORITES: favs,
                 }
                 coordinator.current_wallpaper = new_active
                 coordinator._configured_wallpaper_source = new_active
                 coordinator._schedule_persist_runtime_state()
-                self.hass.config_entries.async_update_entry(
-                    coordinator.entry, data=merged_del, options=merged_del
-                )
+                coordinator.update_device_config(merged_del)
                 coordinator.async_notify_listeners()
             return web.json_response(
                 _build_companion_state_payload(self.hass, coordinator, uid=uid)
@@ -1344,10 +1329,7 @@ class LatterCompanionApiView(HomeAssistantView):
 
         if cmd == "save_config":
             incoming_cfg = body.get("config") or {}
-            merged_device: dict[str, Any] = {
-                **coordinator.entry.data,
-                **(coordinator.entry.options or {}),
-            }
+            merged_device: dict[str, Any] = dict(coordinator.device_data)
             global_updates: dict[str, Any] = {}
 
             if "camera_entities" in incoming_cfg and isinstance(incoming_cfg["camera_entities"], list):
@@ -1443,11 +1425,8 @@ class LatterCompanionApiView(HomeAssistantView):
                     if k == CONF_WEB_THEME:
                         val = _normalize_web_theme(val)
                     global_updates[k] = val
-                    merged_device[k] = val
 
-            self.hass.config_entries.async_update_entry(
-                coordinator.entry, data=merged_device, options=merged_device
-            )
+            coordinator.update_device_config(merged_device)
             if global_updates:
                 await _async_save_and_broadcast_global_config(
                     self.hass, global_updates
@@ -1479,7 +1458,9 @@ class LatterCompanionApiView(HomeAssistantView):
                 (
                     c
                     for c in all_coords
-                    if c.entry.entry_id == target_entry_id or (target_slug and c.device_slug == target_slug)
+                    if c.subentry_id == target_entry_id
+                    or c.entry.entry_id == target_entry_id
+                    or (target_slug and c.device_slug == target_slug)
                 ),
                 None,
             )
@@ -1488,19 +1469,24 @@ class LatterCompanionApiView(HomeAssistantView):
                     {"error": "Target device not found"}, status=HTTPStatus.NOT_FOUND
                 )
             remaining = [
-                c for c in all_coords if c.entry.entry_id != target_coord.entry.entry_id
+                c for c in all_coords if c.subentry_id != target_coord.subentry_id
             ]
             redirect_url = (
-                f"/api/latter/companion/{remaining[0].entry.entry_id}?uid={quote(uid, safe='')}&sig={remaining[0].sign_resource(f'studio|{uid}', ttl_s=8 * 3600)}&scope=system"
+                f"/api/latter/companion/{remaining[0].subentry_id}?uid={quote(uid, safe='')}&sig={remaining[0].sign_resource(f'studio|{uid}', ttl_s=8 * 3600)}&scope=system"
                 if remaining
                 else "/config/integrations/integration/latter"
             )
             removed_slug = target_coord.device_slug
-            await self.hass.config_entries.async_remove(target_coord.entry.entry_id)
+            if target_coord.subentry is not None:
+                self.hass.config_entries.async_remove_subentry(
+                    target_coord.entry, target_coord.subentry.subentry_id
+                )
+            else:
+                await self.hass.config_entries.async_remove(target_coord.entry.entry_id)
             log_studio_event(
                 self.hass, "INFO", "studio", f"Removed device '{removed_slug}' from Latter"
             )
-            if remaining and coordinator.entry.entry_id != target_coord.entry.entry_id:
+            if remaining and coordinator.subentry_id != target_coord.subentry_id:
                 return web.json_response(
                     _build_companion_state_payload(self.hass, coordinator, uid=uid)
                 )
@@ -1517,8 +1503,8 @@ class LatterCompanionApiView(HomeAssistantView):
                     if c.device_slug == target_slug
                 ]
                 if not existing:
-                    await self.hass.config_entries.flow.async_init(
-                        DOMAIN,
+                    await self.hass.config_entries.subentries.async_init(
+                        (coordinator.entry.entry_id, "device"),
                         context={"source": "user"},
                         data={
                             CONF_DEVICE_SLUG: target_slug,
@@ -1547,8 +1533,8 @@ class LatterCompanionApiView(HomeAssistantView):
                 ]
                 if not existing:
                     default_area = str(body.get("area_id") or "").strip()
-                    await self.hass.config_entries.flow.async_init(
-                        DOMAIN,
+                    await self.hass.config_entries.subentries.async_init(
+                        (coordinator.entry.entry_id, "device"),
                         context={"source": "user"},
                         data={
                             CONF_DEVICE_SLUG: target_slug,
@@ -1572,13 +1558,10 @@ class LatterCompanionApiView(HomeAssistantView):
             for c in _get_all_coordinators(self.hass):
                 if c.device_slug == target_slug:
                     merged_rg: dict[str, Any] = {
-                        **c.entry.data,
-                        **(c.entry.options or {}),
+                        **c.device_data,
                         CONF_DEVICE_REMOTE_GROUP: rem_grp,
                     }
-                    self.hass.config_entries.async_update_entry(
-                        c.entry, data=merged_rg, options=merged_rg
-                    )
+                    c.update_device_config(merged_rg)
                     c.async_notify_listeners()
                     break
             return web.json_response(
@@ -1852,7 +1835,7 @@ class LatterStudioRootView(HomeAssistantView):
             scope = request.query.get("scope") or "system"
             sig = primary.sign_resource(f"studio|{user.id}", ttl_s=8 * 3600)
             target_url = (
-                f"/api/latter/companion/{primary.entry.entry_id}"
+                f"/api/latter/companion/{primary.subentry_id}"
                 f"?uid={quote(user.id, safe='')}&sig={sig}&scope={quote(scope, safe='')}"
             )
             raise web.HTTPFound(location=target_url)
@@ -1886,7 +1869,7 @@ class LatterStudioRootView(HomeAssistantView):
         scope = request.query.get("scope") or "system"
         sig = primary.sign_resource(f"studio|{user.id}", ttl_s=8 * 3600)
         target_url = (
-            f"/api/latter/companion/{primary.entry.entry_id}"
+            f"/api/latter/companion/{primary.subentry_id}"
             f"?uid={quote(user.id, safe='')}&sig={sig}&scope={quote(scope, safe='')}"
         )
         return web.json_response({"redirect_url": target_url})

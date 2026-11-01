@@ -9,7 +9,7 @@ import logging
 import time
 from typing import Any
 
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import ConfigEntry, ConfigSubentry
 from homeassistant.const import (
     ATTR_ENTITY_ID,
     EVENT_CORE_CONFIG_UPDATE,
@@ -170,9 +170,16 @@ def resolve_coordinator(
     hass: HomeAssistant,
     target: str | None = None,
 ) -> LatterCoordinator | None:
-    """Resolve a loaded LatterCoordinator by entry_id, device_id, or device_slug."""
+    """Resolve a loaded LatterCoordinator by subentry_id, entry_id, device_id, or device_slug."""
+    from .system import get_latter_system
+
     domain_data = hass.data.get(DOMAIN, {})
-    coords = [v for v in domain_data.values() if isinstance(v, LatterCoordinator)]
+    sys_obj = get_latter_system(hass)
+    coords = (
+        list(sys_obj.coordinators.values())
+        if sys_obj and sys_obj.coordinators
+        else [v for v in domain_data.values() if isinstance(v, LatterCoordinator)]
+    )
     if not coords:
         return None
     if not target or not str(target).strip():
@@ -185,13 +192,19 @@ def resolve_coordinator(
 
     for coord in coords:
         if (
-            coord.entry.entry_id == raw
+            coord.subentry_id == raw
+            or coord.entry.entry_id == raw
             or coord.device_slug == norm
             or (coord.esphome_device_id and coord.esphome_device_id == raw)
         ):
             return coord
         if target_dev is not None:
-            if (DOMAIN, coord.entry.entry_id) in target_dev.identifiers:
+            mac = coord.device_mac
+            if (
+                (DOMAIN, coord.subentry_id) in target_dev.identifiers
+                or (DOMAIN, coord.entry.entry_id) in target_dev.identifiers
+                or (mac and (DOMAIN, dr.format_mac(mac)) in target_dev.identifiers)
+            ):
                 return coord
             if (
                 target_dev.via_device_id
@@ -203,26 +216,31 @@ def resolve_coordinator(
 
 
 class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
-    """Manages active speaker, BLE area context, 4-slot remotes, custom bindings, wallpapers, alarm, calendar, and weather."""
+    """Manages active speaker, BLE area context, 4-slot remotes, wallpapers, alarm, calendar, and weather."""
 
     def __init__(
         self,
         hass: HomeAssistant,
         entry: ConfigEntry,
         hmac_secret: bytes,
+        subentry: ConfigSubentry | None = None,
     ) -> None:
         """Initialize the Latter coordinator."""
+        self.entry = entry
+        self.subentry = subentry
+        self.subentry_id: str = (
+            subentry.subentry_id if subentry is not None else entry.entry_id
+        )
         super().__init__(
             hass,
             _LOGGER,
-            name=f"{DOMAIN}_{entry.entry_id}",
+            name=f"{DOMAIN}_{self.subentry_id}",
             config_entry=entry,
         )
-        self.entry = entry
         self._hmac_secret = hmac_secret
-        self._runtime = LatterDeviceRuntime(hass, entry.entry_id)
+        self._runtime = LatterDeviceRuntime(hass, self.subentry_id)
         self._store = self._runtime.store
-        self._url_signer = UrlSigner(hass, entry.entry_id, hmac_secret)
+        self._url_signer = UrlSigner(hass, self.subentry_id, hmac_secret)
         self._packer = DomainPayloadPacker()
         self._area_follow = LatterAreaFollowController(hass)
 
@@ -393,14 +411,50 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         await self.async_refresh_calendar_agenda()
         self._notify_listeners()
 
+    @property
+    def device_data(self) -> dict[str, Any]:
+        """Return a mutable copy of this device's persisted configuration dictionary."""
+        if self.subentry is not None:
+            live_sub = self.entry.subentries.get(self.subentry.subentry_id)
+            if live_sub is not None:
+                self.subentry = live_sub
+            return dict(self.subentry.data)
+        return {**self.entry.data, **(self.entry.options or {})}
+
+    def update_device_config(self, merged_data: dict[str, Any]) -> None:
+        """Persist updated device settings to the ConfigSubentry (or parent ConfigEntry if standalone)."""
+        if self.subentry is not None:
+            live_sub = (
+                self.entry.subentries.get(self.subentry.subentry_id)
+                or self.subentry
+            )
+            self.hass.config_entries.async_update_subentry(
+                self.entry,
+                live_sub,
+                data=merged_data,
+            )
+            self.subentry = self.entry.subentries.get(live_sub.subentry_id) or live_sub
+        else:
+            self.hass.config_entries.async_update_entry(
+                self.entry,
+                data=merged_data,
+                options=merged_data,
+            )
+
     def get_opt(self, key: str, default: Any = None) -> Any:
-        """Retrieve a setting, prioritizing System-Wide config for shared keys and entry options/data for device keys."""
+        """Retrieve a setting, prioritizing System-Wide config for shared keys and subentry/entry data for device keys."""
         domain_data = self.hass.data.get(DOMAIN, {})
         global_cfg = domain_data.get(DATA_GLOBAL_CONFIG)
         if key in GLOBAL_CONFIG_KEYS and isinstance(global_cfg, dict) and key in global_cfg:
             val = global_cfg[key]
             if val is not None and val != "":
                 return val
+        if self.subentry is not None:
+            live_sub = self.entry.subentries.get(self.subentry.subentry_id)
+            if live_sub is not None:
+                self.subentry = live_sub
+            if key in self.subentry.data:
+                return self.subentry.data[key]
         if self.entry.options and key in self.entry.options:
             return self.entry.options[key]
         if key in self.entry.data:
@@ -425,10 +479,19 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     @property
     def device_slug(self) -> str:
-        """Return normalized ESPHome device slug, auto-healing from entry data or legacy unique_id if options were blanked."""
+        """Return normalized ESPHome device slug, auto-healing from subentry/entry data or unique_id."""
         raw = str(self.get_opt(CONF_DEVICE_SLUG, "") or "").strip()
         norm = normalize_device_slug(raw) if raw else "esphome_device"
         if norm == "esphome_device":
+            if self.subentry is not None:
+                sub_slug = str(self.subentry.data.get(CONF_DEVICE_SLUG, "") or "").strip()
+                if sub_slug and sub_slug != "esphome_device":
+                    return normalize_device_slug(sub_slug)
+                sub_uid = str(self.subentry.unique_id or "")
+                if sub_uid.startswith(f"{DOMAIN}_") and ":" not in sub_uid:
+                    rec = normalize_device_slug(sub_uid.removeprefix(f"{DOMAIN}_"))
+                    if rec and rec != "esphome_device":
+                        return rec
             orig_slug = str(self.entry.data.get(CONF_DEVICE_SLUG, "") or "").strip()
             if orig_slug and orig_slug != "esphome_device":
                 return normalize_device_slug(orig_slug)
@@ -438,6 +501,31 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 if recovered and recovered != "esphome_device":
                     return recovered
         return norm
+
+    @property
+    def device_mac(self) -> str | None:
+        """Return normalized MAC address for the bound ESPHome or BLE device when known."""
+        stored_mac = str(self.get_opt("mac", "") or "").strip()
+        if stored_mac and ":" in stored_mac:
+            return dr.format_mac(stored_mac)
+        esp_dev = get_bound_esphome_device(
+            self.hass, self.esphome_device_id, fallback_slug=self.device_slug
+        )
+        if esp_dev is not None:
+            for _ctype, cval in esp_dev.connections:
+                if cval:
+                    return dr.format_mac(str(cval))
+        ble_addr = str(self.get_opt(CONF_BLE_TARGET_ADDRESS, "") or "").strip()
+        if ble_addr and ":" in ble_addr and len(ble_addr) == 17:
+            return dr.format_mac(ble_addr)
+        return None
+
+    @property
+    def device_title(self) -> str:
+        """Return the friendly device title from the ConfigSubentry or formatted slug."""
+        if self.subentry is not None and self.subentry.title:
+            return self.subentry.title
+        return self.device_slug.replace("_", " ").title()
 
     @property
     def esphome_device_id(self) -> str | None:
@@ -456,12 +544,13 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return resolved
 
     def get_device_info(self) -> DeviceInfo:
-        """Return canonical Latter DeviceInfo linked via via_device_id to the underlying ESPHome device."""
+        """Return canonical Latter DeviceInfo keyed by MAC (or subentry_id) and linked via via_device_id to ESPHome."""
         esp_dev_id = self.esphome_device_id
-        pretty_device = self.device_slug.replace("_", " ").title()
+        mac = self.device_mac
+        ident_key = dr.format_mac(mac) if mac else self.subentry_id
         return DeviceInfo(
-            identifiers={(DOMAIN, self.entry.entry_id)},
-            name=pretty_device,
+            identifiers={(DOMAIN, ident_key)},
+            name=self.device_title,
             manufacturer="Lampton Labs",
             model="Latter ESPHome Companion Middleware",
             sw_version=INTEGRATION_VERSION,

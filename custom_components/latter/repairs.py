@@ -33,6 +33,7 @@ def async_audit_coordinator_health(
 ) -> list[dict[str, str]]:
     """Audit mapped entities and BLE proxy availability, updating HA Repairs and returning active warnings for the Web Studio."""
     entry_id = coordinator.entry.entry_id
+    sub_id = coordinator.subentry_id
     slug = coordinator.device_slug
     warnings: list[dict[str, str]] = []
 
@@ -69,7 +70,7 @@ def async_audit_coordinator_health(
             config_entry_id=entry_id,
         )
 
-    missing_issue_id = f"missing_mapped_entity_{entry_id}"
+    missing_issue_id = f"missing_mapped_entity_{sub_id}"
     if missing_labels:
         _create_scoped_issue(
             missing_issue_id,
@@ -83,7 +84,7 @@ def async_audit_coordinator_health(
         ir.async_delete_issue(hass, DOMAIN, missing_issue_id)
 
     # 2. Check BLE proxy availability when native BLE tracking is enabled on a mobile display
-    ble_issue_id = f"ble_no_proxies_{entry_id}"
+    ble_issue_id = f"ble_no_proxies_{sub_id}"
     tracker = coordinator._ble_tracker
     has_seen_ble = bool(
         (tracker is not None and tracker.packets_seen > 0)

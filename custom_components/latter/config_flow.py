@@ -1,4 +1,4 @@
-"""Config flow, Options flow, and Hardware-Auto-Detecting Onboarding for Latter."""
+"""Config flow, Device Subentry flow, Options flow, and Hardware-Auto-Detecting Onboarding for Latter."""
 
 from __future__ import annotations
 
@@ -9,21 +9,19 @@ from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlow,
     ConfigFlowResult,
+    ConfigSubentryData,
+    ConfigSubentryFlow,
     OptionsFlow,
+    SubentryFlowResult,
 )
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr, entity_registry as er, selector
 
 from .backup_engine import get_device_groups_and_profiles
 from .ble_engine import _iter_devices
-from .identity import (
-    esphome_service,
-    find_device_entity_by_suffix,
-    get_bound_esphome_device,
-    read_device_hardware_manifest,
-)
 from .const import (
     CONF_ALARM_ENTITY,
+    CONF_AREA_FOLLOW_DWELL_S,
     CONF_AREA_HANDOFF,
     CONF_ART_SIZE,
     CONF_BLE_AUTO_SWITCH,
@@ -39,6 +37,8 @@ from .const import (
     CONF_SYNC_DEVICE_AREA,
     CONF_WEATHER_ENTITY,
     DATA_GLOBAL_CONFIG,
+    DATA_GLOBAL_STORE,
+    DEFAULT_AREA_FOLLOW_DWELL_S,
     DEFAULT_AREA_HANDOFF,
     DEFAULT_ART_SIZE,
     DEFAULT_DEVICE_GROUP,
@@ -47,8 +47,27 @@ from .const import (
     DOMAIN,
     normalize_device_slug,
 )
+from .identity import (
+    esphome_service,
+    find_device_entity_by_suffix,
+    get_bound_esphome_device,
+    read_device_hardware_manifest,
+)
+from .system import get_latter_system
 
 CONF_APPLY_PROFILE = "apply_profile"
+
+
+def _iter_configured_device_records(hass: HomeAssistant) -> list[tuple[dict[str, Any], str | None]]:
+    """Return (data_dict, unique_id) pairs across all Latter device subentries and legacy entries."""
+    records: list[tuple[dict[str, Any], str | None]] = []
+    for entry in hass.config_entries.async_entries(DOMAIN):
+        for sub in entry.subentries.values():
+            if sub.subentry_type == "device":
+                records.append((dict(sub.data), sub.unique_id))
+        if entry.data.get(CONF_DEVICE_SLUG):
+            records.append((dict(entry.data), entry.unique_id))
+    return records
 
 
 def _resolve_esphome_device_and_unique_id(
@@ -62,11 +81,11 @@ def _resolve_esphome_device_and_unique_id(
     found_id = find_esphome_device_id(hass, norm)
     matched_dev = dev_reg.async_get(found_id) if found_id else None
 
-    for entry in hass.config_entries.async_entries(DOMAIN):
-        if normalize_device_slug(str(entry.data.get(CONF_DEVICE_SLUG, ""))) == norm and entry.unique_id:
-            dev_id = str(entry.data.get(CONF_ESPHOME_DEVICE_ID, "") or "")
+    for data_dict, uid in _iter_configured_device_records(hass):
+        if normalize_device_slug(str(data_dict.get(CONF_DEVICE_SLUG, ""))) == norm and uid:
+            dev_id = str(data_dict.get(CONF_ESPHOME_DEVICE_ID, "") or "")
             dev = dev_reg.async_get(dev_id) if dev_id else matched_dev
-            return dev, entry.unique_id
+            return dev, uid
 
     if matched_dev is not None:
         for _ctype, cval in matched_dev.connections:
@@ -78,8 +97,9 @@ def _resolve_esphome_device_and_unique_id(
 def _discover_esphome_slug(hass: HomeAssistant) -> str:
     """Auto-discover an unconfigured ESPHome node exposing Latter actions or interactive entities."""
     configured_slugs = {
-        normalize_device_slug(str(e.data.get(CONF_DEVICE_SLUG, "")))
-        for e in hass.config_entries.async_entries(DOMAIN)
+        normalize_device_slug(str(data_dict.get(CONF_DEVICE_SLUG, "")))
+        for data_dict, _uid in _iter_configured_device_records(hass)
+        if data_dict.get(CONF_DEVICE_SLUG)
     }
     esphome_services = hass.services.async_services().get("esphome", {})
     for suffix in ("_set_browse_slots", "_set_area_slots", "_latter_ping"):
@@ -217,7 +237,11 @@ def _detect_hardware_defaults(hass: HomeAssistant, slug: str) -> dict[str, Any]:
 
 
 def _apply_onboarding_profile_and_defaults(
-    hass: HomeAssistant, user_input: dict[str, Any], existing: dict[str, Any] | None = None
+    hass: HomeAssistant,
+    user_input: dict[str, Any],
+    existing: dict[str, Any] | None = None,
+    *,
+    rebind_hardware: bool = False,
 ) -> dict[str, Any]:
     """Merge auto-detected hardware defaults, roaming flag, optional Profile, and global system defaults."""
     slug = normalize_device_slug(
@@ -237,6 +261,7 @@ def _apply_onboarding_profile_and_defaults(
         "assigned_person",
         "default_area",
         CONF_ESPHOME_DEVICE_ID,
+        "mac",
     )
     extra_init = {
         k: user_input[k]
@@ -249,11 +274,17 @@ def _apply_onboarding_profile_and_defaults(
         **extra_init,
         CONF_DEVICE_SLUG: slug,
     }
-    if matched_dev is not None and not merged.get(CONF_ESPHOME_DEVICE_ID):
+    if matched_dev is not None and (rebind_hardware or not merged.get(CONF_ESPHOME_DEVICE_ID)):
         merged[CONF_ESPHOME_DEVICE_ID] = matched_dev.id
+        for _ctype, cval in matched_dev.connections:
+            if cval:
+                merged["mac"] = dr.format_mac(str(cval))
+                break
 
-    if not merged.get(CONF_DEFAULT_SPEAKER):
-        merged[CONF_DEFAULT_SPEAKER] = _discover_default_speaker(hass, slug)
+    if rebind_hardware or not merged.get(CONF_DEFAULT_SPEAKER):
+        merged[CONF_DEFAULT_SPEAKER] = _discover_default_speaker(
+            hass, slug, str(merged.get(CONF_ESPHOME_DEVICE_ID) or "") or None
+        )
 
     prof_id = str(user_input.get(CONF_APPLY_PROFILE) or "auto").strip()
     if prof_id and prof_id != "auto":
@@ -293,7 +324,7 @@ def _build_schema(
     *,
     include_device_slug: bool = True,
 ) -> vol.Schema:
-    """Build the onboarding/options schema."""
+    """Build the device onboarding/reconfigure schema."""
     default_slug = str(current.get(CONF_DEVICE_SLUG) or _discover_esphome_slug(hass))
     hw_defs = _detect_hardware_defaults(hass, default_slug)
     is_roaming_default = bool(
@@ -389,19 +420,30 @@ def _format_clean_device_title(
 
 
 class LatterConfigFlow(ConfigFlow, domain=DOMAIN):
-    """Handle a streamlined config flow and automatic ESPHome device discovery for Latter."""
+    """Handle the single System hub config flow and initial ESPHome device discovery for Latter."""
 
-    VERSION = 1
+    VERSION = 2
 
     def __init__(self) -> None:
         """Initialize config flow."""
         self._discovered_slug: str = ""
         self._discovered_name: str = ""
 
+    @classmethod
+    @callback
+    def async_get_supported_subentry_types(
+        cls, config_entry: ConfigEntry
+    ) -> dict[str, type[ConfigSubentryFlow]]:
+        """Return subentry types supported by the Latter System hub."""
+        return {"device": LatterDeviceSubentryFlow}
+
     async def async_step_integration_discovery(
         self, discovery_info: dict[str, Any]
     ) -> ConfigFlowResult:
-        """Handle auto-discovery of a new Latter-compatible ESPHome device."""
+        """Handle auto-discovery of a Latter-compatible ESPHome device when no hub entry exists yet."""
+        if self._async_current_entries():
+            return self.async_abort(reason="already_configured")
+
         slug = normalize_device_slug(str(discovery_info.get(CONF_DEVICE_SLUG) or ""))
         if not slug:
             return self.async_abort(reason="already_configured")
@@ -420,7 +462,10 @@ class LatterConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Handle the streamlined initial setup step."""
+        """Create the single Latter System hub entry and optionally onboard the first device subentry."""
+        if self._async_current_entries():
+            return self.async_abort(reason="single_instance_allowed")
+
         if user_input is not None:
             merged_data = _apply_onboarding_profile_and_defaults(
                 self.hass, user_input
@@ -431,16 +476,26 @@ class LatterConfigFlow(ConfigFlow, domain=DOMAIN):
                 self.hass, slug, keep_flow_id=self.flow_id
             )
             _dev, target_uid = _resolve_esphome_device_and_unique_id(self.hass, slug)
-            if self.unique_id != target_uid:
-                await self.async_set_unique_id(target_uid)
+            await self.async_set_unique_id(DOMAIN)
             self._abort_if_unique_id_configured()
 
             clean_title = _format_clean_device_title(
                 self.hass, slug, self._discovered_name
             )
+            subentries: list[ConfigSubentryData] = []
+            if slug and slug != "esphome_device":
+                subentries.append(
+                    ConfigSubentryData(
+                        data=merged_data,
+                        subentry_type="device",
+                        title=clean_title,
+                        unique_id=target_uid,
+                    )
+                )
             return self.async_create_entry(
-                title=clean_title,
-                data=merged_data,
+                title="Latter",
+                data={},
+                subentries=subentries,
             )
 
         initial: dict[str, Any] = {}
@@ -455,24 +510,134 @@ class LatterConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_reconfigure(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Handle a reconfiguration flow initialized by the user."""
+        """Handle reconfiguration on the System hub entry."""
         reconfigure_entry = self._get_reconfigure_entry()
-        current = {
-            **reconfigure_entry.data,
-            **(reconfigure_entry.options or {}),
-        }
+        domain_data = self.hass.data.get(DOMAIN, {})
+        global_cfg = dict(domain_data.get(DATA_GLOBAL_CONFIG, {}))
         if user_input is not None:
-            merged_data = _apply_onboarding_profile_and_defaults(
-                self.hass, user_input, existing=current
-            )
-            slug = merged_data[CONF_DEVICE_SLUG]
-            _dev, target_uid = _resolve_esphome_device_and_unique_id(self.hass, slug)
-            await self.async_set_unique_id(target_uid)
-            self._abort_if_unique_id_mismatch(reason="wrong_device")
+            for k in (CONF_WEATHER_ENTITY, CONF_ALARM_ENTITY, CONF_AREA_FOLLOW_DWELL_S):
+                if k in user_input:
+                    global_cfg[k] = user_input[k]
+            domain_data[DATA_GLOBAL_CONFIG] = global_cfg
+            store = domain_data.get(DATA_GLOBAL_STORE)
+            if store is not None:
+                await store.async_save(global_cfg)
+            sys_obj = get_latter_system(self.hass)
+            if sys_obj is not None:
+                sys_obj.config = global_cfg
+                for coord in list(sys_obj.coordinators.values()):
+                    await coord.async_on_global_config_updated()
             return self.async_update_and_abort(
                 reconfigure_entry,
-                data_updates=merged_data,
-                options={**(reconfigure_entry.options or {}), **merged_data},
+                data_updates={},
+            )
+
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=_build_system_options_schema(self.hass, global_cfg),
+        )
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
+        """Return the System-level options flow handler."""
+        return LatterOptionsFlowHandler()
+
+
+class LatterDeviceSubentryFlow(ConfigSubentryFlow):
+    """Handle adding, reconfiguring, and replacing hardware for a Latter Device subentry."""
+
+    async def async_step_user(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Add a new ESPHome companion display or BLE device subentry to the Latter System hub."""
+        entry = self._get_entry()
+        if user_input is not None:
+            merged_data = _apply_onboarding_profile_and_defaults(
+                self.hass, user_input, rebind_hardware=True
+            )
+            slug = merged_data[CONF_DEVICE_SLUG]
+            _abort_competing_flows_for_slug(self.hass, slug)
+            _dev, target_uid = _resolve_esphome_device_and_unique_id(self.hass, slug)
+
+            for existing_sub in entry.subentries.values():
+                existing_slug = normalize_device_slug(
+                    str(existing_sub.data.get(CONF_DEVICE_SLUG, ""))
+                )
+                if existing_sub.unique_id == target_uid or existing_slug == slug:
+                    return self.async_abort(reason="already_configured")
+
+            clean_title = _format_clean_device_title(self.hass, slug)
+            return self.async_create_entry(
+                title=clean_title,
+                data=merged_data,
+                unique_id=target_uid,
+            )
+
+        return self.async_show_form(
+            step_id="user",
+            data_schema=_build_schema(self.hass, {}),
+        )
+
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Reconfigure a device subentry or replace its bound ESPHome hardware in-place."""
+        entry = self._get_entry()
+        subentry = self._get_reconfigure_subentry()
+        current = dict(subentry.data)
+        old_slug = normalize_device_slug(str(current.get(CONF_DEVICE_SLUG, "")))
+        old_mac = str(current.get("mac", "") or "").strip()
+
+        if user_input is not None:
+            new_slug = normalize_device_slug(
+                str(user_input.get(CONF_DEVICE_SLUG) or old_slug)
+            )
+            is_replacing_hw = new_slug != old_slug
+            merged_data = _apply_onboarding_profile_and_defaults(
+                self.hass,
+                user_input,
+                existing=current,
+                rebind_hardware=is_replacing_hw,
+            )
+            _dev, target_uid = _resolve_esphome_device_and_unique_id(
+                self.hass, new_slug
+            )
+
+            for other_sub in entry.subentries.values():
+                if other_sub.subentry_id == subentry.subentry_id:
+                    continue
+                other_slug = normalize_device_slug(
+                    str(other_sub.data.get(CONF_DEVICE_SLUG, ""))
+                )
+                if other_sub.unique_id == target_uid or other_slug == new_slug:
+                    return self.async_abort(reason="already_configured")
+
+            new_mac = str(merged_data.get("mac", "") or "").strip()
+            if is_replacing_hw:
+                dev_reg = dr.async_get(self.hass)
+                old_ident_keys = [subentry.subentry_id]
+                if old_mac:
+                    old_ident_keys.insert(0, dr.format_mac(old_mac))
+                new_ident_key = (
+                    dr.format_mac(new_mac) if new_mac else subentry.subentry_id
+                )
+                for key in old_ident_keys:
+                    latter_dev = dev_reg.async_get_device(identifiers={(DOMAIN, key)})
+                    if latter_dev is not None:
+                        dev_reg.async_update_device(
+                            latter_dev.id,
+                            new_identifiers={(DOMAIN, new_ident_key)},
+                        )
+                        break
+
+            clean_title = _format_clean_device_title(self.hass, new_slug)
+            return self.async_update_and_abort(
+                entry,
+                subentry,
+                title=clean_title,
+                data=merged_data,
+                unique_id=target_uid,
             )
 
         return self.async_show_form(
@@ -480,33 +645,79 @@ class LatterConfigFlow(ConfigFlow, domain=DOMAIN):
             data_schema=_build_schema(self.hass, current),
         )
 
-    @staticmethod
-    @callback
-    def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
-        """Return the options flow handler."""
-        return LatterOptionsFlowHandler()
+
+def _build_system_options_schema(
+    hass: HomeAssistant, global_cfg: dict[str, Any]
+) -> vol.Schema:
+    """Build the System-level Options schema for shared weather, alarm, and BLE dwell settings."""
+    default_weather = str(
+        global_cfg.get(CONF_WEATHER_ENTITY)
+        or _discover_default_weather(hass)
+        or ""
+    )
+    default_alarm = str(
+        global_cfg.get(CONF_ALARM_ENTITY)
+        or _discover_default_alarm(hass)
+        or ""
+    )
+    default_dwell = int(
+        global_cfg.get(CONF_AREA_FOLLOW_DWELL_S, DEFAULT_AREA_FOLLOW_DWELL_S)
+    )
+    return vol.Schema(
+        {
+            vol.Optional(
+                CONF_WEATHER_ENTITY,
+                description={"suggested_value": default_weather},
+            ): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="weather")
+            ),
+            vol.Optional(
+                CONF_ALARM_ENTITY,
+                description={"suggested_value": default_alarm},
+            ): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="alarm_control_panel")
+            ),
+            vol.Required(
+                CONF_AREA_FOLLOW_DWELL_S,
+                default=default_dwell,
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=3,
+                    max=60,
+                    step=1,
+                    unit_of_measurement="s",
+                    mode=selector.NumberSelectorMode.SLIDER,
+                )
+            ),
+        }
+    )
 
 
 class LatterOptionsFlowHandler(OptionsFlow):
-    """Handle options flow updates for Latter."""
+    """Handle System-level options flow updates for the Latter hub."""
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Manage the options."""
-        current = {
-            **self.config_entry.data,
-            **(self.config_entry.options or {}),
-        }
+        """Manage System-level options."""
+        domain_data = self.hass.data.get(DOMAIN, {})
+        global_cfg = dict(domain_data.get(DATA_GLOBAL_CONFIG, {}))
         if user_input is not None:
-            merged_data = _apply_onboarding_profile_and_defaults(
-                self.hass, user_input, existing=current
-            )
-            return self.async_create_entry(title="", data=merged_data)
+            for k in (CONF_WEATHER_ENTITY, CONF_ALARM_ENTITY, CONF_AREA_FOLLOW_DWELL_S):
+                if k in user_input:
+                    global_cfg[k] = user_input[k]
+            domain_data[DATA_GLOBAL_CONFIG] = global_cfg
+            store = domain_data.get(DATA_GLOBAL_STORE)
+            if store is not None:
+                await store.async_save(global_cfg)
+            sys_obj = get_latter_system(self.hass)
+            if sys_obj is not None:
+                sys_obj.config = global_cfg
+                for coord in list(sys_obj.coordinators.values()):
+                    await coord.async_on_global_config_updated()
+            return self.async_create_entry(title="", data=user_input)
 
         return self.async_show_form(
             step_id="init",
-            data_schema=_build_schema(
-                self.hass, current, include_device_slug=False
-            ),
+            data_schema=_build_system_options_schema(self.hass, global_cfg),
         )

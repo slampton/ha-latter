@@ -2,8 +2,8 @@
   "config": {
     "step": {
       "user": {
-        "title": "Add ESPHome Device to Latter",
-        "description": "Connect an ESPHome companion display, mixin node, or area sensor to Latter. Shared system entities, BLE area calibration, remotes, and wallpapers can be customized in the Latter Studio.",
+        "title": "Set Up Latter System & Initial Device",
+        "description": "Create the Latter System hub and connect your first ESPHome companion display, mixin node, or area sensor. Additional devices can be added as Device subentries or via Latter Studio.",
         "data": {
           "device_slug": "ESPHome Device Name / Slug",
           "apply_profile": "Configuration Profile",
@@ -16,31 +16,76 @@
         }
       },
       "reconfigure": {
-        "title": "Reconfigure Latter Device",
-        "description": "Update onboarding settings or apply a saved configuration profile to this ESPHome device.",
+        "title": "Reconfigure Latter System Hub",
+        "description": "Update shared system entities and BLE roaming dwell settings for your Latter System.",
         "data": {
-          "device_slug": "ESPHome Device Name / Slug",
-          "apply_profile": "Configuration Profile",
-          "native_ble_tracking": "This device roams (not fixed to a single Area)"
+          "weather_entity": "System Weather Entity",
+          "alarm_entity": "System Alarm Control Panel",
+          "area_follow_dwell_s": "Voice Follows Me Dwell Time (seconds)"
         }
       }
     },
     "abort": {
       "already_configured": "This ESPHome device is already configured in Latter.",
       "not_supported": "This device does not announce Latter companion actions.",
-      "reconfigure_successful": "Device configuration updated.",
+      "reconfigure_successful": "Configuration updated.",
+      "single_instance_allowed": "Latter System is already configured. Add additional displays as Device subentries under the Latter integration.",
       "unique_id_mismatch": "The device slug does not match the existing configuration entry.",
       "wrong_device": "The selected ESPHome device does not match this configuration entry."
+    }
+  },
+  "config_subentries": {
+    "device": {
+      "entry_type": "Device",
+      "initiate_flow": {
+        "user": "Add Device",
+        "reconfigure": "Reconfigure or Replace Hardware"
+      },
+      "step": {
+        "user": {
+          "title": "Add ESPHome Device to Latter",
+          "description": "Connect an ESPHome companion display, mixin node, or area sensor to the Latter System.",
+          "data": {
+            "device_slug": "ESPHome Device Name / Slug",
+            "apply_profile": "Configuration Profile",
+            "native_ble_tracking": "This device roams (not fixed to a single Area)"
+          },
+          "data_description": {
+            "device_slug": "The normalized name of your ESPHome device (for example: kitchen_display).",
+            "apply_profile": "Auto-detect screen geometry and capabilities from hardware, or apply a saved Latter profile.",
+            "native_ble_tracking": "Enable for portable/wearable devices that move area-to-area. Uncheck for stationary area devices."
+          }
+        },
+        "reconfigure": {
+          "title": "Reconfigure or Replace Device Hardware",
+          "description": "Update this device's profile and roaming settings, or enter a new ESPHome device slug to replace its physical hardware in-place while preserving all Studio settings, entities, and Area assignments.",
+          "data": {
+            "device_slug": "ESPHome Device Name / Slug",
+            "apply_profile": "Configuration Profile",
+            "native_ble_tracking": "This device roams (not fixed to a single Area)"
+          },
+          "data_description": {
+            "device_slug": "Keep the current slug to update settings, or enter a replacement ESPHome device slug to rebind hardware in-place.",
+            "apply_profile": "Auto-detect screen geometry and capabilities from hardware, or apply a saved Latter profile.",
+            "native_ble_tracking": "Enable for portable/wearable devices that move area-to-area. Uncheck for stationary area devices."
+          }
+        }
+      },
+      "abort": {
+        "already_configured": "This ESPHome device is already configured in Latter.",
+        "reconfigure_successful": "Device configuration updated."
+      }
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "Latter Device Options",
-        "description": "Update configuration profile or roaming behavior. For full system and device controls, open the Latter Studio from the Home Assistant sidebar.",
+        "title": "Latter System Options",
+        "description": "Configure shared System entities and BLE roaming dwell behavior. For full system, area, and per-device controls, open the Latter Studio from the Home Assistant sidebar.",
         "data": {
-          "apply_profile": "Configuration Profile",
-          "native_ble_tracking": "This device roams (not fixed to a single Area)"
+          "weather_entity": "System Weather Entity",
+          "alarm_entity": "System Alarm Control Panel",
+          "area_follow_dwell_s": "Voice Follows Me Dwell Time (seconds)"
         }
       }
     }

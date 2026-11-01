@@ -388,17 +388,12 @@ async def _async_apply_device_snapshot_to_coordinator(
     if preserve_slug:
         incoming_cfg[CONF_DEVICE_SLUG] = coord.device_slug
 
-    merged: dict[str, Any] = {
-        **coord.entry.data,
-        **(coord.entry.options or {}),
-    }
+    merged: dict[str, Any] = dict(coord.device_data)
     for k in DEVICE_CONFIG_EXPORT_KEYS:
         if k in incoming_cfg and incoming_cfg[k] is not None:
             merged[k] = incoming_cfg[k]
 
-    hass.config_entries.async_update_entry(
-        coord.entry, data=merged, options=merged
-    )
+    coord.update_device_config(merged)
 
     if dev_snap.get("active_area_id"):
         coord.active_area_id = str(dev_snap["active_area_id"])
@@ -554,16 +549,11 @@ async def async_apply_profile_to_coordinators(
     updated_controls = 0
 
     for coord in targets:
-        merged: dict[str, Any] = {
-            **coord.entry.data,
-            **(coord.entry.options or {}),
-        }
+        merged: dict[str, Any] = dict(coord.device_data)
         for k in PROFILE_DEVICE_KEYS:
             if k in dev_cfg and dev_cfg[k] is not None:
                 merged[k] = dev_cfg[k]
-        hass.config_entries.async_update_entry(
-            coord.entry, data=merged, options=merged
-        )
+        coord.update_device_config(merged)
         coord._bind_wallpaper_cycle_timer()
         coord.async_notify_listeners()
         updated_devices += 1

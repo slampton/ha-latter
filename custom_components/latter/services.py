@@ -1222,14 +1222,11 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             await store.async_save(global_cfg)
 
         merged = {
-            **coord.entry.data,
-            **(coord.entry.options or {}),
+            **coord.device_data,
             CONF_CUSTOM_PALETTES: palettes,
             CONF_DEVICE_CUSTOM_COLOR: raw_hex,
         }
-        hass.config_entries.async_update_entry(
-            coord.entry, data=merged, options=merged
-        )
+        coord.update_device_config(merged)
         coord.async_notify_listeners()
 
     hass.services.async_register(

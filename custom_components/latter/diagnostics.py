@@ -7,8 +7,10 @@ from typing import Any
 from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
 
-from .coordinator import LatterCoordinator
+from .coordinator import LatterCoordinator, resolve_coordinator
+from .system import LatterSystem, get_latter_system
 
 TO_REDACT: set[str] = {
     "alert_camera_url",
@@ -28,26 +30,15 @@ TO_REDACT: set[str] = {
 }
 
 
-async def async_get_config_entry_diagnostics(
-    hass: HomeAssistant, entry: ConfigEntry[LatterCoordinator]
-) -> dict[str, Any]:
-    """Return diagnostics for a Latter config entry."""
-    coordinator: LatterCoordinator | None = getattr(entry, "runtime_data", None)
-
-    if coordinator is None:
-        return {"entry_data": async_redact_data(dict(entry.data), TO_REDACT)}
-
+def _build_coordinator_diagnostics(coordinator: LatterCoordinator) -> dict[str, Any]:
+    """Build diagnostic snapshot for a single LatterCoordinator."""
     media_state, media_attrs = coordinator.get_active_media_payload()
     area_state, area_attrs = coordinator.get_area_context_payload()
     remote_state, remote_attrs = coordinator.get_remote_config_payload()
-
-    payload: dict[str, Any] = {
-        "entry": {
-            "title": entry.title,
-            "version": entry.version,
-            "data": dict(entry.data),
-            "options": dict(entry.options),
-        },
+    return {
+        "subentry_id": coordinator.subentry_id,
+        "title": coordinator.device_title,
+        "device_data": coordinator.device_data,
         "runtime": {
             "device_slug": coordinator.device_slug,
             "device_profile": coordinator.device_profile,
@@ -76,4 +67,41 @@ async def async_get_config_entry_diagnostics(
         },
     }
 
+
+async def async_get_config_entry_diagnostics(
+    hass: HomeAssistant, entry: ConfigEntry
+) -> dict[str, Any]:
+    """Return diagnostics for the Latter System hub entry and all its device subentries."""
+    runtime = getattr(entry, "runtime_data", None)
+    if isinstance(runtime, LatterCoordinator):
+        return async_redact_data(_build_coordinator_diagnostics(runtime), TO_REDACT)
+
+    sys_obj = runtime if isinstance(runtime, LatterSystem) else get_latter_system(hass)
+    if sys_obj is None:
+        return {"entry_data": async_redact_data(dict(entry.data), TO_REDACT)}
+
+    payload: dict[str, Any] = {
+        "entry": {
+            "title": entry.title,
+            "version": entry.version,
+            "data": dict(entry.data),
+            "options": dict(entry.options),
+            "subentry_count": len(entry.subentries),
+        },
+        "system_config": dict(sys_obj.config),
+        "devices": {
+            sub_id: _build_coordinator_diagnostics(coord)
+            for sub_id, coord in sys_obj.coordinators.items()
+        },
+    }
     return async_redact_data(payload, TO_REDACT)
+
+
+async def async_get_device_diagnostics(
+    hass: HomeAssistant, entry: ConfigEntry, device: dr.DeviceEntry
+) -> dict[str, Any]:
+    """Return diagnostics for an individual Latter device or the Latter System service device."""
+    coord = resolve_coordinator(hass, device.id)
+    if coord is not None:
+        return async_redact_data(_build_coordinator_diagnostics(coord), TO_REDACT)
+    return await async_get_config_entry_diagnostics(hass, entry)

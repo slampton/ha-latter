@@ -1,4 +1,4 @@
-"""Sensor platform for Latter exposing device-scoped (`sensor.<device_slug>_*`) entities."""
+"""Sensor platform for Latter exposing device-scoped (`sensor.<device_slug>_*`) and System-scoped entities."""
 
 from __future__ import annotations
 
@@ -19,6 +19,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from .ble_engine import get_ble_fabric, get_ble_proxy_area_ids
 from .const import DOMAIN, build_device_entity_id, normalize_device_slug
 from .coordinator import LatterCoordinator
+from .system import LatterSystem, get_latter_system, get_system_device_info
 
 PARALLEL_UPDATES = 0
 DATA_CREATED_AREA_OCCUPANT_IDS = "created_area_occupant_ids"
@@ -29,35 +30,55 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Set up Latter sensors from a config entry."""
-    coordinator: LatterCoordinator = entry.runtime_data
-    entities: list[SensorEntity] = []
-    if coordinator.device_profile == "ble_beacon":
-        entities.extend(
-            [
-                LatterCurrentAreaSensor(coordinator),
-                LatterBleDistanceSensor(coordinator),
-                LatterAreaContextSensor(coordinator),
-            ]
-        )
+    """Set up Latter sensors for all device subentries and System-level Area/Person entities."""
+    runtime = entry.runtime_data
+    if isinstance(runtime, LatterSystem):
+        coordinators = list(runtime.coordinators.values())
+    elif isinstance(runtime, LatterCoordinator):
+        coordinators = [runtime]
     else:
-        entities.extend(
-            [
-                LatterCurrentAreaSensor(coordinator),
-                LatterBleDistanceSensor(coordinator),
-                LatterActiveMediaSensor(coordinator),
-                LatterWeatherForecastSensor(coordinator),
-                LatterAreaContextSensor(coordinator),
-                LatterCalendarAgendaSensor(coordinator),
-                LatterRemoteConfigSensor(coordinator),
-            ]
+        sys_obj = get_latter_system(hass)
+        coordinators = list(sys_obj.coordinators.values()) if sys_obj else []
+
+    for coordinator in coordinators:
+        dev_entities: list[SensorEntity] = []
+        if coordinator.device_profile == "ble_beacon":
+            dev_entities.extend(
+                [
+                    LatterCurrentAreaSensor(coordinator),
+                    LatterBleDistanceSensor(coordinator),
+                    LatterAreaContextSensor(coordinator),
+                ]
+            )
+        else:
+            dev_entities.extend(
+                [
+                    LatterCurrentAreaSensor(coordinator),
+                    LatterBleDistanceSensor(coordinator),
+                    LatterActiveMediaSensor(coordinator),
+                    LatterWeatherForecastSensor(coordinator),
+                    LatterAreaContextSensor(coordinator),
+                    LatterCalendarAgendaSensor(coordinator),
+                    LatterRemoteConfigSensor(coordinator),
+                ]
+            )
+        sub_id = (
+            coordinator.subentry.subentry_id
+            if coordinator.subentry is not None
+            else None
         )
+        async_add_entities(dev_entities, config_subentry_id=sub_id)
 
     domain_data = hass.data.setdefault(DOMAIN, {})
-    registered_persons: set[str] = domain_data.setdefault("registered_person_sensors", set())
-    created_area_occupants: set[str] = domain_data.setdefault(DATA_CREATED_AREA_OCCUPANT_IDS, set())
+    registered_persons: set[str] = domain_data.setdefault(
+        "registered_person_sensors", set()
+    )
+    created_area_occupants: set[str] = domain_data.setdefault(
+        DATA_CREATED_AREA_OCCUPANT_IDS, set()
+    )
     entry_area_ids: set[str] = set()
     entry_persons: set[str] = set()
+    system_entities: list[SensorEntity] = []
 
     area_reg = ar.async_get(hass)
     proxy_areas = get_ble_proxy_area_ids(hass)
@@ -70,8 +91,8 @@ async def async_setup_entry(
             continue
         created_area_occupants.add(area_id)
         entry_area_ids.add(area_id)
-        entities.append(
-            LatterAreaOccupantsSensor(hass, coordinator, area_entry.id, area_entry.name)
+        system_entities.append(
+            LatterAreaOccupantsSensor(hass, area_entry.id, area_entry.name)
         )
 
     @callback
@@ -87,26 +108,37 @@ async def async_setup_entry(
         created_area_occupants.add(area_id)
         entry_area_ids.add(area_id)
         async_add_entities(
-            [LatterAreaOccupantsSensor(hass, coordinator, area_entry.id, area_entry.name)]
+            [LatterAreaOccupantsSensor(hass, area_entry.id, area_entry.name)]
         )
 
     @callback
     def _async_ensure_person_sensors() -> None:
-        person_ent = coordinator.assigned_person
-        if person_ent and person_ent.startswith("person.") and person_ent not in registered_persons:
-            registered_persons.add(person_ent)
-            entry_persons.add(person_ent)
-            async_add_entities(
-                [
-                    LatterPersonCurrentAreaSensor(coordinator, person_ent),
-                    LatterPersonBleDistanceSensor(coordinator, person_ent),
-                ]
-            )
+        new_person_entities: list[SensorEntity] = []
+        for coord in coordinators:
+            person_ent = coord.assigned_person
+            if (
+                person_ent
+                and person_ent.startswith("person.")
+                and person_ent not in registered_persons
+            ):
+                registered_persons.add(person_ent)
+                entry_persons.add(person_ent)
+                new_person_entities.extend(
+                    [
+                        LatterPersonCurrentAreaSensor(coord, person_ent),
+                        LatterPersonBleDistanceSensor(coord, person_ent),
+                    ]
+                )
+        if new_person_entities:
+            async_add_entities(new_person_entities)
 
     @callback
     def _cleanup_entry_tracked_ids() -> None:
         created_area_occupants.difference_update(entry_area_ids)
         registered_persons.difference_update(entry_persons)
+
+    if system_entities:
+        async_add_entities(system_entities)
 
     _async_ensure_person_sensors()
     entry.async_on_unload(_cleanup_entry_tracked_ids)
@@ -115,10 +147,10 @@ async def async_setup_entry(
             ar.EVENT_AREA_REGISTRY_UPDATED, _async_on_area_registry_updated
         )
     )
-    entry.async_on_unload(
-        coordinator.async_add_listener(_async_ensure_person_sensors)
-    )
-    async_add_entities(entities)
+    for coordinator in coordinators:
+        entry.async_on_unload(
+            coordinator.async_add_listener(_async_ensure_person_sensors)
+        )
 
 
 class _BaseLatterSensor(SensorEntity):
@@ -157,12 +189,12 @@ class _BaseLatterSensor(SensorEntity):
         slug = coordinator.device_slug
         self._attr_translation_key = suffix
         self._attr_name = label
-        self._attr_unique_id = f"{coordinator.entry.entry_id}_{suffix}"
+        self._attr_unique_id = f"{coordinator.subentry_id}_{suffix}"
         self.entity_id = build_device_entity_id(slug, suffix)
 
     @property
     def device_info(self) -> DeviceInfo:
-        """Return canonical Latter DeviceInfo so every config entry has an expandable Device card in Home Assistant."""
+        """Return canonical Latter DeviceInfo so every device subentry has an expandable Device card in Home Assistant."""
         return self.coordinator.get_device_info()
 
     async def async_added_to_hass(self) -> None:
@@ -305,6 +337,7 @@ class LatterRemoteConfigSensor(_BaseLatterSensor):
             "rev": attrs.get("rev", 0),
         }
 
+
 class LatterCurrentAreaSensor(_BaseLatterSensor):
     """Exposes sensor.<device_slug>_current_area with live area name or 'Away'."""
 
@@ -350,7 +383,7 @@ class LatterBleDistanceSensor(_BaseLatterSensor):
 
 
 class LatterPersonCurrentAreaSensor(_BaseLatterSensor):
-    """Exposes sensor.<person_slug>_current_area as a native Entity Registry sensor."""
+    """Exposes sensor.<person_slug>_current_area under the Latter System service device."""
 
     def __init__(self, coordinator: LatterCoordinator, person_entity: str) -> None:
         """Initialize person current area sensor."""
@@ -366,6 +399,11 @@ class LatterPersonCurrentAreaSensor(_BaseLatterSensor):
         self._attr_has_entity_name = False
         self._attr_unique_id = f"{DOMAIN}_person_{p_slug}_current_area"
         self.entity_id = f"sensor.{p_slug}_current_area"
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Attach person sensors to the System-level Latter service device."""
+        return get_system_device_info()
 
     @property
     def icon(self) -> str:
@@ -386,7 +424,7 @@ class LatterPersonCurrentAreaSensor(_BaseLatterSensor):
 
 
 class LatterPersonBleDistanceSensor(_BaseLatterSensor):
-    """Exposes sensor.<person_slug>_ble_distance as a native Entity Registry sensor."""
+    """Exposes sensor.<person_slug>_ble_distance under the Latter System service device."""
 
     _attr_icon = "mdi:map-marker-distance"
     _attr_native_unit_of_measurement = "ft"
@@ -407,6 +445,11 @@ class LatterPersonBleDistanceSensor(_BaseLatterSensor):
         self._attr_has_entity_name = False
         self._attr_unique_id = f"{DOMAIN}_person_{p_slug}_ble_distance"
         self.entity_id = f"sensor.{p_slug}_ble_distance"
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Attach person sensors to the System-level Latter service device."""
+        return get_system_device_info()
 
     @property
     def native_value(self) -> float | None:
@@ -430,13 +473,11 @@ class LatterAreaOccupantsSensor(SensorEntity):
     def __init__(
         self,
         hass: HomeAssistant,
-        coordinator: LatterCoordinator,
         area_id: str,
         area_name: str,
     ) -> None:
         """Initialize the per-area occupants sensor."""
         self.hass = hass
-        self.coordinator = coordinator
         self._area_id = area_id
         self._area_name = area_name
         a_slug = normalize_device_slug(area_id or area_name)
@@ -454,8 +495,8 @@ class LatterAreaOccupantsSensor(SensorEntity):
 
     @property
     def device_info(self) -> DeviceInfo:
-        """Return canonical Latter DeviceInfo."""
-        return self.coordinator.get_device_info()
+        """Attach Area occupancy sensors to the System-level Latter service device."""
+        return get_system_device_info()
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to real-time updates from the shared Latter BLE Fabric."""

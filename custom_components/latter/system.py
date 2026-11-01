@@ -5,6 +5,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.storage import Store
 
 from .const import (
@@ -12,6 +14,7 @@ from .const import (
     DATA_GLOBAL_STORE,
     DATA_HMAC_SECRET,
     DOMAIN,
+    INTEGRATION_VERSION,
 )
 
 if TYPE_CHECKING:
@@ -54,3 +57,16 @@ def get_latter_system(hass: HomeAssistant) -> LatterSystem | None:
         domain_data[DATA_SYSTEM] = sys_obj
         return sys_obj
     return None
+
+
+def get_system_device_info() -> DeviceInfo:
+    """Return canonical DeviceInfo for the System-level Latter service device."""
+    return DeviceInfo(
+        identifiers={(DOMAIN, "system")},
+        entry_type=dr.DeviceEntryType.SERVICE,
+        name="Latter System",
+        manufacturer="Lampton Labs",
+        model="Latter Site & BLE Fabric Engine",
+        sw_version=INTEGRATION_VERSION,
+        configuration_url="homeassistant://latter",
+    )

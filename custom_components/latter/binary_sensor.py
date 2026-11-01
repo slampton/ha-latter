@@ -15,8 +15,8 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .ble_engine import get_ble_fabric, get_ble_proxy_area_ids
-from .const import DOMAIN
-from .coordinator import LatterCoordinator
+from .const import DOMAIN, normalize_device_slug
+from .system import get_system_device_info
 
 PARALLEL_UPDATES = 0
 DATA_CREATED_AREA_OCCUPANCY_IDS = "created_area_occupancy_ids"
@@ -27,8 +27,7 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Set up per-area BLE occupancy binary sensors once across the Latter domain."""
-    coordinator: LatterCoordinator = entry.runtime_data
+    """Set up per-area BLE occupancy binary sensors once under the Latter System hub."""
     domain_data = hass.data.setdefault(DOMAIN, {})
     created_areas: set[str] = domain_data.setdefault(
         DATA_CREATED_AREA_OCCUPANCY_IDS, set()
@@ -50,7 +49,7 @@ async def async_setup_entry(
         entry_area_ids.add(area_id)
         new_entities.append(
             LatterAreaBleOccupancyBinarySensor(
-                hass, coordinator, area_entry.id, area_entry.name
+                hass, area_entry.id, area_entry.name
             )
         )
 
@@ -69,7 +68,7 @@ async def async_setup_entry(
         async_add_entities(
             [
                 LatterAreaBleOccupancyBinarySensor(
-                    hass, coordinator, area_entry.id, area_entry.name
+                    hass, area_entry.id, area_entry.name
                 )
             ]
         )
@@ -99,18 +98,18 @@ class LatterAreaBleOccupancyBinarySensor(BinarySensorEntity):
     def __init__(
         self,
         hass: HomeAssistant,
-        coordinator: LatterCoordinator,
         area_id: str,
         area_name: str,
     ) -> None:
         """Initialize the per-area BLE occupancy binary sensor."""
         self.hass = hass
-        self.coordinator = coordinator
         self._area_id = area_id
         self._area_name = area_name
+        a_slug = normalize_device_slug(area_id or area_name)
         self._attr_name = f"{area_name} BLE Occupancy"
         self._attr_unique_id = f"latter_area_ble_occupancy_{area_id}"
         self._attr_suggested_area = area_name
+        self.entity_id = f"binary_sensor.{a_slug}_ble_occupancy"
         self._cached_occ: dict[str, Any] | None = None
 
     def _get_occ(self) -> dict[str, Any]:
@@ -121,8 +120,8 @@ class LatterAreaBleOccupancyBinarySensor(BinarySensorEntity):
 
     @property
     def device_info(self) -> DeviceInfo:
-        """Return canonical Latter DeviceInfo."""
-        return self.coordinator.get_device_info()
+        """Attach Area BLE occupancy sensors to the System-level Latter service device."""
+        return get_system_device_info()
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to real-time updates from the shared Latter BLE Fabric."""
@@ -164,6 +163,6 @@ class LatterAreaBleOccupancyBinarySensor(BinarySensorEntity):
             "persons": occ.get("persons", []),
             "closest_device": occ["closest_device"],
             "winning_rssi": occ["winning_rssi"],
-            "closest_distance_m": occ["closest_distance_m"],
+            "closest_distance_m": occ.get("closest_distance_m"),
             "closest_distance_ft": occ.get("closest_distance_ft"),
         }
