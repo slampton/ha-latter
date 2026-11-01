@@ -70,6 +70,7 @@ from ..const import (
     DEFAULT_WALLPAPER_CYCLE_MINUTES,
     DOMAIN,
     GLOBAL_CONFIG_KEYS,
+    INTEGRATION_VERSION,
     normalize_device_slug,
 )
 from ..coordinator import LatterCoordinator
@@ -911,20 +912,7 @@ async def ws_handle_subscribe(
     )
 
 
-@websocket_api.require_admin
-@websocket_api.websocket_command(
-    {
-        vol.Required("type"): vol.In(
-            ("latter/system/command", "latter/device/command")
-        ),
-        vol.Required("command"): str,
-        vol.Optional("subentry_id"): vol.Any(str, None),
-        vol.Optional("device_slug"): vol.Any(str, None),
-        vol.Optional("payload", default={}): dict,
-    }
-)
-@websocket_api.async_response
-async def ws_handle_command(
+async def _async_handle_ws_command_impl(
     hass: HomeAssistant,
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
@@ -962,26 +950,53 @@ async def ws_handle_command(
 @websocket_api.require_admin
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): vol.In(
-            ("latter/system/export", "latter/device/export")
-        ),
+        vol.Required("type"): "latter/system/command",
+        vol.Required("command"): str,
         vol.Optional("subentry_id"): vol.Any(str, None),
-        vol.Optional("scope", default="full"): str,
-        vol.Optional("include_vpn_secrets", default=False): bool,
+        vol.Optional("device_slug"): vol.Any(str, None),
+        vol.Optional("payload", default={}): dict,
     }
 )
 @websocket_api.async_response
-async def ws_handle_export(
+async def ws_handle_system_command(
     hass: HomeAssistant,
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
+    """Execute an admin-gated System command from Latter Studio."""
+    await _async_handle_ws_command_impl(hass, connection, msg)
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "latter/device/command",
+        vol.Required("command"): str,
+        vol.Optional("subentry_id"): vol.Any(str, None),
+        vol.Optional("device_slug"): vol.Any(str, None),
+        vol.Optional("payload", default={}): dict,
+    }
+)
+@websocket_api.async_response
+async def ws_handle_device_command(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Execute an admin-gated Device command from Latter Studio."""
+    await _async_handle_ws_command_impl(hass, connection, msg)
+
+
+async def _async_handle_ws_export_impl(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+    *,
+    is_device: bool,
+) -> None:
     """Export non-secret System or Device configuration JSON."""
     coord = resolve_target_coordinator(
         hass, subentry_id=msg.get("subentry_id")
-    )
-    is_device = (
-        msg["type"] == "latter/device/export" or msg.get("scope") == "device"
     )
     bundle = build_backup_bundle(
         hass=hass,
@@ -996,16 +1011,44 @@ async def ws_handle_export(
 @websocket_api.require_admin
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): vol.In(
-            ("latter/system/import", "latter/device/import")
-        ),
+        vol.Required("type"): "latter/system/export",
         vol.Optional("subentry_id"): vol.Any(str, None),
-        vol.Required("bundle"): dict,
-        vol.Optional("restore_esphome_entities", default=True): bool,
+        vol.Optional("scope", default="full"): str,
+        vol.Optional("include_vpn_secrets", default=False): bool,
     }
 )
 @websocket_api.async_response
-async def ws_handle_import(
+async def ws_handle_system_export(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Export non-secret System configuration JSON."""
+    await _async_handle_ws_export_impl(
+        hass, connection, msg, is_device=msg.get("scope") == "device"
+    )
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "latter/device/export",
+        vol.Optional("subentry_id"): vol.Any(str, None),
+        vol.Optional("scope", default="device"): str,
+        vol.Optional("include_vpn_secrets", default=False): bool,
+    }
+)
+@websocket_api.async_response
+async def ws_handle_device_export(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Export non-secret Device configuration JSON."""
+    await _async_handle_ws_export_impl(hass, connection, msg, is_device=True)
+
+
+async def _async_handle_ws_import_impl(
     hass: HomeAssistant,
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
@@ -1029,15 +1072,59 @@ async def ws_handle_import(
     )
 
 
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "latter/system/import",
+        vol.Optional("subentry_id"): vol.Any(str, None),
+        vol.Required("bundle"): dict,
+        vol.Optional("restore_esphome_entities", default=True): bool,
+    }
+)
+@websocket_api.async_response
+async def ws_handle_system_import(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Import and restore a System JSON snapshot."""
+    await _async_handle_ws_import_impl(hass, connection, msg)
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "latter/device/import",
+        vol.Optional("subentry_id"): vol.Any(str, None),
+        vol.Required("bundle"): dict,
+        vol.Optional("restore_esphome_entities", default=True): bool,
+    }
+)
+@websocket_api.async_response
+async def ws_handle_device_import(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Import and restore a Device JSON snapshot."""
+    await _async_handle_ws_import_impl(hass, connection, msg)
+
+
 @callback
 def async_register_studio_ws_commands(hass: HomeAssistant) -> None:
-    """Register all Latter Studio WebSocket API commands once."""
+    """Register all Latter Studio WebSocket API commands."""
     domain_data = hass.data.setdefault(DOMAIN, {})
-    if domain_data.get("_studio_ws_registered"):
+    if domain_data.get("_studio_ws_registered") == INTEGRATION_VERSION:
         return
-    domain_data["_studio_ws_registered"] = True
-    websocket_api.async_register_command(hass, ws_handle_get_state)
-    websocket_api.async_register_command(hass, ws_handle_subscribe)
-    websocket_api.async_register_command(hass, ws_handle_command)
-    websocket_api.async_register_command(hass, ws_handle_export)
-    websocket_api.async_register_command(hass, ws_handle_import)
+    domain_data["_studio_ws_registered"] = INTEGRATION_VERSION
+    for handler in (
+        ws_handle_get_state,
+        ws_handle_subscribe,
+        ws_handle_system_command,
+        ws_handle_device_command,
+        ws_handle_system_export,
+        ws_handle_device_export,
+        ws_handle_system_import,
+        ws_handle_device_import,
+    ):
+        websocket_api.async_register_command(hass, handler)
