@@ -288,10 +288,12 @@ def _apply_ha_display_precision(
 
 
 def get_esphome_device_entities(
-    hass: HomeAssistant, device_slug: str
+    hass: HomeAssistant,
+    device_slug: str,
+    esphome_device_id: str | None = None,
 ) -> dict[str, Any]:
     """Inspect and semantically group all entities belonging to any ESPHome device."""
-    target_device_id = find_esphome_device_id(hass, device_slug)
+    target_device_id = esphome_device_id or find_esphome_device_id(hass, device_slug)
     dev_reg = dr.async_get(hass)
 
     dev_meta: dict[str, str] = {

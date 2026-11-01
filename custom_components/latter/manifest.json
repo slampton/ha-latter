@@ -16,7 +16,7 @@
   ],
   "codeowners": ["@slampton"],
   "config_flow": true,
-  "dependencies": ["frontend", "http"],
+  "dependencies": ["frontend", "http", "panel_custom", "websocket_api"],
   "documentation": "https://github.com/slampton/ha-latter",
   "integration_type": "hub",
   "iot_class": "local_push",

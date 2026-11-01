@@ -1,74 +1,39 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<link rel="icon" type="image/png" href="/api/latter/brand/icon.png">
-<title>Latter Studio</title>
-<style>
-  /* Native Home Assistant Default Dark & Light Theme Tokens */
-  :root, [data-theme="dark"] {
-    --primary-background-color: #111111;
-    --secondary-background-color: #1c1c1c;
-    --card-background-color: #1c1c1c;
-    --primary-text-color: #e1e1e1;
-    --secondary-text-color: #9b9b9b;
-    --primary-color: #03a9f4;
-    --accent-color: #ff9800;
-    --divider-color: rgba(225, 225, 225, 0.12);
-    --input-fill-color: #141414;
-    --success-color: #4caf50;
-    --warning-color: #ff9800;
-    --error-color: #db4437;
+/**
+ * Latter Studio — Native Home Assistant Custom Panel (`panel_custom` Web Component)
+ * Zero external dependencies; communicates exclusively via admin-gated `websocket_api`.
+ */
 
-    --bg: var(--primary-background-color);
-    --sidebar: var(--secondary-background-color);
-    --card: var(--card-background-color);
+const STUDIO_STYLES = `
+  :host {
+    display: block;
+    min-height: 100vh;
+    --bg: var(--primary-background-color, #111111);
+    --sidebar: var(--secondary-background-color, #1c1c1c);
+    --card: var(--card-background-color, var(--ha-card-background, #1c1c1c));
     --card-hover: rgba(3, 169, 244, 0.08);
-    --border: var(--divider-color);
-    --input-bg: var(--input-fill-color);
-    --text: var(--primary-text-color);
-    --text-strong: var(--primary-text-color);
-    --muted: var(--secondary-text-color);
-    --accent: var(--primary-color);
-    --accent-solid: var(--primary-color);
+    --border: var(--divider-color, rgba(225, 225, 225, 0.12));
+    --input-bg: var(--input-fill-color, var(--secondary-background-color, #141414));
+    --text: var(--primary-text-color, #e1e1e1);
+    --text-strong: var(--primary-text-color, #e1e1e1);
+    --muted: var(--secondary-text-color, #9b9b9b);
+    --accent: var(--primary-color, #03a9f4);
+    --accent-solid: var(--primary-color, #03a9f4);
     --accent-subtle: rgba(3, 169, 244, 0.14);
-    --success: var(--success-color);
-    --warning: var(--warning-color);
-    --danger: var(--error-color);
+    --success: var(--success-color, #4caf50);
+    --warning: var(--warning-color, #ff9800);
+    --danger: var(--error-color, #db4437);
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--paper-font-body1_-_font-family, Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+    font-size: 14px;
+    line-height: 1.45;
+    -webkit-tap-highlight-color: transparent;
   }
-  [data-theme="light"] {
-    --primary-background-color: #fafafa;
-    --secondary-background-color: #f0f0f0;
-    --card-background-color: #ffffff;
-    --primary-text-color: #212121;
-    --secondary-text-color: #727272;
-    --primary-color: #03a9f4;
-    --accent-color: #ff9800;
-    --divider-color: rgba(0, 0, 0, 0.12);
-    --input-fill-color: #f5f5f5;
-    --success-color: #4caf50;
-    --warning-color: #ff9800;
-    --error-color: #db4437;
-
-    --bg: var(--primary-background-color);
-    --sidebar: var(--secondary-background-color);
-    --card: var(--card-background-color);
-    --card-hover: rgba(3, 169, 244, 0.08);
-    --border: var(--divider-color);
-    --input-bg: var(--input-fill-color);
-    --text: var(--primary-text-color);
-    --text-strong: var(--primary-text-color);
-    --muted: var(--secondary-text-color);
-    --accent: var(--primary-color);
-    --accent-solid: var(--primary-color);
-    --accent-subtle: rgba(3, 169, 244, 0.12);
-    --success: var(--success-color);
-    --warning: var(--warning-color);
-    --danger: var(--error-color);
+  :host([narrow]) .ha-menu-btn {
+    display: inline-flex;
   }
   * { box-sizing: border-box; }
-  body {
+  .studio-root {
     margin: 0;
     font-family: Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     background: var(--bg);
@@ -580,7 +545,7 @@
     color: var(--muted);
     margin-bottom: 5px;
   }
-  select, input[type="text"], input[type="number"] {
+  select, input[type="text"], input[type="password"], input[type="number"] {
     width: 100%;
     padding: 8px 11px;
     border-radius: 8px;
@@ -1023,7 +988,7 @@
       position: static;
       padding: 8px 14px;
     }
-    #topbar-device-chips, #topbar-household-chips {
+    #topbar-device-chips, #topbar-system-chips {
       display: none !important;
     }
     .content-wrap { padding: 14px 12px 72px; }
@@ -1047,9 +1012,9 @@
     }
     .scope-tabs { flex: none; }
   }
-</style>
-</head>
-<body data-theme="dark">
+`;
+
+const STUDIO_TEMPLATE = `<div class="studio-root">$
 <header class="latter-top-titlebar">
   <div class="titlebar-brand">
     <button type="button" class="ha-menu-btn" title="Toggle Home Assistant Sidebar" onclick="toggleParentHaSidebar()">
@@ -1069,23 +1034,23 @@
   <aside class="sidebar">
     <div class="scope-box">
       <div class="scope-tabs">
-        <button class="scope-tab" id="tab-scope-household" onclick="setScope('household')">System</button>
+        <button class="scope-tab" id="tab-scope-system" onclick="setScope('system')">System</button>
         <button class="scope-tab active" id="tab-scope-device" onclick="openDevicesLanding()">Devices</button>
       </div>
     </div>
 
     <!-- SYSTEM NAVIGATION (6 TABS) -->
-    <div class="nav-list hidden" id="nav-scope-household">
-      <button class="nav-btn" data-view="fleet_overview" onclick="switchView('fleet_overview', this)">
+    <div class="nav-list hidden" id="nav-scope-system">
+      <button class="nav-btn" data-view="system_overview" onclick="switchView('system_overview', this)">
         <span>Overview</span>
       </button>
-      <button class="nav-btn" data-view="household" onclick="switchView('household', this)">
+      <button class="nav-btn" data-view="shared_entities" onclick="switchView('shared_entities', this)">
         <span>Shared Entities</span>
       </button>
       <button class="nav-btn" data-view="remotes" onclick="switchView('remotes', this)">
         <span>Media &amp; Remotes</span>
       </button>
-      <button class="nav-btn" data-view="fleet_sync" onclick="switchView('fleet_sync', this)">
+      <button class="nav-btn" data-view="system_sync" onclick="switchView('system_sync', this)">
         <span>Groups &amp; Profiles</span>
       </button>
       <button class="nav-btn" data-view="area_tracking" onclick="switchView('area_tracking', this)">
@@ -1100,7 +1065,7 @@
     <div class="nav-list hidden" id="nav-scope-devices-list">
       <button class="nav-btn active" data-view="select_device_prompt" onclick="openDevicesLanding()">
         <span>All Devices</span>
-        <span class="nav-badge" id="nav-fleet-count">1</span>
+        <span class="nav-badge" id="nav-system-count">1</span>
       </button>
     </div>
 
@@ -1140,7 +1105,7 @@
       <!-- ================================================================== -->
       <!-- SYSTEM TAB 1: SYSTEM OVERVIEW                                      -->
       <!-- ================================================================== -->
-      <section id="view-fleet_overview" class="hidden">
+      <section id="view-system_overview" class="hidden">
         <div class="page-header">
           <h2>Overview</h2>
         </div>
@@ -1180,13 +1145,13 @@
             <div class="summary-row clickable" onclick="openSystemSection('remotes', 'card-vol-overrides')">
               <span>Speaker Volume Overrides</span><strong id="sys-sum-vol">0</strong>
             </div>
-            <div class="summary-row clickable" onclick="openSystemSection('household', 'card-cameras')">
+            <div class="summary-row clickable" onclick="openSystemSection('shared_entities', 'card-cameras')">
               <span>Cameras</span><strong id="sys-sum-cameras">0</strong>
             </div>
-            <div class="summary-row clickable" onclick="openSystemSection('household', 'card-calendars')">
+            <div class="summary-row clickable" onclick="openSystemSection('shared_entities', 'card-calendars')">
               <span>Calendars</span><strong id="sys-sum-calendars">0</strong>
             </div>
-            <div class="summary-row clickable" onclick="openSystemSection('fleet_sync', '')">
+            <div class="summary-row clickable" onclick="openSystemSection('system_sync', '')">
               <span>Groups &amp; Saved Profiles</span><strong id="sys-sum-groups-profiles">0</strong>
             </div>
           </div>
@@ -1196,7 +1161,7 @@
       <!-- ================================================================== -->
       <!-- SYSTEM TAB 2: SHARED ENTITIES (WHOLE-HOME, CAMERAS, CALENDARS)     -->
       <!-- ================================================================== -->
-      <section id="view-household" class="hidden">
+      <section id="view-shared_entities" class="hidden">
         <div class="page-header">
           <h2>Shared Entities</h2>
           <p>Select shared system entities, cameras, and calendars.</p>
@@ -1206,7 +1171,7 @@
           <!-- CARD 1: WHOLE-HOME ENTITIES -->
           <div class="card">
             <h3>Whole-Home Entities</h3>
-            <p class="desc">Primary household entities used by the Home screen and Whole-Home Hub.</p>
+            <p class="desc">Primary shared system entities used by the Home screen and Whole-Home Hub.</p>
             <div class="field">
               <label>Weather Provider (weather.*)</label>
               <select id="cfg-weather_entity" onchange="markDirty()"></select>
@@ -1260,7 +1225,7 @@
                 <strong id="cam-preview-label" style="font-size:13px;font-weight:500;color:var(--text-strong);">Camera Snapshot Preview</strong>
                 <div style="display:flex;gap:6px;">
                   <button type="button" class="btn-secondary" style="padding:4px 10px;font-size:12px;" onclick="refreshActiveCameraPreview()">Refresh</button>
-                  <button type="button" class="btn-secondary" style="padding:4px 8px;font-size:12px;" onclick="document.getElementById('cam-preview-box').style.display='none'">Close</button>
+                  <button type="button" class="btn-secondary" style="padding:4px 8px;font-size:12px;" onclick="closeCameraPreviewBox()">Close</button>
                 </div>
               </div>
               <img id="cam-preview-img" style="width:100%;max-width:360px;height:auto;aspect-ratio:16/9;object-fit:cover;border-radius:8px;border:1px solid var(--border);background:#000;" alt="Camera Snapshot">
@@ -1272,7 +1237,7 @@
           <!-- CARD 3: CALENDARS -->
           <div class="card" id="card-calendars">
             <h3>Calendars</h3>
-            <p class="desc">Add family calendars (<code>calendar.*</code>) to aggregate upcoming events in the Agenda tool and Home screen.</p>
+            <p class="desc">Add shared calendars (<code>calendar.*</code>) to aggregate upcoming events in the Agenda tool and Home screen.</p>
             <div id="calendars-list"></div>
             <button type="button" class="btn-secondary" onclick="addCalendarRow(''); markDirty();">+ Add Calendar</button>
           </div>
@@ -1318,7 +1283,7 @@
       <!-- ================================================================== -->
       <!-- SYSTEM TAB 4: GROUPS & PROFILES                                    -->
       <!-- ================================================================== -->
-      <section id="view-fleet_sync" class="hidden">
+      <section id="view-system_sync" class="hidden">
         <div class="page-header">
           <h2>Groups &amp; Profiles</h2>
           <p>Organize devices into groups, save configuration profiles, and apply settings across multiple devices.</p>
@@ -1359,7 +1324,7 @@
             <div class="form-grid-2" style="margin-bottom:12px;">
               <div>
                 <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px;">Category</label>
-                <select id="group-ctrl-cat-filter" onchange="renderFleetOverview(STATE.system_devices, STATE.system_controls, STATE.config)">
+                <select id="group-ctrl-cat-filter" onchange="renderSystemOverview(STATE.system_devices, STATE.system_controls, STATE.config)">
                   <option value="display">Display &amp; Appearance</option>
                   <option value="sleep">Sleep &amp; Wake</option>
                   <option value="voice">Voice Assistant</option>
@@ -1370,10 +1335,10 @@
               </div>
               <div>
                 <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px;">Target Devices</label>
-                <select id="group-ctrl-filter" onchange="renderFleetOverview(STATE.system_devices, STATE.system_controls, STATE.config)"></select>
+                <select id="group-ctrl-filter" onchange="renderSystemOverview(STATE.system_devices, STATE.system_controls, STATE.config)"></select>
               </div>
             </div>
-            <div id="fleet-controls-list" class="native-controls-box"></div>
+            <div id="system-controls-list" class="native-controls-box"></div>
           </div>
         </details>
       </section>
@@ -1522,7 +1487,7 @@
 
         <!-- COLLAPSIBLE: DEVELOPER & YAML TOOLS -->
         <details class="ha-details">
-          <summary>Developer &amp; YAML Tools (Mixins &amp; Contract Generator)</summary>
+          <summary>Developer &amp; YAML Mixin Packages</summary>
           <div class="details-body">
             <h3 style="margin:0 0 6px;font-size:14px;">1-Line Drop-In ESPHome Mixin Packages</h3>
             <p class="desc" style="margin:0 0 12px;color:var(--muted);font-size:12.5px;">Add any of these 1-line packages under <code>packages:</code> in an existing ESPHome device's YAML.</p>
@@ -1569,18 +1534,14 @@
               </div>
             </div>
 
-            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:8px;">
-              <strong style="font-size:13.5px;">Custom ESPHome YAML Contract Generator</strong>
-              <button class="btn-secondary" style="padding:5px 10px;font-size:12px;" onclick="copyGeneratedYaml()">Copy YAML</button>
+            <div style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                <strong style="font-size:13px;">6. Full Latter Protocol v3 Contract Mixin (Custom Displays)</strong>
+                <button class="btn-secondary" style="padding:4px 10px;font-size:11.5px;" onclick="copyTextById('mixin-contract')">Copy</button>
+              </div>
+              <pre id="mixin-contract" class="mono" style="margin:0;padding:8px;background:var(--card);border:1px solid var(--border);border-radius:6px;overflow-x:auto;">packages:
+  latter.contract: github://slampton/esphome-latter-core/mixins/latter_contract.yaml@main</pre>
             </div>
-            <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:10px;font-size:12.5px;">
-              <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="yg-sensors" checked onchange="renderYamlGenerator()"> Push Sensors</label>
-              <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="yg-browse" checked onchange="renderYamlGenerator()"> 5-Slot Callback</label>
-              <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="yg-area" checked onchange="renderYamlGenerator()"> Area Slider Callback</label>
-              <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="yg-ble" checked onchange="renderYamlGenerator()"> BLE Beacon</label>
-              <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="yg-actions" checked onchange="renderYamlGenerator()"> Action Examples</label>
-            </div>
-            <pre id="yaml-gen-output" class="mono" style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:12px;overflow-x:auto;max-height:320px;margin:0;color:var(--text-strong);line-height:1.45;"></pre>
           </div>
         </details>
 
@@ -1895,7 +1856,7 @@
             <p class="desc">Configure this device's normalized ESPHome slug, hardware type, logical group, and pagination.</p>
             <div class="field">
               <label>ESPHome Device Slug (sensor.&lt;slug&gt;_*)</label>
-              <input type="text" id="cfg-device_slug" oninput="markDirty(); renderYamlGenerator();">
+              <input type="text" id="cfg-device_slug" oninput="markDirty();">
             </div>
             <div class="field">
               <label>Device Type</label>
@@ -1913,7 +1874,7 @@
               </div>
               <div class="field">
                 <label>Area Cards Per Page</label>
-                <input type="number" id="cfg-default_page_size" min="1" max="20" value="3" oninput="markDirty(); renderYamlGenerator();">
+                <input type="number" id="cfg-default_page_size" min="1" max="20" value="3" oninput="markDirty();">
               </div>
             </div>
           </div>
@@ -1941,7 +1902,7 @@
             </div>
             <div class="field">
               <label>BLE iBeacon UUID</label>
-              <input type="text" id="cfg-ble_beacon_uuid" oninput="markDirty(); renderYamlGenerator();">
+              <input type="text" id="cfg-ble_beacon_uuid" oninput="markDirty();">
             </div>
             <div class="field">
               <label>External Area Sensor Override (Optional)</label>
@@ -2003,11 +1964,11 @@
                 <div class="form-grid-2">
                   <div class="field">
                     <label>Device Private Key</label>
-                    <input type="text" id="cfg-vpn_private_key" class="mono" oninput="markDirty()">
+                    <input type="password" id="cfg-vpn_private_key" autocomplete="new-password" class="mono" oninput="markDirty()">
                   </div>
                   <div class="field">
                     <label>Preshared Key (PSK)</label>
-                    <input type="text" id="cfg-vpn_preshared_key" class="mono" oninput="markDirty()">
+                    <input type="password" id="cfg-vpn_preshared_key" autocomplete="new-password" class="mono" oninput="markDirty()">
                   </div>
                 </div>
               </div>
@@ -2086,8 +2047,37 @@
 
 <div id="toast" class="toast">Saved</div>
 
-<script>
-const API_URL = window.location.pathname + "/api" + window.location.search;
+</div>`;
+
+let HASS_REF = null;
+let SHADOW_ROOT = null;
+let HOST_ELEMENT = null;
+let ACTIVE_SUBENTRY_ID = "";
+let WS_UNSUB = null;
+
+const doc = {
+  getElementById: (id) => SHADOW_ROOT ? SHADOW_ROOT.getElementById(id) : null,
+  querySelector: (sel) => SHADOW_ROOT ? SHADOW_ROOT.querySelector(sel) : null,
+  querySelectorAll: (sel) => SHADOW_ROOT ? SHADOW_ROOT.querySelectorAll(sel) : [],
+  createElement: (tag) => document.createElement(tag),
+  get activeElement() {
+    return (SHADOW_ROOT && SHADOW_ROOT.activeElement) || doc.activeElement;
+  },
+  body: {
+    appendChild: (el) => {
+      if (el && el.tagName === "A") {
+        doc.body.appendChild(el);
+      } else if (SHADOW_ROOT) {
+        const root = SHADOW_ROOT.querySelector(".studio-root") || SHADOW_ROOT;
+        root.appendChild(el);
+      }
+    },
+    removeChild: (el) => {
+      if (el && el.parentNode) el.parentNode.removeChild(el);
+    }
+  }
+};
+
 const esc = (s) => String(s ?? "").replace(/[&<>"'`]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;","`":"&#96;"}[c]));
 const jsArg = (v) => esc(JSON.stringify(v));
 let STATE = null;
@@ -2095,40 +2085,8 @@ let CALENDARS = [];
 let IS_DIRTY = false;
 let INITIAL_FORM_LOADED = false;
 
-try {
-  if (document.referrer && window.parent === window) {
-    const refUrl = new URL(document.referrer);
-    if (refUrl.origin !== window.location.origin && (refUrl.pathname.startsWith("/config") || refUrl.pathname.startsWith("/latter"))) {
-      window.location.replace(refUrl.origin + window.location.pathname + window.location.search);
-    }
-  }
-} catch (_e) {}
-
-const URL_PARAMS = new URLSearchParams(window.location.search);
-try {
-  // 1. If opened via a Device "Visit" link in a top-level tab, hand off to /latter so the HA Sidebar shell is preserved
-  if (window.parent === window && !URL_PARAMS.has("standalone") && !URL_PARAMS.get("scope")) {
-    const hasHaTokens = !!localStorage.getItem("hassTokens");
-    if (hasHaTokens) {
-      sessionStorage.setItem("latter_visit_redirect", window.location.pathname + window.location.search);
-      window.location.replace("/latter");
-    }
-  } else if (window.parent && window.parent !== window) {
-    // 2. Inside /latter iframe: check if a "Visit" redirect target was queued and jump straight to that device
-    const pendingTarget = window.parent.sessionStorage.getItem("latter_visit_redirect") || sessionStorage.getItem("latter_visit_redirect");
-    if (pendingTarget) {
-      window.parent.sessionStorage.removeItem("latter_visit_redirect");
-      sessionStorage.removeItem("latter_visit_redirect");
-      if (pendingTarget !== (window.location.pathname + window.location.search)) {
-        window.location.replace(pendingTarget);
-      }
-    }
-  }
-} catch (_e) {}
-const ENTERED_VIA_HOUSEHOLD = ["system", "household"].includes(URL_PARAMS.get("scope"));
-let CURRENT_SCOPE = ENTERED_VIA_HOUSEHOLD ? "household" : "device";
-let DEVICE_SELECTED = !ENTERED_VIA_HOUSEHOLD;
-let CURRENT_THEME_PREF = localStorage.getItem("latter_web_theme") || "ha_auto";
+let CURRENT_SCOPE = "system";
+let DEVICE_SELECTED = false;
 let POLL_TIMER = null;
 let SELECTED_SURVEY_SLUG = localStorage.getItem("latter_ble_survey_slug") || "";
 let PREVIEW_CAMERA_ENTITY = "";
@@ -2136,11 +2094,11 @@ let DEVICE_SORT_COL = "title";
 let DEVICE_SORT_ASC = true;
 let DEVICE_CATEGORY_FILTER = "all";
 
-const HOUSEHOLD_VIEWS = [
-  "fleet_overview",
-  "household",
+const SYSTEM_VIEWS = [
+  "system_overview",
+  "shared_entities",
   "remotes",
-  "fleet_sync",
+  "system_sync",
   "area_tracking",
   "system_admin"
 ];
@@ -2154,21 +2112,7 @@ const DEVICE_VIEWS = [
   "system"
 ];
 
-const ALL_VIEWS = HOUSEHOLD_VIEWS.concat(DEVICE_VIEWS);
-
-const HA_CSS_VARS = [
-  "--primary-background-color",
-  "--secondary-background-color",
-  "--card-background-color",
-  "--primary-text-color",
-  "--secondary-text-color",
-  "--primary-color",
-  "--accent-color",
-  "--divider-color",
-  "--success-color",
-  "--warning-color",
-  "--error-color"
-];
+const ALL_VIEWS = SYSTEM_VIEWS.concat(DEVICE_VIEWS);
 
 const DOCK_APP_META = [
   {token: "music",  label: "Music"},
@@ -2180,147 +2124,73 @@ const DOCK_APP_META = [
   {token: "tools",  label: "Tools"}
 ];
 
-const sysMedia = window.matchMedia("(prefers-color-scheme: dark)");
-sysMedia.addEventListener("change", () => {
-  if (CURRENT_THEME_PREF === "ha_auto") applyTheme("ha_auto");
-});
+const SYSTEM_WS_COMMANDS = new Set([
+  "set_ble_area_offset",
+  "set_area_fusion_mode",
+  "system_entity_action",
+  "check_system_updates",
+  "clear_internal_logs",
+  "log_client_error",
+  "remove_device",
+  "add_ble_device",
+  "bridge_esphome_device",
+  "create_device_group",
+  "delete_device_group",
+  "capture_profile",
+  "delete_profile",
+  "apply_profile"
+]);
 
-function clearCustomCssVars() {
-  HA_CSS_VARS.forEach(v => document.documentElement.style.removeProperty(v));
-  document.documentElement.style.removeProperty("--input-fill-color");
-}
-
-function toggleParentHaSidebar() {
-  try {
-    if (window.parent && window.parent !== window && window.parent.document) {
-      const haEl = window.parent.document.querySelector("home-assistant");
-      const target = (haEl && haEl.shadowRoot && haEl.shadowRoot.querySelector("home-assistant-main")) || haEl || window.parent.document.body;
-      target.dispatchEvent(new CustomEvent("hass-toggle-menu", {bubbles: true, composed: true}));
-    }
-  } catch (_e) {}
-}
-
-function collapseParentHaSubpageToolbar(rootNode) {
-  if (!rootNode) return;
-  const walker = [rootNode];
-  while (walker.length) {
-    const cur = walker.pop();
-    if (!cur) continue;
-    if (cur.nodeType === 1) {
-      if (cur.tagName === "HASS-SUBPAGE") {
-        cur.style.setProperty("--header-height", "0px");
-        if (cur.shadowRoot) {
-          const tb = cur.shadowRoot.querySelector(".toolbar");
-          if (tb) tb.style.display = "none";
-          const ct = cur.shadowRoot.querySelector(".content");
-          if (ct) ct.style.height = "100%";
-        }
-      }
-      if (cur.shadowRoot) walker.push(cur.shadowRoot);
-    }
-    const children = cur.children || cur.childNodes || [];
-    for (let i = 0; i < children.length; i++) walker.push(children[i]);
-  }
-}
-
-function isColorLight(colorStr) {
-  if (!colorStr) return false;
-  const c = colorStr.trim();
-  if (c.startsWith("#")) {
-    const hex = c.slice(1);
-    const full = hex.length === 3 ? hex.split("").map(x => x + x).join("") : hex;
-    if (full.length >= 6) {
-      const r = parseInt(full.slice(0, 2), 16);
-      const g = parseInt(full.slice(2, 4), 16);
-      const b = parseInt(full.slice(4, 6), 16);
-      return (0.299 * r + 0.587 * g + 0.114 * b) > 140;
-    }
-  }
-  const rgbMatch = c.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
-  if (rgbMatch) {
-    const r = parseInt(rgbMatch[1], 10);
-    const g = parseInt(rgbMatch[2], 10);
-    const b = parseInt(rgbMatch[3], 10);
-    return (0.299 * r + 0.587 * g + 0.114 * b) > 140;
-  }
-  return false;
-}
-
-function trySyncFromParentHaFrame() {
-  try {
-    const hostWin = (window.parent && window.parent !== window) ? window.parent : window.opener;
-    if (!hostWin || !hostWin.document) return false;
-    if (window.parent && window.parent !== window) {
-      collapseParentHaSubpageToolbar(hostWin.document.body);
-    }
-    const haEl = hostWin.document.querySelector("home-assistant") || hostWin.document.documentElement;
-    const computed = hostWin.getComputedStyle(haEl);
-    const bg = computed.getPropertyValue("--primary-background-color").trim();
-    if (!bg) return false;
-    document.body.setAttribute("data-theme", isColorLight(bg) ? "light" : "dark");
-    HA_CSS_VARS.forEach(v => {
-      const val = computed.getPropertyValue(v).trim();
-      if (val) document.documentElement.style.setProperty(v, val);
-    });
-    document.documentElement.style.setProperty("--input-fill-color", bg);
-    return true;
-  } catch (_e) {
-    return false;
-  }
-}
-
-function populateThemeDropdowns(_haThemes, selectedPref) {
-  document.querySelectorAll("[data-theme-btn]").forEach(btn => {
-    btn.classList.toggle("active", btn.getAttribute("data-theme-btn") === selectedPref);
+async function callStudioCommand(bodyObj) {
+  if (!HASS_REF) throw new Error("Home Assistant connection not ready");
+  const { command, ...payload } = bodyObj || {};
+  const cmdName = command || "save_config";
+  const wsType = SYSTEM_WS_COMMANDS.has(cmdName) ? "latter/system/command" : "latter/device/command";
+  return await HASS_REF.callWS({
+    type: wsType,
+    command: cmdName,
+    subentry_id: ACTIVE_SUBENTRY_ID || null,
+    payload
   });
 }
 
-function applyTheme(_pref) {
-  CURRENT_THEME_PREF = "ha_auto";
-  clearCustomCssVars();
-  document.body.setAttribute("data-theme", sysMedia.matches ? "dark" : "light");
-  trySyncFromParentHaFrame();
+function toggleParentHaSidebar() {
+  if (HOST_ELEMENT) {
+    HOST_ELEMENT.dispatchEvent(new CustomEvent("hass-toggle-menu", { bubbles: true, composed: true }));
+  }
 }
 
-applyTheme(CURRENT_THEME_PREF);
-if (CURRENT_SCOPE === "household") {
-  window.addEventListener("DOMContentLoaded", () => setScope("household", "fleet_overview"));
+function closeCameraPreviewBox() {
+  const box = doc.getElementById("cam-preview-box");
+  if (box) box.style.display = "none";
 }
 
 function showToast(msg) {
-  const t = document.getElementById("toast");
+  const t = doc.getElementById("toast");
   t.textContent = msg;
   t.style.display = "block";
   setTimeout(() => { t.style.display = "none"; }, 2400);
 }
 
 window.addEventListener("error", (ev) => {
-  const msg = `${ev.message || 'JS Error'} at line ${ev.lineno || '?'}`;
-  fetch(API_URL, {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({command: "log_client_error", source: "webui_js", message: msg})
-  }).catch(() => {});
+  const msg = `${ev.message || "JS Error"} at line ${ev.lineno || "?"}`;
+  callStudioCommand({command: "log_client_error", source: "webui_js", message: msg}).catch(() => {});
 });
 
 window.addEventListener("unhandledrejection", (ev) => {
-  const msg = `Unhandled Promise Rejection: ${ev.reason?.message || ev.reason || 'unknown'}`;
-  fetch(API_URL, {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({command: "log_client_error", source: "webui_promise", message: msg})
-  }).catch(() => {});
+  const msg = `Unhandled Promise Rejection: ${ev.reason?.message || ev.reason || "unknown"}`;
+  callStudioCommand({command: "log_client_error", source: "webui_promise", message: msg}).catch(() => {});
 });
 
 function renderLogsView() {
-  const logPre = document.getElementById("internal-log-output");
+  const logPre = doc.getElementById("internal-log-output");
   if (!logPre) return;
   const allLogs = STATE?.internal_logs || [];
-  const filterMode = document.getElementById("log-filter-select")?.value || "all";
+  const filterMode = doc.getElementById("log-filter-select")?.value || "all";
   const slug = (STATE?.config?.device_slug || "").toLowerCase();
   const slugHyphen = slug.replace(/_/g, "-");
 
-  const devBtn = document.getElementById("btn-native-dev-logs");
+  const devBtn = doc.getElementById("btn-native-dev-logs");
   if (devBtn && slug) {
     devBtn.textContent = `HA Logs (${slug})`;
   }
@@ -2347,42 +2217,28 @@ function renderLogsView() {
 function openNativeHaLogs(filterTerm) {
   const q = filterTerm ? `?filter=${encodeURIComponent(filterTerm)}` : "";
   const targetPath = `/config/logs${q}`;
-  try {
-    if (window.parent && window.parent !== window) {
-      window.parent.location.href = targetPath;
-      return;
-    }
-  } catch (_e) {}
+
   window.open(targetPath, "_blank");
 }
 
 function openNativeHaIntegrations() {
   const targetPath = "/config/integrations/integration/latter";
-  try {
-    if (window.parent && window.parent !== window) {
-      window.parent.location.href = targetPath;
-      return;
-    }
-  } catch (_e) {}
+
   window.open(targetPath, "_blank");
 }
 
 async function clearInternalLogs() {
-  const resp = await fetch(API_URL, {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({command: "clear_internal_logs"})
-  });
-  if (resp.ok) {
-    applyStateToDom(await resp.json(), false);
+  const data = await callStudioCommand({command: "clear_internal_logs"});
+  if (data) {
+    applyStateToDom(data, false);
     showToast("Cleared studio events");
   }
 }
 
 function markDirty() {
   IS_DIRTY = true;
-  document.getElementById("dirty-indicator").classList.add("visible");
-  const btn = document.getElementById("btn-save-changes");
+  doc.getElementById("dirty-indicator").classList.add("visible");
+  const btn = doc.getElementById("btn-save-changes");
   if (btn) {
     btn.disabled = false;
     btn.textContent = "Save Changes";
@@ -2391,29 +2247,20 @@ function markDirty() {
 
 function clearDirty() {
   IS_DIRTY = false;
-  document.getElementById("dirty-indicator").classList.remove("visible");
-  const btn = document.getElementById("btn-save-changes");
+  doc.getElementById("dirty-indicator").classList.remove("visible");
+  const btn = doc.getElementById("btn-save-changes");
   if (btn) {
     btn.disabled = true;
     btn.textContent = "Saved";
   }
 }
 
-async function onThemeChanged(themePref) {
-  applyTheme(themePref);
-  const resp = await fetch(API_URL, {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({command: "set_theme", web_theme: themePref})
-  });
-  if (resp.ok) showToast(`Theme set to ${themePref}`);
-}
 
 const VIEW_TITLES = {
-  fleet_overview: "Overview",
-  household: "Shared Entities",
+  system_overview: "Overview",
+  shared_entities: "Shared Entities",
   remotes: "Media & Remotes",
-  fleet_sync: "Groups & Profiles",
+  system_sync: "Groups & Profiles",
   area_tracking: "BLE Calibration",
   system_admin: "Administration",
   select_device_prompt: "Devices",
@@ -2427,7 +2274,7 @@ let CURRENT_VIEW_ID = "dashboard";
 
 function updateUnifiedPageTitle(viewId) {
   if (viewId) CURRENT_VIEW_ID = viewId;
-  const titleEl = document.getElementById("unified-page-title");
+  const titleEl = doc.getElementById("unified-page-title");
   if (!titleEl) return;
   const baseTitle = VIEW_TITLES[CURRENT_VIEW_ID] || "Overview";
   if (CURRENT_SCOPE === "device" && DEVICE_SELECTED && CURRENT_VIEW_ID !== "select_device_prompt") {
@@ -2439,12 +2286,12 @@ function updateUnifiedPageTitle(viewId) {
 }
 
 function updateTopHeaderForScope() {
-  const isHH = (CURRENT_SCOPE === "household") || !DEVICE_SELECTED;
+  const isHH = (CURRENT_SCOPE === "system") || !DEVICE_SELECTED;
   const devTitle = STATE?.esphome?.device?.name || STATE?.title || "Device";
-  const devNavLbl = document.getElementById("nav-selected-device-label");
+  const devNavLbl = doc.getElementById("nav-selected-device-label");
   if (devNavLbl) devNavLbl.textContent = devTitle;
 
-  const updPill = document.getElementById("hdr-update-pill");
+  const updPill = doc.getElementById("hdr-update-pill");
   if (updPill) {
     const showUpd = !isHH && !!(STATE?.live?.fw_update_available && STATE?.live?.fw_update_entity);
     updPill.classList.toggle("hidden", !showUpd);
@@ -2453,9 +2300,9 @@ function updateTopHeaderForScope() {
       updPill.textContent = `Update Available${lat} — Click to Update`;
     }
   }
-  document.getElementById("nav-scope-household").classList.toggle("hidden", CURRENT_SCOPE !== "household");
-  document.getElementById("nav-scope-devices-list")?.classList.toggle("hidden", CURRENT_SCOPE !== "device" || DEVICE_SELECTED);
-  document.getElementById("nav-scope-device").classList.toggle("hidden", CURRENT_SCOPE !== "device" || !DEVICE_SELECTED);
+  doc.getElementById("nav-scope-system").classList.toggle("hidden", CURRENT_SCOPE !== "system");
+  doc.getElementById("nav-scope-devices-list")?.classList.toggle("hidden", CURRENT_SCOPE !== "device" || DEVICE_SELECTED);
+  doc.getElementById("nav-scope-device").classList.toggle("hidden", CURRENT_SCOPE !== "device" || !DEVICE_SELECTED);
   updateUnifiedPageTitle(CURRENT_VIEW_ID);
 }
 
@@ -2466,13 +2313,9 @@ async function triggerHeaderFirmwareUpdate() {
 }
 
 async function checkSystemUpdates() {
-  const resp = await fetch(API_URL, {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({command: "check_system_updates"})
-  });
-  if (resp.ok) {
-    applyStateToDom(await resp.json(), false);
+  const data = await callStudioCommand({command: "check_system_updates"});
+  if (data) {
+    applyStateToDom(data, false);
     showToast("Checked for Latter & device firmware updates");
   }
 }
@@ -2484,7 +2327,7 @@ function openDevicesLanding() {
 
 function openDevicesWithCategory(categoryKey) {
   DEVICE_CATEGORY_FILTER = categoryKey || "all";
-  const sel = document.getElementById("device-category-filter");
+  const sel = doc.getElementById("device-category-filter");
   if (sel) sel.value = DEVICE_CATEGORY_FILTER;
   DEVICE_SELECTED = false;
   setScope("device", "select_device_prompt");
@@ -2492,10 +2335,10 @@ function openDevicesWithCategory(categoryKey) {
 }
 
 function openSystemSection(viewId, cardId) {
-  setScope("household", viewId);
+  setScope("system", viewId);
   if (cardId) {
     setTimeout(() => {
-      const el = document.getElementById(cardId);
+      const el = doc.getElementById(cardId);
       if (el) el.scrollIntoView({behavior: "smooth", block: "start"});
     }, 60);
   } else {
@@ -2504,25 +2347,25 @@ function openSystemSection(viewId, cardId) {
 }
 
 function setScope(scope, targetView=null) {
-  CURRENT_SCOPE = scope === "household" ? "household" : "device";
-  document.getElementById("tab-scope-household").classList.toggle("active", CURRENT_SCOPE === "household");
-  document.getElementById("tab-scope-device").classList.toggle("active", CURRENT_SCOPE === "device");
+  CURRENT_SCOPE = scope === "system" ? "system" : "device";
+  doc.getElementById("tab-scope-system").classList.toggle("active", CURRENT_SCOPE === "system");
+  doc.getElementById("tab-scope-device").classList.toggle("active", CURRENT_SCOPE === "device");
   updateTopHeaderForScope();
 
-  if (CURRENT_SCOPE === "household") {
-    switchView(targetView || "fleet_overview", null);
+  if (CURRENT_SCOPE === "system") {
+    switchView(targetView || "system_overview", null);
   } else if (!DEVICE_SELECTED) {
     switchView("select_device_prompt", null);
   } else {
     switchView(targetView || "dashboard", null);
   }
   if (STATE) {
-    renderFleetOverview(STATE.system_devices, STATE.system_controls, STATE.config);
+    renderSystemOverview(STATE.system_devices, STATE.system_controls, STATE.config);
   }
 }
 
 function switchView(viewId, btnEl) {
-  const neededScope = HOUSEHOLD_VIEWS.includes(viewId) ? "household" : "device";
+  const neededScope = SYSTEM_VIEWS.includes(viewId) ? "system" : "device";
   if (CURRENT_SCOPE !== neededScope) {
     setScope(neededScope, viewId);
     return;
@@ -2530,15 +2373,15 @@ function switchView(viewId, btnEl) {
   if (CURRENT_SCOPE === "device" && !DEVICE_SELECTED && viewId !== "select_device_prompt") {
     viewId = "select_device_prompt";
   }
-  document.querySelectorAll("aside .nav-btn").forEach(b => b.classList.remove("active"));
+  doc.querySelectorAll("aside .nav-btn").forEach(b => b.classList.remove("active"));
   if (btnEl) {
     btnEl.classList.add("active");
   } else {
-    const matchBtn = document.querySelector(`aside .nav-btn[data-view="${viewId}"]`);
+    const matchBtn = doc.querySelector(`aside .nav-btn[data-view="${viewId}"]`);
     if (matchBtn) matchBtn.classList.add("active");
   }
   ALL_VIEWS.forEach(id => {
-    const el = document.getElementById("view-" + id);
+    const el = doc.getElementById("view-" + id);
     if (el) el.classList.toggle("hidden", id !== viewId);
   });
   updateUnifiedPageTitle(viewId);
@@ -2554,22 +2397,30 @@ function selectCurrentDevice() {
   setScope("device", "dashboard");
 }
 
-function switchFleetDevice(companionUrl) {
-  if (!companionUrl) {
+async function switchSystemDevice(targetRef) {
+  if (!targetRef) {
     DEVICE_SELECTED = false;
     setScope("device", "select_device_prompt");
     return;
   }
-  const curBase = window.location.pathname + "?uid=" + encodeURIComponent(URL_PARAMS.get("uid") || "") + "&sig=" + encodeURIComponent(URL_PARAMS.get("sig") || "");
-  if (companionUrl === curBase || companionUrl === window.location.pathname + window.location.search || companionUrl.startsWith(window.location.pathname + "?")) {
-    selectCurrentDevice();
-  } else {
-    window.location.href = companionUrl;
+  const subId = String(targetRef).includes("/devices/")
+    ? String(targetRef).split("/devices/").pop().split("?")[0]
+    : String(targetRef);
+  ACTIVE_SUBENTRY_ID = subId;
+  DEVICE_SELECTED = true;
+  INITIAL_FORM_LOADED = false;
+  try {
+    window.history.replaceState(null, "", `/latter/devices/${encodeURIComponent(subId)}`);
+  } catch (_e) {}
+  await refreshState(true);
+  setScope("device", "dashboard");
+  if (HOST_ELEMENT && typeof HOST_ELEMENT._resubscribe === "function") {
+    HOST_ELEMENT._resubscribe();
   }
 }
 
 function populateSelect(selId, items, selectedVal, allowEmpty=true) {
-  const sel = document.getElementById(selId);
+  const sel = doc.getElementById(selId);
   if (!sel) return;
   sel.innerHTML = "";
   if (allowEmpty) {
@@ -2588,8 +2439,8 @@ function populateSelect(selId, items, selectedVal, allowEmpty=true) {
 }
 
 function renderDockPillsFromInput() {
-  const box = document.getElementById("dock-pills-container");
-  const inp = document.getElementById("cfg-dock_apps");
+  const box = doc.getElementById("dock-pills-container");
+  const inp = doc.getElementById("cfg-dock_apps");
   if (!box || !inp) return;
   const availDockMeta = DOCK_APP_META.slice();
   const rawTokens = inp.value
@@ -2626,7 +2477,7 @@ function renderDockPillsFromInput() {
 }
 
 function toggleDockAppToken(tok) {
-  const inp = document.getElementById("cfg-dock_apps");
+  const inp = doc.getElementById("cfg-dock_apps");
   if (!inp) return;
   let active = inp.value
     .split(/[,;| ]+/)
@@ -2661,7 +2512,7 @@ function toggleDockAppToken(tok) {
 }
 
 function moveDockAppToken(tok, dir) {
-  const inp = document.getElementById("cfg-dock_apps");
+  const inp = doc.getElementById("cfg-dock_apps");
   if (!inp) return;
   const active = inp.value
     .split(/[,;| ]+/)
@@ -2689,7 +2540,7 @@ function toggleSurveyFastMode(enabled) {
 }
 
 function renderRssiBars(surveyRows, packetsSeen) {
-  const box = document.getElementById("rssi-container");
+  const box = doc.getElementById("rssi-container");
   if (!box) return;
   const rows = surveyRows || [];
   if (!rows.length) {
@@ -2733,26 +2584,26 @@ function renderRssiBars(surveyRows, packetsSeen) {
   }).join("");
 }
 
-function renderFleetOverview(fleetDevices, fleetControls, cfg) {
-  const countBadge = document.getElementById("nav-fleet-count");
-  if (countBadge) countBadge.textContent = String((fleetDevices || []).length);
+function renderSystemOverview(systemDevices, systemControls, cfg) {
+  const countBadge = doc.getElementById("nav-system-count");
+  if (countBadge) countBadge.textContent = String((systemDevices || []).length);
 
   const groups = STATE?.device_groups || [];
   const profiles = STATE?.saved_profiles || [];
   const live = STATE?.live || {};
 
-  const profDevLbl = document.getElementById("prof-active-dev-label");
+  const profDevLbl = doc.getElementById("prof-active-dev-label");
   if (profDevLbl) profDevLbl.textContent = STATE?.title || cfg?.device_slug || "Active Device";
 
-  const picker = document.getElementById("fleet-device-picker");
-  if (picker && fleetDevices) {
+  const picker = doc.getElementById("system-device-picker");
+  if (picker && systemDevices) {
     const placeholder = `<option value="" ${!DEVICE_SELECTED ? 'selected' : ''}>— Select a Device —</option>`;
-    picker.innerHTML = placeholder + fleetDevices.map(d =>
-      `<option value="${esc(d.companion_url)}" ${(DEVICE_SELECTED && d.is_current) ? 'selected' : ''}>${esc(d.title)}</option>`
+    picker.innerHTML = placeholder + systemDevices.map(d =>
+      `<option value="${esc(d.subentry_id || d.entry_id)}" ${(DEVICE_SELECTED && d.is_current) ? 'selected' : ''}>${esc(d.title)}</option>`
     ).join("");
   }
 
-  const quickProfSel = document.getElementById("quick-profile-select");
+  const quickProfSel = doc.getElementById("quick-profile-select");
   if (quickProfSel && profiles.length) {
     const prevP = quickProfSel.value;
     quickProfSel.innerHTML = profiles.map(p =>
@@ -2760,7 +2611,7 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
     ).join("");
   }
 
-  const devGrpSel = document.getElementById("cfg-device_group");
+  const devGrpSel = doc.getElementById("cfg-device_group");
   if (devGrpSel && groups.length) {
     const curGrp = cfg?.device_group || "handhelds";
     devGrpSel.innerHTML = groups.map(g =>
@@ -2770,17 +2621,17 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
 
   const targetScopes = [
     {id: "current", name: `Current Device (${STATE?.title || cfg?.device_slug || 'Active'})`},
-    {id: "all", name: `All Devices (${(fleetDevices || []).length})`}
+    {id: "all", name: `All Devices (${(systemDevices || []).length})`}
   ];
   groups.forEach(g => {
-    const cnt = (fleetDevices || []).filter(d => d.device_group === g.id).length;
+    const cnt = (systemDevices || []).filter(d => d.device_group === g.id).length;
     targetScopes.push({id: `group:${g.id}`, name: `Group: ${g.name} (${cnt})`});
   });
-  (fleetDevices || []).forEach(d => {
+  (systemDevices || []).forEach(d => {
     targetScopes.push({id: `device:${d.device_slug}`, name: `Device: ${d.title}`});
   });
 
-  const profScopeSel = document.getElementById("profile-target-scope");
+  const profScopeSel = doc.getElementById("profile-target-scope");
   if (profScopeSel) {
     const prevVal = profScopeSel.value || "current";
     profScopeSel.innerHTML = targetScopes.map(o =>
@@ -2788,15 +2639,15 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
     ).join("");
   }
 
-  const grpFilterSel = document.getElementById("group-ctrl-filter");
+  const grpFilterSel = doc.getElementById("group-ctrl-filter");
   let activeFilter = "all";
   if (grpFilterSel) {
     activeFilter = grpFilterSel.value || "all";
     const filterOpts = [
-      {id: "all", name: `Target: All Devices (${(fleetDevices || []).length})`}
+      {id: "all", name: `Target: All Devices (${(systemDevices || []).length})`}
     ];
     groups.forEach(g => {
-      const cnt = (fleetDevices || []).filter(d => d.device_group === g.id).length;
+      const cnt = (systemDevices || []).filter(d => d.device_group === g.id).length;
       filterOpts.push({id: `group:${g.id}`, name: `Group: ${g.name} (${cnt})`});
     });
     filterOpts.push({id: "arch:mobile_display", name: "Type: Mobile Displays"});
@@ -2812,7 +2663,7 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
     return 3;
   };
 
-  const catSel = document.getElementById("device-category-filter");
+  const catSel = doc.getElementById("device-category-filter");
   if (catSel) {
     const baseOpts = [
       {id: "all", label: "Category: All Devices"},
@@ -2836,7 +2687,7 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
     ).join("");
   }
   const cat = DEVICE_CATEGORY_FILTER || "all";
-  const filteredDevices = (fleetDevices || []).filter(d => {
+  const filteredDevices = (systemDevices || []).filter(d => {
     const isNative = !!d.is_latter_native;
     const isBleTracked = !!(d.has_ble || d.device_profile === "ble_beacon" || (d.area_label || "Roaming") === "Roaming");
     const isRoaming = (d.area_label || "Roaming") === "Roaming";
@@ -2880,7 +2731,7 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
   const tableRowsHtml = filteredDevices.map(d => {
     const actAction = d.is_current
       ? `selectCurrentDevice()`
-      : `switchFleetDevice(${jsArg(d.companion_url)})`;
+      : `switchSystemDevice(${jsArg(d.subentry_id || d.entry_id)})`;
     const st = d.status_label || "Online";
     const dotCls = st === "Update Available" ? "update" : (st === "Offline" ? "offline" : "online");
     const areaVal = d.area_label || "Roaming";
@@ -2914,11 +2765,11 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
       </div>`
     : `<p class="desc" style="margin:8px 0 0;">No matching devices found.</p>`;
 
-  const promptBox = document.getElementById("prompt-devices-list");
+  const promptBox = doc.getElementById("prompt-devices-list");
   if (promptBox) promptBox.innerHTML = tableHtml;
 
   // Populate System -> Overview stats
-  const allDevs = fleetDevices || [];
+  const allDevs = systemDevices || [];
   const totalDevs = allDevs.length;
   const onlineDevs = allDevs.filter(d => d.status_label !== "Offline").length;
   const nativeDevs = allDevs.filter(d => d.is_latter_native).length;
@@ -2928,7 +2779,7 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
   const peopleCount = (STATE?.catalog?.persons || []).length;
 
   const setSysTxt = (id, val) => {
-    const el = document.getElementById(id);
+    const el = doc.getElementById(id);
     if (el) el.textContent = String(val);
   };
 
@@ -2951,22 +2802,22 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
   setSysTxt("sys-sum-calendars", calCnt);
   setSysTxt("sys-sum-groups-profiles", `${groups.length} groups / ${profiles.length} profiles`);
 
-  const alertDevSel = document.getElementById("test-alert-device");
-  if (alertDevSel && fleetDevices && fleetDevices.length) {
-    const prevTarget = alertDevSel.value || (STATE?.config?.device_slug || fleetDevices[0].device_slug);
-    const devOpts = fleetDevices.map(d =>
+  const alertDevSel = doc.getElementById("test-alert-device");
+  if (alertDevSel && systemDevices && systemDevices.length) {
+    const prevTarget = alertDevSel.value || (STATE?.config?.device_slug || systemDevices[0].device_slug);
+    const devOpts = systemDevices.map(d =>
       `<option value="${esc(d.device_slug)}" ${d.device_slug === prevTarget ? 'selected' : ''}>${esc(d.title)} (${esc(d.device_slug)})</option>`
     );
-    if (fleetDevices.length > 1) {
+    if (systemDevices.length > 1) {
       devOpts.push(`<option value="follow_me" ${prevTarget === 'follow_me' ? 'selected' : ''}>Follow-Me (Occupied Areas Only)</option>`);
-      devOpts.push(`<option value="all" ${prevTarget === 'all' ? 'selected' : ''}>All Devices (${fleetDevices.length})</option>`);
+      devOpts.push(`<option value="all" ${prevTarget === 'all' ? 'selected' : ''}>All Devices (${systemDevices.length})</option>`);
     } else {
       devOpts.push(`<option value="follow_me" ${prevTarget === 'follow_me' ? 'selected' : ''}>Follow-Me (Occupied Areas Only)</option>`);
     }
     alertDevSel.innerHTML = devOpts.join("");
   }
 
-  const profBox = document.getElementById("saved-profiles-list");
+  const profBox = doc.getElementById("saved-profiles-list");
   if (profBox) {
     if (!profiles.length) {
       profBox.innerHTML = `<p class="desc">No profiles saved yet.</p>`;
@@ -2988,10 +2839,10 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
     }
   }
 
-  const grpBox = document.getElementById("device-groups-list");
+  const grpBox = doc.getElementById("device-groups-list");
   if (grpBox) {
     grpBox.innerHTML = groups.map(g => {
-      const members = (fleetDevices || []).filter(d => d.device_group === g.id);
+      const members = (systemDevices || []).filter(d => d.device_group === g.id);
       const memNames = members.length ? members.map(m => m.title).join(", ") : "None";
       const isDefault = ["unassigned", "handhelds", "bedrooms", "common_areas", "wall_panels", "sensors"].includes(g.id);
       return `<div class="native-ctrl-row">
@@ -3006,13 +2857,13 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
     }).join("");
   }
 
-  const fBox = document.getElementById("fleet-controls-list");
+  const fBox = doc.getElementById("system-controls-list");
   if (fBox) {
-    if (!fleetControls || !fleetControls.length) {
+    if (!systemControls || !systemControls.length) {
       fBox.innerHTML = `<p class="desc">No shared ESPHome controls discovered.</p>`;
     } else {
-      const activeCat = document.getElementById("group-ctrl-cat-filter")?.value || "display";
-      const filteredRows = fleetControls.map(fc => {
+      const activeCat = doc.getElementById("group-ctrl-cat-filter")?.value || "display";
+      const filteredRows = systemControls.map(fc => {
         if (activeCat !== "all" && fc.section !== activeCat) return "";
         const matchingTargets = (fc.targets || []).filter(t => {
           if (activeFilter === "all") return true;
@@ -3027,16 +2878,16 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
         let widget = `<span class="state-badge">${esc(curState)}</span>`;
         if (fc.domain === "select" && fc.options && fc.options.length) {
           const opts = fc.options.map(o => `<option value="${esc(o)}" ${o===curState?'selected':''}>${esc(o)}</option>`).join("");
-          widget = `<select onchange="fleetSelect(${entIdsArg}, this.value)">${opts}</select>`;
+          widget = `<select onchange="bulkSelect(${entIdsArg}, this.value)">${opts}</select>`;
         } else if (fc.domain === "switch") {
           const isOn = curState === "on";
-          widget = `<button class="${isOn ? 'btn-primary' : 'btn-secondary'}" onclick="fleetToggle(${entIdsArg}, ${jsArg(isOn ? 'turn_off' : 'turn_on')})">${isOn ? 'ON' : 'OFF'}</button>`;
+          widget = `<button class="${isOn ? 'btn-primary' : 'btn-secondary'}" onclick="bulkToggle(${entIdsArg}, ${jsArg(isOn ? 'turn_off' : 'turn_on')})">${isOn ? 'ON' : 'OFF'}</button>`;
         } else if (fc.domain === "number") {
           const minV = fc.min ?? 0;
           const maxV = fc.max ?? 100;
           const stepV = fc.step ?? 1;
           const numVal = parseFloat(curState) || 0;
-          widget = `<input type="range" min="${esc(minV)}" max="${esc(maxV)}" step="${esc(stepV)}" value="${esc(numVal)}" onchange="fleetNumber(${entIdsArg}, this.value)"><span class="state-badge">${esc(curState)} ${esc(fc.unit || '')}</span>`;
+          widget = `<input type="range" min="${esc(minV)}" max="${esc(maxV)}" step="${esc(stepV)}" value="${esc(numVal)}" onchange="bulkNumber(${entIdsArg}, this.value)"><span class="state-badge">${esc(curState)} ${esc(fc.unit || '')}</span>`;
         }
         return `<div class="native-ctrl-row">
           <div class="lbl">
@@ -3054,63 +2905,43 @@ function renderFleetOverview(fleetDevices, fleetControls, cfg) {
 }
 
 async function applyQuickProfileFromOverview() {
-  const sel = document.getElementById("quick-profile-select");
+  const sel = doc.getElementById("quick-profile-select");
   if (!sel || !sel.value) return;
-  const resp = await fetch(API_URL, {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({command: "apply_profile", profile_id: sel.value, target_scope: "current"})
-  });
-  if (resp.ok) {
-    applyStateToDom(await resp.json(), true);
+  const data = await callStudioCommand({command: "apply_profile", profile_id: sel.value, target_scope: "current"});
+  if (data) {
+    applyStateToDom(data, true);
     showToast("Applied configuration profile to device");
   }
 }
 
-async function fleetSelect(entityIds, option) {
-  const resp = await fetch(API_URL, {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({command: "system_entity_action", entity_ids: entityIds, option})
-  });
-  if (resp.ok) {
-    applyStateToDom(await resp.json(), false);
+async function bulkSelect(entityIds, option) {
+  const data = await callStudioCommand({command: "system_entity_action", entity_ids: entityIds, option});
+  if (data) {
+    applyStateToDom(data, false);
     showToast(`Applied '${option}' across ${entityIds.length} device(s)`);
   }
 }
 
-async function fleetToggle(entityIds, action) {
-  const resp = await fetch(API_URL, {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({command: "system_entity_action", entity_ids: entityIds, action})
-  });
-  if (resp.ok) {
-    applyStateToDom(await resp.json(), false);
+async function bulkToggle(entityIds, action) {
+  const data = await callStudioCommand({command: "system_entity_action", entity_ids: entityIds, action});
+  if (data) {
+    applyStateToDom(data, false);
     showToast(`Applied ${action} across ${entityIds.length} device(s)`);
   }
 }
 
-async function fleetNumber(entityIds, level) {
-  const resp = await fetch(API_URL, {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({command: "system_entity_action", entity_ids: entityIds, level})
-  });
-  if (resp.ok) {
-    applyStateToDom(await resp.json(), false);
+async function bulkNumber(entityIds, level) {
+  const data = await callStudioCommand({command: "system_entity_action", entity_ids: entityIds, level});
+  if (data) {
+    applyStateToDom(data, false);
     showToast(`Applied ${level} across ${entityIds.length} device(s)`);
   }
 }
 
 async function setBleOffset(areaId, offsetDb) {
-  const resp = await fetch(API_URL, {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({command: "set_ble_area_offset", area_id: areaId, offset_db: offsetDb})
-  });
-  if (resp.ok) {
-    applyStateToDom(await resp.json(), false);
+  const data = await callStudioCommand({command: "set_ble_area_offset", area_id: areaId, offset_db: offsetDb});
+  if (data) {
+    applyStateToDom(data, false);
     showToast("Saved BLE area offset");
   }
 }
@@ -3129,7 +2960,7 @@ function renderActiveSurveyDeviceBars() {
   renderDiscoveredBleTable();
   const allDevs = STATE.system_devices || [];
   const bleDevs = allDevs.filter(d => d.has_ble);
-  const picker = document.getElementById("ble-survey-device-picker");
+  const picker = doc.getElementById("ble-survey-device-picker");
 
   if (!bleDevs.length) {
     if (picker) picker.innerHTML = `<option value="">No BLE devices found</option>`;
@@ -3161,7 +2992,7 @@ function renderActiveSurveyDeviceBars() {
 }
 
 function renderAreaPresenceGrid() {
-  const box = document.getElementById("area-presence-grid-box");
+  const box = doc.getElementById("area-presence-grid-box");
   if (!box) return;
   const rows = STATE?.live?.area_presence_grid || [];
   if (!rows.length) {
@@ -3222,19 +3053,15 @@ function renderAreaPresenceGrid() {
 }
 
 async function setAreaFusionMode(areaId, mode) {
-  const resp = await fetch(API_URL, {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({command: "set_area_fusion_mode", area_id: areaId, mode})
-  });
-  if (resp.ok) {
-    applyStateToDom(await resp.json(), false);
+  const data = await callStudioCommand({command: "set_area_fusion_mode", area_id: areaId, mode});
+  if (data) {
+    applyStateToDom(data, false);
     showToast("Updated Area sensor fusion mode");
   }
 }
 
 function renderDiscoveredBleTable() {
-  const box = document.getElementById("ble-adopt-table-box");
+  const box = doc.getElementById("ble-adopt-table-box");
   if (!box) return;
   const cands = STATE?.discovered_ble_devices || [];
   if (!cands.length) {
@@ -3268,43 +3095,35 @@ async function quickAdoptBleCandidate(idx) {
   const cands = STATE?.discovered_ble_devices || [];
   const cand = cands[idx];
   if (!cand) return;
-  const assigned_person = document.getElementById(`ble-adopt-person-${idx}`)?.value || "";
-  const resp = await fetch(API_URL, {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({
+  const assigned_person = doc.getElementById(`ble-adopt-person-${idx}`)?.value || "";
+  const data = await callStudioCommand({
       command: "add_ble_device",
       name: cand.title,
       target_address: cand.target_address,
       assigned_person
-    })
-  });
-  if (resp.ok) {
-    applyStateToDom(await resp.json(), false);
+    });
+  if (data) {
+    applyStateToDom(data, false);
     showToast(`Adopted BLE device '${cand.title}'`);
   }
 }
 
 async function autoCalibrateHere(areaId) {
-  const resp = await fetch(API_URL, {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({
+  const data = await callStudioCommand({
       command: "auto_calibrate_here",
       area_id: areaId,
       survey_device_slug: SELECTED_SURVEY_SLUG
-    })
-  });
-  if (resp.ok) {
-    applyStateToDom(await resp.json(), false);
+    });
+  if (data) {
+    applyStateToDom(data, false);
     showToast("Calibrated current area offset");
   }
 }
 
 function renderCameraPreview(camEntityId) {
-  const box = document.getElementById("cam-preview-box");
-  const img = document.getElementById("cam-preview-img");
-  const lbl = document.getElementById("cam-preview-label");
+  const box = doc.getElementById("cam-preview-box");
+  const img = doc.getElementById("cam-preview-img");
+  const lbl = doc.getElementById("cam-preview-label");
   if (!box || !img) return;
   if (!camEntityId) {
     box.style.display = "none";
@@ -3329,48 +3148,40 @@ function refreshActiveCameraPreview() {
 }
 
 async function testDoorbellTalkback() {
-  const firstCam = document.querySelector("#cameras-list .cam-ent-sel")?.value || STATE?.config?.camera_entity || "";
-  const ancMode = document.getElementById("cfg-doorbell_anc_mode")?.value || "ultra";
+  const firstCam = doc.querySelector("#cameras-list .cam-ent-sel")?.value || STATE?.config?.camera_entity || "";
+  const ancMode = doc.getElementById("cfg-doorbell_anc_mode")?.value || "ultra";
   if (!firstCam) {
     showToast("Add a camera entity first");
     return;
   }
-  const resp = await fetch(API_URL, {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({
+  const data = await callStudioCommand({
       command: "test_doorbell_talkback",
       camera_entity: firstCam,
       anc_mode: ancMode,
       message: "Hello! Please leave the package by the front door."
-    })
-  });
-  if (resp.ok) {
-    applyStateToDom(await resp.json(), false);
+    });
+  if (data) {
+    applyStateToDom(data, false);
     showToast(`Sent DSP-stabilized talkback to ${firstCam}`);
   }
 }
 
 async function sendTestNotification() {
-  const target_device = document.getElementById("test-alert-device")?.value || STATE?.config?.device_slug || "";
-  const title = document.getElementById("test-alert-title").value.trim() || "Alert";
-  const message = document.getElementById("test-alert-msg").value.trim() || "Test notification";
-  const priority = document.getElementById("test-alert-prio").value;
-  const include_camera = document.getElementById("test-alert-cam").checked;
-  const resp = await fetch(API_URL, {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({
+  const target_device = doc.getElementById("test-alert-device")?.value || STATE?.config?.device_slug || "";
+  const title = doc.getElementById("test-alert-title").value.trim() || "Alert";
+  const message = doc.getElementById("test-alert-msg").value.trim() || "Test notification";
+  const priority = doc.getElementById("test-alert-prio").value;
+  const include_camera = doc.getElementById("test-alert-cam").checked;
+  const data = await callStudioCommand({
       command: "send_test_notification",
       target_device,
       title,
       message,
       priority,
       include_camera
-    })
-  });
-  if (resp.ok) {
-    applyStateToDom(await resp.json(), false);
+    });
+  if (data) {
+    applyStateToDom(data, false);
     showToast(`Sent notification to ${target_device}`);
   }
 }
@@ -3423,7 +3234,7 @@ function renderCohesiveDeviceSections() {
   if (!esp) return;
   const sections = esp.sections || [];
   const totalCount = sections.reduce((acc, s) => acc + s.count, 0);
-  document.getElementById("nav-esp-badge").textContent = totalCount;
+  doc.getElementById("nav-esp-badge").textContent = totalCount;
 
   const sortByOrder = (items, keywords) => {
     return [...items].sort((a, b) => {
@@ -3446,7 +3257,7 @@ function renderCohesiveDeviceSections() {
     if (low.includes("category")) areaUiItems.push(it);
     else if (!low.includes("handoff")) areaBleItems.push(it);
   });
-  document.getElementById("embedded-area-ble").innerHTML = areaBleItems.map(it => renderNativeControlRow(it)).join("");
+  doc.getElementById("embedded-area-ble").innerHTML = areaBleItems.map(it => renderNativeControlRow(it)).join("");
 
   // 2. Home Screen & Area UI: Filter out the 6 redundant "Shortcut *" switches (handled by Home Dock App pills)
   const rawHomeItems = getSectionItems("home").filter(it => {
@@ -3456,7 +3267,7 @@ function renderCohesiveDeviceSections() {
   const homeItems = sortByOrder(rawHomeItems.concat(areaUiItems), [
     "wake greeting", "weather background", "default category", "show all category"
   ]);
-  document.getElementById("embedded-home").innerHTML = homeItems.length
+  doc.getElementById("embedded-home").innerHTML = homeItems.length
     ? homeItems.map(it => renderNativeControlRow(it)).join("")
     : `<p class="desc">No on-device Home Screen entities exposed.</p>`;
 
@@ -3481,7 +3292,7 @@ function renderCohesiveDeviceSections() {
     "auto brightness", "manual brightness", "day brightness", "night brightness",
     "day start hour", "night start hour", "condition simulation"
   ]);
-  document.getElementById("embedded-display").innerHTML = dispItems.map(it => renderNativeControlRow(it)).join("");
+  doc.getElementById("embedded-display").innerHTML = dispItems.map(it => renderNativeControlRow(it)).join("");
 
   // 4. Sleep & Wake: Filter out diagnostic timer/alarm readouts, hide Screensaver Style if Docked Screensaver is OFF, and order logically
   const rawSleepItems = getSectionItems("sleep");
@@ -3500,13 +3311,13 @@ function renderCohesiveDeviceSections() {
     "stay awake", "pickup to wake", "tap to wake", "docked screensaver",
     "screensaver style", "hold crown"
   ]);
-  document.getElementById("embedded-sleep").innerHTML = sleepItems.length
+  doc.getElementById("embedded-sleep").innerHTML = sleepItems.length
     ? sleepItems.map(it => renderNativeControlRow(it)).join("")
     : `<p class="desc">No on-device Sleep &amp; Wake entities exposed.</p>`;
 
   const pwrProfItem = rawSleepItems.find(it => `${it.name} ${it.entity_id}`.toLowerCase().includes("power_profile") || (it.name || "").toLowerCase().includes("power profile"));
-  const pwrWrap = document.getElementById("dash-power-profile-wrap");
-  const pwrSel = document.getElementById("dash-power-profile-select");
+  const pwrWrap = doc.getElementById("dash-power-profile-wrap");
+  const pwrSel = doc.getElementById("dash-power-profile-select");
   if (pwrWrap && pwrSel) {
     if (pwrProfItem && pwrProfItem.options && pwrProfItem.options.length) {
       pwrWrap.classList.remove("hidden");
@@ -3537,13 +3348,13 @@ function renderCohesiveDeviceSections() {
   const sortedVoicePrimary = sortByOrder(voicePrimary, [
     "wake word mode", "active wake word", "visual profile", "wake screen"
   ]);
-  document.getElementById("embedded-voice-primary").innerHTML = sortedVoicePrimary.length
+  doc.getElementById("embedded-voice-primary").innerHTML = sortedVoicePrimary.length
     ? sortedVoicePrimary.map(it => renderNativeControlRow(it)).join("")
     : `<p class="desc">No on-device Voice Assistant entities exposed.</p>`;
-  document.getElementById("embedded-voice-sens").innerHTML = voiceSens.length
+  doc.getElementById("embedded-voice-sens").innerHTML = voiceSens.length
     ? voiceSens.map(it => renderNativeControlRow(it)).join("")
     : `<p class="desc">No per-model sensitivity controls exposed.</p>`;
-  const sensDetails = document.getElementById("details-voice-sens");
+  const sensDetails = doc.getElementById("details-voice-sens");
   if (sensDetails) {
     sensDetails.classList.toggle("hidden", !!(wwDisabled || voiceSens.length === 0));
   }
@@ -3552,7 +3363,7 @@ function renderCohesiveDeviceSections() {
   const soundItems = sortByOrder(getSectionItems("sound"), [
     "alert volume", "volume step", "game sound"
   ]);
-  document.getElementById("embedded-sound").innerHTML = soundItems.map(it => renderNativeControlRow(it)).join("");
+  doc.getElementById("embedded-sound").innerHTML = soundItems.map(it => renderNativeControlRow(it)).join("");
 
   const allMusicItems = getSectionItems("music").filter(it => it.domain !== "media_player");
   const musicPrimary = [];
@@ -3562,17 +3373,17 @@ function renderCohesiveDeviceSections() {
     if (low.includes("sort")) musicSort.push(it);
     else musicPrimary.push(it);
   });
-  document.getElementById("embedded-music").innerHTML = sortByOrder(musicPrimary, [
+  doc.getElementById("embedded-music").innerHTML = sortByOrder(musicPrimary, [
     "album art style", "overlay style", "speaker shortcut", "library shortcut"
   ]).map(it => renderNativeControlRow(it)).join("");
-  const sortBox = document.getElementById("embedded-music-sort");
+  const sortBox = doc.getElementById("embedded-music-sort");
   if (sortBox) {
     sortBox.innerHTML = musicSort.map(it => renderNativeControlRow(it)).join("");
   }
 
   // Render Quick Actions right at the top of Device Overview!
   const actionItems = getSectionItems("actions");
-  const qaBox = document.getElementById("dash-quick-actions");
+  const qaBox = doc.getElementById("dash-quick-actions");
   if (qaBox) {
     qaBox.innerHTML = actionItems.length
       ? actionItems.map(it =>
@@ -3582,19 +3393,19 @@ function renderCohesiveDeviceSections() {
   }
 
   const batItems = getSectionItems("battery");
-  document.getElementById("embedded-battery").innerHTML = batItems.length
+  doc.getElementById("embedded-battery").innerHTML = batItems.length
     ? batItems.map(it => renderNativeControlRow(it)).join("")
     : `<p class="desc">No battery telemetry entities reported.</p>`;
 
   const netItems = getSectionItems("network");
-  document.getElementById("embedded-network").innerHTML = netItems.length
+  doc.getElementById("embedded-network").innerHTML = netItems.length
     ? netItems.map(it => renderNativeControlRow(it)).join("")
     : `<p class="desc">No network or diagnostic entities reported.</p>`;
 
   // Only show the extra "Device Sensors & Controls" card on Overview if the device has "other" entities or is a sensor/headless node
   const otherItems = getSectionItems("other");
-  const sensorCard = document.getElementById("dash-sensor-entities-card");
-  const dashBox = document.getElementById("dash-device-entities");
+  const sensorCard = doc.getElementById("dash-sensor-entities-card");
+  const dashBox = doc.getElementById("dash-device-entities");
   if (sensorCard && dashBox) {
     if (otherItems.length > 0) {
       sensorCard.classList.remove("hidden");
@@ -3610,7 +3421,7 @@ function renderCohesiveDeviceSections() {
 function renderRawEntityList() {
   const esp = STATE?.esphome;
   if (!esp || !esp.sections) return;
-  const query = (document.getElementById("esp-search")?.value || "").trim().toLowerCase();
+  const query = (doc.getElementById("esp-search")?.value || "").trim().toLowerCase();
   let allItems = [];
   esp.sections.forEach(s => { allItems = allItems.concat(s.items || []); });
   if (query) {
@@ -3618,14 +3429,14 @@ function renderRawEntityList() {
       it.name.toLowerCase().includes(query) || it.entity_id.toLowerCase().includes(query)
     );
   }
-  const box = document.getElementById("raw-entity-items");
+  const box = doc.getElementById("raw-entity-items");
   if (box) {
     box.innerHTML = allItems.map(it => renderNativeControlRow(it, true)).join("");
   }
 }
 
 function renderWallpaperGallery(wallpapers, slug, shape) {
-  const box = document.getElementById("wp-gallery-grid");
+  const box = doc.getElementById("wp-gallery-grid");
   if (!box) return;
   const shapeClass = shape === "square" ? "square" : "circle";
   box.innerHTML = (wallpapers || []).map(wp => {
@@ -3647,7 +3458,7 @@ function renderWallpaperGallery(wallpapers, slug, shape) {
 }
 
 async function uploadWallpaperFile() {
-  const input = document.getElementById("wp-file-input");
+  const input = doc.getElementById("wp-file-input");
   if (!input.files || !input.files.length) {
     showToast("Select an image file first");
     return;
@@ -3655,18 +3466,14 @@ async function uploadWallpaperFile() {
   const file = input.files[0];
   const reader = new FileReader();
   reader.onload = async () => {
-    const resp = await fetch(API_URL, {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({
+    const data = await callStudioCommand({
         command: "upload_wallpaper",
         filename: file.name,
         data_b64: reader.result
-      })
-    });
-    if (resp.ok) {
+      });
+  if (data) {
       input.value = "";
-      applyStateToDom(await resp.json(), true);
+      applyStateToDom(data, true);
       showToast("Wallpaper uploaded & activated");
     }
   };
@@ -3674,80 +3481,56 @@ async function uploadWallpaperFile() {
 }
 
 async function selectWallpaperSource(sourceId) {
-  document.getElementById("cfg-wallpaper_source").value = sourceId;
-  const resp = await fetch(API_URL, {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({command: "select_wallpaper", source_id: sourceId})
-  });
-  if (resp.ok) {
-    applyStateToDom(await resp.json(), false);
+  doc.getElementById("cfg-wallpaper_source").value = sourceId;
+  const data = await callStudioCommand({command: "select_wallpaper", source_id: sourceId});
+  if (data) {
+    applyStateToDom(data, false);
     showToast(sourceId ? "Wallpaper activated" : "Wallpaper cleared");
   }
 }
 
 async function toggleWallpaperFav(sourceId) {
-  const resp = await fetch(API_URL, {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({command: "toggle_wallpaper_favorite", source_id: sourceId})
-  });
-  if (resp.ok) {
-    applyStateToDom(await resp.json(), false);
+  const data = await callStudioCommand({command: "toggle_wallpaper_favorite", source_id: sourceId});
+  if (data) {
+    applyStateToDom(data, false);
     showToast("Updated wallpaper favorites");
   }
 }
 
 async function deleteWallpaper(sourceId) {
-  const resp = await fetch(API_URL, {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({command: "delete_wallpaper", source_id: sourceId})
-  });
-  if (resp.ok) {
-    applyStateToDom(await resp.json(), false);
+  const data = await callStudioCommand({command: "delete_wallpaper", source_id: sourceId});
+  if (data) {
+    applyStateToDom(data, false);
     showToast("Deleted wallpaper");
   }
 }
 
 async function espAction(entity_id, action) {
-  const resp = await fetch(API_URL, {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({command: "esphome_entity_action", entity_id, action})
-  });
-  if (resp.ok) {
-    applyStateToDom(await resp.json(), false);
+  const data = await callStudioCommand({command: "esphome_entity_action", entity_id, action});
+  if (data) {
+    applyStateToDom(data, false);
     showToast(`Executed ${action} on ${entity_id}`);
   }
 }
 
 async function espSelect(entity_id, option) {
-  const resp = await fetch(API_URL, {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({command: "esphome_entity_action", entity_id, option})
-  });
-  if (resp.ok) {
-    applyStateToDom(await resp.json(), false);
+  const data = await callStudioCommand({command: "esphome_entity_action", entity_id, option});
+  if (data) {
+    applyStateToDom(data, false);
     showToast(`Selected ${option}`);
   }
 }
 
 async function espNumber(entity_id, level) {
-  const resp = await fetch(API_URL, {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({command: "esphome_entity_action", entity_id, level})
-  });
-  if (resp.ok) {
-    applyStateToDom(await resp.json(), false);
+  const data = await callStudioCommand({command: "esphome_entity_action", entity_id, level});
+  if (data) {
+    applyStateToDom(data, false);
     showToast(`Updated ${entity_id} = ${level}`);
   }
 }
 
 function renumberCameraRows() {
-  const rows = document.querySelectorAll("#cameras-list .camera-row-item");
+  const rows = doc.querySelectorAll("#cameras-list .camera-row-item");
   rows.forEach((row, idx) => {
     const lbl = row.querySelector(".cam-slot-lbl");
     if (lbl) {
@@ -3759,7 +3542,7 @@ function renumberCameraRows() {
 }
 
 function addCameraRow(entityId="") {
-  const list = document.getElementById("cameras-list");
+  const list = doc.getElementById("cameras-list");
   if (!list) return;
   const existingCount = list.querySelectorAll(".camera-row-item").length;
   if (existingCount >= 10) {
@@ -3789,7 +3572,7 @@ function addCameraRow(entityId="") {
 }
 
 function addCalendarRow(entityId="") {
-  const list = document.getElementById("calendars-list");
+  const list = doc.getElementById("calendars-list");
   if (!list) return;
   const row = document.createElement("div");
   row.className = "native-ctrl-row calendar-row-item";
@@ -3810,7 +3593,7 @@ let REMOTE_GROUPS_STATE = [];
 
 function getInventoryRemoteIds() {
   const out = [];
-  document.querySelectorAll("#remotes-list .rem-ent-sel").forEach(sel => {
+  doc.querySelectorAll("#remotes-list .rem-ent-sel").forEach(sel => {
     const v = (sel.value || "").trim();
     if (v && !out.includes(v)) out.push(v);
   });
@@ -3824,7 +3607,7 @@ function getRemoteFriendlyLabel(entId) {
 }
 
 function renderRemoteGroupsEditor() {
-  const box = document.getElementById("remote-groups-list");
+  const box = doc.getElementById("remote-groups-list");
   if (!box) return;
   const areas = STATE?.catalog?.areas || [];
   const invIds = getInventoryRemoteIds();
@@ -3911,7 +3694,7 @@ function toggleRemoteInGroup(gIdx, entId) {
 }
 
 function renderDeviceRemoteAssignments() {
-  const box = document.getElementById("device-remote-assignments-list");
+  const box = doc.getElementById("device-remote-assignments-list");
   if (!box) return;
   const devs = (STATE?.system_devices || []).filter(d => d.device_profile !== "ble_beacon" && d.device_profile !== "headless_node");
   if (!devs.length) {
@@ -3940,19 +3723,15 @@ function renderDeviceRemoteAssignments() {
 }
 
 async function assignDeviceRemoteGroup(deviceSlug, modeVal) {
-  const resp = await fetch(API_URL, {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({command: "set_device_remote_group", device_slug: deviceSlug, device_remote_group: modeVal})
-  });
-  if (resp.ok) {
-    applyStateToDom(await resp.json(), false);
+  const data = await callStudioCommand({command: "set_device_remote_group", device_slug: deviceSlug, device_remote_group: modeVal});
+  if (data) {
+    applyStateToDom(data, false);
     showToast(`Updated remote assignment for ${deviceSlug}`);
   }
 }
 
 function renumberRemoteControlRows() {
-  const rows = document.querySelectorAll("#remotes-list .remote-row-item");
+  const rows = doc.querySelectorAll("#remotes-list .remote-row-item");
   rows.forEach((row, idx) => {
     const lbl = row.querySelector(".rem-slot-lbl");
     if (lbl) {
@@ -3964,7 +3743,7 @@ function renumberRemoteControlRows() {
 }
 
 function addRemoteControlRow(entityId="") {
-  const list = document.getElementById("remotes-list");
+  const list = doc.getElementById("remotes-list");
   if (!list) return;
   const existingCount = list.querySelectorAll(".remote-row-item").length;
   if (existingCount >= 10) {
@@ -3991,7 +3770,7 @@ function addRemoteControlRow(entityId="") {
 }
 
 function addVolumeOverrideRow(speaker="", target="") {
-  const list = document.getElementById("volume-overrides-list");
+  const list = doc.getElementById("volume-overrides-list");
   if (!list) return;
   const existingCount = list.querySelectorAll(".vol-override-row").length;
   if (existingCount >= 10) {
@@ -4023,36 +3802,6 @@ function addVolumeOverrideRow(speaker="", target="") {
   list.appendChild(row);
 }
 
-function renderYamlGenerator() {
-  const box = document.getElementById("yaml-gen-output");
-  if (!box) return;
-  const slug = (document.getElementById("cfg-device_slug")?.value || STATE?.config?.device_slug || "esphome_device").trim().toLowerCase().replace(/-/g, "_");
-  const nodeHyphen = slug.replace(/_/g, "-");
-
-  const incBrowse = document.getElementById("yg-browse")?.checked;
-  const incArea = document.getElementById("yg-area")?.checked;
-  const incBle = document.getElementById("yg-ble")?.checked;
-
-  const files = ["mixins/latter_presence_node.yaml"];
-  if (incBle) files.push("mixins/latter_ble_proxy.yaml");
-  if (incBrowse || incArea) files.push("modules/latter_client.yaml");
-
-  const lines = [
-    `# Latter Protocol v3 ESPHome Package Reference for '${nodeHyphen}'`,
-    `# Full wire contract & mixin documentation: https://github.com/slampton/esphome-latter-core/blob/main/DEVICE_CONTRACT.md`,
-    `substitutions:`,
-    `  name: ${nodeHyphen}`,
-    ``,
-    `packages:`,
-    `  latter_sdk:`,
-    `    url: https://github.com/slampton/esphome-latter-core`,
-    `    ref: main`,
-    `    files:`,
-    ...files.map((f) => `      - ${f}`)
-  ];
-
-  box.textContent = lines.join("\n");
-}
 
 function copyToClipboard(text, successMsg) {
   if (!text) return;
@@ -4074,35 +3823,27 @@ function fallbackCopyText(text, successMsg) {
     ta.style.position = "fixed";
     ta.style.top = "-9999px";
     ta.style.left = "-9999px";
-    document.body.appendChild(ta);
+    doc.body.appendChild(ta);
     ta.focus();
     ta.select();
     const ok = document.execCommand("copy");
-    document.body.removeChild(ta);
+    doc.body.removeChild(ta);
     showToast(ok ? successMsg : "Copy failed — select text manually");
   } catch (_e) {
     showToast("Copy failed — select text manually");
   }
 }
 
-function copyGeneratedYaml() {
-  const text = document.getElementById("yaml-gen-output")?.textContent || "";
-  copyToClipboard(text, "Copied ESPHome YAML snippet");
-}
 
 function copyTextById(elId) {
-  const text = document.getElementById(elId)?.textContent || "";
+  const text = doc.getElementById(elId)?.textContent || "";
   copyToClipboard(text, "Copied to clipboard");
 }
 
 async function generateDeviceVpnKeys() {
-  const resp = await fetch(API_URL, {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({command: "generate_vpn_keys"})
-  });
-  if (resp.ok) {
-    applyStateToDom(await resp.json(), true);
+  const data = await callStudioCommand({command: "generate_vpn_keys"});
+  if (data) {
+    applyStateToDom(data, true);
     showToast("Generated WireGuard keys for device");
   }
 }
@@ -4111,7 +3852,7 @@ let pendingRemoveEntryId = "";
 let pendingRemoveTitle = "";
 
 function ensureRemoveDeviceModal() {
-  if (document.getElementById("latter-rm-modal")) return;
+  if (doc.getElementById("latter-rm-modal")) return;
   const modal = document.createElement("div");
   modal.id = "latter-rm-modal";
   modal.style.cssText = "position:fixed;inset:0;background:rgba(8,12,18,0.82);backdrop-filter:blur(6px);z-index:9999;display:none;align-items:center;justify-content:center;padding:16px;";
@@ -4125,11 +3866,11 @@ function ensureRemoveDeviceModal() {
       </div>
     </div>
   `;
-  document.body.appendChild(modal);
+  doc.body.appendChild(modal);
 }
 
 function closeRemoveDeviceModal() {
-  const m = document.getElementById("latter-rm-modal");
+  const m = doc.getElementById("latter-rm-modal");
   if (m) m.style.display = "none";
   pendingRemoveEntryId = "";
   pendingRemoveTitle = "";
@@ -4139,11 +3880,11 @@ function removeManagedDevice(entryId, title) {
   ensureRemoveDeviceModal();
   pendingRemoveEntryId = entryId;
   pendingRemoveTitle = title || entryId;
-  const desc = document.getElementById("latter-rm-desc");
+  const desc = doc.getElementById("latter-rm-desc");
   if (desc) {
     desc.textContent = `Remove '${pendingRemoveTitle}' from Latter? Your ESPHome device will remain in Home Assistant, and you can re-add it anytime.`;
   }
-  document.getElementById("latter-rm-modal").style.display = "flex";
+  doc.getElementById("latter-rm-modal").style.display = "flex";
 }
 
 async function confirmRemoveManagedDevice() {
@@ -4151,16 +3892,13 @@ async function confirmRemoveManagedDevice() {
   const title = pendingRemoveTitle;
   closeRemoveDeviceModal();
   if (!entryId) return;
-  const resp = await fetch(API_URL, {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({command: "remove_device", entry_id: entryId})
-  });
-  if (resp.ok) {
-    const data = await resp.json();
-    if (data.removed && data.redirect_url) {
-      window.location.href = data.redirect_url;
-      return;
+  const data = await callStudioCommand({command: "remove_device", entry_id: entryId});
+  if (data) {
+    const data = data;
+    if (data.removed) {
+      ACTIVE_SUBENTRY_ID = data.next_subentry_id || "";
+      DEVICE_SELECTED = false;
+      setScope("device", "select_device_prompt");
     }
     applyStateToDom(data, false);
     showToast(`Removed '${title}' from Latter`);
@@ -4172,7 +3910,7 @@ async function confirmRemoveManagedDevice() {
 let ADD_DEV_MODE = "esphome";
 
 function ensureAddDeviceModal() {
-  if (document.getElementById("latter-add-dev-modal")) return;
+  if (doc.getElementById("latter-add-dev-modal")) return;
   const modal = document.createElement("div");
   modal.id = "latter-add-dev-modal";
   modal.style.cssText = "position:fixed;inset:0;background:rgba(8,12,18,0.82);backdrop-filter:blur(6px);z-index:9999;display:none;align-items:center;justify-content:center;padding:16px;";
@@ -4219,16 +3957,16 @@ function ensureAddDeviceModal() {
       </div>
     </div>
   `;
-  document.body.appendChild(modal);
+  doc.body.appendChild(modal);
 }
 
 function switchAddDeviceTab(mode) {
   ADD_DEV_MODE = mode === "ble" ? "ble" : "esphome";
-  document.getElementById("add-tab-esphome")?.classList.toggle("active", ADD_DEV_MODE === "esphome");
-  document.getElementById("add-tab-ble")?.classList.toggle("active", ADD_DEV_MODE === "ble");
-  document.getElementById("add-dev-pane-esphome")?.classList.toggle("hidden", ADD_DEV_MODE !== "esphome");
-  document.getElementById("add-dev-pane-ble")?.classList.toggle("hidden", ADD_DEV_MODE !== "ble");
-  const addBtn = document.getElementById("btn-confirm-add-device");
+  doc.getElementById("add-tab-esphome")?.classList.toggle("active", ADD_DEV_MODE === "esphome");
+  doc.getElementById("add-tab-ble")?.classList.toggle("active", ADD_DEV_MODE === "ble");
+  doc.getElementById("add-dev-pane-esphome")?.classList.toggle("hidden", ADD_DEV_MODE !== "esphome");
+  doc.getElementById("add-dev-pane-ble")?.classList.toggle("hidden", ADD_DEV_MODE !== "ble");
+  const addBtn = doc.getElementById("btn-confirm-add-device");
   if (addBtn) {
     if (ADD_DEV_MODE === "esphome") {
       addBtn.disabled = !(STATE?.unbridged_devices?.length > 0);
@@ -4242,8 +3980,8 @@ function onSelectBleCandidate(targetAddr) {
   if (!targetAddr) return;
   const cands = STATE?.discovered_ble_devices || [];
   const found = cands.find(c => c.target_address === targetAddr);
-  const nameInp = document.getElementById("ble-custom-name");
-  const addrInp = document.getElementById("ble-custom-addr");
+  const nameInp = doc.getElementById("ble-custom-name");
+  const addrInp = doc.getElementById("ble-custom-addr");
   if (addrInp) addrInp.value = targetAddr;
   if (nameInp && found) nameInp.value = found.title;
 }
@@ -4252,9 +3990,9 @@ function openAddDeviceModal() {
   ensureAddDeviceModal();
   const unbridged = STATE?.unbridged_devices || [];
   const bleCands = STATE?.discovered_ble_devices || [];
-  const picker = document.getElementById("bridge-device-picker");
-  const wrap = document.getElementById("add-dev-modal-picker-wrap");
-  const emptyMsg = document.getElementById("add-dev-modal-empty");
+  const picker = doc.getElementById("bridge-device-picker");
+  const wrap = doc.getElementById("add-dev-modal-picker-wrap");
+  const emptyMsg = doc.getElementById("add-dev-modal-empty");
 
   if (unbridged.length > 0) {
     wrap?.classList.remove("hidden");
@@ -4269,68 +4007,60 @@ function openAddDeviceModal() {
     emptyMsg?.classList.remove("hidden");
   }
 
-  const blePicker = document.getElementById("ble-candidate-picker");
+  const blePicker = doc.getElementById("ble-candidate-picker");
   if (blePicker) {
     const opts = [`<option value="">— Select Discovered BLE Device or Enter Below —</option>`].concat(
       bleCands.map(c => `<option value="${esc(c.target_address)}">${esc(c.label)}</option>`)
     );
     blePicker.innerHTML = opts.join("");
   }
-  const nameInp = document.getElementById("ble-custom-name");
-  const addrInp = document.getElementById("ble-custom-addr");
+  const nameInp = doc.getElementById("ble-custom-name");
+  const addrInp = doc.getElementById("ble-custom-addr");
   if (nameInp) nameInp.value = "";
   if (addrInp) addrInp.value = "";
   populateSelect("ble-custom-person", STATE?.catalog?.persons || [], "", true);
 
   switchAddDeviceTab(unbridged.length > 0 ? "esphome" : "ble");
-  document.getElementById("latter-add-dev-modal").style.display = "flex";
+  doc.getElementById("latter-add-dev-modal").style.display = "flex";
 }
 
 function closeAddDeviceModal() {
-  const m = document.getElementById("latter-add-dev-modal");
+  const m = doc.getElementById("latter-add-dev-modal");
   if (m) m.style.display = "none";
 }
 
 async function confirmAddDeviceModal() {
   if (ADD_DEV_MODE === "ble") {
-    const name = document.getElementById("ble-custom-name")?.value?.trim() || "";
-    const target_address = document.getElementById("ble-custom-addr")?.value?.trim() || "";
-    const assigned_person = document.getElementById("ble-custom-person")?.value || "";
+    const name = doc.getElementById("ble-custom-name")?.value?.trim() || "";
+    const target_address = doc.getElementById("ble-custom-addr")?.value?.trim() || "";
+    const assigned_person = doc.getElementById("ble-custom-person")?.value || "";
     if (!name || !target_address) {
       showToast("Enter a Device Name and BLE Address/Entity");
       return;
     }
     closeAddDeviceModal();
-    const resp = await fetch(API_URL, {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({
+    const data = await callStudioCommand({
         command: "add_ble_device",
         name,
         target_address,
         assigned_person
-      })
-    });
-    if (resp.ok) {
-      applyStateToDom(await resp.json(), false);
+      });
+  if (data) {
+      applyStateToDom(data, false);
       showToast(`Added BLE device '${name}'`);
     }
     return;
   }
 
-  const picker = document.getElementById("bridge-device-picker");
+  const picker = doc.getElementById("bridge-device-picker");
   if (!picker || !picker.value) return;
   const slug = picker.value;
   const optEl = picker.options[picker.selectedIndex];
   const areaId = optEl ? (optEl.getAttribute("data-area") || "") : "";
   closeAddDeviceModal();
-  const resp = await fetch(API_URL, {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({command: "bridge_esphome_device", device_slug: slug, area_id: areaId})
-  });
-  if (resp.ok) {
-    applyStateToDom(await resp.json(), false);
+  const data = await callStudioCommand({command: "bridge_esphome_device", device_slug: slug, area_id: areaId});
+  if (data) {
+    applyStateToDom(data, false);
     showToast(`Added ESPHome device '${slug}'`);
   }
 }
@@ -4348,88 +4078,68 @@ function toggleDeviceTableSort(col) {
     DEVICE_SORT_ASC = true;
   }
   if (STATE) {
-    renderFleetOverview(STATE.system_devices, STATE.system_controls, STATE.config);
+    renderSystemOverview(STATE.system_devices, STATE.system_controls, STATE.config);
   }
 }
 
 function onFilterDeviceCategory(val) {
   DEVICE_CATEGORY_FILTER = val || "all";
   if (STATE) {
-    renderFleetOverview(STATE.system_devices, STATE.system_controls, STATE.config);
+    renderSystemOverview(STATE.system_devices, STATE.system_controls, STATE.config);
   }
 }
 
 async function createDeviceGroup() {
-  const nameEl = document.getElementById("new-group-name");
-  const descEl = document.getElementById("new-group-desc");
+  const nameEl = doc.getElementById("new-group-name");
+  const descEl = doc.getElementById("new-group-desc");
   const name = (nameEl?.value || "").trim();
   if (!name) {
     showToast("Enter a group name first");
     return;
   }
-  const resp = await fetch(API_URL, {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({command: "create_device_group", name, description: (descEl?.value || "").trim()})
-  });
-  if (resp.ok) {
+  const data = await callStudioCommand({command: "create_device_group", name, description: (descEl?.value || "").trim()});
+  if (data) {
     if (nameEl) nameEl.value = "";
     if (descEl) descEl.value = "";
-    applyStateToDom(await resp.json(), false);
+    applyStateToDom(data, false);
     showToast(`Created device group '${name}'`);
   }
 }
 
 async function deleteDeviceGroup(groupId) {
-  const resp = await fetch(API_URL, {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({command: "delete_device_group", group_id: groupId})
-  });
-  if (resp.ok) {
-    applyStateToDom(await resp.json(), false);
+  const data = await callStudioCommand({command: "delete_device_group", group_id: groupId});
+  if (data) {
+    applyStateToDom(data, false);
     showToast("Removed device group");
   }
 }
 
 async function captureCurrentDeviceProfile() {
-  const nameEl = document.getElementById("new-profile-name");
-  const descEl = document.getElementById("new-profile-desc");
+  const nameEl = doc.getElementById("new-profile-name");
+  const descEl = doc.getElementById("new-profile-desc");
   const name = (nameEl?.value || "").trim() || `${STATE?.title || 'Device'} Profile`;
-  const resp = await fetch(API_URL, {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({command: "capture_profile", name, description: (descEl?.value || "").trim()})
-  });
-  if (resp.ok) {
+  const data = await callStudioCommand({command: "capture_profile", name, description: (descEl?.value || "").trim()});
+  if (data) {
     if (nameEl) nameEl.value = "";
     if (descEl) descEl.value = "";
-    applyStateToDom(await resp.json(), false);
+    applyStateToDom(data, false);
     showToast(`Saved profile '${name}'`);
   }
 }
 
 async function applySavedProfile(profileId) {
-  const scope = document.getElementById("profile-target-scope")?.value || "current";
-  const resp = await fetch(API_URL, {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({command: "apply_profile", profile_id: profileId, target_scope: scope})
-  });
-  if (resp.ok) {
-    applyStateToDom(await resp.json(), true);
+  const scope = doc.getElementById("profile-target-scope")?.value || "current";
+  const data = await callStudioCommand({command: "apply_profile", profile_id: profileId, target_scope: scope});
+  if (data) {
+    applyStateToDom(data, true);
     showToast(`Applied profile to ${scope}`);
   }
 }
 
 async function deleteSavedProfile(profileId) {
-  const resp = await fetch(API_URL, {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({command: "delete_profile", profile_id: profileId})
-  });
-  if (resp.ok) {
-    applyStateToDom(await resp.json(), false);
+  const data = await callStudioCommand({command: "delete_profile", profile_id: profileId});
+  if (data) {
+    applyStateToDom(data, false);
     showToast("Deleted profile");
   }
 }
@@ -4443,58 +4153,58 @@ function triggerJsonDownload(bundle) {
   const a = document.createElement("a");
   a.href = url;
   a.download = filename;
-  document.body.appendChild(a);
+  doc.body.appendChild(a);
   a.click();
   setTimeout(() => {
-    document.body.removeChild(a);
+    doc.body.removeChild(a);
     URL.revokeObjectURL(url);
   }, 200);
 }
 
 async function exportBackupToComputer(overrideScope) {
-  const scope = overrideScope || document.getElementById("bkp-scope-select")?.value || "system";
-  const incVpn = document.getElementById("bkp-include-vpn")?.checked ?? false;
-  const resp = await fetch(API_URL, {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({command: "export_backup_json", scope, include_vpn_secrets: incVpn})
+  if (!HASS_REF) return;
+  const scope = overrideScope || doc.getElementById("bkp-scope-select")?.value || "system";
+  const incVpn = doc.getElementById("bkp-include-vpn")?.checked ?? false;
+  const wsType = scope === "device" ? "latter/device/export" : "latter/system/export";
+  const data = await HASS_REF.callWS({
+    type: wsType,
+    subentry_id: ACTIVE_SUBENTRY_ID || null,
+    scope,
+    include_vpn_secrets: incVpn
   });
-  if (resp.ok) {
-    const data = await resp.json();
-    if (data.bundle) {
-      triggerJsonDownload(data.bundle);
-      showToast(`Downloaded ${scope} backup .JSON`);
-    }
+  if (data && data.bundle) {
+    triggerJsonDownload(data.bundle);
+    showToast(`Downloaded ${scope} backup .JSON`);
   }
 }
 
 function restoreFromUploadedFile() {
-  const input = document.getElementById("bkp-upload-file");
+  const input = doc.getElementById("bkp-upload-file");
   if (!input || !input.files || !input.files.length) {
     showToast("Choose a .JSON backup file first");
     return;
   }
-  const restoreEsp = document.getElementById("bkp-restore-esp")?.checked ?? true;
+  const restoreEsp = doc.getElementById("bkp-restore-esp")?.checked ?? true;
   const file = input.files[0];
   const reader = new FileReader();
   reader.onload = async () => {
     try {
       const parsed = JSON.parse(reader.result);
       const bundle = parsed.bundle || parsed;
-      const resp = await fetch(API_URL, {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({command: "restore_backup", bundle, restore_esphome_entities: restoreEsp})
+      const wsType = bundle.scope === "device" ? "latter/device/import" : "latter/system/import";
+      const data = await HASS_REF.callWS({
+        type: wsType,
+        subentry_id: ACTIVE_SUBENTRY_ID || null,
+        bundle,
+        restore_esphome_entities: restoreEsp
       });
-      if (resp.ok) {
+      if (data) {
         input.value = "";
-        applyStateToDom(await resp.json(), true);
-        showToast(`Restored ${bundle.scope || 'backup'} from file`);
-      } else {
-        showToast("Restore failed: invalid backup file");
+        applyStateToDom(data, true);
+        showToast(`Restored ${bundle.scope || "backup"} from file`);
       }
     } catch (_e) {
-      showToast("Invalid JSON backup file");
+      showToast("Restore failed: invalid JSON backup file");
     }
   };
   reader.readAsText(file);
@@ -4516,131 +4226,137 @@ function applyStateToDom(data, forceFormUpdate=false) {
   const showDisplay = !!caps.has_display;
   const showPower = !!caps.has_power;
   const showAudioVoice = !!(caps.has_voice || caps.has_audio);
-  document.getElementById("nav-btn-home_display")?.classList.toggle("hidden", !showDisplay);
-  document.getElementById("nav-btn-audio_voice")?.classList.toggle("hidden", !showAudioVoice);
-  document.getElementById("nav-btn-power")?.classList.toggle("hidden", !showPower);
+  doc.getElementById("nav-btn-home_display")?.classList.toggle("hidden", !showDisplay);
+  doc.getElementById("nav-btn-audio_voice")?.classList.toggle("hidden", !showAudioVoice);
+  doc.getElementById("nav-btn-power")?.classList.toggle("hidden", !showPower);
 
-  // Extract live Battery, Wi-Fi/BLE & IP/Target from current device's fleet entry
-  const curFleet = (data.system_devices || []).find(d => d.is_current) || {};
+  // Extract live Battery, Wi-Fi/BLE & IP/Target from current device's system entry
+  const curDevEntry = (data.system_devices || []).find(d => d.is_current) || {};
   const isBleOnly = cfg.device_profile === "ble_beacon";
   const isStationary = cfg.device_profile === "stationary_display";
   const winBleRow = (live.ble_survey_rows || []).find(r => r.is_winner);
   let batText = "Plugged In";
   if (isBleOnly) {
     batText = "BLE Beacon";
-  } else if (curFleet.battery_level !== null && curFleet.battery_level !== undefined && !isStationary) {
-    if (curFleet.is_charging) {
-      batText = `${curFleet.battery_level}% (Charging)`;
-    } else if (curFleet.is_usb_connected) {
-      batText = `${curFleet.battery_level}% (Plugged In)`;
+  } else if (curDevEntry.battery_level !== null && curDevEntry.battery_level !== undefined && !isStationary) {
+    if (curDevEntry.is_charging) {
+      batText = `${curDevEntry.battery_level}% (Charging)`;
+    } else if (curDevEntry.is_usb_connected) {
+      batText = `${curDevEntry.battery_level}% (Plugged In)`;
     } else {
-      batText = `${curFleet.battery_level}%`;
+      batText = `${curDevEntry.battery_level}%`;
     }
   }
-  const wifiText = (curFleet.wifi_rssi !== null && curFleet.wifi_rssi !== undefined)
-    ? `${curFleet.wifi_rssi} dBm`
-    : (isBleOnly && winBleRow && winBleRow.effective_rssi !== null ? `${winBleRow.effective_rssi} dBm (BLE)` : (curFleet.status_label || "Online"));
-  const ipStr = curFleet.ip_address || (isBleOnly ? (cfg.ble_target_address || "BLE Tracked") : "Connected");
+  const wifiText = (curDevEntry.wifi_rssi !== null && curDevEntry.wifi_rssi !== undefined)
+    ? `${curDevEntry.wifi_rssi} dBm`
+    : (isBleOnly && winBleRow && winBleRow.effective_rssi !== null ? `${winBleRow.effective_rssi} dBm (BLE)` : (curDevEntry.status_label || "Online"));
+  const ipStr = curDevEntry.ip_address || (isBleOnly ? (cfg.ble_target_address || "BLE Tracked") : "Connected");
 
-  const hasAssignedArea = !!curFleet.has_assigned_area;
+  const hasAssignedArea = !!curDevEntry.has_assigned_area;
   const isRoaming = !hasAssignedArea;
-  const areaLblEl = document.getElementById("st-area-label");
+  const areaLblEl = doc.getElementById("st-area-label");
   if (areaLblEl) areaLblEl.textContent = hasAssignedArea ? "Area" : "Current Area (Roaming)";
 
   // 4 Hero Stat Boxes on Device Overview
   const rawDevSw = String(live.device_sw_version || esp?.device?.sw_version || data.version || "2.2.0").replace(/^v/i, "");
-  document.getElementById("dash-header-title").textContent = "Overview";
-  document.getElementById("st-area").textContent = hasAssignedArea ? (curFleet.area_label || areaName) : areaName;
-  document.getElementById("st-battery").textContent = batText;
-  document.getElementById("st-wifi").textContent = wifiText;
-  const fwEl = document.getElementById("st-fw-version");
+  doc.getElementById("dash-header-title").textContent = "Overview";
+  doc.getElementById("st-area").textContent = hasAssignedArea ? (curDevEntry.area_label || areaName) : areaName;
+  doc.getElementById("st-battery").textContent = batText;
+  doc.getElementById("st-wifi").textContent = wifiText;
+  const fwEl = doc.getElementById("st-fw-version");
   if (fwEl) {
     fwEl.textContent = live.fw_update_available ? `v${rawDevSw} (Update)` : `v${rawDevSw}`;
   }
 
   const grpList = data.device_groups || [];
   const grpObj = grpList.find(g => g.id === cfg.device_group);
-  document.getElementById("st-group").textContent = grpObj ? grpObj.name : (cfg.device_group || "Unassigned");
+  doc.getElementById("st-group").textContent = grpObj ? grpObj.name : (cfg.device_group || "Unassigned");
 
-  const hwModel = curFleet.model_label || esp?.device?.model || "ESPHome Node";
-  document.getElementById("dash-hw-model").textContent = hwModel;
-  document.getElementById("dash-ip-addr").textContent = ipStr;
-  document.getElementById("dash-ble-mode").textContent = isRoaming
+  const hwModel = curDevEntry.model_label || esp?.device?.model || "ESPHome Node";
+  doc.getElementById("dash-hw-model").textContent = hwModel;
+  doc.getElementById("dash-ip-addr").textContent = ipStr;
+  doc.getElementById("dash-ble-mode").textContent = isRoaming
     ? `Roaming (BLE Auto-Switch • ${areaName})`
     : `Stationary (${areaName})`;
   const winRow = (live.ble_survey_rows || []).find(r => r.is_winner);
   const distSuffix = (winRow && winRow.distance_m != null) ? ` (~${winRow.distance_m}m / ${winRow.distance_ft}ft)` : "";
-  document.getElementById("dash-ble-proxy").textContent = (live.ble_closest_proxy || "None") + distSuffix;
-  const proxyRow = document.getElementById("dash-row-ble-proxy");
+  doc.getElementById("dash-ble-proxy").textContent = (live.ble_closest_proxy || "None") + distSuffix;
+  const proxyRow = doc.getElementById("dash-row-ble-proxy");
   if (proxyRow) proxyRow.style.display = (caps.has_ble_beacon && cfg.native_ble_tracking) ? "flex" : "none";
 
   renderLogsView();
   renderActiveSurveyDeviceBars();
   renderWallpaperGallery(data.wallpapers, cfg.device_slug, cfg.display_shape);
   if (data.vpn_snippets) {
-    const wy = document.getElementById("vpn-esphome-yaml");
-    const sp = document.getElementById("vpn-server-peer");
+    const wy = doc.getElementById("vpn-esphome-yaml");
+    const sp = doc.getElementById("vpn-server-peer");
     if (wy) wy.textContent = data.vpn_snippets.esphome_yaml || "";
     if (sp) sp.textContent = [data.vpn_snippets.server_peer_conf || "", data.vpn_snippets.ha_addon_yaml || ""].join("\n\n");
   }
 
-  const activeEl = document.activeElement;
+  const activeEl = doc.activeElement;
   if (!activeEl || !["SELECT", "INPUT"].includes(activeEl.tagName)) {
     renderCohesiveDeviceSections();
-    renderFleetOverview(data.system_devices, data.system_controls, cfg);
+    renderSystemOverview(data.system_devices, data.system_controls, cfg);
   }
 
   if (!INITIAL_FORM_LOADED || forceFormUpdate) {
     INITIAL_FORM_LOADED = true;
-    populateThemeDropdowns(data.ha_themes, cfg.web_theme || "ha_auto");
-    applyTheme(cfg.web_theme || "ha_auto");
-    renderCohesiveDeviceSections();
-    renderFleetOverview(data.system_devices, data.system_controls, cfg);
+            renderCohesiveDeviceSections();
+    renderSystemOverview(data.system_devices, data.system_controls, cfg);
 
-    document.getElementById("cfg-device_slug").value = cfg.device_slug || "";
-    document.getElementById("cfg-companion_base_url").value = cfg.companion_base_url || "";
-    document.getElementById("cfg-vpn_endpoint").value = cfg.vpn_endpoint || "";
-    document.getElementById("cfg-vpn_server_public_key").value = cfg.vpn_server_public_key || "";
-    document.getElementById("cfg-vpn_subnet").value = cfg.vpn_subnet || "10.10.10.0/24";
-    document.getElementById("cfg-vpn_ha_ip").value = cfg.vpn_ha_ip || "10.10.10.1";
-    document.getElementById("cfg-vpn_enabled").checked = !!cfg.vpn_enabled;
-    document.getElementById("cfg-vpn_client_ip").value = cfg.vpn_client_ip || "";
-    document.getElementById("cfg-vpn_hotspot_ssid").value = cfg.vpn_hotspot_ssid || "";
-    document.getElementById("cfg-vpn_public_key").value = cfg.vpn_public_key || "";
-    document.getElementById("cfg-vpn_private_key").value = cfg.vpn_private_key || "";
-    document.getElementById("cfg-vpn_preshared_key").value = cfg.vpn_preshared_key || "";
-    document.getElementById("cfg-device_profile").value = cfg.device_profile || "mobile_display";
-    document.getElementById("cfg-display_shape").value = cfg.display_shape || "circle";
-    document.getElementById("cfg-default_page_size").value = cfg.default_page_size ?? 3;
-    document.getElementById("cfg-native_ble_tracking").checked = !!cfg.native_ble_tracking;
-    document.getElementById("cfg-ble_auto_switch").checked = !!cfg.ble_auto_switch;
-    document.getElementById("cfg-sync_device_area").checked = !!cfg.sync_device_area;
-    const syncAreaRow = document.getElementById("row-sync-device-area");
+    doc.getElementById("cfg-device_slug").value = cfg.device_slug || "";
+    doc.getElementById("cfg-companion_base_url").value = cfg.companion_base_url || "";
+    doc.getElementById("cfg-vpn_endpoint").value = cfg.vpn_endpoint || "";
+    doc.getElementById("cfg-vpn_server_public_key").value = cfg.vpn_server_public_key || "";
+    doc.getElementById("cfg-vpn_subnet").value = cfg.vpn_subnet || "10.10.10.0/24";
+    doc.getElementById("cfg-vpn_ha_ip").value = cfg.vpn_ha_ip || "10.10.10.1";
+    doc.getElementById("cfg-vpn_enabled").checked = !!cfg.vpn_enabled;
+    doc.getElementById("cfg-vpn_client_ip").value = cfg.vpn_client_ip || "";
+    doc.getElementById("cfg-vpn_hotspot_ssid").value = cfg.vpn_hotspot_ssid || "";
+    doc.getElementById("cfg-vpn_public_key").value = cfg.vpn_public_key || "";
+    const vpnPrivEl = doc.getElementById("cfg-vpn_private_key");
+    if (vpnPrivEl) {
+      vpnPrivEl.value = "";
+      vpnPrivEl.placeholder = cfg.has_vpn_private_key ? "•••••••• (Configured — enter new key to replace)" : "Enter or generate private key";
+    }
+    const vpnPskEl = doc.getElementById("cfg-vpn_preshared_key");
+    if (vpnPskEl) {
+      vpnPskEl.value = "";
+      vpnPskEl.placeholder = cfg.has_vpn_preshared_key ? "•••••••• (Configured — enter new key to replace)" : "Optional preshared key";
+    }
+    doc.getElementById("cfg-device_profile").value = cfg.device_profile || "mobile_display";
+    doc.getElementById("cfg-display_shape").value = cfg.display_shape || "circle";
+    doc.getElementById("cfg-default_page_size").value = cfg.default_page_size ?? 3;
+    doc.getElementById("cfg-native_ble_tracking").checked = !!cfg.native_ble_tracking;
+    doc.getElementById("cfg-ble_auto_switch").checked = !!cfg.ble_auto_switch;
+    doc.getElementById("cfg-sync_device_area").checked = !!cfg.sync_device_area;
+    const syncAreaRow = doc.getElementById("row-sync-device-area");
     if (syncAreaRow) {
       syncAreaRow.classList.toggle("hidden", STATE?.capabilities?.is_roaming_device === false);
     }
-    document.getElementById("cfg-area_handoff").checked = !!cfg.area_handoff;
-    document.getElementById("cfg-ble_beacon_uuid").value = cfg.ble_beacon_uuid || "";
-    if (document.getElementById("cfg-ble_target_address")) {
-      document.getElementById("cfg-ble_target_address").value = cfg.ble_target_address || "";
+    doc.getElementById("cfg-area_handoff").checked = !!cfg.area_handoff;
+    doc.getElementById("cfg-ble_beacon_uuid").value = cfg.ble_beacon_uuid || "";
+    if (doc.getElementById("cfg-ble_target_address")) {
+      doc.getElementById("cfg-ble_target_address").value = cfg.ble_target_address || "";
     }
-    document.getElementById("cfg-dock_apps").value = cfg.dock_apps || "music,alarm,area,remote,games,tools";
+    doc.getElementById("cfg-dock_apps").value = cfg.dock_apps || "music,alarm,area,remote,games,tools";
     renderDockPillsFromInput();
-    document.getElementById("cfg-wallpaper_source").value = cfg.wallpaper_source || "";
-    document.getElementById("cfg-wallpaper_cycle_minutes").value = String(cfg.wallpaper_cycle_minutes || 0);
-    document.getElementById("cfg-art_size").value = String(cfg.art_size || 466);
-    if (document.getElementById("cfg-doorbell_anc_mode")) {
-      document.getElementById("cfg-doorbell_anc_mode").value = cfg.doorbell_anc_mode || "ultra";
+    doc.getElementById("cfg-wallpaper_source").value = cfg.wallpaper_source || "";
+    doc.getElementById("cfg-wallpaper_cycle_minutes").value = String(cfg.wallpaper_cycle_minutes || 0);
+    doc.getElementById("cfg-art_size").value = String(cfg.art_size || 466);
+    if (doc.getElementById("cfg-doorbell_anc_mode")) {
+      doc.getElementById("cfg-doorbell_anc_mode").value = cfg.doorbell_anc_mode || "ultra";
     }
 
     populateSelect("cfg-default_area", cat.areas, cfg.default_area);
     populateSelect("cfg-presence_entity", cat.presence_sensors, cfg.presence_entity);
     populateSelect("cfg-assigned_person", cat.persons, cfg.assigned_person);
-    if (document.getElementById("cfg-assigned_role")) {
-      document.getElementById("cfg-assigned_role").value = cfg.assigned_role || "admin";
+    if (doc.getElementById("cfg-assigned_role")) {
+      doc.getElementById("cfg-assigned_role").value = cfg.assigned_role || "admin";
     }
     populateSelect("cfg-default_speaker", cat.ma_speakers, cfg.default_speaker, false);
-    const voListEl = document.getElementById("volume-overrides-list");
+    const voListEl = doc.getElementById("volume-overrides-list");
     if (voListEl) {
       voListEl.innerHTML = "";
       let voItems = Array.isArray(cfg.volume_overrides) ? cfg.volume_overrides : [];
@@ -4652,7 +4368,7 @@ function applyStateToDom(data, forceFormUpdate=false) {
         if (vo && vo.speaker && vo.target) addVolumeOverrideRow(vo.speaker, vo.target);
       });
     }
-    const remListEl = document.getElementById("remotes-list");
+    const remListEl = doc.getElementById("remotes-list");
     if (remListEl) {
       remListEl.innerHTML = "";
       let remItems = Array.isArray(cfg.remotes_list) ? cfg.remotes_list.filter(Boolean) : [];
@@ -4672,7 +4388,7 @@ function applyStateToDom(data, forceFormUpdate=false) {
     populateSelect("cfg-garage_entity", cat.garages, cfg.garage_entity);
     populateSelect("cfg-vacuum_entity", cat.vacuums, cfg.vacuum_entity);
 
-    const camListEl = document.getElementById("cameras-list");
+    const camListEl = doc.getElementById("cameras-list");
     if (camListEl) {
       camListEl.innerHTML = "";
       let camItems = Array.isArray(cfg.camera_entities) ? cfg.camera_entities.filter(Boolean) : [];
@@ -4682,81 +4398,89 @@ function applyStateToDom(data, forceFormUpdate=false) {
       camItems.forEach(cId => addCameraRow(cId));
     }
 
-    const calListEl = document.getElementById("calendars-list");
+    const calListEl = doc.getElementById("calendars-list");
     if (calListEl) {
       calListEl.innerHTML = "";
       const calItems = Array.isArray(cfg.calendar_entities) ? cfg.calendar_entities.filter(Boolean) : [];
       calItems.forEach(cId => addCalendarRow(cId));
     }
 
-    renderYamlGenerator();
     clearDirty();
   }
   renderCustomColorPalettes();
 }
 
 async function refreshState(forceForm=false) {
-  const resp = await fetch(API_URL);
-  if (resp.ok) {
-    const data = await resp.json();
-    applyStateToDom(data, forceForm);
+  if (!HASS_REF) return;
+  try {
+    const data = await HASS_REF.callWS({
+      type: "latter/system/get_state",
+      subentry_id: ACTIVE_SUBENTRY_ID || null
+    });
+    if (data) {
+      if (!ACTIVE_SUBENTRY_ID && data.subentry_id) {
+        ACTIVE_SUBENTRY_ID = data.subentry_id;
+      }
+      applyStateToDom(data, forceForm);
+    }
+  } catch (err) {
+    console.warn("Latter Studio get_state error:", err);
   }
 }
 
 async function saveAllConfig() {
   const volumeOverrides = [];
-  document.querySelectorAll("#volume-overrides-list .vol-override-row").forEach(row => {
+  doc.querySelectorAll("#volume-overrides-list .vol-override-row").forEach(row => {
     const speaker = row.querySelector(".vo-spk")?.value?.trim() || "";
     const target = row.querySelector(".vo-tgt")?.value?.trim() || "";
     if (speaker && target) volumeOverrides.push({speaker, target});
   });
 
   const remotesList = [];
-  document.querySelectorAll("#remotes-list .remote-row-item").forEach(row => {
+  doc.querySelectorAll("#remotes-list .remote-row-item").forEach(row => {
     const rEnt = row.querySelector(".rem-ent-sel")?.value?.trim() || "";
     if (rEnt) remotesList.push(rEnt);
   });
 
   const cameraEntities = [];
-  document.querySelectorAll("#cameras-list .camera-row-item").forEach(row => {
+  doc.querySelectorAll("#cameras-list .camera-row-item").forEach(row => {
     const cEnt = row.querySelector(".cam-ent-sel")?.value?.trim() || "";
     if (cEnt && !cameraEntities.includes(cEnt)) cameraEntities.push(cEnt);
   });
 
   const calendarEntities = [];
-  document.querySelectorAll("#calendars-list .calendar-row-item").forEach(row => {
+  doc.querySelectorAll("#calendars-list .calendar-row-item").forEach(row => {
     const calEnt = row.querySelector(".cal-ent-sel")?.value?.trim() || "";
     if (calEnt && !calendarEntities.includes(calEnt)) calendarEntities.push(calEnt);
   });
 
   const config = {
-    device_slug: document.getElementById("cfg-device_slug").value.trim(),
-    companion_base_url: document.getElementById("cfg-companion_base_url").value.trim(),
-    vpn_endpoint: document.getElementById("cfg-vpn_endpoint").value.trim(),
-    vpn_server_public_key: document.getElementById("cfg-vpn_server_public_key").value.trim(),
-    vpn_subnet: document.getElementById("cfg-vpn_subnet").value.trim(),
-    vpn_ha_ip: document.getElementById("cfg-vpn_ha_ip").value.trim(),
-    vpn_enabled: document.getElementById("cfg-vpn_enabled").checked,
-    vpn_client_ip: document.getElementById("cfg-vpn_client_ip").value.trim(),
-    vpn_hotspot_ssid: document.getElementById("cfg-vpn_hotspot_ssid").value.trim(),
-    vpn_public_key: document.getElementById("cfg-vpn_public_key").value.trim(),
-    vpn_private_key: document.getElementById("cfg-vpn_private_key").value.trim(),
-    vpn_preshared_key: document.getElementById("cfg-vpn_preshared_key").value.trim(),
-    device_profile: document.getElementById("cfg-device_profile").value,
-    device_group: document.getElementById("cfg-device_group")?.value || "handhelds",
-    display_shape: document.getElementById("cfg-display_shape").value,
-    default_page_size: parseInt(document.getElementById("cfg-default_page_size").value, 10) || 3,
-    web_theme: CURRENT_THEME_PREF || "ha_auto",
-    native_ble_tracking: document.getElementById("cfg-native_ble_tracking").checked,
-    ble_auto_switch: document.getElementById("cfg-ble_auto_switch").checked,
-    sync_device_area: document.getElementById("cfg-sync_device_area").checked,
-    area_handoff: document.getElementById("cfg-area_handoff").checked,
-    ble_beacon_uuid: document.getElementById("cfg-ble_beacon_uuid").value.trim(),
-    ble_target_address: document.getElementById("cfg-ble_target_address")?.value?.trim() || "",
-    presence_entity: document.getElementById("cfg-presence_entity").value,
-    assigned_person: document.getElementById("cfg-assigned_person")?.value || "",
-    assigned_role: document.getElementById("cfg-assigned_role")?.value || "admin",
-    default_speaker: document.getElementById("cfg-default_speaker").value,
+    device_slug: doc.getElementById("cfg-device_slug").value.trim(),
+    companion_base_url: doc.getElementById("cfg-companion_base_url").value.trim(),
+    vpn_endpoint: doc.getElementById("cfg-vpn_endpoint").value.trim(),
+    vpn_server_public_key: doc.getElementById("cfg-vpn_server_public_key").value.trim(),
+    vpn_subnet: doc.getElementById("cfg-vpn_subnet").value.trim(),
+    vpn_ha_ip: doc.getElementById("cfg-vpn_ha_ip").value.trim(),
+    vpn_enabled: doc.getElementById("cfg-vpn_enabled").checked,
+    vpn_client_ip: doc.getElementById("cfg-vpn_client_ip").value.trim(),
+    vpn_hotspot_ssid: doc.getElementById("cfg-vpn_hotspot_ssid").value.trim(),
+    vpn_public_key: doc.getElementById("cfg-vpn_public_key").value.trim(),
+    vpn_private_key: doc.getElementById("cfg-vpn_private_key").value.trim(),
+    vpn_preshared_key: doc.getElementById("cfg-vpn_preshared_key").value.trim(),
+    device_profile: doc.getElementById("cfg-device_profile").value,
+    device_group: doc.getElementById("cfg-device_group")?.value || "handhelds",
+    display_shape: doc.getElementById("cfg-display_shape").value,
+    default_page_size: parseInt(doc.getElementById("cfg-default_page_size").value, 10) || 3,
+    native_ble_tracking: doc.getElementById("cfg-native_ble_tracking").checked,
+    ble_auto_switch: doc.getElementById("cfg-ble_auto_switch").checked,
+    sync_device_area: doc.getElementById("cfg-sync_device_area").checked,
+    area_handoff: doc.getElementById("cfg-area_handoff").checked,
+    ble_beacon_uuid: doc.getElementById("cfg-ble_beacon_uuid").value.trim(),
+    ble_target_address: doc.getElementById("cfg-ble_target_address")?.value?.trim() || "",
+    presence_entity: doc.getElementById("cfg-presence_entity").value,
+    assigned_person: doc.getElementById("cfg-assigned_person")?.value || "",
+    assigned_role: doc.getElementById("cfg-assigned_role")?.value || "admin",
+    default_speaker: doc.getElementById("cfg-default_speaker").value,
     volume_overrides: volumeOverrides,
     vol_speaker_1: volumeOverrides[0]?.speaker || "",
     vol_target_1: volumeOverrides[0]?.target || "",
@@ -4768,32 +4492,28 @@ async function saveAllConfig() {
     remote_2: remotesList[1] || "",
     remote_3: remotesList[2] || "",
     remote_4: remotesList[3] || "",
-    alarm_entity: document.getElementById("cfg-alarm_entity").value,
+    alarm_entity: doc.getElementById("cfg-alarm_entity").value,
     camera_entity: cameraEntities[0] || "",
     camera_entities: cameraEntities,
-    weather_entity: document.getElementById("cfg-weather_entity").value,
-    thermostat_entity: document.getElementById("cfg-thermostat_entity")?.value || "",
-    lock_entity: document.getElementById("cfg-lock_entity")?.value || "",
-    garage_entity: document.getElementById("cfg-garage_entity")?.value || "",
-    vacuum_entity: document.getElementById("cfg-vacuum_entity")?.value || "",
-    default_area: document.getElementById("cfg-default_area").value,
-    dock_apps: document.getElementById("cfg-dock_apps").value.trim(),
-    wallpaper_source: document.getElementById("cfg-wallpaper_source").value.trim(),
-    wallpaper_cycle_minutes: parseInt(document.getElementById("cfg-wallpaper_cycle_minutes").value, 10) || 0,
-    art_size: document.getElementById("cfg-art_size").value.includes("x") ? document.getElementById("cfg-art_size").value : (parseInt(document.getElementById("cfg-art_size").value, 10) || 466),
+    weather_entity: doc.getElementById("cfg-weather_entity").value,
+    thermostat_entity: doc.getElementById("cfg-thermostat_entity")?.value || "",
+    lock_entity: doc.getElementById("cfg-lock_entity")?.value || "",
+    garage_entity: doc.getElementById("cfg-garage_entity")?.value || "",
+    vacuum_entity: doc.getElementById("cfg-vacuum_entity")?.value || "",
+    default_area: doc.getElementById("cfg-default_area").value,
+    dock_apps: doc.getElementById("cfg-dock_apps").value.trim(),
+    wallpaper_source: doc.getElementById("cfg-wallpaper_source").value.trim(),
+    wallpaper_cycle_minutes: parseInt(doc.getElementById("cfg-wallpaper_cycle_minutes").value, 10) || 0,
+    art_size: doc.getElementById("cfg-art_size").value.includes("x") ? doc.getElementById("cfg-art_size").value : (parseInt(doc.getElementById("cfg-art_size").value, 10) || 466),
     calendar_entities: calendarEntities,
     custom_palettes: Array.isArray((STATE?.config || {}).custom_palettes) ? STATE.config.custom_palettes : [],
     device_custom_color: (STATE?.config || {}).device_custom_color || "#3898FF",
-    doorbell_anc_mode: document.getElementById("cfg-doorbell_anc_mode")?.value || "ultra",
+    doorbell_anc_mode: doc.getElementById("cfg-doorbell_anc_mode")?.value || "ultra",
   };
 
-  const resp = await fetch(API_URL, {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({command: "save_config", config})
-  });
-  if (resp.ok) {
-    applyStateToDom(await resp.json(), true);
+  const data = await callStudioCommand({command: "save_config", config});
+  if (data) {
+    applyStateToDom(data, true);
     showToast("Saved configuration");
   }
 }
@@ -4802,7 +4522,7 @@ let cwTargetScope = "device";
 let cwSelectedHex = "#3898FF";
 
 function ensureColorWheelModal() {
-  if (document.getElementById("latter-cw-modal")) return;
+  if (doc.getElementById("latter-cw-modal")) return;
   const modal = document.createElement("div");
   modal.id = "latter-cw-modal";
   modal.style.cssText = "position:fixed;inset:0;background:rgba(8,12,18,0.82);backdrop-filter:blur(6px);z-index:9999;display:none;align-items:center;justify-content:center;padding:16px;";
@@ -4827,9 +4547,9 @@ function ensureColorWheelModal() {
       </div>
     </div>
   `;
-  document.body.appendChild(modal);
+  doc.body.appendChild(modal);
 
-  const canvas = document.getElementById("latter-cw-canvas");
+  const canvas = doc.getElementById("latter-cw-canvas");
   const ctx = canvas.getContext("2d");
   const cx = 110, cy = 110, r = 108;
   const img = ctx.createImageData(220, 220);
@@ -4887,10 +4607,10 @@ function hsvToRgbJS(h, s, v) {
 
 function setCwHex(hex) {
   cwSelectedHex = hex.toUpperCase();
-  const prev = document.getElementById("latter-cw-preview");
-  const inp = document.getElementById("latter-cw-hex");
+  const prev = doc.getElementById("latter-cw-preview");
+  const inp = doc.getElementById("latter-cw-hex");
   if (prev) prev.style.background = cwSelectedHex;
-  if (inp && document.activeElement !== inp) inp.value = cwSelectedHex;
+  if (inp && doc.activeElement !== inp) inp.value = cwSelectedHex;
 }
 
 function onCwHexInput(val) {
@@ -4898,7 +4618,7 @@ function onCwHexInput(val) {
   if (!v.startsWith("#")) v = "#" + v;
   if (/^#[0-9A-F]{6}$/.test(v)) {
     cwSelectedHex = v;
-    const prev = document.getElementById("latter-cw-preview");
+    const prev = doc.getElementById("latter-cw-preview");
     if (prev) prev.style.background = v;
   }
 }
@@ -4908,18 +4628,18 @@ function openColorWheelModal(scope) {
   cwTargetScope = scope || "device";
   const curHex = ((STATE && STATE.config && STATE.config.device_custom_color) || "#3898FF").toUpperCase();
   setCwHex(curHex);
-  const nameInp = document.getElementById("latter-cw-name");
+  const nameInp = doc.getElementById("latter-cw-name");
   if (nameInp) nameInp.value = "";
-  document.getElementById("latter-cw-modal").style.display = "flex";
+  doc.getElementById("latter-cw-modal").style.display = "flex";
 }
 
 function closeColorWheelModal() {
-  const m = document.getElementById("latter-cw-modal");
+  const m = doc.getElementById("latter-cw-modal");
   if (m) m.style.display = "none";
 }
 
 async function saveColorWheelSelection() {
-  const nameInp = document.getElementById("latter-cw-name");
+  const nameInp = doc.getElementById("latter-cw-name");
   const name = (nameInp && nameInp.value.trim()) ? nameInp.value.trim() : `Custom (${cwSelectedHex})`;
   STATE.config = STATE.config || {};
   let pals = Array.isArray(STATE.config.custom_palettes) ? [...STATE.config.custom_palettes] : [];
@@ -4974,10 +4694,10 @@ function renderCustomColorPalettes() {
   const pals = Array.isArray(STATE.config.custom_palettes) ? STATE.config.custom_palettes : [];
   const curHex = (STATE.config.device_custom_color || "#3898FF").toUpperCase();
 
-  const sw = document.getElementById("dev-color-swatch");
+  const sw = doc.getElementById("dev-color-swatch");
   if (sw) sw.style.background = curHex;
 
-  const sel = document.getElementById("dev-custom-palette-select");
+  const sel = doc.getElementById("dev-custom-palette-select");
   if (sel) {
     let optsHtml = "";
     if (pals.length === 0) {
@@ -4993,7 +4713,7 @@ function renderCustomColorPalettes() {
     sel.innerHTML = optsHtml;
   }
 
-  const sysBox = document.getElementById("sys-custom-palettes-list");
+  const sysBox = doc.getElementById("sys-custom-palettes-list");
   if (sysBox) {
     if (pals.length === 0) {
       sysBox.innerHTML = `<p class="desc" style="margin:0;">No custom colors saved yet. Click "+ Open Color Wheel" to create one.</p>`;
@@ -5014,8 +4734,273 @@ function renderCustomColorPalettes() {
   }
 }
 
-refreshState(true);
-toggleSurveyFastMode(false);
-</script>
-</body>
-</html>
+
+
+function bindStudioGlobals() {
+  window.addCalendarRow = addCalendarRow;
+  window.addCameraRow = addCameraRow;
+  window.addRemoteControlRow = addRemoteControlRow;
+  window.addRemoteGroupRow = addRemoteGroupRow;
+  window.addVolumeOverrideRow = addVolumeOverrideRow;
+  window.applyDeviceCustomColor = applyDeviceCustomColor;
+  window.applyQuickProfileFromOverview = applyQuickProfileFromOverview;
+  window.applySavedProfile = applySavedProfile;
+  window.applyStateToDom = applyStateToDom;
+  window.assignDeviceRemoteGroup = assignDeviceRemoteGroup;
+  window.autoCalibrateHere = autoCalibrateHere;
+  window.bulkNumber = bulkNumber;
+  window.bulkSelect = bulkSelect;
+  window.bulkToggle = bulkToggle;
+  window.callStudioCommand = callStudioCommand;
+  window.captureCurrentDeviceProfile = captureCurrentDeviceProfile;
+  window.checkSystemUpdates = checkSystemUpdates;
+  window.clearDirty = clearDirty;
+  window.clearInternalLogs = clearInternalLogs;
+  window.closeAddDeviceModal = closeAddDeviceModal;
+  window.closeCameraPreviewBox = closeCameraPreviewBox;
+  window.closeColorWheelModal = closeColorWheelModal;
+  window.closeRemoveDeviceModal = closeRemoveDeviceModal;
+  window.confirmAddDeviceModal = confirmAddDeviceModal;
+  window.confirmRemoveManagedDevice = confirmRemoveManagedDevice;
+  window.copyTextById = copyTextById;
+  window.copyToClipboard = copyToClipboard;
+  window.createDeviceGroup = createDeviceGroup;
+  window.deleteCustomPalette = deleteCustomPalette;
+  window.deleteDeviceGroup = deleteDeviceGroup;
+  window.deleteSavedProfile = deleteSavedProfile;
+  window.deleteWallpaper = deleteWallpaper;
+  window.ensureAddDeviceModal = ensureAddDeviceModal;
+  window.ensureColorWheelModal = ensureColorWheelModal;
+  window.ensureRemoveDeviceModal = ensureRemoveDeviceModal;
+  window.espAction = espAction;
+  window.espNumber = espNumber;
+  window.espSelect = espSelect;
+  window.exportBackupToComputer = exportBackupToComputer;
+  window.fallbackCopyText = fallbackCopyText;
+  window.generateDeviceVpnKeys = generateDeviceVpnKeys;
+  window.getInventoryRemoteIds = getInventoryRemoteIds;
+  window.getRemoteFriendlyLabel = getRemoteFriendlyLabel;
+  window.getSectionItems = getSectionItems;
+  window.hsvToRgbJS = hsvToRgbJS;
+  window.markDirty = markDirty;
+  window.moveDockAppToken = moveDockAppToken;
+  window.navigateToView = navigateToView;
+  window.onAssignedPersonChanged = onAssignedPersonChanged;
+  window.onCwHexInput = onCwHexInput;
+  window.onFilterDeviceCategory = onFilterDeviceCategory;
+  window.onSelectBleCandidate = onSelectBleCandidate;
+  window.onSelectBleSurveyDevice = onSelectBleSurveyDevice;
+  window.onSelectDeviceCustomPalette = onSelectDeviceCustomPalette;
+  window.openAddDeviceModal = openAddDeviceModal;
+  window.openColorWheelModal = openColorWheelModal;
+  window.openDevicesLanding = openDevicesLanding;
+  window.openDevicesWithCategory = openDevicesWithCategory;
+  window.openNativeHaIntegrations = openNativeHaIntegrations;
+  window.openNativeHaLogs = openNativeHaLogs;
+  window.openSystemSection = openSystemSection;
+  window.populateSelect = populateSelect;
+  window.quickAdoptBleCandidate = quickAdoptBleCandidate;
+  window.refreshActiveCameraPreview = refreshActiveCameraPreview;
+  window.refreshState = refreshState;
+  window.removeManagedDevice = removeManagedDevice;
+  window.removeRemoteGroupRow = removeRemoteGroupRow;
+  window.renderActiveSurveyDeviceBars = renderActiveSurveyDeviceBars;
+  window.renderAreaPresenceGrid = renderAreaPresenceGrid;
+  window.renderCameraPreview = renderCameraPreview;
+  window.renderCohesiveDeviceSections = renderCohesiveDeviceSections;
+  window.renderCustomColorPalettes = renderCustomColorPalettes;
+  window.renderDeviceRemoteAssignments = renderDeviceRemoteAssignments;
+  window.renderDiscoveredBleTable = renderDiscoveredBleTable;
+  window.renderDockPillsFromInput = renderDockPillsFromInput;
+  window.renderLogsView = renderLogsView;
+  window.renderNativeControlRow = renderNativeControlRow;
+  window.renderRawEntityList = renderRawEntityList;
+  window.renderRemoteGroupsEditor = renderRemoteGroupsEditor;
+  window.renderRssiBars = renderRssiBars;
+  window.renderSystemOverview = renderSystemOverview;
+  window.renderWallpaperGallery = renderWallpaperGallery;
+  window.renumberCameraRows = renumberCameraRows;
+  window.renumberRemoteControlRows = renumberRemoteControlRows;
+  window.restoreFromUploadedFile = restoreFromUploadedFile;
+  window.saveAllConfig = saveAllConfig;
+  window.saveColorWheelSelection = saveColorWheelSelection;
+  window.selectCurrentDevice = selectCurrentDevice;
+  window.selectWallpaperSource = selectWallpaperSource;
+  window.sendTestNotification = sendTestNotification;
+  window.setAreaFusionMode = setAreaFusionMode;
+  window.setBleOffset = setBleOffset;
+  window.setCwHex = setCwHex;
+  window.setScope = setScope;
+  window.showToast = showToast;
+  window.switchAddDeviceTab = switchAddDeviceTab;
+  window.switchSystemDevice = switchSystemDevice;
+  window.switchView = switchView;
+  window.testDoorbellTalkback = testDoorbellTalkback;
+  window.toggleDeviceTableSort = toggleDeviceTableSort;
+  window.toggleDockAppToken = toggleDockAppToken;
+  window.toggleParentHaSidebar = toggleParentHaSidebar;
+  window.toggleRemoteInGroup = toggleRemoteInGroup;
+  window.toggleSurveyFastMode = toggleSurveyFastMode;
+  window.toggleWallpaperFav = toggleWallpaperFav;
+  window.triggerHeaderFirmwareUpdate = triggerHeaderFirmwareUpdate;
+  window.triggerJsonDownload = triggerJsonDownload;
+  window.updateRemoteGroupField = updateRemoteGroupField;
+  window.updateTopHeaderForScope = updateTopHeaderForScope;
+  window.updateUnifiedPageTitle = updateUnifiedPageTitle;
+  window.uploadWallpaperFile = uploadWallpaperFile;
+  Object.defineProperty(window, "STATE", {
+    get: () => STATE,
+    configurable: true
+  });
+}
+
+class LatterStudio extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+    this._hass = null;
+    this._narrow = false;
+    this._route = null;
+    this._panel = null;
+    this._initialized = false;
+    this._subscribedSubentryId = null;
+  }
+
+  connectedCallback() {
+    SHADOW_ROOT = this.shadowRoot;
+    HOST_ELEMENT = this;
+    bindStudioGlobals();
+    if (!this._initialized) {
+      this.shadowRoot.innerHTML = `<style>${STUDIO_STYLES}</style>${STUDIO_TEMPLATE}`;
+      this._initialized = true;
+      this._applyRoute();
+    }
+    if (this._hass) {
+      HASS_REF = this._hass;
+      this._ensureSubscription();
+    }
+  }
+
+  disconnectedCallback() {
+    if (POLL_TIMER) {
+      clearInterval(POLL_TIMER);
+      POLL_TIMER = null;
+    }
+    this._teardownSubscription();
+  }
+
+  set hass(h) {
+    const firstHass = !this._hass && !!h;
+    this._hass = h;
+    HASS_REF = h;
+    if (this._initialized && firstHass) {
+      this._ensureSubscription();
+    }
+  }
+
+  get hass() {
+    return this._hass;
+  }
+
+  set narrow(n) {
+    this._narrow = Boolean(n);
+    if (this._narrow) {
+      this.setAttribute("narrow", "");
+    } else {
+      this.removeAttribute("narrow");
+    }
+  }
+
+  get narrow() {
+    return this._narrow;
+  }
+
+  set panel(p) {
+    this._panel = p;
+  }
+
+  get panel() {
+    return this._panel;
+  }
+
+  set route(r) {
+    const prevPath = this._route ? this._route.path : null;
+    this._route = r;
+    if (this._initialized && r && r.path !== prevPath) {
+      this._applyRoute();
+    }
+  }
+
+  get route() {
+    return this._route;
+  }
+
+  _applyRoute() {
+    const path = String((this._route && this._route.path) || window.location.pathname || "");
+    const devMatch = path.match(/\/devices\/([^/?#]+)/);
+    const params = new URLSearchParams(window.location.search);
+    const querySub = params.get("subentry_id") || params.get("device") || "";
+    if (devMatch && devMatch[1]) {
+      ACTIVE_SUBENTRY_ID = decodeURIComponent(devMatch[1]);
+      DEVICE_SELECTED = true;
+      setScope("device", "dashboard");
+      if (this._hass) {
+        refreshState(true);
+        this._resubscribe();
+      }
+    } else if (querySub) {
+      ACTIVE_SUBENTRY_ID = querySub;
+      DEVICE_SELECTED = true;
+      setScope("device", "dashboard");
+      if (this._hass) {
+        refreshState(true);
+        this._resubscribe();
+      }
+    } else {
+      DEVICE_SELECTED = false;
+      setScope("system", "system_overview");
+    }
+  }
+
+  _teardownSubscription() {
+    if (typeof WS_UNSUB === "function") {
+      try {
+        WS_UNSUB();
+      } catch (_e) {}
+    }
+    WS_UNSUB = null;
+    this._subscribedSubentryId = null;
+  }
+
+  _resubscribe() {
+    this._teardownSubscription();
+    this._ensureSubscription();
+  }
+
+  async _ensureSubscription() {
+    if (!this._hass || !this._hass.connection) return;
+    await refreshState(true);
+    try {
+      const unsubPromise = this._hass.connection.subscribeMessage(
+        (eventPayload) => {
+          if (eventPayload && !IS_DIRTY) {
+            applyStateToDom(eventPayload, false);
+          }
+        },
+        {
+          type: "latter/system/subscribe",
+          subentry_id: ACTIVE_SUBENTRY_ID || null
+        }
+      );
+      WS_UNSUB = await unsubPromise;
+      this._subscribedSubentryId = ACTIVE_SUBENTRY_ID || "";
+    } catch (err) {
+      console.warn("Latter Studio WS subscription fallback to polling:", err);
+      toggleSurveyFastMode(false);
+    }
+  }
+}
+
+if (!customElements.get("latter-studio")) {
+  customElements.define("latter-studio", LatterStudio);
+}

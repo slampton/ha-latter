@@ -22,7 +22,6 @@ CONF_ESPHOME_DEVICE_ID: Final = "esphome_device_id"
 CONF_DEVICE_PROFILE: Final = "device_profile"
 CONF_DISPLAY_SHAPE: Final = "display_shape"
 CONF_DEFAULT_PAGE_SIZE: Final = "default_page_size"
-CONF_WEB_THEME: Final = "web_theme"
 CONF_COMPANION_BASE_URL: Final = "companion_base_url"
 CONF_WEATHER_ENTITY: Final = "weather_entity"
 CONF_ALARM_ENTITY: Final = "alarm_entity"
@@ -66,7 +65,6 @@ DEFAULT_DOORBELL_ANC_MODE: Final = "ultra"
 DEFAULT_DEVICE_PROFILE: Final = "mobile_display"
 DEFAULT_DISPLAY_SHAPE: Final = "circle"
 DEFAULT_PAGE_SIZE: Final = 3
-DEFAULT_WEB_THEME: Final = "ha_auto"
 DEFAULT_NATIVE_BLE_TRACKING: Final = True
 DEFAULT_BLE_BEACON_UUID: Final = "4C415454-4552-434F-5245-000000000220"
 DEFAULT_BLE_AUTO_SWITCH: Final = True
@@ -101,10 +99,7 @@ API_CAMERA_PROXY_PATH: Final = "/api/latter/camera/{target_device}"
 API_CAMERA_AUDIO_STREAM_PATH: Final = "/api/latter/camera_audio/{target_device}"
 API_DOORBELL_TALKBACK_PATH: Final = "/api/latter/doorbell_talkback/{target_device}"
 API_MAP_PROXY_PATH: Final = "/api/latter/map/{target_device}"
-API_COMPANION_UI_PATH: Final = "/api/latter/companion/{entry_id}"
-API_COMPANION_API_PATH: Final = "/api/latter/companion/{entry_id}/api"
 API_BRAND_ICON_PATH: Final = "/api/latter/brand/icon.png"
-API_STUDIO_ROOT_PATH: Final = "/api/latter/studio"
 API_SIDEBAR_ICON_JS_PATH: Final = "/api/latter/brand/sidebar_icon.js"
 DATA_HMAC_SECRET: Final = "hmac_secret"
 DATA_DISCOVERY_UNSUB: Final = "discovery_unsub"
@@ -144,7 +139,6 @@ CONF_AREA_FUSION_CONFIG: Final = "area_fusion_config"
 EVENT_LATTER: Final = "latter_event"
 
 GLOBAL_CONFIG_KEYS: Final[tuple[str, ...]] = (
-    CONF_WEB_THEME,
     CONF_COMPANION_BASE_URL,
     CONF_WEATHER_ENTITY,
     CONF_ALARM_ENTITY,

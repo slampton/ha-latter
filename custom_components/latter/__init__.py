@@ -47,14 +47,6 @@ from .const import (
     normalize_device_slug,
 )
 from .coordinator import LatterCoordinator
-from .dashboard import (
-    LatterBrandIconView,
-    LatterCompanionApiView,
-    LatterCompanionDashboardView,
-    LatterSidebarIconJsView,
-    LatterStudioRootView,
-    get_studio_panel_token,
-)
 from .doorbell_engine import (
     LatterCameraAudioStreamView,
     LatterDoorbellTalkbackView,
@@ -67,6 +59,12 @@ from .http import (
 )
 from .identity import get_bound_esphome_device
 from .services import async_push_active_area_entities, async_setup_services
+from .studio import (
+    LatterBrandIconView,
+    LatterSidebarIconJsView,
+    async_register_studio_panel,
+    async_unregister_studio_panel,
+)
 from .system import LatterSystem, get_latter_system
 
 _LOGGER = logging.getLogger(__name__)
@@ -455,28 +453,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
         hass.http.register_view(LatterCameraAudioStreamView(hass))
         hass.http.register_view(LatterDoorbellTalkbackView(hass))
         hass.http.register_view(LatterMapSnapshotView(hass))
-        hass.http.register_view(LatterCompanionDashboardView(hass))
-        hass.http.register_view(LatterCompanionApiView(hass))
         hass.http.register_view(LatterBrandIconView(hass))
-        hass.http.register_view(LatterStudioRootView(hass))
         hass.http.register_view(LatterSidebarIconJsView(hass))
-        try:
-            from homeassistant.components import frontend
 
-            frontend.add_extra_js_url(hass, "/api/latter/brand/sidebar_icon.js")
-            panel_token = get_studio_panel_token(hass)
-            frontend.async_register_built_in_panel(
-                hass,
-                component_name="iframe",
-                sidebar_title="Latter",
-                sidebar_icon="latter:logo",
-                frontend_url_path="latter",
-                config={"url": f"/api/latter/studio?scope=system&token={panel_token}"},
-                require_admin=True,
-                update=True,
-            )
-        except Exception as err:  # noqa: BLE001
-            _LOGGER.debug("Sidebar panel registration skipped: %s", err)
+    await async_register_studio_panel(hass)
 
     # Register the System-level service device for Site & Area entities
     dev_reg = dr.async_get(hass)
@@ -585,6 +565,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> b
 
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
+        async_unregister_studio_panel(hass)
         domain_data = hass.data.get(DOMAIN, {})
         sys_obj = get_latter_system(hass)
         if sys_obj is not None:
