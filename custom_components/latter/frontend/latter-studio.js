@@ -1779,7 +1779,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root">
             <div id="embedded-voice-primary" class="native-controls-box" style="margin-bottom:10px;"></div>
 
             <div class="toggle-row" id="row-sync-device-area" style="margin-bottom:10px;">
-              <span>Voice Follows Me (Sync Active Area to Device Area)</span>
+              <span>Voice Follows Me (Sync Active Area to Device Area — keeps BLE beacon active on battery)</span>
               <input type="checkbox" id="cfg-sync_device_area" onchange="markDirty()">
             </div>
 
