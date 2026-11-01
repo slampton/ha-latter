@@ -813,8 +813,8 @@ async def ws_handle_get_state(
 ) -> None:
     """Return the current Latter Studio state payload."""
     if msg.get("studio_rev") != 2:
-        _LOGGER.warning(
-            "Ignoring get_state from stale cached Studio JS client (missing studio_rev=2) — refresh browser cache or close stale /latter tab"
+        _LOGGER.debug(
+            "Ignoring get_state from stale cached Studio JS client (missing studio_rev=2)"
         )
         connection.send_result(msg["id"], None)
         return
@@ -848,8 +848,8 @@ async def ws_handle_subscribe(
 ) -> None:
     """Subscribe to live Latter Studio state & BLE survey updates."""
     if msg.get("studio_rev") != 2:
-        _LOGGER.warning(
-            "Ignoring subscribe from stale cached Studio JS client (missing studio_rev=2) — refresh browser cache or close stale /latter tab"
+        _LOGGER.debug(
+            "Ignoring subscribe from stale cached Studio JS client (missing studio_rev=2)"
         )
         connection.send_result(msg["id"], None)
         return
