@@ -2273,6 +2273,10 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         if ma_counterpart and ma_counterpart not in tracked:
             tracked.append(ma_counterpart)
+        if self.is_local_speaker_entity(self.active_speaker) and self.device_slug:
+            np_title = f"sensor.{self.device_slug}_now_playing_title"
+            if np_title not in tracked:
+                tracked.append(np_title)
 
         self._unsub_speaker_state = async_track_state_change_event(
             self.hass,
