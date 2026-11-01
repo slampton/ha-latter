@@ -255,6 +255,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             function=self._async_debounced_notify,
         )
         self._cached_media_payload: tuple[float, tuple[str, dict[str, Any]]] | None = None
+        self._cached_media_anchor: tuple[tuple[Any, ...], float] | None = None
         self._cached_area_payload: tuple[float, tuple[str, dict[str, Any]]] | None = None
         self._cached_remote_payload: tuple[float, tuple[str, dict[str, Any]]] | None = None
         self._unsub_core_config: Callable[[], None] | None = None
@@ -1762,6 +1763,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._packer.force_republish_all_domains()
         self.rev = max(self.rev, self._packer.rev)
         self._cached_media_payload = None
+        self._cached_media_anchor = None
         self._cached_area_payload = None
         self._cached_remote_payload = None
         if self.weather_attributes and "condition" in self.weather_attributes:
@@ -2401,6 +2403,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self, event: Event[EventStateChangedData]
     ) -> None:
         """Handle target media_player state/attribute updates."""
+        self._cached_media_anchor = None
         self._notify_listeners()
 
     def _read_volume_from_target(
@@ -2658,13 +2661,45 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             pos_updated_at = 0
 
         dur_r = round(duration, 1)
-        pos_r = round(position, 1)
         vol_r = round(volume, 2) if volume is not None else None
         vol_pct = (
             int(round(max(0.0, min(1.0, volume)) * 100.0))
             if volume is not None
             else None
         )
+        raw_pos = float(
+            attrs.get("media_position")
+            or m_attrs.get("media_position")
+            or 0.0
+        )
+        media_anchor = (
+            state,
+            title,
+            artist,
+            album,
+            dur_r,
+            round(raw_pos, 1),
+            pos_updated_at,
+            vol_pct,
+            media_type,
+            supported_features,
+            art_url,
+            self.active_speaker,
+            speaker_name,
+            self.last_speaker,
+            self.local_speaker,
+            vol_target,
+            is_local_flag,
+        )
+        if (
+            self._cached_media_anchor is not None
+            and self._cached_media_anchor[0] == media_anchor
+        ):
+            pos_r = self._cached_media_anchor[1]
+        else:
+            pos_r = round(position, 1)
+            self._cached_media_anchor = (media_anchor, pos_r)
+
         med_rev, med_payload = self._pack_domain_payload(
             "active_media",
             state,

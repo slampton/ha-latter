@@ -106,7 +106,7 @@ class UrlSigner:
             return "none"
         base_url = self.get_lan_base_url()
         sig = self.sign_resource(f"camera:{cam_ent}|{width}|{height}|{shape}")
-        v_tag = cache_bust or str(int(time.time()))
+        v_tag = cache_bust or sig[:8]
         return (
             f"{base_url}/api/latter/camera/{device_slug}"
             f"?entity_id={cam_ent}&w={width}&h={height}&shape={shape}&sig={sig}&v={v_tag}"
