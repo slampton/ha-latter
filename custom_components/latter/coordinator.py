@@ -418,6 +418,20 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         elif self._ble_tracker is not None:
             self._ble_tracker.async_stop()
             self._ble_tracker = None
+
+        conf_def_spk = str(self.get_opt(CONF_DEFAULT_SPEAKER) or "").strip()
+        target_def_spk = conf_def_spk or self.local_speaker
+        if (
+            self.local_speaker
+            and target_def_spk
+            and self.is_local_speaker_entity(target_def_spk)
+        ):
+            target_def_spk = self.local_speaker
+        if target_def_spk and target_def_spk != self.active_speaker:
+            self.last_speaker = self.active_speaker
+            self.active_speaker = target_def_spk
+            self._schedule_persist_runtime_state()
+
         self._bind_speaker_listener()
         self._bind_weather_listener()
         self._bind_alarm_listener()
@@ -717,6 +731,28 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return _resolve_esphome_local_speaker(
             self.hass, self.device_slug, self.esphome_device_id
         )
+
+    @property
+    def local_ma_speaker(self) -> str:
+        """Return the Music Assistant Sendspin media_player entity corresponding to this device's local speaker."""
+        local_spk = self.local_speaker
+        return (
+            _resolve_ma_counterpart_entity(
+                self.hass, local_spk, self.device_slug
+            )
+            or ""
+        )
+
+    def is_local_speaker_entity(self, speaker_entity_id: str | None) -> bool:
+        """Return True if speaker_entity_id is this device's ESPHome speaker or its Music Assistant Sendspin counterpart."""
+        spk = str(speaker_entity_id or "").strip()
+        if not spk:
+            return False
+        local_spk = self.local_speaker
+        if local_spk and spk == local_spk:
+            return True
+        local_ma = self.local_ma_speaker
+        return bool(local_ma and spk == local_ma)
 
     @property
     def weather_entity(self) -> str | None:
@@ -1415,7 +1451,13 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def _enforce_local_speaker_if_remote_idle(self, reason: str) -> None:
         """Reset active_speaker to local_speaker on boot/wake unless the remote speaker is actively playing."""
         local_spk = self.local_speaker
-        if not local_spk or self.active_speaker == local_spk:
+        if not local_spk:
+            return
+        if self.is_local_speaker_entity(self.active_speaker):
+            if self.active_speaker != local_spk:
+                self.active_speaker = local_spk
+                self._bind_speaker_listener()
+                self._schedule_persist_runtime_state()
             return
 
         remote_state = self.hass.states.get(self.active_speaker)
@@ -1498,8 +1540,23 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return
 
         cmd = command.strip().lower()
+        ma_target = _resolve_ma_counterpart_entity(
+            self.hass, target_spk, self.device_slug
+        )
+        cmd_target = ma_target or target_spk
         state_obj = self.hass.states.get(target_spk)
+        ma_state_obj = (
+            self.hass.states.get(ma_target)
+            if ma_target and ma_target != target_spk
+            else None
+        )
         cur_state = state_obj.state if state_obj else STATE_IDLE
+        if (
+            cur_state in (STATE_IDLE, STATE_OFF, STATE_UNAVAILABLE, STATE_UNKNOWN)
+            and ma_state_obj is not None
+            and ma_state_obj.state in (STATE_PLAYING, STATE_PAUSED, STATE_BUFFERING)
+        ):
+            cur_state = ma_state_obj.state
 
         if cmd == "toggle":
             cmd = (
@@ -1528,12 +1585,10 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             await self.hass.services.async_call(
                 "media_player",
                 "media_play",
-                {ATTR_ENTITY_ID: target_spk},
+                {ATTR_ENTITY_ID: cmd_target},
                 blocking=False,
             )
-            is_local = bool(
-                self.local_speaker and target_spk == self.local_speaker
-            )
+            is_local = self.is_local_speaker_entity(target_spk)
             if is_local and self._local_needs_cold_resume and cur_state in (
                 STATE_IDLE,
                 STATE_OFF,
@@ -1546,7 +1601,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             await self.hass.services.async_call(
                 "media_player",
                 "media_pause",
-                {ATTR_ENTITY_ID: target_spk},
+                {ATTR_ENTITY_ID: cmd_target},
                 blocking=False,
             )
             return
@@ -1555,7 +1610,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             await self.hass.services.async_call(
                 "media_player",
                 "media_next_track",
-                {ATTR_ENTITY_ID: target_spk},
+                {ATTR_ENTITY_ID: cmd_target},
                 blocking=False,
             )
             return
@@ -1564,7 +1619,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             await self.hass.services.async_call(
                 "media_player",
                 "media_previous_track",
-                {ATTR_ENTITY_ID: target_spk},
+                {ATTR_ENTITY_ID: cmd_target},
                 blocking=False,
             )
             return
@@ -1573,7 +1628,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             await self.hass.services.async_call(
                 "media_player",
                 "media_stop",
-                {ATTR_ENTITY_ID: target_spk},
+                {ATTR_ENTITY_ID: cmd_target},
                 blocking=False,
             )
             return
@@ -1582,7 +1637,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             await self.hass.services.async_call(
                 "media_player",
                 "clear_playlist",
-                {ATTR_ENTITY_ID: target_spk},
+                {ATTR_ENTITY_ID: cmd_target},
                 blocking=False,
             )
             return
@@ -1592,7 +1647,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "media_player",
                 "media_seek",
                 {
-                    ATTR_ENTITY_ID: target_spk,
+                    ATTR_ENTITY_ID: cmd_target,
                     "seek_position": round(float(seek_position), 1),
                 },
                 blocking=False,
@@ -2350,11 +2405,30 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if self._cached_media_payload is not None and (now_m - self._cached_media_payload[0]) < 0.05:
             return self._cached_media_payload[1]
         state_obj = self.hass.states.get(self.active_speaker)
+        ma_counterpart = _resolve_ma_counterpart_entity(
+            self.hass, self.active_speaker, self.device_slug
+        )
+        ma_st = (
+            self.hass.states.get(ma_counterpart)
+            if ma_counterpart and ma_counterpart != self.active_speaker
+            else None
+        )
+        if (
+            state_obj is None
+            or state_obj.state in (STATE_UNAVAILABLE, STATE_UNKNOWN)
+        ) and ma_st is not None:
+            state_obj = ma_st
+
         vol_target = self.get_volume_target_entity(self.active_speaker)
+        is_local_flag = 1 if self.is_local_speaker_entity(self.active_speaker) else 0
         fallback_spk_name = (
-            self.active_speaker.split(".", 1)[-1].replace("_", " ").title()
-            if self.active_speaker
-            else "Local Speaker"
+            self.device_title
+            if is_local_flag
+            else (
+                self.active_speaker.split(".", 1)[-1].replace("_", " ").title()
+                if self.active_speaker
+                else "Local Speaker"
+            )
         )
 
         if state_obj is None or state_obj.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
@@ -2371,7 +2445,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 if idle_vol is not None
                 else None
             )
-            is_local_flag = 1 if (self.active_speaker and self.active_speaker == self.local_speaker) else 0
             med_rev, med_payload = self._pack_domain_payload(
                 "active_media",
                 STATE_OFF,
@@ -2419,6 +2492,12 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return res
 
         state = state_obj.state
+        if (
+            state in (STATE_IDLE, STATE_OFF)
+            and ma_st is not None
+            and ma_st.state in (STATE_PLAYING, STATE_PAUSED, STATE_BUFFERING)
+        ):
+            state = ma_st.state
         if state not in (
             STATE_PLAYING,
             STATE_PAUSED,
@@ -2442,14 +2521,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # When playing on the local ESPHome Sendspin speaker, media_player.<slug>_music often omits media_title
         # and entity_picture in HA; fall back to the Music Assistant counterpart entity or ESPHome text_sensors.
-        ma_counterpart = _resolve_ma_counterpart_entity(
-            self.hass, self.active_speaker, self.device_slug
-        )
-        ma_st = (
-            self.hass.states.get(ma_counterpart)
-            if ma_counterpart and ma_counterpart != self.active_speaker
-            else None
-        )
         m_attrs: dict[str, Any] = dict(ma_st.attributes) if ma_st is not None else {}
 
         if title == "Idle" and m_attrs.get("media_title"):
@@ -2466,7 +2537,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if position <= 0 and ma_st is not None:
             position = _interpolate_speaker_position(ma_st) or position
 
-        if title == "Idle" and self.active_speaker == self.local_speaker:
+        if title == "Idle" and bool(is_local_flag):
             t_st = self.hass.states.get(f"sensor.{self.device_slug}_now_playing_title")
             a_st = self.hass.states.get(f"sensor.{self.device_slug}_now_playing_artist")
             al_st = self.hass.states.get(f"sensor.{self.device_slug}_now_playing_album")
@@ -2512,7 +2583,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             title == "Idle"
             and state == STATE_IDLE
             and self.last_media_title
-            and self.active_speaker == self.local_speaker
+            and bool(is_local_flag)
         ):
             title = self.last_media_title
             artist = self.last_media_artist or "None"
@@ -2522,6 +2593,8 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             media_type = self.last_media_type or "music"
 
         volume = self._read_volume_from_target(vol_target, attrs)
+        if volume is None and m_attrs:
+            volume = self._read_volume_from_target(vol_target, m_attrs)
         supported_features = int(attrs.get("supported_features") or 0)
         if vol_target != self.active_speaker:
             vol_state = self.hass.states.get(vol_target)
@@ -2557,7 +2630,11 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         else:
             art_url = "none"
 
-        speaker_name = str(attrs.get("friendly_name") or fallback_spk_name)
+        speaker_name = (
+            self.device_title
+            if is_local_flag
+            else str(attrs.get("friendly_name") or fallback_spk_name)
+        )
 
         raw_updated_at = attrs.get("media_position_updated_at") or m_attrs.get(
             "media_position_updated_at"
@@ -2570,11 +2647,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         else:
             pos_updated_at = 0
 
-        is_local_flag = (
-            1
-            if (self.active_speaker and self.active_speaker == self.local_speaker)
-            else 0
-        )
         dur_r = round(duration, 1)
         pos_r = round(position, 1)
         vol_r = round(volume, 2) if volume is not None else None

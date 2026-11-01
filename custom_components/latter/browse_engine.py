@@ -210,8 +210,10 @@ def _format_local_speaker_name(hass: HomeAssistant, state_obj: State) -> str:
         dev = dev_reg.async_get(entry.device_id)
         if dev:
             dev_name = str(dev.name_by_user or dev.name or "").strip()
-            if dev_name and dev_name.lower() not in friendly.lower():
-                return f"{dev_name} ({friendly})"
+            if dev_name:
+                return dev_name
+    if friendly.lower().endswith(" music") and len(friendly) > 6:
+        return friendly[:-6].strip()
     return friendly
 
 
@@ -221,13 +223,36 @@ async def _browse_speakers(
     last_speaker: str,
     local_speaker: str,
 ) -> list[dict[str, Any]]:
-    """Build sorted speaker list restricted strictly to Music Assistant players (+ local speaker)."""
+    """Build sorted speaker list restricted strictly to Music Assistant players (+ deduplicated local speaker)."""
+    from .media_engine import resolve_ma_counterpart_entity
+
+    local_ma = (
+        resolve_ma_counterpart_entity(hass, local_speaker)
+        if local_speaker
+        else None
+    )
+    local_ids = {s for s in (local_speaker, local_ma) if s}
+    has_local_esphome = bool(
+        local_speaker
+        and (st_loc := hass.states.get(local_speaker)) is not None
+        and st_loc.state not in ("unavailable", "unknown")
+    )
+
     items: list[dict[str, Any]] = []
     for state_obj in hass.states.async_all("media_player"):
         if state_obj.state in ("unavailable", "unknown"):
             continue
         ent_id = state_obj.entity_id
-        is_local = ent_id == local_speaker
+        if (
+            has_local_esphome
+            and local_ma
+            and ent_id == local_ma
+            and local_ma != local_speaker
+        ):
+            # Deduplicate: local_speaker already represents this physical device's speaker
+            continue
+
+        is_local = ent_id in local_ids
 
         if not is_local and not is_music_assistant_player(hass, state_obj):
             continue
@@ -237,15 +262,25 @@ async def _browse_speakers(
             if is_local
             else str(state_obj.attributes.get("friendly_name") or ent_id)
         )
+        is_active = (
+            (active_speaker in local_ids)
+            if is_local
+            else (ent_id == active_speaker)
+        )
+        is_last = (
+            (last_speaker in local_ids)
+            if is_local
+            else (ent_id == last_speaker)
+        )
 
         items.append(
             {
                 "name": friendly,
-                "id": ent_id,
+                "id": local_speaker if (is_local and local_speaker) else ent_id,
                 "type": "speaker",
-                "active": ent_id == active_speaker,
+                "active": is_active,
                 "_is_local": is_local,
-                "_is_last": ent_id == last_speaker,
+                "_is_last": is_last,
             }
         )
 

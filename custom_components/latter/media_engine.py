@@ -292,6 +292,31 @@ def resolve_ma_counterpart_entity(
         if resolved_coord is not None
         else ""
     )
+
+    # Pass 1d: Exact Sendspin entity_id or device slug match (Music Assistant creates a separate DeviceEntry for Sendspin players)
+    if matched_entity is None:
+        spk_obj_id = speaker_entity_id.split(".", 1)[-1].lower()
+        for sfx in ("_music", "_speaker", "_media_player"):
+            if spk_obj_id.endswith(sfx) and len(spk_obj_id) > len(sfx):
+                spk_obj_id = spk_obj_id[: -len(sfx)]
+                break
+        exact_slugs = {
+            s for s in (eff_slug, normalize_device_slug(spk_obj_id)) if s
+        }
+        if exact_slugs:
+            exact_ent_ids = {f"media_player.{s}" for s in exact_slugs}
+            for c_entry, c_dev in ma_candidates:
+                if c_entry.entity_id.lower() in exact_ent_ids:
+                    matched_entity = c_entry.entity_id
+                    break
+                if c_dev is not None:
+                    c_dev_slug = normalize_device_slug(
+                        str(c_dev.name_by_user or c_dev.name or "")
+                    )
+                    if c_dev_slug and c_dev_slug in exact_slugs:
+                        matched_entity = c_entry.entity_id
+                        break
+
     if eff_slug:
         ir.async_delete_issue(hass, DOMAIN, f"link_ma_player_{eff_slug}")
 

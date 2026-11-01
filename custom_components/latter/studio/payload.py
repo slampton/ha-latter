@@ -340,6 +340,9 @@ def build_studio_state_payload(
     if coordinator.camera_entity:
         allowed_cams_set.add(coordinator.camera_entity)
 
+    local_spk_id = coordinator.local_speaker
+    local_ma_id = coordinator.local_ma_speaker
+
     for state_obj in sorted(
         hass.states.async_all(), key=lambda s: s.entity_id
     ):
@@ -359,10 +362,33 @@ def build_studio_state_payload(
             remotes_list.append(item)
             volume_targets.append(item)
             if (
-                ent_id == coordinator.local_speaker
+                local_spk_id
+                and local_ma_id
+                and ent_id == local_ma_id
+                and local_ma_id != local_spk_id
+            ):
+                # Avoid listing two speaker entities for the same physical device;
+                # local_speaker represents the built-in speaker and links to local_ma_speaker automatically.
+                continue
+            if (
+                ent_id == local_spk_id
                 or is_music_assistant_player(hass, state_obj)
             ):
-                ma_speakers.append(item)
+                if ent_id == local_spk_id:
+                    clean_lbl = (
+                        friendly[:-6].strip()
+                        if friendly.lower().endswith(" music") and len(friendly) > 6
+                        else friendly
+                    )
+                    ma_speakers.append(
+                        {
+                            "id": ent_id,
+                            "name": f"{clean_lbl} — Built-in Speaker ({ent_id}){suffix_state}",
+                            "domain": domain,
+                        }
+                    )
+                else:
+                    ma_speakers.append(item)
         elif domain == "remote":
             remotes_list.append(item)
         elif domain in ("number", "input_number"):
@@ -518,6 +544,15 @@ def build_studio_state_payload(
     has_priv_key = bool(str(coordinator.get_opt(CONF_VPN_PRIVATE_KEY, "") or ""))
     has_psk = bool(str(coordinator.get_opt(CONF_VPN_PRESHARED_KEY, "") or ""))
 
+    raw_def_spk = str(coordinator.get_opt(CONF_DEFAULT_SPEAKER, "") or "").strip()
+    if (
+        raw_def_spk
+        and local_spk_id
+        and local_ma_id
+        and raw_def_spk == local_ma_id
+    ):
+        raw_def_spk = local_spk_id
+
     config_data = {
         CONF_DEVICE_SLUG: coordinator.device_slug,
         CONF_DEVICE_PROFILE: coordinator.device_profile,
@@ -525,9 +560,7 @@ def build_studio_state_payload(
         CONF_DISPLAY_SHAPE: coordinator.display_shape,
         CONF_DEFAULT_PAGE_SIZE: coordinator.default_page_size,
         CONF_COMPANION_BASE_URL: coordinator.companion_base_url,
-        CONF_DEFAULT_SPEAKER: str(
-            coordinator.get_opt(CONF_DEFAULT_SPEAKER, "") or ""
-        ),
+        CONF_DEFAULT_SPEAKER: raw_def_spk,
         CONF_VOLUME_OVERRIDES: [
             {"speaker": k, "target": v}
             for k, v in coordinator.volume_overrides.items()
