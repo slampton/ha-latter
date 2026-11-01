@@ -300,17 +300,17 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 )
 
                 # Remove legacy v1 device & entities keyed by (DOMAIN, v1_entry.entry_id) so subentry entities register without _2 suffixes
-                old_latter_dev = dev_reg.async_get_device(
-                    identifiers={(DOMAIN, v1_entry.entry_id)}
-                )
-                if old_latter_dev is not None:
-                    for ent_entry in list(
-                        er.async_entries_for_device(
-                            ent_reg, old_latter_dev.id, include_disabled_entities=True
-                        )
-                    ):
-                        ent_reg.async_remove(ent_entry.entity_id)
-                    dev_reg.async_remove_device(old_latter_dev.id)
+                for old_latter_dev in list(
+                    dr.async_entries_for_config_entry(dev_reg, v1_entry.entry_id)
+                ):
+                    if (DOMAIN, v1_entry.entry_id) in old_latter_dev.identifiers:
+                        for ent_entry in list(
+                            er.async_entries_for_device(
+                                ent_reg, old_latter_dev.id, include_disabled_entities=True
+                            )
+                        ):
+                            ent_reg.async_remove(ent_entry.entity_id)
+                        dev_reg.async_remove_device(old_latter_dev.id)
 
                 if sub_uid not in existing_sub_uids and slug not in existing_sub_slugs:
                     subentry = ConfigSubentry(

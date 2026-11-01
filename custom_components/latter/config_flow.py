@@ -622,8 +622,12 @@ class LatterDeviceSubentryFlow(ConfigSubentryFlow):
                 new_ident_key = (
                     dr.format_mac(new_mac) if new_mac else subentry.subentry_id
                 )
+                entry_devs = dr.async_entries_for_config_entry(dev_reg, entry.entry_id)
                 for key in old_ident_keys:
-                    latter_dev = dev_reg.async_get_device(identifiers={(DOMAIN, key)})
+                    latter_dev = next(
+                        (d for d in entry_devs if (DOMAIN, key) in d.identifiers),
+                        None,
+                    )
                     if latter_dev is not None:
                         dev_reg.async_update_device(
                             latter_dev.id,
