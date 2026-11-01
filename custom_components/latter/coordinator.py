@@ -987,7 +987,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         try:
             hw_w = int(hw.get("w") or 0)
             hw_h = int(hw.get("h") or 0)
-            if hw_w >= 400 and hw_h >= 400:
+            if hw_w >= 240 and hw_h >= 240:
                 return hw_w // 2, hw_h // 2
             if hw_w >= 64 and hw_h >= 64:
                 return max(64, min(1920, hw_w)), max(64, min(1920, hw_h))
@@ -999,14 +999,14 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             try:
                 w = max(64, min(1920, int(parts[0].strip())))
                 h = max(64, min(1920, int(parts[1].strip())))
-                if w >= 400 and h >= 400:
+                if w >= 240 and h >= 240:
                     return w // 2, h // 2
                 return w, h
             except ValueError:
                 return 233, 233
         try:
             sq = max(64, min(1920, int(raw)))
-            if sq >= 400:
+            if sq >= 240:
                 return sq // 2, sq // 2
             return sq, sq
         except ValueError:
