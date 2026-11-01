@@ -39,35 +39,44 @@ async def async_register_studio_panel(hass: HomeAssistant) -> None:
     domain_data = hass.data.setdefault(DOMAIN, {})
     async_register_studio_ws_commands(hass)
 
+    frontend_dir = Path(__file__).parent.parent / "frontend"
+    cache_tag = f"{INTEGRATION_VERSION.replace('.', '_')}_{int(time.time())}"
+    versioned_prefix = f"{STATIC_URL_PREFIX}_{cache_tag}"
+
+    static_configs = [
+        StaticPathConfig(
+            versioned_prefix,
+            str(frontend_dir),
+            cache_headers=False,
+        )
+    ]
     if not domain_data.get("_studio_static_registered"):
         domain_data["_studio_static_registered"] = True
-        frontend_dir = Path(__file__).parent.parent / "frontend"
-        await hass.http.async_register_static_paths(
-            [
-                StaticPathConfig(
-                    STATIC_URL_PREFIX,
-                    str(frontend_dir),
-                    cache_headers=False,
-                )
-            ]
+        static_configs.append(
+            StaticPathConfig(
+                STATIC_URL_PREFIX,
+                str(frontend_dir),
+                cache_headers=False,
+            )
         )
         frontend.add_extra_js_url(hass, "/api/latter/brand/sidebar_icon.js")
 
+    await hass.http.async_register_static_paths(static_configs)
+
     try:
         frontend.async_remove_panel(hass, "latter", warn_if_unknown=False)
-        cache_tag = f"{INTEGRATION_VERSION}-{int(time.time())}"
         await panel_custom.async_register_panel(
             hass,
             frontend_url_path="latter",
             webcomponent_name="latter-studio",
-            module_url=f"{STATIC_URL_PREFIX}/latter-studio.js?v={cache_tag}",
+            module_url=f"{versioned_prefix}/latter-studio.js?v={cache_tag}",
             sidebar_title="Latter",
             sidebar_icon="latter:logo",
             require_admin=True,
             embed_iframe=False,
         )
     except Exception as err:  # noqa: BLE001
-        _LOGGER.debug("Latter Studio panel_custom registration skipped: %s", err)
+        _LOGGER.warning("Latter Studio panel_custom registration failed: %s", err)
 
 
 def async_unregister_studio_panel(hass: HomeAssistant) -> None:
