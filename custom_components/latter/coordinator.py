@@ -396,8 +396,8 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if self.native_ble_tracking_enabled:
             if self._ble_tracker is not None:
                 if (
-                    self._ble_tracker.beacon_uuid != self.ble_beacon_uuid
-                    or self._ble_tracker.target_address != self.ble_target_address
+                    getattr(self._ble_tracker, "beacon_uuid", self.ble_beacon_uuid) != self.ble_beacon_uuid
+                    or getattr(self._ble_tracker, "target_address", self.ble_target_address) != self.ble_target_address
                 ):
                     self._ble_tracker.async_stop()
                     self._ble_tracker = None

@@ -294,8 +294,10 @@ class LatterNativeBleTracker:
     ) -> None:
         """Initialize the native BLE proxy area tracker."""
         self.hass = hass
+        self.beacon_uuid = str(beacon_uuid or "").strip()
         self._target_uuid_hex = _normalize_uuid_hex(beacon_uuid)
         self._target_address = str(target_address or "").strip()
+        self.target_address = self._target_address
         self._device_slug = device_slug.lower().replace("_", "-")
         self._raw_slug = device_slug
         self._esphome_device_id: str | None = esphome_device_id
