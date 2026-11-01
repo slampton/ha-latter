@@ -1014,7 +1014,7 @@ const STUDIO_STYLES = `
   }
 `;
 
-const STUDIO_TEMPLATE = `<div class="studio-root">$
+const STUDIO_TEMPLATE = `<div class="studio-root">
 <header class="latter-top-titlebar">
   <div class="titlebar-brand">
     <button type="button" class="ha-menu-btn" title="Toggle Home Assistant Sidebar" onclick="toggleParentHaSidebar()">
@@ -2061,12 +2061,12 @@ const doc = {
   querySelectorAll: (sel) => SHADOW_ROOT ? SHADOW_ROOT.querySelectorAll(sel) : [],
   createElement: (tag) => document.createElement(tag),
   get activeElement() {
-    return (SHADOW_ROOT && SHADOW_ROOT.activeElement) || doc.activeElement;
+    return (SHADOW_ROOT && SHADOW_ROOT.activeElement) || document.activeElement;
   },
   body: {
     appendChild: (el) => {
       if (el && el.tagName === "A") {
-        doc.body.appendChild(el);
+        document.body.appendChild(el);
       } else if (SHADOW_ROOT) {
         const root = SHADOW_ROOT.querySelector(".studio-root") || SHADOW_ROOT;
         root.appendChild(el);
@@ -2393,7 +2393,14 @@ function navigateToView(viewId) {
 }
 
 function selectCurrentDevice() {
+  if (ACTIVE_SUBENTRY_ID) {
+    switchSystemDevice(ACTIVE_SUBENTRY_ID);
+    return;
+  }
   DEVICE_SELECTED = true;
+  if (STATE) {
+    applyStateToDom(STATE, true);
+  }
   setScope("device", "dashboard");
 }
 
@@ -2406,17 +2413,22 @@ async function switchSystemDevice(targetRef) {
   const subId = String(targetRef).includes("/devices/")
     ? String(targetRef).split("/devices/").pop().split("?")[0]
     : String(targetRef);
+  const changed = ACTIVE_SUBENTRY_ID !== subId;
   ACTIVE_SUBENTRY_ID = subId;
   DEVICE_SELECTED = true;
-  INITIAL_FORM_LOADED = false;
   try {
     window.history.replaceState(null, "", `/latter/devices/${encodeURIComponent(subId)}`);
   } catch (_e) {}
-  await refreshState(true);
-  setScope("device", "dashboard");
-  if (HOST_ELEMENT && typeof HOST_ELEMENT._resubscribe === "function") {
-    HOST_ELEMENT._resubscribe();
+  if (changed || !STATE) {
+    INITIAL_FORM_LOADED = false;
+    await refreshState(true);
+    if (HOST_ELEMENT && typeof HOST_ELEMENT._resubscribe === "function") {
+      HOST_ELEMENT._resubscribe();
+    }
+  } else {
+    applyStateToDom(STATE, true);
   }
+  setScope("device", "dashboard");
 }
 
 function populateSelect(selId, items, selectedVal, allowEmpty=true) {

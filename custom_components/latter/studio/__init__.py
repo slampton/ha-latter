@@ -59,7 +59,7 @@ async def async_register_studio_panel(hass: HomeAssistant) -> None:
             hass,
             frontend_url_path="latter",
             webcomponent_name="latter-studio",
-            module_url=f"{STATIC_URL_PREFIX}/latter-studio.js?v={INTEGRATION_VERSION}",
+            module_url=f"{STATIC_URL_PREFIX}/latter-studio.js?v={INTEGRATION_VERSION}-r2",
             sidebar_title="Latter",
             sidebar_icon="latter:logo",
             require_admin=True,
