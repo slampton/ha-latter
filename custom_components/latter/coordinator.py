@@ -981,37 +981,42 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         except ValueError:
             return DEFAULT_ART_SIZE
 
+    @staticmethod
+    def _cap_stream_dimensions(w: int, h: int, max_dim: int = 480) -> tuple[int, int]:
+        """Cap network-streamed artwork/image dimensions at max_dim (480px) while preserving aspect ratio."""
+        w = max(64, min(1920, w))
+        h = max(64, min(1920, h))
+        peak = max(w, h)
+        if peak <= 502:
+            return w, h
+        scale = float(max_dim) / float(peak)
+        return max(64, round(w * scale)), max(64, round(h * scale))
+
     @property
     def art_dimensions(self) -> tuple[int, int]:
-        """Return (width, height) in pixels for Baseline-JPEG transcoders (auto-detected from hardware_manifest or CONF_ART_SIZE)."""
+        """Return (width, height) in pixels for Baseline-JPEG transcoders (capped at 480px max edge for large panels)."""
         hw = self._read_device_hardware_manifest()
         try:
             hw_w = int(hw.get("w") or 0)
             hw_h = int(hw.get("h") or 0)
-            if hw_w >= 240 and hw_h >= 240:
-                return hw_w // 2, hw_h // 2
             if hw_w >= 64 and hw_h >= 64:
-                return max(64, min(1920, hw_w)), max(64, min(1920, hw_h))
+                return self._cap_stream_dimensions(hw_w, hw_h)
         except (ValueError, TypeError):
             pass
         raw = str(self.get_opt(CONF_ART_SIZE, DEFAULT_ART_SIZE) or DEFAULT_ART_SIZE).strip().lower()
         if "x" in raw:
             parts = raw.split("x", 1)
             try:
-                w = max(64, min(1920, int(parts[0].strip())))
-                h = max(64, min(1920, int(parts[1].strip())))
-                if w >= 240 and h >= 240:
-                    return w // 2, h // 2
-                return w, h
+                w = int(parts[0].strip())
+                h = int(parts[1].strip())
+                return self._cap_stream_dimensions(w, h)
             except ValueError:
-                return 233, 233
+                return 466, 466
         try:
-            sq = max(64, min(1920, int(raw)))
-            if sq >= 240:
-                return sq // 2, sq // 2
-            return sq, sq
+            sq = int(raw)
+            return self._cap_stream_dimensions(sq, sq)
         except ValueError:
-            return 233, 233
+            return 466, 466
 
     def sign_resource(self, resource: str, ttl_s: int = 7 * 86400) -> str:
         """Generate a time-bounded, resource-scoped HMAC-SHA256 signature."""
