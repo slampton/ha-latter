@@ -10,7 +10,8 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.const import EntityCategory
+from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
@@ -29,9 +30,7 @@ async def async_setup_entry(
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up Latter sensors from a config entry."""
-    coordinator: LatterCoordinator = (
-        getattr(entry, "runtime_data", None) or hass.data[DOMAIN][entry.entry_id]
-    )
+    coordinator: LatterCoordinator = entry.runtime_data
     entities: list[SensorEntity] = []
     if coordinator.device_profile == "ble_beacon":
         entities.extend(
@@ -76,6 +75,22 @@ async def async_setup_entry(
         )
 
     @callback
+    def _async_on_area_registry_updated(event: Event) -> None:
+        if event.data.get("action") != "create":
+            return
+        area_id = str(event.data.get("area_id") or "").strip()
+        if not area_id or area_id in created_area_occupants:
+            return
+        area_entry = ar.async_get(hass).async_get_area(area_id)
+        if area_entry is None:
+            return
+        created_area_occupants.add(area_id)
+        entry_area_ids.add(area_id)
+        async_add_entities(
+            [LatterAreaOccupantsSensor(hass, coordinator, area_entry.id, area_entry.name)]
+        )
+
+    @callback
     def _async_ensure_person_sensors() -> None:
         person_ent = coordinator.assigned_person
         if person_ent and person_ent.startswith("person.") and person_ent not in registered_persons:
@@ -95,6 +110,11 @@ async def async_setup_entry(
 
     _async_ensure_person_sensors()
     entry.async_on_unload(_cleanup_entry_tracked_ids)
+    entry.async_on_unload(
+        hass.bus.async_listen(
+            ar.EVENT_AREA_REGISTRY_UPDATED, _async_on_area_registry_updated
+        )
+    )
     entry.async_on_unload(
         coordinator.async_add_listener(_async_ensure_person_sensors)
     )
@@ -160,7 +180,8 @@ class _BaseLatterSensor(SensorEntity):
 class LatterActiveMediaSensor(_BaseLatterSensor):
     """Exposes sensor.<device_slug>_active_media with idle-guarded 15s position updates."""
 
-    _attr_icon = "mdi:music-circle"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_entity_registry_visible_default = False
 
     def __init__(self, coordinator: LatterCoordinator) -> None:
         """Initialize active media sensor."""
@@ -185,7 +206,8 @@ class LatterActiveMediaSensor(_BaseLatterSensor):
 class LatterWeatherForecastSensor(_BaseLatterSensor):
     """Exposes sensor.<device_slug>_weather_forecast with 5-day semicolon string."""
 
-    _attr_icon = "mdi:weather-partly-cloudy"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_entity_registry_visible_default = False
 
     def __init__(self, coordinator: LatterCoordinator) -> None:
         """Initialize weather forecast sensor."""
@@ -209,7 +231,8 @@ class LatterWeatherForecastSensor(_BaseLatterSensor):
 class LatterAreaContextSensor(_BaseLatterSensor):
     """Exposes sensor.<device_slug>_area_context for Area Control, Telemetry & Alarm."""
 
-    _attr_icon = "mdi:floor-plan"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_entity_registry_visible_default = False
 
     def __init__(self, coordinator: LatterCoordinator) -> None:
         """Initialize area context sensor."""
@@ -234,7 +257,8 @@ class LatterAreaContextSensor(_BaseLatterSensor):
 class LatterCalendarAgendaSensor(_BaseLatterSensor):
     """Exposes sensor.<device_slug>_calendar_agenda with upcoming system events."""
 
-    _attr_icon = "mdi:calendar-clock"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_entity_registry_visible_default = False
 
     def __init__(self, coordinator: LatterCoordinator) -> None:
         """Initialize calendar agenda sensor."""
@@ -259,7 +283,8 @@ class LatterCalendarAgendaSensor(_BaseLatterSensor):
 class LatterRemoteConfigSensor(_BaseLatterSensor):
     """Exposes sensor.<device_slug>_remote_config replacing hardcoded YAML remote substitutions."""
 
-    _attr_icon = "mdi:remote-tv"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_entity_registry_visible_default = False
 
     def __init__(self, coordinator: LatterCoordinator) -> None:
         """Initialize 4-slot remote config sensor."""
@@ -283,8 +308,6 @@ class LatterRemoteConfigSensor(_BaseLatterSensor):
 class LatterCurrentAreaSensor(_BaseLatterSensor):
     """Exposes sensor.<device_slug>_current_area with live area name or 'Away'."""
 
-    _attr_icon = "mdi:map-marker-radius"
-
     def __init__(self, coordinator: LatterCoordinator) -> None:
         """Initialize current area sensor."""
         super().__init__(coordinator, "current_area", "Current Area")
@@ -305,7 +328,6 @@ class LatterCurrentAreaSensor(_BaseLatterSensor):
 class LatterBleDistanceSensor(_BaseLatterSensor):
     """Exposes sensor.<device_slug>_ble_distance with estimated distance (ft) to the winning area proxy."""
 
-    _attr_icon = "mdi:map-marker-distance"
     _attr_native_unit_of_measurement = "ft"
     _attr_device_class = SensorDeviceClass.DISTANCE
     _attr_state_class = SensorStateClass.MEASUREMENT
@@ -400,7 +422,7 @@ class LatterPersonBleDistanceSensor(_BaseLatterSensor):
 
 
 class LatterAreaOccupantsSensor(SensorEntity):
-    """Exposes sensor.<area_slug>_occupants with live occupant names and Bayesian sensor fusion telemetry."""
+    """Exposes sensor.<area_slug>_occupants with live occupant names and area sensor fusion telemetry."""
 
     _attr_has_entity_name = False
     _attr_should_poll = False
@@ -422,6 +444,13 @@ class LatterAreaOccupantsSensor(SensorEntity):
         self._attr_unique_id = f"latter_area_occupants_{area_id}"
         self._attr_suggested_area = area_name
         self.entity_id = f"sensor.{a_slug}_occupants"
+        self._cached_occ: dict[str, Any] | None = None
+
+    def _get_occ(self) -> dict[str, Any]:
+        """Return cached or freshly evaluated occupancy snapshot for this Area."""
+        if self._cached_occ is None:
+            self._cached_occ = get_ble_fabric(self.hass).get_area_occupancy(self._area_id)
+        return self._cached_occ
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -432,6 +461,7 @@ class LatterAreaOccupantsSensor(SensorEntity):
         """Subscribe to real-time updates from the shared Latter BLE Fabric."""
         await super().async_added_to_hass()
         fabric = get_ble_fabric(self.hass)
+        self._cached_occ = fabric.get_area_occupancy(self._area_id)
         self.async_on_remove(
             fabric.register_occupancy_listener(self._handle_occupancy_update)
         )
@@ -439,6 +469,7 @@ class LatterAreaOccupantsSensor(SensorEntity):
     @callback
     def _handle_occupancy_update(self) -> None:
         """Push updated occupant state to Home Assistant."""
+        self._cached_occ = get_ble_fabric(self.hass).get_area_occupancy(self._area_id)
         self.async_write_ha_state()
 
     @property
@@ -449,7 +480,7 @@ class LatterAreaOccupantsSensor(SensorEntity):
     @property
     def native_value(self) -> str:
         """Return comma-separated occupant names, 'Occupied (Sensor)', or 'Empty'."""
-        occ = get_ble_fabric(self.hass).get_area_occupancy(self._area_id)
+        occ = self._get_occ()
         names = occ.get("occupant_names") or []
         if names:
             return ", ".join(names)
@@ -460,7 +491,7 @@ class LatterAreaOccupantsSensor(SensorEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return detailed occupant list, sensor fusion status, and signal attributes."""
-        occ = get_ble_fabric(self.hass).get_area_occupancy(self._area_id)
+        occ = self._get_occ()
         return {
             "area_id": self._area_id,
             "area_name": self._area_name,
@@ -470,7 +501,7 @@ class LatterAreaOccupantsSensor(SensorEntity):
             "occupant_names": occ.get("occupant_names", []),
             "persons": occ.get("persons", []),
             "occupied_by": occ.get("occupied_by", []),
-            "fusion_mode": occ.get("fusion_mode", "auto_bayes"),
+            "fusion_mode": occ.get("fusion_mode", "weighted"),
             "confidence_pct": occ.get("confidence_pct", 0),
             "ble_occupied": occ.get("ble_occupied", False),
             "sensor_occupied": occ.get("sensor_occupied", False),

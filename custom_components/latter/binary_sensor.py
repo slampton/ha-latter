@@ -9,7 +9,7 @@ from homeassistant.components.binary_sensor import (
     BinarySensorEntity,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
@@ -55,10 +55,35 @@ async def async_setup_entry(
         )
 
     @callback
+    def _async_on_area_registry_updated(event: Event) -> None:
+        if event.data.get("action") != "create":
+            return
+        area_id = str(event.data.get("area_id") or "").strip()
+        if not area_id or area_id in created_areas:
+            return
+        area_entry = ar.async_get(hass).async_get_area(area_id)
+        if area_entry is None:
+            return
+        created_areas.add(area_id)
+        entry_area_ids.add(area_id)
+        async_add_entities(
+            [
+                LatterAreaBleOccupancyBinarySensor(
+                    hass, coordinator, area_entry.id, area_entry.name
+                )
+            ]
+        )
+
+    @callback
     def _cleanup_entry_areas() -> None:
         created_areas.difference_update(entry_area_ids)
 
     entry.async_on_unload(_cleanup_entry_areas)
+    entry.async_on_unload(
+        hass.bus.async_listen(
+            ar.EVENT_AREA_REGISTRY_UPDATED, _async_on_area_registry_updated
+        )
+    )
 
     if new_entities:
         async_add_entities(new_entities)

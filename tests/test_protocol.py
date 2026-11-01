@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import hashlib
+import importlib.util
 import json
 from pathlib import Path
 from typing import Any
@@ -12,45 +12,14 @@ import unittest
 REPO_ROOT = Path(__file__).resolve().parent.parent
 HA_PROTO_JSON = REPO_ROOT / "custom_components" / "latter" / "protocol_v3.json"
 CORE_PROTO_JSON = REPO_ROOT.parent / "esphome-latter-core" / "protocol" / "latter_v3.json"
+PAYLOADS_PY = REPO_ROOT / "custom_components" / "latter" / "payloads.py"
 
-
-def _sanitize_v3_field(val: Any) -> str:
-    """Mirror LatterCoordinator._sanitize_v3_field."""
-    if val is None:
-        return ""
-    if isinstance(val, bool):
-        return "1" if val else "0"
-    s = str(val)
-    for ch in ("\x1f", "\x1e", "\x1d", "\n", "\r"):
-        if ch in s:
-            s = s.replace(ch, " ")
-    return s.strip()
-
-
-class _MockDomainPacker:
-    """Mirror LatterCoordinator._pack_domain_payload & force_republish_all_domains."""
-
-    def __init__(self, epoch: int = 1700000000) -> None:
-        self.epoch = epoch
-        self._domain_rev: dict[str, int] = {}
-        self._domain_hash: dict[str, str] = {}
-        self._domain_packed: dict[str, str] = {}
-
-    def pack_domain_payload(self, domain: str, fields: list[Any]) -> tuple[str, int]:
-        sanitized = [_sanitize_v3_field(f) for f in fields]
-        body = "\x1f".join(sanitized)
-        digest = hashlib.sha256(body.encode("utf-8")).hexdigest()[:16]
-        if self._domain_hash.get(domain) != digest or domain not in self._domain_packed:
-            self._domain_hash[domain] = digest
-            rev = self._domain_rev.get(domain, 0) + 1
-            self._domain_rev[domain] = rev
-            self._domain_packed[domain] = f"v3\x1f{self.epoch}\x1f{rev}\x1f{body}"
-        return self._domain_packed[domain], self._domain_rev[domain]
-
-    def force_republish_all_domains(self) -> None:
-        self._domain_hash.clear()
-        self._domain_packed.clear()
-        self._domain_rev.clear()
+_SPEC = importlib.util.spec_from_file_location("latter_payloads", PAYLOADS_PY)
+assert _SPEC is not None and _SPEC.loader is not None
+_PAYLOADS_MOD = importlib.util.module_from_spec(_SPEC)
+_SPEC.loader.exec_module(_PAYLOADS_MOD)
+DomainPayloadPacker = _PAYLOADS_MOD.DomainPayloadPacker
+sanitize_v3_field = _PAYLOADS_MOD.sanitize_v3_field
 
 
 class TestProtocolV3Contract(unittest.TestCase):
@@ -96,11 +65,12 @@ class TestProtocolV3Contract(unittest.TestCase):
 
     def test_content_hashed_revision_and_delimiters(self) -> None:
         """Unchanged domain content must not bump rev; delimiter characters must be sanitized."""
-        packer = _MockDomainPacker(epoch=1761900000)
+        packer = DomainPayloadPacker(epoch=1761900000)
+        self.assertEqual(sanitize_v3_field("a\x1fb\nc"), "a b c")
         for dom_name, dom_spec in self.schema["domains"].items():
             field_count = len(dom_spec["fields"])
             sample_fields = [f"val_{i}\x1finjected\nline" for i in range(field_count)]
-            packed1, rev1 = packer.pack_domain_payload(dom_name, sample_fields)
+            rev1, packed1 = packer.pack(dom_name, *sample_fields)
             self.assertEqual(rev1, 1)
             tokens = packed1.split("\x1f")
             self.assertEqual(
@@ -113,23 +83,23 @@ class TestProtocolV3Contract(unittest.TestCase):
             self.assertEqual(tokens[2], "1")
 
             # Identical content -> rev stays 1
-            packed2, rev2 = packer.pack_domain_payload(dom_name, sample_fields)
+            rev2, packed2 = packer.pack(dom_name, *sample_fields)
             self.assertEqual(rev2, 1)
             self.assertEqual(packed1, packed2)
 
             # Mutated field -> rev increments to 2
             mutated = list(sample_fields)
             mutated[0] = "changed_value"
-            packed3, rev3 = packer.pack_domain_payload(dom_name, mutated)
+            rev3, packed3 = packer.pack(dom_name, *mutated)
             self.assertEqual(rev3, 2)
             self.assertNotEqual(packed2, packed3)
 
-        # Reconnect / device_hello -> resets rev to 1
+        # Reconnect / device_hello -> increments rev across all domains
         packer.force_republish_all_domains()
-        _, rev_after_reset = packer.pack_domain_payload(
-            "remote_config", ["0", "2", "Apple TV\x1eremote.apple_tv"]
+        rev_after_reset, _ = packer.pack(
+            "remote_config", "0", "2", "Apple TV\x1eremote.apple_tv"
         )
-        self.assertEqual(rev_after_reset, 1)
+        self.assertEqual(rev_after_reset, 3)
 
     def test_hardware_manifest_state_json_within_ha_255_char_limit(self) -> None:
         """The System: Hardware Manifest entity state string must never exceed HA's 255-char MAX_STATE_LENGTH."""

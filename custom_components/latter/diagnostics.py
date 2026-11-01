@@ -8,7 +8,6 @@ from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
-from .const import DOMAIN
 from .coordinator import LatterCoordinator
 
 TO_REDACT: set[str] = {
@@ -30,12 +29,10 @@ TO_REDACT: set[str] = {
 
 
 async def async_get_config_entry_diagnostics(
-    hass: HomeAssistant, entry: ConfigEntry
+    hass: HomeAssistant, entry: ConfigEntry[LatterCoordinator]
 ) -> dict[str, Any]:
     """Return diagnostics for a Latter config entry."""
-    coordinator: LatterCoordinator | None = getattr(
-        entry, "runtime_data", None
-    ) or hass.data.get(DOMAIN, {}).get(entry.entry_id)
+    coordinator: LatterCoordinator | None = getattr(entry, "runtime_data", None)
 
     if coordinator is None:
         return {"entry_data": async_redact_data(dict(entry.data), TO_REDACT)}

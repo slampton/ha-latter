@@ -18,7 +18,7 @@ rules:
   entity-event-setup: done
   entity-unique-id: done
   has-entity-name: todo
-  runtime-data: todo
+  runtime-data: done
   test-before-configure: todo
   test-before-setup: todo
   unique-config-entry: done
@@ -50,15 +50,15 @@ rules:
   docs-troubleshooting: done
   docs-use-cases: done
   dynamic-devices: todo
-  entity-category: todo
+  entity-category: done
   entity-device-class: done
   entity-disabled-by-default: done
   entity-translations: todo
   exception-translations: done
-  icon-translations: todo
+  icon-translations: done
   reconfiguration-flow: done
   repair-issues: done
-  stale-devices: todo
+  stale-devices: done
 
   # Platinum
   async-dependency:

@@ -59,6 +59,7 @@ from .http import (
     LatterWallpaperProxyView,
 )
 from .services import async_push_active_area_entities, async_setup_services
+from .system import get_latter_system
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -136,6 +137,7 @@ async def _async_ensure_global_store(
     if changed:
         await domain_data[DATA_GLOBAL_STORE].async_save(global_cfg)
 
+    get_latter_system(hass)
     return global_cfg
 
 
@@ -338,6 +340,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
     await coordinator.async_setup()
     entry.runtime_data = coordinator
     domain_data[entry.entry_id] = coordinator
+    sys_obj = get_latter_system(hass)
+    if sys_obj is not None:
+        sys_obj.coordinators[entry.entry_id] = coordinator
 
     clean_title = coordinator.device_slug.replace("_", " ").title()
     if entry.title.lower().startswith("latter (") or entry.title != clean_title:
@@ -359,10 +364,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
 
 async def _async_update_listener(hass: HomeAssistant, entry: LatterConfigEntry) -> None:
     """Apply updated options in-place, or schedule a config entry reload if structural keys changed."""
-    coordinator: LatterCoordinator | None = getattr(
-        entry, "runtime_data", None
-    ) or hass.data.get(DOMAIN, {}).get(entry.entry_id)
-    if coordinator is None or coordinator.has_structural_changes():
+    coordinator: LatterCoordinator = entry.runtime_data
+    if coordinator.has_structural_changes():
         hass.config_entries.async_schedule_reload(entry.entry_id)
         return
     await coordinator.async_apply_options()
@@ -375,6 +378,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> b
         coordinator: LatterCoordinator | None = hass.data[DOMAIN].pop(
             entry.entry_id, None
         )
+        sys_obj = get_latter_system(hass)
+        if sys_obj is not None:
+            sys_obj.coordinators.pop(entry.entry_id, None)
         if coordinator is not None:
             coordinator.async_cleanup()
     return unload_ok

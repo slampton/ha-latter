@@ -1,71 +1,27 @@
 {
   "entity": {
     "sensor": {
-      "current_area": {
-        "default": "mdi:map-marker-radius"
-      },
-      "ble_distance": {
-        "default": "mdi:map-marker-distance"
-      },
       "active_media": {
         "default": "mdi:music-circle"
-      },
-      "weather_forecast": {
-        "default": "mdi:weather-partly-cloudy"
       },
       "area_context": {
         "default": "mdi:floor-plan"
       },
+      "ble_distance": {
+        "default": "mdi:map-marker-distance"
+      },
       "calendar_agenda": {
         "default": "mdi:calendar-clock"
       },
+      "current_area": {
+        "default": "mdi:map-marker-radius"
+      },
       "remote_config": {
         "default": "mdi:remote-tv"
+      },
+      "weather_forecast": {
+        "default": "mdi:weather-partly-cloudy"
       }
-    }
-  },
-  "services": {
-    "music_browse": {
-      "service": "mdi:library-music"
-    },
-    "set_active_speaker": {
-      "service": "mdi:speaker-wireless"
-    },
-    "media_command": {
-      "service": "mdi:play-pause"
-    },
-    "media_volume": {
-      "service": "mdi:volume-high"
-    },
-    "area_browse": {
-      "service": "mdi:home-search"
-    },
-    "area_action": {
-      "service": "mdi:home-lightning-bolt"
-    },
-    "set_active_area": {
-      "service": "mdi:map-marker-radius"
-    },
-    "remote_action": {
-      "service": "mdi:remote-tv"
-    },
-    "calendar_fetch": {
-      "service": "mdi:calendar-sync"
-    },
-    "calendar_create_event": {
-      "service": "mdi:calendar-plus"
-    },
-    "intercom_broadcast": {
-      "service": "mdi:bullhorn"
-    },
-    "notify": {
-      "service": "mdi:bell-ring"
-    },
-    "save_custom_color": {
-      "service": "mdi:palette"
-    },
-    "doorbell_intercom": {
-      "service": "mdi:doorbell-video"
     }
   }
 }
