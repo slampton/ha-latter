@@ -2055,18 +2055,22 @@ let HOST_ELEMENT = null;
 let ACTIVE_SUBENTRY_ID = "";
 let WS_UNSUB = null;
 
+function getStudioActiveElement() {
+  if (SHADOW_ROOT && SHADOW_ROOT.activeElement) {
+    return SHADOW_ROOT.activeElement;
+  }
+  return window.document ? window.document.activeElement : null;
+}
+
 const doc = {
   getElementById: (id) => SHADOW_ROOT ? SHADOW_ROOT.getElementById(id) : null,
   querySelector: (sel) => SHADOW_ROOT ? SHADOW_ROOT.querySelector(sel) : null,
   querySelectorAll: (sel) => SHADOW_ROOT ? SHADOW_ROOT.querySelectorAll(sel) : [],
-  createElement: (tag) => document.createElement(tag),
-  get activeElement() {
-    return (SHADOW_ROOT && SHADOW_ROOT.activeElement) || document.activeElement;
-  },
+  createElement: (tag) => window.document.createElement(tag),
   body: {
     appendChild: (el) => {
       if (el && el.tagName === "A") {
-        document.body.appendChild(el);
+        window.document.body.appendChild(el);
       } else if (SHADOW_ROOT) {
         const root = SHADOW_ROOT.querySelector(".studio-root") || SHADOW_ROOT;
         root.appendChild(el);
@@ -4306,7 +4310,7 @@ function applyStateToDom(data, forceFormUpdate=false) {
     if (sp) sp.textContent = [data.vpn_snippets.server_peer_conf || "", data.vpn_snippets.ha_addon_yaml || ""].join("\n\n");
   }
 
-  const activeEl = doc.activeElement;
+  const activeEl = getStudioActiveElement();
   if (!activeEl || !["SELECT", "INPUT"].includes(activeEl.tagName)) {
     renderCohesiveDeviceSections();
     renderSystemOverview(data.system_devices, data.system_controls, cfg);
@@ -4622,7 +4626,7 @@ function setCwHex(hex) {
   const prev = doc.getElementById("latter-cw-preview");
   const inp = doc.getElementById("latter-cw-hex");
   if (prev) prev.style.background = cwSelectedHex;
-  if (inp && doc.activeElement !== inp) inp.value = cwSelectedHex;
+  if (inp && getStudioActiveElement() !== inp) inp.value = cwSelectedHex;
 }
 
 function onCwHexInput(val) {

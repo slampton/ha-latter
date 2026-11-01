@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+import time
 
 from homeassistant.components import frontend, panel_custom
 from homeassistant.components.http import StaticPathConfig
@@ -53,13 +54,13 @@ async def async_register_studio_panel(hass: HomeAssistant) -> None:
         frontend.add_extra_js_url(hass, "/api/latter/brand/sidebar_icon.js")
 
     try:
-        if "latter" in hass.data.get(frontend.DATA_PANELS, {}):
-            frontend.async_remove_panel(hass, "latter")
+        frontend.async_remove_panel(hass, "latter", warn_if_unknown=False)
+        cache_tag = f"{INTEGRATION_VERSION}-{int(time.time())}"
         await panel_custom.async_register_panel(
             hass,
             frontend_url_path="latter",
             webcomponent_name="latter-studio",
-            module_url=f"{STATIC_URL_PREFIX}/latter-studio.js?v={INTEGRATION_VERSION}-r2",
+            module_url=f"{STATIC_URL_PREFIX}/latter-studio.js?v={cache_tag}",
             sidebar_title="Latter",
             sidebar_icon="latter:logo",
             require_admin=True,
@@ -72,7 +73,6 @@ async def async_register_studio_panel(hass: HomeAssistant) -> None:
 def async_unregister_studio_panel(hass: HomeAssistant) -> None:
     """Remove the Latter Studio custom panel when the integration unloads."""
     try:
-        if "latter" in hass.data.get(frontend.DATA_PANELS, {}):
-            frontend.async_remove_panel(hass, "latter")
+        frontend.async_remove_panel(hass, "latter", warn_if_unknown=False)
     except Exception as err:  # noqa: BLE001
         _LOGGER.debug("Latter Studio panel_custom removal skipped: %s", err)
