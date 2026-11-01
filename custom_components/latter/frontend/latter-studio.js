@@ -4080,9 +4080,8 @@ async function confirmAddDeviceModal() {
   }
 }
 
-async function onAssignedPersonChanged(personEnt) {
+function onAssignedPersonChanged(personEnt) {
   markDirty();
-  await saveAllConfig();
 }
 
 function toggleDeviceTableSort(col) {

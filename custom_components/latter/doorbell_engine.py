@@ -315,6 +315,23 @@ class LatterCameraAudioStreamView(HomeAssistantView):
         out_fmt = "flac" if fmt == "flac" else "wav"
         content_type = "audio/flac" if fmt == "flac" else "audio/wav"
 
+        manifest = coord.hardware_manifest
+        audio_info = manifest.get("audio")
+        board_id = str(manifest.get("board") or "")
+        default_rate = 48000 if board_id.startswith("waveshare_s3_") else 16000
+        out_rate = (
+            int(audio_info.get("out_rate") or default_rate)
+            if isinstance(audio_info, dict)
+            else default_rate
+        )
+        out_ch = (
+            int(audio_info.get("out_ch") or 1)
+            if isinstance(audio_info, dict)
+            else 1
+        )
+        out_rate = out_rate if out_rate in (16000, 22050, 24000, 44100, 48000) else 16000
+        out_ch = 2 if out_ch == 2 else 1
+
         cmd = [
             ffmpeg_bin,
             "-hide_banner",
@@ -327,9 +344,9 @@ class LatterCameraAudioStreamView(HomeAssistantView):
             "-af",
             filtergraph,
             "-ar",
-            "16000",
+            str(out_rate),
             "-ac",
-            "1",
+            str(out_ch),
             "-c:a",
             out_codec,
             "-f",
