@@ -86,7 +86,7 @@ Latter Studio is an admin-only sidebar panel for everything that isn't an automa
 | Mobile Assistant | [Waveshare ESP32-S3-Touch-AMOLED-2.16][ws-216] | 2.16" square AMOLED, 480×480 |
 | Wrist Assist | [Waveshare ESP32-S3-Touch-AMOLED-2.06][ws-206] | 2.06" watch AMOLED, 410×502 |
 | Remote Assistant | [Waveshare ESP32-P4-WIFI6-Touch-LCD-3.5][ws-p4-35] | 3.5" IPS, 320×480 |
-| Desk Assistant | [Waveshare ESP32-P4-WIFI6-Touch-LCD-4B][ws-p4-4b] | 4" IPS, 720×720 |
+| Desk Assistant | [Waveshare ESP32-P4-86-Panel-ETH-2RO][ws-p4-86] | 4" IPS, 720×720 |
 
 <sub>Some hardware links are affiliate links. Buying through them supports the project at no extra cost to you.</sub>
 
@@ -199,4 +199,4 @@ Latter is designed, tested on hardware, and maintained by Sean Lampton, a system
 [ws-216]: https://www.waveshare.com/esp32-s3-touch-amoled-2.16.htm
 [ws-206]: https://www.waveshare.com/esp32-s3-touch-amoled-2.06.htm
 [ws-p4-35]: https://www.waveshare.com/esp32-p4-wifi6-touch-lcd-3.5.htm
-[ws-p4-4b]: https://www.waveshare.com/esp32-p4-wifi6-touch-lcd-4b.htm
+[ws-p4-86]: https://www.waveshare.com/esp32-p4-86-panel-eth-2ro.htm

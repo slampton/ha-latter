@@ -104,7 +104,7 @@ class TestProtocolV3Contract(unittest.TestCase):
     def test_hardware_manifest_state_json_within_ha_255_char_limit(self) -> None:
         """The System: Hardware Manifest entity state string must never exceed HA's 255-char MAX_STATE_LENGTH."""
         longest_state_json = (
-            '{"v":2,"contract":3,"board":"waveshare_p4_4b",'
+            '{"v":2,"contract":3,"board":"waveshare_p4_86_panel",'
             '"w":720,"h":720,"shape":"square",'
             '"display":1,"touch":1,"audio":1,"mic":1,"spk":1,'
             '"imu":0,"battery":0,"stationary":1,"wearable":0,'

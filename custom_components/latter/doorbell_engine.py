@@ -302,14 +302,14 @@ class LatterCameraAudioStreamView(HomeAssistantView):
         out_fmt = "flac" if fmt == "flac" else "wav"
         content_type = "audio/flac" if fmt == "flac" else "audio/wav"
 
+        # Output format comes only from the device's declared audio traits (hardware manifest),
+        # never from board-name matching.
         manifest = coord.hardware_manifest
         audio_info = manifest.get("audio")
-        board_id = str(manifest.get("board") or "")
-        default_rate = 48000 if board_id.startswith("waveshare_s3_") else 16000
         out_rate = (
-            int(audio_info.get("out_rate") or default_rate)
+            int(audio_info.get("out_rate") or 16000)
             if isinstance(audio_info, dict)
-            else default_rate
+            else 16000
         )
         out_ch = (
             int(audio_info.get("out_ch") or 1)
