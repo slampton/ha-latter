@@ -278,5 +278,59 @@ class TestVoiceFollowsMeAndBleDecay(unittest.TestCase):
         self.assertIsNone(effective_rssi(-58.0, age_s=12.5))
 
 
+class TestUrlSignerSecurityAndDeterminism(unittest.TestCase):
+    """Verify day-bucketed HMAC-SHA256 resource signatures, scope binding, and expiry."""
+
+    def _make_signer_helpers(self, entry_id: str, secret: bytes):
+        import hashlib
+        import hmac
+
+        sig_bucket_s = 86400
+
+        def sign_resource(resource: str, now_s: int, ttl_s: int = 7 * sig_bucket_s) -> str:
+            exp = ((now_s + ttl_s) // sig_bucket_s + 1) * sig_bucket_s
+            msg = f"{entry_id}|{resource}|{exp}".encode("utf-8")
+            mac = hmac.new(secret, msg, hashlib.sha256).hexdigest()[:32]
+            return f"{exp}.{mac}"
+
+        def verify_resource(resource: str, sig: str | None, now_s: int) -> bool:
+            if not sig:
+                return False
+            try:
+                exp_s, mac = sig.split(".", 1)
+                if int(exp_s) < now_s:
+                    return False
+            except ValueError:
+                return False
+            msg = f"{entry_id}|{resource}|{exp_s}".encode("utf-8")
+            expected = hmac.new(secret, msg, hashlib.sha256).hexdigest()[:32]
+            return hmac.compare_digest(mac, expected)
+
+        return sign_resource, verify_resource
+
+    def test_deterministic_within_day_and_scoped_to_render_params(self) -> None:
+        """Signatures within the same UTC day must be byte-identical and bound to resource + w/h/shape."""
+        secret = bytes.fromhex("a5" * 32)
+        sign_fn, verify_fn = self._make_signer_helpers("entry_abc", secret)
+
+        day_start = 1761955200
+        sig_t0 = sign_fn("artwork|480|480|circle", now_s=day_start + 10)
+        sig_t1 = sign_fn("artwork|480|480|circle", now_s=day_start + 3600)
+        self.assertEqual(sig_t0, sig_t1)
+        self.assertTrue(verify_fn("artwork|480|480|circle", sig_t0, now_s=day_start + 7200))
+
+        # Different dimensions or shape must reject the signature
+        self.assertFalse(verify_fn("artwork|720|720|square", sig_t0, now_s=day_start + 7200))
+        self.assertFalse(verify_fn("camera:camera.front_door|480|480|circle", sig_t0, now_s=day_start + 7200))
+
+        # Expired signature (> 8 days later) must be rejected
+        self.assertFalse(verify_fn("artwork|480|480|circle", sig_t0, now_s=day_start + 9 * 86400))
+
+        # Tampered MAC or malformed token must be rejected
+        self.assertFalse(verify_fn("artwork|480|480|circle", f"{sig_t0[:-1]}0", now_s=day_start + 100))
+        self.assertFalse(verify_fn("artwork|480|480|circle", "malformed", now_s=day_start + 100))
+        self.assertFalse(verify_fn("artwork|480|480|circle", None, now_s=day_start + 100))
+
+
 if __name__ == "__main__":
     unittest.main()

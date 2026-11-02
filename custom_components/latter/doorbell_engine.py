@@ -22,12 +22,10 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from .ble_engine import _iter_entities
 from .const import (
     API_CAMERA_AUDIO_STREAM_PATH,
-    API_CAMERA_PROXY_PATH,
     API_DOORBELL_TALKBACK_PATH,
     DOMAIN,
     normalize_device_slug,
 )
-from .http import LatterCameraSnapshotView
 from .area_engine import resolve_entity_area_id
 from .media_engine import async_announce_on_targets
 
@@ -137,17 +135,6 @@ def resolve_doorbell_talkback_target(
     info["area_id"] = area_id
 
     return info
-
-
-class LatterRotatableCameraSnapshotView(LatterCameraSnapshotView):
-    """Extends LatterCameraSnapshotView with server-side 90° Landscape Widescreen rotation (&rot=90)."""
-
-    url = API_CAMERA_PROXY_PATH
-    name = "api:latter:camera_snapshot"
-
-    async def get(self, request: web.Request, target_device: str) -> web.Response:
-        """Serve camera snapshot, delegating to LatterCameraSnapshotView (which supports &rot=90/180/270)."""
-        return await super().get(request, target_device)
 
 
 class LatterAudioDspPipeline:

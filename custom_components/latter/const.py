@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Final
+from typing import Final
 
 from homeassistant.const import Platform
-from homeassistant.util.hass_dict import HassKey
 
 DOMAIN: Final = "latter"
-LATTER_DATA_KEY: HassKey[dict[str, Any]] = HassKey(DOMAIN)
 INTEGRATION_VERSION: Final = "2.2.9"
 PLATFORMS: Final[list[Platform]] = [Platform.SENSOR, Platform.BINARY_SENSOR]
 

@@ -332,11 +332,6 @@ async def async_push_active_area_entities(
 
 async def async_setup_services(hass: HomeAssistant) -> None:
     """Register Latter domain services with Voluptuous schema validation."""
-    domain_data = hass.data.get(DOMAIN, {})
-    for val in domain_data.values():
-        if isinstance(val, LatterCoordinator):
-            val.on_area_changed_push_slots = lambda c: async_push_active_area_entities(hass, c)
-
     if hass.services.has_service(DOMAIN, SERVICE_MUSIC_BROWSE):
         return
 

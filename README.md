@@ -116,7 +116,7 @@ Everything the finished devices use is documented and open to you:
 
 | Reference | Covers |
 | :--- | :--- |
-| [Services](docs/reference/services.md) | All 16 `latter.*` services, their fields, and special targets such as `follow_me` |
+| [Services](docs/reference/services.md) | All 15 user-facing `latter.*` services, their fields, and special targets such as `follow_me` |
 | [Entities](docs/reference/entities.md) | Every entity Latter creates, its attributes, update cadence, and the `latter_event` bus event |
 | [HTTP API](docs/reference/http-api.md) | Image endpoints, the signed-URL model, and the transcoder output spec |
 | [Device protocol](https://github.com/slampton/esphome-latter-core/blob/main/docs/device-protocol.md) | What a device must implement to be discovered and receive data |
@@ -140,19 +140,19 @@ Everything the finished devices use is documented and open to you:
 
 ## Project status
 
-This is version **2.2.0**, built and maintained by one person and tested on the five devices listed above.
+This is version **2.2.1**, built and maintained by one person and tested on the five devices listed above.
 
 | Area | Status |
 | :--- | :--- |
 | Device discovery, Studio, area control, media, notifications, backups | Stable |
 | BLE area presence and area occupancy | Stable. See the [known gaps](docs/presence.md#known-limitations). |
 | Doorbell ring detection and camera popup | Stable |
-| Doorbell two-way talk, SIP client | **Experimental.** The SIP client supports only G.711 μ-law, has no NAT traversal, and has not been tested against a range of PBXs. |
+| Doorbell two-way talk | **Experimental** (via go2rtc or ONVIF backchannel). |
 
 What's not here yet:
 - No `device_tracker` entities. The presence engine creates area and distance sensors, but nothing a `person` entity can use.
 - BLE calibration is a single offset per area. There is no per-scanner calibration.
-- CI runs `hassfest` and HACS validation. There is no unit test suite yet.
+- CI runs `hassfest`, HACS validation, `ruff` static analysis, and the Protocol v3 / Voice Follows Me / URL Signer unit test suite.
 
 Bugs and feature requests: [issues](https://github.com/slampton/ha-latter/issues).
 

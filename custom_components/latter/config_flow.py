@@ -392,14 +392,13 @@ def _abort_competing_flows_for_slug(
 ) -> None:
     """Abort any background discovery flow for the same slug when the user submits a manual setup flow."""
     _dev, target_uid = _resolve_esphome_device_and_unique_id(hass, slug)
-    legacy_uid = f"{DOMAIN}_{normalize_device_slug(slug)}"
     for flow in list(hass.config_entries.flow.async_progress_by_handler(DOMAIN)):
         fid = flow.get("flow_id")
         if not fid or fid == keep_flow_id:
             continue
         ctx = flow.get("context") or {}
         if flow.get("step_id") is None or (
-            ctx.get("unique_id") in (target_uid, legacy_uid)
+            ctx.get("unique_id") == target_uid
             and ctx.get("source") != "user"
         ):
             hass.config_entries.flow.async_abort(fid)

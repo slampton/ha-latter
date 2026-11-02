@@ -1,33 +1,28 @@
 # Services Reference
 
-Latter registers 16 services under the `latter` domain. Latter firmware calls most of them from the device. You can also call them from automations, scripts, or your own firmware.
+Latter registers 15 user-facing services (plus the internal `latter.device_hello` handshake service) under the `latter` domain. Latter firmware calls most of them from the device. You can also call them from automations, scripts, or your own firmware.
 
 - **Source:** [`services.py`](../../custom_components/latter/services.py), with UI schemas in [`services.yaml`](../../custom_components/latter/services.yaml).
-- **Unknown fields are accepted and ignored.** Every schema allows extra keys, so a misspelled field name won't raise an error. Check your spelling.
+- **Strict schema validation.** Every service validates its fields strictly and rejects unknown keys.
 
 ## Targeting
 
-Most services take one of these fields to choose a device:
+Services that target a device accept `target_device`:
 
 | Field | Type | Notes |
 | :--- | :--- | :--- |
-| `target_device` | string | A device slug (`pocket_assistant`), a config entry ID, or a [special target](#special-target-values) |
-| `device_slug` | string | Same as a slug passed in `target_device` |
-| `device_id` | string or list | A Home Assistant device ID |
+| `target_device` | string | A device slug (`pocket_assistant`), a subentry ID, a Home Assistant device ID, or a [special target](#special-target-values) |
 
-Latter resolves them in this order:
-1. A slug or entry ID.
-2. A Home Assistant device ID, matched through the device's identifiers and then its name.
-3. **Otherwise, the first loaded Latter device.** If you have more than one device, always set a target.
+If only a single Latter device is configured, `target_device` is optional. When multiple devices are configured, `target_device` is required.
 
 ### Special target values
 
-| Value | `notify` / `notify_device` | `intercom_broadcast` |
+| Value | `notify` | `intercom_broadcast` |
 | :--- | :--- | :--- |
 | `all` | Every display device | — |
 | `follow_me`, `occupied`, `occupied_areas` | Devices whose current area is occupied | Music Assistant speakers in occupied areas, plus each matching device's active and local speaker |
 | `person.<id>` | Devices assigned to that person, plus devices in that person's current area | — |
-| No match | Falls back to every display device | Falls back to every online Music Assistant speaker |
+| No match | Falls back to every display device | No-op (returns a status response without broadcasting to unoccupied areas) |
 
 Headless and BLE-beacon-only devices never receive notifications.
 
@@ -47,17 +42,14 @@ Shows a banner on the device, with an optional chime and an optional camera snap
 | `chime` | bool | `true` | |
 | `camera_entity` | `camera.*` | — | Adds a signed baseline-JPEG snapshot URL |
 
-Latter updates the device's `alert_*` attributes on `sensor.<slug>_area_context` **and** calls `esphome.<slug>_show_notification` directly. It also fires `latter_event` with `type: notification_dispatched`.
-
-### `latter.notify_device`
-Identical to `latter.notify`. Both names are registered.
+Latter calls `esphome.<slug>_show_notification` with a monotonic `alert_id` and fires `latter_event` with `type: notification_dispatched`.
 
 ### `latter.intercom_broadcast`
 Speaks a TTS message or plays an audio clip on speakers.
 
 | Field | Type | Notes |
 | :--- | :--- | :--- |
-| `message` | string | Spoken with `tts.speak`, falling back to `tts.cloud_say` |
+| `message` | string | Spoken with `tts.speak` |
 | `media_url` | string | Audio clip URL. Played through `music_assistant.play_announcement` on Music Assistant players, and through `media_player.play_media` with `announce: true` elsewhere. |
 | `target_speakers` | entity list or special target | When empty, all online Music Assistant players |
 | `tts_entity` | `tts.*` | When empty, the first TTS entity |
@@ -69,18 +61,18 @@ Speaks a TTS message or plays an audio clip on speakers.
 ### `latter.set_active_speaker`
 | Field | Type | Default | Notes |
 | :--- | :--- | :--- | :--- |
-| `entity_id` (alias `speaker`) | `media_player.*` | **required** | |
+| `entity_id` | `media_player.*` | **required** | |
 | `transfer_queue` | bool | `true` | Moves the current queue to the new speaker (see below) |
 
 How the queue moves:
-- **Between two Music Assistant players:** Latter calls `music_assistant.transfer_queue`.
-- **Otherwise:** Latter pauses the source and replays its `media_content_id` on the target. If playback was more than 5 s in and the target ends up more than 4 s away from that position, Latter seeks back to it. This takes about 4.5 s.
+- **Between two Music Assistant players:** Latter maps both ends to their Music Assistant counterparts and calls `music_assistant.transfer_queue`.
+- **Otherwise:** Latter pauses the source and replays its `media_content_id` on the target.
 
 ### `latter.media_command`
 | Field | Type | Default | Notes |
 | :--- | :--- | :--- | :--- |
-| `command` (alias `action`) | string | `toggle` | `play`, `pause`, `toggle`, `next`, `previous`, `stop`, `seek`, `clear_queue`, `play_media` |
-| `entity_id` / `speaker` | `media_player.*` | the device's active speaker | |
+| `command` | string | `toggle` | `play`, `pause`, `toggle`, `next`, `previous`, `stop`, `seek`, `clear_queue`, `play_media` |
+| `entity_id` | `media_player.*` | the device's active speaker | |
 | `seek_position` | float (seconds) | — | For `seek` |
 | `media_id`, `media_type`, `enqueue` | string | — | For `play_media`. If Music Assistant can't play an artist or album URI directly, Latter expands it to tracks (up to 25). |
 
@@ -89,7 +81,7 @@ How the queue moves:
 | :--- | :--- | :--- | :--- |
 | `action` | `set` \| `up` \| `down` \| `mute` | `set` | |
 | `volume_level` | number | — | 0–1, or 0–100 (values above 1 are treated as a percentage) |
-| `entity_id` / `speaker` | `media_player.*` | the active speaker | |
+| `entity_id` | `media_player.*` | the active speaker | |
 
 If the speaker has a **volume override** configured in Studio, the command goes to that entity instead. For `number` and `input_number` overrides, steps use the entity's own step size, or 5% of its range if it has none.
 
@@ -192,13 +184,13 @@ Returns at most 25 events, with duplicates (same summary and start) removed. Eve
 ## Doorbell and appearance
 
 ### `latter.doorbell_intercom` *(experimental)*
-Two-way doorbell and SIP actions. Can return a response.
+Two-way doorbell and area-to-area intercom actions. Can return a response.
 
 | Field | Type | Notes |
 | :--- | :--- | :--- |
 | `action` | string | `listen_start`, `listen_stop`, `listen_toggle` (the default), `talk_message`, `quick_reply`, `unlock_door`, `call_target`, `set_anc_mode`, `select_camera` |
 | `camera_entity` / `camera_index` | `camera.*` / int 0–9 | |
-| `message` | string | Text to speak, a SIP URI, or DTMF digits, depending on `action` |
+| `message` | string | Text to speak or target device slug (`all` or `<slug>`), depending on `action` |
 | `anc_mode` | `ultra` \| `balanced` \| `raw` | Noise-reduction preset for doorbell audio |
 
 ### `latter.save_custom_color`

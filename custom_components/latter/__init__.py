@@ -50,10 +50,10 @@ from .coordinator import LatterCoordinator
 from .doorbell_engine import (
     LatterCameraAudioStreamView,
     LatterDoorbellTalkbackView,
-    LatterRotatableCameraSnapshotView,
 )
 from .http import (
     LatterArtworkTranscoderView,
+    LatterCameraSnapshotView,
     LatterMapSnapshotView,
     LatterWallpaperProxyView,
 )
@@ -464,7 +464,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
         domain_data["views_registered"] = True
         hass.http.register_view(LatterArtworkTranscoderView(hass))
         hass.http.register_view(LatterWallpaperProxyView(hass))
-        hass.http.register_view(LatterRotatableCameraSnapshotView(hass))
+        hass.http.register_view(LatterCameraSnapshotView(hass))
         hass.http.register_view(LatterCameraAudioStreamView(hass))
         hass.http.register_view(LatterDoorbellTalkbackView(hass))
         hass.http.register_view(LatterMapSnapshotView(hass))
