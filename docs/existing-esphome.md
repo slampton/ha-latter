@@ -1,33 +1,45 @@
 # Using Latter with ESPHome Devices You Already Have
 
-You don't need Latter hardware to get value from Latter. There are two ways an ESPHome device can participate:
+Latter manages Latter devices: one of the [supported displays](../README.md#get-started), or your own build on [Latter Core](https://github.com/slampton/esphome-latter-core). Other ESPHome devices aren't added to Latter, but the Bluetooth data they already give Home Assistant feeds Latter's presence engine.
 
-| | What it is | What you get |
-| :--- | :--- | :--- |
-| **Latter firmware** | One of the [supported displays](../README.md#get-started), or your own build on [Latter Core](https://github.com/slampton/esphome-latter-core) | Everything |
-| **Bridged device** | Any ESPHome device, with its YAML untouched | Grouping, live entity view and control in Studio, and settings backups |
+> These are standard ESPHome components in your own configs. Latter reads what Home Assistant's Bluetooth integration already collects; it doesn't ship or support this YAML.
 
 ---
 
-## Bridging a device (no YAML changes)
+## Bluetooth proxies become Area scanners
 
-1. Open **Studio → Devices → All Devices**. ESPHome devices that aren't in Latter yet are listed there.
-2. Click **Add Device to Latter**, pick the device, and optionally set a default area.
+Any ESPHome node running an active Bluetooth proxy, assigned to an Area in Home Assistant, is a presence scanner for that Area:
 
-The device is added as a headless node with BLE tracking off. What you get:
-- **A live entity view.** Every entity on the device, controllable from Studio.
-- **Groups and profiles.** Put it in a device group alongside your other devices.
-- **Backups.** Device backups capture the device's live `select`, `switch`, and `number` values, and can restore them onto the same device or a replacement.
+```yaml
+esp32_ble_tracker:
+  scan_parameters:
+    active: true
 
-What you don't get: area tracking, the `latter.*` slot services, or anything that needs the device to call Home Assistant. Those require Latter firmware.
+bluetooth_proxy:
+  active: true
+```
 
----
+## ESPHome beacons are tracked like any iBeacon
 
-## Presence without flashing anything
+A node that advertises an iBeacon can be tracked as it moves between Areas. Give each node its own UUID:
 
-If you already have ESPHome Bluetooth proxies assigned to Areas, you can track phones, watches, and iBeacons right now:
+```yaml
+esp32_ble_beacon:
+  type: iBeacon
+  uuid: "<a UUID unique to this node>"
+```
+
+Then open **Studio → System → BLE & Area Presence → Discovered Nearby Bluetooth Devices** and click **Adopt**, or add it by UUID with **+ Add Device**.
+
+## Phones and watches
 
 1. Set up Home Assistant's [Private BLE Device](https://www.home-assistant.io/integrations/private_ble_device/) integration for each phone or watch.
-2. Open **Studio → System → BLE & Area Presence → Discovered Nearby Bluetooth Devices** and click **Adopt**.
+2. Adopt it from the same **Discovered Nearby Bluetooth Devices** list.
 
 → [Presence guide](presence.md)
+
+---
+
+## Building your own Latter device
+
+To make an ESPHome device a full Latter device, build it on [Latter Core](https://github.com/slampton/esphome-latter-core) and implement the [device protocol](https://github.com/slampton/esphome-latter-core/blob/main/docs/device-protocol.md). Home Assistant then discovers it as **Discovered: Latter**.

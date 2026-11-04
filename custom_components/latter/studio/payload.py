@@ -26,7 +26,6 @@ from ..area_engine import (
 )
 from ..backup_engine import get_device_groups_and_profiles
 from ..ble_engine import (
-    _iter_devices,
     get_all_areas_presence_summary,
     get_discovered_ble_candidates,
 )
@@ -801,37 +800,10 @@ def build_studio_state_payload(
             }
         )
 
-    onboarded_slugs = {c.device_slug for c in _get_all_coordinators(hass)}
-    unbridged_devices: list[dict[str, str]] = []
-    seen_unbridged: set[str] = set()
-    for dev in _iter_devices(dev_reg):
-        dev_entries = er.async_entries_for_device(ent_reg, dev.id)
-        if not any(e.platform == "esphome" for e in dev_entries):
-            continue
-        raw_name = str(dev.name_by_user or dev.name or "").strip()
-        if not raw_name:
-            continue
-        cand_slug = re.sub(r"[^a-z0-9]+", "_", raw_name.lower()).strip("_")
-        if (
-            not cand_slug
-            or cand_slug in onboarded_slugs
-            or cand_slug in seen_unbridged
-        ):
-            continue
-        seen_unbridged.add(cand_slug)
-        area_obj = area_reg.async_get_area(dev.area_id) if dev.area_id else None
-        area_lbl = f" • {area_obj.name}" if area_obj else ""
-        model_lbl = f" ({dev.model})" if dev.model else ""
-        unbridged_devices.append(
-            {
-                "slug": cand_slug,
-                "name": f"{raw_name}{model_lbl}{area_lbl}",
-                "area_id": dev.area_id or "",
-            }
-        )
-    unbridged_devices.sort(key=lambda d: d["name"].lower())
 
     internal_logs = _get_combined_system_and_studio_logs(hass)
+
+    onboarded_slugs = {c.device_slug for c in _get_all_coordinators(hass)}
 
     return {
         "entry_id": coordinator.subentry_id,
@@ -842,7 +814,6 @@ def build_studio_state_payload(
         "internal_logs": internal_logs,
         "health_warnings": health_warnings,
         "system_devices": system_devices,
-        "unbridged_devices": unbridged_devices,
         "discovered_ble_devices": get_discovered_ble_candidates(
             hass,
             onboarded_slugs,

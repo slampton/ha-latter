@@ -54,7 +54,7 @@ Settings here live in `.storage/latter.site` and apply to every device.
 
 ## Devices
 
-The **All Devices** page lists onboarded devices, plus ESPHome devices not yet in Latter. **Add Device to Latter** bridges an existing ESPHome device or adopts a BLE device. → [Existing ESPHome devices](existing-esphome.md)
+The **All Devices** page lists onboarded devices. **+ Add Device** adopts a BLE phone, watch, or tag; Latter devices are added through Home Assistant's ESPHome discovery. → [Existing ESPHome devices](existing-esphome.md)
 
 Each device has five pages. The options on each page depend on what the device's hardware reports. A headless sensor won't show display settings.
 

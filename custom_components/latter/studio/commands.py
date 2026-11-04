@@ -603,39 +603,6 @@ async def _async_execute_studio_command(
                     },
                 )
 
-    elif cmd == "bridge_esphome_device":
-        if coordinator is None:
-            raise ValueError("Latter System entry is not initialized")
-        raw_slug = str(body.get("device_slug") or "").strip()
-        target_slug = re.sub(r"[^a-z0-9]+", "_", raw_slug.lower()).strip("_")
-        if target_slug:
-            existing = [
-                c
-                for c in _get_all_coordinators(hass)
-                if c.device_slug == target_slug
-            ]
-            if not existing:
-                default_area = str(body.get("area_id") or "").strip()
-                await hass.config_entries.subentries.async_init(
-                    (coordinator.entry.entry_id, "device"),
-                    context={"source": "user"},
-                    data={
-                        CONF_DEVICE_SLUG: target_slug,
-                        CONF_DEVICE_PROFILE: "headless_node",
-                        CONF_DEVICE_GROUP: DEFAULT_DEVICE_GROUP,
-                        CONF_DEFAULT_SPEAKER: "",
-                        CONF_NATIVE_BLE_TRACKING: False,
-                        CONF_BLE_AUTO_SWITCH: False,
-                        CONF_SYNC_DEVICE_AREA: False,
-                        CONF_ART_SIZE: DEFAULT_ART_SIZE,
-                        **(
-                            {CONF_DEFAULT_AREA: default_area}
-                            if default_area
-                            else {}
-                        ),
-                    },
-                )
-
     elif cmd == "set_device_remote_group":
         target_slug = str(
             body.get("device_slug")

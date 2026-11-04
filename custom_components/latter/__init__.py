@@ -57,7 +57,11 @@ from .http import (
     LatterMapSnapshotView,
     LatterWallpaperProxyView,
 )
-from .identity import get_bound_esphome_device
+from .identity import (
+    LATTER_CONTRACT_ACTION_SUFFIXES,
+    get_bound_esphome_device,
+    is_latter_compatible_esphome_device,
+)
 from .media_engine import clear_ma_counterpart_cache
 from .services import async_push_active_area_entities, async_setup_services
 from .studio import (
@@ -74,37 +78,10 @@ CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 type LatterConfigEntry = ConfigEntry[LatterSystem]
 
-LATTER_CONTRACT_ACTION_SUFFIXES: tuple[str, ...] = (
-    "_set_browse_slots",
-    "_set_area_slots",
-    "_show_notification",
-    "_latter_ping",
-)
-
-
 def _slugify_device_name(name: str) -> str:
     """Convert an ESPHome device name into a normalized slug."""
     val = normalize_device_slug(name)
     return "" if val == "esphome_device" and name.strip().lower() != "esphome_device" else val
-
-
-def is_latter_compatible_esphome_device(
-    hass: HomeAssistant, device: dr.DeviceEntry, slug: str
-) -> bool:
-    """Return True ONLY if the ESPHome device implements the Latter API contract or Latter project namespace."""
-    # 1. Check registered ESPHome API contract actions (_set_browse_slots, _set_area_slots, _show_notification, _latter_ping)
-    esphome_services = hass.services.async_services_for_domain("esphome")
-    for suffix in LATTER_CONTRACT_ACTION_SUFFIXES:
-        exact = f"{slug}{suffix}"
-        if exact in esphome_services:
-            return True
-
-    # 2. Check ESPHome project namespace or Latter OTA update entity
-    model_str = f"{device.model or ''} {device.sw_version or ''}".lower()
-    if "latter" in model_str or hass.states.get(f"update.{slug}_project_firmware") is not None:
-        return True
-
-    return False
 
 
 async def _async_ensure_global_store(

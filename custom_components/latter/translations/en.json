@@ -32,6 +32,9 @@
       "single_instance_allowed": "Latter System is already configured. Add additional displays as Device subentries under the Latter integration.",
       "unique_id_mismatch": "The device slug does not match the existing configuration entry.",
       "wrong_device": "The selected ESPHome device does not match this configuration entry."
+    },
+    "error": {
+      "not_latter_device": "This ESPHome device doesn't run Latter firmware. Latter supports Latter devices and custom builds on Latter Core (they expose the Latter actions, such as latter_ping)."
     }
   },
   "config_subentries": {
@@ -74,6 +77,9 @@
       "abort": {
         "already_configured": "This ESPHome device is already configured in Latter.",
         "reconfigure_successful": "Device configuration updated."
+      },
+      "error": {
+        "not_latter_device": "This ESPHome device doesn't run Latter firmware. Latter supports Latter devices and custom builds on Latter Core (they expose the Latter actions, such as latter_ping)."
       }
     }
   },

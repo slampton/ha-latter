@@ -51,6 +51,7 @@ from .identity import (
     esphome_service,
     find_device_entity_by_suffix,
     get_bound_esphome_device,
+    is_latter_compatible_esphome_device,
     read_device_hardware_manifest,
 )
 from .system import get_latter_system
@@ -95,7 +96,7 @@ def _resolve_esphome_device_and_unique_id(
 
 
 def _discover_esphome_slug(hass: HomeAssistant) -> str:
-    """Auto-discover an unconfigured ESPHome node exposing Latter actions or interactive entities."""
+    """Return the slug of an unconfigured ESPHome node that exposes Latter actions."""
     configured_slugs = {
         normalize_device_slug(str(data_dict.get(CONF_DEVICE_SLUG, "")))
         for data_dict, _uid in _iter_configured_device_records(hass)
@@ -108,18 +109,6 @@ def _discover_esphome_slug(hass: HomeAssistant) -> str:
                 cand = normalize_device_slug(service_name[: -len(suffix)])
                 if cand not in configured_slugs:
                     return cand
-
-    dev_reg = dr.async_get(hass)
-    ent_reg = er.async_get(hass)
-    for dev in _iter_devices(dev_reg):
-        entries = er.async_entries_for_device(ent_reg, dev.id)
-        if not any(e.platform == "esphome" for e in entries):
-            continue
-        dev_name = str(dev.name_by_user or dev.name or "").strip()
-        if dev_name and "proxy" not in dev_name.lower():
-            slug = normalize_device_slug(dev_name)
-            if slug and slug != "esphome_device" and slug not in configured_slugs:
-                return slug
 
     return "esphome_device"
 
@@ -319,6 +308,18 @@ def _apply_onboarding_profile_and_defaults(
     return merged
 
 
+def _is_latter_device_slug(hass: HomeAssistant, merged: dict[str, Any]) -> bool:
+    """Return True if the onboarding target is a Latter device (Latter firmware / Latter Core) or a BLE device.
+
+    Latter does not bridge arbitrary ESPHome devices: an ESPHome slug must expose the Latter API contract.
+    """
+    if merged.get(CONF_DEVICE_PROFILE) == "ble_beacon":
+        return True
+    slug = str(merged.get(CONF_DEVICE_SLUG) or "")
+    dev, _uid = _resolve_esphome_device_and_unique_id(hass, slug)
+    return dev is not None and is_latter_compatible_esphome_device(hass, dev, slug)
+
+
 def _build_schema(
     hass: HomeAssistant,
     current: dict[str, Any],
@@ -471,6 +472,14 @@ class LatterConfigFlow(ConfigFlow, domain=DOMAIN):
                 self.hass, user_input
             )
             slug = merged_data[CONF_DEVICE_SLUG]
+            if slug and slug != "esphome_device" and not _is_latter_device_slug(
+                self.hass, merged_data
+            ):
+                return self.async_show_form(
+                    step_id="user",
+                    data_schema=_build_schema(self.hass, user_input),
+                    errors={CONF_DEVICE_SLUG: "not_latter_device"},
+                )
 
             _abort_competing_flows_for_slug(
                 self.hass, slug, keep_flow_id=self.flow_id
@@ -557,6 +566,12 @@ class LatterDeviceSubentryFlow(ConfigSubentryFlow):
                 self.hass, user_input, rebind_hardware=True
             )
             slug = merged_data[CONF_DEVICE_SLUG]
+            if not _is_latter_device_slug(self.hass, merged_data):
+                return self.async_show_form(
+                    step_id="user",
+                    data_schema=_build_schema(self.hass, user_input),
+                    errors={CONF_DEVICE_SLUG: "not_latter_device"},
+                )
             _abort_competing_flows_for_slug(self.hass, slug)
             _dev, target_uid = _resolve_esphome_device_and_unique_id(self.hass, slug)
 
@@ -600,6 +615,12 @@ class LatterDeviceSubentryFlow(ConfigSubentryFlow):
                 existing=current,
                 rebind_hardware=is_replacing_hw,
             )
+            if is_replacing_hw and not _is_latter_device_slug(self.hass, merged_data):
+                return self.async_show_form(
+                    step_id="reconfigure",
+                    data_schema=_build_schema(self.hass, {**current, **user_input}),
+                    errors={CONF_DEVICE_SLUG: "not_latter_device"},
+                )
             _dev, target_uid = _resolve_esphome_device_and_unique_id(
                 self.hass, new_slug
             )

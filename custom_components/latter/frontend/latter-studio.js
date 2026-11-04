@@ -1387,7 +1387,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root">
               <h3 style="margin:0;">Discovered Nearby Bluetooth Devices (1-Click Adopt)</h3>
               <p class="desc" style="margin:2px 0 0;">Adopt discovered phones/watches (<code>private_ble_device</code>), iBeacons, or named BLE tags into Latter Area tracking in one click.</p>
             </div>
-            <button type="button" class="btn-secondary" style="padding:5px 12px;font-size:12px;" onclick="openAddDeviceModal(); switchAddDeviceTab('ble');">+ Manual BLE Address</button>
+            <button type="button" class="btn-secondary" style="padding:5px 12px;font-size:12px;" onclick="openAddDeviceModal()">+ Manual BLE Address</button>
           </div>
           <div id="ble-adopt-table-box" class="native-controls-box"></div>
         </div>
@@ -1968,7 +1968,6 @@ const SYSTEM_WS_COMMANDS = new Set([
   "log_client_error",
   "remove_device",
   "add_ble_device",
-  "bridge_esphome_device",
   "create_device_group",
   "delete_device_group",
   "capture_profile",
@@ -2513,7 +2512,6 @@ function renderSystemOverview(systemDevices, systemControls, cfg) {
       {id: "all", label: "Category: All Devices"},
       {id: "online", label: "Online / Active Devices"},
       {id: "native", label: "Latter Native Devices"},
-      {id: "bridged", label: "Bridged ESPHome Devices"},
       {id: "ble_tracked", label: "BLE Tracked Devices"},
       {id: "roaming", label: "Roaming Devices"},
       {id: "stationary", label: "Stationary Devices"},
@@ -2537,7 +2535,6 @@ function renderSystemOverview(systemDevices, systemControls, cfg) {
     const isRoaming = (d.area_label || "Roaming") === "Roaming";
     if (cat === "online") return d.status_label !== "Offline";
     if (cat === "native") return isNative;
-    if (cat === "bridged") return !isNative && d.device_profile !== "ble_beacon";
     if (cat === "ble_tracked") return isBleTracked;
     if (cat === "roaming") return isRoaming;
     if (cat === "stationary") return !isRoaming;
@@ -3743,8 +3740,6 @@ async function confirmRemoveManagedDevice() {
   }
 }
 
-let ADD_DEV_MODE = "esphome";
-
 function ensureAddDeviceModal() {
   if (doc.getElementById("latter-add-dev-modal")) return;
   const modal = document.createElement("div");
@@ -3752,23 +3747,10 @@ function ensureAddDeviceModal() {
   modal.style.cssText = "position:fixed;inset:0;background:rgba(8,12,18,0.82);backdrop-filter:blur(6px);z-index:9999;display:none;align-items:center;justify-content:center;padding:16px;";
   modal.innerHTML = `
     <div class="card" style="max-width:460px;width:100%;margin:0;">
-      <h3 style="margin-bottom:12px;">Add Device to Latter</h3>
-      <div class="scope-tabs" style="margin-bottom:14px;">
-        <button type="button" class="scope-tab active" id="add-tab-esphome" onclick="switchAddDeviceTab('esphome')">ESPHome Device</button>
-        <button type="button" class="scope-tab" id="add-tab-ble" onclick="switchAddDeviceTab('ble')">BLE Phone / Watch / Tag</button>
-      </div>
+      <h3 style="margin-bottom:12px;">Add BLE Phone, Watch or Tag</h3>
+      <p style="color:var(--muted);font-size:13px;margin:0 0 12px;">Latter devices are added through Home Assistant's ESPHome discovery.</p>
 
-      <!-- TAB 1: ESPHOME DEVICE -->
-      <div id="add-dev-pane-esphome">
-        <div class="field" id="add-dev-modal-picker-wrap">
-          <label>Discovered ESPHome Devices</label>
-          <select id="bridge-device-picker"></select>
-        </div>
-        <p class="hidden" id="add-dev-modal-empty" style="color:var(--muted);font-size:13px;margin:0 0 12px;">All discovered ESPHome devices are already onboarded.</p>
-      </div>
-
-      <!-- TAB 2: BLE PHONE / WATCH / BEACON -->
-      <div id="add-dev-pane-ble" class="hidden">
+      <div id="add-dev-pane-ble">
         <div class="field">
           <label>Discovered Bluetooth / Private BLE / iBeacon Devices</label>
           <select id="ble-candidate-picker" onchange="onSelectBleCandidate(this.value)"></select>
@@ -3796,22 +3778,6 @@ function ensureAddDeviceModal() {
   doc.body.appendChild(modal);
 }
 
-function switchAddDeviceTab(mode) {
-  ADD_DEV_MODE = mode === "ble" ? "ble" : "esphome";
-  doc.getElementById("add-tab-esphome")?.classList.toggle("active", ADD_DEV_MODE === "esphome");
-  doc.getElementById("add-tab-ble")?.classList.toggle("active", ADD_DEV_MODE === "ble");
-  doc.getElementById("add-dev-pane-esphome")?.classList.toggle("hidden", ADD_DEV_MODE !== "esphome");
-  doc.getElementById("add-dev-pane-ble")?.classList.toggle("hidden", ADD_DEV_MODE !== "ble");
-  const addBtn = doc.getElementById("btn-confirm-add-device");
-  if (addBtn) {
-    if (ADD_DEV_MODE === "esphome") {
-      addBtn.disabled = !(STATE?.unbridged_devices?.length > 0);
-    } else {
-      addBtn.disabled = false;
-    }
-  }
-}
-
 function onSelectBleCandidate(targetAddr) {
   if (!targetAddr) return;
   const cands = STATE?.discovered_ble_devices || [];
@@ -3824,24 +3790,7 @@ function onSelectBleCandidate(targetAddr) {
 
 function openAddDeviceModal() {
   ensureAddDeviceModal();
-  const unbridged = STATE?.unbridged_devices || [];
   const bleCands = STATE?.discovered_ble_devices || [];
-  const picker = doc.getElementById("bridge-device-picker");
-  const wrap = doc.getElementById("add-dev-modal-picker-wrap");
-  const emptyMsg = doc.getElementById("add-dev-modal-empty");
-
-  if (unbridged.length > 0) {
-    wrap?.classList.remove("hidden");
-    emptyMsg?.classList.add("hidden");
-    if (picker) {
-      picker.innerHTML = unbridged.map(u =>
-        `<option value="${esc(u.slug)}" data-area="${esc(u.area_id || '')}">${esc(u.name)}</option>`
-      ).join("");
-    }
-  } else {
-    wrap?.classList.add("hidden");
-    emptyMsg?.classList.remove("hidden");
-  }
 
   const blePicker = doc.getElementById("ble-candidate-picker");
   if (blePicker) {
@@ -3856,7 +3805,6 @@ function openAddDeviceModal() {
   if (addrInp) addrInp.value = "";
   populateSelect("ble-custom-person", STATE?.catalog?.persons || [], "", true);
 
-  switchAddDeviceTab(unbridged.length > 0 ? "esphome" : "ble");
   doc.getElementById("latter-add-dev-modal").style.display = "flex";
 }
 
@@ -3866,38 +3814,23 @@ function closeAddDeviceModal() {
 }
 
 async function confirmAddDeviceModal() {
-  if (ADD_DEV_MODE === "ble") {
-    const name = doc.getElementById("ble-custom-name")?.value?.trim() || "";
-    const target_address = doc.getElementById("ble-custom-addr")?.value?.trim() || "";
-    const assigned_person = doc.getElementById("ble-custom-person")?.value || "";
-    if (!name || !target_address) {
-      showToast("Enter a Device Name and BLE Address/Entity");
-      return;
-    }
-    closeAddDeviceModal();
-    const data = await callStudioCommand({
-        command: "add_ble_device",
-        name,
-        target_address,
-        assigned_person
-      });
-  if (data) {
-      applyStateToDom(data, false);
-      showToast(`Added BLE device '${name}'`);
-    }
+  const name = doc.getElementById("ble-custom-name")?.value?.trim() || "";
+  const target_address = doc.getElementById("ble-custom-addr")?.value?.trim() || "";
+  const assigned_person = doc.getElementById("ble-custom-person")?.value || "";
+  if (!name || !target_address) {
+    showToast("Enter a Device Name and BLE Address/Entity");
     return;
   }
-
-  const picker = doc.getElementById("bridge-device-picker");
-  if (!picker || !picker.value) return;
-  const slug = picker.value;
-  const optEl = picker.options[picker.selectedIndex];
-  const areaId = optEl ? (optEl.getAttribute("data-area") || "") : "";
   closeAddDeviceModal();
-  const data = await callStudioCommand({command: "bridge_esphome_device", device_slug: slug, area_id: areaId});
+  const data = await callStudioCommand({
+    command: "add_ble_device",
+    name,
+    target_address,
+    assigned_person
+  });
   if (data) {
     applyStateToDom(data, false);
-    showToast(`Added ESPHome device '${slug}'`);
+    showToast(`Added BLE device '${name}'`);
   }
 }
 
@@ -4648,8 +4581,7 @@ function bindStudioGlobals() {
   window.setCwHex = setCwHex;
   window.setScope = setScope;
   window.showToast = showToast;
-  window.switchAddDeviceTab = switchAddDeviceTab;
-  window.switchSystemDevice = switchSystemDevice;
+    window.switchSystemDevice = switchSystemDevice;
   window.switchView = switchView;
   window.testDoorbellTalkback = testDoorbellTalkback;
   window.toggleDeviceTableSort = toggleDeviceTableSort;

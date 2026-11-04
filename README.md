@@ -104,7 +104,7 @@ Latter Studio is an admin-only sidebar panel for everything that isn't an automa
 ## Already running ESPHome?
 
 You don't need Latter hardware to use most of this.
-- **Bridge any ESPHome device into Studio** without editing its YAML. You get grouping, live entity inspection, and backups of its settings. → [Existing ESPHome devices](docs/existing-esphome.md)
+- **Use the ESPHome devices you already have for presence.** Bluetooth proxies become Area scanners, and ESPHome beacons are tracked like any iBeacon. → [Existing ESPHome devices](docs/existing-esphome.md)
 - **Area presence from the proxies you already have.** Phones, watches, and iBeacons can be tracked without flashing anything new. → [Presence](docs/presence.md)
 - **Coming from Bermuda?** Read [what's different, and what isn't there yet](docs/presence.md#coming-from-bermuda).
 
@@ -163,7 +163,7 @@ Bugs and feature requests: [issues](https://github.com/slampton/ha-latter/issues
 | [Getting started](docs/getting-started.md) | Your first device, from box to working |
 | [Latter Studio](docs/studio.md) | Every Studio page and what it controls |
 | [Presence](docs/presence.md) | BLE area tracking, calibration, occupancy, and migrating from Bermuda |
-| [Existing ESPHome devices](docs/existing-esphome.md) | Bridging devices you already have |
+| [Existing ESPHome devices](docs/existing-esphome.md) | Using your Bluetooth proxies and beacons for presence |
 | [Automations](docs/automations.md) | Ready-to-use automation recipes |
 | [Troubleshooting](docs/troubleshooting.md) | Common problems and their fixes |
 | [Reference](docs/reference/) | Services, entities, and the HTTP API |

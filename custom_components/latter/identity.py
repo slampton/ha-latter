@@ -19,6 +19,33 @@ from .const import (
 )
 
 
+LATTER_CONTRACT_ACTION_SUFFIXES: tuple[str, ...] = (
+    "_set_browse_slots",
+    "_set_area_slots",
+    "_show_notification",
+    "_latter_ping",
+)
+
+
+def is_latter_compatible_esphome_device(
+    hass: HomeAssistant, device: dr.DeviceEntry, slug: str
+) -> bool:
+    """Return True ONLY if the ESPHome device implements the Latter API contract or Latter project namespace."""
+    # 1. Check registered ESPHome API contract actions (_set_browse_slots, _set_area_slots, _show_notification, _latter_ping)
+    esphome_services = hass.services.async_services_for_domain("esphome")
+    for suffix in LATTER_CONTRACT_ACTION_SUFFIXES:
+        exact = f"{slug}{suffix}"
+        if exact in esphome_services:
+            return True
+
+    # 2. Check ESPHome project namespace or Latter OTA update entity
+    model_str = f"{device.model or ''} {device.sw_version or ''}".lower()
+    if "latter" in model_str or hass.states.get(f"update.{slug}_project_firmware") is not None:
+        return True
+
+    return False
+
+
 def get_bound_esphome_device(
     hass: HomeAssistant,
     entry_or_device_id: ConfigEntry | dr.DeviceEntry | str | None,
