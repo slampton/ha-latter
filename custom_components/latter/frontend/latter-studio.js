@@ -1413,10 +1413,6 @@ const STUDIO_TEMPLATE = `<div class="studio-root">
                 <option value="device">Active Device Only</option>
               </select>
             </div>
-            <div class="toggle-row" style="margin-bottom:12px;">
-              <span>Include WireGuard Private Keys</span>
-              <input type="checkbox" id="bkp-include-vpn">
-            </div>
             <div class="quick-actions-row">
               <button class="btn-primary" onclick="exportBackupToComputer('')">Download .JSON</button>
             </div>
@@ -1502,15 +1498,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root">
               </div>
               <div style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                  <strong style="font-size:13px;">2. Roaming WireGuard VPN Tunnel</strong>
-                  <button class="btn-secondary" style="padding:4px 10px;font-size:11.5px;" onclick="copyTextById('mixin-vpn')">Copy</button>
-                </div>
-                <pre id="mixin-vpn" class="mono" style="margin:0;padding:8px;background:var(--card);border:1px solid var(--border);border-radius:6px;overflow-x:auto;">packages:
-  latter.vpn: github://slampton/esphome-latter-core/mixins/roaming_vpn.yaml@main</pre>
-              </div>
-              <div style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                  <strong style="font-size:13px;">3. Stationary Area BLE Scanner Proxy</strong>
+                  <strong style="font-size:13px;">2. Stationary Area BLE Scanner Proxy</strong>
                   <button class="btn-secondary" style="padding:4px 10px;font-size:11.5px;" onclick="copyTextById('mixin-ble-proxy')">Copy</button>
                 </div>
                 <pre id="mixin-ble-proxy" class="mono" style="margin:0;padding:8px;background:var(--card);border:1px solid var(--border);border-radius:6px;overflow-x:auto;">packages:
@@ -1518,7 +1506,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root">
               </div>
               <div style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                  <strong style="font-size:13px;">4. Studio Discovery &amp; Diagnostics</strong>
+                  <strong style="font-size:13px;">3. Studio Discovery &amp; Diagnostics</strong>
                   <button class="btn-secondary" style="padding:4px 10px;font-size:11.5px;" onclick="copyTextById('mixin-core')">Copy</button>
                 </div>
                 <pre id="mixin-core" class="mono" style="margin:0;padding:8px;background:var(--card);border:1px solid var(--border);border-radius:6px;overflow-x:auto;">packages:
@@ -1526,7 +1514,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root">
               </div>
               <div style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                  <strong style="font-size:13px;">5. ESP32-P4 Onboard 5MP MIPI-CSI Camera</strong>
+                  <strong style="font-size:13px;">4. ESP32-P4 Onboard 5MP MIPI-CSI Camera</strong>
                   <button class="btn-secondary" style="padding:4px 10px;font-size:11.5px;" onclick="copyTextById('mixin-p4-cam')">Copy</button>
                 </div>
                 <pre id="mixin-p4-cam" class="mono" style="margin:0;padding:8px;background:var(--card);border:1px solid var(--border);border-radius:6px;overflow-x:auto;">packages:
@@ -1536,7 +1524,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root">
 
             <div style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                <strong style="font-size:13px;">6. Full Latter Protocol v3 Contract Mixin (Custom Displays)</strong>
+                <strong style="font-size:13px;">5. Full Latter Protocol v3 Contract Mixin (Custom Displays)</strong>
                 <button class="btn-secondary" style="padding:4px 10px;font-size:11.5px;" onclick="copyTextById('mixin-contract')">Copy</button>
               </div>
               <pre id="mixin-contract" class="mono" style="margin:0;padding:8px;background:var(--card);border:1px solid var(--border);border-radius:6px;overflow-x:auto;">packages:
@@ -1841,12 +1829,12 @@ const STUDIO_TEMPLATE = `<div class="studio-root">
       </section>
 
       <!-- ================================================================== -->
-      <!-- DEVICE TAB 5: ADMINISTRATION (IDENTITY, BLE, VPN, RAW, REMOVE)     -->
+      <!-- DEVICE TAB 5: ADMINISTRATION (IDENTITY, BLE, RAW, REMOVE)          -->
       <!-- ================================================================== -->
       <section id="view-system" class="hidden">
         <div class="page-header">
           <h2>Device Administration</h2>
-          <p>Device identity, BLE area tracking configuration, WireGuard roaming VPN, and entity inspection.</p>
+          <p>Device identity, BLE area tracking configuration, and entity inspection.</p>
         </div>
 
         <div class="grid-2">
@@ -1911,88 +1899,6 @@ const STUDIO_TEMPLATE = `<div class="studio-root">
             </div>
           </div>
         </div>
-
-        <!-- COLLAPSIBLE: ROAMING WIREGUARD VPN -->
-        <details class="ha-details">
-          <summary>Roaming WireGuard VPN Provisioning</summary>
-          <div class="details-body">
-            <div class="grid-2" style="margin-bottom:16px;">
-              <div>
-                <h3 style="margin:0 0 8px;font-size:14px;">System WireGuard Server Endpoint</h3>
-                <div class="field">
-                  <label>Public Endpoint (Hostname/IP:Port)</label>
-                  <input type="text" id="cfg-vpn_endpoint" placeholder="vpn.example.com:51820" oninput="markDirty()">
-                </div>
-                <div class="field">
-                  <label>Server Public Key (Base64)</label>
-                  <input type="text" id="cfg-vpn_server_public_key" placeholder="Server Curve25519 Public Key" oninput="markDirty()">
-                </div>
-                <div class="form-grid-2">
-                  <div class="field">
-                    <label>Tunnel Subnet (CIDR)</label>
-                    <input type="text" id="cfg-vpn_subnet" placeholder="10.10.10.0/24" oninput="markDirty()">
-                  </div>
-                  <div class="field">
-                    <label>Home Assistant Tunnel IP</label>
-                    <input type="text" id="cfg-vpn_ha_ip" placeholder="10.10.10.1" oninput="markDirty()">
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;">
-                  <h3 style="margin:0;font-size:14px;">Device Roaming Identity</h3>
-                  <button class="btn-primary" style="padding:6px 12px;font-size:12px;" onclick="generateDeviceVpnKeys()">Generate Keys</button>
-                </div>
-                <div class="toggle-row" style="margin-bottom:10px;">
-                  <span>Enable Roaming WireGuard Profile</span>
-                  <input type="checkbox" id="cfg-vpn_enabled" onchange="markDirty()">
-                </div>
-                <div class="form-grid-2">
-                  <div class="field">
-                    <label>Device Tunnel IP</label>
-                    <input type="text" id="cfg-vpn_client_ip" placeholder="10.10.10.2" oninput="markDirty()">
-                  </div>
-                  <div class="field">
-                    <label>Hotspot / Travel SSID</label>
-                    <input type="text" id="cfg-vpn_hotspot_ssid" placeholder="Phone Hotspot" oninput="markDirty()">
-                  </div>
-                </div>
-                <div class="field">
-                  <label>Device Public Key</label>
-                  <input type="text" id="cfg-vpn_public_key" readonly class="mono">
-                </div>
-                <div class="form-grid-2">
-                  <div class="field">
-                    <label>Device Private Key</label>
-                    <input type="password" id="cfg-vpn_private_key" autocomplete="new-password" class="mono" oninput="markDirty()">
-                  </div>
-                  <div class="field">
-                    <label>Preshared Key (PSK)</label>
-                    <input type="password" id="cfg-vpn_preshared_key" autocomplete="new-password" class="mono" oninput="markDirty()">
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div class="grid-2">
-              <div>
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                  <strong style="font-size:13px;">1. ESPHome WireGuard &amp; Hotspot YAML</strong>
-                  <button class="btn-secondary" style="padding:4px 10px;font-size:11.5px;" onclick="copyTextById('vpn-esphome-yaml')">Copy YAML</button>
-                </div>
-                <pre id="vpn-esphome-yaml" class="mono" style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:10px;overflow-x:auto;max-height:220px;margin:0;"></pre>
-              </div>
-              <div>
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                  <strong style="font-size:13px;">2. WireGuard Server Peer Config</strong>
-                  <button class="btn-secondary" style="padding:4px 10px;font-size:11.5px;" onclick="copyTextById('vpn-server-peer')">Copy Peer Config</button>
-                </div>
-                <pre id="vpn-server-peer" class="mono" style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:10px;overflow-x:auto;max-height:220px;margin:0;"></pre>
-              </div>
-            </div>
-          </div>
-        </details>
 
         <!-- COLLAPSIBLE: BLE MIXIN SNIPPETS -->
         <details class="ha-details">
@@ -3855,14 +3761,6 @@ function copyTextById(elId) {
   copyToClipboard(text, "Copied to clipboard");
 }
 
-async function generateDeviceVpnKeys() {
-  const data = await callStudioCommand({command: "generate_vpn_keys"});
-  if (data) {
-    applyStateToDom(data, true);
-    showToast("Generated WireGuard keys for device");
-  }
-}
-
 let pendingRemoveEntryId = "";
 let pendingRemoveTitle = "";
 
@@ -4178,13 +4076,11 @@ function triggerJsonDownload(bundle) {
 async function exportBackupToComputer(overrideScope) {
   if (!HASS_REF) return;
   const scope = overrideScope || doc.getElementById("bkp-scope-select")?.value || "system";
-  const incVpn = doc.getElementById("bkp-include-vpn")?.checked ?? false;
   const wsType = scope === "device" ? "latter/device/export" : "latter/system/export";
   const data = await HASS_REF.callWS({
     type: wsType,
     subentry_id: ACTIVE_SUBENTRY_ID || null,
-    scope,
-    include_vpn_secrets: incVpn
+    scope
   });
   if (data && data.bundle) {
     triggerJsonDownload(data.bundle);
@@ -4301,13 +4197,6 @@ function applyStateToDom(data, forceFormUpdate=false) {
   renderLogsView();
   renderActiveSurveyDeviceBars();
   renderWallpaperGallery(data.wallpapers, cfg.device_slug, cfg.display_shape);
-  if (data.vpn_snippets) {
-    const wy = doc.getElementById("vpn-esphome-yaml");
-    const sp = doc.getElementById("vpn-server-peer");
-    if (wy) wy.textContent = data.vpn_snippets.esphome_yaml || "";
-    if (sp) sp.textContent = [data.vpn_snippets.server_peer_conf || "", data.vpn_snippets.ha_addon_yaml || ""].join("\n\n");
-  }
-
   const activeEl = getStudioActiveElement();
   if (!activeEl || !["SELECT", "INPUT"].includes(activeEl.tagName)) {
     renderCohesiveDeviceSections();
@@ -4321,24 +4210,6 @@ function applyStateToDom(data, forceFormUpdate=false) {
 
     doc.getElementById("cfg-device_slug").value = cfg.device_slug || "";
     doc.getElementById("cfg-companion_base_url").value = cfg.companion_base_url || "";
-    doc.getElementById("cfg-vpn_endpoint").value = cfg.vpn_endpoint || "";
-    doc.getElementById("cfg-vpn_server_public_key").value = cfg.vpn_server_public_key || "";
-    doc.getElementById("cfg-vpn_subnet").value = cfg.vpn_subnet || "10.10.10.0/24";
-    doc.getElementById("cfg-vpn_ha_ip").value = cfg.vpn_ha_ip || "10.10.10.1";
-    doc.getElementById("cfg-vpn_enabled").checked = !!cfg.vpn_enabled;
-    doc.getElementById("cfg-vpn_client_ip").value = cfg.vpn_client_ip || "";
-    doc.getElementById("cfg-vpn_hotspot_ssid").value = cfg.vpn_hotspot_ssid || "";
-    doc.getElementById("cfg-vpn_public_key").value = cfg.vpn_public_key || "";
-    const vpnPrivEl = doc.getElementById("cfg-vpn_private_key");
-    if (vpnPrivEl) {
-      vpnPrivEl.value = "";
-      vpnPrivEl.placeholder = cfg.has_vpn_private_key ? "•••••••• (Configured — enter new key to replace)" : "Enter or generate private key";
-    }
-    const vpnPskEl = doc.getElementById("cfg-vpn_preshared_key");
-    if (vpnPskEl) {
-      vpnPskEl.value = "";
-      vpnPskEl.placeholder = cfg.has_vpn_preshared_key ? "•••••••• (Configured — enter new key to replace)" : "Optional preshared key";
-    }
     doc.getElementById("cfg-device_profile").value = cfg.device_profile || "mobile_display";
     doc.getElementById("cfg-display_shape").value = cfg.display_shape || "circle";
     doc.getElementById("cfg-default_page_size").value = cfg.default_page_size ?? 3;
@@ -4473,16 +4344,6 @@ async function saveAllConfig() {
   const config = {
     device_slug: doc.getElementById("cfg-device_slug")?.value?.trim() || (STATE?.config?.device_slug || ""),
     companion_base_url: doc.getElementById("cfg-companion_base_url")?.value?.trim() || "",
-    vpn_endpoint: doc.getElementById("cfg-vpn_endpoint")?.value?.trim() || "",
-    vpn_server_public_key: doc.getElementById("cfg-vpn_server_public_key")?.value?.trim() || "",
-    vpn_subnet: doc.getElementById("cfg-vpn_subnet")?.value?.trim() || "",
-    vpn_ha_ip: doc.getElementById("cfg-vpn_ha_ip")?.value?.trim() || "",
-    vpn_enabled: Boolean(doc.getElementById("cfg-vpn_enabled")?.checked),
-    vpn_client_ip: doc.getElementById("cfg-vpn_client_ip")?.value?.trim() || "",
-    vpn_hotspot_ssid: doc.getElementById("cfg-vpn_hotspot_ssid")?.value?.trim() || "",
-    vpn_public_key: doc.getElementById("cfg-vpn_public_key")?.value?.trim() || "",
-    vpn_private_key: doc.getElementById("cfg-vpn_private_key")?.value?.trim() || "",
-    vpn_preshared_key: doc.getElementById("cfg-vpn_preshared_key")?.value?.trim() || "",
     device_profile: doc.getElementById("cfg-device_profile")?.value || (STATE?.config?.device_profile || "mobile_display"),
     device_group: doc.getElementById("cfg-device_group")?.value || "handhelds",
     display_shape: doc.getElementById("cfg-display_shape")?.value || (STATE?.config?.display_shape || "round"),
@@ -4810,8 +4671,7 @@ function bindStudioGlobals() {
   window.espSelect = espSelect;
   window.exportBackupToComputer = exportBackupToComputer;
   window.fallbackCopyText = fallbackCopyText;
-  window.generateDeviceVpnKeys = generateDeviceVpnKeys;
-  window.getInventoryRemoteIds = getInventoryRemoteIds;
+    window.getInventoryRemoteIds = getInventoryRemoteIds;
   window.getRemoteFriendlyLabel = getRemoteFriendlyLabel;
   window.getSectionItems = getSectionItems;
   window.hsvToRgbJS = hsvToRgbJS;

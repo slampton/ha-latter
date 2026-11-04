@@ -72,16 +72,6 @@ from ..const import (
     CONF_THERMOSTAT_ENTITY,
     CONF_VACUUM_ENTITY,
     CONF_VOLUME_OVERRIDES,
-    CONF_VPN_CLIENT_IP,
-    CONF_VPN_ENABLED,
-    CONF_VPN_ENDPOINT,
-    CONF_VPN_HA_IP,
-    CONF_VPN_HOTSPOT_SSID,
-    CONF_VPN_PRESHARED_KEY,
-    CONF_VPN_PRIVATE_KEY,
-    CONF_VPN_PUBLIC_KEY,
-    CONF_VPN_SERVER_PUBLIC_KEY,
-    CONF_VPN_SUBNET,
     CONF_WALLPAPER_CYCLE_MINUTES,
     CONF_WALLPAPER_FAVORITES,
     CONF_WALLPAPER_SOURCE,
@@ -97,11 +87,9 @@ from ..coordinator import LatterCoordinator
 from ..identity import esphome_service
 from ..repairs import async_audit_coordinator_health
 from ..system import get_latter_system
-from ..vpn_engine import build_wireguard_provisioning_snippets
 from ..wallpaper_engine import list_wallpaper_catalog
 
 MAX_INTERNAL_LOGS = 150
-SECRET_MASK = "••••••••"
 
 
 def log_studio_event(
@@ -487,12 +475,6 @@ def build_studio_state_payload(
     for s in esphome_inspector.get("sections", []):
         all_esp_items.extend(s.get("items") or [])
 
-    has_vpn_entities = any(
-        "vpn" in str(it.get("entity_id") or "").lower()
-        or "wireguard" in str(it.get("entity_id") or "").lower()
-        or "vpn" in str(it.get("name") or "").lower()
-        for it in all_esp_items
-    )
     has_ble_beacon_entity = any(
         "ble" in str(it.get("entity_id") or "").lower()
         and "beacon" in str(it.get("entity_id") or "").lower()
@@ -512,7 +494,7 @@ def build_studio_state_payload(
     if has_native_slots:
         dev_tier = 1
         dev_tier_label = "Tier 1: Native Latter"
-    elif has_mixin_ping or has_vpn_entities or has_ble_beacon_entity:
+    elif has_mixin_ping or has_ble_beacon_entity:
         dev_tier = 2
         dev_tier_label = "Tier 2: Mixin Enabled"
     else:
@@ -536,13 +518,9 @@ def build_studio_state_payload(
         "has_voice": has_voice,
         "has_audio": has_audio,
         "has_ble_beacon": has_native_slots or has_ble_beacon_entity,
-        "has_vpn_mixin": has_vpn_entities or coordinator.vpn_enabled,
         "is_roaming_device": coordinator.is_roaming_device,
         "total_entities": len(all_esp_items),
     }
-
-    has_priv_key = bool(str(coordinator.get_opt(CONF_VPN_PRIVATE_KEY, "") or ""))
-    has_psk = bool(str(coordinator.get_opt(CONF_VPN_PRESHARED_KEY, "") or ""))
 
     raw_def_spk = str(coordinator.get_opt(CONF_DEFAULT_SPEAKER, "") or "").strip()
     if (
@@ -607,32 +585,6 @@ def build_studio_state_payload(
         CONF_WALLPAPER_CYCLE_MINUTES: coordinator.wallpaper_cycle_minutes,
         CONF_ART_SIZE: coordinator.art_size,
         CONF_SITE_ID: coordinator.site_id,
-        CONF_VPN_ENDPOINT: str(
-            coordinator.get_opt(CONF_VPN_ENDPOINT, "") or ""
-        ),
-        CONF_VPN_SERVER_PUBLIC_KEY: str(
-            coordinator.get_opt(CONF_VPN_SERVER_PUBLIC_KEY, "") or ""
-        ),
-        CONF_VPN_SUBNET: str(
-            coordinator.get_opt(CONF_VPN_SUBNET, "10.10.10.0/24")
-            or "10.10.10.0/24"
-        ),
-        CONF_VPN_HA_IP: str(
-            coordinator.get_opt(CONF_VPN_HA_IP, "10.10.10.1") or "10.10.10.1"
-        ),
-        CONF_VPN_ENABLED: coordinator.vpn_enabled,
-        CONF_VPN_CLIENT_IP: coordinator.vpn_client_ip,
-        # Never expose raw VPN private/preshared keys in get_state payloads
-        CONF_VPN_PRIVATE_KEY: "",
-        "has_vpn_private_key": has_priv_key,
-        CONF_VPN_PUBLIC_KEY: str(
-            coordinator.get_opt(CONF_VPN_PUBLIC_KEY, "") or ""
-        ),
-        CONF_VPN_PRESHARED_KEY: "",
-        "has_vpn_preshared_key": has_psk,
-        CONF_VPN_HOTSPOT_SSID: str(
-            coordinator.get_opt(CONF_VPN_HOTSPOT_SSID, "") or ""
-        ),
     }
 
     try:
@@ -898,17 +850,6 @@ def build_studio_state_payload(
 
     internal_logs = _get_combined_system_and_studio_logs(hass)
 
-    # Use actual stored keys on the server for WG preview snippet rendering without sending raw private/preshared keys in config_data
-    vpn_snippet_cfg = {
-        **config_data,
-        CONF_VPN_PRIVATE_KEY: str(
-            coordinator.get_opt(CONF_VPN_PRIVATE_KEY, "") or ""
-        ),
-        CONF_VPN_PRESHARED_KEY: str(
-            coordinator.get_opt(CONF_VPN_PRESHARED_KEY, "") or ""
-        ),
-    }
-
     return {
         "entry_id": coordinator.subentry_id,
         "subentry_id": coordinator.subentry_id,
@@ -934,9 +875,6 @@ def build_studio_state_payload(
         "config": config_data,
         "esphome": esphome_inspector,
         "wallpapers": wallpapers_catalog,
-        "vpn_snippets": build_wireguard_provisioning_snippets(
-            coordinator.device_slug, vpn_snippet_cfg, vpn_snippet_cfg
-        ),
         "live": {
             "active_area_id": coordinator.active_area_id or "",
             "active_area_name": area_attrs.get("area_name", "Home"),

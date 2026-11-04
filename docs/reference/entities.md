@@ -34,7 +34,6 @@ This sensor is the main channel from Home Assistant to the device. It has about 
 | Appearance | `wallpaper_url`, `theme_color_hex`, `dock_apps` |
 | Cameras and doorbell | `camera_snapshot_url`, `cameras_summary`, `doorbell_talk_state`, `intercom_targets_summary` |
 | Presence | `ble_closest_proxy`, `ble_rssi_by_area`, `ble_scanners_map` |
-| VPN | `vpn_enabled`, `vpn_client_ip` |
 | Hardware | `hardware_manifest` (parsed from the device; see [device protocol](https://github.com/slampton/esphome-latter-core/blob/main/docs/device-protocol.md#2-hardware-manifest)) |
 
 The field formats the firmware parses, such as `slots_summary` and `cameras_summary`, are specified in the [device protocol](https://github.com/slampton/esphome-latter-core/blob/main/docs/device-protocol.md).

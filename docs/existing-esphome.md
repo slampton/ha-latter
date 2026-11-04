@@ -5,7 +5,7 @@ You don't need Latter hardware to get value from Latter. There are three ways an
 | | What it is | What you get |
 | :--- | :--- | :--- |
 | **Latter firmware** | One of the [supported displays](../README.md#get-started), or your own build on [Latter Core](https://github.com/slampton/esphome-latter-core) | Everything |
-| **Mixin node** | Your existing YAML plus one or more [one-line packages](https://github.com/slampton/esphome-latter-core/blob/main/docs/mixins.md) | Automatic discovery, plus whatever the package adds: BLE beacon, proxy, WireGuard roaming, diagnostics |
+| **Mixin node** | Your existing YAML plus one or more [one-line packages](https://github.com/slampton/esphome-latter-core/blob/main/docs/mixins.md) | Automatic discovery, plus whatever the package adds: BLE beacon, proxy, diagnostics |
 | **Bridged device** | Any ESPHome device, with its YAML untouched | Grouping, live entity view and control in Studio, and settings backups |
 
 ---

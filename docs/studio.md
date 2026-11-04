@@ -65,15 +65,6 @@ Each device has five pages. The options on each page depend on what the device's
 | **Display & Home** | Color profile, display geometry, home dock apps and their order, area cards per page, and wallpapers (5 built-in presets, plus uploads that can rotate on a schedule) |
 | **Audio & Voice** | Wake word and sensitivity, default speaker, alert volume, and music sorting |
 | **Power & Battery** | Sleep and wake timeouts, plus battery and power readings |
-| **Administration** | Device slug, type, and group; BLE tracking settings; WireGuard roaming; and **Remove Device** |
+| **Administration** | Device slug, type, and group; BLE tracking settings; and **Remove Device** |
 
-### WireGuard roaming
-
-This feature keeps a portable device connected to Home Assistant over a phone hotspot or other remote Wi-Fi. Latter **generates keys and config text only**. It does not set up the WireGuard server for you.
-
-1. Under **System WireGuard Server Endpoint**, enter your server's public `host:port`, its public key, and the tunnel subnet. The default subnet is `10.10.10.0/24`.
-2. Under **Device Roaming Identity**, generate keys. Latter creates an X25519 keypair and a preshared key, and assigns the next free tunnel IP.
-3. Copy the generated ESPHome snippet into the device's config, or use the [`roaming_vpn` mixin](https://github.com/slampton/esphome-latter-core/blob/main/docs/mixins.md#roaming_vpn) with your `secrets.yaml`.
-4. Copy the generated peer block into your WireGuard server: a router, or the Home Assistant WireGuard add-on.
-
-> Key generation and every config save reload the Latter config entry for that device. The device reconnects within a few seconds.
+> Every config save reloads the Latter config entry for that device. The device reconnects within a few seconds.

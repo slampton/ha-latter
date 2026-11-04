@@ -112,25 +112,13 @@ GLOBAL_STORAGE_KEY: Final = "latter.site"
 DATA_GLOBAL_CONFIG: Final = "global_config"
 DATA_GLOBAL_STORE: Final = "global_store"
 
-# Multi-Site, Device Groups, Reusable Profiles & Roaming WireGuard VPN Keys
+# Multi-Site, Device Groups & Reusable Profiles
 CONF_SITE_ID: Final = "site_id"
 DEFAULT_SITE_ID: Final = "primary"
 CONF_DEVICE_GROUP: Final = "device_group"
 DEFAULT_DEVICE_GROUP: Final = "unassigned"
 CONF_DEVICE_GROUPS: Final = "device_groups"
 CONF_SAVED_PROFILES: Final = "saved_profiles"
-
-CONF_VPN_ENDPOINT: Final = "vpn_endpoint"
-CONF_VPN_SERVER_PUBLIC_KEY: Final = "vpn_server_public_key"
-CONF_VPN_SUBNET: Final = "vpn_subnet"
-CONF_VPN_HA_IP: Final = "vpn_ha_ip"
-
-CONF_VPN_ENABLED: Final = "vpn_enabled"
-CONF_VPN_CLIENT_IP: Final = "vpn_client_ip"
-CONF_VPN_PRIVATE_KEY: Final = "vpn_private_key"
-CONF_VPN_PUBLIC_KEY: Final = "vpn_public_key"
-CONF_VPN_PRESHARED_KEY: Final = "vpn_preshared_key"
-CONF_VPN_HOTSPOT_SSID: Final = "vpn_hotspot_ssid"
 
 # Area Sensor Fusion & Event Bus
 CONF_AREA_FUSION_CONFIG: Final = "area_fusion_config"
@@ -155,10 +143,6 @@ GLOBAL_CONFIG_KEYS: Final[tuple[str, ...]] = (
     CONF_DOORBELL_ANC_MODE,
     CONF_DEVICE_GROUPS,
     CONF_SAVED_PROFILES,
-    CONF_VPN_ENDPOINT,
-    CONF_VPN_SERVER_PUBLIC_KEY,
-    CONF_VPN_SUBNET,
-    CONF_VPN_HA_IP,
     CONF_AREA_FUSION_CONFIG,
 )
 

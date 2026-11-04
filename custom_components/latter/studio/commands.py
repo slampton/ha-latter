@@ -52,14 +52,6 @@ from ..const import (
     CONF_SITE_ID,
     CONF_SYNC_DEVICE_AREA,
     CONF_VOLUME_OVERRIDES,
-    CONF_VPN_CLIENT_IP,
-    CONF_VPN_ENABLED,
-    CONF_VPN_HA_IP,
-    CONF_VPN_HOTSPOT_SSID,
-    CONF_VPN_PRESHARED_KEY,
-    CONF_VPN_PRIVATE_KEY,
-    CONF_VPN_PUBLIC_KEY,
-    CONF_VPN_SUBNET,
     CONF_WALLPAPER_CYCLE_MINUTES,
     CONF_WALLPAPER_FAVORITES,
     CONF_WALLPAPER_SOURCE,
@@ -75,14 +67,12 @@ from ..const import (
 )
 from ..coordinator import LatterCoordinator
 from ..doorbell_engine import async_execute_doorbell_intercom
-from ..vpn_engine import allocate_next_tunnel_ip, generate_wireguard_keypair
 from ..wallpaper_engine import (
     async_refresh_wallpaper_cache,
     delete_uploaded_wallpaper,
     save_uploaded_wallpaper,
 )
 from .payload import (
-    SECRET_MASK,
     _get_all_coordinators,
     async_save_and_broadcast_global_config,
     build_studio_state_payload,
@@ -308,36 +298,6 @@ async def _async_execute_studio_command(
             blocking=True,
         )
 
-    elif cmd == "generate_vpn_keys":
-        if coordinator is None:
-            raise ValueError("No active Latter device selected")
-        keys = generate_wireguard_keypair()
-        subnet = str(
-            coordinator.get_opt(CONF_VPN_SUBNET, "10.10.10.0/24")
-            or "10.10.10.0/24"
-        )
-        used_ips = [
-            c.vpn_client_ip
-            for c in _get_all_coordinators(hass)
-            if c.subentry_id != coordinator.subentry_id and c.vpn_client_ip
-        ]
-        server_ip, next_client_ip = allocate_next_tunnel_ip(subnet, used_ips)
-        client_ip = coordinator.vpn_client_ip or next_client_ip
-        merged_vpn: dict[str, Any] = {
-            **coordinator.device_data,
-            CONF_VPN_ENABLED: True,
-            CONF_VPN_CLIENT_IP: client_ip,
-            CONF_VPN_PRIVATE_KEY: keys["private_key"],
-            CONF_VPN_PUBLIC_KEY: keys["public_key"],
-            CONF_VPN_PRESHARED_KEY: keys["preshared_key"],
-        }
-        coordinator.update_device_config(merged_vpn)
-        if not coordinator.get_opt(CONF_VPN_HA_IP):
-            await async_save_and_broadcast_global_config(
-                hass, {CONF_VPN_HA_IP: server_ip, CONF_VPN_SUBNET: subnet}
-            )
-        coordinator.async_notify_listeners()
-
     elif cmd == "check_system_updates":
         for st_u in hass.states.async_all("update"):
             eid_low = st_u.entity_id.lower()
@@ -508,20 +468,11 @@ async def _async_execute_studio_command(
             CONF_ART_SIZE,
             CONF_DEVICE_CUSTOM_COLOR,
             CONF_SITE_ID,
-            CONF_VPN_ENABLED,
-            CONF_VPN_CLIENT_IP,
-            CONF_VPN_PRIVATE_KEY,
-            CONF_VPN_PUBLIC_KEY,
-            CONF_VPN_PRESHARED_KEY,
-            CONF_VPN_HOTSPOT_SSID,
         )
 
         for k in device_keys:
             if k in incoming_cfg:
                 val = incoming_cfg[k]
-                if k in (CONF_VPN_PRIVATE_KEY, CONF_VPN_PRESHARED_KEY):
-                    if val == SECRET_MASK or not str(val or "").strip():
-                        continue
                 if k == CONF_DEVICE_SLUG:
                     clean_s = normalize_device_slug(str(val or ""))
                     if not clean_s or clean_s == "esphome_device":
@@ -775,13 +726,11 @@ async def _async_execute_studio_command(
 
     elif cmd == "export_backup_json":
         b_scope = str(body.get("scope") or "device").strip()
-        inc_vpn = bool(body.get("include_vpn_secrets", False))
         extra["bundle"] = build_backup_bundle(
             hass=hass,
             scope=b_scope,
             coordinators=_get_all_coordinators(hass),
             target_coordinator=coordinator,
-            include_vpn_secrets=inc_vpn,
         )
 
     elif cmd == "restore_backup":
@@ -1003,7 +952,6 @@ async def _async_handle_ws_export_impl(
         scope="device" if is_device else str(msg.get("scope", "full")),
         coordinators=_get_all_coordinators(hass),
         target_coordinator=coord,
-        include_vpn_secrets=bool(msg.get("include_vpn_secrets", False)),
     )
     connection.send_result(msg["id"], {"bundle": bundle})
 
@@ -1014,7 +962,6 @@ async def _async_handle_ws_export_impl(
         vol.Required("type"): "latter/system/export",
         vol.Optional("subentry_id"): vol.Any(str, None),
         vol.Optional("scope", default="full"): str,
-        vol.Optional("include_vpn_secrets", default=False): bool,
     }
 )
 @websocket_api.async_response
@@ -1035,7 +982,6 @@ async def ws_handle_system_export(
         vol.Required("type"): "latter/device/export",
         vol.Optional("subentry_id"): vol.Any(str, None),
         vol.Optional("scope", default="device"): str,
-        vol.Optional("include_vpn_secrets", default=False): bool,
     }
 )
 @websocket_api.async_response

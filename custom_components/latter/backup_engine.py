@@ -34,12 +34,6 @@ from .const import (
     CONF_SAVED_PROFILES,
     CONF_SITE_ID,
     CONF_SYNC_DEVICE_AREA,
-    CONF_VPN_CLIENT_IP,
-    CONF_VPN_ENABLED,
-    CONF_VPN_HOTSPOT_SSID,
-    CONF_VPN_PRESHARED_KEY,
-    CONF_VPN_PRIVATE_KEY,
-    CONF_VPN_PUBLIC_KEY,
     CONF_WALLPAPER_CYCLE_MINUTES,
     CONF_WALLPAPER_FAVORITES,
     CONF_WALLPAPER_SOURCE,
@@ -79,19 +73,8 @@ DEVICE_CONFIG_EXPORT_KEYS: tuple[str, ...] = (
     CONF_DEVICE_CUSTOM_COLOR,
     "device_remote_group",
     CONF_SITE_ID,
-    CONF_VPN_ENABLED,
-    CONF_VPN_CLIENT_IP,
-    CONF_VPN_PRIVATE_KEY,
-    CONF_VPN_PUBLIC_KEY,
-    CONF_VPN_PRESHARED_KEY,
-    CONF_VPN_HOTSPOT_SSID,
     "capabilities_manifest",
     "gui_layout",
-)
-
-VPN_SECRET_KEYS: tuple[str, ...] = (
-    CONF_VPN_PRIVATE_KEY,
-    CONF_VPN_PRESHARED_KEY,
 )
 
 PROFILE_DEVICE_KEYS: tuple[str, ...] = (
@@ -285,14 +268,10 @@ async def apply_esphome_controls_to_device(
     return applied
 
 
-def _serialize_device_snapshot(
-    hass: HomeAssistant, coordinator: Any, include_vpn_secrets: bool = False
-) -> dict[str, Any]:
+def _serialize_device_snapshot(hass: HomeAssistant, coordinator: Any) -> dict[str, Any]:
     """Build a portable dictionary snapshot of a single device's Latter config & live ESPHome controls."""
     dev_cfg: dict[str, Any] = {}
     for k in DEVICE_CONFIG_EXPORT_KEYS:
-        if not include_vpn_secrets and k in VPN_SECRET_KEYS:
-            continue
         val = coordinator.get_opt(k)
         if val is not None:
             dev_cfg[k] = val
@@ -317,7 +296,6 @@ def build_backup_bundle(
     coordinators: list[Any],
     target_coordinator: Any | None = None,
     name: str = "",
-    include_vpn_secrets: bool = False,
 ) -> dict[str, Any]:
     """Construct a complete, portable JSON backup bundle for 'system' or 'device' scope."""
     now_iso = dt_util.now().isoformat(timespec="seconds")
@@ -334,9 +312,7 @@ def build_backup_bundle(
     if clean_scope == "system":
         devices_map: dict[str, Any] = {}
         for coord in coordinators:
-            devices_map[coord.device_slug] = _serialize_device_snapshot(
-                hass, coord, include_vpn_secrets=include_vpn_secrets
-            )
+            devices_map[coord.device_slug] = _serialize_device_snapshot(hass, coord)
         label = name.strip() or f"System Backup ({dt_util.now().strftime('%Y-%m-%d %H:%M')})"
         return {
             "id": backup_id,
@@ -347,7 +323,6 @@ def build_backup_bundle(
             "created_at": now_iso,
             "target_device": "all",
             "device_count": len(devices_map),
-            "include_vpn_secrets": bool(include_vpn_secrets),
             "global_config": global_export,
             "devices": devices_map,
         }
@@ -355,9 +330,7 @@ def build_backup_bundle(
     coord = target_coordinator or (coordinators[0] if coordinators else None)
     if coord is None:
         raise ValueError("No target device coordinator available for device backup")
-    dev_snap = _serialize_device_snapshot(
-        hass, coord, include_vpn_secrets=include_vpn_secrets
-    )
+    dev_snap = _serialize_device_snapshot(hass, coord)
     label = (
         name.strip()
         or f"{dev_snap['title']} ({dt_util.now().strftime('%Y-%m-%d %H:%M')})"
@@ -371,7 +344,6 @@ def build_backup_bundle(
         "created_at": now_iso,
         "target_device": coord.device_slug,
         "device_count": 1,
-        "include_vpn_secrets": bool(include_vpn_secrets),
         "device": dev_snap,
     }
 

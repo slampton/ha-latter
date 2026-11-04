@@ -68,7 +68,6 @@ Latter Studio is an admin-only sidebar panel for everything that isn't an automa
 - BLE calibration.
 - Device groups and reusable profiles.
 - Wallpapers and backups.
-- WireGuard key generation.
 
 <!-- MEDIA: docs/media/studio-overview.png — Studio, System → Overview. -->
 
@@ -107,7 +106,7 @@ Latter Studio is an admin-only sidebar panel for everything that isn't an automa
 You don't need Latter hardware to use most of this.
 - **Bridge any ESPHome device into Studio** without editing its YAML. You get grouping, live entity inspection, and backups of its settings. → [Existing ESPHome devices](docs/existing-esphome.md)
 - **Area presence from the proxies you already have.** Phones, watches, and iBeacons can be tracked without flashing anything new. → [Presence](docs/presence.md)
-- **One-line packages** add a BLE beacon, BLE proxy, WireGuard roaming, or diagnostics to an existing config. → [Mixins](https://github.com/slampton/esphome-latter-core/blob/main/docs/mixins.md)
+- **One-line packages** add a BLE beacon, BLE proxy, or diagnostics to an existing config. → [Mixins](https://github.com/slampton/esphome-latter-core/blob/main/docs/mixins.md)
 - **Coming from Bermuda?** Read [what's different, and what isn't there yet](docs/presence.md#coming-from-bermuda).
 
 ## Building your own?

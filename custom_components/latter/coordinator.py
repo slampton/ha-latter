@@ -98,8 +98,6 @@ from .const import (
     CONF_THERMOSTAT_ENTITY,
     CONF_VACUUM_ENTITY,
     CONF_VOLUME_OVERRIDES,
-    CONF_VPN_CLIENT_IP,
-    CONF_VPN_ENABLED,
     CONF_WALLPAPER_CYCLE_MINUTES,
     CONF_WALLPAPER_FAVORITES,
     CONF_WALLPAPER_SOURCE,
@@ -600,16 +598,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def site_id(self) -> str:
         """Return the logical site identifier for this device (defaults to 'primary' for single-site homes)."""
         return str(self.get_opt(CONF_SITE_ID, DEFAULT_SITE_ID) or DEFAULT_SITE_ID).strip()
-
-    @property
-    def vpn_enabled(self) -> bool:
-        """Return True if Roaming WireGuard VPN is enabled for this device."""
-        return bool(self.get_opt(CONF_VPN_ENABLED, False))
-
-    @property
-    def vpn_client_ip(self) -> str:
-        """Return the assigned WireGuard tunnel IP for this device."""
-        return str(self.get_opt(CONF_VPN_CLIENT_IP, "") or "").strip()
 
     def _read_device_hardware_manifest(self) -> dict[str, Any]:
         """Read compile-time hardware capability manifest reported by the bound ESPHome device."""
@@ -2157,8 +2145,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "area_id": self.active_area_id or "",
             "area_name": area_name,
             "device_profile": self.device_profile,
-            "vpn_enabled": self.vpn_enabled,
-            "vpn_client_ip": self.vpn_client_ip,
             "display_shape": self.display_shape,
             "default_page_size": self.default_page_size,
             "dock_apps": self.dock_apps_csv,
@@ -2226,8 +2212,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             area_attrs["area_id"],
             area_name,
             area_attrs["site_id"],
-            1 if self.vpn_enabled else 0,
-            area_attrs["vpn_client_ip"],
             area_attrs["ble_closest_proxy"],
             area_attrs["dock_apps"],
             area_attrs["wallpaper_url"],

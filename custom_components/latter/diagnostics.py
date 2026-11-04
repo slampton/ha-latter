@@ -21,11 +21,6 @@ TO_REDACT: set[str] = {
     "companion_url",
     "hmac_secret_hex",
     "mac",
-    "vpn_client_ip",
-    "vpn_endpoint",
-    "vpn_preshared_key",
-    "vpn_private_key",
-    "vpn_public_key",
     "wallpaper_url",
 }
 
