@@ -460,11 +460,6 @@ def build_studio_state_payload(
         )
         or coordinator.hardware_manifest
     )
-    has_mixin_ping = bool(
-        esphome_service(
-            hass, coordinator.esphome_device_id, "latter_ping", fallback_slug=slug
-        )
-    )
 
     sec_ids = {
         s.get("id")
@@ -491,16 +486,6 @@ def build_studio_state_payload(
         or ("music" in sec_ids)
     )
 
-    if has_native_slots:
-        dev_tier = 1
-        dev_tier_label = "Tier 1: Native Latter"
-    elif has_mixin_ping or has_ble_beacon_entity:
-        dev_tier = 2
-        dev_tier_label = "Tier 2: Mixin Enabled"
-    else:
-        dev_tier = 3
-        dev_tier_label = "Tier 3: Bridged Device"
-
     hw_manifest = coordinator.hardware_manifest
     if "imu" in hw_manifest:
         has_imu = bool(hw_manifest.get("imu"))
@@ -510,8 +495,6 @@ def build_studio_state_payload(
             for it in all_esp_items
         )
     device_capabilities = {
-        "tier": dev_tier,
-        "tier_label": dev_tier_label,
         "has_display": has_display,
         "has_imu": has_imu,
         "has_power": has_power,

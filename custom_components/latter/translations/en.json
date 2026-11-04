@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Set Up Latter System & Initial Device",
-        "description": "Create the Latter System hub and connect your first ESPHome companion display, mixin node, or area sensor. Additional devices can be added as Device subentries or via Latter Studio.",
+        "description": "Create the Latter System hub and connect your first ESPHome companion display or area sensor. Additional devices can be added as Device subentries or via Latter Studio.",
         "data": {
           "device_slug": "ESPHome Device Name / Slug",
           "apply_profile": "Configuration Profile",
@@ -44,7 +44,7 @@
       "step": {
         "user": {
           "title": "Add ESPHome Device to Latter",
-          "description": "Connect an ESPHome companion display, mixin node, or area sensor to the Latter System.",
+          "description": "Connect an ESPHome companion display or area sensor to the Latter System.",
           "data": {
             "device_slug": "ESPHome Device Name / Slug",
             "apply_profile": "Configuration Profile",

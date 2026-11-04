@@ -49,7 +49,6 @@ Settings here live in `.storage/latter.site` and apply to every device.
 | **Reverse Proxy & External Access** | An external base URL for the device **Visit** links, for setups behind a reverse proxy. |
 | **Notification Tester** | Send a test notification to any device. |
 | **System Custom Color Library** | Up to 24 saved theme colors. |
-| **1-Line Drop-In ESPHome Mixin Packages** | Ready-to-copy package lines for [mixins](https://github.com/slampton/esphome-latter-core/blob/main/docs/mixins.md). |
 
 ---
 

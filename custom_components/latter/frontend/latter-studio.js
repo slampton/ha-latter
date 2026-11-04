@@ -1399,7 +1399,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root">
       <section id="view-system_admin" class="hidden">
         <div class="page-header">
           <h2>System Administration</h2>
-          <p>Backups, appearance, notification testing, developer YAML mixins, and system logs.</p>
+          <p>Backups, appearance, notification testing, and system logs.</p>
         </div>
 
         <div class="grid-2">
@@ -1480,58 +1480,6 @@ const STUDIO_TEMPLATE = `<div class="studio-root">
           </div>
           <div id="sys-custom-palettes-list" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;"></div>
         </div>
-
-        <!-- COLLAPSIBLE: DEVELOPER & YAML TOOLS -->
-        <details class="ha-details">
-          <summary>Developer &amp; YAML Mixin Packages</summary>
-          <div class="details-body">
-            <h3 style="margin:0 0 6px;font-size:14px;">1-Line Drop-In ESPHome Mixin Packages</h3>
-            <p class="desc" style="margin:0 0 12px;color:var(--muted);font-size:12.5px;">Add any of these 1-line packages under <code>packages:</code> in an existing ESPHome device's YAML.</p>
-            <div class="grid-2" style="margin-bottom:16px;">
-              <div style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                  <strong style="font-size:13px;">1. Roaming BLE Presence Beacon</strong>
-                  <button class="btn-secondary" style="padding:4px 10px;font-size:11.5px;" onclick="copyTextById('mixin-ble-beacon')">Copy</button>
-                </div>
-                <pre id="mixin-ble-beacon" class="mono" style="margin:0;padding:8px;background:var(--card);border:1px solid var(--border);border-radius:6px;overflow-x:auto;">packages:
-  latter.ble: github://slampton/esphome-latter-core/mixins/ble_beacon.yaml@main</pre>
-              </div>
-              <div style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                  <strong style="font-size:13px;">2. Stationary Area BLE Scanner Proxy</strong>
-                  <button class="btn-secondary" style="padding:4px 10px;font-size:11.5px;" onclick="copyTextById('mixin-ble-proxy')">Copy</button>
-                </div>
-                <pre id="mixin-ble-proxy" class="mono" style="margin:0;padding:8px;background:var(--card);border:1px solid var(--border);border-radius:6px;overflow-x:auto;">packages:
-  latter.proxy: github://slampton/esphome-latter-core/mixins/ble_proxy.yaml@main</pre>
-              </div>
-              <div style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                  <strong style="font-size:13px;">3. Studio Discovery &amp; Diagnostics</strong>
-                  <button class="btn-secondary" style="padding:4px 10px;font-size:11.5px;" onclick="copyTextById('mixin-core')">Copy</button>
-                </div>
-                <pre id="mixin-core" class="mono" style="margin:0;padding:8px;background:var(--card);border:1px solid var(--border);border-radius:6px;overflow-x:auto;">packages:
-  latter.core: github://slampton/esphome-latter-core/mixins/diagnostics.yaml@main</pre>
-              </div>
-              <div style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                  <strong style="font-size:13px;">4. ESP32-P4 Onboard 5MP MIPI-CSI Camera</strong>
-                  <button class="btn-secondary" style="padding:4px 10px;font-size:11.5px;" onclick="copyTextById('mixin-p4-cam')">Copy</button>
-                </div>
-                <pre id="mixin-p4-cam" class="mono" style="margin:0;padding:8px;background:var(--card);border:1px solid var(--border);border-radius:6px;overflow-x:auto;">packages:
-  latter.p4_cam: github://slampton/esphome-latter-core/mixins/p4_camera.yaml@main</pre>
-              </div>
-            </div>
-
-            <div style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                <strong style="font-size:13px;">5. Full Latter Protocol v3 Contract Mixin (Custom Displays)</strong>
-                <button class="btn-secondary" style="padding:4px 10px;font-size:11.5px;" onclick="copyTextById('mixin-contract')">Copy</button>
-              </div>
-              <pre id="mixin-contract" class="mono" style="margin:0;padding:8px;background:var(--card);border:1px solid var(--border);border-radius:6px;overflow-x:auto;">packages:
-  latter.contract: github://slampton/esphome-latter-core/mixins/latter_contract.yaml@main</pre>
-            </div>
-          </div>
-        </details>
 
         <!-- COLLAPSIBLE: SYSTEM & DEVICE LOGS -->
         <details class="ha-details">
@@ -1899,31 +1847,6 @@ const STUDIO_TEMPLATE = `<div class="studio-root">
             </div>
           </div>
         </div>
-
-        <!-- COLLAPSIBLE: BLE MIXIN SNIPPETS -->
-        <details class="ha-details">
-          <summary>BLE Beacon &amp; Scanner Proxy YAML Mixins</summary>
-          <div class="details-body">
-            <div class="grid-2">
-              <div style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                  <strong style="font-size:13px;">Option A: Portable Device (BLE Beacon)</strong>
-                  <button class="btn-secondary" style="padding:4px 10px;font-size:11.5px;" onclick="copyTextById('dev-ble-beacon-snip')">Copy</button>
-                </div>
-                <pre id="dev-ble-beacon-snip" class="mono" style="margin:0;padding:8px;background:var(--card);border:1px solid var(--border);border-radius:6px;overflow-x:auto;">packages:
-  latter.ble: github://slampton/esphome-latter-core/mixins/ble_beacon.yaml@main</pre>
-              </div>
-              <div style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                  <strong style="font-size:13px;">Option B: Stationary Node (BLE Scanner Proxy)</strong>
-                  <button class="btn-secondary" style="padding:4px 10px;font-size:11.5px;" onclick="copyTextById('dev-ble-proxy-snip')">Copy</button>
-                </div>
-                <pre id="dev-ble-proxy-snip" class="mono" style="margin:0;padding:8px;background:var(--card);border:1px solid var(--border);border-radius:6px;overflow-x:auto;">packages:
-  latter.proxy: github://slampton/esphome-latter-core/mixins/ble_proxy.yaml@main</pre>
-              </div>
-            </div>
-          </div>
-        </details>
 
         <!-- COLLAPSIBLE: DIAGNOSTICS & RAW ENTITY INSPECTOR -->
         <details class="ha-details">

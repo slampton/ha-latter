@@ -9,7 +9,7 @@ Latter tracks which area each device is in using the Bluetooth proxies you alrea
 ## What you need
 
 - **At least one Bluetooth scanner in each area** you want to detect, assigned to that Area in Home Assistant. ESPHome proxies are tested. Any scanner Home Assistant's Bluetooth integration can use (a USB adapter, Shelly, and others) should work too, but is not verified yet.
-  - To make an ESPHome node a proxy, add [`ble_proxy`](https://github.com/slampton/esphome-latter-core/blob/main/docs/mixins.md#ble_proxy) or set `bluetooth_proxy: active: true`.
+  - To make an ESPHome node a proxy, set `bluetooth_proxy: active: true` in its YAML.
 - **Optional:** Home Assistant **Floors** assigned to your Areas. This turns on the cross-floor penalty described below.
 
 ## What can be tracked
@@ -17,9 +17,8 @@ Latter tracks which area each device is in using the Bluetooth proxies you alrea
 | Target | How it's identified | How to add it |
 | :--- | :--- | :--- |
 | Latter firmware devices | The device's MAC address from Home Assistant's device registry (±2, to cover the ESP32 BLE MAC offset). The Latter iBeacon UUID and minor are also accepted, which covers ESP32-P4 boards where BLE runs on a separate C6 chip with its own MAC. | Check **This device roams** when adding the device |
-| ESPHome nodes running the [`ble_beacon`](https://github.com/slampton/esphome-latter-core/blob/main/docs/mixins.md#ble_beacon) mixin | MAC address from the device registry | Same as above |
 | Phones and watches | Home Assistant's [Private BLE Device](https://www.home-assistant.io/integrations/private_ble_device/) integration resolves the rotating address from the device's IRK. Latter re-reads the current address every 2 seconds. | Set up Private BLE Device, then **Studio → BLE & Area Presence → Discovered Nearby Bluetooth Devices → Adopt** |
-| iBeacons | UUID, or an `ibeacon` device tracker entity | Adopt from the same list, or enter the UUID |
+| iBeacons, including any ESPHome node running `esp32_ble_beacon` | UUID, or an `ibeacon` device tracker entity | Adopt from the same list, or enter the UUID |
 | Other BLE devices with a static address | MAC address | Adopt from the same list, or enter the MAC |
 
 Latter parses Apple-format iBeacons only. Eddystone and AltBeacon frames are not supported.

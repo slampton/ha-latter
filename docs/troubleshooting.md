@@ -6,7 +6,7 @@
 
 Latter discovers devices from Home Assistant's device and service registries, not from the network. Check these in order:
 1. **The device is in the ESPHome integration and online.** Latter needs the ESPHome device first.
-2. **The device registers at least one Latter action.** Look in **Developer Tools → Actions** for `esphome.<name>_latter_ping` or `esphome.<name>_set_browse_slots`. If neither is there, the firmware or mixin isn't included.
+2. **The device registers at least one Latter action.** Look in **Developer Tools → Actions** for `esphome.<name>_latter_ping` or `esphome.<name>_set_browse_slots`. If neither is there, the device isn't running Latter firmware.
 3. **A rescan has run.** Latter rescans 5 seconds after any device-registry change, and when ESPHome registers a new action. Reloading the ESPHome integration triggers a rescan.
 
 You can also add the device by hand: **Settings → Devices & Services → Add Integration → Latter**.
