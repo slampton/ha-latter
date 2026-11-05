@@ -9,6 +9,7 @@ from __future__ import annotations
 import importlib.util
 import json
 from pathlib import Path
+import re
 import sys
 from types import ModuleType
 from typing import Any
@@ -23,7 +24,9 @@ CORE_PROTO_JSON = REPO_ROOT.parent / "esphome-latter-core" / "protocol" / "latte
 
 def _load_ha_free_module(name: str) -> ModuleType:
     """Load a Home Assistant-free production module from custom_components/latter by file path."""
-    spec = importlib.util.spec_from_file_location(f"latter_{name}", LATTER_DIR / f"{name}.py")
+    spec = importlib.util.spec_from_file_location(
+        f"latter_{name.replace('/', '_')}", LATTER_DIR / f"{name}.py"
+    )
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
@@ -42,6 +45,9 @@ manifest_is_roaming = area_follow.manifest_is_roaming
 
 ble_math = _load_ha_free_module("ble_math")
 resource_signing = _load_ha_free_module("resource_signing")
+issue_ids = _load_ha_free_module("issue_ids")
+studio_scope = _load_ha_free_module("studio/scope")
+STUDIO_JS = LATTER_DIR / "frontend" / "latter-studio.js"
 
 
 class TestProtocolV3Contract(unittest.TestCase):
@@ -408,6 +414,77 @@ class TestResourceSigning(unittest.TestCase):
             resource_signing.day_bucketed_expiry(now, 0)
         with self.assertRaises(ValueError):
             resource_signing.exact_expiry(now, 0)
+
+
+class _Dev:
+    def __init__(self, subentry_id: str, slug: str) -> None:
+        self.subentry_id = subentry_id
+        self.device_slug = slug
+
+
+def _js_command_set(js_src: str, const_name: str) -> set[str]:
+    match = re.search(rf"const {const_name} = new Set\(\[(.*?)\]\);", js_src, re.S)
+    assert match is not None, const_name
+    return set(re.findall(r'"([a-z_]+)"', match.group(1)))
+
+
+class TestStudioTargeting(unittest.TestCase):
+    """Studio Device targeting and command scopes, exercised through studio/scope.py."""
+
+    def test_target_resolves_by_exact_subentry_id_only(self) -> None:
+        """No first-Device fallback, no slug or entry_id matching."""
+        devs = [_Dev("sub_a", "kitchen"), _Dev("sub_b", "pocket")]
+        find = studio_scope.find_by_subentry_id
+        self.assertIs(find(devs, "sub_b"), devs[1])
+        self.assertIs(find(devs, " sub_a "), devs[0])
+        for missing in (None, "", "   ", "pocket", "SUB_A", "sub", "entry_hub"):
+            self.assertIsNone(find(devs, missing), missing)
+        self.assertIsNone(find([], "sub_a"))
+
+    def test_command_scopes(self) -> None:
+        """Device commands need a Device; System commands only in their Device-scoped modes; unknown commands fail."""
+        needs = studio_scope.command_requires_device
+        self.assertFalse(studio_scope.SYSTEM_COMMANDS & studio_scope.DEVICE_COMMANDS)
+        for cmd in studio_scope.DEVICE_COMMANDS:
+            self.assertTrue(needs(cmd, {}), cmd)
+        for cmd in ("set_ble_area_offset", "auto_calibrate_here", "remove_device", "check_system_updates"):
+            self.assertFalse(needs(cmd, {}), cmd)
+        self.assertTrue(needs("apply_profile", {}))
+        self.assertTrue(needs("apply_profile", {"target_scope": "current"}))
+        self.assertFalse(needs("apply_profile", {"target_scope": "all"}))
+        self.assertFalse(needs("apply_profile", {"target_scope": "device:sub_a"}))
+        self.assertTrue(needs("export_backup_json", {}))
+        self.assertFalse(needs("export_backup_json", {"scope": "system"}))
+        self.assertTrue(needs("restore_backup", {"bundle": {"scope": "device"}}))
+        self.assertFalse(needs("restore_backup", {"bundle": {"scope": "system"}}))
+        self.assertTrue(needs("send_test_notification", {"include_camera": True}))
+        self.assertFalse(needs("send_test_notification", {"target_device": "all"}))
+        with self.assertRaises(studio_scope.UnknownStudioCommand):
+            needs("format_disk", {})
+
+    def test_studio_js_command_sets_match_backend(self) -> None:
+        """latter-studio.js must classify every command exactly as studio/scope.py does."""
+        js_src = STUDIO_JS.read_text(encoding="utf-8")
+        self.assertEqual(_js_command_set(js_src, "SYSTEM_WS_COMMANDS"), set(studio_scope.SYSTEM_COMMANDS))
+        self.assertEqual(_js_command_set(js_src, "DEVICE_WS_COMMANDS"), set(studio_scope.DEVICE_COMMANDS))
+        sent = set(re.findall(r'command: "([a-z_]+)"', js_src))
+        known = studio_scope.SYSTEM_COMMANDS | studio_scope.DEVICE_COMMANDS
+        self.assertFalse(sent - known, f"Studio sends unknown commands: {sorted(sent - known)}")
+
+
+class TestDeviceIssueIds(unittest.TestCase):
+    """Per-Device repair issue IDs, exercised through issue_ids.py."""
+
+    def test_device_issue_ids_cover_every_per_device_issue(self) -> None:
+        self.assertEqual(
+            set(issue_ids.device_issue_ids("sub_a")),
+            {
+                "link_ma_player_sub_a",
+                "missing_mapped_entity_sub_a",
+                "ble_no_proxies_sub_a",
+                "slot_push_failing_sub_a",
+            },
+        )
 
 
 if __name__ == "__main__":

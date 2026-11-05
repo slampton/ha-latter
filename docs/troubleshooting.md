@@ -17,7 +17,7 @@ The device can't call Home Assistant services. Go to **Settings → Devices & Se
 
 **I renamed the device and now nothing updates**
 
-Latter derives the slug from the device's name in Home Assistant. Latter firmware derives its sensor names from the `device_slug` substitution. If you rename a device, set `device_slug` in its YAML to match the new name, lowercase with underscores. For example, `Kitchen Pocket` becomes `kitchen_pocket`. Then update the slug in **Studio → Devices → Administration**.
+Latter finds the ESPHome device by its device ID (or by its MAC address if the ESPHome device was re-created), so renaming the device in Home Assistant changes nothing. The Device's slug is the ESPHome node name, which Latter firmware also uses (the `device_slug` substitution). If you rename the ESPHome node, set `device_slug` in its YAML to match, lowercase with underscores (for example, `Kitchen Pocket` becomes `kitchen_pocket`). Then open **Settings → Devices & Services → Latter**, choose the Device, and run **Reconfigure or Replace Hardware** with the same ESPHome device selected. Latter picks up the new node name and reloads.
 
 ---
 

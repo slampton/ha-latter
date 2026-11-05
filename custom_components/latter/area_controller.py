@@ -109,7 +109,6 @@ def compute_is_device_away(
     ble_tracker: LatterNativeBleTracker | None,
     device_profile: str,
     esphome_device_id: str | None,
-    device_slug: str,
 ) -> bool:
     """Return True if a roaming BLE device has timed out across all proxies and is not awake on Wi-Fi."""
     if not native_ble_tracking_enabled or ble_tracker is None:
@@ -124,15 +123,7 @@ def compute_is_device_away(
         "sensor",
         ("_wi_fi_signal", "_wifi_signal", "_ip_address"),
     )
-    wifi_st = (
-        hass.states.get(wifi_ent_id)
-        if wifi_ent_id
-        else (
-            hass.states.get(f"sensor.{device_slug}_wi_fi_signal")
-            or hass.states.get(f"sensor.{device_slug}_wifi_signal")
-            or hass.states.get(f"sensor.{device_slug}_ip_address")
-        )
-    )
+    wifi_st = hass.states.get(wifi_ent_id) if wifi_ent_id else None
     if wifi_st is not None and wifi_st.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN, ""):
         return False
     return True

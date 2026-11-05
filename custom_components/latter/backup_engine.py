@@ -188,9 +188,11 @@ def _canonical_control_key(domain: str, label: str) -> str:
     return f"{domain.strip().lower()}:{clean}"
 
 
-def capture_live_esphome_controls(hass: HomeAssistant, device_slug: str) -> dict[str, Any]:
-    """Capture all configurable ESPHome entities (select, switch, number) for a device."""
-    esp_info = get_esphome_device_entities(hass, device_slug)
+def capture_live_esphome_controls(
+    hass: HomeAssistant, esphome_device_id: str | None
+) -> dict[str, Any]:
+    """Capture all configurable ESPHome entities (select, switch, number) of the bound device."""
+    esp_info = get_esphome_device_entities(hass, esphome_device_id)
     controls: dict[str, Any] = {}
     for sec in esp_info.get("sections", []):
         for item in sec.get("items", []):
@@ -215,12 +217,12 @@ def capture_live_esphome_controls(hass: HomeAssistant, device_slug: str) -> dict
 
 
 async def apply_esphome_controls_to_device(
-    hass: HomeAssistant, device_slug: str, controls: dict[str, Any]
+    hass: HomeAssistant, esphome_device_id: str | None, controls: dict[str, Any]
 ) -> int:
     """Apply a dictionary of canonical ESPHome control values ('domain:clean_name': val) to a live device."""
     if not isinstance(controls, dict) or not controls:
         return 0
-    esp_info = get_esphome_device_entities(hass, device_slug)
+    esp_info = get_esphome_device_entities(hass, esphome_device_id)
     applied = 0
     for sec in esp_info.get("sections", []):
         for item in sec.get("items", []):
@@ -284,7 +286,7 @@ def _serialize_device_snapshot(hass: HomeAssistant, coordinator: Any) -> dict[st
         "active_speaker": coordinator.active_speaker,
         "active_remote_slot": coordinator.active_remote_slot,
         "device_config": dev_cfg,
-        "esphome_controls": capture_live_esphome_controls(hass, coordinator.device_slug),
+        "esphome_controls": capture_live_esphome_controls(hass, coordinator.esphome_device_id),
     }
 
 
@@ -325,9 +327,9 @@ def build_backup_bundle(
             "devices": devices_map,
         }
 
-    coord = target_coordinator or (coordinators[0] if coordinators else None)
+    coord = target_coordinator
     if coord is None:
-        raise ValueError("No target device coordinator available for device backup")
+        raise ValueError("A Device backup needs a target Device")
     dev_snap = _serialize_device_snapshot(hass, coord)
     label = (
         name.strip()
@@ -377,7 +379,7 @@ async def _async_apply_device_snapshot_to_coordinator(
     applied_controls = 0
     if restore_esphome_entities and isinstance(dev_snap.get("esphome_controls"), dict):
         applied_controls = await apply_esphome_controls_to_device(
-            hass, coord.device_slug, dev_snap["esphome_controls"]
+            hass, coord.esphome_device_id, dev_snap["esphome_controls"]
         )
     return applied_controls
 
@@ -440,12 +442,7 @@ async def async_restore_backup_bundle(
 
     coord = target_coordinator
     if coord is None:
-        snap_slug = str(dev_snap.get("device_slug") or "")
-        coord = next((c for c in coordinators if c.device_slug == snap_slug), None)
-    if coord is None and coordinators:
-        coord = coordinators[0]
-    if coord is None:
-        raise ValueError("No target device available to restore onto")
+        raise ValueError("A Device backup must be restored onto a selected Device")
 
     restored_controls = await _async_apply_device_snapshot_to_coordinator(
         hass,
@@ -503,7 +500,7 @@ def capture_profile_from_coordinator(
         "description": description.strip() or f"Captured from {coordinator.device_slug}",
         "created_at": dt_util.now().isoformat(timespec="seconds"),
         "device_config": dev_cfg,
-        "esphome_controls": capture_live_esphome_controls(hass, coordinator.device_slug),
+        "esphome_controls": capture_live_esphome_controls(hass, coordinator.esphome_device_id),
     }
 
 
@@ -529,7 +526,7 @@ async def async_apply_profile_to_coordinators(
         updated_devices += 1
         if isinstance(esp_ctrls, dict) and esp_ctrls:
             updated_controls += await apply_esphome_controls_to_device(
-                hass, coord.device_slug, esp_ctrls
+                hass, coord.esphome_device_id, esp_ctrls
             )
 
     if updated_controls > 0:

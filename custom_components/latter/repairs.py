@@ -15,6 +15,11 @@ from .const import (
     DOMAIN,
 )
 from .coordinator import LatterCoordinator
+from .issue_ids import (
+    ble_no_proxies_issue_id,
+    device_issue_ids,
+    missing_mapped_entity_issue_id,
+)
 
 
 def _entity_exists_in_ha(hass: HomeAssistant, entity_id: str) -> bool:
@@ -70,7 +75,7 @@ def async_audit_coordinator_health(
             config_entry_id=entry_id,
         )
 
-    missing_issue_id = f"missing_mapped_entity_{sub_id}"
+    missing_issue_id = missing_mapped_entity_issue_id(sub_id)
     if missing_labels:
         _create_scoped_issue(
             missing_issue_id,
@@ -84,7 +89,7 @@ def async_audit_coordinator_health(
         ir.async_delete_issue(hass, DOMAIN, missing_issue_id)
 
     # 2. Check BLE proxy availability when native BLE tracking is enabled on roaming hardware
-    ble_issue_id = f"ble_no_proxies_{sub_id}"
+    ble_issue_id = ble_no_proxies_issue_id(sub_id)
     tracker = coordinator._ble_tracker
     has_seen_ble = bool(
         (tracker is not None and tracker.packets_seen > 0)
@@ -116,6 +121,19 @@ def async_audit_coordinator_health(
         ir.async_delete_issue(hass, DOMAIN, ble_issue_id)
 
     return warnings
+
+
+@callback
+def async_delete_device_issues(hass: HomeAssistant, subentry_id: str) -> None:
+    """Delete every repair issue raised for one Device (called when its subentry is removed)."""
+    for issue_id in device_issue_ids(subentry_id):
+        ir.async_delete_issue(hass, DOMAIN, issue_id)
+    domain_data = hass.data.get(DOMAIN, {})
+    if isinstance(domain_data, dict):
+        for key in ("_slot_push_failures", "_slot_push_last_warn"):
+            bucket = domain_data.get(key)
+            if isinstance(bucket, dict):
+                bucket.pop(subentry_id, None)
 
 
 async def async_create_fix_flow(

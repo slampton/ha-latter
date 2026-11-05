@@ -71,6 +71,7 @@ from ..wallpaper_engine import (
     delete_uploaded_wallpaper,
     save_uploaded_wallpaper,
 )
+from ..identity import device_entities
 from .payload import (
     _get_all_coordinators,
     async_save_and_broadcast_global_config,
@@ -78,6 +79,7 @@ from .payload import (
     log_studio_event,
     resolve_target_coordinator,
 )
+from .scope import UnknownStudioCommand, command_requires_device, find_by_subentry_id
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -99,16 +101,23 @@ async def _async_execute_studio_command(
 ) -> tuple[LatterCoordinator | None, dict[str, Any]]:
     """Execute a Studio command and return `(updated_coordinator, extra_response_fields)`."""
     extra: dict[str, Any] = {}
-    if coordinator is None:
-        all_c = _get_all_coordinators(hass)
-        coordinator = all_c[0] if all_c else None
+    try:
+        needs_device = command_requires_device(cmd, body)
+    except UnknownStudioCommand:
+        raise StudioCommandError(
+            "unknown_command", f"Unsupported Studio command: {cmd}"
+        ) from None
+    if needs_device and coordinator is None:
+        raise StudioCommandError(
+            "device_required", f"'{cmd}' needs a Device: select one in Studio first"
+        )
+    global_cfg: dict[str, Any] = hass.data.get(DOMAIN, {}).get(DATA_GLOBAL_CONFIG) or {}
 
     if cmd == "set_ble_area_offset":
         area_id = str(body.get("area_id") or "").strip()
         offset_val = float(body.get("offset_db") or 0.0)
-        offsets = (
-            dict(coordinator.ble_area_offsets) if coordinator is not None else {}
-        )
+        raw_offsets = global_cfg.get(CONF_BLE_AREA_OFFSETS)
+        offsets = dict(raw_offsets) if isinstance(raw_offsets, dict) else {}
         if abs(offset_val) < 0.1:
             offsets.pop(area_id, None)
         elif area_id:
@@ -123,11 +132,7 @@ async def _async_execute_studio_command(
         if mode_val not in ("weighted", "any_or", "ble_only", "ble_and_sensor"):
             mode_val = "weighted"
         if area_id:
-            raw_fusion = (
-                coordinator.get_opt(CONF_AREA_FUSION_CONFIG, {})
-                if coordinator is not None
-                else {}
-            )
+            raw_fusion = global_cfg.get(CONF_AREA_FUSION_CONFIG) or {}
             fusion_cfg = (
                 dict(raw_fusion) if isinstance(raw_fusion, dict) else {}
             )
@@ -245,8 +250,6 @@ async def _async_execute_studio_command(
             )
 
     elif cmd == "test_doorbell_speaker":
-        if coordinator is None:
-            raise ValueError("No active Latter device selected")
         cam_ent = str(
             body.get("camera_entity") or coordinator.camera_entity or ""
         ).strip()
@@ -269,15 +272,12 @@ async def _async_execute_studio_command(
         ).strip()
         priority = str(body.get("priority") or "normal").strip()
         inc_cam = bool(body.get("include_camera", False))
-        target_slug = str(
-            body.get("target_device")
-            or (coordinator.device_slug if coordinator is not None else "all")
-        ).strip()
-        cam_ent = (
-            coordinator.camera_entity
-            if inc_cam and coordinator is not None
-            else None
-        )
+        target_slug = str(body.get("target_device") or "").strip()
+        if not target_slug:
+            raise StudioCommandError(
+                "invalid_format", "target_device is required (a Device or 'all')"
+            )
+        cam_ent = coordinator.camera_entity if inc_cam and coordinator else None
         await hass.services.async_call(
             DOMAIN,
             "notify",
@@ -293,22 +293,20 @@ async def _async_execute_studio_command(
         )
 
     elif cmd == "check_system_updates":
-        for st_u in hass.states.async_all("update"):
-            eid_low = st_u.entity_id.lower()
-            if "latter" in eid_low or any(
-                c.device_slug in eid_low for c in _get_all_coordinators(hass)
-            ):
-                if hass.services.has_service("homeassistant", "update_entity"):
-                    await hass.services.async_call(
-                        "homeassistant",
-                        "update_entity",
-                        {"entity_id": st_u.entity_id},
-                        blocking=False,
-                    )
+        update_ids = [
+            e.entity_id
+            for c in _get_all_coordinators(hass)
+            for e in device_entities(hass, c.esphome_device_id, domain="update")
+        ]
+        if update_ids and hass.services.has_service("homeassistant", "update_entity"):
+            await hass.services.async_call(
+                "homeassistant",
+                "update_entity",
+                {"entity_id": update_ids},
+                blocking=False,
+            )
 
     elif cmd == "upload_wallpaper":
-        if coordinator is None:
-            raise ValueError("No active Latter device selected")
         filename = str(body.get("filename") or "wallpaper.jpg")
         data_b64 = str(body.get("data_b64") or "")
         if data_b64:
@@ -334,8 +332,6 @@ async def _async_execute_studio_command(
             coordinator.async_notify_listeners()
 
     elif cmd == "select_wallpaper":
-        if coordinator is None:
-            raise ValueError("No active Latter device selected")
         source_id = str(body.get("source_id") or "").strip()
         merged_sel: dict[str, Any] = {
             **coordinator.device_data,
@@ -348,8 +344,6 @@ async def _async_execute_studio_command(
         coordinator.async_notify_listeners()
 
     elif cmd == "toggle_wallpaper_favorite":
-        if coordinator is None:
-            raise ValueError("No active Latter device selected")
         source_id = str(body.get("source_id") or "").strip()
         favs = list(coordinator.wallpaper_favorites)
         if source_id in favs:
@@ -365,8 +359,6 @@ async def _async_execute_studio_command(
         coordinator.async_notify_listeners()
 
     elif cmd == "delete_wallpaper":
-        if coordinator is None:
-            raise ValueError("No active Latter device selected")
         source_id = str(body.get("source_id") or "").strip()
         if source_id:
             await hass.async_add_executor_job(
@@ -395,8 +387,6 @@ async def _async_execute_studio_command(
             coordinator.async_notify_listeners()
 
     elif cmd == "save_config":
-        if coordinator is None:
-            raise ValueError("No active Latter device selected")
         incoming_cfg = dict(body.get("config") or {})
         merged_device: dict[str, Any] = dict(coordinator.device_data)
         global_updates: dict[str, Any] = {}
@@ -438,7 +428,6 @@ async def _async_execute_studio_command(
             ]
 
         device_keys = (
-            CONF_DEVICE_SLUG,
             CONF_DEVICE_PROFILE,
             CONF_DEVICE_GROUP,
             CONF_DEVICE_REMOTE_GROUP,
@@ -466,13 +455,7 @@ async def _async_execute_studio_command(
         for k in device_keys:
             if k in incoming_cfg:
                 val = incoming_cfg[k]
-                if k == CONF_DEVICE_SLUG:
-                    clean_s = normalize_device_slug(str(val or ""))
-                    if not clean_s or clean_s == "esphome_device":
-                        val = coordinator.device_slug
-                    else:
-                        val = clean_s
-                elif k == CONF_ART_SIZE:
+                if k == CONF_ART_SIZE:
                     s_val = str(val or DEFAULT_ART_SIZE).strip().lower()
                     val = (
                         s_val
@@ -504,7 +487,7 @@ async def _async_execute_studio_command(
             hass,
             "INFO",
             coordinator.device_slug,
-            f"Saved configuration for '{merged_device.get(CONF_DEVICE_SLUG, coordinator.device_slug)}'",
+            f"Saved configuration for '{coordinator.device_slug}'",
         )
 
     elif cmd == "log_client_error":
@@ -520,50 +503,31 @@ async def _async_execute_studio_command(
         )
 
     elif cmd == "remove_device":
-        target_entry_id = str(
-            body.get("entry_id") or body.get("target_entry_id") or ""
-        ).strip()
-        target_slug = str(body.get("device_slug") or "").strip()
-        all_coords = _get_all_coordinators(hass)
-        target_coord = next(
-            (
-                c
-                for c in all_coords
-                if c.subentry_id == target_entry_id
-                or c.entry.entry_id == target_entry_id
-                or (target_slug and c.device_slug == target_slug)
-            ),
-            None,
+        target_coord = find_by_subentry_id(
+            _get_all_coordinators(hass), str(body.get("subentry_id") or "")
         )
         if target_coord is None:
-            raise ValueError("Target device not found")
-        remaining = [
-            c for c in all_coords if c.subentry_id != target_coord.subentry_id
-        ]
+            raise StudioCommandError(
+                "not_found", "subentry_id of the Device to remove is missing or unknown"
+            )
         removed_slug = target_coord.device_slug
-        if target_coord.subentry is not None:
-            hass.config_entries.async_remove_subentry(
-                target_coord.entry, target_coord.subentry.subentry_id
-            )
-        else:
-            await hass.config_entries.async_remove(
-                target_coord.entry.entry_id
-            )
+        hass.config_entries.async_remove_subentry(
+            target_coord.entry, target_coord.subentry_id
+        )
         log_studio_event(
             hass,
             "INFO",
             "studio",
             f"Removed device '{removed_slug}' from Latter",
         )
-        coordinator = remaining[0] if remaining else None
+        coordinator = None
         extra["removed"] = True
-        extra["next_subentry_id"] = (
-            remaining[0].subentry_id if remaining else ""
-        )
+        extra["next_subentry_id"] = ""
 
     elif cmd == "add_ble_device":
-        if coordinator is None:
-            raise ValueError("Latter System entry is not initialized")
+        system_entries = hass.config_entries.async_entries(DOMAIN)
+        if not system_entries:
+            raise StudioCommandError("not_found", "Latter System entry is not set up")
         raw_name = str(
             body.get("name") or body.get("device_slug") or "ble_device"
         ).strip()
@@ -580,7 +544,7 @@ async def _async_execute_studio_command(
             ]
             if not existing:
                 await hass.config_entries.subentries.async_init(
-                    (coordinator.entry.entry_id, "device"),
+                    (system_entries[0].entry_id, "device"),
                     context={"source": "user"},
                     data={
                         CONF_DEVICE_SLUG: target_slug,
@@ -597,20 +561,20 @@ async def _async_execute_studio_command(
                 )
 
     elif cmd == "set_device_remote_group":
-        target_slug = str(
-            body.get("device_slug")
-            or (coordinator.device_slug if coordinator is not None else "")
-        ).strip()
+        rg_coord = find_by_subentry_id(
+            _get_all_coordinators(hass), str(body.get("subentry_id") or "")
+        )
+        if rg_coord is None:
+            raise StudioCommandError(
+                "not_found", "subentry_id of the Device is missing or unknown"
+            )
         rem_grp = str(body.get("device_remote_group") or "area_auto").strip()
-        for c in _get_all_coordinators(hass):
-            if c.device_slug == target_slug:
-                merged_rg: dict[str, Any] = {
-                    **c.device_data,
-                    CONF_DEVICE_REMOTE_GROUP: rem_grp,
-                }
-                c.update_device_config(merged_rg)
-                c.async_notify_listeners()
-                break
+        merged_rg: dict[str, Any] = {
+            **rg_coord.device_data,
+            CONF_DEVICE_REMOTE_GROUP: rem_grp,
+        }
+        rg_coord.update_device_config(merged_rg)
+        rg_coord.async_notify_listeners()
 
     elif cmd == "create_device_group":
         g_name = str(body.get("name") or "").strip()
@@ -641,8 +605,6 @@ async def _async_execute_studio_command(
         )
 
     elif cmd == "capture_profile":
-        if coordinator is None:
-            raise ValueError("No active Latter device selected")
         p_name = str(body.get("name") or "").strip()
         p_desc = str(body.get("description") or "").strip()
         _, profiles = get_device_groups_and_profiles(hass)
@@ -664,8 +626,6 @@ async def _async_execute_studio_command(
         )
 
     elif cmd == "apply_profile":
-        if coordinator is None:
-            raise ValueError("No active Latter device selected")
         p_id = str(body.get("profile_id") or "").strip()
         target_scope = str(body.get("target_scope") or "current").strip()
         _, profiles = get_device_groups_and_profiles(hass)
@@ -678,10 +638,20 @@ async def _async_execute_studio_command(
                 grp_id = target_scope.split(":", 1)[1]
                 targets = [c for c in all_coords if c.device_group == grp_id]
             elif target_scope.startswith("device:"):
-                d_slug = target_scope.split(":", 1)[1]
-                targets = [c for c in all_coords if c.device_slug == d_slug]
-            else:
+                d_coord = find_by_subentry_id(
+                    all_coords, target_scope.split(":", 1)[1]
+                )
+                if d_coord is None:
+                    raise StudioCommandError(
+                        "not_found", f"Unknown Device in target scope '{target_scope}'"
+                    )
+                targets = [d_coord]
+            elif target_scope == "current" and coordinator is not None:
                 targets = [coordinator]
+            else:
+                raise StudioCommandError(
+                    "invalid_format", f"Unknown target scope '{target_scope}'"
+                )
             await async_apply_profile_to_coordinators(hass, prof, targets)
 
     elif cmd == "export_backup_json":
@@ -707,7 +677,7 @@ async def _async_execute_studio_command(
         )
 
     else:
-        raise ValueError(f"Unsupported Studio command: {cmd}")
+        raise StudioCommandError("unknown_command", f"Unsupported Studio command: {cmd}")
 
     return coordinator, extra
 
@@ -717,7 +687,6 @@ async def _async_execute_studio_command(
     {
         vol.Required("type"): "latter/system/get_state",
         vol.Optional("subentry_id"): vol.Any(str, None),
-        vol.Optional("device_slug"): vol.Any(str, None),
         vol.Optional("studio_rev"): vol.Any(int, None),
     }
 )
@@ -734,11 +703,7 @@ async def ws_handle_get_state(
         )
         connection.send_result(msg["id"], None)
         return
-    coord = resolve_target_coordinator(
-        hass,
-        subentry_id=msg.get("subentry_id"),
-        device_slug=msg.get("device_slug"),
-    )
+    coord = resolve_target_coordinator(hass, msg.get("subentry_id"))
     if coord is not None:
         await async_refresh_wallpaper_cache(hass, coord.device_slug)
     connection.send_result(
@@ -752,7 +717,6 @@ async def ws_handle_get_state(
     {
         vol.Required("type"): "latter/system/subscribe",
         vol.Optional("subentry_id"): vol.Any(str, None),
-        vol.Optional("device_slug"): vol.Any(str, None),
         vol.Optional("studio_rev"): vol.Any(int, None),
     }
 )
@@ -770,16 +734,13 @@ async def ws_handle_subscribe(
         connection.send_result(msg["id"], None)
         return
     sub_id = msg.get("subentry_id")
-    dev_slug = msg.get("device_slug")
     unsubs: list[Any] = []
     debounce_cancel: list[Any] = [None]
 
     @callback
     def _push_now(_now: Any = None) -> None:
         debounce_cancel[0] = None
-        coord = resolve_target_coordinator(
-            hass, subentry_id=sub_id, device_slug=dev_slug
-        )
+        coord = resolve_target_coordinator(hass, sub_id)
         connection.send_message(
             websocket_api.event_message(
                 msg["id"],
@@ -810,9 +771,7 @@ async def ws_handle_subscribe(
         unsubs.clear()
 
     connection.subscriptions[msg["id"]] = _unsub_all
-    coord = resolve_target_coordinator(
-        hass, subentry_id=sub_id, device_slug=dev_slug
-    )
+    coord = resolve_target_coordinator(hass, sub_id)
     if coord is not None:
         await async_refresh_wallpaper_cache(hass, coord.device_slug)
     connection.send_result(
@@ -827,11 +786,7 @@ async def _async_handle_ws_command_impl(
     msg: dict[str, Any],
 ) -> None:
     """Execute an admin-gated System or Device command from Latter Studio."""
-    coord = resolve_target_coordinator(
-        hass,
-        subentry_id=msg.get("subentry_id"),
-        device_slug=msg.get("device_slug"),
-    )
+    coord = resolve_target_coordinator(hass, msg.get("subentry_id"))
     cmd = str(msg["command"]).strip()
     body = dict(msg.get("payload") or {})
     try:
@@ -865,7 +820,6 @@ async def _async_handle_ws_command_impl(
         vol.Required("type"): "latter/system/command",
         vol.Required("command"): str,
         vol.Optional("subentry_id"): vol.Any(str, None),
-        vol.Optional("device_slug"): vol.Any(str, None),
         vol.Optional("payload", default={}): dict,
     }
 )
@@ -885,7 +839,6 @@ async def ws_handle_system_command(
         vol.Required("type"): "latter/device/command",
         vol.Required("command"): str,
         vol.Optional("subentry_id"): vol.Any(str, None),
-        vol.Optional("device_slug"): vol.Any(str, None),
         vol.Optional("payload", default={}): dict,
     }
 )
@@ -907,12 +860,16 @@ async def _async_handle_ws_export_impl(
     is_device: bool,
 ) -> None:
     """Export non-secret System or Device configuration JSON."""
-    coord = resolve_target_coordinator(
-        hass, subentry_id=msg.get("subentry_id")
-    )
+    coord = resolve_target_coordinator(hass, msg.get("subentry_id"))
+    scope = "device" if is_device else str(msg.get("scope", "system"))
+    if scope != "system" and coord is None:
+        connection.send_error(
+            msg["id"], "device_required", "Select a Device to export a Device backup"
+        )
+        return
     bundle = build_backup_bundle(
         hass=hass,
-        scope="device" if is_device else str(msg.get("scope", "full")),
+        scope=scope,
         coordinators=_get_all_coordinators(hass),
         target_coordinator=coord,
     )
@@ -924,7 +881,7 @@ async def _async_handle_ws_export_impl(
     {
         vol.Required("type"): "latter/system/export",
         vol.Optional("subentry_id"): vol.Any(str, None),
-        vol.Optional("scope", default="full"): str,
+        vol.Optional("scope", default="system"): str,
     }
 )
 @websocket_api.async_response
@@ -963,9 +920,12 @@ async def _async_handle_ws_import_impl(
     msg: dict[str, Any],
 ) -> None:
     """Import and restore a System or Device JSON snapshot."""
-    coord = resolve_target_coordinator(
-        hass, subentry_id=msg.get("subentry_id")
-    )
+    coord = resolve_target_coordinator(hass, msg.get("subentry_id"))
+    if str(msg["bundle"].get("scope") or "device") != "system" and coord is None:
+        connection.send_error(
+            msg["id"], "device_required", "Select the Device to restore this backup onto"
+        )
+        return
     await async_restore_backup_bundle(
         hass,
         bundle=msg["bundle"],

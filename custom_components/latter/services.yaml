@@ -585,6 +585,13 @@ media_command:
             - "seek"
             - "play_media"
             - "clear_queue"
+    entity_id:
+      name: Speaker
+      description: Optional media_player to command instead of the device's active speaker.
+      required: false
+      selector:
+        entity:
+          domain: media_player
     seek_position:
       name: Seek Position (Seconds)
       description: Target playback position in seconds when command is seek.
@@ -606,6 +613,17 @@ media_command:
       required: false
       selector:
         text:
+    enqueue:
+      name: Enqueue
+      description: Optional queue behaviour for play_media (Music Assistant enqueue mode, e.g. play, next, add, replace).
+      required: false
+      selector:
+        select:
+          options:
+            - "play"
+            - "next"
+            - "add"
+            - "replace"
 
 notify:
   name: Send Notification

@@ -20,7 +20,6 @@ from homeassistant.helpers import (
 from homeassistant.util import dt as dt_util
 
 from ..area_engine import (
-    find_esphome_device_id,
     get_area_entities,
     get_esphome_device_entities,
 )
@@ -78,13 +77,13 @@ from ..const import (
     DATA_GLOBAL_STORE,
     DOMAIN,
     INTEGRATION_VERSION,
-    normalize_device_slug,
 )
 from ..coordinator import LatterCoordinator
 from ..identity import esphome_service
 from ..repairs import async_audit_coordinator_health
 from ..system import get_latter_system
 from ..wallpaper_engine import list_wallpaper_catalog
+from .scope import find_by_subentry_id
 
 MAX_INTERNAL_LOGS = 150
 
@@ -185,27 +184,10 @@ def _get_all_coordinators(hass: HomeAssistant) -> list[LatterCoordinator]:
 
 
 def resolve_target_coordinator(
-    hass: HomeAssistant,
-    subentry_id: str | None = None,
-    device_slug: str | None = None,
+    hass: HomeAssistant, subentry_id: str | None
 ) -> LatterCoordinator | None:
-    """Resolve a target LatterCoordinator by subentry_id or device_slug."""
-    all_coords = _get_all_coordinators(hass)
-    if not all_coords:
-        return None
-    if subentry_id:
-        target = str(subentry_id).strip()
-        for c in all_coords:
-            if c.subentry_id == target or c.entry.entry_id == target:
-                return c
-            if c.device_slug == normalize_device_slug(target):
-                return c
-    if device_slug:
-        norm = normalize_device_slug(str(device_slug))
-        for c in all_coords:
-            if c.device_slug == norm:
-                return c
-    return all_coords[0]
+    """Return the Device coordinator whose subentry_id equals subentry_id exactly, else None."""
+    return find_by_subentry_id(_get_all_coordinators(hass), subentry_id)
 
 
 async def async_save_and_broadcast_global_config(
@@ -231,9 +213,7 @@ def _build_system_shared_controls(hass: HomeAssistant) -> list[dict[str, Any]]:
     by_label: dict[str, dict[str, Any]] = {}
     for coord in coords:
         esp_info = get_esphome_device_entities(
-            hass,
-            coord.device_slug,
-            esphome_device_id=coord.esphome_device_id,
+            hass, coord.esphome_device_id, coord.device_slug
         )
         for sec in esp_info.get("sections", []):
             sec_id = sec.get("id", "")
@@ -279,28 +259,10 @@ def _build_system_shared_controls(hass: HomeAssistant) -> list[dict[str, Any]]:
     )
 
 
-def build_studio_state_payload(
-    hass: HomeAssistant,
-    coordinator: LatterCoordinator | None,
+def _build_entity_catalog(
+    hass: HomeAssistant, coordinator: LatterCoordinator | None
 ) -> dict[str, Any]:
-    """Build the JSON payload consumed by the Latter Studio custom panel."""
-    if coordinator is None:
-        all_c = _get_all_coordinators(hass)
-        if not all_c:
-            return {
-                "entry_id": "",
-                "title": "Latter System",
-                "version": INTEGRATION_VERSION,
-                "system_devices": [],
-                "system_controls": [],
-                "device_groups": [],
-                "saved_profiles": [],
-                "config": {},
-                "live": {},
-                "catalog": {"areas": []},
-            }
-        coordinator = all_c[0]
-
+    """Build the entity pickers for Studio (camera previews and speaker de-duplication need a Device)."""
     area_reg = ar.async_get(hass)
     areas_list = [
         {"id": a.id, "name": a.name}
@@ -321,12 +283,15 @@ def build_studio_state_payload(
     persons_list: list[dict[str, str]] = []
     presence_sensors: list[dict[str, str]] = []
 
-    allowed_cams_set = set(coordinator.camera_entities)
-    if coordinator.camera_entity:
-        allowed_cams_set.add(coordinator.camera_entity)
-
-    local_spk_id = coordinator.local_speaker
-    local_ma_id = coordinator.local_ma_speaker
+    allowed_cams_set: set[str] = set()
+    local_spk_id = ""
+    local_ma_id = ""
+    if coordinator is not None:
+        allowed_cams_set = set(coordinator.camera_entities)
+        if coordinator.camera_entity:
+            allowed_cams_set.add(coordinator.camera_entity)
+        local_spk_id = coordinator.local_speaker
+        local_ma_id = coordinator.local_ma_speaker
 
     for state_obj in sorted(
         hass.states.async_all(), key=lambda s: s.entity_id
@@ -382,7 +347,7 @@ def build_studio_state_payload(
             alarms_list.append(item)
         elif domain == "camera":
             cam_item: dict[str, Any] = dict(item)
-            if ent_id in allowed_cams_set:
+            if coordinator is not None and ent_id in allowed_cams_set:
                 cam_sig = coordinator.sign_payload_resource(
                     f"camera:{ent_id}|320|180|square"
                 )
@@ -418,13 +383,282 @@ def build_studio_state_payload(
         elif domain in ("sensor", "device_tracker", "input_text"):
             presence_sensors.append(item)
 
+    return {
+        "areas": areas_list,
+        "ma_speakers": ma_speakers,
+        "volume_targets": volume_targets,
+        "remotes": remotes_list,
+        "alarms": alarms_list,
+        "cameras": cameras_list,
+        "climates": climates_list,
+        "locks": locks_list,
+        "garages": garages_list,
+        "vacuums": vacuums_list,
+        "weathers": weathers_list,
+        "calendars": calendars_list,
+        "persons": persons_list,
+        "presence_sensors": presence_sensors,
+    }
+
+
+def _build_system_section(
+    hass: HomeAssistant, current_subentry_id: str
+) -> dict[str, Any]:
+    """Build the System-scoped part of the Studio payload (no Device needed)."""
+    area_reg = ar.async_get(hass)
+    device_groups, saved_profiles = get_device_groups_and_profiles(hass)
+    group_name_map = {
+        g["id"]: g["name"]
+        for g in device_groups
+        if isinstance(g, dict) and g.get("id")
+    }
+
+    dev_reg = dr.async_get(hass)
+    ent_reg = er.async_get(hass)
+
+    system_devices: list[dict[str, Any]] = []
+    for c in _get_all_coordinators(hass):
+        c_area_name, c_area_attrs = c.get_area_context_payload()
+        c_media_state, _ = c.get_active_media_payload()
+        c_grp = c.device_group
+        c_manifest = c.hardware_manifest
+        c_has_native_svc = bool(
+            esphome_service(
+                hass,
+                c.esphome_device_id,
+                "set_browse_slots",
+            )
+            or esphome_service(
+                hass,
+                c.esphome_device_id,
+                "set_area_slots",
+            )
+            or esphome_service(
+                hass,
+                c.esphome_device_id,
+                "show_notification",
+            )
+            or c_manifest
+        )
+        c_has_audio = bool(c.local_speaker) or c_has_native_svc
+        c_has_ble = bool(
+            c.native_ble_tracking_enabled
+            or c._ble_tracker is not None
+            or c_has_native_svc
+            or c.device_entity("switch", "_area_ble_presence_beacon", "_ble_presence_beacon")
+            is not None
+        )
+        c_survey_rows = (
+            c._ble_tracker.get_area_calibration_telemetry()
+            if c._ble_tracker is not None
+            and hasattr(c._ble_tracker, "get_area_calibration_telemetry")
+            else []
+        )
+        c_packets_seen = (
+            c._ble_tracker.packets_seen if c._ble_tracker is not None else 0
+        )
+        c_bat_st = c.device_state("sensor", "_battery_level")
+        c_chg_st = c.device_state("binary_sensor", "_battery_charging")
+        c_usb_st = c.device_state("binary_sensor", "_usb_power_connected")
+        c_wifi_st = c.device_state(
+            "sensor", "_system_wi_fi_signal", "_wi_fi_signal", "_wifi_signal"
+        )
+        c_ip_st = c.device_state("sensor", "_ip_address")
+        c_ip_val = (
+            str(c_ip_st.state)
+            if (c_ip_st and c_ip_st.state not in ("unavailable", "unknown", ""))
+            else ""
+        )
+        c_bat_val: int | None = None
+        if c_bat_st and c_bat_st.state not in ("unavailable", "unknown", ""):
+            try:
+                c_bat_val = int(round(float(c_bat_st.state)))
+            except ValueError:
+                c_bat_val = None
+        c_wifi_val: int | None = None
+        if c_wifi_st and c_wifi_st.state not in ("unavailable", "unknown", ""):
+            try:
+                c_wifi_val = int(round(float(c_wifi_st.state)))
+            except ValueError:
+                c_wifi_val = None
+
+        c_dev_id = c.esphome_device_id
+        c_dev_entry = dev_reg.async_get(c_dev_id) if c_dev_id else None
+        raw_model = str(
+            (c_dev_entry.model if c_dev_entry else "") or ""
+        ).strip()
+        c_is_latter_native = bool(
+            c.device_profile != "ble_beacon"
+            and (
+                c_has_native_svc
+                or c.device_entity("update", "_project_firmware") is not None
+                or "latter" in raw_model.lower()
+            )
+        )
+        c_w = int(c_manifest.get("w") or 0)
+        c_h = int(c_manifest.get("h") or 0)
+        c_board = str(c_manifest.get("board") or "").strip()
+        if c.device_profile == "ble_beacon":
+            c_model_label = (
+                "Private BLE (Phone/Watch)"
+                if "private_ble" in c.ble_target_address
+                or "." in c.ble_target_address
+                else "BLE Beacon / Tag"
+            )
+        elif c_w > 0 and c_h > 0:
+            c_model_label = (
+                f"{raw_model} ({c_w}x{c_h})"
+                if raw_model
+                else f"Latter Display ({c_w}x{c_h}{f' {c_board}' if c_board else ''})"
+            )
+        else:
+            c_model_label = raw_model or "ESPHome Node"
+
+        ha_assigned_area_id = (
+            str(c_dev_entry.area_id or "").strip()
+            if (c_dev_entry and not c.sync_device_area_enabled)
+            else ""
+        ) or str(c.get_opt(CONF_DEFAULT_AREA) or "").strip()
+        if (
+            not ha_assigned_area_id
+            and not c.native_ble_tracking_enabled
+            and c_dev_entry
+            and c_dev_entry.area_id
+        ):
+            ha_assigned_area_id = str(c_dev_entry.area_id).strip()
+
+        a_obj = (
+            area_reg.async_get_area(ha_assigned_area_id)
+            if ha_assigned_area_id
+            else None
+        )
+        c_has_assigned_area = a_obj is not None
+        c_area_label = a_obj.name if a_obj is not None else "Roaming"
+
+        c_upd_st = c.device_state("update", "_project_firmware")
+        c_has_update = bool(c_upd_st and c_upd_st.state == "on")
+        c_is_online = bool(c_wifi_val is not None or c_ip_val)
+        if not c_is_online and c_dev_id:
+            for e_reg in er.async_entries_for_device(ent_reg, c_dev_id):
+                if e_reg.platform == "esphome":
+                    st_e = hass.states.get(e_reg.entity_id)
+                    if st_e and st_e.state not in ("unavailable", "unknown"):
+                        c_is_online = True
+                        break
+                    if e_reg.domain == "update" and st_e and st_e.state == "on":
+                        c_has_update = True
+        if c.device_profile == "ble_beacon":
+            c_away = c.is_device_away()
+            c_seen = bool(
+                c._ble_tracker
+                and c._ble_tracker.packets_seen > 0
+                and not c_away
+            )
+            c_status_label = (
+                f"Online ({c_area_name})"
+                if c_seen
+                else ("Away" if c_away else "Scanning")
+            )
+        else:
+            c_status_label = (
+                "Update Available"
+                if c_has_update
+                else ("Online" if c_is_online else "Offline")
+            )
+
+        system_devices.append(
+            {
+                "entry_id": c.subentry_id,
+                "subentry_id": c.subentry_id,
+                "device_slug": c.device_slug,
+                "title": (
+                    str(c_dev_entry.name_by_user or c_dev_entry.name).strip()
+                    if c_dev_entry
+                    and (c_dev_entry.name_by_user or c_dev_entry.name)
+                    else c.device_title
+                ),
+                "model_label": c_model_label,
+                "has_assigned_area": c_has_assigned_area,
+                "area_label": c_area_label,
+                "status_label": c_status_label,
+                "device_profile": c.device_profile,
+                "device_group": c_grp,
+                "device_remote_group": c.device_remote_group,
+                "device_group_name": group_name_map.get(
+                    c_grp, c_grp.replace("_", " ").title()
+                ),
+                "site_id": c.site_id,
+                "display_shape": c.display_shape,
+                "active_area_name": c_area_name,
+                "active_speaker": c.active_speaker if c_has_audio else "",
+                "has_audio": c_has_audio,
+                "is_latter_native": c_is_latter_native,
+                "media_state": c_media_state if c_has_audio else "",
+                "battery_level": c_bat_val,
+                "is_charging": bool(c_chg_st and c_chg_st.state == "on"),
+                "is_usb_connected": bool(c_usb_st and c_usb_st.state == "on"),
+                "wifi_rssi": c_wifi_val,
+                "ip_address": c_ip_val,
+                "has_ble": c_has_ble,
+                "ble_survey_rows": c_survey_rows,
+                "ble_packets_seen": c_packets_seen,
+                "ble_closest_proxy": c_area_attrs.get("ble_closest_proxy", ""),
+                "companion_url": f"/latter/devices/{c.subentry_id}",
+                "is_current": c.subentry_id == current_subentry_id,
+            }
+        )
+
+
+    internal_logs = _get_combined_system_and_studio_logs(hass)
+
+    onboarded_slugs = {c.device_slug for c in _get_all_coordinators(hass)}
+
+    return {
+        "internal_logs": internal_logs,
+        "system_devices": system_devices,
+        "discovered_ble_devices": get_discovered_ble_candidates(
+            hass,
+            onboarded_slugs,
+            {
+                c.ble_target_address
+                for c in _get_all_coordinators(hass)
+                if c.ble_target_address
+            },
+        ),
+        "system_controls": _build_system_shared_controls(hass),
+        "device_groups": device_groups,
+        "saved_profiles": saved_profiles,
+    }
+
+
+def build_studio_state_payload(
+    hass: HomeAssistant,
+    coordinator: LatterCoordinator | None,
+) -> dict[str, Any]:
+    """Build the Studio payload: System scope only when no Device is targeted, else System + that Device."""
+    if coordinator is None:
+        return {
+            "entry_id": "",
+            "subentry_id": "",
+            "title": "Latter System",
+            "version": INTEGRATION_VERSION,
+            **_build_system_section(hass, ""),
+            "capabilities": {},
+            "health_warnings": [],
+            "config": {},
+            "esphome": {"device": {}, "sections": []},
+            "wallpapers": [],
+            "live": {"area_presence_grid": get_all_areas_presence_summary(hass)},
+            "catalog": _build_entity_catalog(hass, None),
+        }
+
+    local_spk_id = coordinator.local_speaker
+    local_ma_id = coordinator.local_ma_speaker
     _, area_attrs = coordinator.get_area_context_payload()
     media_state, media_attrs = coordinator.get_active_media_payload()
     _, remote_attrs = coordinator.get_remote_config_payload()
     esphome_inspector = get_esphome_device_entities(
-        hass,
-        coordinator.device_slug,
-        esphome_device_id=coordinator.esphome_device_id,
+        hass, coordinator.esphome_device_id, coordinator.device_slug
     )
     active_area_cards = get_area_entities(
         hass,
@@ -441,19 +675,16 @@ def build_studio_state_payload(
         display_shape=coordinator.display_shape,
     )
 
-    slug = coordinator.device_slug
     has_native_slots = bool(
         esphome_service(
             hass,
             coordinator.esphome_device_id,
             "set_browse_slots",
-            fallback_slug=slug,
         )
         or esphome_service(
             hass,
             coordinator.esphome_device_id,
             "set_area_slots",
-            fallback_slug=slug,
         )
         or coordinator.hardware_manifest
     )
@@ -574,250 +805,14 @@ def build_studio_state_payload(
             coordinator._ble_tracker.get_area_calibration_telemetry()
         )
 
-    device_groups, saved_profiles = get_device_groups_and_profiles(hass)
-    group_name_map = {
-        g["id"]: g["name"]
-        for g in device_groups
-        if isinstance(g, dict) and g.get("id")
-    }
-
-    dev_reg = dr.async_get(hass)
-    ent_reg = er.async_get(hass)
-
-    system_devices: list[dict[str, Any]] = []
-    for c in _get_all_coordinators(hass):
-        c_area_name, c_area_attrs = c.get_area_context_payload()
-        c_media_state, _ = c.get_active_media_payload()
-        c_grp = c.device_group
-        c_manifest = c.hardware_manifest
-        c_has_native_svc = bool(
-            esphome_service(
-                hass,
-                c.esphome_device_id,
-                "set_browse_slots",
-                fallback_slug=c.device_slug,
-            )
-            or esphome_service(
-                hass,
-                c.esphome_device_id,
-                "set_area_slots",
-                fallback_slug=c.device_slug,
-            )
-            or esphome_service(
-                hass,
-                c.esphome_device_id,
-                "show_notification",
-                fallback_slug=c.device_slug,
-            )
-            or c_manifest
-        )
-        c_has_audio = bool(c.local_speaker) or c_has_native_svc
-        c_has_ble = bool(
-            c.native_ble_tracking_enabled
-            or c._ble_tracker is not None
-            or c_has_native_svc
-            or hass.states.get(
-                f"switch.{c.device_slug}_area_ble_presence_beacon"
-            )
-            is not None
-            or hass.states.get(f"switch.{c.device_slug}_ble_presence_beacon")
-            is not None
-        )
-        c_survey_rows = (
-            c._ble_tracker.get_area_calibration_telemetry()
-            if c._ble_tracker is not None
-            and hasattr(c._ble_tracker, "get_area_calibration_telemetry")
-            else []
-        )
-        c_packets_seen = (
-            c._ble_tracker.packets_seen if c._ble_tracker is not None else 0
-        )
-        c_bat_st = hass.states.get(f"sensor.{c.device_slug}_battery_level")
-        c_chg_st = hass.states.get(
-            f"binary_sensor.{c.device_slug}_battery_charging"
-        )
-        c_usb_st = hass.states.get(
-            f"binary_sensor.{c.device_slug}_usb_power_connected"
-        )
-        c_wifi_st = (
-            hass.states.get(f"sensor.{c.device_slug}_wi_fi_signal")
-            or hass.states.get(f"sensor.{c.device_slug}_wifi_signal")
-            or hass.states.get(f"sensor.{c.device_slug}_system_wi_fi_signal")
-        )
-        c_ip_st = hass.states.get(f"sensor.{c.device_slug}_ip_address")
-        c_ip_val = (
-            str(c_ip_st.state)
-            if (c_ip_st and c_ip_st.state not in ("unavailable", "unknown", ""))
-            else ""
-        )
-        c_bat_val: int | None = None
-        if c_bat_st and c_bat_st.state not in ("unavailable", "unknown", ""):
-            try:
-                c_bat_val = int(round(float(c_bat_st.state)))
-            except ValueError:
-                c_bat_val = None
-        c_wifi_val: int | None = None
-        if c_wifi_st and c_wifi_st.state not in ("unavailable", "unknown", ""):
-            try:
-                c_wifi_val = int(round(float(c_wifi_st.state)))
-            except ValueError:
-                c_wifi_val = None
-
-        c_dev_id = c.esphome_device_id or find_esphome_device_id(
-            hass, c.device_slug
-        )
-        c_dev_entry = dev_reg.async_get(c_dev_id) if c_dev_id else None
-        raw_model = str(
-            (c_dev_entry.model if c_dev_entry else "") or ""
-        ).strip()
-        c_is_latter_native = bool(
-            c.device_profile != "ble_beacon"
-            and (
-                c_has_native_svc
-                or hass.states.get(f"update.{c.device_slug}_project_firmware")
-                is not None
-                or "latter" in raw_model.lower()
-            )
-        )
-        c_w = int(c_manifest.get("w") or 0)
-        c_h = int(c_manifest.get("h") or 0)
-        c_board = str(c_manifest.get("board") or "").strip()
-        if c.device_profile == "ble_beacon":
-            c_model_label = (
-                "Private BLE (Phone/Watch)"
-                if "private_ble" in c.ble_target_address
-                or "." in c.ble_target_address
-                else "BLE Beacon / Tag"
-            )
-        elif c_w > 0 and c_h > 0:
-            c_model_label = (
-                f"{raw_model} ({c_w}x{c_h})"
-                if raw_model
-                else f"Latter Display ({c_w}x{c_h}{f' {c_board}' if c_board else ''})"
-            )
-        else:
-            c_model_label = raw_model or "ESPHome Node"
-
-        ha_assigned_area_id = (
-            str(c_dev_entry.area_id or "").strip()
-            if (c_dev_entry and not c.sync_device_area_enabled)
-            else ""
-        ) or str(c.get_opt(CONF_DEFAULT_AREA) or "").strip()
-        if (
-            not ha_assigned_area_id
-            and not c.native_ble_tracking_enabled
-            and c_dev_entry
-            and c_dev_entry.area_id
-        ):
-            ha_assigned_area_id = str(c_dev_entry.area_id).strip()
-
-        a_obj = (
-            area_reg.async_get_area(ha_assigned_area_id)
-            if ha_assigned_area_id
-            else None
-        )
-        c_has_assigned_area = a_obj is not None
-        c_area_label = a_obj.name if a_obj is not None else "Roaming"
-
-        c_upd_st = hass.states.get(f"update.{c.device_slug}_project_firmware")
-        c_has_update = bool(c_upd_st and c_upd_st.state == "on")
-        c_is_online = bool(c_wifi_val is not None or c_ip_val)
-        if not c_is_online and c_dev_id:
-            for e_reg in er.async_entries_for_device(ent_reg, c_dev_id):
-                if e_reg.platform == "esphome":
-                    st_e = hass.states.get(e_reg.entity_id)
-                    if st_e and st_e.state not in ("unavailable", "unknown"):
-                        c_is_online = True
-                        break
-                    if e_reg.domain == "update" and st_e and st_e.state == "on":
-                        c_has_update = True
-        if c.device_profile == "ble_beacon":
-            c_away = c.is_device_away()
-            c_seen = bool(
-                c._ble_tracker
-                and c._ble_tracker.packets_seen > 0
-                and not c_away
-            )
-            c_status_label = (
-                f"Online ({c_area_name})"
-                if c_seen
-                else ("Away" if c_away else "Scanning")
-            )
-        else:
-            c_status_label = (
-                "Update Available"
-                if c_has_update
-                else ("Online" if c_is_online else "Offline")
-            )
-
-        system_devices.append(
-            {
-                "entry_id": c.subentry_id,
-                "subentry_id": c.subentry_id,
-                "device_slug": c.device_slug,
-                "title": (
-                    str(c_dev_entry.name_by_user or c_dev_entry.name).strip()
-                    if c_dev_entry
-                    and (c_dev_entry.name_by_user or c_dev_entry.name)
-                    else c.device_title
-                ),
-                "model_label": c_model_label,
-                "has_assigned_area": c_has_assigned_area,
-                "area_label": c_area_label,
-                "status_label": c_status_label,
-                "device_profile": c.device_profile,
-                "device_group": c_grp,
-                "device_remote_group": c.device_remote_group,
-                "device_group_name": group_name_map.get(
-                    c_grp, c_grp.replace("_", " ").title()
-                ),
-                "site_id": c.site_id,
-                "display_shape": c.display_shape,
-                "active_area_name": c_area_name,
-                "active_speaker": c.active_speaker if c_has_audio else "",
-                "has_audio": c_has_audio,
-                "is_latter_native": c_is_latter_native,
-                "media_state": c_media_state if c_has_audio else "",
-                "battery_level": c_bat_val,
-                "is_charging": bool(c_chg_st and c_chg_st.state == "on"),
-                "is_usb_connected": bool(c_usb_st and c_usb_st.state == "on"),
-                "wifi_rssi": c_wifi_val,
-                "ip_address": c_ip_val,
-                "has_ble": c_has_ble,
-                "ble_survey_rows": c_survey_rows,
-                "ble_packets_seen": c_packets_seen,
-                "ble_closest_proxy": c_area_attrs.get("ble_closest_proxy", ""),
-                "companion_url": f"/latter/devices/{c.subentry_id}",
-                "is_current": c.subentry_id == coordinator.subentry_id,
-            }
-        )
-
-
-    internal_logs = _get_combined_system_and_studio_logs(hass)
-
-    onboarded_slugs = {c.device_slug for c in _get_all_coordinators(hass)}
-
     return {
         "entry_id": coordinator.subentry_id,
         "subentry_id": coordinator.subentry_id,
         "title": coordinator.device_title,
         "version": INTEGRATION_VERSION,
         "capabilities": device_capabilities,
-        "internal_logs": internal_logs,
+        **_build_system_section(hass, coordinator.subentry_id),
         "health_warnings": health_warnings,
-        "system_devices": system_devices,
-        "discovered_ble_devices": get_discovered_ble_candidates(
-            hass,
-            onboarded_slugs,
-            {
-                c.ble_target_address
-                for c in _get_all_coordinators(hass)
-                if c.ble_target_address
-            },
-        ),
-        "system_controls": _build_system_shared_controls(hass),
-        "device_groups": device_groups,
-        "saved_profiles": saved_profiles,
         "config": config_data,
         "esphome": esphome_inspector,
         "wallpapers": wallpapers_catalog,
@@ -860,16 +855,9 @@ def build_studio_state_payload(
             "remote_slots_meta": remote_attrs,
             "device_sw_version": str(
                 (
-                    hass.states.get(
-                        f"sensor.{coordinator.device_slug}_firmware_version"
-                    ).state
-                    if hass.states.get(
-                        f"sensor.{coordinator.device_slug}_firmware_version"
-                    )
-                    and hass.states.get(
-                        f"sensor.{coordinator.device_slug}_firmware_version"
-                    ).state
-                    not in ("unavailable", "unknown", "")
+                    fw_st.state
+                    if (fw_st := coordinator.device_state("sensor", "_firmware_version")) is not None
+                    and fw_st.state not in ("unavailable", "unknown", "")
                     else esphome_inspector.get("device", {}).get("sw_version")
                 )
                 or INTEGRATION_VERSION
@@ -902,22 +890,7 @@ def build_studio_state_payload(
                 "",
             ),
         },
-        "catalog": {
-            "areas": areas_list,
-            "ma_speakers": ma_speakers,
-            "volume_targets": volume_targets,
-            "remotes": remotes_list,
-            "alarms": alarms_list,
-            "cameras": cameras_list,
-            "climates": climates_list,
-            "locks": locks_list,
-            "garages": garages_list,
-            "vacuums": vacuums_list,
-            "weathers": weathers_list,
-            "calendars": calendars_list,
-            "persons": persons_list,
-            "presence_sensors": presence_sensors,
-        },
+        "catalog": _build_entity_catalog(hass, coordinator),
     }
 
 

@@ -28,8 +28,12 @@ from homeassistant.util import dt as dt_util
 
 from .ble_engine import get_ble_proxy_area_ids
 from .browse_engine import is_music_assistant_player
-from .const import DOMAIN, normalize_device_slug
-from .identity import device_entities, get_bound_esphome_device
+from .const import CONF_ESPHOME_DEVICE_ID, DOMAIN
+from .identity import (
+    device_entities,
+    get_bound_esphome_device,
+    resolve_bound_esphome_device_id,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -256,16 +260,21 @@ def match_area_by_name_or_id(
     return None
 
 
-def find_esphome_device_id(
-    hass: HomeAssistant,
-    device_slug: str,
-    esphome_device_id: str | None = None,
-) -> str | None:
-    """Find the Home Assistant device_id for the target ESPHome node via canonical identity resolution."""
-    dev = get_bound_esphome_device(
-        hass, esphome_device_id, fallback_slug=device_slug
-    )
-    return dev.id if dev is not None else None
+def latter_bound_esphome_device_ids(hass: HomeAssistant) -> set[str]:
+    """Return the ESPHome device IDs bound to Latter Devices (each Device subentry's stored device ID / MAC)."""
+    out: set[str] = set()
+    for entry in hass.config_entries.async_entries(DOMAIN):
+        for sub in entry.subentries.values():
+            if sub.subentry_type != "device":
+                continue
+            dev_id = resolve_bound_esphome_device_id(
+                hass,
+                str(sub.data.get(CONF_ESPHOME_DEVICE_ID) or "") or None,
+                str(sub.data.get("mac") or "") or None,
+            )
+            if dev_id:
+                out.add(dev_id)
+    return out
 
 
 def _apply_ha_display_precision(
@@ -289,11 +298,12 @@ def _apply_ha_display_precision(
 
 def get_esphome_device_entities(
     hass: HomeAssistant,
-    device_slug: str,
-    esphome_device_id: str | None = None,
+    esphome_device_id: str | None,
+    device_slug: str = "",
 ) -> dict[str, Any]:
-    """Inspect and semantically group all entities belonging to any ESPHome device."""
-    target_device_id = esphome_device_id or find_esphome_device_id(hass, device_slug)
+    """Inspect and semantically group all entities of the bound ESPHome device (device_slug only trims labels)."""
+    bound_dev = get_bound_esphome_device(hass, esphome_device_id)
+    target_device_id = bound_dev.id if bound_dev is not None else None
     dev_reg = dr.async_get(hass)
 
     dev_meta: dict[str, str] = {
@@ -323,7 +333,6 @@ def get_esphome_device_entities(
     entries: list[er.RegistryEntry] = device_entities(
         hass,
         target_device_id,
-        fallback_slug=device_slug,
         include_disabled=False,
     )
 
@@ -813,28 +822,6 @@ def resolve_remote_slot_pair(
     }
 
 
-def _get_companion_display_device_ids_and_slugs(
-    hass: HomeAssistant, local_speaker: str = ""
-) -> tuple[set[str], set[str]]:
-    """Return (device_ids, slugs) of all Latter companion displays so their own backlights/switches never appear as area loads."""
-    dev_ids: set[str] = set()
-    slugs: set[str] = set()
-    if local_speaker.startswith("media_player."):
-        sp_slug = local_speaker.removeprefix("media_player.").removesuffix("_music")
-        if sp_slug:
-            slugs.add(sp_slug)
-    domain_data = hass.data.get("latter", {})
-    for val in domain_data.values():
-        slug = getattr(val, "device_slug", "")
-        prof = getattr(val, "device_profile", "")
-        if slug and prof in ("mobile_display", "stationary_display"):
-            slugs.add(slug)
-            did = find_esphome_device_id(hass, slug)
-            if did:
-                dev_ids.add(did)
-    return dev_ids, slugs
-
-
 def _is_curated_area_entity(
     hass: HomeAssistant, state_obj: State, local_speaker: str = ""
 ) -> bool:
@@ -851,19 +838,13 @@ def _is_curated_area_entity(
     attrs = state_obj.attributes
     dev_class = str(attrs.get("device_class") or "").lower()
 
-    # Never include a companion display's own entities in Area Control
-    if domain in ("light", "switch", "fan", "cover"):
-        comp_dev_ids, comp_slugs = _get_companion_display_device_ids_and_slugs(
-            hass, local_speaker
-        )
-        is_comp_dev = bool(
-            (entry and entry.device_id and entry.device_id in comp_dev_ids)
-            or any(
-                state_obj.entity_id.startswith(f"{domain}.{s}_") for s in comp_slugs
-            )
-        )
-        if is_comp_dev:
-            return False
+    # Never include a Latter Device's own entities (backlight, switches, ...) in Area Control
+    if (
+        entry is not None
+        and entry.device_id
+        and entry.device_id in latter_bound_esphome_device_ids(hass)
+    ):
+        return False
 
     if domain in ("light", "scene", "fan", "climate"):
         return True
@@ -949,7 +930,7 @@ def format_entity_slot_name(state_obj: State, area_name: str = "") -> str:
 
 
 def get_area_climate_telemetry(
-    hass: HomeAssistant, area_id: str | None, device_slug: str = ""
+    hass: HomeAssistant, area_id: str | None
 ) -> dict[str, Any]:
     """Discover ambient area temperature and humidity assigned to an area."""
     result: dict[str, Any] = {
@@ -961,15 +942,10 @@ def get_area_climate_telemetry(
         return result
 
     ent_reg = er.async_get(hass)
-    handheld_dev_id = (
-        find_esphome_device_id(hass, device_slug) if device_slug else None
-    )
-    slug_norm = normalize_device_slug(device_slug) if device_slug else ""
+    latter_dev_ids = latter_bound_esphome_device_ids(hass)
 
     for state_obj in hass.states.async_all("sensor"):
         if state_obj.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
-            continue
-        if slug_norm and slug_norm in state_obj.entity_id:
             continue
 
         entry = ent_reg.async_get(state_obj.entity_id)
@@ -978,7 +954,7 @@ def get_area_climate_telemetry(
                 continue
             if entry.entity_category is not None:
                 continue
-            if handheld_dev_id and entry.device_id == handheld_dev_id:
+            if entry.device_id and entry.device_id in latter_dev_ids:
                 continue
 
         if resolve_entity_area_id(hass, state_obj.entity_id) != area_id:
@@ -1186,7 +1162,6 @@ def get_areas_summary(
     hass: HomeAssistant,
     active_area_id: str | None = None,
     local_speaker: str = "",
-    device_slug: str = "",
 ) -> list[dict[str, Any]]:
     """Return a sorted list of Home Assistant areas that contain curated controllable entities."""
     area_reg = ar.async_get(hass)
@@ -1215,7 +1190,7 @@ def get_areas_summary(
         if not counts or counts["total"] == 0:
             continue
         lights_on = counts["lights_on"]
-        climate_info = get_area_climate_telemetry(hass, area.id, device_slug)
+        climate_info = get_area_climate_telemetry(hass, area.id)
         temp_val = climate_info.get("temperature")
 
         suffix_parts: list[str] = []

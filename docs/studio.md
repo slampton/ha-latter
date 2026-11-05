@@ -64,6 +64,6 @@ Each device has five pages. The options on each page depend on what the device's
 | **Display & Home** | Color profile, display geometry, home dock apps and their order, area cards per page, and wallpapers (5 built-in presets, plus uploads that can rotate on a schedule) |
 | **Audio & Voice** | Wake word and sensitivity, default speaker, alert volume, and music sorting |
 | **Power & Battery** | Sleep and wake timeouts, plus battery and power readings |
-| **Administration** | Device slug, type, and group; BLE tracking settings; and **Remove Device** |
+| **Administration** | Device slug (read-only: the ESPHome node name), type, and group; BLE tracking settings; and **Remove Device** |
 
-> Most settings apply live: Studio saves them and pushes the change to the device without a reload. Adding or removing a device, or changing a device's slug or bound ESPHome device, reloads the Latter integration; devices reconnect within a few seconds.
+> Most settings apply live: Studio saves them and pushes the change to the device without a reload. Adding or removing a device, or changing a device's bound ESPHome device, reloads the Latter integration; devices reconnect within a few seconds.

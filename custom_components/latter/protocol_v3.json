@@ -229,10 +229,6 @@
     "save_custom_color": {
       "description": "Save a custom RGB accent color from the on-device color wheel",
       "fields": ["target_device", "hex_color", "name"]
-    },
-    "notify": {
-      "description": "Deliver a visual banner, chime, optional TTS announcement, and optional camera snapshot",
-      "fields": ["target_device", "title", "message", "priority", "duration", "chime", "announce", "camera_entity"]
     }
   }
 }

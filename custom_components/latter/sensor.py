@@ -62,12 +62,7 @@ async def async_setup_entry(
                     LatterRemoteConfigSensor(coordinator),
                 ]
             )
-        sub_id = (
-            coordinator.subentry.subentry_id
-            if coordinator.subentry is not None
-            else None
-        )
-        async_add_entities(dev_entities, config_subentry_id=sub_id)
+        async_add_entities(dev_entities, config_subentry_id=coordinator.subentry_id)
 
     domain_data = hass.data.setdefault(DOMAIN, {})
     registered_persons: set[str] = domain_data.setdefault(

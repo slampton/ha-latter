@@ -45,7 +45,7 @@ Shows a banner on the device, with an optional chime and an optional camera snap
 | `camera_entity` | `camera.*` | — | Adds a signed baseline-JPEG snapshot URL |
 | `announce` | bool | `false` | Also speaks `message` with TTS on the device (through its Assist satellite, or its local speaker). The banner chime is skipped when this is on. |
 
-Latter calls `esphome.<slug>_show_notification` with a monotonic `alert_id` and fires `latter_event` with `type: notification_dispatched`.
+Latter calls the bound ESPHome device's `esphome.<node>_show_notification` action with a monotonic `alert_id` and fires `latter_event` with `type: notification_dispatched`.
 
 ### `latter.intercom_broadcast`
 Speaks a TTS message or plays an audio clip on speakers.

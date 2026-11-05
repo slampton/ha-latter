@@ -45,7 +45,7 @@ Latter watches Home Assistant's device registry for ESPHome devices that impleme
 
 | Field | What to enter |
 | :--- | :--- |
-| **ESPHome Device Name / Slug** | Pre-filled. Leave it unless you renamed the device. |
+| **ESPHome Device** | Pre-selected. Latter binds to this ESPHome device and its MAC address. The Device's slug is its ESPHome node name. |
 | **Configuration Profile** | Leave **Auto-detect**. Latter reads the screen size and shape from the device. |
 | **Track this device's area with Bluetooth** | Leave it checked for handhelds and the watch. Uncheck it for something fixed in one Area, like the Desk Assistant. |
 

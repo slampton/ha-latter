@@ -21,7 +21,13 @@ from homeassistant.const import (
     STATE_UNAVAILABLE,
     STATE_UNKNOWN,
 )
-from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
+from homeassistant.core import (
+    Event,
+    EventStateChangedData,
+    HomeAssistant,
+    State,
+    callback,
+)
 from homeassistant.helpers import (
     area_registry as ar,
     device_registry as dr,
@@ -44,7 +50,6 @@ from .area_controller import (
 )
 from .area_engine import (
     find_area_media_entities,
-    find_esphome_device_id,
     get_area_available_domains,
     get_area_climate_telemetry,
     get_area_entities,
@@ -130,8 +135,10 @@ from .const import (
 from .device_runtime import LatterDeviceRuntime
 from .identity import (
     esphome_service,
+    find_device_entity_by_suffix,
     get_bound_esphome_device,
     read_device_hardware_manifest,
+    resolve_bound_esphome_device_id,
 )
 from .media_controller import (
     VOLUME_FEATURE_FLAGS,
@@ -155,12 +162,10 @@ TRANSFER_HOLD_WINDOW_SECONDS = 4.5
 
 
 def _get_esphome_device_current_area(
-    hass: HomeAssistant,
-    device_slug: str,
-    esphome_device_id: str | None = None,
+    hass: HomeAssistant, esphome_device_id: str | None
 ) -> str | None:
-    """Return the current area_id assigned to the ESPHome device in HA Device Registry."""
-    dev = get_bound_esphome_device(hass, esphome_device_id, fallback_slug=device_slug)
+    """Return the current area_id assigned to the bound ESPHome device in HA Device Registry."""
+    dev = get_bound_esphome_device(hass, esphome_device_id)
     return dev.area_id if dev and dev.area_id else None
 
 
@@ -168,7 +173,7 @@ def resolve_coordinator(
     hass: HomeAssistant,
     target: str | None = None,
 ) -> LatterCoordinator | None:
-    """Resolve a loaded LatterCoordinator by subentry_id, entry_id, device_id, or device_slug."""
+    """Resolve a loaded LatterCoordinator by subentry_id, Latter or ESPHome device_id, or the Device's own slug (exact)."""
     from .system import get_latter_system
 
     domain_data = hass.data.get(DOMAIN, {})
@@ -191,7 +196,6 @@ def resolve_coordinator(
     for coord in coords:
         if (
             coord.subentry_id == raw
-            or coord.entry.entry_id == raw
             or coord.device_slug == norm
             or (coord.esphome_device_id and coord.esphome_device_id == raw)
         ):
@@ -200,7 +204,6 @@ def resolve_coordinator(
             mac = coord.device_mac
             if (
                 (DOMAIN, coord.subentry_id) in target_dev.identifiers
-                or (DOMAIN, coord.entry.entry_id) in target_dev.identifiers
                 or (mac and (DOMAIN, dr.format_mac(mac)) in target_dev.identifiers)
             ):
                 return coord
@@ -221,14 +224,12 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         hass: HomeAssistant,
         entry: ConfigEntry,
         hmac_secret: bytes,
-        subentry: ConfigSubentry | None = None,
+        subentry: ConfigSubentry,
     ) -> None:
-        """Initialize the Latter coordinator."""
+        """Initialize the Latter coordinator for one Device subentry."""
         self.entry = entry
         self.subentry = subentry
-        self.subentry_id: str = (
-            subentry.subentry_id if subentry is not None else entry.entry_id
-        )
+        self.subentry_id: str = subentry.subentry_id
         super().__init__(
             hass,
             _LOGGER,
@@ -442,35 +443,24 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._bind_wallpaper_cycle_timer()
         self._notify_listeners()
 
+    def _live_subentry(self) -> ConfigSubentry:
+        """Return the current ConfigSubentry object for this Device (subentries are replaced on update)."""
+        live_sub = self.entry.subentries.get(self.subentry_id)
+        if live_sub is not None:
+            self.subentry = live_sub
+        return self.subentry
+
     @property
     def device_data(self) -> dict[str, Any]:
         """Return a mutable copy of this device's persisted configuration dictionary."""
-        if self.subentry is not None:
-            live_sub = self.entry.subentries.get(self.subentry.subentry_id)
-            if live_sub is not None:
-                self.subentry = live_sub
-            return dict(self.subentry.data)
-        return {**self.entry.data, **(self.entry.options or {})}
+        return dict(self._live_subentry().data)
 
     def update_device_config(self, merged_data: dict[str, Any]) -> None:
-        """Persist updated device settings to the ConfigSubentry (or parent ConfigEntry if standalone)."""
-        if self.subentry is not None:
-            live_sub = (
-                self.entry.subentries.get(self.subentry.subentry_id)
-                or self.subentry
-            )
-            self.hass.config_entries.async_update_subentry(
-                self.entry,
-                live_sub,
-                data=merged_data,
-            )
-            self.subentry = self.entry.subentries.get(live_sub.subentry_id) or live_sub
-        else:
-            self.hass.config_entries.async_update_entry(
-                self.entry,
-                data=merged_data,
-                options=merged_data,
-            )
+        """Persist updated device settings to the Device's ConfigSubentry."""
+        self.hass.config_entries.async_update_subentry(
+            self.entry, self._live_subentry(), data=merged_data
+        )
+        self._live_subentry()
 
     def get_opt(self, key: str, default: Any = None) -> Any:
         """Retrieve a setting, prioritizing System-Wide config for shared keys and subentry/entry data for device keys."""
@@ -482,16 +472,9 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 if val is not None:
                     return val
             return default
-        if self.subentry is not None:
-            live_sub = self.entry.subentries.get(self.subentry.subentry_id)
-            if live_sub is not None:
-                self.subentry = live_sub
-            if key in self.subentry.data:
-                return self.subentry.data[key]
-        if self.entry.options and key in self.entry.options:
-            return self.entry.options[key]
-        if key in self.entry.data:
-            return self.entry.data[key]
+        sub_data = self._live_subentry().data
+        if key in sub_data:
+            return sub_data[key]
         if isinstance(global_cfg, dict) and key in global_cfg:
             return global_cfg[key]
         return default
@@ -516,57 +499,37 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     @property
     def device_slug(self) -> str:
-        """Return normalized ESPHome device slug, auto-healing from subentry/entry data or unique_id."""
-        raw = str(self.get_opt(CONF_DEVICE_SLUG, "") or "").strip()
-        norm = normalize_device_slug(raw) if raw else "esphome_device"
-        if norm == "esphome_device":
-            if self.subentry is not None:
-                sub_slug = str(self.subentry.data.get(CONF_DEVICE_SLUG, "") or "").strip()
-                if sub_slug and sub_slug != "esphome_device":
-                    return normalize_device_slug(sub_slug)
-                sub_uid = str(self.subentry.unique_id or "")
-                if sub_uid.startswith(f"{DOMAIN}_") and ":" not in sub_uid:
-                    rec = normalize_device_slug(sub_uid.removeprefix(f"{DOMAIN}_"))
-                    if rec and rec != "esphome_device":
-                        return rec
-            orig_slug = str(self.entry.data.get(CONF_DEVICE_SLUG, "") or "").strip()
-            if orig_slug and orig_slug != "esphome_device":
-                return normalize_device_slug(orig_slug)
-            uid = str(self.entry.unique_id or "")
-            if uid.startswith(f"{DOMAIN}_") and ":" not in uid:
-                recovered = normalize_device_slug(uid.removeprefix(f"{DOMAIN}_"))
-                if recovered and recovered != "esphome_device":
-                    return recovered
-        return norm
+        """Return the Device's slug as stored in its subentry (set once at onboarding)."""
+        return normalize_device_slug(
+            str(self._live_subentry().data.get(CONF_DEVICE_SLUG) or "")
+        )
 
     @property
     def device_mac(self) -> str | None:
-        """Return normalized MAC address for the bound ESPHome or BLE device when known."""
+        """Return the MAC stored for this Device at onboarding, else the bound ESPHome device's MAC connection."""
         stored_mac = str(self.get_opt("mac", "") or "").strip()
-        if stored_mac and ":" in stored_mac:
+        if stored_mac:
             return dr.format_mac(stored_mac)
-        esp_dev = get_bound_esphome_device(
-            self.hass, self.esphome_device_id, fallback_slug=self.device_slug
-        )
+        esp_dev = get_bound_esphome_device(self.hass, self.esphome_device_id)
         if esp_dev is not None:
-            for _ctype, cval in esp_dev.connections:
-                if cval:
+            for ctype, cval in esp_dev.connections:
+                if ctype == dr.CONNECTION_NETWORK_MAC and cval:
                     return dr.format_mac(str(cval))
         ble_addr = str(self.get_opt(CONF_BLE_TARGET_ADDRESS, "") or "").strip()
-        if ble_addr and ":" in ble_addr and len(ble_addr) == 17:
+        if len(ble_addr) == 17 and ble_addr.count(":") == 5:
             return dr.format_mac(ble_addr)
         return None
 
     @property
     def device_title(self) -> str:
         """Return the friendly device title from the ConfigSubentry or formatted slug."""
-        if self.subentry is not None and self.subentry.title:
+        if self._live_subentry().title:
             return self.subentry.title
         return self.device_slug.replace("_", " ").title()
 
     @property
     def esphome_device_id(self) -> str | None:
-        """Return the Home Assistant Device Registry ID for the underlying ESPHome device."""
+        """Return the bound ESPHome device ID: the stored ID, else the ESPHome device carrying the stored MAC."""
         dev_reg = dr.async_get(self.hass)
         if (
             self._cached_esphome_device_id
@@ -574,11 +537,21 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         ):
             return self._cached_esphome_device_id
         stored = str(self.get_opt(CONF_ESPHOME_DEVICE_ID, "") or "").strip()
-        resolved = find_esphome_device_id(
-            self.hass, self.device_slug, stored or None
-        )
+        stored_mac = str(self.get_opt("mac", "") or "").strip()
+        resolved = resolve_bound_esphome_device_id(self.hass, stored or None, stored_mac or None)
         self._cached_esphome_device_id = resolved
         return resolved
+
+    def device_entity(self, domain: str, *suffixes: str) -> str | None:
+        """Return the bound ESPHome device's enabled domain entity whose entity_id ends with the first matching suffix."""
+        return find_device_entity_by_suffix(
+            self.hass, self.esphome_device_id, domain, suffixes
+        )
+
+    def device_state(self, domain: str, *suffixes: str) -> State | None:
+        """Return the state of device_entity(domain, *suffixes), or None."""
+        ent_id = self.device_entity(domain, *suffixes)
+        return self.hass.states.get(ent_id) if ent_id else None
 
     def get_device_info(self) -> DeviceInfo:
         """Return canonical Latter DeviceInfo keyed by MAC (or subentry_id) and linked via via_device_id to ESPHome."""
@@ -604,8 +577,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Read compile-time hardware capability manifest reported by the bound ESPHome device."""
         return read_device_hardware_manifest(
             self.hass,
-            self._cached_esphome_device_id or str(self.get_opt(CONF_ESPHOME_DEVICE_ID, "") or "").strip(),
-            fallback_slug=self.device_slug,
+            self.esphome_device_id,
             cached_manifest=self._runtime.hello_manifest,
         )
 
@@ -718,9 +690,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     @property
     def local_speaker(self) -> str:
         """Automatically resolve the on-device media_player entity from the bound ESPHome device."""
-        return _resolve_esphome_local_speaker(
-            self.hass, self.device_slug, self.esphome_device_id
-        )
+        return _resolve_esphome_local_speaker(self.hass, self.esphome_device_id)
 
     @property
     def local_ma_speaker(self) -> str:
@@ -761,7 +731,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     @property
     def camera_entities(self) -> list[str]:
-        """Return configured list of up to 10 camera entity_ids, plus any onboard ESPHome P4 cameras."""
+        """Return the configured list of up to 10 camera entity_ids."""
         cleaned: list[str] = []
         raw_list = self.get_opt(CONF_CAMERA_ENTITIES)
         if isinstance(raw_list, list):
@@ -770,13 +740,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             single = str(self.get_opt(CONF_CAMERA_ENTITY) or "").strip()
             if single:
                 cleaned = [single]
-        # Auto-include any onboard ESPHome camera belonging to a Latter device (e.g. P4 Remote Assistant 5MP cam)
-        domain_data = self.hass.data.get(DOMAIN, {})
-        for val in domain_data.values():
-            if hasattr(val, "device_slug"):
-                for cand in (f"camera.{val.device_slug}", f"camera.{val.device_slug}_camera"):
-                    if self.hass.states.get(cand) is not None and cand not in cleaned and len(cleaned) < 10:
-                        cleaned.append(cand)
         return cleaned[:10]
 
     def _build_intercom_targets_summary(self) -> str:
@@ -1150,7 +1113,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self.hass,
                 self.esphome_device_id,
                 "set_browse_slots",
-                fallback_slug=self.device_slug,
             )
         )
         if not has_media_ui:
@@ -1180,7 +1142,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self.active_area_id = None
         elif not self.active_area_id:
             dev_area = _get_esphome_device_current_area(
-                self.hass, self.device_slug, self.esphome_device_id
+                self.hass, self.esphome_device_id
             )
             if dev_area:
                 self.active_area_id = dev_area
@@ -1393,7 +1355,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.hass,
             self.esphome_device_id,
             "show_notification",
-            fallback_slug=self.device_slug,
         )
         if esp_notify_svc:
             self.entry.async_create_background_task(
@@ -1654,7 +1615,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             ble_tracker=self._ble_tracker,
             device_profile=self.device_profile,
             esphome_device_id=self.esphome_device_id,
-            device_slug=self.device_slug,
         )
 
     def get_current_area_and_distance(self) -> tuple[str, dict[str, Any]]:
@@ -2107,7 +2067,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.hass, self.active_area_id, self.local_speaker
         )
         climate_telemetry = get_area_climate_telemetry(
-            self.hass, self.active_area_id, self.device_slug
+            self.hass, self.active_area_id
         )
         alarm_info = get_home_alarm_summary(
             self.hass, self.get_opt(CONF_ALARM_ENTITY)
@@ -2262,9 +2222,9 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         if ma_counterpart and ma_counterpart not in tracked:
             tracked.append(ma_counterpart)
-        if self.is_local_speaker_entity(self.active_speaker) and self.device_slug:
-            np_title = f"sensor.{self.device_slug}_now_playing_title"
-            if np_title not in tracked:
+        if self.is_local_speaker_entity(self.active_speaker):
+            np_title = self.device_entity("sensor", "_now_playing_title")
+            if np_title and np_title not in tracked:
                 tracked.append(np_title)
 
         self._unsub_speaker_state = async_track_state_change_event(
@@ -2535,9 +2495,9 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             position = _interpolate_speaker_position(ma_st) or position
 
         if title == "Idle" and bool(is_local_flag):
-            t_st = self.hass.states.get(f"sensor.{self.device_slug}_now_playing_title")
-            a_st = self.hass.states.get(f"sensor.{self.device_slug}_now_playing_artist")
-            al_st = self.hass.states.get(f"sensor.{self.device_slug}_now_playing_album")
+            t_st = self.device_state("sensor", "_now_playing_title")
+            a_st = self.device_state("sensor", "_now_playing_artist")
+            al_st = self.device_state("sensor", "_now_playing_album")
             if t_st is not None and t_st.state not in ("", "None", "Idle", STATE_UNKNOWN, STATE_UNAVAILABLE):
                 title = str(t_st.state)
                 if a_st is not None and a_st.state not in ("", "None", STATE_UNKNOWN, STATE_UNAVAILABLE):

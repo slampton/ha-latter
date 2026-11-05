@@ -44,6 +44,7 @@ from .const import (
 )
 from .coordinator import LatterCoordinator, resolve_coordinator
 from .identity import esphome_service
+from .issue_ids import slot_push_failing_issue_id
 from .area_engine import (
     async_execute_area_action,
     get_area_entities,
@@ -179,35 +180,27 @@ def _resolve_coordinator_from_call(
     return coord
 
 
-def _resolve_esphome_action(
-    hass: HomeAssistant, device_slug: str, suffix: str
-) -> str | None:
-    """Resolve the registered esphome.<node>_<suffix> service name via identity.esphome_service."""
-    coord = resolve_coordinator(hass, device_slug)
-    dev_id = coord.esphome_device_id if coord is not None else None
-    return esphome_service(hass, dev_id, suffix, fallback_slug=device_slug)
-
-
 _SLOT_PUSH_WARN_INTERVAL_S = 600.0
 _SLOT_PUSH_REPAIR_THRESHOLD = 5
 
 
 async def async_push_browse_slots(
     hass: HomeAssistant,
-    device_slug: str,
+    coord: LatterCoordinator,
     mode: str,
     page: int,
     page_size: int,
     items: list[dict[str, Any]],
     preferred_suffix: str = "set_browse_slots",
 ) -> None:
-    """Paginate items and push to esphome.<slug>_<suffix> using the canonical Protocol v3 packed slot contract."""
-    esphome_action = _resolve_esphome_action(hass, device_slug, preferred_suffix)
+    """Paginate items and push them to the Device's bound esphome.<node>_<suffix> action (Protocol v3 packed slots)."""
+    device_slug = coord.device_slug
+    esphome_action = esphome_service(hass, coord.esphome_device_id, preferred_suffix)
     include_levels = preferred_suffix == "set_area_slots" and esphome_action is not None
 
     if esphome_action is None and preferred_suffix != "set_browse_slots":
-        esphome_action = _resolve_esphome_action(
-            hass, device_slug, "set_browse_slots"
+        esphome_action = esphome_service(
+            hass, coord.esphome_device_id, "set_browse_slots"
         )
 
     slot_capacity = 3 if include_levels else 5
@@ -246,20 +239,21 @@ async def async_push_browse_slots(
     domain_data = hass.data.setdefault(DOMAIN, {})
     fail_counts: dict[str, int] = domain_data.setdefault("_slot_push_failures", {})
     last_warn_ts: dict[str, float] = domain_data.setdefault("_slot_push_last_warn", {})
-    issue_id = f"slot_push_failing_{device_slug}"
+    fail_key = coord.subentry_id
+    issue_id = slot_push_failing_issue_id(fail_key)
 
     try:
         await hass.services.async_call(
             "esphome", esphome_action, payload, blocking=True
         )
-        if fail_counts.pop(device_slug, 0) >= _SLOT_PUSH_REPAIR_THRESHOLD:
+        if fail_counts.pop(fail_key, 0) >= _SLOT_PUSH_REPAIR_THRESHOLD:
             ir.async_delete_issue(hass, DOMAIN, issue_id)
     except Exception as err:  # noqa: BLE001
-        count = fail_counts.get(device_slug, 0) + 1
-        fail_counts[device_slug] = count
+        count = fail_counts.get(fail_key, 0) + 1
+        fail_counts[fail_key] = count
         now_m = time.monotonic()
-        if now_m - last_warn_ts.get(device_slug, -_SLOT_PUSH_WARN_INTERVAL_S) >= _SLOT_PUSH_WARN_INTERVAL_S:
-            last_warn_ts[device_slug] = now_m
+        if now_m - last_warn_ts.get(fail_key, -_SLOT_PUSH_WARN_INTERVAL_S) >= _SLOT_PUSH_WARN_INTERVAL_S:
+            last_warn_ts[fail_key] = now_m
             _LOGGER.warning(
                 "Failed to push %s slots to '%s' (consecutive failures=%d): %s",
                 esphome_action,
@@ -268,7 +262,6 @@ async def async_push_browse_slots(
                 err,
             )
         if count >= _SLOT_PUSH_REPAIR_THRESHOLD:
-            coord = resolve_coordinator(hass, device_slug)
             placeholders = {
                 "device_slug": device_slug,
                 "service_name": f"esphome.{esphome_action}",
@@ -282,13 +275,16 @@ async def async_push_browse_slots(
                 severity=ir.IssueSeverity.WARNING,
                 translation_key="slot_push_failing",
                 translation_placeholders=placeholders,
-                config_entry_id=coord.entry.entry_id if coord else None,
+                config_entry_id=coord.entry.entry_id,
             )
 
 
 def _is_esphome_device_online(hass: HomeAssistant, coord: LatterCoordinator) -> bool:
     """Return True if the target ESPHome device supports slot callbacks and has an online entity."""
-    if _resolve_esphome_action(hass, coord.device_slug, "set_area_slots") is None and _resolve_esphome_action(hass, coord.device_slug, "set_browse_slots") is None:
+    if (
+        esphome_service(hass, coord.esphome_device_id, "set_area_slots") is None
+        and esphome_service(hass, coord.esphome_device_id, "set_browse_slots") is None
+    ):
         return False
     local_spk = coord.local_speaker
     if local_spk:
@@ -322,7 +318,7 @@ async def async_push_active_area_entities(
     )
     await async_push_browse_slots(
         hass=hass,
-        device_slug=coord.device_slug,
+        coord=coord,
         mode=f"area_{coord.last_area_filter or 'all'}",
         page=coord.last_area_page or 1,
         page_size=coord.default_page_size,
@@ -614,7 +610,6 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     async def _handle_music_browse(call: ServiceCall) -> None:
         coord = _resolve_coordinator_from_call(hass, call)
         data = call.data
-        device_slug = coord.device_slug
 
         mode = str(data.get("mode") or "speakers")
         page = int(data.get("page") or 1)
@@ -650,7 +645,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
         await async_push_browse_slots(
             hass=hass,
-            device_slug=device_slug,
+            coord=coord,
             mode=mode,
             page=page,
             page_size=page_size,
@@ -661,7 +656,6 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     async def _handle_area_browse(call: ServiceCall) -> None:
         coord = _resolve_coordinator_from_call(hass, call)
         data = call.data
-        device_slug = coord.device_slug
 
         mode = str(data.get("mode") or "entities").strip().lower()
         page = int(data.get("page") or 1)
@@ -687,7 +681,6 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 hass,
                 active_area_id=coord.active_area_id,
                 local_speaker=local_speaker,
-                device_slug=device_slug,
             )
             slot_mode = "area_areas"
         elif mode == "home":
@@ -708,7 +701,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         target_suffix = "set_browse_slots" if mode == "areas" else "set_area_slots"
         await async_push_browse_slots(
             hass=hass,
-            device_slug=device_slug,
+            coord=coord,
             mode=slot_mode,
             page=page,
             page_size=page_size,
@@ -757,7 +750,6 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     async def _handle_calendar_fetch(call: ServiceCall) -> None:
         coord = _resolve_coordinator_from_call(hass, call)
         data = call.data
-        device_slug = coord.device_slug
 
         days = int(data.get("days") or 30)
         page = int(data.get("page") or 1)
@@ -768,7 +760,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
         await async_push_browse_slots(
             hass=hass,
-            device_slug=device_slug,
+            coord=coord,
             mode="calendar_agenda",
             page=page,
             page_size=page_size,
@@ -1169,8 +1161,8 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 camera_entity=cam_ent,
             )
 
-            esp_notify_svc = _resolve_esphome_action(
-                hass, coord.device_slug, "show_notification"
+            esp_notify_svc = esphome_service(
+                hass, coord.esphome_device_id, "show_notification"
             )
             if esp_notify_svc:
                 try:

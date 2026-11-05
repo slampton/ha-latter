@@ -1,7 +1,11 @@
 name: Validate Marketplace & Hassfest
 
+# dev is the integration branch: a push to dev that passes every job fast-forwards main, the branch
+# HACS installs from. main is never ahead of a green run.
+
 on:
   push:
+    branches: [main, dev]
   pull_request:
   workflow_dispatch:
   schedule:
@@ -44,3 +48,18 @@ jobs:
         run: ruff check custom_components/latter tests --select E9,F63,F7,F82,F401,F811,F841
       - name: Run unit tests
         run: python -m unittest discover -s tests -v
+
+  promote:
+    name: Fast-forward main to this commit
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    needs: [validate_marketplace, hassfest, lint_and_test]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Fast-forward main (refuses anything that is not a fast-forward)
+        run: git push origin "${GITHUB_SHA}:refs/heads/main"

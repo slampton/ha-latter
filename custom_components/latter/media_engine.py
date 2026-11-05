@@ -26,7 +26,8 @@ from .browse_engine import (
     async_browse_media_items,
     is_music_assistant_player,
 )
-from .const import DOMAIN, normalize_device_slug
+from .const import DOMAIN
+from .issue_ids import link_ma_player_issue_id
 from .identity import (
     device_entities,
     find_device_entity_by_suffix,
@@ -141,31 +142,26 @@ def _parse_media_uri_type(media_id: str) -> str:
 
 
 def resolve_esphome_local_speaker(
-    hass: HomeAssistant, device_slug: str, esphome_device_id: str | None = None
+    hass: HomeAssistant, esphome_device_id: str | None
 ) -> str:
     """Resolve the on-device media_player entity for the bound ESPHome node, or '' if the device has no speaker."""
-    dev = get_bound_esphome_device(hass, esphome_device_id, fallback_slug=device_slug)
-    if dev is not None:
-        by_suffix = find_device_entity_by_suffix(
-            hass, dev.id, "media_player", ("_music", "_speaker", "_media_player")
-        )
-        if by_suffix:
-            return by_suffix
-        for entry in device_entities(hass, dev.id, domain="media_player"):
-            if entry.platform == "esphome":
-                return entry.entity_id
-
-    slug_norm = normalize_device_slug(device_slug)
-    for cand in (f"media_player.{slug_norm}", f"media_player.{slug_norm}_music"):
-        if hass.states.get(cand) is not None:
-            return cand
-
+    dev = get_bound_esphome_device(hass, esphome_device_id)
+    if dev is None:
+        return ""
+    by_suffix = find_device_entity_by_suffix(
+        hass, dev.id, "media_player", ("_music", "_speaker", "_media_player")
+    )
+    if by_suffix:
+        return by_suffix
+    for entry in device_entities(hass, dev.id, domain="media_player"):
+        if entry.platform == "esphome":
+            return entry.entity_id
     return ""
 
 
 def _ma_link_issue_id(coordinator: Any) -> str:
     """Return the per-Device `link_ma_player` repair issue ID (scoped by config subentry)."""
-    return f"link_ma_player_{getattr(coordinator, 'subentry_id', '')}"
+    return link_ma_player_issue_id(str(getattr(coordinator, "subentry_id", "")))
 
 
 @callback

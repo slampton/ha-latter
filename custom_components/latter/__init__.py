@@ -20,7 +20,6 @@ from homeassistant.helpers import (
     config_validation as cv,
     device_registry as dr,
     discovery_flow,
-    entity_registry as er,
 )
 from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.storage import Store
@@ -28,7 +27,7 @@ from homeassistant.helpers.typing import ConfigType
 
 from .ble_engine import _iter_devices
 from .const import (
-    CONF_DEVICE_SLUG,
+    CONF_ESPHOME_DEVICE_ID,
     DATA_DISCOVERY_UNSUB,
     DATA_GLOBAL_CONFIG,
     DATA_GLOBAL_STORE,
@@ -39,7 +38,6 @@ from .const import (
     INTEGRATION_VERSION,
     PLATFORMS,
     STORAGE_VERSION,
-    normalize_device_slug,
 )
 from .coordinator import LatterCoordinator
 from .doorbell_engine import LatterCameraAudioStreamView
@@ -49,11 +47,14 @@ from .http import (
     LatterMapSnapshotView,
     LatterWallpaperProxyView,
 )
+from .config_flow import _device_unique_id
 from .identity import (
     LATTER_CONTRACT_ACTION_SUFFIXES,
+    is_esphome_device,
     is_latter_compatible_esphome_device,
 )
 from .media_engine import clear_ma_counterpart_cache
+from .repairs import async_delete_device_issues
 from .services import async_push_active_area_entities, async_setup_services
 from .studio import (
     LatterBrandIconView,
@@ -68,12 +69,6 @@ _LOGGER = logging.getLogger(__name__)
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 type LatterConfigEntry = ConfigEntry[LatterSystem]
-
-def _slugify_device_name(name: str) -> str:
-    """Convert an ESPHome device name into a normalized slug."""
-    val = normalize_device_slug(name)
-    return "" if val == "esphome_device" and name.strip().lower() != "esphome_device" else val
-
 
 async def _async_ensure_global_store(
     hass: HomeAssistant, seed_entry: ConfigEntry | None = None
@@ -137,20 +132,12 @@ async def _async_ensure_global_store(
 
 @callback
 def _async_scan_all_esphome_devices_for_discovery(hass: HomeAssistant) -> None:
-    """Self-heal crashed flows, abort non-Latter discovery flows, and discover Latter-compatible ESPHome devices."""
+    """Self-heal crashed flows, abort stale discovery flows, and discover Latter-compatible ESPHome devices."""
     dev_reg = dr.async_get(hass)
-    devices_by_uid: dict[str, tuple[dr.DeviceEntry, str]] = {}
-    for dev in _iter_devices(dev_reg):
-        dev_name = str(dev.name_by_user or dev.name or "").strip()
-        if dev_name:
-            slug = _slugify_device_name(dev_name)
-            if slug:
-                devices_by_uid[f"{DOMAIN}_{slug}"] = (dev, slug)
-                for _ctype, cval in dev.connections:
-                    if cval:
-                        devices_by_uid[f"{DOMAIN}_{dr.format_mac(str(cval))}"] = (dev, slug)
+    esphome_devices = [d for d in _iter_devices(dev_reg) if is_esphome_device(hass, d)]
+    devices_by_uid = {_device_unique_id(d): d for d in esphome_devices}
 
-    # 1. Clean up only crashed flows (step_id is None) or unsupported discovery flows
+    # 1. Clean up only crashed flows (step_id is None) or discovery flows whose device no longer qualifies
     for flow in list(hass.config_entries.flow.async_progress_by_handler(DOMAIN)):
         fid = flow.get("flow_id")
         if not fid:
@@ -161,15 +148,12 @@ def _async_scan_all_esphome_devices_for_discovery(hass: HomeAssistant) -> None:
         ctx = flow.get("context", {})
         if ctx.get("source") != SOURCE_INTEGRATION_DISCOVERY:
             continue
-        unique_id = str(ctx.get("unique_id") or "")
-        if not unique_id.startswith(f"{DOMAIN}_"):
-            continue
-        pair = devices_by_uid.get(unique_id)
-        if pair is None or not is_latter_compatible_esphome_device(hass, pair[0], pair[1]):
+        dev = devices_by_uid.get(str(ctx.get("unique_id") or ""))
+        if dev is None or not is_latter_compatible_esphome_device(hass, dev):
             hass.config_entries.flow.async_abort(fid)
 
     # 2. Trigger discovery for any unconfigured Latter-compatible ESPHome devices
-    for dev in _iter_devices(dev_reg):
+    for dev in esphome_devices:
         _async_check_esphome_device_for_discovery(hass, dev)
 
 
@@ -178,31 +162,17 @@ def _async_check_esphome_device_for_discovery(
     hass: HomeAssistant, device: dr.DeviceEntry
 ) -> None:
     """Trigger a Latter discovery flow ONLY if no Latter hub entry exists yet and the ESPHome device implements the Latter contract."""
-    existing_entries = hass.config_entries.async_entries(DOMAIN)
-    if existing_entries:
+    if hass.config_entries.async_entries(DOMAIN):
         return
-
-    ent_reg = er.async_get(hass)
-    entries = er.async_entries_for_device(ent_reg, device.id)
-    if not any(e.platform == "esphome" for e in entries):
+    if not is_esphome_device(hass, device):
         return
-
-    dev_name = str(device.name_by_user or device.name or "").strip()
-    if not dev_name:
+    if not is_latter_compatible_esphome_device(hass, device):
         return
-
-    slug = _slugify_device_name(dev_name)
-    if not slug:
-        return
-
-    if not is_latter_compatible_esphome_device(hass, device, slug):
-        return
-
     discovery_flow.async_create_flow(
         hass,
         DOMAIN,
         context={"source": SOURCE_INTEGRATION_DISCOVERY},
-        data={CONF_DEVICE_SLUG: slug, "name": dev_name},
+        data={CONF_ESPHOME_DEVICE_ID: device.id},
     )
 
 
@@ -358,6 +328,8 @@ async def _async_update_listener(hass: HomeAssistant, entry: LatterConfigEntry) 
     }
     loaded_sub_ids = set(sys_obj.coordinators.keys())
     if current_sub_ids != loaded_sub_ids:
+        for removed_id in loaded_sub_ids - current_sub_ids:
+            async_delete_device_issues(hass, removed_id)
         hass.config_entries.async_schedule_reload(entry.entry_id)
         return
 

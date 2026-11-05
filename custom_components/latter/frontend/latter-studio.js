@@ -1781,7 +1781,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root">
             <p class="desc">Configure this device's normalized ESPHome slug, hardware type, logical group, and pagination.</p>
             <div class="field">
               <label>ESPHome Device Slug (sensor.&lt;slug&gt;_*)</label>
-              <input type="text" id="cfg-device_slug" oninput="markDirty();">
+              <input type="text" id="cfg-device_slug" readonly title="Set from the ESPHome node name when the Device was added">
             </div>
             <div class="field">
               <label>Device Type</label>
@@ -1856,7 +1856,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root">
               <h3 style="margin:0;color:var(--danger);">Remove Device</h3>
               <p class="desc" style="margin:2px 0 0;">Remove this device from Latter. The ESPHome device itself will remain in Home Assistant and can be re-added anytime.</p>
             </div>
-            <button type="button" class="btn-danger" onclick="removeManagedDevice(STATE.entry_id, STATE.title)">Remove Device from Latter</button>
+            <button type="button" class="btn-danger" onclick="removeManagedDevice(STATE.subentry_id, STATE.title)">Remove Device from Latter</button>
           </div>
         </div>
       </section>
@@ -1948,27 +1948,47 @@ const DOCK_APP_META = [
   {token: "tools",  label: "Tools"}
 ];
 
+// Must match custom_components/latter/studio/scope.py (checked by tests/test_protocol.py).
 const SYSTEM_WS_COMMANDS = new Set([
   "set_ble_area_offset",
   "set_area_fusion_mode",
+  "auto_calibrate_here",
   "system_entity_action",
+  "esphome_entity_action",
+  "send_test_notification",
   "check_system_updates",
-  "clear_internal_logs",
   "log_client_error",
+  "clear_internal_logs",
   "remove_device",
   "add_ble_device",
+  "set_device_remote_group",
   "create_device_group",
   "delete_device_group",
-  "capture_profile",
   "delete_profile",
-  "apply_profile"
+  "apply_profile",
+  "export_backup_json",
+  "restore_backup"
+]);
+
+const DEVICE_WS_COMMANDS = new Set([
+  "test_doorbell_speaker",
+  "upload_wallpaper",
+  "select_wallpaper",
+  "toggle_wallpaper_favorite",
+  "delete_wallpaper",
+  "save_config",
+  "capture_profile"
 ]);
 
 async function callStudioCommand(bodyObj) {
   if (!HASS_REF) throw new Error("Home Assistant connection not ready");
   const { command, ...payload } = bodyObj || {};
   const cmdName = command || "save_config";
-  const wsType = SYSTEM_WS_COMMANDS.has(cmdName) ? "latter/system/command" : "latter/device/command";
+  if (DEVICE_WS_COMMANDS.has(cmdName) && !ACTIVE_SUBENTRY_ID) {
+    showToast("Select a device first");
+    return null;
+  }
+  const wsType = DEVICE_WS_COMMANDS.has(cmdName) ? "latter/device/command" : "latter/system/command";
   return await HASS_REF.callWS({
     type: wsType,
     command: cmdName,
@@ -2460,7 +2480,7 @@ function renderSystemOverview(systemDevices, systemControls, cfg) {
     targetScopes.push({id: `group:${g.id}`, name: `Group: ${g.name} (${cnt})`});
   });
   (systemDevices || []).forEach(d => {
-    targetScopes.push({id: `device:${d.device_slug}`, name: `Device: ${d.title}`});
+    targetScopes.push({id: `device:${d.subentry_id}`, name: `Device: ${d.title}`});
   });
 
   const profScopeSel = doc.getElementById("profile-target-scope");
@@ -3553,17 +3573,17 @@ function renderDeviceRemoteAssignments() {
         <small>Active Area: ${esc(d.active_area_name || 'Unassigned')}</small>
       </div>
       <div class="widget">
-        <select onchange="assignDeviceRemoteGroup(${jsArg(d.device_slug)}, this.value)">${opts}</select>
+        <select onchange="assignDeviceRemoteGroup(${jsArg(d.subentry_id)}, ${jsArg(d.title)}, this.value)">${opts}</select>
       </div>
     </div>`;
   }).join("");
 }
 
-async function assignDeviceRemoteGroup(deviceSlug, modeVal) {
-  const data = await callStudioCommand({command: "set_device_remote_group", device_slug: deviceSlug, device_remote_group: modeVal});
+async function assignDeviceRemoteGroup(subentryId, title, modeVal) {
+  const data = await callStudioCommand({command: "set_device_remote_group", subentry_id: subentryId, device_remote_group: modeVal});
   if (data) {
     applyStateToDom(data, false);
-    showToast(`Updated remote assignment for ${deviceSlug}`);
+    showToast(`Updated remote assignment for ${title}`);
   }
 }
 
@@ -3721,7 +3741,7 @@ async function confirmRemoveManagedDevice() {
   const title = pendingRemoveTitle;
   closeRemoveDeviceModal();
   if (!entryId) return;
-  const data = await callStudioCommand({command: "remove_device", entry_id: entryId});
+  const data = await callStudioCommand({command: "remove_device", subentry_id: entryId});
   if (data) {
     const data = data;
     if (data.removed) {
@@ -4191,7 +4211,6 @@ async function saveAllConfig() {
 
   const artVal = String(doc.getElementById("cfg-art_size")?.value || "466");
   const config = {
-    device_slug: doc.getElementById("cfg-device_slug")?.value?.trim() || (STATE?.config?.device_slug || ""),
     companion_base_url: doc.getElementById("cfg-companion_base_url")?.value?.trim() || "",
     device_profile: doc.getElementById("cfg-device_profile")?.value || (STATE?.config?.device_profile || "mobile_display"),
     device_group: doc.getElementById("cfg-device_group")?.value || "handhelds",

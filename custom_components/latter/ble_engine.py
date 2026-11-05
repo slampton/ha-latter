@@ -88,14 +88,10 @@ def _int_to_mac(mac_int: int) -> str:
 
 
 def _discover_target_device_macs(
-    hass: HomeAssistant,
-    device_slug: str,
-    esphome_device_id: str | None = None,
+    hass: HomeAssistant, esphome_device_id: str | None
 ) -> set[int]:
     """Find known Wi-Fi/BLE MAC address integers for the bound ESPHome device."""
-    dev = get_bound_esphome_device(
-        hass, esphome_device_id, fallback_slug=device_slug
-    )
+    dev = get_bound_esphome_device(hass, esphome_device_id)
     if dev is None:
         return set()
 
@@ -298,7 +294,6 @@ class LatterNativeBleTracker:
         self._target_uuid_hex = _normalize_uuid_hex(beacon_uuid)
         self._target_address = str(target_address or "").strip()
         self.target_address = self._target_address
-        self._device_slug = device_slug.lower().replace("_", "-")
         self._raw_slug = device_slug
         self._esphome_device_id: str | None = esphome_device_id
         self._manifest_beacon: dict[str, Any] = (
@@ -417,7 +412,7 @@ class LatterNativeBleTracker:
         beacon_cfg = self._manifest_beacon
         if not beacon_cfg:
             hw = read_device_hardware_manifest(
-                self.hass, self._esphome_device_id, fallback_slug=self._raw_slug
+                self.hass, self._esphome_device_id
             )
             if isinstance(hw.get("beacon"), dict):
                 beacon_cfg = hw["beacon"]
@@ -473,7 +468,7 @@ class LatterNativeBleTracker:
         self.current_area_id = None
         self._last_switch_monotonic = 0.0
         self._target_mac_ints = _discover_target_device_macs(
-            self.hass, self._raw_slug, self._esphome_device_id
+            self.hass, self._esphome_device_id
         )
 
     @callback
@@ -481,7 +476,7 @@ class LatterNativeBleTracker:
         """Register this tracker with the singleton LatterBleFabric."""
         self.async_stop()
         self._target_mac_ints = _discover_target_device_macs(
-            self.hass, self._raw_slug, self._esphome_device_id
+            self.hass, self._esphome_device_id
         )
         fabric = get_ble_fabric(self.hass)
         fabric.register_tracker(self)
@@ -616,12 +611,7 @@ class LatterNativeBleTracker:
         if self._target_mac_ints and adv_int is not None and adv_int in self._target_mac_ints:
             return True
 
-        # 2. Local BLE device name match
-        adv_name = name.lower().replace("_", "-") if name else ""
-        if adv_name and self._device_slug in adv_name:
-            return True
-
-        # 3. Apple iBeacon UUID + Major/Minor ID match (supports ESP32-P4 + ESP32-C6 where the C6 BLE MAC
+        # 2. Apple iBeacon UUID + Major/Minor ID match (supports ESP32-P4 + ESP32-C6 where the C6 BLE MAC
         #    differs from the P4 host MAC in HA Device Registry)
         apple_bytes = mfg_data.get(APPLE_COMPANY_ID)
         if apple_bytes and len(apple_bytes) >= 18:
@@ -715,7 +705,7 @@ class LatterNativeBleTracker:
 
         if not self._target_mac_ints and self.packets_seen <= 3:
             self._target_mac_ints = _discover_target_device_macs(
-                self.hass, self._raw_slug, self._esphome_device_id
+                self.hass, self._esphome_device_id
             )
 
         cached_area = self._scanner_area_cache.get(source)
@@ -1076,7 +1066,7 @@ class LatterBleFabric:
             ):
                 tracker._last_mac_discovery_mono = now_mono_check
                 tracker._target_mac_ints = _discover_target_device_macs(
-                    self.hass, tracker._raw_slug, tracker._esphome_device_id
+                    self.hass, tracker._esphome_device_id
                 )
         try:
             from homeassistant.components import bluetooth

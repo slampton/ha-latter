@@ -5,12 +5,12 @@
         "title": "Set Up Latter System & Initial Device",
         "description": "Create the Latter System hub and connect your first ESPHome companion display or area sensor. Additional devices can be added as Device subentries or via Latter Studio.",
         "data": {
-          "device_slug": "ESPHome Device Name / Slug",
+          "esphome_device_id": "ESPHome Device",
           "apply_profile": "Configuration Profile",
           "native_ble_tracking": "Track this device's area with Bluetooth"
         },
         "data_description": {
-          "device_slug": "The normalized name of your ESPHome device (for example: kitchen_display).",
+          "esphome_device_id": "The ESPHome device running Latter firmware (or a Latter Core build). Latter binds to this device and its MAC address.",
           "apply_profile": "Auto-detect screen geometry and capabilities from hardware, or apply a saved Latter profile.",
           "native_ble_tracking": "Use your Bluetooth proxies to work out which Area this device is in. Turn off for devices that never move."
         }
@@ -27,10 +27,10 @@
     },
     "abort": {
       "already_configured": "This ESPHome device is already configured in Latter.",
-      "not_supported": "This device does not announce Latter companion actions.",
+      "not_supported": "This device is not an ESPHome device that announces Latter companion actions.",
       "reconfigure_successful": "Configuration updated.",
       "single_instance_allowed": "Latter System is already configured. Add additional displays as Device subentries under the Latter integration.",
-      "unique_id_mismatch": "The device slug does not match the existing configuration entry.",
+      "unique_id_mismatch": "The selected ESPHome device does not match the existing configuration entry.",
       "wrong_device": "The selected ESPHome device does not match this configuration entry."
     },
     "error": {
@@ -49,26 +49,26 @@
           "title": "Add ESPHome Device to Latter",
           "description": "Connect an ESPHome companion display or area sensor to the Latter System.",
           "data": {
-            "device_slug": "ESPHome Device Name / Slug",
+            "esphome_device_id": "ESPHome Device",
             "apply_profile": "Configuration Profile",
             "native_ble_tracking": "Track this device's area with Bluetooth"
           },
           "data_description": {
-            "device_slug": "The normalized name of your ESPHome device (for example: kitchen_display).",
+            "esphome_device_id": "The ESPHome device running Latter firmware (or a Latter Core build). Latter binds to this device and its MAC address.",
             "apply_profile": "Auto-detect screen geometry and capabilities from hardware, or apply a saved Latter profile.",
             "native_ble_tracking": "Use your Bluetooth proxies to work out which Area this device is in. Turn off for devices that never move."
           }
         },
         "reconfigure": {
           "title": "Reconfigure or Replace Device Hardware",
-          "description": "Update this device's profile and Bluetooth area tracking, or enter a new ESPHome device slug to replace its physical hardware in-place while preserving all Studio settings, entities, and Area assignments.",
+          "description": "Update this device's profile and Bluetooth area tracking, or pick a different ESPHome device to replace its physical hardware in place while preserving all Studio settings, entities, and Area assignments.",
           "data": {
-            "device_slug": "ESPHome Device Name / Slug",
+            "esphome_device_id": "ESPHome Device",
             "apply_profile": "Configuration Profile",
             "native_ble_tracking": "Track this device's area with Bluetooth"
           },
           "data_description": {
-            "device_slug": "Keep the current slug to update settings, or enter a replacement ESPHome device slug to rebind hardware in-place.",
+            "esphome_device_id": "Keep the current device to update settings, or pick a replacement ESPHome device to rebind the hardware in place.",
             "apply_profile": "Auto-detect screen geometry and capabilities from hardware, or apply a saved Latter profile.",
             "native_ble_tracking": "Use your Bluetooth proxies to work out which Area this device is in. Turn off for devices that never move."
           }
@@ -76,7 +76,8 @@
       },
       "abort": {
         "already_configured": "This ESPHome device is already configured in Latter.",
-        "reconfigure_successful": "Device configuration updated."
+        "reconfigure_successful": "Device configuration updated.",
+        "not_supported": "This Device is managed in Latter Studio (BLE tags), or the request was incomplete."
       },
       "error": {
         "not_latter_device": "This ESPHome device doesn't run Latter firmware. Latter supports Latter devices and custom builds on Latter Core (they expose the Latter actions, such as latter_ping)."
