@@ -27,6 +27,18 @@ def slot_push_failing_issue_id(subentry_id: str) -> str:
     return f"slot_push_failing_{subentry_id}"
 
 
+def device_health_issue_id(kind: str, subentry_id: str) -> str:
+    """Issue: a device health problem (device_crashed, device_brownout, firmware_rolled_back)."""
+    return f"{kind}_{subentry_id}"
+
+
+DEVICE_HEALTH_ISSUE_KINDS: tuple[str, ...] = (
+    "device_crashed",
+    "device_brownout",
+    "firmware_rolled_back",
+)
+
+
 def device_issue_ids(subentry_id: str) -> list[str]:
     """Return every repair issue ID that can exist for one Device."""
     return [
@@ -34,4 +46,5 @@ def device_issue_ids(subentry_id: str) -> list[str]:
         missing_mapped_entity_issue_id(subentry_id),
         ble_no_proxies_issue_id(subentry_id),
         slot_push_failing_issue_id(subentry_id),
+        *(device_health_issue_id(kind, subentry_id) for kind in DEVICE_HEALTH_ISSUE_KINDS),
     ]

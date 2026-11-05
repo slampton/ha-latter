@@ -31,6 +31,7 @@ from homeassistant.core import (
 from homeassistant.helpers import (
     area_registry as ar,
     device_registry as dr,
+    issue_registry as ir,
 )
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.debounce import Debouncer
@@ -133,6 +134,11 @@ from .const import (
     normalize_noise_reduction,
 )
 from .device_runtime import LatterDeviceRuntime
+from .health import (
+    ISSUE_ROLLED_BACK,
+    evaluate_device_health,
+    parse_device_health,
+)
 from .identity import (
     esphome_service,
     find_device_entity_by_suffix,
@@ -152,6 +158,7 @@ from .media_engine import (
     resolve_esphome_local_speaker as _resolve_esphome_local_speaker,
     resolve_ma_counterpart_entity as _resolve_ma_counterpart_entity,
 )
+from .issue_ids import device_health_issue_id
 from .payloads import DomainPayloadPacker
 from .site_feeds import async_fetch_calendar_snapshot, async_fetch_weather_snapshot
 from .url_signer import UrlSigner
@@ -347,6 +354,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.active_camera_index: int = 0
         self.active_carousel_camera: str = ""
         self.doorbell_talk_state: str = "idle"
+        self.last_device_health: dict[str, Any] | None = None
         self._doorbell_reply_task: asyncio.Task[None] | None = None
         self._doorbell_reply_resume_listen: bool = False
         self.doorbell_noise_reduction: str = normalize_noise_reduction(
@@ -1069,6 +1077,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "last_media_album": self.last_media_album,
             "last_media_duration": round(self.last_media_duration, 1),
             "last_media_position": round(self.last_media_position, 1),
+            "last_device_health": self.last_device_health,
         }
 
     @callback
@@ -1104,6 +1113,8 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.last_media_album = str(stored.get("last_media_album") or "")
             self.last_media_duration = float(stored.get("last_media_duration") or 0.0)
             self.last_media_position = float(stored.get("last_media_position") or 0.0)
+            saved_health = stored.get("last_device_health")
+            self.last_device_health = saved_health if isinstance(saved_health, dict) else None
         self._structural_snapshot = self._capture_structural_snapshot()
         self._runtime.seed_snapshot(self._build_persisted_snapshot())
 
@@ -1388,6 +1399,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._cached_hw_manifest = (manifest_raw, parsed)
             if self._ble_tracker is not None:
                 self._ble_tracker.update_manifest_beacon(parsed.get("beacon"))
+            self._apply_device_health(parsed, str(boot_id or "").strip())
         if is_new_boot:
             self._local_needs_cold_resume = True
 
@@ -1400,6 +1412,51 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         self.force_republish_all_domains()
         await self._async_handle_device_reconnect()
+
+    @callback
+    def _apply_device_health(self, manifest: dict[str, Any], boot_id: str) -> None:
+        """Raise or clear this Device's crash, brownout and rollback repairs, once per boot (survives HA restarts)."""
+        if (
+            boot_id
+            and self.last_device_health is not None
+            and self.last_device_health.get("boot_id") == boot_id
+        ):
+            return
+        health = parse_device_health(manifest)
+        reported_at = dt_util.now().isoformat(timespec="seconds")
+        self.last_device_health = {
+            "boot_id": boot_id,
+            "sdk": health.sdk,
+            "reset": health.reset,
+            "crash": health.crash,
+            "rollback": health.rollback,
+            "reported_at": reported_at,
+        }
+        self._schedule_persist_runtime_state()
+        actions = evaluate_device_health(health)
+        for kind in actions.delete_issues:
+            ir.async_delete_issue(
+                self.hass, DOMAIN, device_health_issue_id(kind, self.subentry_id)
+            )
+        for kind, extra in actions.raise_issues.items():
+            ir.async_create_issue(
+                self.hass,
+                DOMAIN,
+                device_health_issue_id(kind, self.subentry_id),
+                is_fixable=True,
+                severity=(
+                    ir.IssueSeverity.ERROR
+                    if kind == ISSUE_ROLLED_BACK
+                    else ir.IssueSeverity.WARNING
+                ),
+                translation_key=kind,
+                translation_placeholders={
+                    "device": self.device_title,
+                    "time": reported_at,
+                    **extra,
+                },
+                config_entry_id=self.entry.entry_id,
+            )
 
     @callback
     def _enforce_local_speaker_if_remote_idle(self, reason: str) -> None:

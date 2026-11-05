@@ -60,6 +60,24 @@ If the speaker's real volume control is an AV receiver, map the speaker in **Stu
 
 ---
 
+## Device health
+
+**A repair says the device restarted after a crash**
+
+The device reported a panic or watchdog reset when it booted. Open its logs in ESPHome Device Builder before it restarts again: ESPHome prints the decoded backtrace to every log client until the next restart, and decoding needs the build the device is running. The repair shows the Latter SDK rev and the boot time, and clears when a later boot is clean (power-on, external, software, deep sleep).
+
+**A repair says the device restarted after a brownout**
+
+The supply voltage sagged below the safe level. Try another power supply or USB cable, or charge the battery.
+
+**A repair says a firmware update failed**
+
+The update didn't boot, so the device went back to the previous firmware. Check the build logs and install the update again; the repair clears after a successful update.
+
+The last reported reset reason, crash flag, rollback flag and SDK rev for each Device are in Latter's diagnostics download.
+
+---
+
 ## Getting help
 
 When you [open an issue](https://github.com/slampton/ha-latter/issues), attach the integration's diagnostics: **Settings → Devices & Services → Latter → ⋮ → Download diagnostics**. Read the file before posting it. It can contain your LAN IP address and signed image URLs.

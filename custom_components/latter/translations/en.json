@@ -166,6 +166,39 @@
           }
         }
       }
+    },
+    "device_crashed": {
+      "title": "{device} restarted after a crash ({reason})",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "{device} crashed",
+            "description": "**{device}** reported a crash reset (**{reason}**) when it booted at {time} (Latter SDK rev {sdk}). Open the device's logs in ESPHome Device Builder before it restarts again: the decoded backtrace is shown there. Decoding needs the build the device is running. Confirm to dismiss; a new crash raises this again."
+          }
+        }
+      }
+    },
+    "device_brownout": {
+      "title": "{device} restarted after a brownout",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "{device} lost power briefly",
+            "description": "**{device}** reported a brownout reset when it booted at {time} (Latter SDK rev {sdk}): its supply voltage sagged below the safe level. Check the power supply, the USB cable, or the battery. Confirm to dismiss; a new brownout raises this again."
+          }
+        }
+      }
+    },
+    "firmware_rolled_back": {
+      "title": "Firmware update failed on {device}",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "{device} rolled back its firmware",
+            "description": "The last firmware update on **{device}** failed to boot, so the device went back to the previous firmware (Latter SDK rev {sdk}, reported at {time}). Check the build logs, then install the update again. This clears after a successful update."
+          }
+        }
+      }
     }
   },
   "exceptions": {

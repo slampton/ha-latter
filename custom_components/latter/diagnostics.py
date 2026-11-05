@@ -47,6 +47,8 @@ def _build_coordinator_diagnostics(coordinator: LatterCoordinator) -> dict[str, 
             "volume_overrides": coordinator.volume_overrides,
             "last_area_follow_write": coordinator.last_area_follow_write,
         },
+        # Last device_hello health report: sdk, reset reason, crash record held, rollback, boot_id.
+        "device_health": coordinator.last_device_health,
         "sensors": {
             "active_media": {"state": media_state, "attributes": media_attrs},
             "area_context": {"state": area_state, "attributes": area_attrs},

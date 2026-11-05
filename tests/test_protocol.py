@@ -46,6 +46,7 @@ manifest_is_roaming = area_follow.manifest_is_roaming
 ble_math = _load_ha_free_module("ble_math")
 resource_signing = _load_ha_free_module("resource_signing")
 issue_ids = _load_ha_free_module("issue_ids")
+health = _load_ha_free_module("health")
 studio_scope = _load_ha_free_module("studio/scope")
 STUDIO_JS = LATTER_DIR / "frontend" / "latter-studio.js"
 
@@ -483,8 +484,64 @@ class TestDeviceIssueIds(unittest.TestCase):
                 "missing_mapped_entity_sub_a",
                 "ble_no_proxies_sub_a",
                 "slot_push_failing_sub_a",
+                "device_crashed_sub_a",
+                "device_brownout_sub_a",
+                "firmware_rolled_back_sub_a",
             },
         )
+
+
+class TestDeviceHealth(unittest.TestCase):
+    """Crash / brownout / rollback repair decisions, exercised through `health.py`."""
+
+    def _actions(self, manifest: dict[str, Any]):
+        return health.evaluate_device_health(health.parse_device_health(manifest))
+
+    def test_crash_resets_raise_device_crashed(self) -> None:
+        for reason in ("panic", "int-wdt", "task-wdt", "wdt"):
+            acts = self._actions({"sdk": 41, "reset": reason, "crash": 1, "rollback": 0})
+            self.assertEqual(acts.raise_issues, {"device_crashed": {"reason": reason, "sdk": "41"}})
+            self.assertEqual(acts.delete_issues, {"firmware_rolled_back"})
+
+    def test_brownout_raises_its_own_issue(self) -> None:
+        acts = self._actions({"sdk": 41, "reset": "brownout", "crash": 0})
+        self.assertEqual(acts.raise_issues, {"device_brownout": {"sdk": "41"}})
+        self.assertEqual(acts.delete_issues, frozenset())
+
+    def test_clean_reset_clears_crash_and_brownout(self) -> None:
+        for reason in ("power-on", "external", "software", "deep-sleep"):
+            acts = self._actions({"sdk": 41, "reset": reason, "crash": 0, "rollback": 0})
+            self.assertEqual(acts.raise_issues, {})
+            self.assertEqual(
+                acts.delete_issues, {"device_crashed", "device_brownout", "firmware_rolled_back"}
+            )
+
+    def test_unknown_or_missing_reset_leaves_issues_alone(self) -> None:
+        for manifest in ({"reset": "unknown"}, {}, {"w": 466, "h": 466}):
+            acts = self._actions(manifest)
+            self.assertEqual(acts.raise_issues, {})
+            self.assertEqual(acts.delete_issues, frozenset())
+
+    def test_rollback(self) -> None:
+        acts = self._actions({"sdk": 40, "reset": "software", "rollback": 1})
+        self.assertEqual(acts.raise_issues, {"firmware_rolled_back": {"sdk": "40"}})
+        self.assertNotIn("firmware_rolled_back", acts.delete_issues)
+        acts = self._actions({"reset": "panic", "rollback": "1"})
+        self.assertEqual(
+            set(acts.raise_issues), {"device_crashed", "firmware_rolled_back"}
+        )
+        self.assertEqual(acts.raise_issues["firmware_rolled_back"], {"sdk": "unknown"})
+
+    def test_parse_tolerates_bad_values(self) -> None:
+        parsed = health.parse_device_health({"sdk": "x", "reset": " PANIC ", "crash": "1", "rollback": None})
+        self.assertEqual(parsed, health.DeviceHealth(sdk=None, reset="panic", crash=True, rollback=None))
+        self.assertEqual(health.parse_device_health(None), health.DeviceHealth(None, None, None, None))
+
+    def test_health_issue_ids_are_cleaned_with_the_device(self) -> None:
+        ids = set(issue_ids.device_issue_ids("sub_a"))
+        for kind in (health.ISSUE_CRASHED, health.ISSUE_BROWNOUT, health.ISSUE_ROLLED_BACK):
+            self.assertIn(issue_ids.device_health_issue_id(kind, "sub_a"), ids)
+            self.assertIn(kind, issue_ids.DEVICE_HEALTH_ISSUE_KINDS)
 
 
 if __name__ == "__main__":
