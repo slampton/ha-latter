@@ -1,21 +1,25 @@
 # HTTP API Reference
 
-Latter registers its HTTP endpoints under `/api/latter/`. Source: [`http.py`](../../custom_components/latter/http.py), [`doorbell_engine.py`](../../custom_components/latter/doorbell_engine.py) (camera audio), [`url_signer.py`](../../custom_components/latter/url_signer.py) (signatures).
+Latter registers its HTTP endpoints under `/api/latter/`. Source: [`http.py`](../../custom_components/latter/http.py), [`doorbell_engine.py`](../../custom_components/latter/doorbell_engine.py) (camera audio), [`url_signer.py`](../../custom_components/latter/url_signer.py) and [`resource_signing.py`](../../custom_components/latter/resource_signing.py) (signatures).
 
 These endpoints exist so an ESP32 can fetch images without Home Assistant's bearer token. Each request is authorized by a signature in the URL instead.
 
 ## URL signing
 
-Latter keeps a 256-bit secret in `.storage/latter.site`. Image URLs carry a `sig` parameter of the form `<expiry>.<HMAC-SHA256, truncated to 128 bits>`. The signature covers the config entry, the resource (for example `camera:camera.front_door`), and the expiry time. Signatures are compared in constant time.
+Latter keeps a 256-bit secret in `.storage/latter.site`. URLs carry a `sig` parameter of the form `<expiry>.<HMAC-SHA256, truncated to 128 bits>`. The signature covers the Device (its config subentry), the resource including the server-chosen render parameters (for example `camera:camera.front_door|480|480|circle`), and the expiry time. Signatures are compared in constant time.
 
-Signatures are **day-bucketed**: a URL stays valid until the first UTC midnight after its nominal lifetime has passed. This keeps URLs stable within a day, so devices can cache images.
+There are two expiry modes:
 
-| Resource | Nominal lifetime | Actually valid for |
-| :--- | :--- | :--- |
-| Artwork, wallpaper, camera snapshot, map | 7 days | 7 to 8 days |
-| Camera audio | 1 hour | 1 to 25 hours (a new URL is signed each time listening starts) |
+- **Day-bucketed**, for URLs embedded in Protocol v3 payloads and Studio previews. The expiry is the first UTC midnight after the lifetime has passed, so every URL signed during one UTC day is identical. Payload content hashes stay stable and devices (and the Studio page) can cache images. Lifetimes are whole days.
+- **Exact**, for URLs minted on demand and never embedded in a payload. The URL expires exactly when its lifetime ends.
 
-You shouldn't build these URLs yourself. Latter publishes them, already signed, in sensor attributes (`art_url`, `wallpaper_url`, `camera_snapshot_url`, `alert_camera_url`, and the calendar `map_url`).
+| Resource | Mode | Lifetime | Actually valid for |
+| :--- | :--- | :--- | :--- |
+| Artwork, wallpaper, camera snapshot, map | Day-bucketed | 7 days | 7 to 8 days |
+| Studio camera preview, wallpaper thumbnail | Day-bucketed | 7 days | 7 to 8 days |
+| Camera audio (doorbell listen stream) | Exact | 10 minutes | 10 minutes (a new URL is signed each time listening starts; the signature is checked when the stream opens) |
+
+You shouldn't build these URLs yourself. Latter publishes the image URLs, already signed, in sensor attributes (`art_url`, `wallpaper_url`, `camera_snapshot_url`, `alert_camera_url`, and the calendar `map_url`).
 
 URLs use Home Assistant's numeric LAN IPv4 address, not a `.local` name. Latter finds the address by opening a UDP socket and caches it until Home Assistant's core config changes. The external base URL in Studio (**Reverse Proxy & External Access**) does not change these URLs; it only affects the device **Visit** links.
 

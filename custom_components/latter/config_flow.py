@@ -60,14 +60,12 @@ CONF_APPLY_PROFILE = "apply_profile"
 
 
 def _iter_configured_device_records(hass: HomeAssistant) -> list[tuple[dict[str, Any], str | None]]:
-    """Return (data_dict, unique_id) pairs across all Latter device subentries and legacy entries."""
+    """Return (data_dict, unique_id) pairs across all Latter device subentries."""
     records: list[tuple[dict[str, Any], str | None]] = []
     for entry in hass.config_entries.async_entries(DOMAIN):
         for sub in entry.subentries.values():
             if sub.subentry_type == "device":
                 records.append((dict(sub.data), sub.unique_id))
-        if entry.data.get(CONF_DEVICE_SLUG):
-            records.append((dict(entry.data), entry.unique_id))
     return records
 
 

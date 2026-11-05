@@ -394,8 +394,6 @@ async def async_execute_doorbell_intercom(
                     },
                     blocking=False,
                 )
-        coordinator.doorbell_talk_state = "listening"
-        coordinator.async_notify_listeners()
         return target_info
 
     if act == "select_camera":
@@ -437,7 +435,7 @@ async def async_execute_doorbell_intercom(
         coordinator.doorbell_talk_state = "listening"
         coordinator.async_notify_listeners()
         base_url = coordinator.get_lan_base_url()
-        sig = coordinator.sign_resource(f"camera_audio:{cam_ent}", ttl_s=3600)
+        sig = coordinator.sign_on_demand_resource(f"camera_audio:{cam_ent}")
         stream_url = (
             f"{base_url}/api/latter/camera_audio/{coordinator.device_slug}"
             f"?entity_id={cam_ent}&nr={coordinator.doorbell_noise_reduction}&fmt=flac"
@@ -464,7 +462,17 @@ async def async_execute_doorbell_intercom(
         if not spoken_text:
             spoken_text = "Please leave the package at the door, thank you."
 
-        was_listening = coordinator.doorbell_talk_state == "listening"
+        # One pending restore per Device: a new reply replaces the previous one and inherits
+        # whether listening should resume, so back-to-back replies resume only after the last.
+        prev_task = coordinator._doorbell_reply_task
+        inherit_resume = False
+        if prev_task is not None and not prev_task.done():
+            prev_task.cancel()
+            inherit_resume = coordinator._doorbell_reply_resume_listen
+        was_listening = coordinator.doorbell_talk_state == "listening" or (
+            coordinator.doorbell_talk_state == "talking" and inherit_resume
+        )
+        coordinator._doorbell_reply_resume_listen = was_listening
         coordinator.doorbell_talk_state = "talking"
         coordinator.async_notify_listeners()
 
@@ -514,6 +522,9 @@ async def async_execute_doorbell_intercom(
 
         async def _post_reply_restore() -> None:
             await asyncio.sleep(est_duration)
+            # An End Call / listen_stop (or a new listen_start) during the reply wins.
+            if coordinator.doorbell_talk_state != "talking":
+                return
             if was_listening:
                 await async_execute_doorbell_intercom(
                     hass, coordinator, action="listen_start", camera_entity=cam_ent
@@ -522,7 +533,7 @@ async def async_execute_doorbell_intercom(
                 coordinator.doorbell_talk_state = "idle"
                 coordinator.async_notify_listeners()
 
-        coordinator.entry.async_create_background_task(
+        coordinator._doorbell_reply_task = coordinator.entry.async_create_background_task(
             hass,
             _post_reply_restore(),
             f"latter_doorbell_reply_{coordinator.device_slug}",

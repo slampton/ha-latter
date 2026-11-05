@@ -1912,7 +1912,7 @@ let INITIAL_FORM_LOADED = false;
 let CURRENT_SCOPE = "system";
 let DEVICE_SELECTED = false;
 let POLL_TIMER = null;
-let SELECTED_SURVEY_SLUG = localStorage.getItem("latter_ble_survey_slug") || "";
+let SELECTED_SURVEY_ID = localStorage.getItem("latter_ble_survey_subentry") || "";
 let PREVIEW_CAMERA_ENTITY = "";
 let DEVICE_SORT_COL = "title";
 let DEVICE_SORT_ASC = true;
@@ -2776,10 +2776,10 @@ async function setBleOffset(areaId, offsetDb) {
   }
 }
 
-function onSelectBleSurveyDevice(slug) {
-  SELECTED_SURVEY_SLUG = slug || "";
-  if (SELECTED_SURVEY_SLUG) {
-    localStorage.setItem("latter_ble_survey_slug", SELECTED_SURVEY_SLUG);
+function onSelectBleSurveyDevice(subentryId) {
+  SELECTED_SURVEY_ID = subentryId || "";
+  if (SELECTED_SURVEY_ID) {
+    localStorage.setItem("latter_ble_survey_subentry", SELECTED_SURVEY_ID);
   }
   renderActiveSurveyDeviceBars();
 }
@@ -2798,16 +2798,16 @@ function renderActiveSurveyDeviceBars() {
     return;
   }
 
-  let activeDev = bleDevs.find(d => d.device_slug === SELECTED_SURVEY_SLUG);
+  let activeDev = bleDevs.find(d => d.subentry_id === SELECTED_SURVEY_ID);
   if (!activeDev) {
     activeDev = bleDevs.find(d => d.is_current) || bleDevs[0];
-    SELECTED_SURVEY_SLUG = activeDev.device_slug;
-    localStorage.setItem("latter_ble_survey_slug", SELECTED_SURVEY_SLUG);
+    SELECTED_SURVEY_ID = activeDev.subentry_id;
+    localStorage.setItem("latter_ble_survey_subentry", SELECTED_SURVEY_ID);
   }
 
   if (picker) {
     picker.innerHTML = bleDevs.map(d =>
-      `<option value="${esc(d.device_slug)}" ${d.device_slug === SELECTED_SURVEY_SLUG ? 'selected' : ''}>${esc(d.title)} (${esc(d.active_area_name)})</option>`
+      `<option value="${esc(d.subentry_id)}" ${d.subentry_id === SELECTED_SURVEY_ID ? 'selected' : ''}>${esc(d.title)} (${esc(d.active_area_name)})</option>`
     ).join("");
   }
 
@@ -2938,11 +2938,21 @@ async function quickAdoptBleCandidate(idx) {
 }
 
 async function autoCalibrateHere(areaId) {
-  const data = await callStudioCommand({
+  if (!SELECTED_SURVEY_ID) {
+    showToast("Select the BLE survey device first");
+    return;
+  }
+  let data;
+  try {
+    data = await callStudioCommand({
       command: "auto_calibrate_here",
       area_id: areaId,
-      survey_device_slug: SELECTED_SURVEY_SLUG
+      survey_subentry_id: SELECTED_SURVEY_ID
     });
+  } catch (err) {
+    showToast(`Calibration failed: ${err?.message || err}`);
+    return;
+  }
   if (data) {
     applyStateToDom(data, false);
     showToast("Calibrated current area offset");

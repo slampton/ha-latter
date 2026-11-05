@@ -163,10 +163,44 @@ def resolve_esphome_local_speaker(
     return ""
 
 
+def _ma_link_issue_id(coordinator: Any) -> str:
+    """Return the per-Device `link_ma_player` repair issue ID (scoped by config subentry)."""
+    return f"link_ma_player_{getattr(coordinator, 'subentry_id', '')}"
+
+
+@callback
+def _update_ma_link_issue(
+    hass: HomeAssistant, coordinator: Any, speaker_entity_id: str, matched: bool
+) -> None:
+    """Raise the `link_ma_player` repair when a Latter Device's speaker has no Music Assistant counterpart; clear it otherwise."""
+    issue_id = _ma_link_issue_id(coordinator)
+    if matched or not hass.config_entries.async_entries("music_assistant"):
+        ir.async_delete_issue(hass, DOMAIN, issue_id)
+        return
+    entry = getattr(coordinator, "entry", None)
+    ir.async_create_issue(
+        hass,
+        DOMAIN,
+        issue_id,
+        is_fixable=True,
+        severity=ir.IssueSeverity.WARNING,
+        translation_key="link_ma_player",
+        translation_placeholders={
+            "device_slug": str(getattr(coordinator, "device_slug", "") or ""),
+            "speaker_entity": speaker_entity_id,
+        },
+        config_entry_id=getattr(entry, "entry_id", None),
+    )
+
+
 def resolve_ma_counterpart_entity(
-    hass: HomeAssistant, speaker_entity_id: str, device_slug: str = ""
+    hass: HomeAssistant, speaker_entity_id: str
 ) -> str | None:
-    """Find the Music Assistant media_player entity corresponding to a target speaker by exact device_id or MAC."""
+    """Find the Music Assistant media_player for a speaker by exact device_id, then by MAC; else None.
+
+    When the speaker is a Latter Device's own speaker and no counterpart exists, the
+    `link_ma_player` repair is raised for that Device (and cleared once a match is found).
+    """
     if not speaker_entity_id:
         return None
 
@@ -180,25 +214,25 @@ def resolve_ma_counterpart_entity(
     cache: dict[str, str | None] = domain_data.setdefault(
         "_ma_counterpart_cache", {}
     )
-    slug_norm = normalize_device_slug(device_slug) if device_slug else ""
-    cache_key = f"{speaker_entity_id}|{slug_norm}"
-    if cache_key in cache:
-        cached_ent = cache[cache_key]
+    if speaker_entity_id in cache:
+        cached_ent = cache[speaker_entity_id]
         if cached_ent is None or ent_reg.async_get(cached_ent) is not None:
             return cached_ent
 
     dev_reg = dr.async_get(hass)
     target_dev_ids: set[str] = set()
     target_macs: set[str] = set()
-    resolved_coord: Any = None
 
-    for val in domain_data.values():
-        if hasattr(val, "device_slug"):
-            if getattr(val, "local_speaker", None) == speaker_entity_id or (
-                slug_norm and getattr(val, "device_slug", None) == slug_norm
-            ):
-                resolved_coord = val
-                break
+    # The Latter Device whose bound ESPHome speaker this is (exact entity_id equality only).
+    owner_coord: Any = next(
+        (
+            val
+            for val in domain_data.values()
+            if hasattr(val, "device_slug")
+            and getattr(val, "local_speaker", None) == speaker_entity_id
+        ),
+        None,
+    )
 
     if spk_entry is not None:
         if spk_entry.device_id:
@@ -212,21 +246,13 @@ def resolve_ma_counterpart_entity(
             _extract_macs_from_device_or_entry(spk_dev, spk_entry)
         )
 
-    if resolved_coord is not None and (
-        speaker_entity_id == getattr(resolved_coord, "local_speaker", None)
-        or spk_entry is None
-    ):
-        esp_dev_id = getattr(resolved_coord, "esphome_device_id", None)
+    if owner_coord is not None:
+        esp_dev_id = getattr(owner_coord, "esphome_device_id", None)
         if esp_dev_id:
             target_dev_ids.add(str(esp_dev_id))
-        coord_mac = getattr(resolved_coord, "device_mac", None)
+        coord_mac = getattr(owner_coord, "device_mac", None)
         if coord_mac:
             target_macs.add(dr.format_mac(str(coord_mac)))
-
-    if slug_norm and not target_dev_ids:
-        esp_dev = get_bound_esphome_device(hass, None, fallback_slug=slug_norm)
-        if esp_dev is not None:
-            target_dev_ids.add(esp_dev.id)
 
     for did in list(target_dev_ids):
         d_obj = dev_reg.async_get(did)
@@ -253,7 +279,7 @@ def resolve_ma_counterpart_entity(
 
     matched_entity: str | None = None
 
-    # Pass 1a: Exact device_id match in the entity/device registry
+    # Pass 1: exact device_id match in the entity/device registry
     if target_dev_ids:
         for c_entry, c_dev in ma_candidates:
             if c_entry.device_id and (
@@ -263,7 +289,7 @@ def resolve_ma_counterpart_entity(
                 matched_entity = c_entry.entity_id
                 break
 
-    # Pass 1b: Exact MAC / player_id match
+    # Pass 2: exact MAC / player_id match
     if matched_entity is None and target_macs:
         for c_entry, c_dev in ma_candidates:
             cand_macs = _extract_macs_from_device_or_entry(c_dev, c_entry)
@@ -271,61 +297,13 @@ def resolve_ma_counterpart_entity(
                 matched_entity = c_entry.entity_id
                 break
 
-    # Pass 1c: Exact entity_id match against MA player unique_id / device identifiers
-    if matched_entity is None and speaker_entity_id:
-        spk_lower = speaker_entity_id.lower()
-        for c_entry, c_dev in ma_candidates:
-            uid_lower = str(c_entry.unique_id or "").strip().lower()
-            if uid_lower == spk_lower:
-                matched_entity = c_entry.entity_id
-                break
-            if c_dev is not None:
-                for _dom, ident_val in c_dev.identifiers:
-                    if str(ident_val or "").strip().lower() == spk_lower:
-                        matched_entity = c_entry.entity_id
-                        break
-                if matched_entity is not None:
-                    break
+    if owner_coord is not None:
+        _update_ma_link_issue(
+            hass, owner_coord, speaker_entity_id, matched_entity is not None
+        )
 
-    eff_slug = slug_norm or (
-        str(getattr(resolved_coord, "device_slug", "") or "")
-        if resolved_coord is not None
-        else ""
-    )
-
-    # Pass 1d: Exact Sendspin entity_id or device slug match (Music Assistant creates a separate DeviceEntry for Sendspin players)
-    if matched_entity is None:
-        spk_obj_id = speaker_entity_id.split(".", 1)[-1].lower()
-        for sfx in ("_music", "_speaker", "_media_player"):
-            if spk_obj_id.endswith(sfx) and len(spk_obj_id) > len(sfx):
-                spk_obj_id = spk_obj_id[: -len(sfx)]
-                break
-        exact_slugs = {
-            s for s in (eff_slug, normalize_device_slug(spk_obj_id)) if s
-        }
-        if exact_slugs:
-            exact_ent_ids = {f"media_player.{s}" for s in exact_slugs}
-            for c_entry, c_dev in ma_candidates:
-                if c_entry.entity_id.lower() in exact_ent_ids:
-                    matched_entity = c_entry.entity_id
-                    break
-                if c_dev is not None:
-                    c_dev_slug = normalize_device_slug(
-                        str(c_dev.name_by_user or c_dev.name or "")
-                    )
-                    if c_dev_slug and c_dev_slug in exact_slugs:
-                        matched_entity = c_entry.entity_id
-                        break
-
-    if eff_slug:
-        ir.async_delete_issue(hass, DOMAIN, f"link_ma_player_{eff_slug}")
-
-    if matched_entity is not None:
-        cache[cache_key] = matched_entity
-        return matched_entity
-
-    cache[cache_key] = None
-    return None
+    cache[speaker_entity_id] = matched_entity
+    return matched_entity
 
 
 def interpolate_speaker_position(state_obj: Any) -> float:
@@ -349,13 +327,12 @@ def interpolate_speaker_position(state_obj: Any) -> float:
 async def async_find_queue_resume_item(
     hass: HomeAssistant,
     speaker_entity_id: str,
-    device_slug: str,
     last_media_uri: str,
     last_media_position: float,
 ) -> tuple[str, float]:
     """Query Music Assistant get_queue for the current queue item URI and position, falling back to persisted store."""
     ma_entity = resolve_ma_counterpart_entity(
-        hass, speaker_entity_id, device_slug
+        hass, speaker_entity_id
     )
     if ma_entity and hass.services.has_service("music_assistant", "get_queue"):
         try:
@@ -394,13 +371,12 @@ async def async_find_queue_resume_item(
 async def async_play_media_with_ma_fallback(
     hass: HomeAssistant,
     target_spk: str,
-    device_slug: str,
     media_id: str,
     media_type: str | None = None,
     enqueue: str | None = None,
 ) -> None:
     """Play media via Music Assistant (expanding artist/album containers into tracks when needed)."""
-    ma_target = resolve_ma_counterpart_entity(hass, target_spk, device_slug)
+    ma_target = resolve_ma_counterpart_entity(hass, target_spk)
     ent_reg = er.async_get(hass)
     spk_entry = ent_reg.async_get(target_spk) if target_spk else None
     is_esphome_sendspin = bool(spk_entry and spk_entry.platform == "esphome")
@@ -539,7 +515,7 @@ def resolve_assist_satellite_entity(
                 or (
                     local_spk
                     and resolve_ma_counterpart_entity(
-                        hass, str(local_spk), str(getattr(val, "device_slug", ""))
+                        hass, str(local_spk)
                     )
                     == target
                 )

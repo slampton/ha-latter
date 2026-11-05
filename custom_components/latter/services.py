@@ -1,4 +1,4 @@
-"""Service registration for Latter (Universal ESPHome Pagination, Area Control, BLE Area Sync, TV Remote, Calendar, Intercom)."""
+"""Latter service actions: device handshake, music and Area browsing, Area and media control, remotes, calendar, notifications, intercom and doorbell."""
 
 from __future__ import annotations
 
@@ -1091,7 +1091,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         ),
     )
     async def _handle_notify(call: ServiceCall) -> None:
-        """Dispatch a toast notification, chime, and optional live camera peephole snapshot to one, occupied ('follow_me'), or all Latter displays."""
+        """Dispatch a toast notification, chime, and optional camera snapshot to one, occupied ('follow_me'), or all Latter displays."""
         data = call.data
         raw_target = str(data.get("target_device") or "").strip()
         target_low = raw_target.lower()

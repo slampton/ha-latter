@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import hmac
 import socket
 import time
 from urllib.parse import quote_plus, urlparse
@@ -11,11 +10,18 @@ from urllib.parse import quote_plus, urlparse
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.network import get_url
 
-SIG_BUCKET_SECONDS: int = 86400
+from .resource_signing import (
+    ON_DEMAND_TTL_SECONDS,
+    PAYLOAD_TTL_DAYS,
+    day_bucketed_expiry,
+    exact_expiry,
+    sign,
+    verify,
+)
 
 
 class UrlSigner:
-    """Signs and verifies device-scoped, day-bucketed HMAC-SHA256 resource URLs."""
+    """Signs and verifies Device-scoped HMAC-SHA256 resource URLs (day-bucketed or exact expiry)."""
 
     def __init__(
         self,
@@ -33,26 +39,25 @@ class UrlSigner:
         """Invalidate the cached numeric LAN base URL when HA network config changes."""
         self._cached_lan_base_url = None
 
-    def sign_resource(self, resource: str, ttl_s: int = 7 * SIG_BUCKET_SECONDS) -> str:
-        """Generate a time-bounded, resource-scoped HMAC-SHA256 signature."""
-        exp = ((int(time.time()) + ttl_s) // SIG_BUCKET_SECONDS + 1) * SIG_BUCKET_SECONDS
-        msg = f"{self.entry_id}|{resource}|{exp}".encode("utf-8")
-        mac = hmac.new(self._hmac_secret, msg, hashlib.sha256).hexdigest()[:32]
-        return f"{exp}.{mac}"
+    def sign_payload_resource(
+        self, resource: str, ttl_days: int = PAYLOAD_TTL_DAYS
+    ) -> str:
+        """Sign a resource whose URL is embedded in a payload: day-bucketed, so it is identical all UTC day."""
+        exp = day_bucketed_expiry(int(time.time()), ttl_days)
+        return sign(self._hmac_secret, self.entry_id, resource, exp)
+
+    def sign_on_demand_resource(
+        self, resource: str, ttl_s: int = ON_DEMAND_TTL_SECONDS
+    ) -> str:
+        """Sign a resource whose URL is minted on demand and never embedded in a payload: exact expiry."""
+        exp = exact_expiry(int(time.time()), ttl_s)
+        return sign(self._hmac_secret, self.entry_id, resource, exp)
 
     def verify_resource(self, resource: str, sig: str | None = None) -> bool:
-        """Verify a resource-scoped expiring signature."""
-        if not sig:
-            return False
-        try:
-            exp_s, mac = sig.split(".", 1)
-            if int(exp_s) < int(time.time()):
-                return False
-        except ValueError:
-            return False
-        msg = f"{self.entry_id}|{resource}|{exp_s}".encode("utf-8")
-        expected = hmac.new(self._hmac_secret, msg, hashlib.sha256).hexdigest()[:32]
-        return hmac.compare_digest(mac, expected)
+        """Verify a resource-scoped expiring signature (either mode)."""
+        return verify(
+            self._hmac_secret, self.entry_id, resource, sig, int(time.time())
+        )
 
     def get_lan_base_url(self) -> str:
         """Resolve the numeric-IP LAN HTTP base URL and active HTTP port for ESP32 online_image clients."""
@@ -105,7 +110,7 @@ class UrlSigner:
         if not cam_ent:
             return "none"
         base_url = self.get_lan_base_url()
-        sig = self.sign_resource(f"camera:{cam_ent}|{width}|{height}|{shape}")
+        sig = self.sign_payload_resource(f"camera:{cam_ent}|{width}|{height}|{shape}")
         v_tag = cache_bust or sig[:8]
         return (
             f"{base_url}/api/latter/camera/{device_slug}"
@@ -125,7 +130,7 @@ class UrlSigner:
         if not clean_loc:
             return "none"
         base_url = self.get_lan_base_url()
-        sig = self.sign_resource(f"map:{clean_loc}|{width}|{height}|{shape}")
+        sig = self.sign_payload_resource(f"map:{clean_loc}|{width}|{height}|{shape}")
         return (
             f"{base_url}/api/latter/map/{device_slug}"
             f"?w={width}&h={height}&shape={shape}&q={quote_plus(clean_loc)}&sig={sig}"
@@ -144,7 +149,7 @@ class UrlSigner:
         if not clean_src:
             return "none"
         base_url = self.get_lan_base_url()
-        sig = self.sign_resource(f"wallpaper:{clean_src}|{width}|{height}|{shape}")
+        sig = self.sign_payload_resource(f"wallpaper:{clean_src}|{width}|{height}|{shape}")
         digest = hashlib.md5(
             f"{clean_src}|{shape}|{width}x{height}".encode("utf-8")
         ).hexdigest()[:10]
@@ -163,7 +168,7 @@ class UrlSigner:
     ) -> str:
         """Build the universal Baseline-JPEG artwork URL."""
         base_url = self.get_lan_base_url()
-        sig = self.sign_resource(f"artwork|{width}|{height}|{shape}")
+        sig = self.sign_payload_resource(f"artwork|{width}|{height}|{shape}")
         digest = hashlib.md5(cache_bust.encode("utf-8")).hexdigest()[:10]
         return (
             f"{base_url}/api/latter/artwork/{device_slug}"

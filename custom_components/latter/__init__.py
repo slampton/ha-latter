@@ -2,16 +2,13 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import secrets
 import time
-from types import MappingProxyType
 from typing import Any
 
 from homeassistant.config_entries import (
     ConfigEntry,
-    ConfigSubentry,
     SOURCE_INTEGRATION_DISCOVERY,
 )
 from homeassistant.const import (
@@ -32,7 +29,6 @@ from homeassistant.helpers.typing import ConfigType
 from .ble_engine import _iter_devices
 from .const import (
     CONF_DEVICE_SLUG,
-    CONF_ESPHOME_DEVICE_ID,
     DATA_DISCOVERY_UNSUB,
     DATA_GLOBAL_CONFIG,
     DATA_GLOBAL_STORE,
@@ -42,7 +38,6 @@ from .const import (
     GLOBAL_STORAGE_KEY,
     INTEGRATION_VERSION,
     PLATFORMS,
-    STORAGE_KEY_PREFIX,
     STORAGE_VERSION,
     normalize_device_slug,
 )
@@ -56,7 +51,6 @@ from .http import (
 )
 from .identity import (
     LATTER_CONTRACT_ACTION_SUFFIXES,
-    get_bound_esphome_device,
     is_latter_compatible_esphome_device,
 )
 from .media_engine import clear_ma_counterpart_cache
@@ -212,142 +206,6 @@ def _async_check_esphome_device_for_discovery(
     )
 
 
-async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Atomically migrate VERSION 1 per-device ConfigEntries into ConfigSubentries on the single VERSION 2 Latter System hub entry."""
-    if entry.version >= 2:
-        return True
-
-    domain_data = hass.data.setdefault(DOMAIN, {})
-    lock: asyncio.Lock = domain_data.setdefault("_migration_lock", asyncio.Lock())
-    async with lock:
-        if entry.version >= 2:
-            return True
-
-        await _async_ensure_global_store(hass, seed_entry=entry)
-        all_entries = hass.config_entries.async_entries(DOMAIN)
-        hub_entry = next(
-            (
-                e
-                for e in all_entries
-                if e.version >= 2 and not e.data.get("_migrated_to_hub")
-            ),
-            all_entries[0],
-        )
-
-        dev_reg = dr.async_get(hass)
-        ent_reg = er.async_get(hass)
-        v1_entries = [
-            e
-            for e in all_entries
-            if e.version < 2 and not e.data.get("_migrated_to_hub")
-        ]
-
-        existing_sub_uids = {
-            sub.unique_id for sub in hub_entry.subentries.values() if sub.unique_id
-        }
-        existing_sub_slugs = {
-            normalize_device_slug(str(sub.data.get(CONF_DEVICE_SLUG, "")))
-            for sub in hub_entry.subentries.values()
-            if sub.data.get(CONF_DEVICE_SLUG)
-        }
-
-        for v1_entry in v1_entries:
-            await _async_ensure_global_store(hass, seed_entry=v1_entry)
-            raw_merged = {**v1_entry.data, **(v1_entry.options or {})}
-            slug = normalize_device_slug(str(raw_merged.get(CONF_DEVICE_SLUG, "")))
-            dev_data = {
-                k: v for k, v in raw_merged.items() if k not in GLOBAL_CONFIG_KEYS
-            }
-
-            if slug and slug != "esphome_device":
-                dev_data[CONF_DEVICE_SLUG] = slug
-                matched_dev = get_bound_esphome_device(
-                    hass,
-                    str(dev_data.get(CONF_ESPHOME_DEVICE_ID) or "") or None,
-                    fallback_slug=slug,
-                )
-                mac_str = ""
-                if matched_dev is not None:
-                    dev_data[CONF_ESPHOME_DEVICE_ID] = matched_dev.id
-                    for _ctype, cval in matched_dev.connections:
-                        if cval:
-                            mac_str = dr.format_mac(str(cval))
-                            dev_data["mac"] = mac_str
-                            break
-
-                sub_uid = (
-                    f"{DOMAIN}_{mac_str}"
-                    if mac_str
-                    else (str(v1_entry.unique_id or "") or f"{DOMAIN}_{slug}")
-                )
-                sub_title = (
-                    v1_entry.title
-                    if v1_entry.title and v1_entry.title.lower() != "latter"
-                    else slug.replace("_", " ").title()
-                )
-
-                # Remove legacy v1 device & entities keyed by (DOMAIN, v1_entry.entry_id) so subentry entities register without _2 suffixes
-                for old_latter_dev in list(
-                    dr.async_entries_for_config_entry(dev_reg, v1_entry.entry_id)
-                ):
-                    if (DOMAIN, v1_entry.entry_id) in old_latter_dev.identifiers:
-                        for ent_entry in list(
-                            er.async_entries_for_device(
-                                ent_reg, old_latter_dev.id, include_disabled_entities=True
-                            )
-                        ):
-                            ent_reg.async_remove(ent_entry.entity_id)
-                        dev_reg.async_remove_device(old_latter_dev.id)
-
-                if sub_uid not in existing_sub_uids and slug not in existing_sub_slugs:
-                    subentry = ConfigSubentry(
-                        data=MappingProxyType(dev_data),
-                        subentry_type="device",
-                        title=sub_title,
-                        unique_id=sub_uid,
-                    )
-                    hass.config_entries.async_add_subentry(hub_entry, subentry)
-                    existing_sub_uids.add(sub_uid)
-                    existing_sub_slugs.add(slug)
-
-                    # Migrate per-device runtime storage (.storage/latter.runtime.<old_entry_id> -> <subentry_id>)
-                    old_store: Store[dict[str, Any]] = Store(
-                        hass, STORAGE_VERSION, f"{STORAGE_KEY_PREFIX}.{v1_entry.entry_id}"
-                    )
-                    loaded_rt = await old_store.async_load()
-                    if isinstance(loaded_rt, dict) and loaded_rt:
-                        new_store: Store[dict[str, Any]] = Store(
-                            hass,
-                            STORAGE_VERSION,
-                            f"{STORAGE_KEY_PREFIX}.{subentry.subentry_id}",
-                        )
-                        await new_store.async_save(loaded_rt)
-                        await old_store.async_remove()
-
-            if v1_entry.entry_id != hub_entry.entry_id:
-                hass.config_entries.async_update_entry(
-                    v1_entry,
-                    data={"_migrated_to_hub": hub_entry.entry_id},
-                    options={},
-                    version=2,
-                )
-
-        hass.config_entries.async_update_entry(
-            hub_entry,
-            title="Latter",
-            unique_id=DOMAIN,
-            data={},
-            options={},
-            version=2,
-        )
-        _LOGGER.info(
-            "Migrated %d Latter v1 device entries into ConfigSubentries on System hub entry %s",
-            len(v1_entries),
-            hub_entry.entry_id,
-        )
-        return True
-
-
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up the Latter domain, register services, and scan for Latter-compatible ESPHome devices."""
     domain_data = hass.data.setdefault(DOMAIN, {})
@@ -422,12 +280,6 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bool:
     """Set up the Latter System hub entry and all configured Device subentries."""
-    if entry.data.get("_migrated_to_hub"):
-        hass.async_create_task(
-            hass.config_entries.async_remove(entry.entry_id)
-        )
-        return True
-
     domain_data = hass.data.setdefault(DOMAIN, {})
     await _async_ensure_global_store(hass, seed_entry=entry)
     sys_obj = get_latter_system(hass)
@@ -458,29 +310,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
         sw_version=INTEGRATION_VERSION,
         configuration_url="homeassistant://latter",
     )
-
-    # If the entry was created with inline device data and no subentries yet, promote it to a ConfigSubentry
-    if not entry.subentries and entry.data.get(CONF_DEVICE_SLUG):
-        slug = normalize_device_slug(str(entry.data.get(CONF_DEVICE_SLUG, "")))
-        if slug and slug != "esphome_device":
-            dev_data = {
-                k: v
-                for k, v in {**entry.data, **(entry.options or {})}.items()
-                if k not in GLOBAL_CONFIG_KEYS
-            }
-            sub_uid = str(entry.unique_id or f"{DOMAIN}_{slug}")
-            if sub_uid == DOMAIN:
-                sub_uid = f"{DOMAIN}_{slug}"
-            subentry = ConfigSubentry(
-                data=MappingProxyType(dev_data),
-                subentry_type="device",
-                title=slug.replace("_", " ").title(),
-                unique_id=sub_uid,
-            )
-            hass.config_entries.async_add_subentry(entry, subentry)
-            hass.config_entries.async_update_entry(
-                entry, title="Latter", unique_id=DOMAIN, data={}, options={}
-            )
 
     entry.runtime_data = sys_obj
 
@@ -521,8 +350,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
 
 async def _async_update_listener(hass: HomeAssistant, entry: LatterConfigEntry) -> None:
     """Reload when device subentries are added/removed or structural keys change; otherwise apply options in-place."""
-    if entry.data.get("_migrated_to_hub"):
-        return
     sys_obj: LatterSystem = entry.runtime_data
     current_sub_ids = {
         sub.subentry_id
@@ -548,9 +375,6 @@ async def _async_update_listener(hass: HomeAssistant, entry: LatterConfigEntry) 
 
 async def async_unload_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bool:
     """Unload the Latter System hub entry and all its device subentry coordinators."""
-    if entry.data.get("_migrated_to_hub"):
-        return True
-
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
         clear_ma_counterpart_cache(hass)

@@ -190,9 +190,9 @@ Returns at most 25 events, with duplicates (same summary and start) removed. Eve
 Doorbell listen, push-to-talk reply, and unlock actions, plus `call_target`, which rings other displays with a notification. Can return a response.
 
 - **Listen** (`listen_start` / `listen_stop` / `listen_toggle`): the camera's RTSP audio runs through an FFmpeg noise-reduction filter and plays on the device as FLAC.
-- **Reply** (`talk_message` / `quick_reply`): Home Assistant speaks `message` with TTS on the camera's `media_player` (a sibling entity on the camera's device, or a Studio volume override). Latter firmware sends the text its push-to-talk speech recognition produced. Listening pauses during the reply and resumes after it.
+- **Reply** (`talk_message` / `quick_reply`): Home Assistant speaks `message` with TTS on the camera's `media_player` (a sibling entity on the camera's device, or a Studio volume override). Latter firmware sends the text its push-to-talk speech recognition produced. Listening pauses during the reply and resumes after it, unless the call ended in the meantime. A new reply replaces a pending one, so listening resumes only after the last reply.
 - **Unlock** (`unlock_door`): calls `lock.unlock` on the camera's lock, or the lock configured in Studio.
-- **`call_target`**: sends a critical `latter.notify` ("Tap to answer") to the display named in `message`, or to every other display. No audio path is opened between displays.
+- **`call_target`**: sends a critical `latter.notify` ("Tap to answer") to the display named in `message`, or to every other display. No audio path is opened between displays, and it does not start listening on the calling device (the device sends its own listen_start).
 
 There is no live audio from the device to the door and no echo cancellation.
 

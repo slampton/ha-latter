@@ -383,7 +383,7 @@ def build_studio_state_payload(
         elif domain == "camera":
             cam_item: dict[str, Any] = dict(item)
             if ent_id in allowed_cams_set:
-                cam_sig = coordinator.sign_resource(
+                cam_sig = coordinator.sign_payload_resource(
                     f"camera:{ent_id}|320|180|square"
                 )
                 cam_item["preview_url"] = (
@@ -437,7 +437,7 @@ def build_studio_state_payload(
         coordinator.device_slug,
         coordinator.wallpaper_source,
         coordinator.wallpaper_favorites,
-        sign_resource=coordinator.sign_resource,
+        sign_resource=coordinator.sign_payload_resource,
         display_shape=coordinator.display_shape,
     )
 

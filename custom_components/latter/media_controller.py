@@ -63,8 +63,8 @@ async def async_execute_ma_queue_transfer(
     media_content_type: str,
 ) -> None:
     """Execute Music Assistant 2.10.8+ queue transfer, quiesce local Sendspin speaker, and verify position handoff."""
-    src_ma = resolve_ma_counterpart_entity(hass, source_speaker, "")
-    tgt_ma = resolve_ma_counterpart_entity(hass, target_speaker, "")
+    src_ma = resolve_ma_counterpart_entity(hass, source_speaker)
+    tgt_ma = resolve_ma_counterpart_entity(hass, target_speaker)
     is_from_local = bool(local_speaker and source_speaker == local_speaker)
 
     transferred_via_ma = False
@@ -173,7 +173,6 @@ async def async_execute_ma_queue_transfer(
 async def async_resume_idle_speaker_queue(
     hass: HomeAssistant,
     speaker_entity_id: str,
-    device_slug: str,
     last_media_uri: str,
     last_media_position: float,
     last_media_type: str,
@@ -184,7 +183,7 @@ async def async_resume_idle_speaker_queue(
     if cur_state is not None and cur_state.state in (STATE_PLAYING, STATE_BUFFERING):
         return True
 
-    ma_entity = resolve_ma_counterpart_entity(hass, speaker_entity_id, device_slug)
+    ma_entity = resolve_ma_counterpart_entity(hass, speaker_entity_id)
     if ma_entity and ma_entity != speaker_entity_id:
         try:
             await hass.services.async_call(
@@ -203,7 +202,6 @@ async def async_resume_idle_speaker_queue(
     resume_uri, resume_pos = await async_find_queue_resume_item(
         hass,
         speaker_entity_id,
-        device_slug,
         last_media_uri,
         last_media_position,
     )
@@ -225,7 +223,6 @@ async def async_resume_idle_speaker_queue(
             await async_play_media_with_ma_fallback(
                 hass,
                 play_target,
-                device_slug,
                 resume_uri,
                 media_type=last_media_type or "music",
             )

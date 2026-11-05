@@ -82,6 +82,15 @@ from .payload import (
 _LOGGER = logging.getLogger(__name__)
 
 
+class StudioCommandError(Exception):
+    """A Studio command rejected its input; sent to the panel as a websocket error with `code`."""
+
+    def __init__(self, code: str, message: str) -> None:
+        """Store the websocket error code alongside the message."""
+        super().__init__(message)
+        self.code = code
+
+
 async def _async_execute_studio_command(
     hass: HomeAssistant,
     coordinator: LatterCoordinator | None,
@@ -145,72 +154,65 @@ async def _async_execute_studio_command(
             get_ble_fabric(hass).notify_occupancy_listeners()
 
     elif cmd == "auto_calibrate_here":
-        if coordinator is None:
-            raise ValueError("No active Latter device selected")
         target_area_id = str(body.get("area_id") or "").strip()
-        survey_slug = str(body.get("survey_device_slug") or "").strip()
-        survey_coord = coordinator
-        if survey_slug:
-            matched_c = next(
-                (
-                    c
-                    for c in _get_all_coordinators(hass)
-                    if c.device_slug == survey_slug
-                    and c._ble_tracker is not None
-                ),
-                None,
+        survey_id = str(body.get("survey_subentry_id") or "").strip()
+        if not target_area_id:
+            raise StudioCommandError("invalid_format", "area_id is required")
+        if not survey_id:
+            raise StudioCommandError(
+                "invalid_format",
+                "survey_subentry_id is required: select the BLE survey device",
             )
-            if matched_c is not None:
-                survey_coord = matched_c
-        elif survey_coord._ble_tracker is None:
-            fallback_c = next(
-                (
-                    c
-                    for c in _get_all_coordinators(hass)
-                    if c._ble_tracker is not None
-                ),
-                None,
+        survey_coord = next(
+            (c for c in _get_all_coordinators(hass) if c.subentry_id == survey_id),
+            None,
+        )
+        if survey_coord is None:
+            raise StudioCommandError(
+                "not_found", f"No Latter device with subentry_id '{survey_id}'"
             )
-            if fallback_c is not None:
-                survey_coord = fallback_c
+        if survey_coord._ble_tracker is None:
+            raise StudioCommandError(
+                "not_supported",
+                f"{survey_coord.device_title} has no BLE tracker: enable Built-in BLE Area Tracking for it first",
+            )
 
-        if target_area_id and survey_coord._ble_tracker is not None:
-            rows = survey_coord._ble_tracker.get_area_calibration_telemetry()
-            target_row = next(
-                (r for r in rows if r["area_id"] == target_area_id), None
+        rows = survey_coord._ble_tracker.get_area_calibration_telemetry()
+        target_row = next(
+            (r for r in rows if r["area_id"] == target_area_id), None
+        )
+        competing = [
+            r["effective_rssi"]
+            for r in rows
+            if r["area_id"] != target_area_id
+            and r["effective_rssi"] is not None
+        ]
+        offsets = dict(survey_coord.ble_area_offsets)
+        if target_row and target_row["raw_rssi"] is not None and competing:
+            best_competing_eff = max(competing)
+            needed_offset = (
+                best_competing_eff - target_row["raw_rssi"]
+            ) + 6.0
+            offsets[target_area_id] = round(
+                max(-25.0, min(25.0, needed_offset)), 1
             )
-            competing = [
-                r["effective_rssi"]
-                for r in rows
-                if r["area_id"] != target_area_id
-                and r["effective_rssi"] is not None
-            ]
-            offsets = dict(survey_coord.ble_area_offsets)
-            if target_row and target_row["raw_rssi"] is not None and competing:
-                best_competing_eff = max(competing)
-                needed_offset = (
-                    best_competing_eff - target_row["raw_rssi"]
-                ) + 6.0
-                offsets[target_area_id] = round(
-                    max(-25.0, min(25.0, needed_offset)), 1
-                )
-            elif target_row:
-                offsets[target_area_id] = round(
-                    max(
-                        -25.0,
-                        min(
-                            25.0,
-                            float(offsets.get(target_area_id, 0.0)) + 5.0,
-                        ),
+        elif target_row:
+            offsets[target_area_id] = round(
+                max(
+                    -25.0,
+                    min(
+                        25.0,
+                        float(offsets.get(target_area_id, 0.0)) + 5.0,
                     ),
-                    1,
-                )
-            await async_save_and_broadcast_global_config(
-                hass, {CONF_BLE_AREA_OFFSETS: offsets}
+                ),
+                1,
             )
-            survey_coord.async_set_active_area(
-                target_area_id, handoff_media=False, sync_device_registry=True
-            )
+        await async_save_and_broadcast_global_config(
+            hass, {CONF_BLE_AREA_OFFSETS: offsets}
+        )
+        survey_coord.async_set_active_area(
+            target_area_id, handoff_media=False, sync_device_registry=True
+        )
 
     elif cmd == "system_entity_action":
         entity_ids = body.get("entity_ids") or []
@@ -838,6 +840,9 @@ async def _async_handle_ws_command_impl(
         )
     except PermissionError as err:
         connection.send_error(msg["id"], "forbidden", str(err))
+        return
+    except StudioCommandError as err:
+        connection.send_error(msg["id"], err.code, str(err))
         return
     except Exception as err:  # noqa: BLE001
         _LOGGER.exception("Latter Studio command '%s' failed: %s", cmd, err)

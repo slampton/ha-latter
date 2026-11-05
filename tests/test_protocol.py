@@ -1,25 +1,47 @@
-"""Standalone Protocol v3 contract tests for ha-latter and esphome-latter-core."""
+"""Standalone tests for ha-latter: Protocol v3 contract, Voice Follows Me, BLE Area scoring, and URL signing.
+
+They run without Home Assistant installed. Each production module under test (payloads.py,
+area_follow.py, ble_math.py, resource_signing.py) is standard-library only and loaded by file path.
+"""
 
 from __future__ import annotations
 
 import importlib.util
 import json
 from pathlib import Path
+import sys
+from types import ModuleType
 from typing import Any
 import unittest
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-HA_PROTO_JSON = REPO_ROOT / "custom_components" / "latter" / "protocol_v3.json"
+LATTER_DIR = REPO_ROOT / "custom_components" / "latter"
+HA_PROTO_JSON = LATTER_DIR / "protocol_v3.json"
 CORE_PROTO_JSON = REPO_ROOT.parent / "esphome-latter-core" / "protocol" / "latter_v3.json"
-PAYLOADS_PY = REPO_ROOT / "custom_components" / "latter" / "payloads.py"
 
-_SPEC = importlib.util.spec_from_file_location("latter_payloads", PAYLOADS_PY)
-assert _SPEC is not None and _SPEC.loader is not None
-_PAYLOADS_MOD = importlib.util.module_from_spec(_SPEC)
-_SPEC.loader.exec_module(_PAYLOADS_MOD)
+
+def _load_ha_free_module(name: str) -> ModuleType:
+    """Load a Home Assistant-free production module from custom_components/latter by file path."""
+    spec = importlib.util.spec_from_file_location(f"latter_{name}", LATTER_DIR / f"{name}.py")
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+_PAYLOADS_MOD = _load_ha_free_module("payloads")
 DomainPayloadPacker = _PAYLOADS_MOD.DomainPayloadPacker
 sanitize_v3_field = _PAYLOADS_MOD.sanitize_v3_field
+
+area_follow = _load_ha_free_module("area_follow")
+AreaFollowDwell = area_follow.AreaFollowDwell
+FollowAction = area_follow.FollowAction
+manifest_is_roaming = area_follow.manifest_is_roaming
+
+ble_math = _load_ha_free_module("ble_math")
+resource_signing = _load_ha_free_module("resource_signing")
 
 
 class TestProtocolV3Contract(unittest.TestCase):
@@ -129,207 +151,263 @@ class TestProtocolV3Contract(unittest.TestCase):
         self.assertEqual(notif_vars.get("alert_id"), "int")
 
 
-class _MockVoiceFollowsMeHarness:
-    """Deterministic unit-test harness for Voice Follows Me (Task 2.11) invariants."""
+class _FollowHarness:
+    """Drives the production `AreaFollowDwell` the way `LatterAreaFollowController` does.
+
+    Only the Home Assistant parts are faked: the timer is a stored deadline, and the Device
+    Registry write is appended to `registry_writes`. Every decision (roaming trait, dwell,
+    pending, ignore) comes from `area_follow.py`.
+    """
 
     def __init__(self, manifest: dict[str, Any], esphome_device_id: str, dwell_s: float = 10.0) -> None:
         self.manifest = manifest
         self.esphome_device_id = esphome_device_id
         self.dwell_s = dwell_s
         self.sync_device_area = True
-        self.current_device_area_id: str | None = "kitchen"
-        self.pending_area_id: str | None = None
-        self.pending_due_at: float | None = None
+        self.device_area_id: str | None = "kitchen"
+        self.dwell = AreaFollowDwell()
+        self.timer: tuple[float, str] | None = None
         self.registry_writes: list[tuple[str, str]] = []
-        self.last_area_follow_write: dict[str, Any] | None = None
 
     @property
     def is_roaming_device(self) -> bool:
-        if "stationary" in self.manifest:
-            return int(self.manifest.get("stationary", 0)) == 0
-        return False
+        return manifest_is_roaming(self.manifest)
 
-    def _cancel_dwell(self) -> None:
-        self.pending_area_id = None
-        self.pending_due_at = None
+    def _allowed(self) -> bool:
+        return self.is_roaming_device and self.sync_device_area
 
-    def _commit_area(self, area_id: str, now_s: float) -> None:
-        if not self.is_roaming_device or not self.sync_device_area:
+    def _write(self, area_id: str) -> None:
+        if self.device_area_id != area_id:
+            self.device_area_id = area_id
+            self.registry_writes.append((self.esphome_device_id, area_id))
+
+    def cancel(self) -> None:
+        self.timer = None
+        self.dwell.cancel()
+
+    def set_area(self, area_id: str, *, ble_driven: bool, now: float) -> None:
+        if not self._allowed():
+            self.cancel()
             return
-        if not area_id or area_id in ("unknown", "unavailable", "none", "away"):
+        action = self.dwell.request(area_id, ble_driven=ble_driven, dwell_s=self.dwell_s, now=now)
+        if action is FollowAction.PENDING:
             return
-        if self.current_device_area_id == area_id:
+        self.timer = None
+        if action is FollowAction.IGNORE:
             return
-        prev = self.current_device_area_id or ""
-        self.current_device_area_id = area_id
-        self.registry_writes.append((self.esphome_device_id, area_id))
-        self.last_area_follow_write = {
-            "timestamp": now_s,
-            "from_area": prev,
-            "to_area": area_id,
-            "device_id": self.esphome_device_id,
-        }
+        if action is FollowAction.DWELL:
+            self.timer = (now + self.dwell_s, area_id)
+            return
+        self._write(area_id)
 
-    def on_ble_area_change(self, new_area_id: str | None, now_s: float) -> None:
-        if not self.is_roaming_device or not self.sync_device_area:
-            self._cancel_dwell()
-            return
-        if not new_area_id or new_area_id in ("unknown", "unavailable", "none", "away"):
-            self._cancel_dwell()
-            return
-        if self.pending_area_id == new_area_id and self.pending_due_at is not None:
-            return
-        self._cancel_dwell()
-        self.pending_area_id = new_area_id
-        self.pending_due_at = now_s + max(1.0, self.dwell_s)
-
-    def on_explicit_area_pick(self, new_area_id: str, now_s: float) -> None:
-        self._cancel_dwell()
-        self._commit_area(new_area_id, now_s)
-
-    def advance_clock(self, now_s: float) -> None:
-        if self.pending_area_id is not None and self.pending_due_at is not None and now_s >= self.pending_due_at:
-            target = self.pending_area_id
-            self._cancel_dwell()
-            self._commit_area(target, now_s)
+    def advance_clock(self, now: float) -> None:
+        if self.timer is not None and now >= self.timer[0]:
+            target = self.timer[1]
+            self.timer = None
+            if self.dwell.take_due(target, now) and self._allowed():
+                self._write(target)
 
 
-class TestVoiceFollowsMeAndBleDecay(unittest.TestCase):
-    """Verify Voice Follows Me (Task 2.11) and BLE silence decay invariants."""
+class TestVoiceFollowsMe(unittest.TestCase):
+    """Voice Follows Me invariants, exercised through `area_follow.py`."""
+
+    def test_roaming_comes_from_hardware_traits_only(self) -> None:
+        """stationary == 0 or wearable == 1 is roaming; missing or malformed traits are not."""
+        self.assertTrue(manifest_is_roaming({"stationary": 0}))
+        self.assertTrue(manifest_is_roaming({"stationary": 0, "wearable": 1}))
+        self.assertTrue(manifest_is_roaming({"wearable": 1}))
+        self.assertFalse(manifest_is_roaming({"stationary": 1, "wearable": 0}))
+        self.assertFalse(manifest_is_roaming({}))
+        self.assertFalse(manifest_is_roaming({"stationary": "x"}))
+        self.assertFalse(manifest_is_roaming({"profile": "mobile_display"}))
 
     def test_stationary_device_never_writes_area(self) -> None:
-        """Stationary devices (stationary == 1) must never mutate device registry area_id."""
-        harness = _MockVoiceFollowsMeHarness(
-            manifest={"stationary": 1},
-            esphome_device_id="esp_stationary_01",
-        )
+        """Stationary devices (stationary == 1) must never mutate the device registry area_id."""
+        harness = _FollowHarness(manifest={"stationary": 1}, esphome_device_id="esp_stationary_01")
         self.assertFalse(harness.is_roaming_device)
-        harness.on_ble_area_change("office", now_s=100.0)
-        harness.advance_clock(now_s=200.0)
-        harness.on_explicit_area_pick("office", now_s=205.0)
+        harness.set_area("office", ble_driven=True, now=100.0)
+        harness.advance_clock(now=200.0)
+        harness.set_area("office", ble_driven=False, now=205.0)
         self.assertEqual(harness.registry_writes, [])
-        self.assertEqual(harness.current_device_area_id, "kitchen")
+        self.assertEqual(harness.device_area_id, "kitchen")
 
     def test_roaming_dwell_bounce_and_away_preservation(self) -> None:
-        """Rapid BLE bounce A -> B -> C cancels B; away/unknown never clears area; explicit pick applies immediately."""
-        harness = _MockVoiceFollowsMeHarness(
-            manifest={"stationary": 0},
-            esphome_device_id="esp_roaming_01",
-            dwell_s=10.0,
-        )
+        """Bounce A -> B cancels A; away/unknown never clears the Area; an explicit pick applies immediately."""
+        harness = _FollowHarness(manifest={"stationary": 0}, esphome_device_id="esp_roaming_01", dwell_s=10.0)
         self.assertTrue(harness.is_roaming_device)
 
-        # Bounce to hallway at t=10s, then office at t=14s (before 10s dwell expires)
-        harness.on_ble_area_change("hallway", now_s=10.0)
-        harness.advance_clock(now_s=14.0)
+        harness.set_area("hallway", ble_driven=True, now=10.0)
+        harness.advance_clock(now=14.0)
         self.assertEqual(harness.registry_writes, [])
 
-        harness.on_ble_area_change("office", now_s=14.0)
-        harness.advance_clock(now_s=20.0)
+        harness.set_area("office", ble_driven=True, now=14.0)
+        harness.advance_clock(now=20.0)
         self.assertEqual(harness.registry_writes, [])
 
-        # At t=24.0s, office has been stable for 10s -> single write to esp_roaming_01
-        harness.advance_clock(now_s=24.0)
+        harness.advance_clock(now=24.0)
         self.assertEqual(harness.registry_writes, [("esp_roaming_01", "office")])
-        self.assertEqual(harness.current_device_area_id, "office")
-        self.assertIsNotNone(harness.last_area_follow_write)
-        assert harness.last_area_follow_write is not None
-        self.assertEqual(harness.last_area_follow_write["from_area"], "kitchen")
-        self.assertEqual(harness.last_area_follow_write["to_area"], "office")
+        self.assertEqual(harness.device_area_id, "office")
 
-        # Brief BLE move to bedroom at t=30s followed by away/unknown at t=35s -> cancels dwell, preserves "office"
-        harness.on_ble_area_change("bedroom", now_s=30.0)
-        harness.on_ble_area_change("away", now_s=35.0)
-        harness.advance_clock(now_s=50.0)
+        # Brief move to bedroom, then the source reports away -> pending move dropped, "office" kept.
+        harness.set_area("bedroom", ble_driven=True, now=30.0)
+        harness.set_area("away", ble_driven=True, now=35.0)
+        harness.advance_clock(now=50.0)
         self.assertEqual(len(harness.registry_writes), 1)
-        self.assertEqual(harness.current_device_area_id, "office")
+        self.assertEqual(harness.device_area_id, "office")
+        self.assertIsNone(harness.dwell.pending_area_id)
 
-        # Explicit on-device pick writes immediately without waiting for dwell
-        harness.on_explicit_area_pick("den", now_s=55.0)
+        harness.set_area("den", ble_driven=False, now=55.0)
         self.assertEqual(
             harness.registry_writes,
             [("esp_roaming_01", "office"), ("esp_roaming_01", "den")],
         )
 
-    def test_ble_silence_decay_overtakes_stale_room(self) -> None:
-        """Silence decay (1.5 dB/s after 2s grace) allows a newly entered room to overtake a silent room within ~12s."""
-        grace_s = 2.0
-        decay_db_per_s = 1.5
-        stale_proxy_s = 12.0
-        min_rssi_floor = -88.0
+    def test_repeated_ble_report_keeps_original_deadline(self) -> None:
+        """Re-reporting the pending Area must not restart the dwell."""
+        dwell = AreaFollowDwell()
+        self.assertIs(dwell.request("hallway", ble_driven=True, dwell_s=10, now=10.0), FollowAction.DWELL)
+        self.assertIs(dwell.request("hallway", ble_driven=True, dwell_s=10, now=15.0), FollowAction.PENDING)
+        self.assertFalse(dwell.take_due("hallway", now=19.0))
+        self.assertTrue(dwell.take_due("hallway", now=20.0))
+        self.assertIsNone(dwell.pending_area_id)
 
-        def effective_rssi(ema_rssi: float, age_s: float) -> float | None:
-            if age_s > stale_proxy_s:
-                return None
-            silence_penalty = max(0.0, age_s - grace_s) * decay_db_per_s
-            eff = ema_rssi - silence_penalty
-            return eff if eff >= min_rssi_floor else None
-
-        # Room A had strong signal (-58 dBm) at t=0, now silent for 9s -> -58 - (7 * 1.5) = -68.5 dBm
-        eff_room_a = effective_rssi(-58.0, age_s=9.0)
-        # Room B has fresh signal (-64 dBm) at age 0.5s -> -64.0 dBm
-        eff_room_b = effective_rssi(-64.0, age_s=0.5)
-        self.assertIsNotNone(eff_room_a)
-        self.assertIsNotNone(eff_room_b)
-        assert eff_room_a is not None and eff_room_b is not None
-        self.assertGreater(eff_room_b, eff_room_a)
-
-        # At age 12.5s (> STALE_PROXY_SECONDS), Room A is dropped completely
-        self.assertIsNone(effective_rssi(-58.0, age_s=12.5))
+    def test_non_area_states_and_zero_dwell(self) -> None:
+        """Placeholders are ignored and cancel; a zero dwell commits at once."""
+        dwell = AreaFollowDwell()
+        dwell.request("office", ble_driven=True, dwell_s=10, now=0.0)
+        for placeholder in ("", "unknown", "unavailable", "none", "away", "not_home", "Away"):
+            self.assertIs(dwell.request(placeholder, ble_driven=True, dwell_s=10, now=1.0), FollowAction.IGNORE)
+            self.assertIsNone(dwell.pending_area_id)
+        self.assertIs(dwell.request("office", ble_driven=True, dwell_s=0, now=2.0), FollowAction.COMMIT)
+        self.assertFalse(dwell.take_due("office", now=100.0))
 
 
-class TestUrlSignerSecurityAndDeterminism(unittest.TestCase):
-    """Verify day-bucketed HMAC-SHA256 resource signatures, scope binding, and expiry."""
+def _never_cross_floor(_area_id: str) -> bool:
+    return False
 
-    def _make_signer_helpers(self, entry_id: str, secret: bytes):
-        import hashlib
-        import hmac
 
-        sig_bucket_s = 86400
+class TestBleAreaScoring(unittest.TestCase):
+    """BLE Area scoring and switching, exercised through `ble_math.py`."""
 
-        def sign_resource(resource: str, now_s: int, ttl_s: int = 7 * sig_bucket_s) -> str:
-            exp = ((now_s + ttl_s) // sig_bucket_s + 1) * sig_bucket_s
-            msg = f"{entry_id}|{resource}|{exp}".encode("utf-8")
-            mac = hmac.new(secret, msg, hashlib.sha256).hexdigest()[:32]
-            return f"{exp}.{mac}"
+    def test_silence_decay_lets_new_room_overtake_and_stale_room_drops(self) -> None:
+        """After the 2 s grace an Area loses 1.5 dB/s, so a fresh Area overtakes a silent one; > 12 s silent drops it."""
+        area_rssi = {"room_a": (-58.0, 0.0), "room_b": (-64.0, 8.5)}
 
-        def verify_resource(resource: str, sig: str | None, now_s: int) -> bool:
-            if not sig:
-                return False
-            try:
-                exp_s, mac = sig.split(".", 1)
-                if int(exp_s) < now_s:
-                    return False
-            except ValueError:
-                return False
-            msg = f"{entry_id}|{resource}|{exp_s}".encode("utf-8")
-            expected = hmac.new(secret, msg, hashlib.sha256).hexdigest()[:32]
-            return hmac.compare_digest(mac, expected)
+        scores = ble_math.score_areas(area_rssi, 9.0, _never_cross_floor)
+        self.assertAlmostEqual(scores["room_a"], -58.0 - 7.0 * 1.5)
+        self.assertAlmostEqual(scores["room_b"], -64.0)
+        decision = ble_math.decide_area(scores, "room_a", 9.0, last_switch=0.0)
+        assert decision is not None
+        self.assertEqual(decision.best_area_id, "room_b")
+        self.assertFalse(decision.switch, "a 4.5 dB lead is inside the 5 dB hysteresis")
 
-        return sign_resource, verify_resource
+        scores = ble_math.score_areas({"room_a": (-58.0, 0.0), "room_b": (-64.0, 9.5)}, 10.0, _never_cross_floor)
+        decision = ble_math.decide_area(scores, "room_a", 10.0, last_switch=0.0)
+        assert decision is not None
+        self.assertTrue(decision.switch)
+        self.assertEqual(decision.best_area_id, "room_b")
 
-    def test_deterministic_within_day_and_scoped_to_render_params(self) -> None:
-        """Signatures within the same UTC day must be byte-identical and bound to resource + w/h/shape."""
-        secret = bytes.fromhex("a5" * 32)
-        sign_fn, verify_fn = self._make_signer_helpers("entry_abc", secret)
+        scores = ble_math.score_areas(area_rssi, 12.5, _never_cross_floor)
+        self.assertNotIn("room_a", scores)
 
-        day_start = 1761955200
-        sig_t0 = sign_fn("artwork|480|480|circle", now_s=day_start + 10)
-        sig_t1 = sign_fn("artwork|480|480|circle", now_s=day_start + 3600)
+    def test_cross_floor_penalty(self) -> None:
+        """Candidates on another floor lose CROSS_FLOOR_ATTENUATION_DB (6 dB)."""
+        scores = ble_math.score_areas(
+            {"upstairs": (-60.0, 10.0), "kitchen": (-63.0, 10.0)},
+            10.0,
+            lambda area_id: area_id == "upstairs",
+        )
+        self.assertAlmostEqual(scores["upstairs"], -66.0)
+        decision = ble_math.decide_area(scores, "kitchen", 10.0, last_switch=0.0)
+        assert decision is not None
+        self.assertEqual(decision.best_area_id, "kitchen")
+        self.assertFalse(decision.switch)
+
+    def test_hold_override_and_floor(self) -> None:
+        """Within the 4 s hold only an 8 dB lead switches; nothing below -88 dBm wins; no current Area locks at once."""
+        scores = {"a": -70.0, "b": -64.0}
+        decision = ble_math.decide_area(scores, "a", now=11.0, last_switch=10.0)
+        assert decision is not None
+        self.assertFalse(decision.switch)
+        decision = ble_math.decide_area({"a": -70.0, "b": -61.0}, "a", now=11.0, last_switch=10.0)
+        assert decision is not None
+        self.assertTrue(decision.switch)
+        self.assertIsNone(ble_math.decide_area({"a": -90.0}, None, now=0.0, last_switch=0.0))
+        self.assertIsNone(ble_math.decide_area({}, None, now=0.0, last_switch=0.0))
+        decision = ble_math.decide_area({"a": -80.0}, None, now=0.0, last_switch=0.0)
+        assert decision is not None
+        self.assertTrue(decision.switch)
+
+    def test_smoothing_restarts_after_stale_gap(self) -> None:
+        """The EMA blends 50/50 and restarts from the raw value after a stale gap."""
+        self.assertEqual(ble_math.smooth_rssi(None, -70.0, 5.0), -70.0)
+        self.assertEqual(ble_math.smooth_rssi((-60.0, 4.0), -70.0, 5.0), -65.0)
+        self.assertEqual(ble_math.smooth_rssi((-60.0, 0.0), -70.0, 13.0), -70.0)
+
+
+class TestResourceSigning(unittest.TestCase):
+    """HMAC resource signatures, exercised through `resource_signing.py`."""
+
+    SECRET = bytes.fromhex("a5" * 32)
+    DAY_START = 1761955200
+
+    def _sign_bucketed(self, resource: str, now_s: int, scope: str = "sub_abc") -> str:
+        exp = resource_signing.day_bucketed_expiry(now_s, resource_signing.PAYLOAD_TTL_DAYS)
+        return resource_signing.sign(self.SECRET, scope, resource, exp)
+
+    def test_day_bucketed_is_deterministic_and_scoped(self) -> None:
+        """Same UTC day -> identical signature, bound to the Device scope and the render parameters."""
+        res = "artwork|480|480|circle"
+        sig_t0 = self._sign_bucketed(res, self.DAY_START + 10)
+        sig_t1 = self._sign_bucketed(res, self.DAY_START + 3600)
         self.assertEqual(sig_t0, sig_t1)
-        self.assertTrue(verify_fn("artwork|480|480|circle", sig_t0, now_s=day_start + 7200))
+        self.assertNotEqual(sig_t0, self._sign_bucketed(res, self.DAY_START + 86400 + 10))
 
-        # Different dimensions or shape must reject the signature
-        self.assertFalse(verify_fn("artwork|720|720|square", sig_t0, now_s=day_start + 7200))
-        self.assertFalse(verify_fn("camera:camera.front_door|480|480|circle", sig_t0, now_s=day_start + 7200))
+        verify = resource_signing.verify
+        now = self.DAY_START + 7200
+        self.assertTrue(verify(self.SECRET, "sub_abc", res, sig_t0, now))
+        self.assertFalse(verify(self.SECRET, "sub_other", res, sig_t0, now))
+        self.assertFalse(verify(self.SECRET, "sub_abc", "artwork|720|720|square", sig_t0, now))
+        self.assertFalse(verify(self.SECRET, "sub_abc", "camera:camera.front_door|480|480|circle", sig_t0, now))
 
-        # Expired signature (> 8 days later) must be rejected
-        self.assertFalse(verify_fn("artwork|480|480|circle", sig_t0, now_s=day_start + 9 * 86400))
+    def test_day_bucketed_lifetime_is_ttl_to_ttl_plus_one_day(self) -> None:
+        """A 7-day URL signed at any time of day stays valid for 7 to 8 days."""
+        for offset in (0, 43200, 86399):
+            now = self.DAY_START + offset
+            exp = resource_signing.day_bucketed_expiry(now, 7)
+            self.assertEqual(exp % 86400, 0)
+            self.assertGreaterEqual(exp - now, 7 * 86400)
+            self.assertLessEqual(exp - now, 8 * 86400)
+        sig = self._sign_bucketed("map:Home|480|480|circle", self.DAY_START)
+        exp = int(sig.split(".", 1)[0])
+        self.assertTrue(resource_signing.verify(self.SECRET, "sub_abc", "map:Home|480|480|circle", sig, exp))
+        self.assertFalse(resource_signing.verify(self.SECRET, "sub_abc", "map:Home|480|480|circle", sig, exp + 1))
 
-        # Tampered MAC or malformed token must be rejected
-        self.assertFalse(verify_fn("artwork|480|480|circle", f"{sig_t0[:-1]}0", now_s=day_start + 100))
-        self.assertFalse(verify_fn("artwork|480|480|circle", "malformed", now_s=day_start + 100))
-        self.assertFalse(verify_fn("artwork|480|480|circle", None, now_s=day_start + 100))
+    def test_exact_expiry_for_on_demand_urls(self) -> None:
+        """An on-demand URL expires exactly ON_DEMAND_TTL_SECONDS (10 min) after signing."""
+        now = self.DAY_START + 12345
+        ttl = resource_signing.ON_DEMAND_TTL_SECONDS
+        self.assertEqual(ttl, 600)
+        exp = resource_signing.exact_expiry(now, ttl)
+        self.assertEqual(exp, now + 600)
+        sig = resource_signing.sign(self.SECRET, "sub_abc", "camera_audio:camera.door", exp)
+        verify = resource_signing.verify
+        self.assertTrue(verify(self.SECRET, "sub_abc", "camera_audio:camera.door", sig, now + 600))
+        self.assertFalse(verify(self.SECRET, "sub_abc", "camera_audio:camera.door", sig, now + 601))
+
+    def test_rejects_tampered_malformed_and_bad_ttl(self) -> None:
+        """Tampered MACs, malformed or non-ASCII tokens are rejected without raising; ttl must be positive."""
+        res = "artwork|480|480|circle"
+        sig = self._sign_bucketed(res, self.DAY_START)
+        now = self.DAY_START + 100
+        verify = resource_signing.verify
+        tampered = f"{sig[:-1]}{'0' if sig[-1] != '0' else '1'}"
+        for bad in (tampered, "malformed", None, "", ".", "abc.def", f"{sig}é", "１２３.abcd", f"+{sig}"):
+            self.assertFalse(verify(self.SECRET, "sub_abc", res, bad, now), bad)
+        with self.assertRaises(ValueError):
+            resource_signing.day_bucketed_expiry(now, 0)
+        with self.assertRaises(ValueError):
+            resource_signing.exact_expiry(now, 0)
 
 
 if __name__ == "__main__":

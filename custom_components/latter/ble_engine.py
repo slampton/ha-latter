@@ -15,6 +15,13 @@ from homeassistant.helpers import (
 )
 from homeassistant.helpers.event import async_track_time_interval
 
+from .ble_math import (
+    STALE_PROXY_SECONDS,
+    decide_area,
+    rssi_to_distance_m,
+    score_areas,
+    smooth_rssi,
+)
 from .const import normalize_device_slug
 from .identity import (
     get_bound_esphome_device,
@@ -26,15 +33,8 @@ _LOGGER = logging.getLogger(__name__)
 APPLE_COMPANY_ID = 0x004C
 IBEACON_PREFIX = b"\x02\x15"
 _UNMAPPED = "__unmapped__"
-EMA_ALPHA = 0.50
-HYSTERESIS_DB = 5.0
-FAST_OVERRIDE_DB = 8.0
-CROSS_FLOOR_ATTENUATION_DB = 6.0
-STALE_PROXY_SECONDS = 12.0
-SILENCE_DECAY_DB_PER_S = 1.5
 SURVEY_RETENTION_SECONDS = 180.0
 WAKE_GAP_SECONDS = 8.0
-MIN_HOLD_SECONDS = 4.0
 SCANNER_POLL_INTERVAL_SECONDS = 2.0
 AWAY_TIMEOUT_SECONDS = 180.0
 
@@ -573,8 +573,7 @@ class LatterNativeBleTracker:
             dist_m: float | None = None
             dist_ft: float | None = None
             if effective_dbm is not None:
-                # Log-distance path-loss model (TxPower = -59 dBm @ 1m, indoor n = 2.2)
-                dist_m = round(max(0.2, min(50.0, 10.0 ** ((-59.0 - effective_dbm) / (10.0 * 2.2)))), 1)
+                dist_m = rssi_to_distance_m(effective_dbm)
                 dist_ft = round(dist_m * 3.28084, 1)
 
             rows.append(
@@ -737,12 +736,12 @@ class LatterNativeBleTracker:
             self._area_raw_rssi.clear()
             self.current_area_id = None
 
-        raw_f = float(rssi)
         prev_raw = self._area_raw_rssi.get(area_id)
-        if prev_raw is None or (obs_time - prev_raw[1]) > STALE_PROXY_SECONDS:
-            raw_ema = raw_f
-        else:
-            raw_ema = (EMA_ALPHA * raw_f) + ((1.0 - EMA_ALPHA) * prev_raw[0])
+        raw_ema = smooth_rssi(
+            (prev_raw[0], prev_raw[1]) if prev_raw is not None else None,
+            float(rssi),
+            obs_time,
+        )
         self._area_raw_rssi[area_id] = (raw_ema, obs_time, scanner_name or source)
 
         offset_db = float(self._area_offsets.get(area_id, 0.0))
@@ -755,14 +754,6 @@ class LatterNativeBleTracker:
     @callback
     def _evaluate_best_area(self, now: float, latest_source: str = "") -> None:
         """Evaluate fresh effective RSSI scores across all areas (with silence decay and multi-story floor attenuation)."""
-        raw_fresh_areas = {
-            k: (val, ts)
-            for k, (val, ts) in self._area_rssi.items()
-            if (now - ts) <= STALE_PROXY_SECONDS
-        }
-        if not raw_fresh_areas:
-            return
-
         area_reg = ar.async_get(self.hass)
         cur_floor_id: str | None = None
         if self.current_area_id:
@@ -770,51 +761,30 @@ class LatterNativeBleTracker:
             if cur_area_entry:
                 cur_floor_id = getattr(cur_area_entry, "floor_id", None)
 
-        fresh_areas: dict[str, tuple[float, float]] = {}
-        for k, (val, ts) in raw_fresh_areas.items():
-            age_s = max(0.0, now - ts)
-            silence_penalty = SILENCE_DECAY_DB_PER_S * max(0.0, age_s - 2.0)
-            adj_val = val - silence_penalty
-            if cur_floor_id and k != self.current_area_id:
-                cand_entry = area_reg.async_get_area(k)
-                cand_floor_id = getattr(cand_entry, "floor_id", None) if cand_entry else None
-                if cand_floor_id and cand_floor_id != cur_floor_id:
-                    adj_val -= CROSS_FLOOR_ATTENUATION_DB
-            fresh_areas[k] = (adj_val, ts)
+        def _is_cross_floor(area_id: str) -> bool:
+            if not cur_floor_id or area_id == self.current_area_id:
+                return False
+            cand_entry = area_reg.async_get_area(area_id)
+            cand_floor_id = getattr(cand_entry, "floor_id", None) if cand_entry else None
+            return bool(cand_floor_id and cand_floor_id != cur_floor_id)
 
-        best_area, (best_ema, best_ts) = max(
-            fresh_areas.items(), key=lambda item: item[1][0]
+        scores = score_areas(self._area_rssi, now, _is_cross_floor)
+        decision = decide_area(
+            scores, self.current_area_id, now, self._last_switch_monotonic
         )
-        best_age_s = max(0.0, now - best_ts)
-        if best_ema < -88.0:
+        if decision is None:
             return
         self.is_away = False
+        best_area = decision.best_area_id
 
         def _update_winner_metrics(win_area: str) -> None:
-            eff_entry = raw_fresh_areas.get(win_area)
+            eff_entry = self._area_rssi.get(win_area)
             if eff_entry is not None:
                 eff_dbm = eff_entry[0]
                 self.winning_rssi = int(round(eff_dbm))
-                d_m = round(max(0.2, min(50.0, 10.0 ** ((-59.0 - eff_dbm) / (10.0 * 2.2)))), 1)
+                d_m = rssi_to_distance_m(eff_dbm)
                 self.winning_distance_m = d_m
                 self.winning_distance_ft = round(d_m * 3.28084, 1)
-
-        if self.current_area_id is None:
-            self.current_area_id = best_area
-            _update_winner_metrics(best_area)
-            if latest_source:
-                self.closest_scanner = latest_source
-            self._last_switch_monotonic = now
-            _LOGGER.debug(
-                "BLE initial area lock (%s): area=%s best_ema=%.1fdBm age=%.1fs",
-                self._raw_slug,
-                best_area,
-                best_ema,
-                best_age_s,
-            )
-            self._on_area_detected(best_area, self.closest_scanner)
-            get_ble_fabric(self.hass).notify_occupancy_listeners()
-            return
 
         if best_area == self.current_area_id:
             _update_winner_metrics(best_area)
@@ -822,40 +792,25 @@ class LatterNativeBleTracker:
                 self.closest_scanner = latest_source
             return
 
-        cur_entry = fresh_areas.get(self.current_area_id)
-        cur_ema = cur_entry[0] if cur_entry is not None else -100.0
-        delta_db = best_ema - cur_ema
         _LOGGER.debug(
-            "BLE area candidate (%s): area=%s best_ema=%.1fdBm runner_up_ema=%.1fdBm delta=%.1fdB age=%.1fs",
+            "BLE area candidate (%s): area=%s score=%.1fdBm current=%s score=%.1fdBm switch=%s",
             self._raw_slug,
             best_area,
-            best_ema,
-            cur_ema,
-            delta_db,
-            best_age_s,
+            decision.best_score,
+            self.current_area_id,
+            decision.current_score,
+            decision.switch,
         )
-
-        if delta_db >= FAST_OVERRIDE_DB:
-            self.current_area_id = best_area
-            _update_winner_metrics(best_area)
-            if latest_source:
-                self.closest_scanner = latest_source
-            self._last_switch_monotonic = now
-            self._on_area_detected(best_area, self.closest_scanner)
-            get_ble_fabric(self.hass).notify_occupancy_listeners()
+        if not decision.switch:
             return
 
-        if (now - self._last_switch_monotonic) < MIN_HOLD_SECONDS:
-            return
-
-        if delta_db >= HYSTERESIS_DB:
-            self.current_area_id = best_area
-            _update_winner_metrics(best_area)
-            if latest_source:
-                self.closest_scanner = latest_source
-            self._last_switch_monotonic = now
-            self._on_area_detected(best_area, self.closest_scanner)
-            get_ble_fabric(self.hass).notify_occupancy_listeners()
+        self.current_area_id = best_area
+        _update_winner_metrics(best_area)
+        if latest_source:
+            self.closest_scanner = latest_source
+        self._last_switch_monotonic = now
+        self._on_area_detected(best_area, self.closest_scanner)
+        get_ble_fabric(self.hass).notify_occupancy_listeners()
 
 from .area_engine import (  # noqa: E402
     evaluate_area_sensor_fusion,

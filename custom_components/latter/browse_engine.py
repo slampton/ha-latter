@@ -114,7 +114,7 @@ async def _browse_ma_media_children(
 
     from .media_engine import resolve_ma_counterpart_entity
 
-    ma_entity = resolve_ma_counterpart_entity(hass, speaker, "")
+    ma_entity = resolve_ma_counterpart_entity(hass, speaker)
     if not ma_entity:
         return []
 
@@ -583,7 +583,7 @@ async def _browse_active_queue(
     """Fetch upcoming queue items natively from Music Assistant 2.10.8+."""
     from .media_engine import resolve_ma_counterpart_entity
 
-    ma_target = resolve_ma_counterpart_entity(hass, speaker, "")
+    ma_target = resolve_ma_counterpart_entity(hass, speaker)
     if not ma_target or not hass.services.has_service("music_assistant", "get_queue"):
         return []
 
@@ -899,7 +899,7 @@ async def _browse_track_lyrics_or_bio(
     # 1. Query Music Assistant via public get_queue and get_library services
     from .media_engine import resolve_ma_counterpart_entity
 
-    ma_target = resolve_ma_counterpart_entity(hass, speaker, "")
+    ma_target = resolve_ma_counterpart_entity(hass, speaker)
     if ma_target and hass.services.has_service("music_assistant", "get_queue"):
         try:
             resp = await hass.services.async_call(

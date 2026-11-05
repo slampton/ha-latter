@@ -53,6 +53,7 @@ from .area_engine import (
     match_area_by_name_or_id,
     resolve_remote_slot_pair,
 )
+from .area_follow import manifest_is_roaming
 from .ble_engine import (
     LatterNativeBleTracker,
     get_all_scanners_diagnostic_map,
@@ -345,6 +346,8 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.active_camera_index: int = 0
         self.active_carousel_camera: str = ""
         self.doorbell_talk_state: str = "idle"
+        self._doorbell_reply_task: asyncio.Task[None] | None = None
+        self._doorbell_reply_resume_listen: bool = False
         self.doorbell_noise_reduction: str = normalize_noise_reduction(
             self.get_opt(CONF_DOORBELL_NOISE_REDUCTION, DEFAULT_DOORBELL_NOISE_REDUCTION)
         )
@@ -725,7 +728,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         local_spk = self.local_speaker
         return (
             _resolve_ma_counterpart_entity(
-                self.hass, local_spk, self.device_slug
+                self.hass, local_spk
             )
             or ""
         )
@@ -889,14 +892,8 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     @property
     def is_roaming_device(self) -> bool:
-        """Return True only for portable/roaming displays (stationary == 0 in hardware manifest)."""
-        hw = self.hardware_manifest
-        if "stationary" in hw:
-            try:
-                return int(hw.get("stationary")) == 0
-            except (ValueError, TypeError):
-                pass
-        return self.device_profile in ("mobile_display", "wearable_display")
+        """Return True only for roaming hardware (manifest `stationary == 0` or `wearable == 1`)."""
+        return manifest_is_roaming(self.hardware_manifest)
 
     @property
     def sync_device_area_enabled(self) -> bool:
@@ -998,9 +995,13 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         except ValueError:
             return 466, 466
 
-    def sign_resource(self, resource: str, ttl_s: int = 7 * 86400) -> str:
-        """Generate a time-bounded, resource-scoped HMAC-SHA256 signature."""
-        return self._url_signer.sign_resource(resource, ttl_s=ttl_s)
+    def sign_payload_resource(self, resource: str) -> str:
+        """Sign a payload-embedded or Studio-preview resource (day-bucketed, deterministic within a UTC day)."""
+        return self._url_signer.sign_payload_resource(resource)
+
+    def sign_on_demand_resource(self, resource: str) -> str:
+        """Sign a resource minted on demand and never embedded in a payload (exact 10-minute expiry)."""
+        return self._url_signer.sign_on_demand_resource(resource)
 
     def verify_resource(
         self,
@@ -1482,6 +1483,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     self._ble_tracker.current_area_id,
                     handoff_media=False,
                     sync_device_registry=True,
+                    ble_driven=True,
                 )
         self._notify_listeners()
         await asyncio.sleep(1.5)
@@ -1495,6 +1497,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self._ble_tracker.current_area_id,
                 handoff_media=False,
                 sync_device_registry=True,
+                ble_driven=True,
             )
         self._notify_listeners()
         if self.on_area_changed_push_slots is not None:
@@ -1508,7 +1511,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         resumed = await async_resume_idle_speaker_queue(
             self.hass,
             speaker_entity_id,
-            self.device_slug,
             self.last_media_uri,
             self.last_media_position,
             self.last_media_type,
@@ -1533,7 +1535,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         cmd = command.strip().lower()
         ma_target = _resolve_ma_counterpart_entity(
-            self.hass, target_spk, self.device_slug
+            self.hass, target_spk
         )
         cmd_target = ma_target or target_spk
         state_obj = self.hass.states.get(target_spk)
@@ -1562,7 +1564,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             await async_play_media_with_ma_fallback(
                 self.hass,
                 target_spk,
-                self.device_slug,
                 media_id,
                 media_type=media_type,
                 enqueue=enqueue,
@@ -2257,7 +2258,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if vol_target and vol_target != self.active_speaker:
             tracked.append(vol_target)
         ma_counterpart = _resolve_ma_counterpart_entity(
-            self.hass, self.active_speaker, self.device_slug
+            self.hass, self.active_speaker
         )
         if ma_counterpart and ma_counterpart not in tracked:
             tracked.append(ma_counterpart)
@@ -2364,6 +2365,9 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return
 
         matched_area = match_area_by_name_or_id(self.hass, new_state.state)
+        if matched_area is None:
+            # away / unknown / not an Area: never move the Device, and drop any pending dwell.
+            self._area_follow.cancel()
         if matched_area and matched_area != self.active_area_id:
             _LOGGER.info(
                 "BLE Presence ('%s' -> '%s') auto-switching '%s' to area '%s'",
@@ -2399,7 +2403,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return self._cached_media_payload[1]
         state_obj = self.hass.states.get(self.active_speaker)
         ma_counterpart = _resolve_ma_counterpart_entity(
-            self.hass, self.active_speaker, self.device_slug
+            self.hass, self.active_speaker
         )
         ma_st = (
             self.hass.states.get(ma_counterpart)

@@ -147,7 +147,7 @@ async def _async_serve_speaker_artwork(
         )
     if not pic_path:
         ma_counterpart = resolve_ma_counterpart_entity(
-            hass, coordinator.active_speaker, coordinator.device_slug
+            hass, coordinator.active_speaker
         )
         if ma_counterpart and ma_counterpart != coordinator.active_speaker:
             ma_st = hass.states.get(ma_counterpart)

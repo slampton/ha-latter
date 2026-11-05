@@ -71,7 +71,6 @@ def async_audit_coordinator_health(
         )
 
     missing_issue_id = f"missing_mapped_entity_{sub_id}"
-    ir.async_delete_issue(hass, DOMAIN, f"link_ma_player_{slug}")
     if missing_labels:
         _create_scoped_issue(
             missing_issue_id,
@@ -84,7 +83,7 @@ def async_audit_coordinator_health(
     else:
         ir.async_delete_issue(hass, DOMAIN, missing_issue_id)
 
-    # 2. Check BLE proxy availability when native BLE tracking is enabled on a mobile display
+    # 2. Check BLE proxy availability when native BLE tracking is enabled on roaming hardware
     ble_issue_id = f"ble_no_proxies_{sub_id}"
     tracker = coordinator._ble_tracker
     has_seen_ble = bool(
@@ -94,7 +93,7 @@ def async_audit_coordinator_health(
     if (
         hass.is_running
         and coordinator.native_ble_tracking_enabled
-        and coordinator.device_profile == "mobile_display"
+        and coordinator.is_roaming_device
         and not coordinator.presence_entity
         and not has_seen_ble
     ):
