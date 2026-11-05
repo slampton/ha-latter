@@ -1,4 +1,4 @@
-"""State coordinator for Latter (Universal ESPHome Companion & Entity Middleware)."""
+"""State coordinator for one Latter device (Home Assistant side of Protocol v3)."""
 
 from __future__ import annotations
 
@@ -65,7 +65,6 @@ from .const import (
     CONF_AREA_HANDOFF,
     CONF_ART_SIZE,
     CONF_ASSIGNED_PERSON,
-    CONF_ASSIGNED_ROLE,
     CONF_BLE_AREA_OFFSETS,
     CONF_BLE_AUTO_SWITCH,
     CONF_BLE_BEACON_UUID,
@@ -85,7 +84,7 @@ from .const import (
     CONF_DEVICE_SLUG,
     CONF_DISPLAY_SHAPE,
     CONF_DOCK_APPS,
-    CONF_DOORBELL_ANC_MODE,
+    CONF_DOORBELL_NOISE_REDUCTION,
     CONF_ESPHOME_DEVICE_ID,
     CONF_GARAGE_ENTITY,
     CONF_LOCK_ENTITY,
@@ -106,7 +105,6 @@ from .const import (
     DEFAULT_AREA_FOLLOW_DWELL_S,
     DEFAULT_AREA_HANDOFF,
     DEFAULT_ART_SIZE,
-    DEFAULT_ASSIGNED_ROLE,
     DEFAULT_BLE_AUTO_SWITCH,
     DEFAULT_BLE_BEACON_UUID,
     DEFAULT_DEVICE_GROUP,
@@ -114,7 +112,7 @@ from .const import (
     DEFAULT_DEVICE_REMOTE_GROUP,
     DEFAULT_DISPLAY_SHAPE,
     DEFAULT_DOCK_APPS,
-    DEFAULT_DOORBELL_ANC_MODE,
+    DEFAULT_DOORBELL_NOISE_REDUCTION,
     DEFAULT_NATIVE_BLE_TRACKING,
     DEFAULT_PAGE_SIZE,
     DEFAULT_SITE_ID,
@@ -126,6 +124,7 @@ from .const import (
     GLOBAL_CONFIG_KEYS,
     INTEGRATION_VERSION,
     normalize_device_slug,
+    normalize_noise_reduction,
 )
 from .device_runtime import LatterDeviceRuntime
 from .identity import (
@@ -346,8 +345,8 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.active_camera_index: int = 0
         self.active_carousel_camera: str = ""
         self.doorbell_talk_state: str = "idle"
-        self.doorbell_anc_mode: str = str(
-            self.get_opt(CONF_DOORBELL_ANC_MODE, DEFAULT_DOORBELL_ANC_MODE) or DEFAULT_DOORBELL_ANC_MODE
+        self.doorbell_noise_reduction: str = normalize_noise_reduction(
+            self.get_opt(CONF_DOORBELL_NOISE_REDUCTION, DEFAULT_DOORBELL_NOISE_REDUCTION)
         )
         self._configured_wallpaper_source: str = str(
             self.get_opt(CONF_WALLPAPER_SOURCE, "") or ""
@@ -388,9 +387,8 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.current_wallpaper = new_conf_wp
             self._schedule_persist_runtime_state()
 
-        self.doorbell_anc_mode = str(
-            self.get_opt(CONF_DOORBELL_ANC_MODE, DEFAULT_DOORBELL_ANC_MODE)
-            or DEFAULT_DOORBELL_ANC_MODE
+        self.doorbell_noise_reduction = normalize_noise_reduction(
+            self.get_opt(CONF_DOORBELL_NOISE_REDUCTION, DEFAULT_DOORBELL_NOISE_REDUCTION)
         )
         if self.native_ble_tracking_enabled:
             if self._ble_tracker is not None:
@@ -779,7 +777,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return cleaned[:10]
 
     def _build_intercom_targets_summary(self) -> str:
-        """Build semicolon-delimited 'target_id|Friendly Label;...' for Area-to-Area intercom calling."""
+        """Build semicolon-delimited 'target_id|Friendly Label;...' of displays the device can ring with call_target."""
         rows: list[str] = ["all|Call All Areas"]
         domain_data = self.hass.data.get(DOMAIN, {})
         for val in domain_data.values():
@@ -883,12 +881,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Return optional person.* entity_id assigned to this device."""
         val = self.get_opt(CONF_ASSIGNED_PERSON, "")
         return str(val or "").strip()
-
-    @property
-    def assigned_role(self) -> str:
-        """Return RBAC role assigned to this device (admin, member, guest, kiosk_area_only)."""
-        val = str(self.get_opt(CONF_ASSIGNED_ROLE, DEFAULT_ASSIGNED_ROLE) or DEFAULT_ASSIGNED_ROLE).strip().lower()
-        return val if val in ("admin", "member", "guest", "kiosk_area_only") else DEFAULT_ASSIGNED_ROLE
 
     @property
     def ble_auto_switch_enabled(self) -> bool:
@@ -2180,7 +2172,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "ble_scanners_map": get_all_scanners_diagnostic_map(self.hass),
             "ble_target_macs": self._ble_tracker.target_macs_formatted if self._ble_tracker else [],
             "assigned_person": self.assigned_person,
-            "assigned_role": self.assigned_role,
             "presence_entity": pres_ent or "",
             "presence_state": pres_state,
             "ble_auto_switch": self.ble_auto_switch_enabled,
@@ -2193,7 +2184,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self.active_carousel_camera or self.camera_entity
             ) if (self.active_carousel_camera or self.camera_entity) else "none",
             "doorbell_talk_state": self.doorbell_talk_state,
-            "doorbell_anc_mode": self.doorbell_anc_mode,
+            "doorbell_noise_reduction": self.doorbell_noise_reduction,
             "intercom_targets_summary": self._build_intercom_targets_summary(),
             "alert_id": self.alert_id,
             "alert_title": self.alert_title,

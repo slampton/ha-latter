@@ -14,9 +14,9 @@ Latter is split across two repositories:
 | Repository | Runs on | Responsibility |
 | :--- | :--- | :--- |
 | **ha-latter** (this repo) | Home Assistant | The integration and the **Latter Studio** panel. Maps entities to devices, tracks which area each device is in, re-encodes images so an ESP32 can decode them, and provides services for automations. |
-| **[esphome-latter-core](https://github.com/slampton/esphome-latter-core)** | The ESP32 | Firmware for five Waveshare displays, one-line packages for ESPHome devices you already own, and the SDK for building your own device. |
+| **[esphome-latter-core](https://github.com/slampton/esphome-latter-core)** | The ESP32 | Firmware for five Waveshare displays, and the Latter Core SDK for building your own Latter device. |
 
-You need both for the finished devices. If you only want BLE presence or Studio for ESPHome devices you already run, this repo alone is enough.
+You need both for the finished devices. If you only want BLE area presence from the Bluetooth proxies, phones, and beacons you already have, this repo alone is enough.
 
 ---
 
@@ -29,7 +29,7 @@ Most ESPHome display projects bake entity IDs into the YAML. A new speaker, a re
 ### Devices know which area they're in
 Latter reads RSSI from the Bluetooth proxies you already have and gives every Latter device a **Current Area** sensor. Phones and watches get one too, through Home Assistant's [Private BLE Device](https://www.home-assistant.io/integrations/private_ble_device/) integration.
 
-When a handheld changes areas, Latter also updates its Home Assistant Area. "Turn off the lights" to Assist then targets the area you're standing in.
+When a handheld or wearable with **Voice Follows Me** on changes areas, Latter also updates that device's Home Assistant Area. "Turn off the lights" to Assist then targets the area you're standing in.
 
 Per-area occupancy sensors combine BLE with any mmWave, PIR, or door sensors already in that area. Areas on different floors get a 6 dB penalty, so a device upstairs doesn't flap into the area below it.
 
@@ -52,7 +52,12 @@ The device's current area drives its controls:
 Whole-home tiles cover the alarm panel, thermostat, lock, garage door, and robot vacuum.
 
 ### Doorbell popups
-Latter finds your doorbell's ring entity on its own. A press wakes the displays and shows a camera snapshot for 20 seconds. Two-way talk exists, but is [experimental](#project-status).
+Latter finds your doorbell's ring entity on its own. A press wakes the displays and shows a camera snapshot for 20 seconds. From the popup you can:
+- **Listen:** the camera's audio plays on the device, cleaned up by an FFmpeg noise-reduction filter (Strong, Light, or Off).
+- **Reply by push-to-talk:** the device transcribes what you say, and Home Assistant speaks it on the doorbell's speaker with TTS. Quick replies work the same way.
+- **Unlock** the door's lock.
+
+This is not a live call: no audio goes from the device to the door, and there is no echo cancellation. Listen and reply are [experimental](#project-status).
 
 <!-- MEDIA: docs/media/doorbell.gif — doorbell press, camera popup on the device. -->
 
@@ -67,7 +72,8 @@ Latter Studio is an admin-only sidebar panel for everything that isn't an automa
 - TV remotes and AV receiver volume routing.
 - BLE calibration.
 - Device groups and reusable profiles.
-- Wallpapers and backups.
+- Wallpapers.
+- Settings export and import (`.json`). Full backups are Home Assistant's own.
 
 <!-- MEDIA: docs/media/studio-overview.png — Studio, System → Overview. -->
 
@@ -103,7 +109,7 @@ Latter Studio is an admin-only sidebar panel for everything that isn't an automa
 
 ## Already running ESPHome?
 
-You don't need Latter hardware to use most of this.
+You don't need Latter hardware for BLE area presence.
 - **Use the ESPHome devices you already have for presence.** Bluetooth proxies become Area scanners, and ESPHome beacons are tracked like any iBeacon. → [Existing ESPHome devices](docs/existing-esphome.md)
 - **Area presence from the proxies you already have.** Phones, watches, and iBeacons can be tracked without flashing anything new. → [Presence](docs/presence.md)
 - **Coming from Bermuda?** Read [what's different, and what isn't there yet](docs/presence.md#coming-from-bermuda).
@@ -114,7 +120,7 @@ Everything the finished devices use is documented and open to you:
 
 | Reference | Covers |
 | :--- | :--- |
-| [Services](docs/reference/services.md) | All 15 user-facing `latter.*` services, their fields, and special targets such as `follow_me` |
+| [Services](docs/reference/services.md) | All 14 user-facing `latter.*` services (plus the internal `device_hello`), their fields, and special targets such as `follow_me` |
 | [Entities](docs/reference/entities.md) | Every entity Latter creates, its attributes, update cadence, and the `latter_event` bus event |
 | [HTTP API](docs/reference/http-api.md) | Image endpoints, the signed-URL model, and the transcoder output spec |
 | [Device protocol](https://github.com/slampton/esphome-latter-core/blob/main/docs/device-protocol.md) | What a device must implement to be discovered and receive data |
@@ -130,7 +136,7 @@ Everything the finished devices use is documented and open to you:
 | ESPHome | 2026.10 or newer | Only needed if you build Latter firmware yourself |
 | Music Assistant | 2.10.8 or newer, optional | Required for library browsing, queue transfer, and the default intercom speaker set. Basic transport and volume work without it. |
 | Bluetooth proxies | At least one per area you want to detect | ESPHome proxies are tested. Other HA Bluetooth scanners should work but are unverified. |
-| `ffmpeg` | Optional | Used for doorbell audio. Bundled with Home Assistant OS. |
+| `ffmpeg` | Optional | Used to stream doorbell camera audio to devices. Bundled with Home Assistant OS. |
 
 **Network access.** Everything runs locally except four lookups. Calendar-event maps use OpenStreetMap tiles and Nominatim geocoding. Lyrics come from LRCLIB and bios from Wikipedia, and both are used only when Music Assistant doesn't already have the text.
 
@@ -138,19 +144,21 @@ Everything the finished devices use is documented and open to you:
 
 ## Project status
 
-This is version **2.2.1**, built and maintained by one person and tested on the five devices listed above.
+This is version **2.2.9**, built and maintained by one person and tested on the five devices listed above.
 
 | Area | Status |
 | :--- | :--- |
-| Device discovery, Studio, area control, media, notifications, backups | Stable |
+| Device discovery, Studio, area control, media, notifications, settings export/import | Stable |
 | BLE area presence and area occupancy | Stable. See the [known gaps](docs/presence.md#known-limitations). |
 | Doorbell ring detection and camera popup | Stable |
-| Doorbell two-way talk | **Experimental** (via go2rtc or ONVIF backchannel). |
+| Doorbell listen and push-to-talk replies | **Experimental.** Replies are spoken with TTS on the camera's `media_player`; there is no live audio to the door. |
 
 What's not here yet:
 - No `device_tracker` entities. The presence engine creates area and distance sensors, but nothing a `person` entity can use.
 - BLE calibration is a single offset per area. There is no per-scanner calibration.
-- CI runs `hassfest`, HACS validation, `ruff` static analysis, and the Protocol v3 / Voice Follows Me / URL Signer unit test suite.
+- No live two-way doorbell calls. The device can't send live audio to the door, and there is no echo cancellation.
+
+CI runs `hassfest`, HACS validation, `ruff` (syntax and unused-import checks), and the unit tests in `tests/`. The Protocol v3 tests run against the integration's own packer. The Voice Follows Me, BLE decay, and URL signer tests check the specified behavior against test-local models, not the integration modules themselves.
 
 Bugs and feature requests: [issues](https://github.com/slampton/ha-latter/issues).
 
@@ -174,7 +182,7 @@ Bugs and feature requests: [issues](https://github.com/slampton/ha-latter/issues
 2. Remove Latter in HACS, then restart Home Assistant.
 
 Leftover data:
-- Studio settings and backups stay in `.storage/latter.site`, `.storage/latter.backups`, and `.storage/latter.runtime.*`.
+- Studio settings stay in `.storage/latter.site` and `.storage/latter.runtime.*`.
 - Uploaded wallpapers stay in `/config/www/latter_wallpapers/`.
 
 Delete these by hand if you want a clean slate.

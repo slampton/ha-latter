@@ -208,7 +208,7 @@ media_volume:
 
 set_active_area:
   name: Set Active Area (BLE Presence & Voice Sync)
-  description: Switch the active area context by area_id or area name, sync the ESPHome device's HA area for area-aware Voice Assistant, and optionally hand off speaker/remote.
+  description: Switch the active area context by area_id or area name, and optionally hand off speaker/remote. On roaming devices with Voice Follows Me enabled, this also moves the device's Home Assistant Area so area-aware Assist commands target it.
   fields:
     area_id:
       name: Area ID or Area Name
@@ -427,9 +427,9 @@ calendar_fetch:
           integration: latter
     days:
       name: Lookahead Days
-      description: Number of days ahead to query (default 30).
+      description: Number of days ahead to query (default 7).
       required: false
-      default: 30
+      default: 7
       selector:
         number:
           min: 1
@@ -525,7 +525,7 @@ intercom_broadcast:
   fields:
     target_device:
       name: Target ESPHome Device or Routing Mode
-      description: Optional originating ESPHome device slug, or 'follow_me' / 'occupied_areas' to broadcast only to speakers in occupied Areas.
+      description: Optional originating ESPHome device slug, or 'follow_me' / 'occupied_areas' to broadcast only to speakers in occupied Areas (nothing plays if no Area is occupied).
       required: false
       selector:
         text:
@@ -543,7 +543,7 @@ intercom_broadcast:
         text:
     target_speakers:
       name: Target Speakers
-      description: Specific media_player entities to broadcast to (defaults to all active speakers).
+      description: Specific media_player entities to broadcast to (defaults to all online Music Assistant players).
       required: false
       selector:
         entity:
@@ -613,7 +613,7 @@ notify:
   fields:
     target_device:
       name: Target Device / Follow-Me Routing
-      description: ESPHome device slug, 'follow_me' / 'occupied_areas' (occupied Areas only), 'all' (all displays), or a 'person.*' entity ID.
+      description: ESPHome device slug, 'follow_me' / 'occupied_areas' (occupied Areas only), 'all' (all displays), or a 'person.*' entity ID. If follow_me or a person matches no display, nothing is delivered; an unknown device slug is an error.
       required: false
       selector:
         text:
@@ -658,6 +658,13 @@ notify:
       default: true
       selector:
         boolean:
+    announce:
+      name: Speak Message
+      description: Also speak the message with TTS on the device (through its Assist satellite or local speaker). The banner chime is skipped when enabled.
+      required: false
+      default: false
+      selector:
+        boolean:
     camera_entity:
       name: Camera Entity (Optional Peephole Snapshot)
       description: Optional camera.* entity to transcode and display alongside the notification.
@@ -691,8 +698,8 @@ save_custom_color:
         text:
 
 doorbell_intercom:
-  name: Doorbell & Two-Way Intercom Action
-  description: Control live de-noised camera audio listening, two-way doorbell talkback, quick replies, 90° camera selection, and smart lock unlocking.
+  name: Doorbell Listen & Reply Action
+  description: Listen to a doorbell camera's noise-reduced audio on a Latter device, reply by push-to-talk or quick reply (spoken with TTS on the camera's media_player), select a carousel camera, unlock the door's lock, or ring other Latter displays with a notification (call_target). There is no live device-to-door audio.
   fields:
     target_device:
       name: Target Device
@@ -702,8 +709,8 @@ doorbell_intercom:
         device:
           integration: latter
     action:
-      name: Intercom Action
-      description: Two-way audio or doorbell action to perform.
+      name: Doorbell Action
+      description: listen_start / listen_stop / listen_toggle play or stop the camera audio on the device. talk_message and quick_reply speak `message` on the camera's speaker with TTS. unlock_door unlocks the camera's lock. call_target rings the device named in `message` (or all displays) with a critical notification. set_noise_reduction applies `noise_reduction` and restarts listening if active. select_camera switches the carousel camera.
       required: true
       default: "listen_toggle"
       selector:
@@ -716,7 +723,7 @@ doorbell_intercom:
             - "quick_reply"
             - "unlock_door"
             - "call_target"
-            - "set_anc_mode"
+            - "set_noise_reduction"
             - "select_camera"
     camera_entity:
       name: Camera Entity
@@ -736,18 +743,17 @@ doorbell_intercom:
           mode: box
     message:
       name: Spoken Message / Target Device
-      description: Message to speak to the doorbell speaker or target device for call_target.
+      description: Text to speak on the doorbell speaker (talk_message, quick_reply), or the device slug to ring for call_target (empty or "all" rings every other display).
       required: false
       selector:
         text:
-    anc_mode:
-      name: Noise & Echo Cancellation Mode (ANC+AEC)
-      description: DSP filter profile (ultra, balanced, raw).
+    noise_reduction:
+      name: Noise Reduction
+      description: FFmpeg noise-reduction level for the doorbell listen stream (strong, light, off). Applies to this device until the integration reloads or Studio settings are saved; the default comes from Studio. Omit to keep the current level.
       required: false
-      default: "ultra"
       selector:
         select:
           options:
-            - "ultra"
-            - "balanced"
-            - "raw"
+            - "strong"
+            - "light"
+            - "off"

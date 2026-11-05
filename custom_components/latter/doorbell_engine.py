@@ -1,4 +1,10 @@
-"""Universal Doorbell Two-Way Audio (go2rtc, ONVIF), 90° Landscape Proxy & FFmpeg ANC Filterchain Engine."""
+"""Doorbell listen stream, push-to-talk TTS replies, and doorbell ring auto-detection.
+
+Listen: the camera's RTSP audio runs through an FFmpeg noise-reduction filter and streams
+to the device as FLAC. Talk: push-to-talk relay; the device transcribes speech and sends
+the text (`talk_message`), and Home Assistant speaks it with TTS on the camera's
+media_player. There is no live device-to-door audio.
+"""
 
 from __future__ import annotations
 
@@ -11,32 +17,31 @@ import time
 from typing import Any
 import wave
 
-from aiohttp import ClientTimeout, web
+from aiohttp import web
 
 from homeassistant.components.http import HomeAssistantView
 from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import device_registry as dr, entity_registry as er
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers import entity_registry as er
 
 from .ble_engine import _iter_entities
 from .const import (
     API_CAMERA_AUDIO_STREAM_PATH,
-    API_DOORBELL_TALKBACK_PATH,
+    DOORBELL_NOISE_REDUCTION_LEVELS,
     DOMAIN,
-    normalize_device_slug,
+    normalize_noise_reduction,
 )
 from .area_engine import resolve_entity_area_id
 from .media_engine import async_announce_on_targets
 
 _LOGGER = logging.getLogger(__name__)
 
-UNIFI_PREROLL_MS: int = 250
-TALKBACK_ECHO_GUARD_SECONDS: float = 0.75
+# Length of the silent WAV served when no camera stream or FFmpeg binary is available.
+SILENCE_FALLBACK_MS: int = 250
 _FFMPEG_STREAM_SEMAPHORE = asyncio.Semaphore(2)
 
 
-def _build_silence_wav(duration_ms: int = UNIFI_PREROLL_MS, sample_rate: int = 16000) -> bytes:
+def _build_silence_wav(duration_ms: int = SILENCE_FALLBACK_MS, sample_rate: int = 16000) -> bytes:
     """Build a short PCM16 mono silent WAV buffer."""
     num_samples = max(160, int(sample_rate * (duration_ms / 1000.0)))
     out_io = io.BytesIO()
@@ -48,18 +53,22 @@ def _build_silence_wav(duration_ms: int = UNIFI_PREROLL_MS, sample_rate: int = 1
     return out_io.getvalue()
 
 
-def resolve_doorbell_talkback_target(
+def resolve_doorbell_targets(
     hass: HomeAssistant,
     camera_entity_id: str | None,
     volume_overrides: dict[str, str] | None = None,
 ) -> dict[str, Any]:
-    """Auto-discover the talkback media_player, ONVIF/go2rtc stream, and area lock for a camera."""
+    """Auto-discover the door speaker media_player and lock for a camera.
+
+    `tts_lead_in` is set for UniFi Protect speakers, which clip the first syllable of
+    a TTS clip; replies to them get a short spoken pause in front.
+    """
     info: dict[str, Any] = {
         "camera_entity": "",
         "friendly_name": "Camera",
-        "talkback_media_player": "",
+        "door_speaker": "",
         "platform": "",
-        "is_unifi": False,
+        "tts_lead_in": False,
         "area_id": "",
         "lock_entity": "",
     }
@@ -77,35 +86,24 @@ def resolve_doorbell_talkback_target(
     if volume_overrides and cam_ent in volume_overrides:
         mapped_spk = str(volume_overrides[cam_ent]).strip()
         if mapped_spk.startswith("media_player."):
-            info["talkback_media_player"] = mapped_spk
+            info["door_speaker"] = mapped_spk
 
     ent_reg = er.async_get(hass)
-    dev_reg = dr.async_get(hass)
     cam_entry = ent_reg.async_get(cam_ent)
 
     if cam_entry is not None:
         info["platform"] = str(cam_entry.platform or "")
-        if cam_entry.platform == "unifiprotect":
-            info["is_unifi"] = True
 
         if cam_entry.device_id:
-            dev = dev_reg.async_get(cam_entry.device_id)
-            if dev is not None:
-                mfg_model = f"{dev.manufacturer or ''} {dev.model or ''}".lower()
-                if any(k in mfg_model for k in ("ubiquiti", "unifi", "g4", "g5", "g6")):
-                    info["is_unifi"] = True
-
             for sib in er.async_entries_for_device(ent_reg, cam_entry.device_id):
                 if sib.disabled_by:
                     continue
-                if sib.domain == "media_player" and not info["talkback_media_player"]:
-                    info["talkback_media_player"] = sib.entity_id
-                    if sib.platform == "unifiprotect":
-                        info["is_unifi"] = True
+                if sib.domain == "media_player" and not info["door_speaker"]:
+                    info["door_speaker"] = sib.entity_id
                 elif sib.domain == "lock" and not info["lock_entity"]:
                     info["lock_entity"] = sib.entity_id
 
-    if not info["talkback_media_player"]:
+    if not info["door_speaker"]:
         base_slug = cam_ent.split(".", 1)[-1]
         for suffix in ("_high", "_medium", "_low", "_package", "_camera", "_rtsp", "_fluent", "_clear"):
             if base_slug.endswith(suffix):
@@ -116,20 +114,20 @@ def resolve_doorbell_talkback_target(
             f"media_player.{base_slug}",
         ):
             if hass.states.get(cand_mp) is not None:
-                info["talkback_media_player"] = cand_mp
-                mp_entry = ent_reg.async_get(cand_mp)
-                if mp_entry and mp_entry.platform == "unifiprotect":
-                    info["is_unifi"] = True
+                info["door_speaker"] = cand_mp
                 break
 
-        if not info["talkback_media_player"]:
+        if not info["door_speaker"]:
             for entry in _iter_entities(ent_reg):
                 if entry.domain == "media_player" and not entry.disabled_by:
                     if base_slug and base_slug in entry.entity_id and "speaker" in entry.entity_id:
-                        info["talkback_media_player"] = entry.entity_id
-                        if entry.platform == "unifiprotect":
-                            info["is_unifi"] = True
+                        info["door_speaker"] = entry.entity_id
                         break
+
+    spk_entry = ent_reg.async_get(info["door_speaker"]) if info["door_speaker"] else None
+    info["tts_lead_in"] = info["platform"] == "unifiprotect" or bool(
+        spk_entry is not None and spk_entry.platform == "unifiprotect"
+    )
 
     area_id = resolve_entity_area_id(hass, cam_ent) or ""
     info["area_id"] = area_id
@@ -137,49 +135,29 @@ def resolve_doorbell_talkback_target(
     return info
 
 
-class LatterAudioDspPipeline:
-    """FFmpeg ANC Filtergraph Builder and Talkback Echo-Guard Timing Pipeline."""
+def build_noise_reduction_filter(level: str) -> str:
+    """Build the FFmpeg audio filter chain for a doorbell listen stream.
 
-    def __init__(self) -> None:
-        """Initialize the talkback echo-guard state."""
-        self._last_talkback_mono: float = 0.0
-
-    def record_talkback_activity(self) -> None:
-        """Record outbound talkback timestamp for the acoustic echo guard."""
-        self._last_talkback_mono = time.monotonic()
-
-    def is_in_echo_guard_window(self) -> bool:
-        """Return True if outbound talkback is active or within the 750ms acoustic tail window."""
-        return (time.monotonic() - self._last_talkback_mono) < TALKBACK_ECHO_GUARD_SECONDS
-
-    @staticmethod
-    def build_ffmpeg_anc_filtergraph(anc_mode: str = "ultra") -> str:
-        """Build the broadcast-grade FFmpeg audio filterchain for live RTSP doorbell streams."""
-        mode = (anc_mode or "ultra").strip().lower()
-        if mode == "raw":
-            return "highpass=f=60,alimiter=limit=0.95"
-        if mode == "balanced":
-            return (
-                "highpass=f=100,lowpass=f=4000,"
-                "afftdn=nf=-20,"
-                "acompressor=threshold=-18dB:ratio=2.5:attack=5:release=90,"
-                "alimiter=limit=0.91"
-            )
+    `strong`: band-limit to speech, spectral denoise (afftdn), presence EQ, compressor, limiter.
+    `light`: wider band-limit, milder denoise, compressor, limiter.
+    `off`: rumble high-pass and limiter only.
+    """
+    if level == "off":
+        return "highpass=f=60,alimiter=limit=0.95"
+    if level == "light":
         return (
-            "highpass=f=120,lowpass=f=3600,"
-            "afftdn=nf=-26,"
-            "equalizer=f=1800:t=q:w=1.2:g=3,"
-            "acompressor=threshold=-20dB:ratio=3.2:attack=4:release=75:makeup=2,"
-            "alimiter=limit=0.89"
+            "highpass=f=100,lowpass=f=4000,"
+            "afftdn=nf=-20,"
+            "acompressor=threshold=-18dB:ratio=2.5:attack=5:release=90,"
+            "alimiter=limit=0.91"
         )
-
-
-def get_dsp_pipeline(hass: HomeAssistant) -> LatterAudioDspPipeline:
-    """Return the singleton LatterAudioDspPipeline instance."""
-    domain_data = hass.data.setdefault(DOMAIN, {})
-    if "audio_dsp" not in domain_data:
-        domain_data["audio_dsp"] = LatterAudioDspPipeline()
-    return domain_data["audio_dsp"]
+    return (
+        "highpass=f=120,lowpass=f=3600,"
+        "afftdn=nf=-26,"
+        "equalizer=f=1800:t=q:w=1.2:g=3,"
+        "acompressor=threshold=-20dB:ratio=3.2:attack=4:release=75:makeup=2,"
+        "alimiter=limit=0.89"
+    )
 
 
 def _resolve_coordinator_by_slug(hass: HomeAssistant, target_slug: str) -> Any | None:
@@ -189,41 +167,8 @@ def _resolve_coordinator_by_slug(hass: HomeAssistant, target_slug: str) -> Any |
     return resolve_coordinator(hass, target_slug)
 
 
-async def _async_push_go2rtc_or_onvif_backchannel(
-    hass: HomeAssistant, camera_entity_id: str, wav_bytes: bytes
-) -> bool:
-    """Attempt to push talkback audio via local go2rtc (port 1984) or ONVIF RTSP backchannel."""
-    slug = camera_entity_id.split(".", 1)[-1]
-    session = async_get_clientsession(hass)
-    try:
-        async with session.get(
-            "http://127.0.0.1:1984/api/streams", timeout=ClientTimeout(total=1.5)
-        ) as resp:
-            if resp.status == 200:
-                streams = await resp.json()
-                matched_stream = None
-                if isinstance(streams, dict):
-                    if slug in streams:
-                        matched_stream = slug
-                    else:
-                        for s_key in streams:
-                            if slug in str(s_key).lower():
-                                matched_stream = str(s_key)
-                                break
-                if matched_stream:
-                    post_url = f"http://127.0.0.1:1984/api/streams?dst={matched_stream}"
-                    async with session.post(
-                        post_url, data=wav_bytes, timeout=ClientTimeout(total=8.0)
-                    ) as p_resp:
-                        if p_resp.status in (200, 201, 204):
-                            return True
-    except Exception:  # noqa: BLE001
-        pass
-    return False
-
-
 class LatterCameraAudioStreamView(HomeAssistantView):
-    """Streams live RTSP camera audio through Latter's 4-Stage ANC+AEC filterchain to ESPHome."""
+    """Streams live RTSP camera audio through an FFmpeg noise-reduction filter to a Latter device."""
 
     requires_auth = False
     url = API_CAMERA_AUDIO_STREAM_PATH
@@ -262,11 +207,9 @@ class LatterCameraAudioStreamView(HomeAssistantView):
         if cam_ent not in allowed_cams:
             return web.Response(status=HTTPStatus.FORBIDDEN, text="Camera entity not authorized")
 
-        anc_mode = (
-            request.query.get("anc")
-            or coord.doorbell_anc_mode
-            or "ultra"
-        ).strip().lower()
+        nr_level = normalize_noise_reduction(
+            request.query.get("nr") or coord.doorbell_noise_reduction
+        )
         fmt = (request.query.get("fmt") or "flac").strip().lower()
 
         stream_url: str | None = None
@@ -276,8 +219,6 @@ class LatterCameraAudioStreamView(HomeAssistantView):
             stream_url = await ha_camera.async_get_stream_source(self.hass, cam_ent)
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("camera.async_get_stream_source(%s) failed: %s", cam_ent, err)
-
-        dsp = get_dsp_pipeline(self.hass)
 
         ffmpeg_bin: str | None = None
         try:
@@ -297,7 +238,7 @@ class LatterCameraAudioStreamView(HomeAssistantView):
             )
 
         input_args: list[str] = ["-rtsp_transport", "tcp"]
-        filtergraph = LatterAudioDspPipeline.build_ffmpeg_anc_filtergraph(anc_mode)
+        filtergraph = build_noise_reduction_filter(nr_level)
         out_codec = "flac" if fmt == "flac" else "pcm_s16le"
         out_fmt = "flac" if fmt == "flac" else "wav"
         content_type = "audio/flac" if fmt == "flac" else "audio/wav"
@@ -363,8 +304,6 @@ class LatterCameraAudioStreamView(HomeAssistantView):
                         chunk = await proc.stdout.read(4096)
                         if not chunk:
                             break
-                        if dsp.is_in_echo_guard_window() and out_fmt == "wav":
-                            chunk = b"\x00" * len(chunk)
                         await resp.write(chunk)
             except (asyncio.CancelledError, ConnectionResetError):
                 pass
@@ -381,151 +320,27 @@ class LatterCameraAudioStreamView(HomeAssistantView):
             return resp
 
 
-class LatterDoorbellTalkbackView(HomeAssistantView):
-    """Serves and ingests talkback audio for camera speakers, go2rtc & ONVIF."""
-
-    requires_auth = False
-    url = API_DOORBELL_TALKBACK_PATH
-    name = "api:latter:doorbell_talkback"
-
-    def __init__(self, hass: HomeAssistant) -> None:
-        """Initialize the doorbell talkback view."""
-        self.hass = hass
-
-    async def get(self, request: web.Request, target_device: str) -> web.Response:
-        """Serve the latest talkback WAV clip for media_player.<doorbell>_speaker."""
-        norm = normalize_device_slug(target_device.removesuffix(".wav"))
-        coord = _resolve_coordinator_by_slug(self.hass, norm)
-        if coord is None or not coord.verify_resource(
-            "talkback",
-            sig=request.query.get("sig"),
-        ):
-            return web.Response(status=HTTPStatus.FORBIDDEN, text="Invalid or missing signature")
-
-        domain_data = self.hass.data.setdefault(DOMAIN, {})
-        clips: dict[str, bytes] = domain_data.setdefault("talkback_clips", {})
-        wav_bytes = clips.get(norm)
-        if not wav_bytes:
-            wav_bytes = _build_silence_wav()
-        return web.Response(
-            body=wav_bytes,
-            content_type="audio/wav",
-            headers={"Cache-Control": "no-store"},
-        )
-
-    async def post(self, request: web.Request, target_device: str) -> web.Response:
-        """Ingest raw PCM16 or WAV talkback audio (requires admin HA user or valid talkback:<camera_entity> signature)."""
-        coord = _resolve_coordinator_by_slug(self.hass, target_device)
-        if coord is None:
-            return web.json_response(
-                {"error": "Unknown target device"}, status=HTTPStatus.NOT_FOUND
-            )
-
-        cam_ent = (
-            request.query.get("camera_entity")
-            or coord.active_carousel_camera
-            or coord.camera_entity
-            or ""
-        ).strip()
-        allowed_cams = set(coord.camera_entities)
-        if coord.camera_entity:
-            allowed_cams.add(coord.camera_entity)
-        if coord.active_carousel_camera:
-            allowed_cams.add(coord.active_carousel_camera)
-        if not cam_ent or cam_ent not in allowed_cams:
-            return web.json_response(
-                {"error": "Camera entity not configured for this device"},
-                status=HTTPStatus.FORBIDDEN,
-            )
-
-        user = request.get("hass_user")
-        if user is None:
-            auth_hdr = request.headers.get("Authorization", "")
-            if auth_hdr.startswith("Bearer "):
-                bearer = auth_hdr.removeprefix("Bearer ").strip()
-                rt = await self.hass.auth.async_validate_access_token(bearer)
-                if rt is not None:
-                    user = rt.user
-
-        is_admin_user = bool(user is not None and user.is_active and user.is_admin)
-        sig = request.query.get("sig") or request.headers.get("X-Latter-Sig")
-        has_valid_sig = coord.verify_resource(f"talkback:{cam_ent}", sig=sig)
-        if not is_admin_user and not has_valid_sig:
-            return web.json_response(
-                {"error": "Forbidden"}, status=HTTPStatus.FORBIDDEN
-            )
-
-        raw_bytes = await request.read()
-        if not raw_bytes:
-            return web.json_response(
-                {"error": "Empty audio payload"}, status=HTTPStatus.BAD_REQUEST
-            )
-
-        dsp = get_dsp_pipeline(self.hass)
-        dsp.record_talkback_activity()
-
-        norm = normalize_device_slug(target_device.removesuffix(".wav"))
-        domain_data = self.hass.data.setdefault(DOMAIN, {})
-        clips: dict[str, bytes] = domain_data.setdefault("talkback_clips", {})
-        clips[norm] = raw_bytes
-
-        await async_play_talkback_clip_to_doorbell(self.hass, coord, cam_ent, raw_bytes)
-
-        return web.json_response({"status": "ok", "bytes": len(raw_bytes)})
-
-
-async def async_play_talkback_clip_to_doorbell(
-    hass: HomeAssistant,
-    coordinator: Any,
-    camera_entity_id: str | None = None,
-    wav_bytes: bytes | None = None,
-) -> bool:
-    """Stream the stored talkback WAV clip to camera speaker or go2rtc/ONVIF backchannel."""
-    cam_ent = camera_entity_id or coordinator.active_carousel_camera or coordinator.camera_entity
-    target_info = resolve_doorbell_talkback_target(
-        hass, cam_ent, coordinator.volume_overrides
-    )
-    talkback_mp = target_info["talkback_media_player"]
-    if talkback_mp:
-        base_url = coordinator.get_lan_base_url()
-        sig = coordinator.sign_resource("talkback", ttl_s=300)
-        clip_url = (
-            f"{base_url}/api/latter/doorbell_talkback/{coordinator.device_slug}.wav"
-            f"?v={int(time.time() * 1000)}&sig={sig}"
-        )
-        try:
-            await async_announce_on_targets(
-                hass,
-                speakers=[talkback_mp],
-                media_url=clip_url,
-                blocking=False,
-            )
-            return True
-        except Exception as err:  # noqa: BLE001
-            _LOGGER.debug("Doorbell talkback announce failed on %s: %s", talkback_mp, err)
-
-    if cam_ent and wav_bytes:
-        if await _async_push_go2rtc_or_onvif_backchannel(hass, cam_ent, wav_bytes):
-            return True
-
-    return False
-
-
 async def async_execute_doorbell_intercom(
     hass: HomeAssistant,
     coordinator: Any,
     action: str,
     camera_entity: str | None = None,
     message: str = "",
-    anc_mode: str | None = None,
+    noise_reduction: str | None = None,
     camera_index: int | None = None,
 ) -> dict[str, Any]:
-    """Execute a unified two-way doorbell or area-to-area intercom command."""
-    act = (action or "listen_toggle").strip().lower()
-    dsp = get_dsp_pipeline(hass)
+    """Execute a doorbell listen / push-to-talk reply / unlock action, or ring other displays.
 
-    if anc_mode and anc_mode.strip().lower() in ("ultra", "balanced", "raw"):
-        coordinator.doorbell_anc_mode = anc_mode.strip().lower()
+    Listen plays the camera's noise-reduced audio on this device. Talk speaks the device's
+    transcribed text with TTS on the camera's media_player. `call_target` only sends a
+    critical notification to other Latter displays; it opens no audio path.
+    """
+    act = (action or "listen_toggle").strip().lower()
+
+    if noise_reduction:
+        nr_val = noise_reduction.strip().lower()
+        if nr_val in DOORBELL_NOISE_REDUCTION_LEVELS:
+            coordinator.doorbell_noise_reduction = nr_val
 
     cams = coordinator.camera_entities
     if camera_index is not None and cams:
@@ -542,7 +357,7 @@ async def async_execute_doorbell_intercom(
     if cam_ent:
         coordinator.active_carousel_camera = cam_ent
 
-    target_info = resolve_doorbell_talkback_target(
+    target_info = resolve_doorbell_targets(
         hass, cam_ent, coordinator.volume_overrides
     )
     local_spk = coordinator.local_speaker
@@ -556,19 +371,12 @@ async def async_execute_doorbell_intercom(
             )
         return target_info
 
-    # 2. Area-to-Area Device Call
+    # 2. Ring other Latter displays (one named device, or all) with a critical notification.
     if act == "call_target":
         target_str = (message or "").strip()
-        # Area-to-Area Call to another Latter display (or 'all' displays)
         domain_data = hass.data.get(DOMAIN, {})
         all_coords = [v for v in domain_data.values() if hasattr(v, "device_slug")]
         caller_title = coordinator.device_slug.replace("_", " ").title()
-        # Check if calling device has an onboard P4 camera entity to include in the video call popup!
-        caller_cam = (
-            f"camera.{coordinator.device_slug}"
-            if hass.states.get(f"camera.{coordinator.device_slug}") is not None
-            else (coordinator.camera_entity or "")
-        )
         for c in all_coords:
             if c.device_slug == coordinator.device_slug:
                 continue
@@ -579,11 +387,10 @@ async def async_execute_doorbell_intercom(
                     {
                         "target_device": c.device_slug,
                         "title": f"Intercom: {caller_title}",
-                        "message": "Tap Answer for 2-Way Call",
+                        "message": "Tap to answer",
                         "priority": "critical",
                         "duration": 20,
                         "chime": True,
-                        **({"camera_entity": caller_cam} if caller_cam else {}),
                     },
                     blocking=False,
                 )
@@ -595,7 +402,7 @@ async def async_execute_doorbell_intercom(
         coordinator.async_notify_listeners()
         return target_info
 
-    if act == "set_anc_mode":
+    if act == "set_noise_reduction":
         if coordinator.doorbell_talk_state == "listening" and local_spk and cam_ent:
             act = "listen_start"
         else:
@@ -633,7 +440,7 @@ async def async_execute_doorbell_intercom(
         sig = coordinator.sign_resource(f"camera_audio:{cam_ent}", ttl_s=3600)
         stream_url = (
             f"{base_url}/api/latter/camera_audio/{coordinator.device_slug}"
-            f"?entity_id={cam_ent}&anc={coordinator.doorbell_anc_mode}&fmt=flac"
+            f"?entity_id={cam_ent}&nr={coordinator.doorbell_noise_reduction}&fmt=flac"
             f"&v={int(time.time())}&sig={sig}"
         )
         try:
@@ -659,7 +466,6 @@ async def async_execute_doorbell_intercom(
 
         was_listening = coordinator.doorbell_talk_state == "listening"
         coordinator.doorbell_talk_state = "talking"
-        dsp.record_talkback_activity()
         coordinator.async_notify_listeners()
 
         if local_spk and was_listening:
@@ -673,9 +479,9 @@ async def async_execute_doorbell_intercom(
             except Exception:  # noqa: BLE001
                 pass
 
-        talkback_mp = target_info["talkback_media_player"]
-        if talkback_mp:
-            mp_st = hass.states.get(talkback_mp)
+        door_spk = target_info["door_speaker"]
+        if door_spk:
+            mp_st = hass.states.get(door_spk)
             if mp_st is not None:
                 cur_vol = mp_st.attributes.get("volume_level")
                 if cur_vol is not None and float(cur_vol) < 0.25:
@@ -683,35 +489,31 @@ async def async_execute_doorbell_intercom(
                         await hass.services.async_call(
                             "media_player",
                             "volume_set",
-                            {ATTR_ENTITY_ID: talkback_mp, "volume_level": 0.80},
+                            {ATTR_ENTITY_ID: door_spk, "volume_level": 0.80},
                             blocking=True,
                         )
                     except Exception:  # noqa: BLE001
                         pass
 
-            stabilized_msg = (
-                f"... {spoken_text}" if target_info["is_unifi"] else spoken_text
-            )
+            tts_text = f"... {spoken_text}" if target_info["tts_lead_in"] else spoken_text
             tts_states = hass.states.async_all("tts")
             tts_ent = tts_states[0].entity_id if tts_states else ""
 
             try:
                 await async_announce_on_targets(
                     hass,
-                    speakers=[talkback_mp],
-                    message=stabilized_msg,
+                    speakers=[door_spk],
+                    message=tts_text,
                     tts_entity=tts_ent,
                     blocking=True,
                 )
             except Exception as err:  # noqa: BLE001
-                _LOGGER.debug("Doorbell TTS announce to %s failed: %s", talkback_mp, err)
+                _LOGGER.debug("Doorbell TTS announce to %s failed: %s", door_spk, err)
 
         est_duration = max(2.2, min(8.0, len(spoken_text) * 0.085 + 1.2))
-        dsp.record_talkback_activity()
 
-        async def _post_talkback_restore() -> None:
+        async def _post_reply_restore() -> None:
             await asyncio.sleep(est_duration)
-            dsp.record_talkback_activity()
             if was_listening:
                 await async_execute_doorbell_intercom(
                     hass, coordinator, action="listen_start", camera_entity=cam_ent
@@ -722,8 +524,8 @@ async def async_execute_doorbell_intercom(
 
         coordinator.entry.async_create_background_task(
             hass,
-            _post_talkback_restore(),
-            f"latter_doorbell_talkback_{coordinator.device_slug}",
+            _post_reply_restore(),
+            f"latter_doorbell_reply_{coordinator.device_slug}",
         )
         return target_info
 

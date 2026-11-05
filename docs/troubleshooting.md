@@ -27,7 +27,7 @@ Latter derives the slug from the device's name in Home Assistant. Latter firmwar
 
 Latter serves images from Home Assistant's numeric LAN IP, because ESP32 firmware can't resolve `.local` names. Check:
 - **The device can reach Home Assistant's IP** on Home Assistant's HTTP port. Watch out for VLANs and firewalls between them.
-- **Your external URL setup, if you use a reverse proxy.** Set **Studio → System Administration → Reverse Proxy & External Access** only if the device has to go through the proxy. Most setups should leave it empty.
+- **Not the Studio external URL.** **Studio → System Administration → Reverse Proxy & External Access** only changes the device **Visit** links. Image URLs always use Home Assistant's LAN IP, so the device must be able to reach it directly.
 
 ---
 
@@ -35,7 +35,7 @@ Latter serves images from Home Assistant's numeric LAN IP, because ESP32 firmwar
 
 **A roaming device never changes areas**
 - **Proxies lack an Area.** Every Bluetooth proxy must be assigned to an Area in Home Assistant. Home Assistant raises a repair issue, **"No Area-assigned Bluetooth proxies found"**, when Latter can't map any scanner to an area.
-- **Roaming is off.** Check that **This device roams** was enabled when the device was added. You can change it in the integration's options.
+- **Bluetooth area tracking is off.** Check that **Track this device's area with Bluetooth** was enabled when the device was added. To change it, use **Studio → Devices → your device → Administration → Enable BLE Proxy Area Tracking**, or the device's **Reconfigure or Replace Hardware** entry under **Settings → Devices & Services → Latter**.
 - **Look at the live readings.** Open **Studio → BLE & Area Presence**. If an area never shows a reading, its proxy isn't hearing the device.
 
 **The device keeps choosing the neighboring area**

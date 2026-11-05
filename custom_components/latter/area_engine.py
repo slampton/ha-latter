@@ -676,8 +676,6 @@ def evaluate_area_sensor_fusion(
         area_cfg = {}
 
     raw_mode = str(area_cfg.get("mode") or "weighted").strip().lower()
-    if raw_mode == "auto_bayes":
-        raw_mode = "weighted"
     fusion_mode = (
         raw_mode
         if raw_mode in ("weighted", "any_or", "ble_only", "ble_and_sensor")

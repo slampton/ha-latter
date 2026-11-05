@@ -20,7 +20,7 @@ Settings here live in `.storage/latter.site` and apply to every device.
 | Card | What it does |
 | :--- | :--- |
 | **Whole-Home Entities** | Weather provider, alarm panel, primary thermostat, entry lock, garage door, and robot vacuum. These drive the on-device weather page and Whole-Home Hub. |
-| **Cameras & Doorbell Two-Way Audio** | Up to 10 cameras for the on-device camera carousel and doorbell popups. Talkback and SIP settings are here too; both are experimental. |
+| **Cameras & Doorbell Audio** | Up to 10 cameras for the on-device camera carousel and doorbell popups, plus the **Doorbell audio noise reduction** level (Strong, Light, Off) for listening to a doorbell, and a **Test door speaker** button that speaks a test sentence on the camera's speaker with TTS. Listen and push-to-talk replies are experimental. |
 | **Calendars** | Calendars merged into the on-device agenda. Duplicate events across calendars are removed, and events with a location get a map. |
 
 ### Media & Remotes
@@ -44,8 +44,8 @@ Settings here live in `.storage/latter.site` and apply to every device.
 ### System Administration
 | Card | What it does |
 | :--- | :--- |
-| **Create or Export Backup** | Back up the whole system or a single device. Device backups include the device's live ESPHome select, switch, and number values. You can save to the internal vault or download a `.json` file. |
-| **Restore from File** / **Saved Local Backups** | Restore a backup. A device backup can be restored onto a different device to clone its setup. The vault keeps 25 backups. |
+| **Export Settings (.JSON)** | Download the whole System's settings, or one device's, as a `.json` file. Device exports include the device's live ESPHome select, switch, and number values. Full backups are Home Assistant's own: Latter's storage is included in every Home Assistant backup. |
+| **Restore from File (.JSON)** | Upload an exported `.json` file to restore it. A device export can be restored onto a different device to clone its setup. |
 | **Reverse Proxy & External Access** | An external base URL for the device **Visit** links, for setups behind a reverse proxy. |
 | **Notification Tester** | Send a test notification to any device. |
 | **System Custom Color Library** | Up to 24 saved theme colors. |
@@ -66,4 +66,4 @@ Each device has five pages. The options on each page depend on what the device's
 | **Power & Battery** | Sleep and wake timeouts, plus battery and power readings |
 | **Administration** | Device slug, type, and group; BLE tracking settings; and **Remove Device** |
 
-> Every config save reloads the Latter config entry for that device. The device reconnects within a few seconds.
+> Most settings apply live: Studio saves them and pushes the change to the device without a reload. Adding or removing a device, or changing a device's slug or bound ESPHome device, reloads the Latter integration; devices reconnect within a few seconds.

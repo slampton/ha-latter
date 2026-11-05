@@ -1202,19 +1202,19 @@ const STUDIO_TEMPLATE = `<div class="studio-root">
             </div>
           </div>
 
-          <!-- CARD 2: CAMERAS & TWO-WAY DOORBELL AUDIO -->
+          <!-- CARD 2: CAMERAS & DOORBELL AUDIO -->
           <div class="card" id="card-cameras">
-            <h3>Cameras &amp; Doorbell Two-Way Audio</h3>
-            <p class="desc">Add up to 10 <code>camera.*</code> entities for the on-device Camera Carousel and two-way doorbell intercom.</p>
+            <h3>Cameras &amp; Doorbell Audio</h3>
+            <p class="desc">Add up to 10 <code>camera.*</code> entities for the on-device Camera Carousel and doorbell popups. Devices can listen to a doorbell and reply by push-to-talk: your speech is transcribed and spoken on the camera's speaker with Home Assistant TTS.</p>
             <div class="field">
-              <label>Doorbell Noise &amp; Echo Cancellation (ANC + NLMS AEC)</label>
+              <label>Doorbell audio noise reduction</label>
               <div class="input-action-row">
-                <select id="cfg-doorbell_anc_mode" onchange="markDirty()">
-                  <option value="ultra">Ultra ANC + NLMS Echo Cancel (High-Rejection)</option>
-                  <option value="balanced">Balanced Spectral ANC</option>
-                  <option value="raw">Raw Audio Passthrough</option>
+                <select id="cfg-doorbell_noise_reduction" onchange="markDirty()">
+                  <option value="strong">Strong</option>
+                  <option value="light">Light</option>
+                  <option value="off">Off</option>
                 </select>
-                <button type="button" class="btn-secondary" onclick="testDoorbellTalkback()">Test Talkback</button>
+                <button type="button" class="btn-secondary" onclick="testDoorbellSpeaker()">Test door speaker</button>
               </div>
             </div>
             <div id="cameras-list"></div>
@@ -1250,7 +1250,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root">
       <section id="view-remotes" class="hidden">
         <div class="page-header">
           <h2>Media &amp; Remotes</h2>
-          <p>Assign up to four TV/media remote slots and configure speaker volume overrides.</p>
+          <p>Assign up to 10 TV/media remotes and configure speaker volume overrides.</p>
         </div>
 
         <div class="card" id="card-remotes">
@@ -1515,7 +1515,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root">
       <section id="view-select_device_prompt" class="hidden">
         <div class="page-header">
           <h2>Devices</h2>
-          <p>Select a device to manage its settings, or add an existing ESPHome device.</p>
+          <p>Select a device to manage its settings, or adopt a Bluetooth phone, watch, or tag.</p>
         </div>
         <div class="card">
           <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
@@ -1573,20 +1573,9 @@ const STUDIO_TEMPLATE = `<div class="studio-root">
               </div>
             </div>
 
-            <div class="form-grid-2" id="dash-assigned-person-field" style="padding-top:12px;border-top:1px solid var(--border);">
-              <div class="field">
-                <label>Assigned Person (<code>sensor.&lt;person&gt;_current_area</code>)</label>
-                <select id="cfg-assigned_person" onchange="onAssignedPersonChanged(this.value)"></select>
-              </div>
-              <div class="field">
-                <label>Device Access Role (RBAC)</label>
-                <select id="cfg-assigned_role" onchange="onAssignedPersonChanged(this.value)">
-                  <option value="admin">Administrator (Full Access)</option>
-                  <option value="member">Site Member (Standard)</option>
-                  <option value="guest">Guest (Restricted)</option>
-                  <option value="kiosk_area_only">Area Kiosk (Assigned Area Only)</option>
-                </select>
-              </div>
+            <div class="field" id="dash-assigned-person-field" style="padding-top:12px;border-top:1px solid var(--border);">
+              <label>Assigned Person (<code>sensor.&lt;person&gt;_current_area</code>)</label>
+              <select id="cfg-assigned_person" onchange="onAssignedPersonChanged(this.value)"></select>
             </div>
           </div>
 
@@ -1715,7 +1704,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root">
             <div id="embedded-voice-primary" class="native-controls-box" style="margin-bottom:10px;"></div>
 
             <div class="toggle-row" id="row-sync-device-area" style="margin-bottom:10px;">
-              <span>Voice Follows Me (Sync Active Area to Device Area — keeps BLE beacon active on battery)</span>
+              <span>Voice Follows Me (move this device's Home Assistant Area with it)</span>
               <input type="checkbox" id="cfg-sync_device_area" onchange="markDirty()">
             </div>
 
@@ -2871,8 +2860,7 @@ function renderAreaPresenceGrid() {
       sigParts.push(`Floor: ${r.floor_id}`);
     }
     const subTxt = sigParts.length ? sigParts.join(" • ") : "BLE Proxy Ready";
-    const rawMode = r.fusion_mode || "weighted";
-    const curMode = rawMode === "auto_bayes" ? "weighted" : rawMode;
+    const curMode = r.fusion_mode || "weighted";
     const optsHtml = modeOptions.map(m =>
       `<option value="${esc(m.val)}" ${m.val === curMode ? 'selected' : ''}>${esc(m.label)}</option>`
     ).join("");
@@ -2988,22 +2976,20 @@ function refreshActiveCameraPreview() {
   }
 }
 
-async function testDoorbellTalkback() {
+async function testDoorbellSpeaker() {
   const firstCam = doc.querySelector("#cameras-list .cam-ent-sel")?.value || STATE?.config?.camera_entity || "";
-  const ancMode = doc.getElementById("cfg-doorbell_anc_mode")?.value || "ultra";
   if (!firstCam) {
     showToast("Add a camera entity first");
     return;
   }
   const data = await callStudioCommand({
-      command: "test_doorbell_talkback",
+      command: "test_doorbell_speaker",
       camera_entity: firstCam,
-      anc_mode: ancMode,
       message: "Hello! Please leave the package by the front door."
     });
   if (data) {
     applyStateToDom(data, false);
-    showToast(`Sent DSP-stabilized talkback to ${firstCam}`);
+    showToast(`Sent test message to ${firstCam} speaker`);
   }
 }
 
@@ -4086,16 +4072,13 @@ function applyStateToDom(data, forceFormUpdate=false) {
     doc.getElementById("cfg-wallpaper_source").value = cfg.wallpaper_source || "";
     doc.getElementById("cfg-wallpaper_cycle_minutes").value = String(cfg.wallpaper_cycle_minutes || 0);
     doc.getElementById("cfg-art_size").value = String(cfg.art_size || 466);
-    if (doc.getElementById("cfg-doorbell_anc_mode")) {
-      doc.getElementById("cfg-doorbell_anc_mode").value = cfg.doorbell_anc_mode || "ultra";
+    if (doc.getElementById("cfg-doorbell_noise_reduction")) {
+      doc.getElementById("cfg-doorbell_noise_reduction").value = cfg.doorbell_noise_reduction || "strong";
     }
 
     populateSelect("cfg-default_area", cat.areas, cfg.default_area);
     populateSelect("cfg-presence_entity", cat.presence_sensors, cfg.presence_entity);
     populateSelect("cfg-assigned_person", cat.persons, cfg.assigned_person);
-    if (doc.getElementById("cfg-assigned_role")) {
-      doc.getElementById("cfg-assigned_role").value = cfg.assigned_role || "admin";
-    }
     populateSelect("cfg-default_speaker", cat.ma_speakers, cfg.default_speaker, true);
     const voListEl = doc.getElementById("volume-overrides-list");
     if (voListEl) {
@@ -4212,7 +4195,6 @@ async function saveAllConfig() {
     ble_target_address: doc.getElementById("cfg-ble_target_address")?.value?.trim() || "",
     presence_entity: doc.getElementById("cfg-presence_entity")?.value ?? "",
     assigned_person: doc.getElementById("cfg-assigned_person")?.value ?? "",
-    assigned_role: doc.getElementById("cfg-assigned_role")?.value || "admin",
     default_speaker: doc.getElementById("cfg-default_speaker")?.value ?? "",
     volume_overrides: volumeOverrides,
     vol_speaker_1: volumeOverrides[0]?.speaker || "",
@@ -4241,7 +4223,7 @@ async function saveAllConfig() {
     calendar_entities: calendarEntities,
     custom_palettes: Array.isArray((STATE?.config || {}).custom_palettes) ? STATE.config.custom_palettes : [],
     device_custom_color: (STATE?.config || {}).device_custom_color || "#3898FF",
-    doorbell_anc_mode: doc.getElementById("cfg-doorbell_anc_mode")?.value || "ultra",
+    doorbell_noise_reduction: doc.getElementById("cfg-doorbell_noise_reduction")?.value || "strong",
   };
 
   const btn = doc.getElementById("btn-save-changes");
@@ -4583,7 +4565,7 @@ function bindStudioGlobals() {
   window.showToast = showToast;
     window.switchSystemDevice = switchSystemDevice;
   window.switchView = switchView;
-  window.testDoorbellTalkback = testDoorbellTalkback;
+  window.testDoorbellSpeaker = testDoorbellSpeaker;
   window.toggleDeviceTableSort = toggleDeviceTableSort;
   window.toggleDockAppToken = toggleDockAppToken;
   window.toggleParentHaSidebar = toggleParentHaSidebar;

@@ -30,7 +30,7 @@ actions:
 
 ## Follow-me notification
 
-Delivers only to devices in currently occupied areas. If no area is occupied, it goes to every device.
+Delivers only to devices in currently occupied areas. If no area is occupied, nothing is delivered.
 
 ```yaml
 alias: Laundry done
@@ -49,7 +49,7 @@ actions:
 
 ## Notify a person
 
-Targets the devices assigned to that person, plus devices in that person's current area.
+Targets the devices assigned to that person, plus devices in that person's current area. If none match, nothing is delivered.
 
 ```yaml
 actions:
@@ -112,13 +112,13 @@ actions:
 
 ## Move a device to an area from an automation
 
-For example, from an NFC tag on a dock:
+For example, from an NFC tag on a dock. On a roaming device with **Voice Follows Me** on, this also moves the device's Home Assistant Area.
 
 ```yaml
 actions:
   - action: latter.set_active_area
     data:
       target_device: pocket_assistant
-      area: kitchen
+      area_id: kitchen
       handoff_media: true    # move the active speaker to one in the new area
 ```

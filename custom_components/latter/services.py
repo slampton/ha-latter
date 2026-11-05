@@ -21,6 +21,7 @@ from .media_engine import async_announce_on_targets, resolve_assist_satellite_en
 from .const import (
     CONF_ALARM_ENTITY,
     DOMAIN,
+    DOORBELL_NOISE_REDUCTION_LEVELS,
     SERVICE_CALENDAR_CREATE_EVENT,
     SERVICE_CALENDAR_FETCH,
     SERVICE_DEVICE_HELLO,
@@ -1281,7 +1282,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     )
 
     async def _handle_doorbell_intercom(call: ServiceCall) -> ServiceResponse:
-        """Execute a two-way doorbell intercom or camera audio action and return target metadata."""
+        """Execute a doorbell listen, push-to-talk reply, unlock or call_target action and return target metadata."""
         from .doorbell_engine import async_execute_doorbell_intercom
 
         coord = _resolve_coordinator_from_call(hass, call)
@@ -1289,7 +1290,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         action = str(data.get("action") or "listen_toggle").strip()
         cam_ent = str(data.get("camera_entity") or "").strip() or None
         msg = str(data.get("message") or "").strip()
-        anc = str(data.get("anc_mode") or "").strip() or None
+        nr_level = str(data.get("noise_reduction") or "").strip() or None
         raw_idx = data.get("camera_index")
         cam_idx = int(raw_idx) if raw_idx is not None and str(raw_idx).strip() != "" else None
         info = await async_execute_doorbell_intercom(
@@ -1298,7 +1299,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             action=action,
             camera_entity=cam_ent,
             message=msg,
-            anc_mode=anc,
+            noise_reduction=nr_level,
             camera_index=cam_idx,
         )
         return {
@@ -1306,7 +1307,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             "device_slug": coord.device_slug,
             "action": action,
             "doorbell_talk_state": coord.doorbell_talk_state,
-            "doorbell_anc_mode": coord.doorbell_anc_mode,
+            "doorbell_noise_reduction": coord.doorbell_noise_reduction,
             **info,
         }
 
@@ -1321,7 +1322,9 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 vol.Optional("camera_entity"): cv.string,
                 vol.Optional("camera_index"): vol.Any(vol.Coerce(int), cv.string),
                 vol.Optional("message"): cv.string,
-                vol.Optional("anc_mode"): cv.string,
+                vol.Optional("noise_reduction"): vol.Any(
+                    vol.In(DOORBELL_NOISE_REDUCTION_LEVELS), ""
+                ),
             }
         ),
         supports_response=SupportsResponse.OPTIONAL,

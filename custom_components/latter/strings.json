@@ -7,12 +7,12 @@
         "data": {
           "device_slug": "ESPHome Device Name / Slug",
           "apply_profile": "Configuration Profile",
-          "native_ble_tracking": "This device roams (not fixed to a single Area)"
+          "native_ble_tracking": "Track this device's area with Bluetooth"
         },
         "data_description": {
           "device_slug": "The normalized name of your ESPHome device (for example: kitchen_display).",
           "apply_profile": "Auto-detect screen geometry and capabilities from hardware, or apply a saved Latter profile.",
-          "native_ble_tracking": "Enable for portable/wearable devices that move area-to-area. Uncheck for stationary area devices."
+          "native_ble_tracking": "Use your Bluetooth proxies to work out which Area this device is in. Turn off for devices that never move."
         }
       },
       "reconfigure": {
@@ -51,26 +51,26 @@
           "data": {
             "device_slug": "ESPHome Device Name / Slug",
             "apply_profile": "Configuration Profile",
-            "native_ble_tracking": "This device roams (not fixed to a single Area)"
+            "native_ble_tracking": "Track this device's area with Bluetooth"
           },
           "data_description": {
             "device_slug": "The normalized name of your ESPHome device (for example: kitchen_display).",
             "apply_profile": "Auto-detect screen geometry and capabilities from hardware, or apply a saved Latter profile.",
-            "native_ble_tracking": "Enable for portable/wearable devices that move area-to-area. Uncheck for stationary area devices."
+            "native_ble_tracking": "Use your Bluetooth proxies to work out which Area this device is in. Turn off for devices that never move."
           }
         },
         "reconfigure": {
           "title": "Reconfigure or Replace Device Hardware",
-          "description": "Update this device's profile and roaming settings, or enter a new ESPHome device slug to replace its physical hardware in-place while preserving all Studio settings, entities, and Area assignments.",
+          "description": "Update this device's profile and Bluetooth area tracking, or enter a new ESPHome device slug to replace its physical hardware in-place while preserving all Studio settings, entities, and Area assignments.",
           "data": {
             "device_slug": "ESPHome Device Name / Slug",
             "apply_profile": "Configuration Profile",
-            "native_ble_tracking": "This device roams (not fixed to a single Area)"
+            "native_ble_tracking": "Track this device's area with Bluetooth"
           },
           "data_description": {
             "device_slug": "Keep the current slug to update settings, or enter a replacement ESPHome device slug to rebind hardware in-place.",
             "apply_profile": "Auto-detect screen geometry and capabilities from hardware, or apply a saved Latter profile.",
-            "native_ble_tracking": "Enable for portable/wearable devices that move area-to-area. Uncheck for stationary area devices."
+            "native_ble_tracking": "Use your Bluetooth proxies to work out which Area this device is in. Turn off for devices that never move."
           }
         }
       },

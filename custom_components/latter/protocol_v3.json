@@ -62,9 +62,9 @@
         {"index": 31, "name": "alert_id", "cpp_enum": "ALERT_ID", "type": "u32", "description": "Monotonic alert/notification identifier"},
         {"index": 32, "name": "alert_title", "cpp_enum": "ALERT_TITLE", "type": "string", "description": "Alert banner title"},
         {"index": 33, "name": "alert_message", "cpp_enum": "ALERT_MESSAGE", "type": "string", "description": "Alert banner message body"},
-        {"index": 34, "name": "alert_priority", "cpp_enum": "ALERT_PRIORITY", "type": "string", "description": "Alert priority level (info|normal|high|critical)"},
+        {"index": 34, "name": "alert_priority", "cpp_enum": "ALERT_PRIORITY", "type": "string", "description": "Alert priority level (normal|warning|critical)"},
         {"index": 35, "name": "alert_duration", "cpp_enum": "ALERT_DURATION", "type": "u16", "description": "Alert display duration in seconds"},
-        {"index": 36, "name": "alert_chime", "cpp_enum": "ALERT_CHIME", "type": "string", "description": "Alert RTTTL/chime preset name"},
+        {"index": 36, "name": "alert_chime", "cpp_enum": "ALERT_CHIME", "type": "bool", "description": "1 = play the alert chime (embedded WAV: sfx 9 for warning/critical, otherwise sfx 6), else 0"},
         {"index": 37, "name": "alert_camera_url", "cpp_enum": "ALERT_CAMERA_URL", "type": "url", "description": "Signed HTTP URL for alert camera snapshot"}
       ]
     },
@@ -134,9 +134,10 @@
       "variables": {}
     },
     "ui_input": {
-      "description": "Remote hardware navigation/input command (up|down|left|right|select|back|home|wake|sleep)",
+      "description": "Remote navigation input: action home|back|select|next|prev|left|right|up|down|cw|ccw (ok/click alias select); delta overrides the step for next/prev-style actions (0 = derive from action)",
       "variables": {
-        "command": "string"
+        "action": "string",
+        "delta": "int"
       }
     },
     "set_browse_slots": {
@@ -160,14 +161,15 @@
       }
     },
     "show_notification": {
-      "description": "Wake display, show an on-screen alert banner, and optionally play an RTTTL chime or camera preview",
+      "description": "Wake display, show an on-screen alert banner (priority normal|warning|critical, duration 3-60 s, default 10), optionally play the embedded WAV chime and show a camera snapshot; alert_id > 0 deduplicates repeats",
       "variables": {
-        "alert_id": "int",
         "title": "string",
         "message": "string",
         "priority": "string",
-        "duration_s": "int",
-        "chime": "string"
+        "duration": "int",
+        "chime": "bool",
+        "camera_url": "string",
+        "alert_id": "int"
       }
     }
   },
@@ -221,8 +223,8 @@
       "fields": ["target_device", "message", "media_url", "target_speakers", "tts_entity"]
     },
     "doorbell_intercom": {
-      "description": "Control two-way doorbell talkback or trigger explicit lock actions during a doorbell event",
-      "fields": ["target_device", "action", "camera_entity", "camera_index", "message", "anc_mode"]
+      "description": "Doorbell talkback and requests. action: talk_message (push-to-talk speech transcribed on the device, spoken at the door by Home Assistant), quick_reply, listen_start|listen_stop (door audio played on the device), call_target (rings other displays with a notification; no display-to-display audio), unlock_door (unlock request to Home Assistant), set_noise_reduction. noise_reduction: strong|light|off, the noise filter preset Home Assistant applies to door audio (FFmpeg). No echo cancellation; camera is auto-refreshing snapshots",
+      "fields": ["target_device", "action", "camera_entity", "camera_index", "message", "noise_reduction"]
     },
     "save_custom_color": {
       "description": "Save a custom RGB accent color from the on-device color wheel",

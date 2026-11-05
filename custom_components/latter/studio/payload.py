@@ -39,7 +39,6 @@ from ..const import (
     CONF_AREA_HANDOFF,
     CONF_ART_SIZE,
     CONF_ASSIGNED_PERSON,
-    CONF_ASSIGNED_ROLE,
     CONF_BLE_AREA_OFFSETS,
     CONF_BLE_AUTO_SWITCH,
     CONF_BLE_BEACON_UUID,
@@ -59,7 +58,7 @@ from ..const import (
     CONF_DEVICE_SLUG,
     CONF_DISPLAY_SHAPE,
     CONF_DOCK_APPS,
-    CONF_DOORBELL_ANC_MODE,
+    CONF_DOORBELL_NOISE_REDUCTION,
     CONF_GARAGE_ENTITY,
     CONF_LOCK_ENTITY,
     CONF_NATIVE_BLE_TRACKING,
@@ -77,7 +76,6 @@ from ..const import (
     CONF_WEATHER_ENTITY,
     DATA_GLOBAL_CONFIG,
     DATA_GLOBAL_STORE,
-    DEFAULT_DOORBELL_ANC_MODE,
     DOMAIN,
     INTEGRATION_VERSION,
     normalize_device_slug,
@@ -534,7 +532,6 @@ def build_studio_state_payload(
         or {},
         CONF_PRESENCE_ENTITY: coordinator.presence_entity or "",
         CONF_ASSIGNED_PERSON: coordinator.assigned_person,
-        CONF_ASSIGNED_ROLE: coordinator.assigned_role,
         CONF_BLE_AUTO_SWITCH: coordinator.ble_auto_switch_enabled,
         CONF_SYNC_DEVICE_AREA: coordinator.sync_device_area_enabled,
         CONF_AREA_FOLLOW_DWELL_S: coordinator.area_follow_dwell_s,
@@ -555,12 +552,7 @@ def build_studio_state_payload(
         CONF_CALENDAR_ENTITIES: coordinator.calendar_entities,
         CONF_CUSTOM_PALETTES: coordinator.custom_palettes,
         CONF_DEVICE_CUSTOM_COLOR: coordinator.device_custom_color,
-        CONF_DOORBELL_ANC_MODE: str(
-            coordinator.get_opt(
-                CONF_DOORBELL_ANC_MODE, coordinator.doorbell_anc_mode
-            )
-            or DEFAULT_DOORBELL_ANC_MODE
-        ),
+        CONF_DOORBELL_NOISE_REDUCTION: coordinator.doorbell_noise_reduction,
         CONF_DOCK_APPS: coordinator.dock_apps_csv,
         CONF_WALLPAPER_SOURCE: coordinator.wallpaper_source,
         CONF_WALLPAPER_FAVORITES: coordinator.wallpaper_favorites,
@@ -863,7 +855,7 @@ def build_studio_state_payload(
             "weather_temp": coordinator.weather_attributes.get("temperature"),
             "wallpaper_url": area_attrs.get("wallpaper_url", "none"),
             "doorbell_talk_state": coordinator.doorbell_talk_state,
-            "doorbell_anc_mode": coordinator.doorbell_anc_mode,
+            "doorbell_noise_reduction": coordinator.doorbell_noise_reduction,
             "active_remote_slot": coordinator.active_remote_slot,
             "remote_slots_meta": remote_attrs,
             "device_sw_version": str(

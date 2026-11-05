@@ -16,7 +16,7 @@ Latter tracks which area each device is in using the Bluetooth proxies you alrea
 
 | Target | How it's identified | How to add it |
 | :--- | :--- | :--- |
-| Latter firmware devices | The device's MAC address from Home Assistant's device registry (±2, to cover the ESP32 BLE MAC offset). The Latter iBeacon UUID and minor are also accepted, which covers ESP32-P4 boards where BLE runs on a separate C6 chip with its own MAC. | Check **This device roams** when adding the device |
+| Latter firmware devices | The device's MAC address from Home Assistant's device registry (±2, to cover the ESP32 BLE MAC offset). The Latter iBeacon UUID and minor are also accepted, which covers ESP32-P4 boards where BLE runs on a separate C6 chip with its own MAC. | Check **Track this device's area with Bluetooth** when adding the device |
 | Phones and watches | Home Assistant's [Private BLE Device](https://www.home-assistant.io/integrations/private_ble_device/) integration resolves the rotating address from the device's IRK. Latter re-reads the current address every 2 seconds. | Set up Private BLE Device, then **Studio → BLE & Area Presence → Discovered Nearby Bluetooth Devices → Adopt** |
 | iBeacons, including any ESPHome node running `esp32_ble_beacon` | UUID, or an `ibeacon` device tracker entity | Adopt from the same list, or enter the UUID |
 | Other BLE devices with a static address | MAC address | Adopt from the same list, or enter the MAC |
@@ -36,11 +36,12 @@ All of these values are constants in [`ble_engine.py`](../custom_components/latt
    - Every **2 s** it reads each scanner's advertisement table directly, because Home Assistant's Bluetooth stack suppresses repeated identical advertisements from static beacons.
 
    Readings at or below −100 dBm are dropped.
-2. **Smooth.** Each area keeps an exponential moving average of RSSI with α = 0.5. If an area hasn't heard the device for **25 s**, its average resets.
+2. **Smooth.** Each area keeps one exponential moving average of RSSI with α = 0.5; readings from every scanner in that area feed the same average. After **2 s** without a reading, an area loses **1.5 dB per second**. After **12 s** without a reading, its average resets and it drops out of the decision.
 3. **Adjust.** The per-area calibration offset is added. Offsets are limited to ±25 dB. If the device's current area has a floor and a candidate area is on a different floor, the candidate gets **−6 dB**.
 4. **Decide.**
    - A challenger area takes over immediately if it leads by **8 dB** or more.
    - Otherwise it needs a lead of at least **5 dB**, and at least **4 s** must have passed since the last switch.
+   - No area wins while its effective RSSI is below **−88 dBm**.
 5. **Away.**
    - With no matched packets for **180 s**, the device is marked `Away`.
    - Display devices with a live Wi-Fi connection are never marked away; they just keep their last area.
@@ -77,20 +78,20 @@ Fusion modes, set per area in Studio:
 
 | Mode | Behavior |
 | :--- | :--- |
-| `auto_bayes` (default) | Occupied when the score passes the area's threshold (default 50%, adjustable from 20% to 95%) |
+| `weighted` (default) | Occupied when the hand-tuned weighted score above passes the area's threshold (default 50%, adjustable from 20% to 95%) |
 | `any_or` | Occupied if BLE **or** any sensor says so |
 | `ble_only` | BLE only |
 | `ble_and_sensor` | BLE **and** a sensor, where the area has one |
 
-> Despite the mode name, `auto_bayes` is a hand-tuned weighted score, not a formal Bayesian update. It's simple and predictable, and the weights above are the whole model.
+> The weighted score is not a Bayesian update. It's simple and predictable, and the weights above are the whole model.
 
 Sensors are discovered automatically by device class (occupancy, presence, motion, moving, door, opening), from both entity areas and device areas. You can also list them explicitly per area.
 
 ## What Latter does with the area
 
-- **Moves the device's Home Assistant Area.** When a roaming device changes areas, Latter updates the device's Area in the registry, so Assist's area-aware commands target where you are. If you have proxies, the device only moves into areas that contain one. You can turn this off per device.
+- **Moves the device's Home Assistant Area.** When a roaming device (one whose hardware reports it isn't stationary) with **Voice Follows Me** on changes areas, Latter updates that device's Area in the registry after it has stayed in the new area for the dwell time (10 s by default), so Assist's area-aware commands target where you are. Picking an area on the device applies immediately. Latter never clears the Area when the device goes away, and never moves stationary devices. You can turn this off per device.
 - **Scopes Area Control** on the device to the current area.
-- **Routes notifications and intercom.** `target_device: follow_me` delivers to devices in occupied areas. See [services](reference/services.md#special-target-values).
+- **Routes notifications and intercom.** `target_device: follow_me` delivers to devices in occupied areas; if no area is occupied, nothing is delivered. See [services](reference/services.md#special-target-values).
 - **Fires `latter_event`** with `type: area_changed` for your own automations.
 
 ---
@@ -132,7 +133,7 @@ Per-area occupancy sensors and `follow_me` routing are different: they come only
 
 - **No `device_tracker` entities.**
 - **Calibration is per area, not per scanner.** Offsets are shared by all tracked devices, and the path-loss constants (−59 dBm at 1 m, exponent 2.2) can't be configured.
-- **Areas share an average.** If two scanners are in the same area, the most recent reading wins.
+- **Areas share an average.** If two scanners are in the same area, their readings are blended into one per-area average.
 - **The 2-second table poll sets the smoothing rate.** The moving average updates at the poll rate, not the advertisement rate.
 - **Occupancy sensors don't update on RSSI changes alone.** They refresh on area transitions, away events, and changes to any occupancy, motion, or door sensor.
 - **Timing constants are fixed.** These are the 4 s hold, 5 and 8 dB thresholds, and 180 s away timeout.

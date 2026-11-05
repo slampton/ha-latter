@@ -1,4 +1,4 @@
-"""The Latter (Universal ESPHome Companion & Entity Middleware) integration."""
+"""The Latter integration: Home Assistant middleware for Latter displays."""
 
 from __future__ import annotations
 
@@ -47,10 +47,7 @@ from .const import (
     normalize_device_slug,
 )
 from .coordinator import LatterCoordinator
-from .doorbell_engine import (
-    LatterCameraAudioStreamView,
-    LatterDoorbellTalkbackView,
-)
+from .doorbell_engine import LatterCameraAudioStreamView
 from .http import (
     LatterArtworkTranscoderView,
     LatterCameraSnapshotView,
@@ -443,7 +440,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
         hass.http.register_view(LatterWallpaperProxyView(hass))
         hass.http.register_view(LatterCameraSnapshotView(hass))
         hass.http.register_view(LatterCameraAudioStreamView(hass))
-        hass.http.register_view(LatterDoorbellTalkbackView(hass))
         hass.http.register_view(LatterMapSnapshotView(hass))
         hass.http.register_view(LatterBrandIconView(hass))
         hass.http.register_view(LatterSidebarIconJsView(hass))

@@ -1,4 +1,4 @@
-"""Constants for the Latter universal ESPHome companion middleware integration."""
+"""Constants for the Latter integration."""
 
 from __future__ import annotations
 
@@ -38,8 +38,6 @@ CONF_BLE_TARGET_ADDRESS: Final = "ble_target_address"
 CONF_BLE_AREA_OFFSETS: Final = "ble_area_offsets"
 CONF_PRESENCE_ENTITY: Final = "presence_entity"
 CONF_ASSIGNED_PERSON: Final = "assigned_person"
-CONF_ASSIGNED_ROLE: Final = "assigned_role"
-DEFAULT_ASSIGNED_ROLE: Final = "admin"
 CONF_BLE_AUTO_SWITCH: Final = "ble_auto_switch"
 CONF_SYNC_DEVICE_AREA: Final = "sync_device_area"
 CONF_AREA_FOLLOW_DWELL_S: Final = "area_follow_dwell_s"
@@ -56,10 +54,11 @@ CONF_WALLPAPER_CYCLE_MINUTES: Final = "wallpaper_cycle_minutes"
 CONF_ART_SIZE: Final = "art_size"
 CONF_CUSTOM_PALETTES: Final = "custom_palettes"
 CONF_DEVICE_CUSTOM_COLOR: Final = "device_custom_color"
-CONF_DOORBELL_ANC_MODE: Final = "doorbell_anc_mode"
+CONF_DOORBELL_NOISE_REDUCTION: Final = "doorbell_noise_reduction"
 
 # Defaults
-DEFAULT_DOORBELL_ANC_MODE: Final = "ultra"
+DEFAULT_DOORBELL_NOISE_REDUCTION: Final = "strong"
+DOORBELL_NOISE_REDUCTION_LEVELS: Final[tuple[str, ...]] = ("strong", "light", "off")
 DEFAULT_DEVICE_PROFILE: Final = "mobile_display"
 DEFAULT_DISPLAY_SHAPE: Final = "circle"
 DEFAULT_PAGE_SIZE: Final = 3
@@ -90,12 +89,11 @@ SERVICE_NOTIFY: Final = "notify"
 SERVICE_SAVE_CUSTOM_COLOR: Final = "save_custom_color"
 SERVICE_DOORBELL_INTERCOM: Final = "doorbell_intercom"
 
-# HTTP Endpoints (Artwork, Wallpaper, Camera Peephole, Doorbell Audio & Web Companion Studio)
+# HTTP Endpoints (Artwork, Wallpaper, Camera Snapshot, Camera Audio, Map & Brand)
 API_ARTWORK_PROXY_PATH: Final = "/api/latter/artwork/{target_device}"
 API_WALLPAPER_PROXY_PATH: Final = "/api/latter/wallpaper/{target_device}"
 API_CAMERA_PROXY_PATH: Final = "/api/latter/camera/{target_device}"
 API_CAMERA_AUDIO_STREAM_PATH: Final = "/api/latter/camera_audio/{target_device}"
-API_DOORBELL_TALKBACK_PATH: Final = "/api/latter/doorbell_talkback/{target_device}"
 API_MAP_PROXY_PATH: Final = "/api/latter/map/{target_device}"
 API_BRAND_ICON_PATH: Final = "/api/latter/brand/icon.png"
 API_SIDEBAR_ICON_JS_PATH: Final = "/api/latter/brand/sidebar_icon.js"
@@ -140,7 +138,7 @@ GLOBAL_CONFIG_KEYS: Final[tuple[str, ...]] = (
     CONF_REMOTE_GROUPS,
     CONF_CALENDAR_ENTITIES,
     CONF_CUSTOM_PALETTES,
-    CONF_DOORBELL_ANC_MODE,
+    CONF_DOORBELL_NOISE_REDUCTION,
     CONF_DEVICE_GROUPS,
     CONF_SAVED_PROFILES,
     CONF_AREA_FUSION_CONFIG,
@@ -151,6 +149,12 @@ def normalize_device_slug(raw_slug: str) -> str:
     """Normalize an ESPHome device name or slug to lowercase underscore format."""
     norm = re.sub(r"[^a-z0-9]+", "_", raw_slug.strip().lower()).strip("_")
     return norm or "esphome_device"
+
+
+def normalize_noise_reduction(level: str | None) -> str:
+    """Return a valid doorbell noise-reduction level (`strong`, `light`, `off`), else the default."""
+    val = str(level or "").strip().lower()
+    return val if val in DOORBELL_NOISE_REDUCTION_LEVELS else DEFAULT_DOORBELL_NOISE_REDUCTION
 
 
 def build_device_entity_id(device_slug: str, suffix: str) -> str:

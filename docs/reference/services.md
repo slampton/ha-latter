@@ -1,9 +1,9 @@
 # Services Reference
 
-Latter registers 15 user-facing services (plus the internal `latter.device_hello` handshake service) under the `latter` domain. Latter firmware calls most of them from the device. You can also call them from automations, scripts, or your own firmware.
+Latter registers 14 user-facing services (plus the internal `latter.device_hello` handshake service) under the `latter` domain. Latter firmware calls most of them from the device. You can also call them from automations, scripts, or your own firmware.
 
 - **Source:** [`services.py`](../../custom_components/latter/services.py), with UI schemas in [`services.yaml`](../../custom_components/latter/services.yaml).
-- **Strict schema validation.** Every service validates its fields strictly and rejects unknown keys.
+- **Schema validation.** Every service rejects unknown keys. Most values (for example `priority`, `mode`, `action`, `command`) are free-form strings checked by the handler, which ignores or defaults values it doesn't recognize; `doorbell_intercom`'s `noise_reduction` is validated by the schema.
 
 ## Targeting
 
@@ -22,7 +22,9 @@ If only a single Latter device is configured, `target_device` is optional. When 
 | `all` | Every display device | — |
 | `follow_me`, `occupied`, `occupied_areas` | Devices whose current area is occupied | Music Assistant speakers in occupied areas, plus each matching device's active and local speaker |
 | `person.<id>` | Devices assigned to that person, plus devices in that person's current area | — |
-| No match | Falls back to every display device | No-op (returns a status response without broadcasting to unoccupied areas) |
+| No match | Nothing is delivered (`follow_me` / `person.*`) | No-op (returns a status response without broadcasting to unoccupied areas) |
+
+An unknown device slug in `target_device` is an error (`ServiceValidationError`), not a fallback.
 
 Headless and BLE-beacon-only devices never receive notifications.
 
@@ -41,6 +43,7 @@ Shows a banner on the device, with an optional chime and an optional camera snap
 | `duration` | int (seconds) | `8` | Clamped to 2–60 |
 | `chime` | bool | `true` | |
 | `camera_entity` | `camera.*` | — | Adds a signed baseline-JPEG snapshot URL |
+| `announce` | bool | `false` | Also speaks `message` with TTS on the device (through its Assist satellite, or its local speaker). The banner chime is skipped when this is on. |
 
 Latter calls `esphome.<slug>_show_notification` with a monotonic `alert_id` and fires `latter_event` with `type: notification_dispatched`.
 
@@ -113,10 +116,10 @@ Text is wrapped to 32 characters per line.
 ### `latter.set_active_area`
 | Field | Type | Notes |
 | :--- | :--- | :--- |
-| `area` (alias `area_id`) | string | **Required.** An Area ID or Area name. |
+| `area_id` | string | **Required.** An Area ID or Area name. |
 | `handoff_media` | bool | Moves playback to a Music Assistant speaker in the new area |
 
-This also moves the ESPHome device's Home Assistant Area, unless area sync is off for the device.
+On roaming devices (the hardware reports it isn't stationary) with **Voice Follows Me** on, this also moves the device's Home Assistant Area. Stationary devices are never moved.
 
 ### `latter.area_browse`
 Sends a page of areas or entities to the device. `entities` and `home` pages use `set_area_slots`, which includes slider levels. `areas` uses `set_browse_slots`.
@@ -165,7 +168,7 @@ Key names are translated per platform:
 ### `latter.calendar_fetch`
 | Field | Type | Default |
 | :--- | :--- | :--- |
-| `days` | int 1–60 | `7` when called without the field, `30` in the UI form |
+| `days` | int 1–60 | `7` |
 | `page`, `page_size` | int | `1`, `5` |
 
 Returns at most 25 events, with duplicates (same summary and start) removed. Events with a location get a signed map URL.
@@ -184,14 +187,21 @@ Returns at most 25 events, with duplicates (same summary and start) removed. Eve
 ## Doorbell and appearance
 
 ### `latter.doorbell_intercom` *(experimental)*
-Two-way doorbell and area-to-area intercom actions. Can return a response.
+Doorbell listen, push-to-talk reply, and unlock actions, plus `call_target`, which rings other displays with a notification. Can return a response.
+
+- **Listen** (`listen_start` / `listen_stop` / `listen_toggle`): the camera's RTSP audio runs through an FFmpeg noise-reduction filter and plays on the device as FLAC.
+- **Reply** (`talk_message` / `quick_reply`): Home Assistant speaks `message` with TTS on the camera's `media_player` (a sibling entity on the camera's device, or a Studio volume override). Latter firmware sends the text its push-to-talk speech recognition produced. Listening pauses during the reply and resumes after it.
+- **Unlock** (`unlock_door`): calls `lock.unlock` on the camera's lock, or the lock configured in Studio.
+- **`call_target`**: sends a critical `latter.notify` ("Tap to answer") to the display named in `message`, or to every other display. No audio path is opened between displays.
+
+There is no live audio from the device to the door and no echo cancellation.
 
 | Field | Type | Notes |
 | :--- | :--- | :--- |
-| `action` | string | `listen_start`, `listen_stop`, `listen_toggle` (the default), `talk_message`, `quick_reply`, `unlock_door`, `call_target`, `set_anc_mode`, `select_camera` |
+| `action` | string | `listen_start`, `listen_stop`, `listen_toggle` (the default), `talk_message`, `quick_reply`, `unlock_door`, `call_target`, `set_noise_reduction`, `select_camera` |
 | `camera_entity` / `camera_index` | `camera.*` / int 0–9 | |
 | `message` | string | Text to speak or target device slug (`all` or `<slug>`), depending on `action` |
-| `anc_mode` | `ultra` \| `balanced` \| `raw` | Noise-reduction preset for doorbell audio |
+| `noise_reduction` | `strong` \| `light` \| `off` | FFmpeg noise-reduction level for the listen stream. Applies to this device until the integration reloads or Studio settings are saved; the default comes from Studio (`strong`). `set_noise_reduction` applies it and restarts listening if active. |
 
 ### `latter.save_custom_color`
 | Field | Type | Notes |

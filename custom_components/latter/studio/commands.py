@@ -27,7 +27,6 @@ from ..const import (
     CONF_AREA_HANDOFF,
     CONF_ART_SIZE,
     CONF_ASSIGNED_PERSON,
-    CONF_ASSIGNED_ROLE,
     CONF_BLE_AREA_OFFSETS,
     CONF_BLE_AUTO_SWITCH,
     CONF_BLE_BEACON_UUID,
@@ -112,8 +111,6 @@ async def _async_execute_studio_command(
     elif cmd == "set_area_fusion_mode":
         area_id = str(body.get("area_id") or "").strip()
         mode_val = str(body.get("mode") or "weighted").strip().lower()
-        if mode_val == "auto_bayes":
-            mode_val = "weighted"
         if mode_val not in ("weighted", "any_or", "ble_only", "ble_and_sensor"):
             mode_val = "weighted"
         if area_id:
@@ -245,7 +242,7 @@ async def _async_execute_studio_command(
                 option=str(option) if option is not None else None,
             )
 
-    elif cmd == "test_doorbell_talkback":
+    elif cmd == "test_doorbell_speaker":
         if coordinator is None:
             raise ValueError("No active Latter device selected")
         cam_ent = str(
@@ -255,17 +252,12 @@ async def _async_execute_studio_command(
             body.get("message")
             or "Hello! Please leave the package by the front door."
         ).strip()
-        anc = str(
-            body.get("anc_mode") or coordinator.doorbell_anc_mode or "ultra"
-        ).strip()
-        coordinator.doorbell_anc_mode = anc
         await async_execute_doorbell_intercom(
             hass,
             coordinator,
             action="talk_message",
             camera_entity=cam_ent,
             message=msg,
-            anc_mode=anc,
         )
 
     elif cmd == "send_test_notification":
@@ -457,7 +449,6 @@ async def _async_execute_studio_command(
             CONF_BLE_TARGET_ADDRESS,
             CONF_PRESENCE_ENTITY,
             CONF_ASSIGNED_PERSON,
-            CONF_ASSIGNED_ROLE,
             CONF_BLE_AUTO_SWITCH,
             CONF_SYNC_DEVICE_AREA,
             CONF_AREA_FOLLOW_DWELL_S,

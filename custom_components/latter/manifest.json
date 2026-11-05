@@ -6,8 +6,7 @@
     "bluetooth",
     "bluetooth_adapters",
     "camera",
-    "ffmpeg",
-    "go2rtc"
+    "ffmpeg"
   ],
   "categories": [
     "ai_voice.voice_assistants",
