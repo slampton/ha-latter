@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections import OrderedDict
+import contextlib
+from dataclasses import dataclass, field
 from http import HTTPStatus
 import io
 import logging
@@ -32,9 +35,14 @@ _LOGGER = logging.getLogger(__name__)
 MAX_ART_CACHE_ENTRIES = 24
 # (pic_url, width, height, circular_mask, darken) -> encoded_baseline_jpeg_bytes
 _ARTWORK_LRU_CACHE: OrderedDict[tuple[str, int, int, bool, float], bytes] = OrderedDict()
-# (cam_entity, width, height, is_circle, rotate_deg) -> (monotonic_ts, encoded_baseline_jpeg_bytes)
-_CAMERA_SNAPSHOT_MICRO_CACHE: dict[tuple[str, int, int, bool, int], tuple[float, bytes]] = {}
-CAMERA_MICRO_CACHE_TTL_SECONDS = 0.20
+# Live camera views: while a Device keeps polling a camera view, a background task keeps the
+# next transcoded frame ready so the request is answered without waiting on the camera.
+CAMERA_LIVE_IDLE_SECONDS = 3.0  # stop refreshing a view nobody has polled for this long
+CAMERA_LIVE_MAX_AGE_SECONDS = 2.0  # never serve a frame older than this; fetch a new one instead
+CAMERA_LIVE_LEAD_SECONDS = 0.1  # finish the refresh this long before the next poll is due
+CAMERA_LIVE_MIN_GAP_SECONDS = 0.2  # never start refreshes closer together than this
+CAMERA_LIVE_ERROR_BACKOFF_SECONDS = 1.0
+CAMERA_LIVE_MAX_VIEWS = 8
 # (width, height) -> (mask_L, black_bg_RGB) cached to avoid re-allocating PIL surfaces per frame
 _CIRCULAR_MASK_CACHE: dict[tuple[int, int], tuple[Image.Image, Image.Image]] = {}
 
@@ -332,6 +340,188 @@ class LatterWallpaperProxyView(HomeAssistantView):
         )
 
 
+class _CameraFetchError(Exception):
+    """The camera entity did not return a frame."""
+
+
+class _CameraTranscodeError(Exception):
+    """Pillow could not transcode the camera frame."""
+
+
+def _retrieve_task_exception(task: asyncio.Task[bytes]) -> None:
+    """Mark a shared fetch's failure as retrieved when every waiter has gone away."""
+    if not task.cancelled():
+        task.exception()
+
+
+CameraViewKey = tuple[str, int, int, bool, int]  # (cam_entity, width, height, is_circle, rotate_deg)
+
+
+@dataclass
+class _LiveCameraFeed:
+    """One polled camera view and the frame prepared for its next poll."""
+
+    frame: bytes | None = None
+    frame_ts: float = 0.0  # when the current frame finished
+    started_ts: float = 0.0  # when the current (or in-flight) refresh began
+    unserved: bool = False  # the current frame was made for a poll that has not come yet
+    inflight_late: bool = False  # a poll arrived during the in-flight refresh and took the old frame
+    last_request: float = 0.0
+    last_served: float = 0.0  # when the last poll was answered
+    poll_gap: float | None = None  # smoothed time from an answer to the Device's next poll
+    refresh_cost: float = 0.3  # peak-held refresh duration: rises at once, decays slowly
+    inflight: asyncio.Future[bytes] | None = None
+    task: asyncio.Task[None] | None = None
+    wake: asyncio.Event = field(default_factory=asyncio.Event)
+
+
+class _LiveCameraFeeds:
+    """Keep the next frame of each polled camera view ready ahead of the Device's poll.
+
+    A Device's image download blocks its main loop until the response headers arrive, so
+    the camera round trip and the Pillow transcode must not happen inside the request.
+    The first poll of a view fetches a frame inline; after that a background task times
+    one refresh to finish just before the next poll is due (one camera fetch per poll,
+    as before), and the poll is answered from memory. The task ends when polling stops.
+    """
+
+    def __init__(self, hass: HomeAssistant) -> None:
+        """Initialize the live camera feed registry."""
+        self.hass = hass
+        self._feeds: dict[CameraViewKey, _LiveCameraFeed] = {}
+
+    async def async_get_frame(self, key: CameraViewKey) -> tuple[bytes, bool]:
+        """Return (jpeg_bytes, served_from_memory) for a poll of the camera view."""
+        now = time.monotonic()
+        feed = self._feeds.get(key)
+        if feed is None:
+            feed = self._add_feed(key)
+        elif 0.0 < now - feed.last_served < CAMERA_LIVE_IDLE_SECONDS:
+            # The Device polls a fixed time after each download, so time it from our answer.
+            gap = now - feed.last_served
+            feed.poll_gap = gap if feed.poll_gap is None else 0.7 * feed.poll_gap + 0.3 * gap
+        feed.last_request = now
+
+        if feed.frame is not None and now - feed.frame_ts <= CAMERA_LIVE_MAX_AGE_SECONDS:
+            frame, from_memory = feed.frame, True
+            # A refresh still running was meant for this poll; prepare the next one on time.
+            feed.inflight_late = feed.inflight is not None
+        else:
+            frame, from_memory = await self._async_refresh(key, feed), False
+
+        # This poll has its frame: let the feed task prepare the next one.
+        feed.unserved = False
+        feed.last_served = time.monotonic()
+        feed.wake.set()
+        if feed.task is None and self._feeds.get(key) is feed:
+            feed.task = self.hass.async_create_background_task(
+                self._async_run_feed(key, feed), name=f"latter_camera_live_{key[0]}"
+            )
+        return frame, from_memory
+
+    def _add_feed(self, key: CameraViewKey) -> _LiveCameraFeed:
+        if len(self._feeds) >= CAMERA_LIVE_MAX_VIEWS:
+            # The evicted view's task sees it is no longer registered and ends.
+            oldest = min(self._feeds, key=lambda k: self._feeds[k].last_request)
+            self._feeds.pop(oldest).wake.set()
+        feed = _LiveCameraFeed()
+        self._feeds[key] = feed
+        return feed
+
+    async def _async_refresh(self, key: CameraViewKey, feed: _LiveCameraFeed) -> bytes:
+        """Fetch and transcode one frame; concurrent callers share the in-flight refresh.
+
+        The fetch runs in its own task so a Device dropping its request cannot cancel a
+        refresh the feed task (or another Device) is also waiting on.
+        """
+        if feed.inflight is None:
+            feed.started_ts = time.monotonic()
+            feed.inflight_late = False
+            feed.inflight = self.hass.async_create_background_task(
+                self._async_fetch_into(key, feed), name=f"latter_camera_fetch_{key[0]}"
+            )
+            feed.inflight.add_done_callback(_retrieve_task_exception)
+        return await asyncio.shield(feed.inflight)
+
+    async def _async_fetch_into(self, key: CameraViewKey, feed: _LiveCameraFeed) -> bytes:
+        started = feed.started_ts
+        try:
+            frame = await self._async_fetch_frame(key)
+        finally:
+            feed.inflight = None
+        finished = time.monotonic()
+        feed.frame = frame
+        feed.frame_ts = finished
+        feed.unserved = not feed.inflight_late
+        cost = finished - started
+        feed.refresh_cost = max(cost, 0.9 * feed.refresh_cost + 0.1 * cost)
+        return frame
+
+    async def _async_fetch_frame(self, key: CameraViewKey) -> bytes:
+        from homeassistant.components import camera  # noqa: PLC0415 - camera is an after_dependency
+
+        cam_entity, width, height, is_circle, rotate_deg = key
+        try:
+            image_obj = await camera.async_get_image(
+                self.hass, cam_entity, width=width, height=height, timeout=8
+            )
+        except Exception as err:
+            raise _CameraFetchError(str(err)) from err
+        try:
+            return await self.hass.async_add_executor_job(
+                _transcode_to_baseline_jpeg,
+                image_obj.content,
+                width,
+                height,
+                is_circle,
+                1.0,
+                rotate_deg,
+                True,
+            )
+        except Exception as err:
+            raise _CameraTranscodeError(str(err)) from err
+
+    @staticmethod
+    async def _async_wait_for_poll(feed: _LiveCameraFeed, timeout: float) -> None:
+        with contextlib.suppress(TimeoutError):
+            async with asyncio.timeout(timeout):
+                await feed.wake.wait()
+
+    async def _async_run_feed(self, key: CameraViewKey, feed: _LiveCameraFeed) -> None:
+        """Refresh the frame once per poll, timed to finish just before the poll is due."""
+        try:
+            while self._feeds.get(key) is feed:
+                feed.wake.clear()
+                now = time.monotonic()
+                if now - feed.last_request > CAMERA_LIVE_IDLE_SECONDS:
+                    return
+                if feed.unserved or feed.inflight is not None:
+                    # The frame for the upcoming poll is made (or being made): wait for the poll.
+                    await self._async_wait_for_poll(feed, CAMERA_LIVE_IDLE_SECONDS)
+                    continue
+                # Until the Device's polling gap is known, prepare the next frame straight away.
+                next_poll = feed.last_served + (feed.poll_gap or 0.0)
+                start_at = max(
+                    next_poll - feed.refresh_cost - CAMERA_LIVE_LEAD_SECONDS,
+                    feed.started_ts + CAMERA_LIVE_MIN_GAP_SECONDS,
+                )
+                if start_at > now:
+                    # An early poll takes the current frame; then the timing is worked out again.
+                    await self._async_wait_for_poll(feed, start_at - now)
+                    continue
+                try:
+                    await self._async_refresh(key, feed)
+                except (_CameraFetchError, _CameraTranscodeError) as err:
+                    _LOGGER.debug("Live camera refresh failed for %s: %s", key[0], err)
+                    await asyncio.sleep(CAMERA_LIVE_ERROR_BACKOFF_SECONDS)
+        finally:
+            feed.task = None
+            if self._feeds.get(key) is feed and (
+                time.monotonic() - feed.last_request > CAMERA_LIVE_IDLE_SECONDS
+            ):
+                self._feeds.pop(key, None)
+
+
 class LatterCameraSnapshotView(HomeAssistantView):
     """Fetches a live frame from any Home Assistant camera.* entity and transcodes to Baseline JPEG (/api/latter/camera/{target_device})."""
 
@@ -342,6 +532,7 @@ class LatterCameraSnapshotView(HomeAssistantView):
     def __init__(self, hass: HomeAssistant) -> None:
         """Initialize the camera snapshot transcoder view."""
         self.hass = hass
+        self._live = _LiveCameraFeeds(hass)
 
     async def get(self, request: web.Request, target_device: str) -> web.Response:
         """Handle GET /api/latter/camera/{target_device}?entity_id=camera.front_door&w=466&h=466&shape=circle"""
@@ -384,57 +575,29 @@ class LatterCameraSnapshotView(HomeAssistantView):
             return web.Response(status=HTTPStatus.BAD_REQUEST, text="Invalid rotation angle")
         rotate_deg = int(rot_str)
 
-        cam_cache_key = (cam_entity, width, height, is_circle, rotate_deg)
-        now_mono = time.monotonic()
-        cached_cam = _CAMERA_SNAPSHOT_MICRO_CACHE.get(cam_cache_key)
-        if cached_cam is not None and (now_mono - cached_cam[0]) <= CAMERA_MICRO_CACHE_TTL_SECONDS:
-            return web.Response(
-                body=cached_cam[1],
-                content_type="image/jpeg",
-                headers={"Cache-Control": "private, no-store, max-age=0", "X-Latter-Cam-Cache": "HIT"},
-            )
-
         try:
-            from homeassistant.components import camera
-
-            image_obj = await camera.async_get_image(
-                self.hass, cam_entity, width=width, height=height, timeout=8
+            jpeg_bytes, from_memory = await self._live.async_get_frame(
+                (cam_entity, width, height, is_circle, rotate_deg)
             )
-            raw_bytes = image_obj.content
-        except Exception as err:  # noqa: BLE001
+        except _CameraFetchError as err:
             _LOGGER.debug("Camera snapshot fetch failed for %s: %s", cam_entity, err)
             return web.Response(
                 status=HTTPStatus.BAD_GATEWAY, text="Camera snapshot unavailable"
             )
-
-        try:
-            jpeg_bytes = await self.hass.async_add_executor_job(
-                _transcode_to_baseline_jpeg,
-                raw_bytes,
-                width,
-                height,
-                is_circle,
-                1.0,
-                rotate_deg,
-                True,
-            )
-        except Exception as err:  # noqa: BLE001
+        except _CameraTranscodeError as err:
             _LOGGER.debug("Camera snapshot Pillow transcode failed: %s", err)
             return web.Response(
                 status=HTTPStatus.UNPROCESSABLE_ENTITY, text="Camera image processing error"
             )
 
-        _CAMERA_SNAPSHOT_MICRO_CACHE[cam_cache_key] = (time.monotonic(), jpeg_bytes)
-        if len(_CAMERA_SNAPSHOT_MICRO_CACHE) > 24:
-            oldest_k = min(_CAMERA_SNAPSHOT_MICRO_CACHE, key=lambda k: _CAMERA_SNAPSHOT_MICRO_CACHE[k][0])
-            _CAMERA_SNAPSHOT_MICRO_CACHE.pop(oldest_k, None)
-
         return web.Response(
             body=jpeg_bytes,
             content_type="image/jpeg",
-            headers={"Cache-Control": "private, no-store, max-age=0", "X-Latter-Cam-Cache": "MISS"},
+            headers={
+                "Cache-Control": "private, no-store, max-age=0",
+                "X-Latter-Cam-Cache": "HIT" if from_memory else "MISS",
+            },
         )
-
 
 _MAP_GEOCODE_CACHE: OrderedDict[str, tuple[float, float]] = OrderedDict()
 MAX_MAP_GEOCODE_CACHE = 64
