@@ -50,6 +50,7 @@ from ..const import (
     CONF_DEFAULT_AREA,
     CONF_DEFAULT_PAGE_SIZE,
     CONF_DEFAULT_SPEAKER,
+    CONF_MA_PLAYER_ENTITY,
     CONF_DEVICE_CUSTOM_COLOR,
     CONF_DEVICE_GROUP,
     CONF_DEVICE_REMOTE_GROUP,
@@ -79,6 +80,7 @@ from ..const import (
 )
 from ..coordinator import LatterCoordinator
 from ..identity import esphome_service
+from ..media_engine import ma_player_entities
 from ..repairs import async_audit_coordinator_health
 from ..system import get_latter_system
 from ..wallpaper_engine import list_wallpaper_catalog
@@ -382,9 +384,22 @@ def _build_entity_catalog(
         elif domain in ("sensor", "device_tracker", "input_text"):
             presence_sensors.append(item)
 
+    ma_players: list[dict[str, str]] = []
+    for ma_entry in ma_player_entities(hass):
+        ma_st = hass.states.get(ma_entry.entity_id)
+        ma_name = str(
+            (ma_st.attributes.get("friendly_name") if ma_st else None)
+            or ma_entry.name
+            or ma_entry.original_name
+            or ma_entry.entity_id
+        )
+        ma_players.append({"id": ma_entry.entity_id, "name": f"{ma_name} ({ma_entry.entity_id})"})
+    ma_players.sort(key=lambda item: item["name"].lower())
+
     return {
         "areas": areas_list,
         "ma_speakers": ma_speakers,
+        "ma_players": ma_players,
         "volume_targets": volume_targets,
         "remotes": remotes_list,
         "alarms": alarms_list,
@@ -755,6 +770,7 @@ def build_studio_state_payload(
         CONF_DEFAULT_PAGE_SIZE: coordinator.default_page_size,
         CONF_COMPANION_BASE_URL: coordinator.companion_base_url,
         CONF_DEFAULT_SPEAKER: raw_def_spk,
+        CONF_MA_PLAYER_ENTITY: str(coordinator.get_opt(CONF_MA_PLAYER_ENTITY, "") or ""),
         CONF_VOLUME_OVERRIDES: [
             {"speaker": k, "target": v}
             for k, v in coordinator.volume_overrides.items()

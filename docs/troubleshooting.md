@@ -54,6 +54,10 @@ The phone has to be set up in Home Assistant's [Private BLE Device](https://www.
 
 Library browsing, queue transfer, and the default intercom speaker list need the Music Assistant integration loaded in Home Assistant. Without it, only transport controls and volume work.
 
+**A repair asks you to pick the Music Assistant player for a device**
+
+Music Assistant identifies a Latter device's Sendspin player by a key hash, not by its MAC address, and doesn't link it to the ESPHome device. So Latter can't find the device's own Music Assistant player by itself, and library playback, queues and lyrics on that device fail until it's linked. Open the repair (**Settings → Repairs**), pick the device's player (it's pre-selected when exactly one Music Assistant player has the same manufacturer and model as the ESPHome device), and submit. You can change the link later in **Studio → (device) → Audio & Voice → Music Assistant Player**.
+
 **Volume buttons do nothing**
 
 If the speaker's real volume control is an AV receiver, map the speaker in **Studio → Media & Remotes → Speaker Volume Overrides**.

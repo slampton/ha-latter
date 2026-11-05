@@ -37,6 +37,7 @@ from ..const import (
     CONF_DEFAULT_PAGE_SIZE,
     CONF_DEFAULT_SPEAKER,
     CONF_DEVICE_CUSTOM_COLOR,
+    CONF_MA_PLAYER_ENTITY,
     CONF_DEVICE_GROUP,
     CONF_DEVICE_GROUPS,
     CONF_DEVICE_REMOTE_GROUP,
@@ -70,6 +71,7 @@ from ..wallpaper_engine import (
     save_uploaded_wallpaper,
 )
 from ..identity import device_entities
+from ..media_engine import async_refresh_ma_link
 from .payload import (
     _get_all_coordinators,
     async_save_and_broadcast_global_config,
@@ -431,6 +433,7 @@ async def _async_execute_studio_command(
             CONF_DISPLAY_SHAPE,
             CONF_DEFAULT_PAGE_SIZE,
             CONF_DEFAULT_SPEAKER,
+            CONF_MA_PLAYER_ENTITY,
             CONF_DEFAULT_AREA,
             CONF_NATIVE_BLE_TRACKING,
             CONF_BLE_BEACON_UUID,
@@ -473,9 +476,14 @@ async def _async_execute_studio_command(
             if k in incoming_cfg and incoming_cfg[k] != current_global.get(k):
                 global_updates[k] = incoming_cfg[k]
 
+        ma_link_changed = merged_device.get(CONF_MA_PLAYER_ENTITY, "") != coordinator.device_data.get(
+            CONF_MA_PLAYER_ENTITY, ""
+        )
         if merged_device != dict(coordinator.device_data):
             coordinator.update_device_config(merged_device)
             await coordinator.async_apply_options()
+        if ma_link_changed:
+            async_refresh_ma_link(hass, coordinator)
         if global_updates:
             await async_save_and_broadcast_global_config(hass, global_updates)
         coordinator._bind_wallpaper_cycle_timer()

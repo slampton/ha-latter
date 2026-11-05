@@ -26,8 +26,9 @@ from .browse_engine import (
     async_browse_media_items,
     is_music_assistant_player,
 )
-from .const import DOMAIN
+from .const import CONF_MA_PLAYER_ENTITY, DOMAIN
 from .issue_ids import link_ma_player_issue_id
+from .ma_link import configured_link, suggest_ma_player
 from .identity import (
     device_entities,
     find_device_entity_by_suffix,
@@ -186,16 +187,75 @@ def _update_ma_link_issue(
             "speaker_entity": speaker_entity_id,
         },
         config_entry_id=getattr(entry, "entry_id", None),
+        data={"subentry_id": str(getattr(coordinator, "subentry_id", ""))},
     )
+
+
+def ma_player_entities(hass: HomeAssistant) -> list[er.RegistryEntry]:
+    """Return the enabled Music Assistant media_player registry entries."""
+    ent_reg = er.async_get(hass)
+    out: list[er.RegistryEntry] = []
+    for ma_cfg in hass.config_entries.async_entries("music_assistant"):
+        for entry in er.async_entries_for_config_entry(ent_reg, ma_cfg.entry_id):
+            if (
+                entry.domain == "media_player"
+                and entry.platform == "music_assistant"
+                and not entry.disabled_by
+            ):
+                out.append(entry)
+    return out
+
+
+def suggest_ma_player_for(hass: HomeAssistant, coordinator: Any) -> str | None:
+    """Suggest the MA player whose device's manufacturer AND model equal the bound ESPHome device's (exactly one match)."""
+    esp_dev = get_bound_esphome_device(hass, getattr(coordinator, "esphome_device_id", None))
+    if esp_dev is None:
+        return None
+    dev_reg = dr.async_get(hass)
+    candidates: list[tuple[str, str | None, str | None]] = []
+    for entry in ma_player_entities(hass):
+        c_dev = dev_reg.async_get(entry.device_id) if entry.device_id else None
+        candidates.append(
+            (
+                entry.entity_id,
+                c_dev.manufacturer if c_dev is not None else None,
+                c_dev.model if c_dev is not None else None,
+            )
+        )
+    return suggest_ma_player((esp_dev.manufacturer, esp_dev.model), candidates)
+
+
+@callback
+def async_refresh_ma_link(hass: HomeAssistant, coordinator: Any) -> str:
+    """Drop cached counterparts and re-resolve this Device's link (raises or clears its repair)."""
+    domain_data = hass.data.get(DOMAIN, {})
+    cache = domain_data.get("_ma_counterpart_cache") if isinstance(domain_data, dict) else None
+    if isinstance(cache, dict):
+        cache.clear()
+    local_spk = str(getattr(coordinator, "local_speaker", "") or "")
+    return (resolve_ma_counterpart_entity(hass, local_spk) or "") if local_spk else ""
+
+
+@callback
+def async_set_ma_player_link(
+    hass: HomeAssistant, coordinator: Any, ma_entity_id: str
+) -> None:
+    """Save the Device's Music Assistant player link to its subentry and re-resolve."""
+    coordinator.update_device_config(
+        {**coordinator.device_data, CONF_MA_PLAYER_ENTITY: ma_entity_id}
+    )
+    async_refresh_ma_link(hass, coordinator)
 
 
 def resolve_ma_counterpart_entity(
     hass: HomeAssistant, speaker_entity_id: str
 ) -> str | None:
-    """Find the Music Assistant media_player for a speaker by exact device_id, then by MAC; else None.
+    """Find the Music Assistant media_player for a speaker; else None.
 
-    When the speaker is a Latter Device's own speaker and no counterpart exists, the
-    `link_ma_player` repair is raised for that Device (and cleared once a match is found).
+    In order: the Device's configured link (`ma_player_entity`, for a Latter Device's own
+    speaker), an exact device_id match, then an exact MAC match. When the speaker is a Latter
+    Device's own speaker and nothing matches, the `link_ma_player` repair is raised for that
+    Device (and cleared once a match is found).
     """
     if not speaker_entity_id:
         return None
@@ -275,8 +335,15 @@ def resolve_ma_counterpart_entity(
 
     matched_entity: str | None = None
 
+    # Pass 0: the Device's explicit link (MA reports neither the device nor the MAC of Sendspin players)
+    if owner_coord is not None:
+        matched_entity = configured_link(
+            owner_coord.get_opt(CONF_MA_PLAYER_ENTITY),
+            (c_entry.entity_id for c_entry, _c_dev in ma_candidates),
+        )
+
     # Pass 1: exact device_id match in the entity/device registry
-    if target_dev_ids:
+    if matched_entity is None and target_dev_ids:
         for c_entry, c_dev in ma_candidates:
             if c_entry.device_id and (
                 c_entry.device_id in target_dev_ids

@@ -62,7 +62,7 @@ Each device has five pages. The options on each page depend on what the device's
 | :--- | :--- |
 | **Overview** | Quick actions, power profile, apply a profile, assigned person, device status, and a live view of every entity on the device |
 | **Display & Home** | Color profile, display geometry, home dock apps and their order, area cards per page, and wallpapers (5 built-in presets, plus uploads that can rotate on a schedule) |
-| **Audio & Voice** | Wake word and sensitivity, default speaker, alert volume, and music sorting |
+| **Audio & Voice** | Wake word and sensitivity, default speaker, the device's **Music Assistant Player** (its link to Music Assistant, needed for library playback), alert volume, and music sorting |
 | **Power & Battery** | Sleep and wake timeouts, plus battery and power readings |
 | **Administration** | Device slug (read-only: the ESPHome node name) and group; BLE tracking settings; and **Remove Device** |
 

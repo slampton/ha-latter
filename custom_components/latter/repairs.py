@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+import voluptuous as vol
+
 from homeassistant.components.repairs import ConfirmRepairFlow, RepairsFlow
+from homeassistant.data_entry_flow import FlowResult
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers import entity_registry as er, issue_registry as ir
+from homeassistant.helpers import entity_registry as er, issue_registry as ir, selector
 
 from .ble_engine import get_ble_proxy_area_ids
 from .const import (
     CONF_ALARM_ENTITY,
     CONF_DEFAULT_SPEAKER,
+    CONF_MA_PLAYER_ENTITY,
     CONF_PRESENCE_ENTITY,
     CONF_WEATHER_ENTITY,
     DOMAIN,
@@ -18,8 +22,15 @@ from .coordinator import LatterCoordinator
 from .issue_ids import (
     ble_no_proxies_issue_id,
     device_issue_ids,
+    link_ma_player_issue_id,
     missing_mapped_entity_issue_id,
 )
+from .media_engine import (
+    async_set_ma_player_link,
+    ma_player_entities,
+    suggest_ma_player_for,
+)
+from .system import get_latter_system
 
 
 def _entity_exists_in_ha(hass: HomeAssistant, entity_id: str) -> bool:
@@ -136,10 +147,72 @@ def async_delete_device_issues(hass: HomeAssistant, subentry_id: str) -> None:
                 bucket.pop(subentry_id, None)
 
 
+class LinkMaPlayerRepairFlow(RepairsFlow):
+    """Pick the Music Assistant player of one Latter Device and save it as that Device's link."""
+
+    def __init__(self, subentry_id: str) -> None:
+        """Remember which Device this repair belongs to."""
+        self._subentry_id = subentry_id
+
+    async def async_step_init(
+        self, user_input: dict[str, str] | None = None
+    ) -> FlowResult:
+        """Start at the player picker."""
+        return await self.async_step_pick()
+
+    async def async_step_pick(
+        self, user_input: dict[str, str] | None = None
+    ) -> FlowResult:
+        """Show the MA player picker (pre-selected only on a unique manufacturer + model match) and save the choice."""
+        sys_obj = get_latter_system(self.hass)
+        coordinator = sys_obj.coordinators.get(self._subentry_id) if sys_obj else None
+        if coordinator is None:
+            return self.async_abort(reason="device_removed")
+
+        valid = {e.entity_id for e in ma_player_entities(self.hass)}
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            choice = str(user_input.get(CONF_MA_PLAYER_ENTITY) or "").strip()
+            if choice in valid:
+                async_set_ma_player_link(self.hass, coordinator, choice)
+                ir.async_delete_issue(
+                    self.hass, DOMAIN, link_ma_player_issue_id(self._subentry_id)
+                )
+                return self.async_create_entry(data={})
+            errors[CONF_MA_PLAYER_ENTITY] = "invalid_ma_player"
+
+        suggestion = suggest_ma_player_for(self.hass, coordinator)
+        key = (
+            vol.Required(CONF_MA_PLAYER_ENTITY, default=suggestion)
+            if suggestion
+            else vol.Required(CONF_MA_PLAYER_ENTITY)
+        )
+        return self.async_show_form(
+            step_id="pick",
+            data_schema=vol.Schema(
+                {
+                    key: selector.EntitySelector(
+                        selector.EntitySelectorConfig(
+                            domain="media_player", integration="music_assistant"
+                        )
+                    )
+                }
+            ),
+            errors=errors,
+            description_placeholders={
+                "device_slug": coordinator.device_slug,
+                "speaker_entity": coordinator.local_speaker or "",
+            },
+        )
+
+
 async def async_create_fix_flow(
     hass: HomeAssistant,
     issue_id: str,
     data: dict[str, str | int | float | None] | None,
 ) -> RepairsFlow:
-    """Create a RepairsFlow to acknowledge and clear a Latter configuration issue."""
+    """Create the fix flow for a Latter repair: the MA player picker, or a plain confirm."""
+    if issue_id.startswith("link_ma_player_"):
+        # The issue ID is link_ma_player_<subentry_id> (issue_ids.link_ma_player_issue_id).
+        return LinkMaPlayerRepairFlow(issue_id.removeprefix("link_ma_player_"))
     return ConfirmRepairFlow()

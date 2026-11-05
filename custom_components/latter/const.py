@@ -34,6 +34,8 @@ CONF_LOCK_ENTITY: Final = "lock_entity"
 CONF_GARAGE_ENTITY: Final = "garage_entity"
 CONF_VACUUM_ENTITY: Final = "vacuum_entity"
 CONF_DEFAULT_SPEAKER: Final = "default_speaker"
+# The Device's own Music Assistant player (explicit link: MA reports neither its device nor its MAC)
+CONF_MA_PLAYER_ENTITY: Final = "ma_player_entity"
 CONF_VOLUME_OVERRIDES: Final = "volume_overrides"
 CONF_DEFAULT_AREA: Final = "default_area"
 CONF_NATIVE_BLE_TRACKING: Final = "native_ble_tracking"

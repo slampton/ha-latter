@@ -1726,6 +1726,11 @@ const STUDIO_TEMPLATE = `<div class="studio-root">
               <label>Default Speaker Entity</label>
               <select id="cfg-default_speaker" onchange="markDirty()"></select>
             </div>
+            <div class="field">
+              <label>Music Assistant Player</label>
+              <select id="cfg-ma_player_entity" onchange="markDirty()"></select>
+              <p class="desc" style="margin:4px 0 0;">This device's own player in Music Assistant. Music Assistant doesn't report the device's MAC, so Latter needs this link for library playback, queues and lyrics.</p>
+            </div>
             <div class="toggle-row" style="margin-bottom:10px;">
               <span>Auto-Switch Speaker &amp; Remote on Area Change</span>
               <input type="checkbox" id="cfg-area_handoff" onchange="markDirty()">
@@ -4101,6 +4106,7 @@ function applyStateToDom(data, forceFormUpdate=false) {
     populateSelect("cfg-presence_entity", cat.presence_sensors, cfg.presence_entity);
     populateSelect("cfg-assigned_person", cat.persons, cfg.assigned_person);
     populateSelect("cfg-default_speaker", cat.ma_speakers, cfg.default_speaker, true);
+    populateSelect("cfg-ma_player_entity", cat.ma_players, cfg.ma_player_entity, true);
     const voListEl = doc.getElementById("volume-overrides-list");
     if (voListEl) {
       voListEl.innerHTML = "";
@@ -4215,6 +4221,7 @@ async function saveAllConfig() {
     presence_entity: doc.getElementById("cfg-presence_entity")?.value ?? "",
     assigned_person: doc.getElementById("cfg-assigned_person")?.value ?? "",
     default_speaker: doc.getElementById("cfg-default_speaker")?.value ?? "",
+    ma_player_entity: doc.getElementById("cfg-ma_player_entity")?.value ?? "",
     volume_overrides: volumeOverrides,
     vol_speaker_1: volumeOverrides[0]?.speaker || "",
     vol_target_1: volumeOverrides[0]?.target || "",

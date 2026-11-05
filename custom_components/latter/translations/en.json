@@ -184,13 +184,22 @@
       }
     },
     "link_ma_player": {
-      "title": "Music Assistant player not linked for {device_slug}",
+      "title": "Pick the Music Assistant player for {device_slug}",
       "fix_flow": {
         "step": {
-          "confirm": {
-            "title": "Link Music Assistant player for {device_slug}",
-            "description": "No Music Assistant player matching the device ID or MAC address of **{speaker_entity}** on **{device_slug}** was found. Verify that the Sendspin player is enabled in Music Assistant or select the default speaker in Latter Studio."
+          "pick": {
+            "title": "Link {device_slug} to its Music Assistant player",
+            "description": "Music Assistant doesn't report this device's MAC address or device, so Latter can't find the Music Assistant player behind **{speaker_entity}** on its own. Pick **{device_slug}**'s player once. Library playback, queues and lyrics on the device use it. You can change it later in Latter Studio (device → Sound & Media Player).",
+            "data": {
+              "ma_player_entity": "Music Assistant player"
+            }
           }
+        },
+        "abort": {
+          "device_removed": "This device is no longer part of Latter."
+        },
+        "error": {
+          "invalid_ma_player": "Pick a Music Assistant media player."
         }
       }
     },

@@ -48,6 +48,7 @@ ble_math = _load_ha_free_module("ble_math")
 resource_signing = _load_ha_free_module("resource_signing")
 issue_ids = _load_ha_free_module("issue_ids")
 health = _load_ha_free_module("health")
+ma_link = _load_ha_free_module("ma_link")
 studio_scope = _load_ha_free_module("studio/scope")
 STUDIO_JS = LATTER_DIR / "frontend" / "latter-studio.js"
 
@@ -569,6 +570,39 @@ class TestDeviceHealth(unittest.TestCase):
         for kind in (health.ISSUE_CRASHED, health.ISSUE_BROWNOUT, health.ISSUE_ROLLED_BACK):
             self.assertIn(issue_ids.device_health_issue_id(kind, "sub_a"), ids)
             self.assertIn(kind, issue_ids.DEVICE_HEALTH_ISSUE_KINDS)
+
+
+class TestMaPlayerLink(unittest.TestCase):
+    """Music Assistant player link for a Latter Device, exercised through `ma_link.py`."""
+
+    CANDIDATES = [
+        ("media_player.desk_assistant", "slampton", "desk-assistant-p4-86"),
+        ("media_player.pocket_assistant", "slampton", "pocket-assistant-s3-206"),
+        ("media_player.office_amp", "Music Assistant", "Sendspin"),
+    ]
+
+    def test_configured_link_takes_precedence_when_it_is_a_current_ma_player(self) -> None:
+        ma_ids = [c[0] for c in self.CANDIDATES]
+        self.assertEqual(
+            ma_link.configured_link("media_player.desk_assistant", ma_ids),
+            "media_player.desk_assistant",
+        )
+        self.assertIsNone(ma_link.configured_link("media_player.gone", ma_ids))
+        self.assertIsNone(ma_link.configured_link("", ma_ids))
+        self.assertIsNone(ma_link.configured_link(None, ma_ids))
+
+    def test_suggestion_needs_exactly_one_manufacturer_and_model_match(self) -> None:
+        suggest = ma_link.suggest_ma_player
+        self.assertEqual(
+            suggest(("slampton", "desk-assistant-p4-86"), self.CANDIDATES),
+            "media_player.desk_assistant",
+        )
+        self.assertIsNone(suggest(("slampton", "remote-assistant-p4-35"), self.CANDIDATES))
+        twins = self.CANDIDATES + [("media_player.desk_assistant_2", "slampton", "desk-assistant-p4-86")]
+        self.assertIsNone(suggest(("slampton", "desk-assistant-p4-86"), twins))
+        self.assertIsNone(suggest(("slampton", None), self.CANDIDATES))
+        self.assertIsNone(suggest((None, "desk-assistant-p4-86"), self.CANDIDATES))
+        self.assertIsNone(suggest(("Slampton", "desk-assistant-p4-86"), self.CANDIDATES), "exact match only")
 
 
 if __name__ == "__main__":

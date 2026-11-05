@@ -68,7 +68,7 @@ Speaks a TTS message or plays an audio clip on speakers.
 | `transfer_queue` | bool | `true` | Moves the current queue to the new speaker (see below) |
 
 How the queue moves:
-- **Between two Music Assistant players:** Latter maps both ends to their Music Assistant counterparts and calls `music_assistant.transfer_queue`.
+- **Between two Music Assistant players:** Latter maps both ends to their Music Assistant counterparts and calls `music_assistant.transfer_queue`. A Latter device's own speaker maps to the Music Assistant player linked to that device (its **Music Assistant Player** setting); other speakers map by device or MAC address.
 - **Otherwise:** Latter pauses the source and replays its `media_content_id` on the target.
 
 ### `latter.media_command`
