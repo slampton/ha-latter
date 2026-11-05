@@ -28,7 +28,7 @@ from homeassistant.util import dt as dt_util
 
 from .ble_engine import get_ble_proxy_area_ids
 from .browse_engine import is_music_assistant_player
-from .const import CONF_ESPHOME_DEVICE_ID, DOMAIN
+from .const import CONF_ESPHOME_DEVICE_ID, DOMAIN, SUBENTRY_DEVICE
 from .identity import (
     device_entities,
     get_bound_esphome_device,
@@ -265,7 +265,7 @@ def latter_bound_esphome_device_ids(hass: HomeAssistant) -> set[str]:
     out: set[str] = set()
     for entry in hass.config_entries.async_entries(DOMAIN):
         for sub in entry.subentries.values():
-            if sub.subentry_type != "device":
+            if sub.subentry_type != SUBENTRY_DEVICE:
                 continue
             dev_id = resolve_bound_esphome_device_id(
                 hass,

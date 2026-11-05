@@ -24,7 +24,6 @@ from .const import (
     CONF_DEVICE_CUSTOM_COLOR,
     CONF_DEVICE_GROUP,
     CONF_DEVICE_GROUPS,
-    CONF_DEVICE_PROFILE,
     CONF_DEVICE_SLUG,
     CONF_DISPLAY_SHAPE,
     CONF_DOCK_APPS,
@@ -49,7 +48,6 @@ _LOGGER = logging.getLogger(__name__)
 
 DEVICE_CONFIG_EXPORT_KEYS: tuple[str, ...] = (
     CONF_DEVICE_SLUG,
-    CONF_DEVICE_PROFILE,
     CONF_DEVICE_GROUP,
     CONF_DISPLAY_SHAPE,
     CONF_DEFAULT_PAGE_SIZE,
@@ -76,7 +74,6 @@ DEVICE_CONFIG_EXPORT_KEYS: tuple[str, ...] = (
 )
 
 PROFILE_DEVICE_KEYS: tuple[str, ...] = (
-    CONF_DEVICE_PROFILE,
     CONF_DISPLAY_SHAPE,
     CONF_DEFAULT_PAGE_SIZE,
     CONF_NATIVE_BLE_TRACKING,
@@ -104,10 +101,8 @@ BUILTIN_STARTER_PROFILES: list[dict[str, Any]] = [
     {
         "id": "preset_handheld_standard",
         "name": "Standard Handheld (Balanced)",
-        "archetype": "mobile_display",
         "description": "Balanced battery life, Docked-Only wake word, 30s battery screen timeout, and full Home dock.",
         "device_config": {
-            CONF_DEVICE_PROFILE: "mobile_display",
             CONF_DISPLAY_SHAPE: "circle",
             CONF_DEFAULT_PAGE_SIZE: 3,
             CONF_NATIVE_BLE_TRACKING: True,
@@ -134,10 +129,8 @@ BUILTIN_STARTER_PROFILES: list[dict[str, Any]] = [
     {
         "id": "preset_nightstand_quiet",
         "name": "Bedroom Nightstand (Quiet / Dim)",
-        "archetype": "mobile_display",
         "description": "Dimmed night brightness (60%), Ambient Clock screensaver, 15s battery timeout, and quieter 50% alerts.",
         "device_config": {
-            CONF_DEVICE_PROFILE: "mobile_display",
             CONF_DISPLAY_SHAPE: "circle",
             CONF_DEFAULT_PAGE_SIZE: 3,
             CONF_NATIVE_BLE_TRACKING: True,
@@ -162,10 +155,8 @@ BUILTIN_STARTER_PROFILES: list[dict[str, Any]] = [
     {
         "id": "preset_wall_panel",
         "name": "Stationary Wall / Desk Panel",
-        "archetype": "stationary_display",
         "description": "Always-On wake word, Tap-to-Wake Always On, 5 min idle timeout, and stationary area assignment.",
         "device_config": {
-            CONF_DEVICE_PROFILE: "stationary_display",
             CONF_NATIVE_BLE_TRACKING: False,
             CONF_BLE_AUTO_SWITCH: False,
             CONF_SYNC_DEVICE_AREA: False,
@@ -279,7 +270,6 @@ def _serialize_device_snapshot(hass: HomeAssistant, coordinator: Any) -> dict[st
     return {
         "device_slug": coordinator.device_slug,
         "title": coordinator.device_slug.replace("_", " ").title(),
-        "device_profile": coordinator.device_profile,
         "device_group": str(dev_cfg.get(CONF_DEVICE_GROUP) or DEFAULT_DEVICE_GROUP),
         "display_shape": coordinator.display_shape,
         "active_area_id": coordinator.active_area_id or "",
@@ -496,7 +486,6 @@ def capture_profile_from_coordinator(
     return {
         "id": profile_id,
         "name": name.strip() or f"{coordinator.device_slug.replace('_', ' ').title()} Profile",
-        "archetype": coordinator.device_profile,
         "description": description.strip() or f"Captured from {coordinator.device_slug}",
         "created_at": dt_util.now().isoformat(timespec="seconds"),
         "device_config": dev_cfg,

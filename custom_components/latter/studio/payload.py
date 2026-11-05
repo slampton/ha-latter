@@ -52,7 +52,6 @@ from ..const import (
     CONF_DEFAULT_SPEAKER,
     CONF_DEVICE_CUSTOM_COLOR,
     CONF_DEVICE_GROUP,
-    CONF_DEVICE_PROFILE,
     CONF_DEVICE_REMOTE_GROUP,
     CONF_DEVICE_SLUG,
     CONF_DISPLAY_SHAPE,
@@ -248,7 +247,7 @@ def _build_system_shared_controls(hass: HomeAssistant) -> list[dict[str, Any]]:
                     {
                         "device_slug": coord.device_slug,
                         "device_group": coord.device_group,
-                        "device_profile": coord.device_profile,
+                        "is_roaming": coord.is_roaming_device,
                         "entity_id": item.get("entity_id"),
                         "state": item.get("state"),
                     }
@@ -488,7 +487,7 @@ def _build_system_section(
             (c_dev_entry.model if c_dev_entry else "") or ""
         ).strip()
         c_is_latter_native = bool(
-            c.device_profile != "ble_beacon"
+            not c.is_ble_tag
             and (
                 c_has_native_svc
                 or c.device_entity("update", "_project_firmware") is not None
@@ -498,7 +497,7 @@ def _build_system_section(
         c_w = int(c_manifest.get("w") or 0)
         c_h = int(c_manifest.get("h") or 0)
         c_board = str(c_manifest.get("board") or "").strip()
-        if c.device_profile == "ble_beacon":
+        if c.is_ble_tag:
             c_model_label = (
                 "Private BLE (Phone/Watch)"
                 if "private_ble" in c.ble_target_address
@@ -547,7 +546,7 @@ def _build_system_section(
                         break
                     if e_reg.domain == "update" and st_e and st_e.state == "on":
                         c_has_update = True
-        if c.device_profile == "ble_beacon":
+        if c.is_ble_tag:
             c_away = c.is_device_away()
             c_seen = bool(
                 c._ble_tracker
@@ -581,7 +580,10 @@ def _build_system_section(
                 "has_assigned_area": c_has_assigned_area,
                 "area_label": c_area_label,
                 "status_label": c_status_label,
-                "device_profile": c.device_profile,
+                "kind": "ble_tag" if c.is_ble_tag else "device",
+                "has_display": c.has_display,
+                "is_roaming": c.is_roaming_device,
+                "is_wearable": c.is_wearable,
                 "device_group": c_grp,
                 "device_remote_group": c.device_remote_group,
                 "device_group_name": group_name_map.get(
@@ -744,7 +746,10 @@ def build_studio_state_payload(
 
     config_data = {
         CONF_DEVICE_SLUG: coordinator.device_slug,
-        CONF_DEVICE_PROFILE: coordinator.device_profile,
+        "kind": "ble_tag" if coordinator.is_ble_tag else "device",
+        "has_display": coordinator.has_display,
+        "is_roaming": coordinator.is_roaming_device,
+        "is_wearable": coordinator.is_wearable,
         CONF_DEVICE_GROUP: coordinator.device_group,
         CONF_DISPLAY_SHAPE: coordinator.display_shape,
         CONF_DEFAULT_PAGE_SIZE: coordinator.default_page_size,

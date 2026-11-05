@@ -1,15 +1,13 @@
-"""Voice Follows Me policy: which Devices may follow, and the dwell gate for BLE-driven Area moves.
+"""Voice Follows Me dwell gate for BLE-driven Area moves.
 
 Standard library only (no Home Assistant imports), so the unit tests exercise this exact code.
 `area_controller.LatterAreaFollowController` drives `AreaFollowDwell` with Home Assistant timers
-and performs the Device Registry write.
+and performs the Device Registry write. Which Devices may follow is `traits.manifest_is_roaming`.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from enum import Enum
-from typing import Any
 
 # States an Area source can report that are not an Area. They never move a Device and they
 # cancel a pending dwell: Latter never clears or changes an Area on away/unknown.
@@ -18,24 +16,6 @@ NON_AREA_STATES: frozenset[str] = frozenset(
 )
 # Timer callbacks may run a hair before the monotonic deadline they were scheduled for.
 _CLOCK_TOLERANCE_S = 0.25
-
-
-def _manifest_flag(manifest: Mapping[str, Any], key: str) -> int | None:
-    """Return an integer hardware-manifest trait, or None when it is missing or malformed."""
-    if key not in manifest:
-        return None
-    try:
-        return int(manifest[key])
-    except (TypeError, ValueError):
-        return None
-
-
-def manifest_is_roaming(manifest: Mapping[str, Any]) -> bool:
-    """Return True for roaming hardware: `stationary == 0`, or `wearable == 1`. Unknown traits are not roaming."""
-    return (
-        _manifest_flag(manifest, "stationary") == 0
-        or _manifest_flag(manifest, "wearable") == 1
-    )
 
 
 def is_area_id(value: str | None) -> bool:

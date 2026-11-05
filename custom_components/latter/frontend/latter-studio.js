@@ -1528,7 +1528,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root">
                 <option value="roaming">Roaming Devices</option>
                 <option value="stationary">Stationary Devices</option>
                 <option value="headless">Screenless / Headless Devices</option>
-                <option value="ble_beacon">BLE Phones, Watches &amp; Tags</option>
+                <option value="ble_tag">BLE Phones, Watches &amp; Tags</option>
                 <option value="updates">Firmware Updates Available</option>
               </select>
             </div>
@@ -1778,20 +1778,10 @@ const STUDIO_TEMPLATE = `<div class="studio-root">
           <!-- CARD 1: DEVICE IDENTITY -->
           <div class="card">
             <h3>Device Identity</h3>
-            <p class="desc">Configure this device's normalized ESPHome slug, hardware type, logical group, and pagination.</p>
+            <p class="desc">This device's ESPHome slug, logical group, and pagination. Hardware traits (display, roaming, wearable) come from the device itself.</p>
             <div class="field">
               <label>ESPHome Device Slug (sensor.&lt;slug&gt;_*)</label>
               <input type="text" id="cfg-device_slug" readonly title="Set from the ESPHome node name when the Device was added">
-            </div>
-            <div class="field">
-              <label>Device Type</label>
-              <select id="cfg-device_profile" onchange="markDirty()">
-                <option value="mobile_display">Mobile Display</option>
-                <option value="wearable_display">Wearable Display</option>
-                <option value="stationary_display">Stationary Display</option>
-                <option value="headless_node">Headless / Sensor Node</option>
-                <option value="ble_beacon">BLE Phone / Watch / Tag</option>
-              </select>
             </div>
             <div class="form-grid-2">
               <div class="field">
@@ -2502,8 +2492,8 @@ function renderSystemOverview(systemDevices, systemControls, cfg) {
       const cnt = (systemDevices || []).filter(d => d.device_group === g.id).length;
       filterOpts.push({id: `group:${g.id}`, name: `Group: ${g.name} (${cnt})`});
     });
-    filterOpts.push({id: "arch:mobile_display", name: "Type: Mobile Displays"});
-    filterOpts.push({id: "arch:stationary_display", name: "Type: Stationary Displays"});
+    filterOpts.push({id: "trait:roaming", name: "Type: Roaming Devices"});
+    filterOpts.push({id: "trait:stationary", name: "Type: Stationary Devices"});
     grpFilterSel.innerHTML = filterOpts.map(o =>
       `<option value="${esc(o.id)}" ${o.id === activeFilter ? 'selected' : ''}>${esc(o.name)}</option>`
     ).join("");
@@ -2525,7 +2515,7 @@ function renderSystemOverview(systemDevices, systemControls, cfg) {
       {id: "roaming", label: "Roaming Devices"},
       {id: "stationary", label: "Stationary Devices"},
       {id: "headless", label: "Screenless / Headless Devices"},
-      {id: "ble_beacon", label: "BLE Phones, Watches & Tags"},
+      {id: "ble_tag", label: "BLE Phones, Watches & Tags"},
       {id: "updates", label: "Firmware Updates Available"}
     ];
     groups.forEach(g => {
@@ -2540,15 +2530,16 @@ function renderSystemOverview(systemDevices, systemControls, cfg) {
   const cat = DEVICE_CATEGORY_FILTER || "all";
   const filteredDevices = (systemDevices || []).filter(d => {
     const isNative = !!d.is_latter_native;
-    const isBleTracked = !!(d.has_ble || d.device_profile === "ble_beacon" || (d.area_label || "Roaming") === "Roaming");
-    const isRoaming = (d.area_label || "Roaming") === "Roaming";
+    const isBleTag = d.kind === "ble_tag";
+    const isBleTracked = !!(d.has_ble || isBleTag || (d.area_label || "Roaming") === "Roaming");
+    const isRoaming = isBleTag || !!d.is_roaming;
     if (cat === "online") return d.status_label !== "Offline";
     if (cat === "native") return isNative;
     if (cat === "ble_tracked") return isBleTracked;
     if (cat === "roaming") return isRoaming;
     if (cat === "stationary") return !isRoaming;
-    if (cat === "headless") return d.device_profile === "headless_node" || d.device_profile === "ble_beacon";
-    if (cat === "ble_beacon") return d.device_profile === "ble_beacon";
+    if (cat === "headless") return isBleTag || !d.has_display;
+    if (cat === "ble_tag") return isBleTag;
     if (cat === "updates") return d.status_label === "Update Available";
     if (cat.startsWith("group:")) return d.device_group === cat.split(":", 2)[1];
     return true;
@@ -2623,7 +2614,7 @@ function renderSystemOverview(systemDevices, systemControls, cfg) {
   const totalDevs = allDevs.length;
   const onlineDevs = allDevs.filter(d => d.status_label !== "Offline").length;
   const nativeDevs = allDevs.filter(d => d.is_latter_native).length;
-  const bleTrackedDevs = allDevs.filter(d => d.has_ble || d.device_profile === "ble_beacon" || (d.area_label || "Roaming") === "Roaming").length;
+  const bleTrackedDevs = allDevs.filter(d => d.has_ble || d.kind === "ble_tag" || (d.area_label || "Roaming") === "Roaming").length;
   const scannersMap = STATE?.live?.ble_scanners_map || {};
   const proxyCount = Object.keys(scannersMap).length || (STATE?.live?.ble_survey_rows || []).length;
   const peopleCount = (STATE?.catalog?.persons || []).length;
@@ -2718,7 +2709,8 @@ function renderSystemOverview(systemDevices, systemControls, cfg) {
         const matchingTargets = (fc.targets || []).filter(t => {
           if (activeFilter === "all") return true;
           if (activeFilter.startsWith("group:")) return t.device_group === activeFilter.split(":")[1];
-          if (activeFilter.startsWith("arch:")) return t.device_profile === activeFilter.split(":")[1];
+          if (activeFilter === "trait:roaming") return !!t.is_roaming;
+          if (activeFilter === "trait:stationary") return !t.is_roaming;
           return true;
         });
         if (!matchingTargets.length) return "";
@@ -3553,7 +3545,7 @@ function toggleRemoteInGroup(gIdx, entId) {
 function renderDeviceRemoteAssignments() {
   const box = doc.getElementById("device-remote-assignments-list");
   if (!box) return;
-  const devs = (STATE?.system_devices || []).filter(d => d.device_profile !== "ble_beacon" && d.device_profile !== "headless_node");
+  const devs = (STATE?.system_devices || []).filter(d => d.kind !== "ble_tag" && d.has_display);
   if (!devs.length) {
     box.innerHTML = `<p style="color:var(--muted);font-size:12.5px;margin:0;">No display devices onboarded.</p>`;
     return;
@@ -4014,8 +4006,8 @@ function applyStateToDom(data, forceFormUpdate=false) {
 
   // Extract live Battery, Wi-Fi/BLE & IP/Target from current device's system entry
   const curDevEntry = (data.system_devices || []).find(d => d.is_current) || {};
-  const isBleOnly = cfg.device_profile === "ble_beacon";
-  const isStationary = cfg.device_profile === "stationary_display";
+  const isBleOnly = cfg.kind === "ble_tag";
+  const isStationary = cfg.kind === "device" && !cfg.is_roaming;
   const winBleRow = (live.ble_survey_rows || []).find(r => r.is_winner);
   let batText = "Plugged In";
   if (isBleOnly) {
@@ -4082,7 +4074,6 @@ function applyStateToDom(data, forceFormUpdate=false) {
 
     doc.getElementById("cfg-device_slug").value = cfg.device_slug || "";
     doc.getElementById("cfg-companion_base_url").value = cfg.companion_base_url || "";
-    doc.getElementById("cfg-device_profile").value = cfg.device_profile || "mobile_display";
     doc.getElementById("cfg-display_shape").value = cfg.display_shape || "circle";
     doc.getElementById("cfg-default_page_size").value = cfg.default_page_size ?? 3;
     doc.getElementById("cfg-native_ble_tracking").checked = !!cfg.native_ble_tracking;
@@ -4212,7 +4203,6 @@ async function saveAllConfig() {
   const artVal = String(doc.getElementById("cfg-art_size")?.value || "466");
   const config = {
     companion_base_url: doc.getElementById("cfg-companion_base_url")?.value?.trim() || "",
-    device_profile: doc.getElementById("cfg-device_profile")?.value || (STATE?.config?.device_profile || "mobile_display"),
     device_group: doc.getElementById("cfg-device_group")?.value || "handhelds",
     display_shape: doc.getElementById("cfg-display_shape")?.value || (STATE?.config?.display_shape || "round"),
     default_page_size: parseInt(doc.getElementById("cfg-default_page_size")?.value || "3", 10) || 3,

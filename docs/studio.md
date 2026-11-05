@@ -54,7 +54,7 @@ Settings here live in `.storage/latter.site` and apply to every device.
 
 ## Devices
 
-The **All Devices** page lists onboarded devices. **+ Add Device** adopts a BLE phone, watch, or tag; Latter devices are added through Home Assistant's ESPHome discovery. → [Existing ESPHome devices](existing-esphome.md)
+The **All Devices** page lists onboarded devices. **+ Add Device** adds a BLE phone, watch, or tag as a **BLE tag** entry (you can also add one from **Settings → Devices & Services → Latter → Add BLE tag**). Latter devices are added through Home Assistant's ESPHome discovery. What a device can do comes from its hardware manifest (display, roaming, wearable), not from a type setting. → [Existing ESPHome devices](existing-esphome.md)
 
 Each device has five pages. The options on each page depend on what the device's hardware reports. A headless sensor won't show display settings.
 
@@ -64,6 +64,6 @@ Each device has five pages. The options on each page depend on what the device's
 | **Display & Home** | Color profile, display geometry, home dock apps and their order, area cards per page, and wallpapers (5 built-in presets, plus uploads that can rotate on a schedule) |
 | **Audio & Voice** | Wake word and sensitivity, default speaker, alert volume, and music sorting |
 | **Power & Battery** | Sleep and wake timeouts, plus battery and power readings |
-| **Administration** | Device slug (read-only: the ESPHome node name), type, and group; BLE tracking settings; and **Remove Device** |
+| **Administration** | Device slug (read-only: the ESPHome node name) and group; BLE tracking settings; and **Remove Device** |
 
 > Most settings apply live: Studio saves them and pushes the change to the device without a reload. Adding or removing a device, or changing a device's bound ESPHome device, reloads the Latter integration; devices reconnect within a few seconds.

@@ -10,7 +10,7 @@ Latter creates **sensor** and **binary_sensor** entities only. There are no `dev
 
 ## Per device
 
-`<slug>` is the device slug, for example `pocket_assistant`. Devices adopted as BLE beacons get only the three sensors marked ★.
+`<slug>` is the device slug, for example `pocket_assistant`. BLE tags (phones, watches and tags added as **BLE tag** entries) get only the three sensors marked ★.
 
 | Entity | State | Key attributes | Updates when |
 | :--- | :--- | :--- | :--- |

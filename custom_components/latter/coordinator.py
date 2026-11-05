@@ -59,7 +59,6 @@ from .area_engine import (
     match_area_by_name_or_id,
     resolve_remote_slot_pair,
 )
-from .area_follow import manifest_is_roaming
 from .ble_engine import (
     LatterNativeBleTracker,
     get_all_scanners_diagnostic_map,
@@ -86,7 +85,6 @@ from .const import (
     CONF_DEFAULT_SPEAKER,
     CONF_DEVICE_CUSTOM_COLOR,
     CONF_DEVICE_GROUP,
-    CONF_DEVICE_PROFILE,
     CONF_DEVICE_REMOTE_GROUP,
     CONF_DEVICE_SLUG,
     CONF_DISPLAY_SHAPE,
@@ -115,7 +113,6 @@ from .const import (
     DEFAULT_BLE_AUTO_SWITCH,
     DEFAULT_BLE_BEACON_UUID,
     DEFAULT_DEVICE_GROUP,
-    DEFAULT_DEVICE_PROFILE,
     DEFAULT_DEVICE_REMOTE_GROUP,
     DEFAULT_DISPLAY_SHAPE,
     DEFAULT_DOCK_APPS,
@@ -130,6 +127,7 @@ from .const import (
     FORECAST_REFRESH_INTERVAL_MINUTES,
     GLOBAL_CONFIG_KEYS,
     INTEGRATION_VERSION,
+    SUBENTRY_BLE_TAG,
     normalize_device_slug,
     normalize_noise_reduction,
 )
@@ -152,15 +150,16 @@ from .media_controller import (
     async_resume_idle_speaker_queue,
     read_volume_from_target,
 )
+from .issue_ids import device_health_issue_id
 from .media_engine import (
     async_play_media_with_ma_fallback,
     interpolate_speaker_position as _interpolate_speaker_position,
     resolve_esphome_local_speaker as _resolve_esphome_local_speaker,
     resolve_ma_counterpart_entity as _resolve_ma_counterpart_entity,
 )
-from .issue_ids import device_health_issue_id
 from .payloads import DomainPayloadPacker
 from .site_feeds import async_fetch_calendar_snapshot, async_fetch_weather_snapshot
+from .traits import manifest_has_display, manifest_is_roaming, manifest_is_wearable
 from .url_signer import UrlSigner
 
 _LOGGER = logging.getLogger(__name__)
@@ -381,7 +380,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return {
             CONF_DEVICE_SLUG: self.device_slug,
             CONF_ESPHOME_DEVICE_ID: str(self.get_opt(CONF_ESPHOME_DEVICE_ID, "") or "").strip(),
-            "is_ble_beacon": self.device_profile == "ble_beacon",
         }
 
     def has_structural_changes(self) -> bool:
@@ -595,19 +593,25 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return self._read_device_hardware_manifest()
 
     @property
-    def device_profile(self) -> str:
-        """Return device archetype (auto-detected from hardware_manifest when unconfigured)."""
-        hw_prof = str(self._read_device_hardware_manifest().get("profile") or "").strip()
-        configured = str(self.get_opt(CONF_DEVICE_PROFILE, "") or "").strip()
-        if hw_prof and (not configured or configured == DEFAULT_DEVICE_PROFILE):
-            return hw_prof
-        return configured or DEFAULT_DEVICE_PROFILE
+    def is_ble_tag(self) -> bool:
+        """Return True for a Studio-adopted BLE tag (phone, watch, tag) rather than an ESPHome Latter device."""
+        return self.subentry.subentry_type == SUBENTRY_BLE_TAG
+
+    @property
+    def has_display(self) -> bool:
+        """Return False only for an ESPHome device whose manifest reports `display == 0` (headless node)."""
+        return not self.is_ble_tag and manifest_has_display(self.hardware_manifest)
+
+    @property
+    def is_wearable(self) -> bool:
+        """Return True when the hardware manifest reports `wearable == 1`."""
+        return manifest_is_wearable(self.hardware_manifest)
 
     @property
     def device_group(self) -> str:
         """Return logical device group ID (defaults to 'unassigned' so no profile is assumed)."""
         raw = str(self.get_opt(CONF_DEVICE_GROUP, DEFAULT_DEVICE_GROUP) or DEFAULT_DEVICE_GROUP).strip()
-        if raw == "handhelds" and self.device_profile == "headless_node":
+        if raw == "handhelds" and not self.has_display:
             return DEFAULT_DEVICE_GROUP
         return raw
 
@@ -755,7 +759,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         rows: list[str] = ["all|Call All Areas"]
         domain_data = self.hass.data.get(DOMAIN, {})
         for val in domain_data.values():
-            if hasattr(val, "device_slug") and getattr(val, "device_profile", "") != "ble_beacon":
+            if hasattr(val, "device_slug") and not getattr(val, "is_ble_tag", False):
                 if val.device_slug != self.device_slug:
                     title = val.device_slug.replace("_", " ").title()[:24]
                     rows.append(f"{val.device_slug}|Call: {title}")
@@ -1296,7 +1300,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._unsub_doorbell_ring_state()
             self._unsub_doorbell_ring_state = None
 
-        if self.device_profile in ("ble_beacon", "headless_node"):
+        if self.is_ble_tag or not self.has_display:
             return
 
         from .doorbell_engine import resolve_doorbell_ring_entities
@@ -1670,7 +1674,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.hass,
             native_ble_tracking_enabled=self.native_ble_tracking_enabled,
             ble_tracker=self._ble_tracker,
-            device_profile=self.device_profile,
+            is_ble_tag=self.is_ble_tag,
             esphome_device_id=self.esphome_device_id,
         )
 
@@ -2154,7 +2158,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "site_id": self.site_id,
             "area_id": self.active_area_id or "",
             "area_name": area_name,
-            "device_profile": self.device_profile,
             "display_shape": self.display_shape,
             "default_page_size": self.default_page_size,
             "dock_apps": self.dock_apps_csv,

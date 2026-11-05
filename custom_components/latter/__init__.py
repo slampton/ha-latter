@@ -29,6 +29,7 @@ from .ble_engine import _iter_devices
 from .const import (
     CONF_ESPHOME_DEVICE_ID,
     DATA_DISCOVERY_UNSUB,
+    DEVICE_SUBENTRY_TYPES,
     DATA_GLOBAL_CONFIG,
     DATA_GLOBAL_STORE,
     DATA_HMAC_SECRET,
@@ -286,7 +287,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
     device_subentries = [
         sub
         for sub in entry.subentries.values()
-        if sub.subentry_type == "device"
+        if sub.subentry_type in DEVICE_SUBENTRY_TYPES
     ]
     for sub in device_subentries:
         coordinator = LatterCoordinator(
@@ -324,7 +325,7 @@ async def _async_update_listener(hass: HomeAssistant, entry: LatterConfigEntry) 
     current_sub_ids = {
         sub.subentry_id
         for sub in entry.subentries.values()
-        if sub.subentry_type == "device"
+        if sub.subentry_type in DEVICE_SUBENTRY_TYPES
     }
     loaded_sub_ids = set(sys_obj.coordinators.keys())
     if current_sub_ids != loaded_sub_ids:

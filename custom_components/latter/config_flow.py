@@ -26,6 +26,7 @@ from .backup_engine import get_device_groups_and_profiles
 from .ble_engine import _iter_devices
 from .const import (
     CONF_ALARM_ENTITY,
+    CONF_ASSIGNED_PERSON,
     CONF_AREA_FOLLOW_DWELL_S,
     CONF_AREA_HANDOFF,
     CONF_ART_SIZE,
@@ -35,7 +36,6 @@ from .const import (
     CONF_DEFAULT_PAGE_SIZE,
     CONF_DEFAULT_SPEAKER,
     CONF_DEVICE_GROUP,
-    CONF_DEVICE_PROFILE,
     CONF_DEVICE_SLUG,
     CONF_DISPLAY_SHAPE,
     CONF_ESPHOME_DEVICE_ID,
@@ -51,6 +51,8 @@ from .const import (
     DEFAULT_DOCK_APPS,
     DEFAULT_PAGE_SIZE,
     DOMAIN,
+    SUBENTRY_BLE_TAG,
+    SUBENTRY_DEVICE,
     normalize_device_slug,
 )
 from .identity import (
@@ -65,7 +67,6 @@ from .identity import (
 from .system import get_latter_system
 
 CONF_APPLY_PROFILE = "apply_profile"
-BLE_BEACON_PROFILE = "ble_beacon"
 
 
 def _iter_configured_device_records(hass: HomeAssistant) -> list[tuple[dict[str, Any], str | None]]:
@@ -73,7 +74,7 @@ def _iter_configured_device_records(hass: HomeAssistant) -> list[tuple[dict[str,
     records: list[tuple[dict[str, Any], str | None]] = []
     for entry in hass.config_entries.async_entries(DOMAIN):
         for sub in entry.subentries.values():
-            if sub.subentry_type == "device":
+            if sub.subentry_type == SUBENTRY_DEVICE:
                 records.append((dict(sub.data), sub.unique_id))
     return records
 
@@ -143,7 +144,7 @@ def _discover_default_speaker(hass: HomeAssistant, esphome_device_id: str | None
 def _detect_hardware_defaults(
     hass: HomeAssistant, dev: dr.DeviceEntry | None
 ) -> dict[str, Any]:
-    """Auto-detect screen shape, art_size, archetype, area, and roaming BLE capability from the device's hardware manifest."""
+    """Auto-detect screen shape, art_size, group, area, and roaming BLE capability from the device's hardware manifest."""
     ent_reg = er.async_get(hass)
     dev_id = dev.id if dev is not None else None
     manifest = read_device_hardware_manifest(hass, dev_id)
@@ -166,12 +167,7 @@ def _detect_hardware_defaults(
         shape = str(manifest.get("shape") or ("circle" if w == h == 466 else "square"))
         is_stationary = bool(int(manifest.get("stationary") or 0) == 1)
         art_size: int | str = w if w == h else f"{w}x{h}"
-        profile = str(
-            manifest.get("profile")
-            or ("stationary_display" if is_stationary else "mobile_display")
-        )
         return {
-            CONF_DEVICE_PROFILE: profile,
             CONF_DEVICE_GROUP: "wall_panels" if is_stationary else "handhelds",
             CONF_DISPLAY_SHAPE: shape,
             CONF_ART_SIZE: art_size,
@@ -186,7 +182,6 @@ def _detect_hardware_defaults(
 
     if has_native_slots:
         return {
-            CONF_DEVICE_PROFILE: "mobile_display",
             CONF_DEVICE_GROUP: "handhelds",
             CONF_DISPLAY_SHAPE: "circle",
             CONF_ART_SIZE: DEFAULT_ART_SIZE,
@@ -200,7 +195,6 @@ def _detect_hardware_defaults(
         }
 
     return {
-        CONF_DEVICE_PROFILE: "headless_node",
         CONF_DEVICE_GROUP: DEFAULT_DEVICE_GROUP,
         CONF_DISPLAY_SHAPE: "square",
         CONF_ART_SIZE: DEFAULT_ART_SIZE,
@@ -266,8 +260,6 @@ def _apply_onboarding_profile_and_defaults(
         merged[CONF_NATIVE_BLE_TRACKING] = is_roaming
         merged[CONF_BLE_AUTO_SWITCH] = is_roaming
         merged[CONF_SYNC_DEVICE_AREA] = is_roaming
-        if not is_roaming and merged.get(CONF_DEVICE_PROFILE) == "mobile_display":
-            merged[CONF_DEVICE_PROFILE] = "stationary_display"
 
     _seed_global_defaults(hass)
     return merged
@@ -288,16 +280,23 @@ def _seed_global_defaults(hass: HomeAssistant) -> None:
                 global_cfg[CONF_ALARM_ENTITY] = def_a
 
 
-def _build_ble_beacon_data(user_input: dict[str, Any]) -> dict[str, Any] | None:
-    """Return subentry data for a Studio-adopted BLE tag, or None if the request is incomplete."""
-    slug = normalize_device_slug(str(user_input.get(CONF_DEVICE_SLUG) or ""))
+def _build_ble_tag_data(user_input: dict[str, Any]) -> dict[str, Any] | None:
+    """Return subentry data for a BLE tag (phone, watch, tag), or None if the name or address is missing."""
+    slug = normalize_device_slug(str(user_input.get("name") or ""))
     target = str(user_input.get(CONF_BLE_TARGET_ADDRESS) or "").strip()
-    if not slug or slug == "esphome_device" or not target:
+    if slug == "esphome_device" or not target:
         return None
-    data = {k: v for k, v in user_input.items() if k not in (CONF_ESPHOME_DEVICE_ID, "mac")}
-    data[CONF_DEVICE_SLUG] = slug
-    data[CONF_DEVICE_PROFILE] = BLE_BEACON_PROFILE
-    return data
+    return {
+        CONF_DEVICE_SLUG: slug,
+        CONF_BLE_TARGET_ADDRESS: target,
+        CONF_ASSIGNED_PERSON: str(user_input.get(CONF_ASSIGNED_PERSON) or "").strip(),
+        CONF_DEVICE_GROUP: DEFAULT_DEVICE_GROUP,
+        CONF_DEFAULT_SPEAKER: "",
+        CONF_NATIVE_BLE_TRACKING: True,
+        CONF_BLE_AUTO_SWITCH: True,
+        CONF_SYNC_DEVICE_AREA: False,
+        CONF_ART_SIZE: DEFAULT_ART_SIZE,
+    }
 
 
 def _build_schema(
@@ -417,7 +416,10 @@ class LatterConfigFlow(ConfigFlow, domain=DOMAIN):
         cls, config_entry: ConfigEntry
     ) -> dict[str, type[ConfigSubentryFlow]]:
         """Return subentry types supported by the Latter System hub."""
-        return {"device": LatterDeviceSubentryFlow}
+        return {
+            SUBENTRY_DEVICE: LatterDeviceSubentryFlow,
+            SUBENTRY_BLE_TAG: LatterBleTagSubentryFlow,
+        }
 
     async def async_step_integration_discovery(
         self, discovery_info: dict[str, Any]
@@ -467,7 +469,7 @@ class LatterConfigFlow(ConfigFlow, domain=DOMAIN):
                 subentries=[
                     ConfigSubentryData(
                         data=merged_data,
-                        subentry_type="device",
+                        subentry_type=SUBENTRY_DEVICE,
                         title=_device_title(dev),
                         unique_id=target_uid,
                     )
@@ -525,24 +527,8 @@ class LatterDeviceSubentryFlow(ConfigSubentryFlow):
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> SubentryFlowResult:
-        """Add an ESPHome Latter device (picked in the form) or a Studio-adopted BLE tag to the System."""
+        """Add an ESPHome Latter device (picked in the form) to the System."""
         entry = self._get_entry()
-        if user_input is not None and user_input.get(CONF_DEVICE_PROFILE) == BLE_BEACON_PROFILE:
-            ble_data = _build_ble_beacon_data(user_input)
-            if ble_data is None:
-                return self.async_abort(reason="not_supported")
-            target_uid = _ble_unique_id(ble_data[CONF_DEVICE_SLUG])
-            for sub in entry.subentries.values():
-                if sub.unique_id == target_uid or (
-                    sub.data.get(CONF_BLE_TARGET_ADDRESS) == ble_data[CONF_BLE_TARGET_ADDRESS]
-                ):
-                    return self.async_abort(reason="already_configured")
-            return self.async_create_entry(
-                title=ble_data[CONF_DEVICE_SLUG].replace("_", " ").title(),
-                data=ble_data,
-                unique_id=target_uid,
-            )
-
         if user_input is not None:
             dev = _selected_device(self.hass, user_input)
             if dev is None or not is_latter_compatible_esphome_device(self.hass, dev):
@@ -576,8 +562,6 @@ class LatterDeviceSubentryFlow(ConfigSubentryFlow):
         entry = self._get_entry()
         subentry = self._get_reconfigure_subentry()
         current = dict(subentry.data)
-        if current.get(CONF_DEVICE_PROFILE) == BLE_BEACON_PROFILE:
-            return self.async_abort(reason="not_supported")
         old_dev_id = str(current.get(CONF_ESPHOME_DEVICE_ID) or "")
         old_mac = str(current.get("mac", "") or "").strip()
 
@@ -638,6 +622,49 @@ class LatterDeviceSubentryFlow(ConfigSubentryFlow):
         return self.async_show_form(
             step_id="reconfigure",
             data_schema=_build_schema(self.hass, current),
+        )
+
+
+class LatterBleTagSubentryFlow(ConfigSubentryFlow):
+    """Add a BLE tag (phone, watch or tag tracked through Bluetooth proxies) to the Latter System."""
+
+    async def async_step_user(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Create the BLE tag from the form (or from Studio's Add Device, which passes the same fields)."""
+        entry = self._get_entry()
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            data = _build_ble_tag_data(user_input)
+            if data is None:
+                errors["base"] = "ble_tag_incomplete"
+            else:
+                target_uid = _ble_unique_id(data[CONF_DEVICE_SLUG])
+                for sub in entry.subentries.values():
+                    if (
+                        sub.unique_id == target_uid
+                        or sub.data.get(CONF_DEVICE_SLUG) == data[CONF_DEVICE_SLUG]
+                        or sub.data.get(CONF_BLE_TARGET_ADDRESS) == data[CONF_BLE_TARGET_ADDRESS]
+                    ):
+                        return self.async_abort(reason="already_configured")
+                return self.async_create_entry(
+                    title=str(user_input.get("name") or data[CONF_DEVICE_SLUG]).strip(),
+                    data=data,
+                    unique_id=target_uid,
+                )
+
+        return self.async_show_form(
+            step_id="user",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("name"): selector.TextSelector(),
+                    vol.Required(CONF_BLE_TARGET_ADDRESS): selector.TextSelector(),
+                    vol.Optional(CONF_ASSIGNED_PERSON): selector.EntitySelector(
+                        selector.EntitySelectorConfig(domain="person")
+                    ),
+                }
+            ),
+            errors=errors,
         )
 
 

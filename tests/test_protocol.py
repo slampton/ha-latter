@@ -1,7 +1,7 @@
 """Standalone tests for ha-latter: Protocol v3 contract, Voice Follows Me, BLE Area scoring, and URL signing.
 
 They run without Home Assistant installed. Each production module under test (payloads.py,
-area_follow.py, ble_math.py, resource_signing.py) is standard-library only and loaded by file path.
+area_follow.py, traits.py, ble_math.py, resource_signing.py, ...) is standard-library only and loaded by file path.
 """
 
 from __future__ import annotations
@@ -41,7 +41,8 @@ sanitize_v3_field = _PAYLOADS_MOD.sanitize_v3_field
 area_follow = _load_ha_free_module("area_follow")
 AreaFollowDwell = area_follow.AreaFollowDwell
 FollowAction = area_follow.FollowAction
-manifest_is_roaming = area_follow.manifest_is_roaming
+traits = _load_ha_free_module("traits")
+manifest_is_roaming = traits.manifest_is_roaming
 
 ble_math = _load_ha_free_module("ble_math")
 resource_signing = _load_ha_free_module("resource_signing")
@@ -226,7 +227,18 @@ class TestVoiceFollowsMe(unittest.TestCase):
         self.assertFalse(manifest_is_roaming({"stationary": 1, "wearable": 0}))
         self.assertFalse(manifest_is_roaming({}))
         self.assertFalse(manifest_is_roaming({"stationary": "x"}))
-        self.assertFalse(manifest_is_roaming({"profile": "mobile_display"}))
+        self.assertFalse(manifest_is_roaming({"display": 1}))
+
+    def test_display_and_wearable_traits(self) -> None:
+        """Headless only when the manifest says display == 0; wearable only when it says wearable == 1."""
+        self.assertTrue(traits.manifest_has_display({"display": 1}))
+        self.assertFalse(traits.manifest_has_display({"display": 0}))
+        self.assertFalse(traits.manifest_has_display({"display": "0"}))
+        self.assertTrue(traits.manifest_has_display({}), "an unreported trait never makes a Device headless")
+        self.assertTrue(traits.manifest_has_display({"display": "x"}))
+        self.assertTrue(traits.manifest_is_wearable({"wearable": 1}))
+        self.assertFalse(traits.manifest_is_wearable({"wearable": 0}))
+        self.assertFalse(traits.manifest_is_wearable({}))
 
     def test_stationary_device_never_writes_area(self) -> None:
         """Stationary devices (stationary == 1) must never mutate the device registry area_id."""
@@ -471,6 +483,21 @@ class TestStudioTargeting(unittest.TestCase):
         sent = set(re.findall(r'command: "([a-z_]+)"', js_src))
         known = studio_scope.SYSTEM_COMMANDS | studio_scope.DEVICE_COMMANDS
         self.assertFalse(sent - known, f"Studio sends unknown commands: {sorted(sent - known)}")
+
+
+class TestNoDeviceProfile(unittest.TestCase):
+    """Hardware kind is the subentry type plus manifest traits; no code reads a device profile."""
+
+    def test_no_profile_readers_remain(self) -> None:
+        pattern = re.compile(r"device_profile|DEVICE_PROFILE|headless_node|mobile_display|stationary_display|wearable_display|\"ble_beacon\"")
+        offenders = []
+        for path in sorted(LATTER_DIR.rglob("*")):
+            if path.suffix not in (".py", ".js", ".json", ".yaml") or "__pycache__" in path.parts:
+                continue
+            for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+                if pattern.search(line):
+                    offenders.append(f"{path.relative_to(LATTER_DIR)}:{lineno}: {line.strip()}")
+        self.assertEqual(offenders, [])
 
 
 class TestDeviceIssueIds(unittest.TestCase):

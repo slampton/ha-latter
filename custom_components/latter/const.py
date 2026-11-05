@@ -14,10 +14,14 @@ PLATFORMS: Final[list[Platform]] = [Platform.SENSOR, Platform.BINARY_SENSOR]
 STORAGE_VERSION: Final = 1
 STORAGE_KEY_PREFIX: Final = "latter.runtime"
 
+# Config subentry types: an ESPHome Latter device, or a Studio-adopted BLE tag (phone, watch, tag)
+SUBENTRY_DEVICE: Final = "device"
+SUBENTRY_BLE_TAG: Final = "ble_tag"
+DEVICE_SUBENTRY_TYPES: Final[tuple[str, ...]] = (SUBENTRY_DEVICE, SUBENTRY_BLE_TAG)
+
 # Config & Options keys
 CONF_DEVICE_SLUG: Final = "device_slug"
 CONF_ESPHOME_DEVICE_ID: Final = "esphome_device_id"
-CONF_DEVICE_PROFILE: Final = "device_profile"
 CONF_DISPLAY_SHAPE: Final = "display_shape"
 CONF_DEFAULT_PAGE_SIZE: Final = "default_page_size"
 CONF_COMPANION_BASE_URL: Final = "companion_base_url"
@@ -59,7 +63,6 @@ CONF_DOORBELL_NOISE_REDUCTION: Final = "doorbell_noise_reduction"
 # Defaults
 DEFAULT_DOORBELL_NOISE_REDUCTION: Final = "strong"
 DOORBELL_NOISE_REDUCTION_LEVELS: Final[tuple[str, ...]] = ("strong", "light", "off")
-DEFAULT_DEVICE_PROFILE: Final = "mobile_display"
 DEFAULT_DISPLAY_SHAPE: Final = "circle"
 DEFAULT_PAGE_SIZE: Final = 3
 DEFAULT_NATIVE_BLE_TRACKING: Final = True

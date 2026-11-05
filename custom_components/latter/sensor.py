@@ -42,7 +42,7 @@ async def async_setup_entry(
 
     for coordinator in coordinators:
         dev_entities: list[SensorEntity] = []
-        if coordinator.device_profile == "ble_beacon":
+        if coordinator.is_ble_tag:
             dev_entities.extend(
                 [
                     LatterCurrentAreaSensor(coordinator),

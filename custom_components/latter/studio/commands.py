@@ -39,9 +39,7 @@ from ..const import (
     CONF_DEVICE_CUSTOM_COLOR,
     CONF_DEVICE_GROUP,
     CONF_DEVICE_GROUPS,
-    CONF_DEVICE_PROFILE,
     CONF_DEVICE_REMOTE_GROUP,
-    CONF_DEVICE_SLUG,
     CONF_DISPLAY_SHAPE,
     CONF_DOCK_APPS,
     CONF_NATIVE_BLE_TRACKING,
@@ -56,12 +54,12 @@ from ..const import (
     CONF_WALLPAPER_SOURCE,
     DATA_GLOBAL_CONFIG,
     DEFAULT_ART_SIZE,
-    DEFAULT_DEVICE_GROUP,
     DEFAULT_PAGE_SIZE,
     DEFAULT_WALLPAPER_CYCLE_MINUTES,
     DOMAIN,
     GLOBAL_CONFIG_KEYS,
     INTEGRATION_VERSION,
+    SUBENTRY_BLE_TAG,
     normalize_device_slug,
 )
 from ..coordinator import LatterCoordinator
@@ -428,8 +426,7 @@ async def _async_execute_studio_command(
             ]
 
         device_keys = (
-            CONF_DEVICE_PROFILE,
-            CONF_DEVICE_GROUP,
+                    CONF_DEVICE_GROUP,
             CONF_DEVICE_REMOTE_GROUP,
             CONF_DISPLAY_SHAPE,
             CONF_DEFAULT_PAGE_SIZE,
@@ -536,29 +533,23 @@ async def _async_execute_studio_command(
         target_slug = (
             normalize_device_slug(raw_name) if raw_name else "ble_device"
         )
-        if target_slug and target_addr:
-            existing = [
-                c
-                for c in _get_all_coordinators(hass)
-                if c.device_slug == target_slug
-            ]
-            if not existing:
-                await hass.config_entries.subentries.async_init(
-                    (system_entries[0].entry_id, "device"),
-                    context={"source": "user"},
-                    data={
-                        CONF_DEVICE_SLUG: target_slug,
-                        CONF_DEVICE_PROFILE: "ble_beacon",
-                        CONF_DEVICE_GROUP: DEFAULT_DEVICE_GROUP,
-                        CONF_DEFAULT_SPEAKER: "",
-                        CONF_NATIVE_BLE_TRACKING: True,
-                        CONF_BLE_AUTO_SWITCH: True,
-                        CONF_SYNC_DEVICE_AREA: False,
-                        CONF_BLE_TARGET_ADDRESS: target_addr,
-                        CONF_ASSIGNED_PERSON: assigned_person,
-                        CONF_ART_SIZE: DEFAULT_ART_SIZE,
-                    },
-                )
+        if not target_slug or not target_addr:
+            raise StudioCommandError(
+                "invalid_format", "A BLE tag needs a name and a target address"
+            )
+        if any(c.device_slug == target_slug for c in _get_all_coordinators(hass)):
+            raise StudioCommandError(
+                "already_configured", f"A Device named '{target_slug}' already exists"
+            )
+        await hass.config_entries.subentries.async_init(
+            (system_entries[0].entry_id, SUBENTRY_BLE_TAG),
+            context={"source": "user"},
+            data={
+                "name": raw_name,
+                CONF_BLE_TARGET_ADDRESS: target_addr,
+                CONF_ASSIGNED_PERSON: assigned_person,
+            },
+        )
 
     elif cmd == "set_device_remote_group":
         rg_coord = find_by_subentry_id(

@@ -1092,7 +1092,8 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             c
             for c in hass.data.get(DOMAIN, {}).values()
             if isinstance(c, LatterCoordinator)
-            and c.device_profile not in ("ble_beacon", "headless_node")
+            and not c.is_ble_tag
+            and c.has_display
         ]
         target_coords: list[LatterCoordinator] = []
 

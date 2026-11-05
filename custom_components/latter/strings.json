@@ -76,11 +76,38 @@
       },
       "abort": {
         "already_configured": "This ESPHome device is already configured in Latter.",
-        "reconfigure_successful": "Device configuration updated.",
-        "not_supported": "This Device is managed in Latter Studio (BLE tags), or the request was incomplete."
+        "reconfigure_successful": "Device configuration updated."
       },
       "error": {
         "not_latter_device": "This ESPHome device doesn't run Latter firmware. Latter supports Latter devices and custom builds on Latter Core (they expose the Latter actions, such as latter_ping)."
+      }
+    },
+    "ble_tag": {
+      "entry_type": "BLE tag",
+      "initiate_flow": {
+        "user": "Add BLE tag"
+      },
+      "step": {
+        "user": {
+          "title": "Add a BLE phone, watch, or tag",
+          "description": "Track a phone, watch, or Bluetooth tag through your Bluetooth proxies. Latter adds Area and distance sensors for it.",
+          "data": {
+            "name": "Name",
+            "ble_target_address": "MAC address, iBeacon UUID, or tracker entity",
+            "assigned_person": "Person"
+          },
+          "data_description": {
+            "name": "Used for the entity IDs (for example `Sean's Phone` gives `sensor.sean_s_phone_current_area`).",
+            "ble_target_address": "A static MAC address, an iBeacon UUID, or a `private_ble_device` / iBeacon tracker entity ID.",
+            "assigned_person": "Optional. Follow-me notifications and occupancy use it."
+          }
+        }
+      },
+      "abort": {
+        "already_configured": "A BLE tag with this name or address is already configured."
+      },
+      "error": {
+        "ble_tag_incomplete": "Enter a name and a MAC address, iBeacon UUID, or tracker entity."
       }
     }
   },

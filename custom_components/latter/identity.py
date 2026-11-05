@@ -204,13 +204,4 @@ def read_device_hardware_manifest(
                 "major": 1,
                 "minor": int(merged["minor"]),
             }
-        if "profile" not in merged:
-            if not int(merged.get("display") or 0):
-                merged["profile"] = "headless_node"
-            elif int(merged.get("wearable") or 0):
-                merged["profile"] = "wearable_display"
-            elif int(merged.get("stationary") or 0):
-                merged["profile"] = "stationary_display"
-            else:
-                merged["profile"] = "mobile_display"
     return merged
