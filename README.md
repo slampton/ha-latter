@@ -158,7 +158,7 @@ What's not here yet:
 - BLE calibration is a single offset per area. There is no per-scanner calibration.
 - No live two-way doorbell calls. The device can't send live audio to the door, and there is no echo cancellation.
 
-CI runs `hassfest`, HACS validation, `ruff` (syntax and unused-import checks), and the unit tests in `tests/`. The Protocol v3 tests run against the integration's own packer. The Voice Follows Me, BLE Area scoring, and URL signing tests import the integration's own Home Assistant-free modules (`area_follow.py`, `ble_math.py`, `resource_signing.py`), which the integration itself uses; the Home Assistant glue around them (timers, registry writes) is not covered.
+CI runs `hassfest`, HACS validation, `ruff` (syntax and unused-import checks), and the unit tests in `tests/`. The Protocol v3 tests run against the integration's own packer. The Voice Follows Me, BLE Area scoring, URL signing, Studio targeting, repair-ID and device-health tests import the integration's own Home Assistant-free modules (`area_follow.py`, `ble_math.py`, `resource_signing.py`, `studio/scope.py`, `issue_ids.py`, `health.py`), which the integration itself uses; the Home Assistant glue around them (timers, registry writes, repairs) is not covered.
 
 Bugs and feature requests: [issues](https://github.com/slampton/ha-latter/issues).
 
