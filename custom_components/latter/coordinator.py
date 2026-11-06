@@ -158,6 +158,7 @@ from .media_engine import (
     resolve_ma_counterpart_entity as _resolve_ma_counterpart_entity,
 )
 from .payloads import DomainPayloadPacker
+from .presence_beacon import Trigger, decide_beacon_action
 from .site_feeds import async_fetch_calendar_snapshot, async_fetch_weather_snapshot
 from .traits import manifest_has_display, manifest_is_roaming, manifest_is_wearable
 from .url_signer import UrlSigner
@@ -447,7 +448,48 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._bind_area_entities_listener()
         self._bind_doorbell_ring_listener()
         self._bind_wallpaper_cycle_timer()
+        await self.async_sync_presence_beacon("options")
         self._notify_listeners()
+
+    async def async_sync_presence_beacon(self, trigger: Trigger) -> None:
+        """Turn the bound device's BLE presence beacon switch on or off per `presence_beacon.decide_beacon_action`.
+
+        The switch is found only on the bound ESPHome device. BLE tags and devices without a
+        beacon switch are left alone.
+        """
+        if self.is_ble_tag:
+            return
+        switch_ent = self.device_entity(
+            "switch", "_area_ble_presence_beacon", "_ble_presence_beacon"
+        )
+        if not switch_ent:
+            return
+        state = self.hass.states.get(switch_ent)
+        action = decide_beacon_action(
+            self.native_ble_tracking_enabled,
+            state.state if state is not None else None,
+            trigger,
+        )
+        if action is None:
+            return
+        try:
+            await self.hass.services.async_call(
+                "switch", action, {ATTR_ENTITY_ID: switch_ent}, blocking=True
+            )
+            _LOGGER.info(
+                "Presence beacon of '%s': %s (%s, native BLE tracking %s)",
+                self.device_slug,
+                action,
+                trigger,
+                "on" if self.native_ble_tracking_enabled else "off",
+            )
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning(
+                "Couldn't %s the presence beacon of '%s': %s",
+                action.replace("_", " "),
+                self.device_slug,
+                err,
+            )
 
     def _live_subentry(self) -> ConfigSubentry:
         """Return the current ConfigSubentry object for this Device (subentries are replaced on update)."""
@@ -1201,6 +1243,8 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             timedelta(minutes=CALENDAR_REFRESH_INTERVAL_MINUTES),
         )
         self._bind_wallpaper_cycle_timer()
+        # Onboarding / reload: mirror the tracking option (no-op until the device's switch is available).
+        await self.async_sync_presence_beacon("options")
         try:
             from .repairs import async_audit_coordinator_health
 
@@ -1416,6 +1460,8 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         self.force_republish_all_domains()
         await self._async_handle_device_reconnect()
+        # After the reconnect delay the device's entities have their states; turn the beacon on if tracked.
+        await self.async_sync_presence_beacon("hello")
 
     @callback
     def _apply_device_health(self, manifest: dict[str, Any], boot_id: str) -> None:

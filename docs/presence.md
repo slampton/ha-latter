@@ -23,6 +23,8 @@ Latter tracks which area each device is in using the Bluetooth proxies you alrea
 
 Latter parses Apple-format iBeacons only. Eddystone and AltBeacon frames are not supported.
 
+Latter firmware ships with the device's **Area: BLE Presence Beacon** switch off, so a new or reset device doesn't advertise until presence is set up. For a device with **Track this device's area with Bluetooth** on, Latter turns the beacon on whenever the device connects, and turns it off when you switch tracking off in Studio or the device's options.
+
 To link a tracked device to a person, set **Assigned Person** on the device's Overview page. You'll get `sensor.<person>_current_area`, which follows whichever of that person's devices was heard most recently.
 
 ---

@@ -50,6 +50,7 @@ issue_ids = _load_ha_free_module("issue_ids")
 health = _load_ha_free_module("health")
 ma_link = _load_ha_free_module("ma_link")
 reset_policy = _load_ha_free_module("reset_policy")
+presence_beacon = _load_ha_free_module("presence_beacon")
 studio_scope = _load_ha_free_module("studio/scope")
 STUDIO_JS = LATTER_DIR / "frontend" / "latter-studio.js"
 
@@ -696,6 +697,31 @@ class TestResetPolicy(unittest.TestCase):
         strings = json.loads((LATTER_DIR / "strings.json").read_text(encoding="utf-8"))
         for key in ("reset_nothing_selected", "reset_ble_tag_has_no_device_settings", "factory_reset_unsupported", "factory_reset_failed"):
             self.assertIn(key, strings["exceptions"], key)
+
+
+class TestPresenceBeacon(unittest.TestCase):
+    """When Latter turns the device's BLE presence beacon on or off, exercised through `presence_beacon.py`."""
+
+    def test_hello_only_turns_on_for_tracked_devices(self) -> None:
+        d = presence_beacon.decide_beacon_action
+        self.assertEqual(d(True, "off", "hello"), "turn_on")
+        self.assertIsNone(d(True, "on", "hello"))
+        self.assertIsNone(d(False, "on", "hello"), "a hello never turns the beacon off")
+        self.assertIsNone(d(False, "off", "hello"))
+
+    def test_options_mirror_the_tracking_option(self) -> None:
+        d = presence_beacon.decide_beacon_action
+        self.assertEqual(d(True, "off", "options"), "turn_on")
+        self.assertIsNone(d(True, "on", "options"))
+        self.assertEqual(d(False, "on", "options"), "turn_off")
+        self.assertIsNone(d(False, "off", "options"))
+
+    def test_missing_or_unavailable_switch_is_left_alone(self) -> None:
+        d = presence_beacon.decide_beacon_action
+        for state in (None, "unavailable", "unknown", ""):
+            for tracking in (True, False):
+                for trigger in ("hello", "options"):
+                    self.assertIsNone(d(tracking, state, trigger), (state, tracking, trigger))
 
 
 if __name__ == "__main__":
