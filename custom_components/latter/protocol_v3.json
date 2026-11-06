@@ -133,6 +133,10 @@
       "description": "No-op discovery marker action announcing Latter Protocol v3 compatibility and hardware manifest",
       "variables": {}
     },
+    "latter_factory_reset": {
+      "description": "Reset to defaults: erases every saved setting (the whole NVS partition, including the Wi-Fi driver's cached network data and RF calibration) and reboots. Compiled-in Wi-Fi credentials and the API key are kept, so the device rejoins Home Assistant unchanged",
+      "variables": {}
+    },
     "ui_input": {
       "description": "Remote navigation input: action home|back|select|next|prev|left|right|up|down|cw|ccw (ok/click alias select); delta overrides the step for next/prev-style actions (0 = derive from action)",
       "variables": {

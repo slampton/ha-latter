@@ -1844,6 +1844,17 @@ const STUDIO_TEMPLATE = `<div class="studio-root">
           </div>
         </details>
 
+        <!-- RESET TO DEFAULTS CARD -->
+        <div class="card" style="margin-top:16px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+            <div>
+              <h3 style="margin:0;">Reset to Defaults</h3>
+              <p class="desc" style="margin:2px 0 0;">Erase the settings saved on the device, reset this device's Latter options, or both. Wi-Fi and pairing are kept.</p>
+            </div>
+            <button type="button" class="btn-secondary" onclick="openResetDeviceModal()">Reset to defaults…</button>
+          </div>
+        </div>
+
         <!-- DEDICATED REMOVE DEVICE CARD -->
         <div class="card" style="border-color:rgba(219, 68, 55, 0.35);margin-top:16px;">
           <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
@@ -3733,6 +3744,88 @@ function removeManagedDevice(entryId, title) {
   doc.getElementById("latter-rm-modal").style.display = "flex";
 }
 
+function ensureResetDeviceModal() {
+  if (doc.getElementById("latter-reset-modal")) return;
+  const modal = document.createElement("div");
+  modal.id = "latter-reset-modal";
+  modal.style.cssText = "position:fixed;inset:0;background:rgba(8,12,18,0.82);backdrop-filter:blur(6px);z-index:9999;display:none;align-items:center;justify-content:center;padding:16px;";
+  modal.innerHTML = `
+    <div class="card" style="max-width:440px;width:100%;margin:0;">
+      <h3 style="margin-bottom:6px;color:var(--danger);" id="latter-reset-title">Reset to defaults?</h3>
+      <div class="toggle-row" style="margin-bottom:8px;">
+        <span>Device settings (erases everything saved on the device; it restarts)</span>
+        <input type="checkbox" id="latter-reset-device-settings" checked onchange="updateResetDeviceConfirm()">
+      </div>
+      <div class="toggle-row" style="margin-bottom:8px;">
+        <span>Latter options for this device</span>
+        <input type="checkbox" id="latter-reset-latter-options" checked onchange="updateResetDeviceConfirm()">
+      </div>
+      <p class="desc" id="latter-reset-desc" style="margin-bottom:16px;">Wi-Fi and pairing are kept, so the device rejoins Home Assistant by itself. Its ESPHome binding and Music Assistant player link are kept too.</p>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button type="button" class="btn-secondary" onclick="closeResetDeviceModal()">Cancel</button>
+        <button type="button" class="btn-danger" id="latter-reset-confirm-btn" onclick="confirmResetDevice()">Reset</button>
+      </div>
+    </div>
+  `;
+  doc.body.appendChild(modal);
+}
+
+function updateResetDeviceConfirm() {
+  const dev = doc.getElementById("latter-reset-device-settings");
+  const opts = doc.getElementById("latter-reset-latter-options");
+  const btn = doc.getElementById("latter-reset-confirm-btn");
+  if (btn) btn.disabled = !((dev && dev.checked && !dev.disabled) || (opts && opts.checked));
+}
+
+function openResetDeviceModal() {
+  if (!ACTIVE_SUBENTRY_ID) {
+    showToast("Select a device first");
+    return;
+  }
+  ensureResetDeviceModal();
+  const isBleTag = STATE?.config?.kind === "ble_tag";
+  const dev = doc.getElementById("latter-reset-device-settings");
+  const opts = doc.getElementById("latter-reset-latter-options");
+  if (dev) {
+    dev.checked = !isBleTag;
+    dev.disabled = isBleTag;
+  }
+  if (opts) opts.checked = true;
+  const title = doc.getElementById("latter-reset-title");
+  if (title) title.textContent = `Reset '${STATE?.title || "this device"}' to defaults?`;
+  updateResetDeviceConfirm();
+  doc.getElementById("latter-reset-modal").style.display = "flex";
+}
+
+function closeResetDeviceModal() {
+  const m = doc.getElementById("latter-reset-modal");
+  if (m) m.style.display = "none";
+}
+
+async function confirmResetDevice() {
+  const dev = doc.getElementById("latter-reset-device-settings");
+  const opts = doc.getElementById("latter-reset-latter-options");
+  const deviceSettings = !!(dev && dev.checked && !dev.disabled);
+  const latterOptions = !!(opts && opts.checked);
+  closeResetDeviceModal();
+  if (!HASS_REF || !ACTIVE_SUBENTRY_ID || (!deviceSettings && !latterOptions)) return;
+  try {
+    const data = await HASS_REF.callWS({
+      type: "latter/device/reset",
+      subentry_id: ACTIVE_SUBENTRY_ID,
+      device_settings: deviceSettings,
+      latter_options: latterOptions
+    });
+    if (data) {
+      INITIAL_FORM_LOADED = false;
+      applyStateToDom(data, true);
+    }
+    showToast(deviceSettings ? "Reset sent; the device is restarting" : "Latter options reset to defaults");
+  } catch (err) {
+    showToast(`Reset failed: ${err?.message || err}`);
+  }
+}
+
 async function confirmRemoveManagedDevice() {
   const entryId = pendingRemoveEntryId;
   const title = pendingRemoveTitle;
@@ -3740,7 +3833,6 @@ async function confirmRemoveManagedDevice() {
   if (!entryId) return;
   const data = await callStudioCommand({command: "remove_device", subentry_id: entryId});
   if (data) {
-    const data = data;
     if (data.removed) {
       ACTIVE_SUBENTRY_ID = data.next_subentry_id || "";
       DEVICE_SELECTED = false;
@@ -4560,6 +4652,10 @@ function bindStudioGlobals() {
   window.refreshActiveCameraPreview = refreshActiveCameraPreview;
   window.refreshState = refreshState;
   window.removeManagedDevice = removeManagedDevice;
+  window.openResetDeviceModal = openResetDeviceModal;
+  window.closeResetDeviceModal = closeResetDeviceModal;
+  window.confirmResetDevice = confirmResetDevice;
+  window.updateResetDeviceConfirm = updateResetDeviceConfirm;
   window.removeRemoteGroupRow = removeRemoteGroupRow;
   window.renderActiveSurveyDeviceBars = renderActiveSurveyDeviceBars;
   window.renderAreaPresenceGrid = renderAreaPresenceGrid;

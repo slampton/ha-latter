@@ -775,3 +775,29 @@ doorbell_intercom:
             - "strong"
             - "light"
             - "off"
+
+reset_device:
+  name: Reset Device to Defaults
+  description: Reset a Latter device. Device settings erases everything saved on the device (its settings and the Wi-Fi driver's cached data) and restarts it; Wi-Fi credentials and the API key are compiled into the firmware, so it rejoins Home Assistant unchanged. Latter options puts this device's Latter options back to the defaults it got when it was added, keeping its ESPHome binding and its Music Assistant player link.
+  fields:
+    target_device:
+      name: Target Device
+      description: Optional Latter device (auto-resolved when running a single Latter device).
+      required: false
+      selector:
+        device:
+          integration: latter
+    device_settings:
+      name: Device Settings
+      description: Erase everything saved on the device and restart it. Needs Latter firmware SDK rev 2026110261 or later. Not available for BLE tags.
+      required: false
+      default: true
+      selector:
+        boolean:
+    latter_options:
+      name: Latter Options
+      description: Reset this device's Latter options (Studio settings) to their defaults.
+      required: false
+      default: true
+      selector:
+        boolean:

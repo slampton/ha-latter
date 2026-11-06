@@ -10,6 +10,7 @@ import voluptuous as vol
 
 from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers.event import async_call_later
 
 from ..area_engine import async_execute_area_action
@@ -64,6 +65,7 @@ from ..const import (
     normalize_device_slug,
 )
 from ..coordinator import LatterCoordinator
+from ..device_reset import async_reset_device
 from ..doorbell_engine import async_execute_doorbell_intercom
 from ..wallpaper_engine import (
     async_refresh_wallpaper_cache,
@@ -978,6 +980,59 @@ async def ws_handle_device_import(
     await _async_handle_ws_import_impl(hass, connection, msg)
 
 
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "latter/device/reset",
+        vol.Required("subentry_id"): str,
+        vol.Optional("device_settings", default=True): bool,
+        vol.Optional("latter_options", default=True): bool,
+    }
+)
+@websocket_api.async_response
+async def ws_handle_device_reset(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Reset a Device to defaults (device settings and/or Latter options) through the same path as latter.reset_device."""
+    coord = resolve_target_coordinator(hass, msg["subentry_id"])
+    if coord is None:
+        connection.send_error(
+            msg["id"], "not_found", f"No Latter device with subentry_id '{msg['subentry_id']}'"
+        )
+        return
+    try:
+        await async_reset_device(
+            hass,
+            coord,
+            device_settings=msg["device_settings"],
+            latter_options=msg["latter_options"],
+        )
+    except ServiceValidationError as err:
+        connection.send_error(msg["id"], "invalid_format", str(err))
+        return
+    except HomeAssistantError as err:
+        connection.send_error(msg["id"], "command_failed", str(err))
+        return
+    log_studio_event(
+        hass,
+        "INFO",
+        coord.device_slug,
+        "Reset to defaults ("
+        + ", ".join(
+            part
+            for part, on in (
+                ("device settings", msg["device_settings"]),
+                ("Latter options", msg["latter_options"]),
+            )
+            if on
+        )
+        + ")",
+    )
+    connection.send_result(msg["id"], build_studio_state_payload(hass, coord))
+
+
 @callback
 def async_register_studio_ws_commands(hass: HomeAssistant) -> None:
     """Register all Latter Studio WebSocket API commands."""
@@ -994,5 +1049,6 @@ def async_register_studio_ws_commands(hass: HomeAssistant) -> None:
         ws_handle_device_export,
         ws_handle_system_import,
         ws_handle_device_import,
+        ws_handle_device_reset,
     ):
         websocket_api.async_register_command(hass, handler)

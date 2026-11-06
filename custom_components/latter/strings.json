@@ -249,6 +249,18 @@
     },
     "unknown_target": {
       "message": "Target Latter device {target_device} could not be resolved."
+    },
+    "factory_reset_unsupported": {
+      "message": "{device} doesn't offer Reset to defaults. Update its firmware to Latter SDK rev {sdk_rev} or later."
+    },
+    "factory_reset_failed": {
+      "message": "{device} didn't accept Reset to defaults: {error}"
+    },
+    "reset_nothing_selected": {
+      "message": "Select what to reset: the device settings, the Latter options, or both."
+    },
+    "reset_ble_tag_has_no_device_settings": {
+      "message": "A BLE tag has no device settings to reset. Reset only its Latter options."
     }
   }
 }

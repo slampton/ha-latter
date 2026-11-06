@@ -142,12 +142,15 @@ def _discover_default_speaker(hass: HomeAssistant, esphome_device_id: str | None
 
 
 def _detect_hardware_defaults(
-    hass: HomeAssistant, dev: dr.DeviceEntry | None
+    hass: HomeAssistant,
+    dev: dr.DeviceEntry | None,
+    manifest: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Auto-detect screen shape, art_size, group, area, and roaming BLE capability from the device's hardware manifest."""
     ent_reg = er.async_get(hass)
     dev_id = dev.id if dev is not None else None
-    manifest = read_device_hardware_manifest(hass, dev_id)
+    if manifest is None:
+        manifest = read_device_hardware_manifest(hass, dev_id)
 
     has_native_slots = bool(
         esphome_service(hass, dev_id, "set_browse_slots")
@@ -205,6 +208,21 @@ def _detect_hardware_defaults(
         CONF_AREA_HANDOFF: False,
         CONF_DEFAULT_AREA: (dev.area_id or "") if dev else "",
     }
+
+
+def device_option_defaults(
+    hass: HomeAssistant, dev: dr.DeviceEntry | None, manifest: dict[str, Any]
+) -> dict[str, Any]:
+    """Return the option defaults a newly onboarded ESPHome Latter device gets (used by Reset to defaults)."""
+    return {
+        **_detect_hardware_defaults(hass, dev, manifest),
+        CONF_DEFAULT_SPEAKER: _discover_default_speaker(hass, dev.id if dev is not None else None),
+    }
+
+
+def ble_tag_option_defaults(slug: str, target_address: str) -> dict[str, Any]:
+    """Return the data a newly added BLE tag gets for this name and address (used by Reset to defaults)."""
+    return _build_ble_tag_data({"name": slug, CONF_BLE_TARGET_ADDRESS: target_address}) or {}
 
 
 def _selected_device(

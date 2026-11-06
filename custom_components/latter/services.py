@@ -38,6 +38,7 @@ from .const import (
     DATA_GLOBAL_STORE,
     SERVICE_AREA_ACTION,
     SERVICE_AREA_BROWSE,
+    SERVICE_RESET_DEVICE,
     SERVICE_SAVE_CUSTOM_COLOR,
     SERVICE_SET_ACTIVE_AREA,
     SERVICE_SET_ACTIVE_SPEAKER,
@@ -1270,6 +1271,31 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 **BASE_TARGET_FIELDS,
                 vol.Required("hex_color"): cv.string,
                 vol.Optional("name"): cv.string,
+            }
+        ),
+    )
+
+    async def _handle_reset_device(call: ServiceCall) -> None:
+        """Reset a Latter Device: the settings saved on the device and/or its Latter options."""
+        from .device_reset import async_reset_device
+
+        coord = _resolve_coordinator_from_call(hass, call)
+        await async_reset_device(
+            hass,
+            coord,
+            device_settings=bool(call.data["device_settings"]),
+            latter_options=bool(call.data["latter_options"]),
+        )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_RESET_DEVICE,
+        _handle_reset_device,
+        schema=vol.Schema(
+            {
+                **BASE_TARGET_FIELDS,
+                vol.Optional("device_settings", default=True): cv.boolean,
+                vol.Optional("latter_options", default=True): cv.boolean,
             }
         ),
     )

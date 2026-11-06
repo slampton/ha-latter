@@ -49,6 +49,7 @@ resource_signing = _load_ha_free_module("resource_signing")
 issue_ids = _load_ha_free_module("issue_ids")
 health = _load_ha_free_module("health")
 ma_link = _load_ha_free_module("ma_link")
+reset_policy = _load_ha_free_module("reset_policy")
 studio_scope = _load_ha_free_module("studio/scope")
 STUDIO_JS = LATTER_DIR / "frontend" / "latter-studio.js"
 
@@ -603,6 +604,98 @@ class TestMaPlayerLink(unittest.TestCase):
         self.assertIsNone(suggest(("slampton", None), self.CANDIDATES))
         self.assertIsNone(suggest((None, "desk-assistant-p4-86"), self.CANDIDATES))
         self.assertIsNone(suggest(("Slampton", "desk-assistant-p4-86"), self.CANDIDATES), "exact match only")
+
+
+def _const_conf_values() -> set[str]:
+    """Return every CONF_* string value defined in const.py."""
+    import ast
+
+    values: set[str] = set()
+    for node in ast.parse((LATTER_DIR / "const.py").read_text(encoding="utf-8")).body:
+        if isinstance(node, (ast.Assign, ast.AnnAssign)) and isinstance(getattr(node, "value", None), ast.Constant):
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            if any(isinstance(t, ast.Name) and t.id.startswith("CONF_") for t in targets):
+                values.add(str(node.value.value))
+    return values
+
+
+class TestResetPolicy(unittest.TestCase):
+    """Reset to defaults: keep/reset decision and flag validation, exercised through `reset_policy.py`."""
+
+    CURRENT = {
+        "esphome_device_id": "dev123",
+        "mac": "aa:bb:cc:dd:ee:ff",
+        "device_slug": "desk_assistant",
+        "ma_player_entity": "media_player.desk_assistant",
+        "dock_apps": "music,games",
+        "wallpaper_source": "/local/latter_wallpapers/desk/beach.jpg",
+        "wallpaper_favorites": ["a", "b"],
+        "device_custom_color": "#FF0000",
+        "default_area": "kitchen",
+        "native_ble_tracking": True,
+        "custom_palettes": [{"name": "x", "hex": "#000000"}],
+    }
+    DEFAULTS = {
+        "device_group": "wall_panels",
+        "display_shape": "square",
+        "art_size": 720,
+        "default_page_size": 3,
+        "native_ble_tracking": False,
+        "ble_auto_switch": False,
+        "sync_device_area": False,
+        "area_handoff": False,
+        "default_area": "office",
+        "dock_apps": "music,alarm,area,remote,games,tools",
+        "default_speaker": "media_player.desk_assistant_music",
+        "esphome_device_id": "must_not_win",
+    }
+
+    def test_device_reset_keeps_identity_and_link_and_restores_defaults(self) -> None:
+        out = reset_policy.reset_subentry_data(
+            self.CURRENT, self.DEFAULTS, reset_policy.DEVICE_IDENTITY_KEYS
+        )
+        for key in ("esphome_device_id", "mac", "device_slug", "ma_player_entity"):
+            self.assertEqual(out[key], self.CURRENT[key], key)
+        self.assertEqual(out["dock_apps"], self.DEFAULTS["dock_apps"])
+        self.assertEqual(out["default_area"], "office")
+        self.assertFalse(out["native_ble_tracking"])
+        for dropped in ("wallpaper_source", "wallpaper_favorites", "device_custom_color", "custom_palettes"):
+            self.assertNotIn(dropped, out)
+
+    def test_ble_tag_reset_keeps_name_and_address(self) -> None:
+        current = {"device_slug": "seans_phone", "ble_target_address": "AA:BB:CC:DD:EE:FF", "assigned_person": "person.sean"}
+        defaults = {"device_slug": "x", "ble_target_address": "y", "assigned_person": "", "native_ble_tracking": True}
+        out = reset_policy.reset_subentry_data(current, defaults, reset_policy.BLE_TAG_IDENTITY_KEYS)
+        self.assertEqual(out["device_slug"], "seans_phone")
+        self.assertEqual(out["ble_target_address"], "AA:BB:CC:DD:EE:FF")
+        self.assertEqual(out["assigned_person"], "")
+        self.assertTrue(out["native_ble_tracking"])
+
+    def test_missing_identity_keys_are_not_invented(self) -> None:
+        out = reset_policy.reset_subentry_data({"device_slug": "x"}, {}, reset_policy.DEVICE_IDENTITY_KEYS)
+        self.assertEqual(out, {"device_slug": "x"})
+
+    def test_flag_validation(self) -> None:
+        err = reset_policy.reset_flags_error
+        self.assertIsNone(err(True, True, is_ble_tag=False))
+        self.assertIsNone(err(True, False, is_ble_tag=False))
+        self.assertIsNone(err(False, True, is_ble_tag=False))
+        self.assertIsNone(err(False, True, is_ble_tag=True))
+        self.assertEqual(err(False, False, is_ble_tag=False), "reset_nothing_selected")
+        self.assertEqual(err(False, False, is_ble_tag=True), "reset_nothing_selected")
+        self.assertEqual(err(True, True, is_ble_tag=True), "reset_ble_tag_has_no_device_settings")
+
+    def test_field_lists_name_real_subentry_keys(self) -> None:
+        """Every enumerated key is a real config key (const.py CONF_* value), and the lists don't overlap."""
+        conf_values = _const_conf_values() | {"mac"}
+        keys = reset_policy.DEVICE_IDENTITY_KEYS + reset_policy.BLE_TAG_IDENTITY_KEYS + reset_policy.DEVICE_OPTION_KEYS
+        self.assertFalse(set(keys) - conf_values, sorted(set(keys) - conf_values))
+        self.assertFalse(set(reset_policy.DEVICE_IDENTITY_KEYS) & set(reset_policy.DEVICE_OPTION_KEYS))
+
+    def test_reset_error_keys_are_translated(self) -> None:
+        strings = json.loads((LATTER_DIR / "strings.json").read_text(encoding="utf-8"))
+        for key in ("reset_nothing_selected", "reset_ble_tag_has_no_device_settings", "factory_reset_unsupported", "factory_reset_failed"):
+            self.assertIn(key, strings["exceptions"], key)
 
 
 if __name__ == "__main__":

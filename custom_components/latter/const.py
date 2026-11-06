@@ -93,6 +93,7 @@ SERVICE_INTERCOM_BROADCAST: Final = "intercom_broadcast"
 SERVICE_NOTIFY: Final = "notify"
 SERVICE_SAVE_CUSTOM_COLOR: Final = "save_custom_color"
 SERVICE_DOORBELL_INTERCOM: Final = "doorbell_intercom"
+SERVICE_RESET_DEVICE: Final = "reset_device"
 
 # HTTP Endpoints (Artwork, Wallpaper, Camera Snapshot, Camera Audio, Map & Brand)
 API_ARTWORK_PROXY_PATH: Final = "/api/latter/artwork/{target_device}"

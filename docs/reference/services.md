@@ -208,3 +208,15 @@ There is no live audio from the device to the door and no echo cancellation.
 | :--- | :--- | :--- |
 | `hex_color` | `#RRGGBB` | Added to the system color library (24 colors maximum) and applied to the device |
 | `name` | string | |
+
+## Maintenance
+
+### `latter.reset_device`
+Resets a Latter device to defaults. Choose what to reset with the two fields; at least one must be on.
+
+| Field | Type | Notes |
+| :--- | :--- | :--- |
+| `device_settings` | boolean, default `true` | Calls the device's `latter_factory_reset` action. The device erases everything it has saved (all its settings, plus the Wi-Fi driver's cached network data and RF calibration) and restarts. Wi-Fi credentials and the API key are compiled into the firmware, so the device rejoins Home Assistant by itself. Needs Latter firmware SDK rev 2026110261 or later; older firmware returns an error asking you to update. Not available for BLE tags. |
+| `latter_options` | boolean, default `true` | Puts this device's Latter options (everything set in Studio for it, such as group, dock apps, default speaker, default area, BLE tracking, wallpaper and color) back to the defaults it got when it was added. Kept: the bound ESPHome device and its MAC address, the device slug, and the Music Assistant player link. For a BLE tag, its name and tracked address are kept. System-wide settings aren't touched. |
+
+The request is checked before anything changes. Latter options are reset first, then the device action is sent.

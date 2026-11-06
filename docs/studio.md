@@ -64,6 +64,8 @@ Each device has five pages. The options on each page depend on what the device's
 | **Display & Home** | Color profile, display geometry, home dock apps and their order, area cards per page, and wallpapers (5 built-in presets, plus uploads that can rotate on a schedule) |
 | **Audio & Voice** | Wake word and sensitivity, default speaker, the device's **Music Assistant Player** (its link to Music Assistant, needed for library playback), alert volume, and music sorting |
 | **Power & Battery** | Sleep and wake timeouts, plus battery and power readings |
-| **Administration** | Device slug (read-only: the ESPHome node name) and group; BLE tracking settings; and **Remove Device** |
+| **Administration** | Device slug (read-only: the ESPHome node name) and group; BLE tracking settings; **Reset to defaults…**; and **Remove Device** |
+
+**Reset to defaults…** opens a confirmation with two options, both on by default: **Device settings** (erases everything saved on the device; it restarts) and **Latter options for this device**. Wi-Fi and pairing are kept, as are the device's ESPHome binding and Music Assistant player link. It does the same as the [`latter.reset_device`](reference/services.md#latterreset_device) service; BLE tags only offer the Latter options.
 
 > Most settings apply live: Studio saves them and pushes the change to the device without a reload. Adding or removing a device, or changing a device's bound ESPHome device, reloads the Latter integration; devices reconnect within a few seconds.
