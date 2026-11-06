@@ -5,7 +5,7 @@ The firmware reports, per boot:
 
 - `sdk`: LATTER_SDK_REV of the running build.
 - `reset`: the reset reason (power-on, external, software, panic, int-wdt, task-wdt, wdt,
-  deep-sleep, brownout, unknown).
+  deep-sleep, usb, brownout, unknown).
 - `crash`: 1 while ESPHome's crash handler holds a crash record (its decoded backtrace is
   logged to every log client until the device restarts).
 - `rollback`: 1 while the running firmware is the one that replaced an update that failed to
@@ -20,7 +20,7 @@ from typing import Any
 
 CRASH_RESETS: frozenset[str] = frozenset({"panic", "int-wdt", "task-wdt", "wdt"})
 BROWNOUT_RESET = "brownout"
-CLEAN_RESETS: frozenset[str] = frozenset({"power-on", "external", "software", "deep-sleep"})
+CLEAN_RESETS: frozenset[str] = frozenset({"power-on", "external", "software", "deep-sleep", "usb"})
 
 ISSUE_CRASHED = "device_crashed"
 ISSUE_BROWNOUT = "device_brownout"
@@ -70,7 +70,7 @@ def evaluate_device_health(health: DeviceHealth) -> HealthActions:
     """Decide which health repairs one boot's hello raises or clears.
 
     - A crash reset (panic or any watchdog) raises `device_crashed`; a brownout raises
-      `device_brownout`. A clean reset (power-on, external, software, deep-sleep) clears both.
+      `device_brownout`. A clean reset (power-on, external, software, deep-sleep, usb) clears both.
       `unknown` or a missing reason leaves both as they are.
     - `rollback == 1` raises `firmware_rolled_back`; `rollback == 0` clears it.
     """

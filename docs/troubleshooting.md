@@ -68,7 +68,7 @@ If the speaker's real volume control is an AV receiver, map the speaker in **Stu
 
 **A repair says the device restarted after a crash**
 
-The device reported a panic or watchdog reset when it booted. Open its logs in ESPHome Device Builder before it restarts again: ESPHome prints the decoded backtrace to every log client until the next restart, and decoding needs the build the device is running. The repair shows the Latter SDK rev and the boot time, and clears when a later boot is clean (power-on, external, software, deep sleep).
+The device reported a panic or watchdog reset when it booted. Open its logs in ESPHome Device Builder before it restarts again: ESPHome prints the decoded backtrace to every log client until the next restart, and decoding needs the build the device is running. The repair shows the Latter SDK rev and the boot time, and clears when a later boot is clean (power-on, external, software, deep sleep, USB reset).
 
 **A repair says the device restarted after a brownout**
 
