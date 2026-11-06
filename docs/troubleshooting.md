@@ -81,6 +81,15 @@ The update didn't boot, so the device went back to the previous firmware. Check 
 
 The last reported reset reason, crash flag, rollback flag and SDK rev for each Device are in Latter's diagnostics download.
 
+**Firmware updates are very slow or stall at 0%, or the device drops off Wi-Fi**
+
+Check the device's **Wi-Fi Signal** sensor. Below about -70 dBm, updates slow down sharply: ESPHome may judge the link lossy and switch the upload to UDP, which is much slower. Two common causes:
+
+- **Devices docked next to each other.** Latter devices (and other 2.4 GHz gear) a few centimeters apart detune each other's antennas. Keep docked devices at least 30 cm apart; moving one device clear of the others can improve the signal of both by 15-20 dB.
+- **Distance or walls to the access point.** Move the device closer for the update, or check that it joined the nearest access point.
+
+Start one update at a time: ESPHome Device Builder runs simultaneous uploads in parallel, and they slow each other down.
+
 ---
 
 ## Getting help
