@@ -5,7 +5,8 @@ The firmware reports, per boot:
 
 - `sdk`: LATTER_SDK_REV of the running build.
 - `reset`: the reset reason (power-on, external, software, panic, int-wdt, task-wdt, wdt,
-  deep-sleep, usb, brownout, unknown).
+  stall, deep-sleep, usb, brownout, unknown). `stall` is the firmware's main-loop stall guard:
+  one ESPHome operation blocked the loop for 30 s or longer and the device restarted itself.
 - `crash`: 1 while ESPHome's crash handler holds a crash record (its decoded backtrace is
   logged to every log client until the device restarts).
 - `rollback`: 1 while the running firmware is the one that replaced an update that failed to
@@ -18,7 +19,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
-CRASH_RESETS: frozenset[str] = frozenset({"panic", "int-wdt", "task-wdt", "wdt"})
+CRASH_RESETS: frozenset[str] = frozenset({"panic", "int-wdt", "task-wdt", "wdt", "stall"})
 BROWNOUT_RESET = "brownout"
 CLEAN_RESETS: frozenset[str] = frozenset({"power-on", "external", "software", "deep-sleep", "usb"})
 

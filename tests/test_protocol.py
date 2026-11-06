@@ -526,7 +526,7 @@ class TestDeviceHealth(unittest.TestCase):
         return health.evaluate_device_health(health.parse_device_health(manifest))
 
     def test_crash_resets_raise_device_crashed(self) -> None:
-        for reason in ("panic", "int-wdt", "task-wdt", "wdt"):
+        for reason in ("panic", "int-wdt", "task-wdt", "wdt", "stall"):
             acts = self._actions({"sdk": 41, "reset": reason, "crash": 1, "rollback": 0})
             self.assertEqual(acts.raise_issues, {"device_crashed": {"reason": reason, "sdk": "41"}})
             self.assertEqual(acts.delete_issues, {"firmware_rolled_back"})
