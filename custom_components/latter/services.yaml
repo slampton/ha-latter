@@ -782,8 +782,8 @@ reset_device:
   fields:
     target_device:
       name: Target Device
-      description: Optional Latter device (auto-resolved when running a single Latter device).
-      required: false
+      description: The Latter device to reset. Required; a reset never falls back to the only device.
+      required: true
       selector:
         device:
           integration: latter

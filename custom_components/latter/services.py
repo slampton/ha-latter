@@ -1276,7 +1276,11 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     )
 
     async def _handle_reset_device(call: ServiceCall) -> None:
-        """Reset a Latter Device: the settings saved on the device and/or its Latter options."""
+        """Reset a Latter Device: the settings saved on the device and/or its Latter options.
+
+        Unlike the other per-device services, the target is required: a destructive reset never
+        falls back to the single-device default.
+        """
         from .device_reset import async_reset_device
 
         coord = _resolve_coordinator_from_call(hass, call)
@@ -1293,7 +1297,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         _handle_reset_device,
         schema=vol.Schema(
             {
-                **BASE_TARGET_FIELDS,
+                vol.Required("target_device"): vol.All(cv.string, vol.Strip, vol.Length(min=1)),
                 vol.Optional("device_settings", default=True): cv.boolean,
                 vol.Optional("latter_options", default=True): cv.boolean,
             }
