@@ -76,7 +76,7 @@ Latter creates one occupancy binary sensor and one occupants sensor per area. Th
 | Door or opening closed | +0.08 |
 | Occupancy sensor explicitly off, no motion, weak BLE | −0.18 |
 
-Fusion modes, set per area in Studio:
+Fusion modes, set per area in Studio (**System → BLE & Area Presence**, with the threshold and the sensors under each area's **Fusion settings**):
 
 | Mode | Behavior |
 | :--- | :--- |
@@ -87,7 +87,7 @@ Fusion modes, set per area in Studio:
 
 > The weighted score is not a Bayesian update. It's simple and predictable, and the weights above are the whole model.
 
-Sensors are discovered automatically by device class (occupancy, presence, motion, moving, door, opening), from both entity areas and device areas. You can also list them explicitly per area.
+Sensors are discovered automatically by device class (occupancy, presence, motion, moving, door, opening), from both entity areas and device areas. By default every discovered sensor in the area counts; in **Fusion settings** you can pick the ones that count instead (only the area's own sensors can be picked).
 
 ## What Latter does with the area
 

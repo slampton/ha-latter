@@ -18,7 +18,7 @@ from typing import Any, Literal, Protocol, TypeVar
 SYSTEM_COMMANDS: frozenset[str] = frozenset(
     {
         "set_ble_area_offset",
-        "set_area_fusion_mode",
+        "set_area_fusion",
         "auto_calibrate_here",
         "system_entity_action",
         "send_test_notification",

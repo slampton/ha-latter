@@ -16,9 +16,10 @@ import voluptuous as vol
 from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
+from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers.event import async_call_later
 
-from ..area_engine import async_execute_area_action
+from ..area_engine import area_fusion_sensor_choices, async_execute_area_action
 from ..backup_engine import (
     async_apply_profile_to_coordinators,
     async_restore_backup_bundle,
@@ -78,6 +79,7 @@ from .scope import (
 )
 from .settings import (
     SettingsScopeError,
+    clean_area_fusion,
     clean_device_settings,
     clean_system_settings,
     system_settings_view,
@@ -141,37 +143,25 @@ async def _async_execute_studio_command(
             hass, {CONF_BLE_AREA_OFFSETS: offsets}
         )
 
-    elif cmd == "set_area_fusion_mode":
+    elif cmd == "set_area_fusion":
         area_id = str(body.get("area_id") or "").strip()
-        mode_val = str(body.get("mode") or "weighted").strip().lower()
-        if mode_val not in ("weighted", "any_or", "ble_only", "ble_and_sensor"):
-            mode_val = "weighted"
-        if area_id:
-            raw_fusion = global_cfg.get(CONF_AREA_FUSION_CONFIG) or {}
-            fusion_cfg = (
-                dict(raw_fusion) if isinstance(raw_fusion, dict) else {}
-            )
-            cur_area_cfg = (
-                dict(fusion_cfg.get(area_id) or {})
-                if isinstance(fusion_cfg.get(area_id), dict)
-                else {}
-            )
-            cur_area_cfg["mode"] = mode_val
-            if "threshold_pct" in body and body["threshold_pct"] is not None:
-                cur_area_cfg["threshold_pct"] = max(
-                    20, min(95, int(body["threshold_pct"]))
-                )
-            if "sensors" in body and isinstance(body["sensors"], list):
-                cur_area_cfg["sensors"] = [
-                    str(s).strip()
-                    for s in body["sensors"]
-                    if str(s or "").strip()
-                ]
-            fusion_cfg[area_id] = cur_area_cfg
-            await async_save_and_broadcast_global_config(
-                hass, {CONF_AREA_FUSION_CONFIG: fusion_cfg}
-            )
-            get_ble_fabric(hass).notify_occupancy_listeners()
+        if not area_id or ar.async_get(hass).async_get_area(area_id) is None:
+            raise StudioCommandError("not_found", f"Unknown Area '{area_id}'")
+        allowed_sensors = {
+            s["entity_id"] for s in area_fusion_sensor_choices(hass, area_id)
+        }
+        raw_fusion = global_cfg.get(CONF_AREA_FUSION_CONFIG) or {}
+        fusion_cfg = dict(raw_fusion) if isinstance(raw_fusion, dict) else {}
+        current_area = fusion_cfg.get(area_id)
+        fusion_cfg[area_id] = clean_area_fusion(
+            current_area if isinstance(current_area, dict) else {},
+            {k: body[k] for k in ("mode", "threshold_pct", "sensors") if k in body},
+            allowed_sensors,
+        )
+        await async_save_and_broadcast_global_config(
+            hass, {CONF_AREA_FUSION_CONFIG: fusion_cfg}
+        )
+        get_ble_fabric(hass).notify_occupancy_listeners()
 
     elif cmd == "auto_calibrate_here":
         target_area_id = str(body.get("area_id") or "").strip()

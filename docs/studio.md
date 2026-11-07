@@ -40,7 +40,7 @@ Settings here live in `.storage/latter.site` and apply to every device.
 - **Device Groups:** logical groupings such as handhelds, bedrooms, or wall panels, used for organization and when applying profiles.
 
 ### BLE & Area Presence
-- **Live Area Presence & Sensor Fusion:** per-area occupancy, the devices and people in each area, and the fusion mode used for each area.
+- **Live Area Presence & Sensor Fusion:** per-area occupancy, the devices and people in each area, and each area's fusion mode. **Fusion settings** under each area set the occupancy threshold (weighted mode, 20 to 95%) and which of the area's sensors count (none picked means all of them). Changes apply at once.
 - **Per-Area BLE Signal Calibration:** live raw and effective RSSI per area for a selected device. Includes **Calibrate Current Area**, ±1 dB adjustment, and a **Fast refresh** switch (updates every 1.5 s).
 - **Discovered Nearby Bluetooth Devices:** named BLE devices, `private_ble_device` entities, and iBeacons your scanners can hear. **Adopt** one to track it as its own Latter device.
 

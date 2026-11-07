@@ -179,6 +179,27 @@ class TestSaveScopes(unittest.TestCase):
         flow_src = (LATTER_DIR / "config_flow.py").read_text(encoding="utf-8")
         self.assertNotIn("AREA_FOLLOW_DWELL", flow_src)
 
+    def test_area_fusion_validates_against_the_areas_sensors(self) -> None:
+        allowed = {"binary_sensor.kitchen_motion", "binary_sensor.kitchen_mmwave"}
+        cur = {"mode": "weighted", "threshold_pct": 50, "sensors": []}
+        out = settings.clean_area_fusion(
+            cur, {"threshold_pct": 99, "sensors": ["binary_sensor.kitchen_mmwave", "binary_sensor.kitchen_mmwave"]}, allowed
+        )
+        self.assertEqual(out, {"mode": "weighted", "threshold_pct": 95, "sensors": ["binary_sensor.kitchen_mmwave"]})
+        self.assertEqual(settings.clean_area_fusion(cur, {"threshold_pct": 5}, allowed)["threshold_pct"], 20)
+        self.assertEqual(settings.clean_area_fusion({}, {"mode": "BLE_ONLY"}, allowed), {"mode": "ble_only"})
+        # An empty list means every sensor in the Area counts.
+        self.assertEqual(settings.clean_area_fusion(cur, {"sensors": []}, allowed)["sensors"], [])
+        for bad in (
+            {"sensors": ["binary_sensor.front_door"]},  # another Area's sensor
+            {"sensors": ["lock.front_door"]},
+            {"sensors": "binary_sensor.kitchen_motion"},
+            {"mode": "bayesian"},
+            {"threshold_pct": "high"},
+        ):
+            with self.assertRaises(settings.SettingsScopeError):
+                settings.clean_area_fusion(cur, bad, allowed)
+
     def test_system_view_reads_without_a_device(self) -> None:
         view = settings.system_settings_view({"camera_entity": "camera.door", "weather_entity": "weather.home"})
         self.assertEqual(view["camera_entities"], ["camera.door"])

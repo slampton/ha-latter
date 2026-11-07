@@ -158,6 +158,48 @@ def clean_dwell_s(val: Any) -> int:
         return DEFAULT_DWELL_S
 
 
+FUSION_MODES: tuple[str, ...] = ("weighted", "any_or", "ble_only", "ble_and_sensor")
+FUSION_THRESHOLD_MIN = 20
+FUSION_THRESHOLD_MAX = 95
+DEFAULT_FUSION_THRESHOLD = 50
+
+
+def clean_area_fusion(
+    current: Mapping[str, Any], update: Mapping[str, Any], allowed_sensors: set[str]
+) -> dict[str, Any]:
+    """Return one Area's fusion settings after a Studio change (`area_fusion_config[<area_id>]`).
+
+    `update` may name `mode`, `threshold_pct` (20-95 %, used by the weighted mode) and `sensors` (the
+    Area's sensors that count; an empty list means all of them). Every sensor must be one the Area
+    actually has (`allowed_sensors`, discovered server-side); anything else is rejected.
+    """
+    out: dict[str, Any] = {k: current[k] for k in ("mode", "threshold_pct", "sensors") if k in current}
+    if "mode" in update:
+        mode = _text(update["mode"]).lower()
+        if mode not in FUSION_MODES:
+            raise SettingsScopeError(f"Unknown fusion mode: {mode or '(empty)'}")
+        out["mode"] = mode
+    if "threshold_pct" in update:
+        try:
+            pct = int(update["threshold_pct"])
+        except (TypeError, ValueError):
+            raise SettingsScopeError("The occupancy threshold must be a whole percent") from None
+        out["threshold_pct"] = max(FUSION_THRESHOLD_MIN, min(FUSION_THRESHOLD_MAX, pct))
+    if "sensors" in update:
+        if not isinstance(update["sensors"], (list, tuple)):
+            raise SettingsScopeError("sensors must be a list of entity IDs")
+        sensors: list[str] = []
+        for item in update["sensors"]:
+            ent = _text(item)
+            if ent and ent not in sensors:
+                sensors.append(ent)
+        unknown = [s for s in sensors if s not in allowed_sensors]
+        if unknown:
+            raise SettingsScopeError(f"Not a sensor of this Area: {', '.join(unknown)}")
+        out["sensors"] = sensors
+    return out
+
+
 def clean_system_settings(incoming: Mapping[str, Any]) -> dict[str, Any]:
     """Validate and normalize a System save. The primary camera (`camera_entity`) is derived, never sent."""
     _check_scope(incoming, SYSTEM_SETTING_KEYS, "System")

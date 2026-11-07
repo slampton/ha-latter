@@ -663,6 +663,20 @@ def discover_area_fusion_sensors(
     return occ_on, occ_off, motion_on, door_closed, available
 
 
+def area_fusion_sensor_choices(hass: HomeAssistant, area_id: str) -> list[dict[str, str]]:
+    """Return the occupancy, motion and door sensors an Area has (the only ones its fusion can use)."""
+    return discover_area_fusion_sensors(hass, area_id)[4]
+
+
+def area_fusion_settings(hass: HomeAssistant, area_id: str) -> dict[str, Any]:
+    """Return one Area's stored fusion settings (`area_fusion_config[<area_id>]`), or {}."""
+    domain_data = hass.data.get(DOMAIN, {})
+    global_cfg = domain_data.get("global_config", {}) if isinstance(domain_data, dict) else {}
+    fusion_map = global_cfg.get("area_fusion_config", {}) if isinstance(global_cfg, dict) else {}
+    area_cfg = fusion_map.get(area_id, {}) if isinstance(fusion_map, dict) else {}
+    return area_cfg if isinstance(area_cfg, dict) else {}
+
+
 def evaluate_area_sensor_fusion(
     hass: HomeAssistant,
     area_id: str,
@@ -671,18 +685,7 @@ def evaluate_area_sensor_fusion(
     best_rssi: int | None,
 ) -> dict[str, Any]:
     """Evaluate weighted BLE + physical sensor fusion for a Home Assistant Area (`area_fusion_config`)."""
-    domain_data = hass.data.get(DOMAIN, {})
-    global_cfg = (
-        domain_data.get("global_config", {}) if isinstance(domain_data, dict) else {}
-    )
-    fusion_map = (
-        global_cfg.get("area_fusion_config", {})
-        if isinstance(global_cfg, dict)
-        else {}
-    )
-    area_cfg = fusion_map.get(area_id, {}) if isinstance(fusion_map, dict) else {}
-    if not isinstance(area_cfg, dict):
-        area_cfg = {}
+    area_cfg = area_fusion_settings(hass, area_id)
 
     raw_mode = str(area_cfg.get("mode") or "weighted").strip().lower()
     fusion_mode = (

@@ -322,6 +322,9 @@ const STUDIO_STYLES = `
     font-weight: var(--studio-weight-medium);
   }
   details.sub-collapsible > .card-content { padding: var(--studio-space-3) 0 0; }
+  .fusion-area { border-bottom: 1px solid var(--studio-divider); padding-bottom: var(--studio-space-3); }
+  .fusion-area:last-child { border-bottom: none; }
+  .fusion-area > .settings-row { border-bottom: none; }
   .subsection-title {
     padding-top: var(--studio-space-3);
     border-top: 1px solid var(--studio-divider);
@@ -1869,7 +1872,7 @@ const DOCK_APP_META = [
 // System commands never act on the selected Device; one that acts on a Device names it in its payload.
 const SYSTEM_WS_COMMANDS = new Set([
   "set_ble_area_offset",
-  "set_area_fusion_mode",
+  "set_area_fusion",
   "auto_calibrate_here",
   "system_entity_action",
   "send_test_notification",
@@ -2827,13 +2830,16 @@ function renderActiveSurveyDeviceBars() {
 function renderAreaPresenceGrid() {
   const box = doc.getElementById("area-presence-grid-box");
   if (!box) return;
+  // Don't rebuild the list under a control the user is using (a slider drag or an open select).
+  const activeEl = getStudioActiveElement();
+  if (activeEl && box.contains(activeEl) && ["INPUT", "SELECT"].includes(activeEl.tagName)) return;
   const rows = STATE?.live?.area_presence_grid || [];
   if (!rows.length) {
     box.innerHTML = emptyStateHtml("No Bluetooth proxies or Area occupancy sensors found yet.");
     return;
   }
   const modeOptions = [
-    {val: "weighted", label: "Weighted (BLE + sensors)"},
+    {val: "weighted", label: "Weighted (BLE and sensors)"},
     {val: "any_or", label: "Either (BLE or a sensor)"},
     {val: "ble_only", label: "BLE only"},
     {val: "ble_and_sensor", label: "Both (BLE and a sensor)"}
@@ -2854,23 +2860,68 @@ function renderAreaPresenceGrid() {
     }
     if (r.floor_id) parts.push(`Floor: ${r.floor_id}`);
     const curMode = r.fusion_mode || "weighted";
+    const areaArg = jsArg(r.area_id);
     const opts = modeOptions.map(m => `<option value="${esc(m.val)}" ${m.val === curMode ? 'selected' : ''}>${esc(m.label)}</option>`).join("");
     const chip = isOcc
       ? `<span class="chip chip-success">Occupied • ${esc(fmtPercent(r.confidence_pct))}</span>`
       : `<span class="chip">Clear</span>`;
-    return settingsRowHtml(
-      `${esc(r.area_name)} ${chip}`,
-      esc(parts.join(" • ")),
-      `<select aria-label="Fusion mode for ${esc(r.area_name)}" onchange="setAreaFusionMode(${jsArg(r.area_id)}, this.value)">${opts}</select>`
-    );
+    const threshold = Number(r.fusion_threshold_pct || 50);
+    const chosen = r.fusion_sensors || [];
+    const choices = r.fusion_sensor_choices || [];
+    const sensorPills = choices.length
+      ? `<div class="pill-list">${choices.map(s => {
+          const on = chosen.includes(s.entity_id);
+          return `<span class="pill ${on ? "enabled" : ""}"><button type="button" class="pill-toggle" aria-pressed="${on}" title="${esc(s.entity_id)}" onclick="toggleFusionSensor(${areaArg}, ${jsArg(s.entity_id)})">${on ? "✓ " : ""}${esc(s.name)}</button></span>`;
+        }).join("")}</div>`
+      : emptyStateHtml("This Area has no occupancy, motion or door sensors.");
+    const thresholdId = `fusion-threshold-${esc(r.area_id)}`;
+    return `<div class="fusion-area">
+      ${settingsRowHtml(
+        `${esc(r.area_name)} ${chip}`,
+        esc(parts.join(" • ")),
+        `<select aria-label="Fusion mode for ${esc(r.area_name)}" onchange="setAreaFusion(${areaArg}, {mode: this.value})">${opts}</select>`
+      )}
+      <details class="sub-collapsible" ${FUSION_OPEN_AREAS.has(r.area_id) ? "open" : ""} ontoggle="onFusionDetailsToggle(${areaArg}, this.open)">
+        <summary>Fusion settings</summary>
+        <div class="card-content settings-list">
+          ${settingsRowHtml(
+            `<label for="${thresholdId}">Occupied at</label>`,
+            curMode === "weighted"
+              ? "The Area counts as occupied when the combined BLE and sensor score reaches this."
+              : "Used by the Weighted mode only.",
+            `<input type="range" id="${thresholdId}" min="20" max="95" step="5" value="${esc(threshold)}" ${curMode === "weighted" ? "" : "disabled"}
+               oninput="this.nextElementSibling.textContent = fmtPercent(Number(this.value))"
+               onchange="setAreaFusion(${areaArg}, {threshold_pct: Number(this.value)})"><span class="chip">${esc(fmtPercent(threshold))}</span>`
+          )}
+          <div class="settings-row stacked">
+            <div class="settings-row-text"><span class="row-label">Sensors that count</span><p class="row-description">${chosen.length ? `${chosen.length} of ${choices.length} selected.` : "None selected: every sensor in this Area counts."}</p></div>
+            <div class="settings-row-control">${sensorPills}</div>
+          </div>
+        </div>
+      </details>
+    </div>`;
   }).join("");
 }
 
-async function setAreaFusionMode(areaId, mode) {
-  const data = await callStudioCommand({command: "set_area_fusion_mode", area_id: areaId, mode});
+const FUSION_OPEN_AREAS = new Set();
+
+function onFusionDetailsToggle(areaId, isOpen) {
+  if (isOpen) FUSION_OPEN_AREAS.add(areaId);
+  else FUSION_OPEN_AREAS.delete(areaId);
+}
+
+function toggleFusionSensor(areaId, entityId) {
+  const row = (STATE?.live?.area_presence_grid || []).find(r => r.area_id === areaId);
+  const current = row?.fusion_sensors || [];
+  const next = current.includes(entityId) ? current.filter(s => s !== entityId) : current.concat([entityId]);
+  setAreaFusion(areaId, {sensors: next});
+}
+
+async function setAreaFusion(areaId, changes) {
+  const data = await callStudioCommand({command: "set_area_fusion", area_id: areaId, ...changes});
   if (data) {
     applyStateToDom(data, false);
-    showToast("Updated Area sensor fusion mode");
+    showToast("Saved Area sensor fusion");
   }
 }
 
@@ -4482,7 +4533,9 @@ function bindStudioGlobals() {
   window.selectCurrentDevice = selectCurrentDevice;
   window.selectWallpaperSource = selectWallpaperSource;
   window.sendTestNotification = sendTestNotification;
-  window.setAreaFusionMode = setAreaFusionMode;
+  window.setAreaFusion = setAreaFusion;
+  window.toggleFusionSensor = toggleFusionSensor;
+  window.onFusionDetailsToggle = onFusionDetailsToggle;
   window.setBleOffset = setBleOffset;
   window.setCwHex = setCwHex;
   window.setScope = setScope;

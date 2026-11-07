@@ -818,6 +818,8 @@ class LatterNativeBleTracker:
         get_ble_fabric(self.hass).notify_occupancy_listeners()
 
 from .area_engine import (  # noqa: E402
+    area_fusion_sensor_choices,
+    area_fusion_settings,
     evaluate_area_sensor_fusion,
     invalidate_area_fusion_index,
 )
@@ -1151,7 +1153,10 @@ def get_ble_fabric(hass: HomeAssistant) -> LatterBleFabric:
 
 
 def get_all_areas_presence_summary(hass: HomeAssistant) -> list[dict[str, Any]]:
-    """Build live per-area presence, occupant names, confidence score, and fusion status for Latter Studio."""
+    """Build live per-area presence, occupant names, confidence score, and fusion settings for Latter Studio.
+
+    Rows are in Area name order (a stable list: Studio edits each Area's fusion settings in place).
+    """
     area_reg = ar.async_get(hass)
     fabric = get_ble_fabric(hass)
     proxy_areas = get_ble_proxy_area_ids(hass)
@@ -1163,6 +1168,7 @@ def get_all_areas_presence_summary(hass: HomeAssistant) -> list[dict[str, Any]]:
         has_sensors = len(occ["available_sensors"]) > 0
         if not has_proxy and not has_sensors and not occ["is_occupied"]:
             continue
+        fusion_cfg = area_fusion_settings(hass, area_entry.id)
         rows.append(
             {
                 "area_id": area_entry.id,
@@ -1184,16 +1190,13 @@ def get_all_areas_presence_summary(hass: HomeAssistant) -> list[dict[str, Any]]:
                 "winning_rssi": occ["winning_rssi"],
                 "closest_distance_m": occ["closest_distance_m"],
                 "closest_distance_ft": occ["closest_distance_ft"],
+                "fusion_threshold_pct": int(fusion_cfg.get("threshold_pct") or 50),
+                "fusion_sensors": [
+                    str(s) for s in (fusion_cfg.get("sensors") or []) if isinstance(s, str)
+                ],
+                "fusion_sensor_choices": area_fusion_sensor_choices(hass, area_entry.id),
             }
         )
-
-    rows.sort(
-        key=lambda r: (
-            not r["is_occupied"],
-            -int(r["confidence_pct"] or 0),
-            r["area_name"].lower(),
-        )
-    )
     return rows
 
 
