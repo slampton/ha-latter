@@ -28,9 +28,9 @@ Every control in Studio is wired end to end, or it doesn't ship.
 
 ## 3. Design tokens
 
-Studio matches Home Assistant's own settings pages. Every visual value comes from a token. Tokens are defined **once**, in the `:host` block at the top of `STUDIO_STYLES`, and each one reads a Home Assistant theme variable with a fallback. No other rule in the file contains a font size, a pixel spacing value, or a color literal.
+Studio matches Home Assistant's own settings pages. Every visual value comes from a token. Tokens are defined **once**, in the `:host` block at the top of `STUDIO_STYLES`, and each one reads a Home Assistant theme variable with a fallback. No other rule in the file contains a font size, a pixel spacing value, or a color literal (`[STUDIO TOKENS]`: zero allowed outside `:host`).
 
-> **Ratchet.** Studio is being migrated to these tokens. Until the migration is complete, the `[STUDIO TOKENS]` check counts the hard-coded `font-size`, pixel spacing, and color literals outside the `:host` block, and fails if the count grows. Lower the recorded count whenever a change removes some. The goal is zero.
+Markup carries no inline styles (`[STUDIO INLINE STYLES]`). The one exception is a data-driven custom property, set from data on the element that needs it (`style="--signal-pct: 62%"`, `el.style.setProperty("--swatch-color", color)`), and read by a class rule.
 
 ### Type scale
 
@@ -92,30 +92,65 @@ Literal colors appear only as token fallbacks inside `:host`. User data (a saved
   --studio-radius-card: var(--ha-card-border-radius, 12px);
   --studio-radius-control: var(--ha-border-radius-md, 8px);
   --studio-radius-pill: var(--ha-border-radius-pill, 9999px);
-  /* colors: surfaces, text, accent and status as listed above, each with a fallback */
+  --studio-control-height: 36px;          /* regular button and input */
+  --studio-control-height-compact: 28px;  /* compact button */
+  /* Colors, each reading the HA variable with a literal fallback: */
+  --studio-bg, --studio-surface, --studio-surface-alt, --studio-input-bg,
+  --studio-divider, --studio-card-border,
+  --studio-text, --studio-text-secondary, --studio-text-disabled,
+  --studio-primary, --studio-on-primary,
+  --studio-primary-tint, --studio-primary-tint-strong,   /* rgba(var(--rgb-primary-color), a) */
+  --studio-success, --studio-warning, --studio-error, --studio-info,
+  --studio-success-tint, --studio-warning-tint, --studio-error-tint, --studio-info-tint;
 }
 ```
+
+The `:host` block holds only declarations (no nested rules and no `}` inside comments), so the check can find where it ends.
 
 ## 4. Components
 
 Studio has one implementation of each component. A new pattern is added here first, then built once and reused.
 
 - **Card**: header (title, optional one-line description, actions on the right) → content → optional footer actions separated by a divider. Descriptions are always visible.
-- **Collapsible card**: a native `<details>` with the same header. Used for long or advanced content (logs, raw entity inspector).
-- **Settings row**: label and optional description on the left, the control on the right, a divider between rows. Stacks on narrow screens. Every Latter option and every curated Device setting goes through this one row. One switch style for every on/off setting.
-- **Key/value rows**: a label and a value; unknown values show `—`.
-- **Tables**: for lists longer than a few rows. Sortable column headers that work with the keyboard; the whole row opens its item.
-- **Chips**: one chip shape with status variants (neutral, primary, success, warning, error) taken from the theme colors.
-- **Empty state**: one block with a sentence that says what's missing and, where possible, how to add it. Never hidden.
-- **Loading state**: shown until the first data arrives; never pre-filled with fake values.
-- **Error state**: every failed command shows an error toast with the reason. A persistent problem (a Device health issue, a missing required entity) shows as an inline alert in the card it affects.
-- **Buttons**: primary (filled), secondary (outlined), tertiary (text or icon), danger (outlined; filled only inside a confirmation dialog). At most **one primary button per card or view**. Two sizes: regular and compact.
-- **Dialogs**: native `<dialog>`, closed with Esc, focus moved into the dialog on open and returned on close. Confirmation dialogs say exactly what will happen.
+  ```html
+  <section class="card">
+    <div class="card-header">
+      <div class="card-heading"><h2 class="card-title">…</h2><p class="card-description">…</p></div>
+      <div class="card-header-actions">…</div>
+    </div>
+    <div class="card-content">…</div>
+    <div class="card-actions">…</div>
+  </section>
+  ```
+- **Collapsible card**: a native `<details class="card">` whose `<summary>` is the card header. Used for long or advanced content (logs, raw entity inspector). Inside a card, a nested collapsible section uses `details.sub-collapsible`.
+- **Settings row**: label and optional description on the left, the control on the right, a divider between rows. Every Latter option and every curated Device setting goes through this one row, built by `settingsRowHtml()`: `.settings-list` > `.settings-row` > `.settings-row-text` (`.row-label`, `.row-description`) + `.settings-row-control`. `.settings-row.stacked` puts a wide control (a slider, a picker) under the label.
+- **Switch**: one style for every on/off setting: `<input type="checkbox" class="switch" role="switch">`.
+- **Key/value rows**: `.kv-list` > `.kv-row` (label, value); unknown values show `—`. A row that opens something is a `button.kv-row`.
+- **Stats**: `.stat-grid` > `.stat` for a few headline numbers on an overview.
+- **Lists**: `.list-row` (with `.list-row-main` and `.list-row-grow`) for short item lists with actions; `.list-block` for an item with a heading row (`.list-row-head`) and stacked fields (`.stacked-field`, `.field-label`).
+- **Tables**: for lists longer than a few rows: `.table-wrap` > `table.data-table`. Sortable headers are `button.sort-btn` inside a `th` with `aria-sort`. Each row is focusable (`tabindex="0"`) and opens its item on click, Enter or Space.
+- **Chips**: one shape, `.chip`, with variants `.chip-primary`, `.chip-success`, `.chip-warning`, `.chip-error` (no class is neutral). Status dots (`.status-dot`) use the same variants.
+- **Empty state**: `emptyStateHtml()` renders `.empty-state`: a sentence that says what's missing and, where possible, how to add it. Never hidden.
+- **Loading state**: `.loading-state`, shown until the first payload arrives; the page is never pre-filled with fake values. If the first load fails, an `.alert.alert-error` with a Retry button replaces it.
+- **Error state**: every failed command shows an error toast (`.toast.error`) with the reason, from the one place that sends commands. A persistent problem (a Device health issue, a missing required entity) shows as an inline `.alert` (`.alert-warning`, `.alert-error`) in the card it affects.
+- **Buttons**: `.btn` plus one variant: `.btn-primary` (filled), `.btn-secondary` (outlined), `.btn-text` (tertiary), `.btn-danger` (outlined), `.btn-danger-filled` (only inside a confirmation dialog). At most **one primary button per card or view**; the page header's Save is the view's primary. Two sizes: regular, and `.btn-compact` for buttons inside rows. Icon-only buttons are `.btn-icon` (`.btn-icon.danger` for delete) and always have an `aria-label`.
+- **Dialogs**: a native `<dialog class="studio-dialog">`, opened with `openDialog()` and closed with `closeDialog()`. Esc closes it, focus moves into the dialog on open and returns to the opener on close. Confirmation dialogs say exactly what will happen.
+- **Narrow layouts**: cards are size containers; below 520 px of card width, settings rows and list rows stack (a container query, not a viewport media query), so a card in a narrow column behaves like a card on a phone.
 
 ## 5. Navigation
 
 - Two scopes, selected at the top of the sidebar: **Devices** first and the default landing page (the Device list), **System** second (`[STUDIO DEFAULT VIEW]`).
-- Opening Studio, or reloading it, shows the Device list unless the URL names a Device (`/latter/devices/<subentry_id>`).
+- The URL follows the page, so reload and Back keep it:
+
+  | URL | Page |
+  | :--- | :--- |
+  | `/latter` | Device list (the default) |
+  | `/latter/devices/<subentry_id>` | That Device's Overview |
+  | `/latter/devices/<subentry_id>/<page>` | `overview`, `display`, `audio`, `power`, `settings` |
+  | `/latter/system/<page>` | `overview`, `shared`, `remotes`, `groups`, `presence`, `settings` |
+
+  Studio writes the URL with `history.pushState` and a `location-changed` event, the way Home Assistant's own panels navigate. An unknown path shows the Device list.
+- The **Visit** link on a Latter Device's Home Assistant device page opens that Device in Studio (`/latter/devices/<subentry_id>`).
 - The page template starts in the Devices state, so nothing flashes before the first render.
 - Page names are unique: Device pages are **Overview**, **Display & Home**, **Audio & Voice**, **Power & Battery**, and **Device settings**; System pages are **System overview**, **Shared Entities**, **Media & Remotes**, **Groups & Profiles**, **BLE & Area Presence**, and **System settings**. A nav label and its page title are the same text.
 - System pages work fully with no Device selected. A System action that acts on one Device names that Device in the action itself (a picker), never the "selected Device" of another page.
@@ -126,7 +161,7 @@ Studio has one implementation of each component. A new pattern is added here fir
 - No marketing device names or personal equipment brands in labels or logic; Studio branches on hardware-manifest traits.
 - Labels use sentence case, like Home Assistant. Help text is one short sentence that says what the setting does, not how it's built.
 - Show entity IDs only where the user picks or inspects an entity.
-- Units, numbers, and dates follow the user's Home Assistant settings (`hass.locale`, `hass.config.unit_system`). Times are relative ("2 min ago") where that reads better.
+- Units, numbers, and dates follow the user's Home Assistant settings (`hass.locale`, `hass.config.unit_system`). Times are relative ("2 min ago") where that reads better. Studio formats them with one set of helpers: `fmtNumber`, `fmtPercent`, `fmtDistance` (feet or metres by the unit system), `fmtAgo`, and `fmtDateTime` (the user's time zone setting, server or browser). The backend sends timestamps as UTC ISO 8601 and never formats them.
 
 ## 7. Engineering rules
 

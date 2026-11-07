@@ -24,7 +24,7 @@ Settings here live in `.storage/latter.site` and apply to every device.
 | Card | What it does |
 | :--- | :--- |
 | **Whole-Home Entities** | Weather provider, alarm panel, primary thermostat, entry lock, garage door, and robot vacuum. These drive the on-device weather page and Whole-Home Hub. |
-| **Cameras & Doorbell Audio** | Up to 10 cameras for the on-device camera carousel and doorbell popups, plus the **Doorbell audio noise reduction** level (Strong, Light, Off) for listening to a doorbell, and a **Test door speaker** button that speaks a test sentence on the primary camera's speaker with TTS, from the device you choose. Listen and push-to-talk replies are experimental. |
+| **Cameras & Doorbell Audio** | Up to 10 cameras for the on-device camera carousel and doorbell popups, plus the **Doorbell audio noise reduction** level (Strong, Light, Off) for listening to a doorbell, and **Test the door speaker**, which speaks a test sentence on the primary camera's speaker with TTS, from the device you choose. Listen and push-to-talk replies are experimental. |
 | **Calendars** | Calendars merged into the on-device agenda. Duplicate events across calendars are removed, and events with a location get a map. |
 
 ### Media & Remotes
@@ -40,24 +40,24 @@ Settings here live in `.storage/latter.site` and apply to every device.
 
 ### BLE & Area Presence
 - **Live Area Presence & Sensor Fusion:** per-area occupancy, the devices and people in each area, and the fusion mode used for each area.
-- **Per-Area BLE Signal Calibration:** live raw and effective RSSI per area for a selected device. Includes **Calibrate Current Area**, ±1 dB adjustment, and a **Fast Refresh (1.5s)** toggle.
-- **Discovered Nearby Bluetooth Devices (1-Click Adopt):** named BLE devices, `private_ble_device` entities, and iBeacons your scanners can hear. Adopt one to track it as its own Latter device.
+- **Per-Area BLE Signal Calibration:** live raw and effective RSSI per area for a selected device. Includes **Calibrate Current Area**, ±1 dB adjustment, and a **Fast refresh** switch (updates every 1.5 s).
+- **Discovered Nearby Bluetooth Devices:** named BLE devices, `private_ble_device` entities, and iBeacons your scanners can hear. **Adopt** one to track it as its own Latter device.
 
 → [Presence guide](presence.md)
 
 ### System settings
 | Card | What it does |
 | :--- | :--- |
-| **Export Settings (.JSON)** | Download the whole System's settings, or one device's, as a `.json` file. Device exports include the device's live ESPHome select, switch, and number values. Full backups are Home Assistant's own: Latter's storage is included in every Home Assistant backup. |
-| **Restore from File (.JSON)** | Upload an exported `.json` file to restore it. For a device export, choose the device to restore it onto; it can be a different device, to clone a setup. |
+| **Export Settings** | Download the whole System's settings, or one device's, as a `.json` file. Device exports include the device's live ESPHome select, switch, and number values. Full backups are Home Assistant's own: Latter's storage is included in every Home Assistant backup. |
+| **Restore from File** | Upload an exported `.json` file to restore it. For a device export, choose the device to restore it onto; it can be a different device, to clone a setup. |
 | **Notification Tester** | Send a test notification to any device, optionally with a snapshot from the primary camera. |
-| **System Custom Color Library** | Up to 24 saved theme colors. Apply one to a device from that device's **Display & Home** page. |
+| **Custom Color Library** | Up to 24 saved theme colors; **Add Color** opens a color picker. Apply one to a device from that device's **Display & Home** page. |
 
 ---
 
 ## Devices
 
-The **All Devices** page lists onboarded devices. **+ Add Device** adds a BLE phone, watch, or tag as a **BLE tag** entry (you can also add one from **Settings → Devices & Services → Latter → Add BLE tag**). Latter devices are added through Home Assistant's ESPHome discovery. What a device can do comes from its hardware manifest (display, roaming, wearable), not from a type setting. → [Existing ESPHome devices](existing-esphome.md)
+The **All Devices** page lists onboarded devices. **Add BLE Device** adds a BLE phone, watch, or tag as a **BLE tag** entry (you can also add one from **Settings → Devices & Services → Latter → Add BLE tag**). Latter devices are added through Home Assistant's ESPHome discovery. What a device can do comes from its hardware manifest (display, roaming, wearable), not from a type setting. → [Existing ESPHome devices](existing-esphome.md)
 
 Each device has five pages. The options on each page depend on what the device's hardware reports. A headless sensor won't show display settings.
 
@@ -65,11 +65,11 @@ Each device has five pages. The options on each page depend on what the device's
 | :--- | :--- |
 | **Overview** | Quick actions, power profile, apply a profile, assigned person, and device status. A value the device hasn't reported shows as —. |
 | **Display & Home** | Color profile, home dock apps and their order, and wallpapers (5 built-in presets, plus uploads that can rotate on a schedule). Screen shape and resolution come from the device's hardware manifest. |
-| **Audio & Voice** | Wake word and sensitivity, default speaker, the device's **Music Assistant Player** (its link to Music Assistant, needed for library playback), alert volume, and music sorting |
+| **Audio & Voice** | Wake word and sensitivity, default speaker, the device's **Music Assistant player** (its link to Music Assistant, needed for library playback), alert volume, and music sorting |
 | **Power & Battery** | Sleep and wake timeouts, plus battery and power readings |
-| **Device settings** | Device slug (read-only: the ESPHome node name), group, and area cards per page; BLE tracking settings (the BLE presence beacon follows **Enable BLE Proxy Area Tracking** and is shown read-only); diagnostics and the raw entity inspector; **Reset to defaults…**; and **Remove Device** |
+| **Device settings** | Device slug (read-only: the ESPHome node name), group, and area cards per page; BLE tracking settings (the BLE presence beacon follows **Enable BLE Proxy Area Tracking** and is shown read-only); diagnostics and the raw entity inspector; **Reset to Defaults** (**Reset…**); and **Remove Device** (**Remove…**) |
 
-**Reset to defaults…** opens a confirmation with two options, both on by default: **Device settings** (erases everything saved on the device; it restarts) and **Latter options for this device**. Wi-Fi and pairing are kept, as are the device's ESPHome binding and Music Assistant player link. It does the same as the [`latter.reset_device`](reference/services.md#latterreset_device) service; BLE tags only offer the Latter options.
+**Reset…** opens a confirmation with two options, both on by default: **Device settings** (erases everything saved on the device; it restarts) and **Latter options for this Device**. Wi-Fi and pairing are kept, as are the device's ESPHome binding and Music Assistant player link. It does the same as the [`latter.reset_device`](reference/services.md#latterreset_device) service; BLE tags only offer the Latter options.
 
 > Most settings apply live: Studio saves them and pushes the change to the device without a reload. Adding or removing a device, or changing a device's bound ESPHome device, reloads the Latter integration; devices reconnect within a few seconds.
 
