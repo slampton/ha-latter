@@ -18,6 +18,13 @@ from PIL import Image, ImageDraw, ImageOps
 from homeassistant.core import HomeAssistant
 
 from .const import normalize_device_slug
+from .wallpaper_refs import (
+    IMAGE_SUFFIXES,
+    make_upload_source,
+    parse_upload_source,
+    private_root,
+    resolve_upload_path,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -50,10 +57,14 @@ BUILTIN_WALLPAPER_PRESETS: tuple[dict[str, str], ...] = (
 )
 
 
+def get_wallpaper_root(hass: HomeAssistant) -> Path:
+    """Return Latter's private wallpaper root (`<config>/.storage/latter/wallpapers`, never served by HA)."""
+    return private_root(hass.config.config_dir)
+
+
 def get_device_wallpaper_dir(hass: HomeAssistant, device_slug: str) -> Path:
-    """Return the persistent directory `/config/www/latter_wallpapers/<device_slug>`."""
-    slug = normalize_device_slug(device_slug)
-    return Path(hass.config.path("www")) / "latter_wallpapers" / slug
+    """Return the private upload directory of one Device (`<wallpaper root>/<device_slug>`)."""
+    return get_wallpaper_root(hass) / normalize_device_slug(device_slug)
 
 
 def render_builtin_preset_bytes(
@@ -148,9 +159,12 @@ def _scan_wallpaper_dir_sync(wp_dir: Path, slug: str) -> list[tuple[str, str]]:
     entries: list[tuple[str, str]] = []
     if wp_dir.is_dir():
         for file_path in sorted(wp_dir.glob("*"), key=lambda p: p.name.lower()):
-            if file_path.suffix.lower() not in (".jpg", ".jpeg", ".png", ".webp"):
+            if file_path.suffix.lower() not in IMAGE_SUFFIXES:
                 continue
-            source_id = f"/local/latter_wallpapers/{slug}/{file_path.name}"
+            try:
+                source_id = make_upload_source(slug, file_path.name)
+            except ValueError:
+                continue
             entries.append((source_id, file_path.name))
     _WALLPAPER_FILES_CACHE[slug] = entries
     return entries
@@ -165,6 +179,14 @@ async def async_refresh_wallpaper_cache(
     await hass.async_add_executor_job(_scan_wallpaper_dir_sync, wp_dir, slug)
 
 
+def known_wallpaper_ids(device_slug: str) -> set[str]:
+    """Return the wallpaper IDs a Device may select: the built-in presets and its own cached uploads."""
+    slug = normalize_device_slug(device_slug)
+    return {p["id"] for p in BUILTIN_WALLPAPER_PRESETS} | {
+        source_id for source_id, _ in _WALLPAPER_FILES_CACHE.get(slug, [])
+    }
+
+
 def list_wallpaper_catalog(
     hass: HomeAssistant,
     device_slug: str,
@@ -174,7 +196,7 @@ def list_wallpaper_catalog(
     sign_resource: Callable[[str], str] | None = None,
     display_shape: str = "circle",
 ) -> list[dict[str, Any]]:
-    """Return built-in AMOLED presets + cached uploaded wallpapers in `/config/www/latter_wallpapers/<slug>`."""
+    """Return built-in AMOLED presets + the Device's cached uploads, each with a signed Studio thumbnail URL."""
     fav_set = set(favorites or [])
     items: list[dict[str, Any]] = []
     slug = normalize_device_slug(device_slug)
@@ -233,7 +255,7 @@ def save_uploaded_wallpaper(
     filename: str,
     base64_data: str,
 ) -> str:
-    """Decode a base64 image upload, convert to high-quality RGB JPEG, save in www/latter_wallpapers/<slug>, and return `/local/...` ID."""
+    """Decode a base64 image upload, save it as an RGB JPEG in the Device's private directory, and return its `upload:` ID."""
     if "," in base64_data:
         base64_data = base64_data.split(",", 1)[1]
     raw_bytes = base64.b64decode(base64_data)
@@ -257,7 +279,7 @@ def save_uploaded_wallpaper(
 
     slug = normalize_device_slug(device_slug)
     _scan_wallpaper_dir_sync(wp_dir, slug)
-    return f"/local/latter_wallpapers/{slug}/{out_name}"
+    return make_upload_source(slug, out_name)
 
 
 def delete_uploaded_wallpaper(
@@ -265,15 +287,14 @@ def delete_uploaded_wallpaper(
     device_slug: str,
     source_id: str,
 ) -> bool:
-    """Delete an uploaded wallpaper file from `/config/www/latter_wallpapers/<slug>`."""
+    """Delete one of this Device's uploads (an `upload:<slug>/<file>` ID with the Device's own slug)."""
     slug = normalize_device_slug(device_slug)
-    prefix = f"/local/latter_wallpapers/{slug}/"
-    if not source_id.startswith(prefix):
+    parsed = parse_upload_source(source_id)
+    if parsed is None or parsed[0] != slug:
         return False
-    fname = Path(source_id[len(prefix) :]).name
     wp_dir = get_device_wallpaper_dir(hass, device_slug)
-    target = wp_dir / fname
-    if target.is_file():
+    target = resolve_upload_path(get_wallpaper_root(hass), source_id)
+    if target is not None and target.is_file():
         target.unlink()
         _scan_wallpaper_dir_sync(wp_dir, slug)
         return True

@@ -28,6 +28,7 @@ from homeassistant.helpers.typing import ConfigType
 from .ble_engine import _iter_devices
 from .const import (
     CONF_ESPHOME_DEVICE_ID,
+    CONF_SAVED_PROFILES,
     DATA_DISCOVERY_UNSUB,
     DEVICE_SUBENTRY_TYPES,
     DATA_GLOBAL_CONFIG,
@@ -64,12 +65,49 @@ from .studio import (
     async_unregister_studio_panel,
 )
 from .system import LatterSystem, get_latter_system
+from .wallpaper_refs import (
+    migrate_profiles,
+    migrate_wallpaper_settings,
+    move_public_uploads,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 type LatterConfigEntry = ConfigEntry[LatterSystem]
+
+
+async def _async_migrate_public_wallpapers(
+    hass: HomeAssistant, entry: ConfigEntry
+) -> None:
+    """Move uploads out of `/config/www` (served without auth at `/local/`) into private storage (D-005).
+
+    Rewrites the references stored in Device subentries and saved profiles. Runtime state is
+    rewritten by each coordinator when it loads.
+    """
+    moved = await hass.async_add_executor_job(
+        move_public_uploads, hass.config.config_dir
+    )
+    for sub in list(entry.subentries.values()):
+        if sub.subentry_type not in DEVICE_SUBENTRY_TYPES:
+            continue
+        new_data = migrate_wallpaper_settings(sub.data)
+        if new_data is not None:
+            hass.config_entries.async_update_subentry(entry, sub, data=new_data)
+    domain_data = hass.data[DOMAIN]
+    global_cfg: dict[str, Any] = domain_data[DATA_GLOBAL_CONFIG]
+    profiles = global_cfg.get(CONF_SAVED_PROFILES)
+    if isinstance(profiles, list):
+        new_profiles = migrate_profiles(profiles)
+        if new_profiles is not None:
+            global_cfg[CONF_SAVED_PROFILES] = new_profiles
+            await domain_data[DATA_GLOBAL_STORE].async_save(global_cfg)
+    if moved:
+        _LOGGER.info(
+            "Moved %d uploaded wallpaper(s) from /config/www to Latter's private storage",
+            moved,
+        )
 
 async def _async_ensure_global_store(
     hass: HomeAssistant, seed_entry: ConfigEntry | None = None
@@ -283,6 +321,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
     )
 
     entry.runtime_data = sys_obj
+    await _async_migrate_public_wallpapers(hass, entry)
 
     device_subentries = [
         sub

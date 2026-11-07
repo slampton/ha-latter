@@ -9,7 +9,6 @@ from dataclasses import dataclass, field
 from http import HTTPStatus
 import io
 import logging
-from pathlib import Path
 import time
 
 from aiohttp import ClientTimeout, web
@@ -28,7 +27,8 @@ from .const import (
 )
 from .coordinator import LatterCoordinator, resolve_coordinator
 from .media_engine import resolve_ma_counterpart_entity
-from .wallpaper_engine import render_builtin_preset_bytes
+from .wallpaper_engine import get_wallpaper_root, render_builtin_preset_bytes
+from .wallpaper_refs import parse_upload_source, read_upload_bytes
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -298,16 +298,10 @@ class LatterWallpaperProxyView(HomeAssistantView):
             raw_bytes = await self.hass.async_add_executor_job(
                 render_builtin_preset_bytes, wp_source, width, height
             )
-        elif wp_source.startswith(("/local/", "/config/www/")):
-            rel = wp_source.replace("/local/", "").replace("/config/www/", "").lstrip("/")
-            www_root = Path(self.hass.config.path("www")).resolve()
-            local_file = (www_root / rel).resolve()
-            if not local_file.is_relative_to(www_root):
-                return web.Response(status=HTTPStatus.FORBIDDEN, text="Path traversal rejected")
-            if await self.hass.async_add_executor_job(local_file.is_file):
-                raw_bytes = await self.hass.async_add_executor_job(
-                    local_file.read_bytes
-                )
+        elif parse_upload_source(wp_source) is not None:
+            raw_bytes = await self.hass.async_add_executor_job(
+                read_upload_bytes, get_wallpaper_root(self.hass), wp_source
+            )
         else:
             return web.Response(status=HTTPStatus.FORBIDDEN, text="Unsupported wallpaper source")
 

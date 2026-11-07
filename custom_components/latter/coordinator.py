@@ -161,6 +161,7 @@ from .payloads import DomainPayloadPacker
 from .presence_beacon import Trigger, decide_beacon_action
 from .site_feeds import async_fetch_calendar_snapshot, async_fetch_weather_snapshot
 from .traits import manifest_has_display, manifest_is_roaming, manifest_is_wearable
+from .wallpaper_refs import migrate_public_source
 from .url_signer import UrlSigner
 
 _LOGGER = logging.getLogger(__name__)
@@ -687,7 +688,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     @property
     def wallpaper_source(self) -> str:
-        """Return active runtime wallpaper or configured photo wallpaper URL, preset ID, or /local/ path."""
+        """Return the active runtime wallpaper, else the configured one (a `preset:` ID or an `upload:` ID)."""
         if self.current_wallpaper:
             return self.current_wallpaper
         return str(self.get_opt(CONF_WALLPAPER_SOURCE, "") or "").strip()
@@ -1149,7 +1150,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             saved_slot = stored.get("active_remote_slot")
             if isinstance(saved_slot, int) and 1 <= saved_slot <= 10:
                 self.active_remote_slot = saved_slot
-            saved_wp = str(stored.get("current_wallpaper") or "").strip()
+            saved_wp = migrate_public_source(str(stored.get("current_wallpaper") or "").strip())
             if saved_wp:
                 self.current_wallpaper = saved_wp
             self.last_media_uri = str(stored.get("last_media_uri") or "")
