@@ -10,6 +10,7 @@ import ast
 import importlib.util
 from pathlib import Path
 import sys
+import tempfile
 from types import ModuleType
 import unittest
 
@@ -30,6 +31,25 @@ def _load(name: str) -> ModuleType:
 
 settings = _load("studio/settings")
 scope = _load("studio/scope")
+assets = _load("studio/assets")
+
+
+class TestPanelCacheBuster(unittest.TestCase):
+    """The panel module URL's ?v= follows the JS content, so a changed Studio never loads from cache."""
+
+    def test_digest_follows_content(self) -> None:
+        js = LATTER_DIR / "frontend" / "latter-studio.js"
+        self.assertEqual(assets.content_digest(js), assets.content_digest(js))
+        self.assertRegex(assets.content_digest(js), r"^[0-9a-f]{16}$")
+        with tempfile.TemporaryDirectory() as tmp:
+            f = Path(tmp) / "a.js"
+            f.write_text("one", encoding="utf-8")
+            first = assets.content_digest(f)
+            f.write_text("two", encoding="utf-8")
+            self.assertNotEqual(first, assets.content_digest(f))
+        init_src = (LATTER_DIR / "studio" / "__init__.py").read_text(encoding="utf-8")
+        self.assertIn('latter-studio.js?v={js_digest}"', init_src)
+        self.assertIn("content_digest,", init_src)
 
 
 def _const_tables() -> tuple[dict[str, str], tuple[str, ...]]:

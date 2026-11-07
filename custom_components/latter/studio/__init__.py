@@ -10,6 +10,7 @@ from homeassistant.components.http import StaticPathConfig
 from homeassistant.core import HomeAssistant
 
 from ..const import DOMAIN, INTEGRATION_VERSION
+from .assets import content_digest
 from .commands import async_register_studio_ws_commands
 from .payload import (
     LatterBrandIconView,
@@ -63,7 +64,15 @@ async def async_register_studio_panel(hass: HomeAssistant) -> None:
     if static_configs:
         await hass.http.async_register_static_paths(static_configs)
 
-    module_url = f"{versioned_prefix}/latter-studio.js?v={cache_tag}"
+    # The cache-buster follows the JS content, so every change to latter-studio.js reaches the
+    # browser without a hard refresh (a cached old panel would be ignored as a stale client).
+    js_digest = domain_data.get("_studio_js_digest")
+    if not js_digest:
+        js_digest = await hass.async_add_executor_job(
+            content_digest, frontend_dir / "latter-studio.js"
+        )
+        domain_data["_studio_js_digest"] = js_digest
+    module_url = f"{versioned_prefix}/latter-studio.js?v={js_digest}"
     panels = hass.data.get("frontend_panels", {})
     if (
         domain_data.get("_registered_panel_url") == module_url
