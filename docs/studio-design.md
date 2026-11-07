@@ -132,7 +132,7 @@ Studio has one implementation of each component. A new pattern is added here fir
 
 - Studio is a `panel_custom` web component (`require_admin=True`, `embed_iframe=False`). It talks to Home Assistant only through admin-gated `websocket_api` commands (`latter/system/*` and `latter/device/*`).
 - Every command the UI calls exists in the backend, and every backend command is used by the UI (`[STUDIO COMMANDS]`).
-- The websocket type is the scope: `latter/system/*` never needs a selected Device unless the command names one in its own payload, and `latter/device/*` always acts on the selected Device.
+- The websocket type is the scope: `latter/system/*` never acts on the selected Device (a System command that acts on one Device names it in its own payload), and `latter/device/*` acts on the Device named by its required `subentry_id`.
 - The backend never acts on a client-chosen `entity_id` or `src` that it hasn't validated. Device entity actions are limited to the bound Device's own entities; bulk System actions are limited to the shared controls the backend itself offers; image URLs are minted and signed by the backend.
 - Every Latter HTTP view requires a scoped, expiring HMAC signature (`resource_signing.py`). Studio never builds or signs a URL itself.
 - No Home Assistant frontend internals: no `hass-subpage`, no walking other components' shadow roots, no `localStorage.hassTokens`, no `fetch` with stored tokens.

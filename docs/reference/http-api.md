@@ -21,7 +21,7 @@ There are two expiry modes:
 
 You shouldn't build these URLs yourself. Latter publishes the image URLs, already signed, in sensor attributes (`art_url`, `wallpaper_url`, `camera_snapshot_url`, `alert_camera_url`, and the calendar `map_url`).
 
-URLs use Home Assistant's numeric LAN IPv4 address, not a `.local` name. Latter finds the address by opening a UDP socket and caches it until Home Assistant's core config changes. The external base URL in Studio (**Reverse Proxy & External Access**) does not change these URLs; it only affects the device **Visit** links.
+URLs use Home Assistant's numeric LAN IPv4 address, not a `.local` name. Latter finds the address by opening a UDP socket and caches it until Home Assistant's core config changes.
 
 ## Image output
 
@@ -52,7 +52,7 @@ Album art for the device's active speaker. Latter tries `entity_picture_local`, 
 
 | Param | Notes |
 | :--- | :--- |
-| `src` | `preset:<name>` for one of the 5 generated presets, or a path under `/local/` or `/config/www/`. Paths that escape those directories are rejected. |
+| `src` | `preset:<name>` for one of the 5 generated presets, or `upload:<slug>/<file>` for an uploaded photo in Latter's private storage (`.storage/latter/wallpapers/`). Anything else is rejected. Without `src`, the device's current wallpaper is served. |
 | `w`, `h`, `shape` | |
 
 Photos are darkened to 78% brightness so text stays readable on top of them.

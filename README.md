@@ -183,7 +183,7 @@ Bugs and feature requests: [issues](https://github.com/slampton/ha-latter/issues
 
 Leftover data:
 - Studio settings stay in `.storage/latter.site` and `.storage/latter.runtime.*`.
-- Uploaded wallpapers stay in `/config/www/latter_wallpapers/`.
+- Uploaded wallpapers stay in `.storage/latter/wallpapers/`.
 
 Delete these by hand if you want a clean slate.
 

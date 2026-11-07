@@ -27,7 +27,7 @@ Latter finds the ESPHome device by its device ID (or by its MAC address if the E
 
 Latter serves images from Home Assistant's numeric LAN IP, because ESP32 firmware can't resolve `.local` names. Check:
 - **The device can reach Home Assistant's IP** on Home Assistant's HTTP port. Watch out for VLANs and firewalls between them.
-- **Not the Studio external URL.** **Studio → System Administration → Reverse Proxy & External Access** only changes the device **Visit** links. Image URLs always use Home Assistant's LAN IP, so the device must be able to reach it directly.
+- **Image URLs use the LAN IP.** Image URLs always use Home Assistant's LAN IP, never an external or reverse-proxy URL, so the device must be able to reach it directly.
 
 ---
 
@@ -35,7 +35,7 @@ Latter serves images from Home Assistant's numeric LAN IP, because ESP32 firmwar
 
 **A roaming device never changes areas**
 - **Proxies lack an Area.** Every Bluetooth proxy must be assigned to an Area in Home Assistant. Home Assistant raises a repair issue, **"No Area-assigned Bluetooth proxies found"**, when Latter can't map any scanner to an area.
-- **Bluetooth area tracking is off.** Check that **Track this device's area with Bluetooth** was enabled when the device was added. To change it, use **Studio → Devices → your device → Administration → Enable BLE Proxy Area Tracking**, or the device's **Reconfigure or Replace Hardware** entry under **Settings → Devices & Services → Latter**.
+- **Bluetooth area tracking is off.** Check that **Track this device's area with Bluetooth** was enabled when the device was added. To change it, use **Studio → Devices → your device → Device settings → Enable BLE Proxy Area Tracking**, or the device's **Reconfigure or Replace Hardware** entry under **Settings → Devices & Services → Latter**.
 - **The device's beacon is off.** Latter firmware ships with **Area: BLE Presence Beacon** off and Latter turns it on when the device connects with tracking enabled. If you turned the switch off by hand, reconnecting the device (or saving its options) turns it back on.
 - **Look at the live readings.** Open **Studio → BLE & Area Presence**. If an area never shows a reading, its proxy isn't hearing the device.
 

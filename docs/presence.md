@@ -117,7 +117,7 @@ Sensors are discovered automatically by device class (occupancy, presence, motio
 
 ### Using both
 
-You don't have to choose. On a device's **Administration** page, set **External Area Sensor Override** to a Bermuda area sensor. When its state matches an Area name or ID, Latter switches the device to that area. It also moves the device's Home Assistant Area and rescopes Area Control, just as it would with its own engine.
+You don't have to choose. On a device's **Device settings** page, set **External Area Sensor Override** to a Bermuda area sensor. When its state matches an Area name or ID, Latter switches the device to that area. It also moves the device's Home Assistant Area and rescopes Area Control, just as it would with its own engine.
 
 Per-area occupancy sensors and `follow_me` routing are different: they come only from Latter's own engine and ignore the override.
 
