@@ -5,1126 +5,1173 @@
 
 const STUDIO_STYLES = `
   :host {
+    /* Design tokens (docs/studio-design.md section 3). Every visual value reads a token; each token
+       reads a Home Assistant theme variable, with a fallback for themes that don't set it. */
+    --studio-font-family: var(--ha-font-family-body, inherit);
+    --studio-font-code: var(--ha-font-family-code, monospace);
+    --studio-font-title: var(--ha-font-size-xl, 20px);
+    --studio-font-section: var(--ha-font-size-l, 16px);
+    --studio-font-body: var(--ha-font-size-m, 14px);
+    --studio-font-secondary: var(--ha-font-size-s, 12px);
+    --studio-font-caption: var(--ha-font-size-s, 12px);
+    --studio-weight-regular: var(--ha-font-weight-normal, 400);
+    --studio-weight-medium: var(--ha-font-weight-medium, 500);
+    --studio-line-height: var(--ha-line-height-normal, 1.5);
+    --studio-space-1: var(--ha-space-1, 4px);
+    --studio-space-2: var(--ha-space-2, 8px);
+    --studio-space-3: var(--ha-space-3, 12px);
+    --studio-space-4: var(--ha-space-4, 16px);
+    --studio-space-5: var(--ha-space-6, 24px);
+    --studio-radius-card: var(--ha-card-border-radius, 12px);
+    --studio-radius-control: var(--ha-border-radius-md, 8px);
+    --studio-radius-pill: var(--ha-border-radius-pill, 9999px);
+    --studio-control-height: 36px;
+    --studio-control-height-compact: 28px;
+    --studio-header-height: 56px;
+    --studio-sidebar-width: 244px;
+    --studio-bg: var(--primary-background-color, #111111);
+    --studio-surface: var(--ha-card-background, var(--card-background-color, #1c1c1c));
+    --studio-surface-alt: var(--secondary-background-color, #202020);
+    --studio-header-bg: var(--app-header-background-color, var(--secondary-background-color, #1c1c1c));
+    --studio-header-text: var(--app-header-text-color, var(--primary-text-color, #e1e1e1));
+    --studio-sidebar-bg: var(--sidebar-background-color, var(--card-background-color, #1c1c1c));
+    --studio-input-bg: var(--input-fill-color, var(--secondary-background-color, #141414));
+    --studio-divider: var(--divider-color, rgba(225, 225, 225, 0.12));
+    --studio-card-border: var(--ha-card-border-color, var(--divider-color, rgba(225, 225, 225, 0.12)));
+    --studio-text: var(--primary-text-color, #e1e1e1);
+    --studio-text-secondary: var(--secondary-text-color, #9b9b9b);
+    --studio-text-disabled: var(--disabled-text-color, #6f6f6f);
+    --studio-primary: var(--primary-color, #03a9f4);
+    --studio-on-primary: var(--text-primary-color, #ffffff);
+    --studio-primary-tint: rgba(var(--rgb-primary-color, 3, 169, 244), 0.12);
+    --studio-primary-tint-strong: rgba(var(--rgb-primary-color, 3, 169, 244), 0.24);
+    --studio-hover: rgba(var(--rgb-primary-text-color, 225, 225, 225), 0.06);
+    --studio-success: var(--success-color, #43a047);
+    --studio-warning: var(--warning-color, #ffa600);
+    --studio-error: var(--error-color, #db4437);
+    --studio-info: var(--info-color, #039be5);
+    --studio-success-tint: color-mix(in srgb, var(--studio-success) 14%, transparent);
+    --studio-warning-tint: color-mix(in srgb, var(--studio-warning) 14%, transparent);
+    --studio-error-tint: color-mix(in srgb, var(--studio-error) 14%, transparent);
+    --studio-info-tint: color-mix(in srgb, var(--studio-info) 14%, transparent);
+    --studio-card-shadow: var(--ha-card-box-shadow, none);
+    --studio-overlay-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    --studio-scrim: rgba(0, 0, 0, 0.5);
+    --studio-media-bg: var(--secondary-background-color, #000000);
     display: block;
     min-height: 100vh;
-    --bg: var(--primary-background-color, #111111);
-    --sidebar: var(--secondary-background-color, #1c1c1c);
-    --card: var(--card-background-color, var(--ha-card-background, #1c1c1c));
-    --card-hover: rgba(3, 169, 244, 0.08);
-    --border: var(--divider-color, rgba(225, 225, 225, 0.12));
-    --input-bg: var(--input-fill-color, var(--secondary-background-color, #141414));
-    --text: var(--primary-text-color, #e1e1e1);
-    --text-strong: var(--primary-text-color, #e1e1e1);
-    --muted: var(--secondary-text-color, #9b9b9b);
-    --accent: var(--primary-color, #03a9f4);
-    --accent-solid: var(--primary-color, #03a9f4);
-    --accent-subtle: rgba(3, 169, 244, 0.14);
-    --success: var(--success-color, #4caf50);
-    --warning: var(--warning-color, #ff9800);
-    --danger: var(--error-color, #db4437);
-    background: var(--bg);
-    color: var(--text);
-    font-family: var(--paper-font-body1_-_font-family, Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
-    font-size: 14px;
-    line-height: 1.45;
+    background: var(--studio-bg);
+    color: var(--studio-text);
+    font-family: var(--studio-font-family);
+    font-size: var(--studio-font-body);
+    font-weight: var(--studio-weight-regular);
+    line-height: var(--studio-line-height);
     -webkit-tap-highlight-color: transparent;
   }
-  :host([narrow]) .ha-menu-btn {
-    display: inline-flex;
-  }
   * { box-sizing: border-box; }
+  .hidden { display: none !important; }
   .studio-root {
-    margin: 0;
-    font-family: Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    background: var(--bg);
-    color: var(--text);
     min-height: 100vh;
     display: flex;
     flex-direction: column;
-    font-size: 14px;
-    line-height: 1.45;
-    -webkit-tap-highlight-color: transparent;
+    background: var(--studio-bg);
   }
+  h2, h3, h4, p { margin: 0; }
   code, .mono {
-    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
-    font-size: 12px;
+    font-family: var(--studio-font-code);
+    font-size: var(--studio-font-secondary);
   }
+  a { color: var(--studio-primary); }
+
+  /* ---------- Title bar ---------- */
   header.latter-top-titlebar {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    height: 56px;
-    padding: 0 20px 0 16px;
-    background: var(--sidebar);
-    border-bottom: 1px solid var(--border);
+    gap: var(--studio-space-3);
+    height: var(--studio-header-height);
+    padding: 0 var(--studio-space-4);
+    background: var(--studio-header-bg);
+    color: var(--studio-header-text);
+    border-bottom: 1px solid var(--studio-divider);
     position: sticky;
     top: 0;
     z-index: 30;
-    gap: 12px;
   }
   .titlebar-brand {
     display: flex;
     align-items: center;
-    gap: 10px;
-    font-size: 20px;
-    font-weight: 500;
-    color: var(--text-strong);
+    gap: var(--studio-space-2);
+    font-size: var(--studio-font-title);
+    font-weight: var(--studio-weight-medium);
     user-select: none;
   }
-  .titlebar-brand svg.brand-logo {
+  .brand-logo {
     width: 22px;
     height: 22px;
-    fill: var(--accent);
+    fill: var(--studio-primary);
     flex-shrink: 0;
   }
-  .ha-menu-btn {
-    display: none;
+  .titlebar-actions {
+    display: flex;
     align-items: center;
-    justify-content: center;
-    width: 36px;
-    height: 36px;
-    margin-right: 2px;
-    border: none;
-    border-radius: 50%;
-    background: transparent;
-    color: var(--text-strong);
-    cursor: pointer;
+    gap: var(--studio-space-2);
   }
-  .ha-menu-btn:hover {
-    background: var(--card-hover);
-  }
-  .ha-menu-btn svg {
-    width: 22px;
-    height: 22px;
-    fill: currentColor;
-  }
+  .titlebar-brand .ha-menu-btn { display: none; }
+  :host([narrow]) .titlebar-brand .ha-menu-btn { display: inline-flex; }
+
+  /* ---------- Shell & navigation ---------- */
   .app-shell {
     display: grid;
-    grid-template-columns: 244px minmax(0, 1fr);
-    min-height: calc(100vh - 56px);
+    grid-template-columns: var(--studio-sidebar-width) minmax(0, 1fr);
+    min-height: calc(100vh - var(--studio-header-height));
   }
-
-  /* NATIVE HOME ASSISTANT SIDEBAR */
   aside.sidebar {
-    background: var(--sidebar);
-    border-right: 1px solid var(--border);
+    background: var(--studio-sidebar-bg);
+    border-right: 1px solid var(--studio-divider);
     display: flex;
     flex-direction: column;
-    padding: 16px 12px 12px;
+    gap: var(--studio-space-2);
+    padding: var(--studio-space-4) var(--studio-space-3);
     position: sticky;
-    top: 56px;
-    height: calc(100vh - 56px);
+    top: var(--studio-header-height);
+    height: calc(100vh - var(--studio-header-height));
     overflow-y: auto;
-  }
-  .scope-box {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 8px;
-    margin-bottom: 10px;
   }
   .scope-tabs {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 4px;
-    background: var(--input-bg);
-    padding: 3px;
-    border-radius: 7px;
-    border: 1px solid var(--border);
+    gap: var(--studio-space-1);
+    padding: var(--studio-space-1);
+    background: var(--studio-input-bg);
+    border: 1px solid var(--studio-divider);
+    border-radius: var(--studio-radius-control);
   }
   .scope-tab {
-    padding: 6px 8px;
-    border-radius: 5px;
+    min-height: var(--studio-control-height-compact);
     border: none;
+    border-radius: var(--studio-radius-control);
     background: transparent;
-    color: var(--muted);
-    font-size: 12.5px;
-    font-weight: 500;
+    color: var(--studio-text-secondary);
+    font: inherit;
+    font-weight: var(--studio-weight-medium);
     cursor: pointer;
-    text-align: center;
-    transition: background 0.12s ease, color 0.12s ease;
   }
   .scope-tab.active {
-    background: var(--accent-solid);
-    color: #ffffff;
-    font-weight: 600;
-  }
-  .nav-device-title {
-    font-size: 16px;
-    font-weight: 600;
-    color: var(--text-strong);
-    margin: 6px 0 6px;
-    padding: 10px 12px;
-    border-top: 1px solid var(--border);
-    border-bottom: 1px solid var(--border);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  #nav-scope-device .nav-btn:not(.nav-back-btn) {
-    margin-left: 10px;
-    width: calc(100% - 10px);
-    padding: 8px 12px;
+    background: var(--studio-primary);
+    color: var(--studio-on-primary);
   }
   .nav-list {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: var(--studio-space-1);
   }
   .nav-btn {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
+    gap: var(--studio-space-2);
     width: 100%;
-    margin: 0;
-    padding: 9px 12px;
-    border-radius: 8px;
+    min-height: var(--studio-control-height);
+    padding: 0 var(--studio-space-3);
     border: none;
+    border-radius: var(--studio-radius-control);
     background: transparent;
-    color: var(--text);
-    font-weight: 500;
-    font-size: 13.5px;
-    cursor: pointer;
+    color: var(--studio-text);
+    font: inherit;
+    font-weight: var(--studio-weight-medium);
     text-align: left;
     white-space: nowrap;
-    transition: background 0.12s ease, color 0.12s ease;
+    cursor: pointer;
   }
-  .nav-btn:hover {
-    background: var(--card-hover);
-  }
+  .nav-btn:hover { background: var(--studio-hover); }
   .nav-btn.active {
-    background: var(--accent-subtle);
-    color: var(--accent);
-    font-weight: 600;
+    background: var(--studio-primary-tint);
+    color: var(--studio-primary);
   }
+  .nav-btn.nav-back-btn { color: var(--studio-text-secondary); }
+  .nav-device-title {
+    padding: var(--studio-space-2) var(--studio-space-3);
+    border-top: 1px solid var(--studio-divider);
+    border-bottom: 1px solid var(--studio-divider);
+    font-size: var(--studio-font-section);
+    font-weight: var(--studio-weight-medium);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  #nav-scope-device .nav-btn:not(.nav-back-btn) { padding-left: var(--studio-space-4); }
   .nav-badge {
-    font-size: 11px;
-    padding: 2px 7px;
-    border-radius: 10px;
-    background: var(--input-bg);
-    border: 1px solid var(--border);
-    color: var(--muted);
+    min-width: 20px;
+    padding: 0 var(--studio-space-2);
+    border-radius: var(--studio-radius-pill);
+    background: var(--studio-input-bg);
+    color: var(--studio-text-secondary);
+    font-size: var(--studio-font-caption);
+    font-weight: var(--studio-weight-medium);
+    text-align: center;
     font-variant-numeric: tabular-nums;
   }
-
-  /* MAIN AREA & TOPBAR */
-  .main-area {
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-  }
-  .topbar-actions {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  .dirty-banner {
-    display: none;
-    align-items: center;
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--warning);
-    background: rgba(255, 152, 0, 0.12);
-    border: 1px solid rgba(255, 152, 0, 0.35);
-    padding: 4px 10px;
-    border-radius: 16px;
-  }
-  .dirty-banner.visible { display: inline-flex; }
-
-  /* BUTTONS */
-  button.btn-primary {
-    background: var(--accent-solid);
-    color: #ffffff;
-    border: 1px solid transparent;
-    padding: 8px 14px;
-    border-radius: 8px;
-    font-weight: 500;
-    cursor: pointer;
-    font-size: 13px;
-    white-space: nowrap;
-    transition: opacity 0.15s ease, background 0.15s ease;
-  }
-  button.btn-primary:disabled {
-    background: var(--card);
-    color: var(--muted);
-    border: 1px solid var(--border);
-    opacity: 0.65;
-    cursor: default;
-  }
-  button.btn-secondary {
-    background: var(--card);
-    color: var(--text-strong);
-    border: 1px solid var(--border);
-    padding: 8px 13px;
-    border-radius: 8px;
-    font-weight: 500;
-    cursor: pointer;
-    font-size: 13px;
-    white-space: nowrap;
-  }
-  button.btn-secondary:hover {
-    background: var(--card-hover);
-    border-color: var(--accent);
-  }
-  button.btn-chip {
-    background: rgba(3, 169, 244, 0.16);
-    color: var(--text-strong);
-    border: 1px solid var(--accent);
-    padding: 8px 14px;
-    border-radius: 8px;
-    font-weight: 500;
-    cursor: pointer;
-    font-size: 13px;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    white-space: nowrap;
-    transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
-  }
-  button.btn-chip:hover {
-    background: var(--accent-solid);
-    border-color: var(--accent-solid);
-    color: #ffffff;
-  }
-  button.btn-danger {
-    background: rgba(219, 68, 55, 0.12);
-    color: var(--danger);
-    border: 1px solid rgba(219, 68, 55, 0.3);
-    padding: 7px 11px;
-    border-radius: 8px;
-    font-weight: 500;
-    cursor: pointer;
-    font-size: 12.5px;
-    white-space: nowrap;
-  }
-
-  /* CONTENT & CARDS */
+  .main-area { min-width: 0; }
   .content-wrap {
     max-width: 1140px;
-    width: 100%;
     margin: 0 auto;
-    padding: 20px 24px 64px;
-  }
-  .unified-page-header {
+    padding: var(--studio-space-5) var(--studio-space-5) var(--studio-space-5);
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    flex-wrap: wrap;
-    margin-bottom: 16px;
+    flex-direction: column;
+    gap: var(--studio-space-4);
   }
-  .unified-page-header h2 {
-    margin: 0;
-    font-size: 22px;
-    font-weight: 600;
-    letter-spacing: -0.01em;
-    color: var(--text-strong);
+  .content-wrap > section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--studio-space-4);
+  }
+  .page-title {
     display: flex;
     align-items: baseline;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: var(--studio-space-2);
+    font-size: var(--studio-font-title);
+    font-weight: var(--studio-weight-medium);
   }
-  .unified-page-header h2 .header-device-sub {
-    font-size: 17.5px;
-    font-weight: 400;
-    color: var(--muted);
-    letter-spacing: normal;
+  .page-subtitle {
+    color: var(--studio-text-secondary);
+    font-weight: var(--studio-weight-regular);
   }
+  .is-loading .content-wrap > section { display: none !important; }
   .grid-2 {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
-    gap: 16px;
-    margin-bottom: 16px;
+    gap: var(--studio-space-4);
+    align-items: start;
   }
-  .form-grid-2 {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
+
+  /* ---------- Card ---------- */
+  .card {
+    min-width: 0;
+    container-type: inline-size;
+    background: var(--studio-surface);
+    border: 1px solid var(--studio-card-border);
+    border-radius: var(--studio-radius-card);
+    box-shadow: var(--studio-card-shadow);
   }
-  .input-action-row {
+  .card.danger { border-color: var(--studio-error); }
+  .card-header {
     display: flex;
-    gap: 8px;
+    align-items: flex-start;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--studio-space-3);
+    padding: var(--studio-space-4) var(--studio-space-4) 0;
+  }
+  .card-heading {
+    display: flex;
+    flex-direction: column;
+    gap: var(--studio-space-1);
+    min-width: 0;
+    flex: 1 1 240px;
+  }
+  .card-title {
+    font-size: var(--studio-font-section);
+    font-weight: var(--studio-weight-medium);
+  }
+  .card.danger .card-title { color: var(--studio-error); }
+  .card-description, .row-description, .help-text {
+    color: var(--studio-text-secondary);
+    font-size: var(--studio-font-secondary);
+  }
+  .card-header-actions {
+    display: flex;
     align-items: center;
     flex-wrap: wrap;
+    gap: var(--studio-space-2);
   }
-  .input-action-row > input,
-  .input-action-row > select {
-    flex: 1 1 180px;
-    min-width: 0;
+  .card-content {
+    display: flex;
+    flex-direction: column;
+    gap: var(--studio-space-3);
+    padding: var(--studio-space-4);
   }
-  .card {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 18px;
-    min-width: 0;
-    margin-bottom: 16px;
+  .card-actions {
+    display: flex;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: var(--studio-space-2);
+    padding: var(--studio-space-3) var(--studio-space-4);
+    border-top: 1px solid var(--studio-divider);
   }
-  .grid-2 > .card {
-    margin-bottom: 0;
+  details.card > summary {
+    list-style: none;
+    cursor: pointer;
+    padding-bottom: var(--studio-space-4);
   }
-  .card h3 {
-    margin: 0 0 18px;
-    font-size: 17.5px;
-    font-weight: 600;
-    letter-spacing: -0.01em;
-    color: var(--text-strong);
+  details.card > summary::-webkit-details-marker { display: none; }
+  details.card > summary::after {
+    content: "▾";
+    color: var(--studio-text-secondary);
+    transition: transform 0.15s ease;
   }
-  .card p.desc {
-    margin: 0 0 14px;
-    font-size: 13px;
-    color: var(--muted);
+  details.card[open] > summary::after { transform: rotate(180deg); }
+  details.card[open] > summary { border-bottom: 1px solid var(--studio-divider); }
+  details.sub-collapsible {
+    border-top: 1px solid var(--studio-divider);
+    padding-top: var(--studio-space-3);
   }
-  .hero-stats {
+  details.sub-collapsible > summary {
+    cursor: pointer;
+    font-weight: var(--studio-weight-medium);
+  }
+  details.sub-collapsible > .card-content { padding: var(--studio-space-3) 0 0; }
+  .subsection-title {
+    padding-top: var(--studio-space-3);
+    border-top: 1px solid var(--studio-divider);
+    font-size: var(--studio-font-body);
+    font-weight: var(--studio-weight-medium);
+  }
+
+  /* ---------- Settings row & controls ---------- */
+  .settings-list {
+    display: flex;
+    flex-direction: column;
+  }
+  .settings-row {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 12px;
-    margin-bottom: 16px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--studio-space-3);
+    padding: var(--studio-space-3) 0;
+    border-bottom: 1px solid var(--studio-divider);
   }
-  .update-pill {
+  .settings-row:last-child { border-bottom: none; }
+  .settings-row-text {
+    display: flex;
+    flex-direction: column;
+    gap: var(--studio-space-1);
+    min-width: 0;
+  }
+  .row-label { font-weight: var(--studio-weight-regular); }
+  .settings-row-control {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: var(--studio-space-2);
+  }
+  .settings-row-control select,
+  .settings-row-control input[type="text"],
+  .settings-row-control input[type="number"] {
+    width: 260px;
+    max-width: 100%;
+  }
+  .settings-row-control input[type="number"] { width: 120px; }
+  .settings-row.stacked { grid-template-columns: minmax(0, 1fr); }
+  .settings-row.stacked .settings-row-control { justify-content: stretch; }
+  .settings-row.stacked .settings-row-control > * { flex: 1 1 200px; width: auto; }
+  select, input[type="text"], input[type="number"], input[type="password"] {
+    min-height: var(--studio-control-height);
+    padding: 0 var(--studio-space-3);
+    border: 1px solid var(--studio-divider);
+    border-radius: var(--studio-radius-control);
+    background: var(--studio-input-bg);
+    color: var(--studio-text);
+    font: inherit;
+  }
+  input[type="file"] { color: var(--studio-text-secondary); font: inherit; }
+  input[type="range"] { width: 140px; accent-color: var(--studio-primary); }
+  select:focus-visible, input:focus-visible, button:focus-visible, summary:focus-visible, [tabindex]:focus-visible {
+    outline: 2px solid var(--studio-primary);
+    outline-offset: 2px;
+  }
+  .switch {
+    appearance: none;
+    position: relative;
+    width: 36px;
+    height: 20px;
+    margin: 0;
+    border-radius: var(--studio-radius-pill);
+    background: var(--studio-text-disabled);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background 0.15s ease;
+  }
+  .switch::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--studio-on-primary);
+    transition: transform 0.15s ease;
+  }
+  .switch:checked { background: var(--studio-primary); }
+  .switch:checked::after { transform: translateX(16px); }
+  .switch:disabled { opacity: 0.5; cursor: default; }
+  .input-action-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--studio-space-2);
+  }
+  .input-action-row > input, .input-action-row > select { flex: 1 1 180px; min-width: 0; }
+  .list-row {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--studio-space-2);
+    padding: var(--studio-space-3);
+    background: var(--studio-input-bg);
+    border: 1px solid var(--studio-divider);
+    border-radius: var(--studio-radius-control);
+  }
+  .list-row-main {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: var(--studio-space-2);
+    flex: 1;
+    min-width: 0;
+  }
+  .list-row-grow { flex: 1; }
+  .list-block {
+    display: flex;
+    flex-direction: column;
+    gap: var(--studio-space-3);
+    padding: var(--studio-space-3);
+    background: var(--studio-input-bg);
+    border: 1px solid var(--studio-divider);
+    border-radius: var(--studio-radius-control);
+  }
+  .list-row-head {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--studio-space-2);
+  }
+  .stacked-field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--studio-space-1);
+    min-width: 0;
+  }
+  .stacked-field > label, .stacked-field > .field-label {
+    color: var(--studio-text-secondary);
+    font-size: var(--studio-font-secondary);
+  }
+  .stacked-field > select, .stacked-field > input { width: 100%; }
+  .stack {
+    display: flex;
+    flex-direction: column;
+    gap: var(--studio-space-2);
+  }
+
+  /* ---------- Buttons ---------- */
+  .btn {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    padding: 4px 11px;
-    border-radius: 16px;
-    background: rgba(3, 169, 244, 0.18);
-    border: 1px solid var(--accent);
-    color: var(--text-strong);
-    font-size: 12px;
-    font-weight: 500;
+    justify-content: center;
+    gap: var(--studio-space-1);
+    min-height: var(--studio-control-height);
+    padding: 0 var(--studio-space-4);
+    border: 1px solid transparent;
+    border-radius: var(--studio-radius-control);
+    font: inherit;
+    font-weight: var(--studio-weight-medium);
+    white-space: nowrap;
     cursor: pointer;
-    transition: background 0.12s ease, color 0.12s ease;
   }
-  .update-pill:hover {
-    background: var(--accent-solid);
-    color: #ffffff;
+  .btn:disabled { opacity: 0.5; cursor: default; }
+  .btn-compact {
+    min-height: var(--studio-control-height-compact);
+    padding: 0 var(--studio-space-3);
   }
-  .stat-box {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 11px 14px;
+  .btn-primary { background: var(--studio-primary); color: var(--studio-on-primary); }
+  .btn-secondary {
+    background: transparent;
+    color: var(--studio-primary);
+    border-color: var(--studio-divider);
   }
-  .stat-box span {
-    display: block;
-    font-size: 11px;
-    font-weight: 500;
-    color: var(--muted);
-    margin-bottom: 2px;
+  .btn-secondary:hover:not(:disabled), .btn-text:hover:not(:disabled) { background: var(--studio-primary-tint); }
+  .btn-text {
+    background: transparent;
+    color: var(--studio-primary);
+    padding: 0 var(--studio-space-2);
   }
-  .stat-box strong {
-    font-size: 15px;
-    font-weight: 500;
-    color: var(--text-strong);
-    display: block;
+  .btn-danger {
+    background: transparent;
+    color: var(--studio-error);
+    border-color: var(--studio-error);
+  }
+  .btn-danger:hover:not(:disabled) { background: var(--studio-error-tint); }
+  .btn-danger-filled { background: var(--studio-error); color: var(--studio-on-primary); }
+  .btn-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--studio-control-height);
+    height: var(--studio-control-height);
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+  }
+  .btn-icon:hover { background: var(--studio-hover); }
+  .btn-icon.danger { color: var(--studio-error); }
+  .btn-icon svg { width: 20px; height: 20px; fill: currentColor; }
+
+  /* ---------- Data display ---------- */
+  .kv-list { display: flex; flex-direction: column; }
+  .kv-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--studio-space-3);
+    padding: var(--studio-space-2) 0;
+    border-bottom: 1px solid var(--studio-divider);
+  }
+  .kv-row:last-child { border-bottom: none; }
+  .kv-row > span:first-child { color: var(--studio-text-secondary); }
+  .kv-row > strong, .kv-value {
+    font-weight: var(--studio-weight-medium);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+  button.kv-row {
+    width: 100%;
+    border: none;
+    border-bottom: 1px solid var(--studio-divider);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  button.kv-row:hover { background: var(--studio-hover); }
+  button.kv-row > strong::after {
+    content: " ›";
+    color: var(--studio-text-secondary);
+    font-weight: var(--studio-weight-regular);
+  }
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--studio-space-3);
+  }
+  .stat {
+    display: flex;
+    flex-direction: column;
+    gap: var(--studio-space-1);
+    padding: var(--studio-space-3) var(--studio-space-4);
+    background: var(--studio-surface);
+    border: 1px solid var(--studio-card-border);
+    border-radius: var(--studio-radius-card);
+    min-width: 0;
+  }
+  .stat > span { color: var(--studio-text-secondary); font-size: var(--studio-font-secondary); }
+  .stat > strong {
+    font-size: var(--studio-font-section);
+    font-weight: var(--studio-weight-medium);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     font-variant-numeric: tabular-nums;
   }
-  .field { margin-bottom: 13px; }
-  .field:last-child { margin-bottom: 0; }
-  .field label {
-    display: block;
-    font-size: 12.5px;
-    font-weight: 500;
-    color: var(--muted);
-    margin-bottom: 5px;
-  }
-  select, input[type="text"], input[type="password"], input[type="number"] {
-    width: 100%;
-    padding: 8px 11px;
-    border-radius: 8px;
-    border: 1px solid var(--border);
-    background: var(--input-bg);
-    color: var(--text-strong);
-    font-size: 13.5px;
-  }
-  .toggle-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 10px 0;
-    border-bottom: 1px solid var(--border);
-    font-size: 13.5px;
-    gap: 12px;
-  }
-  .toggle-row:last-child { border-bottom: none; }
-  .summary-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 9px 0;
-    border-bottom: 1px solid var(--border);
-    font-size: 13.5px;
-    gap: 10px;
-  }
-  .summary-row:last-child { border-bottom: none; }
-  .summary-row span { color: var(--muted); }
-  .summary-row strong { color: var(--text-strong); font-weight: 500; }
-  .summary-row.clickable {
-    cursor: pointer;
-    margin: 0 -8px;
-    padding: 9px 8px;
-    border-radius: 7px;
-    transition: background 0.12s ease, color 0.12s ease;
-  }
-  .summary-row.clickable:hover {
-    background: var(--card-hover);
-  }
-  .summary-row.clickable:hover span {
-    color: var(--text-strong);
-  }
-  .summary-row.clickable strong::after {
-    content: " ›";
-    color: var(--muted);
-    font-weight: 400;
-    margin-left: 6px;
-  }
-
-  /* EXPANDABLE HA DETAILS PANELS */
-  details.ha-details {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    margin-bottom: 12px;
-    overflow: hidden;
-  }
-  details.ha-details > summary {
-    padding: 14px 18px;
-    font-size: 16px;
-    font-weight: 600;
-    letter-spacing: -0.01em;
-    color: var(--text-strong);
-    cursor: pointer;
-    list-style: none;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    user-select: none;
-  }
-  details.ha-details > summary::-webkit-details-marker { display: none; }
-  details.ha-details > summary::after {
-    content: "▾";
-    color: var(--muted);
-    font-size: 14px;
-    transition: transform 0.15s ease;
-  }
-  details.ha-details[open] > summary {
-    border-bottom: 1px solid var(--border);
-  }
-  details.ha-details[open] > summary::after {
-    transform: rotate(180deg);
-  }
-  .details-body {
-    padding: 16px 18px;
-  }
-
-  /* HOME ASSISTANT SORTABLE DATA TABLE */
-  .ha-table-wrap {
+  .table-wrap {
     width: 100%;
     overflow-x: auto;
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    background: var(--input-bg);
+    border: 1px solid var(--studio-divider);
+    border-radius: var(--studio-radius-control);
   }
-  table.ha-data-table {
+  table.data-table {
     width: 100%;
     border-collapse: collapse;
     text-align: left;
-    font-size: 13.5px;
   }
-  table.ha-data-table thead th {
-    padding: 10px 14px;
-    font-size: 11.5px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-    color: var(--muted);
-    border-bottom: 1px solid var(--border);
-    cursor: pointer;
-    user-select: none;
-    white-space: nowrap;
-    transition: color 0.12s ease, background 0.12s ease;
-  }
-  table.ha-data-table thead th:hover {
-    color: var(--text-strong);
-    background: var(--card-hover);
-  }
-  table.ha-data-table thead th.sorted {
-    color: var(--accent);
-  }
-  table.ha-data-table tbody tr {
-    border-bottom: 1px solid var(--border);
-    cursor: pointer;
-    transition: background 0.12s ease;
-  }
-  table.ha-data-table tbody tr:last-child {
-    border-bottom: none;
-  }
-  table.ha-data-table tbody tr:hover {
-    background: var(--card-hover);
-  }
-  table.ha-data-table tbody td {
-    padding: 11px 14px;
-    color: var(--text);
+  table.data-table th {
+    padding: 0;
+    border-bottom: 1px solid var(--studio-divider);
     white-space: nowrap;
   }
-  table.ha-data-table tbody td.col-name {
-    font-weight: 500;
-    color: var(--text-strong);
+  .sort-btn {
+    width: 100%;
+    padding: var(--studio-space-3) var(--studio-space-3);
+    border: none;
+    background: transparent;
+    color: var(--studio-text-secondary);
+    font: inherit;
+    font-size: var(--studio-font-caption);
+    font-weight: var(--studio-weight-medium);
+    text-align: left;
+    cursor: pointer;
   }
+  .sort-btn:hover { color: var(--studio-text); }
+  th[aria-sort="ascending"] .sort-btn, th[aria-sort="descending"] .sort-btn { color: var(--studio-primary); }
+  table.data-table td {
+    padding: var(--studio-space-3);
+    border-bottom: 1px solid var(--studio-divider);
+    white-space: nowrap;
+  }
+  table.data-table tbody tr:last-child td { border-bottom: none; }
+  table.data-table tbody tr { cursor: pointer; }
+  table.data-table tbody tr:hover, table.data-table tbody tr:focus-visible { background: var(--studio-hover); }
+  td.col-name { font-weight: var(--studio-weight-medium); }
+  td.col-open { color: var(--studio-text-secondary); text-align: right; }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--studio-space-1);
+    min-height: 22px;
+    padding: 0 var(--studio-space-2);
+    border-radius: var(--studio-radius-pill);
+    background: var(--studio-input-bg);
+    color: var(--studio-text-secondary);
+    font-size: var(--studio-font-caption);
+    font-weight: var(--studio-weight-medium);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  .chip-primary { background: var(--studio-primary-tint); color: var(--studio-primary); }
+  .chip-success { background: var(--studio-success-tint); color: var(--studio-success); }
+  .chip-warning { background: var(--studio-warning-tint); color: var(--studio-warning); }
+  .chip-error { background: var(--studio-error-tint); color: var(--studio-error); }
   .status-dot {
     display: inline-block;
     width: 8px;
     height: 8px;
+    margin-right: var(--studio-space-2);
     border-radius: 50%;
-    margin-right: 6px;
+    background: var(--studio-text-disabled);
   }
-  .status-dot.online { background: var(--success); }
-  .status-dot.offline { background: var(--muted); opacity: 0.5; }
-  .status-dot.update { background: var(--warning); }
+  .status-dot.online { background: var(--studio-success); }
+  .status-dot.update { background: var(--studio-warning); }
+  .pill-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--studio-space-2);
+  }
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--studio-space-1);
+    min-height: var(--studio-control-height-compact);
+    padding: 0 var(--studio-space-3);
+    border: 1px solid var(--studio-divider);
+    border-radius: var(--studio-radius-pill);
+    background: var(--studio-input-bg);
+    color: var(--studio-text-secondary);
+    font: inherit;
+    font-size: var(--studio-font-secondary);
+    font-weight: var(--studio-weight-medium);
+    cursor: pointer;
+  }
+  .pill.enabled {
+    border-color: var(--studio-primary);
+    background: var(--studio-primary-tint);
+    color: var(--studio-text);
+  }
+  .pill-move {
+    border: none;
+    background: transparent;
+    color: var(--studio-text-secondary);
+    font: inherit;
+    padding: 0 var(--studio-space-1);
+    cursor: pointer;
+  }
+  .pill-move:hover { color: var(--studio-primary); }
+  .pill-toggle {
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+  }
+  .swatch {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 1px solid var(--studio-divider);
+    background: var(--swatch-color, var(--studio-primary));
+    flex-shrink: 0;
+  }
 
-  /* ENTITY ROWS & LISTS */
-  .native-controls-box {
+  /* ---------- BLE rows ---------- */
+  .signal-row {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: var(--studio-space-2);
+    padding: var(--studio-space-3);
+    border: 1px solid var(--studio-divider);
+    border-radius: var(--studio-radius-control);
+    background: var(--studio-input-bg);
   }
-  .native-ctrl-row {
+  .signal-row.winner { border-color: var(--studio-primary); }
+  .signal-row-head {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
-    padding: 9px 12px;
-    background: var(--input-bg);
-    border: 1px solid var(--border);
-    border-radius: 8px;
+    flex-wrap: wrap;
+    gap: var(--studio-space-2);
   }
-  .native-ctrl-row .lbl {
-    font-size: 13.5px;
-    font-weight: 500;
-    color: var(--text-strong);
-    min-width: 0;
-  }
-  .native-ctrl-row .lbl small {
-    display: block;
-    font-weight: 400;
-    font-size: 11.5px;
-    color: var(--muted);
-    margin-top: 1px;
-  }
-  .native-ctrl-row .widget {
+  .signal-row-title {
     display: flex;
     align-items: center;
-    gap: 8px;
-    flex-shrink: 0;
     flex-wrap: wrap;
+    gap: var(--studio-space-2);
   }
-  .native-ctrl-row select {
-    width: auto;
-    min-width: 145px;
-    max-width: 220px;
-    padding: 6px 10px;
-  }
-  .native-ctrl-row input[type="range"] {
-    width: 120px;
-    accent-color: var(--accent-solid);
-  }
-  .state-badge {
-    display: inline-block;
-    padding: 3px 9px;
-    border-radius: 12px;
-    background: var(--card);
-    border: 1px solid var(--border);
-    color: var(--accent);
-    font-weight: 500;
-    font-size: 11.5px;
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
-  }
-
-  /* QUICK ACTIONS & AREA MINI CARDS */
-  .quick-actions-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-
-  /* DOCK PILL SELECTOR */
-  .dock-pill-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-  }
-  .dock-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 5px 10px;
-    border-radius: 16px;
-    font-size: 12.5px;
-    font-weight: 500;
-    background: var(--input-bg);
-    border: 1px solid var(--border);
-    color: var(--muted);
-    cursor: pointer;
-    user-select: none;
-  }
-  .dock-pill.enabled {
-    background: var(--accent-subtle);
-    border-color: var(--accent);
-    color: var(--text-strong);
-  }
-  .dock-pill .move-arrow {
-    font-size: 11px;
-    padding: 0 3px;
-    color: var(--muted);
-  }
-  .dock-pill .move-arrow:hover {
-    color: var(--accent);
-  }
-
-  /* RSSI & GALLERIES */
-  .rssi-track {
-    height: 7px;
-    background: var(--input-bg);
-    border-radius: 4px;
+  .signal-meta { color: var(--studio-text-secondary); font-size: var(--studio-font-secondary); }
+  .signal-track {
+    height: 6px;
+    border-radius: var(--studio-radius-pill);
+    background: var(--studio-surface-alt);
     overflow: hidden;
-    border: 1px solid var(--border);
   }
-  .rssi-fill {
+  .signal-fill {
+    width: var(--signal-pct, 0%);
     height: 100%;
-    background: var(--accent-solid);
-    border-radius: 4px;
+    background: var(--studio-primary);
     transition: width 0.25s ease;
   }
+  .signal-fill.no-signal { opacity: 0.2; }
+
+  /* ---------- Wallpapers ---------- */
   .wp-gallery {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-    gap: 12px;
-    margin-top: 12px;
+    gap: var(--studio-space-3);
   }
   .wp-card {
-    background: var(--input-bg);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 12px;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 8px;
+    gap: var(--studio-space-2);
+    padding: var(--studio-space-3);
+    border: 1px solid var(--studio-divider);
+    border-radius: var(--studio-radius-control);
+    background: var(--studio-input-bg);
     text-align: center;
   }
-  .wp-card.active {
-    border-color: var(--accent);
-    background: var(--accent-subtle);
-  }
+  .wp-gallery > .empty-state { grid-column: 1 / -1; }
+  .wp-card.active { border-color: var(--studio-primary); background: var(--studio-primary-tint); }
   .wp-thumb {
     width: 104px;
     height: 104px;
     object-fit: cover;
-    border: 1px solid var(--border);
-    background: #000;
+    background: var(--studio-media-bg);
+    border: 1px solid var(--studio-divider);
   }
   .wp-thumb.circle { border-radius: 50%; }
-  .wp-thumb.square { border-radius: 8px; }
-  .wp-title {
-    font-size: 12.5px;
-    font-weight: 500;
-    color: var(--text-strong);
-  }
+  .wp-thumb.square { border-radius: var(--studio-radius-control); }
+  .wp-title { font-size: var(--studio-font-secondary); font-weight: var(--studio-weight-medium); }
   .wp-actions {
     display: flex;
-    gap: 5px;
-    width: 100%;
     justify-content: center;
+    gap: var(--studio-space-1);
     margin-top: auto;
   }
+  .cam-preview {
+    display: flex;
+    flex-direction: column;
+    gap: var(--studio-space-2);
+    padding: var(--studio-space-3);
+    border: 1px solid var(--studio-divider);
+    border-radius: var(--studio-radius-control);
+    background: var(--studio-input-bg);
+  }
+  .cam-preview img {
+    width: 100%;
+    max-width: 360px;
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+    border-radius: var(--studio-radius-control);
+    background: var(--studio-media-bg);
+  }
+  .log-output {
+    max-height: 380px;
+    margin: 0;
+    padding: var(--studio-space-3);
+    overflow: auto;
+    border: 1px solid var(--studio-divider);
+    border-radius: var(--studio-radius-control);
+    background: var(--studio-input-bg);
+    white-space: pre-wrap;
+  }
+
+  /* ---------- States ---------- */
+  .empty-state {
+    padding: var(--studio-space-3) 0;
+    color: var(--studio-text-secondary);
+  }
+  .loading-state {
+    display: flex;
+    align-items: center;
+    gap: var(--studio-space-3);
+    padding: var(--studio-space-5) 0;
+    color: var(--studio-text-secondary);
+  }
+  .loading-state::before {
+    content: "";
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--studio-divider);
+    border-top-color: var(--studio-primary);
+    border-radius: 50%;
+    animation: studio-spin 0.8s linear infinite;
+  }
+  .studio-root:not(.is-loading) #studio-loading { display: none; }
+  @keyframes studio-spin { to { transform: rotate(360deg); } }
+  .alert {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--studio-space-3);
+    padding: var(--studio-space-3) var(--studio-space-4);
+    border-left: 4px solid var(--studio-info);
+    border-radius: var(--studio-radius-control);
+    background: var(--studio-info-tint);
+  }
+  .alert-error { border-left-color: var(--studio-error); background: var(--studio-error-tint); }
+  .alert-warning { border-left-color: var(--studio-warning); background: var(--studio-warning-tint); }
   .toast {
     position: fixed;
-    bottom: 20px;
-    right: 20px;
-    background: var(--card);
-    color: var(--text-strong);
-    border: 1px solid var(--accent);
-    padding: 10px 16px;
-    border-radius: 8px;
-    font-weight: 500;
-    font-size: 13px;
-    display: none;
+    right: var(--studio-space-5);
+    bottom: var(--studio-space-5);
     z-index: 50;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+    max-width: 420px;
+    padding: var(--studio-space-3) var(--studio-space-4);
+    border: 1px solid var(--studio-primary);
+    border-radius: var(--studio-radius-control);
+    background: var(--studio-surface);
+    box-shadow: var(--studio-overlay-shadow);
+    font-weight: var(--studio-weight-medium);
   }
-  .toast.error {
-    border-color: var(--danger);
-    color: var(--danger);
-  }
-  .hidden { display: none !important; }
+  .toast.error { border-color: var(--studio-error); color: var(--studio-error); }
+  .offscreen { position: fixed; top: -9999px; left: -9999px; }
 
-  /* PHONE & TABLET RESPONSIVE BREAKPOINTS */
+  /* ---------- Dialogs ---------- */
+  dialog.studio-dialog {
+    width: min(460px, calc(100vw - 32px));
+    padding: var(--studio-space-5);
+    border: 1px solid var(--studio-card-border);
+    border-radius: var(--studio-radius-card);
+    background: var(--studio-surface);
+    color: var(--studio-text);
+    box-shadow: var(--studio-overlay-shadow);
+  }
+  dialog.studio-dialog::backdrop { background: var(--studio-scrim); }
+  .dialog-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--studio-space-3);
+  }
+  .dialog-title {
+    font-size: var(--studio-font-section);
+    font-weight: var(--studio-weight-medium);
+  }
+  .dialog-title.danger { color: var(--studio-error); }
+  .dialog-text { color: var(--studio-text-secondary); }
+  .dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--studio-space-2);
+    margin-top: var(--studio-space-2);
+  }
+  .color-wheel { display: flex; justify-content: center; }
+  .color-wheel canvas { border-radius: 50%; cursor: crosshair; }
+  .color-hex-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--studio-space-2);
+  }
+  .color-hex-row input { width: 120px; font-family: var(--studio-font-code); text-align: center; }
+
+  /* ---------- Narrow cards and screens ---------- */
+  @container (max-width: 520px) {
+    .settings-row { grid-template-columns: minmax(0, 1fr); }
+    .settings-row-control { justify-content: flex-start; }
+    .settings-row-control select, .settings-row-control input[type="text"] { width: 100%; }
+  }
   @media (max-width: 860px) {
-    .ha-menu-btn { display: inline-flex; }
+    .titlebar-brand .ha-menu-btn { display: inline-flex; }
     .app-shell { grid-template-columns: 1fr; }
     aside.sidebar {
       position: sticky;
-      top: 56px;
+      top: var(--studio-header-height);
       z-index: 25;
       height: auto;
-      padding: 8px 12px;
+      padding: var(--studio-space-2) var(--studio-space-3);
       border-right: none;
-      border-bottom: 1px solid var(--border);
+      border-bottom: 1px solid var(--studio-divider);
     }
-    .scope-box {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 6px;
-      margin-bottom: 6px;
-    }
-    .scope-tabs { flex: 0 0 150px; }
     .nav-device-title { display: none; }
-    .nav-list {
-      flex-direction: row;
-      overflow-x: auto;
-      padding-bottom: 2px;
-      gap: 6px;
-      scrollbar-width: none;
-    }
+    .nav-list { flex-direction: row; overflow-x: auto; scrollbar-width: none; }
     .nav-list::-webkit-scrollbar { display: none; }
-    .nav-btn {
-      width: auto;
-      border-radius: 16px;
-      padding: 6px 12px;
-      font-size: 12.5px;
-      background: var(--card);
-      border: 1px solid var(--border);
-    }
-    .content-wrap { padding: 14px 12px 72px; }
+    .nav-btn { width: auto; border: 1px solid var(--studio-divider); border-radius: var(--studio-radius-pill); }
+    #nav-scope-device .nav-btn:not(.nav-back-btn) { padding-left: var(--studio-space-3); }
+    .content-wrap { padding: var(--studio-space-4) var(--studio-space-3) var(--studio-space-5); }
     .grid-2 { grid-template-columns: 1fr; }
-    .hero-stats { grid-template-columns: 1fr; }
-    .native-ctrl-row {
-      flex-direction: column;
-      align-items: stretch;
-      gap: 8px;
-    }
-    .native-ctrl-row .widget { justify-content: space-between; }
-    .native-ctrl-row select { max-width: 100%; width: 100%; }
-  }
-  @media (max-width: 640px) {
-    .form-grid-2 {
-      grid-template-columns: 1fr;
-    }
-    .scope-box {
-      flex-direction: column;
-      align-items: stretch;
-    }
-    .scope-tabs { flex: none; }
+    .stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .settings-row { grid-template-columns: minmax(0, 1fr); }
+    .settings-row-control { justify-content: flex-start; }
+    .settings-row-control select, .settings-row-control input[type="text"] { width: 100%; }
   }
 `;
 
-const STUDIO_TEMPLATE = `<div class="studio-root">
+const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
 <header class="latter-top-titlebar">
   <div class="titlebar-brand">
-    <button type="button" class="ha-menu-btn" title="Toggle Home Assistant Sidebar" onclick="toggleParentHaSidebar()">
-      <svg viewBox="0 0 24 24"><path d="M3 6h18v2H3V6m0 5h18v2H3v-2m0 5h18v2H3v-2Z"/></svg>
+    <button type="button" class="btn-icon ha-menu-btn" aria-label="Toggle the Home Assistant sidebar" onclick="toggleParentHaSidebar()">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18v2H3V6m0 5h18v2H3v-2m0 5h18v2H3v-2Z"/></svg>
     </button>
     <svg class="brand-logo" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h1A1.5 1.5 0 0 1 8 5.5v13A1.5 1.5 0 0 1 6.5 20h-1A1.5 1.5 0 0 1 4 18.5v-13ZM16 5.5A1.5 1.5 0 0 1 17.5 4h1A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5h-1A1.5 1.5 0 0 1 16 18.5v-13ZM4 16.5h16v2A1.5 1.5 0 0 1 18.5 20h-13A1.5 1.5 0 0 1 4 18.5v-2ZM8 5.25h8v2.5H8v-2.5ZM8 10.75h8v2.5H8v-2.5Z"/></svg>
     <span>Latter</span>
   </div>
-  <div class="topbar-actions">
-    <button type="button" id="hdr-update-pill" class="update-pill hidden" onclick="triggerHeaderFirmwareUpdate()">Update Available</button>
-    <div id="dirty-indicator" class="dirty-banner">Unsaved</div>
-    <button id="btn-save-changes" class="btn-primary" disabled onclick="saveAllConfig()">Saved</button>
+  <div class="titlebar-actions">
+    <button type="button" id="hdr-update-pill" class="btn btn-secondary btn-compact hidden" onclick="triggerHeaderFirmwareUpdate()">Update Available</button>
+    <span id="dirty-indicator" class="chip chip-warning hidden">Unsaved</span>
+    <button type="button" id="btn-save-changes" class="btn btn-primary" disabled onclick="saveAllConfig()">Saved</button>
   </div>
 </header>
 <div class="app-shell">
-  <!-- LEFT SIDEBAR: SYSTEM (6 TABS) vs DEVICE (5 TABS) -->
   <aside class="sidebar">
-    <div class="scope-box">
-      <div class="scope-tabs">
-        <button class="scope-tab active" id="tab-scope-device" onclick="openDevicesLanding()">Devices</button>
-        <button class="scope-tab" id="tab-scope-system" onclick="setScope('system')">System</button>
-      </div>
+    <div class="scope-tabs" role="tablist" aria-label="Scope">
+      <button class="scope-tab active" id="tab-scope-device" role="tab" onclick="openDevicesLanding()">Devices</button>
+      <button class="scope-tab" id="tab-scope-system" role="tab" onclick="setScope('system')">System</button>
     </div>
 
-    <!-- SYSTEM NAVIGATION (6 TABS) -->
-    <div class="nav-list hidden" id="nav-scope-system">
-      <button class="nav-btn" data-view="system_overview" onclick="switchView('system_overview', this)">
-        <span>System overview</span>
-      </button>
-      <button class="nav-btn" data-view="shared_entities" onclick="switchView('shared_entities', this)">
-        <span>Shared Entities</span>
-      </button>
-      <button class="nav-btn" data-view="remotes" onclick="switchView('remotes', this)">
-        <span>Media &amp; Remotes</span>
-      </button>
-      <button class="nav-btn" data-view="system_sync" onclick="switchView('system_sync', this)">
-        <span>Groups &amp; Profiles</span>
-      </button>
-      <button class="nav-btn" data-view="area_tracking" onclick="switchView('area_tracking', this)">
-        <span>BLE &amp; Area Presence</span>
-      </button>
-      <button class="nav-btn" data-view="system_admin" onclick="switchView('system_admin', this)">
-        <span>System settings</span>
-      </button>
-    </div>
+    <nav class="nav-list hidden" id="nav-scope-system" aria-label="System pages">
+      <button class="nav-btn" data-view="system_overview" onclick="switchView('system_overview', this)"><span>System overview</span></button>
+      <button class="nav-btn" data-view="shared_entities" onclick="switchView('shared_entities', this)"><span>Shared Entities</span></button>
+      <button class="nav-btn" data-view="remotes" onclick="switchView('remotes', this)"><span>Media &amp; Remotes</span></button>
+      <button class="nav-btn" data-view="system_sync" onclick="switchView('system_sync', this)"><span>Groups &amp; Profiles</span></button>
+      <button class="nav-btn" data-view="area_tracking" onclick="switchView('area_tracking', this)"><span>BLE &amp; Area Presence</span></button>
+      <button class="nav-btn" data-view="system_admin" onclick="switchView('system_admin', this)"><span>System settings</span></button>
+    </nav>
 
-    <!-- DEVICES LIST SIDEBAR (WHEN ON ALL DEVICES LANDING PAGE) -->
-    <div class="nav-list" id="nav-scope-devices-list">
+    <nav class="nav-list" id="nav-scope-devices-list" aria-label="Devices">
       <button class="nav-btn active" data-view="select_device_prompt" onclick="openDevicesLanding()">
-        <span>All Devices</span>
-        <span class="nav-badge" id="nav-system-count">—</span>
+        <span>All Devices</span><span class="nav-badge" id="nav-system-count">—</span>
       </button>
-    </div>
+    </nav>
 
-    <!-- SELECTED DEVICE NAVIGATION (5 TABS) -->
-    <div class="nav-list hidden" id="nav-scope-device">
-      <button class="nav-btn nav-back-btn" style="color:var(--muted);" onclick="openDevicesLanding()">
-        <span>&larr; All Devices</span>
-      </button>
-      <div class="nav-device-title" id="nav-selected-device-label">Device</div>
-      <button class="nav-btn" data-view="dashboard" onclick="switchView('dashboard', this)">
-        <span>Overview</span>
-      </button>
-      <button class="nav-btn" id="nav-btn-home_display" data-view="home_display" onclick="switchView('home_display', this)">
-        <span>Display &amp; Home</span>
-      </button>
-      <button class="nav-btn" id="nav-btn-audio_voice" data-view="audio_voice" onclick="switchView('audio_voice', this)">
-        <span>Audio &amp; Voice</span>
-      </button>
-      <button class="nav-btn" id="nav-btn-power" data-view="power" onclick="switchView('power', this)">
-        <span>Power &amp; Battery</span>
-      </button>
-      <button class="nav-btn" data-view="system" onclick="switchView('system', this)">
-        <span>Device settings</span>
-        <span class="nav-badge" id="nav-esp-badge">0</span>
-      </button>
-    </div>
-
+    <nav class="nav-list hidden" id="nav-scope-device" aria-label="Device pages">
+      <button class="nav-btn nav-back-btn" onclick="openDevicesLanding()"><span>&larr; All Devices</span></button>
+      <div class="nav-device-title" id="nav-selected-device-label">—</div>
+      <button class="nav-btn" data-view="dashboard" onclick="switchView('dashboard', this)"><span>Overview</span></button>
+      <button class="nav-btn" id="nav-btn-home_display" data-view="home_display" onclick="switchView('home_display', this)"><span>Display &amp; Home</span></button>
+      <button class="nav-btn" id="nav-btn-audio_voice" data-view="audio_voice" onclick="switchView('audio_voice', this)"><span>Audio &amp; Voice</span></button>
+      <button class="nav-btn" id="nav-btn-power" data-view="power" onclick="switchView('power', this)"><span>Power &amp; Battery</span></button>
+      <button class="nav-btn" data-view="system" onclick="switchView('system', this)"><span>Device settings</span><span class="nav-badge" id="nav-esp-badge">—</span></button>
+    </nav>
   </aside>
 
-  <!-- MAIN AREA -->
-  <div class="main-area">
+  <main class="main-area">
     <div class="content-wrap">
-      <div class="unified-page-header">
-        <h2 id="unified-page-title">Devices</h2>
+      <div class="page-header"><h2 class="page-title" id="unified-page-title">Devices</h2></div>
+      <div id="studio-loading" class="loading-state" role="status">Loading Latter…</div>
+      <div id="studio-load-error" class="alert alert-error hidden" role="alert">
+        <span id="studio-load-error-text">Latter couldn't load.</span>
+        <button type="button" class="btn btn-secondary btn-compact" onclick="refreshState(true)">Retry</button>
       </div>
 
-      <!-- ================================================================== -->
-      <!-- SYSTEM TAB 1: SYSTEM OVERVIEW                                      -->
-      <!-- ================================================================== -->
+      <!-- SYSTEM: SYSTEM OVERVIEW -->
       <section id="view-system_overview" class="hidden">
         <div class="grid-2">
           <div class="card">
-            <h3>System</h3>
-            <div class="summary-row">
-              <span>Latter Version</span>
-              <div style="display:flex;align-items:center;gap:8px;">
-                <strong id="sys-sum-version">—</strong>
-                <button type="button" class="btn-secondary" style="padding:3px 9px;font-size:11.5px;" onclick="checkSystemUpdates()">Check for Updates</button>
-              </div>
+            <div class="card-header">
+              <div class="card-heading"><h3 class="card-title">System</h3></div>
+              <div class="card-header-actions"><button type="button" class="btn btn-secondary btn-compact" onclick="checkSystemUpdates()">Check for Updates</button></div>
             </div>
-            <div class="summary-row clickable" onclick="openDevicesWithCategory('all')">
-              <span>Online / Active Devices</span><strong id="sys-sum-online">—</strong>
-            </div>
-            <div class="summary-row clickable" onclick="openDevicesWithCategory('native')">
-              <span>Latter Native Devices</span><strong id="sys-sum-native">—</strong>
-            </div>
-            <div class="summary-row clickable" onclick="openDevicesWithCategory('ble_tracked')">
-              <span>BLE Tracked Devices</span><strong id="sys-sum-ble-tracked">—</strong>
-            </div>
-            <div class="summary-row clickable" onclick="openDevicesWithCategory('assigned_person')">
-              <span>Devices with an assigned person</span><strong id="sys-sum-people">—</strong>
-            </div>
-            <div class="summary-row clickable" onclick="openSystemSection('area_tracking', '')">
-              <span>BLE Area Proxies</span><strong id="sys-sum-proxies">—</strong>
+            <div class="card-content kv-list">
+              <div class="kv-row"><span>Latter Version</span><strong id="sys-sum-version">—</strong></div>
+              <button type="button" class="kv-row" onclick="openDevicesWithCategory('online')"><span>Online / Active Devices</span><strong id="sys-sum-online">—</strong></button>
+              <button type="button" class="kv-row" onclick="openDevicesWithCategory('native')"><span>Latter Native Devices</span><strong id="sys-sum-native">—</strong></button>
+              <button type="button" class="kv-row" onclick="openDevicesWithCategory('ble_tracked')"><span>BLE Tracked Devices</span><strong id="sys-sum-ble-tracked">—</strong></button>
+              <button type="button" class="kv-row" onclick="openDevicesWithCategory('assigned_person')"><span>Devices with an assigned person</span><strong id="sys-sum-people">—</strong></button>
+              <button type="button" class="kv-row" onclick="openSystemSection('area_tracking', '')"><span>BLE Area Proxies</span><strong id="sys-sum-proxies">—</strong></button>
             </div>
           </div>
-
           <div class="card">
-            <h3>Configured Integrations</h3>
-            <div class="summary-row clickable" onclick="openSystemSection('remotes', 'card-remotes')">
-              <span>Remote Controls</span><strong id="sys-sum-remotes">—</strong>
-            </div>
-            <div class="summary-row clickable" onclick="openSystemSection('remotes', 'card-vol-overrides')">
-              <span>Speaker Volume Overrides</span><strong id="sys-sum-vol">—</strong>
-            </div>
-            <div class="summary-row clickable" onclick="openSystemSection('shared_entities', 'card-cameras')">
-              <span>Cameras</span><strong id="sys-sum-cameras">—</strong>
-            </div>
-            <div class="summary-row clickable" onclick="openSystemSection('shared_entities', 'card-calendars')">
-              <span>Calendars</span><strong id="sys-sum-calendars">—</strong>
-            </div>
-            <div class="summary-row clickable" onclick="openSystemSection('system_sync', '')">
-              <span>Groups &amp; Saved Profiles</span><strong id="sys-sum-groups-profiles">—</strong>
+            <div class="card-header"><div class="card-heading"><h3 class="card-title">Configured Integrations</h3></div></div>
+            <div class="card-content kv-list">
+              <button type="button" class="kv-row" onclick="openSystemSection('remotes', 'card-remotes')"><span>Remote Controls</span><strong id="sys-sum-remotes">—</strong></button>
+              <button type="button" class="kv-row" onclick="openSystemSection('remotes', 'card-vol-overrides')"><span>Speaker Volume Overrides</span><strong id="sys-sum-vol">—</strong></button>
+              <button type="button" class="kv-row" onclick="openSystemSection('shared_entities', 'card-cameras')"><span>Cameras</span><strong id="sys-sum-cameras">—</strong></button>
+              <button type="button" class="kv-row" onclick="openSystemSection('shared_entities', 'card-calendars')"><span>Calendars</span><strong id="sys-sum-calendars">—</strong></button>
+              <button type="button" class="kv-row" onclick="openSystemSection('system_sync', '')"><span>Groups &amp; Saved Profiles</span><strong id="sys-sum-groups-profiles">—</strong></button>
             </div>
           </div>
         </div>
       </section>
 
-      <!-- ================================================================== -->
-      <!-- SYSTEM TAB 2: SHARED ENTITIES (WHOLE-HOME, CAMERAS, CALENDARS)     -->
-      <!-- ================================================================== -->
+      <!-- SYSTEM: SHARED ENTITIES -->
       <section id="view-shared_entities" class="hidden">
         <div class="grid-2">
-          <!-- CARD 1: WHOLE-HOME ENTITIES -->
           <div class="card">
-            <h3>Whole-Home Entities</h3>
-            <p class="desc">Primary shared system entities used by the Home screen and Whole-Home Hub.</p>
-            <div class="field">
-              <label>Weather Provider (weather.*)</label>
-              <select id="cfg-weather_entity" onchange="markDirty('system')"></select>
-            </div>
-            <div class="field">
-              <label>Security Alarm (alarm_control_panel.*)</label>
-              <select id="cfg-alarm_entity" onchange="markDirty('system')"></select>
-            </div>
-            <div class="form-grid-2">
-              <div class="field">
-                <label>Thermostat (climate.*)</label>
-                <select id="cfg-thermostat_entity" onchange="markDirty('system')"></select>
-              </div>
-              <div class="field">
-                <label>Entry Lock (lock.*)</label>
-                <select id="cfg-lock_entity" onchange="markDirty('system')"></select>
-              </div>
-            </div>
-            <div class="form-grid-2">
-              <div class="field">
-                <label>Garage Door (cover.*)</label>
-                <select id="cfg-garage_entity" onchange="markDirty('system')"></select>
-              </div>
-              <div class="field">
-                <label>Robot Vacuum (vacuum.*)</label>
-                <select id="cfg-vacuum_entity" onchange="markDirty('system')"></select>
-              </div>
+            <div class="card-header"><div class="card-heading">
+              <h3 class="card-title">Whole-Home Entities</h3>
+              <p class="card-description">Shared entities used by the Home screen and the Whole-Home Hub.</p>
+            </div></div>
+            <div class="card-content settings-list">
+              <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-weather_entity">Weather</label></div><div class="settings-row-control"><select id="cfg-weather_entity" onchange="markDirty('system')"></select></div></div>
+              <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-alarm_entity">Security alarm</label></div><div class="settings-row-control"><select id="cfg-alarm_entity" onchange="markDirty('system')"></select></div></div>
+              <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-thermostat_entity">Thermostat</label></div><div class="settings-row-control"><select id="cfg-thermostat_entity" onchange="markDirty('system')"></select></div></div>
+              <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-lock_entity">Entry lock</label></div><div class="settings-row-control"><select id="cfg-lock_entity" onchange="markDirty('system')"></select></div></div>
+              <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-garage_entity">Garage door</label></div><div class="settings-row-control"><select id="cfg-garage_entity" onchange="markDirty('system')"></select></div></div>
+              <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-vacuum_entity">Robot vacuum</label></div><div class="settings-row-control"><select id="cfg-vacuum_entity" onchange="markDirty('system')"></select></div></div>
             </div>
           </div>
 
-          <!-- CARD 2: CAMERAS & DOORBELL AUDIO -->
           <div class="card" id="card-cameras">
-            <h3>Cameras &amp; Doorbell Audio</h3>
-            <p class="desc">Add up to 10 <code>camera.*</code> entities for the on-device Camera Carousel and doorbell popups. Devices can listen to a doorbell and reply by push-to-talk: your speech is transcribed and spoken on the camera's speaker with Home Assistant TTS.</p>
-            <div class="field">
-              <label>Doorbell audio noise reduction</label>
-              <div class="input-action-row">
-                <select id="cfg-doorbell_noise_reduction" onchange="markDirty('system')">
-                  <option value="strong">Strong</option>
-                  <option value="light">Light</option>
-                  <option value="off">Off</option>
-                </select>
-              </div>
-            </div>
-            <div class="field">
-              <label>Test the primary camera's speaker from a Device</label>
-              <div class="input-action-row">
-                <select id="doorbell-test-device"></select>
-                <button type="button" class="btn-secondary" onclick="testDoorbellSpeaker()">Test door speaker</button>
-              </div>
-            </div>
-            <div id="cameras-list"></div>
-            <button type="button" class="btn-secondary" id="btn-add-camera" onclick="addCameraRow(''); markDirty('system');">+ Add Camera</button>
-
-            <div id="cam-preview-box" style="display:none;flex-direction:column;gap:8px;margin-top:14px;padding:12px;background:var(--input-bg);border:1px solid var(--border);border-radius:10px;">
-              <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
-                <strong id="cam-preview-label" style="font-size:13px;font-weight:500;color:var(--text-strong);">Camera Snapshot Preview</strong>
-                <div style="display:flex;gap:6px;">
-                  <button type="button" class="btn-secondary" style="padding:4px 10px;font-size:12px;" onclick="refreshActiveCameraPreview()">Refresh</button>
-                  <button type="button" class="btn-secondary" style="padding:4px 8px;font-size:12px;" onclick="closeCameraPreviewBox()">Close</button>
+            <div class="card-header"><div class="card-heading">
+              <h3 class="card-title">Cameras &amp; Doorbell Audio</h3>
+              <p class="card-description">Up to 10 cameras for the on-device Camera Carousel and doorbell popups. Devices can listen to a doorbell and reply by push-to-talk: your speech is transcribed and spoken on the camera's speaker with Home Assistant TTS.</p>
+            </div></div>
+            <div class="card-content">
+              <div class="settings-list">
+                <div class="settings-row">
+                  <div class="settings-row-text"><label class="row-label" for="cfg-doorbell_noise_reduction">Doorbell audio noise reduction</label></div>
+                  <div class="settings-row-control">
+                    <select id="cfg-doorbell_noise_reduction" onchange="markDirty('system')">
+                      <option value="strong">Strong</option>
+                      <option value="light">Light</option>
+                      <option value="off">Off</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="settings-row">
+                  <div class="settings-row-text">
+                    <label class="row-label" for="doorbell-test-device">Test the door speaker</label>
+                    <p class="row-description">Speaks a test sentence on the primary camera's speaker, from the Device you choose.</p>
+                  </div>
+                  <div class="settings-row-control">
+                    <select id="doorbell-test-device"></select>
+                    <button type="button" class="btn btn-secondary" onclick="testDoorbellSpeaker()">Test</button>
+                  </div>
                 </div>
               </div>
-              <img id="cam-preview-img" style="width:100%;max-width:360px;height:auto;aspect-ratio:16/9;object-fit:cover;border-radius:8px;border:1px solid var(--border);background:#000;" alt="Camera Snapshot">
+              <div id="cameras-list" class="stack"></div>
+              <div><button type="button" class="btn btn-text" onclick="addCameraRow(''); markDirty('system');">+ Add Camera</button></div>
+              <div id="cam-preview-box" class="cam-preview hidden">
+                <div class="signal-row-head">
+                  <strong id="cam-preview-label">Camera preview</strong>
+                  <div class="input-action-row">
+                    <button type="button" class="btn btn-secondary btn-compact" onclick="refreshActiveCameraPreview()">Refresh</button>
+                    <button type="button" class="btn btn-text btn-compact" onclick="closeCameraPreviewBox()">Close</button>
+                  </div>
+                </div>
+                <img id="cam-preview-img" alt="Camera snapshot">
+              </div>
             </div>
           </div>
         </div>
 
         <div class="grid-2">
-          <!-- CARD 3: CALENDARS -->
           <div class="card" id="card-calendars">
-            <h3>Calendars</h3>
-            <p class="desc">Add shared calendars (<code>calendar.*</code>) to aggregate upcoming events in the Agenda tool and Home screen.</p>
-            <div id="calendars-list"></div>
-            <button type="button" class="btn-secondary" onclick="addCalendarRow(''); markDirty('system');">+ Add Calendar</button>
+            <div class="card-header"><div class="card-heading">
+              <h3 class="card-title">Calendars</h3>
+              <p class="card-description">Calendars merged into the on-device agenda and Home screen.</p>
+            </div></div>
+            <div class="card-content">
+              <div id="calendars-list" class="stack"></div>
+              <div><button type="button" class="btn btn-text" onclick="addCalendarRow(''); markDirty('system');">+ Add Calendar</button></div>
+            </div>
           </div>
         </div>
       </section>
 
-      <!-- ================================================================== -->
-      <!-- SYSTEM TAB 3: MEDIA & REMOTES (REMOTES + SPEAKER VOLUME OVERRIDES) -->
-      <!-- ================================================================== -->
+      <!-- SYSTEM: MEDIA & REMOTES -->
       <section id="view-remotes" class="hidden">
         <div class="card" id="card-remotes">
-          <h3>System Remote Inventory</h3>
-          <p class="desc">Add up to 10 <code>remote.*</code> or <code>media_player.*</code> entities across your site. Once added here, organize them into Area or Device Remote Groups below.</p>
-          <div id="remotes-list"></div>
-          <button type="button" class="btn-secondary" id="btn-add-remote" onclick="addRemoteControlRow(''); markDirty('system');">+ Add Remote Control</button>
+          <div class="card-header"><div class="card-heading">
+            <h3 class="card-title">System Remote Inventory</h3>
+            <p class="card-description">Up to 10 <code>remote.*</code> or <code>media_player.*</code> entities. Organize them into Remote Groups below.</p>
+          </div></div>
+          <div class="card-content">
+            <div id="remotes-list" class="stack"></div>
+            <div><button type="button" class="btn btn-text" onclick="addRemoteControlRow(''); markDirty('system');">+ Add Remote Control</button></div>
+          </div>
         </div>
 
         <div class="card" id="card-remote-groups">
-          <h3>Remote Control Groups (Area &amp; Device Assignment)</h3>
-          <p class="desc">Create groups of remotes and assign them to an <strong>Area</strong> (so roaming devices automatically see that Area's remotes when present, or hide the Remote app when an Area has none) or assign a group statically to a specific device.</p>
-          <div id="remote-groups-list"></div>
-          <button type="button" class="btn-secondary" onclick="addRemoteGroupRow(); markDirty('system');">+ Create Remote Group</button>
-
-          <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border);">
-            <h4 style="margin:0 0 10px;font-size:14.5px;font-weight:600;color:var(--text-strong);">Device Remote Assignment</h4>
-            <div id="device-remote-assignments-list" class="native-controls-box"></div>
+          <div class="card-header"><div class="card-heading">
+            <h3 class="card-title">Remote Control Groups</h3>
+            <p class="card-description">Group remotes and assign a group to an Area (roaming Devices show that Area's remotes while they're in it) or to a Device.</p>
+          </div></div>
+          <div class="card-content">
+            <div id="remote-groups-list" class="stack"></div>
+            <div><button type="button" class="btn btn-text" onclick="addRemoteGroupRow(); markDirty('system');">+ Create Remote Group</button></div>
+            <h4 class="subsection-title">Device Remote Assignment</h4>
+            <div id="device-remote-assignments-list" class="settings-list"></div>
           </div>
         </div>
 
         <div class="card" id="card-vol-overrides">
-          <h3>Speaker Volume Overrides</h3>
-          <p class="desc">When streaming audio to a specific speaker, route volume commands to a different media player or number entity instead.</p>
-          <div id="volume-overrides-list"></div>
-          <button type="button" class="btn-secondary" id="btn-add-vol-override" onclick="addVolumeOverrideRow('', ''); markDirty('system');">+ Add Volume Override</button>
+          <div class="card-header"><div class="card-heading">
+            <h3 class="card-title">Speaker Volume Overrides</h3>
+            <p class="card-description">When audio plays on a speaker, send its volume changes to a different media player or number entity instead.</p>
+          </div></div>
+          <div class="card-content">
+            <div id="volume-overrides-list" class="stack"></div>
+            <div><button type="button" class="btn btn-text" onclick="addVolumeOverrideRow('', ''); markDirty('system');">+ Add Volume Override</button></div>
+          </div>
         </div>
       </section>
 
-      <!-- ================================================================== -->
-      <!-- SYSTEM TAB 4: GROUPS & PROFILES                                    -->
-      <!-- ================================================================== -->
+      <!-- SYSTEM: GROUPS & PROFILES -->
       <section id="view-system_sync" class="hidden">
         <div class="grid-2">
           <div class="card">
-            <h3>Configuration Profiles</h3>
-            <p class="desc">Capture a Device's settings as a reusable profile, or apply a profile to any Device or group.</p>
-            <div class="field">
-              <label>Capture from</label>
-              <select id="profile-source-device"></select>
+            <div class="card-header"><div class="card-heading">
+              <h3 class="card-title">Configuration Profiles</h3>
+              <p class="card-description">Capture a Device's settings as a reusable profile, or apply a profile to any Device or group.</p>
+            </div></div>
+            <div class="card-content">
+              <div class="settings-list">
+                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="profile-source-device">Capture from</label></div><div class="settings-row-control"><select id="profile-source-device"></select></div></div>
+                <div class="settings-row stacked"><div class="settings-row-text"><span class="row-label">Profile name and description</span></div>
+                  <div class="settings-row-control"><input type="text" id="new-profile-name" placeholder="Profile name (e.g. Nightstand)"><input type="text" id="new-profile-desc" placeholder="Description (optional)"></div>
+                </div>
+              </div>
             </div>
-            <div class="input-action-row" style="margin-bottom:12px;">
-              <input type="text" id="new-profile-name" placeholder="Profile Name (e.g. Nightstand)">
-              <input type="text" id="new-profile-desc" placeholder="Description (optional)">
-              <button class="btn-primary" onclick="captureDeviceProfile()">Capture Profile</button>
+            <div class="card-actions"><button type="button" class="btn btn-primary" onclick="captureDeviceProfile()">Capture Profile</button></div>
+            <div class="card-content">
+              <div class="settings-list">
+                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="profile-target-scope">Apply profiles to</label></div><div class="settings-row-control"><select id="profile-target-scope"></select></div></div>
+              </div>
+              <div id="saved-profiles-list" class="settings-list"></div>
             </div>
-            <div class="field">
-              <label>Apply Profile Target</label>
-              <select id="profile-target-scope"></select>
-            </div>
-            <div id="saved-profiles-list" class="native-controls-box"></div>
           </div>
 
           <div class="card">
-            <h3>Device Groups</h3>
-            <p class="desc">Assign devices to logical groups for targeted profile deployment and bulk control.</p>
-            <div class="input-action-row" style="margin-bottom:12px;">
-              <input type="text" id="new-group-name" placeholder="New Group Name">
-              <input type="text" id="new-group-desc" placeholder="Description">
-              <button class="btn-secondary" onclick="createDeviceGroup()">+ Add Group</button>
+            <div class="card-header"><div class="card-heading">
+              <h3 class="card-title">Device Groups</h3>
+              <p class="card-description">Groups target profiles and bulk controls.</p>
+            </div></div>
+            <div class="card-content">
+              <div class="input-action-row">
+                <input type="text" id="new-group-name" placeholder="New group name" aria-label="New group name">
+                <input type="text" id="new-group-desc" placeholder="Description" aria-label="Group description">
+                <button type="button" class="btn btn-secondary" onclick="createDeviceGroup()">Add Group</button>
+              </div>
+              <div id="device-groups-list" class="settings-list"></div>
             </div>
-            <div id="device-groups-list" class="native-controls-box"></div>
           </div>
         </div>
 
-        <details class="ha-details">
-          <summary>Bulk Device Controls (Multi-Device Live Settings)</summary>
-          <div class="details-body">
-            <p class="desc" style="margin:0 0 12px;color:var(--muted);font-size:13px;">Dispatch display, sleep, voice, or sound changes simultaneously across all devices or a selected group.</p>
-            <div class="form-grid-2" style="margin-bottom:12px;">
-              <div>
-                <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px;">Category</label>
+        <details class="card">
+          <summary class="card-header"><div class="card-heading">
+            <h3 class="card-title">Bulk Device Controls</h3>
+            <p class="card-description">Change display, sleep, voice, or sound settings on several Devices at once.</p>
+          </div></summary>
+          <div class="card-content">
+            <div class="list-row-main">
+              <div class="stacked-field">
+                <label for="group-ctrl-cat-filter">Category</label>
                 <select id="group-ctrl-cat-filter" onchange="renderSystemOverview(STATE.system_devices, STATE.system_controls, STATE.config)">
                   <option value="display">Display &amp; Appearance</option>
                   <option value="sleep">Sleep &amp; Wake</option>
@@ -1134,480 +1181,464 @@ const STUDIO_TEMPLATE = `<div class="studio-root">
                   <option value="all">All Categories</option>
                 </select>
               </div>
-              <div>
-                <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px;">Target Devices</label>
+              <div class="stacked-field">
+                <label for="group-ctrl-filter">Target Devices</label>
                 <select id="group-ctrl-filter" onchange="renderSystemOverview(STATE.system_devices, STATE.system_controls, STATE.config)"></select>
               </div>
             </div>
-            <div id="system-controls-list" class="native-controls-box"></div>
+            <div id="system-controls-list" class="settings-list"></div>
           </div>
         </details>
       </section>
 
-      <!-- ================================================================== -->
-      <!-- SYSTEM TAB 5: BLE & AREA PRESENCE                                  -->
-      <!-- ================================================================== -->
+      <!-- SYSTEM: BLE & AREA PRESENCE -->
       <section id="view-area_tracking" class="hidden">
         <div class="card">
-          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:14px;">
-            <div>
-              <h3 style="margin:0;">Live Area Presence &amp; Sensor Fusion</h3>
-              <p class="desc" style="margin:2px 0 0;">Real-time occupancy (<code>binary_sensor.&lt;area&gt;_ble_occupancy</code> &amp; <code>sensor.&lt;area&gt;_occupants</code>) combining BLE beacons with area occupancy/mmWave/PIR sensors.</p>
-            </div>
-          </div>
-          <div id="area-presence-grid-box" class="native-controls-box"></div>
+          <div class="card-header"><div class="card-heading">
+            <h3 class="card-title">Live Area Presence &amp; Sensor Fusion</h3>
+            <p class="card-description">Occupancy per Area (<code>binary_sensor.&lt;area&gt;_ble_occupancy</code>, <code>sensor.&lt;area&gt;_occupants</code>), combining BLE beacons with occupancy, mmWave and PIR sensors.</p>
+          </div></div>
+          <div class="card-content"><div id="area-presence-grid-box" class="settings-list"></div></div>
         </div>
 
         <div class="card">
-          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:18px;">
-            <div>
-              <h3 style="margin:0;">Per-Area BLE Signal Calibration</h3>
-              <p class="desc" style="margin:2px 0 0;">Select a BLE-enabled device, carry it into an area, and click <strong>Calibrate Current Area</strong>.</p>
+          <div class="card-header">
+            <div class="card-heading">
+              <h3 class="card-title">Per-Area BLE Signal Calibration</h3>
+              <p class="card-description">Choose a BLE-enabled Device, carry it into an Area, and select Calibrate Current Area.</p>
             </div>
-            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-              <div style="display:flex;align-items:center;gap:8px;">
-                <label style="font-size:12px;color:var(--muted);white-space:nowrap;">Calibration Device:</label>
-                <select id="ble-survey-device-picker" style="width:auto;min-width:185px;" onchange="onSelectBleSurveyDevice(this.value)"></select>
-              </div>
-              <label style="font-size:12.5px;font-weight:500;color:var(--accent);display:inline-flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap;">
-                <input type="checkbox" id="survey-fast-mode" onchange="toggleSurveyFastMode(this.checked)"> Fast Refresh (1.5s)
-              </label>
+            <div class="card-header-actions">
+              <select id="ble-survey-device-picker" aria-label="Calibration Device" onchange="onSelectBleSurveyDevice(this.value)"></select>
+              <label class="input-action-row"><input type="checkbox" class="switch" role="switch" id="survey-fast-mode" onchange="toggleSurveyFastMode(this.checked)"><span>Fast refresh</span></label>
             </div>
           </div>
-          <div id="rssi-container"></div>
+          <div class="card-content"><div id="rssi-container" class="stack"></div></div>
         </div>
 
         <div class="card">
-          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:14px;">
-            <div>
-              <h3 style="margin:0;">Discovered Nearby Bluetooth Devices (1-Click Adopt)</h3>
-              <p class="desc" style="margin:2px 0 0;">Adopt discovered phones/watches (<code>private_ble_device</code>), iBeacons, or named BLE tags into Latter Area tracking in one click.</p>
+          <div class="card-header">
+            <div class="card-heading">
+              <h3 class="card-title">Discovered Nearby Bluetooth Devices</h3>
+              <p class="card-description">Adopt phones and watches (<code>private_ble_device</code>), iBeacons, or named BLE tags for Area tracking.</p>
             </div>
-            <button type="button" class="btn-secondary" style="padding:5px 12px;font-size:12px;" onclick="openAddDeviceModal()">+ Manual BLE Address</button>
+            <div class="card-header-actions"><button type="button" class="btn btn-secondary btn-compact" onclick="openAddDeviceModal()">Add by Address</button></div>
           </div>
-          <div id="ble-adopt-table-box" class="native-controls-box"></div>
+          <div class="card-content"><div id="ble-adopt-table-box" class="settings-list"></div></div>
         </div>
       </section>
 
-      <!-- ================================================================== -->
-      <!-- SYSTEM TAB 6: ADMINISTRATION (BACKUPS, STUDIO, LOGS & DEV YAML)    -->
-      <!-- ================================================================== -->
+      <!-- SYSTEM: SYSTEM SETTINGS -->
       <section id="view-system_admin" class="hidden">
         <div class="grid-2">
           <div class="card">
-            <h3>Export Settings (.JSON)</h3>
-            <p class="desc">Download a portable JSON bundle of your system settings, entity mappings, BLE area offsets, and live ESPHome device preferences. (Full system backups are handled automatically by Home Assistant's native Backup system.)</p>
-            <div class="field">
-              <label>Backup Scope</label>
-              <select id="bkp-scope-select"></select>
+            <div class="card-header"><div class="card-heading">
+              <h3 class="card-title">Export Settings</h3>
+              <p class="card-description">Download the System's settings, or one Device's, as a JSON file. Full backups are Home Assistant's own; Latter's storage is in every Home Assistant backup.</p>
+            </div></div>
+            <div class="card-content settings-list">
+              <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="bkp-scope-select">Export</label></div><div class="settings-row-control"><select id="bkp-scope-select"></select></div></div>
             </div>
-            <div class="quick-actions-row">
-              <button class="btn-primary" onclick="exportBackupToComputer('')">Download .JSON</button>
-            </div>
+            <div class="card-actions"><button type="button" class="btn btn-primary" onclick="exportBackupToComputer('')">Download</button></div>
           </div>
 
           <div class="card">
-            <h3>Restore from File (.JSON)</h3>
-            <p class="desc">Upload a downloaded <code>latter-*.json</code> backup file from your computer.</p>
-            <div class="field">
-              <label>Backup .JSON File</label>
-              <input type="file" id="bkp-upload-file" accept=".json,application/json">
+            <div class="card-header"><div class="card-heading">
+              <h3 class="card-title">Restore from File</h3>
+              <p class="card-description">Upload a <code>latter-*.json</code> export. A Device export can be restored onto a different Device.</p>
+            </div></div>
+            <div class="card-content settings-list">
+              <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="bkp-upload-file">Backup file</label></div><div class="settings-row-control"><input type="file" id="bkp-upload-file" accept=".json,application/json"></div></div>
+              <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="bkp-restore-device">Device for a Device backup</label></div><div class="settings-row-control"><select id="bkp-restore-device"></select></div></div>
+              <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="bkp-restore-esp">Restore the Device's own settings</label><p class="row-description">Selects, switches and numbers stored on the Device.</p></div><div class="settings-row-control"><input type="checkbox" class="switch" role="switch" id="bkp-restore-esp" checked></div></div>
             </div>
-            <div class="field">
-              <label>Device to restore a Device backup onto</label>
-              <select id="bkp-restore-device"></select>
-            </div>
-            <div class="toggle-row" style="margin-bottom:12px;">
-              <span>Restore Live ESPHome Device Settings</span>
-              <input type="checkbox" id="bkp-restore-esp" checked>
-            </div>
-            <button class="btn-primary" onclick="restoreFromUploadedFile()">Upload &amp; Restore</button>
+            <div class="card-actions"><button type="button" class="btn btn-primary" onclick="restoreFromUploadedFile()">Restore</button></div>
           </div>
         </div>
 
         <div class="grid-2">
           <div class="card">
-            <h3>Notification Tester</h3>
-            <p class="desc">Send a test on-screen alert (<code>latter.notify</code>) to a specific device.</p>
-            <div class="field">
-              <label>Target Device</label>
-              <select id="test-alert-device"></select>
+            <div class="card-header"><div class="card-heading">
+              <h3 class="card-title">Notification Tester</h3>
+              <p class="card-description">Send a test on-screen alert (<code>latter.notify</code>).</p>
+            </div></div>
+            <div class="card-content settings-list">
+              <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="test-alert-device">Send to</label></div><div class="settings-row-control"><select id="test-alert-device"></select></div></div>
+              <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="test-alert-title">Title</label></div><div class="settings-row-control"><input type="text" id="test-alert-title" value="Front Door"></div></div>
+              <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="test-alert-msg">Message</label></div><div class="settings-row-control"><input type="text" id="test-alert-msg" value="Person detected at Front Door"></div></div>
+              <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="test-alert-prio">Priority</label></div><div class="settings-row-control">
+                <select id="test-alert-prio"><option value="normal">Normal</option><option value="warning">Warning</option><option value="critical">Critical</option></select>
+              </div></div>
+              <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="test-alert-cam">Include a snapshot from the primary camera</label></div><div class="settings-row-control"><input type="checkbox" class="switch" role="switch" id="test-alert-cam"></div></div>
             </div>
-            <div class="form-grid-2" style="margin-bottom:10px;">
-              <input type="text" id="test-alert-title" value="Front Door" placeholder="Title">
-              <select id="test-alert-prio">
-                <option value="normal">Priority: Normal</option>
-                <option value="warning">Priority: Warning</option>
-                <option value="critical">Priority: Critical</option>
-              </select>
-            </div>
-            <div class="field">
-              <input type="text" id="test-alert-msg" value="Person detected at Front Door" placeholder="Message">
-            </div>
-            <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
-              <label style="font-size:12.5px;color:var(--muted);display:inline-flex;align-items:center;gap:6px;cursor:pointer;">
-                <input type="checkbox" id="test-alert-cam"> Include a snapshot from the primary camera
-              </label>
-              <button class="btn-primary" onclick="sendTestNotification()">Send Notification</button>
-            </div>
+            <div class="card-actions"><button type="button" class="btn btn-primary" onclick="sendTestNotification()">Send Notification</button></div>
           </div>
-        </div>
 
-        <div class="card" id="sys-custom-palettes-card">
-          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:18px;">
-            <div>
-              <h3 style="margin:0;">System Custom Color Library</h3>
-              <p class="desc" style="margin:2px 0 0;">Create custom UI color profiles on the HSV Color Wheel and reuse them across any display.</p>
-            </div>
-            <button type="button" class="btn-secondary" onclick="openColorWheelModal('system')">+ Open Color Wheel</button>
-          </div>
-          <div id="sys-custom-palettes-list" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;"></div>
-        </div>
-
-        <!-- COLLAPSIBLE: SYSTEM & DEVICE LOGS -->
-        <details class="ha-details">
-          <summary>System &amp; Device Logs</summary>
-          <div class="details-body">
-            <div class="quick-actions-row" style="margin-bottom:12px;">
-              <button type="button" class="btn-secondary" onclick="openNativeHaLogs('latter')">HA Logs (latter)</button>
-              <button type="button" class="btn-secondary" id="btn-native-dev-logs" onclick="openNativeHaLogs(STATE?.config?.device_slug || 'esphome')">HA Logs (Active Device)</button>
-              <button type="button" class="btn-secondary" onclick="openNativeHaLogs('esphome')">HA Logs (esphome)</button>
-              <button type="button" class="btn-secondary" onclick="openNativeHaIntegrations()">HA Integration Page</button>
-            </div>
-            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
-              <select id="log-filter-select" style="width:auto;min-width:200px;" onchange="renderLogsView()">
-                <option value="all">All Latter &amp; ESPHome Logs</option>
-                <option value="device">Active Device Only</option>
-                <option value="latter">Latter Middleware Only</option>
-                <option value="errors">Warnings &amp; Errors Only</option>
-              </select>
-              <div style="display:flex;gap:6px;flex-wrap:wrap;">
-                <button type="button" class="btn-secondary" onclick="refreshState(false)">Refresh</button>
-                <button type="button" class="btn-secondary" onclick="copyTextById('internal-log-output')">Copy</button>
-                <button type="button" class="btn-danger" onclick="clearInternalLogs()">Clear</button>
+          <div class="card" id="sys-custom-palettes-card">
+            <div class="card-header">
+              <div class="card-heading">
+                <h3 class="card-title">Custom Color Library</h3>
+                <p class="card-description">Saved theme colors. Apply one to a Device from its Display &amp; Home page.</p>
               </div>
+              <div class="card-header-actions"><button type="button" class="btn btn-secondary btn-compact" onclick="openColorWheelModal('system')">Add Color</button></div>
             </div>
-            <pre id="internal-log-output" class="mono" style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:12px;overflow-x:auto;max-height:380px;margin:0;color:var(--text-strong);line-height:1.5;">No events logged yet.</pre>
+            <div class="card-content"><div id="sys-custom-palettes-list" class="settings-list"></div></div>
+          </div>
+        </div>
+
+        <details class="card">
+          <summary class="card-header"><div class="card-heading">
+            <h3 class="card-title">System &amp; Device Logs</h3>
+            <p class="card-description">Latter's events plus Latter, ESPHome and Music Assistant entries from the Home Assistant log.</p>
+          </div></summary>
+          <div class="card-content">
+            <div class="input-action-row">
+              <button type="button" class="btn btn-secondary btn-compact" onclick="openNativeHaLogs('latter')">HA Logs (latter)</button>
+              <button type="button" class="btn btn-secondary btn-compact" id="btn-native-dev-logs" onclick="openNativeHaLogs(STATE?.config?.device_slug || 'esphome')">HA Logs (Device)</button>
+              <button type="button" class="btn btn-secondary btn-compact" onclick="openNativeHaLogs('esphome')">HA Logs (esphome)</button>
+              <button type="button" class="btn btn-secondary btn-compact" onclick="openNativeHaIntegrations()">Latter integration</button>
+            </div>
+            <div class="input-action-row">
+              <select id="log-filter-select" aria-label="Log filter" onchange="renderLogsView()">
+                <option value="all">All Latter &amp; ESPHome entries</option>
+                <option value="device">Selected Device only</option>
+                <option value="latter">Latter only</option>
+                <option value="errors">Warnings &amp; errors only</option>
+              </select>
+              <button type="button" class="btn btn-text btn-compact" onclick="refreshState(false)">Refresh</button>
+              <button type="button" class="btn btn-text btn-compact" onclick="copyTextById('internal-log-output')">Copy</button>
+              <button type="button" class="btn btn-danger btn-compact" onclick="clearInternalLogs()">Clear</button>
+            </div>
+            <pre id="internal-log-output" class="log-output mono">No events logged yet.</pre>
           </div>
         </details>
       </section>
 
-      <!-- ================================================================== -->
-      <!-- DEVICES LANDING PAGE (CATEGORY DROPDOWN + SORTABLE TABLE)          -->
-      <!-- ================================================================== -->
+      <!-- DEVICES: LANDING -->
       <section id="view-select_device_prompt">
         <div class="card">
-          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
-            <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:220px;max-width:340px;">
-              <select id="device-category-filter" onchange="onFilterDeviceCategory(this.value)">
-                <option value="all">Category: All Devices</option>
-                <option value="online">Online / Active Devices</option>
-                <option value="native">Latter Native Devices</option>
-                <option value="ble_tracked">BLE Tracked Devices</option>
-                <option value="roaming">Roaming Devices</option>
-                <option value="stationary">Stationary Devices</option>
-                <option value="headless">Screenless / Headless Devices</option>
-                <option value="ble_tag">BLE Phones, Watches &amp; Tags</option>
-                <option value="updates">Firmware Updates Available</option>
-              </select>
+          <div class="card-header">
+            <div class="card-heading">
+              <h3 class="card-title">All Devices</h3>
+              <p class="card-description">Open a Device to manage it. Latter displays are added through Home Assistant's ESPHome discovery; BLE phones, watches and tags can be added here.</p>
             </div>
-            <button type="button" class="btn-primary" id="btn-open-add-device" onclick="openAddDeviceModal()">+ Add Device</button>
+            <div class="card-header-actions">
+              <select id="device-category-filter" aria-label="Device category" onchange="onFilterDeviceCategory(this.value)"></select>
+              <button type="button" class="btn btn-primary" onclick="openAddDeviceModal()">Add BLE Device</button>
+            </div>
           </div>
-          <div id="prompt-devices-list"></div>
+          <div class="card-content"><div id="prompt-devices-list"></div></div>
         </div>
       </section>
 
-      <!-- ================================================================== -->
-      <!-- DEVICE TAB 1: OVERVIEW (TELEMETRY, QUICK ACTIONS & DEVICE STATUS)  -->
-      <!-- ================================================================== -->
+      <!-- DEVICE: OVERVIEW -->
       <section id="view-dashboard" class="hidden">
-        <div class="hero-stats" style="grid-template-columns:repeat(4, minmax(0, 1fr));">
-          <div class="stat-box"><span id="st-area-label">Current Area</span><strong id="st-area">—</strong></div>
-          <div class="stat-box"><span>Battery / Power</span><strong id="st-battery">—</strong></div>
-          <div class="stat-box"><span>Wi-Fi Signal</span><strong id="st-wifi">—</strong></div>
-          <div class="stat-box"><span>Firmware Version</span><strong id="st-fw-version">—</strong></div>
+        <div class="stat-grid">
+          <div class="stat"><span id="st-area-label">Area</span><strong id="st-area">—</strong></div>
+          <div class="stat"><span>Battery / Power</span><strong id="st-battery">—</strong></div>
+          <div class="stat"><span>Wi-Fi Signal</span><strong id="st-wifi">—</strong></div>
+          <div class="stat"><span>Firmware Version</span><strong id="st-fw-version">—</strong></div>
         </div>
-
         <div class="grid-2">
-          <!-- CARD 1: QUICK ACTIONS & PROFILE -->
           <div class="card">
-            <h3>Quick Actions</h3>
-            <p class="desc">Execute immediate device commands or apply a saved configuration profile.</p>
-            <div id="dash-quick-actions" class="quick-actions-row" style="margin-bottom:18px;"></div>
-
-            <div class="field hidden" id="dash-power-profile-wrap">
-              <label>Sleep &amp; Wake Power Profile</label>
-              <select id="dash-power-profile-select" onchange="if (this.dataset.ent) espSelect(this.dataset.ent, this.value)"></select>
-            </div>
-
-            <div class="field">
-              <label>Apply Configuration Profile</label>
-              <div class="input-action-row">
-                <select id="quick-profile-select"></select>
-                <button class="btn-chip" onclick="applyQuickProfileFromOverview()">Apply Profile</button>
+            <div class="card-header"><div class="card-heading">
+              <h3 class="card-title">Quick Actions</h3>
+              <p class="card-description">Run a Device action, or apply a saved configuration profile.</p>
+            </div></div>
+            <div class="card-content">
+              <div id="dash-quick-actions" class="input-action-row"></div>
+              <div class="settings-list">
+                <div class="settings-row hidden" id="dash-power-profile-wrap"><div class="settings-row-text"><label class="row-label" for="dash-power-profile-select">Sleep &amp; Wake power profile</label></div><div class="settings-row-control"><select id="dash-power-profile-select" onchange="if (this.dataset.ent) espSelect(this.dataset.ent, this.value)"></select></div></div>
+                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="quick-profile-select">Configuration profile</label></div><div class="settings-row-control"><select id="quick-profile-select"></select><button type="button" class="btn btn-secondary" onclick="applyQuickProfileFromOverview()">Apply</button></div></div>
+                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-assigned_person">Assigned person</label><p class="row-description">Creates <code>sensor.&lt;person&gt;_current_area</code>.</p></div><div class="settings-row-control"><select id="cfg-assigned_person" onchange="onAssignedPersonChanged(this.value)"></select></div></div>
               </div>
             </div>
-
-            <div class="field" id="dash-assigned-person-field" style="padding-top:12px;border-top:1px solid var(--border);">
-              <label>Assigned Person (<code>sensor.&lt;person&gt;_current_area</code>)</label>
-              <select id="cfg-assigned_person" onchange="onAssignedPersonChanged(this.value)"></select>
-            </div>
           </div>
 
-          <!-- CARD 2: DEVICE STATUS & BACKUPS -->
           <div class="card">
-            <h3>Device Status</h3>
-            <p class="desc">Hardware model, roaming location mode, and device management.</p>
-            <div class="summary-row"><span>Hardware Model</span><strong id="dash-hw-model">—</strong></div>
-            <div class="summary-row"><span>IP Address</span><strong id="dash-ip-addr">—</strong></div>
-            <div class="summary-row"><span>Location Mode</span><strong id="dash-ble-mode">—</strong></div>
-            <div class="summary-row" id="dash-row-ble-proxy"><span>Nearest BLE Proxy</span><strong id="dash-ble-proxy">—</strong></div>
-            <div class="summary-row"><span>Device Group</span><strong id="st-group">—</strong></div>
-            <div class="quick-actions-row" style="margin-top:16px;">
-              <button class="btn-chip" onclick="exportBackupToComputer('device')">Download .JSON</button>
-              <button class="btn-chip" onclick="navigateToView('system')">Device settings</button>
+            <div class="card-header"><div class="card-heading"><h3 class="card-title">Device Status</h3></div></div>
+            <div class="card-content kv-list">
+              <div class="kv-row"><span>Hardware model</span><strong id="dash-hw-model">—</strong></div>
+              <div class="kv-row"><span>IP address</span><strong id="dash-ip-addr">—</strong></div>
+              <div class="kv-row"><span>Location mode</span><strong id="dash-ble-mode">—</strong></div>
+              <div class="kv-row" id="dash-row-ble-proxy"><span>Nearest BLE proxy</span><strong id="dash-ble-proxy">—</strong></div>
+              <div class="kv-row"><span>Device group</span><strong id="st-group">—</strong></div>
+            </div>
+            <div class="card-actions">
+              <button type="button" class="btn btn-text" onclick="navigateToView('system')">Device settings</button>
+              <button type="button" class="btn btn-secondary" onclick="exportBackupToComputer('device')">Download Backup</button>
             </div>
           </div>
         </div>
-
-        <!-- TIER 3 / SENSOR NODE CONTROLS (SHOWN WHEN CUSTOM/OTHER ENTITIES EXIST) -->
         <div class="card hidden" id="dash-sensor-entities-card">
-          <h3>Device Sensors &amp; Controls</h3>
-          <p class="desc">Exposed sensors, switches, and parameters on this ESPHome node.</p>
-          <div id="dash-device-entities" class="native-controls-box"></div>
+          <div class="card-header"><div class="card-heading">
+            <h3 class="card-title">Device Sensors &amp; Controls</h3>
+            <p class="card-description">Other sensors, switches and settings this ESPHome device exposes.</p>
+          </div></div>
+          <div class="card-content"><div id="dash-device-entities" class="settings-list"></div></div>
         </div>
       </section>
 
-      <!-- ================================================================== -->
-      <!-- DEVICE TAB 2: DISPLAY & HOME                                       -->
-      <!-- ================================================================== -->
+      <!-- DEVICE: DISPLAY & HOME -->
       <section id="view-home_display" class="hidden">
         <div class="grid-2">
           <div class="card">
-            <h3>Display &amp; Appearance</h3>
-            <p class="desc">Screen brightness, auto-brightness schedule, clock face, and color profile.</p>
-            <div id="embedded-display" class="native-controls-box" style="margin-bottom:14px;"></div>
-
-            <div class="field" style="padding:12px;border-radius:10px;background:var(--input-bg);border:1px solid var(--border);">
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-                <label style="margin-bottom:0;">Custom Color Profile</label>
-                <button type="button" class="btn-secondary" style="padding:4px 10px;font-size:12px;" onclick="openColorWheelModal('device')">+ Color Wheel</button>
-              </div>
-              <div style="display:flex;gap:8px;align-items:center;">
-                <span id="dev-color-swatch" style="width:24px;height:24px;border-radius:50%;border:2px solid #fff;background:#3898FF;flex-shrink:0;"></span>
-                <select id="dev-custom-palette-select" onchange="onSelectDeviceCustomPalette(this.value)" style="flex:1;"></select>
+            <div class="card-header"><div class="card-heading">
+              <h3 class="card-title">Display &amp; Appearance</h3>
+              <p class="card-description">Brightness, auto-brightness schedule, clock face, and color profile.</p>
+            </div></div>
+            <div class="card-content">
+              <div id="embedded-display" class="settings-list"></div>
+              <div class="settings-list">
+                <div class="settings-row">
+                  <div class="settings-row-text"><label class="row-label" for="dev-custom-palette-select">Custom color</label><p class="row-description">Used when the color profile is Custom.</p></div>
+                  <div class="settings-row-control">
+                    <span id="dev-color-swatch" class="swatch" aria-hidden="true"></span>
+                    <select id="dev-custom-palette-select" onchange="onSelectDeviceCustomPalette(this.value)"></select>
+                  </div>
+                </div>
               </div>
             </div>
-
           </div>
 
           <div class="card">
-            <h3>Home Screen &amp; Area UI</h3>
-            <p class="desc">Configure home screen behavior, dock apps, and default Area Control category.</p>
-            <div id="embedded-home" class="native-controls-box" style="margin-bottom:14px;"></div>
-
-            <div class="field">
-              <label>Home Dock Apps (Click to Enable/Disable, Arrows to Reorder)</label>
-              <div id="dock-pills-container" class="dock-pill-list"></div>
-              <input type="hidden" id="cfg-dock_apps">
+            <div class="card-header"><div class="card-heading">
+              <h3 class="card-title">Home Screen &amp; Area UI</h3>
+              <p class="card-description">Home screen behavior, dock apps, and the default Area Control category.</p>
+            </div></div>
+            <div class="card-content">
+              <div id="embedded-home" class="settings-list"></div>
+              <div class="settings-row stacked">
+                <div class="settings-row-text"><span class="row-label">Home dock apps</span><p class="row-description">Select an app to show or hide it; use the arrows to reorder.</p></div>
+                <div class="settings-row-control"><div id="dock-pills-container" class="pill-list"></div></div>
+                <input type="hidden" id="cfg-dock_apps">
+              </div>
             </div>
           </div>
         </div>
 
         <div class="card">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:18px;">
-            <div>
-              <h3 style="margin:0;">Wallpapers</h3>
-              <p class="desc" style="margin:2px 0 0;">Select an AMOLED preset, upload a custom photo, or star multiple favorites to rotate automatically.</p>
+          <div class="card-header">
+            <div class="card-heading">
+              <h3 class="card-title">Wallpapers</h3>
+              <p class="card-description">Choose a built-in preset, upload a photo, or star several favorites to rotate.</p>
             </div>
-            <div class="input-action-row" style="flex:0 1 auto;">
-              <select id="cfg-wallpaper_cycle_minutes" style="width:auto;min-width:170px;" title="Favorite Wallpaper Rotation" onchange="markDirty('device')">
+            <div class="card-header-actions">
+              <select id="cfg-wallpaper_cycle_minutes" aria-label="Favorite rotation" onchange="markDirty('device')">
                 <option value="0">Rotation: Off</option>
-                <option value="15">Rotate: Every 15m</option>
-                <option value="60">Rotate: Every Hour</option>
-                <option value="360">Rotate: Every 6h</option>
-                <option value="1440">Rotate: Daily</option>
+                <option value="15">Rotate every 15 min</option>
+                <option value="60">Rotate every hour</option>
+                <option value="360">Rotate every 6 h</option>
+                <option value="1440">Rotate daily</option>
               </select>
-              <button class="btn-secondary" onclick="selectWallpaperSource('')">Disable Wallpaper</button>
+              <button type="button" class="btn btn-secondary btn-compact" onclick="selectWallpaperSource('')">Turn Off Wallpaper</button>
             </div>
           </div>
-          <div class="input-action-row" style="padding:10px 12px;background:var(--input-bg);border:1px solid var(--border);border-radius:8px;margin-bottom:12px;">
-            <input type="file" id="wp-file-input" accept="image/*">
-            <button class="btn-primary" onclick="uploadWallpaperFile()">Upload Photo</button>
+          <div class="card-content">
+            <div class="input-action-row">
+              <input type="file" id="wp-file-input" accept="image/*" aria-label="Wallpaper image">
+              <button type="button" class="btn btn-primary" onclick="uploadWallpaperFile()">Upload Photo</button>
+            </div>
+            <div id="wp-gallery-grid" class="wp-gallery"></div>
           </div>
-          <div id="wp-gallery-grid" class="wp-gallery"></div>
         </div>
       </section>
 
-      <!-- ================================================================== -->
-      <!-- DEVICE TAB 3: AUDIO & VOICE                                        -->
-      <!-- ================================================================== -->
+      <!-- DEVICE: AUDIO & VOICE -->
       <section id="view-audio_voice" class="hidden">
         <div class="grid-2">
           <div class="card">
-            <h3>Voice Assistant &amp; Wake Word</h3>
-            <p class="desc">Configure wake word operating mode, active wake word model, and visual profile.</p>
-            <div id="embedded-voice-primary" class="native-controls-box" style="margin-bottom:10px;"></div>
-
-            <div class="toggle-row" id="row-sync-device-area" style="margin-bottom:10px;">
-              <span>Voice Follows Me (move this device's Home Assistant Area with it)</span>
-              <input type="checkbox" id="cfg-sync_device_area" onchange="markDirty('device')">
-            </div>
-
-            <details class="ha-details" id="details-voice-sens" style="margin-bottom:0;">
-              <summary>Wake Word Sensitivity (Per Model)</summary>
-              <div class="details-body">
-                <div id="embedded-voice-sens" class="native-controls-box"></div>
+            <div class="card-header"><div class="card-heading">
+              <h3 class="card-title">Voice Assistant &amp; Wake Word</h3>
+              <p class="card-description">Wake word mode, active wake word, and visual profile.</p>
+            </div></div>
+            <div class="card-content">
+              <div id="embedded-voice-primary" class="settings-list"></div>
+              <div class="settings-list">
+                <div class="settings-row" id="row-sync-device-area">
+                  <div class="settings-row-text"><label class="row-label" for="cfg-sync_device_area">Voice Follows Me</label><p class="row-description">Moves this Device's Home Assistant Area with it, so voice commands act on the Area it's in.</p></div>
+                  <div class="settings-row-control"><input type="checkbox" class="switch" role="switch" id="cfg-sync_device_area" onchange="markDirty('device')"></div>
+                </div>
               </div>
-            </details>
+              <details class="sub-collapsible" id="details-voice-sens">
+                <summary>Wake word sensitivity (per model)</summary>
+                <div class="card-content"><div id="embedded-voice-sens" class="settings-list"></div></div>
+              </details>
+            </div>
           </div>
 
           <div class="card">
-            <h3>Sound &amp; Media Player</h3>
-            <p class="desc">Adjust onboard alert volume, volume step size, player appearance, and default speaker.</p>
-            <div id="embedded-sound" class="native-controls-box" style="margin-bottom:8px;"></div>
-            <div id="embedded-music" class="native-controls-box" style="margin-bottom:12px;"></div>
-
-            <div class="field">
-              <label>Default Speaker Entity</label>
-              <select id="cfg-default_speaker" onchange="markDirty('device')"></select>
-            </div>
-            <div class="field">
-              <label>Music Assistant Player</label>
-              <select id="cfg-ma_player_entity" onchange="markDirty('device')"></select>
-              <p class="desc" style="margin:4px 0 0;">This device's own player in Music Assistant. Music Assistant doesn't report the device's MAC, so Latter needs this link for library playback, queues and lyrics.</p>
-            </div>
-            <div class="toggle-row" style="margin-bottom:10px;">
-              <span>Auto-Switch Speaker &amp; Remote on Area Change</span>
-              <input type="checkbox" id="cfg-area_handoff" onchange="markDirty('device')">
-            </div>
-
-            <details class="ha-details" style="margin-bottom:0;">
-              <summary>Library Sorting Preferences</summary>
-              <div class="details-body">
-                <div id="embedded-music-sort" class="native-controls-box"></div>
+            <div class="card-header"><div class="card-heading">
+              <h3 class="card-title">Sound &amp; Media Player</h3>
+              <p class="card-description">Alert volume, volume step, player appearance, and speakers.</p>
+            </div></div>
+            <div class="card-content">
+              <div id="embedded-sound" class="settings-list"></div>
+              <div id="embedded-music" class="settings-list"></div>
+              <div class="settings-list">
+                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-default_speaker">Default speaker</label></div><div class="settings-row-control"><select id="cfg-default_speaker" onchange="markDirty('device')"></select></div></div>
+                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-ma_player_entity">Music Assistant player</label><p class="row-description">This Device's own player in Music Assistant, needed for library playback, queues and lyrics.</p></div><div class="settings-row-control"><select id="cfg-ma_player_entity" onchange="markDirty('device')"></select></div></div>
+                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-area_handoff">Switch speaker and remote on Area change</label></div><div class="settings-row-control"><input type="checkbox" class="switch" role="switch" id="cfg-area_handoff" onchange="markDirty('device')"></div></div>
               </div>
-            </details>
+              <details class="sub-collapsible">
+                <summary>Library sorting</summary>
+                <div class="card-content"><div id="embedded-music-sort" class="settings-list"></div></div>
+              </details>
+            </div>
           </div>
         </div>
       </section>
 
-      <!-- ================================================================== -->
-      <!-- DEVICE TAB 4: POWER & BATTERY                                      -->
-      <!-- ================================================================== -->
+      <!-- DEVICE: POWER & BATTERY -->
       <section id="view-power" class="hidden">
         <div class="grid-2">
           <div class="card">
-            <h3>Sleep &amp; Wake Timeouts</h3>
-            <p class="desc">Inactivity timeouts, pickup-to-wake, tap-to-wake, docked screensaver, and hardware hibernate.</p>
-            <div id="embedded-sleep" class="native-controls-box"></div>
+            <div class="card-header"><div class="card-heading">
+              <h3 class="card-title">Sleep &amp; Wake</h3>
+              <p class="card-description">Screen timeouts, pickup and tap to wake, docked screensaver, and hibernate.</p>
+            </div></div>
+            <div class="card-content"><div id="embedded-sleep" class="settings-list"></div></div>
           </div>
-
           <div class="card">
-            <h3>Battery &amp; Power Telemetry</h3>
-            <p class="desc">Live battery charge level, charging status, PMIC voltage, and internal temperature.</p>
-            <div id="embedded-battery" class="native-controls-box"></div>
+            <div class="card-header"><div class="card-heading">
+              <h3 class="card-title">Battery &amp; Power</h3>
+              <p class="card-description">Live battery level, charging, voltage, and temperature.</p>
+            </div></div>
+            <div class="card-content"><div id="embedded-battery" class="settings-list"></div></div>
           </div>
         </div>
       </section>
 
-      <!-- ================================================================== -->
-      <!-- DEVICE TAB 5: ADMINISTRATION (IDENTITY, BLE, RAW, REMOVE)          -->
-      <!-- ================================================================== -->
+      <!-- DEVICE: DEVICE SETTINGS -->
       <section id="view-system" class="hidden">
         <div class="grid-2">
-          <!-- CARD 1: DEVICE IDENTITY -->
           <div class="card">
-            <h3>Device Identity</h3>
-            <p class="desc">This device's ESPHome slug, logical group, and pagination. Hardware traits (display, roaming, wearable) come from the device itself.</p>
-            <div class="field">
-              <label>ESPHome Device Slug (sensor.&lt;slug&gt;_*)</label>
-              <input type="text" id="cfg-device_slug" readonly title="Set from the ESPHome node name when the Device was added">
-            </div>
-            <div class="form-grid-2">
-              <div class="field">
-                <label>Device Group</label>
-                <select id="cfg-device_group" onchange="markDirty('device')"></select>
-              </div>
-              <div class="field">
-                <label>Area Cards Per Page</label>
-                <input type="number" id="cfg-default_page_size" min="1" max="20" value="3" oninput="markDirty('device');">
-              </div>
+            <div class="card-header"><div class="card-heading">
+              <h3 class="card-title">Device Identity</h3>
+              <p class="card-description">Hardware traits (display, roaming, wearable) come from the Device itself.</p>
+            </div></div>
+            <div class="card-content settings-list">
+              <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-device_slug">ESPHome node name</label><p class="row-description">Set when the Device was added; entities are <code>sensor.&lt;name&gt;_*</code>.</p></div><div class="settings-row-control"><input type="text" id="cfg-device_slug" readonly></div></div>
+              <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-device_group">Device group</label></div><div class="settings-row-control"><select id="cfg-device_group" onchange="markDirty('device')"></select></div></div>
+              <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-default_page_size">Area cards per page</label></div><div class="settings-row-control"><input type="number" id="cfg-default_page_size" min="1" max="20" value="3" oninput="markDirty('device')"></div></div>
             </div>
           </div>
 
-          <!-- CARD 2: BLE AREA TRACKING -->
           <div class="card">
-            <h3>BLE Area Tracking</h3>
-            <p class="desc">Configure how this device roams between areas using ESPHome Bluetooth proxies.</p>
-            <div class="toggle-row">
-              <span>Enable BLE Proxy Area Tracking</span>
-              <input type="checkbox" id="cfg-native_ble_tracking" onchange="markDirty('device')">
-            </div>
-            <div class="toggle-row" style="margin-bottom:10px;">
-              <span>Auto-Switch Active Area on Movement</span>
-              <input type="checkbox" id="cfg-ble_auto_switch" onchange="markDirty('device')">
-            </div>
-            <div id="embedded-area-ble" class="native-controls-box" style="margin-bottom:12px;"></div>
-            <div class="field">
-              <label>Default Fallback Area</label>
-              <select id="cfg-default_area" onchange="markDirty('device')"></select>
-            </div>
-            <div class="field">
-              <label>BLE Target Address / Entity (Optional — MAC or private_ble_device)</label>
-              <input type="text" id="cfg-ble_target_address" class="mono" placeholder="Auto-discovered from ESPHome or device_tracker.*" oninput="markDirty('device')">
-            </div>
-            <div class="field">
-              <label>BLE iBeacon UUID</label>
-              <input type="text" id="cfg-ble_beacon_uuid" oninput="markDirty('device');">
-            </div>
-            <div class="field">
-              <label>External Area Sensor Override (Optional)</label>
-              <select id="cfg-presence_entity" onchange="markDirty('device')"></select>
+            <div class="card-header"><div class="card-heading">
+              <h3 class="card-title">BLE Area Tracking</h3>
+              <p class="card-description">How this Device moves between Areas using ESPHome Bluetooth proxies.</p>
+            </div></div>
+            <div class="card-content">
+              <div class="settings-list">
+                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-native_ble_tracking">Enable BLE Proxy Area Tracking</label></div><div class="settings-row-control"><input type="checkbox" class="switch" role="switch" id="cfg-native_ble_tracking" onchange="markDirty('device')"></div></div>
+                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-ble_auto_switch">Switch the active Area on movement</label></div><div class="settings-row-control"><input type="checkbox" class="switch" role="switch" id="cfg-ble_auto_switch" onchange="markDirty('device')"></div></div>
+              </div>
+              <div id="embedded-area-ble" class="settings-list"></div>
+              <div class="settings-list">
+                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-default_area">Fallback Area</label></div><div class="settings-row-control"><select id="cfg-default_area" onchange="markDirty('device')"></select></div></div>
+                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-ble_target_address">BLE target</label><p class="row-description">Optional MAC address or <code>private_ble_device</code> entity.</p></div><div class="settings-row-control"><input type="text" id="cfg-ble_target_address" class="mono" placeholder="Auto-discovered" oninput="markDirty('device')"></div></div>
+                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-ble_beacon_uuid">iBeacon UUID</label></div><div class="settings-row-control"><input type="text" id="cfg-ble_beacon_uuid" class="mono" oninput="markDirty('device')"></div></div>
+                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-presence_entity">External Area sensor</label><p class="row-description">Optional; for example a Bermuda Area sensor.</p></div><div class="settings-row-control"><select id="cfg-presence_entity" onchange="markDirty('device')"></select></div></div>
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- COLLAPSIBLE: DIAGNOSTICS & RAW ENTITY INSPECTOR -->
-        <details class="ha-details">
-          <summary>Diagnostics &amp; Raw ESPHome Entity Inspector</summary>
-          <div class="details-body">
-            <div id="embedded-network" class="native-controls-box" style="margin-bottom:12px;"></div>
-            <div style="margin-bottom:10px;">
-              <input type="text" id="esp-search" placeholder="Filter all entities by name or entity_id..." oninput="renderRawEntityList()">
-            </div>
-            <div id="raw-entity-items" class="native-controls-box"></div>
+        <details class="card">
+          <summary class="card-header"><div class="card-heading">
+            <h3 class="card-title">Diagnostics &amp; Entity Inspector</h3>
+            <p class="card-description">Network and diagnostic entities, developer controls, and every entity on the Device.</p>
+          </div></summary>
+          <div class="card-content">
+            <div id="embedded-network" class="settings-list"></div>
+            <input type="text" id="esp-search" placeholder="Filter entities by name or entity ID" aria-label="Filter entities" oninput="renderRawEntityList()">
+            <div id="raw-entity-items" class="settings-list"></div>
           </div>
         </details>
 
-        <!-- RESET TO DEFAULTS CARD -->
-        <div class="card" style="margin-top:16px;">
-          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
-            <div>
-              <h3 style="margin:0;">Reset to Defaults</h3>
-              <p class="desc" style="margin:2px 0 0;">Erase the settings saved on the device, reset this device's Latter options, or both. Wi-Fi and pairing are kept.</p>
+        <div class="card">
+          <div class="card-header">
+            <div class="card-heading">
+              <h3 class="card-title">Reset to Defaults</h3>
+              <p class="card-description">Erase the settings saved on the Device, reset its Latter options, or both. Wi-Fi and pairing are kept.</p>
             </div>
-            <button type="button" class="btn-secondary" onclick="openResetDeviceModal()">Reset to defaults…</button>
+            <div class="card-header-actions"><button type="button" class="btn btn-secondary" onclick="openResetDeviceModal()">Reset…</button></div>
           </div>
         </div>
 
-        <!-- DEDICATED REMOVE DEVICE CARD -->
-        <div class="card" style="border-color:rgba(219, 68, 55, 0.35);margin-top:16px;">
-          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
-            <div>
-              <h3 style="margin:0;color:var(--danger);">Remove Device</h3>
-              <p class="desc" style="margin:2px 0 0;">Remove this device from Latter. The ESPHome device itself will remain in Home Assistant and can be re-added anytime.</p>
+        <div class="card danger">
+          <div class="card-header">
+            <div class="card-heading">
+              <h3 class="card-title">Remove Device</h3>
+              <p class="card-description">Remove this Device from Latter. The ESPHome device stays in Home Assistant and can be added again.</p>
             </div>
-            <button type="button" class="btn-danger" onclick="removeManagedDevice(STATE.subentry_id, STATE.title)">Remove Device from Latter</button>
+            <div class="card-header-actions"><button type="button" class="btn btn-danger" onclick="removeManagedDevice(STATE.subentry_id, STATE.title)">Remove…</button></div>
           </div>
         </div>
       </section>
     </div>
-  </div>
+  </main>
 </div>
 
-<div id="toast" class="toast">Saved</div>
+<dialog id="latter-rm-modal" class="studio-dialog" aria-labelledby="latter-rm-title">
+  <div class="dialog-body">
+    <h3 class="dialog-title danger" id="latter-rm-title">Remove Device from Latter?</h3>
+    <p class="dialog-text" id="latter-rm-desc">Your ESPHome device stays in Home Assistant.</p>
+    <div class="dialog-actions">
+      <button type="button" class="btn btn-secondary" onclick="closeRemoveDeviceModal()">Cancel</button>
+      <button type="button" class="btn btn-danger-filled" onclick="confirmRemoveManagedDevice()">Remove Device</button>
+    </div>
+  </div>
+</dialog>
 
+<dialog id="latter-reset-modal" class="studio-dialog" aria-labelledby="latter-reset-title">
+  <div class="dialog-body">
+    <h3 class="dialog-title danger" id="latter-reset-title">Reset to defaults?</h3>
+    <div class="settings-list">
+      <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="latter-reset-device-settings">Device settings</label><p class="row-description">Erases everything saved on the Device; it restarts.</p></div><div class="settings-row-control"><input type="checkbox" class="switch" role="switch" id="latter-reset-device-settings" checked onchange="updateResetDeviceConfirm()"></div></div>
+      <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="latter-reset-latter-options">Latter options for this Device</label></div><div class="settings-row-control"><input type="checkbox" class="switch" role="switch" id="latter-reset-latter-options" checked onchange="updateResetDeviceConfirm()"></div></div>
+    </div>
+    <p class="dialog-text">Wi-Fi and pairing are kept, so the Device rejoins Home Assistant by itself. Its ESPHome binding and Music Assistant player link are kept too.</p>
+    <div class="dialog-actions">
+      <button type="button" class="btn btn-secondary" onclick="closeResetDeviceModal()">Cancel</button>
+      <button type="button" class="btn btn-danger-filled" id="latter-reset-confirm-btn" onclick="confirmResetDevice()">Reset</button>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="latter-add-dev-modal" class="studio-dialog" aria-labelledby="latter-add-dev-title">
+  <div class="dialog-body">
+    <h3 class="dialog-title" id="latter-add-dev-title">Add a BLE Phone, Watch or Tag</h3>
+    <p class="dialog-text">Latter displays are added through Home Assistant's ESPHome discovery.</p>
+    <div class="stacked-field"><label for="ble-candidate-picker">Discovered Bluetooth devices</label><select id="ble-candidate-picker" onchange="onSelectBleCandidate(this.value)"></select></div>
+    <div class="stacked-field"><label for="ble-custom-name">Name</label><input type="text" id="ble-custom-name" placeholder="e.g. Phone, Watch, Keys"></div>
+    <div class="stacked-field"><label for="ble-custom-addr">MAC address, <code>private_ble_device</code> entity, or iBeacon UUID</label><input type="text" id="ble-custom-addr" class="mono" placeholder="AA:BB:CC:DD:EE:FF"></div>
+    <div class="stacked-field"><label for="ble-custom-person">Assigned person (optional)</label><select id="ble-custom-person"></select></div>
+    <div class="dialog-actions">
+      <button type="button" class="btn btn-secondary" onclick="closeAddDeviceModal()">Cancel</button>
+      <button type="button" class="btn btn-primary" onclick="confirmAddDeviceModal()">Add Device</button>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="latter-cw-modal" class="studio-dialog" aria-labelledby="latter-cw-title">
+  <div class="dialog-body">
+    <h3 class="dialog-title" id="latter-cw-title">Add a Custom Color</h3>
+    <p class="dialog-text">Pick a color and save it to the System color library.</p>
+    <div class="color-wheel"><canvas id="latter-cw-canvas" width="220" height="220" aria-label="Color wheel"></canvas></div>
+    <div class="color-hex-row">
+      <span id="latter-cw-preview" class="swatch" aria-hidden="true"></span>
+      <input type="text" id="latter-cw-hex" aria-label="Hex color" oninput="onCwHexInput(this.value)">
+    </div>
+    <div class="stacked-field"><label for="latter-cw-name">Name</label><input type="text" id="latter-cw-name" placeholder="e.g. Sunset Coral"></div>
+    <div class="dialog-actions">
+      <button type="button" class="btn btn-secondary" onclick="closeColorWheelModal()">Cancel</button>
+      <button type="button" class="btn btn-primary" onclick="saveColorWheelSelection()">Save Color</button>
+    </div>
+  </div>
+</dialog>
+
+<div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
 </div>`;
 
 let HASS_REF = null;
@@ -1646,6 +1677,53 @@ const doc = {
 
 const esc = (s) => String(s ?? "").replace(/[&<>"'`]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;","`":"&#96;"}[c]));
 const jsArg = (v) => esc(JSON.stringify(v));
+
+// Shared markup (docs/studio-design.md section 4). Labels and descriptions are passed already escaped.
+const ICON_DELETE = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 4h-3.5l-1-1h-5l-1 1H5v2h14M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12Z"/></svg>`;
+
+function settingsRowHtml(labelHtml, descriptionHtml, controlHtml) {
+  return `<div class="settings-row">
+    <div class="settings-row-text"><span class="row-label">${labelHtml}</span>${descriptionHtml ? `<p class="row-description">${descriptionHtml}</p>` : ""}</div>
+    <div class="settings-row-control">${controlHtml || ""}</div>
+  </div>`;
+}
+
+function emptyStateHtml(text) {
+  return `<div class="empty-state">${esc(text)}</div>`;
+}
+
+function iconButtonHtml(icon, label, onclick, variant = "") {
+  return `<button type="button" class="btn-icon ${variant}" aria-label="${esc(label)}" title="${esc(label)}" onclick="${onclick}">${icon}</button>`;
+}
+
+function cssColorToHex(color) {
+  const ctx = document.createElement("canvas").getContext("2d");
+  ctx.fillStyle = String(color || "").trim() || ctx.fillStyle;
+  return String(ctx.fillStyle).toUpperCase();
+}
+
+// Native <dialog>: Esc closes it, focus moves into it on open and returns to the opener on close.
+let DIALOG_RETURN_FOCUS = null;
+
+function openDialog(id) {
+  const dlg = doc.getElementById(id);
+  if (!dlg || dlg.open) return;
+  DIALOG_RETURN_FOCUS = getStudioActiveElement();
+  dlg.showModal();
+}
+
+function closeDialog(id) {
+  const dlg = doc.getElementById(id);
+  if (dlg && dlg.open) dlg.close();
+}
+
+function bindDialogs() {
+  doc.querySelectorAll("dialog.studio-dialog").forEach(dlg => dlg.addEventListener("close", () => {
+    const el = DIALOG_RETURN_FOCUS;
+    DIALOG_RETURN_FOCUS = null;
+    if (el && typeof el.focus === "function") el.focus();
+  }));
+}
 let STATE = null;
 let CALENDARS = [];
 let IS_DIRTY = false;
@@ -1766,8 +1844,7 @@ function toggleParentHaSidebar() {
 }
 
 function closeCameraPreviewBox() {
-  const box = doc.getElementById("cam-preview-box");
-  if (box) box.style.display = "none";
+  doc.getElementById("cam-preview-box")?.classList.add("hidden");
 }
 
 let TOAST_TIMER = null;
@@ -1779,9 +1856,9 @@ function showToast(msg, kind = "info") {
   t.textContent = msg;
   t.classList.toggle("error", isError);
   t.setAttribute("role", isError ? "alert" : "status");
-  t.style.display = "block";
+  t.classList.remove("hidden");
   if (TOAST_TIMER) clearTimeout(TOAST_TIMER);
-  TOAST_TIMER = setTimeout(() => { t.style.display = "none"; }, isError ? 6000 : 2400);
+  TOAST_TIMER = setTimeout(() => t.classList.add("hidden"), isError ? 6000 : 2400);
 }
 
 function renderLogsView() {
@@ -1839,7 +1916,7 @@ async function clearInternalLogs() {
 
 function renderDirtyState() {
   IS_DIRTY = DIRTY.system || DIRTY.device;
-  doc.getElementById("dirty-indicator")?.classList.toggle("visible", IS_DIRTY);
+  doc.getElementById("dirty-indicator")?.classList.toggle("hidden", !IS_DIRTY);
   const btn = doc.getElementById("btn-save-changes");
   if (btn) {
     btn.disabled = !IS_DIRTY;
@@ -1883,10 +1960,10 @@ function updateUnifiedPageTitle(viewId) {
   if (viewId) CURRENT_VIEW_ID = viewId;
   const titleEl = doc.getElementById("unified-page-title");
   if (!titleEl) return;
-  const baseTitle = VIEW_TITLES[CURRENT_VIEW_ID] || "Overview";
+  const baseTitle = VIEW_TITLES[CURRENT_VIEW_ID] || "Devices";
   if (CURRENT_SCOPE === "device" && DEVICE_SELECTED && CURRENT_VIEW_ID !== "select_device_prompt") {
-    const devTitle = STATE?.esphome?.device?.name || STATE?.title || "Device";
-    titleEl.innerHTML = `<span>${esc(baseTitle)}</span><span class="header-device-sub">&mdash; ${esc(devTitle)}</span>`;
+    const devTitle = STATE?.esphome?.device?.name || STATE?.title || "";
+    titleEl.innerHTML = `<span>${esc(baseTitle)}</span>${devTitle ? `<span class="page-subtitle">${esc(devTitle)}</span>` : ""}`;
   } else {
     titleEl.textContent = baseTitle;
   }
@@ -2057,37 +2134,24 @@ function renderDockPillsFromInput() {
   const box = doc.getElementById("dock-pills-container");
   const inp = doc.getElementById("cfg-dock_apps");
   if (!box || !inp) return;
-  const availDockMeta = DOCK_APP_META.slice();
-  const rawTokens = inp.value
-    .split(/[,;| ]+/)
-    .map(t => {
-      const v = t.trim().toLowerCase();
-      return v;
-    })
-    .filter(Boolean);
-
+  const rawTokens = inp.value.split(/[,;| ]+/).map(t => t.trim().toLowerCase()).filter(Boolean);
   const activeTokens = [];
   rawTokens.forEach(t => {
-    if (availDockMeta.some(m => m.token === t) && !activeTokens.includes(t)) {
-      activeTokens.push(t);
-    }
+    if (DOCK_APP_META.some(m => m.token === t) && !activeTokens.includes(t)) activeTokens.push(t);
   });
-  const disabledTokens = availDockMeta
-    .map(m => m.token)
-    .filter(t => !activeTokens.includes(t));
-
-  const allOrdered = activeTokens.concat(disabledTokens);
-  box.innerHTML = allOrdered.map((tok) => {
+  const disabledTokens = DOCK_APP_META.map(m => m.token).filter(t => !activeTokens.includes(t));
+  box.innerHTML = activeTokens.concat(disabledTokens).map((tok) => {
     const meta = DOCK_APP_META.find(m => m.token === tok);
+    const label = meta ? meta.label : tok;
     const isEn = activeTokens.includes(tok);
     const actIdx = activeTokens.indexOf(tok);
     const canLeft = isEn && actIdx > 0;
     const canRight = isEn && actIdx < activeTokens.length - 1;
-    return `<div class="dock-pill ${isEn ? 'enabled' : ''}" onclick="toggleDockAppToken(${jsArg(tok)})">
-      ${canLeft ? `<span class="move-arrow" title="Move Left" onclick="event.stopPropagation(); moveDockAppToken(${jsArg(tok)}, -1)">◀</span>` : ''}
-      <span>${isEn ? '✓ ' : '+ '}${esc(meta ? meta.label : tok)}</span>
-      ${canRight ? `<span class="move-arrow" title="Move Right" onclick="event.stopPropagation(); moveDockAppToken(${jsArg(tok)}, 1)">▶</span>` : ''}
-    </div>`;
+    return `<span class="pill ${isEn ? 'enabled' : ''}">
+      ${canLeft ? `<button type="button" class="pill-move" aria-label="Move ${esc(label)} left" onclick="moveDockAppToken(${jsArg(tok)}, -1)">◀</button>` : ''}
+      <button type="button" class="pill-toggle" aria-pressed="${isEn}" onclick="toggleDockAppToken(${jsArg(tok)})">${isEn ? '✓ ' : '+ '}${esc(label)}</button>
+      ${canRight ? `<button type="button" class="pill-move" aria-label="Move ${esc(label)} right" onclick="moveDockAppToken(${jsArg(tok)}, 1)">▶</button>` : ''}
+    </span>`;
   }).join("");
 }
 
@@ -2159,7 +2223,7 @@ function renderRssiBars(surveyRows, packetsSeen) {
   if (!box) return;
   const rows = surveyRows || [];
   if (!rows.length) {
-    box.innerHTML = `<p class="desc">No Bluetooth proxies discovered yet (Packets seen: ${esc(packetsSeen || 0)}).</p>`;
+    box.innerHTML = emptyStateHtml(`No Bluetooth proxy has heard this Device yet (packets seen: ${packetsSeen || 0}).`);
     return;
   }
   box.innerHTML = rows.map(r => {
@@ -2168,33 +2232,28 @@ function renderRssiBars(surveyRows, packetsSeen) {
     const pct = hasSignal ? Math.max(6, Math.min(100, Math.round(((eff + 100) / 55) * 100))) : 0;
     const offSign = r.offset_db > 0 ? `+${r.offset_db}` : `${r.offset_db}`;
     const ageText = hasSignal ? `${r.age_seconds}s ago` : "No signal yet";
-    const distText = (hasSignal && r.distance_m != null)
-      ? ` &bull; Distance: <strong style="color:var(--text-strong);">~${esc(r.distance_m)}m (${esc(r.distance_ft)}ft)</strong>`
-      : "";
-    const sigText = hasSignal
-      ? `Raw: <strong>${esc(r.raw_rssi)} dBm</strong> &bull; Offset: <strong>${esc(offSign)} dB</strong> &rarr; Effective: <strong style="color:var(--accent);">${esc(r.effective_rssi)} dBm</strong>${distText}`
-      : `Offset: <strong>${esc(offSign)} dB</strong> &bull; Waiting for beacon packet...`;
-    const winBadge = r.is_winner
-      ? `<span class="state-badge" style="border-color:var(--success);color:var(--success);margin-left:6px;">ACTIVE</span>`
-      : "";
-
-    return `<div style="background:var(--input-bg);border:1px solid ${r.is_winner ? 'var(--accent)' : 'var(--border)'};border-radius:10px;padding:11px 13px;margin-bottom:8px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:6px;">
-        <div>
-          <strong style="color:var(--text-strong);font-size:13.5px;font-weight:500;">${esc(r.area_name)}</strong>
-          <small style="color:var(--muted);margin-left:6px;">(${esc(r.scanner)} &bull; ${esc(ageText)})</small>
-          ${winBadge}
+    const dist = (hasSignal && r.distance_m != null) ? ` • ~${r.distance_m} m (${r.distance_ft} ft)` : "";
+    const sig = hasSignal
+      ? `Raw ${r.raw_rssi} dBm • Offset ${offSign} dB → Effective ${r.effective_rssi} dBm${dist}`
+      : `Offset ${offSign} dB • Waiting for a beacon packet`;
+    const areaArg = jsArg(r.area_id);
+    return `<div class="signal-row ${r.is_winner ? 'winner' : ''}">
+      <div class="signal-row-head">
+        <div class="signal-row-title">
+          <strong>${esc(r.area_name)}</strong>
+          <span class="signal-meta">${esc(r.scanner)} • ${esc(ageText)}</span>
+          ${r.is_winner ? '<span class="chip chip-success">Active</span>' : ''}
         </div>
-        <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">
-          <button class="btn-secondary" style="padding:4px 8px;font-size:12px;" onclick="setBleOffset(${jsArg(r.area_id)}, ${Number(r.offset_db) - 1})">-1 dB</button>
-          <span class="state-badge" style="min-width:52px;text-align:center;">${esc(offSign)} dB</span>
-          <button class="btn-secondary" style="padding:4px 8px;font-size:12px;" onclick="setBleOffset(${jsArg(r.area_id)}, ${Number(r.offset_db) + 1})">+1 dB</button>
-          ${r.offset_db !== 0 ? `<button class="btn-danger" style="padding:4px 7px;font-size:11.5px;" title="Reset to 0 dB" onclick="setBleOffset(${jsArg(r.area_id)}, 0)">0</button>` : ''}
-          <button class="btn-secondary" style="padding:4px 10px;font-size:12px;border-color:var(--accent);color:var(--accent);" onclick="autoCalibrateHere(${jsArg(r.area_id)})">Calibrate Current Area</button>
+        <div class="input-action-row">
+          <button type="button" class="btn btn-secondary btn-compact" aria-label="Lower the offset by 1 dB" onclick="setBleOffset(${areaArg}, ${Number(r.offset_db) - 1})">−1 dB</button>
+          <span class="chip">${esc(offSign)} dB</span>
+          <button type="button" class="btn btn-secondary btn-compact" aria-label="Raise the offset by 1 dB" onclick="setBleOffset(${areaArg}, ${Number(r.offset_db) + 1})">+1 dB</button>
+          ${r.offset_db !== 0 ? `<button type="button" class="btn btn-text btn-compact" onclick="setBleOffset(${areaArg}, 0)">Reset</button>` : ''}
+          <button type="button" class="btn btn-secondary btn-compact" onclick="autoCalibrateHere(${areaArg})">Calibrate Current Area</button>
         </div>
       </div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">${sigText}</div>
-      <div class="rssi-track"><div class="rssi-fill" style="width:${pct}%;opacity:${hasSignal ? 1 : 0.2};"></div></div>
+      <div class="signal-meta">${esc(sig)}</div>
+      <div class="signal-track"><div class="signal-fill ${hasSignal ? '' : 'no-signal'}" style="--signal-pct:${pct}%"></div></div>
     </div>`;
   }).join("");
 }
@@ -2205,7 +2264,6 @@ function renderSystemOverview(systemDevices, systemControls, cfg) {
 
   const groups = STATE?.device_groups || [];
   const profiles = STATE?.saved_profiles || [];
-  const live = STATE?.live || {};
 
   // Pickers for System actions that act on one Device: the action names its Device (studio-design.md section 5).
   const allDevices = systemDevices || [];
@@ -2225,24 +2283,21 @@ function renderSystemOverview(systemDevices, systemControls, cfg) {
 
   const devGrpSel = doc.getElementById("cfg-device_group");
   if (devGrpSel && groups.length) {
-    const curGrp = cfg?.device_group || "unassigned";
+    const curGrp = DIRTY.device ? devGrpSel.value : (cfg?.device_group || "unassigned");
     devGrpSel.innerHTML = groups.map(g =>
-      `<option value="${esc(g.id)}" ${g.id === curGrp ? 'selected' : ''}>Group: ${esc(g.name)}</option>`
+      `<option value="${esc(g.id)}" ${g.id === curGrp ? 'selected' : ''}>${esc(g.name)}</option>`
     ).join("");
   }
 
   const targetScopes = [
     {id: "", name: "— Choose where to apply —"},
-    {id: "all", name: `All Devices (${(systemDevices || []).length})`}
+    {id: "all", name: `All Devices (${allDevices.length})`}
   ];
   groups.forEach(g => {
-    const cnt = (systemDevices || []).filter(d => d.device_group === g.id).length;
+    const cnt = allDevices.filter(d => d.device_group === g.id).length;
     targetScopes.push({id: `group:${g.id}`, name: `Group: ${g.name} (${cnt})`});
   });
-  (systemDevices || []).forEach(d => {
-    targetScopes.push({id: `device:${d.subentry_id}`, name: `Device: ${d.title}`});
-  });
-
+  allDevices.forEach(d => targetScopes.push({id: `device:${d.subentry_id}`, name: `Device: ${d.title}`}));
   const profScopeSel = doc.getElementById("profile-target-scope");
   if (profScopeSel) {
     const prevVal = profScopeSel.value || "";
@@ -2255,57 +2310,48 @@ function renderSystemOverview(systemDevices, systemControls, cfg) {
   let activeFilter = "all";
   if (grpFilterSel) {
     activeFilter = grpFilterSel.value || "all";
-    const filterOpts = [
-      {id: "all", name: `Target: All Devices (${(systemDevices || []).length})`}
-    ];
+    const filterOpts = [{id: "all", name: `All Devices (${allDevices.length})`}];
     groups.forEach(g => {
-      const cnt = (systemDevices || []).filter(d => d.device_group === g.id).length;
+      const cnt = allDevices.filter(d => d.device_group === g.id).length;
       filterOpts.push({id: `group:${g.id}`, name: `Group: ${g.name} (${cnt})`});
     });
-    filterOpts.push({id: "trait:roaming", name: "Type: Roaming Devices"});
-    filterOpts.push({id: "trait:stationary", name: "Type: Stationary Devices"});
+    filterOpts.push({id: "trait:roaming", name: "Roaming Devices"});
+    filterOpts.push({id: "trait:stationary", name: "Stationary Devices"});
     grpFilterSel.innerHTML = filterOpts.map(o =>
       `<option value="${esc(o.id)}" ${o.id === activeFilter ? 'selected' : ''}>${esc(o.name)}</option>`
     ).join("");
   }
 
-  const statusRank = (st) => {
-    if (st === "Update Available") return 1;
-    if (st === "Offline") return 2;
-    return 3;
-  };
-
   const catSel = doc.getElementById("device-category-filter");
   if (catSel) {
     const baseOpts = [
-      {id: "all", label: "Category: All Devices"},
+      {id: "all", label: "All Devices"},
       {id: "online", label: "Online / Active Devices"},
       {id: "native", label: "Latter Native Devices"},
       {id: "ble_tracked", label: "BLE Tracked Devices"},
       {id: "assigned_person", label: "Devices with an assigned person"},
       {id: "roaming", label: "Roaming Devices"},
       {id: "stationary", label: "Stationary Devices"},
-      {id: "headless", label: "Screenless / Headless Devices"},
+      {id: "headless", label: "Screenless Devices"},
       {id: "ble_tag", label: "BLE Phones, Watches & Tags"},
       {id: "updates", label: "Firmware Updates Available"}
     ];
     groups.forEach(g => {
-      if (g && g.id && g.id !== "unassigned") {
-        baseOpts.push({id: `group:${g.id}`, label: `Group: ${g.name}`});
-      }
+      if (g && g.id && g.id !== "unassigned") baseOpts.push({id: `group:${g.id}`, label: `Group: ${g.name}`});
     });
     catSel.innerHTML = baseOpts.map(o =>
       `<option value="${esc(o.id)}" ${o.id === DEVICE_CATEGORY_FILTER ? 'selected' : ''}>${esc(o.label)}</option>`
     ).join("");
   }
+
+  const statusRank = (st) => (st === "Update Available" ? 1 : (st === "Offline" ? 2 : 3));
   const cat = DEVICE_CATEGORY_FILTER || "all";
-  const filteredDevices = (systemDevices || []).filter(d => {
-    const isNative = !!d.is_latter_native;
+  const filteredDevices = allDevices.filter(d => {
     const isBleTag = d.kind === "ble_tag";
     const isBleTracked = !!(d.has_ble || isBleTag || (d.area_label || "Roaming") === "Roaming");
     const isRoaming = isBleTag || !!d.is_roaming;
     if (cat === "online") return d.status_label !== "Offline";
-    if (cat === "native") return isNative;
+    if (cat === "native") return !!d.is_latter_native;
     if (cat === "ble_tracked") return isBleTracked;
     if (cat === "assigned_person") return !!d.assigned_person;
     if (cat === "roaming") return isRoaming;
@@ -2316,7 +2362,6 @@ function renderSystemOverview(systemDevices, systemControls, cfg) {
     if (cat.startsWith("group:")) return d.device_group === cat.split(":", 2)[1];
     return true;
   });
-
   filteredDevices.sort((a, b) => {
     let cmp = 0;
     if (DEVICE_SORT_COL === "status") {
@@ -2325,197 +2370,145 @@ function renderSystemOverview(systemDevices, systemControls, cfg) {
     } else if (DEVICE_SORT_COL === "model") {
       cmp = (a.model_label || "").localeCompare(b.model_label || "");
     } else if (DEVICE_SORT_COL === "area") {
-      cmp = (a.area_label || "Roaming").localeCompare(b.area_label || "Roaming");
+      cmp = (a.area_label || "").localeCompare(b.area_label || "");
     } else if (DEVICE_SORT_COL === "group") {
-      cmp = (a.device_group_name || "Unassigned").localeCompare(b.device_group_name || "Unassigned");
+      cmp = (a.device_group_name || "").localeCompare(b.device_group_name || "");
     } else {
       cmp = (a.title || "").localeCompare(b.title || "");
     }
     return DEVICE_SORT_ASC ? cmp : -cmp;
   });
 
-  const sortArrow = (col) => {
-    if (DEVICE_SORT_COL !== col) return "";
-    return DEVICE_SORT_ASC ? " ▲" : " ▼";
+  // Sortable, keyboard-accessible table: header buttons sort, rows open with Enter or Space.
+  const sortTh = (col, label) => {
+    const sorted = DEVICE_SORT_COL === col;
+    const aria = sorted ? (DEVICE_SORT_ASC ? "ascending" : "descending") : "none";
+    return `<th aria-sort="${aria}"><button type="button" class="sort-btn" onclick="toggleDeviceTableSort('${col}')">${label}${sorted ? (DEVICE_SORT_ASC ? " ▲" : " ▼") : ""}</button></th>`;
   };
-
-  const thClass = (col) => DEVICE_SORT_COL === col ? "sorted" : "";
-
   const tableRowsHtml = filteredDevices.map(d => {
-    const actAction = d.is_current
-      ? `selectCurrentDevice()`
-      : `switchSystemDevice(${jsArg(d.subentry_id)})`;
+    const act = d.is_current ? "selectCurrentDevice()" : `switchSystemDevice(${jsArg(d.subentry_id)})`;
     const st = d.status_label || "—";
-    const dotCls = st === "Update Available" ? "update" : (st === "Offline" ? "offline" : "online");
-    const areaVal = d.area_label || "Roaming";
-    const grpVal = d.device_group_name || "Unassigned";
-    const mdlVal = d.model_label || "—";
-    return `<tr onclick="${actAction}">
+    const dotCls = st === "Update Available" ? "update" : (st === "Offline" ? "" : "online");
+    return `<tr tabindex="0" aria-label="Open ${esc(d.title)}" onclick="${act}" onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); ${act}; }">
       <td class="col-name">${esc(d.title)}</td>
-      <td>${esc(mdlVal)}</td>
-      <td>${esc(areaVal)}</td>
-      <td>${esc(grpVal)}</td>
+      <td>${esc(d.model_label || "—")}</td>
+      <td>${esc(d.area_label || "—")}</td>
+      <td>${esc(d.device_group_name || "—")}</td>
       <td><span class="status-dot ${dotCls}"></span>${esc(st)}</td>
-      <td style="text-align:right;color:var(--muted);font-size:16px;">›</td>
+      <td class="col-open" aria-hidden="true">›</td>
     </tr>`;
   }).join("");
-
-  const tableHtml = filteredDevices.length
-    ? `<div class="ha-table-wrap">
-        <table class="ha-data-table">
-          <thead>
-            <tr>
-              <th class="${thClass('title')}" onclick="toggleDeviceTableSort('title')">Device${sortArrow('title')}</th>
-              <th class="${thClass('model')}" onclick="toggleDeviceTableSort('model')">Model${sortArrow('model')}</th>
-              <th class="${thClass('area')}" onclick="toggleDeviceTableSort('area')">Area${sortArrow('area')}</th>
-              <th class="${thClass('group')}" onclick="toggleDeviceTableSort('group')">Group${sortArrow('group')}</th>
-              <th class="${thClass('status')}" onclick="toggleDeviceTableSort('status')">Status${sortArrow('status')}</th>
-              <th style="width:32px;"></th>
-            </tr>
-          </thead>
-          <tbody>${tableRowsHtml}</tbody>
-        </table>
-      </div>`
-    : `<p class="desc" style="margin:8px 0 0;">No matching devices found.</p>`;
-
   const promptBox = doc.getElementById("prompt-devices-list");
-  if (promptBox) promptBox.innerHTML = tableHtml;
+  if (promptBox) {
+    promptBox.innerHTML = filteredDevices.length
+      ? `<div class="table-wrap"><table class="data-table">
+          <thead><tr>${sortTh("title", "Device")}${sortTh("model", "Model")}${sortTh("area", "Area")}${sortTh("group", "Group")}${sortTh("status", "Status")}<th><span class="sort-btn" aria-hidden="true"></span></th></tr></thead>
+          <tbody>${tableRowsHtml}</tbody>
+        </table></div>`
+      : emptyStateHtml(allDevices.length ? "No Devices match this category." : "No Devices yet. Latter displays appear here after you add them in Home Assistant.");
+  }
 
-  // Populate System -> Overview stats
-  const allDevs = systemDevices || [];
-  const totalDevs = allDevs.length;
-  const onlineDevs = allDevs.filter(d => d.status_label !== "Offline").length;
-  const nativeDevs = allDevs.filter(d => d.is_latter_native).length;
-  const bleTrackedDevs = allDevs.filter(d => d.has_ble || d.kind === "ble_tag" || (d.area_label || "Roaming") === "Roaming").length;
-  const scannersMap = STATE?.live?.ble_scanners_map || {};
-  const proxyCount = Object.keys(scannersMap).length || (STATE?.live?.ble_survey_rows || []).length;
-  const assignedPersonDevs = allDevs.filter(d => d.assigned_person).length;
-
+  // System overview counts
+  const onlineDevs = allDevices.filter(d => d.status_label !== "Offline").length;
   const setSysTxt = (id, val) => {
     const el = doc.getElementById(id);
     if (el) el.textContent = String(val);
   };
-
+  const scannersMap = STATE?.live?.ble_scanners_map || {};
   setSysTxt("sys-sum-version", STATE?.version ? `v${String(STATE.version).replace(/^v/i, "")}` : "—");
-  setSysTxt("sys-sum-online", `${onlineDevs} / ${totalDevs}`);
-  setSysTxt("sys-sum-native", nativeDevs);
-  setSysTxt("sys-sum-ble-tracked", bleTrackedDevs);
-  setSysTxt("sys-sum-people", assignedPersonDevs);
-  setSysTxt("sys-sum-proxies", proxyCount);
-
+  setSysTxt("sys-sum-online", `${onlineDevs} / ${allDevices.length}`);
+  setSysTxt("sys-sum-native", allDevices.filter(d => d.is_latter_native).length);
+  setSysTxt("sys-sum-ble-tracked", allDevices.filter(d => d.has_ble || d.kind === "ble_tag" || (d.area_label || "Roaming") === "Roaming").length);
+  setSysTxt("sys-sum-people", allDevices.filter(d => d.assigned_person).length);
+  setSysTxt("sys-sum-proxies", Object.keys(scannersMap).length || (STATE?.live?.ble_survey_rows || []).length);
   const sysCfg = STATE?.system_config || {};
-  const remCnt = (sysCfg.remotes_list || []).length;
-  const volCnt = (sysCfg.volume_overrides || []).length;
-  const camCnt = (sysCfg.camera_entities || []).length;
-  const calCnt = (sysCfg.calendar_entities || []).length;
-
-  setSysTxt("sys-sum-remotes", remCnt);
-  setSysTxt("sys-sum-vol", volCnt);
-  setSysTxt("sys-sum-cameras", camCnt);
-  setSysTxt("sys-sum-calendars", calCnt);
+  setSysTxt("sys-sum-remotes", (sysCfg.remotes_list || []).length);
+  setSysTxt("sys-sum-vol", (sysCfg.volume_overrides || []).length);
+  setSysTxt("sys-sum-cameras", (sysCfg.camera_entities || []).length);
+  setSysTxt("sys-sum-calendars", (sysCfg.calendar_entities || []).length);
   setSysTxt("sys-sum-groups-profiles", `${groups.length} groups / ${profiles.length} profiles`);
 
   const alertDevSel = doc.getElementById("test-alert-device");
-  if (alertDevSel && systemDevices && systemDevices.length) {
-    const prevTarget = alertDevSel.value || systemDevices[0].device_slug;
-    const devOpts = systemDevices.map(d =>
-      `<option value="${esc(d.device_slug)}" ${d.device_slug === prevTarget ? 'selected' : ''}>${esc(d.title)} (${esc(d.device_slug)})</option>`
+  if (alertDevSel && allDevices.length) {
+    const prevTarget = alertDevSel.value || allDevices[0].device_slug;
+    const devOpts = allDevices.map(d =>
+      `<option value="${esc(d.device_slug)}" ${d.device_slug === prevTarget ? 'selected' : ''}>${esc(d.title)}</option>`
     );
-    if (systemDevices.length > 1) {
-      devOpts.push(`<option value="follow_me" ${prevTarget === 'follow_me' ? 'selected' : ''}>Follow-Me (Occupied Areas Only)</option>`);
-      devOpts.push(`<option value="all" ${prevTarget === 'all' ? 'selected' : ''}>All Devices (${systemDevices.length})</option>`);
-    } else {
-      devOpts.push(`<option value="follow_me" ${prevTarget === 'follow_me' ? 'selected' : ''}>Follow-Me (Occupied Areas Only)</option>`);
+    devOpts.push(`<option value="follow_me" ${prevTarget === 'follow_me' ? 'selected' : ''}>Follow me (occupied Areas only)</option>`);
+    if (allDevices.length > 1) {
+      devOpts.push(`<option value="all" ${prevTarget === 'all' ? 'selected' : ''}>All Devices (${allDevices.length})</option>`);
     }
     alertDevSel.innerHTML = devOpts.join("");
   }
 
   const profBox = doc.getElementById("saved-profiles-list");
   if (profBox) {
-    if (!profiles.length) {
-      profBox.innerHTML = `<p class="desc">No profiles saved yet.</p>`;
-    } else {
-      profBox.innerHTML = profiles.map(p => {
-        const ctrlCnt = Object.keys(p.esphome_controls || {}).length;
-        const isBuiltin = String(p.id || "").startsWith("preset_");
-        return `<div class="native-ctrl-row">
-          <div class="lbl">
-            ${esc(p.name)} <span class="state-badge" style="margin-left:6px;">${ctrlCnt} controls</span>
-            <small>${esc(p.description || '')}</small>
-          </div>
-          <div class="widget">
-            <button class="btn-primary" onclick="applySavedProfile(${jsArg(p.id)})">Apply</button>
-            ${!isBuiltin ? `<button class="btn-danger" onclick="deleteSavedProfile(${jsArg(p.id)})">✕</button>` : ''}
-          </div>
-        </div>`;
-      }).join("");
-    }
+    profBox.innerHTML = profiles.length
+      ? profiles.map(p => {
+          const ctrlCnt = Object.keys(p.esphome_controls || {}).length;
+          const isBuiltin = String(p.id || "").startsWith("preset_");
+          return settingsRowHtml(
+            `${esc(p.name)} <span class="chip">${ctrlCnt} controls</span>`,
+            esc(p.description || ""),
+            `<button type="button" class="btn btn-secondary btn-compact" onclick="applySavedProfile(${jsArg(p.id)})">Apply</button>
+             ${isBuiltin ? "" : iconButtonHtml(ICON_DELETE, `Delete profile ${p.name}`, `deleteSavedProfile(${jsArg(p.id)})`, "danger")}`
+          );
+        }).join("")
+      : emptyStateHtml("No profiles saved yet.");
   }
 
   const grpBox = doc.getElementById("device-groups-list");
   if (grpBox) {
     grpBox.innerHTML = groups.map(g => {
-      const members = (systemDevices || []).filter(d => d.device_group === g.id);
-      const memNames = members.length ? members.map(m => m.title).join(", ") : "None";
+      const members = allDevices.filter(d => d.device_group === g.id);
       const isDefault = ["unassigned", "handhelds", "bedrooms", "common_areas", "wall_panels", "sensors"].includes(g.id);
-      return `<div class="native-ctrl-row">
-        <div class="lbl">
-          ${esc(g.name)} <span class="state-badge" style="margin-left:6px;">${members.length}</span>
-          <small>${esc(g.description || '')} &bull; Devices: <strong>${esc(memNames)}</strong></small>
-        </div>
-        <div class="widget">
-          ${!isDefault ? `<button class="btn-danger" onclick="deleteDeviceGroup(${jsArg(g.id)})">✕</button>` : ''}
-        </div>
-      </div>`;
+      const desc = [g.description || "", members.length ? `Devices: ${members.map(m => m.title).join(", ")}` : "No Devices"].filter(Boolean).join(" • ");
+      return settingsRowHtml(
+        `${esc(g.name)} <span class="chip">${members.length}</span>`,
+        esc(desc),
+        isDefault ? "" : iconButtonHtml(ICON_DELETE, `Delete group ${g.name}`, `deleteDeviceGroup(${jsArg(g.id)})`, "danger")
+      );
     }).join("");
   }
 
   const fBox = doc.getElementById("system-controls-list");
   if (fBox) {
     if (!systemControls || !systemControls.length) {
-      fBox.innerHTML = `<p class="desc">No shared ESPHome controls discovered.</p>`;
+      fBox.innerHTML = emptyStateHtml("No shared Device controls found.");
     } else {
       const activeCat = doc.getElementById("group-ctrl-cat-filter")?.value || "display";
-      const filteredRows = systemControls.map(fc => {
+      const rows = systemControls.map(fc => {
         if (activeCat !== "all" && fc.section !== activeCat) return "";
-        const matchingTargets = (fc.targets || []).filter(t => {
+        const targets = (fc.targets || []).filter(t => {
           if (activeFilter === "all") return true;
           if (activeFilter.startsWith("group:")) return t.device_group === activeFilter.split(":")[1];
           if (activeFilter === "trait:roaming") return !!t.is_roaming;
           if (activeFilter === "trait:stationary") return !t.is_roaming;
           return true;
         });
-        if (!matchingTargets.length) return "";
-        const entIdsArg = jsArg(matchingTargets.map(t => t.entity_id));
-        const devCount = matchingTargets.length;
-        const curState = matchingTargets[0].state ?? fc.state;
-        let widget = `<span class="state-badge">${esc(curState)}</span>`;
+        if (!targets.length) return "";
+        const idsArg = jsArg(targets.map(t => t.entity_id));
+        const states = [...new Set(targets.map(t => String(t.state ?? "")))];
+        const mixed = states.length > 1;
+        const curState = mixed ? "" : states[0];
+        let widget = `<span class="chip">${esc(mixed ? "Mixed" : curState)}</span>`;
         if (fc.domain === "select" && fc.options && fc.options.length) {
-          const opts = fc.options.map(o => `<option value="${esc(o)}" ${o===curState?'selected':''}>${esc(o)}</option>`).join("");
-          widget = `<select onchange="bulkSelect(${entIdsArg}, this.value)">${opts}</select>`;
+          const opts = (mixed ? [`<option value="" selected disabled>Mixed</option>`] : []).concat(
+            fc.options.map(o => `<option value="${esc(o)}" ${o === curState ? 'selected' : ''}>${esc(o)}</option>`)
+          ).join("");
+          widget = `<select aria-label="${esc(fc.name)}" onchange="bulkSelect(${idsArg}, this.value)">${opts}</select>`;
         } else if (fc.domain === "switch") {
-          const isOn = curState === "on";
-          widget = `<button class="${isOn ? 'btn-primary' : 'btn-secondary'}" onclick="bulkToggle(${entIdsArg}, ${jsArg(isOn ? 'turn_off' : 'turn_on')})">${isOn ? 'ON' : 'OFF'}</button>`;
+          widget = `<input type="checkbox" class="switch" role="switch" aria-label="${esc(fc.name)}" ${curState === "on" ? "checked" : ""} onchange="bulkToggle(${idsArg}, this.checked ? 'turn_on' : 'turn_off')">`;
         } else if (fc.domain === "number") {
-          const minV = fc.min ?? 0;
-          const maxV = fc.max ?? 100;
-          const stepV = fc.step ?? 1;
-          const numVal = parseFloat(curState) || 0;
-          widget = `<input type="range" min="${esc(minV)}" max="${esc(maxV)}" step="${esc(stepV)}" value="${esc(numVal)}" onchange="bulkNumber(${entIdsArg}, this.value)"><span class="state-badge">${esc(curState)} ${esc(fc.unit || '')}</span>`;
+          const numVal = mixed ? (fc.min ?? 0) : (parseFloat(curState) || 0);
+          widget = `<input type="range" aria-label="${esc(fc.name)}" min="${esc(fc.min ?? 0)}" max="${esc(fc.max ?? 100)}" step="${esc(fc.step ?? 1)}" value="${esc(numVal)}" onchange="bulkNumber(${idsArg}, this.value)"><span class="chip">${esc(mixed ? "Mixed" : `${curState} ${fc.unit || ""}`.trim())}</span>`;
         }
-        return `<div class="native-ctrl-row">
-          <div class="lbl">
-            ${esc(fc.name)}
-            <small>${esc(fc.section_title)} &bull; ${devCount} device${devCount > 1 ? 's' : ''}</small>
-          </div>
-          <div class="widget">${widget}</div>
-        </div>`;
+        const desc = `${fc.section_title} • ${targets.length} Device${targets.length > 1 ? "s" : ""}${mixed ? " • Mixed values" : ""}`;
+        return settingsRowHtml(esc(fc.name), esc(desc), widget);
       }).filter(Boolean).join("");
-      fBox.innerHTML = filteredRows || `<p class="desc">No devices match the selected group filter.</p>`;
+      fBox.innerHTML = rows || emptyStateHtml("No Devices match this filter.");
     }
   }
-
-  (void 0);
 }
 
 function fillDevicePicker(selId, devices, placeholder, leadOptions = [], valuePrefix = "") {
@@ -2622,58 +2615,40 @@ function renderAreaPresenceGrid() {
   if (!box) return;
   const rows = STATE?.live?.area_presence_grid || [];
   if (!rows.length) {
-    box.innerHTML = `<p class="desc" style="margin:0;">No BLE proxies or area occupancy sensors discovered yet.</p>`;
+    box.innerHTML = emptyStateHtml("No Bluetooth proxies or Area occupancy sensors found yet.");
     return;
   }
-
   const modeOptions = [
-    {val: "weighted", label: "Weighted (BLE + Sensors)"},
-    {val: "any_or",     label: "Deterministic OR (BLE or Sensor)"},
-    {val: "ble_only",   label: "BLE Only"},
-    {val: "ble_and_sensor", label: "Strict AND (BLE + Sensor)"}
+    {val: "weighted", label: "Weighted (BLE + sensors)"},
+    {val: "any_or", label: "Either (BLE or a sensor)"},
+    {val: "ble_only", label: "BLE only"},
+    {val: "ble_and_sensor", label: "Both (BLE and a sensor)"}
   ];
-
   box.innerHTML = rows.map(r => {
     const isOcc = !!r.is_occupied;
     const occNames = (r.occupant_names && r.occupant_names.length)
       ? r.occupant_names.join(", ")
-      : (isOcc ? "Occupied (Sensor)" : "Empty");
-    const badgeStyle = isOcc
-      ? "background:rgba(46,204,113,0.18);color:var(--ok);border-color:rgba(46,204,113,0.4);"
-      : "opacity:0.75;";
-    const badgeTxt = isOcc ? `OCCUPIED • ${r.confidence_pct}%` : "CLEAR";
-    const sigParts = [];
+      : (isOcc ? "Occupied (sensor)" : "Empty");
+    const parts = [occNames];
     if (r.winning_rssi !== null && r.winning_rssi !== undefined) {
-      const distTxt = r.closest_distance_ft ? ` (~${r.closest_distance_ft} ft)` : "";
-      sigParts.push(`BLE: ${r.winning_rssi} dBm${distTxt}`);
+      parts.push(`BLE ${r.winning_rssi} dBm${r.closest_distance_ft ? ` (~${r.closest_distance_ft} ft)` : ""}`);
     }
     if (r.active_sensors && r.active_sensors.length) {
-      sigParts.push(`Active Sensors: ${r.active_sensors.length}`);
+      parts.push(`${r.active_sensors.length} active sensor${r.active_sensors.length > 1 ? "s" : ""}`);
     } else if (r.available_sensors && r.available_sensors.length) {
-      sigParts.push(`${r.available_sensors.length} Area Sensor${r.available_sensors.length > 1 ? 's' : ''} (Clear)`);
+      parts.push(`${r.available_sensors.length} sensor${r.available_sensors.length > 1 ? "s" : ""} clear`);
     }
-    if (r.floor_id) {
-      sigParts.push(`Floor: ${r.floor_id}`);
-    }
-    const subTxt = sigParts.length ? sigParts.join(" • ") : "BLE Proxy Ready";
+    if (r.floor_id) parts.push(`Floor: ${r.floor_id}`);
     const curMode = r.fusion_mode || "weighted";
-    const optsHtml = modeOptions.map(m =>
-      `<option value="${esc(m.val)}" ${m.val === curMode ? 'selected' : ''}>${esc(m.label)}</option>`
-    ).join("");
-
-    return `<div class="native-ctrl-row">
-      <div class="lbl">
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-          <strong>${esc(r.area_name)}</strong>
-          <span class="state-badge" style="${badgeStyle}">${esc(badgeTxt)}</span>
-          <span style="font-size:12.5px;color:var(--text-strong);font-weight:500;">${esc(occNames)}</span>
-        </div>
-        <small>${esc(subTxt)}</small>
-      </div>
-      <div class="widget">
-        <select style="width:auto;min-width:210px;" onchange="setAreaFusionMode(${jsArg(r.area_id)}, this.value)">${optsHtml}</select>
-      </div>
-    </div>`;
+    const opts = modeOptions.map(m => `<option value="${esc(m.val)}" ${m.val === curMode ? 'selected' : ''}>${esc(m.label)}</option>`).join("");
+    const chip = isOcc
+      ? `<span class="chip chip-success">Occupied • ${esc(r.confidence_pct)}%</span>`
+      : `<span class="chip">Clear</span>`;
+    return settingsRowHtml(
+      `${esc(r.area_name)} ${chip}`,
+      esc(parts.join(" • ")),
+      `<select aria-label="Fusion mode for ${esc(r.area_name)}" onchange="setAreaFusionMode(${jsArg(r.area_id)}, this.value)">${opts}</select>`
+    );
   }).join("");
 }
 
@@ -2690,29 +2665,23 @@ function renderDiscoveredBleTable() {
   if (!box) return;
   const cands = STATE?.discovered_ble_devices || [];
   if (!cands.length) {
-    box.innerHTML = `<p class="desc" style="margin:0;">All discovered Private BLE and named Bluetooth devices are already adopted, or no additional nearby beacons were detected.</p>`;
+    box.innerHTML = emptyStateHtml("No unadopted Bluetooth devices nearby.");
     return;
   }
-
   const persons = STATE?.catalog?.persons || [];
   box.innerHTML = cands.map((c, idx) => {
-    const pOpts = [`<option value="">— Unassigned Person —</option>`].concat(
+    const pOpts = [`<option value="">No person</option>`].concat(
       persons.map(p => `<option value="${esc(p.id)}">${esc(p.friendly || p.name)}</option>`)
     ).join("");
-    const metaParts = [c.kind || "BLE Device", c.target_address];
-    if (c.rssi !== null && c.rssi !== undefined) metaParts.push(`${c.rssi} dBm`);
-    if (c.area_name) metaParts.push(`Nearest Area: ${c.area_name}`);
-
-    return `<div class="native-ctrl-row">
-      <div class="lbl">
-        <strong>${esc(c.title)}</strong>
-        <small>${esc(metaParts.join(" • "))}</small>
-      </div>
-      <div class="widget" style="gap:8px;flex-wrap:wrap;">
-        <select id="ble-adopt-person-${idx}" style="width:auto;min-width:165px;">${pOpts}</select>
-        <button type="button" class="btn-primary" style="padding:5px 12px;font-size:12px;" onclick="quickAdoptBleCandidate(${idx})">+ Adopt</button>
-      </div>
-    </div>`;
+    const meta = [c.kind || "BLE device", c.target_address];
+    if (c.rssi !== null && c.rssi !== undefined) meta.push(`${c.rssi} dBm`);
+    if (c.area_name) meta.push(`Nearest Area: ${c.area_name}`);
+    return settingsRowHtml(
+      esc(c.title),
+      esc(meta.join(" • ")),
+      `<select id="ble-adopt-person-${idx}" aria-label="Assigned person for ${esc(c.title)}">${pOpts}</select>
+       <button type="button" class="btn btn-secondary btn-compact" onclick="quickAdoptBleCandidate(${idx})">Adopt</button>`
+    );
   }).join("");
 }
 
@@ -2755,19 +2724,19 @@ function renderCameraPreview(camEntityId) {
   const lbl = doc.getElementById("cam-preview-label");
   if (!box || !img) return;
   if (!camEntityId) {
-    box.style.display = "none";
+    box.classList.add("hidden");
     return;
   }
   const camObj = (STATE?.catalog?.cameras || []).find(c => c.id === camEntityId);
   if (!camObj || !camObj.preview_url) {
-    box.style.display = "none";
-    showToast("Save configuration first to preview this camera");
+    box.classList.add("hidden");
+    showToast("Save the cameras and open a Device to preview this camera", "error");
     return;
   }
   PREVIEW_CAMERA_ENTITY = camEntityId;
   if (lbl) lbl.textContent = `Preview: ${camEntityId}`;
   img.src = camObj.preview_url;
-  box.style.display = "flex";
+  box.classList.remove("hidden");
 }
 
 function refreshActiveCameraPreview() {
@@ -2821,41 +2790,28 @@ async function sendTestNotification() {
 
 function renderNativeControlRow(item, showEntityId=false, readOnlyNote="") {
   const stateText = `${item.state}${item.unit ? ' ' + item.unit : ''}`;
-  let widgetHtml = `<span class="state-badge">${esc(stateText)}</span>`;
-
+  const idArg = jsArg(item.entity_id);
+  const name = esc(item.name);
+  let widgetHtml = `<span class="chip">${esc(stateText)}</span>`;
   if (readOnlyNote) {
     // Read-only: Latter owns this entity's state.
   } else if (item.domain === "button") {
-    widgetHtml = `<button class="btn-secondary" style="padding:5px 12px;font-size:12px;" onclick="espAction(${jsArg(item.entity_id)}, 'press')">Run</button>`;
+    widgetHtml = `<button type="button" class="btn btn-secondary btn-compact" onclick="espAction(${idArg}, 'press')">Run</button>`;
   } else if (item.domain === "update") {
-    const hasUpd = item.state === "on";
-    widgetHtml = hasUpd
-      ? `<button class="btn-primary" style="padding:5px 12px;font-size:12px;" onclick="espAction(${jsArg(item.entity_id)}, 'install')">Install Update</button>`
-      : `<span class="state-badge">Up to date</span><button class="btn-secondary" style="padding:4px 10px;font-size:11.5px;" onclick="espAction(${jsArg(item.entity_id)}, 'check')">Check</button>`;
+    widgetHtml = item.state === "on"
+      ? `<button type="button" class="btn btn-secondary btn-compact" onclick="espAction(${idArg}, 'install')">Install Update</button>`
+      : `<span class="chip chip-success">Up to date</span><button type="button" class="btn btn-text btn-compact" onclick="espAction(${idArg}, 'check')">Check</button>`;
   } else if (item.domain === "switch" || item.domain === "light" || item.domain === "fan") {
-    const isOn = item.state === "on";
-    widgetHtml = `<button class="${isOn ? 'btn-primary' : 'btn-secondary'}" style="padding:5px 12px;font-size:12px;" onclick="espAction(${jsArg(item.entity_id)}, 'toggle')">${isOn ? 'ON' : 'OFF'}</button>`;
+    widgetHtml = `<input type="checkbox" class="switch" role="switch" aria-label="${name}" ${item.state === "on" ? "checked" : ""} onchange="espAction(${idArg}, this.checked ? 'turn_on' : 'turn_off')">`;
   } else if (item.domain === "select" && item.options && item.options.length) {
-    const opts = item.options.map(o => `<option value="${esc(o)}" ${o===item.state?'selected':''}>${esc(o)}</option>`).join("");
-    widgetHtml = `<select onchange="espSelect(${jsArg(item.entity_id)}, this.value)">${opts}</select>`;
+    const opts = item.options.map(o => `<option value="${esc(o)}" ${o === item.state ? 'selected' : ''}>${esc(o)}</option>`).join("");
+    widgetHtml = `<select aria-label="${name}" onchange="espSelect(${idArg}, this.value)">${opts}</select>`;
   } else if (item.domain === "number") {
-    const minV = item.min ?? 0;
-    const maxV = item.max ?? 100;
-    const stepV = item.step ?? 1;
     const numVal = parseFloat(item.state) || 0;
-    widgetHtml = `
-      <input type="range" min="${esc(minV)}" max="${esc(maxV)}" step="${esc(stepV)}" value="${esc(numVal)}" onchange="espNumber(${jsArg(item.entity_id)}, this.value)">
-      <span class="state-badge">${esc(stateText)}</span>
-    `;
+    widgetHtml = `<input type="range" aria-label="${name}" min="${esc(item.min ?? 0)}" max="${esc(item.max ?? 100)}" step="${esc(item.step ?? 1)}" value="${esc(numVal)}" onchange="espNumber(${idArg}, this.value)"><span class="chip">${esc(stateText)}</span>`;
   }
-
-  return `<div class="native-ctrl-row">
-    <div class="lbl">
-      ${esc(item.name)}
-      ${showEntityId ? `<small>${esc(item.entity_id)}</small>` : (readOnlyNote ? `<small>${esc(readOnlyNote)}</small>` : '')}
-    </div>
-    <div class="widget">${widgetHtml}</div>
-  </div>`;
+  const desc = showEntityId ? esc(item.entity_id) : esc(readOnlyNote || "");
+  return settingsRowHtml(name, desc, widgetHtml);
 }
 
 function getSectionItems(secId) {
@@ -2908,7 +2864,7 @@ function renderCohesiveDeviceSections() {
   ]);
   doc.getElementById("embedded-home").innerHTML = homeItems.length
     ? homeItems.map(it => renderNativeControlRow(it)).join("")
-    : `<p class="desc">No on-device Home Screen entities exposed.</p>`;
+    : emptyStateHtml("No on-device Home Screen entities exposed.");
 
   // 3. Display & Appearance: Logical order + Conditional Brightness visibility based on Auto Brightness Mode
   const rawDispItems = getSectionItems("display");
@@ -2954,7 +2910,7 @@ function renderCohesiveDeviceSections() {
   ]);
   doc.getElementById("embedded-sleep").innerHTML = sleepItems.length
     ? sleepItems.map(it => renderNativeControlRow(it)).join("")
-    : `<p class="desc">No on-device Sleep &amp; Wake entities exposed.</p>`;
+    : emptyStateHtml("No on-device Sleep & Wake entities exposed.");
 
   const pwrProfItem = rawSleepItems.find(it => `${it.name} ${it.entity_id}`.toLowerCase().includes("power_profile") || (it.name || "").toLowerCase().includes("power profile"));
   const pwrWrap = doc.getElementById("dash-power-profile-wrap");
@@ -2991,10 +2947,10 @@ function renderCohesiveDeviceSections() {
   ]);
   doc.getElementById("embedded-voice-primary").innerHTML = sortedVoicePrimary.length
     ? sortedVoicePrimary.map(it => renderNativeControlRow(it)).join("")
-    : `<p class="desc">No on-device Voice Assistant entities exposed.</p>`;
+    : emptyStateHtml("No on-device Voice Assistant entities exposed.");
   doc.getElementById("embedded-voice-sens").innerHTML = voiceSens.length
     ? voiceSens.map(it => renderNativeControlRow(it)).join("")
-    : `<p class="desc">No per-model sensitivity controls exposed.</p>`;
+    : emptyStateHtml("No per-model sensitivity controls exposed.");
   const sensDetails = doc.getElementById("details-voice-sens");
   if (sensDetails) {
     sensDetails.classList.toggle("hidden", !!(wwDisabled || voiceSens.length === 0));
@@ -3028,20 +2984,20 @@ function renderCohesiveDeviceSections() {
   if (qaBox) {
     qaBox.innerHTML = actionItems.length
       ? actionItems.map(it =>
-          `<button class="btn-chip" onclick="espAction(${jsArg(it.entity_id)}, 'press')">${esc(it.name)}</button>`
+          `<button type="button" class="btn btn-secondary" onclick="espAction(${jsArg(it.entity_id)}, 'press')">${esc(it.name)}</button>`
         ).join("")
-      : `<span style="color:var(--muted);font-size:12.5px;">No quick action buttons exposed by this device.</span>`;
+      : emptyStateHtml("This Device has no quick actions.");
   }
 
   const batItems = getSectionItems("battery");
   doc.getElementById("embedded-battery").innerHTML = batItems.length
     ? batItems.map(it => renderNativeControlRow(it)).join("")
-    : `<p class="desc">No battery telemetry entities reported.</p>`;
+    : emptyStateHtml("No battery telemetry entities reported.");
 
   const netItems = getSectionItems("network").concat(rawDispItems.filter(isWeatherSimulation));
   doc.getElementById("embedded-network").innerHTML = netItems.length
     ? netItems.map(it => renderNativeControlRow(it)).join("")
-    : `<p class="desc">No network or diagnostic entities reported.</p>`;
+    : emptyStateHtml("No network or diagnostic entities reported.");
 
   // Only show the extra "Device Sensors & Controls" card on Overview if the device has "other" entities or is a sensor/headless node
   const otherItems = getSectionItems("other");
@@ -3080,22 +3036,19 @@ function renderWallpaperGallery(wallpapers, slug, shape) {
   const box = doc.getElementById("wp-gallery-grid");
   if (!box) return;
   const shapeClass = shape === "square" ? "square" : "circle";
-  box.innerHTML = (wallpapers || []).map(wp => {
-    const thumbUrl = wp.thumb_url || "";
-    const starLabel = wp.favorite ? "★ Fav" : "☆ Fav";
-    const delBtn = wp.deletable
-      ? `<button class="btn-danger" style="padding:5px 8px;" onclick="deleteWallpaper(${jsArg(wp.id)})">✕</button>`
-      : "";
+  const items = wallpapers || [];
+  box.innerHTML = items.length ? items.map(wp => {
+    const idArg = jsArg(wp.id);
     return `<div class="wp-card ${wp.active ? 'active' : ''}">
-      <img class="wp-thumb ${shapeClass}" src="${esc(thumbUrl)}" loading="lazy" alt="${esc(wp.name)}">
+      <img class="wp-thumb ${shapeClass}" src="${esc(wp.thumb_url || "")}" loading="lazy" alt="${esc(wp.name)}">
       <div class="wp-title">${esc(wp.name)}</div>
       <div class="wp-actions">
-        <button class="${wp.active ? 'btn-primary' : 'btn-secondary'}" style="padding:5px 10px;font-size:12px;" onclick="selectWallpaperSource(${jsArg(wp.id)})">${wp.active ? 'Active' : 'Use'}</button>
-        <button class="${wp.favorite ? 'btn-primary' : 'btn-secondary'}" style="padding:5px 10px;font-size:12px;" onclick="toggleWallpaperFav(${jsArg(wp.id)})">${starLabel}</button>
-        ${delBtn}
+        ${wp.active ? '<span class="chip chip-primary">Active</span>' : `<button type="button" class="btn btn-secondary btn-compact" onclick="selectWallpaperSource(${idArg})">Use</button>`}
+        <button type="button" class="btn btn-text btn-compact" aria-pressed="${!!wp.favorite}" aria-label="${wp.favorite ? 'Remove from favorites' : 'Add to favorites'}" onclick="toggleWallpaperFav(${idArg})">${wp.favorite ? '★' : '☆'}</button>
+        ${wp.deletable ? iconButtonHtml(ICON_DELETE, `Delete ${wp.name}`, `deleteWallpaper(${idArg})`, "danger") : ''}
       </div>
     </div>`;
-  }).join("");
+  }).join("") : emptyStateHtml("No wallpapers available.");
 }
 
 async function uploadWallpaperFile() {
@@ -3186,45 +3139,39 @@ function addCameraRow(entityId="") {
   if (!list) return;
   const existingCount = list.querySelectorAll(".camera-row-item").length;
   if (existingCount >= 10) {
-    showToast("Maximum of 10 cameras reached");
+    showToast("Failed: a System can have up to 10 cameras", "error");
     return;
   }
   const row = document.createElement("div");
-  row.className = "native-ctrl-row camera-row-item";
-  row.style.marginBottom = "8px";
+  row.className = "list-row camera-row-item";
   const camOptions = (STATE?.catalog?.cameras || []).map(c =>
     `<option value="${esc(c.id)}" ${c.id === entityId ? 'selected' : ''}>${esc(c.name)}</option>`
   ).join("");
-  const slotTitle = existingCount === 0
-    ? "Camera 1 (Primary / Default Notification Camera)"
-    : `Camera ${existingCount + 1}`;
   row.innerHTML = `
-    <div style="flex:1;min-width:0;">
-      <small class="cam-slot-lbl" style="color:var(--muted);display:block;margin-bottom:3px;font-size:11px;font-weight:500;">${esc(slotTitle)}</small>
-      <select class="cam-ent-sel" style="width:100%;max-width:none;" onchange="markDirty('system')"><option value="">— Select Camera —</option>${camOptions}</select>
+    <div class="stacked-field list-row-grow">
+      <span class="field-label cam-slot-lbl"></span>
+      <select class="cam-ent-sel" aria-label="Camera" onchange="markDirty('system')"><option value="">— Choose a camera —</option>${camOptions}</select>
     </div>
-    <div style="display:flex;gap:6px;align-items:center;">
-      <button type="button" class="btn-secondary" style="padding:6px 10px;font-size:12px;" onclick="renderCameraPreview(this.parentElement.parentElement.querySelector('.cam-ent-sel').value)">Preview</button>
-      <button type="button" class="btn-danger" title="Remove Camera" onclick="this.parentElement.parentElement.remove(); renumberCameraRows(); markDirty('system');">✕</button>
-    </div>
+    <button type="button" class="btn btn-text btn-compact" onclick="renderCameraPreview(this.parentElement.querySelector('.cam-ent-sel').value)">Preview</button>
+    ${iconButtonHtml(ICON_DELETE, "Remove camera", "this.parentElement.remove(); renumberCameraRows(); markDirty('system');", "danger")}
   `;
   list.appendChild(row);
+  renumberCameraRows();
 }
 
 function addCalendarRow(entityId="") {
   const list = doc.getElementById("calendars-list");
   if (!list) return;
   const row = document.createElement("div");
-  row.className = "native-ctrl-row calendar-row-item";
-  row.style.marginBottom = "8px";
+  row.className = "list-row calendar-row-item";
   const calOptions = (STATE?.catalog?.calendars || []).map(c =>
     `<option value="${esc(c.id)}" ${c.id === entityId ? 'selected' : ''}>${esc(c.name)}</option>`
   ).join("");
   row.innerHTML = `
-    <div style="flex:1;min-width:0;">
-      <select class="cal-ent-sel" style="width:100%;max-width:none;" onchange="markDirty('system')"><option value="">— Select Calendar —</option>${calOptions}</select>
+    <div class="stacked-field list-row-grow">
+      <select class="cal-ent-sel" aria-label="Calendar" onchange="markDirty('system')"><option value="">— Choose a calendar —</option>${calOptions}</select>
     </div>
-    <button type="button" class="btn-danger" title="Remove Calendar" onclick="this.parentElement.remove(); markDirty('system');">✕</button>
+    ${iconButtonHtml(ICON_DELETE, "Remove calendar", "this.parentElement.remove(); markDirty('system');", "danger")}
   `;
   list.appendChild(row);
 }
@@ -3251,45 +3198,32 @@ function renderRemoteGroupsEditor() {
   if (!box) return;
   const areas = STATE?.catalog?.areas || [];
   const invIds = getInventoryRemoteIds();
-
   if (!REMOTE_GROUPS_STATE.length) {
-    box.innerHTML = `<p style="color:var(--muted);font-size:13px;margin:0 0 10px;">No Remote Groups created yet. Click <strong>+ Create Remote Group</strong> to group remotes by Area.</p>`;
+    box.innerHTML = emptyStateHtml("No remote groups yet.");
   } else {
     box.innerHTML = REMOTE_GROUPS_STATE.map((grp, gIdx) => {
-      const areaOpts = [`<option value="">— No Area (Static Device Assignment Only) —</option>`].concat(
-        areas.map(a => `<option value="${esc(a.id)}" ${a.id === grp.area_id ? 'selected' : ''}>Area: ${esc(a.name)}</option>`)
+      const areaOpts = [`<option value="">No Area (assign to Devices only)</option>`].concat(
+        areas.map(a => `<option value="${esc(a.id)}" ${a.id === grp.area_id ? 'selected' : ''}>${esc(a.name)}</option>`)
       ).join("");
       const selectedRems = Array.isArray(grp.remotes) ? grp.remotes : [];
-      const orderedPool = selectedRems.filter(id => invIds.includes(id)).concat(invIds.filter(id => !selectedRems.includes(id)));
-      const pillsHtml = orderedPool.length
-        ? orderedPool.map(entId => {
-            const isEn = selectedRems.includes(entId);
+      const pool = selectedRems.filter(id => invIds.includes(id)).concat(invIds.filter(id => !selectedRems.includes(id)));
+      const pills = pool.length
+        ? pool.map(entId => {
             const pos = selectedRems.indexOf(entId);
+            const isEn = pos >= 0;
             const badge = isEn ? (pos === 0 ? "★ Primary: " : `#${pos + 1}: `) : "+ ";
-            return `<div class="dock-pill ${isEn ? 'enabled' : ''}" onclick="toggleRemoteInGroup(${gIdx}, ${jsArg(entId)})">
-              <span>${esc(badge)}${esc(getRemoteFriendlyLabel(entId))}</span>
-            </div>`;
+            return `<button type="button" class="pill ${isEn ? 'enabled' : ''}" aria-pressed="${isEn}" onclick="toggleRemoteInGroup(${gIdx}, ${jsArg(entId)})">${esc(badge)}${esc(getRemoteFriendlyLabel(entId))}</button>`;
           }).join("")
-        : `<span style="color:var(--muted);font-size:12px;">Add remotes to the System Remote Inventory above first.</span>`;
-
-      return `<div style="background:var(--input-bg);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px;">
-        <div class="form-grid-2" style="margin-bottom:10px;">
-          <div>
-            <small style="color:var(--muted);display:block;margin-bottom:3px;font-size:11px;">Group Name</small>
-            <input type="text" value="${esc(grp.name || '')}" placeholder="e.g. TV wall" oninput="updateRemoteGroupField(${gIdx}, 'name', this.value)">
+        : `<span class="help-text">Add remotes to the System Remote Inventory first.</span>`;
+      return `<div class="list-block">
+        <div class="list-row-head">
+          <div class="list-row-main">
+            <div class="stacked-field"><label>Group name</label><input type="text" aria-label="Group name" value="${esc(grp.name || '')}" placeholder="e.g. TV wall" oninput="updateRemoteGroupField(${gIdx}, 'name', this.value)"></div>
+            <div class="stacked-field"><label>Area (loads when a Device enters it)</label><select aria-label="Area" onchange="updateRemoteGroupField(${gIdx}, 'area_id', this.value)">${areaOpts}</select></div>
           </div>
-          <div style="display:flex;gap:8px;align-items:flex-end;">
-            <div style="flex:1;">
-              <small style="color:var(--muted);display:block;margin-bottom:3px;font-size:11px;">Assigned Area (Auto-Loads When Device Enters Area)</small>
-              <select onchange="updateRemoteGroupField(${gIdx}, 'area_id', this.value)">${areaOpts}</select>
-            </div>
-            <button type="button" class="btn-danger" title="Delete Remote Group" onclick="removeRemoteGroupRow(${gIdx})">✕</button>
-          </div>
+          ${iconButtonHtml(ICON_DELETE, `Delete remote group ${grp.name || ""}`, `removeRemoteGroupRow(${gIdx})`, "danger")}
         </div>
-        <div>
-          <small style="color:var(--muted);display:block;margin-bottom:5px;font-size:11px;">Remotes in Group (Click to Enable/Disable; First Selected = Primary Power Target)</small>
-          <div class="dock-pill-list">${pillsHtml}</div>
-        </div>
+        <div class="stacked-field"><span class="field-label">Remotes (the first one selected is the primary power target)</span><div class="pill-list">${pills}</div></div>
       </div>`;
     }).join("");
   }
@@ -3338,27 +3272,22 @@ function renderDeviceRemoteAssignments() {
   if (!box) return;
   const devs = (STATE?.system_devices || []).filter(d => d.kind !== "ble_tag" && d.has_display);
   if (!devs.length) {
-    box.innerHTML = `<p style="color:var(--muted);font-size:12.5px;margin:0;">No display devices onboarded.</p>`;
+    box.innerHTML = emptyStateHtml("No Latter displays yet.");
     return;
   }
+  const savedGroups = STATE?.system_config?.remote_groups || [];
   box.innerHTML = devs.map(d => {
     const curMode = d.device_remote_group || "area_auto";
     const opts = [
-      `<option value="area_auto" ${curMode === 'area_auto' ? 'selected' : ''}>Follow Active Area (Hide Remote App When Area Has None)</option>`,
-      ...(STATE?.system_config?.remote_groups || []).map(g =>
-        `<option value="${esc('group:' + g.id)}" ${curMode === ('group:' + g.id) ? 'selected' : ''}>Static Group: ${esc(g.name)}</option>`
-      ),
-      `<option value="all" ${curMode === 'all' ? 'selected' : ''}>All System Remotes</option>`
+      `<option value="area_auto" ${curMode === 'area_auto' ? 'selected' : ''}>Follow the active Area</option>`,
+      ...savedGroups.map(g => `<option value="${esc('group:' + g.id)}" ${curMode === ('group:' + g.id) ? 'selected' : ''}>Group: ${esc(g.name)}</option>`),
+      `<option value="all" ${curMode === 'all' ? 'selected' : ''}>All System remotes</option>`
     ].join("");
-    return `<div class="native-ctrl-row">
-      <div class="lbl">
-        ${esc(d.title)}
-        <small>Active Area: ${esc(d.active_area_name || 'Unassigned')}</small>
-      </div>
-      <div class="widget">
-        <select onchange="assignDeviceRemoteGroup(${jsArg(d.subentry_id)}, ${jsArg(d.title)}, this.value)">${opts}</select>
-      </div>
-    </div>`;
+    return settingsRowHtml(
+      esc(d.title),
+      esc(`Active Area: ${d.active_area_name || "—"}`),
+      `<select aria-label="Remotes for ${esc(d.title)}" onchange="assignDeviceRemoteGroup(${jsArg(d.subentry_id)}, ${jsArg(d.title)}, this.value)">${opts}</select>`
+    );
   }).join("");
 }
 
@@ -3387,39 +3316,34 @@ function addRemoteControlRow(entityId="") {
   if (!list) return;
   const existingCount = list.querySelectorAll(".remote-row-item").length;
   if (existingCount >= 10) {
-    showToast("Maximum of 10 remote controls reached");
+    showToast("Failed: a System can have up to 10 remotes", "error");
     return;
   }
   const row = document.createElement("div");
-  row.className = "native-ctrl-row remote-row-item";
-  row.style.marginBottom = "8px";
+  row.className = "list-row remote-row-item";
   const remOptions = (STATE?.catalog?.remotes || []).map(r =>
     `<option value="${esc(r.id)}" ${r.id === entityId ? 'selected' : ''}>${esc(r.name)}</option>`
   ).join("");
-  const slotTitle = existingCount === 0
-    ? "Slot 1 (Primary Power Target)"
-    : `Slot ${existingCount + 1}`;
   row.innerHTML = `
-    <div style="flex:1;min-width:0;">
-      <small class="rem-slot-lbl" style="color:var(--muted);display:block;margin-bottom:3px;font-size:11px;font-weight:500;">${esc(slotTitle)}</small>
-      <select class="rem-ent-sel" style="width:100%;max-width:none;" onchange="markDirty('system'); renderRemoteGroupsEditor();"><option value="">— Select Remote or Media Player —</option>${remOptions}</select>
+    <div class="stacked-field list-row-grow">
+      <span class="field-label rem-slot-lbl"></span>
+      <select class="rem-ent-sel" aria-label="Remote or media player" onchange="markDirty('system'); renderRemoteGroupsEditor();"><option value="">— Choose a remote or media player —</option>${remOptions}</select>
     </div>
-    <button type="button" class="btn-danger" title="Remove Remote" onclick="this.parentElement.remove(); renumberRemoteControlRows(); markDirty('system');">✕</button>
+    ${iconButtonHtml(ICON_DELETE, "Remove remote", "this.parentElement.remove(); renumberRemoteControlRows(); markDirty('system');", "danger")}
   `;
   list.appendChild(row);
+  renumberRemoteControlRows();
 }
 
 function addVolumeOverrideRow(speaker="", target="") {
   const list = doc.getElementById("volume-overrides-list");
   if (!list) return;
-  const existingCount = list.querySelectorAll(".vol-override-row").length;
-  if (existingCount >= 10) {
-    showToast("Maximum of 10 volume overrides reached");
+  if (list.querySelectorAll(".vol-override-row").length >= 10) {
+    showToast("Failed: a System can have up to 10 volume overrides", "error");
     return;
   }
   const row = document.createElement("div");
-  row.className = "native-ctrl-row vol-override-row";
-  row.style.marginBottom = "8px";
+  row.className = "list-row vol-override-row";
   const spkOptions = (STATE?.catalog?.ma_speakers || []).map(s =>
     `<option value="${esc(s.id)}" ${s.id === speaker ? 'selected' : ''}>${esc(s.name)}</option>`
   ).join("");
@@ -3427,17 +3351,11 @@ function addVolumeOverrideRow(speaker="", target="") {
     `<option value="${esc(t.id)}" ${t.id === target ? 'selected' : ''}>${esc(t.name)}</option>`
   ).join("");
   row.innerHTML = `
-    <div class="form-grid-2" style="flex:1;min-width:0;">
-      <div>
-        <small style="color:var(--muted);display:block;margin-bottom:3px;font-size:11px;">When Streaming To Speaker</small>
-        <select class="vo-spk" style="width:100%;max-width:none;" onchange="markDirty('system')"><option value="">— Select Speaker —</option>${spkOptions}</select>
-      </div>
-      <div>
-        <small style="color:var(--muted);display:block;margin-bottom:3px;font-size:11px;">Control Volume On</small>
-        <select class="vo-tgt" style="width:100%;max-width:none;" onchange="markDirty('system')"><option value="">— Select Volume Target —</option>${tgtOptions}</select>
-      </div>
+    <div class="list-row-main">
+      <div class="stacked-field"><span class="field-label">When audio plays on</span><select class="vo-spk" aria-label="Speaker" onchange="markDirty('system')"><option value="">— Choose a speaker —</option>${spkOptions}</select></div>
+      <div class="stacked-field"><span class="field-label">Change the volume on</span><select class="vo-tgt" aria-label="Volume target" onchange="markDirty('system')"><option value="">— Choose a volume target —</option>${tgtOptions}</select></div>
     </div>
-    <button type="button" class="btn-danger" title="Remove Override" onclick="this.parentElement.remove(); markDirty('system');">✕</button>
+    ${iconButtonHtml(ICON_DELETE, "Remove volume override", "this.parentElement.remove(); markDirty('system');", "danger")}
   `;
   list.appendChild(row);
 }
@@ -3460,17 +3378,15 @@ function fallbackCopyText(text, successMsg) {
   try {
     const ta = document.createElement("textarea");
     ta.value = text;
-    ta.style.position = "fixed";
-    ta.style.top = "-9999px";
-    ta.style.left = "-9999px";
+    ta.className = "offscreen";
     doc.body.appendChild(ta);
     ta.focus();
     ta.select();
     const ok = document.execCommand("copy");
     doc.body.removeChild(ta);
-    showToast(ok ? successMsg : "Copy failed — select text manually");
+    showToast(ok ? successMsg : "Failed: select the text and copy it manually", ok ? "info" : "error");
   } catch (_e) {
-    showToast("Copy failed — select text manually");
+    showToast("Failed: select the text and copy it manually", "error");
   }
 }
 
@@ -3483,66 +3399,20 @@ function copyTextById(elId) {
 let pendingRemoveEntryId = "";
 let pendingRemoveTitle = "";
 
-function ensureRemoveDeviceModal() {
-  if (doc.getElementById("latter-rm-modal")) return;
-  const modal = document.createElement("div");
-  modal.id = "latter-rm-modal";
-  modal.style.cssText = "position:fixed;inset:0;background:rgba(8,12,18,0.82);backdrop-filter:blur(6px);z-index:9999;display:none;align-items:center;justify-content:center;padding:16px;";
-  modal.innerHTML = `
-    <div class="card" style="max-width:400px;width:100%;margin:0;">
-      <h3 style="margin-bottom:6px;color:var(--danger);">Remove Device from Latter?</h3>
-      <p class="desc" id="latter-rm-desc" style="margin-bottom:16px;">Remove this device from Latter? Your ESPHome device will remain in Home Assistant.</p>
-      <div style="display:flex;gap:8px;justify-content:flex-end;">
-        <button type="button" class="btn-secondary" onclick="closeRemoveDeviceModal()">Cancel</button>
-        <button type="button" class="btn-danger" id="latter-rm-confirm-btn" onclick="confirmRemoveManagedDevice()">Remove Device</button>
-      </div>
-    </div>
-  `;
-  doc.body.appendChild(modal);
-}
-
 function closeRemoveDeviceModal() {
-  const m = doc.getElementById("latter-rm-modal");
-  if (m) m.style.display = "none";
+  closeDialog("latter-rm-modal");
   pendingRemoveEntryId = "";
   pendingRemoveTitle = "";
 }
 
 function removeManagedDevice(entryId, title) {
-  ensureRemoveDeviceModal();
   pendingRemoveEntryId = entryId;
   pendingRemoveTitle = title || entryId;
   const desc = doc.getElementById("latter-rm-desc");
   if (desc) {
-    desc.textContent = `Remove '${pendingRemoveTitle}' from Latter? Your ESPHome device will remain in Home Assistant, and you can re-add it anytime.`;
+    desc.textContent = `Remove '${pendingRemoveTitle}' from Latter? Your ESPHome device stays in Home Assistant, and you can add it again anytime.`;
   }
-  doc.getElementById("latter-rm-modal").style.display = "flex";
-}
-
-function ensureResetDeviceModal() {
-  if (doc.getElementById("latter-reset-modal")) return;
-  const modal = document.createElement("div");
-  modal.id = "latter-reset-modal";
-  modal.style.cssText = "position:fixed;inset:0;background:rgba(8,12,18,0.82);backdrop-filter:blur(6px);z-index:9999;display:none;align-items:center;justify-content:center;padding:16px;";
-  modal.innerHTML = `
-    <div class="card" style="max-width:440px;width:100%;margin:0;">
-      <h3 style="margin-bottom:6px;color:var(--danger);" id="latter-reset-title">Reset to defaults?</h3>
-      <div class="toggle-row" style="margin-bottom:8px;">
-        <span>Device settings (erases everything saved on the device; it restarts)</span>
-        <input type="checkbox" id="latter-reset-device-settings" checked onchange="updateResetDeviceConfirm()">
-      </div>
-      <div class="toggle-row" style="margin-bottom:8px;">
-        <span>Latter options for this device</span>
-        <input type="checkbox" id="latter-reset-latter-options" checked onchange="updateResetDeviceConfirm()">
-      </div>
-      <p class="desc" id="latter-reset-desc" style="margin-bottom:16px;">Wi-Fi and pairing are kept, so the device rejoins Home Assistant by itself. Its ESPHome binding and Music Assistant player link are kept too.</p>
-      <div style="display:flex;gap:8px;justify-content:flex-end;">
-        <button type="button" class="btn-secondary" onclick="closeResetDeviceModal()">Cancel</button>
-        <button type="button" class="btn-danger" id="latter-reset-confirm-btn" onclick="confirmResetDevice()">Reset</button>
-      </div>
-    </div>
-  `;
-  doc.body.appendChild(modal);
+  openDialog("latter-rm-modal");
 }
 
 function updateResetDeviceConfirm() {
@@ -3557,7 +3427,6 @@ function openResetDeviceModal() {
     showToast("Failed: select a Device first", "error");
     return;
   }
-  ensureResetDeviceModal();
   const isBleTag = STATE?.config?.kind === "ble_tag";
   const dev = doc.getElementById("latter-reset-device-settings");
   const opts = doc.getElementById("latter-reset-latter-options");
@@ -3567,14 +3436,13 @@ function openResetDeviceModal() {
   }
   if (opts) opts.checked = true;
   const title = doc.getElementById("latter-reset-title");
-  if (title) title.textContent = `Reset '${STATE?.title || "this device"}' to defaults?`;
+  if (title) title.textContent = `Reset '${STATE?.title || "this Device"}' to defaults?`;
   updateResetDeviceConfirm();
-  doc.getElementById("latter-reset-modal").style.display = "flex";
+  openDialog("latter-reset-modal");
 }
 
 function closeResetDeviceModal() {
-  const m = doc.getElementById("latter-reset-modal");
-  if (m) m.style.display = "none";
+  closeDialog("latter-reset-modal");
 }
 
 async function confirmResetDevice() {
@@ -3617,44 +3485,6 @@ async function confirmRemoveManagedDevice() {
   }
 }
 
-function ensureAddDeviceModal() {
-  if (doc.getElementById("latter-add-dev-modal")) return;
-  const modal = document.createElement("div");
-  modal.id = "latter-add-dev-modal";
-  modal.style.cssText = "position:fixed;inset:0;background:rgba(8,12,18,0.82);backdrop-filter:blur(6px);z-index:9999;display:none;align-items:center;justify-content:center;padding:16px;";
-  modal.innerHTML = `
-    <div class="card" style="max-width:460px;width:100%;margin:0;">
-      <h3 style="margin-bottom:12px;">Add BLE Phone, Watch or Tag</h3>
-      <p style="color:var(--muted);font-size:13px;margin:0 0 12px;">Latter devices are added through Home Assistant's ESPHome discovery.</p>
-
-      <div id="add-dev-pane-ble">
-        <div class="field">
-          <label>Discovered Bluetooth / Private BLE / iBeacon Devices</label>
-          <select id="ble-candidate-picker" onchange="onSelectBleCandidate(this.value)"></select>
-        </div>
-        <div class="field">
-          <label>Device Name</label>
-          <input type="text" id="ble-custom-name" placeholder="e.g. Phone, Watch, Keys">
-        </div>
-        <div class="field">
-          <label>BLE MAC Address, Entity ID (private_ble_device), or iBeacon UUID</label>
-          <input type="text" id="ble-custom-addr" class="mono" placeholder="AA:BB:CC:DD:EE:FF or device_tracker.iphone_ble">
-        </div>
-        <div class="field">
-          <label>Assign to Person (Optional — Creates <code>sensor.&lt;person&gt;_current_area</code>)</label>
-          <select id="ble-custom-person"></select>
-        </div>
-      </div>
-
-      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
-        <button type="button" class="btn-secondary" onclick="closeAddDeviceModal()">Cancel</button>
-        <button type="button" class="btn-primary" id="btn-confirm-add-device" onclick="confirmAddDeviceModal()">Add Device</button>
-      </div>
-    </div>
-  `;
-  doc.body.appendChild(modal);
-}
-
 function onSelectBleCandidate(targetAddr) {
   if (!targetAddr) return;
   const cands = STATE?.discovered_ble_devices || [];
@@ -3666,28 +3496,23 @@ function onSelectBleCandidate(targetAddr) {
 }
 
 function openAddDeviceModal() {
-  ensureAddDeviceModal();
   const bleCands = STATE?.discovered_ble_devices || [];
-
   const blePicker = doc.getElementById("ble-candidate-picker");
   if (blePicker) {
-    const opts = [`<option value="">— Select Discovered BLE Device or Enter Below —</option>`].concat(
+    blePicker.innerHTML = [`<option value="">— Choose a discovered device, or enter one below —</option>`].concat(
       bleCands.map(c => `<option value="${esc(c.target_address)}">${esc(c.label)}</option>`)
-    );
-    blePicker.innerHTML = opts.join("");
+    ).join("");
   }
   const nameInp = doc.getElementById("ble-custom-name");
   const addrInp = doc.getElementById("ble-custom-addr");
   if (nameInp) nameInp.value = "";
   if (addrInp) addrInp.value = "";
   populateSelect("ble-custom-person", STATE?.catalog?.persons || [], "", true);
-
-  doc.getElementById("latter-add-dev-modal").style.display = "flex";
+  openDialog("latter-add-dev-modal");
 }
 
 function closeAddDeviceModal() {
-  const m = doc.getElementById("latter-add-dev-modal");
-  if (m) m.style.display = "none";
+  closeDialog("latter-add-dev-modal");
 }
 
 async function confirmAddDeviceModal() {
@@ -3877,6 +3702,8 @@ function restoreFromUploadedFile() {
 
 function applyStateToDom(data, forceFormUpdate=false) {
   STATE = data;
+  doc.getElementById("studio-root")?.classList.remove("is-loading");
+  doc.getElementById("studio-load-error")?.classList.add("hidden");
   const cfg = data.config || {};
   const live = data.live || {};
   const esp = data.esphome;
@@ -3938,14 +3765,12 @@ function applyStateToDom(data, forceFormUpdate=false) {
 
   doc.getElementById("dash-hw-model").textContent = curDevEntry.model_label || esp?.device?.model || "—";
   doc.getElementById("dash-ip-addr").textContent = ipStr;
-  doc.getElementById("dash-ble-mode").textContent = isRoaming
-    ? `Roaming (BLE Auto-Switch • ${areaName})`
-    : `Stationary (${areaName})`;
+  doc.getElementById("dash-ble-mode").textContent = `${isRoaming ? "Roaming" : "Stationary"}${live.active_area_name ? ` • ${live.active_area_name}` : ""}`;
   const winRow = (live.ble_survey_rows || []).find(r => r.is_winner);
   const distSuffix = (live.ble_closest_proxy && winRow && winRow.distance_m != null) ? ` (~${winRow.distance_m}m / ${winRow.distance_ft}ft)` : "";
   doc.getElementById("dash-ble-proxy").textContent = (live.ble_closest_proxy || "—") + distSuffix;
   const proxyRow = doc.getElementById("dash-row-ble-proxy");
-  if (proxyRow) proxyRow.style.display = (caps.has_ble_beacon && cfg.native_ble_tracking) ? "flex" : "none";
+  if (proxyRow) proxyRow.classList.toggle("hidden", !(caps.has_ble_beacon && cfg.native_ble_tracking));
 
   renderLogsView();
   renderActiveSurveyDeviceBars();
@@ -4044,6 +3869,10 @@ async function refreshState(forceForm=false) {
   });
   if (data) {
     applyStateToDom(data, forceForm);
+  } else if (!STATE) {
+    // Nothing loaded yet: replace the loading state with an error and a Retry button.
+    doc.getElementById("studio-root")?.classList.remove("is-loading");
+    doc.getElementById("studio-load-error")?.classList.remove("hidden");
   }
 }
 
@@ -4131,49 +3960,24 @@ async function saveAllConfig() {
 }
 
 let cwTargetScope = "device";
-let cwSelectedHex = "#3898FF";
+let cwSelectedHex = "";
 
-function ensureColorWheelModal() {
-  if (doc.getElementById("latter-cw-modal")) return;
-  const modal = document.createElement("div");
-  modal.id = "latter-cw-modal";
-  modal.style.cssText = "position:fixed;inset:0;background:rgba(8,12,18,0.82);backdrop-filter:blur(6px);z-index:9999;display:none;align-items:center;justify-content:center;padding:16px;";
-  modal.innerHTML = `
-    <div class="card" style="max-width:380px;width:100%;margin:0;text-align:center;position:relative;">
-      <h3 style="margin-bottom:4px;">HSV Color Wheel Picker</h3>
-      <p class="desc" style="margin-bottom:12px;">Select a custom UI accent color and save it to your system color library.</p>
-      <div style="display:flex;justify-content:center;margin-bottom:14px;">
-        <canvas id="latter-cw-canvas" width="220" height="220" style="border-radius:50%;cursor:crosshair;box-shadow:0 4px 20px rgba(0,0,0,0.45);"></canvas>
-      </div>
-      <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px;">
-        <span id="latter-cw-preview" style="width:32px;height:32px;border-radius:50%;border:2px solid #fff;background:#3898FF;"></span>
-        <input type="text" id="latter-cw-hex" value="#3898FF" style="width:110px;font-family:monospace;text-align:center;" oninput="onCwHexInput(this.value)">
-      </div>
-      <div class="field" style="text-align:left;margin-bottom:14px;">
-        <label>Color Profile Name</label>
-        <input type="text" id="latter-cw-name" placeholder="e.g. Sunset Coral">
-      </div>
-      <div style="display:flex;gap:8px;justify-content:flex-end;">
-        <button type="button" class="btn-secondary" onclick="closeColorWheelModal()">Cancel</button>
-        <button type="button" class="btn-primary" onclick="saveColorWheelSelection()">Save Color</button>
-      </div>
-    </div>
-  `;
-  doc.body.appendChild(modal);
-
+function initColorWheel() {
   const canvas = doc.getElementById("latter-cw-canvas");
+  if (!canvas || canvas.dataset.ready) return;
+  canvas.dataset.ready = "1";
   const ctx = canvas.getContext("2d");
-  const cx = 110, cy = 110, r = 108;
-  const img = ctx.createImageData(220, 220);
-  for (let y = 0; y < 220; y++) {
-    for (let x = 0; x < 220; x++) {
+  const size = canvas.width;
+  const cx = size / 2, cy = size / 2, r = size / 2 - 2;
+  const img = ctx.createImageData(size, size);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
       const dx = x - cx, dy = y - cy;
       const dist = Math.sqrt(dx * dx + dy * dy);
-      const idx = (y * 220 + x) * 4;
+      const idx = (y * size + x) * 4;
       if (dist <= r) {
-        let hue = (Math.atan2(dy, dx) * 180 / Math.PI + 360) % 360;
-        let sat = Math.min(1, dist / r);
-        const [cr, cg, cb] = hsvToRgbJS(hue, sat, 1.0);
+        const hue = (Math.atan2(dy, dx) * 180 / Math.PI + 360) % 360;
+        const [cr, cg, cb] = hsvToRgbJS(hue, Math.min(1, dist / r), 1.0);
         img.data[idx] = cr; img.data[idx + 1] = cg; img.data[idx + 2] = cb; img.data[idx + 3] = 255;
       } else {
         img.data[idx + 3] = 0;
@@ -4181,7 +3985,6 @@ function ensureColorWheelModal() {
     }
   }
   ctx.putImageData(img, 0, 0);
-
   let dragging = false;
   const pickAt = (ev) => {
     const rect = canvas.getBoundingClientRect();
@@ -4190,10 +3993,8 @@ function ensureColorWheelModal() {
     const dx = x - cx, dy = y - cy;
     const dist = Math.min(r, Math.sqrt(dx * dx + dy * dy));
     const hue = (Math.atan2(dy, dx) * 180 / Math.PI + 360) % 360;
-    const sat = dist / r;
-    const [cr, cg, cb] = hsvToRgbJS(hue, sat, 1.0);
-    const hex = "#" + [cr, cg, cb].map(v => v.toString(16).padStart(2, "0")).join("").toUpperCase();
-    setCwHex(hex);
+    const [cr, cg, cb] = hsvToRgbJS(hue, dist / r, 1.0);
+    setCwHex("#" + [cr, cg, cb].map(v => v.toString(16).padStart(2, "0")).join("").toUpperCase());
   };
   canvas.addEventListener("mousedown", (e) => { dragging = true; pickAt(e); });
   window.addEventListener("mousemove", (e) => { if (dragging) pickAt(e); });
@@ -4218,10 +4019,10 @@ function hsvToRgbJS(h, s, v) {
 }
 
 function setCwHex(hex) {
-  cwSelectedHex = hex.toUpperCase();
+  cwSelectedHex = String(hex || "").toUpperCase();
   const prev = doc.getElementById("latter-cw-preview");
   const inp = doc.getElementById("latter-cw-hex");
-  if (prev) prev.style.background = cwSelectedHex;
+  if (prev) prev.style.setProperty("--swatch-color", cwSelectedHex);
   if (inp && getStudioActiveElement() !== inp) inp.value = cwSelectedHex;
 }
 
@@ -4230,24 +4031,23 @@ function onCwHexInput(val) {
   if (!v.startsWith("#")) v = "#" + v;
   if (/^#[0-9A-F]{6}$/.test(v)) {
     cwSelectedHex = v;
-    const prev = doc.getElementById("latter-cw-preview");
-    if (prev) prev.style.background = v;
+    doc.getElementById("latter-cw-preview")?.style.setProperty("--swatch-color", v);
   }
 }
 
 function openColorWheelModal(scope) {
-  ensureColorWheelModal();
+  initColorWheel();
   cwTargetScope = scope || "device";
-  const curHex = ((STATE && STATE.config && STATE.config.device_custom_color) || "#3898FF").toUpperCase();
-  setCwHex(curHex);
+  const pals = STATE?.system_config?.custom_palettes || [];
+  const start = STATE?.config?.device_custom_color || (pals[0] && pals[0].hex) || cssColorToHex(getComputedStyle(HOST_ELEMENT).getPropertyValue("--primary-color"));
+  setCwHex(start);
   const nameInp = doc.getElementById("latter-cw-name");
   if (nameInp) nameInp.value = "";
-  doc.getElementById("latter-cw-modal").style.display = "flex";
+  openDialog("latter-cw-modal");
 }
 
 function closeColorWheelModal() {
-  const m = doc.getElementById("latter-cw-modal");
-  if (m) m.style.display = "none";
+  closeDialog("latter-cw-modal");
 }
 
 async function saveSystemPalettes(pals) {
@@ -4313,42 +4113,33 @@ function renderCustomColorPalettes() {
   if (!STATE) return;
   const pals = STATE.system_config?.custom_palettes || [];
   const curHex = (STATE.config?.device_custom_color || "").toUpperCase();
-
   const sw = doc.getElementById("dev-color-swatch");
-  if (sw && curHex) sw.style.background = curHex;
-
+  if (sw && curHex) sw.style.setProperty("--swatch-color", curHex);
   const sel = doc.getElementById("dev-custom-palette-select");
   if (sel) {
     let optsHtml = "";
     if (curHex && !pals.some(p => (p.hex || "").toUpperCase() === curHex)) {
-      optsHtml += `<option value="${esc(curHex)}" selected>Active Custom (${esc(curHex)})</option>`;
+      optsHtml += `<option value="${esc(curHex)}" selected>Current (${esc(curHex)})</option>`;
     }
     for (const p of pals) {
       const h = (p.hex || "").toUpperCase();
-      const selAttr = (h === curHex) ? "selected" : "";
-      optsHtml += `<option value="${esc(h)}" ${selAttr}>${esc(p.name || h)} (${esc(h)})</option>`;
+      optsHtml += `<option value="${esc(h)}" ${h === curHex ? "selected" : ""}>${esc(p.name || h)} (${esc(h)})</option>`;
     }
-    optsHtml += `<option value="__new__">+ Create New Color (Wheel)...</option>`;
+    optsHtml += `<option value="__new__">Add a color…</option>`;
     sel.innerHTML = optsHtml;
   }
-
   const sysBox = doc.getElementById("sys-custom-palettes-list");
   if (sysBox) {
-    if (pals.length === 0) {
-      sysBox.innerHTML = `<p class="desc" style="margin:0;">No custom colors saved yet. Click "+ Open Color Wheel" to create one.</p>`;
-    } else {
-      sysBox.innerHTML = pals.map(p => {
-        const h = (p.hex || "").toUpperCase();
-        return `
-          <div style="display:inline-flex;align-items:center;gap:8px;padding:5px 11px;border-radius:18px;background:var(--input-bg);border:1px solid var(--border);">
-            <span style="width:14px;height:14px;border-radius:50%;background:${esc(h)};border:1px solid var(--border);"></span>
-            <strong style="font-size:12.5px;font-weight:500;">${esc(p.name || h)}</strong>
-            <code style="font-size:11px;opacity:0.75;">${esc(h)}</code>
-            <button type="button" class="btn-secondary" style="padding:2px 6px;font-size:11px;color:var(--danger);" title="Delete color" onclick="deleteCustomPalette(${jsArg(h)})">&times;</button>
-          </div>
-        `;
-      }).join("");
-    }
+    sysBox.innerHTML = pals.length
+      ? pals.map(p => {
+          const h = (p.hex || "").toUpperCase();
+          return settingsRowHtml(
+            `<span class="swatch" style="--swatch-color:${esc(h)}" aria-hidden="true"></span> ${esc(p.name || h)}`,
+            `<code>${esc(h)}</code>`,
+            iconButtonHtml(ICON_DELETE, `Delete color ${p.name || h}`, `deleteCustomPalette(${jsArg(h)})`, "danger")
+          );
+        }).join("")
+      : emptyStateHtml("No custom colors saved yet.");
   }
 }
 
@@ -4387,9 +4178,6 @@ function bindStudioGlobals() {
   window.deleteDeviceGroup = deleteDeviceGroup;
   window.deleteSavedProfile = deleteSavedProfile;
   window.deleteWallpaper = deleteWallpaper;
-  window.ensureAddDeviceModal = ensureAddDeviceModal;
-  window.ensureColorWheelModal = ensureColorWheelModal;
-  window.ensureRemoveDeviceModal = ensureRemoveDeviceModal;
   window.espAction = espAction;
   window.espNumber = espNumber;
   window.espSelect = espSelect;
@@ -4493,6 +4281,7 @@ class LatterStudio extends HTMLElement {
     if (!this._initialized) {
       this.shadowRoot.innerHTML = `<style>${STUDIO_STYLES}</style>${STUDIO_TEMPLATE}`;
       this._initialized = true;
+      bindDialogs();
       this._applyRoute();
     }
     if (this._hass) {
