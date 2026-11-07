@@ -17,6 +17,7 @@ The address bar follows the page you're on (for example `/latter/devices/<id>/di
 Settings here live in `.storage/latter.site` and apply to every device.
 
 ### System overview
+- **Issues:** every Latter repair that's open in Home Assistant (crashes, brownouts, firmware rollbacks, missing entities, BLE proxies, Music Assistant links), with the device it belongs to. **Open Repairs** opens Home Assistant's Repairs page, where you fix them.
 - **System:** the Latter version, a **Check for Updates** button for device firmware, and counts of online devices, Latter devices, BLE-tracked devices, devices with an assigned person, and BLE area proxies. Each count opens the matching device list or page.
 - **Configured Integrations:** how many remotes, volume overrides, cameras, calendars, groups, and saved profiles are set up.
 
@@ -57,17 +58,17 @@ Settings here live in `.storage/latter.site` and apply to every device.
 
 ## Devices
 
-The **All Devices** page lists onboarded devices. **Add BLE Device** adds a BLE phone, watch, or tag as a **BLE tag** entry (you can also add one from **Settings → Devices & Services → Latter → Add BLE tag**). Latter devices are added through Home Assistant's ESPHome discovery. What a device can do comes from its hardware manifest (display, roaming, wearable), not from a type setting. → [Existing ESPHome devices](existing-esphome.md)
+The **All Devices** page lists onboarded devices. **Add BLE Device** adds a BLE phone, watch, or tag as a **BLE tag** entry (you can also add one from **Settings → Devices & Services → Latter → Add BLE tag**). **Add display** opens Latter in Home Assistant, where **Add Device** adds a Latter display (Home Assistant's ESPHome discovery offers new displays too). What a device can do comes from its hardware manifest (display, roaming, wearable), not from a type setting. → [Existing ESPHome devices](existing-esphome.md)
 
 Each device has five pages. The options on each page depend on what the device's hardware reports. A headless sensor won't show display settings.
 
 | Page | Contents |
 | :--- | :--- |
-| **Overview** | Quick actions, power profile, apply a profile, assigned person, and device status. A value the device hasn't reported shows as —. |
+| **Overview** | A **Needs attention** banner when the device has open repairs; battery, Wi-Fi and firmware; **Now** (the device's Area, its active speaker and what's playing); device status; quick actions, power profile, apply a profile, and assigned person. A value the device hasn't reported shows as —. |
 | **Display & Home** | Color profile, home dock apps and their order, and wallpapers (5 built-in presets, plus uploads that can rotate on a schedule). Screen shape and resolution come from the device's hardware manifest. |
 | **Audio & Voice** | Wake word and sensitivity, default speaker, the device's **Music Assistant player** (its link to Music Assistant, needed for library playback), alert volume, and music sorting |
 | **Power & Battery** | Sleep and wake timeouts, plus battery and power readings |
-| **Device settings** | Device slug (read-only: the ESPHome node name), group, and area cards per page; BLE tracking settings (the BLE presence beacon follows **Enable BLE Proxy Area Tracking** and is shown read-only); diagnostics and the raw entity inspector; **Reset to Defaults** (**Reset…**); and **Remove Device** (**Remove…**) |
+| **Device settings** | Device slug (read-only: the ESPHome node name), group, and area cards per page; BLE tracking settings (the BLE presence beacon follows **Enable BLE Proxy Area Tracking** and is shown read-only); diagnostics and the raw entity inspector; **In Home Assistant** (**Open in Home Assistant** for the ESPHome device page, **Download diagnostics**, and **Replace hardware**, which opens Latter in Home Assistant to reconfigure or replace the device's hardware); **Reset to Defaults** (**Reset…**); and **Remove Device** (**Remove…**) |
 
 **Reset…** opens a confirmation with two options, both on by default: **Device settings** (erases everything saved on the device; it restarts) and **Latter options for this Device**. Wi-Fi and pairing are kept, as are the device's ESPHome binding and Music Assistant player link. It does the same as the [`latter.reset_device`](reference/services.md#latterreset_device) service; BLE tags only offer the Latter options.
 

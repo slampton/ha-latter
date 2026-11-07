@@ -555,7 +555,7 @@ const STUDIO_STYLES = `
   }
   .stat-grid {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
     gap: var(--studio-space-3);
   }
   .stat {
@@ -835,6 +835,8 @@ const STUDIO_STYLES = `
   }
   .alert-error { border-left-color: var(--studio-error); background: var(--studio-error-tint); }
   .alert-warning { border-left-color: var(--studio-warning); background: var(--studio-warning-tint); }
+  .alert-body { display: flex; flex-direction: column; gap: var(--studio-space-1); min-width: 0; }
+  .alert-list { margin: 0; padding-left: var(--studio-space-5); }
   .toast {
     position: fixed;
     right: var(--studio-space-5);
@@ -980,6 +982,16 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
 
       <!-- SYSTEM: SYSTEM OVERVIEW -->
       <section id="view-system_overview" class="hidden">
+        <div class="card" id="card-issues">
+          <div class="card-header">
+            <div class="card-heading">
+              <h3 class="card-title">Issues</h3>
+              <p class="card-description">Latter's repairs, the same ones Home Assistant lists in Settings › Repairs.</p>
+            </div>
+            <div class="card-header-actions"><button type="button" class="btn btn-secondary btn-compact" onclick="openHaPage('/config/repairs')">Open Repairs</button></div>
+          </div>
+          <div class="card-content"><div id="sys-issues-list" class="settings-list"></div></div>
+        </div>
         <div class="grid-2">
           <div class="card">
             <div class="card-header">
@@ -1319,10 +1331,11 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
           <div class="card-header">
             <div class="card-heading">
               <h3 class="card-title">All Devices</h3>
-              <p class="card-description">Open a Device to manage it. Latter displays are added through Home Assistant's ESPHome discovery; BLE phones, watches and tags can be added here.</p>
+              <p class="card-description">Open a Device to manage it. Add display opens Latter in Home Assistant, where you choose Add Device. BLE phones, watches and tags are added here.</p>
             </div>
             <div class="card-header-actions">
               <select id="device-category-filter" aria-label="Device category" onchange="onFilterDeviceCategory(this.value)"></select>
+              <button type="button" class="btn btn-secondary" onclick="openHaPage('/config/integrations/integration/latter')">Add display</button>
               <button type="button" class="btn btn-primary" onclick="openAddDeviceModal()">Add BLE Device</button>
             </div>
           </div>
@@ -1332,30 +1345,27 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
 
       <!-- DEVICE: OVERVIEW -->
       <section id="view-dashboard" class="hidden">
+        <div id="dash-health" class="hidden"></div>
         <div class="stat-grid">
-          <div class="stat"><span id="st-area-label">Area</span><strong id="st-area">—</strong></div>
-          <div class="stat"><span>Battery / Power</span><strong id="st-battery">—</strong></div>
-          <div class="stat"><span>Wi-Fi Signal</span><strong id="st-wifi">—</strong></div>
-          <div class="stat"><span>Firmware Version</span><strong id="st-fw-version">—</strong></div>
+          <div class="stat"><span>Battery</span><strong id="st-battery">—</strong></div>
+          <div class="stat"><span>Wi-Fi signal</span><strong id="st-wifi">—</strong></div>
+          <div class="stat"><span>Firmware</span><strong id="st-fw-version">—</strong></div>
         </div>
         <div class="grid-2">
           <div class="card">
             <div class="card-header"><div class="card-heading">
-              <h3 class="card-title">Quick Actions</h3>
-              <p class="card-description">Run a Device action, or apply a saved configuration profile.</p>
+              <h3 class="card-title">Now</h3>
+              <p class="card-description">Where this Device is and what it's playing.</p>
             </div></div>
-            <div class="card-content">
-              <div id="dash-quick-actions" class="input-action-row"></div>
-              <div class="settings-list">
-                <div class="settings-row hidden" id="dash-power-profile-wrap"><div class="settings-row-text"><label class="row-label" for="dash-power-profile-select">Sleep &amp; Wake power profile</label></div><div class="settings-row-control"><select id="dash-power-profile-select" onchange="if (this.dataset.ent) espSelect(this.dataset.ent, this.value)"></select></div></div>
-                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="quick-profile-select">Configuration profile</label></div><div class="settings-row-control"><select id="quick-profile-select"></select><button type="button" class="btn btn-secondary" onclick="applyQuickProfileFromOverview()">Apply</button></div></div>
-                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-assigned_person">Assigned person</label><p class="row-description">Creates <code>sensor.&lt;person&gt;_current_area</code>.</p></div><div class="settings-row-control"><select id="cfg-assigned_person" onchange="onAssignedPersonChanged(this.value)"></select></div></div>
-              </div>
+            <div class="card-content kv-list">
+              <div class="kv-row"><span id="st-area-label">Area</span><strong id="st-area">—</strong></div>
+              <div class="kv-row"><span>Speaker</span><strong id="now-speaker">—</strong></div>
+              <div class="kv-row"><span>Now playing</span><strong id="now-playing">—</strong></div>
             </div>
           </div>
 
           <div class="card">
-            <div class="card-header"><div class="card-heading"><h3 class="card-title">Device Status</h3></div></div>
+            <div class="card-header"><div class="card-heading"><h3 class="card-title">Device status</h3></div></div>
             <div class="card-content kv-list">
               <div class="kv-row"><span>Hardware model</span><strong id="dash-hw-model">—</strong></div>
               <div class="kv-row"><span>IP address</span><strong id="dash-ip-addr">—</strong></div>
@@ -1365,7 +1375,21 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
             </div>
             <div class="card-actions">
               <button type="button" class="btn btn-text" onclick="navigateToView('system')">Device settings</button>
-              <button type="button" class="btn btn-secondary" onclick="exportBackupToComputer('device')">Download Backup</button>
+              <button type="button" class="btn btn-secondary" onclick="exportBackupToComputer('device')">Download backup</button>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><div class="card-heading">
+            <h3 class="card-title">Quick actions</h3>
+            <p class="card-description">Run a Device action, or apply a saved configuration profile.</p>
+          </div></div>
+          <div class="card-content">
+            <div id="dash-quick-actions" class="input-action-row"></div>
+            <div class="settings-list">
+              <div class="settings-row hidden" id="dash-power-profile-wrap"><div class="settings-row-text"><label class="row-label" for="dash-power-profile-select">Sleep &amp; wake power profile</label></div><div class="settings-row-control"><select id="dash-power-profile-select" onchange="if (this.dataset.ent) espSelect(this.dataset.ent, this.value)"></select></div></div>
+              <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="quick-profile-select">Configuration profile</label></div><div class="settings-row-control"><select id="quick-profile-select"></select><button type="button" class="btn btn-secondary" onclick="applyQuickProfileFromOverview()">Apply</button></div></div>
+              <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-assigned_person">Assigned person</label><p class="row-description">Creates <code>sensor.&lt;person&gt;_current_area</code>.</p></div><div class="settings-row-control"><select id="cfg-assigned_person" onchange="onAssignedPersonChanged(this.value)"></select></div></div>
             </div>
           </div>
         </div>
@@ -1555,6 +1579,27 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
             <div id="raw-entity-items" class="settings-list"></div>
           </div>
         </details>
+
+        <div class="card" id="card-device-ha">
+          <div class="card-header"><div class="card-heading">
+            <h3 class="card-title">In Home Assistant</h3>
+            <p class="card-description">This Device's own pages in Home Assistant.</p>
+          </div></div>
+          <div class="card-content settings-list">
+            <div class="settings-row" id="row-open-in-ha">
+              <div class="settings-row-text"><span class="row-label">Device page</span><p class="row-description">Every entity of the ESPHome device, its logs and its firmware update.</p></div>
+              <div class="settings-row-control"><button type="button" class="btn btn-secondary btn-compact" onclick="openDeviceInHa()">Open in Home Assistant</button></div>
+            </div>
+            <div class="settings-row" id="row-diagnostics">
+              <div class="settings-row-text"><span class="row-label">Diagnostics</span><p class="row-description">A JSON file for troubleshooting, with private values redacted.</p></div>
+              <div class="settings-row-control"><button type="button" class="btn btn-secondary btn-compact" onclick="downloadDeviceDiagnostics()">Download diagnostics</button></div>
+            </div>
+            <div class="settings-row" id="row-replace-hardware">
+              <div class="settings-row-text"><span class="row-label">Replace hardware</span><p class="row-description">Opens Latter in Home Assistant. On this Device, choose Reconfigure or Replace Hardware; its settings move to the new hardware.</p></div>
+              <div class="settings-row-control"><button type="button" class="btn btn-secondary btn-compact" onclick="openHaPage('/config/integrations/integration/latter')">Open Latter</button></div>
+            </div>
+          </div>
+        </div>
 
         <div class="card">
           <div class="card-header">
@@ -1940,17 +1985,109 @@ function renderLogsView() {
     : "No matching log entries.";
 }
 
-function openNativeHaLogs(filterTerm) {
-  const q = filterTerm ? `?filter=${encodeURIComponent(filterTerm)}` : "";
-  const targetPath = `/config/logs${q}`;
+// Home Assistant's own pages open in the same tab, the way HA's panels navigate (history API +
+// location-changed); Back returns to Studio.
+function openHaPage(path) {
+  try {
+    window.history.pushState(null, "", path);
+  } catch (_e) {
+    window.location.assign(path);
+    return;
+  }
+  window.dispatchEvent(new CustomEvent("location-changed", {detail: {replace: false}}));
+}
 
-  window.open(targetPath, "_blank");
+function openNativeHaLogs(filterTerm) {
+  openHaPage(`/config/logs${filterTerm ? `?filter=${encodeURIComponent(filterTerm)}` : ""}`);
 }
 
 function openNativeHaIntegrations() {
-  const targetPath = "/config/integrations/integration/latter";
+  openHaPage("/config/integrations/integration/latter");
+}
 
-  window.open(targetPath, "_blank");
+function openDeviceInHa() {
+  const devId = STATE?.links?.esphome_device_id;
+  if (!devId) {
+    showToast("This Device has no ESPHome device in Home Assistant", "error");
+    return;
+  }
+  openHaPage(`/config/devices/device/${encodeURIComponent(devId)}`);
+}
+
+// Device diagnostics come from Home Assistant's diagnostics API, opened through a short-lived signed path.
+async function downloadDeviceDiagnostics() {
+  const links = STATE?.links || {};
+  if (!links.entry_id || !links.latter_device_id) {
+    showToast("Diagnostics aren't available until the Device is set up", "error");
+    return;
+  }
+  const signed = await callStudioWS({
+    type: "auth/sign_path",
+    path: `/api/diagnostics/config_entry/${links.entry_id}/device/${links.latter_device_id}`,
+    expires: 60
+  });
+  if (!signed?.path) return;
+  const a = document.createElement("a");
+  a.href = signed.path;
+  a.download = "";
+  a.classList.add("offscreen");
+  SHADOW_ROOT.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+// Messages for Latter's repairs (kind = the repair's translation key in strings.json).
+const ISSUE_TEXT = {
+  link_ma_player: () => "Not linked to its Music Assistant player.",
+  missing_mapped_entity: (i) => `A chosen entity no longer exists${i.detail ? `: ${i.detail}` : ""}.`,
+  ble_no_proxies: () => "BLE Area tracking is on, but no Bluetooth proxy is assigned to an Area.",
+  slot_push_failing: () => "Latter can't send Area and browse pages to this Device.",
+  device_crashed: (i) => (i.detail === "stall"
+    ? "Restarted itself after its main loop stalled for 30 seconds."
+    : `Restarted after a crash${i.detail ? ` (${i.detail})` : ""}.`),
+  device_brownout: () => "Restarted after a power dip (brownout).",
+  firmware_rolled_back: () => "A firmware update failed to start; the previous firmware is running."
+};
+
+function issueMessage(issue) {
+  const fn = ISSUE_TEXT[issue.kind];
+  return fn ? fn(issue) : `Repair: ${issue.kind.replace(/_/g, " ")}.`;
+}
+
+function renderDeviceHealth() {
+  const box = doc.getElementById("dash-health");
+  if (!box) return;
+  const issues = (STATE?.issues || []).filter(i => i.subentry_id && i.subentry_id === STATE?.subentry_id);
+  if (!issues.length) {
+    box.className = "hidden";
+    box.innerHTML = "";
+    return;
+  }
+  const isError = issues.some(i => i.severity === "error" || i.severity === "critical");
+  box.className = `alert ${isError ? "alert-error" : "alert-warning"}`;
+  box.setAttribute("role", "alert");
+  box.innerHTML = `<div class="alert-body"><strong>Needs attention</strong>
+      <ul class="alert-list">${issues.map(i => `<li>${esc(issueMessage(i))}</li>`).join("")}</ul></div>
+    <button type="button" class="btn btn-secondary btn-compact" onclick="openHaPage('/config/repairs')">Open Repairs</button>`;
+}
+
+function renderSystemIssues() {
+  const box = doc.getElementById("sys-issues-list");
+  if (!box) return;
+  const issues = STATE?.issues || [];
+  box.innerHTML = issues.length
+    ? issues.map(i => {
+        const sev = (i.severity === "error" || i.severity === "critical") ? "chip-error" : "chip-warning";
+        const open = i.subentry_id
+          ? `<button type="button" class="btn btn-text btn-compact" onclick="switchSystemDevice(${jsArg(i.subentry_id)})">Open Device</button>`
+          : "";
+        return settingsRowHtml(
+          `${esc(i.device_title || "Latter")} <span class="chip ${sev}">${i.severity === "warning" ? "Warning" : "Error"}</span>`,
+          esc(issueMessage(i)),
+          open
+        );
+      }).join("")
+    : emptyStateHtml("No issues.");
 }
 
 async function clearInternalLogs() {
@@ -2423,11 +2560,10 @@ function renderSystemOverview(systemDevices, systemControls, cfg) {
   const cat = DEVICE_CATEGORY_FILTER || "all";
   const filteredDevices = allDevices.filter(d => {
     const isBleTag = d.kind === "ble_tag";
-    const isBleTracked = !!(d.has_ble || isBleTag || (d.area_label || "Roaming") === "Roaming");
     const isRoaming = isBleTag || !!d.is_roaming;
-    if (cat === "online") return d.status_label !== "Offline";
+    if (cat === "online") return !!d.is_online;
     if (cat === "native") return !!d.is_latter_native;
-    if (cat === "ble_tracked") return isBleTracked;
+    if (cat === "ble_tracked") return !!d.ble_tracked;
     if (cat === "assigned_person") return !!d.assigned_person;
     if (cat === "roaming") return isRoaming;
     if (cat === "stationary") return !isRoaming;
@@ -2484,18 +2620,17 @@ function renderSystemOverview(systemDevices, systemControls, cfg) {
   }
 
   // System overview counts
-  const onlineDevs = allDevices.filter(d => d.status_label !== "Offline").length;
+  const onlineDevs = allDevices.filter(d => d.is_online).length;
   const setSysTxt = (id, val) => {
     const el = doc.getElementById(id);
     if (el) el.textContent = String(val);
   };
-  const scannersMap = STATE?.live?.ble_scanners_map || {};
   setSysTxt("sys-sum-version", STATE?.version ? `v${String(STATE.version).replace(/^v/i, "")}` : "—");
   setSysTxt("sys-sum-online", `${onlineDevs} / ${allDevices.length}`);
   setSysTxt("sys-sum-native", allDevices.filter(d => d.is_latter_native).length);
-  setSysTxt("sys-sum-ble-tracked", allDevices.filter(d => d.has_ble || d.kind === "ble_tag" || (d.area_label || "Roaming") === "Roaming").length);
+  setSysTxt("sys-sum-ble-tracked", allDevices.filter(d => d.ble_tracked).length);
   setSysTxt("sys-sum-people", allDevices.filter(d => d.assigned_person).length);
-  setSysTxt("sys-sum-proxies", Object.keys(scannersMap).length || (STATE?.live?.ble_survey_rows || []).length);
+  setSysTxt("sys-sum-proxies", STATE?.ble_proxy_count ?? "—");
   const sysCfg = STATE?.system_config || {};
   setSysTxt("sys-sum-remotes", (sysCfg.remotes_list || []).length);
   setSysTxt("sys-sum-vol", (sysCfg.volume_overrides || []).length);
@@ -3820,17 +3955,29 @@ function applyStateToDom(data, forceFormUpdate=false) {
   const hasAssignedArea = !!curDevEntry.has_assigned_area;
   const isRoaming = !hasAssignedArea;
   const areaLblEl = doc.getElementById("st-area-label");
-  if (areaLblEl) areaLblEl.textContent = hasAssignedArea ? "Area" : "Current Area (Roaming)";
+  if (areaLblEl) areaLblEl.textContent = hasAssignedArea ? "Area" : "Current Area";
 
-  // 4 Hero Stat Boxes on Device Overview
+  // Overview stats and the Now card. Unknown renders as "—".
   const rawDevSw = String(live.device_sw_version || esp?.device?.sw_version || "").replace(/^v/i, "");
   doc.getElementById("st-area").textContent = hasAssignedArea ? (curDevEntry.area_label || areaName) : areaName;
+  const now = live.now || {};
+  doc.getElementById("now-speaker").textContent = now.speaker_name || "—";
+  const playing = [now.media_title, now.media_artist].filter(Boolean).join(" — ");
+  doc.getElementById("now-playing").textContent = playing
+    ? (now.media_state === "paused" ? `${playing} (paused)` : playing)
+    : (now.media_state ? "Nothing playing" : "—");
+  renderDeviceHealth();
+  renderSystemIssues();
+  const links = data.links || {};
+  doc.getElementById("row-open-in-ha")?.classList.toggle("hidden", !links.esphome_device_id);
+  doc.getElementById("row-diagnostics")?.classList.toggle("hidden", !links.latter_device_id);
+  doc.getElementById("row-replace-hardware")?.classList.toggle("hidden", isBleOnly);
   doc.getElementById("st-battery").textContent = batText;
   doc.getElementById("st-wifi").textContent = wifiText;
   const fwEl = doc.getElementById("st-fw-version");
   if (fwEl) {
     fwEl.textContent = rawDevSw
-      ? (live.fw_update_available ? `v${rawDevSw} (Update)` : `v${rawDevSw}`)
+      ? (live.fw_update_available ? `v${rawDevSw} (update available)` : `v${rawDevSw}`)
       : "—";
   }
 
@@ -4277,6 +4424,9 @@ function bindStudioGlobals() {
   window.openDevicesWithCategory = openDevicesWithCategory;
   window.openNativeHaIntegrations = openNativeHaIntegrations;
   window.openNativeHaLogs = openNativeHaLogs;
+  window.openHaPage = openHaPage;
+  window.openDeviceInHa = openDeviceInHa;
+  window.downloadDeviceDiagnostics = downloadDeviceDiagnostics;
   window.openSystemSection = openSystemSection;
   window.populateSelect = populateSelect;
   window.quickAdoptBleCandidate = quickAdoptBleCandidate;

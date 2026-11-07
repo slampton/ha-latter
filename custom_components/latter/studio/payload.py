@@ -16,12 +16,14 @@ from homeassistant.helpers import (
     area_registry as ar,
     device_registry as dr,
     entity_registry as er,
+    issue_registry as ir,
 )
 from homeassistant.util import dt as dt_util
 
 from ..area_engine import get_esphome_device_entities
 from ..backup_engine import get_device_groups_and_profiles
 from ..ble_engine import (
+    count_area_ble_proxies,
     get_all_areas_presence_summary,
     get_discovered_ble_candidates,
 )
@@ -53,6 +55,7 @@ from ..const import (
 )
 from ..coordinator import LatterCoordinator
 from ..identity import esphome_service
+from ..issue_ids import parse_device_issue_id
 from ..media_engine import ma_player_entities
 from ..system import get_latter_system
 from ..wallpaper_engine import list_wallpaper_catalog
@@ -388,6 +391,39 @@ def _build_entity_catalog(
     }
 
 
+def _build_issues(
+    hass: HomeAssistant, coords: list[LatterCoordinator]
+) -> list[dict[str, str]]:
+    """Return Latter's active Home Assistant repairs (the same ones Settings › Repairs shows).
+
+    `kind` is the repair's translation key; per-Device repairs name their Device. `detail` carries the
+    one placeholder Studio shows (the crash reason, or the list of missing entities).
+    """
+    by_sub = {c.subentry_id: c for c in coords}
+    out: list[dict[str, str]] = []
+    for issue in ir.async_get(hass).issues.values():
+        if issue.domain != DOMAIN or not issue.active or issue.dismissed_version is not None:
+            continue
+        parsed = parse_device_issue_id(issue.issue_id, set(by_sub))
+        kind, sub_id = parsed if parsed else (str(issue.translation_key or issue.issue_id), "")
+        placeholders = issue.translation_placeholders or {}
+        severity = getattr(issue.severity, "value", issue.severity)
+        out.append(
+            {
+                "issue_id": issue.issue_id,
+                "kind": kind,
+                "severity": str(severity or "warning"),
+                "subentry_id": sub_id,
+                "device_title": by_sub[sub_id].device_title if sub_id else "",
+                "detail": str(
+                    placeholders.get("reason") or placeholders.get("missing_list") or ""
+                ),
+            }
+        )
+    out.sort(key=lambda i: (i["device_title"].lower(), i["kind"]))
+    return out
+
+
 def _build_system_section(
     hass: HomeAssistant, current_subentry_id: str
 ) -> dict[str, Any]:
@@ -518,7 +554,11 @@ def _build_system_section(
             else None
         )
         c_has_assigned_area = a_obj is not None
-        c_area_label = a_obj.name if a_obj is not None else "Roaming"
+        c_area_label = (
+            a_obj.name
+            if a_obj is not None
+            else ("Roaming" if (c.is_roaming_device or c.is_ble_tag) else "")
+        )
 
         c_upd_st = c.device_state("update", "_project_firmware")
         c_has_update = bool(c_upd_st and c_upd_st.state == "on")
@@ -539,6 +579,7 @@ def _build_system_section(
                 and c._ble_tracker.packets_seen > 0
                 and not c_away
             )
+            c_is_online = c_seen
             c_status_label = (
                 f"Online ({c_area_name})"
                 if c_seen
@@ -565,6 +606,7 @@ def _build_system_section(
                 "has_assigned_area": c_has_assigned_area,
                 "area_label": c_area_label,
                 "status_label": c_status_label,
+                "is_online": c_is_online,
                 "kind": "ble_tag" if c.is_ble_tag else "device",
                 "has_display": c.has_display,
                 "is_roaming": c.is_roaming_device,
@@ -582,6 +624,7 @@ def _build_system_section(
                 "wifi_rssi": c_wifi_val,
                 "ip_address": c_ip_val,
                 "has_ble": c_has_ble,
+                "ble_tracked": bool(c.is_ble_tag or c.native_ble_tracking_enabled),
                 "ble_survey_rows": c_survey_rows,
                 "ble_packets_seen": c_packets_seen,
                 "is_current": c.subentry_id == current_subentry_id,
@@ -590,11 +633,14 @@ def _build_system_section(
 
     internal_logs = _get_combined_system_and_studio_logs(hass)
 
-    onboarded_slugs = {c.device_slug for c in _get_all_coordinators(hass)}
+    all_coords = _get_all_coordinators(hass)
+    onboarded_slugs = {c.device_slug for c in all_coords}
 
     return {
         "internal_logs": internal_logs,
         "system_devices": system_devices,
+        "issues": _build_issues(hass, all_coords),
+        "ble_proxy_count": count_area_ble_proxies(hass),
         "discovered_ble_devices": get_discovered_ble_candidates(
             hass,
             onboarded_slugs,
@@ -610,6 +656,35 @@ def _build_system_section(
         "system_config": system_settings_view(
             hass.data.get(DOMAIN, {}).get(DATA_GLOBAL_CONFIG) or {}
         ),
+    }
+
+
+def _build_now_playing(
+    hass: HomeAssistant, coordinator: LatterCoordinator
+) -> dict[str, str]:
+    """Return the Device's active speaker and what it's playing, read from Home Assistant ("" when unknown)."""
+    spk_id = coordinator.active_speaker or ""
+    st = hass.states.get(spk_id) if spk_id else None
+    if (
+        (st is None or st.state in ("unavailable", "unknown"))
+        and coordinator.is_local_speaker_entity(spk_id)
+        and coordinator.local_ma_speaker
+    ):
+        st = hass.states.get(coordinator.local_ma_speaker) or st
+    speaker_name = ""
+    if spk_id:
+        speaker_name = (
+            coordinator.device_title
+            if coordinator.is_local_speaker_entity(spk_id)
+            else str((st.attributes.get("friendly_name") if st else "") or spk_id)
+        )
+    media_state = st.state if st is not None and st.state not in ("unavailable", "unknown") else ""
+    active = media_state in ("playing", "paused", "buffering")
+    return {
+        "speaker_name": speaker_name,
+        "media_state": media_state,
+        "media_title": str(st.attributes.get("media_title") or "") if active and st else "",
+        "media_artist": str(st.attributes.get("media_artist") or "") if active and st else "",
     }
 
 
@@ -751,19 +826,37 @@ def build_studio_state_payload(
     fw_update_entity = str(update_items[0]["entity_id"]) if update_items else ""
     fw_latest_state = hass.states.get(fw_update_entity) if fw_update_entity else None
 
+    latter_idents = coordinator.get_device_info()["identifiers"]
+    latter_dev = next(
+        (
+            d
+            for d in dr.async_entries_for_config_entry(
+                dr.async_get(hass), coordinator.entry.entry_id
+            )
+            if d.identifiers & latter_idents
+        ),
+        None,
+    )
+
     return {
         **base,
         "capabilities": device_capabilities,
         "config": config_data,
         "esphome": esphome_inspector,
         "wallpapers": wallpapers_catalog,
+        # Home Assistant's own pages for this Device: its ESPHome device page and Latter's diagnostics.
+        "links": {
+            "entry_id": coordinator.entry.entry_id,
+            "esphome_device_id": coordinator.esphome_device_id or "",
+            "latter_device_id": latter_dev.id if latter_dev is not None else "",
+        },
         "live": {
             "active_area_name": str(area_attrs.get("area_name") or ""),
             "ble_closest_proxy": str(area_attrs.get("ble_closest_proxy") or ""),
             "ble_packets_seen": area_attrs.get("ble_packets_seen", 0),
             "ble_survey_rows": ble_survey_rows,
-            "ble_scanners_map": area_attrs.get("ble_scanners_map", {}),
             "area_presence_grid": presence_grid,
+            "now": _build_now_playing(hass, coordinator),
             "device_sw_version": fw_version,
             "fw_update_entity": fw_update_entity,
             "fw_update_available": any(it.get("state") == "on" for it in update_items),

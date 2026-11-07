@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import ast
 import importlib.util
+import json
 from pathlib import Path
 import sys
 import tempfile
@@ -32,6 +33,32 @@ def _load(name: str) -> ModuleType:
 settings = _load("studio/settings")
 scope = _load("studio/scope")
 assets = _load("studio/assets")
+issue_ids = _load("issue_ids")
+
+
+class TestIssueAttribution(unittest.TestCase):
+    """Studio's health banner and Issues card attribute each Latter repair to its Device."""
+
+    def test_every_device_issue_parses_back_to_its_device(self) -> None:
+        subs = {"01JABC", "01JXYZ"}
+        for issue_id in issue_ids.device_issue_ids("01JABC"):
+            parsed = issue_ids.parse_device_issue_id(issue_id, subs)
+            self.assertIsNotNone(parsed, issue_id)
+            self.assertEqual(parsed[1], "01JABC")
+            self.assertEqual(f"{parsed[0]}_01JABC", issue_id)
+        self.assertEqual(
+            issue_ids.parse_device_issue_id("device_crashed_01JXYZ", subs), ("device_crashed", "01JXYZ")
+        )
+        # Unknown Devices and non-Device repairs aren't attributed.
+        self.assertIsNone(issue_ids.parse_device_issue_id("device_crashed_01JGONE", subs))
+        self.assertIsNone(issue_ids.parse_device_issue_id("something_else", subs))
+
+    def test_kinds_match_the_repair_translations(self) -> None:
+        strings = json.loads((LATTER_DIR / "strings.json").read_text(encoding="utf-8"))
+        self.assertTrue(set(issue_ids.DEVICE_ISSUE_KINDS) <= set(strings["issues"]))
+        js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
+        for kind in issue_ids.DEVICE_ISSUE_KINDS:
+            self.assertIn(f"  {kind}: ", js, f"Studio has no message for the {kind} repair")
 
 
 class TestPanelCacheBuster(unittest.TestCase):

@@ -48,3 +48,22 @@ def device_issue_ids(subentry_id: str) -> list[str]:
         slot_push_failing_issue_id(subentry_id),
         *(device_health_issue_id(kind, subentry_id) for kind in DEVICE_HEALTH_ISSUE_KINDS),
     ]
+
+
+# Every per-Device issue kind; the issue ID is f"{kind}_{subentry_id}" for each of them.
+DEVICE_ISSUE_KINDS: tuple[str, ...] = (
+    "link_ma_player",
+    "missing_mapped_entity",
+    "ble_no_proxies",
+    "slot_push_failing",
+    *DEVICE_HEALTH_ISSUE_KINDS,
+)
+
+
+def parse_device_issue_id(issue_id: str, subentry_ids: set[str]) -> tuple[str, str] | None:
+    """Return (kind, subentry_id) for a per-Device issue of a known Device, else None."""
+    for kind in DEVICE_ISSUE_KINDS:
+        prefix = f"{kind}_"
+        if issue_id.startswith(prefix) and issue_id[len(prefix):] in subentry_ids:
+            return kind, issue_id[len(prefix):]
+    return None

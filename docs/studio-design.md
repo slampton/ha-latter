@@ -133,8 +133,9 @@ Studio has one implementation of each component. A new pattern is added here fir
 - **Empty state**: `emptyStateHtml()` renders `.empty-state`: a sentence that says what's missing and, where possible, how to add it. Never hidden.
 - **Loading state**: `.loading-state`, shown until the first payload arrives; the page is never pre-filled with fake values. If the first load fails, an `.alert.alert-error` with a Retry button replaces it.
 - **Error state**: every failed command shows an error toast (`.toast.error`) with the reason, from the one place that sends commands. A persistent problem (a Device health issue, a missing required entity) shows as an inline `.alert` (`.alert-warning`, `.alert-error`) in the card it affects.
-- **Buttons**: `.btn` plus one variant: `.btn-primary` (filled), `.btn-secondary` (outlined), `.btn-text` (tertiary), `.btn-danger` (outlined), `.btn-danger-filled` (only inside a confirmation dialog). At most **one primary button per card or view**; the page header's Save is the view's primary. Two sizes: regular, and `.btn-compact` for buttons inside rows. Icon-only buttons are `.btn-icon` (`.btn-icon.danger` for delete) and always have an `aria-label`.
+- **Buttons**: `.btn` plus one variant: `.btn-primary` (filled), `.btn-secondary` (outlined), `.btn-text` (tertiary), `.btn-danger` (outlined), `.btn-danger-filled` (only inside a confirmation dialog). At most **one primary button per card or view**; the page header's Save is the view's primary (D-009). Two sizes: regular, and `.btn-compact` for buttons inside rows. Icon-only buttons are `.btn-icon` (`.btn-icon.danger` for delete) and always have an `aria-label`.
 - **Dialogs**: a native `<dialog class="studio-dialog">`, opened with `openDialog()` and closed with `closeDialog()`. Esc closes it, focus moves into the dialog on open and returns to the opener on close. Confirmation dialogs say exactly what will happen.
+- **Health**: Studio shows Latter's Home Assistant repairs and nothing else as health: a Device's repairs as one inline alert at the top of its Overview, and every Latter repair in the System overview's Issues card. Both link to Home Assistant's Repairs page, where the repairs are fixed. Studio never computes a health warning of its own.
 - **Narrow layouts**: cards are size containers; below 520 px of card width, settings rows and list rows stack (a container query, not a viewport media query), so a card in a narrow column behaves like a card on a phone.
 
 ## 5. Navigation
@@ -171,6 +172,7 @@ Studio has one implementation of each component. A new pattern is added here fir
 - The backend never acts on a client-chosen `entity_id` or `src` that it hasn't validated. Device entity actions are limited to the bound Device's own entities; bulk System actions are limited to the shared controls the backend itself offers; image URLs are minted and signed by the backend.
 - Every Latter HTTP view requires a scoped, expiring HMAC signature (`resource_signing.py`). Studio never builds or signs a URL itself.
 - No Home Assistant frontend internals: no `hass-subpage`, no walking other components' shadow roots, no `localStorage.hassTokens`, no `fetch` with stored tokens.
+- Home Assistant's own pages (a device page, Repairs, the Latter integration, logs) open in the same tab with `openHaPage()` (the history API and a `location-changed` event, as Home Assistant's panels navigate), so Back returns to Studio. Studio never opens Home Assistant's dialogs or flows itself; it opens the page that has them. A download from a Home Assistant API (diagnostics) uses a short-lived path signed by Home Assistant's `auth/sign_path` command.
 - Studio uses its own CSS rather than Home Assistant's internal `ha-*` elements (`ha-card`, `ha-switch`, …), which aren't a stable public API. It looks like them by using the same theme variables.
 - One Save per scope: System settings and Device settings are saved by separate commands, and saving one never writes the other.
 
@@ -233,3 +235,10 @@ A standing decision stays in force until a new entry supersedes it. Changing one
 - **Why:** Two overlapping settings, one of them hidden, made the behavior impossible to predict.
 - **Alternatives:** Show both settings with honest labels.
 - **Status:** Accepted; pending the firmware change.
+
+### D-009: One primary button per card
+- **Date:** 2026-11-07
+- **Decision:** The page header's Save is the view's primary button. A card may have one primary button of its own when its single action is the card's purpose (Download, Restore, Send Notification, Upload Photo, Capture Profile). Every other button in a card is secondary, text or icon.
+- **Why:** The rule keeps the main action of each card obvious without turning a page of single-purpose cards into a page of secondary buttons.
+- **Alternatives:** One primary button per view (the header Save only; every card action secondary).
+- **Status:** Accepted.

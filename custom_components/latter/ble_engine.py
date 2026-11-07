@@ -254,6 +254,21 @@ def get_ble_proxy_area_ids(hass: HomeAssistant) -> set[str]:
     return proxy_areas
 
 
+def count_area_ble_proxies(hass: HomeAssistant) -> int:
+    """Return how many Bluetooth proxies/scanners resolve to a Home Assistant Area."""
+    count = 0
+    try:
+        from homeassistant.components import bluetooth
+
+        for scanner in bluetooth.async_current_scanners(hass):
+            source = str(getattr(scanner, "source", "") or "")
+            if source and _resolve_scanner_area_id(hass, source):
+                count += 1
+    except Exception:  # noqa: BLE001
+        pass
+    return count
+
+
 def get_all_scanners_diagnostic_map(hass: HomeAssistant) -> dict[str, str]:
     """Return a diagnostic dictionary of all registered HA Bluetooth scanners -> resolved Area name."""
     out: dict[str, str] = {}
