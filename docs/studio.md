@@ -6,6 +6,8 @@ Studio has two scopes, selected with the switcher at the top: **Devices** (where
 
 The **Save** button saves System settings and the open device's settings separately, so saving one never changes the other. If a save fails, Studio shows the reason in a red message at the bottom of the page.
 
+The address bar follows the page you're on (for example `/latter/devices/<id>/display` or `/latter/system/presence`), so reloading or pressing Back keeps your place, and you can bookmark a page. The **Visit** link on a Latter device's page in Home Assistant opens that device in Studio.
+
 <!-- MEDIA: docs/media/studio-overview.png — System → System overview. -->
 
 ---

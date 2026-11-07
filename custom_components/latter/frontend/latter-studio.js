@@ -2116,6 +2116,34 @@ function switchView(viewId, btnEl) {
     if (el) el.classList.toggle("hidden", id !== viewId);
   });
   updateUnifiedPageTitle(viewId);
+  syncUrlToView(viewId);
+}
+
+// The URL follows the page (/latter, /latter/devices/<id>[/<page>], /latter/system/<page>), so a reload or
+// Back keeps the user's place. Navigation uses the history API plus Home Assistant's location-changed event.
+const DEVICE_VIEW_SLUGS = {dashboard: "overview", home_display: "display", audio_voice: "audio", power: "power", system: "settings"};
+const SYSTEM_VIEW_SLUGS = {system_overview: "overview", shared_entities: "shared", remotes: "remotes", system_sync: "groups", area_tracking: "presence", system_admin: "settings"};
+const slugToView = (map, slug) => Object.keys(map).find(k => map[k] === slug);
+let ROUTE_APPLYING = false;
+
+function studioPathFor(viewId) {
+  const prefix = HOST_ELEMENT?.route?.prefix || "/latter";
+  if (SYSTEM_VIEW_SLUGS[viewId]) return `${prefix}/system/${SYSTEM_VIEW_SLUGS[viewId]}`;
+  if (viewId === "select_device_prompt" || !DEVICE_SELECTED || !ACTIVE_SUBENTRY_ID) return prefix;
+  const slug = DEVICE_VIEW_SLUGS[viewId] || "overview";
+  return `${prefix}/devices/${encodeURIComponent(ACTIVE_SUBENTRY_ID)}${slug === "overview" ? "" : `/${slug}`}`;
+}
+
+function syncUrlToView(viewId) {
+  if (ROUTE_APPLYING || !HOST_ELEMENT?.isConnected) return;
+  const path = studioPathFor(viewId);
+  if (window.location.pathname === path) return;
+  try {
+    window.history.pushState(null, "", path);
+  } catch (_e) {
+    return;
+  }
+  window.dispatchEvent(new CustomEvent("location-changed", {detail: {replace: false}}));
 }
 
 function navigateToView(viewId) {
@@ -4392,26 +4420,29 @@ class LatterStudio extends HTMLElement {
   }
 
   _applyRoute() {
-    const path = String((this._route && this._route.path) || window.location.pathname || "");
-    const devMatch = path.match(/\/devices\/([^/?#]+)/);
-    const params = new URLSearchParams(window.location.search);
-    const querySub = params.get("subentry_id") || params.get("device") || "";
-    if (devMatch && devMatch[1]) {
-      ACTIVE_SUBENTRY_ID = decodeURIComponent(devMatch[1]);
-      DEVICE_SELECTED = true;
-      setScope("device", "dashboard");
-      if (this._hass) {
-        this._resubscribe(true);
+    const parts = String((this._route && this._route.path) || "").split("/").filter(Boolean).map(decodeURIComponent);
+    ROUTE_APPLYING = true;
+    try {
+      if (parts[0] === "devices" && parts[1]) {
+        const viewId = slugToView(DEVICE_VIEW_SLUGS, parts[2] || "overview") || "dashboard";
+        const changed = ACTIVE_SUBENTRY_ID !== parts[1];
+        if (!changed && DEVICE_SELECTED && CURRENT_SCOPE === "device" && CURRENT_VIEW_ID === viewId) return;
+        ACTIVE_SUBENTRY_ID = parts[1];
+        DEVICE_SELECTED = true;
+        setScope("device", viewId);
+        if (changed && this._hass) {
+          this._resubscribe(true);
+        }
+      } else if (parts[0] === "system") {
+        const viewId = slugToView(SYSTEM_VIEW_SLUGS, parts[1] || "overview") || "system_overview";
+        if (CURRENT_SCOPE === "system" && CURRENT_VIEW_ID === viewId) return;
+        setScope("system", viewId);
+      } else {
+        DEVICE_SELECTED = false;
+        setScope("device", "select_device_prompt");
       }
-    } else if (querySub) {
-      ACTIVE_SUBENTRY_ID = querySub;
-      DEVICE_SELECTED = true;
-      setScope("device", "dashboard");
-      if (this._hass) {
-        this._resubscribe(true);
-      }
-    } else if (!DEVICE_SELECTED) {
-      setScope("device", "select_device_prompt");
+    } finally {
+      ROUTE_APPLYING = false;
     }
   }
 

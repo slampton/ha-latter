@@ -610,7 +610,8 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             manufacturer="Lampton Labs",
             model="Latter ESPHome Companion Middleware",
             sw_version=INTEGRATION_VERSION,
-            configuration_url="homeassistant://latter",
+            # Visit opens this Device in Latter Studio
+            configuration_url=f"homeassistant://latter/devices/{self.subentry_id}",
             **({"via_device_id": esp_dev_id} if esp_dev_id else {}),
         )
 
