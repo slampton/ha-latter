@@ -418,6 +418,7 @@ const STUDIO_STYLES = `
     gap: var(--studio-space-2);
   }
   .input-action-row > input, .input-action-row > select { flex: 1 1 180px; min-width: 0; }
+  .inline-switch { display: inline-flex; align-items: center; gap: var(--studio-space-2); cursor: pointer; white-space: nowrap; }
   .list-row {
     display: flex;
     align-items: flex-end;
@@ -998,8 +999,8 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
         <div class="grid-2">
           <div class="card">
             <div class="card-header">
-              <div class="card-heading"><h3 class="card-title">System</h3></div>
-              <div class="card-header-actions"><button type="button" class="btn btn-secondary btn-compact" onclick="checkSystemUpdates()">Check for Updates</button></div>
+              <div class="card-heading"><h3 class="card-title">System</h3><p class="card-description">Latter itself updates through HACS; the firmware check covers every Device.</p></div>
+              <div class="card-header-actions"><button type="button" class="btn btn-secondary btn-compact" onclick="checkSystemUpdates()">Check firmware updates</button></div>
             </div>
             <div class="card-content kv-list">
               <div class="kv-row"><span>Latter Version</span><strong id="sys-sum-version">—</strong></div>
@@ -1193,6 +1194,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
                   <option value="voice">Voice Assistant</option>
                   <option value="sound">Sound &amp; Alerts</option>
                   <option value="music">Music &amp; Media</option>
+                  <option value="area">Area &amp; Presence</option>
                   <option value="all">All Categories</option>
                 </select>
               </div>
@@ -1224,7 +1226,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
             </div>
             <div class="card-header-actions">
               <select id="ble-survey-device-picker" aria-label="Calibration Device" onchange="onSelectBleSurveyDevice(this.value)"></select>
-              <label class="input-action-row"><input type="checkbox" class="switch" role="switch" id="survey-fast-mode" onchange="toggleSurveyFastMode(this.checked)"><span>Fast refresh</span></label>
+              <label class="inline-switch"><input type="checkbox" class="switch" role="switch" id="survey-fast-mode" onchange="toggleSurveyFastMode(this.checked)"><span>Fast refresh</span></label>
             </div>
           </div>
           <div class="card-content"><div id="rssi-container" class="stack"></div></div>
@@ -2188,10 +2190,18 @@ async function triggerHeaderFirmwareUpdate() {
 }
 
 async function checkSystemUpdates() {
+  showToast("Checking every Device for firmware updates…");
   const data = await callStudioCommand({command: "check_system_updates"});
   if (data) {
     applyStateToDom(data, false);
-    showToast("Checking every Device for firmware updates");
+    const chk = data.update_check || {};
+    if (!chk.checked) {
+      showToast("No Device reports a firmware update entity");
+    } else if (chk.available) {
+      showToast(`Firmware updates available for ${fmtNumber(chk.available)} of ${fmtNumber(chk.checked)} Devices`);
+    } else {
+      showToast(`All ${fmtNumber(chk.checked)} Devices are up to date`);
+    }
   }
 }
 
@@ -2259,6 +2269,7 @@ function switchView(viewId, btnEl) {
     const el = doc.getElementById("view-" + id);
     if (el) el.classList.toggle("hidden", id !== viewId);
   });
+  if (viewId !== "area_tracking" && POLL_TIMER) stopSurveyFastMode();
   updateUnifiedPageTitle(viewId);
   syncUrlToView(viewId);
 }
@@ -2415,9 +2426,17 @@ function moveDockAppToken(tok, dir) {
 
 function toggleSurveyFastMode(enabled) {
   if (POLL_TIMER) clearInterval(POLL_TIMER);
-  const intervalMs = enabled ? 1500 : 5000;
-  POLL_TIMER = setInterval(() => refreshState(false), intervalMs);
-  if (enabled) refreshState(false);
+  POLL_TIMER = null;
+  if (!enabled) return;
+  POLL_TIMER = setInterval(() => refreshState(false), 1500);
+  refreshState(false);
+}
+
+// Fast refresh only polls while the BLE & Area Presence page is open.
+function stopSurveyFastMode() {
+  const sw = doc.getElementById("survey-fast-mode");
+  if (sw) sw.checked = false;
+  toggleSurveyFastMode(false);
 }
 
 function renderRssiBars(surveyRows, packetsSeen) {
@@ -2698,7 +2717,7 @@ function renderSystemOverview(systemDevices, systemControls, cfg) {
           ).join("");
           widget = `<select aria-label="${esc(fc.name)}" onchange="bulkSelect(${idsArg}, this.value)">${opts}</select>`;
         } else if (fc.domain === "switch") {
-          widget = `<input type="checkbox" class="switch" role="switch" aria-label="${esc(fc.name)}" ${curState === "on" ? "checked" : ""} onchange="bulkToggle(${idsArg}, this.checked ? 'turn_on' : 'turn_off')">`;
+          widget = `${mixed ? `<span class="chip">Mixed</span>` : ""}<input type="checkbox" class="switch" role="switch" aria-label="${esc(fc.name)}" ${curState === "on" ? "checked" : ""} onchange="bulkToggle(${idsArg}, this.checked ? 'turn_on' : 'turn_off')">`;
         } else if (fc.domain === "number") {
           const numVal = mixed ? (fc.min ?? 0) : (parseFloat(curState) || 0);
           widget = `<input type="range" aria-label="${esc(fc.name)}" min="${esc(fc.min ?? 0)}" max="${esc(fc.max ?? 100)}" step="${esc(fc.step ?? 1)}" value="${esc(numVal)}" onchange="bulkNumber(${idsArg}, this.value)"><span class="chip">${esc(mixed ? "Mixed" : `${curState} ${fc.unit || ""}`.trim())}</span>`;

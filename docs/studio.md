@@ -18,7 +18,7 @@ Settings here live in `.storage/latter.site` and apply to every device.
 
 ### System overview
 - **Issues:** every Latter repair that's open in Home Assistant (crashes, brownouts, firmware rollbacks, missing entities, BLE proxies, Music Assistant links), with the device it belongs to. **Open Repairs** opens Home Assistant's Repairs page, where you fix them.
-- **System:** the Latter version, a **Check for Updates** button for device firmware, and counts of online devices, Latter devices, BLE-tracked devices, devices with an assigned person, and BLE area proxies. Each count opens the matching device list or page.
+- **System:** the Latter version (Latter itself updates through HACS), **Check firmware updates**, which asks every device for a firmware update and says how many have one, and counts of online devices, Latter devices, BLE-tracked devices, devices with an assigned person, and BLE area proxies. Each count opens the matching device list or page.
 - **Configured Integrations:** how many remotes, volume overrides, cameras, calendars, groups, and saved profiles are set up.
 
 ### Shared Entities
@@ -38,10 +38,11 @@ Settings here live in `.storage/latter.site` and apply to every device.
 ### Groups & Profiles
 - **Configuration Profiles:** choose a device and capture its display, dock, wake word, and timeout settings, then apply them to one device, a group, or all devices.
 - **Device Groups:** logical groupings such as handhelds, bedrooms, or wall panels, used for organization and when applying profiles.
+- **Bulk Device Controls:** change a display, sleep, voice, sound, music, or Area setting on every device in a group (or all roaming or stationary devices) at once. When the devices disagree, the control shows **Mixed**.
 
 ### BLE & Area Presence
 - **Live Area Presence & Sensor Fusion:** per-area occupancy, the devices and people in each area, and each area's fusion mode. **Fusion settings** under each area set the occupancy threshold (weighted mode, 20 to 95%) and which of the area's sensors count (none picked means all of them). Changes apply at once.
-- **Per-Area BLE Signal Calibration:** live raw and effective RSSI per area for a selected device. Includes **Calibrate Current Area**, ±1 dB adjustment, and a **Fast refresh** switch (updates every 1.5 s).
+- **Per-Area BLE Signal Calibration:** live raw and effective RSSI per area for a selected device. Includes **Calibrate Current Area**, ±1 dB adjustment, and a **Fast refresh** switch (updates every 1.5 s while the page is open; off, the page updates when something changes).
 - **Discovered Nearby Bluetooth Devices:** named BLE devices, `private_ble_device` entities, and iBeacons your scanners can hear. **Adopt** one to track it as its own Latter device.
 
 → [Presence guide](presence.md)

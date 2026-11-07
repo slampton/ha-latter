@@ -7,6 +7,7 @@ Studio's selected Device (a System command that acts on one Device names it in i
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from typing import Any
@@ -314,18 +315,40 @@ async def _async_execute_studio_command(
         )
 
     elif cmd == "check_system_updates":
-        update_ids = [
-            e.entity_id
-            for c in _get_all_coordinators(hass)
-            for e in device_entities(hass, c.esphome_device_id, domain="update")
-        ]
-        if update_ids and hass.services.has_service("homeassistant", "update_entity"):
-            await hass.services.async_call(
-                "homeassistant",
-                "update_entity",
-                {"entity_id": update_ids},
-                blocking=False,
-            )
+        # Device firmware only: Latter itself updates through HACS.
+        coords = [c for c in _get_all_coordinators(hass) if not c.is_ble_tag]
+        update_ids = {
+            c.subentry_id: [
+                e.entity_id
+                for e in device_entities(hass, c.esphome_device_id, domain="update")
+            ]
+            for c in coords
+        }
+        all_ids = [eid for ids in update_ids.values() for eid in ids]
+        if all_ids:
+            try:
+                async with asyncio.timeout(30):
+                    await hass.services.async_call(
+                        "homeassistant",
+                        "update_entity",
+                        {"entity_id": all_ids},
+                        blocking=True,
+                    )
+            except TimeoutError:
+                raise StudioCommandError(
+                    "timeout", "The firmware check took longer than 30 seconds; try again"
+                ) from None
+        extra["update_check"] = {
+            "checked": sum(1 for ids in update_ids.values() if ids),
+            "available": sum(
+                1
+                for ids in update_ids.values()
+                if any(
+                    (st := hass.states.get(eid)) is not None and st.state == "on"
+                    for eid in ids
+                )
+            ),
+        }
 
     elif cmd == "upload_wallpaper":
         filename = str(body.get("filename") or "wallpaper.jpg")
