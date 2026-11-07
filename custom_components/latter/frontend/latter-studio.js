@@ -937,7 +937,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
     <span>Latter</span>
   </div>
   <div class="titlebar-actions">
-    <button type="button" id="hdr-update-pill" class="btn btn-secondary btn-compact hidden" onclick="triggerHeaderFirmwareUpdate()">Update Available</button>
+    <button type="button" id="hdr-update-pill" class="btn btn-secondary btn-compact hidden" onclick="triggerHeaderFirmwareUpdate()">Install update</button>
     <span id="dirty-indicator" class="chip chip-warning hidden">Unsaved</span>
     <button type="button" id="btn-save-changes" class="btn btn-primary" disabled onclick="saveAllConfig()">Saved</button>
   </div>
@@ -951,10 +951,10 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
 
     <nav class="nav-list hidden" id="nav-scope-system" aria-label="System pages">
       <button class="nav-btn" data-view="system_overview" onclick="switchView('system_overview', this)"><span>System overview</span></button>
-      <button class="nav-btn" data-view="shared_entities" onclick="switchView('shared_entities', this)"><span>Shared Entities</span></button>
-      <button class="nav-btn" data-view="remotes" onclick="switchView('remotes', this)"><span>Media &amp; Remotes</span></button>
-      <button class="nav-btn" data-view="system_sync" onclick="switchView('system_sync', this)"><span>Groups &amp; Profiles</span></button>
-      <button class="nav-btn" data-view="area_tracking" onclick="switchView('area_tracking', this)"><span>BLE &amp; Area Presence</span></button>
+      <button class="nav-btn" data-view="shared_entities" onclick="switchView('shared_entities', this)"><span>Shared entities</span></button>
+      <button class="nav-btn" data-view="remotes" onclick="switchView('remotes', this)"><span>Media &amp; remotes</span></button>
+      <button class="nav-btn" data-view="system_sync" onclick="switchView('system_sync', this)"><span>Groups &amp; profiles</span></button>
+      <button class="nav-btn" data-view="area_tracking" onclick="switchView('area_tracking', this)"><span>BLE &amp; Area presence</span></button>
       <button class="nav-btn" data-view="system_admin" onclick="switchView('system_admin', this)"><span>System settings</span></button>
     </nav>
 
@@ -968,9 +968,9 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
       <button class="nav-btn nav-back-btn" onclick="openDevicesLanding()"><span>&larr; All Devices</span></button>
       <div class="nav-device-title" id="nav-selected-device-label">—</div>
       <button class="nav-btn" data-view="dashboard" onclick="switchView('dashboard', this)"><span>Overview</span></button>
-      <button class="nav-btn" id="nav-btn-home_display" data-view="home_display" onclick="switchView('home_display', this)"><span>Display &amp; Home</span></button>
-      <button class="nav-btn" id="nav-btn-audio_voice" data-view="audio_voice" onclick="switchView('audio_voice', this)"><span>Audio &amp; Voice</span></button>
-      <button class="nav-btn" id="nav-btn-power" data-view="power" onclick="switchView('power', this)"><span>Power &amp; Battery</span></button>
+      <button class="nav-btn" id="nav-btn-home_display" data-view="home_display" onclick="switchView('home_display', this)"><span>Display &amp; home</span></button>
+      <button class="nav-btn" id="nav-btn-audio_voice" data-view="audio_voice" onclick="switchView('audio_voice', this)"><span>Audio &amp; voice</span></button>
+      <button class="nav-btn" id="nav-btn-power" data-view="power" onclick="switchView('power', this)"><span>Power &amp; battery</span></button>
       <button class="nav-btn" data-view="system" onclick="switchView('system', this)"><span>Device settings</span><span class="nav-badge" id="nav-esp-badge">—</span></button>
     </nav>
   </aside>
@@ -1003,22 +1003,22 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
               <div class="card-header-actions"><button type="button" class="btn btn-secondary btn-compact" onclick="checkSystemUpdates()">Check firmware updates</button></div>
             </div>
             <div class="card-content kv-list">
-              <div class="kv-row"><span>Latter Version</span><strong id="sys-sum-version">—</strong></div>
-              <button type="button" class="kv-row" onclick="openDevicesWithCategory('online')"><span>Online / Active Devices</span><strong id="sys-sum-online">—</strong></button>
-              <button type="button" class="kv-row" onclick="openDevicesWithCategory('native')"><span>Latter Native Devices</span><strong id="sys-sum-native">—</strong></button>
-              <button type="button" class="kv-row" onclick="openDevicesWithCategory('ble_tracked')"><span>BLE Tracked Devices</span><strong id="sys-sum-ble-tracked">—</strong></button>
+              <div class="kv-row"><span>Latter version</span><strong id="sys-sum-version">—</strong></div>
+              <button type="button" class="kv-row" onclick="openDevicesWithCategory('online')"><span>Online Devices</span><strong id="sys-sum-online">—</strong></button>
+              <button type="button" class="kv-row" onclick="openDevicesWithCategory('native')"><span>Latter-native Devices</span><strong id="sys-sum-native">—</strong></button>
+              <button type="button" class="kv-row" onclick="openDevicesWithCategory('ble_tracked')"><span>BLE-tracked Devices</span><strong id="sys-sum-ble-tracked">—</strong></button>
               <button type="button" class="kv-row" onclick="openDevicesWithCategory('assigned_person')"><span>Devices with an assigned person</span><strong id="sys-sum-people">—</strong></button>
-              <button type="button" class="kv-row" onclick="openSystemSection('area_tracking', '')"><span>BLE Area Proxies</span><strong id="sys-sum-proxies">—</strong></button>
+              <button type="button" class="kv-row" onclick="openSystemSection('area_tracking', '')"><span>BLE Area proxies</span><strong id="sys-sum-proxies">—</strong></button>
             </div>
           </div>
           <div class="card">
-            <div class="card-header"><div class="card-heading"><h3 class="card-title">Configured Integrations</h3></div></div>
+            <div class="card-header"><div class="card-heading"><h3 class="card-title">Configured integrations</h3></div></div>
             <div class="card-content kv-list">
-              <button type="button" class="kv-row" onclick="openSystemSection('remotes', 'card-remotes')"><span>Remote Controls</span><strong id="sys-sum-remotes">—</strong></button>
-              <button type="button" class="kv-row" onclick="openSystemSection('remotes', 'card-vol-overrides')"><span>Speaker Volume Overrides</span><strong id="sys-sum-vol">—</strong></button>
+              <button type="button" class="kv-row" onclick="openSystemSection('remotes', 'card-remotes')"><span>Remote controls</span><strong id="sys-sum-remotes">—</strong></button>
+              <button type="button" class="kv-row" onclick="openSystemSection('remotes', 'card-vol-overrides')"><span>Speaker volume overrides</span><strong id="sys-sum-vol">—</strong></button>
               <button type="button" class="kv-row" onclick="openSystemSection('shared_entities', 'card-cameras')"><span>Cameras</span><strong id="sys-sum-cameras">—</strong></button>
               <button type="button" class="kv-row" onclick="openSystemSection('shared_entities', 'card-calendars')"><span>Calendars</span><strong id="sys-sum-calendars">—</strong></button>
-              <button type="button" class="kv-row" onclick="openSystemSection('system_sync', '')"><span>Groups &amp; Saved Profiles</span><strong id="sys-sum-groups-profiles">—</strong></button>
+              <button type="button" class="kv-row" onclick="openSystemSection('system_sync', '')"><span>Groups &amp; saved profiles</span><strong id="sys-sum-groups-profiles">—</strong></button>
             </div>
           </div>
         </div>
@@ -1029,7 +1029,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
         <div class="grid-2">
           <div class="card">
             <div class="card-header"><div class="card-heading">
-              <h3 class="card-title">Whole-Home Entities</h3>
+              <h3 class="card-title">Whole-home entities</h3>
               <p class="card-description">Shared entities used by the Home screen and the Whole-Home Hub.</p>
             </div></div>
             <div class="card-content settings-list">
@@ -1044,7 +1044,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
 
           <div class="card" id="card-cameras">
             <div class="card-header"><div class="card-heading">
-              <h3 class="card-title">Cameras &amp; Doorbell Audio</h3>
+              <h3 class="card-title">Cameras &amp; doorbell audio</h3>
               <p class="card-description">Up to 10 cameras for the on-device Camera Carousel and doorbell popups. Devices can listen to a doorbell and reply by push-to-talk: your speech is transcribed and spoken on the camera's speaker with Home Assistant TTS.</p>
             </div></div>
             <div class="card-content">
@@ -1071,7 +1071,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
                 </div>
               </div>
               <div id="cameras-list" class="stack"></div>
-              <div><button type="button" class="btn btn-text" onclick="addCameraRow(''); markDirty('system');">+ Add Camera</button></div>
+              <div><button type="button" class="btn btn-text" onclick="addCameraRow(''); markDirty('system');">+ Add camera</button></div>
               <div id="cam-preview-box" class="cam-preview hidden">
                 <div class="signal-row-head">
                   <strong id="cam-preview-label">Camera preview</strong>
@@ -1094,7 +1094,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
             </div></div>
             <div class="card-content">
               <div id="calendars-list" class="stack"></div>
-              <div><button type="button" class="btn btn-text" onclick="addCalendarRow(''); markDirty('system');">+ Add Calendar</button></div>
+              <div><button type="button" class="btn btn-text" onclick="addCalendarRow(''); markDirty('system');">+ Add calendar</button></div>
             </div>
           </div>
         </div>
@@ -1104,36 +1104,36 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
       <section id="view-remotes" class="hidden">
         <div class="card" id="card-remotes">
           <div class="card-header"><div class="card-heading">
-            <h3 class="card-title">System Remote Inventory</h3>
-            <p class="card-description">Up to 10 <code>remote.*</code> or <code>media_player.*</code> entities. Organize them into Remote Groups below.</p>
+            <h3 class="card-title">Remote inventory</h3>
+            <p class="card-description">Up to 10 <code>remote.*</code> or <code>media_player.*</code> entities. Organize them into remote groups below.</p>
           </div></div>
           <div class="card-content">
             <div id="remotes-list" class="stack"></div>
-            <div><button type="button" class="btn btn-text" onclick="addRemoteControlRow(''); markDirty('system');">+ Add Remote Control</button></div>
+            <div><button type="button" class="btn btn-text" onclick="addRemoteControlRow(''); markDirty('system');">+ Add remote control</button></div>
           </div>
         </div>
 
         <div class="card" id="card-remote-groups">
           <div class="card-header"><div class="card-heading">
-            <h3 class="card-title">Remote Control Groups</h3>
+            <h3 class="card-title">Remote control groups</h3>
             <p class="card-description">Group remotes and assign a group to an Area (roaming Devices show that Area's remotes while they're in it) or to a Device.</p>
           </div></div>
           <div class="card-content">
             <div id="remote-groups-list" class="stack"></div>
-            <div><button type="button" class="btn btn-text" onclick="addRemoteGroupRow(); markDirty('system');">+ Create Remote Group</button></div>
-            <h4 class="subsection-title">Device Remote Assignment</h4>
+            <div><button type="button" class="btn btn-text" onclick="addRemoteGroupRow(); markDirty('system');">+ Create remote group</button></div>
+            <h4 class="subsection-title">Device remote assignment</h4>
             <div id="device-remote-assignments-list" class="settings-list"></div>
           </div>
         </div>
 
         <div class="card" id="card-vol-overrides">
           <div class="card-header"><div class="card-heading">
-            <h3 class="card-title">Speaker Volume Overrides</h3>
+            <h3 class="card-title">Speaker volume overrides</h3>
             <p class="card-description">When audio plays on a speaker, send its volume changes to a different media player or number entity instead.</p>
           </div></div>
           <div class="card-content">
             <div id="volume-overrides-list" class="stack"></div>
-            <div><button type="button" class="btn btn-text" onclick="addVolumeOverrideRow('', ''); markDirty('system');">+ Add Volume Override</button></div>
+            <div><button type="button" class="btn btn-text" onclick="addVolumeOverrideRow('', ''); markDirty('system');">+ Add volume override</button></div>
           </div>
         </div>
       </section>
@@ -1143,7 +1143,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
         <div class="grid-2">
           <div class="card">
             <div class="card-header"><div class="card-heading">
-              <h3 class="card-title">Configuration Profiles</h3>
+              <h3 class="card-title">Configuration profiles</h3>
               <p class="card-description">Capture a Device's settings as a reusable profile, or apply a profile to any Device or group.</p>
             </div></div>
             <div class="card-content">
@@ -1154,7 +1154,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
                 </div>
               </div>
             </div>
-            <div class="card-actions"><button type="button" class="btn btn-primary" onclick="captureDeviceProfile()">Capture Profile</button></div>
+            <div class="card-actions"><button type="button" class="btn btn-primary" onclick="captureDeviceProfile()">Capture profile</button></div>
             <div class="card-content">
               <div class="settings-list">
                 <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="profile-target-scope">Apply profiles to</label></div><div class="settings-row-control"><select id="profile-target-scope"></select></div></div>
@@ -1165,14 +1165,14 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
 
           <div class="card">
             <div class="card-header"><div class="card-heading">
-              <h3 class="card-title">Device Groups</h3>
+              <h3 class="card-title">Device groups</h3>
               <p class="card-description">Groups target profiles and bulk controls.</p>
             </div></div>
             <div class="card-content">
               <div class="input-action-row">
                 <input type="text" id="new-group-name" placeholder="New group name" aria-label="New group name">
                 <input type="text" id="new-group-desc" placeholder="Description" aria-label="Group description">
-                <button type="button" class="btn btn-secondary" onclick="createDeviceGroup()">Add Group</button>
+                <button type="button" class="btn btn-secondary" onclick="createDeviceGroup()">Add group</button>
               </div>
               <div id="device-groups-list" class="settings-list"></div>
             </div>
@@ -1181,7 +1181,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
 
         <details class="card">
           <summary class="card-header"><div class="card-heading">
-            <h3 class="card-title">Bulk Device Controls</h3>
+            <h3 class="card-title">Bulk Device controls</h3>
             <p class="card-description">Change display, sleep, voice, or sound settings on several Devices at once.</p>
           </div></summary>
           <div class="card-content">
@@ -1189,13 +1189,13 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
               <div class="stacked-field">
                 <label for="group-ctrl-cat-filter">Category</label>
                 <select id="group-ctrl-cat-filter" onchange="renderSystemOverview(STATE.system_devices, STATE.system_controls, STATE.config)">
-                  <option value="display">Display &amp; Appearance</option>
-                  <option value="sleep">Sleep &amp; Wake</option>
-                  <option value="voice">Voice Assistant</option>
-                  <option value="sound">Sound &amp; Alerts</option>
-                  <option value="music">Music &amp; Media</option>
-                  <option value="area">Area &amp; Presence</option>
-                  <option value="all">All Categories</option>
+                  <option value="display">Display &amp; appearance</option>
+                  <option value="sleep">Sleep &amp; wake</option>
+                  <option value="voice">Voice assistant</option>
+                  <option value="sound">Sound &amp; alerts</option>
+                  <option value="music">Music &amp; media</option>
+                  <option value="area">Area &amp; presence</option>
+                  <option value="all">All categories</option>
                 </select>
               </div>
               <div class="stacked-field">
@@ -1212,7 +1212,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
       <section id="view-area_tracking" class="hidden">
         <div class="card">
           <div class="card-header"><div class="card-heading">
-            <h3 class="card-title">Live Area Presence &amp; Sensor Fusion</h3>
+            <h3 class="card-title">Live Area presence &amp; sensor fusion</h3>
             <p class="card-description">Occupancy per Area (<code>binary_sensor.&lt;area&gt;_ble_occupancy</code>, <code>sensor.&lt;area&gt;_occupants</code>), combining BLE beacons with occupancy, mmWave and PIR sensors.</p>
           </div></div>
           <div class="card-content"><div id="area-presence-grid-box" class="settings-list"></div></div>
@@ -1221,8 +1221,8 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
         <div class="card">
           <div class="card-header">
             <div class="card-heading">
-              <h3 class="card-title">Per-Area BLE Signal Calibration</h3>
-              <p class="card-description">Choose a BLE-enabled Device, carry it into an Area, and select Calibrate Current Area.</p>
+              <h3 class="card-title">Per-Area BLE signal calibration</h3>
+              <p class="card-description">Choose a BLE-enabled Device, carry it into an Area, and select Calibrate current Area.</p>
             </div>
             <div class="card-header-actions">
               <select id="ble-survey-device-picker" aria-label="Calibration Device" onchange="onSelectBleSurveyDevice(this.value)"></select>
@@ -1235,10 +1235,10 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
         <div class="card">
           <div class="card-header">
             <div class="card-heading">
-              <h3 class="card-title">Discovered Nearby Bluetooth Devices</h3>
+              <h3 class="card-title">Discovered nearby Bluetooth devices</h3>
               <p class="card-description">Adopt phones and watches (<code>private_ble_device</code>), iBeacons, or named BLE tags for Area tracking.</p>
             </div>
-            <div class="card-header-actions"><button type="button" class="btn btn-secondary btn-compact" onclick="openAddDeviceModal()">Add by Address</button></div>
+            <div class="card-header-actions"><button type="button" class="btn btn-secondary btn-compact" onclick="openAddDeviceModal()">Add by address</button></div>
           </div>
           <div class="card-content"><div id="ble-adopt-table-box" class="settings-list"></div></div>
         </div>
@@ -1249,7 +1249,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
         <div class="grid-2">
           <div class="card">
             <div class="card-header"><div class="card-heading">
-              <h3 class="card-title">Export Settings</h3>
+              <h3 class="card-title">Export settings</h3>
               <p class="card-description">Download the System's settings, or one Device's, as a JSON file. Full backups are Home Assistant's own; Latter's storage is in every Home Assistant backup.</p>
             </div></div>
             <div class="card-content settings-list">
@@ -1260,7 +1260,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
 
           <div class="card">
             <div class="card-header"><div class="card-heading">
-              <h3 class="card-title">Restore from File</h3>
+              <h3 class="card-title">Restore from file</h3>
               <p class="card-description">Upload a <code>latter-*.json</code> export. A Device export can be restored onto a different Device.</p>
             </div></div>
             <div class="card-content settings-list">
@@ -1275,7 +1275,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
         <div class="grid-2">
           <div class="card">
             <div class="card-header"><div class="card-heading">
-              <h3 class="card-title">Notification Tester</h3>
+              <h3 class="card-title">Notification tester</h3>
               <p class="card-description">Send a test on-screen alert (<code>latter.notify</code>).</p>
             </div></div>
             <div class="card-content settings-list">
@@ -1287,16 +1287,16 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
               </div></div>
               <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="test-alert-cam">Include a snapshot from the primary camera</label></div><div class="settings-row-control"><input type="checkbox" class="switch" role="switch" id="test-alert-cam"></div></div>
             </div>
-            <div class="card-actions"><button type="button" class="btn btn-primary" onclick="sendTestNotification()">Send Notification</button></div>
+            <div class="card-actions"><button type="button" class="btn btn-primary" onclick="sendTestNotification()">Send notification</button></div>
           </div>
 
           <div class="card" id="sys-custom-palettes-card">
             <div class="card-header">
               <div class="card-heading">
-                <h3 class="card-title">Custom Color Library</h3>
-                <p class="card-description">Saved theme colors. Apply one to a Device from its Display &amp; Home page.</p>
+                <h3 class="card-title">Custom color library</h3>
+                <p class="card-description">Saved theme colors. Apply one to a Device from its Display &amp; home page.</p>
               </div>
-              <div class="card-header-actions"><button type="button" class="btn btn-secondary btn-compact" onclick="openColorWheelModal('system')">Add Color</button></div>
+              <div class="card-header-actions"><button type="button" class="btn btn-secondary btn-compact" onclick="openColorWheelModal('system')">Add color</button></div>
             </div>
             <div class="card-content"><div id="sys-custom-palettes-list" class="settings-list"></div></div>
           </div>
@@ -1304,14 +1304,14 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
 
         <details class="card">
           <summary class="card-header"><div class="card-heading">
-            <h3 class="card-title">System &amp; Device Logs</h3>
+            <h3 class="card-title">System &amp; Device logs</h3>
             <p class="card-description">Latter's events plus Latter, ESPHome and Music Assistant entries from the Home Assistant log.</p>
           </div></summary>
           <div class="card-content">
             <div class="input-action-row">
-              <button type="button" class="btn btn-secondary btn-compact" onclick="openNativeHaLogs('latter')">HA Logs (latter)</button>
-              <button type="button" class="btn btn-secondary btn-compact" id="btn-native-dev-logs" onclick="openNativeHaLogs(STATE?.config?.device_slug || 'esphome')">HA Logs (Device)</button>
-              <button type="button" class="btn btn-secondary btn-compact" onclick="openNativeHaLogs('esphome')">HA Logs (esphome)</button>
+              <button type="button" class="btn btn-secondary btn-compact" onclick="openNativeHaLogs('latter')">HA logs (latter)</button>
+              <button type="button" class="btn btn-secondary btn-compact" id="btn-native-dev-logs" onclick="openNativeHaLogs(STATE?.config?.device_slug || 'esphome')">HA logs (Device)</button>
+              <button type="button" class="btn btn-secondary btn-compact" onclick="openNativeHaLogs('esphome')">HA logs (esphome)</button>
               <button type="button" class="btn btn-secondary btn-compact" onclick="openNativeHaIntegrations()">Latter integration</button>
             </div>
             <div class="input-action-row">
@@ -1400,7 +1400,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
         </div>
         <div class="card hidden" id="dash-sensor-entities-card">
           <div class="card-header"><div class="card-heading">
-            <h3 class="card-title">Device Sensors &amp; Controls</h3>
+            <h3 class="card-title">Device sensors &amp; controls</h3>
             <p class="card-description">Other sensors, switches and settings this ESPHome device exposes.</p>
           </div></div>
           <div class="card-content"><div id="dash-device-entities" class="settings-list"></div></div>
@@ -1412,7 +1412,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
         <div class="grid-2">
           <div class="card">
             <div class="card-header"><div class="card-heading">
-              <h3 class="card-title">Display &amp; Appearance</h3>
+              <h3 class="card-title">Display &amp; appearance</h3>
               <p class="card-description">Brightness, auto-brightness schedule, clock face, and color profile.</p>
             </div></div>
             <div class="card-content">
@@ -1431,7 +1431,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
 
           <div class="card">
             <div class="card-header"><div class="card-heading">
-              <h3 class="card-title">Home Screen &amp; Area UI</h3>
+              <h3 class="card-title">Home screen &amp; Area UI</h3>
               <p class="card-description">Home screen behavior, dock apps, and the default Area Control category.</p>
             </div></div>
             <div class="card-content">
@@ -1453,19 +1453,19 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
             </div>
             <div class="card-header-actions">
               <select id="cfg-wallpaper_cycle_minutes" aria-label="Favorite rotation" onchange="markDirty('device')">
-                <option value="0">Rotation: Off</option>
+                <option value="0">Rotation: off</option>
                 <option value="15">Rotate every 15 min</option>
                 <option value="60">Rotate every hour</option>
                 <option value="360">Rotate every 6 h</option>
                 <option value="1440">Rotate daily</option>
               </select>
-              <button type="button" class="btn btn-secondary btn-compact" onclick="selectWallpaperSource('')">Turn Off Wallpaper</button>
+              <button type="button" class="btn btn-secondary btn-compact" onclick="selectWallpaperSource('')">Turn off wallpaper</button>
             </div>
           </div>
           <div class="card-content">
             <div class="input-action-row">
               <input type="file" id="wp-file-input" accept="image/*" aria-label="Wallpaper image">
-              <button type="button" class="btn btn-primary" onclick="uploadWallpaperFile()">Upload Photo</button>
+              <button type="button" class="btn btn-primary" onclick="uploadWallpaperFile()">Upload photo</button>
             </div>
             <div id="wp-gallery-grid" class="wp-gallery"></div>
           </div>
@@ -1477,7 +1477,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
         <div class="grid-2">
           <div class="card">
             <div class="card-header"><div class="card-heading">
-              <h3 class="card-title">Voice Assistant &amp; Wake Word</h3>
+              <h3 class="card-title">Voice assistant &amp; wake word</h3>
               <p class="card-description">Wake word mode, active wake word, and visual profile.</p>
             </div></div>
             <div class="card-content">
@@ -1501,7 +1501,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
 
           <div class="card">
             <div class="card-header"><div class="card-heading">
-              <h3 class="card-title">Sound &amp; Media Player</h3>
+              <h3 class="card-title">Sound &amp; media player</h3>
               <p class="card-description">Alert volume, volume step, player appearance, and speakers.</p>
             </div></div>
             <div class="card-content">
@@ -1526,14 +1526,14 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
         <div class="grid-2">
           <div class="card">
             <div class="card-header"><div class="card-heading">
-              <h3 class="card-title">Sleep &amp; Wake</h3>
+              <h3 class="card-title">Sleep &amp; wake</h3>
               <p class="card-description">Screen timeouts, pickup and tap to wake, docked screensaver, and hibernate.</p>
             </div></div>
             <div class="card-content"><div id="embedded-sleep" class="settings-list"></div></div>
           </div>
           <div class="card">
             <div class="card-header"><div class="card-heading">
-              <h3 class="card-title">Battery &amp; Power</h3>
+              <h3 class="card-title">Battery &amp; power</h3>
               <p class="card-description">Live battery level, charging, voltage, and temperature.</p>
             </div></div>
             <div class="card-content"><div id="embedded-battery" class="settings-list"></div></div>
@@ -1546,7 +1546,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
         <div class="grid-2">
           <div class="card">
             <div class="card-header"><div class="card-heading">
-              <h3 class="card-title">Device Identity</h3>
+              <h3 class="card-title">Device identity</h3>
               <p class="card-description">Hardware traits (display, roaming, wearable) come from the Device itself.</p>
             </div></div>
             <div class="card-content settings-list">
@@ -1558,12 +1558,12 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
 
           <div class="card">
             <div class="card-header"><div class="card-heading">
-              <h3 class="card-title">BLE Area Tracking</h3>
+              <h3 class="card-title">BLE Area tracking</h3>
               <p class="card-description">How this Device moves between Areas using ESPHome Bluetooth proxies.</p>
             </div></div>
             <div class="card-content">
               <div class="settings-list">
-                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-native_ble_tracking">Enable BLE Proxy Area Tracking</label></div><div class="settings-row-control"><input type="checkbox" class="switch" role="switch" id="cfg-native_ble_tracking" onchange="markDirty('device')"></div></div>
+                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-native_ble_tracking">Track the Area with BLE proxies</label></div><div class="settings-row-control"><input type="checkbox" class="switch" role="switch" id="cfg-native_ble_tracking" onchange="markDirty('device')"></div></div>
                 <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-ble_auto_switch">Switch the active Area on movement</label></div><div class="settings-row-control"><input type="checkbox" class="switch" role="switch" id="cfg-ble_auto_switch" onchange="markDirty('device')"></div></div>
               </div>
               <div id="embedded-area-ble" class="settings-list"></div>
@@ -1579,7 +1579,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
 
         <details class="card">
           <summary class="card-header"><div class="card-heading">
-            <h3 class="card-title">Diagnostics &amp; Entity Inspector</h3>
+            <h3 class="card-title">Diagnostics &amp; entity inspector</h3>
             <p class="card-description">Network and diagnostic entities, developer controls, and every entity on the Device.</p>
           </div></summary>
           <div class="card-content">
@@ -1613,7 +1613,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
         <div class="card">
           <div class="card-header">
             <div class="card-heading">
-              <h3 class="card-title">Reset to Defaults</h3>
+              <h3 class="card-title">Reset to defaults</h3>
               <p class="card-description">Erase the settings saved on the Device, reset its Latter options, or both. Wi-Fi and pairing are kept.</p>
             </div>
             <div class="card-header-actions"><button type="button" class="btn btn-secondary" onclick="openResetDeviceModal()">Reset…</button></div>
@@ -1662,10 +1662,10 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
 
 <dialog id="latter-add-dev-modal" class="studio-dialog" aria-labelledby="latter-add-dev-title">
   <div class="dialog-body">
-    <h3 class="dialog-title" id="latter-add-dev-title">Add a BLE Phone, Watch or Tag</h3>
+    <h3 class="dialog-title" id="latter-add-dev-title">Add a BLE phone, watch or tag</h3>
     <p class="dialog-text">Latter displays are added through Home Assistant's ESPHome discovery.</p>
     <div class="stacked-field"><label for="ble-candidate-picker">Discovered Bluetooth devices</label><select id="ble-candidate-picker" onchange="onSelectBleCandidate(this.value)"></select></div>
-    <div class="stacked-field"><label for="ble-custom-name">Name</label><input type="text" id="ble-custom-name" placeholder="e.g. Phone, Watch, Keys"></div>
+    <div class="stacked-field"><label for="ble-custom-name">Name</label><input type="text" id="ble-custom-name" placeholder="e.g. phone, watch, keys"></div>
     <div class="stacked-field"><label for="ble-custom-addr">MAC address, <code>private_ble_device</code> entity, or iBeacon UUID</label><input type="text" id="ble-custom-addr" class="mono" placeholder="AA:BB:CC:DD:EE:FF"></div>
     <div class="stacked-field"><label for="ble-custom-person">Assigned person (optional)</label><select id="ble-custom-person"></select></div>
     <div class="dialog-actions">
@@ -1677,7 +1677,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
 
 <dialog id="latter-cw-modal" class="studio-dialog" aria-labelledby="latter-cw-title">
   <div class="dialog-body">
-    <h3 class="dialog-title" id="latter-cw-title">Add a Custom Color</h3>
+    <h3 class="dialog-title" id="latter-cw-title">Add a custom color</h3>
     <p class="dialog-text">Pick a color and save it to the System color library.</p>
     <div class="color-wheel"><canvas id="latter-cw-canvas" width="220" height="220" aria-label="Color wheel"></canvas></div>
     <div class="color-hex-row">
@@ -1687,7 +1687,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
     <div class="stacked-field"><label for="latter-cw-name">Name</label><input type="text" id="latter-cw-name" placeholder="e.g. Sunset Coral"></div>
     <div class="dialog-actions">
       <button type="button" class="btn btn-secondary" onclick="closeColorWheelModal()">Cancel</button>
-      <button type="button" class="btn btn-primary" onclick="saveColorWheelSelection()">Save Color</button>
+      <button type="button" class="btn btn-primary" onclick="saveColorWheelSelection()">Save color</button>
     </div>
   </div>
 </dialog>
@@ -1972,7 +1972,7 @@ function renderLogsView() {
 
   const devBtn = doc.getElementById("btn-native-dev-logs");
   if (devBtn && slug) {
-    devBtn.textContent = `HA Logs (${slug})`;
+    devBtn.textContent = `HA logs (${slug})`;
   }
 
   const filtered = allLogs.filter(l => {
@@ -2113,7 +2113,7 @@ function renderDirtyState() {
   const btn = doc.getElementById("btn-save-changes");
   if (btn) {
     btn.disabled = !IS_DIRTY;
-    btn.textContent = IS_DIRTY ? "Save Changes" : "Saved";
+    btn.textContent = IS_DIRTY ? "Save changes" : "Saved";
   }
 }
 
@@ -2135,16 +2135,16 @@ function clearDirty(scope) {
 
 const VIEW_TITLES = {
   system_overview: "System overview",
-  shared_entities: "Shared Entities",
-  remotes: "Media & Remotes",
-  system_sync: "Groups & Profiles",
-  area_tracking: "BLE & Area Presence",
+  shared_entities: "Shared entities",
+  remotes: "Media & remotes",
+  system_sync: "Groups & profiles",
+  area_tracking: "BLE & Area presence",
   system_admin: "System settings",
   select_device_prompt: "Devices",
   dashboard: "Overview",
-  home_display: "Display & Home",
-  audio_voice: "Audio & Voice",
-  power: "Power & Battery",
+  home_display: "Display & home",
+  audio_voice: "Audio & voice",
+  power: "Power & battery",
   system: "Device settings"
 };
 let CURRENT_VIEW_ID = "select_device_prompt";
@@ -2174,7 +2174,7 @@ function updateTopHeaderForScope() {
     updPill.classList.toggle("hidden", !showUpd);
     if (showUpd) {
       const lat = STATE?.live?.fw_latest_version ? ` (v${String(STATE.live.fw_latest_version).replace(/^v/i, "")})` : "";
-      updPill.textContent = `Update Available${lat} — Click to Update`;
+      updPill.textContent = `Install update${lat}`;
     }
   }
   doc.getElementById("nav-scope-system").classList.toggle("hidden", CURRENT_SCOPE !== "system");
@@ -2470,7 +2470,7 @@ function renderRssiBars(surveyRows, packetsSeen) {
           <span class="chip">${esc(offSign)} dB</span>
           <button type="button" class="btn btn-secondary btn-compact" aria-label="Raise the offset by 1 dB" onclick="setBleOffset(${areaArg}, ${Number(r.offset_db) + 1})">+1 dB</button>
           ${r.offset_db !== 0 ? `<button type="button" class="btn btn-text btn-compact" onclick="setBleOffset(${areaArg}, 0)">Reset</button>` : ''}
-          <button type="button" class="btn btn-secondary btn-compact" onclick="autoCalibrateHere(${areaArg})">Calibrate Current Area</button>
+          <button type="button" class="btn btn-secondary btn-compact" onclick="autoCalibrateHere(${areaArg})">Calibrate current Area</button>
         </div>
       </div>
       <div class="signal-meta">${esc(sig)}</div>
@@ -2492,7 +2492,7 @@ function renderSystemOverview(systemDevices, systemControls, cfg) {
   fillDevicePicker("profile-source-device", latterDevices, "— Choose a Device —");
   fillDevicePicker("doorbell-test-device", latterDevices, "— Choose a Device —");
   fillDevicePicker("bkp-restore-device", allDevices, "— Choose a Device —");
-  fillDevicePicker("bkp-scope-select", allDevices, null, [{value: "system", label: "Full System & All Devices"}], "device:");
+  fillDevicePicker("bkp-scope-select", allDevices, null, [{value: "system", label: "Full System & all Devices"}], "device:");
 
   const quickProfSel = doc.getElementById("quick-profile-select");
   if (quickProfSel && profiles.length) {
@@ -2547,15 +2547,15 @@ function renderSystemOverview(systemDevices, systemControls, cfg) {
   if (catSel) {
     const baseOpts = [
       {id: "all", label: "All Devices"},
-      {id: "online", label: "Online / Active Devices"},
-      {id: "native", label: "Latter Native Devices"},
-      {id: "ble_tracked", label: "BLE Tracked Devices"},
+      {id: "online", label: "Online Devices"},
+      {id: "native", label: "Latter-native Devices"},
+      {id: "ble_tracked", label: "BLE-tracked Devices"},
       {id: "assigned_person", label: "Devices with an assigned person"},
       {id: "roaming", label: "Roaming Devices"},
       {id: "stationary", label: "Stationary Devices"},
       {id: "headless", label: "Screenless Devices"},
-      {id: "ble_tag", label: "BLE Phones, Watches & Tags"},
-      {id: "updates", label: "Firmware Updates Available"}
+      {id: "ble_tag", label: "BLE phones, watches & tags"},
+      {id: "updates", label: "Firmware update available"}
     ];
     groups.forEach(g => {
       if (g && g.id && g.id !== "unassigned") baseOpts.push({id: `group:${g.id}`, label: `Group: ${g.name}`});
@@ -2565,7 +2565,7 @@ function renderSystemOverview(systemDevices, systemControls, cfg) {
     ).join("");
   }
 
-  const statusRank = (st) => (st === "Update Available" ? 1 : (st === "Offline" ? 2 : 3));
+  const statusRank = (st) => (st === "Update available" ? 1 : (st === "Offline" ? 2 : 3));
   const cat = DEVICE_CATEGORY_FILTER || "all";
   const filteredDevices = allDevices.filter(d => {
     const isBleTag = d.kind === "ble_tag";
@@ -2578,7 +2578,7 @@ function renderSystemOverview(systemDevices, systemControls, cfg) {
     if (cat === "stationary") return !isRoaming;
     if (cat === "headless") return isBleTag || !d.has_display;
     if (cat === "ble_tag") return isBleTag;
-    if (cat === "updates") return d.status_label === "Update Available";
+    if (cat === "updates") return d.status_label === "Update available";
     if (cat.startsWith("group:")) return d.device_group === cat.split(":", 2)[1];
     return true;
   });
@@ -2608,7 +2608,7 @@ function renderSystemOverview(systemDevices, systemControls, cfg) {
   const tableRowsHtml = filteredDevices.map(d => {
     const act = d.is_current ? "selectCurrentDevice()" : `switchSystemDevice(${jsArg(d.subentry_id)})`;
     const st = d.status_label || "—";
-    const dotCls = st === "Update Available" ? "update" : (st === "Offline" ? "" : "online");
+    const dotCls = st === "Update available" ? "update" : (st === "Offline" ? "" : "online");
     return `<tr tabindex="0" aria-label="Open ${esc(d.title)}" onclick="${act}" onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); ${act}; }">
       <td class="col-name">${esc(d.title)}</td>
       <td>${esc(d.model_label || "—")}</td>
@@ -2645,7 +2645,7 @@ function renderSystemOverview(systemDevices, systemControls, cfg) {
   setSysTxt("sys-sum-vol", (sysCfg.volume_overrides || []).length);
   setSysTxt("sys-sum-cameras", (sysCfg.camera_entities || []).length);
   setSysTxt("sys-sum-calendars", (sysCfg.calendar_entities || []).length);
-  setSysTxt("sys-sum-groups-profiles", `${groups.length} groups / ${profiles.length} profiles`);
+  setSysTxt("sys-sum-groups-profiles", `${groups.length} group${groups.length === 1 ? "" : "s"} / ${profiles.length} profile${profiles.length === 1 ? "" : "s"}`);
 
   const alertDevSel = doc.getElementById("test-alert-device");
   if (alertDevSel && allDevices.length) {
@@ -3066,7 +3066,7 @@ function renderNativeControlRow(item, showEntityId=false, readOnlyNote="") {
     widgetHtml = `<button type="button" class="btn btn-secondary btn-compact" onclick="espAction(${idArg}, 'press')">Run</button>`;
   } else if (item.domain === "update") {
     widgetHtml = item.state === "on"
-      ? `<button type="button" class="btn btn-secondary btn-compact" onclick="espAction(${idArg}, 'install')">Install Update</button>`
+      ? `<button type="button" class="btn btn-secondary btn-compact" onclick="espAction(${idArg}, 'install')">Install update</button>`
       : `<span class="chip chip-success">Up to date</span><button type="button" class="btn btn-text btn-compact" onclick="espAction(${idArg}, 'check')">Check</button>`;
   } else if (item.domain === "switch" || item.domain === "light" || item.domain === "fan") {
     widgetHtml = `<input type="checkbox" class="switch" role="switch" aria-label="${name}" ${item.state === "on" ? "checked" : ""} onchange="espAction(${idArg}, this.checked ? 'turn_on' : 'turn_off')">`;
@@ -3481,7 +3481,7 @@ function renderRemoteGroupsEditor() {
             const badge = isEn ? (pos === 0 ? "★ Primary: " : `#${pos + 1}: `) : "+ ";
             return `<button type="button" class="pill ${isEn ? 'enabled' : ''}" aria-pressed="${isEn}" onclick="toggleRemoteInGroup(${gIdx}, ${jsArg(entId)})">${esc(badge)}${esc(getRemoteFriendlyLabel(entId))}</button>`;
           }).join("")
-        : `<span class="help-text">Add remotes to the System Remote Inventory first.</span>`;
+        : `<span class="help-text">Add remotes to the remote inventory first.</span>`;
       return `<div class="list-block">
         <div class="list-row-head">
           <div class="list-row-main">
@@ -3501,7 +3501,7 @@ function addRemoteGroupRow() {
   const idx = REMOTE_GROUPS_STATE.length + 1;
   REMOTE_GROUPS_STATE.push({
     id: `rg_${Date.now()}_${idx}`,
-    name: `Area Group ${idx}`,
+    name: `Area group ${idx}`,
     area_id: "",
     remotes: []
   });
@@ -3787,7 +3787,7 @@ async function confirmAddDeviceModal() {
   const target_address = doc.getElementById("ble-custom-addr")?.value?.trim() || "";
   const assigned_person = doc.getElementById("ble-custom-person")?.value || "";
   if (!name || !target_address) {
-    showToast("Enter a Device Name and BLE Address/Entity");
+    showToast("Enter a name and a BLE address or entity", "error");
     return;
   }
   closeAddDeviceModal();
@@ -3994,9 +3994,9 @@ function applyStateToDom(data, forceFormUpdate=false) {
   let batText = "—";
   if (!isBleOnly && curDevEntry.battery_level !== null && curDevEntry.battery_level !== undefined) {
     if (curDevEntry.is_charging) {
-      batText = `${fmtPercent(curDevEntry.battery_level)} (Charging)`;
+      batText = `${fmtPercent(curDevEntry.battery_level)} (charging)`;
     } else if (curDevEntry.is_usb_connected) {
-      batText = `${fmtPercent(curDevEntry.battery_level)} (Plugged In)`;
+      batText = `${fmtPercent(curDevEntry.battery_level)} (plugged in)`;
     } else {
       batText = fmtPercent(curDevEntry.battery_level);
     }

@@ -66,18 +66,18 @@ WINDOW_COVER_CLASSES: set[str] = {
 }
 
 UNIVERSAL_SECTION_META: tuple[tuple[str, str, str], ...] = (
-    ("home", "Home Screen", "Clock face, weather background, home dock shortcuts, and home screen behavior."),
-    ("display", "Display & Appearance", "Screen brightness, color profile, UI theme, and boot animations."),
-    ("sleep", "Sleep & Wake", "Inactivity timeouts, screensaver, pickup-to-wake, tap-to-wake, and hibernate schedule."),
-    ("voice", "Voice Assistant", "Wake word models, microphone mute, and voice detection sensitivity."),
-    ("sound", "Sound & Alerts", "Onboard speaker chimes, alert volume, and volume step increments."),
-    ("music", "Music & Media", "Media player entity and library, artist, album, and podcast sorting options."),
-    ("area", "Area & BLE Presence", "BLE presence beacon toggle and automatic area handoff settings."),
-    ("remote", "TV & Media Remote", "Active remote slot selection and on-device remote behavior."),
-    ("battery", "Battery & Power", "Battery charge level, charging status, PMIC voltage, and internal temperature."),
-    ("actions", "Device Actions", "One-tap restart, hibernate, refresh, and maintenance triggers."),
-    ("network", "Network & Diagnostics", "Wi-Fi signal strength, IP/MAC address, uptime, memory, and firmware updates."),
-    ("other", "General & Custom Entities", "Additional sensors, switches, and custom project entities."),
+    ("home", "Home screen", "Clock face, weather background, home dock shortcuts, and home screen behavior."),
+    ("display", "Display & appearance", "Screen brightness, color profile, UI theme, and boot animations."),
+    ("sleep", "Sleep & wake", "Inactivity timeouts, screensaver, pickup-to-wake, tap-to-wake, and hibernate schedule."),
+    ("voice", "Voice assistant", "Wake word models, microphone mute, and voice detection sensitivity."),
+    ("sound", "Sound & alerts", "Onboard speaker chimes, alert volume, and volume step increments."),
+    ("music", "Music & media", "Media player entity and library, artist, album, and podcast sorting options."),
+    ("area", "Area & BLE presence", "BLE presence beacon toggle and automatic area handoff settings."),
+    ("remote", "TV & media remote", "Active remote slot selection and on-device remote behavior."),
+    ("battery", "Battery & power", "Battery charge level, charging status, PMIC voltage, and internal temperature."),
+    ("actions", "Device actions", "One-tap restart, hibernate, refresh, and maintenance triggers."),
+    ("network", "Network & diagnostics", "Wi-Fi signal strength, IP/MAC address, uptime, memory, and firmware updates."),
+    ("other", "General & custom entities", "Additional sensors, switches, and custom project entities."),
 )
 
 
@@ -460,7 +460,7 @@ def get_esphome_device_entities(
         sections_list.append(
             {
                 "id": "other",
-                "title": "General & Custom Entities",
+                "title": "General & custom entities",
                 "description": "Additional sensors, switches, and custom project entities (spillover).",
                 "count": len(other_items),
                 "items": other_items,

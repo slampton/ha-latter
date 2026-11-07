@@ -1233,7 +1233,7 @@ def get_discovered_ble_candidates(
             if not cand_slug or cand_slug == "esphome_device" or cand_slug in onboarded_slugs or entry.entity_id.lower() in seen_targets:
                 continue
             seen_targets.add(entry.entity_id.lower())
-            kind_lbl = "Private BLE (Phone/Watch)" if entry.platform == "private_ble_device" else "iBeacon Tracker"
+            kind_lbl = "Private BLE (phone or watch)" if entry.platform == "private_ble_device" else "iBeacon tracker"
             rssi_val = st.attributes.get("rssi") if st else None
             src_scanner = str(st.attributes.get("source") or "") if st else ""
             a_id = _resolve_scanner_area_id(hass, src_scanner) if src_scanner else None
@@ -1299,7 +1299,7 @@ def get_discovered_ble_candidates(
                         "slug": cand_slug,
                         "title": local_name,
                         "target_address": addr_str,
-                        "kind": "Named BLE Device",
+                        "kind": "Named BLE device",
                         "rssi": rssi_int,
                         "area_name": area_name,
                         "scanner": scanner_name,

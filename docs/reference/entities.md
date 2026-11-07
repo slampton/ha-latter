@@ -42,7 +42,7 @@ The field formats the firmware parses, such as `slots_summary` and `cameras_summ
 
 ## Per person
 
-These are created when a device has an **Assigned Person**.
+These are created when a device has an **Assigned person**.
 
 | Entity | State |
 | :--- | :--- |

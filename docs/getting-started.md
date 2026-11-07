@@ -55,9 +55,9 @@ The device's entities now appear under a **Latter** device card linked to the ES
 
 Click **Latter** in the Home Assistant sidebar. It's visible to admin users only. Set up these items first:
 
-1. **System → Shared Entities**: choose your weather entity, then any alarm panel, thermostat, lock, garage door, vacuum, cameras, and calendars you want on the device.
-2. **System → Media & Remotes**: add TVs or streaming boxes as remote slots. If your speakers' volume is controlled by an AV receiver, map them under **Speaker Volume Overrides**.
-3. **Devices → your device → Audio & Voice**: pick the device's default speaker and wake word.
+1. **System → Shared entities**: choose your weather entity, then any alarm panel, thermostat, lock, garage door, vacuum, cameras, and calendars you want on the device.
+2. **System → Media & remotes**: add TVs or streaming boxes as remote slots. If your speakers' volume is controlled by an AV receiver, map them under **Speaker volume overrides**.
+3. **Devices → your device → Audio & voice**: pick the device's default speaker and wake word.
 
 Changes reach the device within a second or two. There is nothing to reflash.
 
@@ -69,13 +69,13 @@ On the device:
 - **Swipe up** from the bottom edge, or **tap the pill** at the bottom, to go home.
 - Open **Music**, pick a speaker, and browse your library.
 - Open **Area**. You'll see controls for the Area the device is assigned to.
-- Say **"Okay Nabu"**. The wake word works while the device is docked, by default. You can change this in Studio under **Audio & Voice**, or with the device's **Voice: Wake Word Mode** entity.
+- Say **"Okay Nabu"**. The wake word works while the device is docked, by default. You can change this in Studio under **Audio & voice**, or with the device's **Voice: Wake Word Mode** entity.
 
 ## 7. Optional: area presence for handhelds
 
 If you checked **Track this device's area with Bluetooth**, Latter follows the device from area to area using your Bluetooth proxies. You need at least one ESPHome Bluetooth proxy in each area, and each proxy must be assigned to its Area in Home Assistant. The device's BLE presence beacon is off out of the box; Latter turns it on for you when tracking is on.
 
-After that, open **System → BLE & Area Presence** in Studio, walk the device around, and use **Calibrate Current Area** wherever it picks the wrong area.
+After that, open **System → BLE & Area presence** in Studio, walk the device around, and use **Calibrate current Area** wherever it picks the wrong area.
 
 → [Presence guide](presence.md)
 

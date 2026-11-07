@@ -278,7 +278,7 @@ def _build_entity_catalog(
         domain = state_obj.domain
         friendly = str(state_obj.attributes.get("friendly_name") or ent_id)
         suffix_state = (
-            " [Off/Unavailable]" if state_obj.state == "unavailable" else ""
+            " (unavailable)" if state_obj.state == "unavailable" else ""
         )
         item = {
             "id": ent_id,
@@ -311,7 +311,7 @@ def _build_entity_catalog(
                     ma_speakers.append(
                         {
                             "id": ent_id,
-                            "name": f"{clean_lbl} — Built-in Speaker ({ent_id}){suffix_state}",
+                            "name": f"{clean_lbl} — built-in speaker ({ent_id}){suffix_state}",
                             "domain": domain,
                         }
                     )
@@ -522,16 +522,16 @@ def _build_system_section(
         c_board = str(c_manifest.get("board") or "").strip()
         if c.is_ble_tag:
             c_model_label = (
-                "Private BLE (Phone/Watch)"
+                "Private BLE (phone or watch)"
                 if "private_ble" in c.ble_target_address
                 or "." in c.ble_target_address
-                else "BLE Beacon / Tag"
+                else "BLE beacon or tag"
             )
         elif c_w > 0 and c_h > 0:
             c_model_label = (
                 f"{raw_model} ({c_w}x{c_h})"
                 if raw_model
-                else f"Latter Display ({c_w}x{c_h}{f' {c_board}' if c_board else ''})"
+                else f"Latter display ({c_w}x{c_h}{f' {c_board}' if c_board else ''})"
             )
         else:
             c_model_label = raw_model
@@ -588,7 +588,7 @@ def _build_system_section(
             )
         else:
             c_status_label = (
-                "Update Available"
+                "Update available"
                 if c_has_update
                 else ("Online" if c_is_online else "Offline")
             )

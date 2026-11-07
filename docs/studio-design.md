@@ -153,14 +153,14 @@ Studio has one implementation of each component. A new pattern is added here fir
   Studio writes the URL with `history.pushState` and a `location-changed` event, the way Home Assistant's own panels navigate. An unknown path shows the Device list.
 - The **Visit** link on a Latter Device's Home Assistant device page opens that Device in Studio (`/latter/devices/<subentry_id>`).
 - The page template starts in the Devices state, so nothing flashes before the first render.
-- Page names are unique: Device pages are **Overview**, **Display & Home**, **Audio & Voice**, **Power & Battery**, and **Device settings**; System pages are **System overview**, **Shared Entities**, **Media & Remotes**, **Groups & Profiles**, **BLE & Area Presence**, and **System settings**. A nav label and its page title are the same text.
+- Page names are unique: Device pages are **Overview**, **Display & home**, **Audio & voice**, **Power & battery**, and **Device settings**; System pages are **System overview**, **Shared entities**, **Media & remotes**, **Groups & profiles**, **BLE & Area presence**, and **System settings**. A nav label and its page title are the same text.
 - System pages work fully with no Device selected. A System action that acts on one Device names that Device in the action itself (a picker), never the "selected Device" of another page.
 
 ## 6. Content rules
 
 - Use Home Assistant and IT terminology: **System**, **Sites**, **Areas**, **Devices**, **Roles**, **Policies**, **Bridges**. Never "household", "fleet", or "room" (`[STUDIO TERMINOLOGY]`).
 - No marketing device names or personal equipment brands in labels or logic; Studio branches on hardware-manifest traits.
-- Labels use sentence case, like Home Assistant. Help text is one short sentence that says what the setting does, not how it's built.
+- Labels use sentence case, like Home Assistant: page names, card titles, buttons, options and toasts ("Speaker volume overrides", "Add color"). The terminology words above (System, Device, Area, …) and proper names (Home Assistant, Music Assistant, ESPHome, Voice Follows Me, Repairs) keep their capitals. Help text is one short sentence that says what the setting does, not how it's built.
 - Show entity IDs only where the user picks or inspects an entity.
 - Units, numbers, and dates follow the user's Home Assistant settings (`hass.locale`, `hass.config.unit_system`). Times are relative ("2 min ago") where that reads better. Studio formats them with one set of helpers: `fmtNumber`, `fmtPercent`, `fmtDistance` (feet or metres by the unit system), `fmtAgo`, and `fmtDateTime` (the user's time zone setting, server or browser). The backend sends timestamps as UTC ISO 8601 and never formats them.
 

@@ -29,12 +29,12 @@ esp32_ble_beacon:
   uuid: "<a UUID unique to this node>"
 ```
 
-Then open **Studio → System → BLE & Area Presence → Discovered Nearby Bluetooth Devices** and click **Adopt**, or add it by UUID with **+ Add Device**.
+Then open **Studio → System → BLE & Area presence → Discovered nearby Bluetooth devices** and click **Adopt**, or add it by UUID with **Add by address**.
 
 ## Phones and watches
 
 1. Set up Home Assistant's [Private BLE Device](https://www.home-assistant.io/integrations/private_ble_device/) integration for each phone or watch.
-2. Adopt it from the same **Discovered Nearby Bluetooth Devices** list.
+2. Adopt it from the same **Discovered nearby Bluetooth devices** list.
 
 → [Presence guide](presence.md)
 
