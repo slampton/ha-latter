@@ -391,16 +391,6 @@ const STUDIO_STYLES = `
     color: var(--muted);
     letter-spacing: normal;
   }
-  .content-wrap > section > .page-header {
-    display: none !important;
-  }
-  .page-header > p,
-  .card > p.desc,
-  .card > div > p.desc,
-  .card > div > div > p.desc,
-  .details-body > p.desc {
-    display: none !important;
-  }
   .grid-2 {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
@@ -937,6 +927,10 @@ const STUDIO_STYLES = `
     z-index: 50;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
   }
+  .toast.error {
+    border-color: var(--danger);
+    color: var(--danger);
+  }
   .hidden { display: none !important; }
 
   /* PHONE & TABLET RESPONSIVE BREAKPOINTS */
@@ -1034,15 +1028,15 @@ const STUDIO_TEMPLATE = `<div class="studio-root">
   <aside class="sidebar">
     <div class="scope-box">
       <div class="scope-tabs">
-        <button class="scope-tab" id="tab-scope-system" onclick="setScope('system')">System</button>
         <button class="scope-tab active" id="tab-scope-device" onclick="openDevicesLanding()">Devices</button>
+        <button class="scope-tab" id="tab-scope-system" onclick="setScope('system')">System</button>
       </div>
     </div>
 
     <!-- SYSTEM NAVIGATION (6 TABS) -->
     <div class="nav-list hidden" id="nav-scope-system">
       <button class="nav-btn" data-view="system_overview" onclick="switchView('system_overview', this)">
-        <span>Overview</span>
+        <span>System overview</span>
       </button>
       <button class="nav-btn" data-view="shared_entities" onclick="switchView('shared_entities', this)">
         <span>Shared Entities</span>
@@ -1057,25 +1051,25 @@ const STUDIO_TEMPLATE = `<div class="studio-root">
         <span>BLE &amp; Area Presence</span>
       </button>
       <button class="nav-btn" data-view="system_admin" onclick="switchView('system_admin', this)">
-        <span>Administration</span>
+        <span>System settings</span>
       </button>
     </div>
 
     <!-- DEVICES LIST SIDEBAR (WHEN ON ALL DEVICES LANDING PAGE) -->
-    <div class="nav-list hidden" id="nav-scope-devices-list">
+    <div class="nav-list" id="nav-scope-devices-list">
       <button class="nav-btn active" data-view="select_device_prompt" onclick="openDevicesLanding()">
         <span>All Devices</span>
-        <span class="nav-badge" id="nav-system-count">1</span>
+        <span class="nav-badge" id="nav-system-count">—</span>
       </button>
     </div>
 
     <!-- SELECTED DEVICE NAVIGATION (5 TABS) -->
-    <div class="nav-list" id="nav-scope-device">
+    <div class="nav-list hidden" id="nav-scope-device">
       <button class="nav-btn nav-back-btn" style="color:var(--muted);" onclick="openDevicesLanding()">
         <span>&larr; All Devices</span>
       </button>
       <div class="nav-device-title" id="nav-selected-device-label">Device</div>
-      <button class="nav-btn active" data-view="dashboard" onclick="switchView('dashboard', this)">
+      <button class="nav-btn" data-view="dashboard" onclick="switchView('dashboard', this)">
         <span>Overview</span>
       </button>
       <button class="nav-btn" id="nav-btn-home_display" data-view="home_display" onclick="switchView('home_display', this)">
@@ -1088,7 +1082,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root">
         <span>Power &amp; Battery</span>
       </button>
       <button class="nav-btn" data-view="system" onclick="switchView('system', this)">
-        <span>Administration</span>
+        <span>Device settings</span>
         <span class="nav-badge" id="nav-esp-badge">0</span>
       </button>
     </div>
@@ -1099,60 +1093,56 @@ const STUDIO_TEMPLATE = `<div class="studio-root">
   <div class="main-area">
     <div class="content-wrap">
       <div class="unified-page-header">
-        <h2 id="unified-page-title">Overview</h2>
+        <h2 id="unified-page-title">Devices</h2>
       </div>
 
       <!-- ================================================================== -->
       <!-- SYSTEM TAB 1: SYSTEM OVERVIEW                                      -->
       <!-- ================================================================== -->
       <section id="view-system_overview" class="hidden">
-        <div class="page-header">
-          <h2>Overview</h2>
-        </div>
-
         <div class="grid-2">
           <div class="card">
             <h3>System</h3>
             <div class="summary-row">
               <span>Latter Version</span>
               <div style="display:flex;align-items:center;gap:8px;">
-                <strong id="sys-sum-version">v2.2.0</strong>
+                <strong id="sys-sum-version">—</strong>
                 <button type="button" class="btn-secondary" style="padding:3px 9px;font-size:11.5px;" onclick="checkSystemUpdates()">Check for Updates</button>
               </div>
             </div>
             <div class="summary-row clickable" onclick="openDevicesWithCategory('all')">
-              <span>Online / Active Devices</span><strong id="sys-sum-online">0 / 0</strong>
+              <span>Online / Active Devices</span><strong id="sys-sum-online">—</strong>
             </div>
             <div class="summary-row clickable" onclick="openDevicesWithCategory('native')">
-              <span>Latter Native Devices</span><strong id="sys-sum-native">0</strong>
+              <span>Latter Native Devices</span><strong id="sys-sum-native">—</strong>
             </div>
             <div class="summary-row clickable" onclick="openDevicesWithCategory('ble_tracked')">
-              <span>BLE Tracked Devices</span><strong id="sys-sum-ble-tracked">0</strong>
+              <span>BLE Tracked Devices</span><strong id="sys-sum-ble-tracked">—</strong>
             </div>
-            <div class="summary-row clickable" onclick="openDevicesWithCategory('ble_tracked')">
-              <span>People Tracked (BLE Area)</span><strong id="sys-sum-people">0</strong>
+            <div class="summary-row clickable" onclick="openDevicesWithCategory('assigned_person')">
+              <span>Devices with an assigned person</span><strong id="sys-sum-people">—</strong>
             </div>
             <div class="summary-row clickable" onclick="openSystemSection('area_tracking', '')">
-              <span>BLE Area Proxies</span><strong id="sys-sum-proxies">0</strong>
+              <span>BLE Area Proxies</span><strong id="sys-sum-proxies">—</strong>
             </div>
           </div>
 
           <div class="card">
             <h3>Configured Integrations</h3>
             <div class="summary-row clickable" onclick="openSystemSection('remotes', 'card-remotes')">
-              <span>Remote Controls</span><strong id="sys-sum-remotes">0</strong>
+              <span>Remote Controls</span><strong id="sys-sum-remotes">—</strong>
             </div>
             <div class="summary-row clickable" onclick="openSystemSection('remotes', 'card-vol-overrides')">
-              <span>Speaker Volume Overrides</span><strong id="sys-sum-vol">0</strong>
+              <span>Speaker Volume Overrides</span><strong id="sys-sum-vol">—</strong>
             </div>
             <div class="summary-row clickable" onclick="openSystemSection('shared_entities', 'card-cameras')">
-              <span>Cameras</span><strong id="sys-sum-cameras">0</strong>
+              <span>Cameras</span><strong id="sys-sum-cameras">—</strong>
             </div>
             <div class="summary-row clickable" onclick="openSystemSection('shared_entities', 'card-calendars')">
-              <span>Calendars</span><strong id="sys-sum-calendars">0</strong>
+              <span>Calendars</span><strong id="sys-sum-calendars">—</strong>
             </div>
             <div class="summary-row clickable" onclick="openSystemSection('system_sync', '')">
-              <span>Groups &amp; Saved Profiles</span><strong id="sys-sum-groups-profiles">0</strong>
+              <span>Groups &amp; Saved Profiles</span><strong id="sys-sum-groups-profiles">—</strong>
             </div>
           </div>
         </div>
@@ -1162,11 +1152,6 @@ const STUDIO_TEMPLATE = `<div class="studio-root">
       <!-- SYSTEM TAB 2: SHARED ENTITIES (WHOLE-HOME, CAMERAS, CALENDARS)     -->
       <!-- ================================================================== -->
       <section id="view-shared_entities" class="hidden">
-        <div class="page-header">
-          <h2>Shared Entities</h2>
-          <p>Select shared system entities, cameras, and calendars.</p>
-        </div>
-
         <div class="grid-2">
           <!-- CARD 1: WHOLE-HOME ENTITIES -->
           <div class="card">
@@ -1174,30 +1159,30 @@ const STUDIO_TEMPLATE = `<div class="studio-root">
             <p class="desc">Primary shared system entities used by the Home screen and Whole-Home Hub.</p>
             <div class="field">
               <label>Weather Provider (weather.*)</label>
-              <select id="cfg-weather_entity" onchange="markDirty()"></select>
+              <select id="cfg-weather_entity" onchange="markDirty('system')"></select>
             </div>
             <div class="field">
               <label>Security Alarm (alarm_control_panel.*)</label>
-              <select id="cfg-alarm_entity" onchange="markDirty()"></select>
+              <select id="cfg-alarm_entity" onchange="markDirty('system')"></select>
             </div>
             <div class="form-grid-2">
               <div class="field">
                 <label>Thermostat (climate.*)</label>
-                <select id="cfg-thermostat_entity" onchange="markDirty()"></select>
+                <select id="cfg-thermostat_entity" onchange="markDirty('system')"></select>
               </div>
               <div class="field">
                 <label>Entry Lock (lock.*)</label>
-                <select id="cfg-lock_entity" onchange="markDirty()"></select>
+                <select id="cfg-lock_entity" onchange="markDirty('system')"></select>
               </div>
             </div>
             <div class="form-grid-2">
               <div class="field">
                 <label>Garage Door (cover.*)</label>
-                <select id="cfg-garage_entity" onchange="markDirty()"></select>
+                <select id="cfg-garage_entity" onchange="markDirty('system')"></select>
               </div>
               <div class="field">
                 <label>Robot Vacuum (vacuum.*)</label>
-                <select id="cfg-vacuum_entity" onchange="markDirty()"></select>
+                <select id="cfg-vacuum_entity" onchange="markDirty('system')"></select>
               </div>
             </div>
           </div>
@@ -1209,16 +1194,22 @@ const STUDIO_TEMPLATE = `<div class="studio-root">
             <div class="field">
               <label>Doorbell audio noise reduction</label>
               <div class="input-action-row">
-                <select id="cfg-doorbell_noise_reduction" onchange="markDirty()">
+                <select id="cfg-doorbell_noise_reduction" onchange="markDirty('system')">
                   <option value="strong">Strong</option>
                   <option value="light">Light</option>
                   <option value="off">Off</option>
                 </select>
+              </div>
+            </div>
+            <div class="field">
+              <label>Test the primary camera's speaker from a Device</label>
+              <div class="input-action-row">
+                <select id="doorbell-test-device"></select>
                 <button type="button" class="btn-secondary" onclick="testDoorbellSpeaker()">Test door speaker</button>
               </div>
             </div>
             <div id="cameras-list"></div>
-            <button type="button" class="btn-secondary" id="btn-add-camera" onclick="addCameraRow(''); markDirty();">+ Add Camera</button>
+            <button type="button" class="btn-secondary" id="btn-add-camera" onclick="addCameraRow(''); markDirty('system');">+ Add Camera</button>
 
             <div id="cam-preview-box" style="display:none;flex-direction:column;gap:8px;margin-top:14px;padding:12px;background:var(--input-bg);border:1px solid var(--border);border-radius:10px;">
               <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
@@ -1239,7 +1230,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root">
             <h3>Calendars</h3>
             <p class="desc">Add shared calendars (<code>calendar.*</code>) to aggregate upcoming events in the Agenda tool and Home screen.</p>
             <div id="calendars-list"></div>
-            <button type="button" class="btn-secondary" onclick="addCalendarRow(''); markDirty();">+ Add Calendar</button>
+            <button type="button" class="btn-secondary" onclick="addCalendarRow(''); markDirty('system');">+ Add Calendar</button>
           </div>
         </div>
       </section>
@@ -1248,23 +1239,18 @@ const STUDIO_TEMPLATE = `<div class="studio-root">
       <!-- SYSTEM TAB 3: MEDIA & REMOTES (REMOTES + SPEAKER VOLUME OVERRIDES) -->
       <!-- ================================================================== -->
       <section id="view-remotes" class="hidden">
-        <div class="page-header">
-          <h2>Media &amp; Remotes</h2>
-          <p>Assign up to 10 TV/media remotes and configure speaker volume overrides.</p>
-        </div>
-
         <div class="card" id="card-remotes">
           <h3>System Remote Inventory</h3>
           <p class="desc">Add up to 10 <code>remote.*</code> or <code>media_player.*</code> entities across your site. Once added here, organize them into Area or Device Remote Groups below.</p>
           <div id="remotes-list"></div>
-          <button type="button" class="btn-secondary" id="btn-add-remote" onclick="addRemoteControlRow(''); markDirty();">+ Add Remote Control</button>
+          <button type="button" class="btn-secondary" id="btn-add-remote" onclick="addRemoteControlRow(''); markDirty('system');">+ Add Remote Control</button>
         </div>
 
         <div class="card" id="card-remote-groups">
           <h3>Remote Control Groups (Area &amp; Device Assignment)</h3>
           <p class="desc">Create groups of remotes and assign them to an <strong>Area</strong> (so roaming devices automatically see that Area's remotes when present, or hide the Remote app when an Area has none) or assign a group statically to a specific device.</p>
           <div id="remote-groups-list"></div>
-          <button type="button" class="btn-secondary" onclick="addRemoteGroupRow(); markDirty();">+ Create Remote Group</button>
+          <button type="button" class="btn-secondary" onclick="addRemoteGroupRow(); markDirty('system');">+ Create Remote Group</button>
 
           <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border);">
             <h4 style="margin:0 0 10px;font-size:14.5px;font-weight:600;color:var(--text-strong);">Device Remote Assignment</h4>
@@ -1276,7 +1262,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root">
           <h3>Speaker Volume Overrides</h3>
           <p class="desc">When streaming audio to a specific speaker, route volume commands to a different media player or number entity instead.</p>
           <div id="volume-overrides-list"></div>
-          <button type="button" class="btn-secondary" id="btn-add-vol-override" onclick="addVolumeOverrideRow('', ''); markDirty();">+ Add Volume Override</button>
+          <button type="button" class="btn-secondary" id="btn-add-vol-override" onclick="addVolumeOverrideRow('', ''); markDirty('system');">+ Add Volume Override</button>
         </div>
       </section>
 
@@ -1284,19 +1270,18 @@ const STUDIO_TEMPLATE = `<div class="studio-root">
       <!-- SYSTEM TAB 4: GROUPS & PROFILES                                    -->
       <!-- ================================================================== -->
       <section id="view-system_sync" class="hidden">
-        <div class="page-header">
-          <h2>Groups &amp; Profiles</h2>
-          <p>Organize devices into groups, save configuration profiles, and apply settings across multiple devices.</p>
-        </div>
-
         <div class="grid-2">
           <div class="card">
             <h3>Configuration Profiles</h3>
-            <p class="desc">Capture settings from <strong id="prof-active-dev-label">Active Device</strong> as a reusable profile, or apply a profile to any device or group.</p>
+            <p class="desc">Capture a Device's settings as a reusable profile, or apply a profile to any Device or group.</p>
+            <div class="field">
+              <label>Capture from</label>
+              <select id="profile-source-device"></select>
+            </div>
             <div class="input-action-row" style="margin-bottom:12px;">
               <input type="text" id="new-profile-name" placeholder="Profile Name (e.g. Nightstand)">
               <input type="text" id="new-profile-desc" placeholder="Description (optional)">
-              <button class="btn-primary" onclick="captureCurrentDeviceProfile()">Capture Profile</button>
+              <button class="btn-primary" onclick="captureDeviceProfile()">Capture Profile</button>
             </div>
             <div class="field">
               <label>Apply Profile Target</label>
@@ -1347,11 +1332,6 @@ const STUDIO_TEMPLATE = `<div class="studio-root">
       <!-- SYSTEM TAB 5: BLE & AREA PRESENCE                                  -->
       <!-- ================================================================== -->
       <section id="view-area_tracking" class="hidden">
-        <div class="page-header">
-          <h2>BLE &amp; Area Presence</h2>
-          <p>Live Area occupancy, weighted BLE + mmWave/PIR sensor fusion, per-area signal calibration, and 1-click Bluetooth device adoption.</p>
-        </div>
-
         <div class="card">
           <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:14px;">
             <div>
@@ -1397,21 +1377,13 @@ const STUDIO_TEMPLATE = `<div class="studio-root">
       <!-- SYSTEM TAB 6: ADMINISTRATION (BACKUPS, STUDIO, LOGS & DEV YAML)    -->
       <!-- ================================================================== -->
       <section id="view-system_admin" class="hidden">
-        <div class="page-header">
-          <h2>System Administration</h2>
-          <p>Backups, appearance, notification testing, and system logs.</p>
-        </div>
-
         <div class="grid-2">
           <div class="card">
             <h3>Export Settings (.JSON)</h3>
             <p class="desc">Download a portable JSON bundle of your system settings, entity mappings, BLE area offsets, and live ESPHome device preferences. (Full system backups are handled automatically by Home Assistant's native Backup system.)</p>
             <div class="field">
               <label>Backup Scope</label>
-              <select id="bkp-scope-select">
-                <option value="system">Full System &amp; All Devices</option>
-                <option value="device">Active Device Only</option>
-              </select>
+              <select id="bkp-scope-select"></select>
             </div>
             <div class="quick-actions-row">
               <button class="btn-primary" onclick="exportBackupToComputer('')">Download .JSON</button>
@@ -1425,6 +1397,10 @@ const STUDIO_TEMPLATE = `<div class="studio-root">
               <label>Backup .JSON File</label>
               <input type="file" id="bkp-upload-file" accept=".json,application/json">
             </div>
+            <div class="field">
+              <label>Device to restore a Device backup onto</label>
+              <select id="bkp-restore-device"></select>
+            </div>
             <div class="toggle-row" style="margin-bottom:12px;">
               <span>Restore Live ESPHome Device Settings</span>
               <input type="checkbox" id="bkp-restore-esp" checked>
@@ -1434,15 +1410,6 @@ const STUDIO_TEMPLATE = `<div class="studio-root">
         </div>
 
         <div class="grid-2">
-          <div class="card">
-            <h3>Reverse Proxy &amp; External Access</h3>
-            <p class="desc">Optional external HTTPS base URL override used when linking ESPHome device <em>Visit</em> buttons through a reverse proxy.</p>
-            <div class="field">
-              <label>Companion Base URL Override (Optional)</label>
-              <input type="text" id="cfg-companion_base_url" placeholder="Auto-detected from Home Assistant (e.g. https://ha.example.com)" oninput="markDirty()">
-            </div>
-          </div>
-
           <div class="card">
             <h3>Notification Tester</h3>
             <p class="desc">Send a test on-screen alert (<code>latter.notify</code>) to a specific device.</p>
@@ -1463,7 +1430,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root">
             </div>
             <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
               <label style="font-size:12.5px;color:var(--muted);display:inline-flex;align-items:center;gap:6px;cursor:pointer;">
-                <input type="checkbox" id="test-alert-cam" checked> Include Camera Snapshot
+                <input type="checkbox" id="test-alert-cam"> Include a snapshot from the primary camera
               </label>
               <button class="btn-primary" onclick="sendTestNotification()">Send Notification</button>
             </div>
@@ -1512,11 +1479,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root">
       <!-- ================================================================== -->
       <!-- DEVICES LANDING PAGE (CATEGORY DROPDOWN + SORTABLE TABLE)          -->
       <!-- ================================================================== -->
-      <section id="view-select_device_prompt" class="hidden">
-        <div class="page-header">
-          <h2>Devices</h2>
-          <p>Select a device to manage its settings, or adopt a Bluetooth phone, watch, or tag.</p>
-        </div>
+      <section id="view-select_device_prompt">
         <div class="card">
           <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
             <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:220px;max-width:340px;">
@@ -1541,16 +1504,12 @@ const STUDIO_TEMPLATE = `<div class="studio-root">
       <!-- ================================================================== -->
       <!-- DEVICE TAB 1: OVERVIEW (TELEMETRY, QUICK ACTIONS & DEVICE STATUS)  -->
       <!-- ================================================================== -->
-      <section id="view-dashboard">
-        <div class="page-header">
-          <h2 id="dash-header-title">Overview</h2>
-        </div>
-
+      <section id="view-dashboard" class="hidden">
         <div class="hero-stats" style="grid-template-columns:repeat(4, minmax(0, 1fr));">
-          <div class="stat-box"><span id="st-area-label">Current Area</span><strong id="st-area">--</strong></div>
-          <div class="stat-box"><span>Battery / Power</span><strong id="st-battery">--</strong></div>
-          <div class="stat-box"><span>Wi-Fi Signal</span><strong id="st-wifi">--</strong></div>
-          <div class="stat-box"><span>Firmware Version</span><strong id="st-fw-version">--</strong></div>
+          <div class="stat-box"><span id="st-area-label">Current Area</span><strong id="st-area">—</strong></div>
+          <div class="stat-box"><span>Battery / Power</span><strong id="st-battery">—</strong></div>
+          <div class="stat-box"><span>Wi-Fi Signal</span><strong id="st-wifi">—</strong></div>
+          <div class="stat-box"><span>Firmware Version</span><strong id="st-fw-version">—</strong></div>
         </div>
 
         <div class="grid-2">
@@ -1583,14 +1542,14 @@ const STUDIO_TEMPLATE = `<div class="studio-root">
           <div class="card">
             <h3>Device Status</h3>
             <p class="desc">Hardware model, roaming location mode, and device management.</p>
-            <div class="summary-row"><span>Hardware Model</span><strong id="dash-hw-model">--</strong></div>
-            <div class="summary-row"><span>IP Address</span><strong id="dash-ip-addr">--</strong></div>
-            <div class="summary-row"><span>Location Mode</span><strong id="dash-ble-mode">--</strong></div>
-            <div class="summary-row" id="dash-row-ble-proxy"><span>Nearest BLE Proxy</span><strong id="dash-ble-proxy">--</strong></div>
-            <div class="summary-row"><span>Device Group</span><strong id="st-group">Unassigned</strong></div>
+            <div class="summary-row"><span>Hardware Model</span><strong id="dash-hw-model">—</strong></div>
+            <div class="summary-row"><span>IP Address</span><strong id="dash-ip-addr">—</strong></div>
+            <div class="summary-row"><span>Location Mode</span><strong id="dash-ble-mode">—</strong></div>
+            <div class="summary-row" id="dash-row-ble-proxy"><span>Nearest BLE Proxy</span><strong id="dash-ble-proxy">—</strong></div>
+            <div class="summary-row"><span>Device Group</span><strong id="st-group">—</strong></div>
             <div class="quick-actions-row" style="margin-top:16px;">
               <button class="btn-chip" onclick="exportBackupToComputer('device')">Download .JSON</button>
-              <button class="btn-chip" onclick="navigateToView('system')">Administration &amp; Logs</button>
+              <button class="btn-chip" onclick="navigateToView('system')">Device settings</button>
             </div>
           </div>
         </div>
@@ -1607,15 +1566,10 @@ const STUDIO_TEMPLATE = `<div class="studio-root">
       <!-- DEVICE TAB 2: DISPLAY & HOME                                       -->
       <!-- ================================================================== -->
       <section id="view-home_display" class="hidden">
-        <div class="page-header">
-          <h2>Display &amp; Home</h2>
-          <p>Configure screen brightness, color profile, clock face, home dock apps, area UI defaults, and wallpapers.</p>
-        </div>
-
         <div class="grid-2">
           <div class="card">
             <h3>Display &amp; Appearance</h3>
-            <p class="desc">Screen brightness, auto-brightness schedule, clock face, color profile, and weather simulation.</p>
+            <p class="desc">Screen brightness, auto-brightness schedule, clock face, and color profile.</p>
             <div id="embedded-display" class="native-controls-box" style="margin-bottom:14px;"></div>
 
             <div class="field" style="padding:12px;border-radius:10px;background:var(--input-bg);border:1px solid var(--border);">
@@ -1629,24 +1583,6 @@ const STUDIO_TEMPLATE = `<div class="studio-root">
               </div>
             </div>
 
-            <div class="field">
-              <label>Display Geometry &amp; Resolution</label>
-              <div class="form-grid-2">
-                <select id="cfg-display_shape" onchange="markDirty()">
-                  <option value="circle">Circular Display</option>
-                  <option value="square">Rectangular / Square</option>
-                </select>
-                <select id="cfg-art_size" onchange="markDirty()">
-                  <option value="466">466x466 px (Pocket Assistant 1.75" Round)</option>
-                  <option value="480">480x480 px (Mobile Assistant 2.16" Square)</option>
-                  <option value="410x502">410x502 px (Wrist Assist 2.06" Watch)</option>
-                  <option value="320x480">320x480 px (Remote Assistant 3.5" P4)</option>
-                  <option value="720">720x720 px (Desk Assistant 4.0" P4)</option>
-                  <option value="360">360x360 px</option>
-                  <option value="240">240x240 px</option>
-                </select>
-              </div>
-            </div>
           </div>
 
           <div class="card">
@@ -1669,7 +1605,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root">
               <p class="desc" style="margin:2px 0 0;">Select an AMOLED preset, upload a custom photo, or star multiple favorites to rotate automatically.</p>
             </div>
             <div class="input-action-row" style="flex:0 1 auto;">
-              <select id="cfg-wallpaper_cycle_minutes" style="width:auto;min-width:170px;" title="Favorite Wallpaper Rotation" onchange="markDirty()">
+              <select id="cfg-wallpaper_cycle_minutes" style="width:auto;min-width:170px;" title="Favorite Wallpaper Rotation" onchange="markDirty('device')">
                 <option value="0">Rotation: Off</option>
                 <option value="15">Rotate: Every 15m</option>
                 <option value="60">Rotate: Every Hour</option>
@@ -1682,7 +1618,6 @@ const STUDIO_TEMPLATE = `<div class="studio-root">
           <div class="input-action-row" style="padding:10px 12px;background:var(--input-bg);border:1px solid var(--border);border-radius:8px;margin-bottom:12px;">
             <input type="file" id="wp-file-input" accept="image/*">
             <button class="btn-primary" onclick="uploadWallpaperFile()">Upload Photo</button>
-            <input type="hidden" id="cfg-wallpaper_source">
           </div>
           <div id="wp-gallery-grid" class="wp-gallery"></div>
         </div>
@@ -1692,11 +1627,6 @@ const STUDIO_TEMPLATE = `<div class="studio-root">
       <!-- DEVICE TAB 3: AUDIO & VOICE                                        -->
       <!-- ================================================================== -->
       <section id="view-audio_voice" class="hidden">
-        <div class="page-header">
-          <h2>Audio &amp; Voice</h2>
-          <p>Configure on-device wake words, voice assistant behavior, sound chimes, and Music Assistant library sorting.</p>
-        </div>
-
         <div class="grid-2">
           <div class="card">
             <h3>Voice Assistant &amp; Wake Word</h3>
@@ -1705,7 +1635,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root">
 
             <div class="toggle-row" id="row-sync-device-area" style="margin-bottom:10px;">
               <span>Voice Follows Me (move this device's Home Assistant Area with it)</span>
-              <input type="checkbox" id="cfg-sync_device_area" onchange="markDirty()">
+              <input type="checkbox" id="cfg-sync_device_area" onchange="markDirty('device')">
             </div>
 
             <details class="ha-details" id="details-voice-sens" style="margin-bottom:0;">
@@ -1724,16 +1654,16 @@ const STUDIO_TEMPLATE = `<div class="studio-root">
 
             <div class="field">
               <label>Default Speaker Entity</label>
-              <select id="cfg-default_speaker" onchange="markDirty()"></select>
+              <select id="cfg-default_speaker" onchange="markDirty('device')"></select>
             </div>
             <div class="field">
               <label>Music Assistant Player</label>
-              <select id="cfg-ma_player_entity" onchange="markDirty()"></select>
+              <select id="cfg-ma_player_entity" onchange="markDirty('device')"></select>
               <p class="desc" style="margin:4px 0 0;">This device's own player in Music Assistant. Music Assistant doesn't report the device's MAC, so Latter needs this link for library playback, queues and lyrics.</p>
             </div>
             <div class="toggle-row" style="margin-bottom:10px;">
               <span>Auto-Switch Speaker &amp; Remote on Area Change</span>
-              <input type="checkbox" id="cfg-area_handoff" onchange="markDirty()">
+              <input type="checkbox" id="cfg-area_handoff" onchange="markDirty('device')">
             </div>
 
             <details class="ha-details" style="margin-bottom:0;">
@@ -1750,11 +1680,6 @@ const STUDIO_TEMPLATE = `<div class="studio-root">
       <!-- DEVICE TAB 4: POWER & BATTERY                                      -->
       <!-- ================================================================== -->
       <section id="view-power" class="hidden">
-        <div class="page-header">
-          <h2>Power &amp; Battery</h2>
-          <p>Configure screen timeouts, wake gestures, docked screensaver, and view live battery health.</p>
-        </div>
-
         <div class="grid-2">
           <div class="card">
             <h3>Sleep &amp; Wake Timeouts</h3>
@@ -1774,11 +1699,6 @@ const STUDIO_TEMPLATE = `<div class="studio-root">
       <!-- DEVICE TAB 5: ADMINISTRATION (IDENTITY, BLE, RAW, REMOVE)          -->
       <!-- ================================================================== -->
       <section id="view-system" class="hidden">
-        <div class="page-header">
-          <h2>Device Administration</h2>
-          <p>Device identity, BLE area tracking configuration, and entity inspection.</p>
-        </div>
-
         <div class="grid-2">
           <!-- CARD 1: DEVICE IDENTITY -->
           <div class="card">
@@ -1791,11 +1711,11 @@ const STUDIO_TEMPLATE = `<div class="studio-root">
             <div class="form-grid-2">
               <div class="field">
                 <label>Device Group</label>
-                <select id="cfg-device_group" onchange="markDirty()"></select>
+                <select id="cfg-device_group" onchange="markDirty('device')"></select>
               </div>
               <div class="field">
                 <label>Area Cards Per Page</label>
-                <input type="number" id="cfg-default_page_size" min="1" max="20" value="3" oninput="markDirty();">
+                <input type="number" id="cfg-default_page_size" min="1" max="20" value="3" oninput="markDirty('device');">
               </div>
             </div>
           </div>
@@ -1806,28 +1726,28 @@ const STUDIO_TEMPLATE = `<div class="studio-root">
             <p class="desc">Configure how this device roams between areas using ESPHome Bluetooth proxies.</p>
             <div class="toggle-row">
               <span>Enable BLE Proxy Area Tracking</span>
-              <input type="checkbox" id="cfg-native_ble_tracking" onchange="markDirty()">
+              <input type="checkbox" id="cfg-native_ble_tracking" onchange="markDirty('device')">
             </div>
             <div class="toggle-row" style="margin-bottom:10px;">
               <span>Auto-Switch Active Area on Movement</span>
-              <input type="checkbox" id="cfg-ble_auto_switch" onchange="markDirty()">
+              <input type="checkbox" id="cfg-ble_auto_switch" onchange="markDirty('device')">
             </div>
             <div id="embedded-area-ble" class="native-controls-box" style="margin-bottom:12px;"></div>
             <div class="field">
               <label>Default Fallback Area</label>
-              <select id="cfg-default_area" onchange="markDirty()"></select>
+              <select id="cfg-default_area" onchange="markDirty('device')"></select>
             </div>
             <div class="field">
               <label>BLE Target Address / Entity (Optional — MAC or private_ble_device)</label>
-              <input type="text" id="cfg-ble_target_address" class="mono" placeholder="Auto-discovered from ESPHome or device_tracker.*" oninput="markDirty()">
+              <input type="text" id="cfg-ble_target_address" class="mono" placeholder="Auto-discovered from ESPHome or device_tracker.*" oninput="markDirty('device')">
             </div>
             <div class="field">
               <label>BLE iBeacon UUID</label>
-              <input type="text" id="cfg-ble_beacon_uuid" oninput="markDirty();">
+              <input type="text" id="cfg-ble_beacon_uuid" oninput="markDirty('device');">
             </div>
             <div class="field">
               <label>External Area Sensor Override (Optional)</label>
-              <select id="cfg-presence_entity" onchange="markDirty()"></select>
+              <select id="cfg-presence_entity" onchange="markDirty('device')"></select>
             </div>
           </div>
         </div>
@@ -1913,9 +1833,10 @@ const jsArg = (v) => esc(JSON.stringify(v));
 let STATE = null;
 let CALENDARS = [];
 let IS_DIRTY = false;
+const DIRTY = {system: false, device: false};
 let INITIAL_FORM_LOADED = false;
 
-let CURRENT_SCOPE = "system";
+let CURRENT_SCOPE = "device";
 let DEVICE_SELECTED = false;
 let POLL_TIMER = null;
 let SELECTED_SURVEY_ID = localStorage.getItem("latter_ble_survey_subentry") || "";
@@ -1955,52 +1876,71 @@ const DOCK_APP_META = [
 ];
 
 // Must match custom_components/latter/studio/scope.py (checked by tests/test_protocol.py).
+// System commands never act on the selected Device; one that acts on a Device names it in its payload.
 const SYSTEM_WS_COMMANDS = new Set([
   "set_ble_area_offset",
   "set_area_fusion_mode",
   "auto_calibrate_here",
   "system_entity_action",
-  "esphome_entity_action",
   "send_test_notification",
   "check_system_updates",
-  "log_client_error",
   "clear_internal_logs",
   "remove_device",
   "add_ble_device",
   "set_device_remote_group",
   "create_device_group",
   "delete_device_group",
+  "capture_profile",
   "delete_profile",
   "apply_profile",
-  "export_backup_json",
-  "restore_backup"
+  "test_doorbell_speaker",
+  "save_system_config"
 ]);
 
+// Device commands act on the selected Device (ACTIVE_SUBENTRY_ID).
 const DEVICE_WS_COMMANDS = new Set([
-  "test_doorbell_speaker",
+  "esphome_entity_action",
   "upload_wallpaper",
   "select_wallpaper",
   "toggle_wallpaper_favorite",
   "delete_wallpaper",
-  "save_config",
-  "capture_profile"
+  "save_device_config"
 ]);
 
-async function callStudioCommand(bodyObj) {
-  if (!HASS_REF) throw new Error("Home Assistant connection not ready");
-  const { command, ...payload } = bodyObj || {};
-  const cmdName = command || "save_config";
-  if (DEVICE_WS_COMMANDS.has(cmdName) && !ACTIVE_SUBENTRY_ID) {
-    showToast("Select a device first");
+const STUDIO_REV = 3;
+
+// Every Studio websocket call goes through here: a failure shows an error toast and resolves to null.
+async function callStudioWS(msg) {
+  if (!HASS_REF) {
+    showToast("Home Assistant connection not ready", "error");
     return null;
   }
-  const wsType = DEVICE_WS_COMMANDS.has(cmdName) ? "latter/device/command" : "latter/system/command";
-  return await HASS_REF.callWS({
-    type: wsType,
-    command: cmdName,
-    subentry_id: ACTIVE_SUBENTRY_ID || null,
+  try {
+    return await HASS_REF.callWS(msg);
+  } catch (err) {
+    showToast(`Failed: ${err?.message || err?.code || err || "unknown error"}`, "error");
+    return null;
+  }
+}
+
+async function callStudioCommand(bodyObj) {
+  const { command, ...payload } = bodyObj || {};
+  const isDevice = DEVICE_WS_COMMANDS.has(command);
+  if (!isDevice && !SYSTEM_WS_COMMANDS.has(command)) {
+    showToast(`Failed: unknown Studio command '${command}'`, "error");
+    return null;
+  }
+  if (isDevice && !ACTIVE_SUBENTRY_ID) {
+    showToast("Failed: select a Device first", "error");
+    return null;
+  }
+  const msg = {
+    type: isDevice ? "latter/device/command" : "latter/system/command",
+    command,
     payload
-  });
+  };
+  if (ACTIVE_SUBENTRY_ID) msg.subentry_id = ACTIVE_SUBENTRY_ID;
+  return await callStudioWS(msg);
 }
 
 function toggleParentHaSidebar() {
@@ -2014,22 +1954,19 @@ function closeCameraPreviewBox() {
   if (box) box.style.display = "none";
 }
 
-function showToast(msg) {
+let TOAST_TIMER = null;
+
+function showToast(msg, kind = "info") {
   const t = doc.getElementById("toast");
+  if (!t) return;
+  const isError = kind === "error";
   t.textContent = msg;
+  t.classList.toggle("error", isError);
+  t.setAttribute("role", isError ? "alert" : "status");
   t.style.display = "block";
-  setTimeout(() => { t.style.display = "none"; }, 2400);
+  if (TOAST_TIMER) clearTimeout(TOAST_TIMER);
+  TOAST_TIMER = setTimeout(() => { t.style.display = "none"; }, isError ? 6000 : 2400);
 }
-
-window.addEventListener("error", (ev) => {
-  const msg = `${ev.message || "JS Error"} at line ${ev.lineno || "?"}`;
-  callStudioCommand({command: "log_client_error", source: "webui_js", message: msg}).catch(() => {});
-});
-
-window.addEventListener("unhandledrejection", (ev) => {
-  const msg = `Unhandled Promise Rejection: ${ev.reason?.message || ev.reason || "unknown"}`;
-  callStudioCommand({command: "log_client_error", source: "webui_promise", message: msg}).catch(() => {});
-});
 
 function renderLogsView() {
   const logPre = doc.getElementById("internal-log-output");
@@ -2084,42 +2021,47 @@ async function clearInternalLogs() {
   }
 }
 
-function markDirty() {
-  IS_DIRTY = true;
-  doc.getElementById("dirty-indicator").classList.add("visible");
+function renderDirtyState() {
+  IS_DIRTY = DIRTY.system || DIRTY.device;
+  doc.getElementById("dirty-indicator")?.classList.toggle("visible", IS_DIRTY);
   const btn = doc.getElementById("btn-save-changes");
   if (btn) {
-    btn.disabled = false;
-    btn.textContent = "Save Changes";
+    btn.disabled = !IS_DIRTY;
+    btn.textContent = IS_DIRTY ? "Save Changes" : "Saved";
   }
 }
 
-function clearDirty() {
-  IS_DIRTY = false;
-  doc.getElementById("dirty-indicator").classList.remove("visible");
-  const btn = doc.getElementById("btn-save-changes");
-  if (btn) {
-    btn.disabled = true;
-    btn.textContent = "Saved";
+function markDirty(scope) {
+  DIRTY[scope === "system" ? "system" : "device"] = true;
+  renderDirtyState();
+}
+
+function clearDirty(scope) {
+  if (scope === "system" || scope === "device") {
+    DIRTY[scope] = false;
+  } else {
+    DIRTY.system = false;
+    DIRTY.device = false;
   }
+  renderDirtyState();
 }
 
 
 const VIEW_TITLES = {
-  system_overview: "Overview",
+  system_overview: "System overview",
   shared_entities: "Shared Entities",
   remotes: "Media & Remotes",
   system_sync: "Groups & Profiles",
-  area_tracking: "BLE Calibration",
-  system_admin: "Administration",
+  area_tracking: "BLE & Area Presence",
+  system_admin: "System settings",
   select_device_prompt: "Devices",
   dashboard: "Overview",
   home_display: "Display & Home",
   audio_voice: "Audio & Voice",
   power: "Power & Battery",
-  system: "Administration"
+  system: "Device settings"
 };
-let CURRENT_VIEW_ID = "dashboard";
+let CURRENT_VIEW_ID = "select_device_prompt";
 
 function updateUnifiedPageTitle(viewId) {
   if (viewId) CURRENT_VIEW_ID = viewId;
@@ -2165,7 +2107,7 @@ async function checkSystemUpdates() {
   const data = await callStudioCommand({command: "check_system_updates"});
   if (data) {
     applyStateToDom(data, false);
-    showToast("Checked for Latter & device firmware updates");
+    showToast("Checking every Device for firmware updates");
   }
 }
 
@@ -2248,7 +2190,7 @@ function selectCurrentDevice() {
   }
   DEVICE_SELECTED = true;
   if (STATE) {
-    applyStateToDom(STATE, true);
+    applyStateToDom(STATE, {system: false, device: true});
   }
   setScope("device", "dashboard");
 }
@@ -2266,13 +2208,12 @@ async function switchSystemDevice(targetRef) {
   ACTIVE_SUBENTRY_ID = subId;
   DEVICE_SELECTED = true;
   if (changed || !STATE) {
-    INITIAL_FORM_LOADED = false;
-    await refreshState(true);
+    await refreshState({system: !DIRTY.system, device: true});
     if (HOST_ELEMENT && typeof HOST_ELEMENT._resubscribe === "function") {
       await HOST_ELEMENT._resubscribe(false);
     }
   } else {
-    applyStateToDom(STATE, true);
+    applyStateToDom(STATE, {system: false, device: true});
   }
   setScope("device", "dashboard");
 }
@@ -2354,7 +2295,7 @@ function toggleDockAppToken(tok) {
     nowEnabled = true;
   }
   inp.value = active.join(",");
-  markDirty();
+  markDirty('device');
   renderDockPillsFromInput();
 
   // Also sync the underlying ESPHome Shortcut switch immediately if present
@@ -2386,7 +2327,7 @@ function moveDockAppToken(tok, dir) {
   active[idx] = active[swapIdx];
   active[swapIdx] = tmp;
   inp.value = active.join(",");
-  markDirty();
+  markDirty('device');
   renderDockPillsFromInput();
 }
 
@@ -2450,16 +2391,13 @@ function renderSystemOverview(systemDevices, systemControls, cfg) {
   const profiles = STATE?.saved_profiles || [];
   const live = STATE?.live || {};
 
-  const profDevLbl = doc.getElementById("prof-active-dev-label");
-  if (profDevLbl) profDevLbl.textContent = STATE?.title || cfg?.device_slug || "Active Device";
-
-  const picker = doc.getElementById("system-device-picker");
-  if (picker && systemDevices) {
-    const placeholder = `<option value="" ${!DEVICE_SELECTED ? 'selected' : ''}>— Select a Device —</option>`;
-    picker.innerHTML = placeholder + systemDevices.map(d =>
-      `<option value="${esc(d.subentry_id || d.entry_id)}" ${(DEVICE_SELECTED && d.is_current) ? 'selected' : ''}>${esc(d.title)}</option>`
-    ).join("");
-  }
+  // Pickers for System actions that act on one Device: the action names its Device (studio-design.md section 5).
+  const allDevices = systemDevices || [];
+  const latterDevices = allDevices.filter(d => d.kind !== "ble_tag");
+  fillDevicePicker("profile-source-device", latterDevices, "— Choose a Device —");
+  fillDevicePicker("doorbell-test-device", latterDevices, "— Choose a Device —");
+  fillDevicePicker("bkp-restore-device", allDevices, "— Choose a Device —");
+  fillDevicePicker("bkp-scope-select", allDevices, null, [{value: "system", label: "Full System & All Devices"}], "device:");
 
   const quickProfSel = doc.getElementById("quick-profile-select");
   if (quickProfSel && profiles.length) {
@@ -2471,14 +2409,14 @@ function renderSystemOverview(systemDevices, systemControls, cfg) {
 
   const devGrpSel = doc.getElementById("cfg-device_group");
   if (devGrpSel && groups.length) {
-    const curGrp = cfg?.device_group || "handhelds";
+    const curGrp = cfg?.device_group || "unassigned";
     devGrpSel.innerHTML = groups.map(g =>
       `<option value="${esc(g.id)}" ${g.id === curGrp ? 'selected' : ''}>Group: ${esc(g.name)}</option>`
     ).join("");
   }
 
   const targetScopes = [
-    {id: "current", name: `Current Device (${STATE?.title || cfg?.device_slug || 'Active'})`},
+    {id: "", name: "— Choose where to apply —"},
     {id: "all", name: `All Devices (${(systemDevices || []).length})`}
   ];
   groups.forEach(g => {
@@ -2491,7 +2429,7 @@ function renderSystemOverview(systemDevices, systemControls, cfg) {
 
   const profScopeSel = doc.getElementById("profile-target-scope");
   if (profScopeSel) {
-    const prevVal = profScopeSel.value || "current";
+    const prevVal = profScopeSel.value || "";
     profScopeSel.innerHTML = targetScopes.map(o =>
       `<option value="${esc(o.id)}" ${o.id === prevVal ? 'selected' : ''}>${esc(o.name)}</option>`
     ).join("");
@@ -2528,6 +2466,7 @@ function renderSystemOverview(systemDevices, systemControls, cfg) {
       {id: "online", label: "Online / Active Devices"},
       {id: "native", label: "Latter Native Devices"},
       {id: "ble_tracked", label: "BLE Tracked Devices"},
+      {id: "assigned_person", label: "Devices with an assigned person"},
       {id: "roaming", label: "Roaming Devices"},
       {id: "stationary", label: "Stationary Devices"},
       {id: "headless", label: "Screenless / Headless Devices"},
@@ -2552,6 +2491,7 @@ function renderSystemOverview(systemDevices, systemControls, cfg) {
     if (cat === "online") return d.status_label !== "Offline";
     if (cat === "native") return isNative;
     if (cat === "ble_tracked") return isBleTracked;
+    if (cat === "assigned_person") return !!d.assigned_person;
     if (cat === "roaming") return isRoaming;
     if (cat === "stationary") return !isRoaming;
     if (cat === "headless") return isBleTag || !d.has_display;
@@ -2588,12 +2528,12 @@ function renderSystemOverview(systemDevices, systemControls, cfg) {
   const tableRowsHtml = filteredDevices.map(d => {
     const actAction = d.is_current
       ? `selectCurrentDevice()`
-      : `switchSystemDevice(${jsArg(d.subentry_id || d.entry_id)})`;
-    const st = d.status_label || "Online";
+      : `switchSystemDevice(${jsArg(d.subentry_id)})`;
+    const st = d.status_label || "—";
     const dotCls = st === "Update Available" ? "update" : (st === "Offline" ? "offline" : "online");
     const areaVal = d.area_label || "Roaming";
     const grpVal = d.device_group_name || "Unassigned";
-    const mdlVal = d.model_label || "ESPHome Node";
+    const mdlVal = d.model_label || "—";
     return `<tr onclick="${actAction}">
       <td class="col-name">${esc(d.title)}</td>
       <td>${esc(mdlVal)}</td>
@@ -2633,25 +2573,25 @@ function renderSystemOverview(systemDevices, systemControls, cfg) {
   const bleTrackedDevs = allDevs.filter(d => d.has_ble || d.kind === "ble_tag" || (d.area_label || "Roaming") === "Roaming").length;
   const scannersMap = STATE?.live?.ble_scanners_map || {};
   const proxyCount = Object.keys(scannersMap).length || (STATE?.live?.ble_survey_rows || []).length;
-  const peopleCount = (STATE?.catalog?.persons || []).length;
+  const assignedPersonDevs = allDevs.filter(d => d.assigned_person).length;
 
   const setSysTxt = (id, val) => {
     const el = doc.getElementById(id);
     if (el) el.textContent = String(val);
   };
 
-  const sysVerClean = String(STATE?.version || "2.2.0").replace(/^v/i, "");
-  setSysTxt("sys-sum-version", `v${sysVerClean}`);
+  setSysTxt("sys-sum-version", STATE?.version ? `v${String(STATE.version).replace(/^v/i, "")}` : "—");
   setSysTxt("sys-sum-online", `${onlineDevs} / ${totalDevs}`);
   setSysTxt("sys-sum-native", nativeDevs);
   setSysTxt("sys-sum-ble-tracked", bleTrackedDevs);
-  setSysTxt("sys-sum-people", peopleCount);
+  setSysTxt("sys-sum-people", assignedPersonDevs);
   setSysTxt("sys-sum-proxies", proxyCount);
 
-  const remCnt = Array.isArray(cfg?.remotes_list) ? cfg.remotes_list.filter(Boolean).length : 0;
-  const volCnt = Array.isArray(cfg?.volume_overrides) ? cfg.volume_overrides.length : 0;
-  const camCnt = Array.isArray(cfg?.camera_entities) ? cfg.camera_entities.filter(Boolean).length : (cfg?.camera_entity ? 1 : 0);
-  const calCnt = Array.isArray(cfg?.calendar_entities) ? cfg.calendar_entities.filter(Boolean).length : 0;
+  const sysCfg = STATE?.system_config || {};
+  const remCnt = (sysCfg.remotes_list || []).length;
+  const volCnt = (sysCfg.volume_overrides || []).length;
+  const camCnt = (sysCfg.camera_entities || []).length;
+  const calCnt = (sysCfg.calendar_entities || []).length;
 
   setSysTxt("sys-sum-remotes", remCnt);
   setSysTxt("sys-sum-vol", volCnt);
@@ -2661,7 +2601,7 @@ function renderSystemOverview(systemDevices, systemControls, cfg) {
 
   const alertDevSel = doc.getElementById("test-alert-device");
   if (alertDevSel && systemDevices && systemDevices.length) {
-    const prevTarget = alertDevSel.value || (STATE?.config?.device_slug || systemDevices[0].device_slug);
+    const prevTarget = alertDevSel.value || systemDevices[0].device_slug;
     const devOpts = systemDevices.map(d =>
       `<option value="${esc(d.device_slug)}" ${d.device_slug === prevTarget ? 'selected' : ''}>${esc(d.title)} (${esc(d.device_slug)})</option>`
     );
@@ -2762,10 +2702,22 @@ function renderSystemOverview(systemDevices, systemControls, cfg) {
   (void 0);
 }
 
+function fillDevicePicker(selId, devices, placeholder, leadOptions = [], valuePrefix = "") {
+  const sel = doc.getElementById(selId);
+  if (!sel) return;
+  const prev = sel.value;
+  const opts = (leadOptions || []).map(o => ({value: o.value, label: o.label}));
+  (devices || []).forEach(d => opts.push({value: `${valuePrefix}${d.subentry_id}`, label: `Device: ${d.title}`}));
+  const head = placeholder ? `<option value="">${esc(placeholder)}</option>` : "";
+  sel.innerHTML = head + opts.map(o =>
+    `<option value="${esc(o.value)}" ${o.value === prev ? 'selected' : ''}>${esc(o.label)}</option>`
+  ).join("");
+}
+
 async function applyQuickProfileFromOverview() {
   const sel = doc.getElementById("quick-profile-select");
-  if (!sel || !sel.value) return;
-  const data = await callStudioCommand({command: "apply_profile", profile_id: sel.value, target_scope: "current"});
+  if (!sel || !sel.value || !ACTIVE_SUBENTRY_ID) return;
+  const data = await callStudioCommand({command: "apply_profile", profile_id: sel.value, target_scope: `device:${ACTIVE_SUBENTRY_ID}`});
   if (data) {
     applyStateToDom(data, true);
     showToast("Applied configuration profile to device");
@@ -2967,20 +2919,14 @@ async function quickAdoptBleCandidate(idx) {
 
 async function autoCalibrateHere(areaId) {
   if (!SELECTED_SURVEY_ID) {
-    showToast("Select the BLE survey device first");
+    showToast("Failed: select the BLE survey device first", "error");
     return;
   }
-  let data;
-  try {
-    data = await callStudioCommand({
-      command: "auto_calibrate_here",
-      area_id: areaId,
-      survey_subentry_id: SELECTED_SURVEY_ID
-    });
-  } catch (err) {
-    showToast(`Calibration failed: ${err?.message || err}`);
-    return;
-  }
+  const data = await callStudioCommand({
+    command: "auto_calibrate_here",
+    area_id: areaId,
+    survey_subentry_id: SELECTED_SURVEY_ID
+  });
   if (data) {
     applyStateToDom(data, false);
     showToast("Calibrated current area offset");
@@ -3015,24 +2961,30 @@ function refreshActiveCameraPreview() {
 }
 
 async function testDoorbellSpeaker() {
-  const firstCam = doc.querySelector("#cameras-list .cam-ent-sel")?.value || STATE?.config?.camera_entity || "";
-  if (!firstCam) {
-    showToast("Add a camera entity first");
+  const subentryId = doc.getElementById("doorbell-test-device")?.value || "";
+  const camera = (STATE?.system_config?.camera_entities || [])[0] || "";
+  if (!subentryId) {
+    showToast("Failed: choose the Device to test from", "error");
+    return;
+  }
+  if (!camera) {
+    showToast("Failed: add a camera and save first", "error");
     return;
   }
   const data = await callStudioCommand({
-      command: "test_doorbell_speaker",
-      camera_entity: firstCam,
-      message: "Hello! Please leave the package by the front door."
-    });
+    command: "test_doorbell_speaker",
+    subentry_id: subentryId,
+    camera_entity: camera,
+    message: "This is a test of the Latter door speaker."
+  });
   if (data) {
     applyStateToDom(data, false);
-    showToast(`Sent test message to ${firstCam} speaker`);
+    showToast(`Sent a test message to ${camera}`);
   }
 }
 
 async function sendTestNotification() {
-  const target_device = doc.getElementById("test-alert-device")?.value || STATE?.config?.device_slug || "";
+  const target_device = doc.getElementById("test-alert-device")?.value || "";
   const title = doc.getElementById("test-alert-title").value.trim() || "Alert";
   const message = doc.getElementById("test-alert-msg").value.trim() || "Test notification";
   const priority = doc.getElementById("test-alert-prio").value;
@@ -3051,11 +3003,13 @@ async function sendTestNotification() {
   }
 }
 
-function renderNativeControlRow(item, showEntityId=false) {
+function renderNativeControlRow(item, showEntityId=false, readOnlyNote="") {
   const stateText = `${item.state}${item.unit ? ' ' + item.unit : ''}`;
   let widgetHtml = `<span class="state-badge">${esc(stateText)}</span>`;
 
-  if (item.domain === "button") {
+  if (readOnlyNote) {
+    // Read-only: Latter owns this entity's state.
+  } else if (item.domain === "button") {
     widgetHtml = `<button class="btn-secondary" style="padding:5px 12px;font-size:12px;" onclick="espAction(${jsArg(item.entity_id)}, 'press')">Run</button>`;
   } else if (item.domain === "update") {
     const hasUpd = item.state === "on";
@@ -3082,7 +3036,7 @@ function renderNativeControlRow(item, showEntityId=false) {
   return `<div class="native-ctrl-row">
     <div class="lbl">
       ${esc(item.name)}
-      ${showEntityId ? `<small>${esc(item.entity_id)}</small>` : ''}
+      ${showEntityId ? `<small>${esc(item.entity_id)}</small>` : (readOnlyNote ? `<small>${esc(readOnlyNote)}</small>` : '')}
     </div>
     <div class="widget">${widgetHtml}</div>
   </div>`;
@@ -3122,7 +3076,11 @@ function renderCohesiveDeviceSections() {
     if (low.includes("category")) areaUiItems.push(it);
     else if (!low.includes("handoff")) areaBleItems.push(it);
   });
-  doc.getElementById("embedded-area-ble").innerHTML = areaBleItems.map(it => renderNativeControlRow(it)).join("");
+  const isPresenceBeaconSwitch = (it) => it.domain === "switch"
+    && /presence[ _]beacon/.test(`${it.name} ${it.entity_id}`.toLowerCase());
+  doc.getElementById("embedded-area-ble").innerHTML = areaBleItems.map(it => isPresenceBeaconSwitch(it)
+    ? renderNativeControlRow(it, false, "Follows Enable BLE Proxy Area Tracking")
+    : renderNativeControlRow(it)).join("");
 
   // 2. Home Screen & Area UI: Filter out the 6 redundant "Shortcut *" switches (handled by Home Dock App pills)
   const rawHomeItems = getSectionItems("home").filter(it => {
@@ -3141,8 +3099,10 @@ function renderCohesiveDeviceSections() {
   const abModeItem = rawDispItems.find(it => `${it.name} ${it.entity_id}`.toLowerCase().includes("auto_brightness") || (it.name || "").toLowerCase().includes("auto brightness"));
   const abMode = abModeItem ? String(abModeItem.state) : "Sun Synchronized";
 
+  const isWeatherSimulation = (it) => /condition[ _]simulation/.test(`${it.name} ${it.entity_id}`.toLowerCase());
   const filteredDisp = rawDispItems.filter(it => {
     const low = `${it.name} ${it.entity_id}`.toLowerCase();
+    if (isWeatherSimulation(it)) return false;
     if (abMode === "Disabled") {
       if (low.includes("day brightness") || low.includes("night brightness") || low.includes("start hour")) return false;
     } else if (abMode === "Sun Synchronized") {
@@ -3155,7 +3115,7 @@ function renderCohesiveDeviceSections() {
   const dispItems = sortByOrder(filteredDisp, [
     "start screen", "clock face", "time format", "color profile",
     "auto brightness", "manual brightness", "day brightness", "night brightness",
-    "day start hour", "night start hour", "condition simulation"
+    "day start hour", "night start hour"
   ]);
   doc.getElementById("embedded-display").innerHTML = dispItems.map(it => renderNativeControlRow(it)).join("");
 
@@ -3262,7 +3222,7 @@ function renderCohesiveDeviceSections() {
     ? batItems.map(it => renderNativeControlRow(it)).join("")
     : `<p class="desc">No battery telemetry entities reported.</p>`;
 
-  const netItems = getSectionItems("network");
+  const netItems = getSectionItems("network").concat(rawDispItems.filter(isWeatherSimulation));
   doc.getElementById("embedded-network").innerHTML = netItems.length
     ? netItems.map(it => renderNativeControlRow(it)).join("")
     : `<p class="desc">No network or diagnostic entities reported.</p>`;
@@ -3325,7 +3285,7 @@ function renderWallpaperGallery(wallpapers, slug, shape) {
 async function uploadWallpaperFile() {
   const input = doc.getElementById("wp-file-input");
   if (!input.files || !input.files.length) {
-    showToast("Select an image file first");
+    showToast("Failed: select an image file first", "error");
     return;
   }
   const file = input.files[0];
@@ -3346,7 +3306,6 @@ async function uploadWallpaperFile() {
 }
 
 async function selectWallpaperSource(sourceId) {
-  doc.getElementById("cfg-wallpaper_source").value = sourceId;
   const data = await callStudioCommand({command: "select_wallpaper", source_id: sourceId});
   if (data) {
     applyStateToDom(data, false);
@@ -3426,11 +3385,11 @@ function addCameraRow(entityId="") {
   row.innerHTML = `
     <div style="flex:1;min-width:0;">
       <small class="cam-slot-lbl" style="color:var(--muted);display:block;margin-bottom:3px;font-size:11px;font-weight:500;">${esc(slotTitle)}</small>
-      <select class="cam-ent-sel" style="width:100%;max-width:none;" onchange="markDirty()"><option value="">— Select Camera —</option>${camOptions}</select>
+      <select class="cam-ent-sel" style="width:100%;max-width:none;" onchange="markDirty('system')"><option value="">— Select Camera —</option>${camOptions}</select>
     </div>
     <div style="display:flex;gap:6px;align-items:center;">
       <button type="button" class="btn-secondary" style="padding:6px 10px;font-size:12px;" onclick="renderCameraPreview(this.parentElement.parentElement.querySelector('.cam-ent-sel').value)">Preview</button>
-      <button type="button" class="btn-danger" title="Remove Camera" onclick="this.parentElement.parentElement.remove(); renumberCameraRows(); markDirty();">✕</button>
+      <button type="button" class="btn-danger" title="Remove Camera" onclick="this.parentElement.parentElement.remove(); renumberCameraRows(); markDirty('system');">✕</button>
     </div>
   `;
   list.appendChild(row);
@@ -3447,9 +3406,9 @@ function addCalendarRow(entityId="") {
   ).join("");
   row.innerHTML = `
     <div style="flex:1;min-width:0;">
-      <select class="cal-ent-sel" style="width:100%;max-width:none;" onchange="markDirty()"><option value="">— Select Calendar —</option>${calOptions}</select>
+      <select class="cal-ent-sel" style="width:100%;max-width:none;" onchange="markDirty('system')"><option value="">— Select Calendar —</option>${calOptions}</select>
     </div>
-    <button type="button" class="btn-danger" title="Remove Calendar" onclick="this.parentElement.remove(); markDirty();">✕</button>
+    <button type="button" class="btn-danger" title="Remove Calendar" onclick="this.parentElement.remove(); markDirty('system');">✕</button>
   `;
   list.appendChild(row);
 }
@@ -3501,7 +3460,7 @@ function renderRemoteGroupsEditor() {
         <div class="form-grid-2" style="margin-bottom:10px;">
           <div>
             <small style="color:var(--muted);display:block;margin-bottom:3px;font-size:11px;">Group Name</small>
-            <input type="text" value="${esc(grp.name || '')}" placeholder="e.g. Living Room AV" oninput="updateRemoteGroupField(${gIdx}, 'name', this.value)">
+            <input type="text" value="${esc(grp.name || '')}" placeholder="e.g. TV wall" oninput="updateRemoteGroupField(${gIdx}, 'name', this.value)">
           </div>
           <div style="display:flex;gap:8px;align-items:flex-end;">
             <div style="flex:1;">
@@ -3534,14 +3493,14 @@ function addRemoteGroupRow() {
 
 function removeRemoteGroupRow(gIdx) {
   REMOTE_GROUPS_STATE.splice(gIdx, 1);
-  markDirty();
+  markDirty('system');
   renderRemoteGroupsEditor();
 }
 
 function updateRemoteGroupField(gIdx, field, val) {
   if (!REMOTE_GROUPS_STATE[gIdx]) return;
   REMOTE_GROUPS_STATE[gIdx][field] = val;
-  markDirty();
+  markDirty('system');
   if (field === "name") renderDeviceRemoteAssignments();
 }
 
@@ -3554,7 +3513,7 @@ function toggleRemoteInGroup(gIdx, entId) {
   } else {
     grp.remotes.push(entId);
   }
-  markDirty();
+  markDirty('system');
   renderRemoteGroupsEditor();
 }
 
@@ -3570,7 +3529,7 @@ function renderDeviceRemoteAssignments() {
     const curMode = d.device_remote_group || "area_auto";
     const opts = [
       `<option value="area_auto" ${curMode === 'area_auto' ? 'selected' : ''}>Follow Active Area (Hide Remote App When Area Has None)</option>`,
-      ...REMOTE_GROUPS_STATE.map(g =>
+      ...(STATE?.system_config?.remote_groups || []).map(g =>
         `<option value="${esc('group:' + g.id)}" ${curMode === ('group:' + g.id) ? 'selected' : ''}>Static Group: ${esc(g.name)}</option>`
       ),
       `<option value="all" ${curMode === 'all' ? 'selected' : ''}>All System Remotes</option>`
@@ -3627,9 +3586,9 @@ function addRemoteControlRow(entityId="") {
   row.innerHTML = `
     <div style="flex:1;min-width:0;">
       <small class="rem-slot-lbl" style="color:var(--muted);display:block;margin-bottom:3px;font-size:11px;font-weight:500;">${esc(slotTitle)}</small>
-      <select class="rem-ent-sel" style="width:100%;max-width:none;" onchange="markDirty(); renderRemoteGroupsEditor();"><option value="">— Select Remote or Media Player —</option>${remOptions}</select>
+      <select class="rem-ent-sel" style="width:100%;max-width:none;" onchange="markDirty('system'); renderRemoteGroupsEditor();"><option value="">— Select Remote or Media Player —</option>${remOptions}</select>
     </div>
-    <button type="button" class="btn-danger" title="Remove Remote" onclick="this.parentElement.remove(); renumberRemoteControlRows(); markDirty();">✕</button>
+    <button type="button" class="btn-danger" title="Remove Remote" onclick="this.parentElement.remove(); renumberRemoteControlRows(); markDirty('system');">✕</button>
   `;
   list.appendChild(row);
 }
@@ -3655,14 +3614,14 @@ function addVolumeOverrideRow(speaker="", target="") {
     <div class="form-grid-2" style="flex:1;min-width:0;">
       <div>
         <small style="color:var(--muted);display:block;margin-bottom:3px;font-size:11px;">When Streaming To Speaker</small>
-        <select class="vo-spk" style="width:100%;max-width:none;" onchange="markDirty()"><option value="">— Select Speaker —</option>${spkOptions}</select>
+        <select class="vo-spk" style="width:100%;max-width:none;" onchange="markDirty('system')"><option value="">— Select Speaker —</option>${spkOptions}</select>
       </div>
       <div>
         <small style="color:var(--muted);display:block;margin-bottom:3px;font-size:11px;">Control Volume On</small>
-        <select class="vo-tgt" style="width:100%;max-width:none;" onchange="markDirty()"><option value="">— Select Volume Target —</option>${tgtOptions}</select>
+        <select class="vo-tgt" style="width:100%;max-width:none;" onchange="markDirty('system')"><option value="">— Select Volume Target —</option>${tgtOptions}</select>
       </div>
     </div>
-    <button type="button" class="btn-danger" title="Remove Override" onclick="this.parentElement.remove(); markDirty();">✕</button>
+    <button type="button" class="btn-danger" title="Remove Override" onclick="this.parentElement.remove(); markDirty('system');">✕</button>
   `;
   list.appendChild(row);
 }
@@ -3779,7 +3738,7 @@ function updateResetDeviceConfirm() {
 
 function openResetDeviceModal() {
   if (!ACTIVE_SUBENTRY_ID) {
-    showToast("Select a device first");
+    showToast("Failed: select a Device first", "error");
     return;
   }
   ensureResetDeviceModal();
@@ -3809,20 +3768,15 @@ async function confirmResetDevice() {
   const latterOptions = !!(opts && opts.checked);
   closeResetDeviceModal();
   if (!HASS_REF || !ACTIVE_SUBENTRY_ID || (!deviceSettings && !latterOptions)) return;
-  try {
-    const data = await HASS_REF.callWS({
-      type: "latter/device/reset",
-      subentry_id: ACTIVE_SUBENTRY_ID,
-      device_settings: deviceSettings,
-      latter_options: latterOptions
-    });
-    if (data) {
-      INITIAL_FORM_LOADED = false;
-      applyStateToDom(data, true);
-    }
+  const data = await callStudioWS({
+    type: "latter/device/reset",
+    subentry_id: ACTIVE_SUBENTRY_ID,
+    device_settings: deviceSettings,
+    latter_options: latterOptions
+  });
+  if (data) {
+    applyStateToDom(data, {system: false, device: true});
     showToast(deviceSettings ? "Reset sent; the device is restarting" : "Latter options reset to defaults");
-  } catch (err) {
-    showToast(`Reset failed: ${err?.message || err}`);
   }
 }
 
@@ -3833,15 +3787,17 @@ async function confirmRemoveManagedDevice() {
   if (!entryId) return;
   const data = await callStudioCommand({command: "remove_device", subentry_id: entryId});
   if (data) {
-    if (data.removed) {
-      ACTIVE_SUBENTRY_ID = data.next_subentry_id || "";
+    const removedSelected = data.removed && data.removed_subentry_id === ACTIVE_SUBENTRY_ID;
+    if (removedSelected) {
+      ACTIVE_SUBENTRY_ID = "";
       DEVICE_SELECTED = false;
       setScope("device", "select_device_prompt");
     }
     applyStateToDom(data, false);
     showToast(`Removed '${title}' from Latter`);
-  } else {
-    showToast("Failed to remove device");
+    if (removedSelected && HOST_ELEMENT && typeof HOST_ELEMENT._resubscribe === "function") {
+      await HOST_ELEMENT._resubscribe(false);
+    }
   }
 }
 
@@ -3940,7 +3896,7 @@ async function confirmAddDeviceModal() {
 }
 
 function onAssignedPersonChanged(personEnt) {
-  markDirty();
+  markDirty('device');
 }
 
 function toggleDeviceTableSort(col) {
@@ -3987,11 +3943,17 @@ async function deleteDeviceGroup(groupId) {
   }
 }
 
-async function captureCurrentDeviceProfile() {
+async function captureDeviceProfile() {
+  const subentryId = doc.getElementById("profile-source-device")?.value || "";
+  const source = (STATE?.system_devices || []).find(d => d.subentry_id === subentryId);
+  if (!source) {
+    showToast("Failed: choose the Device to capture from", "error");
+    return;
+  }
   const nameEl = doc.getElementById("new-profile-name");
   const descEl = doc.getElementById("new-profile-desc");
-  const name = (nameEl?.value || "").trim() || `${STATE?.title || 'Device'} Profile`;
-  const data = await callStudioCommand({command: "capture_profile", name, description: (descEl?.value || "").trim()});
+  const name = (nameEl?.value || "").trim() || `${source.title} Profile`;
+  const data = await callStudioCommand({command: "capture_profile", subentry_id: subentryId, name, description: (descEl?.value || "").trim()});
   if (data) {
     if (nameEl) nameEl.value = "";
     if (descEl) descEl.value = "";
@@ -4001,11 +3963,16 @@ async function captureCurrentDeviceProfile() {
 }
 
 async function applySavedProfile(profileId) {
-  const scope = doc.getElementById("profile-target-scope")?.value || "current";
+  const scopeSel = doc.getElementById("profile-target-scope");
+  const scope = scopeSel?.value || "";
+  if (!scope) {
+    showToast("Failed: choose where to apply the profile", "error");
+    return;
+  }
   const data = await callStudioCommand({command: "apply_profile", profile_id: profileId, target_scope: scope});
   if (data) {
-    applyStateToDom(data, true);
-    showToast(`Applied profile to ${scope}`);
+    applyStateToDom(data, {system: false, device: true});
+    showToast(`Applied the profile to ${scopeSel?.selectedOptions?.[0]?.textContent || scope}`);
   }
 }
 
@@ -4035,17 +4002,20 @@ function triggerJsonDownload(bundle) {
 }
 
 async function exportBackupToComputer(overrideScope) {
-  if (!HASS_REF) return;
-  const scope = overrideScope || doc.getElementById("bkp-scope-select")?.value || "system";
-  const wsType = scope === "device" ? "latter/device/export" : "latter/system/export";
-  const data = await HASS_REF.callWS({
-    type: wsType,
-    subentry_id: ACTIVE_SUBENTRY_ID || null,
-    scope
-  });
+  const choice = overrideScope === "device"
+    ? `device:${ACTIVE_SUBENTRY_ID}`
+    : (doc.getElementById("bkp-scope-select")?.value || "system");
+  const deviceId = choice.startsWith("device:") ? choice.slice("device:".length) : "";
+  if (choice.startsWith("device:") && !deviceId) {
+    showToast("Failed: choose a Device", "error");
+    return;
+  }
+  const data = await callStudioWS(deviceId
+    ? {type: "latter/device/export", subentry_id: deviceId}
+    : {type: "latter/system/export"});
   if (data && data.bundle) {
     triggerJsonDownload(data.bundle);
-    showToast(`Downloaded ${scope} backup .JSON`);
+    showToast(deviceId ? "Downloaded the Device backup" : "Downloaded the System backup");
   }
 }
 
@@ -4059,23 +4029,31 @@ function restoreFromUploadedFile() {
   const file = input.files[0];
   const reader = new FileReader();
   reader.onload = async () => {
+    let bundle;
     try {
       const parsed = JSON.parse(reader.result);
-      const bundle = parsed.bundle || parsed;
-      const wsType = bundle.scope === "device" ? "latter/device/import" : "latter/system/import";
-      const data = await HASS_REF.callWS({
-        type: wsType,
-        subentry_id: ACTIVE_SUBENTRY_ID || null,
-        bundle,
-        restore_esphome_entities: restoreEsp
-      });
-      if (data) {
-        input.value = "";
-        applyStateToDom(data, true);
-        showToast(`Restored ${bundle.scope || "backup"} from file`);
-      }
+      bundle = parsed.bundle || parsed;
     } catch (_e) {
-      showToast("Restore failed: invalid JSON backup file");
+      showToast("Failed: that file isn't a Latter backup (.JSON)", "error");
+      return;
+    }
+    let msg;
+    if (bundle.scope === "device") {
+      const targetId = doc.getElementById("bkp-restore-device")?.value || "";
+      if (!targetId) {
+        showToast("Failed: choose the Device to restore this Device backup onto", "error");
+        return;
+      }
+      msg = {type: "latter/device/import", subentry_id: targetId, bundle, restore_esphome_entities: restoreEsp};
+    } else {
+      msg = {type: "latter/system/import", bundle, restore_esphome_entities: restoreEsp};
+      if (ACTIVE_SUBENTRY_ID) msg.subentry_id = ACTIVE_SUBENTRY_ID;
+    }
+    const data = await callStudioWS(msg);
+    if (data) {
+      input.value = "";
+      applyStateToDom(data, true);
+      showToast(bundle.scope === "device" ? "Restored the Device backup" : "Restored the System backup");
     }
   };
   reader.readAsText(file);
@@ -4083,14 +4061,12 @@ function restoreFromUploadedFile() {
 
 function applyStateToDom(data, forceFormUpdate=false) {
   STATE = data;
-  const cfg = data.config;
-  const live = data.live;
-  const cat = data.catalog;
+  const cfg = data.config || {};
+  const live = data.live || {};
   const esp = data.esphome;
 
-  const areaName = live.active_area_name || "Home";
+  const areaName = live.active_area_name || "—";
   const caps = data.capabilities || {};
-  const devTitle = esp?.device?.name || data.title;
   updateTopHeaderForScope();
 
   // Capability-Aware Device Sidebar Tabs
@@ -4101,15 +4077,12 @@ function applyStateToDom(data, forceFormUpdate=false) {
   doc.getElementById("nav-btn-audio_voice")?.classList.toggle("hidden", !showAudioVoice);
   doc.getElementById("nav-btn-power")?.classList.toggle("hidden", !showPower);
 
-  // Extract live Battery, Wi-Fi/BLE & IP/Target from current device's system entry
+  // Live Battery, Wi-Fi/BLE & IP/Target from the current Device's System entry. Unknown renders as "—".
   const curDevEntry = (data.system_devices || []).find(d => d.is_current) || {};
   const isBleOnly = cfg.kind === "ble_tag";
-  const isStationary = cfg.kind === "device" && !cfg.is_roaming;
   const winBleRow = (live.ble_survey_rows || []).find(r => r.is_winner);
-  let batText = "Plugged In";
-  if (isBleOnly) {
-    batText = "BLE Beacon";
-  } else if (curDevEntry.battery_level !== null && curDevEntry.battery_level !== undefined && !isStationary) {
+  let batText = "—";
+  if (!isBleOnly && curDevEntry.battery_level !== null && curDevEntry.battery_level !== undefined) {
     if (curDevEntry.is_charging) {
       batText = `${curDevEntry.battery_level}% (Charging)`;
     } else if (curDevEntry.is_usb_connected) {
@@ -4118,10 +4091,13 @@ function applyStateToDom(data, forceFormUpdate=false) {
       batText = `${curDevEntry.battery_level}%`;
     }
   }
-  const wifiText = (curDevEntry.wifi_rssi !== null && curDevEntry.wifi_rssi !== undefined)
-    ? `${curDevEntry.wifi_rssi} dBm`
-    : (isBleOnly && winBleRow && winBleRow.effective_rssi !== null ? `${winBleRow.effective_rssi} dBm (BLE)` : (curDevEntry.status_label || "Online"));
-  const ipStr = curDevEntry.ip_address || (isBleOnly ? (cfg.ble_target_address || "BLE Tracked") : "Connected");
+  let wifiText = "—";
+  if (curDevEntry.wifi_rssi !== null && curDevEntry.wifi_rssi !== undefined) {
+    wifiText = `${curDevEntry.wifi_rssi} dBm`;
+  } else if (isBleOnly && winBleRow && winBleRow.effective_rssi !== null) {
+    wifiText = `${winBleRow.effective_rssi} dBm (BLE)`;
+  }
+  const ipStr = curDevEntry.ip_address || (isBleOnly ? (cfg.ble_target_address || "—") : "—");
 
   const hasAssignedArea = !!curDevEntry.has_assigned_area;
   const isRoaming = !hasAssignedArea;
@@ -4129,29 +4105,29 @@ function applyStateToDom(data, forceFormUpdate=false) {
   if (areaLblEl) areaLblEl.textContent = hasAssignedArea ? "Area" : "Current Area (Roaming)";
 
   // 4 Hero Stat Boxes on Device Overview
-  const rawDevSw = String(live.device_sw_version || esp?.device?.sw_version || data.version || "2.2.0").replace(/^v/i, "");
-  doc.getElementById("dash-header-title").textContent = "Overview";
+  const rawDevSw = String(live.device_sw_version || esp?.device?.sw_version || "").replace(/^v/i, "");
   doc.getElementById("st-area").textContent = hasAssignedArea ? (curDevEntry.area_label || areaName) : areaName;
   doc.getElementById("st-battery").textContent = batText;
   doc.getElementById("st-wifi").textContent = wifiText;
   const fwEl = doc.getElementById("st-fw-version");
   if (fwEl) {
-    fwEl.textContent = live.fw_update_available ? `v${rawDevSw} (Update)` : `v${rawDevSw}`;
+    fwEl.textContent = rawDevSw
+      ? (live.fw_update_available ? `v${rawDevSw} (Update)` : `v${rawDevSw}`)
+      : "—";
   }
 
   const grpList = data.device_groups || [];
   const grpObj = grpList.find(g => g.id === cfg.device_group);
-  doc.getElementById("st-group").textContent = grpObj ? grpObj.name : (cfg.device_group || "Unassigned");
+  doc.getElementById("st-group").textContent = grpObj ? grpObj.name : (cfg.device_group || "—");
 
-  const hwModel = curDevEntry.model_label || esp?.device?.model || "ESPHome Node";
-  doc.getElementById("dash-hw-model").textContent = hwModel;
+  doc.getElementById("dash-hw-model").textContent = curDevEntry.model_label || esp?.device?.model || "—";
   doc.getElementById("dash-ip-addr").textContent = ipStr;
   doc.getElementById("dash-ble-mode").textContent = isRoaming
     ? `Roaming (BLE Auto-Switch • ${areaName})`
     : `Stationary (${areaName})`;
   const winRow = (live.ble_survey_rows || []).find(r => r.is_winner);
-  const distSuffix = (winRow && winRow.distance_m != null) ? ` (~${winRow.distance_m}m / ${winRow.distance_ft}ft)` : "";
-  doc.getElementById("dash-ble-proxy").textContent = (live.ble_closest_proxy || "None") + distSuffix;
+  const distSuffix = (live.ble_closest_proxy && winRow && winRow.distance_m != null) ? ` (~${winRow.distance_m}m / ${winRow.distance_ft}ft)` : "";
+  doc.getElementById("dash-ble-proxy").textContent = (live.ble_closest_proxy || "—") + distSuffix;
   const proxyRow = doc.getElementById("dash-row-ble-proxy");
   if (proxyRow) proxyRow.style.display = (caps.has_ble_beacon && cfg.native_ble_tracking) ? "flex" : "none";
 
@@ -4164,145 +4140,131 @@ function applyStateToDom(data, forceFormUpdate=false) {
     renderSystemOverview(data.system_devices, data.system_controls, cfg);
   }
 
-  if (!INITIAL_FORM_LOADED || forceFormUpdate) {
+  // Forms: `true` reloads both scopes; {system, device} reloads only the named scopes, so a save of one
+  // scope (or a Device switch) never discards unsaved edits in the other.
+  let reload = {system: false, device: false};
+  if (!INITIAL_FORM_LOADED || forceFormUpdate === true) {
+    reload = {system: true, device: true};
+  } else if (forceFormUpdate && typeof forceFormUpdate === "object") {
+    reload = {system: !!forceFormUpdate.system, device: !!forceFormUpdate.device};
+  }
+  if (reload.system || reload.device) {
     INITIAL_FORM_LOADED = true;
-            renderCohesiveDeviceSections();
+    renderCohesiveDeviceSections();
     renderSystemOverview(data.system_devices, data.system_controls, cfg);
-
-    doc.getElementById("cfg-device_slug").value = cfg.device_slug || "";
-    doc.getElementById("cfg-companion_base_url").value = cfg.companion_base_url || "";
-    doc.getElementById("cfg-display_shape").value = cfg.display_shape || "circle";
-    doc.getElementById("cfg-default_page_size").value = cfg.default_page_size ?? 3;
-    doc.getElementById("cfg-native_ble_tracking").checked = !!cfg.native_ble_tracking;
-    doc.getElementById("cfg-ble_auto_switch").checked = !!cfg.ble_auto_switch;
-    doc.getElementById("cfg-sync_device_area").checked = !!cfg.sync_device_area;
-    const syncAreaRow = doc.getElementById("row-sync-device-area");
-    if (syncAreaRow) {
-      syncAreaRow.classList.toggle("hidden", STATE?.capabilities?.is_roaming_device === false);
+    if (reload.system) {
+      loadSystemForm(data);
+      clearDirty("system");
     }
-    doc.getElementById("cfg-area_handoff").checked = !!cfg.area_handoff;
-    doc.getElementById("cfg-ble_beacon_uuid").value = cfg.ble_beacon_uuid || "";
-    if (doc.getElementById("cfg-ble_target_address")) {
-      doc.getElementById("cfg-ble_target_address").value = cfg.ble_target_address || "";
+    if (reload.device) {
+      loadDeviceForm(data);
+      clearDirty("device");
     }
-    doc.getElementById("cfg-dock_apps").value = cfg.dock_apps || "music,alarm,area,remote,games,tools";
-    renderDockPillsFromInput();
-    doc.getElementById("cfg-wallpaper_source").value = cfg.wallpaper_source || "";
-    doc.getElementById("cfg-wallpaper_cycle_minutes").value = String(cfg.wallpaper_cycle_minutes || 0);
-    doc.getElementById("cfg-art_size").value = String(cfg.art_size || 466);
-    if (doc.getElementById("cfg-doorbell_noise_reduction")) {
-      doc.getElementById("cfg-doorbell_noise_reduction").value = cfg.doorbell_noise_reduction || "strong";
-    }
-
-    populateSelect("cfg-default_area", cat.areas, cfg.default_area);
-    populateSelect("cfg-presence_entity", cat.presence_sensors, cfg.presence_entity);
-    populateSelect("cfg-assigned_person", cat.persons, cfg.assigned_person);
-    populateSelect("cfg-default_speaker", cat.ma_speakers, cfg.default_speaker, true);
-    populateSelect("cfg-ma_player_entity", cat.ma_players, cfg.ma_player_entity, true);
-    const voListEl = doc.getElementById("volume-overrides-list");
-    if (voListEl) {
-      voListEl.innerHTML = "";
-      let voItems = Array.isArray(cfg.volume_overrides) ? cfg.volume_overrides : [];
-      if (!voItems.length) {
-        if (cfg.vol_speaker_1 && cfg.vol_target_1) voItems.push({speaker: cfg.vol_speaker_1, target: cfg.vol_target_1});
-        if (cfg.vol_speaker_2 && cfg.vol_target_2) voItems.push({speaker: cfg.vol_speaker_2, target: cfg.vol_target_2});
-      }
-      voItems.forEach(vo => {
-        if (vo && vo.speaker && vo.target) addVolumeOverrideRow(vo.speaker, vo.target);
-      });
-    }
-    const remListEl = doc.getElementById("remotes-list");
-    if (remListEl) {
-      remListEl.innerHTML = "";
-      let remItems = Array.isArray(cfg.remotes_list) ? cfg.remotes_list.filter(Boolean) : [];
-      if (!remItems.length) {
-        [cfg.remote_1, cfg.remote_2, cfg.remote_3, cfg.remote_4].forEach(r => {
-          if (r) remItems.push(r);
-        });
-      }
-      remItems.forEach(rId => addRemoteControlRow(rId));
-    }
-    REMOTE_GROUPS_STATE = Array.isArray(cfg.remote_groups) ? JSON.parse(JSON.stringify(cfg.remote_groups)) : [];
-    renderRemoteGroupsEditor();
-    populateSelect("cfg-alarm_entity", cat.alarms, cfg.alarm_entity);
-    populateSelect("cfg-weather_entity", cat.weathers, cfg.weather_entity);
-    populateSelect("cfg-thermostat_entity", cat.climates, cfg.thermostat_entity);
-    populateSelect("cfg-lock_entity", cat.locks, cfg.lock_entity);
-    populateSelect("cfg-garage_entity", cat.garages, cfg.garage_entity);
-    populateSelect("cfg-vacuum_entity", cat.vacuums, cfg.vacuum_entity);
-
-    const camListEl = doc.getElementById("cameras-list");
-    if (camListEl) {
-      camListEl.innerHTML = "";
-      let camItems = Array.isArray(cfg.camera_entities) ? cfg.camera_entities.filter(Boolean) : [];
-      if (!camItems.length && cfg.camera_entity) {
-        camItems.push(cfg.camera_entity);
-      }
-      camItems.forEach(cId => addCameraRow(cId));
-    }
-
-    const calListEl = doc.getElementById("calendars-list");
-    if (calListEl) {
-      calListEl.innerHTML = "";
-      const calItems = Array.isArray(cfg.calendar_entities) ? cfg.calendar_entities.filter(Boolean) : [];
-      calItems.forEach(cId => addCalendarRow(cId));
-    }
-
-    clearDirty();
   }
   renderCustomColorPalettes();
 }
 
-async function refreshState(forceForm=false) {
-  if (!HASS_REF) return;
-  try {
-    const data = await HASS_REF.callWS({
-      type: "latter/system/get_state",
-      subentry_id: ACTIVE_SUBENTRY_ID || null,
-      studio_rev: 2
-    });
-    if (data) {
-      if (!ACTIVE_SUBENTRY_ID && data.subentry_id) {
-        ACTIVE_SUBENTRY_ID = data.subentry_id;
-      }
-      applyStateToDom(data, forceForm);
-    }
-  } catch (err) {
-    console.warn("Latter Studio get_state error:", err);
+function loadSystemForm(data) {
+  const sc = data.system_config || {};
+  const cat = data.catalog || {};
+  doc.getElementById("cfg-doorbell_noise_reduction").value = sc.doorbell_noise_reduction || "strong";
+  const voListEl = doc.getElementById("volume-overrides-list");
+  if (voListEl) {
+    voListEl.innerHTML = "";
+    (sc.volume_overrides || []).forEach(vo => addVolumeOverrideRow(vo.speaker, vo.target));
+  }
+  const remListEl = doc.getElementById("remotes-list");
+  if (remListEl) {
+    remListEl.innerHTML = "";
+    (sc.remotes_list || []).forEach(rId => addRemoteControlRow(rId));
+  }
+  REMOTE_GROUPS_STATE = JSON.parse(JSON.stringify(sc.remote_groups || []));
+  renderRemoteGroupsEditor();
+  populateSelect("cfg-alarm_entity", cat.alarms, sc.alarm_entity);
+  populateSelect("cfg-weather_entity", cat.weathers, sc.weather_entity);
+  populateSelect("cfg-thermostat_entity", cat.climates, sc.thermostat_entity);
+  populateSelect("cfg-lock_entity", cat.locks, sc.lock_entity);
+  populateSelect("cfg-garage_entity", cat.garages, sc.garage_entity);
+  populateSelect("cfg-vacuum_entity", cat.vacuums, sc.vacuum_entity);
+  const camListEl = doc.getElementById("cameras-list");
+  if (camListEl) {
+    camListEl.innerHTML = "";
+    (sc.camera_entities || []).forEach(cId => addCameraRow(cId));
+  }
+  const calListEl = doc.getElementById("calendars-list");
+  if (calListEl) {
+    calListEl.innerHTML = "";
+    (sc.calendar_entities || []).forEach(cId => addCalendarRow(cId));
   }
 }
 
-async function saveAllConfig() {
+function loadDeviceForm(data) {
+  const cfg = data.config || {};
+  const cat = data.catalog || {};
+  doc.getElementById("cfg-device_slug").value = cfg.device_slug || "";
+  doc.getElementById("cfg-default_page_size").value = cfg.default_page_size ?? 3;
+  doc.getElementById("cfg-native_ble_tracking").checked = !!cfg.native_ble_tracking;
+  doc.getElementById("cfg-ble_auto_switch").checked = !!cfg.ble_auto_switch;
+  doc.getElementById("cfg-sync_device_area").checked = !!cfg.sync_device_area;
+  doc.getElementById("row-sync-device-area")?.classList.toggle("hidden", data.capabilities?.is_roaming_device === false);
+  doc.getElementById("cfg-area_handoff").checked = !!cfg.area_handoff;
+  doc.getElementById("cfg-ble_beacon_uuid").value = cfg.ble_beacon_uuid || "";
+  doc.getElementById("cfg-ble_target_address").value = cfg.ble_target_address || "";
+  doc.getElementById("cfg-dock_apps").value = cfg.dock_apps || "";
+  renderDockPillsFromInput();
+  doc.getElementById("cfg-wallpaper_cycle_minutes").value = String(cfg.wallpaper_cycle_minutes || 0);
+  populateSelect("cfg-default_area", cat.areas, cfg.default_area);
+  populateSelect("cfg-presence_entity", cat.presence_sensors, cfg.presence_entity);
+  populateSelect("cfg-assigned_person", cat.persons, cfg.assigned_person);
+  populateSelect("cfg-default_speaker", cat.ma_speakers, cfg.default_speaker, true);
+  populateSelect("cfg-ma_player_entity", cat.ma_players, cfg.ma_player_entity, true);
+}
+
+async function refreshState(forceForm=false) {
+  const data = await callStudioWS({
+    type: "latter/system/get_state",
+    subentry_id: ACTIVE_SUBENTRY_ID || null,
+    studio_rev: STUDIO_REV
+  });
+  if (data) {
+    applyStateToDom(data, forceForm);
+  }
+}
+
+function collectSystemSettings() {
   const volumeOverrides = [];
   doc.querySelectorAll("#volume-overrides-list .vol-override-row").forEach(row => {
     const speaker = row.querySelector(".vo-spk")?.value?.trim() || "";
     const target = row.querySelector(".vo-tgt")?.value?.trim() || "";
     if (speaker && target) volumeOverrides.push({speaker, target});
   });
+  const rowValues = (selector) => {
+    const out = [];
+    doc.querySelectorAll(selector).forEach(sel => {
+      const v = sel.value?.trim() || "";
+      if (v && !out.includes(v)) out.push(v);
+    });
+    return out;
+  };
+  return {
+    weather_entity: doc.getElementById("cfg-weather_entity")?.value ?? "",
+    alarm_entity: doc.getElementById("cfg-alarm_entity")?.value ?? "",
+    thermostat_entity: doc.getElementById("cfg-thermostat_entity")?.value ?? "",
+    lock_entity: doc.getElementById("cfg-lock_entity")?.value ?? "",
+    garage_entity: doc.getElementById("cfg-garage_entity")?.value ?? "",
+    vacuum_entity: doc.getElementById("cfg-vacuum_entity")?.value ?? "",
+    camera_entities: rowValues("#cameras-list .camera-row-item .cam-ent-sel"),
+    remotes_list: rowValues("#remotes-list .remote-row-item .rem-ent-sel"),
+    remote_groups: REMOTE_GROUPS_STATE,
+    volume_overrides: volumeOverrides,
+    calendar_entities: rowValues("#calendars-list .calendar-row-item .cal-ent-sel"),
+    doorbell_noise_reduction: doc.getElementById("cfg-doorbell_noise_reduction")?.value || "strong"
+  };
+}
 
-  const remotesList = [];
-  doc.querySelectorAll("#remotes-list .remote-row-item").forEach(row => {
-    const rEnt = row.querySelector(".rem-ent-sel")?.value?.trim() || "";
-    if (rEnt) remotesList.push(rEnt);
-  });
-
-  const cameraEntities = [];
-  doc.querySelectorAll("#cameras-list .camera-row-item").forEach(row => {
-    const cEnt = row.querySelector(".cam-ent-sel")?.value?.trim() || "";
-    if (cEnt && !cameraEntities.includes(cEnt)) cameraEntities.push(cEnt);
-  });
-
-  const calendarEntities = [];
-  doc.querySelectorAll("#calendars-list .calendar-row-item").forEach(row => {
-    const calEnt = row.querySelector(".cal-ent-sel")?.value?.trim() || "";
-    if (calEnt && !calendarEntities.includes(calEnt)) calendarEntities.push(calEnt);
-  });
-
-  const artVal = String(doc.getElementById("cfg-art_size")?.value || "466");
-  const config = {
-    companion_base_url: doc.getElementById("cfg-companion_base_url")?.value?.trim() || "",
-    device_group: doc.getElementById("cfg-device_group")?.value || "handhelds",
-    display_shape: doc.getElementById("cfg-display_shape")?.value || (STATE?.config?.display_shape || "round"),
+function collectDeviceSettings() {
+  return {
+    device_group: doc.getElementById("cfg-device_group")?.value || "unassigned",
     default_page_size: parseInt(doc.getElementById("cfg-default_page_size")?.value || "3", 10) || 3,
     native_ble_tracking: Boolean(doc.getElementById("cfg-native_ble_tracking")?.checked),
     ble_auto_switch: Boolean(doc.getElementById("cfg-ble_auto_switch")?.checked),
@@ -4314,58 +4276,42 @@ async function saveAllConfig() {
     assigned_person: doc.getElementById("cfg-assigned_person")?.value ?? "",
     default_speaker: doc.getElementById("cfg-default_speaker")?.value ?? "",
     ma_player_entity: doc.getElementById("cfg-ma_player_entity")?.value ?? "",
-    volume_overrides: volumeOverrides,
-    vol_speaker_1: volumeOverrides[0]?.speaker || "",
-    vol_target_1: volumeOverrides[0]?.target || "",
-    vol_speaker_2: volumeOverrides[1]?.speaker || "",
-    vol_target_2: volumeOverrides[1]?.target || "",
-    remotes_list: remotesList,
-    remote_groups: REMOTE_GROUPS_STATE,
-    remote_1: remotesList[0] || "",
-    remote_2: remotesList[1] || "",
-    remote_3: remotesList[2] || "",
-    remote_4: remotesList[3] || "",
-    alarm_entity: doc.getElementById("cfg-alarm_entity")?.value ?? "",
-    camera_entity: cameraEntities[0] || "",
-    camera_entities: cameraEntities,
-    weather_entity: doc.getElementById("cfg-weather_entity")?.value ?? "",
-    thermostat_entity: doc.getElementById("cfg-thermostat_entity")?.value ?? "",
-    lock_entity: doc.getElementById("cfg-lock_entity")?.value ?? "",
-    garage_entity: doc.getElementById("cfg-garage_entity")?.value ?? "",
-    vacuum_entity: doc.getElementById("cfg-vacuum_entity")?.value ?? "",
     default_area: doc.getElementById("cfg-default_area")?.value ?? "",
     dock_apps: doc.getElementById("cfg-dock_apps")?.value?.trim() || "",
-    wallpaper_source: doc.getElementById("cfg-wallpaper_source")?.value?.trim() || "",
-    wallpaper_cycle_minutes: parseInt(doc.getElementById("cfg-wallpaper_cycle_minutes")?.value || "0", 10) || 0,
-    art_size: artVal.includes("x") ? artVal : (parseInt(artVal, 10) || 466),
-    calendar_entities: calendarEntities,
-    custom_palettes: Array.isArray((STATE?.config || {}).custom_palettes) ? STATE.config.custom_palettes : [],
-    device_custom_color: (STATE?.config || {}).device_custom_color || "#3898FF",
-    doorbell_noise_reduction: doc.getElementById("cfg-doorbell_noise_reduction")?.value || "strong",
+    wallpaper_cycle_minutes: parseInt(doc.getElementById("cfg-wallpaper_cycle_minutes")?.value || "0", 10) || 0
   };
+}
 
+// One Save button; each scope is saved by its own command and only when it has changes (D-007).
+async function saveAllConfig() {
   const btn = doc.getElementById("btn-save-changes");
   if (btn) {
     btn.disabled = true;
     btn.textContent = "Saving...";
   }
-  try {
-    const data = await callStudioCommand({command: "save_config", config});
-    if (data) {
-      applyStateToDom(data, true);
-      showToast("Saved configuration");
-    } else if (btn) {
-      btn.disabled = false;
-      btn.textContent = "Save Changes";
+  let latest = null;
+  const saved = [];
+  if (DIRTY.system) {
+    const sysData = await callStudioCommand({command: "save_system_config", config: collectSystemSettings()});
+    if (sysData) {
+      latest = sysData;
+      saved.push("system");
+      clearDirty("system");
     }
-  } catch (err) {
-    console.error("Latter Studio save_config failed:", err);
-    if (btn) {
-      btn.disabled = false;
-      btn.textContent = "Save Changes";
-    }
-    showToast(`Save failed: ${err?.message || err || "Unknown error"}`);
   }
+  if (DIRTY.device) {
+    const devData = await callStudioCommand({command: "save_device_config", config: collectDeviceSettings()});
+    if (devData) {
+      latest = devData;
+      saved.push("device");
+      clearDirty("device");
+    }
+  }
+  if (latest) {
+    applyStateToDom(latest, {system: saved.includes("system"), device: saved.includes("device")});
+    showToast(saved.length === 2 ? "Saved System and Device settings" : (saved[0] === "system" ? "Saved System settings" : "Saved Device settings"));
+  }
+  renderDirtyState();
 }
 
 let cwTargetScope = "device";
@@ -4488,27 +4434,36 @@ function closeColorWheelModal() {
   if (m) m.style.display = "none";
 }
 
+async function saveSystemPalettes(pals) {
+  const data = await callStudioCommand({command: "save_system_config", config: {custom_palettes: pals}});
+  if (data) {
+    applyStateToDom(data, false);
+    showToast("Saved the color library");
+  }
+  return data;
+}
+
 async function saveColorWheelSelection() {
   const nameInp = doc.getElementById("latter-cw-name");
   const name = (nameInp && nameInp.value.trim()) ? nameInp.value.trim() : `Custom (${cwSelectedHex})`;
-  STATE.config = STATE.config || {};
-  let pals = Array.isArray(STATE.config.custom_palettes) ? [...STATE.config.custom_palettes] : [];
+  const pals = (STATE?.system_config?.custom_palettes || []).map(p => ({...p}));
   const existing = pals.find(p => (p.hex || "").toUpperCase() === cwSelectedHex);
   if (existing) {
     existing.name = name;
   } else {
     pals.unshift({name, hex: cwSelectedHex});
   }
-  STATE.config.custom_palettes = pals;
-  STATE.config.device_custom_color = cwSelectedHex;
   closeColorWheelModal();
-  await applyDeviceCustomColor(cwSelectedHex, true);
+  const saved = await saveSystemPalettes(pals);
+  if (saved && cwTargetScope === "device" && ACTIVE_SUBENTRY_ID) {
+    await applyDeviceCustomColor(cwSelectedHex, true);
+  }
 }
 
 async function applyDeviceCustomColor(hexColor, alsoSwitchSelect) {
-  STATE.config = STATE.config || {};
-  STATE.config.device_custom_color = hexColor.toUpperCase();
-  await saveAllConfig();
+  const data = await callStudioCommand({command: "save_device_config", config: {device_custom_color: hexColor.toUpperCase()}});
+  if (!data) return;
+  applyStateToDom(data, false);
   if (alsoSwitchSelect) {
     const secs = ((STATE.esphome || {}).sections || []);
     for (const s of secs) {
@@ -4519,6 +4474,7 @@ async function applyDeviceCustomColor(hexColor, alsoSwitchSelect) {
       }
     }
   }
+  showToast("Applied the custom color");
 }
 
 async function onSelectDeviceCustomPalette(val) {
@@ -4533,31 +4489,28 @@ async function onSelectDeviceCustomPalette(val) {
 }
 
 async function deleteCustomPalette(hexColor) {
-  STATE.config = STATE.config || {};
-  let pals = Array.isArray(STATE.config.custom_palettes) ? STATE.config.custom_palettes : [];
-  STATE.config.custom_palettes = pals.filter(p => (p.hex || "").toUpperCase() !== hexColor.toUpperCase());
-  await saveAllConfig();
+  const pals = (STATE?.system_config?.custom_palettes || []).filter(p => (p.hex || "").toUpperCase() !== hexColor.toUpperCase());
+  await saveSystemPalettes(pals);
 }
 
 function renderCustomColorPalettes() {
-  if (!STATE || !STATE.config) return;
-  const pals = Array.isArray(STATE.config.custom_palettes) ? STATE.config.custom_palettes : [];
-  const curHex = (STATE.config.device_custom_color || "#3898FF").toUpperCase();
+  if (!STATE) return;
+  const pals = STATE.system_config?.custom_palettes || [];
+  const curHex = (STATE.config?.device_custom_color || "").toUpperCase();
 
   const sw = doc.getElementById("dev-color-swatch");
-  if (sw) sw.style.background = curHex;
+  if (sw && curHex) sw.style.background = curHex;
 
   const sel = doc.getElementById("dev-custom-palette-select");
   if (sel) {
     let optsHtml = "";
-    if (pals.length === 0) {
-      optsHtml += `<option value="${esc(curHex)}">Active Custom (${esc(curHex)})</option>`;
-    } else {
-      for (const p of pals) {
-        const h = (p.hex || "").toUpperCase();
-        const selAttr = (h === curHex) ? "selected" : "";
-        optsHtml += `<option value="${esc(h)}" ${selAttr}>${esc(p.name || h)} (${esc(h)})</option>`;
-      }
+    if (curHex && !pals.some(p => (p.hex || "").toUpperCase() === curHex)) {
+      optsHtml += `<option value="${esc(curHex)}" selected>Active Custom (${esc(curHex)})</option>`;
+    }
+    for (const p of pals) {
+      const h = (p.hex || "").toUpperCase();
+      const selAttr = (h === curHex) ? "selected" : "";
+      optsHtml += `<option value="${esc(h)}" ${selAttr}>${esc(p.name || h)} (${esc(h)})</option>`;
     }
     optsHtml += `<option value="__new__">+ Create New Color (Wheel)...</option>`;
     sel.innerHTML = optsHtml;
@@ -4572,11 +4525,10 @@ function renderCustomColorPalettes() {
         const h = (p.hex || "").toUpperCase();
         return `
           <div style="display:inline-flex;align-items:center;gap:8px;padding:5px 11px;border-radius:18px;background:var(--input-bg);border:1px solid var(--border);">
-            <span style="width:14px;height:14px;border-radius:50%;background:${esc(h)};border:1px solid #fff;"></span>
+            <span style="width:14px;height:14px;border-radius:50%;background:${esc(h)};border:1px solid var(--border);"></span>
             <strong style="font-size:12.5px;font-weight:500;">${esc(p.name || h)}</strong>
             <code style="font-size:11px;opacity:0.75;">${esc(h)}</code>
-            <button type="button" class="btn-secondary" style="padding:2px 8px;font-size:11px;" onclick="applyDeviceCustomColor(${jsArg(h)}, true)">Apply</button>
-            <button type="button" class="btn-secondary" style="padding:2px 6px;font-size:11px;color:var(--danger);" onclick="deleteCustomPalette(${jsArg(h)})">&times;</button>
+            <button type="button" class="btn-secondary" style="padding:2px 6px;font-size:11px;color:var(--danger);" title="Delete color" onclick="deleteCustomPalette(${jsArg(h)})">&times;</button>
           </div>
         `;
       }).join("");
@@ -4602,7 +4554,7 @@ function bindStudioGlobals() {
   window.bulkSelect = bulkSelect;
   window.bulkToggle = bulkToggle;
   window.callStudioCommand = callStudioCommand;
-  window.captureCurrentDeviceProfile = captureCurrentDeviceProfile;
+  window.captureDeviceProfile = captureDeviceProfile;
   window.checkSystemUpdates = checkSystemUpdates;
   window.clearDirty = clearDirty;
   window.clearInternalLogs = clearInternalLogs;
@@ -4807,7 +4759,7 @@ class LatterStudio extends HTMLElement {
         this._resubscribe(true);
       }
     } else if (!DEVICE_SELECTED) {
-      setScope("system", "system_overview");
+      setScope("device", "select_device_prompt");
     }
   }
 
@@ -4851,7 +4803,7 @@ class LatterStudio extends HTMLElement {
         {
           type: "latter/system/subscribe",
           subentry_id: targetSubId,
-          studio_rev: 2
+          studio_rev: STUDIO_REV
         }
       );
       if (myGen !== SUB_GEN) {

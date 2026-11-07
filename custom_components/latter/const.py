@@ -24,7 +24,6 @@ CONF_DEVICE_SLUG: Final = "device_slug"
 CONF_ESPHOME_DEVICE_ID: Final = "esphome_device_id"
 CONF_DISPLAY_SHAPE: Final = "display_shape"
 CONF_DEFAULT_PAGE_SIZE: Final = "default_page_size"
-CONF_COMPANION_BASE_URL: Final = "companion_base_url"
 CONF_WEATHER_ENTITY: Final = "weather_entity"
 CONF_ALARM_ENTITY: Final = "alarm_entity"
 CONF_CAMERA_ENTITY: Final = "camera_entity"
@@ -129,7 +128,6 @@ CONF_AREA_FUSION_CONFIG: Final = "area_fusion_config"
 EVENT_LATTER: Final = "latter_event"
 
 GLOBAL_CONFIG_KEYS: Final[tuple[str, ...]] = (
-    CONF_COMPANION_BASE_URL,
     CONF_WEATHER_ENTITY,
     CONF_ALARM_ENTITY,
     CONF_CAMERA_ENTITY,

@@ -124,6 +124,9 @@ async def _async_ensure_global_store(
 
     global_cfg: dict[str, Any] = domain_data[DATA_GLOBAL_CONFIG]
     changed = False
+    # The Companion Base URL setting was removed (nothing ever read it); drop its stored value.
+    if global_cfg.pop("companion_base_url", None) is not None:
+        changed = True
     secret_hex = str(global_cfg.get("hmac_secret_hex") or "").strip()
     if len(secret_hex) != 64:
         secret_hex = secrets.token_hex(32)

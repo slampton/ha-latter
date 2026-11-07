@@ -17,8 +17,6 @@ TO_REDACT: set[str] = {
     "art_url",
     "ble_beacon_uuid",
     "ble_target_address",
-    "companion_base_url",
-    "companion_url",
     "hmac_secret_hex",
     "mac",
     "wallpaper_url",

@@ -19,10 +19,7 @@ from homeassistant.helpers import (
 )
 from homeassistant.util import dt as dt_util
 
-from ..area_engine import (
-    get_area_entities,
-    get_esphome_device_entities,
-)
+from ..area_engine import get_esphome_device_entities
 from ..backup_engine import get_device_groups_and_profiles
 from ..ble_engine import (
     get_all_areas_presence_summary,
@@ -32,47 +29,24 @@ from ..browse_engine import is_music_assistant_player
 from ..const import (
     API_BRAND_ICON_PATH,
     API_SIDEBAR_ICON_JS_PATH,
-    CONF_ALARM_ENTITY,
-    CONF_AREA_FOLLOW_DWELL_S,
-    CONF_AREA_FUSION_CONFIG,
     CONF_AREA_HANDOFF,
-    CONF_ART_SIZE,
     CONF_ASSIGNED_PERSON,
-    CONF_BLE_AREA_OFFSETS,
     CONF_BLE_AUTO_SWITCH,
     CONF_BLE_BEACON_UUID,
     CONF_BLE_TARGET_ADDRESS,
-    CONF_CALENDAR_ENTITIES,
-    CONF_CAMERA_ENTITIES,
-    CONF_CAMERA_ENTITY,
-    CONF_COMPANION_BASE_URL,
-    CONF_CUSTOM_PALETTES,
     CONF_DEFAULT_AREA,
     CONF_DEFAULT_PAGE_SIZE,
     CONF_DEFAULT_SPEAKER,
-    CONF_MA_PLAYER_ENTITY,
     CONF_DEVICE_CUSTOM_COLOR,
     CONF_DEVICE_GROUP,
-    CONF_DEVICE_REMOTE_GROUP,
     CONF_DEVICE_SLUG,
     CONF_DISPLAY_SHAPE,
     CONF_DOCK_APPS,
-    CONF_DOORBELL_NOISE_REDUCTION,
-    CONF_GARAGE_ENTITY,
-    CONF_LOCK_ENTITY,
+    CONF_MA_PLAYER_ENTITY,
     CONF_NATIVE_BLE_TRACKING,
     CONF_PRESENCE_ENTITY,
-    CONF_REMOTE_GROUPS,
-    CONF_REMOTES_LIST,
-    CONF_SITE_ID,
     CONF_SYNC_DEVICE_AREA,
-    CONF_THERMOSTAT_ENTITY,
-    CONF_VACUUM_ENTITY,
-    CONF_VOLUME_OVERRIDES,
     CONF_WALLPAPER_CYCLE_MINUTES,
-    CONF_WALLPAPER_FAVORITES,
-    CONF_WALLPAPER_SOURCE,
-    CONF_WEATHER_ENTITY,
     DATA_GLOBAL_CONFIG,
     DATA_GLOBAL_STORE,
     DOMAIN,
@@ -81,10 +55,10 @@ from ..const import (
 from ..coordinator import LatterCoordinator
 from ..identity import esphome_service
 from ..media_engine import ma_player_entities
-from ..repairs import async_audit_coordinator_health
 from ..system import get_latter_system
 from ..wallpaper_engine import list_wallpaper_catalog
 from .scope import find_by_subentry_id
+from .settings import system_settings_view
 
 MAX_INTERNAL_LOGS = 150
 
@@ -433,7 +407,6 @@ def _build_system_section(
     system_devices: list[dict[str, Any]] = []
     for c in _get_all_coordinators(hass):
         c_area_name, c_area_attrs = c.get_area_context_payload()
-        c_media_state, _ = c.get_active_media_payload()
         c_grp = c.device_group
         c_manifest = c.hardware_manifest
         c_has_native_svc = bool(
@@ -454,7 +427,6 @@ def _build_system_section(
             )
             or c_manifest
         )
-        c_has_audio = bool(c.local_speaker) or c_has_native_svc
         c_has_ble = bool(
             c.native_ble_tracking_enabled
             or c._ble_tracker is not None
@@ -526,7 +498,7 @@ def _build_system_section(
                 else f"Latter Display ({c_w}x{c_h}{f' {c_board}' if c_board else ''})"
             )
         else:
-            c_model_label = raw_model or "ESPHome Node"
+            c_model_label = raw_model
 
         ha_assigned_area_id = (
             str(c_dev_entry.area_id or "").strip()
@@ -582,7 +554,6 @@ def _build_system_section(
 
         system_devices.append(
             {
-                "entry_id": c.subentry_id,
                 "subentry_id": c.subentry_id,
                 "device_slug": c.device_slug,
                 "title": (
@@ -598,19 +569,14 @@ def _build_system_section(
                 "kind": "ble_tag" if c.is_ble_tag else "device",
                 "has_display": c.has_display,
                 "is_roaming": c.is_roaming_device,
-                "is_wearable": c.is_wearable,
                 "device_group": c_grp,
                 "device_remote_group": c.device_remote_group,
                 "device_group_name": group_name_map.get(
                     c_grp, c_grp.replace("_", " ").title()
                 ),
-                "site_id": c.site_id,
-                "display_shape": c.display_shape,
+                "assigned_person": c.assigned_person,
                 "active_area_name": c_area_name,
-                "active_speaker": c.active_speaker if c_has_audio else "",
-                "has_audio": c_has_audio,
                 "is_latter_native": c_is_latter_native,
-                "media_state": c_media_state if c_has_audio else "",
                 "battery_level": c_bat_val,
                 "is_charging": bool(c_chg_st and c_chg_st.state == "on"),
                 "is_usb_connected": bool(c_usb_st and c_usb_st.state == "on"),
@@ -619,12 +585,9 @@ def _build_system_section(
                 "has_ble": c_has_ble,
                 "ble_survey_rows": c_survey_rows,
                 "ble_packets_seen": c_packets_seen,
-                "ble_closest_proxy": c_area_attrs.get("ble_closest_proxy", ""),
-                "companion_url": f"/latter/devices/{c.subentry_id}",
                 "is_current": c.subentry_id == current_subentry_id,
             }
         )
-
 
     internal_logs = _get_combined_system_and_studio_logs(hass)
 
@@ -645,6 +608,9 @@ def _build_system_section(
         "system_controls": _build_system_shared_controls(hass),
         "device_groups": device_groups,
         "saved_profiles": saved_profiles,
+        "system_config": system_settings_view(
+            hass.data.get(DOMAIN, {}).get(DATA_GLOBAL_CONFIG) or {}
+        ),
     }
 
 
@@ -652,36 +618,36 @@ def build_studio_state_payload(
     hass: HomeAssistant,
     coordinator: LatterCoordinator | None,
 ) -> dict[str, Any]:
-    """Build the Studio payload: System scope only when no Device is targeted, else System + that Device."""
+    """Build the Studio payload: the System part always, plus the Device part when a Device is targeted.
+
+    `system_config` (System settings) never depends on the selected Device; `config` holds only
+    that Device's own settings.
+    """
+    base: dict[str, Any] = {
+        "subentry_id": coordinator.subentry_id if coordinator is not None else "",
+        "title": coordinator.device_title if coordinator is not None else "",
+        "version": INTEGRATION_VERSION,
+        **_build_system_section(
+            hass, coordinator.subentry_id if coordinator is not None else ""
+        ),
+        "catalog": _build_entity_catalog(hass, coordinator),
+    }
+    presence_grid = get_all_areas_presence_summary(hass)
     if coordinator is None:
         return {
-            "entry_id": "",
-            "subentry_id": "",
-            "title": "Latter System",
-            "version": INTEGRATION_VERSION,
-            **_build_system_section(hass, ""),
+            **base,
             "capabilities": {},
-            "health_warnings": [],
             "config": {},
             "esphome": {"device": {}, "sections": []},
             "wallpapers": [],
-            "live": {"area_presence_grid": get_all_areas_presence_summary(hass)},
-            "catalog": _build_entity_catalog(hass, None),
+            "live": {"area_presence_grid": presence_grid},
         }
 
     local_spk_id = coordinator.local_speaker
     local_ma_id = coordinator.local_ma_speaker
     _, area_attrs = coordinator.get_area_context_payload()
-    media_state, media_attrs = coordinator.get_active_media_payload()
-    _, remote_attrs = coordinator.get_remote_config_payload()
     esphome_inspector = get_esphome_device_entities(
         hass, coordinator.esphome_device_id, coordinator.device_slug
-    )
-    active_area_cards = get_area_entities(
-        hass,
-        area_id=coordinator.active_area_id,
-        domain_filter="all",
-        local_speaker=coordinator.local_speaker,
     )
     wallpapers_catalog = list_wallpaper_catalog(
         hass,
@@ -720,34 +686,18 @@ def build_studio_state_payload(
         and "beacon" in str(it.get("entity_id") or "").lower()
         for it in all_esp_items
     )
-    local_spk = coordinator.local_speaker
-    has_display = has_native_slots or ("display" in sec_ids) or ("home" in sec_ids)
-    has_power = ("sleep" in sec_ids) or ("battery" in sec_ids)
-    has_voice = "voice" in sec_ids
-    has_audio = (
-        has_native_slots
-        or bool(local_spk)
-        or ("sound" in sec_ids)
-        or ("music" in sec_ids)
-    )
-
-    hw_manifest = coordinator.hardware_manifest
-    if "imu" in hw_manifest:
-        has_imu = bool(hw_manifest.get("imu"))
-    else:
-        has_imu = any(
-            "imu" in str(it.get("entity_id") or "").lower()
-            for it in all_esp_items
-        )
     device_capabilities = {
-        "has_display": has_display,
-        "has_imu": has_imu,
-        "has_power": has_power,
-        "has_voice": has_voice,
-        "has_audio": has_audio,
+        "has_display": has_native_slots or ("display" in sec_ids) or ("home" in sec_ids),
+        "has_power": ("sleep" in sec_ids) or ("battery" in sec_ids),
+        "has_voice": "voice" in sec_ids,
+        "has_audio": (
+            has_native_slots
+            or bool(local_spk_id)
+            or ("sound" in sec_ids)
+            or ("music" in sec_ids)
+        ),
         "has_ble_beacon": has_native_slots or has_ble_beacon_entity,
         "is_roaming_device": coordinator.is_roaming_device,
-        "total_entities": len(all_esp_items),
     }
 
     raw_def_spk = str(coordinator.get_opt(CONF_DEFAULT_SPEAKER, "") or "").strip()
@@ -762,61 +712,25 @@ def build_studio_state_payload(
     config_data = {
         CONF_DEVICE_SLUG: coordinator.device_slug,
         "kind": "ble_tag" if coordinator.is_ble_tag else "device",
-        "has_display": coordinator.has_display,
         "is_roaming": coordinator.is_roaming_device,
-        "is_wearable": coordinator.is_wearable,
-        CONF_DEVICE_GROUP: coordinator.device_group,
         CONF_DISPLAY_SHAPE: coordinator.display_shape,
+        CONF_DEVICE_GROUP: coordinator.device_group,
         CONF_DEFAULT_PAGE_SIZE: coordinator.default_page_size,
-        CONF_COMPANION_BASE_URL: coordinator.companion_base_url,
         CONF_DEFAULT_SPEAKER: raw_def_spk,
         CONF_MA_PLAYER_ENTITY: str(coordinator.get_opt(CONF_MA_PLAYER_ENTITY, "") or ""),
-        CONF_VOLUME_OVERRIDES: [
-            {"speaker": k, "target": v}
-            for k, v in coordinator.volume_overrides.items()
-        ],
         CONF_DEFAULT_AREA: coordinator.get_opt(CONF_DEFAULT_AREA, ""),
         CONF_NATIVE_BLE_TRACKING: coordinator.native_ble_tracking_enabled,
         CONF_BLE_BEACON_UUID: coordinator.ble_beacon_uuid,
         CONF_BLE_TARGET_ADDRESS: coordinator.ble_target_address,
-        CONF_BLE_AREA_OFFSETS: coordinator.ble_area_offsets,
-        CONF_AREA_FUSION_CONFIG: coordinator.get_opt(CONF_AREA_FUSION_CONFIG, {})
-        or {},
         CONF_PRESENCE_ENTITY: coordinator.presence_entity or "",
         CONF_ASSIGNED_PERSON: coordinator.assigned_person,
         CONF_BLE_AUTO_SWITCH: coordinator.ble_auto_switch_enabled,
         CONF_SYNC_DEVICE_AREA: coordinator.sync_device_area_enabled,
-        CONF_AREA_FOLLOW_DWELL_S: coordinator.area_follow_dwell_s,
         CONF_AREA_HANDOFF: coordinator.area_handoff_enabled,
-        CONF_ALARM_ENTITY: str(
-            coordinator.get_opt(CONF_ALARM_ENTITY, "") or ""
-        ),
-        CONF_CAMERA_ENTITY: coordinator.camera_entity or "",
-        CONF_CAMERA_ENTITIES: coordinator.camera_entities,
-        CONF_THERMOSTAT_ENTITY: coordinator.thermostat_entity or "",
-        CONF_LOCK_ENTITY: coordinator.lock_entity or "",
-        CONF_GARAGE_ENTITY: coordinator.garage_entity or "",
-        CONF_VACUUM_ENTITY: coordinator.vacuum_entity or "",
-        CONF_REMOTES_LIST: coordinator.get_remote_entities_list(),
-        CONF_REMOTE_GROUPS: coordinator.remote_groups,
-        CONF_DEVICE_REMOTE_GROUP: coordinator.device_remote_group,
-        CONF_WEATHER_ENTITY: coordinator.weather_entity or "",
-        CONF_CALENDAR_ENTITIES: coordinator.calendar_entities,
-        CONF_CUSTOM_PALETTES: coordinator.custom_palettes,
         CONF_DEVICE_CUSTOM_COLOR: coordinator.device_custom_color,
-        CONF_DOORBELL_NOISE_REDUCTION: coordinator.doorbell_noise_reduction,
         CONF_DOCK_APPS: coordinator.dock_apps_csv,
-        CONF_WALLPAPER_SOURCE: coordinator.wallpaper_source,
-        CONF_WALLPAPER_FAVORITES: coordinator.wallpaper_favorites,
         CONF_WALLPAPER_CYCLE_MINUTES: coordinator.wallpaper_cycle_minutes,
-        CONF_ART_SIZE: coordinator.art_size,
-        CONF_SITE_ID: coordinator.site_id,
     }
-
-    try:
-        health_warnings = async_audit_coordinator_health(hass, coordinator)
-    except Exception:  # noqa: BLE001
-        health_warnings = []
 
     ble_survey_rows: list[dict[str, Any]] = []
     if coordinator._ble_tracker is not None and hasattr(
@@ -826,92 +740,39 @@ def build_studio_state_payload(
             coordinator._ble_tracker.get_area_calibration_telemetry()
         )
 
+    fw_st = coordinator.device_state("sensor", "_firmware_version")
+    fw_version = (
+        str(fw_st.state)
+        if fw_st is not None and fw_st.state not in ("unavailable", "unknown", "")
+        else str(esphome_inspector.get("device", {}).get("sw_version") or "")
+    )
+    update_items = [
+        it for it in all_esp_items if it.get("domain") == "update" and it.get("entity_id")
+    ]
+    fw_update_entity = str(update_items[0]["entity_id"]) if update_items else ""
+    fw_latest_state = hass.states.get(fw_update_entity) if fw_update_entity else None
+
     return {
-        "entry_id": coordinator.subentry_id,
-        "subentry_id": coordinator.subentry_id,
-        "title": coordinator.device_title,
-        "version": INTEGRATION_VERSION,
+        **base,
         "capabilities": device_capabilities,
-        **_build_system_section(hass, coordinator.subentry_id),
-        "health_warnings": health_warnings,
         "config": config_data,
         "esphome": esphome_inspector,
         "wallpapers": wallpapers_catalog,
         "live": {
-            "active_area_id": coordinator.active_area_id or "",
-            "active_area_name": area_attrs.get("area_name", "Home"),
-            "area_temp": area_attrs.get("area_temp"),
-            "area_humidity": area_attrs.get("area_humidity"),
-            "lights_on": area_attrs.get("lights_on", 0),
-            "covers_open": area_attrs.get("covers_open", 0),
-            "entity_count": area_attrs.get("entity_count", 0),
-            "area_cards": active_area_cards[:12],
-            "ble_closest_proxy": area_attrs.get("ble_closest_proxy", ""),
+            "active_area_name": str(area_attrs.get("area_name") or ""),
+            "ble_closest_proxy": str(area_attrs.get("ble_closest_proxy") or ""),
             "ble_packets_seen": area_attrs.get("ble_packets_seen", 0),
-            "ble_rssi_by_area": area_attrs.get("ble_rssi_by_area", {}),
             "ble_survey_rows": ble_survey_rows,
             "ble_scanners_map": area_attrs.get("ble_scanners_map", {}),
-            "area_presence_grid": get_all_areas_presence_summary(hass),
-            "active_speaker": coordinator.active_speaker,
-            "local_speaker": coordinator.local_speaker,
-            "volume_entity": media_attrs.get("volume_entity", ""),
-            "media_state": media_state,
-            "media_title": media_attrs.get("title", "Idle"),
-            "media_artist": media_attrs.get("artist", "None"),
-            "media_art_url": media_attrs.get("art_url", "none"),
-            "alarm_state": area_attrs.get("alarm_state", "none"),
-            "thermostat_state": area_attrs.get("thermostat_state", "off"),
-            "thermostat_temp": area_attrs.get("thermostat_temp"),
-            "lock_state": area_attrs.get("lock_state", "locked"),
-            "garage_state": area_attrs.get("garage_state", "closed"),
-            "vacuum_state": area_attrs.get("vacuum_state", "docked"),
-            "weather_condition": coordinator.weather_attributes.get(
-                "condition", "unknown"
-            ),
-            "weather_temp": coordinator.weather_attributes.get("temperature"),
-            "wallpaper_url": area_attrs.get("wallpaper_url", "none"),
-            "doorbell_talk_state": coordinator.doorbell_talk_state,
-            "doorbell_noise_reduction": coordinator.doorbell_noise_reduction,
-            "active_remote_slot": coordinator.active_remote_slot,
-            "remote_slots_meta": remote_attrs,
-            "device_sw_version": str(
-                (
-                    fw_st.state
-                    if (fw_st := coordinator.device_state("sensor", "_firmware_version")) is not None
-                    and fw_st.state not in ("unavailable", "unknown", "")
-                    else esphome_inspector.get("device", {}).get("sw_version")
-                )
-                or INTEGRATION_VERSION
-            ),
-            "fw_update_entity": next(
-                (
-                    str(it.get("entity_id"))
-                    for it in all_esp_items
-                    if it.get("domain") == "update" and it.get("entity_id")
-                ),
-                "",
-            ),
-            "fw_update_available": any(
-                it.get("domain") == "update" and it.get("state") == "on"
-                for it in all_esp_items
-            ),
-            "fw_latest_version": next(
-                (
-                    str(
-                        hass.states.get(
-                            str(it.get("entity_id"))
-                        ).attributes.get("latest_version")
-                        or ""
-                    )
-                    for it in all_esp_items
-                    if it.get("domain") == "update"
-                    and it.get("entity_id")
-                    and hass.states.get(str(it.get("entity_id")))
-                ),
-                "",
+            "area_presence_grid": presence_grid,
+            "device_sw_version": fw_version,
+            "fw_update_entity": fw_update_entity,
+            "fw_update_available": any(it.get("state") == "on" for it in update_items),
+            "fw_latest_version": str(
+                (fw_latest_state.attributes.get("latest_version") if fw_latest_state else "")
+                or ""
             ),
         },
-        "catalog": _build_entity_catalog(hass, coordinator),
     }
 
 

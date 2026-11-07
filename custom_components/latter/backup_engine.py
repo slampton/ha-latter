@@ -13,7 +13,6 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_AREA_HANDOFF,
-    CONF_ART_SIZE,
     CONF_ASSIGNED_PERSON,
     CONF_BLE_AUTO_SWITCH,
     CONF_BLE_BEACON_UUID,
@@ -25,7 +24,6 @@ from .const import (
     CONF_DEVICE_GROUP,
     CONF_DEVICE_GROUPS,
     CONF_DEVICE_SLUG,
-    CONF_DISPLAY_SHAPE,
     CONF_DOCK_APPS,
     CONF_NATIVE_BLE_TRACKING,
     CONF_PRESENCE_ENTITY,
@@ -49,7 +47,6 @@ _LOGGER = logging.getLogger(__name__)
 DEVICE_CONFIG_EXPORT_KEYS: tuple[str, ...] = (
     CONF_DEVICE_SLUG,
     CONF_DEVICE_GROUP,
-    CONF_DISPLAY_SHAPE,
     CONF_DEFAULT_PAGE_SIZE,
     CONF_DEFAULT_SPEAKER,
     CONF_DEFAULT_AREA,
@@ -65,16 +62,12 @@ DEVICE_CONFIG_EXPORT_KEYS: tuple[str, ...] = (
     CONF_WALLPAPER_SOURCE,
     CONF_WALLPAPER_FAVORITES,
     CONF_WALLPAPER_CYCLE_MINUTES,
-    CONF_ART_SIZE,
     CONF_DEVICE_CUSTOM_COLOR,
     "device_remote_group",
     CONF_SITE_ID,
-    "capabilities_manifest",
-    "gui_layout",
 )
 
 PROFILE_DEVICE_KEYS: tuple[str, ...] = (
-    CONF_DISPLAY_SHAPE,
     CONF_DEFAULT_PAGE_SIZE,
     CONF_NATIVE_BLE_TRACKING,
     CONF_BLE_AUTO_SWITCH,
@@ -83,7 +76,6 @@ PROFILE_DEVICE_KEYS: tuple[str, ...] = (
     CONF_DOCK_APPS,
     CONF_WALLPAPER_SOURCE,
     CONF_WALLPAPER_CYCLE_MINUTES,
-    CONF_ART_SIZE,
     CONF_DEVICE_CUSTOM_COLOR,
     "device_remote_group",
 )
@@ -103,14 +95,12 @@ BUILTIN_STARTER_PROFILES: list[dict[str, Any]] = [
         "name": "Standard Handheld (Balanced)",
         "description": "Balanced battery life, Docked-Only wake word, 30s battery screen timeout, and full Home dock.",
         "device_config": {
-            CONF_DISPLAY_SHAPE: "circle",
             CONF_DEFAULT_PAGE_SIZE: 3,
             CONF_NATIVE_BLE_TRACKING: True,
             CONF_BLE_AUTO_SWITCH: True,
             CONF_SYNC_DEVICE_AREA: True,
             CONF_AREA_HANDOFF: False,
             CONF_DOCK_APPS: "music,alarm,area,remote,games,tools",
-            CONF_ART_SIZE: 466,
         },
         "esphome_controls": {
             "select:wake_word_mode": "Docked Only",
@@ -123,7 +113,6 @@ BUILTIN_STARTER_PROFILES: list[dict[str, Any]] = [
             "select:day_brightness": "90%",
             "select:night_brightness": "70%",
             "switch:docked_screensaver": "on",
-            "switch:ble_presence_beacon": "on",
         },
     },
     {
@@ -131,14 +120,12 @@ BUILTIN_STARTER_PROFILES: list[dict[str, Any]] = [
         "name": "Bedroom Nightstand (Quiet / Dim)",
         "description": "Dimmed night brightness (60%), Ambient Clock screensaver, 15s battery timeout, and quieter 50% alerts.",
         "device_config": {
-            CONF_DISPLAY_SHAPE: "circle",
             CONF_DEFAULT_PAGE_SIZE: 3,
             CONF_NATIVE_BLE_TRACKING: True,
             CONF_BLE_AUTO_SWITCH: True,
             CONF_SYNC_DEVICE_AREA: True,
             CONF_AREA_HANDOFF: False,
             CONF_DOCK_APPS: "music,alarm,area,remote,tools",
-            CONF_ART_SIZE: 466,
         },
         "esphome_controls": {
             "select:wake_word_mode": "Docked Only",
@@ -167,7 +154,6 @@ BUILTIN_STARTER_PROFILES: list[dict[str, Any]] = [
             "select:tap_to_wake": "Always On",
             "select:docked_idle_timeout": "5 min",
             "select:battery_hibernate_timeout": "Disabled",
-            "switch:ble_presence_beacon": "off",
         },
     },
 ]

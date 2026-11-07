@@ -458,25 +458,23 @@ class TestStudioTargeting(unittest.TestCase):
         self.assertIsNone(find([], "sub_a"))
 
     def test_command_scopes(self) -> None:
-        """Device commands need a Device; System commands only in their Device-scoped modes; unknown commands fail."""
-        needs = studio_scope.command_requires_device
+        """The websocket type is the scope: every command belongs to exactly one; unknown commands fail."""
+        scope = studio_scope.command_scope
         self.assertFalse(studio_scope.SYSTEM_COMMANDS & studio_scope.DEVICE_COMMANDS)
         for cmd in studio_scope.DEVICE_COMMANDS:
-            self.assertTrue(needs(cmd, {}), cmd)
-        for cmd in ("set_ble_area_offset", "auto_calibrate_here", "remove_device", "check_system_updates"):
-            self.assertFalse(needs(cmd, {}), cmd)
-        self.assertTrue(needs("apply_profile", {}))
-        self.assertTrue(needs("apply_profile", {"target_scope": "current"}))
-        self.assertFalse(needs("apply_profile", {"target_scope": "all"}))
-        self.assertFalse(needs("apply_profile", {"target_scope": "device:sub_a"}))
-        self.assertTrue(needs("export_backup_json", {}))
-        self.assertFalse(needs("export_backup_json", {"scope": "system"}))
-        self.assertTrue(needs("restore_backup", {"bundle": {"scope": "device"}}))
-        self.assertFalse(needs("restore_backup", {"bundle": {"scope": "system"}}))
-        self.assertTrue(needs("send_test_notification", {"include_camera": True}))
-        self.assertFalse(needs("send_test_notification", {"target_device": "all"}))
-        with self.assertRaises(studio_scope.UnknownStudioCommand):
-            needs("format_disk", {})
+            self.assertEqual(scope(cmd), "device", cmd)
+        for cmd in studio_scope.SYSTEM_COMMANDS:
+            self.assertEqual(scope(cmd), "system", cmd)
+        # Saves are split by scope; entity actions on a Device's own entities are Device commands.
+        self.assertEqual(scope("save_system_config"), "system")
+        self.assertEqual(scope("save_device_config"), "device")
+        self.assertEqual(scope("esphome_entity_action"), "device")
+        # System actions that act on one Device name it in their payload, so they stay System commands.
+        for cmd in ("capture_profile", "test_doorbell_speaker", "remove_device", "apply_profile"):
+            self.assertEqual(scope(cmd), "system", cmd)
+        for retired in ("save_config", "log_client_error", "export_backup_json", "restore_backup", "format_disk"):
+            with self.assertRaises(studio_scope.UnknownStudioCommand):
+                scope(retired)
 
     def test_studio_js_command_sets_match_backend(self) -> None:
         """latter-studio.js must classify every command exactly as studio/scope.py does."""

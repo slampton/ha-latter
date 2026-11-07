@@ -78,7 +78,6 @@ from .const import (
     CONF_CALENDAR_ENTITIES,
     CONF_CAMERA_ENTITIES,
     CONF_CAMERA_ENTITY,
-    CONF_COMPANION_BASE_URL,
     CONF_CUSTOM_PALETTES,
     CONF_DEFAULT_AREA,
     CONF_DEFAULT_PAGE_SIZE,
@@ -680,11 +679,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def dock_apps_csv(self) -> str:
         """Return comma-separated Home Dock app order."""
         return str(self.get_opt(CONF_DOCK_APPS, DEFAULT_DOCK_APPS)).strip()
-
-    @property
-    def companion_base_url(self) -> str:
-        """Return optional user-configured reverse proxy base URL (e.g. https://ha.example.com)."""
-        return str(self.get_opt(CONF_COMPANION_BASE_URL, "") or "").strip().rstrip("/")
 
     @property
     def wallpaper_source(self) -> str:
