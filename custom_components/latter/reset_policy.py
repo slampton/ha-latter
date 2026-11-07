@@ -32,8 +32,6 @@ DEVICE_OPTION_KEYS: tuple[str, ...] = (
     "device_group",
     "device_remote_group",
     "site_id",
-    "display_shape",
-    "art_size",
     "default_page_size",
     "dock_apps",
     "default_speaker",

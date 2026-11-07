@@ -29,7 +29,6 @@ from .const import (
     CONF_ASSIGNED_PERSON,
     CONF_AREA_FOLLOW_DWELL_S,
     CONF_AREA_HANDOFF,
-    CONF_ART_SIZE,
     CONF_BLE_AUTO_SWITCH,
     CONF_BLE_TARGET_ADDRESS,
     CONF_DEFAULT_AREA,
@@ -37,7 +36,6 @@ from .const import (
     CONF_DEFAULT_SPEAKER,
     CONF_DEVICE_GROUP,
     CONF_DEVICE_SLUG,
-    CONF_DISPLAY_SHAPE,
     CONF_ESPHOME_DEVICE_ID,
     CONF_NATIVE_BLE_TRACKING,
     CONF_SYNC_DEVICE_AREA,
@@ -46,7 +44,6 @@ from .const import (
     DATA_GLOBAL_STORE,
     DEFAULT_AREA_FOLLOW_DWELL_S,
     DEFAULT_AREA_HANDOFF,
-    DEFAULT_ART_SIZE,
     DEFAULT_DEVICE_GROUP,
     DEFAULT_DOCK_APPS,
     DEFAULT_PAGE_SIZE,
@@ -146,7 +143,7 @@ def _detect_hardware_defaults(
     dev: dr.DeviceEntry | None,
     manifest: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Auto-detect screen shape, art_size, group, area, and roaming BLE capability from the device's hardware manifest."""
+    """Auto-detect group, area, and roaming BLE capability from the device's hardware manifest (screen traits stay in the manifest)."""
     ent_reg = er.async_get(hass)
     dev_id = dev.id if dev is not None else None
     if manifest is None:
@@ -165,15 +162,9 @@ def _detect_hardware_defaults(
                 break
 
     if manifest and "w" in manifest and "h" in manifest:
-        w = int(manifest.get("w") or 466)
-        h = int(manifest.get("h") or 466)
-        shape = str(manifest.get("shape") or ("circle" if w == h == 466 else "square"))
         is_stationary = bool(int(manifest.get("stationary") or 0) == 1)
-        art_size: int | str = w if w == h else f"{w}x{h}"
         return {
             CONF_DEVICE_GROUP: "wall_panels" if is_stationary else "handhelds",
-            CONF_DISPLAY_SHAPE: shape,
-            CONF_ART_SIZE: art_size,
             CONF_DEFAULT_PAGE_SIZE: DEFAULT_PAGE_SIZE,
             CONF_NATIVE_BLE_TRACKING: not is_stationary,
             CONF_BLE_AUTO_SWITCH: not is_stationary,
@@ -186,8 +177,6 @@ def _detect_hardware_defaults(
     if has_native_slots:
         return {
             CONF_DEVICE_GROUP: "handhelds",
-            CONF_DISPLAY_SHAPE: "circle",
-            CONF_ART_SIZE: DEFAULT_ART_SIZE,
             CONF_DEFAULT_PAGE_SIZE: DEFAULT_PAGE_SIZE,
             CONF_NATIVE_BLE_TRACKING: True,
             CONF_BLE_AUTO_SWITCH: True,
@@ -199,8 +188,6 @@ def _detect_hardware_defaults(
 
     return {
         CONF_DEVICE_GROUP: DEFAULT_DEVICE_GROUP,
-        CONF_DISPLAY_SHAPE: "square",
-        CONF_ART_SIZE: DEFAULT_ART_SIZE,
         CONF_DEFAULT_PAGE_SIZE: DEFAULT_PAGE_SIZE,
         CONF_NATIVE_BLE_TRACKING: has_ble_beacon,
         CONF_BLE_AUTO_SWITCH: has_ble_beacon,
@@ -313,7 +300,6 @@ def _build_ble_tag_data(user_input: dict[str, Any]) -> dict[str, Any] | None:
         CONF_NATIVE_BLE_TRACKING: True,
         CONF_BLE_AUTO_SWITCH: True,
         CONF_SYNC_DEVICE_AREA: False,
-        CONF_ART_SIZE: DEFAULT_ART_SIZE,
     }
 
 
@@ -325,7 +311,9 @@ def _build_schema(
     default_dev_id = str(
         current.get(CONF_ESPHOME_DEVICE_ID) or _discover_unconfigured_latter_device_id(hass)
     )
-    hw_defs = _detect_hardware_defaults(hass, get_bound_esphome_device(hass, default_dev_id))
+    default_dev = get_bound_esphome_device(hass, default_dev_id)
+    hw_manifest = read_device_hardware_manifest(hass, default_dev.id if default_dev else None)
+    hw_defs = _detect_hardware_defaults(hass, default_dev, hw_manifest)
     is_roaming_default = bool(
         current.get(
             CONF_NATIVE_BLE_TRACKING,
@@ -334,19 +322,11 @@ def _build_schema(
     )
 
     _, profiles = get_device_groups_and_profiles(hass)
-    art_sz = str(hw_defs.get(CONF_ART_SIZE) or "")
+    hw_w, hw_h = int(hw_manifest.get("w") or 0), int(hw_manifest.get("h") or 0)
     hw_shape_lbl = (
-        "410x502 Watch"
-        if art_sz == "410x502"
-        else "480x480 Square AMOLED"
-        if art_sz == "480"
-        else "320x480 Widescreen Handheld"
-        if art_sz == "320x480"
-        else "720x720 Stationary Display"
-        if art_sz == "720"
-        else "466x466 Round Display"
-        if hw_defs.get(CONF_DISPLAY_SHAPE) == "circle"
-        else "ESPHome Node"
+        f"{hw_w}x{hw_h} {'round' if hw_manifest.get('shape') == 'circle' else 'rectangular'} display"
+        if hw_w and hw_h
+        else "no hardware manifest reported yet"
     )
     profile_options = [
         selector.SelectOptionDict(

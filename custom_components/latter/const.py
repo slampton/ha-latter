@@ -22,7 +22,6 @@ DEVICE_SUBENTRY_TYPES: Final[tuple[str, ...]] = (SUBENTRY_DEVICE, SUBENTRY_BLE_T
 # Config & Options keys
 CONF_DEVICE_SLUG: Final = "device_slug"
 CONF_ESPHOME_DEVICE_ID: Final = "esphome_device_id"
-CONF_DISPLAY_SHAPE: Final = "display_shape"
 CONF_DEFAULT_PAGE_SIZE: Final = "default_page_size"
 CONF_WEATHER_ENTITY: Final = "weather_entity"
 CONF_ALARM_ENTITY: Final = "alarm_entity"
@@ -56,7 +55,6 @@ CONF_DOCK_APPS: Final = "dock_apps"
 CONF_WALLPAPER_SOURCE: Final = "wallpaper_source"
 CONF_WALLPAPER_FAVORITES: Final = "wallpaper_favorites"
 CONF_WALLPAPER_CYCLE_MINUTES: Final = "wallpaper_cycle_minutes"
-CONF_ART_SIZE: Final = "art_size"
 CONF_CUSTOM_PALETTES: Final = "custom_palettes"
 CONF_DEVICE_CUSTOM_COLOR: Final = "device_custom_color"
 CONF_DOORBELL_NOISE_REDUCTION: Final = "doorbell_noise_reduction"
@@ -64,6 +62,7 @@ CONF_DOORBELL_NOISE_REDUCTION: Final = "doorbell_noise_reduction"
 # Defaults
 DEFAULT_DOORBELL_NOISE_REDUCTION: Final = "strong"
 DOORBELL_NOISE_REDUCTION_LEVELS: Final[tuple[str, ...]] = ("strong", "light", "off")
+# Used only until the Device reports its hardware manifest (screen shape and size live there)
 DEFAULT_DISPLAY_SHAPE: Final = "circle"
 DEFAULT_PAGE_SIZE: Final = 3
 DEFAULT_NATIVE_BLE_TRACKING: Final = True
@@ -74,7 +73,7 @@ DEFAULT_AREA_FOLLOW_DWELL_S: Final = 10
 DEFAULT_AREA_HANDOFF: Final = False
 DEFAULT_DOCK_APPS: Final = "music,alarm,area,remote,games,tools"
 DEFAULT_WALLPAPER_CYCLE_MINUTES: Final = 0
-DEFAULT_ART_SIZE: Final = 466
+DEFAULT_ART_SIZE: Final = 466  # artwork edge until the Device reports its hardware manifest
 
 # Native Latter Services
 SERVICE_DEVICE_HELLO: Final = "device_hello"

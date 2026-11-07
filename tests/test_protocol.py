@@ -627,7 +627,7 @@ class TestResetPolicy(unittest.TestCase):
         "device_slug": "desk_assistant",
         "ma_player_entity": "media_player.desk_assistant",
         "dock_apps": "music,games",
-        "wallpaper_source": "/local/latter_wallpapers/desk/beach.jpg",
+        "wallpaper_source": "upload:desk/beach.jpg",
         "wallpaper_favorites": ["a", "b"],
         "device_custom_color": "#FF0000",
         "default_area": "kitchen",
@@ -636,8 +636,6 @@ class TestResetPolicy(unittest.TestCase):
     }
     DEFAULTS = {
         "device_group": "wall_panels",
-        "display_shape": "square",
-        "art_size": 720,
         "default_page_size": 3,
         "native_ble_tracking": False,
         "ble_auto_switch": False,

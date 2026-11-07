@@ -69,7 +69,6 @@ from .const import (
     CONF_ALARM_ENTITY,
     CONF_AREA_FOLLOW_DWELL_S,
     CONF_AREA_HANDOFF,
-    CONF_ART_SIZE,
     CONF_ASSIGNED_PERSON,
     CONF_BLE_AREA_OFFSETS,
     CONF_BLE_AUTO_SWITCH,
@@ -86,7 +85,6 @@ from .const import (
     CONF_DEVICE_GROUP,
     CONF_DEVICE_REMOTE_GROUP,
     CONF_DEVICE_SLUG,
-    CONF_DISPLAY_SHAPE,
     CONF_DOCK_APPS,
     CONF_DOORBELL_NOISE_REDUCTION,
     CONF_ESPHOME_DEVICE_ID,
@@ -659,13 +657,9 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     @property
     def display_shape(self) -> str:
-        """Return display geometry ('circle' or 'square', auto-detected from hardware_manifest)."""
+        """Return display geometry ('circle' or 'square') from the hardware manifest (the default until it reports)."""
         hw_shape = str(self._read_device_hardware_manifest().get("shape") or "").strip().lower()
-        if hw_shape in ("circle", "square"):
-            return hw_shape
-        return str(
-            self.get_opt(CONF_DISPLAY_SHAPE, DEFAULT_DISPLAY_SHAPE)
-        ).strip().lower()
+        return hw_shape if hw_shape in ("circle", "square") else DEFAULT_DISPLAY_SHAPE
 
     @property
     def default_page_size(self) -> int:
@@ -959,17 +953,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Return True if switching areas should hand off active speaker/remote context."""
         return bool(self.get_opt(CONF_AREA_HANDOFF, DEFAULT_AREA_HANDOFF))
 
-    @property
-    def art_size(self) -> str | int:
-        """Return configured artwork resolution ('410x502' or integer square size like 466)."""
-        raw = str(self.get_opt(CONF_ART_SIZE, DEFAULT_ART_SIZE) or DEFAULT_ART_SIZE).strip().lower()
-        if "x" in raw:
-            return raw
-        try:
-            return int(raw)
-        except ValueError:
-            return DEFAULT_ART_SIZE
-
     @staticmethod
     def _cap_stream_dimensions(w: int, h: int, max_dim: int = 480) -> tuple[int, int]:
         """Cap network-streamed artwork/image dimensions at max_dim (480px) while preserving aspect ratio."""
@@ -983,29 +966,16 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     @property
     def art_dimensions(self) -> tuple[int, int]:
-        """Return (width, height) in pixels for Baseline-JPEG transcoders (capped at 480px max edge for large panels)."""
+        """Return (width, height) in pixels for Baseline-JPEG transcoders, from the hardware manifest (capped at 480px)."""
         hw = self._read_device_hardware_manifest()
         try:
             hw_w = int(hw.get("w") or 0)
             hw_h = int(hw.get("h") or 0)
-            if hw_w >= 64 and hw_h >= 64:
-                return self._cap_stream_dimensions(hw_w, hw_h)
         except (ValueError, TypeError):
-            pass
-        raw = str(self.get_opt(CONF_ART_SIZE, DEFAULT_ART_SIZE) or DEFAULT_ART_SIZE).strip().lower()
-        if "x" in raw:
-            parts = raw.split("x", 1)
-            try:
-                w = int(parts[0].strip())
-                h = int(parts[1].strip())
-                return self._cap_stream_dimensions(w, h)
-            except ValueError:
-                return 466, 466
-        try:
-            sq = int(raw)
-            return self._cap_stream_dimensions(sq, sq)
-        except ValueError:
-            return 466, 466
+            hw_w = hw_h = 0
+        if hw_w >= 64 and hw_h >= 64:
+            return self._cap_stream_dimensions(hw_w, hw_h)
+        return DEFAULT_ART_SIZE, DEFAULT_ART_SIZE
 
     def sign_payload_resource(self, resource: str) -> str:
         """Sign a payload-embedded or Studio-preview resource (day-bucketed, deterministic within a UTC day)."""

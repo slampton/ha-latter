@@ -78,13 +78,14 @@ CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 type LatterConfigEntry = ConfigEntry[LatterSystem]
 
 
-async def _async_migrate_public_wallpapers(
+async def _async_migrate_stored_settings(
     hass: HomeAssistant, entry: ConfigEntry
 ) -> None:
-    """Move uploads out of `/config/www` (served without auth at `/local/`) into private storage (D-005).
+    """One-time storage migrations; remove once every install has run them (zero-legacy).
 
-    Rewrites the references stored in Device subentries and saved profiles. Runtime state is
-    rewritten by each coordinator when it loads.
+    Moves uploads out of `/config/www` (served without auth at `/local/`) into private storage
+    (D-005) and rewrites the references stored in Device subentries and saved profiles; runtime state
+    is rewritten by each coordinator when it loads. Drops retired Device subentry keys.
     """
     moved = await hass.async_add_executor_job(
         move_public_uploads, hass.config.config_dir
@@ -92,8 +93,11 @@ async def _async_migrate_public_wallpapers(
     for sub in list(entry.subentries.values()):
         if sub.subentry_type not in DEVICE_SUBENTRY_TYPES:
             continue
-        new_data = migrate_wallpaper_settings(sub.data)
-        if new_data is not None:
+        new_data = migrate_wallpaper_settings(sub.data) or dict(sub.data)
+        # Screen shape and size come only from the hardware manifest now; drop the stored copies.
+        for retired in ("display_shape", "art_size"):
+            new_data.pop(retired, None)
+        if new_data != dict(sub.data):
             hass.config_entries.async_update_subentry(entry, sub, data=new_data)
     domain_data = hass.data[DOMAIN]
     global_cfg: dict[str, Any] = domain_data[DATA_GLOBAL_CONFIG]
@@ -324,7 +328,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
     )
 
     entry.runtime_data = sys_obj
-    await _async_migrate_public_wallpapers(hass, entry)
+    await _async_migrate_stored_settings(hass, entry)
 
     device_subentries = [
         sub
