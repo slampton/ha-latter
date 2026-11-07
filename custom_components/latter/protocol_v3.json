@@ -2,6 +2,9 @@
   "contract_version": 3,
   "separator": "\u001f",
   "record_separator": "\u001e",
+  "defaults": {
+    "dock_apps": "music,alarm,area,remote,games,tools"
+  },
   "header": [
     {
       "index": 0,
@@ -35,7 +38,7 @@
         {"index": 4, "name": "area_name", "cpp_enum": "AREA_NAME", "type": "string", "description": "Friendly display name of the active Area"},
         {"index": 5, "name": "site_id", "cpp_enum": "SITE_ID", "type": "string", "description": "Active Site ID"},
         {"index": 6, "name": "ble_closest_proxy", "cpp_enum": "BLE_CLOSEST_PROXY", "type": "string", "description": "Friendly name of closest Bluetooth proxy"},
-        {"index": 7, "name": "dock_apps", "cpp_enum": "DOCK_APPS", "type": "csv", "description": "Comma-separated Home Dock app IDs"},
+        {"index": 7, "name": "dock_apps", "cpp_enum": "DOCK_APPS", "type": "csv", "description": "Home dock apps in order, and the only ones shown (music, alarm, area, remote, camera, games, tools; Settings is always last). Empty until set: the device shows defaults.dock_apps"},
         {"index": 8, "name": "wallpaper_url", "cpp_enum": "WALLPAPER_URL", "type": "url", "description": "Signed HTTP URL for active wallpaper"},
         {"index": 9, "name": "theme_color_hex", "cpp_enum": "THEME_COLOR_HEX", "type": "string", "description": "Active theme accent color (#RRGGBB)"},
         {"index": 10, "name": "available_domains", "cpp_enum": "AVAILABLE_DOMAINS", "type": "csv", "description": "Comma-separated available Area domains"},
@@ -200,15 +203,15 @@
     },
     "area_browse": {
       "description": "Browse Areas, Area domains, or paginated controllable entities",
-      "fields": ["target_device", "mode", "area_id", "domain_filter", "page", "page_size", "handoff_media"]
+      "fields": ["target_device", "mode", "area_id", "domain_filter", "page", "page_size"]
     },
     "area_action": {
       "description": "Execute an explicit domain action on an Area or specific entity",
       "fields": ["target_device", "entity_id", "area_id", "action", "level", "code"]
     },
     "set_active_area": {
-      "description": "Set the active Area context for a Latter device",
-      "fields": ["target_device", "area_id", "handoff_media"]
+      "description": "Set the active Area context for a Latter device (an on-device Area pick). Whether media follows is the Device's Latter setting",
+      "fields": ["target_device", "area_id"]
     },
     "remote_action": {
       "description": "Send a TV/AV remote command or select active remote slot",
@@ -233,6 +236,10 @@
     "save_custom_color": {
       "description": "Save a custom RGB accent color from the on-device color wheel",
       "fields": ["target_device", "hex_color", "name"]
+    },
+    "set_dock_apps": {
+      "description": "Save the Home dock apps chosen on the device (Home settings) as the Device's Latter dock setting",
+      "fields": ["target_device", "dock_apps"]
     }
   }
 }

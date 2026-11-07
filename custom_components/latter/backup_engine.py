@@ -36,6 +36,7 @@ from .const import (
     DATA_GLOBAL_CONFIG,
     DATA_GLOBAL_STORE,
     DEFAULT_DEVICE_GROUP,
+    DEFAULT_DOCK_APPS,
     DOMAIN,
     GLOBAL_CONFIG_KEYS,
     INTEGRATION_VERSION,
@@ -100,7 +101,7 @@ BUILTIN_STARTER_PROFILES: list[dict[str, Any]] = [
             CONF_BLE_AUTO_SWITCH: True,
             CONF_SYNC_DEVICE_AREA: True,
             CONF_AREA_HANDOFF: False,
-            CONF_DOCK_APPS: "music,alarm,area,remote,games,tools",
+            CONF_DOCK_APPS: DEFAULT_DOCK_APPS,
         },
         "esphome_controls": {
             "select:wake_word_mode": "Docked Only",

@@ -117,7 +117,8 @@ Text is wrapped to 32 characters per line.
 | Field | Type | Notes |
 | :--- | :--- | :--- |
 | `area_id` | string | **Required.** An Area ID or Area name. |
-| `handoff_media` | bool | Moves playback to a Music Assistant speaker in the new area |
+
+Whether the device's speaker follows to the new Area is the device's own setting, **Media follows this Device to its new Area** in Studio (**Audio & voice**). The same setting applies when Bluetooth moves the device.
 
 On roaming devices (the hardware reports it isn't stationary) with **Voice Follows Me** on, this also moves the device's Home Assistant Area. Stationary devices are never moved.
 
@@ -208,6 +209,13 @@ There is no live audio from the device to the door and no echo cancellation.
 | :--- | :--- | :--- |
 | `hex_color` | `#RRGGBB` | Added to the system color library (24 colors maximum) and applied to the device |
 | `name` | string | |
+
+### `latter.set_dock_apps`
+Saves a device's Home dock: the apps shown, in order (Settings is always last). Latter firmware sends it when you show or hide an app in **Settings → Home** on the device; Studio's **Home dock apps** edits the same setting. Until a device has one, it shows the default dock (`music,alarm,area,remote,games,tools`).
+
+| Field | Type | Notes |
+| :--- | :--- | :--- |
+| `dock_apps` | string | **Required.** Comma-separated, from `music`, `alarm`, `area`, `remote`, `camera`, `games`, `tools`; at least one |
 
 ## Maintenance
 

@@ -90,6 +90,7 @@ SERVICE_CALENDAR_CREATE_EVENT: Final = "calendar_create_event"
 SERVICE_INTERCOM_BROADCAST: Final = "intercom_broadcast"
 SERVICE_NOTIFY: Final = "notify"
 SERVICE_SAVE_CUSTOM_COLOR: Final = "save_custom_color"
+SERVICE_SET_DOCK_APPS: Final = "set_dock_apps"
 SERVICE_DOORBELL_INTERCOM: Final = "doorbell_intercom"
 SERVICE_RESET_DEVICE: Final = "reset_device"
 

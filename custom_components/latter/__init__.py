@@ -90,6 +90,8 @@ async def _async_migrate_stored_settings(
     (D-005) and rewrites the references stored in Device subentries and saved profiles; runtime state
     is rewritten by each coordinator when it loads. Drops retired Device subentry keys. Moves the
     Voice Follows Me dwell from the System settings to each Latter display (its one home now).
+    Companion, removed together with this function: `LatterCoordinator._async_migrate_media_handoff_switch`
+    (runs on device_hello, since it reads a device entity) and `studio.settings.clean_dwell_s`.
     """
     moved = await hass.async_add_executor_job(
         move_public_uploads, hass.config.config_dir

@@ -208,7 +208,7 @@ media_volume:
 
 set_active_area:
   name: Set Active Area
-  description: Switch the active area context by area_id or area name, and optionally hand off speaker/remote. On roaming devices with Voice Follows Me enabled, this also moves the device's Home Assistant Area so area-aware Assist commands target it.
+  description: Switch the active area context by area_id or area name. The device's speaker follows to the new area when the device's "Media follows this Device" setting is on. On roaming devices with Voice Follows Me enabled, this also moves the device's Home Assistant Area so area-aware Assist commands target it.
   fields:
     area_id:
       name: Area ID or Area Name
@@ -216,12 +216,6 @@ set_active_area:
       required: true
       selector:
         area:
-    handoff_media:
-      name: Handoff Media Context
-      description: Optional override for automatic area speaker & remote handoff.
-      required: false
-      selector:
-        boolean:
     target_device:
       name: Target Device
       description: Optional Latter device.
@@ -338,12 +332,6 @@ area_browse:
           min: 1
           max: 20
           mode: box
-    handoff_media:
-      name: Handoff Area Media Context
-      description: Automatically switch active speaker and TV remote to the selected area.
-      required: false
-      selector:
-        boolean:
 
 area_action:
   name: Area Action
@@ -712,6 +700,25 @@ save_custom_color:
       name: Color Name
       description: Optional friendly name for the System-Wide Color Library.
       required: false
+      selector:
+        text:
+
+set_dock_apps:
+  name: Set Home Dock Apps
+  description: Save a device's Home dock apps (the apps shown, in order; Settings is always last). The device sends this from its Home settings; Studio edits the same setting.
+  fields:
+    target_device:
+      name: Target Device
+      description: Target Latter device.
+      required: false
+      selector:
+        device:
+          integration: latter
+    dock_apps:
+      name: Dock Apps
+      description: Comma-separated apps in order, from music, alarm, area, remote, camera, games, tools.
+      required: true
+      example: "music,alarm,area,remote,games,tools"
       selector:
         text:
 

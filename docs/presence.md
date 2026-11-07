@@ -93,6 +93,7 @@ Sensors are discovered automatically by device class (occupancy, presence, motio
 
 - **Moves the device's Home Assistant Area.** When a roaming device (one whose hardware reports it isn't stationary) with **Voice Follows Me** on changes areas, Latter updates that device's Area in the registry after it has stayed in the new area for the device's **Voice Follows Me delay** (10 s by default, 3 to 60 s, set in Studio under **Audio & voice**), so Assist's area-aware commands target where you are. Picking an area on the device applies immediately. Latter never clears the Area when the device goes away, and never moves stationary devices. You can turn this off per device.
 - **Scopes Area Control** on the device to the current area.
+- **Moves media with the device**, when its **Media follows this Device to its new Area** setting is on (Studio, **Audio & voice**): the device's speaker switches to the new area's speaker and music that's playing moves along. The same setting applies when you pick an area on the device. After the device reconnects, Latter re-syncs its area without moving media.
 - **Routes notifications and intercom.** `target_device: follow_me` delivers to devices in occupied areas; if no area is occupied, nothing is delivered. See [services](reference/services.md#special-target-values).
 - **Fires `latter_event`** with `type: area_changed` for your own automations.
 

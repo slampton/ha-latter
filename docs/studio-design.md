@@ -234,7 +234,7 @@ A standing decision stays in force until a new entry supersedes it. Changing one
 - **Decision:** A Device has one setting for handing media to the Area it moves into, used for both BLE moves and on-device Area picks.
 - **Why:** Two overlapping settings, one of them hidden, made the behavior impossible to predict.
 - **Alternatives:** Show both settings with honest labels.
-- **Status:** Accepted; pending the firmware change.
+- **Status:** Accepted; implemented 2026-11-07 (the firmware's own switch is gone; the Latter setting `area_handoff` decides for both).
 
 ### D-009: One primary button per card
 - **Date:** 2026-11-07

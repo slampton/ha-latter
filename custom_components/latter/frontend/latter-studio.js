@@ -1510,7 +1510,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
               <div class="settings-list">
                 <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-default_speaker">Default speaker</label></div><div class="settings-row-control"><select id="cfg-default_speaker" onchange="markDirty('device')"></select></div></div>
                 <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-ma_player_entity">Music Assistant player</label><p class="row-description">This Device's own player in Music Assistant, needed for library playback, queues and lyrics.</p></div><div class="settings-row-control"><select id="cfg-ma_player_entity" onchange="markDirty('device')"></select></div></div>
-                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-area_handoff">Switch speaker and remote on Area change</label></div><div class="settings-row-control"><input type="checkbox" class="switch" role="switch" id="cfg-area_handoff" onchange="markDirty('device')"></div></div>
+                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-area_handoff">Media follows this Device to its new Area</label><p class="row-description">When Bluetooth moves this Device to another Area, or you pick one on it, its speaker switches to that Area's speaker and playing music moves along.</p></div><div class="settings-row-control"><input type="checkbox" class="switch" role="switch" id="cfg-area_handoff" onchange="markDirty('device')"></div></div>
               </div>
               <details class="sub-collapsible">
                 <summary>Library sorting</summary>
@@ -3113,19 +3113,16 @@ function renderCohesiveDeviceSections() {
   areaItems.forEach(it => {
     const low = `${it.name} ${it.entity_id}`.toLowerCase();
     if (low.includes("category")) areaUiItems.push(it);
-    else if (!low.includes("handoff")) areaBleItems.push(it);
+    else areaBleItems.push(it);
   });
   const isPresenceBeaconSwitch = (it) => it.domain === "switch"
     && /presence[ _]beacon/.test(`${it.name} ${it.entity_id}`.toLowerCase());
   doc.getElementById("embedded-area-ble").innerHTML = areaBleItems.map(it => isPresenceBeaconSwitch(it)
-    ? renderNativeControlRow(it, false, "Follows Enable BLE Proxy Area Tracking")
+    ? renderNativeControlRow(it, false, "Follows Track the Area with BLE proxies")
     : renderNativeControlRow(it)).join("");
 
-  // 2. Home Screen & Area UI: Filter out the 6 redundant "Shortcut *" switches (handled by Home Dock App pills)
-  const rawHomeItems = getSectionItems("home").filter(it => {
-    const low = `${it.name} ${it.entity_id}`.toLowerCase();
-    return !low.includes("shortcut");
-  });
+  // 2. Home screen & Area UI (the dock itself is the Home dock apps setting below)
+  const rawHomeItems = getSectionItems("home");
   const homeItems = sortByOrder(rawHomeItems.concat(areaUiItems), [
     "wake greeting", "weather background", "default category", "show all category"
   ]);

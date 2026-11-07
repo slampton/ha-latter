@@ -34,6 +34,7 @@ from .const import (
     SERVICE_REMOTE_ACTION,
     CONF_CUSTOM_PALETTES,
     CONF_DEVICE_CUSTOM_COLOR,
+    CONF_DOCK_APPS,
     DATA_GLOBAL_CONFIG,
     DATA_GLOBAL_STORE,
     SERVICE_AREA_ACTION,
@@ -41,9 +42,11 @@ from .const import (
     SERVICE_RESET_DEVICE,
     SERVICE_SAVE_CUSTOM_COLOR,
     SERVICE_SET_ACTIVE_AREA,
+    SERVICE_SET_DOCK_APPS,
     SERVICE_SET_ACTIVE_SPEAKER,
 )
 from .coordinator import LatterCoordinator, resolve_coordinator
+from .dock_policy import normalize_dock_apps
 from .identity import esphome_service
 from .issue_ids import slot_push_failing_issue_id
 from .area_engine import (
@@ -468,17 +471,8 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         coord = _resolve_coordinator_from_call(hass, call)
         area_val = str(call.data.get("area_id") or "").strip()
         if area_val:
-            raw_handoff = call.data.get("handoff_media")
-            handoff_val = (
-                _parse_bool(raw_handoff, default=coord.area_handoff_enabled)
-                if raw_handoff is not None
-                else None
-            )
-            coord.async_set_active_area(
-                area_val,
-                handoff_media=handoff_val,
-                sync_device_registry=True,
-            )
+            # Whether media follows is the Device's one setting (area_handoff, D-008).
+            coord.async_set_active_area(area_val, sync_device_registry=True)
 
     async def _handle_remote_action(call: ServiceCall) -> None:
         coord = _resolve_coordinator_from_call(hass, call)
@@ -986,7 +980,6 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             {
                 **BASE_TARGET_FIELDS,
                 vol.Required("area_id"): cv.string,
-                vol.Optional("handoff_media"): vol.Any(bool, cv.string),
             }
         ),
     )
@@ -1034,7 +1027,6 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 vol.Optional("domain_filter", default="all"): cv.string,
                 vol.Optional("page", default=1): vol.Coerce(int),
                 vol.Optional("page_size"): vol.Coerce(int),
-                vol.Optional("handoff_media"): vol.Any(bool, cv.string),
             }
         ),
     )
@@ -1271,6 +1263,29 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 **BASE_TARGET_FIELDS,
                 vol.Required("hex_color"): cv.string,
                 vol.Optional("name"): cv.string,
+            }
+        ),
+    )
+
+    async def _handle_set_dock_apps(call: ServiceCall) -> None:
+        """Save the Home dock chosen on the device (Home settings) as the Device's dock_apps setting."""
+        coord = _resolve_coordinator_from_call(hass, call)
+        try:
+            dock_csv = normalize_dock_apps(call.data.get("dock_apps"))
+        except ValueError as err:
+            raise ServiceValidationError(str(err)) from err
+        if dock_csv != coord.dock_apps_csv:
+            coord.update_device_config({**coord.device_data, CONF_DOCK_APPS: dock_csv})
+            await coord.async_apply_options()
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SET_DOCK_APPS,
+        _handle_set_dock_apps,
+        schema=vol.Schema(
+            {
+                **BASE_TARGET_FIELDS,
+                vol.Required("dock_apps"): cv.string,
             }
         ),
     )

@@ -119,6 +119,5 @@ actions:
   - action: latter.set_active_area
     data:
       target_device: pocket_assistant
-      area_id: kitchen
-      handoff_media: true    # move the active speaker to one in the new area
+      area_id: kitchen       # the speaker follows if the device's "Media follows this Device" setting is on
 ```

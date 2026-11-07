@@ -38,32 +38,36 @@ dock_policy = _load("dock_policy")
 
 
 class TestDockPolicy(unittest.TestCase):
-    """dock_apps is the one source for the Home dock; the firmware's Shortcut switches follow it."""
+    """dock_apps is the one source for the Home dock: the firmware shows exactly the listed apps."""
 
     def test_normalize_and_parse(self) -> None:
         self.assertEqual(dock_policy.normalize_dock_apps(" Music,area,music ,camera"), "music,area,camera")
-        for bad in ("", " , ", "music,spotify"):
+        for bad in ("", " , ", "music,spotify", "settings"):
             with self.assertRaises(ValueError):
                 dock_policy.normalize_dock_apps(bad)
-        self.assertEqual(dock_policy.parse_dock_apps("tools;games|alarm junk"), ["tools", "games", "alarm"])
+        self.assertEqual(dock_policy.parse_dock_apps("tools, games,alarm,junk"), ["tools", "games", "alarm"])
 
-    def test_switches_follow_the_list(self) -> None:
-        self.assertEqual(dock_policy.dock_switch_action(True, "off"), "turn_on")
-        self.assertEqual(dock_policy.dock_switch_action(False, "on"), "turn_off")
-        self.assertIsNone(dock_policy.dock_switch_action(True, "on"))
-        self.assertIsNone(dock_policy.dock_switch_action(False, "off"))
-        for unknown in (None, "unavailable", "unknown"):
-            self.assertIsNone(dock_policy.dock_switch_action(True, unknown))
-        # Every app but Cameras has a switch; the firmware shows Cameras only when listed.
-        self.assertEqual(set(dock_policy.DOCK_SWITCH_SUFFIXES), set(dock_policy.DOCK_APP_TOKENS) - {"camera"})
-
-    def test_studio_and_default_use_the_same_apps(self) -> None:
+    def test_one_default_and_one_token_set_in_both_repos(self) -> None:
+        protocol = json.loads((LATTER_DIR / "protocol_v3.json").read_text(encoding="utf-8"))
+        default = protocol["defaults"]["dock_apps"]
+        self.assertEqual(dock_policy.normalize_dock_apps(default), default)
+        const_src = (LATTER_DIR / "const.py").read_text(encoding="utf-8")
+        self.assertIn(f'DEFAULT_DOCK_APPS: Final = "{default}"\n', const_src)
         js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
         for tok in dock_policy.DOCK_APP_TOKENS:
             self.assertIn(f'{{token: "{tok}",', js)
-        const_src = (LATTER_DIR / "const.py").read_text(encoding="utf-8")
-        default = const_src.split('DEFAULT_DOCK_APPS: Final = "', 1)[1].split('"', 1)[0]
-        self.assertEqual(dock_policy.normalize_dock_apps(default), default)
+        # The device's Home settings save through latter.set_dock_apps (protocol service, services.py).
+        self.assertEqual(protocol["services"]["set_dock_apps"]["fields"], ["target_device", "dock_apps"])
+        self.assertNotIn("dock_switch", (LATTER_DIR / "coordinator.py").read_text(encoding="utf-8"))
+
+    def test_media_handoff_is_one_latter_setting(self) -> None:
+        # D-008: no per-call override from the device; the Device's area_handoff decides.
+        protocol = json.loads((LATTER_DIR / "protocol_v3.json").read_text(encoding="utf-8"))
+        for svc in ("set_active_area", "area_browse"):
+            self.assertNotIn("handoff_media", protocol["services"][svc]["fields"])
+        services_src = (LATTER_DIR / "services.py").read_text(encoding="utf-8")
+        self.assertNotIn('"handoff_media"', services_src)
+        self.assertIn("area_handoff", settings.DEVICE_SETTING_KEYS)
 
 
 class TestIssueAttribution(unittest.TestCase):
