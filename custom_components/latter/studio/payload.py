@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 import re
 from typing import Any
@@ -65,10 +65,10 @@ MAX_INTERNAL_LOGS = 150
 def log_studio_event(
     hass: HomeAssistant, level: str, source: str, message: str
 ) -> None:
-    """Append a timestamped diagnostic event to Latter's in-memory Studio ring buffer."""
+    """Append a diagnostic event (UTC ISO timestamp; Studio formats it for the user) to the Studio ring buffer."""
     domain_data = hass.data.setdefault(DOMAIN, {})
     logs: list[dict[str, str]] = domain_data.setdefault("internal_logs", [])
-    ts = dt_util.now().strftime("%Y-%m-%d %H:%M:%S")
+    ts = dt_util.utcnow().isoformat(timespec="seconds")
     logs.insert(
         0,
         {
@@ -121,8 +121,8 @@ def _get_combined_system_and_studio_logs(hass: HomeAssistant) -> list[dict[str, 
                     continue
                 ts_val = d.get("timestamp")
                 ts_str = (
-                    datetime.fromtimestamp(float(ts_val)).strftime(
-                        "%Y-%m-%d %H:%M:%S"
+                    datetime.fromtimestamp(float(ts_val), tz=UTC).isoformat(
+                        timespec="seconds"
                     )
                     if ts_val
                     else ""

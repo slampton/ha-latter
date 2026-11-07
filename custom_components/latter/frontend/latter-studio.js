@@ -1678,6 +1678,53 @@ const doc = {
 const esc = (s) => String(s ?? "").replace(/[&<>"'`]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;","`":"&#96;"}[c]));
 const jsArg = (v) => esc(JSON.stringify(v));
 
+// Locale-aware formatting (docs/studio-design.md section 6): the user's Home Assistant language,
+// time zone setting and unit system.
+function studioLocale() {
+  return HASS_REF?.locale?.language || HASS_REF?.language || undefined;
+}
+
+function fmtNumber(value, digits = 0) {
+  const n = Number(value);
+  if (value === null || value === undefined || value === "" || !Number.isFinite(n)) return "—";
+  return new Intl.NumberFormat(studioLocale(), {maximumFractionDigits: digits}).format(n);
+}
+
+function fmtPercent(value) {
+  const n = Number(value);
+  if (value === null || value === undefined || value === "" || !Number.isFinite(n)) return "—";
+  return new Intl.NumberFormat(studioLocale(), {style: "percent", maximumFractionDigits: 0}).format(n / 100);
+}
+
+function fmtDistance(meters) {
+  const m = Number(meters);
+  if (meters === null || meters === undefined || meters === "" || !Number.isFinite(m)) return "";
+  return HASS_REF?.config?.unit_system?.length === "mi"
+    ? `${fmtNumber(m * 3.28084, 1)} ft`
+    : `${fmtNumber(m, 1)} m`;
+}
+
+function fmtAgo(seconds) {
+  const s = Number(seconds);
+  if (!Number.isFinite(s)) return "—";
+  const rtf = new Intl.RelativeTimeFormat(studioLocale(), {numeric: "auto"});
+  if (s < 60) return rtf.format(-Math.round(s), "second");
+  if (s < 3600) return rtf.format(-Math.round(s / 60), "minute");
+  return rtf.format(-Math.round(s / 3600), "hour");
+}
+
+function fmtDateTime(iso) {
+  const d = new Date(iso);
+  if (!iso || Number.isNaN(d.getTime())) return iso || "—";
+  const opts = {dateStyle: "short", timeStyle: "medium"};
+  if (HASS_REF?.locale?.time_zone === "server" && HASS_REF?.config?.time_zone) opts.timeZone = HASS_REF.config.time_zone;
+  try {
+    return d.toLocaleString(studioLocale(), opts);
+  } catch (_e) {
+    return d.toLocaleString();
+  }
+}
+
 // Shared markup (docs/studio-design.md section 4). Labels and descriptions are passed already escaped.
 const ICON_DELETE = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 4h-3.5l-1-1h-5l-1 1H5v2h14M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12Z"/></svg>`;
 
@@ -1889,7 +1936,7 @@ function renderLogsView() {
   });
 
   logPre.textContent = filtered.length
-    ? filtered.map(l => `[${l.ts}] [${l.level}] (${l.source}) ${l.message}`).join("\n\n")
+    ? filtered.map(l => `[${fmtDateTime(l.ts)}] [${l.level}] (${l.source}) ${l.message}`).join("\n\n")
     : "No matching log entries.";
 }
 
@@ -2231,10 +2278,10 @@ function renderRssiBars(surveyRows, packetsSeen) {
     const eff = hasSignal ? r.effective_rssi : -100;
     const pct = hasSignal ? Math.max(6, Math.min(100, Math.round(((eff + 100) / 55) * 100))) : 0;
     const offSign = r.offset_db > 0 ? `+${r.offset_db}` : `${r.offset_db}`;
-    const ageText = hasSignal ? `${r.age_seconds}s ago` : "No signal yet";
-    const dist = (hasSignal && r.distance_m != null) ? ` • ~${r.distance_m} m (${r.distance_ft} ft)` : "";
+    const ageText = hasSignal ? fmtAgo(r.age_seconds) : "No signal yet";
+    const dist = (hasSignal && r.distance_m != null) ? ` • ~${fmtDistance(r.distance_m)}` : "";
     const sig = hasSignal
-      ? `Raw ${r.raw_rssi} dBm • Offset ${offSign} dB → Effective ${r.effective_rssi} dBm${dist}`
+      ? `Raw ${fmtNumber(r.raw_rssi)} dBm • Offset ${offSign} dB → Effective ${fmtNumber(r.effective_rssi)} dBm${dist}`
       : `Offset ${offSign} dB • Waiting for a beacon packet`;
     const areaArg = jsArg(r.area_id);
     return `<div class="signal-row ${r.is_winner ? 'winner' : ''}">
@@ -2631,7 +2678,7 @@ function renderAreaPresenceGrid() {
       : (isOcc ? "Occupied (sensor)" : "Empty");
     const parts = [occNames];
     if (r.winning_rssi !== null && r.winning_rssi !== undefined) {
-      parts.push(`BLE ${r.winning_rssi} dBm${r.closest_distance_ft ? ` (~${r.closest_distance_ft} ft)` : ""}`);
+      parts.push(`BLE ${fmtNumber(r.winning_rssi)} dBm${r.closest_distance_m != null ? ` (~${fmtDistance(r.closest_distance_m)})` : ""}`);
     }
     if (r.active_sensors && r.active_sensors.length) {
       parts.push(`${r.active_sensors.length} active sensor${r.active_sensors.length > 1 ? "s" : ""}`);
@@ -2642,7 +2689,7 @@ function renderAreaPresenceGrid() {
     const curMode = r.fusion_mode || "weighted";
     const opts = modeOptions.map(m => `<option value="${esc(m.val)}" ${m.val === curMode ? 'selected' : ''}>${esc(m.label)}</option>`).join("");
     const chip = isOcc
-      ? `<span class="chip chip-success">Occupied • ${esc(r.confidence_pct)}%</span>`
+      ? `<span class="chip chip-success">Occupied • ${esc(fmtPercent(r.confidence_pct))}</span>`
       : `<span class="chip">Clear</span>`;
     return settingsRowHtml(
       `${esc(r.area_name)} ${chip}`,
@@ -2674,7 +2721,7 @@ function renderDiscoveredBleTable() {
       persons.map(p => `<option value="${esc(p.id)}">${esc(p.friendly || p.name)}</option>`)
     ).join("");
     const meta = [c.kind || "BLE device", c.target_address];
-    if (c.rssi !== null && c.rssi !== undefined) meta.push(`${c.rssi} dBm`);
+    if (c.rssi !== null && c.rssi !== undefined) meta.push(`${fmtNumber(c.rssi)} dBm`);
     if (c.area_name) meta.push(`Nearest Area: ${c.area_name}`);
     return settingsRowHtml(
       esc(c.title),
@@ -3727,18 +3774,18 @@ function applyStateToDom(data, forceFormUpdate=false) {
   let batText = "—";
   if (!isBleOnly && curDevEntry.battery_level !== null && curDevEntry.battery_level !== undefined) {
     if (curDevEntry.is_charging) {
-      batText = `${curDevEntry.battery_level}% (Charging)`;
+      batText = `${fmtPercent(curDevEntry.battery_level)} (Charging)`;
     } else if (curDevEntry.is_usb_connected) {
-      batText = `${curDevEntry.battery_level}% (Plugged In)`;
+      batText = `${fmtPercent(curDevEntry.battery_level)} (Plugged In)`;
     } else {
-      batText = `${curDevEntry.battery_level}%`;
+      batText = fmtPercent(curDevEntry.battery_level);
     }
   }
   let wifiText = "—";
   if (curDevEntry.wifi_rssi !== null && curDevEntry.wifi_rssi !== undefined) {
-    wifiText = `${curDevEntry.wifi_rssi} dBm`;
+    wifiText = `${fmtNumber(curDevEntry.wifi_rssi)} dBm`;
   } else if (isBleOnly && winBleRow && winBleRow.effective_rssi !== null) {
-    wifiText = `${winBleRow.effective_rssi} dBm (BLE)`;
+    wifiText = `${fmtNumber(winBleRow.effective_rssi)} dBm (BLE)`;
   }
   const ipStr = curDevEntry.ip_address || (isBleOnly ? (cfg.ble_target_address || "—") : "—");
 
@@ -3767,7 +3814,7 @@ function applyStateToDom(data, forceFormUpdate=false) {
   doc.getElementById("dash-ip-addr").textContent = ipStr;
   doc.getElementById("dash-ble-mode").textContent = `${isRoaming ? "Roaming" : "Stationary"}${live.active_area_name ? ` • ${live.active_area_name}` : ""}`;
   const winRow = (live.ble_survey_rows || []).find(r => r.is_winner);
-  const distSuffix = (live.ble_closest_proxy && winRow && winRow.distance_m != null) ? ` (~${winRow.distance_m}m / ${winRow.distance_ft}ft)` : "";
+  const distSuffix = (live.ble_closest_proxy && winRow && winRow.distance_m != null) ? ` (~${fmtDistance(winRow.distance_m)})` : "";
   doc.getElementById("dash-ble-proxy").textContent = (live.ble_closest_proxy || "—") + distSuffix;
   const proxyRow = doc.getElementById("dash-row-ble-proxy");
   if (proxyRow) proxyRow.classList.toggle("hidden", !(caps.has_ble_beacon && cfg.native_ble_tracking));
