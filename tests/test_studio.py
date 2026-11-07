@@ -163,6 +163,22 @@ class TestSaveScopes(unittest.TestCase):
         with self.assertRaises(settings.SettingsScopeError):
             settings.clean_device_settings({"default_page_size": "many"})
 
+    def test_voice_follows_me_dwell_is_a_device_setting(self) -> None:
+        # One home: each Device's subentry (the System options flow no longer has it).
+        self.assertIn("area_follow_dwell_s", settings.DEVICE_SETTING_KEYS)
+        self.assertNotIn("area_follow_dwell_s", self.GLOBAL_KEYS)
+        for raw, want in ((1, 3), (25, 25), ("100", 60)):
+            self.assertEqual(settings.clean_device_settings({"area_follow_dwell_s": raw}), {"area_follow_dwell_s": want})
+        with self.assertRaises(settings.SettingsScopeError):
+            settings.clean_device_settings({"area_follow_dwell_s": "soon"})
+        # The startup migration's tolerant clamp, and the default matches const.py.
+        self.assertEqual(settings.clean_dwell_s("7.9"), 7)
+        self.assertEqual(settings.clean_dwell_s(None), settings.DEFAULT_DWELL_S)
+        const_src = (LATTER_DIR / "const.py").read_text(encoding="utf-8")
+        self.assertIn(f"DEFAULT_AREA_FOLLOW_DWELL_S: Final = {settings.DEFAULT_DWELL_S}\n", const_src)
+        flow_src = (LATTER_DIR / "config_flow.py").read_text(encoding="utf-8")
+        self.assertNotIn("AREA_FOLLOW_DWELL", flow_src)
+
     def test_system_view_reads_without_a_device(self) -> None:
         view = settings.system_settings_view({"camera_entity": "camera.door", "weather_entity": "weather.home"})
         self.assertEqual(view["camera_entities"], ["camera.door"])

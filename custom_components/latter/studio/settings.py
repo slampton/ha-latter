@@ -57,11 +57,16 @@ DEVICE_SETTING_KEYS: tuple[str, ...] = (
     "default_page_size",
     "wallpaper_cycle_minutes",
     "device_custom_color",
+    "area_follow_dwell_s",
 )
 
 MAX_LIST_ITEMS = 10
 MAX_CALENDARS = 50
 MAX_CUSTOM_PALETTES = 24
+# Voice Follows Me: how long a BLE-detected Area must stay stable before the Device moves (seconds).
+DWELL_MIN_S = 3
+DWELL_MAX_S = 60
+DEFAULT_DWELL_S = 10
 NOISE_REDUCTION_LEVELS: tuple[str, ...] = ("strong", "light", "off")
 DEFAULT_NOISE_REDUCTION = "strong"
 _HEX_COLOR = re.compile(r"^#[0-9A-F]{6}$")
@@ -145,6 +150,14 @@ def _noise_reduction(val: Any) -> str:
     return level if level in NOISE_REDUCTION_LEVELS else DEFAULT_NOISE_REDUCTION
 
 
+def clean_dwell_s(val: Any) -> int:
+    """Return a Voice Follows Me dwell in whole seconds, clamped to 3-60 (the default for a non-number)."""
+    try:
+        return max(DWELL_MIN_S, min(DWELL_MAX_S, int(float(val))))
+    except (TypeError, ValueError):
+        return DEFAULT_DWELL_S
+
+
 def clean_system_settings(incoming: Mapping[str, Any]) -> dict[str, Any]:
     """Validate and normalize a System save. The primary camera (`camera_entity`) is derived, never sent."""
     _check_scope(incoming, SYSTEM_SETTING_KEYS, "System")
@@ -186,6 +199,10 @@ def clean_device_settings(incoming: Mapping[str, Any]) -> dict[str, Any]:
             out["default_page_size"] = max(1, min(20, int(incoming["default_page_size"])))
         if "wallpaper_cycle_minutes" in incoming:
             out["wallpaper_cycle_minutes"] = max(0, int(incoming["wallpaper_cycle_minutes"]))
+        if "area_follow_dwell_s" in incoming:
+            out["area_follow_dwell_s"] = max(
+                DWELL_MIN_S, min(DWELL_MAX_S, int(incoming["area_follow_dwell_s"]))
+            )
     except (TypeError, ValueError) as err:
         raise SettingsScopeError(f"Not a whole number: {err}") from None
     if "device_custom_color" in incoming:

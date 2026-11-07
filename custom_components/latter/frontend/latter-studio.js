@@ -1482,6 +1482,10 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
                   <div class="settings-row-text"><label class="row-label" for="cfg-sync_device_area">Voice Follows Me</label><p class="row-description">Moves this Device's Home Assistant Area with it, so voice commands act on the Area it's in.</p></div>
                   <div class="settings-row-control"><input type="checkbox" class="switch" role="switch" id="cfg-sync_device_area" onchange="markDirty('device')"></div>
                 </div>
+                <div class="settings-row" id="row-area-follow-dwell">
+                  <div class="settings-row-text"><label class="row-label" for="cfg-area_follow_dwell_s">Voice Follows Me delay</label><p class="row-description">How long Bluetooth must place the Device in a new Area before it moves there. Picking an Area on the Device moves it at once.</p></div>
+                  <div class="settings-row-control"><input type="range" id="cfg-area_follow_dwell_s" min="3" max="60" step="1" value="10" oninput="onDwellInput(this.value)"><span class="chip" id="dwell-value">—</span></div>
+                </div>
               </div>
               <details class="sub-collapsible" id="details-voice-sens">
                 <summary>Wake word sensitivity (per model)</summary>
@@ -4070,6 +4074,10 @@ function loadDeviceForm(data) {
   doc.getElementById("cfg-ble_auto_switch").checked = !!cfg.ble_auto_switch;
   doc.getElementById("cfg-sync_device_area").checked = !!cfg.sync_device_area;
   doc.getElementById("row-sync-device-area")?.classList.toggle("hidden", data.capabilities?.is_roaming_device === false);
+  doc.getElementById("row-area-follow-dwell")?.classList.toggle("hidden", data.capabilities?.is_roaming_device === false);
+  const dwellEl = doc.getElementById("cfg-area_follow_dwell_s");
+  if (dwellEl) dwellEl.value = String(cfg.area_follow_dwell_s ?? 10);
+  renderDwellValue();
   doc.getElementById("cfg-area_handoff").checked = !!cfg.area_handoff;
   doc.getElementById("cfg-ble_beacon_uuid").value = cfg.ble_beacon_uuid || "";
   doc.getElementById("cfg-ble_target_address").value = cfg.ble_target_address || "";
@@ -4145,8 +4153,20 @@ function collectDeviceSettings() {
     ma_player_entity: doc.getElementById("cfg-ma_player_entity")?.value ?? "",
     default_area: doc.getElementById("cfg-default_area")?.value ?? "",
     dock_apps: doc.getElementById("cfg-dock_apps")?.value?.trim() || "",
-    wallpaper_cycle_minutes: parseInt(doc.getElementById("cfg-wallpaper_cycle_minutes")?.value || "0", 10) || 0
+    wallpaper_cycle_minutes: parseInt(doc.getElementById("cfg-wallpaper_cycle_minutes")?.value || "0", 10) || 0,
+    area_follow_dwell_s: parseInt(doc.getElementById("cfg-area_follow_dwell_s")?.value || "10", 10) || 10
   };
+}
+
+function renderDwellValue() {
+  const val = doc.getElementById("cfg-area_follow_dwell_s")?.value;
+  const out = doc.getElementById("dwell-value");
+  if (out) out.textContent = val ? `${fmtNumber(Number(val))} s` : "—";
+}
+
+function onDwellInput(_val) {
+  renderDwellValue();
+  markDirty("device");
 }
 
 // One Save button; each scope is saved by its own command and only when it has changes (D-007).
@@ -4410,6 +4430,7 @@ function bindStudioGlobals() {
   window.getSectionItems = getSectionItems;
   window.hsvToRgbJS = hsvToRgbJS;
   window.markDirty = markDirty;
+  window.onDwellInput = onDwellInput;
   window.moveDockAppToken = moveDockAppToken;
   window.navigateToView = navigateToView;
   window.onAssignedPersonChanged = onAssignedPersonChanged;

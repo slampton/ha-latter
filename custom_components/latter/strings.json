@@ -17,11 +17,10 @@
       },
       "reconfigure": {
         "title": "Reconfigure Latter System Hub",
-        "description": "Update shared system entities and BLE roaming dwell settings for your Latter System.",
+        "description": "Update the weather and alarm entities shared by every Latter Device.",
         "data": {
           "weather_entity": "System Weather Entity",
-          "alarm_entity": "System Alarm Control Panel",
-          "area_follow_dwell_s": "Voice Follows Me Dwell Time (seconds)"
+          "alarm_entity": "System Alarm Control Panel"
         }
       }
     },
@@ -115,11 +114,10 @@
     "step": {
       "init": {
         "title": "Latter System Options",
-        "description": "Configure shared System entities and BLE roaming dwell behavior. For full system, area, and per-device controls, open the Latter Studio from the Home Assistant sidebar.",
+        "description": "Set the weather and alarm entities shared by every Latter Device. Everything else, including each Device's Voice Follows Me settings, is in Latter Studio in the Home Assistant sidebar.",
         "data": {
           "weather_entity": "System Weather Entity",
-          "alarm_entity": "System Alarm Control Panel",
-          "area_follow_dwell_s": "Voice Follows Me Dwell Time (seconds)"
+          "alarm_entity": "System Alarm Control Panel"
         }
       }
     }

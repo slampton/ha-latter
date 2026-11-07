@@ -911,14 +911,17 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     @property
     def area_follow_dwell_s(self) -> int:
-        """Return required stability dwell time in seconds before BLE moves update ESPHome Device Area."""
+        """Return this Device's Voice Follows Me dwell: seconds a BLE-detected Area must stay stable (3-60)."""
         try:
             return max(
-                0,
-                int(
-                    self.get_opt(
-                        CONF_AREA_FOLLOW_DWELL_S, DEFAULT_AREA_FOLLOW_DWELL_S
-                    )
+                3,
+                min(
+                    60,
+                    int(
+                        self.get_opt(
+                            CONF_AREA_FOLLOW_DWELL_S, DEFAULT_AREA_FOLLOW_DWELL_S
+                        )
+                    ),
                 ),
             )
         except (ValueError, TypeError):

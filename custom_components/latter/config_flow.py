@@ -27,7 +27,6 @@ from .ble_engine import _iter_devices
 from .const import (
     CONF_ALARM_ENTITY,
     CONF_ASSIGNED_PERSON,
-    CONF_AREA_FOLLOW_DWELL_S,
     CONF_AREA_HANDOFF,
     CONF_BLE_AUTO_SWITCH,
     CONF_BLE_TARGET_ADDRESS,
@@ -42,7 +41,6 @@ from .const import (
     CONF_WEATHER_ENTITY,
     DATA_GLOBAL_CONFIG,
     DATA_GLOBAL_STORE,
-    DEFAULT_AREA_FOLLOW_DWELL_S,
     DEFAULT_AREA_HANDOFF,
     DEFAULT_DEVICE_GROUP,
     DEFAULT_DOCK_APPS,
@@ -490,7 +488,7 @@ class LatterConfigFlow(ConfigFlow, domain=DOMAIN):
         domain_data = self.hass.data.get(DOMAIN, {})
         global_cfg = dict(domain_data.get(DATA_GLOBAL_CONFIG, {}))
         if user_input is not None:
-            for k in (CONF_WEATHER_ENTITY, CONF_ALARM_ENTITY, CONF_AREA_FOLLOW_DWELL_S):
+            for k in (CONF_WEATHER_ENTITY, CONF_ALARM_ENTITY):
                 if k in user_input:
                     global_cfg[k] = user_input[k]
             domain_data[DATA_GLOBAL_CONFIG] = global_cfg
@@ -669,7 +667,7 @@ class LatterBleTagSubentryFlow(ConfigSubentryFlow):
 def _build_system_options_schema(
     hass: HomeAssistant, global_cfg: dict[str, Any]
 ) -> vol.Schema:
-    """Build the System-level Options schema for shared weather, alarm, and BLE dwell settings."""
+    """Build the System-level Options schema for the shared weather and alarm entities."""
     default_weather = str(
         global_cfg.get(CONF_WEATHER_ENTITY)
         or _discover_default_weather(hass)
@@ -679,9 +677,6 @@ def _build_system_options_schema(
         global_cfg.get(CONF_ALARM_ENTITY)
         or _discover_default_alarm(hass)
         or ""
-    )
-    default_dwell = int(
-        global_cfg.get(CONF_AREA_FOLLOW_DWELL_S, DEFAULT_AREA_FOLLOW_DWELL_S)
     )
     return vol.Schema(
         {
@@ -697,18 +692,6 @@ def _build_system_options_schema(
             ): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="alarm_control_panel")
             ),
-            vol.Required(
-                CONF_AREA_FOLLOW_DWELL_S,
-                default=default_dwell,
-            ): selector.NumberSelector(
-                selector.NumberSelectorConfig(
-                    min=3,
-                    max=60,
-                    step=1,
-                    unit_of_measurement="s",
-                    mode=selector.NumberSelectorMode.SLIDER,
-                )
-            ),
         }
     )
 
@@ -723,7 +706,7 @@ class LatterOptionsFlowHandler(OptionsFlow):
         domain_data = self.hass.data.get(DOMAIN, {})
         global_cfg = dict(domain_data.get(DATA_GLOBAL_CONFIG, {}))
         if user_input is not None:
-            for k in (CONF_WEATHER_ENTITY, CONF_ALARM_ENTITY, CONF_AREA_FOLLOW_DWELL_S):
+            for k in (CONF_WEATHER_ENTITY, CONF_ALARM_ENTITY):
                 if k in user_input:
                     global_cfg[k] = user_input[k]
             domain_data[DATA_GLOBAL_CONFIG] = global_cfg

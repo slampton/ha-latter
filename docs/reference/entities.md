@@ -79,4 +79,4 @@ Latter fires this on the Home Assistant event bus.
 
 ## Voice Follows Me (Device Area Sync)
 
-Latter never modifies entities owned by other integrations. On roaming displays (`stationary == 0` in the hardware manifest) with **Voice Follows Me** enabled, Latter updates only the bound ESPHome device's Home Assistant Area after the device has remained in the new Area for the configured dwell period (`area_follow_dwell_s`, default 10 s), so area-less Assist voice commands target the room you are standing in.
+Latter never modifies entities owned by other integrations. On roaming displays (`stationary == 0` in the hardware manifest) with **Voice Follows Me** enabled, Latter updates only the bound ESPHome device's Home Assistant Area after the device has remained in the new Area for the Device's dwell period (`area_follow_dwell_s` in the Device's subentry, 3 to 60 s, default 10 s; Studio's **Voice Follows Me delay**), so area-less Assist voice commands target the Area you're in.

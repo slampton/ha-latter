@@ -27,6 +27,7 @@ from homeassistant.helpers.typing import ConfigType
 
 from .ble_engine import _iter_devices
 from .const import (
+    CONF_AREA_FOLLOW_DWELL_S,
     CONF_ESPHOME_DEVICE_ID,
     CONF_SAVED_PROFILES,
     DATA_DISCOVERY_UNSUB,
@@ -40,6 +41,7 @@ from .const import (
     INTEGRATION_VERSION,
     PLATFORMS,
     STORAGE_VERSION,
+    SUBENTRY_DEVICE,
 )
 from .coordinator import LatterCoordinator
 from .doorbell_engine import LatterCameraAudioStreamView
@@ -64,6 +66,7 @@ from .studio import (
     async_register_studio_panel,
     async_unregister_studio_panel,
 )
+from .studio.settings import clean_dwell_s
 from .system import LatterSystem, get_latter_system
 from .wallpaper_refs import (
     migrate_profiles,
@@ -85,11 +88,15 @@ async def _async_migrate_stored_settings(
 
     Moves uploads out of `/config/www` (served without auth at `/local/`) into private storage
     (D-005) and rewrites the references stored in Device subentries and saved profiles; runtime state
-    is rewritten by each coordinator when it loads. Drops retired Device subentry keys.
+    is rewritten by each coordinator when it loads. Drops retired Device subentry keys. Moves the
+    Voice Follows Me dwell from the System settings to each Latter display (its one home now).
     """
     moved = await hass.async_add_executor_job(
         move_public_uploads, hass.config.config_dir
     )
+    domain_data = hass.data[DOMAIN]
+    global_cfg: dict[str, Any] = domain_data[DATA_GLOBAL_CONFIG]
+    system_dwell = global_cfg.pop(CONF_AREA_FOLLOW_DWELL_S, None)
     for sub in list(entry.subentries.values()):
         if sub.subentry_type not in DEVICE_SUBENTRY_TYPES:
             continue
@@ -97,16 +104,20 @@ async def _async_migrate_stored_settings(
         # Screen shape and size come only from the hardware manifest now; drop the stored copies.
         for retired in ("display_shape", "art_size"):
             new_data.pop(retired, None)
+        if (
+            system_dwell is not None
+            and sub.subentry_type == SUBENTRY_DEVICE
+            and CONF_AREA_FOLLOW_DWELL_S not in new_data
+        ):
+            new_data[CONF_AREA_FOLLOW_DWELL_S] = clean_dwell_s(system_dwell)
         if new_data != dict(sub.data):
             hass.config_entries.async_update_subentry(entry, sub, data=new_data)
-    domain_data = hass.data[DOMAIN]
-    global_cfg: dict[str, Any] = domain_data[DATA_GLOBAL_CONFIG]
     profiles = global_cfg.get(CONF_SAVED_PROFILES)
-    if isinstance(profiles, list):
-        new_profiles = migrate_profiles(profiles)
-        if new_profiles is not None:
-            global_cfg[CONF_SAVED_PROFILES] = new_profiles
-            await domain_data[DATA_GLOBAL_STORE].async_save(global_cfg)
+    new_profiles = migrate_profiles(profiles) if isinstance(profiles, list) else None
+    if new_profiles is not None:
+        global_cfg[CONF_SAVED_PROFILES] = new_profiles
+    if new_profiles is not None or system_dwell is not None:
+        await domain_data[DATA_GLOBAL_STORE].async_save(global_cfg)
     if moved:
         _LOGGER.info(
             "Moved %d uploaded wallpaper(s) from /config/www to Latter's private storage",

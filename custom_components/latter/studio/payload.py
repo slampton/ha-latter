@@ -31,6 +31,7 @@ from ..browse_engine import is_music_assistant_player
 from ..const import (
     API_BRAND_ICON_PATH,
     API_SIDEBAR_ICON_JS_PATH,
+    CONF_AREA_FOLLOW_DWELL_S,
     CONF_AREA_HANDOFF,
     CONF_ASSIGNED_PERSON,
     CONF_BLE_AUTO_SWITCH,
@@ -800,6 +801,7 @@ def build_studio_state_payload(
         CONF_ASSIGNED_PERSON: coordinator.assigned_person,
         CONF_BLE_AUTO_SWITCH: coordinator.ble_auto_switch_enabled,
         CONF_SYNC_DEVICE_AREA: coordinator.sync_device_area_enabled,
+        CONF_AREA_FOLLOW_DWELL_S: coordinator.area_follow_dwell_s,
         CONF_AREA_HANDOFF: coordinator.area_handoff_enabled,
         CONF_DEVICE_CUSTOM_COLOR: coordinator.device_custom_color,
         CONF_DOCK_APPS: coordinator.dock_apps_csv,
