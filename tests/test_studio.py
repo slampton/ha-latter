@@ -34,6 +34,36 @@ settings = _load("studio/settings")
 scope = _load("studio/scope")
 assets = _load("studio/assets")
 issue_ids = _load("issue_ids")
+dock_policy = _load("dock_policy")
+
+
+class TestDockPolicy(unittest.TestCase):
+    """dock_apps is the one source for the Home dock; the firmware's Shortcut switches follow it."""
+
+    def test_normalize_and_parse(self) -> None:
+        self.assertEqual(dock_policy.normalize_dock_apps(" Music,area,music ,camera"), "music,area,camera")
+        for bad in ("", " , ", "music,spotify"):
+            with self.assertRaises(ValueError):
+                dock_policy.normalize_dock_apps(bad)
+        self.assertEqual(dock_policy.parse_dock_apps("tools;games|alarm junk"), ["tools", "games", "alarm"])
+
+    def test_switches_follow_the_list(self) -> None:
+        self.assertEqual(dock_policy.dock_switch_action(True, "off"), "turn_on")
+        self.assertEqual(dock_policy.dock_switch_action(False, "on"), "turn_off")
+        self.assertIsNone(dock_policy.dock_switch_action(True, "on"))
+        self.assertIsNone(dock_policy.dock_switch_action(False, "off"))
+        for unknown in (None, "unavailable", "unknown"):
+            self.assertIsNone(dock_policy.dock_switch_action(True, unknown))
+        # Every app but Cameras has a switch; the firmware shows Cameras only when listed.
+        self.assertEqual(set(dock_policy.DOCK_SWITCH_SUFFIXES), set(dock_policy.DOCK_APP_TOKENS) - {"camera"})
+
+    def test_studio_and_default_use_the_same_apps(self) -> None:
+        js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
+        for tok in dock_policy.DOCK_APP_TOKENS:
+            self.assertIn(f'{{token: "{tok}",', js)
+        const_src = (LATTER_DIR / "const.py").read_text(encoding="utf-8")
+        default = const_src.split('DEFAULT_DOCK_APPS: Final = "', 1)[1].split('"', 1)[0]
+        self.assertEqual(dock_policy.normalize_dock_apps(default), default)
 
 
 class TestIssueAttribution(unittest.TestCase):

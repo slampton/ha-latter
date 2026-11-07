@@ -35,6 +35,7 @@ from ..const import (
     CONF_BLE_TARGET_ADDRESS,
     CONF_DEVICE_GROUPS,
     CONF_DEVICE_REMOTE_GROUP,
+    CONF_DOCK_APPS,
     CONF_MA_PLAYER_ENTITY,
     CONF_SAVED_PROFILES,
     CONF_WALLPAPER_FAVORITES,
@@ -49,6 +50,7 @@ from ..const import (
 )
 from ..coordinator import LatterCoordinator
 from ..device_reset import async_reset_device
+from ..dock_policy import normalize_dock_apps
 from ..doorbell_engine import async_execute_doorbell_intercom
 from ..identity import device_entities
 from ..media_engine import async_refresh_ma_link
@@ -427,6 +429,11 @@ async def _async_execute_studio_command(
 
     elif cmd == "save_device_config":
         updates = clean_device_settings(dict(body.get("config") or {}))
+        if CONF_DOCK_APPS in updates:
+            try:
+                updates[CONF_DOCK_APPS] = normalize_dock_apps(updates[CONF_DOCK_APPS])
+            except ValueError as err:
+                raise SettingsScopeError(str(err)) from None
         current = coordinator.device_data
         merged_device: dict[str, Any] = {**current, **updates}
         for gk in GLOBAL_CONFIG_KEYS:

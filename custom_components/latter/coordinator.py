@@ -129,6 +129,7 @@ from .const import (
     normalize_noise_reduction,
 )
 from .device_runtime import LatterDeviceRuntime
+from .dock_policy import DOCK_SWITCH_SUFFIXES, dock_switch_action, parse_dock_apps
 from .health import (
     ISSUE_ROLLED_BACK,
     evaluate_device_health,
@@ -447,6 +448,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._bind_doorbell_ring_listener()
         self._bind_wallpaper_cycle_timer()
         await self.async_sync_presence_beacon("options")
+        await self.async_sync_dock_switches()
         self._notify_listeners()
 
     async def async_sync_presence_beacon(self, trigger: Trigger) -> None:
@@ -488,6 +490,36 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self.device_slug,
                 err,
             )
+
+    async def async_sync_dock_switches(self) -> None:
+        """Make the bound device's "Home: Shortcut <App>" switches match this Device's `dock_apps` (dock_policy).
+
+        `dock_apps` is the one source for the Home dock; the firmware's per-app switches follow it.
+        Switches that are missing, unavailable or unknown are left alone.
+        """
+        if self.is_ble_tag or not self.has_display:
+            return
+        enabled = set(parse_dock_apps(self.dock_apps_csv))
+        for app, suffix in DOCK_SWITCH_SUFFIXES.items():
+            switch_ent = self.device_entity("switch", suffix)
+            if not switch_ent:
+                continue
+            state = self.hass.states.get(switch_ent)
+            action = dock_switch_action(app in enabled, state.state if state else None)
+            if action is None:
+                continue
+            try:
+                await self.hass.services.async_call(
+                    "switch", action, {ATTR_ENTITY_ID: switch_ent}, blocking=True
+                )
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.warning(
+                    "Couldn't %s the %s dock app of '%s': %s",
+                    action.replace("_", " "),
+                    app,
+                    self.device_slug,
+                    err,
+                )
 
     def _live_subentry(self) -> ConfigSubentry:
         """Return the current ConfigSubentry object for this Device (subentries are replaced on update)."""
@@ -1214,6 +1246,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._bind_wallpaper_cycle_timer()
         # Onboarding / reload: mirror the tracking option (no-op until the device's switch is available).
         await self.async_sync_presence_beacon("options")
+        await self.async_sync_dock_switches()
         try:
             from .repairs import async_audit_coordinator_health
 
@@ -1429,8 +1462,10 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         self.force_republish_all_domains()
         await self._async_handle_device_reconnect()
-        # After the reconnect delay the device's entities have their states; turn the beacon on if tracked.
+        # After the reconnect delay the device's entities have their states; turn the beacon on if
+        # tracked, and make the dock switches match dock_apps (a reset device boots with all on).
         await self.async_sync_presence_beacon("hello")
+        await self.async_sync_dock_switches()
 
     @callback
     def _apply_device_health(self, manifest: dict[str, Any], boot_id: str) -> None:

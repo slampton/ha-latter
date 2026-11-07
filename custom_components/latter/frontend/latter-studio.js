@@ -1435,7 +1435,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
             <div class="card-content">
               <div id="embedded-home" class="settings-list"></div>
               <div class="settings-row stacked">
-                <div class="settings-row-text"><span class="row-label">Home dock apps</span><p class="row-description">Select an app to show or hide it; use the arrows to reorder.</p></div>
+                <div class="settings-row-text"><span class="row-label">Home dock apps</span><p class="row-description">Select an app to show or hide it, and use the arrows to reorder. Changes apply when you save.</p></div>
                 <div class="settings-row-control"><div id="dock-pills-container" class="pill-list"></div></div>
                 <input type="hidden" id="cfg-dock_apps">
               </div>
@@ -2379,34 +2379,17 @@ function toggleDockAppToken(tok) {
   if (!inp) return;
   let active = inp.value
     .split(/[,;| ]+/)
-    .map(t => {
-      const v = t.trim().toLowerCase();
-      return v;
-    })
+    .map(t => t.trim().toLowerCase())
     .filter(t => DOCK_APP_META.some(m => m.token === t));
-  let nowEnabled = true;
   if (active.includes(tok)) {
     if (active.length <= 1) return;
     active = active.filter(t => t !== tok);
-    nowEnabled = false;
   } else {
     active.push(tok);
-    nowEnabled = true;
   }
   inp.value = active.join(",");
   markDirty('device');
   renderDockPillsFromInput();
-
-  // Also sync the underlying ESPHome Shortcut switch immediately if present
-  const homeItems = getSectionItems("home");
-  const matchSw = homeItems.find(it =>
-    it.domain === "switch" &&
-    `${it.name} ${it.entity_id}`.toLowerCase().includes(`shortcut`) &&
-    `${it.name} ${it.entity_id}`.toLowerCase().includes(tok)
-  );
-  if (matchSw) {
-    espAction(matchSw.entity_id, nowEnabled ? "turn_on" : "turn_off");
-  }
 }
 
 function moveDockAppToken(tok, dir) {
