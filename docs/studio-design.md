@@ -181,6 +181,7 @@ Studio has one implementation of each component. A new pattern is added here fir
 
   Studio writes the URL with `history.pushState` and a `location-changed` event, the way Home Assistant's own panels navigate. An unknown path shows the Device list.
 - The **Visit** link on a Latter Device's Home Assistant device page opens that Device in Studio (`/latter/devices/<subentry_id>`).
+- Studio's entry in Home Assistant's sidebar shows the Latter mark, `latter:logo` (D-017). Studio's own toolbar shows only the title, as Home Assistant's toolbars do.
 - The page template starts in the Devices state, so nothing flashes before the first render.
 - Page names are unique: the Device list is **All Devices**; Device pages are **Overview**, **Display & Home**, **Audio & Voice**, **Power & Battery**, and **Device Settings**; System pages are **System Overview**, **Shared Entities**, **Media & Remotes**, **Groups & Profiles**, **BLE & Area Presence**, and **System Settings**. A nav label and its page title are the same text.
 - A Device's **Overview** has one **Status** card (status, firmware, SDK revision, Area, battery, Wi-Fi signal, IP address, speaker, now playing, location mode, nearest BLE proxy, hardware model, group) next to **Quick Actions**. Uptime isn't shown: the firmware doesn't report it.
@@ -316,4 +317,12 @@ A standing decision stays in force until a new entry supersedes it. Changing one
 - **Decision:** Studio's components copy the metrics and theme variables of Home Assistant's own components (frontend source, 2026.11): ha-card (24 px regular header, 20/16 padding, `--ha-card-*` border, radius and shadow), ha-settings-row (56 px rows without dividers), ha-input's filled field, ha-button (pill; accent, filled and plain), ha-switch (48 × 24 outlined track), the hass-subpage toolbar (56 px, 20 px regular title, `--app-header-*`), and Home Assistant's light or dark `color-scheme` for native popups. Studio still draws them with its own CSS (D-006); section 3 lists each value and the variable it reads. This carries out D-002.
 - **Why:** The maintainer found the light theme usable but not like Home Assistant, and native select popups were unreadable in dark mode. Matching the real components, rather than approximating them, makes a theme change in Home Assistant look right in Studio too.
 - **Alternatives:** Keep Studio's earlier compact metrics (16 px card titles, 36 px square-cornered controls, row dividers).
+- **Status:** Accepted.
+
+### D-017: The Latter mark is the sidebar icon, not a toolbar logo
+- **Date:** 2026-11-08
+- **Decision:** Studio's toolbar shows only the title "Latter". The Latter mark becomes Studio's icon in Home Assistant's sidebar: the panel registers with `sidebar_icon: "latter:logo"`, and a tiny frontend module, `frontend/latter-icons.js`, defines it through Home Assistant's custom icon API (`window.customIcons["latter"].getIcon(name) → {path, viewBox}`, frontend `src/data/custom_icons.ts`). The glyph is the mark's single 24 × 24 path with no color of its own, so it takes the sidebar's icon color and selected state like Home Assistant's icons. The module is served from Studio's static directory with a content-hash cache-buster (like the panel module), added with `frontend.add_extra_js_url`, and removed with `frontend.remove_extra_js_url` when the panel is removed. If the module can't be registered, the panel uses `mdi:ladder`.
+- **Why:** The maintainer's choice: Home Assistant's toolbars carry no logo, and its sidebar is where an integration's mark belongs.
+- **Limits:** Home Assistant loads extra modules early but asynchronously and has no fallback for an unknown icon set: if the module fails to load in the browser, the sidebar shows no icon (the title still shows). HACS has used the same mechanism for its sidebar icon for years.
+- **Alternatives:** Keep the logo in the toolbar; use an MDI icon in the sidebar.
 - **Status:** Accepted.

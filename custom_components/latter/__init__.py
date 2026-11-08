@@ -64,7 +64,6 @@ from .repairs import async_delete_device_issues
 from .services import async_push_active_area_entities, async_setup_services
 from .studio import (
     LatterBrandIconView,
-    LatterSidebarIconJsView,
     async_register_studio_panel,
     async_unregister_studio_panel,
 )
@@ -325,7 +324,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
         hass.http.register_view(LatterCameraAudioStreamView(hass))
         hass.http.register_view(LatterMapSnapshotView(hass))
         hass.http.register_view(LatterBrandIconView(hass))
-        hass.http.register_view(LatterSidebarIconJsView(hass))
 
     await async_register_studio_panel(hass)
 

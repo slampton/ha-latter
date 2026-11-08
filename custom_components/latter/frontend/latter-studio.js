@@ -148,13 +148,9 @@ const STUDIO_STYLES = `
     user-select: none;
   }
   .titlebar-brand .ha-menu-btn { color: var(--studio-header-icon); }
-  .brand-logo {
-    width: 24px;
-    height: 24px;
-    margin-inline-start: var(--studio-space-3);
-    fill: var(--studio-header-icon);
-    flex-shrink: 0;
-  }
+  /* The title sits where Home Assistant's toolbar puts it; the sidebar entry carries the Latter icon (D-017). */
+  .titlebar-title { padding-inline-start: var(--studio-space-3); }
+  :host([narrow]) .titlebar-title { padding-inline-start: 0; }
   .titlebar-actions {
     display: flex;
     align-items: center;
@@ -162,7 +158,6 @@ const STUDIO_STYLES = `
   }
   .titlebar-brand .ha-menu-btn { display: none; }
   :host([narrow]) .titlebar-brand .ha-menu-btn { display: inline-flex; }
-  :host([narrow]) .brand-logo { margin-inline-start: 0; }
 
   /* ---------- Shell & navigation ---------- */
   .app-shell {
@@ -972,7 +967,7 @@ const STUDIO_STYLES = `
   }
   @media (max-width: 860px) {
     .titlebar-brand .ha-menu-btn { display: inline-flex; }
-    .brand-logo { margin-inline-start: 0; }
+    .titlebar-title { padding-inline-start: 0; }
     .app-shell { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
     aside.sidebar {
       align-self: start;
@@ -1003,8 +998,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
     <button type="button" class="btn-icon ha-menu-btn" aria-label="Toggle the Home Assistant sidebar" onclick="toggleParentHaSidebar()">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18v2H3V6m0 5h18v2H3v-2m0 5h18v2H3v-2Z"/></svg>
     </button>
-    <svg class="brand-logo" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h1A1.5 1.5 0 0 1 8 5.5v13A1.5 1.5 0 0 1 6.5 20h-1A1.5 1.5 0 0 1 4 18.5v-13ZM16 5.5A1.5 1.5 0 0 1 17.5 4h1A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5h-1A1.5 1.5 0 0 1 16 18.5v-13ZM4 16.5h16v2A1.5 1.5 0 0 1 18.5 20h-13A1.5 1.5 0 0 1 4 18.5v-2ZM8 5.25h8v2.5H8v-2.5ZM8 10.75h8v2.5H8v-2.5Z"/></svg>
-    <span>Latter</span>
+    <span class="titlebar-title">Latter</span>
   </div>
   <div class="titlebar-actions">
     <button type="button" id="hdr-update-pill" class="btn btn-secondary btn-compact hidden" onclick="triggerHeaderFirmwareUpdate()">Install Update</button>

@@ -30,7 +30,6 @@ from ..ble_engine import (
 from ..browse_engine import is_music_assistant_player
 from ..const import (
     API_BRAND_ICON_PATH,
-    API_SIDEBAR_ICON_JS_PATH,
     CONF_AREA_FOLLOW_DWELL_S,
     CONF_AREA_HANDOFF,
     CONF_ASSIGNED_PERSON,
@@ -939,42 +938,5 @@ class LatterBrandIconView(HomeAssistantView):
         return web.Response(
             body=data,
             content_type="image/png",
-            headers={"Cache-Control": "public, max-age=86400"},
-        )
-
-
-_SIDEBAR_ICON_JS = """(function() {
-  const ICON_PATH = "M4 6C4 4.89543 4.89543 4 6 4H18C19.1046 4 20 4.89543 20 6V15C20 16.1046 19.1046 17 18 17H6C4.89543 17 4 16.1046 4 15V6ZM6 6V15H18V6H6ZM12 7.5C12.5523 7.5 13 7.94772 13 8.5V12.5C13 13.0523 12.5523 13.5 12 13.5C11.4477 13.5 11 13.0523 11 12.5V8.5C11 7.94772 11.4477 7.5 12 7.5ZM9 9.5C9.55228 9.5 10 9.94772 10 10.5C10 11.0523 9.55228 11.5 9 11.5C8.44772 11.5 8 11.0523 8 10.5C8 9.94772 8.44772 9.5 9 9.5ZM15 9.5C15.5523 9.5 16 9.94772 16 10.5C16 11.0523 15.5523 11.5 15 11.5C14.4477 11.5 14 11.0523 14 10.5C14 9.94772 14.4477 9.5 15 9.5ZM8 19H16C16.5523 19 17 19.4477 17 20C17 20.5523 16.5523 21 16 21H8C7.44772 21 7 20.5523 7 20C7 19.4477 7.44772 19 8 19Z";
-  window.customIcons = window.customIcons || {};
-  window.customIcons["latter"] = {
-    getIcon: async function(iconName) {
-      return { path: ICON_PATH, viewBox: "0 0 24 24" };
-    },
-    getIconList: async function() {
-      return [{ name: "logo" }, { name: "latter" }];
-    }
-  };
-  window.customIconsets = window.customIconsets || {};
-  window.customIconsets["latter"] = window.customIcons["latter"].getIcon;
-})();
-"""
-
-
-class LatterSidebarIconJsView(HomeAssistantView):
-    """Serve the custom `latter:logo` SVG iconset registration script for the HA sidebar."""
-
-    url = API_SIDEBAR_ICON_JS_PATH
-    name = "api:latter:sidebar_icon_js"
-    requires_auth = False
-
-    def __init__(self, hass: HomeAssistant) -> None:
-        """Initialize the sidebar icon JS view."""
-        self.hass = hass
-
-    async def get(self, request: web.Request) -> web.Response:
-        """Return the JS snippet that registers `latter:logo` in HA's frontend."""
-        return web.Response(
-            text=_SIDEBAR_ICON_JS,
-            content_type="application/javascript",
             headers={"Cache-Control": "public, max-age=86400"},
         )

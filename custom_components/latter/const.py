@@ -101,7 +101,6 @@ API_CAMERA_PROXY_PATH: Final = "/api/latter/camera/{target_device}"
 API_CAMERA_AUDIO_STREAM_PATH: Final = "/api/latter/camera_audio/{target_device}"
 API_MAP_PROXY_PATH: Final = "/api/latter/map/{target_device}"
 API_BRAND_ICON_PATH: Final = "/api/latter/brand/icon.png"
-API_SIDEBAR_ICON_JS_PATH: Final = "/api/latter/brand/sidebar_icon.js"
 DATA_HMAC_SECRET: Final = "hmac_secret"
 DATA_DISCOVERY_UNSUB: Final = "discovery_unsub"
 

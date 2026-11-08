@@ -93,4 +93,4 @@ At most 2 streams can run at once. Further requests get `429`.
 ### Studio
 Studio has no HTTP API of its own. It's a `panel_custom` web component at `/latter` (admin only), loaded from the static path `/latter_ui`. It talks to Home Assistant only through admin-gated WebSocket commands: `latter/system/*` (`get_state`, `subscribe`, `command`, `export`, `import`) and `latter/device/*` (`command`, `export`, `import`). These are internal, not a stable API.
 
-Two unauthenticated branding assets are also served: `GET /api/latter/brand/icon.png` and `/api/latter/brand/sidebar_icon.js`.
+One unauthenticated branding asset is also served: `GET /api/latter/brand/icon.png`. Studio's sidebar icon is a static frontend module (`/latter_ui_<version>/latter-icons.js?v=<content hash>`), served like the panel JavaScript and loaded by Home Assistant on every page; it only defines the `latter:logo` icon.

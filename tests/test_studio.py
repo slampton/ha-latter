@@ -86,6 +86,34 @@ class TestPayloadDiet(unittest.TestCase):
 class TestViewLayout(unittest.TestCase):
     """D-014: every view is two independent column stacks; no auto-placing grid."""
 
+    def test_sidebar_icon_module(self) -> None:
+        # D-017: the panel's sidebar icon is "latter:logo", registered by a tiny static frontend module.
+        init_src = (LATTER_DIR / "studio" / "__init__.py").read_text(encoding="utf-8")
+        self.assertIn('SIDEBAR_ICON = "latter:logo"', init_src)
+        self.assertIn('SIDEBAR_ICON_FALLBACK = "mdi:ladder"', init_src)
+        self.assertIn("sidebar_icon=sidebar_icon,", init_src)
+        self.assertIn('ICONS_MODULE = "latter-icons.js"', init_src)
+        self.assertIn('icon_url = f"{versioned_prefix}/{ICONS_MODULE}?v={icon_digest}"', init_src)
+        self.assertIn("frontend.add_extra_js_url(hass, icon_url)", init_src)
+        self.assertIn("frontend.remove_extra_js_url(hass, icon_url)", init_src)
+        # Served from the panel's static directory, so it needs no Latter HTTP view.
+        self.assertIn("str(frontend_dir),", init_src)
+        module = LATTER_DIR / "frontend" / "latter-icons.js"
+        src = module.read_text(encoding="utf-8")
+        self.assertLess(len(src.encode("utf-8")), 1500)
+        self.assertIn("window.customIcons.latter = {", src)
+        self.assertIn('getIcon: async () => ({ path: LATTER_LOGO_PATH, viewBox: "0 0 24 24" }),', src)
+        self.assertNotIn("import ", src)
+        self.assertNotIn("fetch(", src)
+        # One single-color glyph: one path string, no secondary path, no fill or color.
+        self.assertNotIn("secondaryPath", src)
+        self.assertNotRegex(src, r"#[0-9a-fA-F]{3,6}\b|rgb\(|fill")
+        for gone in ("LatterSidebarIconJsView", "sidebar_icon.js", "API_SIDEBAR_ICON_JS_PATH"):
+            for path in LATTER_DIR.rglob("*.py"):
+                self.assertNotIn(gone, path.read_text(encoding="utf-8"), f"{gone} in {path.name}")
+        studio_js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
+        self.assertNotIn("brand-logo", studio_js)
+
     def test_brand_images_are_valid_png(self) -> None:
         # A text round-trip once replaced their high bytes with U+FFFD; HA and HACS show these files.
         sizes = {}

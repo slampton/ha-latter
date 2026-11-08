@@ -1,6 +1,6 @@
 # Latter Studio
 
-Latter Studio is the **Latter** entry in the Home Assistant sidebar. Only admin users can see it. Use it for anything that's configuration rather than automation. Changes are pushed to devices immediately, so nothing needs to be reflashed.
+Latter Studio is the **Latter** entry in the Home Assistant sidebar, with the Latter mark as its icon. Only admin users can see it. Use it for anything that's configuration rather than automation. Changes are pushed to devices immediately, so nothing needs to be reflashed.
 
 Studio has two scopes, selected with the switcher at the top: **Devices** (where Studio opens) for one device at a time, and **System** for settings shared by every device. System pages work whether or not a device is selected; a System action that affects one device asks you which device.
 
