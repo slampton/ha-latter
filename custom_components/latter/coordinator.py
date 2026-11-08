@@ -165,6 +165,7 @@ from .payloads import (
 )
 from .presence_beacon import Trigger, decide_beacon_action
 from .site_feeds import async_fetch_calendar_snapshot, async_fetch_weather_snapshot
+from .targets import other_latter_devices
 from .traits import manifest_has_display, manifest_is_roaming, manifest_is_wearable
 from .url_signer import UrlSigner
 
@@ -795,13 +796,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     def _build_intercom_targets_summary(self) -> V3Records:
         """Records of what this Device can ring with call_target: all other Latter Devices, then each by title."""
-        others = [
-            val
-            for val in self.hass.data.get(DOMAIN, {}).values()
-            if hasattr(val, "device_slug")
-            and not getattr(val, "is_ble_tag", False)
-            and val.device_slug != self.device_slug
-        ]
+        others = other_latter_devices(self.hass.data.get(DOMAIN, {}).values(), self.device_slug)
         others.sort(key=lambda c: (c.device_title.lower(), c.device_slug))
         targets: list[dict[str, str]] = (
             [{"target_id": "all", "label": "All Devices", "kind": "all"}] if others else []

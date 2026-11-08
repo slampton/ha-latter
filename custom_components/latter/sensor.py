@@ -153,30 +153,8 @@ class _BaseLatterSensor(SensorEntity):
 
     _attr_has_entity_name = True
     _attr_should_poll = False
-    _unrecorded_attributes = frozenset(
-        {
-            "alert_camera_url",
-            "art_url",
-            "ble_beacon_uuid",
-            "ble_area_offsets",
-            "ble_rssi_by_area",
-            "ble_scanners_map",
-            "ble_target_macs",
-            "camera_entities",
-            "cameras_summary",
-            "camera_snapshot_url",
-            "doorbell_speakers_map",
-            "intercom_targets_summary",
-            "custom_palettes",
-            "entities_summary",
-            "events",
-            "hardware_manifest",
-            "payload",
-            "rev",
-            "slots_summary",
-            "wallpaper_url",
-        }
-    )
+    # Only the Protocol v3 sensors carry large or fast-changing attributes; nothing else is excluded.
+    _unrecorded_attributes = frozenset({"payload", "rev"})
 
     def __init__(self, coordinator: LatterCoordinator, suffix: str, label: str) -> None:
         """Initialize base sensor with a device-scoped entity_id under its Latter DeviceEntry."""

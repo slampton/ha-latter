@@ -35,6 +35,55 @@ settings = _load("studio/settings")
 RETIRED = ("follow" + "_me", "occu" + "pied")
 
 
+class _Dev:
+    def __init__(self, slug: str, ble_tag: bool = False) -> None:
+        self.device_slug = slug
+        self.is_ble_tag = ble_tag
+
+
+class CallTargetTests(unittest.TestCase):
+    """Doorbell call_target rings Latter Devices only: never the caller, never a BLE tag."""
+
+    def setUp(self) -> None:
+        self.pool = [
+            _Dev("desk"),
+            _Dev("kitchen"),
+            _Dev("phone", ble_tag=True),
+            _Dev("office"),
+            object(),  # something else stored under the domain (the System, a store, ...)
+        ]
+
+    def test_all_rings_every_other_latter_device(self) -> None:
+        for target in ("all", "ALL", "", None):
+            self.assertEqual(targets.call_target_slugs(self.pool, "desk", target), ["kitchen", "office"], target)
+
+    def test_named_target(self) -> None:
+        self.assertEqual(targets.call_target_slugs(self.pool, "desk", "office"), ["office"])
+        self.assertEqual(targets.call_target_slugs(self.pool, "desk", "phone"), [])
+        self.assertEqual(targets.call_target_slugs(self.pool, "desk", "desk"), [])
+        self.assertEqual(targets.call_target_slugs(self.pool, "desk", "nowhere"), [])
+
+    def test_intercom_list_uses_the_same_rule(self) -> None:
+        self.assertEqual(
+            [d.device_slug for d in targets.other_latter_devices(self.pool, "kitchen")], ["desk", "office"]
+        )
+        doorbell = (LATTER_DIR / "doorbell_engine.py").read_text(encoding="utf-8")
+        coordinator = (LATTER_DIR / "coordinator.py").read_text(encoding="utf-8")
+        self.assertIn("call_target_slugs(", doorbell)
+        self.assertIn("other_latter_devices(", coordinator)
+
+
+class UnrecordedAttributesTests(unittest.TestCase):
+    def test_only_attributes_the_sensors_expose(self) -> None:
+        src = (LATTER_DIR / "sensor.py").read_text(encoding="utf-8")
+        m = re.search(r"_unrecorded_attributes = frozenset\((\{[^}]*\})\)", src)
+        self.assertIsNotNone(m)
+        names = set(re.findall(r'"([a-z_]+)"', m.group(1)))
+        self.assertEqual(names, {"payload", "rev"})
+        for name in names:
+            self.assertIn(f'"{name}": attrs.get("{name}"', src)
+
+
 class TargetKindTests(unittest.TestCase):
     def test_special_targets(self) -> None:
         self.assertEqual(targets.target_kind("all"), "all")

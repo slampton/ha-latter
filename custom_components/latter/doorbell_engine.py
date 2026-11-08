@@ -33,6 +33,7 @@ from .const import (
 )
 from .area_engine import resolve_entity_area_id
 from .media_engine import async_announce_on_targets
+from .targets import call_target_slugs
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -373,27 +374,23 @@ async def async_execute_doorbell_intercom(
 
     # 2. Ring other Latter displays (one named device, or all) with a critical notification.
     if act == "call_target":
-        target_str = (message or "").strip()
-        domain_data = hass.data.get(DOMAIN, {})
-        all_coords = [v for v in domain_data.values() if hasattr(v, "device_slug")]
-        caller_title = coordinator.device_slug.replace("_", " ").title()
-        for c in all_coords:
-            if c.device_slug == coordinator.device_slug:
-                continue
-            if target_str in ("all", "", c.device_slug):
-                await hass.services.async_call(
-                    DOMAIN,
-                    "notify",
-                    {
-                        "target_device": c.device_slug,
-                        "title": f"Intercom: {caller_title}",
-                        "message": "Tap to answer",
-                        "priority": "critical",
-                        "duration": 20,
-                        "chime": True,
-                    },
-                    blocking=False,
-                )
+        slugs = call_target_slugs(
+            hass.data.get(DOMAIN, {}).values(), coordinator.device_slug, message
+        )
+        for slug in slugs:
+            await hass.services.async_call(
+                DOMAIN,
+                "notify",
+                {
+                    "target_device": slug,
+                    "title": f"Intercom: {coordinator.device_title}",
+                    "message": "Tap to answer",
+                    "priority": "critical",
+                    "duration": 20,
+                    "chime": True,
+                },
+                blocking=False,
+            )
         return target_info
 
     if act == "select_camera":
