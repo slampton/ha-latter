@@ -4,7 +4,7 @@ Latter Studio is the **Latter** entry in the Home Assistant sidebar. Only admin 
 
 Studio has two scopes, selected with the switcher at the top: **Devices** (where Studio opens) for one device at a time, and **System** for settings shared by every device. System pages work whether or not a device is selected; a System action that affects one device asks you which device.
 
-The **Save** button saves System settings and the open device's settings separately, so saving one never changes the other. If a save fails, Studio shows the reason in a red message at the bottom of the page.
+There's no Save button: a setting applies as soon as you change it, like Home Assistant's own controls. Text and number fields apply when you press Enter or leave the field. If a change fails, Studio shows the reason in a red message at the bottom of the page and puts the setting back.
 
 The address bar follows the page you're on (for example `/latter/devices/<id>/display` or `/latter/system/presence`), so reloading or pressing Back keeps your place, and you can bookmark a page. The **Visit** link on a Latter device's page in Home Assistant opens that device in Studio.
 
@@ -66,7 +66,7 @@ Each device has five pages. The options on each page depend on what the device's
 | Page | Contents |
 | :--- | :--- |
 | **Overview** | A **Needs attention** banner when the device has open repairs; battery, Wi-Fi and firmware; **Now** (the device's Area, its active speaker and what's playing); device status; quick actions, power profile, apply a profile, and assigned person. A value the device hasn't reported shows as —. |
-| **Display & home** | Color profile, home dock apps and their order (applied when you save; the device shows exactly these apps, plus Settings, and **Settings → Home** on the device edits the same list), and wallpapers (5 built-in presets, plus uploads that can rotate on a schedule). Screen shape and resolution come from the device's hardware manifest. |
+| **Display & home** | Color profile, home dock apps and their order (the device shows exactly these apps, plus Settings, and **Settings → Home** on the device edits the same list), and wallpapers (5 built-in presets, plus uploads that can rotate on a schedule). Screen shape and resolution come from the device's hardware manifest. |
 | **Audio & voice** | Wake word and sensitivity, **Voice Follows Me** and its delay (roaming devices: how long Bluetooth must place the device in a new Area before its Home Assistant Area follows, 3 to 60 s), **Media follows this Device to its new Area** (one setting for Bluetooth moves and Area picks on the device), default speaker, the device's **Music Assistant player** (its link to Music Assistant, needed for library playback), alert volume, and music sorting |
 | **Power & battery** | Sleep and wake timeouts, plus battery and power readings |
 | **Device settings** | Device slug (read-only: the ESPHome node name), group, and area cards per page; BLE tracking settings (the BLE presence beacon follows **Track the Area with BLE proxies** and is shown read-only); diagnostics and the raw entity inspector; **In Home Assistant** (**Open in Home Assistant** for the ESPHome device page, **Download diagnostics**, and **Replace hardware**, which opens Latter in Home Assistant to reconfigure or replace the device's hardware); **Reset to defaults** (**Reset…**); and **Remove Device** (**Remove…**) |

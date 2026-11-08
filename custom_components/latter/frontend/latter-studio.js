@@ -938,8 +938,6 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
   </div>
   <div class="titlebar-actions">
     <button type="button" id="hdr-update-pill" class="btn btn-secondary btn-compact hidden" onclick="triggerHeaderFirmwareUpdate()">Install update</button>
-    <span id="dirty-indicator" class="chip chip-warning hidden">Unsaved</span>
-    <button type="button" id="btn-save-changes" class="btn btn-primary" disabled onclick="saveAllConfig()">Saved</button>
   </div>
 </header>
 <div class="app-shell">
@@ -1033,12 +1031,12 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
               <p class="card-description">Shared entities used by the Home screen and the Whole-Home Hub.</p>
             </div></div>
             <div class="card-content settings-list">
-              <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-weather_entity">Weather</label></div><div class="settings-row-control"><select id="cfg-weather_entity" onchange="markDirty('system')"></select></div></div>
-              <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-alarm_entity">Security alarm</label></div><div class="settings-row-control"><select id="cfg-alarm_entity" onchange="markDirty('system')"></select></div></div>
-              <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-thermostat_entity">Thermostat</label></div><div class="settings-row-control"><select id="cfg-thermostat_entity" onchange="markDirty('system')"></select></div></div>
-              <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-lock_entity">Entry lock</label></div><div class="settings-row-control"><select id="cfg-lock_entity" onchange="markDirty('system')"></select></div></div>
-              <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-garage_entity">Garage door</label></div><div class="settings-row-control"><select id="cfg-garage_entity" onchange="markDirty('system')"></select></div></div>
-              <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-vacuum_entity">Robot vacuum</label></div><div class="settings-row-control"><select id="cfg-vacuum_entity" onchange="markDirty('system')"></select></div></div>
+              <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-weather_entity">Weather</label></div><div class="settings-row-control"><select id="cfg-weather_entity" onchange="saveField('system', this)"></select></div></div>
+              <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-alarm_entity">Security alarm</label></div><div class="settings-row-control"><select id="cfg-alarm_entity" onchange="saveField('system', this)"></select></div></div>
+              <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-thermostat_entity">Thermostat</label></div><div class="settings-row-control"><select id="cfg-thermostat_entity" onchange="saveField('system', this)"></select></div></div>
+              <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-lock_entity">Entry lock</label></div><div class="settings-row-control"><select id="cfg-lock_entity" onchange="saveField('system', this)"></select></div></div>
+              <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-garage_entity">Garage door</label></div><div class="settings-row-control"><select id="cfg-garage_entity" onchange="saveField('system', this)"></select></div></div>
+              <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-vacuum_entity">Robot vacuum</label></div><div class="settings-row-control"><select id="cfg-vacuum_entity" onchange="saveField('system', this)"></select></div></div>
             </div>
           </div>
 
@@ -1052,7 +1050,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
                 <div class="settings-row">
                   <div class="settings-row-text"><label class="row-label" for="cfg-doorbell_noise_reduction">Doorbell audio noise reduction</label></div>
                   <div class="settings-row-control">
-                    <select id="cfg-doorbell_noise_reduction" onchange="markDirty('system')">
+                    <select id="cfg-doorbell_noise_reduction" onchange="saveField('system', this)">
                       <option value="strong">Strong</option>
                       <option value="light">Light</option>
                       <option value="off">Off</option>
@@ -1071,7 +1069,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
                 </div>
               </div>
               <div id="cameras-list" class="stack"></div>
-              <div><button type="button" class="btn btn-text" onclick="addCameraRow(''); markDirty('system');">+ Add camera</button></div>
+              <div><button type="button" class="btn btn-text" onclick="addCameraRow('')">+ Add camera</button></div>
               <div id="cam-preview-box" class="cam-preview hidden">
                 <div class="signal-row-head">
                   <strong id="cam-preview-label">Camera preview</strong>
@@ -1094,7 +1092,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
             </div></div>
             <div class="card-content">
               <div id="calendars-list" class="stack"></div>
-              <div><button type="button" class="btn btn-text" onclick="addCalendarRow(''); markDirty('system');">+ Add calendar</button></div>
+              <div><button type="button" class="btn btn-text" onclick="addCalendarRow('')">+ Add calendar</button></div>
             </div>
           </div>
         </div>
@@ -1109,7 +1107,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
           </div></div>
           <div class="card-content">
             <div id="remotes-list" class="stack"></div>
-            <div><button type="button" class="btn btn-text" onclick="addRemoteControlRow(''); markDirty('system');">+ Add remote control</button></div>
+            <div><button type="button" class="btn btn-text" onclick="addRemoteControlRow('')">+ Add remote control</button></div>
           </div>
         </div>
 
@@ -1120,7 +1118,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
           </div></div>
           <div class="card-content">
             <div id="remote-groups-list" class="stack"></div>
-            <div><button type="button" class="btn btn-text" onclick="addRemoteGroupRow(); markDirty('system');">+ Create remote group</button></div>
+            <div><button type="button" class="btn btn-text" onclick="addRemoteGroupRow()">+ Create remote group</button></div>
             <h4 class="subsection-title">Device remote assignment</h4>
             <div id="device-remote-assignments-list" class="settings-list"></div>
           </div>
@@ -1133,7 +1131,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
           </div></div>
           <div class="card-content">
             <div id="volume-overrides-list" class="stack"></div>
-            <div><button type="button" class="btn btn-text" onclick="addVolumeOverrideRow('', ''); markDirty('system');">+ Add volume override</button></div>
+            <div><button type="button" class="btn btn-text" onclick="addVolumeOverrideRow('', '')">+ Add volume override</button></div>
           </div>
         </div>
       </section>
@@ -1452,7 +1450,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
               <p class="card-description">Choose a built-in preset, upload a photo, or star several favorites to rotate.</p>
             </div>
             <div class="card-header-actions">
-              <select id="cfg-wallpaper_cycle_minutes" aria-label="Favorite rotation" onchange="markDirty('device')">
+              <select id="cfg-wallpaper_cycle_minutes" aria-label="Favorite rotation" onchange="saveField('device', this)">
                 <option value="0">Rotation: off</option>
                 <option value="15">Rotate every 15 min</option>
                 <option value="60">Rotate every hour</option>
@@ -1485,11 +1483,11 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
               <div class="settings-list">
                 <div class="settings-row" id="row-sync-device-area">
                   <div class="settings-row-text"><label class="row-label" for="cfg-sync_device_area">Voice Follows Me</label><p class="row-description">Moves this Device's Home Assistant Area with it, so voice commands act on the Area it's in.</p></div>
-                  <div class="settings-row-control"><input type="checkbox" class="switch" role="switch" id="cfg-sync_device_area" onchange="markDirty('device')"></div>
+                  <div class="settings-row-control"><input type="checkbox" class="switch" role="switch" id="cfg-sync_device_area" onchange="saveField('device', this)"></div>
                 </div>
                 <div class="settings-row" id="row-area-follow-dwell">
                   <div class="settings-row-text"><label class="row-label" for="cfg-area_follow_dwell_s">Voice Follows Me delay</label><p class="row-description">How long Bluetooth must place the Device in a new Area before it moves there. Picking an Area on the Device moves it at once.</p></div>
-                  <div class="settings-row-control"><input type="range" id="cfg-area_follow_dwell_s" min="3" max="60" step="1" value="10" oninput="onDwellInput(this.value)"><span class="chip" id="dwell-value">—</span></div>
+                  <div class="settings-row-control"><input type="range" id="cfg-area_follow_dwell_s" min="3" max="60" step="1" value="10" oninput="renderDwellValue()" onchange="saveField('device', this)"><span class="chip" id="dwell-value">—</span></div>
                 </div>
               </div>
               <details class="sub-collapsible" id="details-voice-sens">
@@ -1508,9 +1506,9 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
               <div id="embedded-sound" class="settings-list"></div>
               <div id="embedded-music" class="settings-list"></div>
               <div class="settings-list">
-                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-default_speaker">Default speaker</label></div><div class="settings-row-control"><select id="cfg-default_speaker" onchange="markDirty('device')"></select></div></div>
-                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-ma_player_entity">Music Assistant player</label><p class="row-description">This Device's own player in Music Assistant, needed for library playback, queues and lyrics.</p></div><div class="settings-row-control"><select id="cfg-ma_player_entity" onchange="markDirty('device')"></select></div></div>
-                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-area_handoff">Media follows this Device to its new Area</label><p class="row-description">When Bluetooth moves this Device to another Area, or you pick one on it, its speaker switches to that Area's speaker and playing music moves along.</p></div><div class="settings-row-control"><input type="checkbox" class="switch" role="switch" id="cfg-area_handoff" onchange="markDirty('device')"></div></div>
+                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-default_speaker">Default speaker</label></div><div class="settings-row-control"><select id="cfg-default_speaker" onchange="saveField('device', this)"></select></div></div>
+                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-ma_player_entity">Music Assistant player</label><p class="row-description">This Device's own player in Music Assistant, needed for library playback, queues and lyrics.</p></div><div class="settings-row-control"><select id="cfg-ma_player_entity" onchange="saveField('device', this)"></select></div></div>
+                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-area_handoff">Media follows this Device to its new Area</label><p class="row-description">When Bluetooth moves this Device to another Area, or you pick one on it, its speaker switches to that Area's speaker and playing music moves along.</p></div><div class="settings-row-control"><input type="checkbox" class="switch" role="switch" id="cfg-area_handoff" onchange="saveField('device', this)"></div></div>
               </div>
               <details class="sub-collapsible">
                 <summary>Library sorting</summary>
@@ -1551,8 +1549,8 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
             </div></div>
             <div class="card-content settings-list">
               <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-device_slug">ESPHome node name</label><p class="row-description">Set when the Device was added; entities are <code>sensor.&lt;name&gt;_*</code>.</p></div><div class="settings-row-control"><input type="text" id="cfg-device_slug" readonly></div></div>
-              <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-device_group">Device group</label></div><div class="settings-row-control"><select id="cfg-device_group" onchange="markDirty('device')"></select></div></div>
-              <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-default_page_size">Area cards per page</label></div><div class="settings-row-control"><input type="number" id="cfg-default_page_size" min="1" max="20" value="3" oninput="markDirty('device')"></div></div>
+              <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-device_group">Device group</label></div><div class="settings-row-control"><select id="cfg-device_group" onchange="saveField('device', this)"></select></div></div>
+              <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-default_page_size">Area cards per page</label></div><div class="settings-row-control"><input type="number" id="cfg-default_page_size" min="1" max="20" value="3" onchange="saveField('device', this)" onkeydown="if (event.key === 'Enter') this.blur()"></div></div>
             </div>
           </div>
 
@@ -1563,15 +1561,15 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
             </div></div>
             <div class="card-content">
               <div class="settings-list">
-                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-native_ble_tracking">Track the Area with BLE proxies</label></div><div class="settings-row-control"><input type="checkbox" class="switch" role="switch" id="cfg-native_ble_tracking" onchange="markDirty('device')"></div></div>
-                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-ble_auto_switch">Switch the active Area on movement</label></div><div class="settings-row-control"><input type="checkbox" class="switch" role="switch" id="cfg-ble_auto_switch" onchange="markDirty('device')"></div></div>
+                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-native_ble_tracking">Track the Area with BLE proxies</label></div><div class="settings-row-control"><input type="checkbox" class="switch" role="switch" id="cfg-native_ble_tracking" onchange="saveField('device', this)"></div></div>
+                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-ble_auto_switch">Switch the active Area on movement</label></div><div class="settings-row-control"><input type="checkbox" class="switch" role="switch" id="cfg-ble_auto_switch" onchange="saveField('device', this)"></div></div>
               </div>
               <div id="embedded-area-ble" class="settings-list"></div>
               <div class="settings-list">
-                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-default_area">Fallback Area</label></div><div class="settings-row-control"><select id="cfg-default_area" onchange="markDirty('device')"></select></div></div>
-                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-ble_target_address">BLE target</label><p class="row-description">Optional MAC address or <code>private_ble_device</code> entity.</p></div><div class="settings-row-control"><input type="text" id="cfg-ble_target_address" class="mono" placeholder="Auto-discovered" oninput="markDirty('device')"></div></div>
-                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-ble_beacon_uuid">iBeacon UUID</label></div><div class="settings-row-control"><input type="text" id="cfg-ble_beacon_uuid" class="mono" oninput="markDirty('device')"></div></div>
-                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-presence_entity">External Area sensor</label><p class="row-description">Optional; for example a Bermuda Area sensor.</p></div><div class="settings-row-control"><select id="cfg-presence_entity" onchange="markDirty('device')"></select></div></div>
+                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-default_area">Fallback Area</label></div><div class="settings-row-control"><select id="cfg-default_area" onchange="saveField('device', this)"></select></div></div>
+                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-ble_target_address">BLE target</label><p class="row-description">Optional MAC address or <code>private_ble_device</code> entity.</p></div><div class="settings-row-control"><input type="text" id="cfg-ble_target_address" class="mono" placeholder="Auto-discovered" onchange="saveField('device', this)" onkeydown="if (event.key === 'Enter') this.blur()"></div></div>
+                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-ble_beacon_uuid">iBeacon UUID</label></div><div class="settings-row-control"><input type="text" id="cfg-ble_beacon_uuid" class="mono" onchange="saveField('device', this)" onkeydown="if (event.key === 'Enter') this.blur()"></div></div>
+                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-presence_entity">External Area sensor</label><p class="row-description">Optional; for example a Bermuda Area sensor.</p></div><div class="settings-row-control"><select id="cfg-presence_entity" onchange="saveField('device', this)"></select></div></div>
               </div>
             </div>
           </div>
@@ -1827,8 +1825,11 @@ function bindDialogs() {
 }
 let STATE = null;
 let CALENDARS = [];
-let IS_DIRTY = false;
-const DIRTY = {system: false, device: false};
+// D-010: every setting applies as soon as it changes. Changes are coalesced per scope and sent as one
+// partial save of just the changed keys; a failure shows the error toast and reverts the form.
+const PENDING_KEYS = {system: new Set(), device: new Set()};
+const SAVE_TIMERS = {system: null, device: null};
+const SAVE_IN_FLIGHT = {system: false, device: false};
 let INITIAL_FORM_LOADED = false;
 
 let CURRENT_SCOPE = "device";
@@ -2107,29 +2108,43 @@ async function clearInternalLogs() {
   }
 }
 
-function renderDirtyState() {
-  IS_DIRTY = DIRTY.system || DIRTY.device;
-  doc.getElementById("dirty-indicator")?.classList.toggle("hidden", !IS_DIRTY);
-  const btn = doc.getElementById("btn-save-changes");
-  if (btn) {
-    btn.disabled = !IS_DIRTY;
-    btn.textContent = IS_DIRTY ? "Save changes" : "Saved";
-  }
+function saveSetting(scope, key, delayMs = 250) {
+  PENDING_KEYS[scope].add(key);
+  clearTimeout(SAVE_TIMERS[scope]);
+  SAVE_TIMERS[scope] = setTimeout(() => flushSettings(scope), delayMs);
 }
 
-function markDirty(scope) {
-  DIRTY[scope === "system" ? "system" : "device"] = true;
-  renderDirtyState();
+// A cfg-<key> control saves its own key.
+function saveField(scope, el) {
+  saveSetting(scope, String(el?.id || "").replace(/^cfg-/, ""));
 }
 
-function clearDirty(scope) {
-  if (scope === "system" || scope === "device") {
-    DIRTY[scope] = false;
-  } else {
-    DIRTY.system = false;
-    DIRTY.device = false;
-  }
-  renderDirtyState();
+async function flushSettings(scope) {
+  clearTimeout(SAVE_TIMERS[scope]);
+  SAVE_TIMERS[scope] = null;
+  if (SAVE_IN_FLIGHT[scope] || !PENDING_KEYS[scope].size) return;
+  const keys = [...PENDING_KEYS[scope]];
+  PENDING_KEYS[scope].clear();
+  const all = scope === "system" ? collectSystemSettings() : collectDeviceSettings();
+  const config = {};
+  keys.forEach(k => { if (k in all) config[k] = all[k]; });
+  SAVE_IN_FLIGHT[scope] = true;
+  const data = await callStudioCommand({command: scope === "system" ? "save_system_config" : "save_device_config", config});
+  SAVE_IN_FLIGHT[scope] = false;
+  // On failure the error toast is already showing; put the form back to the last saved state.
+  applyStateToDom(data || STATE, {[scope]: canReloadForm(scope)});
+  if (PENDING_KEYS[scope].size) flushSettings(scope);
+}
+
+// A form follows live state unless the user is in the middle of an edit there (a focused control, a pending
+// save, or a list row that has been added but not filled in yet).
+function canReloadForm(scope) {
+  if (PENDING_KEYS[scope].size || SAVE_TIMERS[scope] || SAVE_IN_FLIGHT[scope]) return false;
+  if (scope === "system" && [...doc.querySelectorAll(
+    "#cameras-list select, #calendars-list select, #remotes-list select, #volume-overrides-list select"
+  )].some(sel => !sel.value)) return false;
+  const el = getStudioActiveElement();
+  return !(el && ["INPUT", "SELECT", "TEXTAREA"].includes(el.tagName));
 }
 
 
@@ -2331,7 +2346,8 @@ async function switchSystemDevice(targetRef) {
   ACTIVE_SUBENTRY_ID = subId;
   DEVICE_SELECTED = true;
   if (changed || !STATE) {
-    await refreshState({system: !DIRTY.system, device: true});
+    await flushSettings("device");
+    await refreshState({system: canReloadForm("system"), device: true});
     if (HOST_ELEMENT && typeof HOST_ELEMENT._resubscribe === "function") {
       await HOST_ELEMENT._resubscribe(false);
     }
@@ -2399,7 +2415,7 @@ function toggleDockAppToken(tok) {
     active.push(tok);
   }
   inp.value = active.join(",");
-  markDirty('device');
+  saveSetting("device", "dock_apps", 600);
   renderDockPillsFromInput();
 }
 
@@ -2420,7 +2436,7 @@ function moveDockAppToken(tok, dir) {
   active[idx] = active[swapIdx];
   active[swapIdx] = tmp;
   inp.value = active.join(",");
-  markDirty('device');
+  saveSetting("device", "dock_apps", 600);
   renderDockPillsFromInput();
 }
 
@@ -2504,7 +2520,7 @@ function renderSystemOverview(systemDevices, systemControls, cfg) {
 
   const devGrpSel = doc.getElementById("cfg-device_group");
   if (devGrpSel && groups.length) {
-    const curGrp = DIRTY.device ? devGrpSel.value : (cfg?.device_group || "unassigned");
+    const curGrp = canReloadForm("device") ? (cfg?.device_group || "unassigned") : devGrpSel.value;
     devGrpSel.innerHTML = groups.map(g =>
       `<option value="${esc(g.id)}" ${g.id === curGrp ? 'selected' : ''}>${esc(g.name)}</option>`
     ).join("");
@@ -3414,10 +3430,10 @@ function addCameraRow(entityId="") {
   row.innerHTML = `
     <div class="stacked-field list-row-grow">
       <span class="field-label cam-slot-lbl"></span>
-      <select class="cam-ent-sel" aria-label="Camera" onchange="markDirty('system')"><option value="">— Choose a camera —</option>${camOptions}</select>
+      <select class="cam-ent-sel" aria-label="Camera" onchange="saveSetting('system', 'camera_entities')"><option value="">— Choose a camera —</option>${camOptions}</select>
     </div>
     <button type="button" class="btn btn-text btn-compact" onclick="renderCameraPreview(this.parentElement.querySelector('.cam-ent-sel').value)">Preview</button>
-    ${iconButtonHtml(ICON_DELETE, "Remove camera", "this.parentElement.remove(); renumberCameraRows(); markDirty('system');", "danger")}
+    ${iconButtonHtml(ICON_DELETE, "Remove camera", "this.parentElement.remove(); renumberCameraRows(); saveSetting('system', 'camera_entities');", "danger")}
   `;
   list.appendChild(row);
   renumberCameraRows();
@@ -3433,9 +3449,9 @@ function addCalendarRow(entityId="") {
   ).join("");
   row.innerHTML = `
     <div class="stacked-field list-row-grow">
-      <select class="cal-ent-sel" aria-label="Calendar" onchange="markDirty('system')"><option value="">— Choose a calendar —</option>${calOptions}</select>
+      <select class="cal-ent-sel" aria-label="Calendar" onchange="saveSetting('system', 'calendar_entities')"><option value="">— Choose a calendar —</option>${calOptions}</select>
     </div>
-    ${iconButtonHtml(ICON_DELETE, "Remove calendar", "this.parentElement.remove(); markDirty('system');", "danger")}
+    ${iconButtonHtml(ICON_DELETE, "Remove calendar", "this.parentElement.remove(); saveSetting('system', 'calendar_entities');", "danger")}
   `;
   list.appendChild(row);
 }
@@ -3482,7 +3498,7 @@ function renderRemoteGroupsEditor() {
       return `<div class="list-block">
         <div class="list-row-head">
           <div class="list-row-main">
-            <div class="stacked-field"><label>Group name</label><input type="text" aria-label="Group name" value="${esc(grp.name || '')}" placeholder="e.g. TV wall" oninput="updateRemoteGroupField(${gIdx}, 'name', this.value)"></div>
+            <div class="stacked-field"><label>Group name</label><input type="text" aria-label="Group name" value="${esc(grp.name || '')}" placeholder="e.g. TV wall" onchange="updateRemoteGroupField(${gIdx}, 'name', this.value)" onkeydown="if (event.key === 'Enter') this.blur()"></div>
             <div class="stacked-field"><label>Area (loads when a Device enters it)</label><select aria-label="Area" onchange="updateRemoteGroupField(${gIdx}, 'area_id', this.value)">${areaOpts}</select></div>
           </div>
           ${iconButtonHtml(ICON_DELETE, `Delete remote group ${grp.name || ""}`, `removeRemoteGroupRow(${gIdx})`, "danger")}
@@ -3503,18 +3519,19 @@ function addRemoteGroupRow() {
     remotes: []
   });
   renderRemoteGroupsEditor();
+  saveSetting("system", "remote_groups");
 }
 
 function removeRemoteGroupRow(gIdx) {
   REMOTE_GROUPS_STATE.splice(gIdx, 1);
-  markDirty('system');
+  saveSetting("system", "remote_groups");
   renderRemoteGroupsEditor();
 }
 
 function updateRemoteGroupField(gIdx, field, val) {
   if (!REMOTE_GROUPS_STATE[gIdx]) return;
   REMOTE_GROUPS_STATE[gIdx][field] = val;
-  markDirty('system');
+  saveSetting("system", "remote_groups");
   if (field === "name") renderDeviceRemoteAssignments();
 }
 
@@ -3527,7 +3544,7 @@ function toggleRemoteInGroup(gIdx, entId) {
   } else {
     grp.remotes.push(entId);
   }
-  markDirty('system');
+  saveSetting("system", "remote_groups");
   renderRemoteGroupsEditor();
 }
 
@@ -3591,9 +3608,9 @@ function addRemoteControlRow(entityId="") {
   row.innerHTML = `
     <div class="stacked-field list-row-grow">
       <span class="field-label rem-slot-lbl"></span>
-      <select class="rem-ent-sel" aria-label="Remote or media player" onchange="markDirty('system'); renderRemoteGroupsEditor();"><option value="">— Choose a remote or media player —</option>${remOptions}</select>
+      <select class="rem-ent-sel" aria-label="Remote or media player" onchange="saveSetting('system', 'remotes_list'); renderRemoteGroupsEditor();"><option value="">— Choose a remote or media player —</option>${remOptions}</select>
     </div>
-    ${iconButtonHtml(ICON_DELETE, "Remove remote", "this.parentElement.remove(); renumberRemoteControlRows(); markDirty('system');", "danger")}
+    ${iconButtonHtml(ICON_DELETE, "Remove remote", "this.parentElement.remove(); renumberRemoteControlRows(); saveSetting('system', 'remotes_list'); renderRemoteGroupsEditor();", "danger")}
   `;
   list.appendChild(row);
   renumberRemoteControlRows();
@@ -3616,10 +3633,10 @@ function addVolumeOverrideRow(speaker="", target="") {
   ).join("");
   row.innerHTML = `
     <div class="list-row-main">
-      <div class="stacked-field"><span class="field-label">When audio plays on</span><select class="vo-spk" aria-label="Speaker" onchange="markDirty('system')"><option value="">— Choose a speaker —</option>${spkOptions}</select></div>
-      <div class="stacked-field"><span class="field-label">Change the volume on</span><select class="vo-tgt" aria-label="Volume target" onchange="markDirty('system')"><option value="">— Choose a volume target —</option>${tgtOptions}</select></div>
+      <div class="stacked-field"><span class="field-label">When audio plays on</span><select class="vo-spk" aria-label="Speaker" onchange="saveSetting('system', 'volume_overrides')"><option value="">— Choose a speaker —</option>${spkOptions}</select></div>
+      <div class="stacked-field"><span class="field-label">Change the volume on</span><select class="vo-tgt" aria-label="Volume target" onchange="saveSetting('system', 'volume_overrides')"><option value="">— Choose a volume target —</option>${tgtOptions}</select></div>
     </div>
-    ${iconButtonHtml(ICON_DELETE, "Remove volume override", "this.parentElement.remove(); markDirty('system');", "danger")}
+    ${iconButtonHtml(ICON_DELETE, "Remove volume override", "this.parentElement.remove(); saveSetting('system', 'volume_overrides');", "danger")}
   `;
   list.appendChild(row);
 }
@@ -3801,7 +3818,7 @@ async function confirmAddDeviceModal() {
 }
 
 function onAssignedPersonChanged(personEnt) {
-  markDirty('device');
+  saveSetting("device", "assigned_person");
 }
 
 function toggleDeviceTableSort(col) {
@@ -4069,14 +4086,8 @@ function applyStateToDom(data, forceFormUpdate=false) {
     INITIAL_FORM_LOADED = true;
     renderCohesiveDeviceSections();
     renderSystemOverview(data.system_devices, data.system_controls, cfg);
-    if (reload.system) {
-      loadSystemForm(data);
-      clearDirty("system");
-    }
-    if (reload.device) {
-      loadDeviceForm(data);
-      clearDirty("device");
-    }
+    if (reload.system) loadSystemForm(data);
+    if (reload.device) loadDeviceForm(data);
   }
   renderCustomColorPalettes();
 }
@@ -4214,42 +4225,7 @@ function renderDwellValue() {
   if (out) out.textContent = val ? `${fmtNumber(Number(val))} s` : "—";
 }
 
-function onDwellInput(_val) {
-  renderDwellValue();
-  markDirty("device");
-}
 
-// One Save button; each scope is saved by its own command and only when it has changes (D-007).
-async function saveAllConfig() {
-  const btn = doc.getElementById("btn-save-changes");
-  if (btn) {
-    btn.disabled = true;
-    btn.textContent = "Saving...";
-  }
-  let latest = null;
-  const saved = [];
-  if (DIRTY.system) {
-    const sysData = await callStudioCommand({command: "save_system_config", config: collectSystemSettings()});
-    if (sysData) {
-      latest = sysData;
-      saved.push("system");
-      clearDirty("system");
-    }
-  }
-  if (DIRTY.device) {
-    const devData = await callStudioCommand({command: "save_device_config", config: collectDeviceSettings()});
-    if (devData) {
-      latest = devData;
-      saved.push("device");
-      clearDirty("device");
-    }
-  }
-  if (latest) {
-    applyStateToDom(latest, {system: saved.includes("system"), device: saved.includes("device")});
-    showToast(saved.length === 2 ? "Saved System and Device settings" : (saved[0] === "system" ? "Saved System settings" : "Saved Device settings"));
-  }
-  renderDirtyState();
-}
 
 let cwTargetScope = "device";
 let cwSelectedHex = "";
@@ -4455,7 +4431,6 @@ function bindStudioGlobals() {
   window.callStudioCommand = callStudioCommand;
   window.captureDeviceProfile = captureDeviceProfile;
   window.checkSystemUpdates = checkSystemUpdates;
-  window.clearDirty = clearDirty;
   window.clearInternalLogs = clearInternalLogs;
   window.closeAddDeviceModal = closeAddDeviceModal;
   window.closeCameraPreviewBox = closeCameraPreviewBox;
@@ -4479,8 +4454,9 @@ function bindStudioGlobals() {
   window.getRemoteFriendlyLabel = getRemoteFriendlyLabel;
   window.getSectionItems = getSectionItems;
   window.hsvToRgbJS = hsvToRgbJS;
-  window.markDirty = markDirty;
-  window.onDwellInput = onDwellInput;
+  window.saveSetting = saveSetting;
+  window.saveField = saveField;
+  window.renderDwellValue = renderDwellValue;
   window.moveDockAppToken = moveDockAppToken;
   window.navigateToView = navigateToView;
   window.onAssignedPersonChanged = onAssignedPersonChanged;
@@ -4527,7 +4503,6 @@ function bindStudioGlobals() {
   window.renumberCameraRows = renumberCameraRows;
   window.renumberRemoteControlRows = renumberRemoteControlRows;
   window.restoreFromUploadedFile = restoreFromUploadedFile;
-  window.saveAllConfig = saveAllConfig;
   window.saveColorWheelSelection = saveColorWheelSelection;
   window.selectCurrentDevice = selectCurrentDevice;
   window.selectWallpaperSource = selectWallpaperSource;
@@ -4696,7 +4671,7 @@ class LatterStudio extends HTMLElement {
     try {
       const unsub = await this._hass.connection.subscribeMessage(
         (eventPayload) => {
-          if (myGen !== SUB_GEN || !eventPayload || IS_DIRTY) return;
+          if (myGen !== SUB_GEN || !eventPayload) return;
           if (
             ACTIVE_SUBENTRY_ID &&
             eventPayload.subentry_id &&
@@ -4704,7 +4679,7 @@ class LatterStudio extends HTMLElement {
           ) {
             return;
           }
-          applyStateToDom(eventPayload, false);
+          applyStateToDom(eventPayload, {system: canReloadForm("system"), device: canReloadForm("device")});
         },
         {
           type: "latter/system/subscribe",
@@ -4724,7 +4699,8 @@ class LatterStudio extends HTMLElement {
       this._subscribedSubentryId = targetSubId || "";
     } catch (err) {
       console.warn("Latter Studio WS subscription fallback to polling:", err);
-      toggleSurveyFastMode(false);
+      if (POLL_TIMER) clearInterval(POLL_TIMER);
+      POLL_TIMER = setInterval(() => refreshState({system: canReloadForm("system"), device: canReloadForm("device")}), 5000);
     }
   }
 }
