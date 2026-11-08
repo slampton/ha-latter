@@ -19,7 +19,7 @@ Settings here live in `.storage/latter.site` and apply to every device.
 ### System overview
 - **Issues:** every Latter repair that's open in Home Assistant (crashes, brownouts, firmware rollbacks, missing entities, BLE proxies, Music Assistant links), with the device it belongs to. **Open Repairs** opens Home Assistant's Repairs page, where you fix them.
 - **System:** the Latter version (Latter itself updates through HACS), **Check firmware updates**, which asks every device for a firmware update and says how many have one, and counts of online devices, Latter devices, BLE-tracked devices, devices with an assigned person, and BLE area proxies. Each count opens the matching device list or page.
-- **Configured integrations:** how many remotes, volume overrides, cameras, calendars, groups, and saved profiles are set up.
+- **Configured items:** how many remotes, volume overrides, cameras, calendars, groups, and saved profiles are set up.
 
 ### Shared entities
 | Card | What it does |
@@ -54,6 +54,7 @@ Settings here live in `.storage/latter.site` and apply to every device.
 | **Restore from file** | Upload an exported `.json` file to restore it. For a device export, choose the device to restore it onto; it can be a different device, to clone a setup. |
 | **Announcements & Alerts** | Choose **Notification** (an on-screen alert with a chime on one device, every device, or the devices in occupied Areas, optionally with a snapshot from the primary camera) or **Broadcast** (the message spoken with text-to-speech on every speaker, or on the speakers in occupied Areas), then **Send**. |
 | **Custom color library** | Up to 24 saved theme colors; **Add color** opens a color picker. Apply one to a device from that device's **Display & home** page. |
+| **System & Device logs** | Latter's own events plus the Latter, ESPHome and Music Assistant entries from the Home Assistant log. Show all entries, Latter only, warnings and errors, or one device's; **Open in Home Assistant** opens Home Assistant's log page filtered the same way. **Copy** and **Clear** act on Latter's list. |
 
 ---
 

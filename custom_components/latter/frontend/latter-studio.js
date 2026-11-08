@@ -1028,7 +1028,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
             </div>
           </div>
           <div class="card">
-            <div class="card-header"><div class="card-heading"><h3 class="card-title">Configured integrations</h3></div></div>
+            <div class="card-header"><div class="card-heading"><h3 class="card-title">Configured items</h3></div></div>
             <div class="card-content kv-list">
               <button type="button" class="kv-row" onclick="openSystemSection('remotes', 'card-remotes')"><span>Remote controls</span><strong id="sys-sum-remotes">—</strong></button>
               <button type="button" class="kv-row" onclick="openSystemSection('remotes', 'card-vol-overrides')"><span>Speaker volume overrides</span><strong id="sys-sum-vol">—</strong></button>
@@ -1329,25 +1329,15 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
         </div>
 
         <details class="card">
-          <summary class="card-header"><div class="card-heading">
-            <h3 class="card-title">System &amp; Device logs</h3>
-            <p class="card-description">Latter's events plus Latter, ESPHome and Music Assistant entries from the Home Assistant log.</p>
-          </div></summary>
+          <summary class="card-header"><div class="card-heading"><h3 class="card-title">System &amp; Device logs</h3></div></summary>
           <div class="card-content">
             <div class="input-action-row">
-              <button type="button" class="btn btn-secondary btn-compact" onclick="openNativeHaLogs('latter')">HA logs (latter)</button>
-              <button type="button" class="btn btn-secondary btn-compact" id="btn-native-dev-logs" onclick="openNativeHaLogs(STATE?.config?.device_slug || 'esphome')">HA logs (Device)</button>
-              <button type="button" class="btn btn-secondary btn-compact" onclick="openNativeHaLogs('esphome')">HA logs (esphome)</button>
-              <button type="button" class="btn btn-secondary btn-compact" onclick="openNativeHaIntegrations()">Latter integration</button>
-            </div>
-            <div class="input-action-row">
-              <select id="log-filter-select" aria-label="Log filter" onchange="renderLogsView()">
-                <option value="all">All Latter &amp; ESPHome entries</option>
-                <option value="device">Selected Device only</option>
+              <select id="log-filter-select" aria-label="Show log entries" onchange="renderLogsView()">
+                <option value="all">All entries</option>
                 <option value="latter">Latter only</option>
-                <option value="errors">Warnings &amp; errors only</option>
+                <option value="errors">Warnings and errors</option>
               </select>
-              <button type="button" class="btn btn-text btn-compact" onclick="refreshState(false)">Refresh</button>
+              <button type="button" class="btn btn-secondary btn-compact" onclick="openNativeHaLogs()">Open in Home Assistant</button>
               <button type="button" class="btn btn-text btn-compact" onclick="copyTextById('internal-log-output')">Copy</button>
               <button type="button" class="btn btn-danger btn-compact" onclick="clearInternalLogs()">Clear</button>
             </div>
@@ -1988,18 +1978,27 @@ function renderLogsView() {
   const logPre = doc.getElementById("internal-log-output");
   if (!logPre) return;
   const allLogs = STATE?.internal_logs || [];
-  const filterMode = doc.getElementById("log-filter-select")?.value || "all";
-  const slug = (STATE?.config?.device_slug || "").toLowerCase();
-  const slugHyphen = slug.replace(/_/g, "-");
-
-  const devBtn = doc.getElementById("btn-native-dev-logs");
-  if (devBtn && slug) {
-    devBtn.textContent = `HA logs (${slug})`;
+  // The filter names its Device (a System page never depends on the selected Device).
+  const filterSel = doc.getElementById("log-filter-select");
+  const devices = (STATE?.system_devices || []).filter(d => d.kind !== "ble_tag");
+  if (filterSel) {
+    const devKey = devices.map(d => `${d.device_slug}=${d.title}`).join("|");
+    if (filterSel.dataset.devKey !== devKey) {
+      filterSel.dataset.devKey = devKey;
+      const keep = filterSel.value || "all";
+      const fixed = [...filterSel.options].filter(o => !o.value.startsWith("device:")).map(o => o.outerHTML).join("");
+      filterSel.innerHTML = fixed + devices.map(d =>
+        `<option value="device:${esc(d.device_slug)}">${esc(d.title)}</option>`).join("");
+      filterSel.value = [...filterSel.options].some(o => o.value === keep) ? keep : "all";
+    }
   }
+  const filterMode = filterSel?.value || "all";
+  const slug = filterMode.startsWith("device:") ? filterMode.slice(7).toLowerCase() : "";
+  const slugHyphen = slug.replace(/_/g, "-");
 
   const filtered = allLogs.filter(l => {
     const hay = `${l.source || ''} ${l.message || ''}`.toLowerCase();
-    if (filterMode === "device" && slug) {
+    if (slug) {
       return hay.includes(slug) || hay.includes(slugHyphen);
     }
     if (filterMode === "latter") {
@@ -2028,12 +2027,11 @@ function openHaPage(path) {
   window.dispatchEvent(new CustomEvent("location-changed", {detail: {replace: false}}));
 }
 
-function openNativeHaLogs(filterTerm) {
-  openHaPage(`/config/logs${filterTerm ? `?filter=${encodeURIComponent(filterTerm)}` : ""}`);
-}
-
-function openNativeHaIntegrations() {
-  openHaPage("/config/integrations/integration/latter");
+// Home Assistant's log page, filtered to the Device picked in the log filter, else to Latter.
+function openNativeHaLogs() {
+  const mode = doc.getElementById("log-filter-select")?.value || "";
+  const term = mode.startsWith("device:") ? mode.slice(7) : "latter";
+  openHaPage(`/config/logs?filter=${encodeURIComponent(term)}`);
 }
 
 function openDeviceInHa() {
@@ -2408,7 +2406,7 @@ function populateSelect(selId, items, selectedVal, allowEmpty=true) {
   if (allowEmpty) {
     const opt = document.createElement("option");
     opt.value = "";
-    opt.textContent = "— None / Auto —";
+    opt.textContent = "— None —";
     sel.appendChild(opt);
   }
   (items || []).forEach(item => {
@@ -4531,7 +4529,6 @@ function bindStudioGlobals() {
   window.openColorWheelModal = openColorWheelModal;
   window.openDevicesLanding = openDevicesLanding;
   window.openDevicesWithCategory = openDevicesWithCategory;
-  window.openNativeHaIntegrations = openNativeHaIntegrations;
   window.openNativeHaLogs = openNativeHaLogs;
   window.openHaPage = openHaPage;
   window.openDeviceInHa = openDeviceInHa;
