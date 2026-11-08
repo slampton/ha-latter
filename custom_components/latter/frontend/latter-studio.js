@@ -1012,12 +1012,12 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
     </div>
 
     <nav class="nav-list hidden" id="nav-scope-system" aria-label="System pages">
-      <button class="nav-btn" data-view="system_overview" onclick="switchView('system_overview', this)"><span>System Overview</span></button>
+      <button class="nav-btn" data-view="system_overview" onclick="switchView('system_overview', this)"><span>Overview</span></button>
       <button class="nav-btn" data-view="shared_entities" onclick="switchView('shared_entities', this)"><span>Shared Entities</span></button>
       <button class="nav-btn" data-view="remotes" onclick="switchView('remotes', this)"><span>Media &amp; Remotes</span></button>
       <button class="nav-btn" data-view="system_sync" onclick="switchView('system_sync', this)"><span>Groups &amp; Profiles</span></button>
       <button class="nav-btn" data-view="area_tracking" onclick="switchView('area_tracking', this)"><span>BLE &amp; Area Presence</span></button>
-      <button class="nav-btn" data-view="system_admin" onclick="switchView('system_admin', this)"><span>System Settings</span></button>
+      <button class="nav-btn" data-view="system_admin" onclick="switchView('system_admin', this)"><span>Settings</span></button>
     </nav>
 
     <nav class="nav-list" id="nav-scope-devices-list" aria-label="Devices">
@@ -1033,7 +1033,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
       <button class="nav-btn" id="nav-btn-home_display" data-view="home_display" onclick="switchView('home_display', this)"><span>Display &amp; Home</span></button>
       <button class="nav-btn" id="nav-btn-audio_voice" data-view="audio_voice" onclick="switchView('audio_voice', this)"><span>Audio &amp; Voice</span></button>
       <button class="nav-btn" id="nav-btn-power" data-view="power" onclick="switchView('power', this)"><span>Power &amp; Battery</span></button>
-      <button class="nav-btn" data-view="system" onclick="switchView('system', this)"><span>Device Settings</span><span class="nav-badge" id="nav-esp-badge">—</span></button>
+      <button class="nav-btn" data-view="system" onclick="switchView('system', this)"><span>Settings</span><span class="nav-badge" id="nav-esp-badge">—</span></button>
     </nav>
   </aside>
 
@@ -1046,7 +1046,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
         <button type="button" class="btn btn-secondary btn-compact" onclick="refreshState(true)">Retry</button>
       </div>
 
-      <!-- SYSTEM: SYSTEM OVERVIEW -->
+      <!-- SYSTEM: OVERVIEW -->
       <section id="view-system_overview" class="hidden">
         <div class="columns">
           <div class="column">
@@ -1294,7 +1294,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
         </div>
       </section>
 
-      <!-- SYSTEM: SYSTEM SETTINGS -->
+      <!-- SYSTEM: SETTINGS -->
       <section id="view-system_admin" class="hidden">
         <div class="columns">
           <div class="column">
@@ -1413,7 +1413,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
               <div class="kv-row"><span>Device Group</span><strong id="st-group">—</strong></div>
             </div>
             <div class="card-actions">
-              <button type="button" class="btn btn-text" onclick="navigateToView('system')">Device Settings</button>
+              <button type="button" class="btn btn-text" onclick="navigateToView('system')">Settings</button>
               <button type="button" class="btn btn-secondary" onclick="exportBackupToComputer('device')">Download Backup</button>
             </div>
           </div>
@@ -1567,7 +1567,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
         </div>
       </section>
 
-      <!-- DEVICE: DEVICE SETTINGS -->
+      <!-- DEVICE: SETTINGS -->
       <section id="view-system" class="hidden">
         <div class="columns">
           <div class="column">
@@ -2197,18 +2197,18 @@ function canReloadForm(scope) {
 
 
 const VIEW_TITLES = {
-  system_overview: "System Overview",
+  system_overview: "Overview",
   shared_entities: "Shared Entities",
   remotes: "Media & Remotes",
   system_sync: "Groups & Profiles",
   area_tracking: "BLE & Area Presence",
-  system_admin: "System Settings",
+  system_admin: "Settings",
   select_device_prompt: "All Devices",
   dashboard: "Overview",
   home_display: "Display & Home",
   audio_voice: "Audio & Voice",
   power: "Power & Battery",
-  system: "Device Settings"
+  system: "Settings"
 };
 let CURRENT_VIEW_ID = "select_device_prompt";
 

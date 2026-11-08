@@ -8,7 +8,7 @@ There's no Save button: a setting applies as soon as you change it, like Home As
 
 The address bar follows the page you're on (for example `/latter/devices/<id>/display` or `/latter/system/presence`), so reloading or pressing Back keeps your place, and you can bookmark a page. The **Visit** link on a Latter device's page in Home Assistant opens that device in Studio.
 
-<!-- MEDIA: docs/media/studio-overview.png — System → System overview. -->
+<!-- MEDIA: docs/media/studio-overview.png — System → Overview. -->
 
 ---
 
@@ -16,7 +16,7 @@ The address bar follows the page you're on (for example `/latter/devices/<id>/di
 
 Settings here live in `.storage/latter.site` and apply to every device.
 
-### System Overview
+### Overview
 - **Issues:** every Latter repair that's open in Home Assistant (crashes, brownouts, firmware rollbacks, missing entities, BLE proxies, Music Assistant links), with the device it belongs to. **Open Repairs** opens Home Assistant's Repairs page, where you fix them.
 - **System:** the Latter version (Latter itself updates through HACS), **Check Firmware Updates**, which asks every device for a firmware update and says how many have one, and counts of online devices, Latter devices, BLE-tracked devices, devices with an assigned person, and BLE area proxies. Each count opens the matching device list or page.
 - **Configured Items:** how many remotes, volume overrides, cameras, calendars, groups, and saved profiles are set up.
@@ -47,7 +47,7 @@ Settings here live in `.storage/latter.site` and apply to every device.
 
 → [Presence guide](presence.md)
 
-### System Settings
+### Settings
 | Card | What it does |
 | :--- | :--- |
 | **Export Settings** | Download the whole System's settings, or one device's, as a `.json` file. Device exports include the device's live ESPHome select, switch, and number values. Full backups are Home Assistant's own: Latter's storage is included in every Home Assistant backup. |
@@ -70,7 +70,7 @@ Each device has five pages. The options on each page depend on what the device's
 | **Display & Home** | Color profile, Area cards per page, home dock apps and their order (the device shows exactly these apps, plus Settings, and **Settings → Home** on the device edits the same list), and wallpapers (5 built-in presets, plus uploads that can rotate on a schedule). Screen shape and resolution come from the device's hardware manifest. |
 | **Audio & Voice** | Wake word and sensitivity, **Voice Follows Me** and its delay (roaming devices: how long Bluetooth must place the device in a new Area before its Home Assistant Area follows, 3 to 60 s), **Media Follows This Device to Its New Area** (one setting for Bluetooth moves and Area picks on the device), default speaker, the device's **Music Assistant player** (its link to Music Assistant, needed for library playback), alert volume, and music sorting |
 | **Power & Battery** | **Sleep & Wake** timeouts, plus **Power & Battery** readings |
-| **Device Settings** | **Device**: the ESPHome node name (read-only) and group. **Location & BLE**: BLE Area tracking (the BLE presence beacon follows **Track the Area with BLE Proxies** and is shown read-only), fallback Area, BLE target and external Area sensor. **In Home Assistant**: **Open in Home Assistant** (the ESPHome device page), **Download Diagnostics**, and **Replace Hardware** (opens Latter in Home Assistant to reconfigure or replace the hardware). **Diagnostics** (collapsed): network and status entities, a **Developer** group (profiler, memory, weather simulation) and every entity. **Danger Zone**: **Reset…** and **Remove…** |
+| **Settings** | **Device**: the ESPHome node name (read-only) and group. **Location & BLE**: BLE Area tracking (the BLE presence beacon follows **Track the Area with BLE Proxies** and is shown read-only), fallback Area, BLE target and external Area sensor. **In Home Assistant**: **Open in Home Assistant** (the ESPHome device page), **Download Diagnostics**, and **Replace Hardware** (opens Latter in Home Assistant to reconfigure or replace the hardware). **Diagnostics** (collapsed): network and status entities, a **Developer** group (profiler, memory, weather simulation) and every entity. **Danger Zone**: **Reset…** and **Remove…** |
 
 **Reset…** opens a confirmation with two options, both on by default: **Settings Saved on the Device** (erases everything saved on the device; it restarts) and **Latter Settings for This Device**. Wi-Fi and pairing are kept, as are the device's ESPHome binding and Music Assistant player link. It does the same as the [`latter.reset_device`](reference/services.md#latterreset_device) service; BLE tags only offer the Latter settings.
 

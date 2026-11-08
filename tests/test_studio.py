@@ -10,6 +10,7 @@ import ast
 import importlib.util
 import json
 from pathlib import Path
+import re
 import sys
 import tempfile
 from types import ModuleType
@@ -85,6 +86,17 @@ class TestPayloadDiet(unittest.TestCase):
 
 class TestViewLayout(unittest.TestCase):
     """D-014: every view is two independent column stacks; no auto-placing grid."""
+
+    def test_view_names_are_unqualified(self) -> None:
+        # D-018: the scope switcher shows Devices or System, so view names don't repeat it.
+        js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
+        titles = js[js.index("const VIEW_TITLES = {"):js.index("};", js.index("const VIEW_TITLES = {"))]
+        names = re.findall(r': "([^"]+)"', titles)
+        self.assertIn("Overview", names)
+        self.assertEqual(names.count("Settings"), 2)
+        for name in names:
+            self.assertFalse(name.startswith(("System ", "Device ")), name)
+        self.assertNotRegex(js, r"<span>(System|Device) (Overview|Settings)</span>")
 
     def test_sidebar_icon_module(self) -> None:
         # D-017: the panel's sidebar icon is "latter:logo", registered by a tiny static frontend module.
