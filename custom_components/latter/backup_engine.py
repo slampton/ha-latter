@@ -369,10 +369,7 @@ async def async_restore_backup_bundle(
     restore_esphome_entities: bool = True,
 ) -> dict[str, Any]:
     """Restore a System or Device backup bundle (from uploaded Computer JSON file)."""
-    if not isinstance(bundle, dict) or bundle.get("schema") not in (
-        "latter.backup.v1",
-        "latter.backup.v2",
-    ):
+    if not isinstance(bundle, dict) or bundle.get("schema") != "latter.backup.v2":
         raise ValueError("Invalid Latter backup bundle schema")
 
     scope = str(bundle.get("scope") or "device")

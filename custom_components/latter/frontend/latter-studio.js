@@ -3315,8 +3315,7 @@ function renderCohesiveDeviceSections() {
   const voiceItems = getSectionItems("voice").filter(it => it.domain !== "assist_satellite");
   const wwModeItem = voiceItems.find(it => `${it.name} ${it.entity_id}`.toLowerCase().includes("wake_word_mode") || (it.name || "").toLowerCase().includes("wake word mode"));
   const wwDisabled = wwModeItem && wwModeItem.state === "Disabled";
-  const isWakeWordChoice = (it) => it.key === "wake_word" || it.key === "wake_word_n"
-    || /active[ _]wake[ _]word/.test(`${it.name} ${it.entity_id}`.toLowerCase());
+  const isWakeWordChoice = (it) => it.key === "wake_word" || it.key === "wake_word_n";
 
   const voicePrimary = [];
   const voiceSens = [];

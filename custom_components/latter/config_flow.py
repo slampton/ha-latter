@@ -718,7 +718,7 @@ class LatterOptionsFlowHandler(OptionsFlow):
                 sys_obj.config = global_cfg
                 for coord in list(sys_obj.coordinators.values()):
                     await coord.async_on_global_config_updated()
-            return self.async_create_entry(title="", data=user_input)
+            return self.async_create_entry(title="", data={})
 
         return self.async_show_form(
             step_id="init",

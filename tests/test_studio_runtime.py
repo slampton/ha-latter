@@ -151,6 +151,13 @@ class TestEntitySections(unittest.TestCase):
         self.assertEqual(self.classify("select.desk_display_voice_visual_profile", "Voice: Visual Profile"), "voice")
         self.assertEqual(self.classify("select.desk_display_display_clock_face", "Display: Clock Face"), "display")
 
+    def test_ha_wake_word_is_the_one_wake_word_control(self) -> None:
+        # Home Assistant's Wake Word / Wake Word 2 are canonical; the firmware has no wake-word select of its own,
+        # so Studio has no special case for one.
+        self.assertNotIn("active[ _]wake", STUDIO_JS)
+        choice = _slice("const isWakeWordChoice", "const voicePrimary")
+        self.assertIn('it.key === "wake_word" || it.key === "wake_word_n";', choice)
+
 
 if __name__ == "__main__":
     unittest.main()

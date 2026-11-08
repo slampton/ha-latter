@@ -66,7 +66,6 @@ MAX_CUSTOM_PALETTES = 24
 # Voice Follows Me: how long a BLE-detected Area must stay stable before the Device moves (seconds).
 DWELL_MIN_S = 3
 DWELL_MAX_S = 60
-DEFAULT_DWELL_S = 10
 NOISE_REDUCTION_LEVELS: tuple[str, ...] = ("strong", "light", "off")
 DEFAULT_NOISE_REDUCTION = "strong"
 _HEX_COLOR = re.compile(r"^#[0-9A-F]{6}$")
@@ -148,14 +147,6 @@ def _custom_palettes(val: Any) -> list[dict[str, str]]:
 def _noise_reduction(val: Any) -> str:
     level = _text(val).lower()
     return level if level in NOISE_REDUCTION_LEVELS else DEFAULT_NOISE_REDUCTION
-
-
-def clean_dwell_s(val: Any) -> int:
-    """Return a Voice Follows Me dwell in whole seconds, clamped to 3-60 (the default for a non-number)."""
-    try:
-        return max(DWELL_MIN_S, min(DWELL_MAX_S, int(float(val))))
-    except (TypeError, ValueError):
-        return DEFAULT_DWELL_S
 
 
 FUSION_MODES: tuple[str, ...] = ("weighted", "any_or", "ble_only", "ble_and_sensor")

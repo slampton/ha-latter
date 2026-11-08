@@ -323,11 +323,6 @@ class TestSaveScopes(unittest.TestCase):
             self.assertEqual(settings.clean_device_settings({"area_follow_dwell_s": raw}), {"area_follow_dwell_s": want})
         with self.assertRaises(settings.SettingsScopeError):
             settings.clean_device_settings({"area_follow_dwell_s": "soon"})
-        # The startup migration's tolerant clamp, and the default matches const.py.
-        self.assertEqual(settings.clean_dwell_s("7.9"), 7)
-        self.assertEqual(settings.clean_dwell_s(None), settings.DEFAULT_DWELL_S)
-        const_src = (LATTER_DIR / "const.py").read_text(encoding="utf-8")
-        self.assertIn(f"DEFAULT_AREA_FOLLOW_DWELL_S: Final = {settings.DEFAULT_DWELL_S}\n", const_src)
         flow_src = (LATTER_DIR / "config_flow.py").read_text(encoding="utf-8")
         self.assertNotIn("AREA_FOLLOW_DWELL", flow_src)
 

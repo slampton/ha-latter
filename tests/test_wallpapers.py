@@ -1,4 +1,4 @@
-"""Standalone tests for uploaded wallpapers: private storage, references, migration and signed serving.
+"""Standalone tests for uploaded wallpapers: private storage, references and signed serving.
 
 They run without Home Assistant installed. The production modules under test (wallpaper_refs.py,
 resource_signing.py) are standard-library only and loaded by file path.
@@ -31,12 +31,11 @@ resource_signing = _load("resource_signing")
 
 
 class TestPrivateWallpapers(unittest.TestCase):
-    """Uploads live in private storage, are referenced as upload:<slug>/<file>, and are migrated (D-005)."""
+    """Uploads live in private storage and are referenced as upload:<slug>/<file> (D-005)."""
 
-    def test_roots(self) -> None:
+    def test_private_root(self) -> None:
         cfg = Path("/config")
         self.assertEqual(wallpaper_refs.private_root(cfg), cfg / ".storage" / "latter" / "wallpapers")
-        self.assertEqual(wallpaper_refs.public_root(cfg), cfg / "www" / "latter_wallpapers")
         self.assertNotIn("www", wallpaper_refs.private_root(cfg).parts)
 
     def test_references_round_trip_and_reject_traversal(self) -> None:
@@ -70,46 +69,6 @@ class TestPrivateWallpapers(unittest.TestCase):
             self.assertIsNotNone(path)
             self.assertTrue(path.is_relative_to(root.resolve()))
 
-    def test_reference_migration(self) -> None:
-        old = "/local/latter_wallpapers/kitchen/beach_1a2b3c.jpg"
-        self.assertEqual(wallpaper_refs.migrate_public_source(old), "upload:kitchen/beach_1a2b3c.jpg")
-        for keep in ("preset:amoled_grid", "upload:kitchen/a.jpg", "", "/local/other/x.jpg", "/local/latter_wallpapers/../x.jpg"):
-            self.assertEqual(wallpaper_refs.migrate_public_source(keep), keep)
-        data = {"device_slug": "kitchen", "wallpaper_source": old, "wallpaper_favorites": [old, "preset:amoled_rings"]}
-        migrated = wallpaper_refs.migrate_wallpaper_settings(data)
-        self.assertEqual(migrated["wallpaper_source"], "upload:kitchen/beach_1a2b3c.jpg")
-        self.assertEqual(migrated["wallpaper_favorites"], ["upload:kitchen/beach_1a2b3c.jpg", "preset:amoled_rings"])
-        self.assertEqual(migrated["device_slug"], "kitchen")
-        self.assertIsNone(wallpaper_refs.migrate_wallpaper_settings(migrated))
-        profiles = [{"id": "p1", "device_config": {"wallpaper_source": old}}, {"id": "p2", "device_config": {}}]
-        new_profiles = wallpaper_refs.migrate_profiles(profiles)
-        self.assertEqual(new_profiles[0]["device_config"]["wallpaper_source"], "upload:kitchen/beach_1a2b3c.jpg")
-        self.assertEqual(new_profiles[1], profiles[1])
-        self.assertIsNone(wallpaper_refs.migrate_profiles(new_profiles))
-
-    def test_move_public_uploads(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            cfg = Path(tmp)
-            pub = wallpaper_refs.public_root(cfg)
-            priv = wallpaper_refs.private_root(cfg)
-            (pub / "kitchen").mkdir(parents=True)
-            (pub / "kitchen" / "beach_1a2b3c.jpg").write_bytes(b"one")
-            (pub / "kitchen" / "dup.png").write_bytes(b"public copy")
-            (pub / "office").mkdir()
-            (pub / "office" / "notes.txt").write_text("not a wallpaper")
-            (priv / "kitchen").mkdir(parents=True)
-            (priv / "kitchen" / "dup.png").write_bytes(b"private copy")
-            self.assertEqual(wallpaper_refs.move_public_uploads(cfg), 1)
-            self.assertEqual((priv / "kitchen" / "beach_1a2b3c.jpg").read_bytes(), b"one")
-            self.assertEqual((priv / "kitchen" / "dup.png").read_bytes(), b"private copy")
-            self.assertFalse((pub / "kitchen").exists())
-            # Files that aren't wallpapers are left where they are.
-            self.assertTrue((pub / "office" / "notes.txt").exists())
-            (pub / "office" / "notes.txt").unlink()
-            self.assertEqual(wallpaper_refs.move_public_uploads(cfg), 0)
-            self.assertFalse(pub.exists())
-            self.assertEqual(wallpaper_refs.move_public_uploads(cfg), 0)
-
     def test_signed_view_resource_binds_the_source(self) -> None:
         """The wallpaper view verifies wallpaper:<src>|w|h|shape; a signature never transfers to another source."""
         secret, now = b"k" * 32, 1_800_000_000
@@ -117,7 +76,7 @@ class TestPrivateWallpapers(unittest.TestCase):
         src = "upload:kitchen/beach_1a2b3c.jpg"
         sig = resource_signing.sign(secret, "sub_kitchen", f"wallpaper:{src}|240|240|circle", exp)
         self.assertTrue(resource_signing.verify(secret, "sub_kitchen", f"wallpaper:{src}|240|240|circle", sig, now))
-        for other in ("upload:office/beach_1a2b3c.jpg", "/local/latter_wallpapers/kitchen/beach_1a2b3c.jpg"):
+        for other in ("upload:office/beach_1a2b3c.jpg", "upload:kitchen/other_1a2b3c.jpg"):
             self.assertFalse(resource_signing.verify(secret, "sub_kitchen", f"wallpaper:{other}|240|240|circle", sig, now))
         self.assertFalse(resource_signing.verify(secret, "sub_office", f"wallpaper:{src}|240|240|circle", sig, now))
         self.assertFalse(resource_signing.verify(secret, "sub_kitchen", f"wallpaper:{src}|240|240|circle", sig, exp + 1))

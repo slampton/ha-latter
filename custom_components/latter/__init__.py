@@ -27,21 +27,17 @@ from homeassistant.helpers.typing import ConfigType
 
 from .ble_engine import _iter_devices
 from .const import (
-    CONF_AREA_FOLLOW_DWELL_S,
     CONF_ESPHOME_DEVICE_ID,
-    CONF_SAVED_PROFILES,
     DATA_DISCOVERY_UNSUB,
     DEVICE_SUBENTRY_TYPES,
     DATA_GLOBAL_CONFIG,
     DATA_GLOBAL_STORE,
     DATA_HMAC_SECRET,
     DOMAIN,
-    GLOBAL_CONFIG_KEYS,
     GLOBAL_STORAGE_KEY,
     INTEGRATION_VERSION,
     PLATFORMS,
     STORAGE_VERSION,
-    SUBENTRY_DEVICE,
 )
 from .coordinator import LatterCoordinator
 from .doorbell_engine import LatterCameraAudioStreamView
@@ -67,13 +63,7 @@ from .studio import (
     async_register_studio_panel,
     async_unregister_studio_panel,
 )
-from .studio.settings import clean_dwell_s
 from .system import LatterSystem, get_latter_system
-from .wallpaper_refs import (
-    migrate_profiles,
-    migrate_wallpaper_settings,
-    move_public_uploads,
-)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -82,54 +72,7 @@ CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 type LatterConfigEntry = ConfigEntry[LatterSystem]
 
 
-async def _async_migrate_stored_settings(
-    hass: HomeAssistant, entry: ConfigEntry
-) -> None:
-    """One-time storage migrations; remove once every install has run them (zero-legacy).
-
-    Moves uploads out of `/config/www` (served without auth at `/local/`) into private storage
-    (D-005) and rewrites the references stored in Device subentries and saved profiles; runtime state
-    is rewritten by each coordinator when it loads. Drops retired Device subentry keys. Moves the
-    Voice Follows Me dwell from the System settings to each Latter display (its one home now).
-    Companion, removed together with this function: `LatterCoordinator._async_migrate_media_handoff_switch`
-    (runs on device_hello, since it reads a device entity) and `studio.settings.clean_dwell_s`.
-    """
-    moved = await hass.async_add_executor_job(
-        move_public_uploads, hass.config.config_dir
-    )
-    domain_data = hass.data[DOMAIN]
-    global_cfg: dict[str, Any] = domain_data[DATA_GLOBAL_CONFIG]
-    system_dwell = global_cfg.pop(CONF_AREA_FOLLOW_DWELL_S, None)
-    for sub in list(entry.subentries.values()):
-        if sub.subentry_type not in DEVICE_SUBENTRY_TYPES:
-            continue
-        new_data = migrate_wallpaper_settings(sub.data) or dict(sub.data)
-        # Screen shape and size come only from the hardware manifest now; drop the stored copies.
-        for retired in ("display_shape", "art_size"):
-            new_data.pop(retired, None)
-        if (
-            system_dwell is not None
-            and sub.subentry_type == SUBENTRY_DEVICE
-            and CONF_AREA_FOLLOW_DWELL_S not in new_data
-        ):
-            new_data[CONF_AREA_FOLLOW_DWELL_S] = clean_dwell_s(system_dwell)
-        if new_data != dict(sub.data):
-            hass.config_entries.async_update_subentry(entry, sub, data=new_data)
-    profiles = global_cfg.get(CONF_SAVED_PROFILES)
-    new_profiles = migrate_profiles(profiles) if isinstance(profiles, list) else None
-    if new_profiles is not None:
-        global_cfg[CONF_SAVED_PROFILES] = new_profiles
-    if new_profiles is not None or system_dwell is not None:
-        await domain_data[DATA_GLOBAL_STORE].async_save(global_cfg)
-    if moved:
-        _LOGGER.info(
-            "Moved %d uploaded wallpaper(s) from /config/www to Latter's private storage",
-            moved,
-        )
-
-async def _async_ensure_global_store(
-    hass: HomeAssistant, seed_entry: ConfigEntry | None = None
-) -> dict[str, Any]:
+async def _async_ensure_global_store(hass: HomeAssistant) -> dict[str, Any]:
     """Load or initialize the shared Site configuration store (`.storage/latter.site`)."""
     domain_data = hass.data.setdefault(DOMAIN, {})
     if DATA_GLOBAL_STORE not in domain_data:
@@ -142,9 +85,6 @@ async def _async_ensure_global_store(
 
     global_cfg: dict[str, Any] = domain_data[DATA_GLOBAL_CONFIG]
     changed = False
-    # The Companion Base URL setting was removed (nothing ever read it); drop its stored value.
-    if global_cfg.pop("companion_base_url", None) is not None:
-        changed = True
     secret_hex = str(global_cfg.get("hmac_secret_hex") or "").strip()
     if len(secret_hex) != 64:
         secret_hex = secrets.token_hex(32)
@@ -158,31 +98,6 @@ async def _async_ensure_global_store(
         domain_data[DATA_HMAC_SECRET] = bytes.fromhex(secret_hex)
         changed = True
 
-    if seed_entry is not None:
-        merged_entry = {**seed_entry.data, **(seed_entry.options or {})}
-        for k in GLOBAL_CONFIG_KEYS:
-            if k not in global_cfg and k in merged_entry and merged_entry[k] not in (None, "", [], {}):
-                global_cfg[k] = merged_entry[k]
-                changed = True
-        for sub in list(seed_entry.subentries.values()):
-            sub_changed = False
-            clean_sub_data = dict(sub.data)
-            for k in GLOBAL_CONFIG_KEYS:
-                if k in clean_sub_data:
-                    if k not in global_cfg and clean_sub_data[k] not in (None, "", [], {}):
-                        global_cfg[k] = clean_sub_data[k]
-                        changed = True
-                    clean_sub_data.pop(k, None)
-                    sub_changed = True
-            if sub_changed:
-                hass.config_entries.async_update_subentry(
-                    seed_entry, sub, data=clean_sub_data
-                )
-        if seed_entry.options and any(k in seed_entry.options for k in GLOBAL_CONFIG_KEYS):
-            clean_opts = {
-                k: v for k, v in seed_entry.options.items() if k not in GLOBAL_CONFIG_KEYS
-            }
-            hass.config_entries.async_update_entry(seed_entry, options=clean_opts)
     if changed:
         await domain_data[DATA_GLOBAL_STORE].async_save(global_cfg)
 
@@ -311,7 +226,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bool:
     """Set up the Latter System hub entry and all configured Device subentries."""
     domain_data = hass.data.setdefault(DOMAIN, {})
-    await _async_ensure_global_store(hass, seed_entry=entry)
+    await _async_ensure_global_store(hass)
     sys_obj = get_latter_system(hass)
     if sys_obj is None:
         return False
@@ -341,7 +256,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
     )
 
     entry.runtime_data = sys_obj
-    await _async_migrate_stored_settings(hass, entry)
 
     device_subentries = [
         sub

@@ -210,7 +210,7 @@ Studio has one implementation of each component. A new pattern is added here fir
 - The entity catalog (every entity offered in Studio's pickers) is the largest part of the payload, so only `get_state`, the first subscription answer and the first live push after an entity, device or Area registry change carry it; command answers and other pushes leave it out and Studio keeps the last one (`studio/catalog_gate.py`). A new payload field must earn its place: Studio renders it.
 - Settings apply as they change (D-010). System settings and Device settings are written by separate commands with only the changed keys, and saving one never writes the other.
 - A change to a Device entity (a select, switch or slider of the bound ESPHome device) shows at once: Studio applies the new state locally, so rows that depend on it appear or hide immediately, and keeps it over incoming payloads until the device reports it (at most 8 s); a failed command puts the old state back. The live subscription pushes when the Device's entities change state. Entity rows re-render from that state, wait while a select, text field or slider has focus (they render when focus leaves), and keep keyboard focus on the same control.
-- Home Assistant's own Assist satellite selects for a Device (Assistant, Finished Speaking Detection, Wake Word, Wake Word 2) are recognized by their translation key and shown on **Audio & Voice** with Latter's voice settings. With Wake Word Mode Disabled the wake words and their sensitivity hide; the assistant settings stay, because the action button, the Trigger Voice Assistant button and Home Assistant still start the assistant.
+- Home Assistant's own Assist satellite selects for a Device (Assistant, Finished Speaking Detection, Wake Word, Wake Word 2) are recognized by their translation key and shown on **Audio & Voice** with Latter's voice settings. Home Assistant's Wake Word and Wake Word 2 are the one wake-word control; the firmware has no wake-word select of its own. With Wake Word Mode Disabled the wake words and their sensitivity hide; the assistant settings stay, because the action button, the Trigger Voice Assistant button and Home Assistant still start the assistant.
 
 ## Decision log
 
@@ -249,7 +249,7 @@ A standing decision stays in force until a new entry supersedes it. Changing one
 - **Decision:** Uploads are stored in Latter's private storage (`.storage/latter/wallpapers/<device>/`), never under `/config/www`. They're served only through the signed, expiring Latter wallpaper view. Existing uploads are moved there at startup, and stored references are updated.
 - **Why:** Home Assistant serves `/config/www` at `/local/` without authentication. Every other Latter resource uses signed URLs.
 - **Alternatives:** Keep `/config/www` (rejected: unauthenticated).
-- **Status:** Accepted.
+- **Status:** Accepted; moving existing uploads at startup superseded by D-019.
 
 ### D-006: Own CSS, not Home Assistant's internal `ha-*` elements
 - **Date:** 2026-11-07
@@ -334,4 +334,11 @@ A standing decision stays in force until a new entry supersedes it. Changing one
 - **Decision:** A view's name doesn't repeat its scope: the scope switcher already says Devices or System, so the System's views are **Overview** and **Settings** (not "System Overview" and "System Settings"), and a Device's settings view is **Settings** (not "Device Settings"). A name is qualified only when two views in the same scope would otherwise collide. The rule covers nav labels, page titles and links to a view; URL slugs were already unqualified.
 - **Why:** The maintainer's choice: "System Overview" beside a Device's "Overview" read as two different kinds of page, and the System's overview holds more than system information.
 - **Alternatives:** Qualify every name with its scope.
+- **Status:** Accepted.
+
+### D-019: No migration code
+- **Date:** 2026-11-08
+- **Decision:** Latter reads only its current storage formats: no startup migrations, upgrade shims or aliases for earlier settings, uploads or backups. This supersedes D-005's move of existing uploads at startup; the rest of D-005 stands. A format change ships with the code that writes it, and nothing that reads the old one.
+- **Why:** The maintainer's choice: Latter has no users on earlier formats before its public release, and every migration path is code that must be kept correct.
+- **Alternatives:** Keep the one-time migrations until the public release.
 - **Status:** Accepted.

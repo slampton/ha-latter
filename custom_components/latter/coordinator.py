@@ -158,7 +158,6 @@ from .payloads import DomainPayloadPacker
 from .presence_beacon import Trigger, decide_beacon_action
 from .site_feeds import async_fetch_calendar_snapshot, async_fetch_weather_snapshot
 from .traits import manifest_has_display, manifest_is_roaming, manifest_is_wearable
-from .wallpaper_refs import migrate_public_source
 from .url_signer import UrlSigner
 
 _LOGGER = logging.getLogger(__name__)
@@ -488,33 +487,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self.device_slug,
                 err,
             )
-
-    async def _async_migrate_media_handoff_switch(self) -> None:
-        """One-time migration (D-008); remove with `_async_migrate_stored_settings` in __init__.py.
-
-        Firmware before SDK rev 2026110282 had its own "Area: Media Handoff" switch for on-device Area
-        picks. If it's on, carry it into this Device's Latter option (`area_handoff`, now the one setting)
-        and turn the switch off, so the next device_hello doesn't carry it again. New firmware has no
-        such switch.
-        """
-        if self.is_ble_tag:
-            return
-        switch_ent = self.device_entity("switch", "_area_media_handoff")
-        state = self.hass.states.get(switch_ent) if switch_ent else None
-        if state is None or state.state != "on":
-            return
-        if not self.area_handoff_enabled:
-            self.update_device_config({**self.device_data, CONF_AREA_HANDOFF: True})
-            _LOGGER.info(
-                "Media follows '%s' to its new Area: carried over from the device's former Media Handoff switch",
-                self.device_slug,
-            )
-        try:
-            await self.hass.services.async_call(
-                "switch", "turn_off", {ATTR_ENTITY_ID: switch_ent}, blocking=True
-            )
-        except Exception as err:  # noqa: BLE001
-            _LOGGER.debug("Couldn't turn off the former Media Handoff switch of '%s': %s", self.device_slug, err)
 
     def _live_subentry(self) -> ConfigSubentry:
         """Return the current ConfigSubentry object for this Device (subentries are replaced on update)."""
@@ -1145,7 +1117,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             saved_slot = stored.get("active_remote_slot")
             if isinstance(saved_slot, int) and 1 <= saved_slot <= 10:
                 self.active_remote_slot = saved_slot
-            saved_wp = migrate_public_source(str(stored.get("current_wallpaper") or "").strip())
+            saved_wp = str(stored.get("current_wallpaper") or "").strip()
             if saved_wp:
                 self.current_wallpaper = saved_wp
             self.last_media_uri = str(stored.get("last_media_uri") or "")
@@ -1463,7 +1435,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         await self._async_handle_device_reconnect()
         # After the reconnect delay the device's entities have their states; turn the beacon on if tracked.
         await self.async_sync_presence_beacon("hello")
-        await self._async_migrate_media_handoff_switch()
 
     @callback
     def _apply_device_health(self, manifest: dict[str, Any], boot_id: str) -> None:
