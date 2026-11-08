@@ -86,6 +86,14 @@ class TestPayloadDiet(unittest.TestCase):
 class TestViewLayout(unittest.TestCase):
     """D-014: every view is two independent column stacks; no auto-placing grid."""
 
+    def test_native_popups_follow_ha_dark_mode(self) -> None:
+        # D-015: color-scheme follows hass.themes.darkMode, and select options get an opaque background.
+        js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
+        self.assertIn('this.toggleAttribute("dark", Boolean(h?.themes?.darkMode ?? h?.selectedTheme?.dark));', js)
+        self.assertIn("    color-scheme: light;\n", js)
+        self.assertIn(":host([dark]) { color-scheme: dark; }", js)
+        self.assertIn("select option, select optgroup { background-color: var(--studio-popup-bg); color: var(--studio-text); }", js)
+
     def test_columns_everywhere(self) -> None:
         js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
         self.assertNotIn("grid-2", js)

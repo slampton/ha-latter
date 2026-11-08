@@ -34,40 +34,58 @@ Markup carries no inline styles (`[STUDIO INLINE STYLES]`). The one exception is
 
 ### Type scale
 
-| Role | Size / weight | Token | HA variable |
+| Role | Size / weight | Token | HA variable (matches) |
 | :--- | :--- | :--- | :--- |
-| Page title | 20 / 500 | `--studio-font-title` | `--ha-font-size-xl` |
-| Section and card title | 16 / 500 | `--studio-font-section` | `--ha-font-size-l` |
-| Body and row label | 14 / 400 | `--studio-font-body` | `--ha-font-size-m` |
-| Secondary text | 12 / 400, `--secondary-text-color` | `--studio-font-secondary` | `--ha-font-size-s` |
+| Toolbar and page title | 20 / 400 | `--studio-font-title` | `--ha-font-size-xl` (hass-subpage toolbar) |
+| Card and dialog title | 24 / 400, tracking -0.012em, line height 1.2 | `--studio-font-card-title` | `--ha-card-header-font-size`, `--ha-font-size-2xl` (ha-card header) |
+| Sub-section title | 14 / 500 | `--studio-font-body` | `--ha-font-size-m` |
+| Body and row label | 14 / 400, line height 1.6 | `--studio-font-body` | `--ha-font-size-m`, `--ha-line-height-normal` |
+| Secondary text | 12 / 400, `--secondary-text-color` | `--studio-font-secondary` | `--ha-font-size-s` (ha-settings-row description) |
 | Caption (chips, table heads) | 12 / 500 | `--studio-font-caption` | `--ha-font-size-s` |
 
 Two weights only: `--ha-font-weight-normal` (400) and `--ha-font-weight-medium` (500). Fonts come from `--ha-font-family-body` and, for code, `--ha-font-family-code`. No hard-coded font stacks: the fallback is `inherit`, so a theme's font always wins.
 
 ### Spacing
 
-A 4 px grid: **4, 8, 12, 16, 24** (`--studio-space-1` … `--studio-space-5`, from `--ha-space-1`, `-2`, `-3`, `-4`, `-6`).
+A 4 px grid: **4, 8, 12, 16, 20, 24** (`--studio-space-1` … `-4`, `--studio-space-card-top`, `--studio-space-5`, from `--ha-space-1` … `-6`).
 
-| Use | Value |
-| :--- | :--- |
-| Page padding | 24 (16 on narrow screens) |
-| Card padding | 16 |
-| Gap between cards | 16 |
-| Settings row padding | 12 vertical |
-| Gap between controls | 8 |
+| Use | Value | Matches |
+| :--- | :--- | :--- |
+| Page padding | 24 (16 on narrow screens) | HA config pages |
+| Card header padding | 20 top, 16 sides; 16 to the content | ha-card header (`20 16 24`, content pulled up 8) |
+| Card content padding | 16 | ha-card `.card-content` |
+| Card actions padding | 8, top divider | ha-card `.card-actions` |
+| Gap between cards | 16 | |
+| Settings row | min height 56, 8 vertical, no divider (a divider between stacked rows on narrow cards) | ha-settings-row |
+| Gap between controls | 8 | |
 
-### Radii
+### Sizes and radii
 
-Three radii: **card** (`--ha-card-border-radius`, 12), **control** (`--ha-border-radius-md`, 8), and **pill** (`--ha-border-radius-pill`).
+| Element | Size | Radius | Matches |
+| :--- | :--- | :--- | :--- |
+| Card | border `--ha-card-border-width` (1) in `--ha-card-border-color` | `--ha-card-border-radius` → `--ha-border-radius-lg` (12) | ha-card |
+| Button | 40 high (compact 32), 16 side padding (compact 12), 14 / 500 | `--ha-button-border-radius` → pill | ha-button (`m` and `s`) |
+| Text field and select | 40 high, filled: `--ha-color-form-background`, 1 px `--ha-color-border-neutral-loud` underline, 2 px primary underline on focus | `--ha-border-radius-sm` (4) on top, square bottom | ha-input (material appearance) |
+| Switch | 48 × 24 outlined track, 18 thumb | pill | ha-switch |
+| Dialog | | `--ha-dialog-border-radius` → `--ha-border-radius-3xl` (24) | ha-dialog |
+| Inner boxes (list blocks, logs, previews) | 1 px divider border | `--ha-border-radius-md` (8) | |
+| Toolbar | `--header-height` (56), `--app-header-border-bottom` | | hass-subpage |
 
 ### Colors
 
 Colors come only from Home Assistant theme variables:
 
-- Surfaces: `--primary-background-color`, `--card-background-color`, `--secondary-background-color`, `--divider-color`.
-- Text: `--primary-text-color`, `--secondary-text-color`, `--text-primary-color` (text on a primary-colored surface).
+- Surfaces: `--primary-background-color` (page), `--card-background-color` / `--ha-card-background` (cards, dialogs, select popups), `--secondary-background-color`, `--divider-color`; toolbar `--app-header-background-color`, `--app-header-text-color`, `--sidebar-icon-color`.
+- Text: `--primary-text-color`, `--secondary-text-color`, `--disabled-text-color`.
 - Accent: `--primary-color`; tints are `rgba(var(--rgb-primary-color), <alpha>)`, never a fixed blue.
+- Buttons, as ha-button: accent (main action) `--ha-color-fill-primary-loud-resting` / `--ha-color-on-primary-loud`; filled (secondary) `--ha-color-fill-primary-normal-resting` / `--ha-color-on-primary-normal`; plain (text) `--ha-color-on-primary-normal` with a `--ha-color-fill-primary-quiet-resting` hover; danger `--ha-color-fill-danger-normal-resting` / `--ha-color-on-danger-normal`, and `--ha-color-fill-danger-loud-resting` for a confirmation.
+- Switch, as ha-switch: off `--ha-color-fill-disabled-quiet-resting` track, `--ha-color-border-neutral-normal` border, `--ha-color-on-neutral-normal` thumb; on `--ha-color-fill-primary-normal-resting` track, `--ha-color-border-primary-loud` border, `--ha-color-on-primary-normal` thumb. The `--ha-switch-*` overrides win.
+- Fields: `--ha-color-form-background` (hover `--ha-color-form-background-hover`), `--ha-color-border-neutral-loud`.
 - Status: `--success-color`, `--warning-color`, `--error-color`, `--info-color`.
+
+Each of these falls back to the older variable a theme may still set (`--input-fill-color`, `--input-idle-line-color`, `--primary-color`, …), then to a literal.
+
+**Light and dark mode.** Studio sets `color-scheme` from Home Assistant's effective mode (`hass.themes.darkMode`, reflected as the host's `dark` attribute), so the browser draws native popups (select lists, file and color pickers, scrollbars) in the matching scheme. Select options also get the card background and the primary text color explicitly, because a theme's field fill can be translucent.
 
 Literal colors appear only as token fallbacks inside `:host`. User data (a saved color swatch, a wallpaper thumbnail) is the only exception, and it's set from data, never written in CSS.
 
@@ -78,30 +96,38 @@ Literal colors appear only as token fallbacks inside `:host`. User data (a saved
   --studio-font-family: var(--ha-font-family-body, inherit);
   --studio-font-code: var(--ha-font-family-code, monospace);
   --studio-font-title: var(--ha-font-size-xl, 20px);
+  --studio-font-card-title: var(--ha-card-header-font-size, var(--ha-font-size-2xl, 24px));
   --studio-font-section: var(--ha-font-size-l, 16px);
   --studio-font-body: var(--ha-font-size-m, 14px);
   --studio-font-secondary: var(--ha-font-size-s, 12px);
   --studio-font-caption: var(--ha-font-size-s, 12px);
   --studio-weight-regular: var(--ha-font-weight-normal, 400);
   --studio-weight-medium: var(--ha-font-weight-medium, 500);
-  --studio-space-1: var(--ha-space-1, 4px);
-  --studio-space-2: var(--ha-space-2, 8px);
-  --studio-space-3: var(--ha-space-3, 12px);
-  --studio-space-4: var(--ha-space-4, 16px);
+  --studio-line-height: var(--ha-line-height-normal, 1.6);
+  --studio-space-1 … --studio-space-4: var(--ha-space-1 … -4);   /* 4, 8, 12, 16 */
+  --studio-space-card-top: var(--ha-space-5, 20px);
   --studio-space-5: var(--ha-space-6, 24px);
-  --studio-radius-card: var(--ha-card-border-radius, 12px);
+  --studio-radius-card: var(--ha-card-border-radius, var(--ha-border-radius-lg, 12px));
   --studio-radius-control: var(--ha-border-radius-md, 8px);
-  --studio-radius-pill: var(--ha-border-radius-pill, 9999px);
-  --studio-control-height: 36px;          /* regular button and input */
-  --studio-control-height-compact: 28px;  /* compact button */
-  /* Colors, each reading the HA variable with a literal fallback: */
-  --studio-bg, --studio-surface, --studio-surface-alt, --studio-input-bg,
-  --studio-divider, --studio-card-border,
+  --studio-radius-field: var(--ha-border-radius-sm, 4px);
+  --studio-radius-button: var(--ha-button-border-radius, var(--ha-border-radius-pill, 9999px));
+  --studio-radius-dialog: var(--ha-dialog-border-radius, var(--ha-border-radius-3xl, 24px));
+  --studio-control-height: var(--ha-button-height, 40px);
+  --studio-control-height-compact: 32px;
+  --studio-row-min-height: 56px;
+  --studio-header-height: var(--header-height, 56px);
+  /* Colors, each reading the HA variable with a fallback: */
+  --studio-bg, --studio-surface, --studio-surface-alt, --studio-input-bg, --studio-popup-bg,
+  --studio-header-bg, --studio-header-text, --studio-header-icon, --studio-header-border,
+  --studio-field-bg, --studio-field-bg-hover, --studio-field-line,
+  --studio-divider, --studio-card-border, --studio-card-border-width,
   --studio-text, --studio-text-secondary, --studio-text-disabled,
-  --studio-primary, --studio-on-primary,
-  --studio-primary-tint, --studio-primary-tint-strong,   /* rgba(var(--rgb-primary-color), a) */
-  --studio-success, --studio-warning, --studio-error, --studio-info,
-  --studio-success-tint, --studio-warning-tint, --studio-error-tint, --studio-info-tint;
+  --studio-primary, --studio-primary-tint, --studio-primary-tint-strong,
+  --studio-btn-accent-*, --studio-btn-tonal-*, --studio-btn-plain-hover, --studio-danger-tonal-*, --studio-danger-loud-*,
+  --studio-switch-track, --studio-switch-border, --studio-switch-thumb, --studio-switch-on-*,
+  --studio-success, --studio-warning, --studio-error, --studio-info (+ -tint),
+  --studio-toast-bg, --studio-toast-text, --studio-scrollbar-thumb;
+  color-scheme: light;   /* :host([dark]) { color-scheme: dark; } */
 }
 ```
 
@@ -123,8 +149,9 @@ Studio has one implementation of each component. A new pattern is added here fir
   </section>
   ```
 - **Collapsible card**: a native `<details class="card">` whose `<summary>` is the card header. Used for long or advanced content (logs, raw entity inspector). Inside a card, a nested collapsible section uses `details.sub-collapsible`.
-- **Settings row**: label and optional description on the left, the control on the right, a divider between rows. Every Latter option and every curated Device setting goes through this one row, built by `settingsRowHtml()`: `.settings-list` > `.settings-row` > `.settings-row-text` (`.row-label`, `.row-description`) + `.settings-row-control`. `.settings-row.stacked` puts a wide control (a slider, a picker) under the label.
-- **Switch**: one style for every on/off setting: `<input type="checkbox" class="switch" role="switch">`.
+- **Settings row**: label and optional description on the left, the control on the right; no divider between rows (as ha-settings-row), except between rows stacked in a narrow card. Every Latter option and every curated Device setting goes through this one row, built by `settingsRowHtml()`: `.settings-list` > `.settings-row` > `.settings-row-text` (`.row-label`, `.row-description`) + `.settings-row-control`. `.settings-row.stacked` puts a wide control (a slider, a picker) under the label.
+- **Switch**: one style for every on/off setting, drawn like ha-switch (48 × 24 outlined track, 18 px thumb): `<input type="checkbox" class="switch" role="switch">`.
+- **Text field and select**: Home Assistant's filled field: form background, 4 px top corners, a 1 px underline that becomes a 2 px primary line on focus. Native `<select>` keeps its own popup, drawn in Home Assistant's light or dark scheme.
 - **Segmented control**: for a small either/or choice that changes the rest of a card (Notifications & Announcements: Notification or Announcement): `.segmented` with `role="radiogroup"` and `role="radio"` buttons using `aria-checked`.
 - **Key/value rows**: `.kv-list` > `.kv-row` (label, value); unknown values show `—`. A row that opens something is a `button.kv-row`.
 - **Lists**: `.list-row` (with `.list-row-main` and `.list-row-grow`) for short item lists with actions; `.list-block` for an item with a heading row (`.list-row-head`) and stacked fields (`.stacked-field`, `.field-label`).
@@ -133,7 +160,7 @@ Studio has one implementation of each component. A new pattern is added here fir
 - **Empty state**: `emptyStateHtml()` renders `.empty-state`: a sentence that says what's missing and, where possible, how to add it. Never hidden.
 - **Loading state**: `.loading-state`, shown until the first payload arrives; the page is never pre-filled with fake values. If the first load fails, an `.alert.alert-error` with a Retry button replaces it.
 - **Error state**: every failed command shows an error toast (`.toast.error`) with the reason, from the one place that sends commands. A persistent problem (a Device health issue, a missing required entity) shows as an inline `.alert` (`.alert-warning`, `.alert-error`) in the card it affects.
-- **Buttons**: `.btn` plus one variant: `.btn-primary` (filled), `.btn-secondary` (outlined), `.btn-text` (tertiary), `.btn-danger` (outlined), `.btn-danger-filled` (only inside a confirmation dialog). At most **one primary button per card** (D-009); the page header has no Save button (D-010). Two sizes: regular, and `.btn-compact` for buttons inside rows. Icon-only buttons are `.btn-icon` (`.btn-icon.danger` for delete) and always have an `aria-label`.
+- **Buttons**: pill-shaped like ha-button. `.btn` plus one variant: `.btn-primary` (accent: the main action), `.btn-secondary` (filled: a tonal primary fill), `.btn-text` (plain), `.btn-danger` (danger fill), `.btn-danger-filled` (loud danger, only inside a confirmation dialog). At most **one primary button per card** (D-009); the page header has no Save button (D-010). Two sizes: regular, and `.btn-compact` for buttons inside rows. Icon-only buttons are `.btn-icon` (`.btn-icon.danger` for delete) and always have an `aria-label`.
 - **Dialogs**: a native `<dialog class="studio-dialog">`, opened with `openDialog()` and closed with `closeDialog()`. Esc closes it, focus moves into the dialog on open and returns to the opener on close. Confirmation dialogs say exactly what will happen.
 - **Health**: Studio shows Latter's Home Assistant repairs and nothing else as health: a Device's repairs as one inline alert at the top of its Overview, and every Latter repair in the System overview's Issues card. Both link to Home Assistant's Repairs page, where the repairs are fixed. Studio never computes a health warning of its own.
 - **Accessibility**: every control has a visible label or an `aria-label`; a set of toggle pills is a `role="group"` with a label; a pointer-only picker (the color wheel) always has a keyboard equivalent next to it (a native color input and a hex field); a segmented control is one tab stop and the arrow keys move between its options; text stays in the normal text color (a danger card or dialog shows danger with its border and its filled confirm button, not with red text, which fails contrast on dark themes).
@@ -282,4 +309,11 @@ A standing decision stays in force until a new entry supersedes it. Changing one
 - **Decision:** Every view lays its cards out in two independent column stacks (`.columns > .column`): cards flow top to bottom within their column, rows are never aligned across columns, so there are no gaps. Below 760 px of content width the two columns become one, first column first. Only cards with wide content (logs, tables, galleries) span the full width, placed first or last in the view. Cards are assigned to a column in the template.
 - **Why:** The previous auto-fit grid aligned cards in rows, so a short card beside a tall one left a gap, and some views were one full-width column while others were two.
 - **Alternatives:** CSS multi-column (`columns: 2`), which balances automatically but moves cards between columns as content opens and closes; a masonry grid (not yet available in every browser).
+- **Status:** Accepted.
+
+### D-015: Home Assistant's component metrics
+- **Date:** 2026-11-08
+- **Decision:** Studio's components copy the metrics and theme variables of Home Assistant's own components (frontend source, 2026.11): ha-card (24 px regular header, 20/16 padding, `--ha-card-*` border, radius and shadow), ha-settings-row (56 px rows without dividers), ha-input's filled field, ha-button (pill; accent, filled and plain), ha-switch (48 × 24 outlined track), the hass-subpage toolbar (56 px, 20 px regular title, `--app-header-*`), and Home Assistant's light or dark `color-scheme` for native popups. Studio still draws them with its own CSS (D-006); section 3 lists each value and the variable it reads. This carries out D-002.
+- **Why:** The maintainer found the light theme usable but not like Home Assistant, and native select popups were unreadable in dark mode. Matching the real components, rather than approximating them, makes a theme change in Home Assistant look right in Studio too.
+- **Alternatives:** Keep Studio's earlier compact metrics (16 px card titles, 36 px square-cornered controls, row dividers).
 - **Status:** Accepted.

@@ -16,36 +16,72 @@ const STUDIO_STYLES = `
     --studio-font-caption: var(--ha-font-size-s, 12px);
     --studio-weight-regular: var(--ha-font-weight-normal, 400);
     --studio-weight-medium: var(--ha-font-weight-medium, 500);
-    --studio-line-height: var(--ha-line-height-normal, 1.5);
+    --studio-line-height: var(--ha-line-height-normal, 1.6);
+    --studio-line-height-condensed: var(--ha-line-height-condensed, 1.2);
+    --studio-font-card-title: var(--ha-card-header-font-size, var(--ha-font-size-2xl, 24px));
+    --studio-card-title-tracking: -0.012em;
     --studio-space-1: var(--ha-space-1, 4px);
     --studio-space-2: var(--ha-space-2, 8px);
     --studio-space-3: var(--ha-space-3, 12px);
     --studio-space-4: var(--ha-space-4, 16px);
+    --studio-space-card-top: var(--ha-space-5, 20px);
     --studio-space-5: var(--ha-space-6, 24px);
-    --studio-radius-card: var(--ha-card-border-radius, 12px);
+    --studio-radius-card: var(--ha-card-border-radius, var(--ha-border-radius-lg, 12px));
     --studio-radius-control: var(--ha-border-radius-md, 8px);
+    --studio-radius-field: var(--ha-border-radius-sm, 4px);
+    --studio-radius-button: var(--ha-button-border-radius, var(--ha-border-radius-pill, 9999px));
+    --studio-radius-dialog: var(--ha-dialog-border-radius, var(--ha-border-radius-3xl, 24px));
     --studio-radius-pill: var(--ha-border-radius-pill, 9999px);
-    --studio-control-height: 36px;
-    --studio-control-height-compact: 28px;
-    --studio-header-height: 56px;
+    --studio-card-border-width: var(--ha-card-border-width, 1px);
+    --studio-control-height: var(--ha-button-height, 40px);
+    --studio-control-height-compact: 32px;
+    --studio-row-min-height: 56px;
+    --studio-header-height: var(--header-height, 56px);
     --studio-sidebar-width: 244px;
     --studio-bg: var(--primary-background-color, #111111);
     --studio-surface: var(--ha-card-background, var(--card-background-color, #1c1c1c));
-    --studio-surface-alt: var(--secondary-background-color, #202020);
-    --studio-header-bg: var(--app-header-background-color, var(--secondary-background-color, #1c1c1c));
+    --studio-surface-alt: var(--secondary-background-color, #282828);
+    --studio-header-bg: var(--app-header-background-color, var(--sidebar-background-color, #1c1c1c));
     --studio-header-text: var(--app-header-text-color, var(--primary-text-color, #e1e1e1));
+    --studio-header-icon: var(--sidebar-icon-color, var(--secondary-text-color, #9b9b9b));
+    --studio-header-border: var(--app-header-border-bottom, 1px solid var(--divider-color, rgba(225, 225, 225, 0.12)));
     --studio-sidebar-bg: var(--sidebar-background-color, var(--card-background-color, #1c1c1c));
-    --studio-input-bg: var(--input-fill-color, var(--secondary-background-color, #141414));
+    --studio-input-bg: var(--input-fill-color, rgba(255, 255, 255, 0.05));
+    --studio-field-bg: var(--ha-color-form-background, var(--input-fill-color, #363636));
+    --studio-field-bg-hover: var(--ha-color-form-background-hover, var(--studio-field-bg));
+    --studio-field-line: var(--ha-color-border-neutral-loud, var(--input-idle-line-color, rgba(255, 255, 255, 0.42)));
+    --studio-popup-bg: var(--card-background-color, #1c1c1c);
     --studio-divider: var(--divider-color, rgba(225, 225, 225, 0.12));
     --studio-card-border: var(--ha-card-border-color, var(--divider-color, rgba(225, 225, 225, 0.12)));
     --studio-text: var(--primary-text-color, #e1e1e1);
     --studio-text-secondary: var(--secondary-text-color, #9b9b9b);
     --studio-text-disabled: var(--disabled-text-color, #6f6f6f);
-    --studio-primary: var(--primary-color, #03a9f4);
+    --studio-primary: var(--primary-color, #009ac7);
     --studio-on-primary: var(--text-primary-color, #ffffff);
-    --studio-primary-tint: rgba(var(--rgb-primary-color, 3, 169, 244), 0.12);
-    --studio-primary-tint-strong: rgba(var(--rgb-primary-color, 3, 169, 244), 0.24);
+    --studio-primary-tint: rgba(var(--rgb-primary-color, 0, 154, 199), 0.12);
+    --studio-primary-tint-strong: rgba(var(--rgb-primary-color, 0, 154, 199), 0.24);
     --studio-hover: rgba(var(--rgb-primary-text-color, 225, 225, 225), 0.06);
+    --studio-btn-accent-bg: var(--ha-color-fill-primary-loud-resting, var(--primary-color, #009ac7));
+    --studio-btn-accent-bg-hover: var(--ha-color-fill-primary-loud-hover, var(--studio-btn-accent-bg));
+    --studio-btn-accent-text: var(--ha-color-on-primary-loud, var(--text-primary-color, #ffffff));
+    --studio-btn-tonal-bg: var(--ha-color-fill-primary-normal-resting, var(--studio-primary-tint));
+    --studio-btn-tonal-bg-hover: var(--ha-color-fill-primary-normal-hover, var(--studio-primary-tint-strong));
+    --studio-btn-tonal-text: var(--ha-color-on-primary-normal, var(--primary-color, #009ac7));
+    --studio-btn-plain-hover: var(--ha-color-fill-primary-quiet-resting, var(--studio-primary-tint));
+    --studio-danger-tonal-bg: var(--ha-color-fill-danger-normal-resting, var(--studio-error-tint));
+    --studio-danger-tonal-text: var(--ha-color-on-danger-normal, var(--error-color, #db4437));
+    --studio-danger-loud-bg: var(--ha-color-fill-danger-loud-resting, var(--error-color, #db4437));
+    --studio-danger-loud-text: var(--ha-color-on-danger-loud, #ffffff);
+    --studio-switch-track: var(--ha-switch-background-color, var(--ha-color-fill-disabled-quiet-resting, #202020));
+    --studio-switch-border: var(--ha-switch-border-color, var(--ha-color-border-neutral-normal, #7a7a7a));
+    --studio-switch-thumb: var(--ha-switch-thumb-background-color, var(--ha-color-on-neutral-normal, #989898));
+    --studio-switch-on-track: var(--ha-switch-checked-background-color, var(--ha-color-fill-primary-normal-resting, var(--studio-primary-tint-strong)));
+    --studio-switch-on-border: var(--ha-switch-checked-border-color, var(--ha-color-border-primary-loud, var(--primary-color, #009ac7)));
+    --studio-switch-on-thumb: var(--ha-switch-checked-thumb-background-color, var(--ha-color-on-primary-normal, var(--primary-color, #009ac7)));
+    --studio-switch-thumb-shadow: var(--ha-switch-thumb-box-shadow, var(--ha-box-shadow-s, 0 1px 2px rgba(0, 0, 0, 0.3)));
+    --studio-toast-bg: var(--primary-text-color, #e1e1e1);
+    --studio-toast-text: var(--card-background-color, #1c1c1c);
+    --studio-scrollbar-thumb: var(--scrollbar-thumb-color, rgb(110, 110, 110));
     --studio-success: var(--success-color, #43a047);
     --studio-warning: var(--warning-color, #ffa600);
     --studio-error: var(--error-color, #db4437);
@@ -67,7 +103,12 @@ const STUDIO_STYLES = `
     font-weight: var(--studio-weight-regular);
     line-height: var(--studio-line-height);
     -webkit-tap-highlight-color: transparent;
+    /* Native popups (select lists, date and color pickers, scrollbars) follow HA's light or dark mode. */
+    color-scheme: light;
+    scrollbar-color: var(--studio-scrollbar-thumb) transparent;
+    scrollbar-width: thin;
   }
+  :host([dark]) { color-scheme: dark; }
   * { box-sizing: border-box; }
   .hidden { display: none !important; }
   .studio-root {
@@ -90,10 +131,10 @@ const STUDIO_STYLES = `
     justify-content: space-between;
     gap: var(--studio-space-3);
     height: var(--studio-header-height);
-    padding: 0 var(--studio-space-4);
+    padding: 0 var(--studio-space-3);
     background: var(--studio-header-bg);
     color: var(--studio-header-text);
-    border-bottom: 1px solid var(--studio-divider);
+    border-bottom: var(--studio-header-border);
     position: sticky;
     top: 0;
     z-index: 30;
@@ -101,16 +142,17 @@ const STUDIO_STYLES = `
   .titlebar-brand {
     display: flex;
     align-items: center;
-    gap: var(--studio-space-2);
+    gap: var(--studio-space-3);
     font-size: var(--studio-font-title);
-    font-weight: var(--studio-weight-medium);
+    font-weight: var(--studio-weight-regular);
     user-select: none;
   }
+  .titlebar-brand .ha-menu-btn { color: var(--studio-header-icon); }
   .brand-logo {
-    width: 22px;
-    height: 22px;
-    /* The header's own text color: a theme may paint the header in the primary color. */
-    fill: currentColor;
+    width: 24px;
+    height: 24px;
+    margin-inline-start: var(--studio-space-3);
+    fill: var(--studio-header-icon);
     flex-shrink: 0;
   }
   .titlebar-actions {
@@ -120,6 +162,7 @@ const STUDIO_STYLES = `
   }
   .titlebar-brand .ha-menu-btn { display: none; }
   :host([narrow]) .titlebar-brand .ha-menu-btn { display: inline-flex; }
+  :host([narrow]) .brand-logo { margin-inline-start: 0; }
 
   /* ---------- Shell & navigation ---------- */
   .app-shell {
@@ -159,8 +202,8 @@ const STUDIO_STYLES = `
     cursor: pointer;
   }
   .scope-tab.active {
-    background: var(--studio-primary);
-    color: var(--studio-on-primary);
+    background: var(--studio-btn-tonal-bg);
+    color: var(--studio-btn-tonal-text);
   }
   .nav-list {
     display: flex;
@@ -233,7 +276,7 @@ const STUDIO_STYLES = `
     flex-wrap: wrap;
     gap: var(--studio-space-2);
     font-size: var(--studio-font-title);
-    font-weight: var(--studio-weight-medium);
+    font-weight: var(--studio-weight-regular);
   }
   .page-subtitle {
     color: var(--studio-text-secondary);
@@ -263,9 +306,10 @@ const STUDIO_STYLES = `
     min-width: 0;
     container-type: inline-size;
     background: var(--studio-surface);
-    border: 1px solid var(--studio-card-border);
+    border: var(--studio-card-border-width) solid var(--studio-card-border);
     border-radius: var(--studio-radius-card);
     box-shadow: var(--studio-card-shadow);
+    color: var(--studio-text);
   }
   .card.danger { border-color: var(--studio-error); }
   .card-header {
@@ -274,18 +318,20 @@ const STUDIO_STYLES = `
     justify-content: space-between;
     flex-wrap: wrap;
     gap: var(--studio-space-3);
-    padding: var(--studio-space-4) var(--studio-space-4) 0;
+    padding: var(--studio-space-card-top) var(--studio-space-4) 0;
   }
   .card-heading {
     display: flex;
     flex-direction: column;
-    gap: var(--studio-space-1);
+    gap: var(--studio-space-2);
     min-width: 0;
     flex: 1 1 240px;
   }
   .card-title {
-    font-size: var(--studio-font-section);
-    font-weight: var(--studio-weight-medium);
+    font-size: var(--studio-font-card-title);
+    font-weight: var(--studio-weight-regular);
+    letter-spacing: var(--studio-card-title-tracking);
+    line-height: var(--studio-line-height-condensed);
   }
   .card-description, .row-description, .help-text {
     color: var(--studio-text-secondary);
@@ -308,13 +354,13 @@ const STUDIO_STYLES = `
     justify-content: flex-end;
     flex-wrap: wrap;
     gap: var(--studio-space-2);
-    padding: var(--studio-space-3) var(--studio-space-4);
+    padding: var(--studio-space-2);
     border-top: 1px solid var(--studio-divider);
   }
   details.card > summary {
     list-style: none;
     cursor: pointer;
-    padding-bottom: var(--studio-space-4);
+    padding-bottom: var(--studio-space-card-top);
   }
   details.card > summary::-webkit-details-marker { display: none; }
   details.card > summary::after {
@@ -352,11 +398,10 @@ const STUDIO_STYLES = `
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
-    gap: var(--studio-space-3);
-    padding: var(--studio-space-3) 0;
-    border-bottom: 1px solid var(--studio-divider);
+    gap: var(--studio-space-4);
+    min-height: var(--studio-row-min-height);
+    padding: var(--studio-space-2) 0;
   }
-  .settings-row:last-child { border-bottom: none; }
   .settings-row-text {
     display: flex;
     flex-direction: column;
@@ -364,6 +409,7 @@ const STUDIO_STYLES = `
     min-width: 0;
   }
   .row-label { font-weight: var(--studio-weight-regular); }
+  .row-description { line-height: normal; }
   .settings-row-control {
     display: flex;
     align-items: center;
@@ -381,47 +427,63 @@ const STUDIO_STYLES = `
   .settings-row.stacked { grid-template-columns: minmax(0, 1fr); }
   .settings-row.stacked .settings-row-control { justify-content: stretch; }
   .settings-row.stacked .settings-row-control > * { flex: 1 1 200px; width: auto; }
+  /* Text fields and selects: Home Assistant's filled field (form background, square bottom, 1 px underline
+     that turns into a 2 px primary line on focus). */
   select, input[type="text"], input[type="number"], input[type="password"] {
     min-height: var(--studio-control-height);
     padding: 0 var(--studio-space-3);
-    border: 1px solid var(--studio-divider);
-    border-radius: var(--studio-radius-control);
-    background: var(--studio-input-bg);
+    border: none;
+    border-bottom: 1px solid var(--studio-field-line);
+    border-radius: var(--studio-radius-field) var(--studio-radius-field) 0 0;
+    background: var(--studio-field-bg);
     color: var(--studio-text);
     font: inherit;
+    transition: background-color 0.15s ease-out;
   }
+  select:hover, input[type="text"]:hover, input[type="number"]:hover, input[type="password"]:hover { background: var(--studio-field-bg-hover); }
+  select option, select optgroup { background-color: var(--studio-popup-bg); color: var(--studio-text); }
+  input::placeholder { color: var(--studio-text-secondary); opacity: 1; }
+  input[readonly] { color: var(--studio-text-secondary); }
   input[type="file"] { color: var(--studio-text-secondary); font: inherit; }
   input[type="range"] { width: 140px; accent-color: var(--studio-primary); }
   select:focus-visible, input:focus-visible, button:focus-visible, summary:focus-visible, [tabindex]:focus-visible {
     outline: 2px solid var(--studio-primary);
     outline-offset: 2px;
   }
+  select:focus-visible, input[type="text"]:focus-visible, input[type="number"]:focus-visible, input[type="password"]:focus-visible {
+    outline: none;
+    border-bottom-color: var(--studio-primary);
+    box-shadow: inset 0 -1px 0 var(--studio-primary);
+  }
+  /* Home Assistant's switch: 48 x 24 outlined track, 18 px thumb. */
   .switch {
     appearance: none;
     position: relative;
-    width: 36px;
-    height: 20px;
+    width: 48px;
+    height: 24px;
     margin: 0;
+    border: 1px solid var(--studio-switch-border);
     border-radius: var(--studio-radius-pill);
-    background: var(--studio-text-disabled);
+    background: var(--studio-switch-track);
     cursor: pointer;
     flex-shrink: 0;
-    transition: background 0.15s ease;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
   }
   .switch::after {
     content: "";
     position: absolute;
     top: 2px;
     left: 2px;
-    width: 16px;
-    height: 16px;
+    width: 18px;
+    height: 18px;
     border-radius: 50%;
-    background: var(--studio-on-primary);
-    transition: transform 0.15s ease;
+    background: var(--studio-switch-thumb);
+    box-shadow: var(--studio-switch-thumb-shadow);
+    transition: transform 0.15s ease, background-color 0.15s ease;
   }
-  .switch:checked { background: var(--studio-primary); }
-  .switch:checked::after { transform: translateX(16px); }
-  .switch:disabled { opacity: 0.5; cursor: default; }
+  .switch:checked { background: var(--studio-switch-on-track); border-color: var(--studio-switch-on-border); }
+  .switch:checked::after { transform: translateX(24px); background: var(--studio-switch-on-thumb); }
+  .switch:disabled { opacity: 0.3; cursor: not-allowed; }
   .input-action-row {
     display: flex;
     align-items: center;
@@ -446,14 +508,13 @@ const STUDIO_STYLES = `
     font: inherit;
     cursor: pointer;
   }
-  .segmented button[aria-checked="true"] { background: var(--studio-primary-tint-strong); color: var(--studio-primary); }
+  .segmented button[aria-checked="true"] { background: var(--studio-btn-tonal-bg); color: var(--studio-btn-tonal-text); }
   .inline-switch { display: inline-flex; align-items: center; gap: var(--studio-space-2); cursor: pointer; white-space: nowrap; }
   .list-row {
     display: flex;
     align-items: flex-end;
     gap: var(--studio-space-2);
     padding: var(--studio-space-3);
-    background: var(--studio-input-bg);
     border: 1px solid var(--studio-divider);
     border-radius: var(--studio-radius-control);
   }
@@ -470,7 +531,6 @@ const STUDIO_STYLES = `
     flex-direction: column;
     gap: var(--studio-space-3);
     padding: var(--studio-space-3);
-    background: var(--studio-input-bg);
     border: 1px solid var(--studio-divider);
     border-radius: var(--studio-radius-control);
   }
@@ -496,7 +556,7 @@ const STUDIO_STYLES = `
     gap: var(--studio-space-2);
   }
 
-  /* ---------- Buttons ---------- */
+  /* ---------- Buttons (Home Assistant's ha-button: pill shape; accent, filled, plain) ---------- */
   .btn {
     display: inline-flex;
     align-items: center;
@@ -504,37 +564,33 @@ const STUDIO_STYLES = `
     gap: var(--studio-space-1);
     min-height: var(--studio-control-height);
     padding: 0 var(--studio-space-4);
-    border: 1px solid transparent;
-    border-radius: var(--studio-radius-control);
+    border: none;
+    border-radius: var(--studio-radius-button);
     font: inherit;
     font-weight: var(--studio-weight-medium);
+    line-height: 1;
     white-space: nowrap;
     cursor: pointer;
+    transition: background-color 0.15s ease-out;
   }
-  .btn:disabled { opacity: 0.5; cursor: default; }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
   .btn-compact {
     min-height: var(--studio-control-height-compact);
     padding: 0 var(--studio-space-3);
   }
-  .btn-primary { background: var(--studio-primary); color: var(--studio-on-primary); }
-  .btn-secondary {
-    background: transparent;
-    color: var(--studio-primary);
-    border-color: var(--studio-divider);
-  }
-  .btn-secondary:hover:not(:disabled), .btn-text:hover:not(:disabled) { background: var(--studio-primary-tint); }
+  .btn-primary { background: var(--studio-btn-accent-bg); color: var(--studio-btn-accent-text); }
+  .btn-primary:hover:not(:disabled) { background: var(--studio-btn-accent-bg-hover); }
+  .btn-secondary { background: var(--studio-btn-tonal-bg); color: var(--studio-btn-tonal-text); }
+  .btn-secondary:hover:not(:disabled) { background: var(--studio-btn-tonal-bg-hover); }
   .btn-text {
     background: transparent;
-    color: var(--studio-primary);
-    padding: 0 var(--studio-space-2);
+    color: var(--studio-btn-tonal-text);
+    padding: 0 var(--studio-space-3);
   }
-  .btn-danger {
-    background: transparent;
-    color: var(--studio-error);
-    border-color: var(--studio-error);
-  }
-  .btn-danger:hover:not(:disabled) { background: var(--studio-error-tint); }
-  .btn-danger-filled { background: var(--studio-error); color: var(--studio-on-primary); }
+  .btn-text:hover:not(:disabled) { background: var(--studio-btn-plain-hover); }
+  .btn-danger { background: var(--studio-danger-tonal-bg); color: var(--studio-danger-tonal-text); }
+  .btn-danger:hover:not(:disabled) { filter: brightness(0.95); }
+  .btn-danger-filled { background: var(--studio-danger-loud-bg); color: var(--studio-danger-loud-text); }
   .btn-icon {
     display: inline-flex;
     align-items: center;
@@ -554,16 +610,15 @@ const STUDIO_STYLES = `
   .btn-icon svg { width: 20px; height: 20px; fill: currentColor; }
 
   /* ---------- Data display ---------- */
-  .kv-list { display: flex; flex-direction: column; }
+  .kv-list { display: flex; flex-direction: column; gap: 0; }
   .kv-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: var(--studio-space-3);
-    padding: var(--studio-space-2) 0;
-    border-bottom: 1px solid var(--studio-divider);
+    min-height: var(--studio-control-height);
+    padding: var(--studio-space-1) 0;
   }
-  .kv-row:last-child { border-bottom: none; }
   .kv-row > span:first-child { color: var(--studio-text-secondary); }
   .kv-row > strong, .kv-value {
     font-weight: var(--studio-weight-medium);
@@ -573,7 +628,7 @@ const STUDIO_STYLES = `
   button.kv-row {
     width: 100%;
     border: none;
-    border-bottom: 1px solid var(--studio-divider);
+    border-radius: var(--studio-radius-control);
     background: transparent;
     color: inherit;
     font: inherit;
@@ -837,37 +892,36 @@ const STUDIO_STYLES = `
     justify-content: space-between;
     flex-wrap: wrap;
     gap: var(--studio-space-3);
-    padding: var(--studio-space-3) var(--studio-space-4);
-    border-left: 4px solid var(--studio-info);
-    border-radius: var(--studio-radius-control);
+    padding: var(--studio-space-2) var(--studio-space-4);
+    border-radius: var(--studio-radius-field);
     background: var(--studio-info-tint);
   }
-  .alert-error { border-left-color: var(--studio-error); background: var(--studio-error-tint); }
-  .alert-warning { border-left-color: var(--studio-warning); background: var(--studio-warning-tint); }
+  .alert-error { background: var(--studio-error-tint); }
+  .alert-warning { background: var(--studio-warning-tint); }
   .alert-body { display: flex; flex-direction: column; gap: var(--studio-space-1); min-width: 0; }
   .alert-list { margin: 0; padding-left: var(--studio-space-5); }
   .toast {
     position: fixed;
-    right: var(--studio-space-5);
+    left: 50%;
     bottom: var(--studio-space-5);
+    transform: translateX(-50%);
     z-index: 50;
-    max-width: 420px;
+    max-width: min(560px, calc(100vw - 32px));
     padding: var(--studio-space-3) var(--studio-space-4);
-    border: 1px solid var(--studio-primary);
-    border-radius: var(--studio-radius-control);
-    background: var(--studio-surface);
+    border-radius: var(--studio-radius-field);
+    background: var(--studio-toast-bg);
+    color: var(--studio-toast-text);
     box-shadow: var(--studio-overlay-shadow);
-    font-weight: var(--studio-weight-medium);
   }
-  .toast.error { border-color: var(--studio-error); color: var(--studio-error); }
+  .toast.error { background: var(--studio-danger-loud-bg); color: var(--studio-danger-loud-text); }
   .offscreen { position: fixed; top: -9999px; left: -9999px; }
 
   /* ---------- Dialogs ---------- */
   dialog.studio-dialog {
     width: min(460px, calc(100vw - 32px));
     padding: var(--studio-space-5);
-    border: 1px solid var(--studio-card-border);
-    border-radius: var(--studio-radius-card);
+    border: none;
+    border-radius: var(--studio-radius-dialog);
     background: var(--studio-surface);
     color: var(--studio-text);
     box-shadow: var(--studio-overlay-shadow);
@@ -879,8 +933,9 @@ const STUDIO_STYLES = `
     gap: var(--studio-space-3);
   }
   .dialog-title {
-    font-size: var(--studio-font-section);
-    font-weight: var(--studio-weight-medium);
+    font-size: var(--studio-font-card-title);
+    font-weight: var(--studio-weight-regular);
+    line-height: var(--studio-line-height-condensed);
   }
   .dialog-text { color: var(--studio-text-secondary); }
   .dialog-actions {
@@ -911,11 +966,13 @@ const STUDIO_STYLES = `
   /* ---------- Narrow cards and screens ---------- */
   @container (max-width: 520px) {
     .settings-row { grid-template-columns: minmax(0, 1fr); }
+    .settings-row + .settings-row { border-top: 1px solid var(--studio-divider); }
     .settings-row-control { justify-content: flex-start; }
     .settings-row-control select, .settings-row-control input[type="text"] { width: 100%; }
   }
   @media (max-width: 860px) {
     .titlebar-brand .ha-menu-btn { display: inline-flex; }
+    .brand-logo { margin-inline-start: 0; }
     .app-shell { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
     aside.sidebar {
       align-self: start;
@@ -934,6 +991,7 @@ const STUDIO_STYLES = `
     #nav-scope-device .nav-btn:not(.nav-back-btn) { padding-left: var(--studio-space-3); }
     .content-wrap { padding: var(--studio-space-4) var(--studio-space-3) var(--studio-space-5); }
     .settings-row { grid-template-columns: minmax(0, 1fr); }
+    .settings-row + .settings-row { border-top: 1px solid var(--studio-divider); }
     .settings-row-control { justify-content: flex-start; }
     .settings-row-control select, .settings-row-control input[type="text"] { width: 100%; }
   }
@@ -4613,6 +4671,9 @@ class LatterStudio extends HTMLElement {
     const firstHass = !this._hass && !!h;
     this._hass = h;
     HASS_REF = h;
+    // HA's effective light/dark mode (the user's choice, or the system's when set to auto) drives
+    // color-scheme, so native popups such as select lists render in the matching scheme.
+    this.toggleAttribute("dark", Boolean(h?.themes?.darkMode ?? h?.selectedTheme?.dark));
     if (this._initialized && firstHass) {
       this._ensureSubscription();
     }
