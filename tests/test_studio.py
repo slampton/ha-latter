@@ -86,6 +86,16 @@ class TestPayloadDiet(unittest.TestCase):
 class TestViewLayout(unittest.TestCase):
     """D-014: every view is two independent column stacks; no auto-placing grid."""
 
+    def test_brand_images_are_valid_png(self) -> None:
+        # A text round-trip once replaced their high bytes with U+FFFD; HA and HACS show these files.
+        sizes = {}
+        for name in ("icon.png", "icon@2x.png", "logo.png", "logo@2x.png"):
+            data = (LATTER_DIR / "brand" / name).read_bytes()
+            self.assertTrue(data.startswith(b"\x89PNG\r\n\x1a\n"), name)
+            self.assertNotIn(b"\xef\xbf\xbd", data[:64], name)
+            sizes[name] = int.from_bytes(data[16:20], "big")
+        self.assertEqual((sizes["icon.png"], sizes["icon@2x.png"]), (256, 512))
+
     def test_native_popups_follow_ha_dark_mode(self) -> None:
         # D-015: color-scheme follows hass.themes.darkMode, and select options get an opaque background.
         js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
