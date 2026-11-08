@@ -59,7 +59,7 @@ def _build_coordinator_diagnostics(coordinator: LatterCoordinator) -> dict[str, 
                 "attributes": coordinator.weather_attributes,
             },
             "calendar_agenda": {
-                "state": coordinator.calendar_agenda_string,
+                "records": [list(rec) for rec in coordinator.calendar_records],
                 "event_count": len(coordinator.calendar_events),
             },
         },

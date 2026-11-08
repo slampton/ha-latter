@@ -154,7 +154,7 @@ from .media_engine import (
     resolve_esphome_local_speaker as _resolve_esphome_local_speaker,
     resolve_ma_counterpart_entity as _resolve_ma_counterpart_entity,
 )
-from .payloads import DomainPayloadPacker
+from .payloads import DomainPayloadPacker, V3Records
 from .presence_beacon import Trigger, decide_beacon_action
 from .site_feeds import async_fetch_calendar_snapshot, async_fetch_weather_snapshot
 from .traits import manifest_has_display, manifest_is_roaming, manifest_is_wearable
@@ -337,7 +337,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         }
 
         # Cached calendar agenda state & attributes
-        self.calendar_agenda_string: str = "NONE"
+        self.calendar_records: V3Records = V3Records()
         self.calendar_events: list[dict[str, Any]] = []
 
         # Smart Device Notification & Camera Peephole Alert State
@@ -2837,33 +2837,27 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def async_refresh_calendar_agenda(self, days: int = 30) -> None:
         """Fetch upcoming calendar events and update sensor state."""
-        agenda_str, events = await async_fetch_calendar_snapshot(
+        records, events = await async_fetch_calendar_snapshot(
             self.hass,
             self.calendar_entities,
             days=days,
             map_url_builder=self.build_map_snapshot_url,
         )
-        self.calendar_agenda_string = agenda_str
+        self.calendar_records = records
         self.calendar_events = events
         self._notify_listeners()
 
-    def get_calendar_agenda_payload(self) -> tuple[str, dict[str, Any]]:
-        """Compute short state (<= 255 chars) and Protocol v3 payload for sensor.<device_slug>_calendar_agenda."""
-        summary = self.calendar_agenda_string or "NONE"
+    def get_calendar_agenda_payload(self) -> tuple[int, dict[str, Any]]:
+        """Return the upcoming event count (the sensor state) and the Protocol v3 calendar_agenda payload."""
         count = len(self.calendar_events)
-        next_event = (
-            str(self.calendar_events[0].get("name") or "NONE")
-            if self.calendar_events
-            else "NONE"
-        )
+        next_event = str(self.calendar_events[0].get("name") or "") if self.calendar_events else ""
         cal_rev, cal_payload = self._pack_domain_payload(
             "calendar_agenda",
-            summary,
+            self.calendar_records,
             count,
             next_event,
         )
-        short_state = summary[:250] if len(summary) > 250 else summary
-        return short_state, {
+        return count, {
             "event_count": count,
             "next_event": next_event,
             "events": self.calendar_events,

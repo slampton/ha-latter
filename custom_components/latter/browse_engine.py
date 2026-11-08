@@ -155,49 +155,35 @@ async def _call_ma_get_library(
     limit: int = 500,
     order_by: str | None = None,
 ) -> list[dict[str, Any]]:
-    """Call music_assistant.get_library with automatic schema fallback."""
-    if hass.services.has_service("music_assistant", "get_library"):
-        base_payload: dict[str, Any] = {
-            "config_entry_id": config_entry_id,
-            "media_type": media_type,
-            "limit": limit,
-        }
-        if favorite is not None:
-            base_payload["favorite"] = favorite
-        if search:
-            base_payload["search"] = search
-
-        attempts: list[dict[str, Any]] = []
-        if order_by:
-            attempts.append({**base_payload, "order_by": order_by})
-        attempts.append(base_payload)
-
-        for payload in attempts:
-            try:
-                resp = await hass.services.async_call(
-                    "music_assistant",
-                    "get_library",
-                    payload,
-                    blocking=True,
-                    return_response=True,
-                )
-                if isinstance(resp, dict):
-                    raw_items = resp.get("items")
-                    if raw_items is None and len(resp) == 1:
-                        first_val = next(iter(resp.values()))
-                        if isinstance(first_val, dict):
-                            raw_items = first_val.get("items")
-                    if isinstance(raw_items, list):
-                        return [_extract_item_dict(x) for x in raw_items]
-            except Exception as err:  # noqa: BLE001
-                _LOGGER.debug(
-                    "music_assistant.get_library(%s, order_by=%s) attempt failed: %s",
-                    media_type,
-                    payload.get("order_by"),
-                    err,
-                )
-
-    return []
+    """Call music_assistant.get_library and return its items ([] if Music Assistant isn't loaded or fails)."""
+    if not hass.services.has_service("music_assistant", "get_library"):
+        return []
+    payload: dict[str, Any] = {
+        "config_entry_id": config_entry_id,
+        "media_type": media_type,
+        "limit": limit,
+    }
+    if favorite is not None:
+        payload["favorite"] = favorite
+    if search:
+        payload["search"] = search
+    if order_by:
+        payload["order_by"] = order_by
+    try:
+        resp = await hass.services.async_call(
+            "music_assistant",
+            "get_library",
+            payload,
+            blocking=True,
+            return_response=True,
+        )
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.debug("music_assistant.get_library(%s, order_by=%s) failed: %s", media_type, order_by, err)
+        return []
+    raw_items = resp.get("items") if isinstance(resp, dict) else None
+    if not isinstance(raw_items, list):
+        return []
+    return [_extract_item_dict(x) for x in raw_items]
 
 
 def _format_local_speaker_name(hass: HomeAssistant, state_obj: State) -> str:

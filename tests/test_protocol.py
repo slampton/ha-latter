@@ -162,6 +162,113 @@ class TestProtocolV3Contract(unittest.TestCase):
         self.assertEqual(notif_vars.get("alert_id"), "int")
 
 
+class TestCalendarAgendaRecords(unittest.TestCase):
+    """calendar_agenda.summary: 0x1E-joined time|title|location|all_day records, sanitized and capped."""
+
+    def setUp(self) -> None:
+        from datetime import date, datetime
+
+        self.p = _PAYLOADS_MOD
+        self.today = date(2026, 11, 8)  # a Sunday
+        self.dt = datetime
+
+    def ev(self, y: int, m: int, d: int, hh: int = 0, mm: int = 0, **kw: Any) -> dict[str, Any]:
+        return {"start_dt": self.dt(y, m, d, hh, mm), "summary": "Event", "location": "", "all_day": False, **kw}
+
+    def test_spec_names_the_record_layout(self) -> None:
+        spec = json.loads(HA_PROTO_JSON.read_text(encoding="utf-8"))
+        self.assertEqual(spec["record_separator"], self.p.RECORD_SEP)
+        self.assertEqual(spec["separator"], self.p.FIELD_SEP)
+        summary = spec["domains"]["calendar_agenda"]["fields"][0]
+        self.assertEqual((summary["name"], summary["type"]), ("summary", "records"))
+        self.assertIn("time|title|location|all_day", summary["description"])
+
+    def test_time_labels(self) -> None:
+        label = self.p.calendar_time_label
+        t = self.today
+        self.assertEqual(label(self.dt(2026, 11, 8, 14, 30), t, False), "TODAY 14:30")
+        self.assertEqual(label(self.dt(2026, 11, 7, 23, 0), t, False), "TODAY 23:00")  # under way
+        self.assertEqual(label(self.dt(2026, 11, 9, 9, 0), t, False), "TOM 09:00")
+        self.assertEqual(label(self.dt(2026, 11, 13, 18, 0), t, False), "FRI 18:00")
+        self.assertEqual(label(self.dt(2026, 11, 20, 8, 5), t, False), "NOV 20 08:05")
+        self.assertEqual(label(self.dt(2026, 11, 8), t, True), "TODAY ALL DAY")
+        self.assertEqual(label(self.dt(2026, 11, 9), t, True), "TOM ALL DAY")
+        self.assertEqual(label(self.dt(2026, 11, 12), t, True), "THU ALL DAY")
+        self.assertEqual(label(self.dt(2026, 12, 1), t, True), "DEC 01")
+        for case in ("TODAY ALL DAY", "NOV 20 08:05", "WED 18:00"):
+            self.assertLessEqual(len(case), self.p.CALENDAR_TIME_MAX)
+
+    def test_encoding_layout_and_all_day(self) -> None:
+        events = [
+            self.ev(2026, 11, 8, 14, 30, summary="Dentist", location="12 Main St"),
+            self.ev(2026, 11, 9, all_day=True, summary="Trip"),
+        ]
+        records = self.p.calendar_agenda_records(events, self.today)
+        self.assertEqual(
+            list(records),
+            [("TODAY 14:30", "Dentist", "12 Main St", "0"), ("TOM ALL DAY", "Trip", "", "1")],
+        )
+        _rev, packed = DomainPayloadPacker(epoch=7).pack("calendar_agenda", records, 2, "TODAY 14:30: Dentist")
+        fields = packed.split("\x1f")
+        self.assertEqual(len(fields), 6)
+        self.assertEqual(fields[3], "TODAY 14:30|Dentist|12 Main St|0\x1eTOM ALL DAY|Trip||1")
+        self.assertEqual([r.split("|") for r in fields[3].split("\x1e")], [list(r) for r in records])
+        self.assertEqual(fields[4:], ["2", "TODAY 14:30: Dentist"])
+
+    def test_no_events_is_an_empty_field(self) -> None:
+        records = self.p.calendar_agenda_records([], self.today)
+        _rev, packed = DomainPayloadPacker(epoch=7).pack("calendar_agenda", records, 0, "")
+        self.assertEqual(packed.split("\x1f")[3:], ["", "0", ""])
+
+    def test_sanitizing_keeps_the_separators_out(self) -> None:
+        nasty = "A|B\x1fC\x1eD\x1dE\nF\r\tG\x00H\u2028I  \u00a0 J"
+        clean = self.p.sanitize_v3_subfield(nasty)
+        self.assertEqual(clean, "A/B C D E F G H I J")
+        records = self.p.calendar_agenda_records(
+            [self.ev(2026, 11, 8, 9, 0, summary=nasty, location=" Room | 2\n")], self.today
+        )
+        title, location = records[0][1], records[0][2]
+        for sub in records[0]:
+            self.assertFalse(any(ch in sub for ch in "|\x1f\x1e\x1d\n\r\t\x00"), repr(sub))
+        self.assertEqual(location, "Room / 2")
+        self.assertTrue(title.startswith("A/B C D"))
+        packed = DomainPayloadPacker(epoch=7).pack("calendar_agenda", records, 1, nasty)[1]
+        self.assertEqual(len(packed.split("\x1f")), 6)
+        self.assertEqual(packed.split("\x1f")[3].count("|"), 3)
+
+    def test_caps(self) -> None:
+        events = [
+            self.ev(2026, 11, 8, 8 + i, 0, summary="T" * 200, location="L" * 200) for i in range(9)
+        ]
+        records = self.p.calendar_agenda_records(events, self.today)
+        self.assertEqual(len(records), self.p.CALENDAR_MAX_RECORDS)
+        self.assertEqual(self.p.CALENDAR_MAX_RECORDS, 5)
+        for time_label, title, location, all_day in records:
+            self.assertLessEqual(len(time_label), self.p.CALENDAR_TIME_MAX)
+            self.assertEqual(len(title), self.p.CALENDAR_TITLE_MAX)
+            self.assertEqual(len(location), self.p.CALENDAR_LOCATION_MAX)
+            self.assertIn(all_day, ("0", "1"))
+        # Cutting never leaves trailing whitespace.
+        self.assertEqual(self.p.sanitize_v3_subfield("abc def", 4), "abc")
+
+    def test_rev_is_deterministic(self) -> None:
+        events = [self.ev(2026, 11, 8, 9, 0, summary="Standup"), self.ev(2026, 11, 10, 12, 0, summary="Lunch")]
+        a = DomainPayloadPacker(epoch=7)
+        b = DomainPayloadPacker(epoch=7)
+        r1 = a.pack("calendar_agenda", self.p.calendar_agenda_records(events, self.today), 2, "x")
+        r2 = a.pack("calendar_agenda", self.p.calendar_agenda_records(list(events), self.today), 2, "x")
+        r3 = b.pack("calendar_agenda", self.p.calendar_agenda_records(events, self.today), 2, "x")
+        self.assertEqual(r1, r2)
+        self.assertEqual(r1, r3)
+        r4 = a.pack("calendar_agenda", self.p.calendar_agenda_records(events[:1], self.today), 1, "x")
+        self.assertEqual(r4[0], r1[0] + 1)
+
+    def test_plain_lists_are_not_records(self) -> None:
+        # Only an explicit V3Records is encoded as records; a plain string keeps the old field sanitizing.
+        self.assertEqual(sanitize_v3_field("a\x1eb"), "a b")
+        self.assertEqual(sanitize_v3_field(self.p.V3Records([("a", "b"), ("c", "d")])), "a|b\x1ec|d")
+
+
 class _FollowHarness:
     """Drives the production `AreaFollowDwell` the way `LatterAreaFollowController` does.
 

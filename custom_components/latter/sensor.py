@@ -292,10 +292,10 @@ class LatterCalendarAgendaSensor(_BaseLatterSensor):
         super().__init__(coordinator, "calendar_agenda", "Calendar Agenda")
 
     @property
-    def native_value(self) -> str:
-        """Return semicolon-delimited upcoming agenda string (bounded <= 250 chars)."""
-        state, _ = self.coordinator.get_calendar_agenda_payload()
-        return state
+    def native_value(self) -> int:
+        """Return the number of upcoming agenda events."""
+        count, _ = self.coordinator.get_calendar_agenda_payload()
+        return count
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:

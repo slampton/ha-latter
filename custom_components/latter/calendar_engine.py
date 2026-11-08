@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import datetime, timedelta
 import logging
 from typing import Any
@@ -9,13 +10,11 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
+from .payloads import V3Records, calendar_agenda_records
+
 _LOGGER = logging.getLogger(__name__)
 
-DAY_ABBR: tuple[str, ...] = ("MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN")
-MONTH_ABBR: tuple[str, ...] = (
-    "", "JAN", "FEB", "MAR", "APR", "MAY", "JUN",
-    "JUL", "AUG", "SEP", "OCT", "NOV", "DEC",
-)
+MAX_AGENDA_EVENTS = 25
 
 
 def _discover_calendars(hass: HomeAssistant, configured: list[str]) -> list[str]:
@@ -31,32 +30,11 @@ def _discover_calendars(hass: HomeAssistant, configured: list[str]) -> list[str]
     ]
 
 
-def _format_event_time_label(start_dt: datetime, now_local: datetime, all_day: bool = False) -> str:
-    """Format a compact time prefix ('TODAY 14:30', 'TOM 09:00', 'FRI 18:00', 'NOV 08 14:30')."""
-    local_start = dt_util.as_local(start_dt)
-    days_ahead = (local_start.date() - now_local.date()).days
-    time_str = "ALL DAY" if all_day else local_start.strftime("%H:%M")
-
-    if days_ahead <= 0:
-        return f"TODAY {time_str}"
-    if days_ahead == 1:
-        return f"TOM {time_str}"
-    if days_ahead < 7:
-        day_name = DAY_ABBR[local_start.weekday()]
-        return f"{day_name} {time_str}"
-    month_name = MONTH_ABBR[local_start.month]
-    if all_day:
-        return f"{month_name} {local_start.day:02d}"
-    return f"{month_name} {local_start.day:02d} {time_str}"
-
-
 def _parse_event_dict(
     ev: dict[str, Any], cal_id: str, now_local: datetime
 ) -> dict[str, Any] | None:
-    """Parse a raw calendar event dictionary into a normalized structure."""
-    summary = str(ev.get("summary") or ev.get("message") or "Event").strip()
-    start_raw = ev.get("start") or ev.get("start_time")
-    end_raw = ev.get("end") or ev.get("end_time")
+    """Parse one event from calendar.get_events into a normalized structure."""
+    start_raw = ev.get("start")
     if not start_raw:
         return None
 
@@ -75,11 +53,11 @@ def _parse_event_dict(
         return None
 
     return {
-        "summary": summary,
+        "summary": str(ev.get("summary") or "Event").strip(),
         "start_dt": dt_util.as_local(parsed_start),
         "start_raw": str(start_raw),
-        "end_raw": str(end_raw or ""),
-        "location": str(ev.get("location") or ""),
+        "end_raw": str(ev.get("end") or ""),
+        "location": str(ev.get("location") or "").strip(),
         "calendar_id": cal_id,
         "all_day": is_all_day,
     }
@@ -89,13 +67,16 @@ async def async_fetch_calendar_agenda(
     hass: HomeAssistant,
     calendar_entities: list[str],
     days: int = 30,
-    max_events: int = 25,
-    map_url_builder: Any = None,
-) -> tuple[str, list[dict[str, Any]]]:
-    """Fetch upcoming events across calendars and return (semicolon_string, slot_items)."""
+    max_events: int = MAX_AGENDA_EVENTS,
+    map_url_builder: Callable[[str], str] | None = None,
+) -> tuple[V3Records, list[dict[str, Any]]]:
+    """Fetch upcoming events across calendars with calendar.get_events.
+
+    Returns (summary records for the calendar_agenda payload, browse slot items for up to `max_events`).
+    """
     targets = _discover_calendars(hass, calendar_entities)
     if not targets:
-        return "NONE", []
+        return V3Records(), []
 
     now_utc = dt_util.utcnow()
     now_local = dt_util.now()
@@ -103,42 +84,32 @@ async def async_fetch_calendar_agenda(
     end_utc = now_utc + timedelta(days=lookahead_days)
 
     raw_events: list[dict[str, Any]] = []
-    if hass.services.has_service("calendar", "get_events"):
-        for cal_id in targets:
-            try:
-                resp = await hass.services.async_call(
-                    "calendar",
-                    "get_events",
-                    {
-                        "entity_id": cal_id,
-                        "start_date_time": now_utc.isoformat(),
-                        "end_date_time": end_utc.isoformat(),
-                    },
-                    blocking=True,
-                    return_response=True,
-                )
-                if isinstance(resp, dict):
-                    cal_data = resp.get(cal_id) or next(iter(resp.values()), {})
-                    events_list = (
-                        cal_data.get("events", []) if isinstance(cal_data, dict) else []
-                    )
-                    for ev in events_list:
-                        if isinstance(ev, dict):
-                            parsed = _parse_event_dict(ev, cal_id, now_local)
-                            if parsed is not None:
-                                raw_events.append(parsed)
-            except Exception as err:  # noqa: BLE001
-                _LOGGER.debug("calendar.get_events failed for %s: %s", cal_id, err)
-
-    # Fallback: also inspect state attributes of each calendar entity in case get_events is unsupported
     for cal_id in targets:
-        st = hass.states.get(cal_id)
-        if st and st.attributes.get("message") and st.attributes.get("start_time"):
-            parsed = _parse_event_dict(dict(st.attributes), cal_id, now_local)
-            if parsed is not None and parsed["start_dt"] >= (now_local - timedelta(hours=12)):
-                raw_events.append(parsed)
+        try:
+            resp = await hass.services.async_call(
+                "calendar",
+                "get_events",
+                {
+                    "entity_id": cal_id,
+                    "start_date_time": now_utc.isoformat(),
+                    "end_date_time": end_utc.isoformat(),
+                },
+                blocking=True,
+                return_response=True,
+            )
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("calendar.get_events failed for %s: %s", cal_id, err)
+            continue
+        cal_data = resp.get(cal_id) if isinstance(resp, dict) else None
+        events_list = cal_data.get("events", []) if isinstance(cal_data, dict) else []
+        for ev in events_list:
+            if isinstance(ev, dict):
+                parsed = _parse_event_dict(ev, cal_id, now_local)
+                if parsed is not None:
+                    raw_events.append(parsed)
 
-    raw_events.sort(key=lambda x: x["start_dt"])
+    # Deterministic order (the payload rev is a content hash): start, then title, then calendar.
+    raw_events.sort(key=lambda x: (x["start_dt"], x["summary"].lower(), x["calendar_id"]))
 
     # Deduplicate identical summary + start time across shared family calendars
     seen: set[tuple[str, str]] = set()
@@ -152,35 +123,27 @@ async def async_fetch_calendar_agenda(
         if len(unique_events) >= max_events:
             break
 
-    if not unique_events:
-        return "NONE", []
-
-    segments: list[str] = []
+    records = calendar_agenda_records(unique_events, now_local.date())
     slot_items: list[dict[str, Any]] = []
-
     for idx, ev in enumerate(unique_events):
-        time_label = _format_event_time_label(ev["start_dt"], now_local, ev["all_day"])
-        clean_summary = ev["summary"].replace(";", ",").replace("|", "-")
-        clean_loc = str(ev.get("location") or "").replace("|", "-").strip()
+        time_label, title, location, _all_day = calendar_agenda_records([ev], now_local.date())[0]
         map_url = (
-            map_url_builder(clean_loc)
-            if (clean_loc and callable(map_url_builder))
+            map_url_builder(location)
+            if (location and callable(map_url_builder))
             else "none"
         )
-        segments.append(f"{time_label}|{clean_summary}")
-
         slot_items.append(
             {
-                "name": f"{time_label}: {clean_summary}",
-                "id": f"{time_label}|{clean_summary}|{clean_loc}|{map_url}",
+                "name": f"{time_label}: {title}",
+                "id": f"{time_label}|{title}|{location}|{map_url}",
                 "type": "calendar_event",
                 "active": idx == 0,
-                "summary": clean_summary,
+                "summary": title,
                 "start": ev["start_raw"],
                 "end": ev["end_raw"],
-                "location": clean_loc,
+                "location": location,
                 "map_url": map_url,
             }
         )
 
-    return ";".join(segments[:5]), slot_items
+    return records, slot_items

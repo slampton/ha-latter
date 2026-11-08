@@ -10,6 +10,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
 from .calendar_engine import async_fetch_calendar_agenda
+from .payloads import V3Records
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -110,8 +111,8 @@ async def async_fetch_calendar_snapshot(
     calendar_entities: list[str],
     days: int = 30,
     map_url_builder: Callable[[str], str] | None = None,
-) -> tuple[str, list[dict[str, Any]]]:
-    """Fetch upcoming calendar agenda string and structured event list."""
+) -> tuple[V3Records, list[dict[str, Any]]]:
+    """Fetch the calendar agenda records (Protocol v3) and the structured event list."""
     return await async_fetch_calendar_agenda(
         hass,
         calendar_entities,
