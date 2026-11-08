@@ -59,9 +59,9 @@
         {"index": 25, "name": "vacuum_entity", "cpp_enum": "VACUUM_ENTITY", "type": "entity_id", "description": "Primary vacuum entity ID"},
         {"index": 26, "name": "vacuum_state", "cpp_enum": "VACUUM_STATE", "type": "string", "description": "Primary vacuum state"},
         {"index": 27, "name": "camera_snapshot_url", "cpp_enum": "CAMERA_SNAPSHOT_URL", "type": "url", "description": "Signed HTTP URL for primary camera snapshot"},
-        {"index": 28, "name": "cameras_summary", "cpp_enum": "CAMERAS_SUMMARY", "type": "records", "description": "0x1E-joined entity_id|name|area_id|snapshot_url camera records"},
+        {"index": 28, "name": "cameras_summary", "cpp_enum": "CAMERAS_SUMMARY", "type": "records", "description": "0x1E-joined entity_id|name|area_id|snapshot_url camera records (up to 10, in configured order; area_id empty when the camera has no Area)"},
         {"index": 29, "name": "doorbell_talk_state", "cpp_enum": "DOORBELL_TALK_STATE", "type": "string", "description": "Doorbell talkback state"},
-        {"index": 30, "name": "intercom_targets_summary", "cpp_enum": "INTERCOM_TARGETS_SUMMARY", "type": "records", "description": "0x1E-joined target_id|label|kind intercom target records"},
+        {"index": 30, "name": "intercom_targets_summary", "cpp_enum": "INTERCOM_TARGETS_SUMMARY", "type": "records", "description": "0x1E-joined target_id|label|kind call_target records (up to 10; kind all = every other Latter Device, listed first; kind device = one Latter Device, labelled by its title); empty when there is no other Device"},
         {"index": 31, "name": "alert_id", "cpp_enum": "ALERT_ID", "type": "u32", "description": "Monotonic alert/notification identifier"},
         {"index": 32, "name": "alert_title", "cpp_enum": "ALERT_TITLE", "type": "string", "description": "Alert banner title"},
         {"index": 33, "name": "alert_message", "cpp_enum": "ALERT_MESSAGE", "type": "string", "description": "Alert banner message body"},
@@ -102,7 +102,7 @@
       "fields": [
         {"index": 3, "name": "active_slot", "cpp_enum": "ACTIVE_SLOT", "type": "u16", "description": "Currently selected 1-based remote slot index"},
         {"index": 4, "name": "configured_count", "cpp_enum": "CONFIGURED_COUNT", "type": "u16", "description": "Number of configured remotes in active group"},
-        {"index": 5, "name": "slots_summary", "cpp_enum": "SLOTS_SUMMARY", "type": "records", "description": "0x1E-joined index|label|entity_id|kind|area_id|mac|state remote records"}
+        {"index": 5, "name": "slots_summary", "cpp_enum": "SLOTS_SUMMARY", "type": "records", "description": "0x1E-joined index|label|entity_id|kind|area_id|state remote records (configured slots only, up to 10; index is the 1-based slot; kind is remote or media_player, the domain of entity_id)"}
       ]
     },
     "weather_forecast": {
@@ -117,7 +117,7 @@
         {"index": 7, "name": "wind_bearing", "cpp_enum": "WIND_BEARING", "type": "string", "description": "Wind cardinal direction or bearing"},
         {"index": 8, "name": "high", "cpp_enum": "HIGH", "type": "f32", "description": "Today's forecast high temperature"},
         {"index": 9, "name": "low", "cpp_enum": "LOW", "type": "f32", "description": "Today's forecast low temperature"},
-        {"index": 10, "name": "forecast_5d", "cpp_enum": "FORECAST_5D", "type": "records", "description": "0x1E-joined day|cond|high|low 5-day forecast records"}
+        {"index": 10, "name": "forecast_5d", "cpp_enum": "FORECAST_5D", "type": "records", "description": "0x1E-joined day|cond|high|low daily forecast records (up to 5; day MON..SUN in local time; cond is the Home Assistant condition; high and low are whole degrees in the weather entity's unit, empty when unknown)"}
       ]
     },
     "calendar_agenda": {
@@ -125,7 +125,7 @@
       "cpp_enum_name": "CalendarField",
       "description": "Upcoming calendar agenda events and next-event headline",
       "fields": [
-        {"index": 3, "name": "summary", "cpp_enum": "SUMMARY", "type": "records", "description": "0x1E-joined time|title|location|all_day agenda records"},
+        {"index": 3, "name": "summary", "cpp_enum": "SUMMARY", "type": "records", "description": "0x1E-joined time|title|location|all_day agenda records (up to 5; time is a local label such as TODAY 14:30, TOM ALL DAY or NOV 20 08:05; all_day 1 or 0)"},
         {"index": 4, "name": "count", "cpp_enum": "EVENT_COUNT", "type": "u16", "description": "Number of upcoming agenda events"},
         {"index": 5, "name": "next_event", "cpp_enum": "NEXT_EVENT", "type": "string", "description": "Headline summary of the next upcoming event"}
       ]

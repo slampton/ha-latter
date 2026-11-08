@@ -10,7 +10,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
 from .calendar_engine import async_fetch_calendar_agenda
-from .payloads import V3Records
+from .payloads import V3Records, forecast_records
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -30,8 +30,11 @@ def _opt_float(val: Any) -> float | None:
 async def async_fetch_weather_snapshot(
     hass: HomeAssistant,
     weather_entity: str | None,
-) -> tuple[str, dict[str, Any]] | None:
-    """Fetch 5-day daily forecast via weather.get_forecasts and return (forecast_string, weather_fields)."""
+) -> tuple[V3Records, dict[str, Any]] | None:
+    """Fetch the daily forecast with weather.get_forecasts; return (forecast_5d records, weather fields).
+
+    Values the weather entity doesn't report stay None (sent empty, shown as unknown on the device).
+    """
     if not weather_entity:
         return None
 
@@ -40,69 +43,44 @@ async def async_fetch_weather_snapshot(
         return None
 
     attrs = state_obj.attributes
-    temp_r = _opt_float(attrs.get("temperature"))
-    hum_r = _opt_float(attrs.get("humidity"))
-    ws_r = _opt_float(attrs.get("wind_speed"))
-    wb_r = _opt_float(attrs.get("wind_bearing"))
-
     forecasts: list[dict[str, Any]] = []
-    if hass.services.has_service("weather", "get_forecasts"):
-        try:
-            resp = await hass.services.async_call(
-                "weather",
-                "get_forecasts",
-                {"entity_id": weather_entity, "type": "daily"},
-                blocking=True,
-                return_response=True,
-            )
-            if isinstance(resp, dict) and weather_entity in resp:
-                forecasts = resp[weather_entity].get("forecast") or []
-        except Exception as err:  # noqa: BLE001
-            _LOGGER.debug("weather.get_forecasts failed for %s: %s", weather_entity, err)
+    try:
+        resp = await hass.services.async_call(
+            "weather",
+            "get_forecasts",
+            {"entity_id": weather_entity, "type": "daily"},
+            blocking=True,
+            return_response=True,
+        )
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.debug("weather.get_forecasts failed for %s: %s", weather_entity, err)
+    else:
+        if isinstance(resp, dict) and isinstance(resp.get(weather_entity), dict):
+            forecasts = [f for f in resp[weather_entity].get("forecast") or [] if isinstance(f, dict)]
 
-    if not forecasts and isinstance(attrs.get("forecast"), list):
-        forecasts = attrs.get("forecast")
+    days: list[dict[str, Any]] = []
+    for item in forecasts:
+        parsed = dt_util.parse_datetime(str(item.get("datetime") or ""))
+        if parsed is None:
+            continue
+        days.append(
+            {
+                "day": DAY_ABBR[dt_util.as_local(parsed).weekday()],
+                "condition": str(item.get("condition") or ""),
+                "high": _opt_float(item.get("temperature")),
+                "low": _opt_float(item.get("templow")),
+            }
+        )
 
-    hi_r = temp_r
-    lo_r = temp_r
-    segments: list[str] = []
-
-    for idx, item in enumerate(forecasts[:5]):
-        f_high = _opt_float(item.get("temperature"))
-        if f_high is None:
-            f_high = temp_r
-        f_low = _opt_float(item.get("templow"))
-        if f_low is None:
-            f_low = f_high
-        f_cond = str(item.get("condition") or state_obj.state or "sunny")
-
-        if idx == 0:
-            if f_high is not None:
-                hi_r = f_high
-            if f_low is not None:
-                lo_r = f_low
-
-        dt_raw = item.get("datetime")
-        day_label = "DAY"
-        if dt_raw:
-            parsed = dt_util.parse_datetime(str(dt_raw))
-            if parsed is not None:
-                local_dt = dt_util.as_local(parsed)
-                day_label = DAY_ABBR[local_dt.weekday()]
-
-        h_int = int(round(f_high)) if f_high is not None else 0
-        l_int = int(round(f_low)) if f_low is not None else h_int
-        segments.append(f"{day_label}:{h_int}:{l_int}:{f_cond}")
-
-    forecast_str = ";".join(segments) if segments else "NONE"
-    return forecast_str, {
+    today = days[0] if days else {}
+    return forecast_records(days), {
         "condition": str(state_obj.state),
-        "temperature": temp_r,
-        "humidity": hum_r,
-        "wind_speed": ws_r,
-        "wind_bearing": wb_r,
-        "high": hi_r,
-        "low": lo_r,
+        "temperature": _opt_float(attrs.get("temperature")),
+        "humidity": _opt_float(attrs.get("humidity")),
+        "wind_speed": _opt_float(attrs.get("wind_speed")),
+        "wind_bearing": _opt_float(attrs.get("wind_bearing")),
+        "high": today.get("high"),
+        "low": today.get("low"),
     }
 
 

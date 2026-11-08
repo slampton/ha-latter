@@ -57,6 +57,7 @@ from .area_engine import (
     get_home_alarm_summary,
     get_whole_home_summary,
     match_area_by_name_or_id,
+    resolve_entity_area_id,
     resolve_remote_slot_pair,
 )
 from .ble_engine import (
@@ -154,7 +155,14 @@ from .media_engine import (
     resolve_esphome_local_speaker as _resolve_esphome_local_speaker,
     resolve_ma_counterpart_entity as _resolve_ma_counterpart_entity,
 )
-from .payloads import DomainPayloadPacker, V3Records
+from .payloads import (
+    CAMERAS_MAX_RECORDS,
+    DomainPayloadPacker,
+    V3Records,
+    camera_records,
+    intercom_target_records,
+    remote_slot_records,
+)
 from .presence_beacon import Trigger, decide_beacon_action
 from .site_feeds import async_fetch_calendar_snapshot, async_fetch_weather_snapshot
 from .traits import manifest_has_display, manifest_is_roaming, manifest_is_wearable
@@ -321,9 +329,9 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             None,
             None,
             None,
-            "NONE",
+            V3Records(),
         )
-        self.forecast_string: str = "NONE"
+        self.forecast_records: V3Records = V3Records()
         self.weather_attributes: dict[str, Any] = {
             "condition": "unknown",
             "temperature": None,
@@ -785,16 +793,23 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 cleaned = [single]
         return cleaned[:10]
 
-    def _build_intercom_targets_summary(self) -> str:
-        """Build semicolon-delimited 'target_id|Friendly Label;...' of displays the device can ring with call_target."""
-        rows: list[str] = ["all|Call All Areas"]
-        domain_data = self.hass.data.get(DOMAIN, {})
-        for val in domain_data.values():
-            if hasattr(val, "device_slug") and not getattr(val, "is_ble_tag", False):
-                if val.device_slug != self.device_slug:
-                    title = val.device_slug.replace("_", " ").title()[:24]
-                    rows.append(f"{val.device_slug}|Call: {title}")
-        return ";".join(rows[:10])
+    def _build_intercom_targets_summary(self) -> V3Records:
+        """Records of what this Device can ring with call_target: all other Latter Devices, then each by title."""
+        others = [
+            val
+            for val in self.hass.data.get(DOMAIN, {}).values()
+            if hasattr(val, "device_slug")
+            and not getattr(val, "is_ble_tag", False)
+            and val.device_slug != self.device_slug
+        ]
+        others.sort(key=lambda c: (c.device_title.lower(), c.device_slug))
+        targets: list[dict[str, str]] = (
+            [{"target_id": "all", "label": "All Devices", "kind": "all"}] if others else []
+        )
+        targets += [
+            {"target_id": c.device_slug, "label": c.device_title, "kind": "device"} for c in others
+        ]
+        return intercom_target_records(targets)
 
     @property
     def camera_entity(self) -> str | None:
@@ -805,19 +820,21 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         val = self.get_opt(CONF_CAMERA_ENTITY)
         return str(val).strip() if val else None
 
-    def _build_cameras_summary(self) -> str:
-        """Build semicolon-delimited 'entity_id|Friendly Name|signed_url;...' summary for up to 10 cameras."""
-        rows: list[str] = []
-        for ent_id in self.camera_entities[:10]:
+    def _build_cameras_summary(self) -> V3Records:
+        """Records (entity_id, name, area_id, signed snapshot URL) for up to 10 configured cameras, in order."""
+        rows: list[dict[str, str]] = []
+        for ent_id in self.camera_entities[:CAMERAS_MAX_RECORDS]:
             st = self.hass.states.get(ent_id)
-            friendly = (
-                str(st.attributes.get("friendly_name") if st else "")
-                or ent_id.split(".", 1)[-1].replace("_", " ").title()
+            friendly = str(st.attributes.get("friendly_name") or "") if st else ""
+            rows.append(
+                {
+                    "entity_id": ent_id,
+                    "name": friendly or ent_id.split(".", 1)[-1].replace("_", " ").title(),
+                    "area_id": resolve_entity_area_id(self.hass, ent_id) or "",
+                    "snapshot_url": self.build_camera_snapshot_url(ent_id),
+                }
             )
-            friendly = friendly.replace(";", "").replace("|", "")[:32]
-            signed_url = self.build_camera_snapshot_url(ent_id)
-            rows.append(f"{ent_id}|{friendly}|{signed_url}")
-        return ";".join(rows) if rows else "NONE"
+        return camera_records(rows)
 
     @property
     def thermostat_entity(self) -> str | None:
@@ -1795,14 +1812,14 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if self.weather_attributes and "condition" in self.weather_attributes:
             w_rev, w_payload = self._pack_domain_payload(
                 "weather_forecast",
-                self.weather_attributes.get("condition", "unknown"),
-                self.weather_attributes.get("temperature", 0.0),
-                self.weather_attributes.get("humidity", 0.0),
-                self.weather_attributes.get("wind_speed", 0.0),
-                self.weather_attributes.get("wind_bearing", 0.0),
-                self.weather_attributes.get("high", 0.0),
-                self.weather_attributes.get("low", 0.0),
-                self.forecast_string,
+                self.weather_attributes.get("condition"),
+                self.weather_attributes.get("temperature"),
+                self.weather_attributes.get("humidity"),
+                self.weather_attributes.get("wind_speed"),
+                self.weather_attributes.get("wind_bearing"),
+                self.weather_attributes.get("high"),
+                self.weather_attributes.get("low"),
+                self.forecast_records,
             )
             self.weather_attributes["rev"] = w_rev
             self.weather_attributes["payload"] = w_payload
@@ -2058,9 +2075,15 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if self._cached_remote_payload is not None and (now_m - self._cached_remote_payload[0]) < 0.05:
             return self._cached_remote_payload[1]
         slots = self.get_remote_slots()
-        populated_count = sum(
-            1 for s in slots if s["remote_entity"] or s["media_player_entity"]
-        )
+        slot_rows: list[dict[str, Any]] = []
+        for idx, slot in enumerate(slots, start=1):
+            # The remote entity when the slot has one, else its media player (what the device controls).
+            ent = slot["remote_entity"] if slot["remote_entity"].startswith("remote.") else slot["media_player_entity"]
+            if ent.startswith(("remote.", "media_player.")):
+                slot_rows.append(
+                    {"index": idx, "label": slot["name"], "entity_id": ent, "area_id": slot["area_id"], "state": slot["state"]}
+                )
+        populated_count = len(slot_rows)
         clamped_active = max(1, min(max(1, len(slots)), self.active_remote_slot))
         attrs: dict[str, Any] = {
             "active_slot": clamped_active,
@@ -2068,10 +2091,10 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "device_remote_group": self.device_remote_group,
             "active_area_id": self.active_area_id or "",
         }
-        if populated_count == 0 or not slots:
-            attrs["slots_summary"] = "NONE"
+        if populated_count == 0:
+            attrs["slots_summary"] = V3Records()
             rem_rev, rem_payload = self._pack_domain_payload(
-                "remote_config", clamped_active, 0, "NONE"
+                "remote_config", clamped_active, 0, attrs["slots_summary"]
             )
             attrs["rev"] = rem_rev
             attrs["payload"] = rem_payload
@@ -2079,20 +2102,16 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._cached_remote_payload = (now_m, res)
             return res
 
-        summary_parts: list[str] = []
         for idx, slot in enumerate(slots, start=1):
             attrs[f"slot_{idx}_name"] = slot["name"]
             attrs[f"slot_{idx}_remote"] = slot["remote_entity"]
             attrs[f"slot_{idx}_media_player"] = slot["media_player_entity"]
             attrs[f"slot_{idx}_area_id"] = slot["area_id"]
             attrs[f"slot_{idx}_state"] = slot["state"]
-            summary_parts.append(
-                f"{idx}:{slot['name']}:{slot['remote_entity']}:{slot['media_player_entity']}:{slot['state']}"
-            )
 
         active_slot_data = slots[clamped_active - 1]
         state_str = active_slot_data["name"] if populated_count > 0 else "None"
-        attrs["slots_summary"] = ";".join(summary_parts)
+        attrs["slots_summary"] = remote_slot_records(slot_rows)
         rem_rev, rem_payload = self._pack_domain_payload(
             "remote_config",
             clamped_active,
@@ -2867,29 +2886,22 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         }
 
     async def async_refresh_weather_forecast(self) -> None:
-        """Fetch daily weather forecast via weather.get_forecasts and format semicolon string."""
+        """Fetch the daily forecast via weather.get_forecasts and pack the weather_forecast payload."""
         weather_ent = self.weather_entity
         if not weather_ent:
-            self.forecast_string = "NONE"
+            # No weather entity: everything is unknown (empty fields; the device shows "—").
+            self.forecast_records = V3Records()
             w_rev, w_payload = self._pack_domain_payload(
-                "weather_forecast",
-                "unknown",
-                "0.0",
-                "0",
-                "0.0",
-                "0",
-                "0.0",
-                "0.0",
-                "NONE",
+                "weather_forecast", "unknown", None, None, None, None, None, None, self.forecast_records
             )
             self.weather_attributes = {
                 "condition": "unknown",
-                "temperature": 0.0,
-                "humidity": 0,
-                "wind_speed": 0.0,
-                "wind_bearing": 0,
-                "high": 0.0,
-                "low": 0.0,
+                "temperature": None,
+                "humidity": None,
+                "wind_speed": None,
+                "wind_bearing": None,
+                "high": None,
+                "low": None,
                 "weather_entity": "",
                 "rev": w_rev,
                 "payload": w_payload,
@@ -2899,8 +2911,8 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         snap = await async_fetch_weather_snapshot(self.hass, weather_ent)
         if snap is None:
             return
-        forecast_str, w_fields = snap
-        self.forecast_string = forecast_str
+        records, w_fields = snap
+        self.forecast_records = records
         w_rev, w_payload = self._pack_domain_payload(
             "weather_forecast",
             w_fields["condition"],
@@ -2910,7 +2922,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             w_fields["wind_bearing"],
             w_fields["high"],
             w_fields["low"],
-            self.forecast_string,
+            self.forecast_records,
         )
         self.weather_attributes = {
             **w_fields,

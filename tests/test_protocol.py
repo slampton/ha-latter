@@ -269,6 +269,120 @@ class TestCalendarAgendaRecords(unittest.TestCase):
         self.assertEqual(sanitize_v3_field(self.p.V3Records([("a", "b"), ("c", "d")])), "a|b\x1ec|d")
 
 
+class TestRecordsFields(unittest.TestCase):
+    """Every "records" field: 0x1E between records, '|' between subfields, the spec's subfield order."""
+
+    def setUp(self) -> None:
+        self.p = _PAYLOADS_MOD
+        self.spec = json.loads(HA_PROTO_JSON.read_text(encoding="utf-8"))
+
+    def layout(self, domain: str, field: str) -> list[str]:
+        """The subfield names a records field's spec description lists (the a|b|c token)."""
+        desc = next(f for f in self.spec["domains"][domain]["fields"] if f["name"] == field)["description"]
+        return next(tok for tok in desc.split() if "|" in tok).split("|")
+
+    def test_every_records_field_is_built_with_v3_records(self) -> None:
+        records_fields = {
+            (dom, f["name"])
+            for dom, spec in self.spec["domains"].items()
+            for f in spec["fields"]
+            if f["type"] == "records"
+        }
+        self.assertEqual(
+            records_fields,
+            {
+                ("area_context", "cameras_summary"),
+                ("area_context", "intercom_targets_summary"),
+                ("remote_config", "slots_summary"),
+                ("weather_forecast", "forecast_5d"),
+                ("calendar_agenda", "summary"),
+            },
+        )
+        coord = (LATTER_DIR / "coordinator.py").read_text(encoding="utf-8")
+        feeds = (LATTER_DIR / "site_feeds.py").read_text(encoding="utf-8")
+        for builder in ("camera_records(", "intercom_target_records(", "remote_slot_records("):
+            self.assertIn(builder, coord)
+        self.assertIn("forecast_records(", feeds)
+        self.assertIn("calendar_agenda_records(", (LATTER_DIR / "calendar_engine.py").read_text(encoding="utf-8"))
+
+    def test_cameras(self) -> None:
+        self.assertEqual(self.layout("area_context", "cameras_summary"), ["entity_id", "name", "area_id", "snapshot_url"])
+        recs = self.p.camera_records(
+            [
+                {"entity_id": "camera.front", "name": "Front | Door\n", "area_id": "porch", "snapshot_url": "http://h/x?sig=1"},
+                {"entity_id": "camera.yard", "name": "Y" * 80, "area_id": "", "snapshot_url": "http://h/y"},
+            ]
+        )
+        self.assertEqual(recs[0], ("camera.front", "Front / Door", "porch", "http://h/x?sig=1"))
+        self.assertEqual(recs[1][1], "Y" * self.p.CAMERA_NAME_MAX)
+        self.assertEqual(recs[1][2], "")
+        self.assertEqual(self.p.encode_v3_records(recs).count("\x1e"), 1)
+        many = [{"entity_id": f"camera.c{i}", "name": "c", "area_id": "", "snapshot_url": ""} for i in range(15)]
+        self.assertEqual(len(self.p.camera_records(many)), self.p.CAMERAS_MAX_RECORDS)
+        self.assertEqual(self.p.encode_v3_records(self.p.camera_records([])), "")
+
+    def test_intercom_targets(self) -> None:
+        self.assertEqual(self.layout("area_context", "intercom_targets_summary"), ["target_id", "label", "kind"])
+        recs = self.p.intercom_target_records(
+            [
+                {"target_id": "all", "label": "All Devices", "kind": "all"},
+                {"target_id": "kitchen", "label": "Kitchen|Display", "kind": "device"},
+            ]
+        )
+        self.assertEqual(list(recs), [("all", "All Devices", "all"), ("kitchen", "Kitchen/Display", "device")])
+        with self.assertRaises(ValueError):
+            self.p.intercom_target_records([{"target_id": "x", "label": "x", "kind": "speaker"}])
+        for kind in self.p.INTERCOM_KINDS:
+            self.assertIn(kind, next(f for f in self.spec["domains"]["area_context"]["fields"] if f["name"] == "intercom_targets_summary")["description"])
+
+    def test_remote_slots(self) -> None:
+        self.assertEqual(
+            self.layout("remote_config", "slots_summary"),
+            ["index", "label", "entity_id", "kind", "area_id", "state"],
+        )
+        recs = self.p.remote_slot_records(
+            [
+                {"index": 1, "label": "Living TV", "entity_id": "remote.living_tv", "area_id": "living", "state": "on"},
+                {"index": 3, "label": "Bedroom\tSpeaker", "entity_id": "media_player.bed", "area_id": "", "state": "idle"},
+            ]
+        )
+        self.assertEqual(
+            list(recs),
+            [
+                ("1", "Living TV", "remote.living_tv", "remote", "living", "on"),
+                ("3", "Bedroom Speaker", "media_player.bed", "media_player", "", "idle"),
+            ],
+        )
+        with self.assertRaises(ValueError):
+            self.p.remote_slot_records([{"index": 1, "label": "x", "entity_id": "switch.tv", "area_id": "", "state": "on"}])
+
+    def test_forecast(self) -> None:
+        self.assertEqual(self.layout("weather_forecast", "forecast_5d"), ["day", "cond", "high", "low"])
+        days = [
+            {"day": "SUN", "condition": "partlycloudy", "high": 71.6, "low": 55.4},
+            {"day": "MON", "condition": "rainy", "high": None, "low": 50},
+        ] + [{"day": "TUE", "condition": "sunny", "high": 70, "low": 60}] * 6
+        recs = self.p.forecast_records(days)
+        self.assertEqual(recs[0], ("SUN", "partlycloudy", "72", "55"))
+        self.assertEqual(recs[1], ("MON", "rainy", "", "50"))
+        self.assertEqual(len(recs), self.p.FORECAST_MAX_RECORDS)
+        packed = DomainPayloadPacker(epoch=9).pack("weather_forecast", "sunny", 70, None, None, None, 72, 55, recs)[1]
+        fields = packed.split("\x1f")
+        self.assertEqual(len(fields), 11)
+        self.assertEqual(fields[10].split("\x1e")[0], "SUN|partlycloudy|72|55")
+        self.assertEqual(fields[4:6], ["70", ""])
+
+    def test_records_revs_are_content_hashed(self) -> None:
+        packer = DomainPayloadPacker(epoch=9)
+        slots = [{"index": 1, "label": "TV", "entity_id": "remote.tv", "area_id": "", "state": "on"}]
+        r1 = packer.pack("remote_config", 1, 1, self.p.remote_slot_records(slots))
+        r2 = packer.pack("remote_config", 1, 1, self.p.remote_slot_records(list(slots)))
+        self.assertEqual(r1, r2)
+        slots[0]["state"] = "off"
+        r3 = packer.pack("remote_config", 1, 1, self.p.remote_slot_records(slots))
+        self.assertEqual(r3[0], r1[0] + 1)
+
+
 class _FollowHarness:
     """Drives the production `AreaFollowDwell` the way `LatterAreaFollowController` does.
 

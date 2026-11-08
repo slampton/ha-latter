@@ -18,9 +18,9 @@ Latter creates **sensor** and **binary_sensor** entities only. There are no `dev
 | ★ `sensor.<slug>_ble_distance` | Feet (device class `distance`) | — | A BLE reading arrives |
 | `sensor.<slug>_active_media` | `off`, `idle`, `playing`, `paused`, `buffering` | `title`, `artist`, `album`, `duration`, `position`, `volume`, `media_type`, `art_url`, `active_speaker`, `local_speaker`, `volume_entity` | The speaker's state changes. While playing, there is also a position update every 15 s; the device interpolates between updates. |
 | ★ `sensor.<slug>_area_context` | Current area name | See [below](#area_context-attributes) | Any mapped entity changes. Area entity changes are debounced to 250 ms. |
-| `sensor.<slug>_weather_forecast` | `DAY:HIGH:LOW:COND;…` for 5 days | `condition`, `temperature`, `humidity`, `wind_speed`, `wind_bearing`, `high`, `low` | The weather entity changes, and every 30 min |
+| `sensor.<slug>_weather_forecast` | The weather entity's current condition | `payload` (Protocol v3: current weather and up to 5 `day\|cond\|high\|low` daily records joined with 0x1E), `rev` | The weather entity changes, and every 30 min |
 | `sensor.<slug>_calendar_agenda` | Number of upcoming events (up to 25) | `payload` (Protocol v3: up to 5 `time\|title\|location\|all_day` records joined with 0x1E, the event count, and the next event), `rev` | Every 15 min |
-| `sensor.<slug>_remote_config` | Active remote slot name | `active_slot`, `slot_N_name` / `_remote` / `_media_player` / `_area_id` / `_state` for N = 1–10, and `slots_summary` | Remote entities change |
+| `sensor.<slug>_remote_config` | Active remote slot name | `payload` (Protocol v3: active slot, configured count, and up to 10 `index\|label\|entity_id\|kind\|area_id\|state` slot records joined with 0x1E), `rev` | Remote entities change |
 
 ### `area_context` attributes
 

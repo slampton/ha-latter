@@ -231,7 +231,7 @@ class LatterActiveMediaSensor(_BaseLatterSensor):
 
 
 class LatterWeatherForecastSensor(_BaseLatterSensor):
-    """Exposes sensor.<device_slug>_weather_forecast with 5-day semicolon string."""
+    """Exposes sensor.<device_slug>_weather_forecast: the current condition, and the Protocol v3 weather payload."""
 
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_entity_registry_visible_default = False
@@ -241,9 +241,10 @@ class LatterWeatherForecastSensor(_BaseLatterSensor):
         super().__init__(coordinator, "weather_forecast", "Weather Forecast")
 
     @property
-    def native_value(self) -> str:
-        """Return semicolon-delimited 5-day forecast (DAY:HIGH:LOW:COND;...)."""
-        return self.coordinator.forecast_string
+    def native_value(self) -> str | None:
+        """Return the weather entity's current condition (None until it's known)."""
+        cond = self.coordinator.weather_attributes.get("condition")
+        return str(cond) if cond and cond != "unknown" else None
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:

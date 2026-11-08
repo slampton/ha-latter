@@ -55,7 +55,7 @@ def _build_coordinator_diagnostics(coordinator: LatterCoordinator) -> dict[str, 
             "area_context": {"state": area_state, "attributes": area_attrs},
             "remote_config": {"state": remote_state, "attributes": remote_attrs},
             "weather_forecast": {
-                "state": coordinator.forecast_string,
+                "records": [list(rec) for rec in coordinator.forecast_records],
                 "attributes": coordinator.weather_attributes,
             },
             "calendar_agenda": {

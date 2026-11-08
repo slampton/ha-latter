@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from datetime import date, datetime
 import hashlib
 import secrets
@@ -64,6 +64,94 @@ def encode_v3_records(records: Iterable[Sequence[Any]]) -> str:
     """Encode records as 0x1E-joined records of '|'-joined, sanitized subfields ("" for no records)."""
     return RECORD_SEP.join(
         SUBFIELD_SEP.join(sanitize_v3_subfield(sub) for sub in rec) for rec in records
+    )
+
+
+def build_v3_records(
+    rows: Iterable[Sequence[Any]], caps: Sequence[int | None], max_records: int
+) -> V3Records:
+    """Return up to `max_records` sanitized records; `caps[i]` caps subfield i (None = identifiers, uncapped)."""
+    out: list[tuple[str, ...]] = []
+    for row in rows:
+        if len(out) >= max_records:
+            break
+        out.append(tuple(sanitize_v3_subfield(val, cap) for val, cap in zip(row, caps, strict=True)))
+    return V3Records(out)
+
+
+def _whole_number(val: Any) -> str:
+    """Return a rounded whole number as text, or "" when the value is unknown."""
+    if val is None or isinstance(val, bool):
+        return ""
+    try:
+        return str(int(round(float(val))))
+    except (TypeError, ValueError, OverflowError):
+        return ""
+
+
+# area_context.cameras_summary: entity_id|name|area_id|snapshot_url
+CAMERAS_MAX_RECORDS = 10
+CAMERA_NAME_MAX = 32
+
+
+def camera_records(cameras: Iterable[Mapping[str, Any]]) -> V3Records:
+    """Records for the configured cameras, in configured order (`entity_id`, `name`, `area_id`, `snapshot_url`)."""
+    return build_v3_records(
+        ((c.get("entity_id"), c.get("name"), c.get("area_id"), c.get("snapshot_url")) for c in cameras),
+        (None, CAMERA_NAME_MAX, None, None),
+        CAMERAS_MAX_RECORDS,
+    )
+
+
+# area_context.intercom_targets_summary: target_id|label|kind
+INTERCOM_MAX_RECORDS = 10
+INTERCOM_LABEL_MAX = 32
+INTERCOM_KINDS: tuple[str, ...] = ("all", "device")
+
+
+def intercom_target_records(targets: Iterable[Mapping[str, Any]]) -> V3Records:
+    """Records for call_target: `kind` all (every other Latter Device) or device (one Latter Device)."""
+    rows = []
+    for t in targets:
+        kind = str(t.get("kind") or "")
+        if kind not in INTERCOM_KINDS:
+            raise ValueError(f"Unknown intercom target kind: {kind!r}")
+        rows.append((t.get("target_id"), t.get("label"), kind))
+    return build_v3_records(rows, (None, INTERCOM_LABEL_MAX, None), INTERCOM_MAX_RECORDS)
+
+
+# remote_config.slots_summary: index|label|entity_id|kind|area_id|state
+REMOTE_MAX_RECORDS = 10
+REMOTE_LABEL_MAX = 32
+REMOTE_KINDS: tuple[str, ...] = ("remote", "media_player")
+
+
+def remote_slot_records(slots: Iterable[Mapping[str, Any]]) -> V3Records:
+    """Records for the configured remote slots (`index` 1-based); `kind` is the domain of `entity_id`."""
+    rows = []
+    for s in slots:
+        entity_id = str(s.get("entity_id") or "")
+        kind = entity_id.split(".", 1)[0] if "." in entity_id else ""
+        if kind not in REMOTE_KINDS:
+            raise ValueError(f"A remote slot needs a remote or media_player entity, got {entity_id!r}")
+        rows.append((int(s["index"]), s.get("label"), entity_id, kind, s.get("area_id"), s.get("state")))
+    return build_v3_records(rows, (None, REMOTE_LABEL_MAX, None, None, None, None), REMOTE_MAX_RECORDS)
+
+
+# weather_forecast.forecast_5d: day|cond|high|low
+FORECAST_MAX_RECORDS = 5
+FORECAST_COND_MAX = 24
+
+
+def forecast_records(days: Iterable[Mapping[str, Any]]) -> V3Records:
+    """Daily forecast records: `day` (MON..SUN), `condition`, `high` and `low` as whole degrees ("" if unknown)."""
+    return build_v3_records(
+        (
+            (d.get("day"), d.get("condition"), _whole_number(d.get("high")), _whole_number(d.get("low")))
+            for d in days
+        ),
+        (3, FORECAST_COND_MAX, None, None),
+        FORECAST_MAX_RECORDS,
     )
 
 
