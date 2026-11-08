@@ -22,7 +22,7 @@ from homeassistant.helpers import (
     device_registry as dr,
     entity_registry as er,
 )
-from homeassistant.helpers.event import async_call_later
+from homeassistant.helpers.event import async_call_later, async_track_state_change_event
 
 from ..area_engine import area_fusion_sensor_choices, async_execute_area_action
 from ..backup_engine import (
@@ -67,6 +67,7 @@ from ..wallpaper_engine import (
 )
 from .catalog_gate import CatalogGate
 from .payload import (
+    STUDIO_BULK_CONTROL_DOMAINS,
     _build_system_shared_controls,
     _get_all_coordinators,
     async_save_and_broadcast_global_config,
@@ -698,9 +699,39 @@ async def ws_handle_subscribe(
     ble_fabric = get_ble_fabric(hass)
     unsubs.append(ble_fabric.register_occupancy_listener(_schedule_push))
 
+    # The bound ESPHome device's own entities change outside Latter (a select set from Studio lands when the
+    # device reports it back), so their state changes push too: a Device subscription watches every entity of
+    # its Device, a System subscription the controls the bulk-control list shows.
+    state_unsub: list[Any] = [None]
+
+    @callback
+    def _entity_changed(_event: Any) -> None:
+        _schedule_push()
+
+    @callback
+    def _track_device_states() -> None:
+        if callable(state_unsub[0]):
+            state_unsub[0]()
+            state_unsub[0] = None
+        target = resolve_target_coordinator(hass, sub_id) if sub_id else None
+        watched = [target] if target is not None else _get_all_coordinators(hass)
+        entity_ids = sorted(
+            {
+                e.entity_id
+                for c in watched
+                for e in device_entities(hass, c.esphome_device_id)
+                if target is not None or e.domain in STUDIO_BULK_CONTROL_DOMAINS
+            }
+        )
+        if entity_ids:
+            state_unsub[0] = async_track_state_change_event(hass, entity_ids, _entity_changed)
+
+    _track_device_states()
+
     @callback
     def _registry_changed(_event: Any) -> None:
         catalog_gate.mark_dirty()
+        _track_device_states()
         _schedule_push()
 
     for registry_event in (
@@ -715,6 +746,9 @@ async def ws_handle_subscribe(
         if callable(debounce_cancel[0]):
             debounce_cancel[0]()
             debounce_cancel[0] = None
+        if callable(state_unsub[0]):
+            state_unsub[0]()
+            state_unsub[0] = None
         for u in unsubs:
             if callable(u):
                 u()

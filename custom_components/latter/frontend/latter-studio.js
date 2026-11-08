@@ -383,6 +383,7 @@ const STUDIO_STYLES = `
     font-size: var(--studio-font-body);
     font-weight: var(--studio-weight-medium);
   }
+  .card-content > .subsection-title:first-child { padding-top: 0; border-top: none; }
 
   /* ---------- Settings row & controls ---------- */
   .settings-list {
@@ -1448,7 +1449,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
               <div id="embedded-display" class="settings-list"></div>
               <div class="settings-list">
                 <div class="settings-row">
-                  <div class="settings-row-text"><label class="row-label" for="dev-custom-palette-select">Custom Color</label><p class="row-description">Used when the color profile is Custom.</p></div>
+                  <div class="settings-row-text"><label class="row-label" for="dev-custom-palette-select">Custom Color</label></div>
                   <div class="settings-row-control">
                     <span id="dev-color-swatch" class="swatch" aria-hidden="true"></span>
                     <select id="dev-custom-palette-select" onchange="onSelectDeviceCustomPalette(this.value)"></select>
@@ -1532,8 +1533,11 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
           <div class="card">
             <div class="card-header"><div class="card-heading"><h3 class="card-title">Sound &amp; Media Player</h3></div></div>
             <div class="card-content">
+              <h4 class="subsection-title" id="sub-sound">Sound</h4>
               <div id="embedded-sound" class="settings-list"></div>
+              <h4 class="subsection-title" id="sub-music-screen">Music Screen</h4>
               <div id="embedded-music" class="settings-list"></div>
+              <h4 class="subsection-title">Speaker</h4>
               <div class="settings-list">
                 <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-default_speaker">Default Speaker</label></div><div class="settings-row-control"><select id="cfg-default_speaker" onchange="saveField('device', this)"></select></div></div>
                 <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-ma_player_entity">Music Assistant Player</label><p class="row-description">This Device's own player in Music Assistant, needed for library playback, queues and lyrics.</p></div><div class="settings-row-control"><select id="cfg-ma_player_entity" onchange="saveField('device', this)"></select></div></div>
@@ -2125,7 +2129,7 @@ function renderDoorbells() {
       ring = `${b.ring_name}: ${status}`;
     }
     const talk = (b.talk || []).map(t => `${t.device_title} ${TALK_STATE_TEXT[t.state] || t.state}`).join(", ");
-    return `<div class="kv-row"><span>${esc(b.camera_name)}</span><strong>${esc(ring)}${talk ? ` • ${esc(talk)}` : ""}</strong></div>`;
+    return `<div class="kv-row"><span>${esc(entityLabel(b.camera_name))}</span><strong>${esc(ring)}${talk ? ` • ${esc(talk)}` : ""}</strong></div>`;
   }).join("");
 }
 
@@ -2776,7 +2780,7 @@ function renderSystemOverview(systemDevices, systemControls, cfg) {
           widget = `<input type="range" aria-label="${esc(fc.name)}" min="${esc(fc.min ?? 0)}" max="${esc(fc.max ?? 100)}" step="${esc(fc.step ?? 1)}" value="${esc(numVal)}" onchange="bulkNumber(${idsArg}, this.value)"><span class="chip">${esc(mixed ? "Mixed" : `${curState} ${fc.unit || ""}`.trim())}</span>`;
         }
         const desc = `${fc.section_title} • ${targets.length} Device${targets.length > 1 ? "s" : ""}${mixed ? " • Mixed values" : ""}`;
-        return settingsRowHtml(esc(fc.name), esc(desc), widget);
+        return settingsRowHtml(esc(entityLabel(fc.name)), esc(desc), widget);
       }).filter(Boolean).join("");
       fBox.innerHTML = rows || emptyStateHtml("No Devices match this filter.");
     }
@@ -3138,27 +3142,57 @@ async function sendAnnouncement() {
   }
 }
 
+// Labels Studio renders from entity names (Home Assistant's, ESPHome's or the firmware's) go through one function, so
+// they follow D-013 Title Case like Studio's own labels: every word capitalized except the minor words (unless first or
+// last), each part of a hyphenated word too, and acronyms and brand casing kept (BLE, Wi-Fi, ESPHome, dB, iBeacon).
+const LABEL_MINOR_WORDS = new Set(["a", "an", "the", "and", "or", "of", "to", "in", "on", "for", "with", "&"]);
+const LABEL_ACRONYMS = {
+  ble: "BLE", wifi: "Wi-Fi", "wi-fi": "Wi-Fi", ha: "HA", ma: "MA", imu: "IMU", sdk: "SDK", ip: "IP", mac: "MAC",
+  tts: "TTS", stt: "STT", vad: "VAD", rssi: "RSSI", ota: "OTA", led: "LED", usb: "USB", ram: "RAM", psram: "PSRAM",
+  cpu: "CPU", ui: "UI", tv: "TV", id: "ID", uuid: "UUID", esphome: "ESPHome"
+};
+function entityLabel(name) {
+  const words = String(name ?? "").trim().split(/\s+/).filter(Boolean);
+  return words.map((word, i) => {
+    const [, pre, core, post] = word.match(/^([(\["'\u201c]*)(.*?)([)\]"'\u201d:,.!?\u2026]*)$/);
+    if (!core) return word;
+    const low = core.toLowerCase();
+    if (LABEL_ACRONYMS[low]) return pre + LABEL_ACRONYMS[low] + post;
+    if (i > 0 && i < words.length - 1 && LABEL_MINOR_WORDS.has(low)) return pre + low + post;
+    const parts = core.split("-").map((part, j) => {
+      if (!part) return part;
+      const pLow = part.toLowerCase();
+      if (LABEL_ACRONYMS[pLow]) return LABEL_ACRONYMS[pLow];
+      if (/[A-Z]/.test(part.slice(1)) || /\d/.test(part) || /^[A-Z]/.test(part)) return part;
+      if (j > 0 && LABEL_MINOR_WORDS.has(pLow)) return pLow;
+      return part[0].toUpperCase() + part.slice(1);
+    });
+    return pre + parts.join("-") + post;
+  }).join(" ");
+}
+
 function renderNativeControlRow(item, showEntityId=false, readOnlyNote="") {
   const stateText = `${item.state}${item.unit ? ' ' + item.unit : ''}`;
   const idArg = jsArg(item.entity_id);
-  const name = esc(item.name);
+  const name = esc(entityLabel(item.name));
+  const entAttr = `data-entity="${esc(item.entity_id)}"`;
   let widgetHtml = `<span class="chip">${esc(stateText)}</span>`;
   if (readOnlyNote) {
     // Read-only: Latter owns this entity's state.
   } else if (item.domain === "button") {
-    widgetHtml = `<button type="button" class="btn btn-secondary btn-compact" onclick="espAction(${idArg}, 'press')">Run</button>`;
+    widgetHtml = `<button type="button" class="btn btn-secondary btn-compact" ${entAttr} onclick="espAction(${idArg}, 'press')">Run</button>`;
   } else if (item.domain === "update") {
     widgetHtml = item.state === "on"
       ? `<button type="button" class="btn btn-secondary btn-compact" onclick="espAction(${idArg}, 'install')">Install Update</button>`
       : `<span class="chip chip-success">Up to date</span><button type="button" class="btn btn-text btn-compact" onclick="espAction(${idArg}, 'check')">Check</button>`;
   } else if (item.domain === "switch" || item.domain === "light" || item.domain === "fan") {
-    widgetHtml = `<input type="checkbox" class="switch" role="switch" aria-label="${name}" ${item.state === "on" ? "checked" : ""} onchange="espAction(${idArg}, this.checked ? 'turn_on' : 'turn_off')">`;
+    widgetHtml = `<input type="checkbox" class="switch" role="switch" ${entAttr} aria-label="${name}" ${item.state === "on" ? "checked" : ""} onchange="espAction(${idArg}, this.checked ? 'turn_on' : 'turn_off')">`;
   } else if (item.domain === "select" && item.options && item.options.length) {
     const opts = item.options.map(o => `<option value="${esc(o)}" ${o === item.state ? 'selected' : ''}>${esc(o)}</option>`).join("");
-    widgetHtml = `<select aria-label="${name}" onchange="espSelect(${idArg}, this.value)">${opts}</select>`;
+    widgetHtml = `<select ${entAttr} aria-label="${name}" onchange="espSelect(${idArg}, this.value)">${opts}</select>`;
   } else if (item.domain === "number") {
     const numVal = parseFloat(item.state) || 0;
-    widgetHtml = `<input type="range" aria-label="${name}" min="${esc(item.min ?? 0)}" max="${esc(item.max ?? 100)}" step="${esc(item.step ?? 1)}" value="${esc(numVal)}" onchange="espNumber(${idArg}, this.value)"><span class="chip">${esc(stateText)}</span>`;
+    widgetHtml = `<input type="range" ${entAttr} aria-label="${name}" min="${esc(item.min ?? 0)}" max="${esc(item.max ?? 100)}" step="${esc(item.step ?? 1)}" value="${esc(numVal)}" onchange="espNumber(${idArg}, this.value)"><span class="chip">${esc(stateText)}</span>`;
   }
   const desc = showEntityId ? esc(item.entity_id) : esc(readOnlyNote || "");
   return settingsRowHtml(name, desc, widgetHtml);
@@ -3274,23 +3308,28 @@ function renderCohesiveDeviceSections() {
     }
   }
 
-  // 5. Voice Assistant: Hide Active Wake Word & Sensitivity drawer when Wake Word Mode is Disabled
-  const voiceItems = getSectionItems("voice");
+  // 5. Voice Assistant: Latter's voice settings plus Home Assistant's own Assist satellite selects (key: pipeline,
+  // vad_sensitivity, wake_word, wake_word_n). With Wake Word Mode Disabled the wake words and their sensitivity
+  // hide; the assistant settings stay, because the action button, the Trigger Voice Assistant button and Home
+  // Assistant (start_conversation, announcements) still start the assistant without a wake word.
+  const voiceItems = getSectionItems("voice").filter(it => it.domain !== "assist_satellite");
   const wwModeItem = voiceItems.find(it => `${it.name} ${it.entity_id}`.toLowerCase().includes("wake_word_mode") || (it.name || "").toLowerCase().includes("wake word mode"));
   const wwDisabled = wwModeItem && wwModeItem.state === "Disabled";
+  const isWakeWordChoice = (it) => it.key === "wake_word" || it.key === "wake_word_n"
+    || /active[ _]wake[ _]word/.test(`${it.name} ${it.entity_id}`.toLowerCase());
 
   const voicePrimary = [];
   const voiceSens = [];
   voiceItems.forEach(it => {
     const low = `${it.name} ${it.entity_id}`.toLowerCase();
-    if (low.includes("sensitivity")) {
+    if (low.includes("sensitivity") && it.key !== "vad_sensitivity") {
       voiceSens.push(it);
-    } else if (!(wwDisabled && low.includes("active wake word"))) {
+    } else if (!(wwDisabled && isWakeWordChoice(it))) {
       voicePrimary.push(it);
     }
   });
   const sortedVoicePrimary = sortByOrder(voicePrimary, [
-    "wake word mode", "active wake word", "visual profile", "wake screen"
+    "wake word mode", "wake word", "assistant", "finished speaking", "visual profile", "wake screen"
   ]);
   doc.getElementById("embedded-voice-primary").innerHTML = sortedVoicePrimary.length
     ? sortedVoicePrimary.map(it => renderNativeControlRow(it)).join("")
@@ -3324,6 +3363,8 @@ function renderCohesiveDeviceSections() {
   if (sortBox) {
     sortBox.innerHTML = musicSort.map(it => renderNativeControlRow(it)).join("");
   }
+  doc.getElementById("sub-sound")?.classList.toggle("hidden", !soundItems.length);
+  doc.getElementById("sub-music-screen")?.classList.toggle("hidden", !musicPrimary.length);
 
   // Render Quick Actions right at the top of Device Overview!
   const actionItems = getSectionItems("actions");
@@ -3331,7 +3372,7 @@ function renderCohesiveDeviceSections() {
   if (qaBox) {
     qaBox.innerHTML = actionItems.length
       ? actionItems.map(it =>
-          `<button type="button" class="btn btn-secondary" onclick="espAction(${jsArg(it.entity_id)}, 'press')">${esc(it.name)}</button>`
+          `<button type="button" class="btn btn-secondary" onclick="espAction(${jsArg(it.entity_id)}, 'press')">${esc(entityLabel(it.name))}</button>`
         ).join("")
       : emptyStateHtml("This Device has no quick actions.");
   }
@@ -3451,28 +3492,99 @@ async function deleteWallpaper(sourceId) {
   }
 }
 
-async function espAction(entity_id, action) {
-  const data = await callStudioCommand({command: "esphome_entity_action", entity_id, action});
-  if (data) {
-    applyStateToDom(data, false);
-    showToast(`Executed ${action} on ${entity_id}`);
+// A change to a Device entity shows at once: the new state is applied locally (so rows that depend on it appear or
+// hide immediately) and kept over incoming payloads until the Device reports it, or for PENDING_ENTITY_MS. A failed
+// command puts the old state back (the error toast comes from the command).
+const PENDING_ENTITY_STATES = new Map();
+const PENDING_ENTITY_MS = 8000;
+
+function entityItems(data, entityId) {
+  const found = [];
+  (data?.esphome?.sections || []).forEach(s => (s.items || []).forEach(it => { if (it.entity_id === entityId) found.push(it); }));
+  return found;
+}
+
+function sameEntityState(a, b) {
+  const na = parseFloat(a);
+  const nb = parseFloat(b);
+  return String(a) === String(b) || (!Number.isNaN(na) && !Number.isNaN(nb) && na === nb);
+}
+
+function overlayPendingEntityStates(data) {
+  const now = Date.now();
+  PENDING_ENTITY_STATES.forEach((pending, entityId) => {
+    const items = entityItems(data, entityId);
+    if (now > pending.expires || items.some(it => sameEntityState(it.state, pending.state))) {
+      PENDING_ENTITY_STATES.delete(entityId);
+      return;
+    }
+    items.forEach(it => { it.state = pending.state; });
+  });
+}
+
+async function commitEntityChange(entityId, newState, body) {
+  const previous = entityItems(STATE, entityId).map(it => it.state)[0];
+  if (newState !== null) {
+    PENDING_ENTITY_STATES.set(entityId, {state: String(newState), expires: Date.now() + PENDING_ENTITY_MS});
+    entityItems(STATE, entityId).forEach(it => { it.state = String(newState); });
+    renderEntitySections();
   }
+  const data = await callStudioCommand(body);
+  if (!data) {
+    if (newState !== null) {
+      PENDING_ENTITY_STATES.delete(entityId);
+      entityItems(STATE, entityId).forEach(it => { it.state = previous; });
+      renderEntitySections();
+    }
+    return null;
+  }
+  applyStateToDom(data, false);
+  return data;
+}
+
+async function espAction(entity_id, action) {
+  const optimistic = action === "turn_on" ? "on" : (action === "turn_off" ? "off" : null);
+  const data = await commitEntityChange(entity_id, optimistic, {command: "esphome_entity_action", entity_id, action});
+  if (data && optimistic === null) showToast(action === "press" ? "Done" : "Sent");
 }
 
 async function espSelect(entity_id, option) {
-  const data = await callStudioCommand({command: "esphome_entity_action", entity_id, option});
-  if (data) {
-    applyStateToDom(data, false);
-    showToast(`Selected ${option}`);
-  }
+  await commitEntityChange(entity_id, option, {command: "esphome_entity_action", entity_id, option});
 }
 
 async function espNumber(entity_id, level) {
-  const data = await callStudioCommand({command: "esphome_entity_action", entity_id, level});
-  if (data) {
-    applyStateToDom(data, false);
-    showToast(`Updated ${entity_id} = ${level}`);
+  await commitEntityChange(entity_id, level, {command: "esphome_entity_action", entity_id, level});
+}
+
+// Entity rows are re-rendered from STATE. A re-render replaces their controls, so it waits while the user is in a
+// select, text field or slider (it runs when focus leaves) and otherwise keeps keyboard focus on the same control.
+let DEFERRED_ENTITY_RENDER = false;
+
+function isEditingControl(el) {
+  if (!el) return false;
+  if (el.tagName === "SELECT" || el.tagName === "TEXTAREA") return true;
+  return el.tagName === "INPUT" && !["checkbox", "radio", "button", "submit"].includes(el.type);
+}
+
+function renderEntitySections() {
+  const active = getStudioActiveElement();
+  const focusEntity = active?.dataset?.entity || "";
+  renderCohesiveDeviceSections();
+  renderSystemOverview(STATE?.system_devices, STATE?.system_controls, STATE?.config || {});
+  if (focusEntity) doc.querySelector(`[data-entity="${CSS.escape(focusEntity)}"]`)?.focus({preventScroll: true});
+}
+
+function renderEntitySectionsWhenIdle() {
+  if (isEditingControl(getStudioActiveElement())) {
+    DEFERRED_ENTITY_RENDER = true;
+    return;
   }
+  DEFERRED_ENTITY_RENDER = false;
+  renderEntitySections();
+}
+
+function onStudioFocusOut() {
+  setTimeout(() => { if (DEFERRED_ENTITY_RENDER) renderEntitySectionsWhenIdle(); }, 0);
 }
 
 function renumberCameraRows() {
@@ -4057,6 +4169,7 @@ function restoreFromUploadedFile() {
 function applyStateToDom(data, forceFormUpdate=false) {
   // Live pushes and command answers leave out the entity catalog unless a registry changed; keep the last one.
   if (!data.catalog && STATE?.catalog) data.catalog = STATE.catalog;
+  overlayPendingEntityStates(data);
   STATE = data;
   doc.getElementById("studio-root")?.classList.remove("is-loading");
   doc.getElementById("studio-load-error")?.classList.add("hidden");
@@ -4151,11 +4264,7 @@ function applyStateToDom(data, forceFormUpdate=false) {
   renderLogsView();
   renderActiveSurveyDeviceBars();
   renderWallpaperGallery(data.wallpapers, cfg.device_slug, cfg.display_shape);
-  const activeEl = getStudioActiveElement();
-  if (!activeEl || !["SELECT", "INPUT"].includes(activeEl.tagName)) {
-    renderCohesiveDeviceSections();
-    renderSystemOverview(data.system_devices, data.system_controls, cfg);
-  }
+  renderEntitySectionsWhenIdle();
 
   // Forms: `true` reloads both scopes; {system, device} reloads only the named scopes, so a save of one
   // scope (or a Device switch) never discards unsaved edits in the other.
@@ -4645,6 +4754,7 @@ class LatterStudio extends HTMLElement {
       this.shadowRoot.innerHTML = `<style>${STUDIO_STYLES}</style>${STUDIO_TEMPLATE}`;
       this._initialized = true;
       bindDialogs();
+      this.shadowRoot.addEventListener("focusout", onStudioFocusOut);
       this._applyRoute();
     }
     if (this._hass) {

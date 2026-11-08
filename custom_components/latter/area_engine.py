@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import re
 import time
 from typing import Any
 
@@ -15,7 +14,6 @@ from homeassistant.const import (
     STATE_PLAYING,
     STATE_UNAVAILABLE,
     STATE_UNKNOWN,
-    EntityCategory,
 )
 from homeassistant.core import HomeAssistant, State
 from homeassistant.exceptions import ServiceValidationError
@@ -24,11 +22,12 @@ from homeassistant.helpers import (
     device_registry as dr,
     entity_registry as er,
 )
-from homeassistant.util import dt as dt_util
+from homeassistant.util import dt as dt_util, slugify
 
 from .ble_engine import get_ble_proxy_area_ids
 from .browse_engine import is_music_assistant_player
 from .const import CONF_ESPHOME_DEVICE_ID, DOMAIN, SUBENTRY_DEVICE
+from .entity_sections import classify_esphome_entity_section
 from .identity import (
     device_entities,
     get_bound_esphome_device,
@@ -79,130 +78,6 @@ UNIVERSAL_SECTION_META: tuple[tuple[str, str, str], ...] = (
     ("network", "Network & diagnostics", "Wi-Fi signal strength, IP/MAC address, uptime, memory, and firmware updates."),
     ("other", "General & custom entities", "Additional sensors, switches, and custom project entities."),
 )
-
-
-def classify_esphome_entity_section(
-    entity_id: str,
-    friendly_name: str,
-    domain: str,
-    device_class: str,
-    entity_category: EntityCategory | None,
-) -> tuple[str, str | None]:
-    """Classify an ESPHome entity into a focused section; returns (section_id, custom_section_title_or_None)."""
-    name_clean = friendly_name.strip()
-    dev_cls = device_class.lower()
-
-    # 1. Explicit "Prefix: Name" Convention (Highest Priority)
-    if ":" in name_clean:
-        prefix_raw = name_clean.split(":", 1)[0].strip()
-        prefix_low = prefix_raw.lower()
-        if prefix_low in ("home", "home screen", "clock"):
-            return "home", None
-        if prefix_low in ("display", "ui", "screen", "theme", "appearance", "weather"):
-            return "display", None
-        if prefix_low in ("sleep & wake", "sleep", "wake"):
-            return "sleep", None
-        if prefix_low in ("voice", "wake word", "assist", "mic", "microphone"):
-            return "voice", None
-        if prefix_low in ("sound", "audio", "chime", "alerts"):
-            return "sound", None
-        if prefix_low in ("music", "media", "player"):
-            return "music", None
-        if prefix_low in ("ble", "area", "presence"):
-            return "area", None
-        if prefix_low in ("remote", "tv"):
-            return "remote", None
-        if prefix_low in ("battery", "power", "pmic"):
-            return "battery", None
-        if prefix_low in ("action", "actions"):
-            return "actions", None
-        if prefix_low in ("system", "network", "wifi", "diagnostics"):
-            return "network", None
-        if 2 <= len(prefix_raw) <= 24:
-            sec_slug = "custom_" + re.sub(r"[^a-z0-9]+", "_", prefix_low).strip("_")
-            return sec_slug, prefix_raw
-
-    # 2. Semantic fallback classification (check clean friendly_name + entity suffix so device_slug words don't false-match)
-    ent_suffix = entity_id.split(".", 1)[-1].lower()
-    clean_low = name_clean.lower()
-
-    if domain == "button" or dev_cls in ("restart", "identify"):
-        return "actions", None
-
-    if any(k in ent_suffix for k in ("timer_remaining", "timer_active", "alarm_ringing")):
-        return "sleep", None
-
-    if dev_cls in ("battery", "voltage", "current", "power", "energy") or any(
-        k in clean_low or k in ent_suffix
-        for k in ("battery", "charging", "charger", "vbus", "axp2101", "pmic", "voltage", "internal_temp", "die_temp", "imu_temp")
-    ):
-        return "battery", None
-
-    # Check Network & System Diagnostics BEFORE generic words so Wi-Fi/IP/MAC/Uptime/Version/Diagnostic entities always land in "network"
-    if (
-        domain == "update"
-        or dev_cls in ("signal_strength", "timestamp", "duration")
-        or any(
-            k in clean_low or k in ent_suffix
-            for k in (
-                "wifi",
-                "wi-fi",
-                "wi_fi",
-                "rssi",
-                "signal",
-                "ip_address",
-                "ip address",
-                "mac_address",
-                "mac address",
-                "ssid",
-                "bssid",
-                "uptime",
-                "free_heap",
-                "heap",
-                "psram",
-                "memory",
-                "cpu",
-                "firmware",
-                "version",
-                "esphome",
-                "status",
-                "online",
-                "connected",
-                "safe_mode",
-            )
-        )
-        or (entity_category == EntityCategory.DIAGNOSTIC and domain in ("sensor", "binary_sensor", "text_sensor"))
-    ):
-        return "network", None
-
-    if any(k in clean_low or k in ent_suffix for k in ("clock", "weather_background", "shortcut_", "dock", "home_")):
-        return "home", None
-
-    if any(k in clean_low or k in ent_suffix for k in ("sleep", "wake_on", "pickup_to_wake", "tap_to_wake", "screensaver", "hibernate", "stay_awake", "timeout")):
-        return "sleep", None
-
-    if any(k in clean_low or k in ent_suffix for k in ("display", "screen", "brightness", "backlight", "amoled", "theme", "color_profile", "boot")):
-        return "display", None
-
-    if any(k in clean_low or k in ent_suffix for k in ("voice", "wake_word", "micro_wake", "mic", "microphone", "sensitivity", "assist")):
-        return "voice", None
-
-    if any(k in clean_low or k in ent_suffix for k in ("sound", "chime", "beep", "ringtone", "alert_volume", "volume_step", "dac", "es8311")):
-        return "sound", None
-
-    if any(k in clean_low or k in ent_suffix for k in ("ble", "beacon", "ibeacon", "presence", "area")):
-        return "area", None
-
-    if any(k in clean_low or k in ent_suffix for k in ("remote", "slot_1", "slot_2", "slot_3", "slot_4")):
-        return "remote", None
-
-    if domain == "media_player" or any(k in clean_low or k in ent_suffix for k in ("music", "album", "artist", "podcast", "queue", "playlist", "sort", "track", "speaker")):
-        return "music", None
-
-    if entity_category == EntityCategory.DIAGNOSTIC:
-        return "network", None
-
-    return "other", None
 
 
 def resolve_entity_area_id(
@@ -338,6 +213,14 @@ def get_esphome_device_entities(
 
     dev_prefix = dev_meta["name"].strip()
     slug_words = device_slug.strip().replace("_", " ").replace("-", " ")
+    # Longest first, so "desk_display_2" is stripped before "desk_display".
+    object_prefixes = tuple(
+        sorted(
+            {p for p in (slugify(dev_prefix), slugify(device_slug)) if p},
+            key=len,
+            reverse=True,
+        )
+    )
 
     domain_sort_order = {
         "switch": 1,
@@ -384,7 +267,13 @@ def get_esphome_device_entities(
         cat = entry.entity_category
 
         sec_id, custom_title = classify_esphome_entity_section(
-            entry.entity_id, clean_name, entry.domain, dev_class, cat
+            entry.entity_id,
+            clean_name,
+            entry.domain,
+            dev_class,
+            cat,
+            translation_key=entry.translation_key,
+            device_object_prefixes=object_prefixes,
         )
         if custom_title and sec_id not in sections_map:
             sections_map[sec_id] = []
@@ -399,6 +288,8 @@ def get_esphome_device_entities(
         item: dict[str, Any] = {
             "entity_id": entry.entity_id,
             "name": display_label,
+            # Home Assistant's own Assist satellite selects are told apart by their translation key.
+            "key": entry.translation_key or "",
             "domain": entry.domain,
             "state": state_val,
             "unit": unit,

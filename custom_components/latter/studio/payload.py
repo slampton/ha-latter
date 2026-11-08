@@ -63,6 +63,8 @@ from .scope import find_by_subentry_id
 from .settings import system_settings_view
 
 MAX_INTERNAL_LOGS = 150
+# Device controls the System's bulk-control list offers (and a System subscription watches).
+STUDIO_BULK_CONTROL_DOMAINS: frozenset[str] = frozenset({"select", "switch", "number"})
 
 
 def log_studio_event(
@@ -198,7 +200,7 @@ def _build_system_shared_controls(hass: HomeAssistant) -> list[dict[str, Any]]:
                 continue
             for item in sec.get("items", []):
                 dom = item.get("domain")
-                if dom not in ("select", "switch", "number"):
+                if dom not in STUDIO_BULK_CONTROL_DOMAINS:
                     continue
                 lbl = str(item.get("name") or "").strip()
                 if not lbl:
