@@ -8,7 +8,7 @@ Copy-and-paste starting points. Every field is documented in the [services refer
 
 ## Doorbell: camera popup on every display
 
-Latter already does this automatically: if a camera is configured in **Studio → Shared entities → Cameras**, Latter finds the doorbell's ring entity on its own. Use this recipe only when your trigger isn't a ring entity Latter can detect, such as a gate sensor or a button in another integration.
+Latter already does this automatically: if a camera is configured in **Studio → Shared Entities → Cameras**, Latter finds the doorbell's ring entity on its own. Use this recipe only when your trigger isn't a ring entity Latter can detect, such as a gate sensor or a button in another integration.
 
 ```yaml
 alias: Gate opened, show camera

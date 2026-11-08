@@ -37,7 +37,7 @@ Latter serves images from Home Assistant's numeric LAN IP, because ESP32 firmwar
 - **Proxies lack an Area.** Every Bluetooth proxy must be assigned to an Area in Home Assistant. Home Assistant raises a repair issue, **"No Area-assigned Bluetooth proxies found"**, when Latter can't map any scanner to an area.
 - **Bluetooth area tracking is off.** Check that **Track this device's area with Bluetooth** was enabled when the device was added. To change it, use **Studio → Devices → your device → Device settings → Track the Area with BLE proxies**, or the device's **Reconfigure or Replace Hardware** entry under **Settings → Devices & Services → Latter**.
 - **The device's beacon is off.** Latter firmware ships with **Area: BLE Presence Beacon** off and Latter turns it on when the device connects with tracking enabled. If you turned the switch off by hand, reconnecting the device (or saving its options) turns it back on.
-- **Look at the live readings.** Open **Studio → BLE & Area presence**. If an area never shows a reading, its proxy isn't hearing the device.
+- **Look at the live readings.** Open **Studio → BLE & Area Presence**. If an area never shows a reading, its proxy isn't hearing the device.
 
 **The device keeps choosing the neighboring area**
 
@@ -57,11 +57,11 @@ Library browsing, queue transfer, and the default intercom speaker list need the
 
 **A repair asks you to pick the Music Assistant player for a device**
 
-Music Assistant identifies a Latter device's Sendspin player by a key hash, not by its MAC address, and doesn't link it to the ESPHome device. So Latter can't find the device's own Music Assistant player by itself, and library playback, queues and lyrics on that device fail until it's linked. Open the repair (**Settings → Repairs**), pick the device's player (it's pre-selected when exactly one Music Assistant player has the same manufacturer and model as the ESPHome device), and submit. You can change the link later in **Studio → (device) → Audio & voice → Music Assistant Player**.
+Music Assistant identifies a Latter device's Sendspin player by a key hash, not by its MAC address, and doesn't link it to the ESPHome device. So Latter can't find the device's own Music Assistant player by itself, and library playback, queues and lyrics on that device fail until it's linked. Open the repair (**Settings → Repairs**), pick the device's player (it's pre-selected when exactly one Music Assistant player has the same manufacturer and model as the ESPHome device), and submit. You can change the link later in **Studio → (device) → Audio & Voice → Music Assistant Player**.
 
 **Volume buttons do nothing**
 
-If the speaker's real volume control is an AV receiver, map the speaker in **Studio → Media & remotes → Speaker volume overrides**.
+If the speaker's real volume control is an AV receiver, map the speaker in **Studio → Media & Remotes → Speaker Volume Overrides**.
 
 ---
 

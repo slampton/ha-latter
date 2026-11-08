@@ -16,45 +16,45 @@ The address bar follows the page you're on (for example `/latter/devices/<id>/di
 
 Settings here live in `.storage/latter.site` and apply to every device.
 
-### System overview
+### System Overview
 - **Issues:** every Latter repair that's open in Home Assistant (crashes, brownouts, firmware rollbacks, missing entities, BLE proxies, Music Assistant links), with the device it belongs to. **Open Repairs** opens Home Assistant's Repairs page, where you fix them.
 - **System:** the Latter version (Latter itself updates through HACS), **Check firmware updates**, which asks every device for a firmware update and says how many have one, and counts of online devices, Latter devices, BLE-tracked devices, devices with an assigned person, and BLE area proxies. Each count opens the matching device list or page.
-- **Configured items:** how many remotes, volume overrides, cameras, calendars, groups, and saved profiles are set up.
+- **Configured Items:** how many remotes, volume overrides, cameras, calendars, groups, and saved profiles are set up.
 
-### Shared entities
+### Shared Entities
 | Card | What it does |
 | :--- | :--- |
-| **Whole-home entities** | Weather provider, alarm panel, primary thermostat, entry lock, garage door, and robot vacuum. These drive the on-device weather page and Whole-Home Hub. |
-| **Cameras & doorbell audio** | Up to 10 cameras for the on-device camera carousel and doorbell popups, plus the **Doorbell audio noise reduction** level (Strong, Light, Off) for listening to a doorbell, and **Test the door speaker**, which speaks a test sentence on the primary camera's speaker with TTS, from the device you choose. Under **Doorbells**, each camera shows, read-only, the doorbell ring entity Latter found for it (and when it last rang or changed) and which devices are listening or replying right now. Listen and push-to-talk replies are experimental. |
+| **Whole-Home Entities** | Weather provider, alarm panel, primary thermostat, entry lock, garage door, and robot vacuum. These drive the on-device weather page and Whole-Home Hub. |
+| **Cameras & Doorbell Audio** | Up to 10 cameras for the on-device camera carousel and doorbell popups, plus the **Doorbell audio noise reduction** level (Strong, Light, Off) for listening to a doorbell, and **Test the door speaker**, which speaks a test sentence on the primary camera's speaker with TTS, from the device you choose. Under **Doorbells**, each camera shows, read-only, the doorbell ring entity Latter found for it (and when it last rang or changed) and which devices are listening or replying right now. Listen and push-to-talk replies are experimental. |
 | **Calendars** | Calendars merged into the on-device agenda. Duplicate events across calendars are removed, and events with a location get a map. |
 
-### Media & remotes
+### Media & Remotes
 | Card | What it does |
 | :--- | :--- |
-| **Remote inventory** | TVs, streaming boxes, and AV receivers available as remote slots, up to 10. Latter pairs each `remote.*` with the `media_player.*` on the same device. It has key mappings for Android TV, Fire TV, Bravia, Apple TV, LG webOS, and Denon/Marantz, and falls back to `remote.send_command` for everything else. |
-| **Remote control groups** | Which remotes appear on which devices, or in which areas. |
-| **Speaker volume overrides** | Sends volume changes for a speaker to a different entity, such as an AV receiver `media_player` or an amplifier's `number` entity. |
+| **Remote Inventory** | TVs, streaming boxes, and AV receivers available as remote slots, up to 10. Latter pairs each `remote.*` with the `media_player.*` on the same device. It has key mappings for Android TV, Fire TV, Bravia, Apple TV, LG webOS, and Denon/Marantz, and falls back to `remote.send_command` for everything else. |
+| **Remote Control Groups** | Which remotes appear on which devices, or in which areas. |
+| **Speaker Volume Overrides** | Sends volume changes for a speaker to a different entity, such as an AV receiver `media_player` or an amplifier's `number` entity. |
 
-### Groups & profiles
-- **Configuration profiles:** choose a device and capture its display, dock, wake word, and timeout settings, then apply them to one device, a group, or all devices.
-- **Device groups:** logical groupings such as handhelds, bedrooms, or wall panels, used for organization and when applying profiles.
-- **Bulk Device controls:** change a display, sleep, voice, sound, music, or Area setting on every device in a group (or all roaming or stationary devices) at once. When the devices disagree, the control shows **Mixed**.
+### Groups & Profiles
+- **Configuration Profiles:** choose a device and capture its display, dock, wake word, and timeout settings, then apply them to one device, a group, or all devices.
+- **Device Groups:** logical groupings such as handhelds, bedrooms, or wall panels, used for organization and when applying profiles.
+- **Bulk Device Controls:** change a display, sleep, voice, sound, music, or Area setting on every device in a group (or all roaming or stationary devices) at once. When the devices disagree, the control shows **Mixed**.
 
-### BLE & Area presence
-- **Live Area presence & sensor fusion:** per-area occupancy, the devices and people in each area, and each area's fusion mode. **Fusion settings** under each area set the occupancy threshold (weighted mode, 20 to 95%) and which of the area's sensors count (none picked means all of them). Changes apply at once.
-- **Per-Area BLE signal calibration:** live raw and effective RSSI per area for a selected device. Includes **Calibrate current Area**, ±1 dB adjustment, and a **Fast refresh** switch (updates every 1.5 s while the page is open; off, the page updates when something changes).
-- **Discovered nearby Bluetooth devices:** named BLE devices, `private_ble_device` entities, and iBeacons your scanners can hear. **Adopt** one to track it as its own Latter device.
+### BLE & Area Presence
+- **Live Area Presence & Sensor Fusion:** per-area occupancy, the devices and people in each area, and each area's fusion mode. **Fusion Settings** under each area set the occupancy threshold (weighted mode, 20 to 95%) and which of the area's sensors count (none picked means all of them). Changes apply at once.
+- **Per-Area BLE Signal Calibration:** live raw and effective RSSI per area for a selected device. Includes **Calibrate current Area**, ±1 dB adjustment, and a **Fast refresh** switch (updates every 1.5 s while the page is open; off, the page updates when something changes).
+- **Discovered Nearby Bluetooth Devices:** named BLE devices, `private_ble_device` entities, and iBeacons your scanners can hear. **Adopt** one to track it as its own Latter device.
 
 → [Presence guide](presence.md)
 
-### System settings
+### System Settings
 | Card | What it does |
 | :--- | :--- |
-| **Export settings** | Download the whole System's settings, or one device's, as a `.json` file. Device exports include the device's live ESPHome select, switch, and number values. Full backups are Home Assistant's own: Latter's storage is included in every Home Assistant backup. |
-| **Restore from file** | Upload an exported `.json` file to restore it. For a device export, choose the device to restore it onto; it can be a different device, to clone a setup. |
+| **Export Settings** | Download the whole System's settings, or one device's, as a `.json` file. Device exports include the device's live ESPHome select, switch, and number values. Full backups are Home Assistant's own: Latter's storage is included in every Home Assistant backup. |
+| **Restore From File** | Upload an exported `.json` file to restore it. For a device export, choose the device to restore it onto; it can be a different device, to clone a setup. |
 | **Announcements & Alerts** | Choose **Notification** (an on-screen alert with a chime on one device, every device, or the devices in occupied Areas, optionally with a snapshot from the primary camera) or **Broadcast** (the message spoken with text-to-speech on every speaker, or on the speakers in occupied Areas), then **Send**. |
-| **Custom color library** | Up to 24 saved theme colors; **Add color** opens a color picker. Apply one to a device from that device's **Display & home** page. |
-| **System & Device logs** | Latter's own events plus the Latter, ESPHome and Music Assistant entries from the Home Assistant log. Show all entries, Latter only, warnings and errors, or one device's; **Open in Home Assistant** opens Home Assistant's log page filtered the same way. **Copy** and **Clear** act on Latter's list. |
+| **Custom Color Library** | Up to 24 saved theme colors; **Add color** opens a color picker. Apply one to a device from that device's **Display & Home** page. |
+| **System & Device Logs** | Latter's own events plus the Latter, ESPHome and Music Assistant entries from the Home Assistant log. Show all entries, Latter only, warnings and errors, or one device's; **Open in Home Assistant** opens Home Assistant's log page filtered the same way. **Copy** and **Clear** act on Latter's list. |
 
 ---
 
@@ -67,12 +67,12 @@ Each device has five pages. The options on each page depend on what the device's
 | Page | Contents |
 | :--- | :--- |
 | **Overview** | A **Needs attention** banner when the device has open repairs; battery, Wi-Fi and firmware; **Now** (the device's Area, its active speaker and what's playing); device status; quick actions, power profile, apply a profile, and assigned person. A value the device hasn't reported shows as —. |
-| **Display & home** | Color profile, Area cards per page, home dock apps and their order (the device shows exactly these apps, plus Settings, and **Settings → Home** on the device edits the same list), and wallpapers (5 built-in presets, plus uploads that can rotate on a schedule). Screen shape and resolution come from the device's hardware manifest. |
-| **Audio & voice** | Wake word and sensitivity, **Voice Follows Me** and its delay (roaming devices: how long Bluetooth must place the device in a new Area before its Home Assistant Area follows, 3 to 60 s), **Media follows this Device to its new Area** (one setting for Bluetooth moves and Area picks on the device), default speaker, the device's **Music Assistant player** (its link to Music Assistant, needed for library playback), alert volume, and music sorting |
-| **Power & battery** | Sleep and wake timeouts, plus battery and power readings |
-| **Device settings** | **Device**: the ESPHome node name (read-only) and group. **Location & BLE**: BLE Area tracking (the BLE presence beacon follows **Track the Area with BLE proxies** and is shown read-only), fallback Area, BLE target and external Area sensor. **In Home Assistant**: **Open in Home Assistant** (the ESPHome device page), **Download diagnostics**, and **Replace hardware** (opens Latter in Home Assistant to reconfigure or replace the hardware). **Diagnostics** (collapsed): network and status entities, a **Developer** group (profiler, memory, weather simulation) and every entity. **Danger Zone**: **Reset…** and **Remove…** |
+| **Display & Home** | Color profile, Area cards per page, home dock apps and their order (the device shows exactly these apps, plus Settings, and **Settings → Home** on the device edits the same list), and wallpapers (5 built-in presets, plus uploads that can rotate on a schedule). Screen shape and resolution come from the device's hardware manifest. |
+| **Audio & Voice** | Wake word and sensitivity, **Voice Follows Me** and its delay (roaming devices: how long Bluetooth must place the device in a new Area before its Home Assistant Area follows, 3 to 60 s), **Media follows this Device to its new Area** (one setting for Bluetooth moves and Area picks on the device), default speaker, the device's **Music Assistant player** (its link to Music Assistant, needed for library playback), alert volume, and music sorting |
+| **Power & Battery** | Sleep and wake timeouts, plus battery and power readings |
+| **Device Settings** | **Device**: the ESPHome node name (read-only) and group. **Location & BLE**: BLE Area tracking (the BLE presence beacon follows **Track the Area with BLE proxies** and is shown read-only), fallback Area, BLE target and external Area sensor. **In Home Assistant**: **Open in Home Assistant** (the ESPHome device page), **Download diagnostics**, and **Replace hardware** (opens Latter in Home Assistant to reconfigure or replace the hardware). **Diagnostics** (collapsed): network and status entities, a **Developer** group (profiler, memory, weather simulation) and every entity. **Danger Zone**: **Reset…** and **Remove…** |
 
-**Reset…** opens a confirmation with two options, both on by default: **Device settings** (erases everything saved on the device; it restarts) and **Latter options for this Device**. Wi-Fi and pairing are kept, as are the device's ESPHome binding and Music Assistant player link. It does the same as the [`latter.reset_device`](reference/services.md#latterreset_device) service; BLE tags only offer the Latter options.
+**Reset…** opens a confirmation with two options, both on by default: **Device Settings** (erases everything saved on the device; it restarts) and **Latter options for this Device**. Wi-Fi and pairing are kept, as are the device's ESPHome binding and Music Assistant player link. It does the same as the [`latter.reset_device`](reference/services.md#latterreset_device) service; BLE tags only offer the Latter options.
 
 > Most settings apply live: Studio saves them and pushes the change to the device without a reload. Adding or removing a device, or changing a device's bound ESPHome device, reloads the Latter integration; devices reconnect within a few seconds.
 

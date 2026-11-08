@@ -111,7 +111,7 @@ The `:host` block holds only declarations (no nested rules and no `}` inside com
 
 Studio has one implementation of each component. A new pattern is added here first, then built once and reused.
 
-- **Card**: header (title, optional one-line description, actions on the right) → content → optional footer actions separated by a divider. Descriptions are always visible.
+- **Card**: header (title and actions on the right) → content → optional footer actions separated by a divider. A card has a description line only for a warning, a consequence or a prerequisite the controls don't show (D-012).
   ```html
   <section class="card">
     <div class="card-header">
@@ -154,15 +154,15 @@ Studio has one implementation of each component. A new pattern is added here fir
   Studio writes the URL with `history.pushState` and a `location-changed` event, the way Home Assistant's own panels navigate. An unknown path shows the Device list.
 - The **Visit** link on a Latter Device's Home Assistant device page opens that Device in Studio (`/latter/devices/<subentry_id>`).
 - The page template starts in the Devices state, so nothing flashes before the first render.
-- Page names are unique: Device pages are **Overview**, **Display & home**, **Audio & voice**, **Power & battery**, and **Device settings**; System pages are **System overview**, **Shared entities**, **Media & remotes**, **Groups & profiles**, **BLE & Area presence**, and **System settings**. A nav label and its page title are the same text.
-- **Device settings** has five cards, in this order: **Device** (node name, group), **Location & BLE** (Area tracking, fallback Area, BLE target, external Area sensor), **In Home Assistant** (device page, diagnostics download, replace hardware), **Diagnostics** (collapsed: network and status entities, a **Developer** group with the profiler, memory and weather simulation, and every entity), and **Danger Zone** (reset, remove). Settings that shape what the screen shows (such as Area cards per page) live on **Display & home**, not here.
+- Page names are unique: Device pages are **Overview**, **Display & Home**, **Audio & Voice**, **Power & Battery**, and **Device Settings**; System pages are **System Overview**, **Shared Entities**, **Media & Remotes**, **Groups & Profiles**, **BLE & Area Presence**, and **System Settings**. A nav label and its page title are the same text.
+- **Device Settings** has five cards, in this order: **Device** (node name, group), **Location & BLE** (Area tracking, fallback Area, BLE target, external Area sensor), **In Home Assistant** (device page, diagnostics download, replace hardware), **Diagnostics** (collapsed: network and status entities, a **Developer** group with the profiler, memory and weather simulation, and every entity), and **Danger Zone** (reset, remove). Settings that shape what the screen shows (such as Area cards per page) live on **Display & Home**, not here.
 - System pages work fully with no Device selected. A System action that acts on one Device names that Device in the action itself (a picker), never the "selected Device" of another page.
 
 ## 6. Content rules
 
 - Use Home Assistant and IT terminology: **System**, **Sites**, **Areas**, **Devices**, **Roles**, **Policies**, **Bridges**. Never "household", "fleet", or "room" (`[STUDIO TERMINOLOGY]`).
 - No marketing device names or personal equipment brands in labels or logic; Studio branches on hardware-manifest traits.
-- Labels use sentence case, like Home Assistant: page names, card titles, buttons, options and toasts ("Speaker volume overrides", "Add color"). The terminology words above (System, Device, Area, …) and proper names (Home Assistant, Music Assistant, ESPHome, Voice Follows Me, Repairs) keep their capitals. Help text is one short sentence that says what the setting does, not how it's built.
+- **Titles** (page and nav names, card, section, sub-section and dialog titles) use Title Case: every word capitalized except a, an, the, and, or, of, to, in, on, for, with and &, unless first or last (D-011, `[STUDIO TITLE CASE]`). Everything else (buttons, row labels, options, help text, toasts) uses sentence case. Terminology words (System, Device, Area, …) and proper names (Home Assistant, Music Assistant, ESPHome, Voice Follows Me, Repairs) always keep their capitals. Help text is one short sentence that says what the setting does, not how it's built.
 - Show entity IDs only where the user picks or inspects an entity.
 - Units, numbers, and dates follow the user's Home Assistant settings (`hass.locale`, `hass.config.unit_system`). Times are relative ("2 min ago") where that reads better. Studio formats them with one set of helpers: `fmtNumber`, `fmtPercent`, `fmtDistance` (feet or metres by the unit system), `fmtAgo`, and `fmtDateTime` (the user's time zone setting, server or browser). The backend sends timestamps as UTC ISO 8601 and never formats them.
 
@@ -251,4 +251,18 @@ A standing decision stays in force until a new entry supersedes it. Changing one
 - **Decision:** There is no Save button. A switch, select or slider applies when it changes (a slider when it's released); a text or number field commits on Enter or when it loses focus. Changes in quick succession are coalesced into one write of just the changed keys, per scope (System or Device), so a run of clicks doesn't flood Home Assistant or the device payload. A failed write shows the error toast and puts the control back to its saved value. Success toasts appear only when the result isn't visible on the page. System and Device settings are still written by separate commands and never write each other. Supersedes D-007; D-009's one-primary-per-card rule stands, minus its header Save.
 - **Why:** It's how Home Assistant's own entity and settings controls behave, and a page that mixes "applies now" with "waits for Save" leaves the user guessing.
 - **Alternatives:** Keep one Save button for everything (D-007); mark each card as "applies now" or "needs Save".
+- **Status:** Accepted.
+
+### D-011: Titles use Title Case
+- **Date:** 2026-11-07
+- **Decision:** Page and nav names, card titles, section and sub-section titles, and dialog titles capitalize every word except the minor words a, an, the, and, or, of, to, in, on, for, with and &, which stay lowercase unless they're first or last ("Location & BLE", "Announcements & Alerts", "Danger Zone", "Display & Home"). Buttons, row labels, options, help text and toasts stay in sentence case. latter-verify's `[STUDIO TITLE CASE]` check enforces it.
+- **Why:** The maintainer's choice: titles read as names and stand apart from the controls under them.
+- **Alternatives:** Sentence case for every label, as Home Assistant's own settings pages do (the previous content rule).
+- **Status:** Accepted.
+
+### D-012: No descriptive subtitles
+- **Date:** 2026-11-07
+- **Decision:** A title has no "what this section configures" line under it. A card keeps a description only when it carries something critical that the title and the controls don't show: a warning, a consequence or a prerequisite (for example "Not a full backup", "Up to 10 cameras", or how to calibrate). Row descriptions under individual settings are unaffected.
+- **Why:** Descriptions that restate the controls add reading without adding information, and they hide the few lines that matter.
+- **Alternatives:** A one-line description on every card (the previous card rule).
 - **Status:** Accepted.

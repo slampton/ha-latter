@@ -966,12 +966,12 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
     </div>
 
     <nav class="nav-list hidden" id="nav-scope-system" aria-label="System pages">
-      <button class="nav-btn" data-view="system_overview" onclick="switchView('system_overview', this)"><span>System overview</span></button>
-      <button class="nav-btn" data-view="shared_entities" onclick="switchView('shared_entities', this)"><span>Shared entities</span></button>
-      <button class="nav-btn" data-view="remotes" onclick="switchView('remotes', this)"><span>Media &amp; remotes</span></button>
-      <button class="nav-btn" data-view="system_sync" onclick="switchView('system_sync', this)"><span>Groups &amp; profiles</span></button>
-      <button class="nav-btn" data-view="area_tracking" onclick="switchView('area_tracking', this)"><span>BLE &amp; Area presence</span></button>
-      <button class="nav-btn" data-view="system_admin" onclick="switchView('system_admin', this)"><span>System settings</span></button>
+      <button class="nav-btn" data-view="system_overview" onclick="switchView('system_overview', this)"><span>System Overview</span></button>
+      <button class="nav-btn" data-view="shared_entities" onclick="switchView('shared_entities', this)"><span>Shared Entities</span></button>
+      <button class="nav-btn" data-view="remotes" onclick="switchView('remotes', this)"><span>Media &amp; Remotes</span></button>
+      <button class="nav-btn" data-view="system_sync" onclick="switchView('system_sync', this)"><span>Groups &amp; Profiles</span></button>
+      <button class="nav-btn" data-view="area_tracking" onclick="switchView('area_tracking', this)"><span>BLE &amp; Area Presence</span></button>
+      <button class="nav-btn" data-view="system_admin" onclick="switchView('system_admin', this)"><span>System Settings</span></button>
     </nav>
 
     <nav class="nav-list" id="nav-scope-devices-list" aria-label="Devices">
@@ -984,10 +984,10 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
       <button class="nav-btn nav-back-btn" onclick="openDevicesLanding()"><span>&larr; All Devices</span></button>
       <div class="nav-device-title" id="nav-selected-device-label">—</div>
       <button class="nav-btn" data-view="dashboard" onclick="switchView('dashboard', this)"><span>Overview</span></button>
-      <button class="nav-btn" id="nav-btn-home_display" data-view="home_display" onclick="switchView('home_display', this)"><span>Display &amp; home</span></button>
-      <button class="nav-btn" id="nav-btn-audio_voice" data-view="audio_voice" onclick="switchView('audio_voice', this)"><span>Audio &amp; voice</span></button>
-      <button class="nav-btn" id="nav-btn-power" data-view="power" onclick="switchView('power', this)"><span>Power &amp; battery</span></button>
-      <button class="nav-btn" data-view="system" onclick="switchView('system', this)"><span>Device settings</span><span class="nav-badge" id="nav-esp-badge">—</span></button>
+      <button class="nav-btn" id="nav-btn-home_display" data-view="home_display" onclick="switchView('home_display', this)"><span>Display &amp; Home</span></button>
+      <button class="nav-btn" id="nav-btn-audio_voice" data-view="audio_voice" onclick="switchView('audio_voice', this)"><span>Audio &amp; Voice</span></button>
+      <button class="nav-btn" id="nav-btn-power" data-view="power" onclick="switchView('power', this)"><span>Power &amp; Battery</span></button>
+      <button class="nav-btn" data-view="system" onclick="switchView('system', this)"><span>Device Settings</span><span class="nav-badge" id="nav-esp-badge">—</span></button>
     </nav>
   </aside>
 
@@ -1004,10 +1004,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
       <section id="view-system_overview" class="hidden">
         <div class="card" id="card-issues">
           <div class="card-header">
-            <div class="card-heading">
-              <h3 class="card-title">Issues</h3>
-              <p class="card-description">Latter's repairs, the same ones Home Assistant lists in Settings › Repairs.</p>
-            </div>
+            <div class="card-heading"><h3 class="card-title">Issues</h3></div>
             <div class="card-header-actions"><button type="button" class="btn btn-secondary btn-compact" onclick="openHaPage('/config/repairs')">Open Repairs</button></div>
           </div>
           <div class="card-content"><div id="sys-issues-list" class="settings-list"></div></div>
@@ -1028,7 +1025,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
             </div>
           </div>
           <div class="card">
-            <div class="card-header"><div class="card-heading"><h3 class="card-title">Configured items</h3></div></div>
+            <div class="card-header"><div class="card-heading"><h3 class="card-title">Configured Items</h3></div></div>
             <div class="card-content kv-list">
               <button type="button" class="kv-row" onclick="openSystemSection('remotes', 'card-remotes')"><span>Remote controls</span><strong id="sys-sum-remotes">—</strong></button>
               <button type="button" class="kv-row" onclick="openSystemSection('remotes', 'card-vol-overrides')"><span>Speaker volume overrides</span><strong id="sys-sum-vol">—</strong></button>
@@ -1044,10 +1041,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
       <section id="view-shared_entities" class="hidden">
         <div class="grid-2">
           <div class="card">
-            <div class="card-header"><div class="card-heading">
-              <h3 class="card-title">Whole-home entities</h3>
-              <p class="card-description">Shared entities used by the Home screen and the Whole-Home Hub.</p>
-            </div></div>
+            <div class="card-header"><div class="card-heading"><h3 class="card-title">Whole-Home Entities</h3></div></div>
             <div class="card-content settings-list">
               <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-weather_entity">Weather</label></div><div class="settings-row-control"><select id="cfg-weather_entity" onchange="saveField('system', this)"></select></div></div>
               <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-alarm_entity">Security alarm</label></div><div class="settings-row-control"><select id="cfg-alarm_entity" onchange="saveField('system', this)"></select></div></div>
@@ -1060,8 +1054,8 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
 
           <div class="card" id="card-cameras">
             <div class="card-header"><div class="card-heading">
-              <h3 class="card-title">Cameras &amp; doorbell audio</h3>
-              <p class="card-description">Up to 10 cameras for the on-device Camera Carousel and doorbell popups. Devices can listen to a doorbell and reply by push-to-talk: your speech is transcribed and spoken on the camera's speaker with Home Assistant TTS.</p>
+              <h3 class="card-title">Cameras &amp; Doorbell Audio</h3>
+              <p class="card-description">Up to 10 cameras.</p>
             </div></div>
             <div class="card-content">
               <div class="settings-list">
@@ -1108,10 +1102,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
 
         <div class="grid-2">
           <div class="card" id="card-calendars">
-            <div class="card-header"><div class="card-heading">
-              <h3 class="card-title">Calendars</h3>
-              <p class="card-description">Calendars merged into the on-device agenda and Home screen.</p>
-            </div></div>
+            <div class="card-header"><div class="card-heading"><h3 class="card-title">Calendars</h3></div></div>
             <div class="card-content">
               <div id="calendars-list" class="stack"></div>
               <div><button type="button" class="btn btn-text" onclick="addCalendarRow('')">+ Add calendar</button></div>
@@ -1124,8 +1115,8 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
       <section id="view-remotes" class="hidden">
         <div class="card" id="card-remotes">
           <div class="card-header"><div class="card-heading">
-            <h3 class="card-title">Remote inventory</h3>
-            <p class="card-description">Up to 10 <code>remote.*</code> or <code>media_player.*</code> entities. Organize them into remote groups below.</p>
+            <h3 class="card-title">Remote Inventory</h3>
+            <p class="card-description">Up to 10 remotes.</p>
           </div></div>
           <div class="card-content">
             <div id="remotes-list" class="stack"></div>
@@ -1134,23 +1125,17 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
         </div>
 
         <div class="card" id="card-remote-groups">
-          <div class="card-header"><div class="card-heading">
-            <h3 class="card-title">Remote control groups</h3>
-            <p class="card-description">Group remotes and assign a group to an Area (roaming Devices show that Area's remotes while they're in it) or to a Device.</p>
-          </div></div>
+          <div class="card-header"><div class="card-heading"><h3 class="card-title">Remote Control Groups</h3></div></div>
           <div class="card-content">
             <div id="remote-groups-list" class="stack"></div>
             <div><button type="button" class="btn btn-text" onclick="addRemoteGroupRow()">+ Create remote group</button></div>
-            <h4 class="subsection-title">Device remote assignment</h4>
+            <h4 class="subsection-title">Device Remote Assignment</h4>
             <div id="device-remote-assignments-list" class="settings-list"></div>
           </div>
         </div>
 
         <div class="card" id="card-vol-overrides">
-          <div class="card-header"><div class="card-heading">
-            <h3 class="card-title">Speaker volume overrides</h3>
-            <p class="card-description">When audio plays on a speaker, send its volume changes to a different media player or number entity instead.</p>
-          </div></div>
+          <div class="card-header"><div class="card-heading"><h3 class="card-title">Speaker Volume Overrides</h3></div></div>
           <div class="card-content">
             <div id="volume-overrides-list" class="stack"></div>
             <div><button type="button" class="btn btn-text" onclick="addVolumeOverrideRow('', '')">+ Add volume override</button></div>
@@ -1162,10 +1147,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
       <section id="view-system_sync" class="hidden">
         <div class="grid-2">
           <div class="card">
-            <div class="card-header"><div class="card-heading">
-              <h3 class="card-title">Configuration profiles</h3>
-              <p class="card-description">Capture a Device's settings as a reusable profile, or apply a profile to any Device or group.</p>
-            </div></div>
+            <div class="card-header"><div class="card-heading"><h3 class="card-title">Configuration Profiles</h3></div></div>
             <div class="card-content">
               <div class="settings-list">
                 <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="profile-source-device">Capture from</label></div><div class="settings-row-control"><select id="profile-source-device"></select></div></div>
@@ -1184,10 +1166,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
           </div>
 
           <div class="card">
-            <div class="card-header"><div class="card-heading">
-              <h3 class="card-title">Device groups</h3>
-              <p class="card-description">Groups target profiles and bulk controls.</p>
-            </div></div>
+            <div class="card-header"><div class="card-heading"><h3 class="card-title">Device Groups</h3></div></div>
             <div class="card-content">
               <div class="input-action-row">
                 <input type="text" id="new-group-name" placeholder="New group name" aria-label="New group name">
@@ -1200,10 +1179,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
         </div>
 
         <details class="card">
-          <summary class="card-header"><div class="card-heading">
-            <h3 class="card-title">Bulk Device controls</h3>
-            <p class="card-description">Change display, sleep, voice, or sound settings on several Devices at once.</p>
-          </div></summary>
+          <summary class="card-header"><div class="card-heading"><h3 class="card-title">Bulk Device Controls</h3></div></summary>
           <div class="card-content">
             <div class="list-row-main">
               <div class="stacked-field">
@@ -1231,17 +1207,14 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
       <!-- SYSTEM: BLE & AREA PRESENCE -->
       <section id="view-area_tracking" class="hidden">
         <div class="card">
-          <div class="card-header"><div class="card-heading">
-            <h3 class="card-title">Live Area presence &amp; sensor fusion</h3>
-            <p class="card-description">Occupancy per Area (<code>binary_sensor.&lt;area&gt;_ble_occupancy</code>, <code>sensor.&lt;area&gt;_occupants</code>), combining BLE beacons with occupancy, mmWave and PIR sensors.</p>
-          </div></div>
+          <div class="card-header"><div class="card-heading"><h3 class="card-title">Live Area Presence &amp; Sensor Fusion</h3></div></div>
           <div class="card-content"><div id="area-presence-grid-box" class="settings-list"></div></div>
         </div>
 
         <div class="card">
           <div class="card-header">
             <div class="card-heading">
-              <h3 class="card-title">Per-Area BLE signal calibration</h3>
+              <h3 class="card-title">Per-Area BLE Signal Calibration</h3>
               <p class="card-description">Choose a BLE-enabled Device, carry it into an Area, and select Calibrate current Area.</p>
             </div>
             <div class="card-header-actions">
@@ -1254,10 +1227,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
 
         <div class="card">
           <div class="card-header">
-            <div class="card-heading">
-              <h3 class="card-title">Discovered nearby Bluetooth devices</h3>
-              <p class="card-description">Adopt phones and watches (<code>private_ble_device</code>), iBeacons, or named BLE tags for Area tracking.</p>
-            </div>
+            <div class="card-heading"><h3 class="card-title">Discovered Nearby Bluetooth Devices</h3></div>
             <div class="card-header-actions"><button type="button" class="btn btn-secondary btn-compact" onclick="openAddDeviceModal()">Add by address</button></div>
           </div>
           <div class="card-content"><div id="ble-adopt-table-box" class="settings-list"></div></div>
@@ -1269,8 +1239,8 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
         <div class="grid-2">
           <div class="card">
             <div class="card-header"><div class="card-heading">
-              <h3 class="card-title">Export settings</h3>
-              <p class="card-description">Download the System's settings, or one Device's, as a JSON file. Full backups are Home Assistant's own; Latter's storage is in every Home Assistant backup.</p>
+              <h3 class="card-title">Export Settings</h3>
+              <p class="card-description">Not a full backup: Latter's storage is already in every Home Assistant backup.</p>
             </div></div>
             <div class="card-content settings-list">
               <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="bkp-scope-select">Export</label></div><div class="settings-row-control"><select id="bkp-scope-select"></select></div></div>
@@ -1279,10 +1249,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
           </div>
 
           <div class="card">
-            <div class="card-header"><div class="card-heading">
-              <h3 class="card-title">Restore from file</h3>
-              <p class="card-description">Upload a <code>latter-*.json</code> export. A Device export can be restored onto a different Device.</p>
-            </div></div>
+            <div class="card-header"><div class="card-heading"><h3 class="card-title">Restore From File</h3></div></div>
             <div class="card-content settings-list">
               <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="bkp-upload-file">Backup file</label></div><div class="settings-row-control"><input type="file" id="bkp-upload-file" accept=".json,application/json"></div></div>
               <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="bkp-restore-device">Device for a Device backup</label></div><div class="settings-row-control"><select id="bkp-restore-device"></select></div></div>
@@ -1319,8 +1286,8 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
           <div class="card" id="sys-custom-palettes-card">
             <div class="card-header">
               <div class="card-heading">
-                <h3 class="card-title">Custom color library</h3>
-                <p class="card-description">Saved theme colors. Apply one to a Device from its Display &amp; home page.</p>
+                <h3 class="card-title">Custom Color Library</h3>
+                <p class="card-description">Apply a color from a Device's Display &amp; Home page.</p>
               </div>
               <div class="card-header-actions"><button type="button" class="btn btn-secondary btn-compact" onclick="openColorWheelModal('system')">Add color</button></div>
             </div>
@@ -1329,7 +1296,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
         </div>
 
         <details class="card">
-          <summary class="card-header"><div class="card-heading"><h3 class="card-title">System &amp; Device logs</h3></div></summary>
+          <summary class="card-header"><div class="card-heading"><h3 class="card-title">System &amp; Device Logs</h3></div></summary>
           <div class="card-content">
             <div class="input-action-row">
               <select id="log-filter-select" aria-label="Show log entries" onchange="renderLogsView()">
@@ -1352,7 +1319,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
           <div class="card-header">
             <div class="card-heading">
               <h3 class="card-title">All Devices</h3>
-              <p class="card-description">Open a Device to manage it. Add display opens Latter in Home Assistant, where you choose Add Device. BLE phones, watches and tags are added here.</p>
+              <p class="card-description">Add display opens Latter in Home Assistant, where you choose Add Device.</p>
             </div>
             <div class="card-header-actions">
               <select id="device-category-filter" aria-label="Device category" onchange="onFilterDeviceCategory(this.value)"></select>
@@ -1374,10 +1341,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
         </div>
         <div class="grid-2">
           <div class="card">
-            <div class="card-header"><div class="card-heading">
-              <h3 class="card-title">Now</h3>
-              <p class="card-description">Where this Device is and what it's playing.</p>
-            </div></div>
+            <div class="card-header"><div class="card-heading"><h3 class="card-title">Now</h3></div></div>
             <div class="card-content kv-list">
               <div class="kv-row"><span id="st-area-label">Area</span><strong id="st-area">—</strong></div>
               <div class="kv-row"><span>Speaker</span><strong id="now-speaker">—</strong></div>
@@ -1386,7 +1350,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
           </div>
 
           <div class="card">
-            <div class="card-header"><div class="card-heading"><h3 class="card-title">Device status</h3></div></div>
+            <div class="card-header"><div class="card-heading"><h3 class="card-title">Device Status</h3></div></div>
             <div class="card-content kv-list">
               <div class="kv-row"><span>Hardware model</span><strong id="dash-hw-model">—</strong></div>
               <div class="kv-row"><span>IP address</span><strong id="dash-ip-addr">—</strong></div>
@@ -1401,10 +1365,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
           </div>
         </div>
         <div class="card">
-          <div class="card-header"><div class="card-heading">
-            <h3 class="card-title">Quick actions</h3>
-            <p class="card-description">Run a Device action, or apply a saved configuration profile.</p>
-          </div></div>
+          <div class="card-header"><div class="card-heading"><h3 class="card-title">Quick Actions</h3></div></div>
           <div class="card-content">
             <div id="dash-quick-actions" class="input-action-row"></div>
             <div class="settings-list">
@@ -1415,10 +1376,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
           </div>
         </div>
         <div class="card hidden" id="dash-sensor-entities-card">
-          <div class="card-header"><div class="card-heading">
-            <h3 class="card-title">Device sensors &amp; controls</h3>
-            <p class="card-description">Other sensors, switches and settings this ESPHome device exposes.</p>
-          </div></div>
+          <div class="card-header"><div class="card-heading"><h3 class="card-title">Device Sensors &amp; Controls</h3></div></div>
           <div class="card-content"><div id="dash-device-entities" class="settings-list"></div></div>
         </div>
       </section>
@@ -1427,10 +1385,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
       <section id="view-home_display" class="hidden">
         <div class="grid-2">
           <div class="card">
-            <div class="card-header"><div class="card-heading">
-              <h3 class="card-title">Display &amp; appearance</h3>
-              <p class="card-description">Brightness, auto-brightness schedule, clock face, and color profile.</p>
-            </div></div>
+            <div class="card-header"><div class="card-heading"><h3 class="card-title">Display &amp; Appearance</h3></div></div>
             <div class="card-content">
               <div id="embedded-display" class="settings-list"></div>
               <div class="settings-list">
@@ -1446,10 +1401,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
           </div>
 
           <div class="card">
-            <div class="card-header"><div class="card-heading">
-              <h3 class="card-title">Home screen &amp; Area UI</h3>
-              <p class="card-description">Home screen behavior, dock apps, and the default Area Control category.</p>
-            </div></div>
+            <div class="card-header"><div class="card-heading"><h3 class="card-title">Home Screen &amp; Area UI</h3></div></div>
             <div class="card-content">
               <div id="embedded-home" class="settings-list"></div>
               <div class="settings-list">
@@ -1468,7 +1420,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
           <div class="card-header">
             <div class="card-heading">
               <h3 class="card-title">Wallpapers</h3>
-              <p class="card-description">Choose a built-in preset, upload a photo, or star several favorites to rotate.</p>
+              <p class="card-description">Star two or more favorites to rotate them.</p>
             </div>
             <div class="card-header-actions">
               <select id="cfg-wallpaper_cycle_minutes" aria-label="Favorite rotation" onchange="saveField('device', this)">
@@ -1495,10 +1447,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
       <section id="view-audio_voice" class="hidden">
         <div class="grid-2">
           <div class="card">
-            <div class="card-header"><div class="card-heading">
-              <h3 class="card-title">Voice assistant &amp; wake word</h3>
-              <p class="card-description">Wake word mode, active wake word, and visual profile.</p>
-            </div></div>
+            <div class="card-header"><div class="card-heading"><h3 class="card-title">Voice Assistant &amp; Wake Word</h3></div></div>
             <div class="card-content">
               <div id="embedded-voice-primary" class="settings-list"></div>
               <div class="settings-list">
@@ -1512,17 +1461,14 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
                 </div>
               </div>
               <details class="sub-collapsible" id="details-voice-sens">
-                <summary>Wake word sensitivity (per model)</summary>
+                <summary>Wake Word Sensitivity (Per Model)</summary>
                 <div class="card-content"><div id="embedded-voice-sens" class="settings-list"></div></div>
               </details>
             </div>
           </div>
 
           <div class="card">
-            <div class="card-header"><div class="card-heading">
-              <h3 class="card-title">Sound &amp; media player</h3>
-              <p class="card-description">Alert volume, volume step, player appearance, and speakers.</p>
-            </div></div>
+            <div class="card-header"><div class="card-heading"><h3 class="card-title">Sound &amp; Media Player</h3></div></div>
             <div class="card-content">
               <div id="embedded-sound" class="settings-list"></div>
               <div id="embedded-music" class="settings-list"></div>
@@ -1532,7 +1478,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
                 <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-area_handoff">Media follows this Device to its new Area</label><p class="row-description">When Bluetooth moves this Device to another Area, or you pick one on it, its speaker switches to that Area's speaker and playing music moves along.</p></div><div class="settings-row-control"><input type="checkbox" class="switch" role="switch" id="cfg-area_handoff" onchange="saveField('device', this)"></div></div>
               </div>
               <details class="sub-collapsible">
-                <summary>Library sorting</summary>
+                <summary>Library Sorting</summary>
                 <div class="card-content"><div id="embedded-music-sort" class="settings-list"></div></div>
               </details>
             </div>
@@ -1544,17 +1490,11 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
       <section id="view-power" class="hidden">
         <div class="grid-2">
           <div class="card">
-            <div class="card-header"><div class="card-heading">
-              <h3 class="card-title">Sleep &amp; wake</h3>
-              <p class="card-description">Screen timeouts, pickup and tap to wake, docked screensaver, and hibernate.</p>
-            </div></div>
+            <div class="card-header"><div class="card-heading"><h3 class="card-title">Sleep &amp; Wake</h3></div></div>
             <div class="card-content"><div id="embedded-sleep" class="settings-list"></div></div>
           </div>
           <div class="card">
-            <div class="card-header"><div class="card-heading">
-              <h3 class="card-title">Battery &amp; power</h3>
-              <p class="card-description">Live battery level, charging, voltage, and temperature.</p>
-            </div></div>
+            <div class="card-header"><div class="card-heading"><h3 class="card-title">Battery &amp; Power</h3></div></div>
             <div class="card-content"><div id="embedded-battery" class="settings-list"></div></div>
           </div>
         </div>
@@ -1616,7 +1556,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
               <div class="card-content"><div id="embedded-developer" class="settings-list"></div></div>
             </details>
             <details class="sub-collapsible">
-              <summary>All entities</summary>
+              <summary>All Entities</summary>
               <div class="card-content">
                 <input type="text" id="esp-search" placeholder="Filter by name or entity ID" aria-label="Filter entities" oninput="renderRawEntityList()">
                 <div id="raw-entity-items" class="settings-list"></div>
@@ -1645,7 +1585,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
 
 <dialog id="latter-rm-modal" class="studio-dialog" aria-labelledby="latter-rm-title">
   <div class="dialog-body">
-    <h3 class="dialog-title danger" id="latter-rm-title">Remove Device from Latter?</h3>
+    <h3 class="dialog-title danger" id="latter-rm-title">Remove Device From Latter?</h3>
     <p class="dialog-text" id="latter-rm-desc">Your ESPHome device stays in Home Assistant.</p>
     <div class="dialog-actions">
       <button type="button" class="btn btn-secondary" onclick="closeRemoveDeviceModal()">Cancel</button>
@@ -1656,7 +1596,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
 
 <dialog id="latter-reset-modal" class="studio-dialog" aria-labelledby="latter-reset-title">
   <div class="dialog-body">
-    <h3 class="dialog-title danger" id="latter-reset-title">Reset to defaults?</h3>
+    <h3 class="dialog-title danger" id="latter-reset-title">Reset to Defaults?</h3>
     <div class="settings-list">
       <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="latter-reset-device-settings">Device settings</label><p class="row-description">Erases everything saved on the Device; it restarts.</p></div><div class="settings-row-control"><input type="checkbox" class="switch" role="switch" id="latter-reset-device-settings" checked onchange="updateResetDeviceConfirm()"></div></div>
       <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="latter-reset-latter-options">Latter options for this Device</label></div><div class="settings-row-control"><input type="checkbox" class="switch" role="switch" id="latter-reset-latter-options" checked onchange="updateResetDeviceConfirm()"></div></div>
@@ -1671,7 +1611,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
 
 <dialog id="latter-add-dev-modal" class="studio-dialog" aria-labelledby="latter-add-dev-title">
   <div class="dialog-body">
-    <h3 class="dialog-title" id="latter-add-dev-title">Add a BLE phone, watch or tag</h3>
+    <h3 class="dialog-title" id="latter-add-dev-title">Add a BLE Phone, Watch or Tag</h3>
     <p class="dialog-text">Latter displays are added through Home Assistant's ESPHome discovery.</p>
     <div class="stacked-field"><label for="ble-candidate-picker">Discovered Bluetooth devices</label><select id="ble-candidate-picker" onchange="onSelectBleCandidate(this.value)"></select></div>
     <div class="stacked-field"><label for="ble-custom-name">Name</label><input type="text" id="ble-custom-name" placeholder="e.g. phone, watch, keys"></div>
@@ -1686,7 +1626,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
 
 <dialog id="latter-cw-modal" class="studio-dialog" aria-labelledby="latter-cw-title">
   <div class="dialog-body">
-    <h3 class="dialog-title" id="latter-cw-title">Add a custom color</h3>
+    <h3 class="dialog-title" id="latter-cw-title">Add a Custom Color</h3>
     <p class="dialog-text">Pick a color and save it to the System color library.</p>
     <div class="color-wheel"><canvas id="latter-cw-canvas" width="220" height="220" aria-label="Color wheel"></canvas></div>
     <div class="color-hex-row">
@@ -2191,18 +2131,18 @@ function canReloadForm(scope) {
 
 
 const VIEW_TITLES = {
-  system_overview: "System overview",
-  shared_entities: "Shared entities",
-  remotes: "Media & remotes",
-  system_sync: "Groups & profiles",
-  area_tracking: "BLE & Area presence",
-  system_admin: "System settings",
+  system_overview: "System Overview",
+  shared_entities: "Shared Entities",
+  remotes: "Media & Remotes",
+  system_sync: "Groups & Profiles",
+  area_tracking: "BLE & Area Presence",
+  system_admin: "System Settings",
   select_device_prompt: "Devices",
   dashboard: "Overview",
-  home_display: "Display & home",
-  audio_voice: "Audio & voice",
-  power: "Power & battery",
-  system: "Device settings"
+  home_display: "Display & Home",
+  audio_voice: "Audio & Voice",
+  power: "Power & Battery",
+  system: "Device Settings"
 };
 let CURRENT_VIEW_ID = "select_device_prompt";
 
@@ -2931,7 +2871,7 @@ function renderAreaPresenceGrid() {
         `<select aria-label="Fusion mode for ${esc(r.area_name)}" onchange="setAreaFusion(${areaArg}, {mode: this.value})">${opts}</select>`
       )}
       <details class="sub-collapsible" ${FUSION_OPEN_AREAS.has(r.area_id) ? "open" : ""} ontoggle="onFusionDetailsToggle(${areaArg}, this.open)">
-        <summary>Fusion settings</summary>
+        <summary>Fusion Settings</summary>
         <div class="card-content settings-list">
           ${settingsRowHtml(
             `<label for="${thresholdId}">Occupied at</label>`,
@@ -3774,7 +3714,7 @@ function openResetDeviceModal() {
   }
   if (opts) opts.checked = true;
   const title = doc.getElementById("latter-reset-title");
-  if (title) title.textContent = `Reset '${STATE?.title || "this Device"}' to defaults?`;
+  if (title) title.textContent = `Reset '${STATE?.title || "This Device"}' to Defaults?`;
   updateResetDeviceConfirm();
   openDialog("latter-reset-modal");
 }

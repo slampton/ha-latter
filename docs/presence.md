@@ -2,7 +2,7 @@
 
 Latter tracks which area each device is in using the Bluetooth proxies you already have. It then uses that area: it moves the device's Home Assistant Area so Assist targets the right area, scopes Area Control, and routes "follow me" notifications.
 
-<!-- MEDIA: docs/media/presence-survey.png — Studio → BLE & Area presence with the live survey and per-area calibration. -->
+<!-- MEDIA: docs/media/presence-survey.png — Studio → BLE & Area Presence with the live survey and per-area calibration. -->
 
 ---
 
@@ -17,7 +17,7 @@ Latter tracks which area each device is in using the Bluetooth proxies you alrea
 | Target | How it's identified | How to add it |
 | :--- | :--- | :--- |
 | Latter firmware devices | The device's MAC address from Home Assistant's device registry (±2, to cover the ESP32 BLE MAC offset). The Latter iBeacon UUID and minor are also accepted, which covers ESP32-P4 boards where BLE runs on a separate C6 chip with its own MAC. | Check **Track this device's area with Bluetooth** when adding the device |
-| Phones and watches | Home Assistant's [Private BLE Device](https://www.home-assistant.io/integrations/private_ble_device/) integration resolves the rotating address from the device's IRK. Latter re-reads the current address every 2 seconds. | Set up Private BLE Device, then **Studio → BLE & Area presence → Discovered nearby Bluetooth devices → Adopt** |
+| Phones and watches | Home Assistant's [Private BLE Device](https://www.home-assistant.io/integrations/private_ble_device/) integration resolves the rotating address from the device's IRK. Latter re-reads the current address every 2 seconds. | Set up Private BLE Device, then **Studio → BLE & Area Presence → Discovered Nearby Bluetooth Devices → Adopt** |
 | iBeacons, including any ESPHome node running `esp32_ble_beacon` | UUID, or an `ibeacon` device tracker entity | Adopt from the same list, or enter the UUID |
 | Other BLE devices with a static address | MAC address | Adopt from the same list, or enter the MAC |
 
@@ -55,7 +55,7 @@ All of these values are constants in [`ble_engine.py`](../custom_components/latt
 
 Walls, furniture, and antenna orientation mean the nearest proxy isn't always the loudest one.
 
-1. Open **Studio → System → BLE & Area presence** and select a device in **Per-Area BLE signal calibration**.
+1. Open **Studio → System → BLE & Area Presence** and select a device in **Per-Area BLE Signal Calibration**.
 2. Turn on **Fast refresh**.
 3. Carry the device into an area and watch the effective RSSI for each area.
 4. If the wrong area wins, click **Calibrate current Area**. Latter sets this area's offset so it beats the strongest competitor by 6 dB. Use ±1 dB to fine-tune.
@@ -76,7 +76,7 @@ Latter creates one occupancy binary sensor and one occupants sensor per area. Th
 | Door or opening closed | +0.08 |
 | Occupancy sensor explicitly off, no motion, weak BLE | −0.18 |
 
-Fusion modes, set per area in Studio (**System → BLE & Area presence**, with the threshold and the sensors under each area's **Fusion settings**):
+Fusion modes, set per area in Studio (**System → BLE & Area Presence**, with the threshold and the sensors under each area's **Fusion Settings**):
 
 | Mode | Behavior |
 | :--- | :--- |
@@ -87,13 +87,13 @@ Fusion modes, set per area in Studio (**System → BLE & Area presence**, with t
 
 > The weighted score is not a Bayesian update. It's simple and predictable, and the weights above are the whole model.
 
-Sensors are discovered automatically by device class (occupancy, presence, motion, moving, door, opening), from both entity areas and device areas. By default every discovered sensor in the area counts; in **Fusion settings** you can pick the ones that count instead (only the area's own sensors can be picked).
+Sensors are discovered automatically by device class (occupancy, presence, motion, moving, door, opening), from both entity areas and device areas. By default every discovered sensor in the area counts; in **Fusion Settings** you can pick the ones that count instead (only the area's own sensors can be picked).
 
 ## What Latter does with the area
 
-- **Moves the device's Home Assistant Area.** When a roaming device (one whose hardware reports it isn't stationary) with **Voice Follows Me** on changes areas, Latter updates that device's Area in the registry after it has stayed in the new area for the device's **Voice Follows Me delay** (10 s by default, 3 to 60 s, set in Studio under **Audio & voice**), so Assist's area-aware commands target where you are. Picking an area on the device applies immediately. Latter never clears the Area when the device goes away, and never moves stationary devices. You can turn this off per device.
+- **Moves the device's Home Assistant Area.** When a roaming device (one whose hardware reports it isn't stationary) with **Voice Follows Me** on changes areas, Latter updates that device's Area in the registry after it has stayed in the new area for the device's **Voice Follows Me delay** (10 s by default, 3 to 60 s, set in Studio under **Audio & Voice**), so Assist's area-aware commands target where you are. Picking an area on the device applies immediately. Latter never clears the Area when the device goes away, and never moves stationary devices. You can turn this off per device.
 - **Scopes Area Control** on the device to the current area.
-- **Moves media with the device**, when its **Media follows this Device to its new Area** setting is on (Studio, **Audio & voice**): the device's speaker switches to the new area's speaker and music that's playing moves along. The same setting applies when you pick an area on the device. After the device reconnects, Latter re-syncs its area without moving media.
+- **Moves media with the device**, when its **Media follows this Device to its new Area** setting is on (Studio, **Audio & Voice**): the device's speaker switches to the new area's speaker and music that's playing moves along. The same setting applies when you pick an area on the device. After the device reconnects, Latter re-syncs its area without moving media.
 - **Routes notifications and intercom.** `target_device: follow_me` delivers to devices in occupied areas; if no area is occupied, nothing is delivered. See [services](reference/services.md#special-target-values).
 - **Fires `latter_event`** with `type: area_changed` for your own automations.
 
@@ -118,14 +118,14 @@ Sensors are discovered automatically by device class (occupancy, presence, motio
 
 ### Using both
 
-You don't have to choose. On a device's **Device settings** page, set **External Area Sensor Override** to a Bermuda area sensor. When its state matches an Area name or ID, Latter switches the device to that area. It also moves the device's Home Assistant Area and rescopes Area Control, just as it would with its own engine.
+You don't have to choose. On a device's **Device Settings** page, set **External Area Sensor Override** to a Bermuda area sensor. When its state matches an Area name or ID, Latter switches the device to that area. It also moves the device's Home Assistant Area and rescopes Area Control, just as it would with its own engine.
 
 Per-area occupancy sensors and `follow_me` routing are different: they come only from Latter's own engine and ignore the override.
 
 ### Switching over
 
 1. Make sure each proxy is assigned to its Area. Bermuda needs this too, so it's probably done already.
-2. Adopt your phones and watches in **Studio → BLE & Area presence**, and set **Assigned person** on each.
+2. Adopt your phones and watches in **Studio → BLE & Area Presence**, and set **Assigned person** on each.
 3. Walk the house and calibrate the areas that pick wrong.
 4. Point your automations at `sensor.<person>_current_area` or `binary_sensor.<area>_ble_occupancy`.
 5. If you use Bermuda's `device_tracker` for `person` home/away, keep Bermuda for that until Latter supports it.
