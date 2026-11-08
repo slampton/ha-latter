@@ -234,6 +234,29 @@ class TestSaveScopes(unittest.TestCase):
             with self.assertRaises(settings.SettingsScopeError):
                 settings.clean_area_fusion(cur, bad, allowed)
 
+    def test_announcements_validate_mode_and_target(self) -> None:
+        slugs = {"kitchen", "desk"}
+        notify = settings.clean_announcement(
+            {"mode": "notify", "target_device": "kitchen", "title": " Door ", "message": "Hi", "include_camera": 1}, slugs
+        )
+        self.assertEqual(notify["service"], "notify")
+        self.assertEqual(notify["data"], {"target_device": "kitchen", "title": "Door", "message": "Hi", "priority": "normal", "chime": True})
+        self.assertTrue(notify["include_camera"])
+        occupied = settings.clean_announcement({"mode": "broadcast", "target_device": "occupied_areas", "message": "Dinner"}, slugs)
+        self.assertEqual(occupied, {"service": "intercom_broadcast", "data": {"message": "Dinner", "target_device": "occupied_areas"}, "include_camera": False})
+        everyone = settings.clean_announcement({"mode": "broadcast", "target_device": "all", "message": "Dinner"}, slugs)
+        self.assertEqual(everyone["data"], {"message": "Dinner"})
+        for bad in (
+            {"mode": "notify", "target_device": "garage", "title": "t", "message": "m"},  # unknown Device
+            {"mode": "notify", "target_device": "kitchen", "title": "", "message": "m"},
+            {"mode": "notify", "target_device": "kitchen", "title": "t", "message": "m", "priority": "urgent"},
+            {"mode": "broadcast", "target_device": "kitchen", "message": "m"},
+            {"mode": "broadcast", "target_device": "all", "message": " "},
+            {"mode": "sms", "target_device": "all", "message": "m"},
+        ):
+            with self.assertRaises(settings.SettingsScopeError):
+                settings.clean_announcement(bad, slugs)
+
     def test_system_view_reads_without_a_device(self) -> None:
         view = settings.system_settings_view({"camera_entity": "camera.door", "weather_entity": "weather.home"})
         self.assertEqual(view["camera_entities"], ["camera.door"])

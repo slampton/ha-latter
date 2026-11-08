@@ -273,3 +273,44 @@ def system_settings_view(global_cfg: Mapping[str, Any]) -> dict[str, Any]:
         }
     )
     return view
+
+
+ANNOUNCE_PRIORITIES: tuple[str, ...] = ("normal", "warning", "critical")
+# Special targets (services.py): every Device, or the Devices in occupied Areas (one name for it in Studio).
+NOTIFY_SPECIAL_TARGETS: tuple[str, ...] = ("all", "occupied_areas")
+BROADCAST_TARGETS: tuple[str, ...] = ("all", "occupied_areas")
+
+
+def clean_announcement(body: Mapping[str, Any], device_slugs: set[str]) -> dict[str, Any]:
+    """Validate a Studio announcement and return {"service", "data", "include_camera"}.
+
+    `mode` is `notify` (an on-screen alert on Latter Devices: `latter.notify`) or `broadcast` (spoken with
+    TTS on speakers: `latter.intercom_broadcast`). The targets are the ones those services accept.
+    """
+    mode = _text(body.get("mode")).lower()
+    target = _text(body.get("target_device"))
+    message = _text(body.get("message"))
+    if not message:
+        raise SettingsScopeError("Enter a message")
+    if mode == "notify":
+        if target not in device_slugs and target not in NOTIFY_SPECIAL_TARGETS:
+            raise SettingsScopeError(f"Not a Latter Device or notify target: {target or '(empty)'}")
+        title = _text(body.get("title"))
+        if not title:
+            raise SettingsScopeError("Enter a title")
+        priority = _text(body.get("priority")).lower() or "normal"
+        if priority not in ANNOUNCE_PRIORITIES:
+            raise SettingsScopeError(f"Unknown priority: {priority}")
+        return {
+            "service": "notify",
+            "data": {"target_device": target, "title": title, "message": message, "priority": priority, "chime": True},
+            "include_camera": bool(body.get("include_camera")),
+        }
+    if mode == "broadcast":
+        if target not in BROADCAST_TARGETS:
+            raise SettingsScopeError(f"Broadcast goes to every speaker or to occupied Areas, not {target or '(empty)'}")
+        data: dict[str, Any] = {"message": message}
+        if target == "occupied_areas":
+            data["target_device"] = "occupied_areas"
+        return {"service": "intercom_broadcast", "data": data, "include_camera": False}
+    raise SettingsScopeError(f"Unknown announcement mode: {mode or '(empty)'}")

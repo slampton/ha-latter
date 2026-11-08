@@ -82,6 +82,7 @@ from .scope import (
 )
 from .settings import (
     SettingsScopeError,
+    clean_announcement,
     clean_area_fusion,
     clean_device_settings,
     clean_system_settings,
@@ -280,38 +281,21 @@ async def _async_execute_studio_command(
             message=msg,
         )
 
-    elif cmd == "send_test_notification":
-        title = str(body.get("title") or "").strip()
-        message = str(body.get("message") or "").strip()
-        priority = str(body.get("priority") or "normal").strip()
-        target_slug = str(body.get("target_device") or "").strip()
-        if not target_slug:
-            raise StudioCommandError(
-                "invalid_format", "target_device is required (a Device or 'all')"
-            )
-        if not title or not message:
-            raise StudioCommandError("invalid_format", "A test notification needs a title and a message")
-        cam_ent = ""
-        if bool(body.get("include_camera", False)):
+    elif cmd == "send_announcement":
+        announcement = clean_announcement(
+            body, {c.device_slug for c in _get_all_coordinators(hass)}
+        )
+        data = dict(announcement["data"])
+        if announcement["include_camera"]:
             cameras = system_settings_view(global_cfg)["camera_entities"]
             if not cameras:
                 raise StudioCommandError(
                     "invalid_format",
                     "Add a camera in Shared Entities first, or turn off the camera snapshot",
                 )
-            cam_ent = cameras[0]
+            data["camera_entity"] = cameras[0]
         await hass.services.async_call(
-            DOMAIN,
-            "notify",
-            {
-                "target_device": target_slug,
-                "title": title,
-                "message": message,
-                "priority": priority,
-                "chime": True,
-                **({"camera_entity": cam_ent} if cam_ent else {}),
-            },
-            blocking=True,
+            DOMAIN, announcement["service"], data, blocking=True
         )
 
     elif cmd == "check_system_updates":

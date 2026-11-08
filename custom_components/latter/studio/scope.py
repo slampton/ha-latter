@@ -21,7 +21,7 @@ SYSTEM_COMMANDS: frozenset[str] = frozenset(
         "set_area_fusion",
         "auto_calibrate_here",
         "system_entity_action",
-        "send_test_notification",
+        "send_announcement",
         "check_system_updates",
         "clear_internal_logs",
         "remove_device",

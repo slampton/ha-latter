@@ -125,6 +125,7 @@ Studio has one implementation of each component. A new pattern is added here fir
 - **Collapsible card**: a native `<details class="card">` whose `<summary>` is the card header. Used for long or advanced content (logs, raw entity inspector). Inside a card, a nested collapsible section uses `details.sub-collapsible`.
 - **Settings row**: label and optional description on the left, the control on the right, a divider between rows. Every Latter option and every curated Device setting goes through this one row, built by `settingsRowHtml()`: `.settings-list` > `.settings-row` > `.settings-row-text` (`.row-label`, `.row-description`) + `.settings-row-control`. `.settings-row.stacked` puts a wide control (a slider, a picker) under the label.
 - **Switch**: one style for every on/off setting: `<input type="checkbox" class="switch" role="switch">`.
+- **Segmented control**: for a small either/or choice that changes the rest of a card (Announcements & Alerts: Notification or Broadcast): `.segmented` with `role="radiogroup"` and `role="radio"` buttons using `aria-checked`.
 - **Key/value rows**: `.kv-list` > `.kv-row` (label, value); unknown values show `—`. A row that opens something is a `button.kv-row`.
 - **Stats**: `.stat-grid` > `.stat` for a few headline numbers on an overview.
 - **Lists**: `.list-row` (with `.list-row-main` and `.list-row-grow`) for short item lists with actions; `.list-block` for an item with a heading row (`.list-row-head`) and stacked fields (`.stacked-field`, `.field-label`).

@@ -418,6 +418,24 @@ const STUDIO_STYLES = `
     gap: var(--studio-space-2);
   }
   .input-action-row > input, .input-action-row > select { flex: 1 1 180px; min-width: 0; }
+  .segmented {
+    display: inline-flex;
+    gap: var(--studio-space-1);
+    padding: var(--studio-space-1);
+    border: 1px solid var(--studio-divider);
+    border-radius: var(--studio-radius-pill);
+  }
+  .segmented button {
+    min-height: var(--studio-control-height-compact);
+    padding: 0 var(--studio-space-3);
+    border: none;
+    border-radius: var(--studio-radius-pill);
+    background: transparent;
+    color: var(--studio-text-secondary);
+    font: inherit;
+    cursor: pointer;
+  }
+  .segmented button[aria-checked="true"] { background: var(--studio-primary-tint-strong); color: var(--studio-primary); }
   .inline-switch { display: inline-flex; align-items: center; gap: var(--studio-space-2); cursor: pointer; white-space: nowrap; }
   .list-row {
     display: flex;
@@ -1271,21 +1289,27 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
         </div>
 
         <div class="grid-2">
-          <div class="card">
-            <div class="card-header"><div class="card-heading">
-              <h3 class="card-title">Notification tester</h3>
-              <p class="card-description">Send a test on-screen alert (<code>latter.notify</code>).</p>
-            </div></div>
+          <div class="card" id="card-announce">
+            <div class="card-header"><div class="card-heading"><h3 class="card-title">Announcements &amp; Alerts</h3></div></div>
             <div class="card-content settings-list">
-              <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="test-alert-device">Send to</label></div><div class="settings-row-control"><select id="test-alert-device"></select></div></div>
-              <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="test-alert-title">Title</label></div><div class="settings-row-control"><input type="text" id="test-alert-title" value="Front Door"></div></div>
-              <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="test-alert-msg">Message</label></div><div class="settings-row-control"><input type="text" id="test-alert-msg" value="Person detected at Front Door"></div></div>
-              <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="test-alert-prio">Priority</label></div><div class="settings-row-control">
-                <select id="test-alert-prio"><option value="normal">Normal</option><option value="warning">Warning</option><option value="critical">Critical</option></select>
+              <div class="settings-row">
+                <div class="settings-row-text"><span class="row-label" id="announce-mode-label">Type</span></div>
+                <div class="settings-row-control">
+                  <div class="segmented" role="radiogroup" aria-labelledby="announce-mode-label">
+                    <button type="button" role="radio" aria-checked="true" data-mode="notify" onclick="setAnnounceMode('notify')">Notification</button>
+                    <button type="button" role="radio" aria-checked="false" data-mode="broadcast" onclick="setAnnounceMode('broadcast')">Broadcast</button>
+                  </div>
+                </div>
+              </div>
+              <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="announce-target">Send to</label></div><div class="settings-row-control"><select id="announce-target"></select></div></div>
+              <div class="settings-row announce-notify-only"><div class="settings-row-text"><label class="row-label" for="announce-title">Title</label></div><div class="settings-row-control"><input type="text" id="announce-title" placeholder="e.g. Front door"></div></div>
+              <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="announce-message">Message</label><p class="row-description announce-broadcast-only hidden">Spoken with text-to-speech on the speakers.</p></div><div class="settings-row-control"><input type="text" id="announce-message" placeholder="e.g. Someone is at the front door"></div></div>
+              <div class="settings-row announce-notify-only"><div class="settings-row-text"><label class="row-label" for="announce-priority">Priority</label></div><div class="settings-row-control">
+                <select id="announce-priority"><option value="normal">Normal</option><option value="warning">Warning</option><option value="critical">Critical</option></select>
               </div></div>
-              <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="test-alert-cam">Include a snapshot from the primary camera</label></div><div class="settings-row-control"><input type="checkbox" class="switch" role="switch" id="test-alert-cam"></div></div>
+              <div class="settings-row announce-notify-only"><div class="settings-row-text"><label class="row-label" for="announce-camera">Include a snapshot from the primary camera</label></div><div class="settings-row-control"><input type="checkbox" class="switch" role="switch" id="announce-camera"></div></div>
             </div>
-            <div class="card-actions"><button type="button" class="btn btn-primary" onclick="sendTestNotification()">Send notification</button></div>
+            <div class="card-actions"><button type="button" class="btn btn-primary" onclick="sendAnnouncement()">Send</button></div>
           </div>
 
           <div class="card" id="sys-custom-palettes-card">
@@ -1871,7 +1895,7 @@ const SYSTEM_WS_COMMANDS = new Set([
   "set_area_fusion",
   "auto_calibrate_here",
   "system_entity_action",
-  "send_test_notification",
+  "send_announcement",
   "check_system_updates",
   "clear_internal_logs",
   "remove_device",
@@ -2656,18 +2680,7 @@ function renderSystemOverview(systemDevices, systemControls, cfg) {
   setSysTxt("sys-sum-calendars", (sysCfg.calendar_entities || []).length);
   setSysTxt("sys-sum-groups-profiles", `${groups.length} group${groups.length === 1 ? "" : "s"} / ${profiles.length} profile${profiles.length === 1 ? "" : "s"}`);
 
-  const alertDevSel = doc.getElementById("test-alert-device");
-  if (alertDevSel && allDevices.length) {
-    const prevTarget = alertDevSel.value || allDevices[0].device_slug;
-    const devOpts = allDevices.map(d =>
-      `<option value="${esc(d.device_slug)}" ${d.device_slug === prevTarget ? 'selected' : ''}>${esc(d.title)}</option>`
-    );
-    devOpts.push(`<option value="follow_me" ${prevTarget === 'follow_me' ? 'selected' : ''}>Follow me (occupied Areas only)</option>`);
-    if (allDevices.length > 1) {
-      devOpts.push(`<option value="all" ${prevTarget === 'all' ? 'selected' : ''}>All Devices (${allDevices.length})</option>`);
-    }
-    alertDevSel.innerHTML = devOpts.join("");
-  }
+  renderAnnounceTargets();
 
   const profBox = doc.getElementById("saved-profiles-list");
   if (profBox) {
@@ -3044,23 +3057,43 @@ async function testDoorbellSpeaker() {
   }
 }
 
-async function sendTestNotification() {
-  const target_device = doc.getElementById("test-alert-device")?.value || "";
-  const title = doc.getElementById("test-alert-title").value.trim() || "Alert";
-  const message = doc.getElementById("test-alert-msg").value.trim() || "Test notification";
-  const priority = doc.getElementById("test-alert-prio").value;
-  const include_camera = doc.getElementById("test-alert-cam").checked;
+// Announcements & Alerts: an on-screen notification on Latter Devices, or a spoken broadcast on speakers.
+let ANNOUNCE_MODE = "notify";
+
+function setAnnounceMode(mode) {
+  ANNOUNCE_MODE = mode === "broadcast" ? "broadcast" : "notify";
+  doc.querySelectorAll("#card-announce .segmented [role=radio]").forEach(b =>
+    b.setAttribute("aria-checked", String(b.dataset.mode === ANNOUNCE_MODE)));
+  doc.querySelectorAll("#card-announce .announce-notify-only").forEach(el => el.classList.toggle("hidden", ANNOUNCE_MODE !== "notify"));
+  doc.querySelectorAll("#card-announce .announce-broadcast-only").forEach(el => el.classList.toggle("hidden", ANNOUNCE_MODE !== "broadcast"));
+  renderAnnounceTargets();
+}
+
+function renderAnnounceTargets() {
+  const sel = doc.getElementById("announce-target");
+  if (!sel) return;
+  const prev = sel.value;
+  const displays = (STATE?.system_devices || []).filter(d => d.kind !== "ble_tag" && d.has_display);
+  const opts = ANNOUNCE_MODE === "notify"
+    ? [{value: "all", label: `All Devices (${displays.length})`}, {value: "occupied_areas", label: "Devices in occupied Areas"}]
+        .concat(displays.map(d => ({value: d.device_slug, label: d.title})))
+    : [{value: "all", label: "Every speaker"}, {value: "occupied_areas", label: "Speakers in occupied Areas"}];
+  sel.innerHTML = opts.map(o => `<option value="${esc(o.value)}" ${o.value === prev ? "selected" : ""}>${esc(o.label)}</option>`).join("");
+}
+
+async function sendAnnouncement() {
   const data = await callStudioCommand({
-      command: "send_test_notification",
-      target_device,
-      title,
-      message,
-      priority,
-      include_camera
-    });
+    command: "send_announcement",
+    mode: ANNOUNCE_MODE,
+    target_device: doc.getElementById("announce-target")?.value || "",
+    title: doc.getElementById("announce-title")?.value.trim() || "",
+    message: doc.getElementById("announce-message")?.value.trim() || "",
+    priority: doc.getElementById("announce-priority")?.value || "normal",
+    include_camera: Boolean(doc.getElementById("announce-camera")?.checked)
+  });
   if (data) {
     applyStateToDom(data, false);
-    showToast(`Sent notification to ${target_device}`);
+    showToast(ANNOUNCE_MODE === "notify" ? "Notification sent" : "Broadcast sent");
   }
 }
 
@@ -4505,7 +4538,8 @@ function bindStudioGlobals() {
   window.saveColorWheelSelection = saveColorWheelSelection;
   window.selectCurrentDevice = selectCurrentDevice;
   window.selectWallpaperSource = selectWallpaperSource;
-  window.sendTestNotification = sendTestNotification;
+  window.sendAnnouncement = sendAnnouncement;
+  window.setAnnounceMode = setAnnounceMode;
   window.setAreaFusion = setAreaFusion;
   window.toggleFusionSensor = toggleFusionSensor;
   window.onFusionDetailsToggle = onFusionDetailsToggle;

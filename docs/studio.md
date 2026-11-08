@@ -52,7 +52,7 @@ Settings here live in `.storage/latter.site` and apply to every device.
 | :--- | :--- |
 | **Export settings** | Download the whole System's settings, or one device's, as a `.json` file. Device exports include the device's live ESPHome select, switch, and number values. Full backups are Home Assistant's own: Latter's storage is included in every Home Assistant backup. |
 | **Restore from file** | Upload an exported `.json` file to restore it. For a device export, choose the device to restore it onto; it can be a different device, to clone a setup. |
-| **Notification tester** | Send a test notification to any device, optionally with a snapshot from the primary camera. |
+| **Announcements & Alerts** | Choose **Notification** (an on-screen alert with a chime on one device, every device, or the devices in occupied Areas, optionally with a snapshot from the primary camera) or **Broadcast** (the message spoken with text-to-speech on every speaker, or on the speakers in occupied Areas), then **Send**. |
 | **Custom color library** | Up to 24 saved theme colors; **Add color** opens a color picker. Apply one to a device from that device's **Display & home** page. |
 
 ---
