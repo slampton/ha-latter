@@ -275,7 +275,6 @@ const STUDIO_STYLES = `
     font-size: var(--studio-font-section);
     font-weight: var(--studio-weight-medium);
   }
-  .card.danger .card-title { color: var(--studio-error); }
   .card-description, .row-description, .help-text {
     color: var(--studio-text-secondary);
     font-size: var(--studio-font-secondary);
@@ -895,7 +894,6 @@ const STUDIO_STYLES = `
     font-size: var(--studio-font-section);
     font-weight: var(--studio-weight-medium);
   }
-  .dialog-title.danger { color: var(--studio-error); }
   .dialog-text { color: var(--studio-text-secondary); }
   .dialog-actions {
     display: flex;
@@ -911,7 +909,16 @@ const STUDIO_STYLES = `
     justify-content: center;
     gap: var(--studio-space-2);
   }
-  .color-hex-row input { width: 120px; font-family: var(--studio-font-code); text-align: center; }
+  .color-hex-row input[type="text"] { width: 120px; font-family: var(--studio-font-code); text-align: center; }
+  .color-hex-row input[type="color"] {
+    width: var(--studio-control-height);
+    height: var(--studio-control-height);
+    padding: 0;
+    border: 1px solid var(--studio-divider);
+    border-radius: var(--studio-radius-control);
+    background: none;
+    cursor: pointer;
+  }
 
   /* ---------- Narrow cards and screens ---------- */
   @container (max-width: 520px) {
@@ -1266,9 +1273,9 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
               <div class="settings-row">
                 <div class="settings-row-text"><span class="row-label" id="announce-mode-label">Type</span></div>
                 <div class="settings-row-control">
-                  <div class="segmented" role="radiogroup" aria-labelledby="announce-mode-label">
+                  <div class="segmented" role="radiogroup" aria-labelledby="announce-mode-label" onkeydown="onAnnounceModeKey(event)">
                     <button type="button" role="radio" aria-checked="true" data-mode="notify" onclick="setAnnounceMode('notify')">Notification</button>
-                    <button type="button" role="radio" aria-checked="false" data-mode="broadcast" onclick="setAnnounceMode('broadcast')">Broadcast</button>
+                    <button type="button" role="radio" aria-checked="false" tabindex="-1" data-mode="broadcast" onclick="setAnnounceMode('broadcast')">Broadcast</button>
                   </div>
                 </div>
               </div>
@@ -1409,7 +1416,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
               </div>
               <div class="settings-row stacked">
                 <div class="settings-row-text"><span class="row-label">Home dock apps</span><p class="row-description">Select an app to show or hide it, and use the arrows to reorder. Changes apply when you save.</p></div>
-                <div class="settings-row-control"><div id="dock-pills-container" class="pill-list"></div></div>
+                <div class="settings-row-control"><div id="dock-pills-container" class="pill-list" role="group" aria-label="Home dock apps"></div></div>
                 <input type="hidden" id="cfg-dock_apps">
               </div>
             </div>
@@ -1457,7 +1464,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
                 </div>
                 <div class="settings-row" id="row-area-follow-dwell">
                   <div class="settings-row-text"><label class="row-label" for="cfg-area_follow_dwell_s">Voice Follows Me delay</label><p class="row-description">How long Bluetooth must place the Device in a new Area before it moves there. Picking an Area on the Device moves it at once.</p></div>
-                  <div class="settings-row-control"><input type="range" id="cfg-area_follow_dwell_s" min="3" max="60" step="1" value="10" oninput="renderDwellValue()" onchange="saveField('device', this)"><span class="chip" id="dwell-value">—</span></div>
+                  <div class="settings-row-control"><input type="range" id="cfg-area_follow_dwell_s" min="3" max="60" step="1" value="10" aria-describedby="dwell-value" oninput="renderDwellValue()" onchange="saveField('device', this)"><span class="chip" id="dwell-value">—</span></div>
                 </div>
               </div>
               <details class="sub-collapsible" id="details-voice-sens">
@@ -1627,11 +1634,10 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
 <dialog id="latter-cw-modal" class="studio-dialog" aria-labelledby="latter-cw-title">
   <div class="dialog-body">
     <h3 class="dialog-title" id="latter-cw-title">Add a Custom Color</h3>
-    <p class="dialog-text">Pick a color and save it to the System color library.</p>
-    <div class="color-wheel"><canvas id="latter-cw-canvas" width="220" height="220" aria-label="Color wheel"></canvas></div>
+    <div class="color-wheel" aria-hidden="true"><canvas id="latter-cw-canvas" width="220" height="220"></canvas></div>
     <div class="color-hex-row">
-      <span id="latter-cw-preview" class="swatch" aria-hidden="true"></span>
-      <input type="text" id="latter-cw-hex" aria-label="Hex color" oninput="onCwHexInput(this.value)">
+      <input type="color" id="latter-cw-native" aria-label="Color" oninput="onCwHexInput(this.value)">
+      <input type="text" id="latter-cw-hex" aria-label="Hex color" placeholder="#RRGGBB" maxlength="7" oninput="onCwHexInput(this.value)">
     </div>
     <div class="stacked-field"><label for="latter-cw-name">Name</label><input type="text" id="latter-cw-name" placeholder="e.g. Sunset Coral"></div>
     <div class="dialog-actions">
@@ -2858,7 +2864,7 @@ function renderAreaPresenceGrid() {
     const chosen = r.fusion_sensors || [];
     const choices = r.fusion_sensor_choices || [];
     const sensorPills = choices.length
-      ? `<div class="pill-list">${choices.map(s => {
+      ? `<div class="pill-list" role="group" aria-label="Sensors that count in ${esc(r.area_name)}">${choices.map(s => {
           const on = chosen.includes(s.entity_id);
           return `<span class="pill ${on ? "enabled" : ""}"><button type="button" class="pill-toggle" aria-pressed="${on}" title="${esc(s.entity_id)}" onclick="toggleFusionSensor(${areaArg}, ${jsArg(s.entity_id)})">${on ? "✓ " : ""}${esc(s.name)}</button></span>`;
         }).join("")}</div>`
@@ -3027,11 +3033,21 @@ let ANNOUNCE_MODE = "notify";
 
 function setAnnounceMode(mode) {
   ANNOUNCE_MODE = mode === "broadcast" ? "broadcast" : "notify";
-  doc.querySelectorAll("#card-announce .segmented [role=radio]").forEach(b =>
-    b.setAttribute("aria-checked", String(b.dataset.mode === ANNOUNCE_MODE)));
+  doc.querySelectorAll("#card-announce .segmented [role=radio]").forEach(b => {
+    const on = b.dataset.mode === ANNOUNCE_MODE;
+    b.setAttribute("aria-checked", String(on));
+    b.tabIndex = on ? 0 : -1;  // one tab stop; arrow keys move between the options
+  });
   doc.querySelectorAll("#card-announce .announce-notify-only").forEach(el => el.classList.toggle("hidden", ANNOUNCE_MODE !== "notify"));
   doc.querySelectorAll("#card-announce .announce-broadcast-only").forEach(el => el.classList.toggle("hidden", ANNOUNCE_MODE !== "broadcast"));
   renderAnnounceTargets();
+}
+
+function onAnnounceModeKey(event) {
+  if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
+  event.preventDefault();
+  setAnnounceMode(ANNOUNCE_MODE === "notify" ? "broadcast" : "notify");
+  doc.querySelector(`#card-announce .segmented [data-mode="${ANNOUNCE_MODE}"]`)?.focus();
 }
 
 function renderAnnounceTargets() {
@@ -3500,7 +3516,7 @@ function renderRemoteGroupsEditor() {
           </div>
           ${iconButtonHtml(ICON_DELETE, `Delete remote group ${grp.name || ""}`, `removeRemoteGroupRow(${gIdx})`, "danger")}
         </div>
-        <div class="stacked-field"><span class="field-label">Remotes (the first one selected is the primary power target)</span><div class="pill-list">${pills}</div></div>
+        <div class="stacked-field"><span class="field-label" id="rg-remotes-${gIdx}">Remotes (the first one selected is the primary power target)</span><div class="pill-list" role="group" aria-labelledby="rg-remotes-${gIdx}">${pills}</div></div>
       </div>`;
     }).join("");
   }
@@ -4288,10 +4304,16 @@ function hsvToRgbJS(h, s, v) {
 
 function setCwHex(hex) {
   cwSelectedHex = String(hex || "").toUpperCase();
-  const prev = doc.getElementById("latter-cw-preview");
+  syncCwInputs();
+}
+
+// Keep the native color input and the hex field showing the picked color (except the one being edited).
+function syncCwInputs() {
+  const native = doc.getElementById("latter-cw-native");
   const inp = doc.getElementById("latter-cw-hex");
-  if (prev) prev.style.setProperty("--swatch-color", cwSelectedHex);
-  if (inp && getStudioActiveElement() !== inp) inp.value = cwSelectedHex;
+  const active = getStudioActiveElement();
+  if (native && active !== native && /^#[0-9A-F]{6}$/.test(cwSelectedHex)) native.value = cwSelectedHex.toLowerCase();
+  if (inp && active !== inp) inp.value = cwSelectedHex;
 }
 
 function onCwHexInput(val) {
@@ -4299,7 +4321,7 @@ function onCwHexInput(val) {
   if (!v.startsWith("#")) v = "#" + v;
   if (/^#[0-9A-F]{6}$/.test(v)) {
     cwSelectedHex = v;
-    doc.getElementById("latter-cw-preview")?.style.setProperty("--swatch-color", v);
+    syncCwInputs();
   }
 }
 
@@ -4507,6 +4529,7 @@ function bindStudioGlobals() {
   window.selectWallpaperSource = selectWallpaperSource;
   window.sendAnnouncement = sendAnnouncement;
   window.setAnnounceMode = setAnnounceMode;
+  window.onAnnounceModeKey = onAnnounceModeKey;
   window.setAreaFusion = setAreaFusion;
   window.toggleFusionSensor = toggleFusionSensor;
   window.onFusionDetailsToggle = onFusionDetailsToggle;
