@@ -176,6 +176,7 @@ Studio has one implementation of each component. A new pattern is added here fir
 - No Home Assistant frontend internals: no `hass-subpage`, no walking other components' shadow roots, no `localStorage.hassTokens`, no `fetch` with stored tokens.
 - Home Assistant's own pages (a device page, Repairs, the Latter integration, logs) open in the same tab with `openHaPage()` (the history API and a `location-changed` event, as Home Assistant's panels navigate), so Back returns to Studio. Studio never opens Home Assistant's dialogs or flows itself; it opens the page that has them. A download from a Home Assistant API (diagnostics) uses a short-lived path signed by Home Assistant's `auth/sign_path` command.
 - Studio uses its own CSS rather than Home Assistant's internal `ha-*` elements (`ha-card`, `ha-switch`, …), which aren't a stable public API. It looks like them by using the same theme variables.
+- The entity catalog (every entity offered in Studio's pickers) is the largest part of the payload, so only `get_state`, the first subscription answer and the first live push after an entity, device or Area registry change carry it; command answers and other pushes leave it out and Studio keeps the last one (`studio/catalog_gate.py`). A new payload field must earn its place: Studio renders it.
 - Settings apply as they change (D-010). System settings and Device settings are written by separate commands with only the changed keys, and saving one never writes the other.
 
 ## Decision log

@@ -35,6 +35,31 @@ scope = _load("studio/scope")
 assets = _load("studio/assets")
 issue_ids = _load("issue_ids")
 dock_policy = _load("dock_policy")
+catalog_gate = _load("studio/catalog_gate")
+
+
+class TestPayloadDiet(unittest.TestCase):
+    """The entity catalog travels only with get_state, the first subscription answer, and after a registry change."""
+
+    def test_gate_opens_once_per_registry_change(self) -> None:
+        gate = catalog_gate.CatalogGate()
+        self.assertFalse(gate.take())
+        gate.mark_dirty()
+        gate.mark_dirty()
+        self.assertTrue(gate.take())
+        self.assertFalse(gate.take())
+
+    def test_only_get_state_and_registry_changes_carry_the_catalog(self) -> None:
+        payload_src = (LATTER_DIR / "studio" / "payload.py").read_text(encoding="utf-8")
+        self.assertIn("    if include_catalog:\n        base[\"catalog\"]", payload_src)
+        cmds = (LATTER_DIR / "studio" / "commands.py").read_text(encoding="utf-8")
+        self.assertIn("build_studio_state_payload(hass, coord, include_catalog=catalog_gate.take())", cmds)
+        for event in ("EVENT_ENTITY_REGISTRY_UPDATED", "EVENT_DEVICE_REGISTRY_UPDATED", "EVENT_AREA_REGISTRY_UPDATED"):
+            self.assertIn(event, cmds)
+        # Every other answer that isn't get_state or the subscription's first answer leaves it out.
+        self.assertEqual(cmds.count("include_catalog=False"), 3)
+        js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
+        self.assertIn("if (!data.catalog && STATE?.catalog) data.catalog = STATE.catalog;", js)
 
 
 class TestDockPolicy(unittest.TestCase):

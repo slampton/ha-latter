@@ -692,11 +692,14 @@ def _build_now_playing(
 def build_studio_state_payload(
     hass: HomeAssistant,
     coordinator: LatterCoordinator | None,
+    *,
+    include_catalog: bool = True,
 ) -> dict[str, Any]:
     """Build the Studio payload: the System part always, plus the Device part when a Device is targeted.
 
     `system_config` (System settings) never depends on the selected Device; `config` holds only
-    that Device's own settings.
+    that Device's own settings. The entity `catalog` is included only when asked (catalog_gate.py):
+    Studio keeps the last one it received.
     """
     base: dict[str, Any] = {
         "subentry_id": coordinator.subentry_id if coordinator is not None else "",
@@ -705,8 +708,9 @@ def build_studio_state_payload(
         **_build_system_section(
             hass, coordinator.subentry_id if coordinator is not None else ""
         ),
-        "catalog": _build_entity_catalog(hass, coordinator),
     }
+    if include_catalog:
+        base["catalog"] = _build_entity_catalog(hass, coordinator)
     presence_grid = get_all_areas_presence_summary(hass)
     if coordinator is None:
         return {

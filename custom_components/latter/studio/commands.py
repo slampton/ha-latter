@@ -17,7 +17,11 @@ import voluptuous as vol
 from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
-from homeassistant.helpers import area_registry as ar
+from homeassistant.helpers import (
+    area_registry as ar,
+    device_registry as dr,
+    entity_registry as er,
+)
 from homeassistant.helpers.event import async_call_later
 
 from ..area_engine import area_fusion_sensor_choices, async_execute_area_action
@@ -61,6 +65,7 @@ from ..wallpaper_engine import (
     known_wallpaper_ids,
     save_uploaded_wallpaper,
 )
+from .catalog_gate import CatalogGate
 from .payload import (
     _build_system_shared_controls,
     _get_all_coordinators,
@@ -668,6 +673,7 @@ async def ws_handle_subscribe(
     sub_id = msg.get("subentry_id")
     unsubs: list[Any] = []
     debounce_cancel: list[Any] = [None]
+    catalog_gate = CatalogGate()
 
     @callback
     def _push_now(_now: Any = None) -> None:
@@ -676,7 +682,7 @@ async def ws_handle_subscribe(
         connection.send_message(
             websocket_api.event_message(
                 msg["id"],
-                build_studio_state_payload(hass, coord),
+                build_studio_state_payload(hass, coord, include_catalog=catalog_gate.take()),
             )
         )
 
@@ -691,6 +697,18 @@ async def ws_handle_subscribe(
 
     ble_fabric = get_ble_fabric(hass)
     unsubs.append(ble_fabric.register_occupancy_listener(_schedule_push))
+
+    @callback
+    def _registry_changed(_event: Any) -> None:
+        catalog_gate.mark_dirty()
+        _schedule_push()
+
+    for registry_event in (
+        er.EVENT_ENTITY_REGISTRY_UPDATED,
+        dr.EVENT_DEVICE_REGISTRY_UPDATED,
+        ar.EVENT_AREA_REGISTRY_UPDATED,
+    ):
+        unsubs.append(hass.bus.async_listen(registry_event, _registry_changed))
 
     @callback
     def _unsub_all() -> None:
@@ -763,7 +781,7 @@ async def _async_handle_ws_command_impl(
     connection.send_result(
         msg["id"],
         {
-            **build_studio_state_payload(hass, selected),
+            **build_studio_state_payload(hass, selected, include_catalog=False),
             **extra,
         },
     )
@@ -878,7 +896,7 @@ async def _async_restore_bundle(
     connection.send_result(
         msg["id"],
         build_studio_state_payload(
-            hass, resolve_target_coordinator(hass, msg.get("subentry_id"))
+            hass, resolve_target_coordinator(hass, msg.get("subentry_id")), include_catalog=False
         ),
     )
 
@@ -987,7 +1005,7 @@ async def ws_handle_device_reset(
         )
         + ")",
     )
-    connection.send_result(msg["id"], build_studio_state_payload(hass, coord))
+    connection.send_result(msg["id"], build_studio_state_payload(hass, coord, include_catalog=False))
 
 
 @callback

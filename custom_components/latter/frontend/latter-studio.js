@@ -4014,6 +4014,8 @@ function restoreFromUploadedFile() {
 }
 
 function applyStateToDom(data, forceFormUpdate=false) {
+  // Live pushes and command answers leave out the entity catalog unless a registry changed; keep the last one.
+  if (!data.catalog && STATE?.catalog) data.catalog = STATE.catalog;
   STATE = data;
   doc.getElementById("studio-root")?.classList.remove("is-loading");
   doc.getElementById("studio-load-error")?.classList.add("hidden");
