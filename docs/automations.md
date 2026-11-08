@@ -119,5 +119,5 @@ actions:
   - action: latter.set_active_area
     data:
       target_device: pocket_assistant
-      area_id: kitchen       # the speaker follows if the device's "Media follows this Device" setting is on
+      area_id: kitchen       # the speaker follows if the device's "Media Follows This Device" setting is on
 ```

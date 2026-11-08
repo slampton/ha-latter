@@ -3,11 +3,11 @@
     "step": {
       "user": {
         "title": "Set Up Latter System & Initial Device",
-        "description": "Create the Latter System hub and connect your first ESPHome companion display or area sensor. Additional devices can be added as Device subentries or via Latter Studio.",
+        "description": "Create the Latter System and connect your first Latter Device (an ESPHome device running Latter firmware, with or without a screen). Add more Devices later with Add Device on the Latter integration page.",
         "data": {
           "esphome_device_id": "ESPHome Device",
           "apply_profile": "Configuration Profile",
-          "native_ble_tracking": "Track this device's area with Bluetooth"
+          "native_ble_tracking": "Track the Area with BLE Proxies"
         },
         "data_description": {
           "esphome_device_id": "The ESPHome device running Latter firmware (or a Latter Core build). Latter binds to this device and its MAC address.",
@@ -16,7 +16,7 @@
         }
       },
       "reconfigure": {
-        "title": "Reconfigure Latter System Hub",
+        "title": "Reconfigure Latter System",
         "description": "Update the weather and alarm entities shared by every Latter Device.",
         "data": {
           "weather_entity": "System Weather Entity",
@@ -28,7 +28,7 @@
       "already_configured": "This ESPHome device is already configured in Latter.",
       "not_supported": "This device is not an ESPHome device that announces Latter companion actions.",
       "reconfigure_successful": "Configuration updated.",
-      "single_instance_allowed": "Latter System is already configured. Add additional displays as Device subentries under the Latter integration.",
+      "single_instance_allowed": "Latter System is already configured. Add more Devices with Add Device on the Latter integration page.",
       "unique_id_mismatch": "The selected ESPHome device does not match the existing configuration entry.",
       "wrong_device": "The selected ESPHome device does not match this configuration entry."
     },
@@ -46,11 +46,11 @@
       "step": {
         "user": {
           "title": "Add ESPHome Device to Latter",
-          "description": "Connect an ESPHome companion display or area sensor to the Latter System.",
+          "description": "Connect an ESPHome device running Latter firmware, with or without a screen, to the Latter System.",
           "data": {
             "esphome_device_id": "ESPHome Device",
             "apply_profile": "Configuration Profile",
-            "native_ble_tracking": "Track this device's area with Bluetooth"
+            "native_ble_tracking": "Track the Area with BLE Proxies"
           },
           "data_description": {
             "esphome_device_id": "The ESPHome device running Latter firmware (or a Latter Core build). Latter binds to this device and its MAC address.",
@@ -64,7 +64,7 @@
           "data": {
             "esphome_device_id": "ESPHome Device",
             "apply_profile": "Configuration Profile",
-            "native_ble_tracking": "Track this device's area with Bluetooth"
+            "native_ble_tracking": "Track the Area with BLE Proxies"
           },
           "data_description": {
             "esphome_device_id": "Keep the current device to update settings, or pick a replacement ESPHome device to rebind the hardware in place.",
@@ -82,13 +82,13 @@
       }
     },
     "ble_tag": {
-      "entry_type": "BLE tag",
+      "entry_type": "BLE Tag",
       "initiate_flow": {
-        "user": "Add BLE tag"
+        "user": "Add BLE Tag"
       },
       "step": {
         "user": {
-          "title": "Add a BLE phone, watch, or tag",
+          "title": "Add a BLE Tag",
           "description": "Track a phone, watch, or Bluetooth tag through your Bluetooth proxies. Latter adds Area and distance sensors for it.",
           "data": {
             "name": "Name",
@@ -98,7 +98,7 @@
           "data_description": {
             "name": "Used for the entity IDs (for example `Sean's Phone` gives `sensor.sean_s_phone_current_area`).",
             "ble_target_address": "A static MAC address, an iBeacon UUID, or a `private_ble_device` / iBeacon tracker entity ID.",
-            "assigned_person": "Optional. Follow-me notifications and occupancy use it."
+            "assigned_person": "Optional. Notifications sent to a person, and occupancy, use it."
           }
         }
       },
@@ -113,7 +113,7 @@
   "options": {
     "step": {
       "init": {
-        "title": "Latter System Options",
+        "title": "Latter System Settings",
         "description": "Set the weather and alarm entities shared by every Latter Device. Everything else, including each Device's Voice Follows Me settings, is in Latter Studio in the Home Assistant sidebar.",
         "data": {
           "weather_entity": "System Weather Entity",
@@ -255,10 +255,10 @@
       "message": "{device} didn't accept Reset to defaults: {error}"
     },
     "reset_nothing_selected": {
-      "message": "Select what to reset: the device settings, the Latter options, or both."
+      "message": "Select what to reset: the settings saved on the device, its Latter settings, or both."
     },
     "reset_ble_tag_has_no_device_settings": {
-      "message": "A BLE tag has no device settings to reset. Reset only its Latter options."
+      "message": "A BLE tag has no settings saved on a device. Reset only its Latter settings."
     }
   }
 }

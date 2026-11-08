@@ -10,7 +10,7 @@ The [decision log](#decision-log) at the end records the standing choices behind
 
 Studio owns three things:
 
-1. **Latter-only settings**: options that exist only in Latter, such as shared entities, remote groups, BLE calibration, wallpapers, the Home dock, and each Device's Latter options.
+1. **Latter-only settings**: options that exist only in Latter, such as shared entities, remote control groups, BLE calibration, wallpapers, the Home dock, and each Device's Latter settings.
 2. **Cross-device actions**: profiles, bulk controls, BLE calibration and adoption, backups.
 3. **Health and status**: what a Device is doing now and what needs attention.
 
@@ -125,9 +125,8 @@ Studio has one implementation of each component. A new pattern is added here fir
 - **Collapsible card**: a native `<details class="card">` whose `<summary>` is the card header. Used for long or advanced content (logs, raw entity inspector). Inside a card, a nested collapsible section uses `details.sub-collapsible`.
 - **Settings row**: label and optional description on the left, the control on the right, a divider between rows. Every Latter option and every curated Device setting goes through this one row, built by `settingsRowHtml()`: `.settings-list` > `.settings-row` > `.settings-row-text` (`.row-label`, `.row-description`) + `.settings-row-control`. `.settings-row.stacked` puts a wide control (a slider, a picker) under the label.
 - **Switch**: one style for every on/off setting: `<input type="checkbox" class="switch" role="switch">`.
-- **Segmented control**: for a small either/or choice that changes the rest of a card (Announcements & Alerts: Notification or Broadcast): `.segmented` with `role="radiogroup"` and `role="radio"` buttons using `aria-checked`.
+- **Segmented control**: for a small either/or choice that changes the rest of a card (Notifications & Announcements: Notification or Announcement): `.segmented` with `role="radiogroup"` and `role="radio"` buttons using `aria-checked`.
 - **Key/value rows**: `.kv-list` > `.kv-row` (label, value); unknown values show `—`. A row that opens something is a `button.kv-row`.
-- **Stats**: `.stat-grid` > `.stat` for a few headline numbers on an overview.
 - **Lists**: `.list-row` (with `.list-row-main` and `.list-row-grow`) for short item lists with actions; `.list-block` for an item with a heading row (`.list-row-head`) and stacked fields (`.stacked-field`, `.field-label`).
 - **Tables**: for lists longer than a few rows: `.table-wrap` > `table.data-table`. Sortable headers are `button.sort-btn` inside a `th` with `aria-sort`. Each row is focusable (`tabindex="0"`) and opens its item on click, Enter or Space.
 - **Chips**: one shape, `.chip`, with variants `.chip-primary`, `.chip-success`, `.chip-warning`, `.chip-error` (no class is neutral). Status dots (`.status-dot`) use the same variants.
@@ -138,6 +137,7 @@ Studio has one implementation of each component. A new pattern is added here fir
 - **Dialogs**: a native `<dialog class="studio-dialog">`, opened with `openDialog()` and closed with `closeDialog()`. Esc closes it, focus moves into the dialog on open and returns to the opener on close. Confirmation dialogs say exactly what will happen.
 - **Health**: Studio shows Latter's Home Assistant repairs and nothing else as health: a Device's repairs as one inline alert at the top of its Overview, and every Latter repair in the System overview's Issues card. Both link to Home Assistant's Repairs page, where the repairs are fixed. Studio never computes a health warning of its own.
 - **Accessibility**: every control has a visible label or an `aria-label`; a set of toggle pills is a `role="group"` with a label; a pointer-only picker (the color wheel) always has a keyboard equivalent next to it (a native color input and a hex field); a segmented control is one tab stop and the arrow keys move between its options; text stays in the normal text color (a danger card or dialog shows danger with its border and its filled confirm button, not with red text, which fails contrast on dark themes).
+- **View layout** (D-014): a view is `[wide cards] .columns > .column + .column [wide cards]`. Each `.column` is an independent stack, so cards flow top to bottom in their own column and a short card never leaves a gap beside a tall one. Below 760 px of content width the columns become one (the first column, then the second). Only a card with wide content (a log, a table, a gallery) spans the full width, and it goes first or last in the view. A view's cards are assigned to columns in the template; there is no auto-placing grid.
 - **Narrow layouts**: cards are size containers; below 520 px of card width, settings rows and list rows stack (a container query, not a viewport media query), so a card in a narrow column behaves like a card on a phone.
 
 ## 5. Navigation
@@ -155,15 +155,17 @@ Studio has one implementation of each component. A new pattern is added here fir
   Studio writes the URL with `history.pushState` and a `location-changed` event, the way Home Assistant's own panels navigate. An unknown path shows the Device list.
 - The **Visit** link on a Latter Device's Home Assistant device page opens that Device in Studio (`/latter/devices/<subentry_id>`).
 - The page template starts in the Devices state, so nothing flashes before the first render.
-- Page names are unique: Device pages are **Overview**, **Display & Home**, **Audio & Voice**, **Power & Battery**, and **Device Settings**; System pages are **System Overview**, **Shared Entities**, **Media & Remotes**, **Groups & Profiles**, **BLE & Area Presence**, and **System Settings**. A nav label and its page title are the same text.
-- **Device Settings** has five cards, in this order: **Device** (node name, group), **Location & BLE** (Area tracking, fallback Area, BLE target, external Area sensor), **In Home Assistant** (device page, diagnostics download, replace hardware), **Diagnostics** (collapsed: network and status entities, a **Developer** group with the profiler, memory and weather simulation, and every entity), and **Danger Zone** (reset, remove). Settings that shape what the screen shows (such as Area cards per page) live on **Display & Home**, not here.
+- Page names are unique: the Device list is **All Devices**; Device pages are **Overview**, **Display & Home**, **Audio & Voice**, **Power & Battery**, and **Device Settings**; System pages are **System Overview**, **Shared Entities**, **Media & Remotes**, **Groups & Profiles**, **BLE & Area Presence**, and **System Settings**. A nav label and its page title are the same text.
+- A Device's **Overview** has one **Status** card (status, firmware, SDK revision, Area, battery, Wi-Fi signal, IP address, speaker, now playing, location mode, nearest BLE proxy, hardware model, group) next to **Quick Actions**. Uptime isn't shown: the firmware doesn't report it.
+- One name per concept: **Device** (a Latter Device, with or without a screen; "display" only means the screen), **BLE Tag** (a tracked phone, watch or tag), **Remote Controls**, **Configuration Profile**, **Notification** (on-screen) and **Announcement** (spoken), **Settings** (never "options"), **Power & Battery**.
+- **Device Settings** has five cards, in this order: **Device** (node name, group), **Location & BLE** (Area tracking, fallback Area, BLE target, external Area sensor), **In Home Assistant** (device page, diagnostics file, replace hardware), **Diagnostics** (collapsed: network and status entities, a **Developer** group with the profiler, memory and weather simulation, and every entity), and **Danger Zone** (reset, remove). Settings that shape what the screen shows (such as Area cards per page) live on **Display & Home**, not here.
 - System pages work fully with no Device selected. A System action that acts on one Device names that Device in the action itself (a picker), never the "selected Device" of another page.
 
 ## 6. Content rules
 
 - Use Home Assistant and IT terminology: **System**, **Sites**, **Areas**, **Devices**, **Roles**, **Policies**, **Bridges**. Never "household", "fleet", or "room" (`[STUDIO TERMINOLOGY]`).
 - No marketing device names or personal equipment brands in labels or logic; Studio branches on hardware-manifest traits.
-- **Titles** (page and nav names, card, section, sub-section and dialog titles) use Title Case: every word capitalized except a, an, the, and, or, of, to, in, on, for, with and &, unless first or last (D-011, `[STUDIO TITLE CASE]`). Everything else (buttons, row labels, options, help text, toasts) uses sentence case. Terminology words (System, Device, Area, …) and proper names (Home Assistant, Music Assistant, ESPHome, Voice Follows Me, Repairs) always keep their capitals. Help text is one short sentence that says what the setting does, not how it's built.
+- **Titles and labels** use Title Case: every word capitalized, including each part of a hyphenated word, except a, an, the, and, or, of, to, in, on, for, with and &, unless first or last (D-013, `[STUDIO TITLE CASE]`). That covers page and nav names; card, section, sub-section and dialog titles; settings-row, key/value, field and switch labels; table headers; tabs and segmented options; and buttons. Body text, descriptions, placeholders, select options, chips, toasts and error messages stay in sentence case. Entity names shown from a Device come from its firmware and are shown as they are. Terminology words (System, Device, Area, …) and proper names (Home Assistant, Music Assistant, ESPHome, Voice Follows Me, Repairs) always keep their capitals. Help text is one short sentence that says what the setting does, not how it's built.
 - Show entity IDs only where the user picks or inspects an entity.
 - Units, numbers, and dates follow the user's Home Assistant settings (`hass.locale`, `hass.config.unit_system`). Times are relative ("2 min ago") where that reads better. Studio formats them with one set of helpers: `fmtNumber`, `fmtPercent`, `fmtDistance` (feet or metres by the unit system), `fmtAgo`, and `fmtDateTime` (the user's time zone setting, server or browser). The backend sends timestamps as UTC ISO 8601 and never formats them.
 
@@ -259,11 +261,25 @@ A standing decision stays in force until a new entry supersedes it. Changing one
 - **Decision:** Page and nav names, card titles, section and sub-section titles, and dialog titles capitalize every word except the minor words a, an, the, and, or, of, to, in, on, for, with and &, which stay lowercase unless they're first or last ("Location & BLE", "Announcements & Alerts", "Danger Zone", "Display & Home"). Buttons, row labels, options, help text and toasts stay in sentence case. latter-verify's `[STUDIO TITLE CASE]` check enforces it.
 - **Why:** The maintainer's choice: titles read as names and stand apart from the controls under them.
 - **Alternatives:** Sentence case for every label, as Home Assistant's own settings pages do (the previous content rule).
-- **Status:** Accepted.
+- **Status:** Superseded by D-013.
 
 ### D-012: No descriptive subtitles
 - **Date:** 2026-11-07
 - **Decision:** A title has no "what this section configures" line under it. A card keeps a description only when it carries something critical that the title and the controls don't show: a warning, a consequence or a prerequisite (for example "Not a full backup", "Up to 10 cameras", or how to calibrate). Row descriptions under individual settings are unaffected.
 - **Why:** Descriptions that restate the controls add reading without adding information, and they hide the few lines that matter.
 - **Alternatives:** A one-line description on every card (the previous card rule).
+- **Status:** Accepted.
+
+### D-013: Titles and labels use Title Case
+- **Date:** 2026-11-08
+- **Decision:** Title Case extends from titles to every label: settings-row labels, key/value labels ("Latter Version", "Online Devices", "BLE Area Proxies"), Shared Entities labels ("Entry Lock", "Garage Door", "Robot Vacuum"), field and switch labels, table headers, tabs and segmented options, dialog titles, and buttons ("Add Device", "Open in Home Assistant"). The minor words stay as in D-011, and each part of a hyphenated word is capitalized ("BLE-Tracked Devices"). Body text, descriptions, placeholders, select options, chips, toasts and error messages stay in sentence case. `[STUDIO TITLE CASE]` checks every pattern it can match reliably. Supersedes D-011.
+- **Why:** The maintainer's choice: one casing for everything that names a thing on the page, so a label never looks different from the title above it.
+- **Alternatives:** Title Case for titles only (D-011).
+- **Status:** Accepted.
+
+### D-014: Two independent column stacks
+- **Date:** 2026-11-08
+- **Decision:** Every view lays its cards out in two independent column stacks (`.columns > .column`): cards flow top to bottom within their column, rows are never aligned across columns, so there are no gaps. Below 760 px of content width the two columns become one, first column first. Only cards with wide content (logs, tables, galleries) span the full width, placed first or last in the view. Cards are assigned to a column in the template.
+- **Why:** The previous auto-fit grid aligned cards in rows, so a short card beside a tall one left a gap, and some views were one full-width column while others were two.
+- **Alternatives:** CSS multi-column (`columns: 2`), which balances automatically but moves cards between columns as content opens and closes; a masonry grid (not yet available in every browser).
 - **Status:** Accepted.

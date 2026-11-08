@@ -10,7 +10,7 @@ Latter creates **sensor** and **binary_sensor** entities only. There are no `dev
 
 ## Per device
 
-`<slug>` is the device slug, for example `pocket_assistant`. BLE tags (phones, watches and tags added as **BLE tag** entries) get only the three sensors marked ★.
+`<slug>` is the device slug, for example `pocket_assistant`. BLE tags (phones, watches and tags added as **BLE Tag** entries) get only the three sensors marked ★.
 
 | Entity | State | Key attributes | Updates when |
 | :--- | :--- | :--- | :--- |
@@ -79,4 +79,4 @@ Latter fires this on the Home Assistant event bus.
 
 ## Voice Follows Me (Device Area Sync)
 
-Latter never modifies entities owned by other integrations. On roaming displays (`stationary == 0` in the hardware manifest) with **Voice Follows Me** enabled, Latter updates only the bound ESPHome device's Home Assistant Area after the device has remained in the new Area for the Device's dwell period (`area_follow_dwell_s` in the Device's subentry, 3 to 60 s, default 10 s; Studio's **Voice Follows Me delay**), so area-less Assist voice commands target the Area you're in.
+Latter never modifies entities owned by other integrations. On roaming displays (`stationary == 0` in the hardware manifest) with **Voice Follows Me** enabled, Latter updates only the bound ESPHome device's Home Assistant Area after the device has remained in the new Area for the Device's dwell period (`area_follow_dwell_s` in the Device's subentry, 3 to 60 s, default 10 s; Studio's **Voice Follows Me Delay**), so area-less Assist voice commands target the Area you're in.

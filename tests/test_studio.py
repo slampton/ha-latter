@@ -72,6 +72,30 @@ class TestPayloadDiet(unittest.TestCase):
         for field in ("camera_name", "ring_entity", "ring_name", "ring_state", "ring_at", "talk"):
             self.assertIn(f"b.{field}", js)
 
+    def test_status_card_renders_its_fields(self) -> None:
+        # One Status card on a Device's Overview; the SDK revision comes from the hardware manifest.
+        payload_src = (LATTER_DIR / "studio" / "payload.py").read_text(encoding="utf-8")
+        self.assertIn('"sdk_rev": str(coordinator.hardware_manifest.get("sdk") or ""),', payload_src)
+        js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
+        self.assertIn('doc.getElementById("dash-sdk-rev").textContent = live.sdk_rev || "—";', js)
+        self.assertEqual(js.count('<h3 class="card-title">Status</h3>'), 1)
+        for gone in ('class="stat-grid"', '<h3 class="card-title">Now</h3>', '<h3 class="card-title">Device Status</h3>'):
+            self.assertNotIn(gone, js)
+
+
+class TestViewLayout(unittest.TestCase):
+    """D-014: every view is two independent column stacks; no auto-placing grid."""
+
+    def test_columns_everywhere(self) -> None:
+        js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
+        self.assertNotIn("grid-2", js)
+        for view in ("system_overview", "shared_entities", "remotes", "system_sync", "area_tracking", "system_admin",
+                     "dashboard", "home_display", "audio_voice", "power", "system"):
+            start = js.index(f'<section id="view-{view}"')
+            body = js[start:js.index("</section>", start)]
+            self.assertEqual(body.count('<div class="columns">'), 1, view)
+            self.assertEqual(body.count('<div class="column">'), 2, view)
+
 
 class TestDockPolicy(unittest.TestCase):
     """dock_apps is the one source for the Home dock: the firmware shows exactly the listed apps."""

@@ -906,6 +906,7 @@ def build_studio_state_payload(
             "area_presence_grid": presence_grid,
             "now": _build_now_playing(hass, coordinator),
             "device_sw_version": fw_version,
+            "sdk_rev": str(coordinator.hardware_manifest.get("sdk") or ""),
             "fw_update_entity": fw_update_entity,
             "fw_update_available": any(it.get("state") == "on" for it in update_items),
             "fw_latest_version": str(

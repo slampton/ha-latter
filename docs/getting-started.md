@@ -47,7 +47,7 @@ Latter watches Home Assistant's device registry for ESPHome devices that impleme
 | :--- | :--- |
 | **ESPHome Device** | Pre-selected. Latter binds to this ESPHome device and its MAC address. The Device's slug is its ESPHome node name. |
 | **Configuration Profile** | Leave **Auto-detect**. Latter reads the screen size and shape from the device. |
-| **Track this device's area with Bluetooth** | Leave it checked for handhelds and the watch. Uncheck it for something fixed in one Area, like the Desk Assistant. |
+| **Track the Area with BLE Proxies** | Leave it checked for handhelds and the watch. Uncheck it for something fixed in one Area, like the Desk Assistant. |
 
 The device's entities now appear under a **Latter** device card linked to the ESPHome device.
 
@@ -73,9 +73,9 @@ On the device:
 
 ## 7. Optional: area presence for handhelds
 
-If you checked **Track this device's area with Bluetooth**, Latter follows the device from area to area using your Bluetooth proxies. You need at least one ESPHome Bluetooth proxy in each area, and each proxy must be assigned to its Area in Home Assistant. The device's BLE presence beacon is off out of the box; Latter turns it on for you when tracking is on.
+If you checked **Track the Area with BLE Proxies**, Latter follows the device from area to area using your Bluetooth proxies. You need at least one ESPHome Bluetooth proxy in each area, and each proxy must be assigned to its Area in Home Assistant. The device's BLE presence beacon is off out of the box; Latter turns it on for you when tracking is on.
 
-After that, open **System → BLE & Area Presence** in Studio, walk the device around, and use **Calibrate current Area** wherever it picks the wrong area.
+After that, open **System → BLE & Area Presence** in Studio, walk the device around, and use **Calibrate Current Area** wherever it picks the wrong area.
 
 → [Presence guide](presence.md)
 
