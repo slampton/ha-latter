@@ -1333,6 +1333,11 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.hass, 0.25, _push_area_update
         )
 
+    @property
+    def doorbell_ring_map(self) -> dict[str, str]:
+        """Return the doorbell ring entities this Device watches (`ring_entity_id -> camera_entity_id`)."""
+        return dict(self._doorbell_ring_map)
+
     @callback
     def _bind_doorbell_ring_listener(self) -> None:
         """Auto-detect sibling doorbell ring / visitor entities on configured cameras and subscribe."""

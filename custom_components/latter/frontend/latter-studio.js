@@ -1088,6 +1088,10 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
               </div>
               <div id="cameras-list" class="stack"></div>
               <div><button type="button" class="btn btn-text" onclick="addCameraRow('')">+ Add camera</button></div>
+              <div id="doorbell-status" class="hidden">
+                <h4 class="subsection-title">Doorbells</h4>
+                <div id="doorbell-status-list" class="kv-list"></div>
+              </div>
               <div id="cam-preview-box" class="cam-preview hidden">
                 <div class="signal-row-head">
                   <strong id="cam-preview-label">Camera preview</strong>
@@ -2096,6 +2100,29 @@ function renderDeviceHealth() {
   box.innerHTML = `<div class="alert-body"><strong>Needs attention</strong>
       <ul class="alert-list">${issues.map(i => `<li>${esc(issueMessage(i))}</li>`).join("")}</ul></div>
     <button type="button" class="btn btn-secondary btn-compact" onclick="openHaPage('/config/repairs')">Open Repairs</button>`;
+}
+
+// Read-only doorbell detail per System camera: the ring entity Latter watches and who is talking on it.
+const TALK_STATE_TEXT = {listening: "listening", talking: "replying"};
+
+function renderDoorbells() {
+  const wrap = doc.getElementById("doorbell-status");
+  const box = doc.getElementById("doorbell-status-list");
+  if (!wrap || !box) return;
+  const bells = STATE?.doorbells || [];
+  wrap.classList.toggle("hidden", !bells.length);
+  box.innerHTML = bells.map(b => {
+    let ring = "No ring sensor found";
+    if (b.ring_entity) {
+      const when = b.ring_at ? fmtAgo((Date.now() - Date.parse(b.ring_at)) / 1000) : "";
+      const status = b.ring_entity.startsWith("event.")
+        ? (when ? `last ring ${when}` : "no ring yet")
+        : (b.ring_state === "on" ? "ringing" : (b.ring_state ? `idle${when ? `, changed ${when}` : ""}` : "unavailable"));
+      ring = `${b.ring_name}: ${status}`;
+    }
+    const talk = (b.talk || []).map(t => `${t.device_title} ${TALK_STATE_TEXT[t.state] || t.state}`).join(", ");
+    return `<div class="kv-row"><span>${esc(b.camera_name)}</span><strong>${esc(ring)}${talk ? ` • ${esc(talk)}` : ""}</strong></div>`;
+  }).join("");
 }
 
 function renderSystemIssues() {
@@ -4073,6 +4100,7 @@ function applyStateToDom(data, forceFormUpdate=false) {
     : (now.media_state ? "Nothing playing" : "—");
   renderDeviceHealth();
   renderSystemIssues();
+  renderDoorbells();
   const links = data.links || {};
   doc.getElementById("row-open-in-ha")?.classList.toggle("hidden", !links.esphome_device_id);
   doc.getElementById("row-diagnostics")?.classList.toggle("hidden", !links.latter_device_id);

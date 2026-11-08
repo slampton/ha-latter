@@ -61,6 +61,17 @@ class TestPayloadDiet(unittest.TestCase):
         js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
         self.assertIn("if (!data.catalog && STATE?.catalog) data.catalog = STATE.catalog;", js)
 
+    def test_doorbell_detail_is_rendered(self) -> None:
+        # Every payload field is read by Studio (studio-design.md section 2).
+        payload_src = (LATTER_DIR / "studio" / "payload.py").read_text(encoding="utf-8")
+        self.assertIn('"doorbells": _build_doorbells(', payload_src)
+        for field in ("camera_name", "ring_entity", "ring_name", "ring_state", "ring_at", "talk"):
+            self.assertIn(f'"{field}":', payload_src)
+        js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
+        self.assertIn("const bells = STATE?.doorbells || [];", js)
+        for field in ("camera_name", "ring_entity", "ring_name", "ring_state", "ring_at", "talk"):
+            self.assertIn(f"b.{field}", js)
+
 
 class TestDockPolicy(unittest.TestCase):
     """dock_apps is the one source for the Home dock: the firmware shows exactly the listed apps."""

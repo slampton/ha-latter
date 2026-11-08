@@ -25,7 +25,7 @@ Settings here live in `.storage/latter.site` and apply to every device.
 | Card | What it does |
 | :--- | :--- |
 | **Whole-home entities** | Weather provider, alarm panel, primary thermostat, entry lock, garage door, and robot vacuum. These drive the on-device weather page and Whole-Home Hub. |
-| **Cameras & doorbell audio** | Up to 10 cameras for the on-device camera carousel and doorbell popups, plus the **Doorbell audio noise reduction** level (Strong, Light, Off) for listening to a doorbell, and **Test the door speaker**, which speaks a test sentence on the primary camera's speaker with TTS, from the device you choose. Listen and push-to-talk replies are experimental. |
+| **Cameras & doorbell audio** | Up to 10 cameras for the on-device camera carousel and doorbell popups, plus the **Doorbell audio noise reduction** level (Strong, Light, Off) for listening to a doorbell, and **Test the door speaker**, which speaks a test sentence on the primary camera's speaker with TTS, from the device you choose. Under **Doorbells**, each camera shows, read-only, the doorbell ring entity Latter found for it (and when it last rang or changed) and which devices are listening or replying right now. Listen and push-to-talk replies are experimental. |
 | **Calendars** | Calendars merged into the on-device agenda. Duplicate events across calendars are removed, and events with a location get a map. |
 
 ### Media & remotes

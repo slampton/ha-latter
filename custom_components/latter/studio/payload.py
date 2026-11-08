@@ -425,6 +425,48 @@ def _build_issues(
     return out
 
 
+def _build_doorbells(
+    hass: HomeAssistant, coords: list[LatterCoordinator], cameras: list[str]
+) -> list[dict[str, Any]]:
+    """Return each System camera's doorbell ring entity (if one was found) and who is talking on it.
+
+    The ring entities are the ones the Devices already watch (each coordinator's doorbell ring map).
+    """
+    ring_for_cam: dict[str, str] = {}
+    for coord in coords:
+        for ring_ent, cam in coord.doorbell_ring_map.items():
+            ring_for_cam.setdefault(cam, ring_ent)
+    out: list[dict[str, Any]] = []
+    for cam in cameras:
+        cam_st = hass.states.get(cam)
+        ring_ent = ring_for_cam.get(cam, "")
+        ring_st = hass.states.get(ring_ent) if ring_ent else None
+        ring_known = ring_st is not None and ring_st.state not in ("unavailable", "unknown")
+        if ring_ent.startswith("event.") and ring_known:
+            ring_at = str(ring_st.state)
+        elif ring_known:
+            ring_at = ring_st.last_changed.isoformat(timespec="seconds")
+        else:
+            ring_at = ""
+        out.append(
+            {
+                "camera_entity": cam,
+                "camera_name": str((cam_st.attributes.get("friendly_name") if cam_st else "") or cam),
+                "ring_entity": ring_ent,
+                "ring_name": str((ring_st.attributes.get("friendly_name") if ring_st else "") or ring_ent),
+                "ring_state": str(ring_st.state) if ring_known else "",
+                "ring_at": ring_at,
+                "talk": [
+                    {"device_title": c.device_title, "state": c.doorbell_talk_state}
+                    for c in coords
+                    if c.doorbell_talk_state != "idle"
+                    and (c.active_carousel_camera or c.camera_entity) == cam
+                ],
+            }
+        )
+    return out
+
+
 def _build_system_section(
     hass: HomeAssistant, current_subentry_id: str
 ) -> dict[str, Any]:
@@ -635,6 +677,7 @@ def _build_system_section(
     internal_logs = _get_combined_system_and_studio_logs(hass)
 
     all_coords = _get_all_coordinators(hass)
+    system_view = system_settings_view(hass.data.get(DOMAIN, {}).get(DATA_GLOBAL_CONFIG) or {})
     onboarded_slugs = {c.device_slug for c in all_coords}
 
     return {
@@ -654,9 +697,8 @@ def _build_system_section(
         "system_controls": _build_system_shared_controls(hass),
         "device_groups": device_groups,
         "saved_profiles": saved_profiles,
-        "system_config": system_settings_view(
-            hass.data.get(DOMAIN, {}).get(DATA_GLOBAL_CONFIG) or {}
-        ),
+        "system_config": system_view,
+        "doorbells": _build_doorbells(hass, all_coords, system_view["camera_entities"]),
     }
 
 
