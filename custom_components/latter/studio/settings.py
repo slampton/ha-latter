@@ -276,7 +276,7 @@ def system_settings_view(global_cfg: Mapping[str, Any]) -> dict[str, Any]:
 
 
 ANNOUNCE_PRIORITIES: tuple[str, ...] = ("normal", "warning", "critical")
-# Special targets (services.py): every Device, or the Devices in occupied Areas (one name for it in Studio).
+# Special targets (targets.py; a test keeps these in sync): every Device, or the Devices in occupied Areas.
 NOTIFY_SPECIAL_TARGETS: tuple[str, ...] = ("all", "occupied_areas")
 BROADCAST_TARGETS: tuple[str, ...] = ("all", "occupied_areas")
 

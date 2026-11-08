@@ -226,7 +226,7 @@
       "fields": ["target_device", "calendar_entity", "summary", "start_date_time", "end_date_time", "in_minutes", "duration_minutes", "description"]
     },
     "intercom_broadcast": {
-      "description": "Broadcast a voice announcement across all, occupied, follow_me, or targeted speakers",
+      "description": "Broadcast a voice announcement to chosen speakers, the speakers in occupied Areas (target_device: occupied_areas), or every speaker",
       "fields": ["target_device", "message", "media_url", "target_speakers", "tts_entity"]
     },
     "doorbell_intercom": {

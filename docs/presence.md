@@ -94,7 +94,7 @@ Sensors are discovered automatically by device class (occupancy, presence, motio
 - **Moves the device's Home Assistant Area.** When a roaming device (one whose hardware reports it isn't stationary) with **Voice Follows Me** on changes areas, Latter updates that device's Area in the registry after it has stayed in the new area for the device's **Voice Follows Me delay** (10 s by default, 3 to 60 s, set in Studio under **Audio & Voice**), so Assist's area-aware commands target where you are. Picking an area on the device applies immediately. Latter never clears the Area when the device goes away, and never moves stationary devices. You can turn this off per device.
 - **Scopes Area Control** on the device to the current area.
 - **Moves media with the device**, when its **Media follows this Device to its new Area** setting is on (Studio, **Audio & Voice**): the device's speaker switches to the new area's speaker and music that's playing moves along. The same setting applies when you pick an area on the device. After the device reconnects, Latter re-syncs its area without moving media.
-- **Routes notifications and intercom.** `target_device: follow_me` delivers to devices in occupied areas; if no area is occupied, nothing is delivered. See [services](reference/services.md#special-target-values).
+- **Routes notifications and intercom.** `target_device: occupied_areas` delivers to devices in occupied areas; if no area is occupied, nothing is delivered. See [services](reference/services.md#special-target-values).
 - **Fires `latter_event`** with `type: area_changed` for your own automations.
 
 ---
@@ -114,13 +114,13 @@ Sensors are discovered automatically by device class (occupancy, presence, motio
 | Calibration | Per scanner, plus global reference power and attenuation | **Per area only**, with fixed path-loss constants |
 | Same entity IDs, so automations carry over | — | **No.** You'll need to update automations. |
 
-**Things Latter adds on top of area detection:** the cross-floor penalty, per-area occupancy fused with your existing sensors, automatic Home Assistant Area moves for Assist, follow-me routing, and a walk-around calibration view.
+**Things Latter adds on top of area detection:** the cross-floor penalty, per-area occupancy fused with your existing sensors, automatic Home Assistant Area moves for Assist, occupied-Area routing for notifications and intercom, and a walk-around calibration view.
 
 ### Using both
 
 You don't have to choose. On a device's **Device Settings** page, set **External Area Sensor Override** to a Bermuda area sensor. When its state matches an Area name or ID, Latter switches the device to that area. It also moves the device's Home Assistant Area and rescopes Area Control, just as it would with its own engine.
 
-Per-area occupancy sensors and `follow_me` routing are different: they come only from Latter's own engine and ignore the override.
+Per-area occupancy sensors and `occupied_areas` routing are different: they come only from Latter's own engine and ignore the override.
 
 ### Switching over
 

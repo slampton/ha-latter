@@ -509,11 +509,11 @@ calendar_create_event:
 
 intercom_broadcast:
   name: Intercom Broadcast
-  description: Broadcast a TTS announcement or recorded audio clip to one, occupied ('follow_me' / 'occupied_areas'), or all media_player speakers.
+  description: Broadcast a TTS announcement or recorded audio clip to chosen speakers, the speakers in occupied Areas ('occupied_areas'), or all online Music Assistant speakers.
   fields:
     target_device:
-      name: Target ESPHome Device or Routing Mode
-      description: Optional originating ESPHome device slug, or 'follow_me' / 'occupied_areas' to broadcast only to speakers in occupied Areas (nothing plays if no Area is occupied).
+      name: Calling Device or Routing Mode
+      description: Optional calling Latter device slug, or 'occupied_areas' to broadcast only to speakers in occupied Areas (nothing plays if no Area is occupied). An unknown device slug is an error.
       required: false
       selector:
         text:
@@ -615,11 +615,11 @@ media_command:
 
 notify:
   name: Send Notification
-  description: Show an on-screen notification, with an optional chime and an optional camera snapshot, on a specific device, the devices in occupied Areas ('follow_me' / 'occupied_areas'), the devices assigned to a person ('person.<slug>'), or all displays ('all').
+  description: Show an on-screen notification, with an optional chime and an optional camera snapshot, on a specific device, the devices in occupied Areas ('occupied_areas'), the devices assigned to a person ('person.<slug>'), or all displays ('all').
   fields:
     target_device:
-      name: Target Device / Follow-Me Routing
-      description: ESPHome device slug, 'follow_me' / 'occupied_areas' (occupied Areas only), 'all' (all displays), or a 'person.*' entity ID. If follow_me or a person matches no display, nothing is delivered; an unknown device slug is an error.
+      name: Target Device or Routing Mode
+      description: ESPHome device slug, 'occupied_areas' (occupied Areas only), 'all' (all displays), or a 'person.*' entity ID. If 'occupied_areas' or a person matches no display, nothing is delivered; an unknown device slug is an error.
       required: false
       selector:
         text:

@@ -2,7 +2,7 @@
 
 Copy-and-paste starting points. Every field is documented in the [services reference](reference/services.md).
 
-`target_device` accepts a device slug such as `pocket_assistant`, a Home Assistant device ID, or one of the [special targets](reference/services.md#special-target-values) like `all` and `follow_me`.
+`target_device` accepts a device slug such as `pocket_assistant`, a Home Assistant device ID, or one of the [special targets](reference/services.md#special-target-values) like `all` and `occupied_areas`.
 
 ---
 
@@ -28,7 +28,7 @@ actions:
       camera_entity: camera.side_yard
 ```
 
-## Follow-me notification
+## Notify the occupied Areas
 
 Delivers only to devices in currently occupied areas. If no area is occupied, nothing is delivered.
 
@@ -41,7 +41,7 @@ triggers:
 actions:
   - action: latter.notify
     data:
-      target_device: follow_me
+      target_device: occupied_areas
       title: Laundry
       message: The washer is done
       priority: normal
@@ -61,14 +61,14 @@ actions:
 
 ## Intercom announcement
 
-Speaks a message on Music Assistant speakers using TTS. `follow_me` limits it to speakers in occupied areas. With no target, it plays on every online Music Assistant speaker.
+Speaks a message on Music Assistant speakers using TTS. `target_device: occupied_areas` limits it to speakers in occupied areas, and `target_speakers` picks speakers by entity. With neither, it plays on every online Music Assistant speaker.
 
 ```yaml
 actions:
   - action: latter.intercom_broadcast
     data:
       message: Dinner is ready
-      target_speakers: follow_me        # or a list of media_player entities
+      target_device: occupied_areas     # or target_speakers: [media_player.kitchen, ...]
       # tts_entity: tts.piper           # optional; defaults to the first tts.* entity
 ```
 

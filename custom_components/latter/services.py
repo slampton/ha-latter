@@ -49,6 +49,7 @@ from .coordinator import LatterCoordinator, resolve_coordinator
 from .dock_policy import normalize_dock_apps
 from .identity import esphome_service
 from .issue_ids import slot_push_failing_issue_id
+from .targets import target_kind
 from .area_engine import (
     async_execute_area_action,
     get_area_entities,
@@ -808,29 +809,24 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         data = call.data
         message = str(data.get("message") or "").strip()
         media_url = str(data.get("media_url") or "").strip()
-        target_speakers = data.get("target_speakers")
+        target_speakers = data.get("target_speakers") or []
         tts_entity = str(data.get("tts_entity") or "").strip()
 
-        if isinstance(target_speakers, str):
-            speakers = [target_speakers]
-        elif isinstance(target_speakers, list) and target_speakers:
-            speakers = [str(s) for s in target_speakers]
-        else:
-            speakers = []
+        speakers = [str(s) for s in target_speakers]
+        kind = target_kind(data.get("target_device"))
+        if kind in ("device", "person"):
+            # The calling Device: it must resolve, so a mistyped target never broadcasts everywhere.
+            _resolve_coordinator_from_call(hass, call)
 
-        follow_me_mode = (
-            speakers in (["follow_me"], ["occupied"], ["occupied_areas"])
-            or str(data.get("target_device") or "").strip().lower()
-            in ("follow_me", "occupied", "occupied_areas")
-        )
-        if follow_me_mode or not speakers:
+        occupied_mode = kind == "occupied_areas"
+        if occupied_mode or not speakers:
             all_online_speakers = [
                 s.entity_id
                 for s in hass.states.async_all("media_player")
                 if s.state not in ("unavailable", "unknown")
                 and is_music_assistant_player(hass, s)
             ]
-            if follow_me_mode:
+            if occupied_mode:
                 from homeassistant.helpers import area_registry as ar, entity_registry as er
                 from .ble_engine import get_ble_fabric
 
@@ -1076,10 +1072,11 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         ),
     )
     async def _handle_notify(call: ServiceCall) -> None:
-        """Dispatch a toast notification, chime, and optional camera snapshot to one, occupied ('follow_me'), or all Latter displays."""
+        """Dispatch a toast notification, chime, and optional camera snapshot to one Latter display, the displays in occupied Areas ('occupied_areas'), a person's displays ('person.*'), or all displays ('all')."""
         data = call.data
         raw_target = str(data.get("target_device") or "").strip()
         target_low = raw_target.lower()
+        kind = target_kind(raw_target)
 
         all_coords = [
             c
@@ -1090,24 +1087,21 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         ]
         target_coords: list[LatterCoordinator] = []
 
-        if target_low == "all":
+        if kind == "all":
             target_coords = list(all_coords)
-        elif (
-            target_low in ("follow_me", "occupied", "occupied_areas")
-            or target_low.startswith("person.")
-        ):
+        elif kind in ("occupied_areas", "person"):
             from .ble_engine import get_ble_fabric
 
             fabric = get_ble_fabric(hass)
             person_area_name = ""
-            if target_low.startswith("person."):
+            if kind == "person":
                 p_slug = raw_target.split(".", 1)[-1].lower()
                 p_st = hass.states.get(f"sensor.{p_slug}_current_area")
                 if p_st and p_st.state not in ("unknown", "unavailable", "Away", ""):
                     person_area_name = p_st.state.strip().lower()
 
             for c in all_coords:
-                if target_low.startswith("person."):
+                if kind == "person":
                     if c.assigned_person.lower() == target_low:
                         target_coords.append(c)
                         continue
@@ -1197,7 +1191,9 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 **BASE_TARGET_FIELDS,
                 vol.Optional("message"): cv.string,
                 vol.Optional("media_url"): cv.string,
-                vol.Optional("target_speakers"): vol.Any(cv.string, [cv.string]),
+                vol.Optional("target_speakers"): vol.All(
+                    cv.entity_ids, [cv.entity_domain("media_player")]
+                ),
                 vol.Optional("tts_entity"): cv.string,
             }
         ),

@@ -19,12 +19,12 @@ If only a single Latter device is configured, `target_device` is optional. When 
 
 | Value | `notify` | `intercom_broadcast` |
 | :--- | :--- | :--- |
-| `all` | Every display device | — |
-| `follow_me`, `occupied`, `occupied_areas` | Devices whose current area is occupied | Music Assistant speakers in occupied areas, plus each matching device's active and local speaker |
+| `all` | Every display device | Every online Music Assistant speaker (the same as no target) |
+| `occupied_areas` | Devices whose current area is occupied | Music Assistant speakers in occupied areas, plus each matching device's active and local speaker |
 | `person.<id>` | Devices assigned to that person, plus devices in that person's current area | — |
-| No match | Nothing is delivered (`follow_me` / `person.*`) | No-op (returns a status response without broadcasting to unoccupied areas) |
+| No match | Nothing is delivered (`occupied_areas` / `person.*`) | No-op (returns a status response without broadcasting to unoccupied areas) |
 
-An unknown device slug in `target_device` is an error (`ServiceValidationError`), not a fallback.
+An unknown device slug in `target_device` is an error (`ServiceValidationError`), not a fallback. For `intercom_broadcast`, a Device slug names the calling Device and must also resolve.
 
 Headless and BLE-beacon-only devices never receive notifications.
 
@@ -54,7 +54,7 @@ Speaks a TTS message or plays an audio clip on speakers.
 | :--- | :--- | :--- |
 | `message` | string | Spoken with `tts.speak` |
 | `media_url` | string | Audio clip URL. Played through `music_assistant.play_announcement` on Music Assistant players, and through `media_player.play_media` with `announce: true` elsewhere. |
-| `target_speakers` | entity list or special target | When empty, all online Music Assistant players |
+| `target_speakers` | `media_player` entity list | When empty, all online Music Assistant players. Ignored when `target_device` is `occupied_areas`. |
 | `tts_entity` | `tts.*` | When empty, the first TTS entity |
 
 ---
