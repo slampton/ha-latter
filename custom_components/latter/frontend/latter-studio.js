@@ -109,7 +109,8 @@ const STUDIO_STYLES = `
   .brand-logo {
     width: 22px;
     height: 22px;
-    fill: var(--studio-primary);
+    /* The header's own text color: a theme may paint the header in the primary color. */
+    fill: currentColor;
     flex-shrink: 0;
   }
   .titlebar-actions {
@@ -928,8 +929,9 @@ const STUDIO_STYLES = `
   }
   @media (max-width: 860px) {
     .titlebar-brand .ha-menu-btn { display: inline-flex; }
-    .app-shell { grid-template-columns: 1fr; }
+    .app-shell { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
     aside.sidebar {
+      align-self: start;
       position: sticky;
       top: var(--studio-header-height);
       z-index: 25;
