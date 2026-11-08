@@ -34,6 +34,19 @@ _MONTH_ABBR: tuple[str, ...] = (
 )
 
 
+# Home Assistant reports a missing value as one of these states; Protocol v3 sends "" instead (never a sentinel).
+HA_ABSENT_STATES: frozenset[str] = frozenset({"", "unknown", "unavailable"})
+
+
+def ha_value(val: Any) -> Any:
+    """Return "" for a value Home Assistant reports as absent (None, "", unknown, unavailable), else the value."""
+    if val is None:
+        return ""
+    if isinstance(val, str) and val.strip().lower() in HA_ABSENT_STATES:
+        return ""
+    return val
+
+
 class V3Records(tuple):
     """A Protocol v3 "records" field: a tuple of records, each a sequence of subfields.
 

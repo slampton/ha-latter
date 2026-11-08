@@ -130,7 +130,7 @@ async def async_fetch_calendar_agenda(
         map_url = (
             map_url_builder(location)
             if (location and callable(map_url_builder))
-            else "none"
+            else ""
         )
         slot_items.append(
             {

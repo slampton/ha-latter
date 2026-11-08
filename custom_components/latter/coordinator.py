@@ -160,6 +160,7 @@ from .payloads import (
     DomainPayloadPacker,
     V3Records,
     camera_records,
+    ha_value,
     intercom_target_records,
     remote_slot_records,
 )
@@ -312,7 +313,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Sticky artwork and transfer position handoff cache (for MA 2.10.8 transfer window)
         self.last_valid_raw_pic: str = ""
         self._last_art_track_key: str = ""
-        self._last_art_proxy_url: str = "none"
+        self._last_art_proxy_url: str = ""
         self._transfer_hold_until: float = 0.0
         self._transfer_hold_position: float = 0.0
         self._transfer_hold_title: str = ""
@@ -323,7 +324,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Cached weather forecast state & attributes
         init_w_rev, init_w_payload = self._pack_domain_payload(
             "weather_forecast",
-            "unknown",
+            "",
             None,
             None,
             None,
@@ -334,7 +335,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         self.forecast_records: V3Records = V3Records()
         self.weather_attributes: dict[str, Any] = {
-            "condition": "unknown",
+            "condition": "",
             "temperature": None,
             "humidity": None,
             "wind_speed": None,
@@ -356,7 +357,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.alert_priority: str = "normal"
         self.alert_duration: int = 8
         self.alert_chime: bool = True
-        self.alert_camera_url: str = "none"
+        self.alert_camera_url: str = ""
         self.active_camera_index: int = 0
         self.active_carousel_camera: str = ""
         self.doorbell_talk_state: str = "idle"
@@ -1057,7 +1058,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 camera_entity, cache_bust=f"{self.alert_id}_{int(time.time())}"
             )
         else:
-            self.alert_camera_url = "none"
+            self.alert_camera_url = ""
         self.hass.bus.async_fire(
             EVENT_LATTER,
             {
@@ -1514,7 +1515,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             _LOGGER.info(
                 "Resetting active_speaker from idle remote '%s' (state=%s) to local_speaker '%s' (%s)",
                 self.active_speaker,
-                remote_state.state if remote_state else "none",
+                remote_state.state if remote_state else "missing",
                 local_spk,
                 reason,
             )
@@ -2064,7 +2065,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return []
         return [resolve_remote_slot_pair(self.hass, eid) for eid in ent_ids[:10]]
 
-    def get_remote_config_payload(self) -> tuple[str, dict[str, Any]]:
+    def get_remote_config_payload(self) -> tuple[str | None, dict[str, Any]]:
         """Compute state and attributes for sensor.<device_slug>_remote_config (supports 0..10 slots)."""
         now_m = time.monotonic()
         if self._cached_remote_payload is not None and (now_m - self._cached_remote_payload[0]) < 0.05:
@@ -2076,7 +2077,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             ent = slot["remote_entity"] if slot["remote_entity"].startswith("remote.") else slot["media_player_entity"]
             if ent.startswith(("remote.", "media_player.")):
                 slot_rows.append(
-                    {"index": idx, "label": slot["name"], "entity_id": ent, "area_id": slot["area_id"], "state": slot["state"]}
+                    {"index": idx, "label": slot["name"], "entity_id": ent, "area_id": slot["area_id"], "state": ha_value(slot["state"])}
                 )
         populated_count = len(slot_rows)
         clamped_active = max(1, min(max(1, len(slots)), self.active_remote_slot))
@@ -2089,11 +2090,11 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if populated_count == 0:
             attrs["slots_summary"] = V3Records()
             rem_rev, rem_payload = self._pack_domain_payload(
-                "remote_config", clamped_active, 0, attrs["slots_summary"]
+                "remote_config", None, 0, attrs["slots_summary"]
             )
             attrs["rev"] = rem_rev
             attrs["payload"] = rem_payload
-            res = ("None", attrs)
+            res = (None, attrs)
             self._cached_remote_payload = (now_m, res)
             return res
 
@@ -2105,7 +2106,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             attrs[f"slot_{idx}_state"] = slot["state"]
 
         active_slot_data = slots[clamped_active - 1]
-        state_str = active_slot_data["name"] if populated_count > 0 else "None"
+        state_str = active_slot_data["name"] or None
         attrs["slots_summary"] = remote_slot_records(slot_rows)
         rem_rev, rem_payload = self._pack_domain_payload(
             "remote_config",
@@ -2185,7 +2186,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         elif self._ble_tracker and self._ble_tracker.current_area_id:
             pres_state = f"native_ble:{self._ble_tracker.current_area_id}"
         else:
-            pres_state = "none"
+            pres_state = ""
 
         area_attrs = {
             "site_id": self.site_id,
@@ -2230,13 +2231,13 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "presence_state": pres_state,
             "ble_auto_switch": self.ble_auto_switch_enabled,
             "voice_area_synced": self.sync_device_area_enabled,
-            "entities_summary": ";".join(summary_items) if summary_items else "NONE",
+            "entities_summary": ";".join(summary_items),
             "camera_entity": self.camera_entity or "",
             "camera_entities": self.camera_entities,
             "cameras_summary": self._build_cameras_summary(),
             "camera_snapshot_url": self.build_camera_snapshot_url(
                 self.active_carousel_camera or self.camera_entity
-            ) if (self.active_carousel_camera or self.camera_entity) else "none",
+            ) if (self.active_carousel_camera or self.camera_entity) else "",
             "doorbell_talk_state": self.doorbell_talk_state,
             "doorbell_noise_reduction": self.doorbell_noise_reduction,
             "intercom_targets_summary": self._build_intercom_targets_summary(),
@@ -2255,7 +2256,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         area_rev, area_payload = self._pack_domain_payload(
             "area_context",
             area_attrs["area_id"],
-            area_name,
+            area_entry.name if area_entry else "",
             area_attrs["site_id"],
             area_attrs["ble_closest_proxy"],
             area_attrs["dock_apps"],
@@ -2282,13 +2283,20 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             area_attrs["cameras_summary"],
             area_attrs["doorbell_talk_state"],
             area_attrs["intercom_targets_summary"],
-            self.alert_id,
-            self.alert_title,
-            self.alert_message,
-            self.alert_priority,
-            self.alert_duration,
-            1 if self.alert_chime else 0,
-            self.alert_camera_url,
+            # Until the first alert (alert_id 0) there is no alert: its fields are empty.
+            *(
+                (
+                    self.alert_id,
+                    self.alert_title,
+                    self.alert_message,
+                    self.alert_priority,
+                    self.alert_duration,
+                    1 if self.alert_chime else 0,
+                    self.alert_camera_url,
+                )
+                if self.alert_id
+                else (0, "", "", "", None, None, "")
+            ),
         )
         area_attrs["rev"] = area_rev
         area_attrs["payload"] = area_payload
@@ -2449,7 +2457,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Read normalized 0.0..1.0 volume from media_player, number, or input_number, or None when unknown."""
         return read_volume_from_target(self.hass, vol_target, fallback_attrs)
 
-    def get_active_media_payload(self) -> tuple[str, dict[str, Any]]:
+    def get_active_media_payload(self) -> tuple[str | None, dict[str, Any]]:
         """Compute state and attributes for sensor.<device_slug>_active_media."""
         now_m = time.monotonic()
         if self._cached_media_payload is not None and (now_m - self._cached_media_payload[0]) < 0.05:
@@ -2477,17 +2485,18 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             else (
                 self.active_speaker.split(".", 1)[-1].replace("_", " ").title()
                 if self.active_speaker
-                else "Local Speaker"
+                else ""
             )
         )
 
         if state_obj is None or state_obj.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
-            idle_title = self.last_media_title or "Idle"
-            idle_artist = self.last_media_artist or "None"
-            idle_album = self.last_media_album or "None"
-            idle_dur = round(self.last_media_duration, 1)
+            # The speaker is missing or unavailable: its state is unknown (""); the last track stays on screen.
+            idle_title = self.last_media_title
+            idle_artist = self.last_media_artist
+            idle_album = self.last_media_album
+            idle_dur = round(self.last_media_duration, 1) if self.last_media_duration > 0 else None
             idle_pos = round(self.last_media_position, 1)
-            idle_type = self.last_media_type or "music"
+            idle_type = self.last_media_type if self.last_media_title else ""
             idle_vol = self._read_volume_from_target(vol_target, {})
             idle_vol_r = round(idle_vol, 2) if idle_vol is not None else None
             idle_vol_pct = (
@@ -2497,17 +2506,17 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
             med_rev, med_payload = self._pack_domain_payload(
                 "active_media",
-                STATE_OFF,
+                "",
                 idle_title,
                 idle_artist,
                 idle_album,
                 idle_dur,
                 idle_pos,
-                0,
+                None,
                 idle_vol_pct,
                 idle_type,
                 0,
-                "none",
+                "",
                 self.active_speaker,
                 fallback_spk_name,
                 self.last_speaker,
@@ -2516,18 +2525,18 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 is_local_flag,
             )
             res = (
-                STATE_OFF,
+                None,
                 {
                     "title": idle_title,
                     "artist": idle_artist,
                     "album": idle_album,
                     "duration": idle_dur,
                     "position": idle_pos,
-                    "position_updated_at": 0,
+                    "position_updated_at": None,
                     "volume": idle_vol_r,
                     "media_type": idle_type,
                     "supported_features": 0,
-                    "art_url": "none",
+                    "art_url": "",
                     "active_speaker": self.active_speaker,
                     "speaker_name": fallback_spk_name,
                     "last_speaker": self.last_speaker,
@@ -2558,14 +2567,14 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             state = STATE_IDLE
 
         attrs = state_obj.attributes
-        title = str(attrs.get("media_title") or "Idle")
+        title = str(attrs.get("media_title") or "")
         artist = str(
             attrs.get("media_artist")
             or attrs.get("media_series_title")
             or attrs.get("media_album_artist")
-            or "None"
+            or ""
         )
-        album = str(attrs.get("media_album_name") or "None")
+        album = str(attrs.get("media_album_name") or "")
         duration = float(attrs.get("media_duration") or 0)
         position = _interpolate_speaker_position(state_obj)
 
@@ -2573,7 +2582,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # and entity_picture in HA; fall back to the Music Assistant counterpart entity or ESPHome text_sensors.
         m_attrs: dict[str, Any] = dict(ma_st.attributes) if ma_st is not None else {}
 
-        if title == "Idle" and m_attrs.get("media_title"):
+        if not title and m_attrs.get("media_title"):
             title = str(m_attrs.get("media_title") or title)
             artist = str(
                 m_attrs.get("media_artist")
@@ -2587,7 +2596,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if position <= 0 and ma_st is not None:
             position = _interpolate_speaker_position(ma_st) or position
 
-        if title == "Idle" and bool(is_local_flag):
+        if not title and bool(is_local_flag):
             t_st = self.device_state("sensor", "_now_playing_title")
             a_st = self.device_state("sensor", "_now_playing_artist")
             al_st = self.device_state("sensor", "_now_playing_album")
@@ -2598,15 +2607,17 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 if al_st is not None and al_st.state not in ("", "None", STATE_UNKNOWN, STATE_UNAVAILABLE):
                     album = str(al_st.state)
 
-        raw_type = str(attrs.get("media_content_type") or "music").lower()
-        if "podcast" in raw_type:
+        raw_type = str(attrs.get("media_content_type") or m_attrs.get("media_content_type") or "").lower()
+        if not raw_type:
+            media_type = ""
+        elif "podcast" in raw_type:
             media_type = "podcast"
         elif "audiobook" in raw_type or "book" in raw_type:
             media_type = "audiobook"
         else:
             media_type = "music"
 
-        if title != "Idle" and state in (STATE_PLAYING, STATE_PAUSED, STATE_BUFFERING):
+        if title and state in (STATE_PLAYING, STATE_PAUSED, STATE_BUFFERING):
             cid = str(attrs.get("media_content_id") or "")
             if cid:
                 self.last_media_uri = cid
@@ -2622,7 +2633,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         in_transfer_window = time.monotonic() < self._transfer_hold_until
         if in_transfer_window:
-            if title == "Idle" and self._transfer_hold_title:
+            if not title and self._transfer_hold_title:
                 title = self._transfer_hold_title
                 artist = self._transfer_hold_artist or artist
                 album = self._transfer_hold_album or album
@@ -2630,17 +2641,17 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if position < 1.0 and self._transfer_hold_position > 1.0:
                 position = self._transfer_hold_position
         elif (
-            title == "Idle"
+            not title
             and state == STATE_IDLE
             and self.last_media_title
             and bool(is_local_flag)
         ):
             title = self.last_media_title
-            artist = self.last_media_artist or "None"
-            album = self.last_media_album or "None"
+            artist = self.last_media_artist
+            album = self.last_media_album
             duration = self.last_media_duration
             position = self.last_media_position
-            media_type = self.last_media_type or "music"
+            media_type = self.last_media_type
 
         volume = self._read_volume_from_target(vol_target, attrs)
         if volume is None and m_attrs:
@@ -2666,8 +2677,8 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         track_key = f"{title}|{artist}|{album}"
 
-        if state == STATE_OFF or title == "Idle":
-            art_url = "none"
+        if state == STATE_OFF or not title:
+            art_url = ""
         elif raw_pic:
             self.last_valid_raw_pic = raw_pic
             self._last_art_track_key = track_key
@@ -2675,10 +2686,10 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 f"{track_key}|{raw_pic}"
             )
             art_url = self._last_art_proxy_url
-        elif (track_key == self._last_art_track_key or in_transfer_window) and self._last_art_proxy_url != "none":
+        elif (track_key == self._last_art_track_key or in_transfer_window) and self._last_art_proxy_url:
             art_url = self._last_art_proxy_url
         else:
-            art_url = "none"
+            art_url = ""
 
         speaker_name = (
             self.device_title
@@ -2697,7 +2708,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         else:
             pos_updated_at = 0
 
-        dur_r = round(duration, 1)
+        dur_r = round(duration, 1) if duration > 0 else None
         vol_r = round(volume, 2) if volume is not None else None
         vol_pct = (
             int(round(max(0.0, min(1.0, volume)) * 100.0))
@@ -2745,7 +2756,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             album,
             dur_r,
             pos_r,
-            pos_updated_at,
+            pos_updated_at or None,
             vol_pct,
             media_type,
             supported_features,
@@ -2887,10 +2898,10 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # No weather entity: everything is unknown (empty fields; the device shows "—").
             self.forecast_records = V3Records()
             w_rev, w_payload = self._pack_domain_payload(
-                "weather_forecast", "unknown", None, None, None, None, None, None, self.forecast_records
+                "weather_forecast", "", None, None, None, None, None, None, self.forecast_records
             )
             self.weather_attributes = {
-                "condition": "unknown",
+                "condition": "",
                 "temperature": None,
                 "humidity": None,
                 "wind_speed": None,

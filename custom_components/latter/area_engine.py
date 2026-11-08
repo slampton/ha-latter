@@ -33,6 +33,7 @@ from .identity import (
     get_bound_esphome_device,
     resolve_bound_esphome_device_id,
 )
+from .payloads import ha_value
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -711,7 +712,7 @@ def resolve_remote_slot_pair(
         "remote_entity": remote_ent or mp_ent,
         "media_player_entity": mp_ent or remote_ent,
         "area_id": area_id,
-        "state": primary_state.state if primary_state else "off",
+        "state": ha_value(primary_state.state) if primary_state else "",
         "platform": platform,
     }
 
@@ -903,7 +904,7 @@ def get_home_alarm_summary(
         if state_obj is not None:
             return {
                 "entity_id": state_obj.entity_id,
-                "state": state_obj.state,
+                "state": ha_value(state_obj.state),
                 "name": str(
                     state_obj.attributes.get("friendly_name") or "Home Alarm"
                 ),
@@ -920,7 +921,7 @@ def get_home_alarm_summary(
             continue
         return {
             "entity_id": state_obj.entity_id,
-            "state": state_obj.state,
+            "state": ha_value(state_obj.state),
             "name": str(
                 state_obj.attributes.get("friendly_name") or "Home Alarm"
             ),
@@ -933,7 +934,7 @@ def get_home_alarm_summary(
         }
     return {
         "entity_id": "",
-        "state": "none",
+        "state": "",
         "name": "",
         "supported_features": 0,
         "code_arm_required": False,
@@ -950,15 +951,15 @@ def get_whole_home_summary(
     """Resolve configured (or primary auto-discovered) Whole-Home Thermostat, Lock, Garage, and Vacuum states."""
     out: dict[str, Any] = {
         "thermostat_entity": "",
-        "thermostat_state": "off",
+        "thermostat_state": "",
         "thermostat_temp": None,
         "thermostat_current_temp": None,
         "lock_entity": "",
-        "lock_state": "locked",
+        "lock_state": "",
         "garage_entity": "",
-        "garage_state": "closed",
+        "garage_state": "",
         "vacuum_entity": "",
-        "vacuum_state": "docked",
+        "vacuum_state": "",
     }
 
     # 1. Thermostat (climate.*)
@@ -970,12 +971,10 @@ def get_whole_home_summary(
                 break
     if t_st is not None:
         out["thermostat_entity"] = t_st.entity_id
-        out["thermostat_state"] = t_st.state
-        tgt_t = (
-            t_st.attributes.get("temperature")
-            or t_st.attributes.get("target_temp_low")
-            or t_st.attributes.get("current_temperature")
-        )
+        out["thermostat_state"] = ha_value(t_st.state)
+        tgt_t = t_st.attributes.get("temperature")
+        if tgt_t is None:
+            tgt_t = t_st.attributes.get("target_temp_low")
         if tgt_t is not None:
             try:
                 out["thermostat_temp"] = int(round(float(tgt_t)))
@@ -997,7 +996,7 @@ def get_whole_home_summary(
                 break
     if l_st is not None:
         out["lock_entity"] = l_st.entity_id
-        out["lock_state"] = l_st.state
+        out["lock_state"] = ha_value(l_st.state)
 
     # 3. Garage Door (cover.*)
     g_st = hass.states.get(garage_entity) if garage_entity else None
@@ -1011,7 +1010,7 @@ def get_whole_home_summary(
                 break
     if g_st is not None:
         out["garage_entity"] = g_st.entity_id
-        out["garage_state"] = g_st.state
+        out["garage_state"] = ha_value(g_st.state)
 
     # 4. Robot Vacuum (vacuum.*)
     v_st = hass.states.get(vacuum_entity) if vacuum_entity else None
@@ -1022,7 +1021,7 @@ def get_whole_home_summary(
                 break
     if v_st is not None:
         out["vacuum_entity"] = v_st.entity_id
-        out["vacuum_state"] = v_st.state
+        out["vacuum_state"] = ha_value(v_st.state)
 
     return out
 

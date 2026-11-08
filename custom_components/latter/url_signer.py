@@ -108,7 +108,7 @@ class UrlSigner:
         """Build the local LAN HTTP Baseline-JPEG camera snapshot URL for ESP32 online_image."""
         cam_ent = (camera_entity_id or "").strip()
         if not cam_ent:
-            return "none"
+            return ""
         base_url = self.get_lan_base_url()
         sig = self.sign_payload_resource(f"camera:{cam_ent}|{width}|{height}|{shape}")
         v_tag = cache_bust or sig[:8]
@@ -128,7 +128,7 @@ class UrlSigner:
         """Build the local LAN HTTP Baseline-JPEG map snapshot URL for a calendar event location."""
         clean_loc = (location or "").strip()
         if not clean_loc:
-            return "none"
+            return ""
         base_url = self.get_lan_base_url()
         sig = self.sign_payload_resource(f"map:{clean_loc}|{width}|{height}|{shape}")
         return (
@@ -147,7 +147,7 @@ class UrlSigner:
         """Build the device-scoped Baseline-JPEG photo wallpaper URL."""
         clean_src = (wallpaper_source or "").strip()
         if not clean_src:
-            return "none"
+            return ""
         base_url = self.get_lan_base_url()
         sig = self.sign_payload_resource(f"wallpaper:{clean_src}|{width}|{height}|{shape}")
         digest = hashlib.md5(

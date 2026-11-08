@@ -10,7 +10,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
 from .calendar_engine import async_fetch_calendar_agenda
-from .payloads import V3Records, forecast_records
+from .payloads import V3Records, forecast_records, ha_value
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -74,7 +74,7 @@ async def async_fetch_weather_snapshot(
 
     today = days[0] if days else {}
     return forecast_records(days), {
-        "condition": str(state_obj.state),
+        "condition": ha_value(state_obj.state),
         "temperature": _opt_float(attrs.get("temperature")),
         "humidity": _opt_float(attrs.get("humidity")),
         "wind_speed": _opt_float(attrs.get("wind_speed")),

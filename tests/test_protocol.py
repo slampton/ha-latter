@@ -383,6 +383,54 @@ class TestRecordsFields(unittest.TestCase):
         self.assertEqual(r3[0], r1[0] + 1)
 
 
+class TestAbsentValues(unittest.TestCase):
+    """Protocol v3 sends "" for a missing value: no none/None/NONE/unknown/Idle placeholders, no made-up states."""
+
+    SOURCES = ("coordinator.py", "area_engine.py", "url_signer.py", "site_feeds.py", "calendar_engine.py", "payloads.py")
+    FORBIDDEN = (
+        r'return "none"',
+        r'= "none"',
+        r'else "none"',
+        r'or "Idle"',
+        r'or "None"',
+        r'"art_url": "none"',
+        r'"state": "none"',
+        r'"Local Speaker"',
+        r'"thermostat_state": "off"',
+        r'"lock_state": "locked"',
+        r'"garage_state": "closed"',
+        r'"vacuum_state": "docked"',
+        r'"condition": "unknown"',
+        r'"weather_forecast",\s*"unknown"',
+        r'"remote_config", clamped_active, 0',
+        r'\.temperature", 0\.0|"high", 0\.0|"low", 0\.0',
+    )
+
+    def test_ha_value(self) -> None:
+        ha_value = _PAYLOADS_MOD.ha_value
+        for absent in (None, "", "unknown", "Unavailable", " unknown "):
+            self.assertEqual(ha_value(absent), "", repr(absent))
+        for real in ("off", "locked", "disarmed", 0, 0.0, "None of these"):
+            self.assertEqual(ha_value(real), real)
+        self.assertEqual(sanitize_v3_field(ha_value(None)), "")
+
+    def test_spec_states_the_rule(self) -> None:
+        spec = json.loads(HA_PROTO_JSON.read_text(encoding="utf-8"))
+        self.assertIn("empty string", spec["absent_value"])
+        state = next(f for f in spec["domains"]["active_media"]["fields"] if f["name"] == "state")
+        self.assertIn("buffering", state["description"])
+        self.assertNotRegex(json.dumps(spec["domains"]), r'\b(NONE|none)\b(?![,)])')
+
+    def test_no_placeholders_in_payload_sources(self) -> None:
+        for name in self.SOURCES:
+            src = (LATTER_DIR / name).read_text(encoding="utf-8")
+            for pat in self.FORBIDDEN:
+                self.assertNotRegex(src, pat, f"{name}: {pat}")
+        coord = (LATTER_DIR / "coordinator.py").read_text(encoding="utf-8")
+        # The area_context payload sends "" without an Area (the HA sensor state may still say Unassigned).
+        self.assertIn('area_entry.name if area_entry else "",', coord)
+
+
 class _FollowHarness:
     """Drives the production `AreaFollowDwell` the way `LatterAreaFollowController` does.
 

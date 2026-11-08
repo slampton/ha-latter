@@ -193,8 +193,8 @@ class LatterActiveMediaSensor(_BaseLatterSensor):
         super().__init__(coordinator, "active_media", "Active Media")
 
     @property
-    def native_value(self) -> str:
-        """Return active speaker playback state."""
+    def native_value(self) -> str | None:
+        """Return active speaker playback state (None while the speaker is unavailable)."""
         state, _ = self.coordinator.get_active_media_payload()
         return state
 
@@ -222,7 +222,7 @@ class LatterWeatherForecastSensor(_BaseLatterSensor):
     def native_value(self) -> str | None:
         """Return the weather entity's current condition (None until it's known)."""
         cond = self.coordinator.weather_attributes.get("condition")
-        return str(cond) if cond and cond != "unknown" else None
+        return str(cond) if cond else None
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -297,8 +297,8 @@ class LatterRemoteConfigSensor(_BaseLatterSensor):
         super().__init__(coordinator, "remote_config", "Remote Config")
 
     @property
-    def native_value(self) -> str:
-        """Return active remote slot name."""
+    def native_value(self) -> str | None:
+        """Return active remote slot name (None when no slot is configured)."""
         state, _ = self.coordinator.get_remote_config_payload()
         return state
 
