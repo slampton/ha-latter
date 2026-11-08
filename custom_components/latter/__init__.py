@@ -52,8 +52,10 @@ from .http import (
     LatterWallpaperProxyView,
 )
 from .config_flow import _device_unique_id
+from .device_ping import async_ping_bound_devices
 from .identity import (
     LATTER_CONTRACT_ACTION_SUFFIXES,
+    esphome_service,
     is_esphome_device,
     is_latter_compatible_esphome_device,
 )
@@ -374,8 +376,30 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
     for coordinator in list(sys_obj.coordinators.values()):
         coordinator.async_notify_listeners()
 
+    # Services are registered (async_setup) and the coordinators exist: ask every bound Device for a
+    # fresh device_hello, in case it sent one while Home Assistant was still starting.
+    entry.async_create_background_task(
+        hass, _async_ping_bound_devices(hass, sys_obj), name="latter_ping_bound_devices"
+    )
+
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     return True
+
+
+async def _async_ping_bound_devices(hass: HomeAssistant, sys_obj: LatterSystem) -> None:
+    """Call each bound Device's latter_ping action; the firmware answers with latter.device_hello."""
+
+    async def _call(service: str) -> None:
+        await hass.services.async_call("esphome", service, {}, blocking=True)
+
+    pinged = await async_ping_bound_devices(
+        [coord.esphome_device_id for coord in list(sys_obj.coordinators.values())],
+        lambda dev_id, action: esphome_service(hass, dev_id, action),
+        _call,
+        lambda service, err: _LOGGER.debug("esphome.%s failed: %s", service, err),
+    )
+    if pinged:
+        _LOGGER.debug("Asked %d Device(s) to resend latter.device_hello", len(pinged))
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: LatterConfigEntry) -> None:
