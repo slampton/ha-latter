@@ -386,7 +386,15 @@ class TestRecordsFields(unittest.TestCase):
 class TestAbsentValues(unittest.TestCase):
     """Protocol v3 sends "" for a missing value: no none/None/NONE/unknown/Idle placeholders, no made-up states."""
 
-    SOURCES = ("coordinator.py", "area_engine.py", "url_signer.py", "site_feeds.py", "calendar_engine.py", "payloads.py")
+    SOURCES = (
+        "coordinator.py",
+        "area_engine.py",
+        "url_signer.py",
+        "site_feeds.py",
+        "calendar_engine.py",
+        "payloads.py",
+        "browse_engine.py",
+    )
     FORBIDDEN = (
         r'return "none"',
         r'= "none"',
@@ -404,6 +412,9 @@ class TestAbsentValues(unittest.TestCase):
         r'"weather_forecast",\s*"unknown"',
         r'"remote_config", clamped_active, 0',
         r'\.temperature", 0\.0|"high", 0\.0|"low", 0\.0',
+        # Nothing accepts "None"/"Idle" back from the device either (ESPHome's text sensors publish "").
+        r'[=!]= "None"',
+        r'"Idle"',
     )
 
     def test_ha_value(self) -> None:

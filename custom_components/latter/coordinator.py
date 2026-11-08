@@ -2600,11 +2600,11 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             t_st = self.device_state("sensor", "_now_playing_title")
             a_st = self.device_state("sensor", "_now_playing_artist")
             al_st = self.device_state("sensor", "_now_playing_album")
-            if t_st is not None and t_st.state not in ("", "None", "Idle", STATE_UNKNOWN, STATE_UNAVAILABLE):
+            if t_st is not None and ha_value(t_st.state):
                 title = str(t_st.state)
-                if a_st is not None and a_st.state not in ("", "None", STATE_UNKNOWN, STATE_UNAVAILABLE):
+                if a_st is not None and ha_value(a_st.state):
                     artist = str(a_st.state)
-                if al_st is not None and al_st.state not in ("", "None", STATE_UNKNOWN, STATE_UNAVAILABLE):
+                if al_st is not None and ha_value(al_st.state):
                     album = str(al_st.state)
 
         raw_type = str(attrs.get("media_content_type") or m_attrs.get("media_content_type") or "").lower()

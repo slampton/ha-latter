@@ -822,15 +822,15 @@ async def _browse_track_lyrics_or_bio(
 
     state_obj = hass.states.get(speaker)
     if state_obj is not None:
-        if not title or title == "None":
+        if not title:
             title = str(state_obj.attributes.get("media_title") or "")
-        if not artist or artist == "None":
+        if not artist:
             artist = str(
                 state_obj.attributes.get("media_artist")
                 or state_obj.attributes.get("media_album_artist")
                 or ""
             )
-        if not album or album == "None":
+        if not album:
             album = str(state_obj.attributes.get("media_album_name") or "")
 
     clean_title = re.sub(
@@ -928,7 +928,7 @@ async def _browse_track_lyrics_or_bio(
                     raw_lyrics = lyr
                     break
 
-        if not raw_artist_bio and artist and artist != "None":
+        if not raw_artist_bio and artist:
             artists = await _call_ma_get_library(
                 hass,
                 config_entry_id=config_entry_id,
@@ -942,7 +942,7 @@ async def _browse_track_lyrics_or_bio(
                     raw_artist_bio = desc
                     break
 
-        if not raw_album_bio and clean_album and clean_album != "None":
+        if not raw_album_bio and clean_album:
             albums = await _call_ma_get_library(
                 hass,
                 config_entry_id=config_entry_id,
@@ -967,7 +967,7 @@ async def _browse_track_lyrics_or_bio(
                 break
             try:
                 q_url = f"https://lrclib.net/api/search?track_name={quote(s_title)}"
-                if artist and artist != "None":
+                if artist:
                     q_url += f"&artist_name={quote(artist)}"
                 async with session.get(q_url, timeout=timeout, headers=headers) as resp:
                     if resp.status == 200:
@@ -984,7 +984,7 @@ async def _browse_track_lyrics_or_bio(
                 _LOGGER.debug("LRCLIB fallback failed for '%s': %s", s_title, err)
 
     # 3. Fallback to Wikipedia REST API if MA didn't return Artist / Album Bio
-    if not raw_artist_bio and not raw_album_bio and artist and artist != "None":
+    if not raw_artist_bio and not raw_album_bio and artist:
         for query_term in (
             f"{clean_album} ({artist} album)",
             f"{artist} (band)",
@@ -992,7 +992,7 @@ async def _browse_track_lyrics_or_bio(
             artist,
             clean_album,
         ):
-            if not query_term or query_term == "None":
+            if not query_term:
                 continue
             try:
                 wiki_title = quote(query_term.replace(" ", "_"))
@@ -1016,7 +1016,7 @@ async def _browse_track_lyrics_or_bio(
     combined_bio = "\n".join(combined_bio_parts).strip()
     if not combined_bio:
         combined_bio = f"{clean_title} by {artist or 'Unknown Artist'}" + (
-            f" — Album: {clean_album}" if clean_album and clean_album != "None" else ""
+            f" — Album: {clean_album}" if clean_album else ""
         )
 
     lyrics_lines = _wrap_text_to_slot_lines(raw_lyrics, width=32) if raw_lyrics else ["No lyrics found for this track."]
