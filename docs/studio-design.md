@@ -154,6 +154,7 @@ Studio has one implementation of each component. A new pattern is added here fir
 - The **Visit** link on a Latter Device's Home Assistant device page opens that Device in Studio (`/latter/devices/<subentry_id>`).
 - The page template starts in the Devices state, so nothing flashes before the first render.
 - Page names are unique: Device pages are **Overview**, **Display & home**, **Audio & voice**, **Power & battery**, and **Device settings**; System pages are **System overview**, **Shared entities**, **Media & remotes**, **Groups & profiles**, **BLE & Area presence**, and **System settings**. A nav label and its page title are the same text.
+- **Device settings** has five cards, in this order: **Device** (node name, group), **Location & BLE** (Area tracking, fallback Area, BLE target, external Area sensor), **In Home Assistant** (device page, diagnostics download, replace hardware), **Diagnostics** (collapsed: network and status entities, a **Developer** group with the profiler, memory and weather simulation, and every entity), and **Danger Zone** (reset, remove). Settings that shape what the screen shows (such as Area cards per page) live on **Display & home**, not here.
 - System pages work fully with no Device selected. A System action that acts on one Device names that Device in the action itself (a picker), never the "selected Device" of another page.
 
 ## 6. Content rules

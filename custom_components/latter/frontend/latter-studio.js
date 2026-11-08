@@ -1434,6 +1434,9 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
             </div></div>
             <div class="card-content">
               <div id="embedded-home" class="settings-list"></div>
+              <div class="settings-list">
+                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-default_page_size">Area cards per page</label></div><div class="settings-row-control"><input type="number" id="cfg-default_page_size" min="1" max="20" value="3" onchange="saveField('device', this)" onkeydown="if (event.key === 'Enter') this.blur()"></div></div>
+              </div>
               <div class="settings-row stacked">
                 <div class="settings-row-text"><span class="row-label">Home dock apps</span><p class="row-description">Select an app to show or hide it, and use the arrows to reorder. Changes apply when you save.</p></div>
                 <div class="settings-row-control"><div id="dock-pills-container" class="pill-list"></div></div>
@@ -1543,22 +1546,15 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
       <section id="view-system" class="hidden">
         <div class="grid-2">
           <div class="card">
-            <div class="card-header"><div class="card-heading">
-              <h3 class="card-title">Device identity</h3>
-              <p class="card-description">Hardware traits (display, roaming, wearable) come from the Device itself.</p>
-            </div></div>
+            <div class="card-header"><div class="card-heading"><h3 class="card-title">Device</h3></div></div>
             <div class="card-content settings-list">
               <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-device_slug">ESPHome node name</label><p class="row-description">Set when the Device was added; entities are <code>sensor.&lt;name&gt;_*</code>.</p></div><div class="settings-row-control"><input type="text" id="cfg-device_slug" readonly></div></div>
               <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-device_group">Device group</label></div><div class="settings-row-control"><select id="cfg-device_group" onchange="saveField('device', this)"></select></div></div>
-              <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-default_page_size">Area cards per page</label></div><div class="settings-row-control"><input type="number" id="cfg-default_page_size" min="1" max="20" value="3" onchange="saveField('device', this)" onkeydown="if (event.key === 'Enter') this.blur()"></div></div>
             </div>
           </div>
 
           <div class="card">
-            <div class="card-header"><div class="card-heading">
-              <h3 class="card-title">BLE Area tracking</h3>
-              <p class="card-description">How this Device moves between Areas using ESPHome Bluetooth proxies.</p>
-            </div></div>
+            <div class="card-header"><div class="card-heading"><h3 class="card-title">Location &amp; BLE</h3></div></div>
             <div class="card-content">
               <div class="settings-list">
                 <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-native_ble_tracking">Track the Area with BLE proxies</label></div><div class="settings-row-control"><input type="checkbox" class="switch" role="switch" id="cfg-native_ble_tracking" onchange="saveField('device', this)"></div></div>
@@ -1575,23 +1571,8 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
           </div>
         </div>
 
-        <details class="card">
-          <summary class="card-header"><div class="card-heading">
-            <h3 class="card-title">Diagnostics &amp; entity inspector</h3>
-            <p class="card-description">Network and diagnostic entities, developer controls, and every entity on the Device.</p>
-          </div></summary>
-          <div class="card-content">
-            <div id="embedded-network" class="settings-list"></div>
-            <input type="text" id="esp-search" placeholder="Filter entities by name or entity ID" aria-label="Filter entities" oninput="renderRawEntityList()">
-            <div id="raw-entity-items" class="settings-list"></div>
-          </div>
-        </details>
-
         <div class="card" id="card-device-ha">
-          <div class="card-header"><div class="card-heading">
-            <h3 class="card-title">In Home Assistant</h3>
-            <p class="card-description">This Device's own pages in Home Assistant.</p>
-          </div></div>
+          <div class="card-header"><div class="card-heading"><h3 class="card-title">In Home Assistant</h3></div></div>
           <div class="card-content settings-list">
             <div class="settings-row" id="row-open-in-ha">
               <div class="settings-row-text"><span class="row-label">Device page</span><p class="row-description">Every entity of the ESPHome device, its logs and its firmware update.</p></div>
@@ -1608,23 +1589,35 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
           </div>
         </div>
 
-        <div class="card">
-          <div class="card-header">
-            <div class="card-heading">
-              <h3 class="card-title">Reset to defaults</h3>
-              <p class="card-description">Erase the settings saved on the Device, reset its Latter options, or both. Wi-Fi and pairing are kept.</p>
-            </div>
-            <div class="card-header-actions"><button type="button" class="btn btn-secondary" onclick="openResetDeviceModal()">Reset…</button></div>
+        <details class="card">
+          <summary class="card-header"><div class="card-heading"><h3 class="card-title">Diagnostics</h3></div></summary>
+          <div class="card-content">
+            <div id="embedded-network" class="settings-list"></div>
+            <details class="sub-collapsible" id="details-developer">
+              <summary>Developer</summary>
+              <div class="card-content"><div id="embedded-developer" class="settings-list"></div></div>
+            </details>
+            <details class="sub-collapsible">
+              <summary>All entities</summary>
+              <div class="card-content">
+                <input type="text" id="esp-search" placeholder="Filter by name or entity ID" aria-label="Filter entities" oninput="renderRawEntityList()">
+                <div id="raw-entity-items" class="settings-list"></div>
+              </div>
+            </details>
           </div>
-        </div>
+        </details>
 
         <div class="card danger">
-          <div class="card-header">
-            <div class="card-heading">
-              <h3 class="card-title">Remove Device</h3>
-              <p class="card-description">Remove this Device from Latter. The ESPHome device stays in Home Assistant and can be added again.</p>
+          <div class="card-header"><div class="card-heading"><h3 class="card-title">Danger Zone</h3></div></div>
+          <div class="card-content settings-list">
+            <div class="settings-row">
+              <div class="settings-row-text"><span class="row-label">Reset to defaults</span><p class="row-description">Erases the settings saved on the Device, resets its Latter options, or both. Wi-Fi and pairing are kept.</p></div>
+              <div class="settings-row-control"><button type="button" class="btn btn-secondary btn-compact" onclick="openResetDeviceModal()">Reset…</button></div>
             </div>
-            <div class="card-header-actions"><button type="button" class="btn btn-danger" onclick="removeManagedDevice(STATE.subentry_id, STATE.title)">Remove…</button></div>
+            <div class="settings-row">
+              <div class="settings-row-text"><span class="row-label">Remove Device</span><p class="row-description">Removes it from Latter. The ESPHome device stays in Home Assistant and can be added again.</p></div>
+              <div class="settings-row-control"><button type="button" class="btn btn-danger btn-compact" onclick="removeManagedDevice(STATE.subentry_id, STATE.title)">Remove…</button></div>
+            </div>
           </div>
         </div>
       </section>
@@ -3274,10 +3267,16 @@ function renderCohesiveDeviceSections() {
     ? batItems.map(it => renderNativeControlRow(it)).join("")
     : emptyStateHtml("No battery telemetry entities reported.");
 
-  const netItems = getSectionItems("network").concat(rawDispItems.filter(isWeatherSimulation));
+  const isDeveloperItem = (it) => /(telemetry[ _]profiler|ram[ _]low[ _]water|ram[ _]largest[ _]block|psram[ _]low[ _]water|condition[ _]simulation)/
+    .test(`${it.name} ${it.entity_id}`.toLowerCase());
+  const diagItems = getSectionItems("network").concat(rawDispItems.filter(isWeatherSimulation));
+  const netItems = diagItems.filter(it => !isDeveloperItem(it));
+  const devItems = diagItems.filter(isDeveloperItem);
   doc.getElementById("embedded-network").innerHTML = netItems.length
     ? netItems.map(it => renderNativeControlRow(it)).join("")
     : emptyStateHtml("No network or diagnostic entities reported.");
+  doc.getElementById("embedded-developer").innerHTML = devItems.map(it => renderNativeControlRow(it)).join("");
+  doc.getElementById("details-developer")?.classList.toggle("hidden", !devItems.length);
 
   // Only show the extra "Device Sensors & Controls" card on Overview if the device has "other" entities or is a sensor/headless node
   const otherItems = getSectionItems("other");
