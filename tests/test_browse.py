@@ -40,6 +40,52 @@ ARTIST_CHILDREN = [
 ]
 
 
+class _BrowseMedia:
+    """Stands in for homeassistant.components.media_player.BrowseMedia: an object with as_dict(), not a dict."""
+
+    def __init__(self, title: str, children: list[dict]) -> None:
+        self.title = title
+        self.children = children
+
+    def as_dict(self) -> dict:
+        return {"title": self.title, "media_class": "album", "children": [dict(c) for c in self.children]}
+
+
+class TestDeskRegression(unittest.TestCase):
+    """Desk Assistant, 2026-11-08: Albums › Dirt showed "No items found".
+
+    Desk's active speaker is its own media_player.desk_assistant_music, linked to the available Music
+    Assistant player media_player.desk_assistant (ma_player_entity), so the browse handle was right.
+    The in-process browse_media response is {entity_id: BrowseMedia}; the code read it only as a dict
+    and returned no children.
+    """
+
+    def test_in_process_response_object_is_read(self) -> None:
+        resp = {"media_player.desk_assistant": _BrowseMedia("Dirt", DIRT_CHILDREN)}
+        node = ma_browse.browse_node_dict(resp["media_player.desk_assistant"])
+        self.assertIsNotNone(node)
+        self.assertEqual(
+            [s["name"] for s in ma_browse.album_track_slots(node["children"])],
+            ["1. Them Bones", "2. Dam That River", "3. Rain When I Die", "4. Would?"],
+        )
+        # Over the websocket API the same response arrives as JSON (a dict); both read the same.
+        self.assertEqual(ma_browse.browse_node_dict(_BrowseMedia("Dirt", DIRT_CHILDREN).as_dict()), node)
+        self.assertIsNone(ma_browse.browse_node_dict(None))
+        self.assertIsNone(ma_browse.browse_node_dict("Dirt"))
+
+    def test_desk_browses_on_its_own_ma_player(self) -> None:
+        available = ["media_player.desk_assistant", "media_player.garage_hifi", "media_player.kitchen_speaker"]
+        # Preferred: the counterpart of Desk's own speaker (desk_assistant_music -> desk_assistant).
+        self.assertEqual(
+            ma_browse.choose_browse_entity(["media_player.desk_assistant", None, None], available),
+            "media_player.desk_assistant",
+        )
+
+    def test_browse_engine_reads_the_object(self) -> None:
+        src = (LATTER_DIR / "browse_engine.py").read_text(encoding="utf-8")
+        self.assertIn("browse_node_dict(resp.get(browse_entity))", src)
+
+
 class TestBrowseEntity(unittest.TestCase):
     def test_prefers_the_devices_own_player_then_a_stable_first(self) -> None:
         players = ["media_player.office_amp", "media_player.kitchen_speaker", "media_player.desk_assistant"]

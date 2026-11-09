@@ -16,7 +16,7 @@ from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import HomeAssistant, State
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 
-from .ma_browse import album_track_slots, artist_album_slots, choose_browse_entity, text_slot
+from .ma_browse import album_track_slots, artist_album_slots, browse_node_dict, choose_browse_entity, text_slot
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -53,6 +53,10 @@ def _extract_item_dict(raw: Any) -> dict[str, Any]:
     """Convert a Music Assistant model, BrowseMedia dict, or object into a normalized dict."""
     if isinstance(raw, dict):
         return raw
+    if hasattr(raw, "as_dict") and callable(raw.as_dict):
+        result = raw.as_dict()
+        if isinstance(result, dict):
+            return result
     if hasattr(raw, "to_dict") and callable(raw.to_dict):
         try:
             return raw.to_dict()
@@ -156,8 +160,8 @@ async def _browse_ma_node(
             media_content_type, media_content_id, browse_entity, err,
         )
         return None
-    node = resp.get(browse_entity) if isinstance(resp, dict) else None
-    if not isinstance(node, dict):
+    node = browse_node_dict(resp.get(browse_entity)) if isinstance(resp, dict) else None
+    if node is None:
         _LOGGER.debug(
             "media_player.browse_media(%s, %s) on %s returned no node", media_content_type, media_content_id, browse_entity
         )

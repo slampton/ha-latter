@@ -26,6 +26,22 @@ def choose_browse_entity(preferred: Iterable[str | None], ma_players: Iterable[s
     return available[0] if available else None
 
 
+def browse_node_dict(node: Any) -> dict[str, Any] | None:
+    """Return a media_player.browse_media result as a dict, or None.
+
+    Called in-process, the service response holds the integration's BrowseMedia object itself; only
+    the websocket API turns it into JSON (through its as_dict()). Reading it as a dict alone found no
+    children for every Device, so album tracks always came back empty.
+    """
+    if isinstance(node, Mapping):
+        return dict(node)
+    as_dict = getattr(node, "as_dict", None)
+    if callable(as_dict):
+        result = as_dict()
+        return dict(result) if isinstance(result, Mapping) else None
+    return None
+
+
 def _child_uri(child: Mapping[str, Any]) -> str:
     return str(child.get("media_content_id") or child.get("uri") or "")
 
