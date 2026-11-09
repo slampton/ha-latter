@@ -4,12 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from homeassistant.components.device_tracker import SourceType
-from homeassistant.components.device_tracker.config_entry import TrackerEntity
+from homeassistant.components.device_tracker import SourceType, TrackerEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
-    STATE_HOME,
-    STATE_NOT_HOME,
     STATE_UNAVAILABLE,
     STATE_UNKNOWN,
 )
@@ -73,15 +70,15 @@ class LatterBleDeviceTracker(TrackerEntity):
         return SourceType.BLUETOOTH_LE
 
     @property
-    def location_name(self) -> str | None:
-        """Return 'home', 'not_home', or None (when BLE tracking is disabled or awaiting initial fix)."""
+    def in_zones(self) -> list[str] | None:
+        """Return ['zone.home'] when home, [] when away, or None when BLE tracking is disabled or awaiting initial fix."""
         if not self.coordinator.native_ble_tracking_enabled:
             return None
         if self.coordinator.is_device_away():
-            return STATE_NOT_HOME
+            return []
         tracker = self.coordinator._ble_tracker
         if tracker is not None and (tracker.packets_seen > 0 or tracker.current_area_id):
-            return STATE_HOME
+            return ["zone.home"]
         if not self.coordinator.is_ble_tag and self.coordinator.esphome_device_id:
             wifi_ent_id = find_device_entity_by_suffix(
                 self.coordinator.hass,
@@ -97,7 +94,7 @@ class LatterBleDeviceTracker(TrackerEntity):
                 STATE_UNKNOWN,
                 "",
             ):
-                return STATE_HOME
+                return ["zone.home"]
         return None
 
     @property

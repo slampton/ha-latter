@@ -166,10 +166,13 @@ class BleDeviceTrackerAndPersonTests(unittest.TestCase):
         const_src = (LATTER_DIR / "const.py").read_text(encoding="utf-8")
         self.assertIn("Platform.DEVICE_TRACKER", const_src)
         dt_src = (LATTER_DIR / "device_tracker.py").read_text(encoding="utf-8")
+        self.assertIn("from homeassistant.components.device_tracker import SourceType, TrackerEntity", dt_src)
+        self.assertNotIn("device_tracker.config_entry", dt_src)
         self.assertIn("class LatterBleDeviceTracker(TrackerEntity):", dt_src)
         self.assertIn("SourceType.BLUETOOTH_LE", dt_src)
-        self.assertIn("STATE_HOME", dt_src)
-        self.assertIn("STATE_NOT_HOME", dt_src)
+        self.assertIn("def in_zones(self) -> list[str] | None:", dt_src)
+        self.assertIn('return ["zone.home"]', dt_src)
+        self.assertNotIn("def location_name", dt_src)
         self.assertNotIn("device_entry", dt_src)
 
     def test_person_sensors_subscribe_across_fabric_and_coordinators(self) -> None:
