@@ -89,7 +89,7 @@
       "step": {
         "user": {
           "title": "Add a BLE Tag",
-          "description": "Track a phone, watch, or Bluetooth tag through your Bluetooth proxies. Latter adds Area and distance sensors for it.",
+          "description": "Track a phone, watch, or Bluetooth tag through your Bluetooth proxies. Latter adds a device_tracker, Area, and distance sensors for it.",
           "data": {
             "name": "Name",
             "ble_target_address": "MAC address, iBeacon UUID, or tracker entity",

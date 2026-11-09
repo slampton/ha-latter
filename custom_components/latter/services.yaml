@@ -509,11 +509,11 @@ calendar_create_event:
 
 intercom_broadcast:
   name: Intercom Broadcast
-  description: Broadcast a TTS announcement or recorded audio clip to chosen speakers, the speakers in occupied Areas ('occupied_areas'), or all online Music Assistant speakers.
+  description: Broadcast a TTS announcement or recorded audio clip to chosen speakers, the speakers in occupied Areas ('occupied_areas'), the speakers in a person's current Area ('person.<slug>'), or all online Music Assistant speakers.
   fields:
     target_device:
       name: Calling Device or Routing Mode
-      description: Optional calling Latter device slug, or 'occupied_areas' to broadcast only to speakers in occupied Areas (nothing plays if no Area is occupied). An unknown device slug is an error.
+      description: Optional calling Latter device slug, 'occupied_areas' (speakers in occupied Areas only), or a 'person.*' entity ID (speakers in that person's current Area). Nothing plays if no matching Area is occupied; an unknown device slug is an error.
       required: false
       selector:
         text:

@@ -14,7 +14,6 @@ from .const import (
     CONF_ALARM_ENTITY,
     CONF_DEFAULT_SPEAKER,
     CONF_MA_PLAYER_ENTITY,
-    CONF_PRESENCE_ENTITY,
     CONF_WEATHER_ENTITY,
     DOMAIN,
 )
@@ -53,12 +52,11 @@ def async_audit_coordinator_health(
     slug = coordinator.device_slug
     warnings: list[dict[str, str]] = []
 
-    # 1. Check mapped entities (Weather, Alarm, Default Speaker, External Presence)
+    # 1. Check mapped entities (Weather, Alarm, Default Speaker)
     checked_keys: tuple[tuple[str, str], ...] = (
         (CONF_WEATHER_ENTITY, "Weather Provider"),
         (CONF_ALARM_ENTITY, "Home Security Alarm"),
         (CONF_DEFAULT_SPEAKER, "Default Speaker"),
-        (CONF_PRESENCE_ENTITY, "External BLE Presence Sensor"),
     )
     missing_labels: list[str] = []
     for conf_key, label in checked_keys:
@@ -110,7 +108,6 @@ def async_audit_coordinator_health(
         hass.is_running
         and coordinator.native_ble_tracking_enabled
         and coordinator.is_roaming_device
-        and not coordinator.presence_entity
         and not has_seen_ble
     ):
         proxy_areas = get_ble_proxy_area_ids(hass)

@@ -117,7 +117,9 @@ class ServiceSourceTests(unittest.TestCase):
 
     def test_intercom_device_target_must_resolve(self) -> None:
         body = self.SRC.split("async def _handle_intercom_broadcast", 1)[1].split("\n    async def ", 1)[0]
-        self.assertRegex(body, r'if kind in \("device", "person"\):\s+#[^\n]*\n\s+_resolve_coordinator_from_call\(hass, call\)')
+        self.assertRegex(body, r'if kind == "device":\s+#[^\n]*\n\s+_resolve_coordinator_from_call\(hass, call\)')
+        self.assertIn('scoped_mode = kind in ("occupied_areas", "person")', body)
+        self.assertIn("resolve_person_area_and_distance(hass, target_low)", body)
 
     def test_target_speakers_schema_is_media_player_entities(self) -> None:
         self.assertRegex(
@@ -142,6 +144,39 @@ class RetiredNamesGuard(unittest.TestCase):
                     if pattern.search(line):
                         hits.append(f"{path.relative_to(REPO_ROOT)}:{num}: {line.strip()}")
         self.assertEqual(hits, [], "retired target names:\n" + "\n".join(hits))
+
+    def test_no_retired_external_presence_entity(self) -> None:
+        retired_key = "presence" + "_entity"
+        retired_cat = "presence" + "_sensors"
+        roots = [LATTER_DIR, REPO_ROOT / "docs", REPO_ROOT / "README.md"]
+        hits: list[str] = []
+        for root in roots:
+            files = [root] if root.is_file() else [p for p in root.rglob("*") if p.is_file()]
+            for path in files:
+                if path.suffix not in (".py", ".js", ".yaml", ".json", ".md") or "__pycache__" in path.parts:
+                    continue
+                txt = path.read_text(encoding="utf-8")
+                if retired_key in txt or retired_cat in txt:
+                    hits.append(str(path.relative_to(REPO_ROOT)))
+        self.assertEqual(hits, [], "retired external presence references: " + ", ".join(hits))
+
+
+class BleDeviceTrackerAndPersonTests(unittest.TestCase):
+    def test_device_tracker_platform_is_registered(self) -> None:
+        const_src = (LATTER_DIR / "const.py").read_text(encoding="utf-8")
+        self.assertIn("Platform.DEVICE_TRACKER", const_src)
+        dt_src = (LATTER_DIR / "device_tracker.py").read_text(encoding="utf-8")
+        self.assertIn("class LatterBleDeviceTracker(TrackerEntity):", dt_src)
+        self.assertIn("SourceType.BLUETOOTH_LE", dt_src)
+        self.assertIn("STATE_HOME", dt_src)
+        self.assertIn("STATE_NOT_HOME", dt_src)
+        self.assertNotIn("device_entry", dt_src)
+
+    def test_person_sensors_subscribe_across_fabric_and_coordinators(self) -> None:
+        sensor_src = (LATTER_DIR / "sensor.py").read_text(encoding="utf-8")
+        self.assertIn("class _BaseLatterPersonSensor(SensorEntity):", sensor_src)
+        self.assertIn("fabric.register_occupancy_listener(self._handle_person_update)", sensor_src)
+        self.assertIn("resolve_person_area_and_distance(self.hass, self._person_entity)", sensor_src)
 
 
 if __name__ == "__main__":

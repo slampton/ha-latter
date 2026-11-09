@@ -64,6 +64,7 @@ from .area_engine import (
 from .ble_engine import (
     LatterNativeBleTracker,
     get_all_scanners_diagnostic_map,
+    get_ble_fabric,
     get_ble_proxy_area_ids,
 )
 from .const import (
@@ -95,7 +96,6 @@ from .const import (
     CONF_GARAGE_ENTITY,
     CONF_LOCK_ENTITY,
     CONF_NATIVE_BLE_TRACKING,
-    CONF_PRESENCE_ENTITY,
     CONF_REMOTE_GROUPS,
     CONF_REMOTES_LIST,
     CONF_SITE_ID,
@@ -235,6 +235,52 @@ def resolve_coordinator(
     return None
 
 
+def resolve_person_area_and_distance(
+    hass: HomeAssistant, person_entity: str
+) -> tuple[str, dict[str, Any]]:
+    """Resolve the freshest area and BLE distance across all Latter devices carried by a person."""
+    domain_data = hass.data.get(DOMAIN, {})
+    target_low = str(person_entity or "").strip().lower()
+    p_coords = [
+        v
+        for v in domain_data.values()
+        if isinstance(v, LatterCoordinator)
+        and v.assigned_person.lower() == target_low
+    ]
+    if not p_coords:
+        return "Unassigned", {
+            "person_entity": person_entity,
+            "area_id": "",
+            "area_name": "Unassigned",
+            "is_home": False,
+            "distance_ft": None,
+            "distance_m": None,
+            "closest_proxy": "",
+            "source_device": "",
+        }
+    home_coords = [c for c in p_coords if not c.is_device_away()]
+    pool = home_coords if home_coords else p_coords
+    best_c = max(
+        pool,
+        key=lambda x: (
+            x._ble_tracker.last_packet_monotonic
+            if x._ble_tracker is not None
+            else 0.0
+        ),
+    )
+    area_name, r_attrs = best_c.get_current_area_and_distance()
+    return area_name, {
+        "person_entity": person_entity,
+        "area_id": r_attrs["area_id"],
+        "area_name": area_name,
+        "is_home": r_attrs["is_home"],
+        "distance_ft": r_attrs["distance_ft"],
+        "distance_m": r_attrs["distance_m"],
+        "closest_proxy": r_attrs["closest_proxy"],
+        "source_device": best_c.device_slug,
+    }
+
+
 class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Manages active speaker, BLE area context, 4-slot remotes, wallpapers, alarm, calendar, and weather."""
 
@@ -280,7 +326,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._unsub_speaker_state: Callable[[], None] | None = None
         self._unsub_weather_state: Callable[[], None] | None = None
         self._unsub_alarm_state: Callable[[], None] | None = None
-        self._unsub_presence_state: Callable[[], None] | None = None
         self._unsub_remotes_state: Callable[[], None] | None = None
         self._unsub_area_entities_state: Callable[[], None] | None = None
         self._unsub_area_debounce: Callable[[], None] | None = None
@@ -455,12 +500,12 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._bind_speaker_listener()
         self._bind_weather_listener()
         self._bind_alarm_listener()
-        self._bind_presence_listener()
         self._bind_remotes_listener()
         self._bind_area_entities_listener()
         self._bind_doorbell_ring_listener()
         self._bind_wallpaper_cycle_timer()
         await self.async_sync_presence_beacon("options")
+        get_ble_fabric(self.hass).notify_occupancy_listeners()
         self._notify_listeners()
 
     async def async_sync_presence_beacon(self, trigger: Trigger) -> None:
@@ -911,12 +956,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return out
 
     @property
-    def presence_entity(self) -> str | None:
-        """Return configured external BLE area presence entity_id (e.g. Bermuda)."""
-        val = self.get_opt(CONF_PRESENCE_ENTITY)
-        return str(val) if val else None
-
-    @property
     def assigned_person(self) -> str:
         """Return optional person.* entity_id assigned to this device."""
         val = self.get_opt(CONF_ASSIGNED_PERSON, "")
@@ -1184,14 +1223,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         proxy_areas = get_ble_proxy_area_ids(self.hass)
 
-        pres_ent = self.presence_entity
-        if pres_ent and self.ble_auto_switch_enabled:
-            pres_state = self.hass.states.get(pres_ent)
-            if pres_state is not None:
-                matched = match_area_by_name_or_id(self.hass, pres_state.state)
-                if matched:
-                    self.active_area_id = matched
-
         explicit_default_area = str(self.get_opt(CONF_DEFAULT_AREA) or "").strip()
         if self.native_ble_tracking_enabled and not explicit_default_area:
             if self.active_area_id and proxy_areas and self.active_area_id not in proxy_areas:
@@ -1206,7 +1237,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._bind_speaker_listener()
         self._bind_weather_listener()
         self._bind_alarm_listener()
-        self._bind_presence_listener()
         self._bind_remotes_listener()
         self._bind_area_entities_listener()
         self._bind_doorbell_ring_listener()
@@ -1265,7 +1295,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._unsub_speaker_state,
             self._unsub_weather_state,
             self._unsub_alarm_state,
-            self._unsub_presence_state,
             self._unsub_remotes_state,
             self._unsub_area_entities_state,
             self._unsub_area_debounce,
@@ -1280,7 +1309,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._unsub_speaker_state = None
         self._unsub_weather_state = None
         self._unsub_alarm_state = None
-        self._unsub_presence_state = None
         self._unsub_remotes_state = None
         self._unsub_area_entities_state = None
         self._unsub_area_debounce = None
@@ -1778,35 +1806,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     def get_person_area_and_distance(self, person_entity: str) -> tuple[str, dict[str, Any]]:
         """Resolve the freshest area and BLE distance across all Latter devices carried by a person."""
-        domain_data = self.hass.data.get(DOMAIN, {})
-        p_coords = [
-            v
-            for v in domain_data.values()
-            if isinstance(v, LatterCoordinator) and v.assigned_person == person_entity
-        ]
-        if not p_coords:
-            p_coords = [self]
-        home_coords = [c for c in p_coords if not c.is_device_away()]
-        pool = home_coords if home_coords else p_coords
-        best_c = max(
-            pool,
-            key=lambda x: (
-                x._ble_tracker.last_packet_monotonic
-                if x._ble_tracker is not None
-                else 0.0
-            ),
-        )
-        area_name, r_attrs = best_c.get_current_area_and_distance()
-        return area_name, {
-            "person_entity": person_entity,
-            "area_id": r_attrs["area_id"],
-            "area_name": area_name,
-            "is_home": r_attrs["is_home"],
-            "distance_ft": r_attrs["distance_ft"],
-            "distance_m": r_attrs["distance_m"],
-            "closest_proxy": r_attrs["closest_proxy"],
-            "source_device": best_c.device_slug,
-        }
+        return resolve_person_area_and_distance(self.hass, person_entity)
 
     def _pack_domain_payload(self, domain: str, *fields: Any) -> tuple[int, str]:
         """Pack domain fields with content-hashed per-domain revision ('v3\\x1f<epoch>\\x1f<rev>\\x1f...')."""
@@ -2198,10 +2198,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             for e in entities[:8]
         ]
 
-        pres_ent = self.presence_entity
-        if pres_ent and self.hass.states.get(pres_ent):
-            pres_state = self.hass.states.get(pres_ent).state
-        elif self._ble_tracker and self._ble_tracker.current_area_id:
+        if self._ble_tracker and self._ble_tracker.current_area_id:
             pres_state = f"native_ble:{self._ble_tracker.current_area_id}"
         else:
             pres_state = ""
@@ -2247,7 +2244,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "ble_scanners_map": get_all_scanners_diagnostic_map(self.hass),
             "ble_target_macs": self._ble_tracker.target_macs_formatted if self._ble_tracker else [],
             "assigned_person": self.assigned_person,
-            "presence_entity": pres_ent or "",
             "presence_state": pres_state,
             "ble_auto_switch": self.ble_auto_switch_enabled,
             "voice_area_synced": self.sync_device_area_enabled,
@@ -2390,23 +2386,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
 
     @callback
-    def _bind_presence_listener(self) -> None:
-        """Subscribe to external BLE trilateration area presence entity changes."""
-        if self._unsub_presence_state is not None:
-            self._unsub_presence_state()
-            self._unsub_presence_state = None
-
-        pres_ent = self.presence_entity
-        if not pres_ent:
-            return
-
-        self._unsub_presence_state = async_track_state_change_event(
-            self.hass,
-            [pres_ent],
-            self._async_on_presence_state_change,
-        )
-
-    @callback
     def _bind_remotes_listener(self) -> None:
         """Subscribe to state changes on the 4 configured TV remote slots."""
         if self._unsub_remotes_state is not None:
@@ -2435,34 +2414,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     ) -> None:
         """Notify sensors when alarm or remote entities change state."""
         self._notify_listeners()
-
-    @callback
-    def _async_on_presence_state_change(
-        self, event: Event[EventStateChangedData]
-    ) -> None:
-        """Auto-switch active area when external BLE presence sensor reports a new area."""
-        new_state = event.data.get("new_state")
-        if new_state is None or not self.ble_auto_switch_enabled:
-            self._notify_listeners()
-            return
-
-        matched_area = match_area_by_name_or_id(self.hass, new_state.state)
-        if matched_area is None:
-            # away / unknown / not an Area: never move the Device, and drop any pending dwell.
-            self._area_follow.cancel()
-        if matched_area and matched_area != self.active_area_id:
-            _LOGGER.info(
-                "BLE Presence ('%s' -> '%s') auto-switching '%s' to area '%s'",
-                event.data.get("entity_id"),
-                new_state.state,
-                self.device_slug,
-                matched_area,
-            )
-            self.async_set_active_area(
-                matched_area, sync_device_registry=True, ble_driven=True
-            )
-        else:
-            self._notify_listeners()
 
     @callback
     def _async_on_speaker_state_change(

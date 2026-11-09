@@ -18,7 +18,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .ble_engine import get_ble_fabric, get_ble_proxy_area_ids
 from .const import DOMAIN, build_device_entity_id, normalize_device_slug
-from .coordinator import LatterCoordinator
+from .coordinator import LatterCoordinator, resolve_person_area_and_distance
 from .system import LatterSystem, get_latter_system, get_system_device_info
 
 PARALLEL_UPDATES = 0
@@ -120,8 +120,8 @@ async def async_setup_entry(
                 entry_persons.add(person_ent)
                 new_person_entities.extend(
                     [
-                        LatterPersonCurrentAreaSensor(coord, person_ent),
-                        LatterPersonBleDistanceSensor(coord, person_ent),
+                        LatterPersonCurrentAreaSensor(hass, person_ent),
+                        LatterPersonBleDistanceSensor(hass, person_ent),
                     ]
                 )
         if new_person_entities:
@@ -356,28 +356,66 @@ class LatterBleDistanceSensor(_BaseLatterSensor):
         return attrs
 
 
-class LatterPersonCurrentAreaSensor(_BaseLatterSensor):
-    """Exposes sensor.<person_slug>_current_area under the Latter System service device."""
+class _BaseLatterPersonSensor(SensorEntity):
+    """Base sensor for a person's fused BLE area and distance across all devices assigned to them."""
 
-    def __init__(self, coordinator: LatterCoordinator, person_entity: str) -> None:
-        """Initialize person current area sensor."""
+    _attr_has_entity_name = False
+    _attr_should_poll = False
+
+    def __init__(self, hass: HomeAssistant, person_entity: str) -> None:
+        """Initialize the person sensor under the Latter System service device."""
+        self.hass = hass
         self._person_entity = person_entity
-        p_slug = normalize_device_slug(person_entity.split(".", 1)[-1])
-        p_st = coordinator.hass.states.get(person_entity)
-        p_friendly = (
+        self._person_slug = normalize_device_slug(person_entity.split(".", 1)[-1])
+        p_st = hass.states.get(person_entity)
+        self._person_friendly = (
             str(p_st.attributes.get("friendly_name") or "").strip()
             if p_st
             else ""
-        ) or p_slug.replace("_", " ").title()
-        super().__init__(coordinator, f"person_{p_slug}_current_area", f"{p_friendly} Current Area")
-        self._attr_has_entity_name = False
-        self._attr_unique_id = f"{DOMAIN}_person_{p_slug}_current_area"
-        self.entity_id = f"sensor.{p_slug}_current_area"
+        ) or self._person_slug.replace("_", " ").title()
 
     @property
     def device_info(self) -> DeviceInfo:
         """Attach person sensors to the System-level Latter service device."""
         return get_system_device_info()
+
+    async def async_added_to_hass(self) -> None:
+        """Subscribe to real-time updates from the shared BLE Fabric and all device coordinators."""
+        await super().async_added_to_hass()
+        fabric = get_ble_fabric(self.hass)
+        self.async_on_remove(
+            fabric.register_occupancy_listener(self._handle_person_update)
+        )
+        sys_obj = get_latter_system(self.hass)
+        coords = (
+            list(sys_obj.coordinators.values())
+            if sys_obj and sys_obj.coordinators
+            else [
+                v
+                for v in self.hass.data.get(DOMAIN, {}).values()
+                if isinstance(v, LatterCoordinator)
+            ]
+        )
+        for coord in coords:
+            self.async_on_remove(
+                coord.async_add_listener(self._handle_person_update)
+            )
+
+    @callback
+    def _handle_person_update(self) -> None:
+        """Write updated person location/distance state to Home Assistant."""
+        self.async_write_ha_state()
+
+
+class LatterPersonCurrentAreaSensor(_BaseLatterPersonSensor):
+    """Exposes sensor.<person_slug>_current_area under the Latter System service device."""
+
+    def __init__(self, hass: HomeAssistant, person_entity: str) -> None:
+        """Initialize person current area sensor."""
+        super().__init__(hass, person_entity)
+        self._attr_name = f"{self._person_friendly} Current Area"
+        self._attr_unique_id = f"{DOMAIN}_person_{self._person_slug}_current_area"
+        self.entity_id = f"sensor.{self._person_slug}_current_area"
 
     @property
     def icon(self) -> str:
@@ -387,17 +425,17 @@ class LatterPersonCurrentAreaSensor(_BaseLatterSensor):
     @property
     def native_value(self) -> str:
         """Return freshest area name across all devices carried by this person."""
-        area_name, _ = self.coordinator.get_person_area_and_distance(self._person_entity)
+        area_name, _ = resolve_person_area_and_distance(self.hass, self._person_entity)
         return area_name
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return person BLE area tracking attributes."""
-        _, attrs = self.coordinator.get_person_area_and_distance(self._person_entity)
+        _, attrs = resolve_person_area_and_distance(self.hass, self._person_entity)
         return attrs
 
 
-class LatterPersonBleDistanceSensor(_BaseLatterSensor):
+class LatterPersonBleDistanceSensor(_BaseLatterPersonSensor):
     """Exposes sensor.<person_slug>_ble_distance under the Latter System service device."""
 
     _attr_icon = "mdi:map-marker-distance"
@@ -405,36 +443,23 @@ class LatterPersonBleDistanceSensor(_BaseLatterSensor):
     _attr_device_class = SensorDeviceClass.DISTANCE
     _attr_state_class = SensorStateClass.MEASUREMENT
 
-    def __init__(self, coordinator: LatterCoordinator, person_entity: str) -> None:
+    def __init__(self, hass: HomeAssistant, person_entity: str) -> None:
         """Initialize person BLE distance sensor."""
-        self._person_entity = person_entity
-        p_slug = normalize_device_slug(person_entity.split(".", 1)[-1])
-        p_st = coordinator.hass.states.get(person_entity)
-        p_friendly = (
-            str(p_st.attributes.get("friendly_name") or "").strip()
-            if p_st
-            else ""
-        ) or p_slug.replace("_", " ").title()
-        super().__init__(coordinator, f"person_{p_slug}_ble_distance", f"{p_friendly} BLE Distance")
-        self._attr_has_entity_name = False
-        self._attr_unique_id = f"{DOMAIN}_person_{p_slug}_ble_distance"
-        self.entity_id = f"sensor.{p_slug}_ble_distance"
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        """Attach person sensors to the System-level Latter service device."""
-        return get_system_device_info()
+        super().__init__(hass, person_entity)
+        self._attr_name = f"{self._person_friendly} BLE Distance"
+        self._attr_unique_id = f"{DOMAIN}_person_{self._person_slug}_ble_distance"
+        self.entity_id = f"sensor.{self._person_slug}_ble_distance"
 
     @property
     def native_value(self) -> float | None:
         """Return estimated distance in feet for this person."""
-        _, attrs = self.coordinator.get_person_area_and_distance(self._person_entity)
+        _, attrs = resolve_person_area_and_distance(self.hass, self._person_entity)
         return attrs.get("distance_ft")
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return person BLE distance attributes."""
-        _, attrs = self.coordinator.get_person_area_and_distance(self._person_entity)
+        _, attrs = resolve_person_area_and_distance(self.hass, self._person_entity)
         return attrs
 
 

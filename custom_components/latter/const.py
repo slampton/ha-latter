@@ -9,7 +9,11 @@ from homeassistant.const import Platform
 
 DOMAIN: Final = "latter"
 INTEGRATION_VERSION: Final = "2.2.9"
-PLATFORMS: Final[list[Platform]] = [Platform.SENSOR, Platform.BINARY_SENSOR]
+PLATFORMS: Final[list[Platform]] = [
+    Platform.SENSOR,
+    Platform.BINARY_SENSOR,
+    Platform.DEVICE_TRACKER,
+]
 
 STORAGE_VERSION: Final = 1
 STORAGE_KEY_PREFIX: Final = "latter.runtime"
@@ -40,7 +44,6 @@ CONF_NATIVE_BLE_TRACKING: Final = "native_ble_tracking"
 CONF_BLE_BEACON_UUID: Final = "ble_beacon_uuid"
 CONF_BLE_TARGET_ADDRESS: Final = "ble_target_address"
 CONF_BLE_AREA_OFFSETS: Final = "ble_area_offsets"
-CONF_PRESENCE_ENTITY: Final = "presence_entity"
 CONF_ASSIGNED_PERSON: Final = "assigned_person"
 CONF_BLE_AUTO_SWITCH: Final = "ble_auto_switch"
 CONF_SYNC_DEVICE_AREA: Final = "sync_device_area"

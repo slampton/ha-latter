@@ -45,7 +45,6 @@ DEVICE_OPTION_KEYS: tuple[str, ...] = (
     "area_follow_dwell_s",
     "ble_beacon_uuid",
     "ble_target_address",
-    "presence_entity",
     "assigned_person",
     "wallpaper_source",
     "wallpaper_favorites",

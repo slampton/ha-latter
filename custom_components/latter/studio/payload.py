@@ -48,7 +48,6 @@ from ..const import (
     CONF_DOCK_APPS,
     CONF_MA_PLAYER_ENTITY,
     CONF_NATIVE_BLE_TRACKING,
-    CONF_PRESENCE_ENTITY,
     CONF_SYNC_DEVICE_AREA,
     CONF_WALLPAPER_CYCLE_MINUTES,
     DATA_GLOBAL_CONFIG,
@@ -263,7 +262,6 @@ def _build_entity_catalog(
     weathers_list: list[dict[str, str]] = []
     calendars_list: list[dict[str, str]] = []
     persons_list: list[dict[str, str]] = []
-    presence_sensors: list[dict[str, str]] = []
 
     allowed_cams_set: set[str] = set()
     local_spk_id = ""
@@ -362,8 +360,6 @@ def _build_entity_catalog(
                     "area_sensor": f"sensor.{p_slug}_current_area",
                 }
             )
-        elif domain in ("sensor", "device_tracker", "input_text"):
-            presence_sensors.append(item)
 
     ma_players: list[dict[str, str]] = []
     for ma_entry in ma_player_entities(hass):
@@ -392,7 +388,6 @@ def _build_entity_catalog(
         "weathers": weathers_list,
         "calendars": calendars_list,
         "persons": persons_list,
-        "presence_sensors": presence_sensors,
     }
 
 
@@ -843,7 +838,6 @@ def build_studio_state_payload(
         CONF_NATIVE_BLE_TRACKING: coordinator.native_ble_tracking_enabled,
         CONF_BLE_BEACON_UUID: coordinator.ble_beacon_uuid,
         CONF_BLE_TARGET_ADDRESS: coordinator.ble_target_address,
-        CONF_PRESENCE_ENTITY: coordinator.presence_entity or "",
         CONF_ASSIGNED_PERSON: coordinator.assigned_person,
         CONF_BLE_AUTO_SWITCH: coordinator.ble_auto_switch_enabled,
         CONF_SYNC_DEVICE_AREA: coordinator.sync_device_area_enabled,

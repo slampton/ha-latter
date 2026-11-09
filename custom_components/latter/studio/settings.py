@@ -41,7 +41,6 @@ DEVICE_TEXT_KEYS: tuple[str, ...] = (
     "default_area",
     "ble_beacon_uuid",
     "ble_target_address",
-    "presence_entity",
     "assigned_person",
     "dock_apps",
     "activity_sources",

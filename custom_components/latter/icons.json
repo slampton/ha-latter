@@ -1,5 +1,10 @@
 {
   "entity": {
+    "device_tracker": {
+      "ble_tracker": {
+        "default": "mdi:bluetooth-connect"
+      }
+    },
     "sensor": {
       "active_media": {
         "default": "mdi:music-circle"

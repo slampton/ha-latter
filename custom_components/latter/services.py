@@ -46,7 +46,11 @@ from .const import (
     SERVICE_SET_DOCK_APPS,
     SERVICE_SET_ACTIVE_SPEAKER,
 )
-from .coordinator import LatterCoordinator, resolve_coordinator
+from .coordinator import (
+    LatterCoordinator,
+    resolve_coordinator,
+    resolve_person_area_and_distance,
+)
 from .dock_policy import normalize_dock_apps
 from .identity import esphome_service
 from .issue_ids import slot_push_failing_issue_id
@@ -815,20 +819,22 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         tts_entity = str(data.get("tts_entity") or "").strip()
 
         speakers = [str(s) for s in target_speakers]
-        kind = target_kind(data.get("target_device"))
-        if kind in ("device", "person"):
+        raw_target = str(data.get("target_device") or "").strip()
+        target_low = raw_target.lower()
+        kind = target_kind(raw_target)
+        if kind == "device":
             # The calling Device: it must resolve, so a mistyped target never broadcasts everywhere.
             _resolve_coordinator_from_call(hass, call)
 
-        occupied_mode = kind == "occupied_areas"
-        if occupied_mode or not speakers:
+        scoped_mode = kind in ("occupied_areas", "person")
+        if scoped_mode or not speakers:
             all_online_speakers = [
                 s.entity_id
                 for s in hass.states.async_all("media_player")
                 if s.state not in ("unavailable", "unknown")
                 and is_music_assistant_player(hass, s)
             ]
-            if occupied_mode:
+            if scoped_mode:
                 from homeassistant.helpers import area_registry as ar, entity_registry as er
                 from .ble_engine import get_ble_fabric
 
@@ -837,13 +843,28 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 ent_reg = er.async_get(hass)
                 dev_reg = dr.async_get(hass)
                 occupied_areas: set[str] = set()
-                for c in hass.data.get(DOMAIN, {}).values():
-                    if isinstance(c, LatterCoordinator) and c.active_area_id:
-                        if fabric.get_area_occupancy(c.active_area_id).get("is_occupied"):
-                            occupied_areas.add(c.active_area_id)
-                for area_entry in area_reg.async_list_areas():
-                    if fabric.get_area_occupancy(area_entry.id).get("is_occupied"):
-                        occupied_areas.add(area_entry.id)
+                if kind == "person":
+                    _, p_attrs = resolve_person_area_and_distance(hass, target_low)
+                    if p_attrs.get("is_home") and p_attrs.get("area_id"):
+                        occupied_areas.add(str(p_attrs["area_id"]))
+                    for area_entry in area_reg.async_list_areas():
+                        occ_persons = [
+                            str(p).lower()
+                            for p in (
+                                fabric.get_area_occupancy(area_entry.id).get("persons")
+                                or []
+                            )
+                        ]
+                        if target_low in occ_persons:
+                            occupied_areas.add(area_entry.id)
+                else:
+                    for c in hass.data.get(DOMAIN, {}).values():
+                        if isinstance(c, LatterCoordinator) and c.active_area_id:
+                            if fabric.get_area_occupancy(c.active_area_id).get("is_occupied"):
+                                occupied_areas.add(c.active_area_id)
+                    for area_entry in area_reg.async_list_areas():
+                        if fabric.get_area_occupancy(area_entry.id).get("is_occupied"):
+                            occupied_areas.add(area_entry.id)
 
                 matched_speakers: list[str] = []
                 seen_dev_ids: set[str] = set()
@@ -1096,7 +1117,11 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
             fabric = get_ble_fabric(hass)
             person_area_name = ""
+            person_area_id = ""
             if kind == "person":
+                _, p_attrs = resolve_person_area_and_distance(hass, target_low)
+                if p_attrs.get("is_home") and p_attrs.get("area_id"):
+                    person_area_id = str(p_attrs["area_id"]).strip().lower()
                 p_slug = raw_target.split(".", 1)[-1].lower()
                 p_st = hass.states.get(f"sensor.{p_slug}_current_area")
                 if p_st and p_st.state not in ("unknown", "unavailable", "Away", ""):
@@ -1104,19 +1129,24 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
             for c in all_coords:
                 if kind == "person":
-                    if c.assigned_person.lower() == target_low:
+                    if c.assigned_person.lower() == target_low and not c.is_device_away():
                         target_coords.append(c)
                         continue
-                    if person_area_name and c.active_area_id:
-                        occ = fabric.get_area_occupancy(c.active_area_id)
-                        if (
-                            c.active_area_id.lower() == person_area_name
-                            or any(
-                                person_area_name in str(n).lower()
-                                for n in (occ.get("occupant_names") or [])
-                            )
-                        ):
+                    if c.active_area_id:
+                        c_area_low = c.active_area_id.lower()
+                        if person_area_id and c_area_low == person_area_id:
                             target_coords.append(c)
+                            continue
+                        if person_area_name:
+                            occ = fabric.get_area_occupancy(c.active_area_id)
+                            if (
+                                c_area_low == person_area_name
+                                or any(
+                                    person_area_name in str(n).lower()
+                                    for n in (occ.get("occupant_names") or [])
+                                )
+                            ):
+                                target_coords.append(c)
                 elif c.active_area_id:
                     occ = fabric.get_area_occupancy(c.active_area_id)
                     if occ.get("is_occupied"):

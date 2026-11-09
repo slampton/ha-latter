@@ -1606,7 +1606,6 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
               <div id="embedded-area-ble" class="settings-list"></div>
               <div class="settings-list">
                 <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-default_area">Fallback Area</label></div><div class="settings-row-control"><select id="cfg-default_area" onchange="saveField('device', this)"></select></div></div>
-                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-presence_entity">External Area Sensor</label><p class="row-description">Optional; for example a Bermuda Area sensor.</p></div><div class="settings-row-control"><select id="cfg-presence_entity" onchange="saveField('device', this)"></select></div></div>
               </div>
             </div>
           </div>
@@ -4383,7 +4382,6 @@ function loadDeviceForm(data) {
   syncActivitySourcesVisibility();
   doc.getElementById("cfg-wallpaper_cycle_minutes").value = String(cfg.wallpaper_cycle_minutes || 0);
   populateSelect("cfg-default_area", cat.areas, cfg.default_area);
-  populateSelect("cfg-presence_entity", cat.presence_sensors, cfg.presence_entity);
   populateSelect("cfg-assigned_person", cat.persons, cfg.assigned_person);
   populateSelect("cfg-default_speaker", cat.ma_speakers, cfg.default_speaker, true);
   populateSelect("cfg-ma_player_entity", cat.ma_players, cfg.ma_player_entity, true);
@@ -4445,7 +4443,6 @@ function collectDeviceSettings() {
     area_handoff: Boolean(doc.getElementById("cfg-area_handoff")?.checked),
     ble_beacon_uuid: doc.getElementById("cfg-ble_beacon_uuid")?.value?.trim() || "",
     ble_target_address: doc.getElementById("cfg-ble_target_address")?.value?.trim() || "",
-    presence_entity: doc.getElementById("cfg-presence_entity")?.value ?? "",
     assigned_person: doc.getElementById("cfg-assigned_person")?.value ?? "",
     default_speaker: doc.getElementById("cfg-default_speaker")?.value ?? "",
     ma_player_entity: doc.getElementById("cfg-ma_player_entity")?.value ?? "",

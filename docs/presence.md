@@ -25,7 +25,7 @@ Latter parses Apple-format iBeacons only. Eddystone and AltBeacon frames are not
 
 Latter firmware ships with the device's **Area: BLE Presence Beacon** switch off, so a new or reset device doesn't advertise until presence is set up. For a device with **Track the Area with BLE Proxies** on, Latter turns the beacon on whenever the device connects, and turns it off when you switch tracking off in Studio or the device's options.
 
-To link a tracked device to a person, set **Assigned person** on the device's Overview page. You'll get `sensor.<person>_current_area`, which follows whichever of that person's devices was heard most recently.
+To link a tracked device to a person, set **Assigned person** on the device's Overview page. You'll get `sensor.<person>_current_area` and `sensor.<person>_ble_distance`, which follow whichever of that person's devices was heard most recently, plus `device_tracker.<slug>` (`home` / `not_home`) on each tracked device so you can attach it to a `person` entity in Home Assistant (**Settings → People**) for Home/Away zone tracking.
 
 ---
 
@@ -109,34 +109,26 @@ Sensors are discovered automatically by device class (occupancy, presence, motio
 | Area sensor per person | Through `person` | ✓ (`sensor.<person>_current_area`) |
 | Phones and watches via Private BLE Device | ✓ | ✓ |
 | iBeacons and static MACs | ✓ | ✓ (Apple iBeacon only) |
-| `device_tracker` entities for `person` home/away | ✓ | **Not yet** |
+| `device_tracker` entities for `person` home/away | ✓ | ✓ (`device_tracker.<slug>`) |
 | Distance sensor per scanner | ✓ | **No.** One closest-distance sensor per device. |
 | Calibration | Per scanner, plus global reference power and attenuation | **Per area only**, with fixed path-loss constants |
 | Same entity IDs, so automations carry over | — | **No.** You'll need to update automations. |
 
-**Things Latter adds on top of area detection:** the cross-floor penalty, per-area occupancy fused with your existing sensors, automatic Home Assistant Area moves for Assist, occupied-Area routing for notifications and intercom, and a walk-around calibration view.
-
-### Using both
-
-You don't have to choose. On a device's **BLE & Area Presence** page, under **Area Tracking**, set **External Area Sensor** to a Bermuda area sensor. When its state matches an Area name or ID, Latter switches the device to that area. It also moves the device's Home Assistant Area and rescopes Area Control, just as it would with its own engine.
-
-Per-area occupancy sensors and `occupied_areas` routing are different: they come only from Latter's own engine and ignore the override.
+**Things Latter adds on top of area detection:** the cross-floor penalty, per-area occupancy fused with your existing sensors, automatic Home Assistant Area moves for Assist, occupied-Area and person-Area routing for notifications and intercom, and a walk-around calibration view.
 
 ### Switching over
 
 1. Make sure each proxy is assigned to its Area. Bermuda needs this too, so it's probably done already.
 2. Adopt your phones and watches in **Studio → BLE & Area Presence**, and set **Assigned person** on each.
-3. Walk the house and calibrate the areas that pick wrong.
-4. Point your automations at `sensor.<person>_current_area` or `binary_sensor.<area>_ble_occupancy`.
-5. If you use Bermuda's `device_tracker` for `person` home/away, keep Bermuda for that until Latter supports it.
+3. Attach `device_tracker.<slug>` to each person in **Settings → People** if you want BLE Home/Away zone tracking.
+4. Walk the house and calibrate the areas that pick wrong.
+5. Point your automations at `sensor.<person>_current_area` or `binary_sensor.<area>_ble_occupancy`.
 
 ---
 
 ## Known limitations
 
-- **No `device_tracker` entities.**
 - **Calibration is per area, not per scanner.** Offsets are shared by all tracked devices, and the path-loss constants (−59 dBm at 1 m, exponent 2.2) can't be configured.
 - **Areas share an average.** If two scanners are in the same area, their readings are blended into one per-area average.
 - **The 2-second table poll sets the smoothing rate.** The moving average updates at the poll rate, not the advertisement rate.
-- **Occupancy sensors don't update on RSSI changes alone.** They refresh on area transitions, away events, and changes to any occupancy, motion, or door sensor.
 - **Timing constants are fixed.** These are the 4 s hold, 5 and 8 dB thresholds, and 180 s away timeout.

@@ -2,18 +2,19 @@
 
 All Latter entities are push-updated: none of them poll. Per-device entities sit on a **Latter** device card that is linked to the ESPHome device through `via_device`.
 
-Large attributes are excluded from the recorder through `_unrecorded_attributes`, so they don't bloat your database. Source: [`sensor.py`](../../custom_components/latter/sensor.py), [`binary_sensor.py`](../../custom_components/latter/binary_sensor.py).
+Large attributes are excluded from the recorder through `_unrecorded_attributes`, so they don't bloat your database. Source: [`sensor.py`](../../custom_components/latter/sensor.py), [`binary_sensor.py`](../../custom_components/latter/binary_sensor.py), [`device_tracker.py`](../../custom_components/latter/device_tracker.py).
 
-Latter creates **sensor** and **binary_sensor** entities only. There are no `device_tracker`, `switch`, or `select` platforms. A device's own settings, such as wake word or clock face, are ESPHome entities on the ESPHome device. They are listed in [esphome-latter-core: Using your device](https://github.com/slampton/esphome-latter-core/blob/main/docs/using-your-device.md).
+Latter creates **sensor**, **binary_sensor**, and **device_tracker** entities only. There are no `switch` or `select` platforms. A device's own settings, such as wake word or clock face, are ESPHome entities on the ESPHome device. They are listed in [esphome-latter-core: Using your device](https://github.com/slampton/esphome-latter-core/blob/main/docs/using-your-device.md).
 
 ---
 
 ## Per device
 
-`<slug>` is the device slug, for example `pocket_assistant`. BLE tags (phones, watches and tags added as **BLE Tag** entries) get only the three sensors marked ★.
+`<slug>` is the device slug, for example `pocket_assistant`. BLE tags (phones, watches and tags added as **BLE Tag** entries) get only the four entities marked ★.
 
 | Entity | State | Key attributes | Updates when |
 | :--- | :--- | :--- | :--- |
+| ★ `device_tracker.<slug>` | `home`, `not_home`, or `unknown` | `area_id`, `area_name`, `closest_proxy`, `distance_ft`, `distance_m`, `rssi`, `assigned_person` | A BLE reading arrives, or the device goes away |
 | ★ `sensor.<slug>_current_area` | Area name, `Away`, or `Unassigned` | `area_id`, `is_home`, `closest_proxy`, `distance_ft`, `distance_m`, `rssi`, `assigned_person` | The area changes, or the device goes away |
 | ★ `sensor.<slug>_ble_distance` | Feet (device class `distance`) | — | A BLE reading arrives |
 | `sensor.<slug>_active_media` | `off`, `idle`, `playing`, `paused`, `buffering` | `title`, `artist`, `album`, `duration`, `position`, `volume`, `media_type`, `art_url`, `active_speaker`, `local_speaker`, `volume_entity` | The speaker's state changes. While playing, there is also a position update every 15 s; the device interpolates between updates. |

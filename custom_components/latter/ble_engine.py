@@ -336,6 +336,7 @@ class LatterNativeBleTracker:
         self.closest_scanner: str = ""
         self.packets_seen: int = 0
         self.last_packet_monotonic: float = 0.0
+        self._started_monotonic: float = time.monotonic()
         self._last_switch_monotonic: float = 0.0
         self.is_away: bool = False
         self.winning_rssi: int | None = None
@@ -400,10 +401,15 @@ class LatterNativeBleTracker:
         for a in stale_addrs:
             self._matched_ble_addresses.pop(a, None)
         self._seed_explicit_target_address()
+        ref_mono = (
+            self.last_packet_monotonic
+            if self.last_packet_monotonic > 0.0
+            else self._started_monotonic
+        )
         if (
             not self.is_away
-            and self.last_packet_monotonic > 0.0
-            and (now_mono - self.last_packet_monotonic) >= AWAY_TIMEOUT_SECONDS
+            and ref_mono > 0.0
+            and (now_mono - ref_mono) >= AWAY_TIMEOUT_SECONDS
         ):
             self.is_away = True
             self.current_area_id = None
@@ -490,6 +496,7 @@ class LatterNativeBleTracker:
     def async_start(self) -> None:
         """Register this tracker with the singleton LatterBleFabric."""
         self.async_stop()
+        self._started_monotonic = time.monotonic()
         self._target_mac_ints = _discover_target_device_macs(
             self.hass, self._esphome_device_id
         )
@@ -792,9 +799,12 @@ class LatterNativeBleTracker:
                 self.winning_distance_ft = round(d_m * 3.28084, 1)
 
         if best_area == self.current_area_id:
+            prev_rssi = self.winning_rssi
             _update_winner_metrics(best_area)
             if latest_source:
                 self.closest_scanner = latest_source
+            if self.winning_rssi != prev_rssi:
+                get_ble_fabric(self.hass).notify_occupancy_listeners()
             return
 
         _LOGGER.debug(

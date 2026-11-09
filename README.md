@@ -154,7 +154,6 @@ This is version **2.2.9**, built and maintained by one person and tested on the 
 | Doorbell listen and push-to-talk replies | **Experimental.** Replies are spoken with TTS on the camera's `media_player`; there is no live audio to the door. |
 
 What's not here yet:
-- No `device_tracker` entities. The presence engine creates area and distance sensors, but nothing a `person` entity can use.
 - BLE calibration is a single offset per area. There is no per-scanner calibration.
 - No live two-way doorbell calls. The device can't send live audio to the door, and there is no echo cancellation.
 
