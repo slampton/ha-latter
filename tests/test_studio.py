@@ -93,10 +93,48 @@ class TestViewLayout(unittest.TestCase):
         titles = js[js.index("const VIEW_TITLES = {"):js.index("};", js.index("const VIEW_TITLES = {"))]
         names = re.findall(r': "([^"]+)"', titles)
         self.assertIn("Overview", names)
-        self.assertEqual(names.count("Settings"), 2)
+        # D-020: each scope's last view is Tools, and both scopes call BLE presence the same.
+        self.assertEqual(names.count("Tools"), 2)
+        self.assertEqual(names.count("BLE & Area Presence"), 2)
+        self.assertNotIn("Settings", names)
         for name in names:
             self.assertFalse(name.startswith(("System ", "Device ")), name)
         self.assertNotRegex(js, r"<span>(System|Device) (Overview|Settings)</span>")
+
+    def test_information_architecture(self) -> None:
+        # D-020: Tools pages, BLE & Area Presence for a Device, identity on the Overview, no count badges on pages.
+        js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
+        self.assertIn('const DEVICE_VIEW_SLUGS = {dashboard: "overview", home_display: "display", audio_voice: "audio", power: "power", presence: "presence", tools: "tools"};', js)
+        self.assertIn('system_sync: "groups", area_tracking: "presence", system_tools: "tools"};', js)
+        self.assertNotIn('"settings"', js[js.index("const DEVICE_VIEW_SLUGS"):js.index("const slugToView")])
+        nav = js[js.index('<nav class="nav-list hidden" id="nav-scope-device"'):js.index("</nav>", js.index('id="nav-scope-device"'))]
+        self.assertEqual(
+            re.findall(r'data-view="(\w+)"', nav), ["dashboard", "home_display", "audio_voice", "power", "presence", "tools"]
+        )
+        self.assertNotIn("nav-esp-badge", js)
+        self.assertEqual(js.count('class="nav-badge"'), 1)  # All Devices: the number of Devices it lists
+
+        def section(view: str) -> str:
+            start = js.index(f'<section id="view-{view}"')
+            return js[start:js.index("</section>", start)]
+
+        tools, sys_tools, groups, overview = section("tools"), section("system_tools"), section("system_sync"), section("dashboard")
+        for title in ("Diagnostics", "Replace Hardware", "Danger Zone"):
+            self.assertIn(f'<h3 class="card-title">{title}</h3>', tools)
+        for title in ("Notifications &amp; Announcements", "Backup &amp; Restore", "System &amp; Device Logs"):
+            self.assertIn(f'<h3 class="card-title">{title}</h3>', sys_tools)
+        self.assertNotIn("Export Settings", js)
+        self.assertNotIn("Restore From File", js)
+        self.assertIn("Custom Color Library", groups)
+        self.assertNotIn("Custom Color Library", sys_tools)
+        self.assertIn('id="dash-node-name"', overview)
+        self.assertIn('id="cfg-device_group"', overview)
+        self.assertIn('id="btn-open-in-ha"', overview)
+        self.assertIn('id="cfg-ble_target_address"', section("presence"))
+        for gone in ("In Home Assistant</h3>", "Location &amp; BLE</h3>", 'id="cfg-device_slug"', 'id="st-group"'):
+            self.assertNotIn(gone, js)
+        # The entity-count badge's data is gone from the payload too.
+        self.assertNotIn('"count": len(', (LATTER_DIR / "area_engine.py").read_text(encoding="utf-8"))
 
     def test_sidebar_icon_module(self) -> None:
         # D-017: the panel's sidebar icon is "latter:logo", registered by a tiny static frontend module.
@@ -147,8 +185,8 @@ class TestViewLayout(unittest.TestCase):
     def test_columns_everywhere(self) -> None:
         js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
         self.assertNotIn("grid-2", js)
-        for view in ("system_overview", "shared_entities", "remotes", "system_sync", "area_tracking", "system_admin",
-                     "dashboard", "home_display", "audio_voice", "power", "system"):
+        for view in ("system_overview", "shared_entities", "remotes", "system_sync", "area_tracking", "system_tools",
+                     "dashboard", "home_display", "audio_voice", "power", "presence", "tools"):
             start = js.index(f'<section id="view-{view}"')
             body = js[start:js.index("</section>", start)]
             self.assertEqual(body.count('<div class="columns">'), 1, view)

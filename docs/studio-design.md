@@ -176,17 +176,19 @@ Studio has one implementation of each component. A new pattern is added here fir
   | :--- | :--- |
   | `/latter` | Device list (the default) |
   | `/latter/devices/<subentry_id>` | That Device's Overview |
-  | `/latter/devices/<subentry_id>/<page>` | `overview`, `display`, `audio`, `power`, `settings` |
-  | `/latter/system/<page>` | `overview`, `shared`, `remotes`, `groups`, `presence`, `settings` |
+  | `/latter/devices/<subentry_id>/<page>` | `overview`, `display`, `audio`, `power`, `presence`, `tools` |
+  | `/latter/system/<page>` | `overview`, `shared`, `remotes`, `groups`, `presence`, `tools` |
 
   Studio writes the URL with `history.pushState` and a `location-changed` event, the way Home Assistant's own panels navigate. An unknown path shows the Device list.
 - The **Visit** link on a Latter Device's Home Assistant device page opens that Device in Studio (`/latter/devices/<subentry_id>`).
 - Studio's entry in Home Assistant's sidebar shows the Latter mark, `latter:logo` (D-017). Studio's own toolbar shows only the title, as Home Assistant's toolbars do.
 - The page template starts in the Devices state, so nothing flashes before the first render.
-- View names are unqualified, because the scope (Devices or System) is always shown; a name is qualified only if two views in the same scope would collide (D-018). The Device list is **All Devices**; Device pages are **Overview**, **Display & Home**, **Audio & Voice**, **Power & Battery**, and **Settings**; System pages are **Overview**, **Shared Entities**, **Media & Remotes**, **Groups & Profiles**, **BLE & Area Presence**, and **Settings**. A nav label and its page title are the same text.
-- A Device's **Overview** has one **Status** card (status, firmware, SDK revision, Area, battery, Wi-Fi signal, IP address, speaker, now playing, location mode, nearest BLE proxy, hardware model, group) next to **Quick Actions**. Uptime isn't shown: the firmware doesn't report it.
-- One name per concept: **Device** (a Latter Device, with or without a screen; "display" only means the screen), **BLE Tag** (a tracked phone, watch or tag), **Remote Controls**, **Configuration Profile**, **Notification** (on-screen) and **Announcement** (spoken), **Settings** (never "options"), **Power & Battery**.
-- A Device's **Settings** page has five cards, in this order: **Device** (node name, group), **Location & BLE** (Area tracking, fallback Area, BLE target, external Area sensor), **In Home Assistant** (device page, diagnostics file, replace hardware), **Diagnostics** (collapsed: network and status entities, a **Developer** group with the profiler, memory and weather simulation, and every entity), and **Danger Zone** (reset, remove). Settings that shape what the screen shows (such as Area cards per page) live on **Display & Home**, not here.
+- View names are unqualified, because the scope (Devices or System) is always shown; a name is qualified only if two views in the same scope would collide (D-018). The Device list is **All Devices**; Device pages are **Overview**, **Display & Home**, **Audio & Voice**, **Power & Battery**, **BLE & Area Presence**, and **Tools**; System pages are **Overview**, **Shared Entities**, **Media & Remotes**, **Groups & Profiles**, **BLE & Area Presence**, and **Tools** (D-020). A nav label and its page title are the same text. A nav item carries a count badge only when the number is what its page lists (All Devices: the number of Devices).
+- A Device's **Overview** holds what identifies it and what it's doing: one **Status** card (status, firmware, SDK revision, Area, battery, Wi-Fi signal, IP address, speaker, now playing, location mode, nearest BLE proxy, hardware model, ESPHome node name) whose footer links to **Tools**, **Open in Home Assistant** (the ESPHome device page) and **Download Backup**, next to **Quick Actions** (quick actions, power profile, **Device Group**, configuration profile, assigned person). Uptime isn't shown: the firmware doesn't report it.
+- One name per concept: **Device** (a Latter Device, with or without a screen; "display" only means the screen), **BLE Tag** (a tracked phone, watch or tag), **Remote Controls**, **Configuration Profile**, **Notification** (on-screen) and **Announcement** (spoken), **Settings** (never "options"), **Power & Battery**, **BLE & Area Presence** (the same page name in both scopes), **Tools** (a scope's page for testers, backups, diagnostics and destructive actions).
+- A Device's **BLE & Area Presence** page has **Area Tracking** (BLE Area tracking, switching the active Area on movement, the BLE presence beacon, fallback Area, external Area sensor) and **BLE Identity** (BLE target, iBeacon UUID).
+- A Device's **Tools** page has **Diagnostics** (the diagnostics file, network and status entities, a **Developer** group with the profiler, memory and weather simulation, and **All Entities**) in the first column, and **Replace Hardware** and **Danger Zone** (reset, remove) in the second. Settings that shape what the screen shows (such as Area cards per page) live on **Display & Home**, not here.
+- The System's **Tools** page has **Notifications & Announcements** (a tester) and **Backup & Restore** (export and restore in one card), with **System & Device Logs** full width last. Shared resources used by many Devices, such as the **Custom Color Library**, live on **Groups & Profiles**.
 - System pages work fully with no Device selected. A System action that acts on one Device names that Device in the action itself (a picker), never the "selected Device" of another page.
 
 ## 6. Content rules
@@ -334,11 +336,18 @@ A standing decision stays in force until a new entry supersedes it. Changing one
 - **Decision:** A view's name doesn't repeat its scope: the scope switcher already says Devices or System, so the System's views are **Overview** and **Settings** (not "System Overview" and "System Settings"), and a Device's settings view is **Settings** (not "Device Settings"). A name is qualified only when two views in the same scope would otherwise collide. The rule covers nav labels, page titles and links to a view; URL slugs were already unqualified.
 - **Why:** The maintainer's choice: "System Overview" beside a Device's "Overview" read as two different kinds of page, and the System's overview holds more than system information.
 - **Alternatives:** Qualify every name with its scope.
-- **Status:** Accepted.
+- **Status:** Accepted; the Settings view names superseded by D-020 (the naming rule stands).
 
 ### D-019: No migration code
 - **Date:** 2026-11-08
 - **Decision:** Latter reads only its current storage formats: no startup migrations, upgrade shims or aliases for earlier settings, uploads or backups. This supersedes D-005's move of existing uploads at startup; the rest of D-005 stands. A format change ships with the code that writes it, and nothing that reads the old one.
 - **Why:** The maintainer's choice: Latter has no users on earlier formats before its public release, and every migration path is code that must be kept correct.
 - **Alternatives:** Keep the one-time migrations until the public release.
+- **Status:** Accepted.
+
+### D-020: Tools pages, a Device presence page, identity on the Overview
+- **Date:** 2026-11-08
+- **Decision:** Both scopes end with a **Tools** page instead of **Settings** (`/system/tools`, `/devices/<id>/tools`; the old `settings` paths are gone, no redirects). System Tools holds Notifications & Announcements, Backup & Restore (Export Settings and Restore From File merged) and the logs; Device Tools holds Diagnostics (with the diagnostics file), Replace Hardware and the Danger Zone. A Device gets a **BLE & Area Presence** page (`/devices/<id>/presence`, the System page's name: one name per concept) with everything from the former Location & BLE card. A Device's identity moves to its **Overview**: the ESPHome node name in Status, Device Group in Quick Actions, and the Home Assistant device page as a Status footer link. The Custom Color Library moves to Groups & Profiles, beside the other resources shared across Devices. The Device pages' entity-count nav badge is removed: it counted entities, not what the page showed. This supersedes D-018's view names (Settings); D-014's two-column layout applies to every new page.
+- **Why:** The maintainer's review: "Settings" pages had become a mix of identity, presence, testers, backups and destructive actions. Each item now sits where its purpose is, and a page's name says what's on it.
+- **Alternatives:** Keep one Settings page per scope with more cards.
 - **Status:** Accepted.

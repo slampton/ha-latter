@@ -35,7 +35,7 @@ Latter serves images from Home Assistant's numeric LAN IP, because ESP32 firmwar
 
 **A roaming device never changes areas**
 - **Proxies lack an Area.** Every Bluetooth proxy must be assigned to an Area in Home Assistant. Home Assistant raises a repair issue, **"No Area-assigned Bluetooth proxies found"**, when Latter can't map any scanner to an area.
-- **Bluetooth area tracking is off.** Check that **Track the Area with BLE Proxies** was enabled when the device was added. To change it, use **Studio → Devices → your device → Settings → Location & BLE → Track the Area with BLE Proxies**, or the device's **Reconfigure or Replace Hardware** entry under **Settings → Devices & Services → Latter**.
+- **Bluetooth area tracking is off.** Check that **Track the Area with BLE Proxies** was enabled when the device was added. To change it, use **Studio → Devices → your device → BLE & Area Presence → Track the Area with BLE Proxies**, or the device's **Reconfigure or Replace Hardware** entry under **Settings → Devices & Services → Latter**.
 - **The device's beacon is off.** Latter firmware ships with **Area: BLE Presence Beacon** off and Latter turns it on when the device connects with tracking enabled. If you turned the switch off by hand, reconnecting the device (or saving its options) turns it back on.
 - **Look at the live readings.** Open **Studio → BLE & Area Presence**. If an area never shows a reading, its proxy isn't hearing the device.
 

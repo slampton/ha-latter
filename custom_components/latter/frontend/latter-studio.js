@@ -1018,7 +1018,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
       <button class="nav-btn" data-view="remotes" onclick="switchView('remotes', this)"><span>Media &amp; Remotes</span></button>
       <button class="nav-btn" data-view="system_sync" onclick="switchView('system_sync', this)"><span>Groups &amp; Profiles</span></button>
       <button class="nav-btn" data-view="area_tracking" onclick="switchView('area_tracking', this)"><span>BLE &amp; Area Presence</span></button>
-      <button class="nav-btn" data-view="system_admin" onclick="switchView('system_admin', this)"><span>Settings</span></button>
+      <button class="nav-btn" data-view="system_tools" onclick="switchView('system_tools', this)"><span>Tools</span></button>
     </nav>
 
     <nav class="nav-list" id="nav-scope-devices-list" aria-label="Devices">
@@ -1034,7 +1034,8 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
       <button class="nav-btn" id="nav-btn-home_display" data-view="home_display" onclick="switchView('home_display', this)"><span>Display &amp; Home</span></button>
       <button class="nav-btn" id="nav-btn-audio_voice" data-view="audio_voice" onclick="switchView('audio_voice', this)"><span>Audio &amp; Voice</span></button>
       <button class="nav-btn" id="nav-btn-power" data-view="power" onclick="switchView('power', this)"><span>Power &amp; Battery</span></button>
-      <button class="nav-btn" data-view="system" onclick="switchView('system', this)"><span>Settings</span><span class="nav-badge" id="nav-esp-badge">—</span></button>
+      <button class="nav-btn" data-view="presence" onclick="switchView('presence', this)"><span>BLE &amp; Area Presence</span></button>
+      <button class="nav-btn" data-view="tools" onclick="switchView('tools', this)"><span>Tools</span></button>
     </nav>
   </aside>
 
@@ -1233,6 +1234,16 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
               <div id="device-groups-list" class="settings-list"></div>
             </div>
           </div>
+          <div class="card" id="sys-custom-palettes-card">
+            <div class="card-header">
+              <div class="card-heading">
+                <h3 class="card-title">Custom Color Library</h3>
+                <p class="card-description">Apply a color from a Device's Display &amp; Home page.</p>
+              </div>
+              <div class="card-header-actions"><button type="button" class="btn btn-secondary btn-compact" onclick="openColorWheelModal('system')">Add Color</button></div>
+            </div>
+            <div class="card-content"><div id="sys-custom-palettes-list" class="settings-list"></div></div>
+          </div>
           <details class="card">
           <summary class="card-header"><div class="card-heading"><h3 class="card-title">Bulk Device Controls</h3></div></summary>
           <div class="card-content">
@@ -1295,8 +1306,8 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
         </div>
       </section>
 
-      <!-- SYSTEM: SETTINGS -->
-      <section id="view-system_admin" class="hidden">
+      <!-- SYSTEM: TOOLS -->
+      <section id="view-system_tools" class="hidden">
         <div class="columns">
           <div class="column">
           <div class="card" id="card-announce">
@@ -1321,34 +1332,24 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
             </div>
             <div class="card-actions"><button type="button" class="btn btn-primary" onclick="sendAnnouncement()">Send</button></div>
           </div>
-          <div class="card">
-            <div class="card-header"><div class="card-heading">
-              <h3 class="card-title">Export Settings</h3>
-              <p class="card-description">Not a full backup: Latter's storage is already in every Home Assistant backup.</p>
-            </div></div>
-            <div class="card-content settings-list">
-              <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="bkp-scope-select">Export</label></div><div class="settings-row-control"><select id="bkp-scope-select"></select></div></div>
-            </div>
-            <div class="card-actions"><button type="button" class="btn btn-primary" onclick="exportBackupToComputer('')">Download</button></div>
-          </div>
           </div>
           <div class="column">
-          <div class="card" id="sys-custom-palettes-card">
-            <div class="card-header">
-              <div class="card-heading">
-                <h3 class="card-title">Custom Color Library</h3>
-                <p class="card-description">Apply a color from a Device's Display &amp; Home page.</p>
+          <div class="card" id="card-backup">
+            <div class="card-header"><div class="card-heading">
+              <h3 class="card-title">Backup &amp; Restore</h3>
+              <p class="card-description">Not a full backup: Latter's storage is already in every Home Assistant backup.</p>
+            </div></div>
+            <div class="card-content">
+              <h4 class="subsection-title">Export</h4>
+              <div class="settings-list">
+                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="bkp-scope-select">What to Export</label></div><div class="settings-row-control"><select id="bkp-scope-select"></select><button type="button" class="btn btn-secondary" onclick="exportBackupToComputer('')">Download</button></div></div>
               </div>
-              <div class="card-header-actions"><button type="button" class="btn btn-secondary btn-compact" onclick="openColorWheelModal('system')">Add Color</button></div>
-            </div>
-            <div class="card-content"><div id="sys-custom-palettes-list" class="settings-list"></div></div>
-          </div>
-          <div class="card">
-            <div class="card-header"><div class="card-heading"><h3 class="card-title">Restore From File</h3></div></div>
-            <div class="card-content settings-list">
-              <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="bkp-upload-file">Backup File</label></div><div class="settings-row-control"><input type="file" id="bkp-upload-file" accept=".json,application/json"></div></div>
-              <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="bkp-restore-device">Device for a Device Backup</label></div><div class="settings-row-control"><select id="bkp-restore-device"></select></div></div>
-              <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="bkp-restore-esp">Restore the Device's Own Settings</label><p class="row-description">Selects, switches and numbers stored on the Device.</p></div><div class="settings-row-control"><input type="checkbox" class="switch" role="switch" id="bkp-restore-esp" checked></div></div>
+              <h4 class="subsection-title">Restore</h4>
+              <div class="settings-list">
+                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="bkp-upload-file">Backup File</label></div><div class="settings-row-control"><input type="file" id="bkp-upload-file" accept=".json,application/json"></div></div>
+                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="bkp-restore-device">Device for a Device Backup</label></div><div class="settings-row-control"><select id="bkp-restore-device"></select></div></div>
+                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="bkp-restore-esp">Restore the Device's Own Settings</label><p class="row-description">Selects, switches and numbers stored on the Device.</p></div><div class="settings-row-control"><input type="checkbox" class="switch" role="switch" id="bkp-restore-esp" checked></div></div>
+              </div>
             </div>
             <div class="card-actions"><button type="button" class="btn btn-primary" onclick="restoreFromUploadedFile()">Restore</button></div>
           </div>
@@ -1411,10 +1412,11 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
               <div class="kv-row"><span>Location Mode</span><strong id="dash-ble-mode">—</strong></div>
               <div class="kv-row" id="dash-row-ble-proxy"><span>Nearest BLE Proxy</span><strong id="dash-ble-proxy">—</strong></div>
               <div class="kv-row"><span>Hardware Model</span><strong id="dash-hw-model">—</strong></div>
-              <div class="kv-row"><span>Device Group</span><strong id="st-group">—</strong></div>
+              <div class="kv-row"><span>ESPHome Node Name</span><strong id="dash-node-name" class="mono">—</strong></div>
             </div>
             <div class="card-actions">
-              <button type="button" class="btn btn-text" onclick="navigateToView('system')">Settings</button>
+              <button type="button" class="btn btn-text" onclick="navigateToView('tools')">Tools</button>
+              <button type="button" class="btn btn-secondary" id="btn-open-in-ha" onclick="openDeviceInHa()">Open in Home Assistant</button>
               <button type="button" class="btn btn-secondary" onclick="exportBackupToComputer('device')">Download Backup</button>
             </div>
           </div>
@@ -1426,6 +1428,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
                 <div id="dash-quick-actions" class="input-action-row"></div>
                 <div class="settings-list">
                   <div class="settings-row hidden" id="dash-power-profile-wrap"><div class="settings-row-text"><label class="row-label" for="dash-power-profile-select">Sleep &amp; Wake Power Profile</label></div><div class="settings-row-control"><select id="dash-power-profile-select" onchange="if (this.dataset.ent) espSelect(this.dataset.ent, this.value)"></select></div></div>
+                  <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-device_group">Device Group</label></div><div class="settings-row-control"><select id="cfg-device_group" onchange="saveField('device', this)"></select></div></div>
                   <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="quick-profile-select">Configuration Profile</label></div><div class="settings-row-control"><select id="quick-profile-select"></select><button type="button" class="btn btn-secondary" onclick="applyQuickProfileFromOverview()">Apply</button></div></div>
                   <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-assigned_person">Assigned Person</label><p class="row-description">Creates <code>sensor.&lt;person&gt;_current_area</code>.</p></div><div class="settings-row-control"><select id="cfg-assigned_person" onchange="onAssignedPersonChanged(this.value)"></select></div></div>
                 </div>
@@ -1571,19 +1574,12 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
         </div>
       </section>
 
-      <!-- DEVICE: SETTINGS -->
-      <section id="view-system" class="hidden">
+      <!-- DEVICE: BLE & AREA PRESENCE -->
+      <section id="view-presence" class="hidden">
         <div class="columns">
           <div class="column">
           <div class="card">
-            <div class="card-header"><div class="card-heading"><h3 class="card-title">Device</h3></div></div>
-            <div class="card-content settings-list">
-              <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-device_slug">ESPHome Node Name</label><p class="row-description">Set when the Device was added; entities are <code>sensor.&lt;name&gt;_*</code>.</p></div><div class="settings-row-control"><input type="text" id="cfg-device_slug" readonly></div></div>
-              <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-device_group">Device Group</label></div><div class="settings-row-control"><select id="cfg-device_group" onchange="saveField('device', this)"></select></div></div>
-            </div>
-          </div>
-          <div class="card">
-            <div class="card-header"><div class="card-heading"><h3 class="card-title">Location &amp; BLE</h3></div></div>
+            <div class="card-header"><div class="card-heading"><h3 class="card-title">Area Tracking</h3></div></div>
             <div class="card-content">
               <div class="settings-list">
                 <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-native_ble_tracking">Track the Area with BLE Proxies</label></div><div class="settings-row-control"><input type="checkbox" class="switch" role="switch" id="cfg-native_ble_tracking" onchange="saveField('device', this)"></div></div>
@@ -1592,48 +1588,61 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
               <div id="embedded-area-ble" class="settings-list"></div>
               <div class="settings-list">
                 <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-default_area">Fallback Area</label></div><div class="settings-row-control"><select id="cfg-default_area" onchange="saveField('device', this)"></select></div></div>
-                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-ble_target_address">BLE Target</label><p class="row-description">Optional MAC address or <code>private_ble_device</code> entity.</p></div><div class="settings-row-control"><input type="text" id="cfg-ble_target_address" class="mono" placeholder="Auto-discovered" onchange="saveField('device', this)" onkeydown="if (event.key === 'Enter') this.blur()"></div></div>
-                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-ble_beacon_uuid">iBeacon UUID</label></div><div class="settings-row-control"><input type="text" id="cfg-ble_beacon_uuid" class="mono" onchange="saveField('device', this)" onkeydown="if (event.key === 'Enter') this.blur()"></div></div>
                 <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-presence_entity">External Area Sensor</label><p class="row-description">Optional; for example a Bermuda Area sensor.</p></div><div class="settings-row-control"><select id="cfg-presence_entity" onchange="saveField('device', this)"></select></div></div>
               </div>
             </div>
           </div>
           </div>
           <div class="column">
-          <div class="card" id="card-device-ha">
-          <div class="card-header"><div class="card-heading"><h3 class="card-title">In Home Assistant</h3></div></div>
-          <div class="card-content settings-list">
-            <div class="settings-row" id="row-open-in-ha">
-              <div class="settings-row-text"><span class="row-label">Device Page</span><p class="row-description">Every entity of the ESPHome device, its logs and its firmware update.</p></div>
-              <div class="settings-row-control"><button type="button" class="btn btn-secondary btn-compact" onclick="openDeviceInHa()">Open in Home Assistant</button></div>
+          <div class="card">
+            <div class="card-header"><div class="card-heading"><h3 class="card-title">BLE Identity</h3></div></div>
+            <div class="card-content settings-list">
+              <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-ble_target_address">BLE Target</label><p class="row-description">Optional MAC address or <code>private_ble_device</code> entity.</p></div><div class="settings-row-control"><input type="text" id="cfg-ble_target_address" class="mono" placeholder="Auto-discovered" onchange="saveField('device', this)" onkeydown="if (event.key === 'Enter') this.blur()"></div></div>
+              <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-ble_beacon_uuid">iBeacon UUID</label></div><div class="settings-row-control"><input type="text" id="cfg-ble_beacon_uuid" class="mono" onchange="saveField('device', this)" onkeydown="if (event.key === 'Enter') this.blur()"></div></div>
             </div>
-            <div class="settings-row" id="row-diagnostics">
-              <div class="settings-row-text"><span class="row-label">Diagnostics File</span><p class="row-description">A JSON file for troubleshooting, with private values redacted.</p></div>
-              <div class="settings-row-control"><button type="button" class="btn btn-secondary btn-compact" onclick="downloadDeviceDiagnostics()">Download Diagnostics</button></div>
-            </div>
-            <div class="settings-row" id="row-replace-hardware">
-              <div class="settings-row-text"><span class="row-label">Replace Hardware</span><p class="row-description">Opens Latter in Home Assistant. On this Device, choose Reconfigure or Replace Hardware; its settings move to the new hardware.</p></div>
-              <div class="settings-row-control"><button type="button" class="btn btn-secondary btn-compact" onclick="openHaPage('/config/integrations/integration/latter')">Open Latter</button></div>
-            </div>
+          </div>
           </div>
         </div>
-          <details class="card">
-          <summary class="card-header"><div class="card-heading"><h3 class="card-title">Diagnostics</h3></div></summary>
-          <div class="card-content">
-            <div id="embedded-network" class="settings-list"></div>
-            <details class="sub-collapsible" id="details-developer">
-              <summary>Developer</summary>
-              <div class="card-content"><div id="embedded-developer" class="settings-list"></div></div>
-            </details>
-            <details class="sub-collapsible">
-              <summary>All Entities</summary>
-              <div class="card-content">
-                <input type="text" id="esp-search" placeholder="Filter by name or entity ID" aria-label="Filter entities" oninput="renderRawEntityList()">
-                <div id="raw-entity-items" class="settings-list"></div>
+      </section>
+
+      <!-- DEVICE: TOOLS -->
+      <section id="view-tools" class="hidden">
+        <div class="columns">
+          <div class="column">
+          <div class="card">
+            <div class="card-header"><div class="card-heading"><h3 class="card-title">Diagnostics</h3></div></div>
+            <div class="card-content">
+              <div class="settings-list">
+                <div class="settings-row" id="row-diagnostics">
+                  <div class="settings-row-text"><span class="row-label">Diagnostics File</span><p class="row-description">A JSON file for troubleshooting, with private values redacted.</p></div>
+                  <div class="settings-row-control"><button type="button" class="btn btn-secondary btn-compact" onclick="downloadDeviceDiagnostics()">Download Diagnostics</button></div>
+                </div>
               </div>
-            </details>
+              <div id="embedded-network" class="settings-list"></div>
+              <details class="sub-collapsible" id="details-developer">
+                <summary>Developer</summary>
+                <div class="card-content"><div id="embedded-developer" class="settings-list"></div></div>
+              </details>
+              <details class="sub-collapsible">
+                <summary>All Entities</summary>
+                <div class="card-content">
+                  <input type="text" id="esp-search" placeholder="Filter by name or entity ID" aria-label="Filter entities" oninput="renderRawEntityList()">
+                  <div id="raw-entity-items" class="settings-list"></div>
+                </div>
+              </details>
+            </div>
           </div>
-        </details>
+          </div>
+          <div class="column">
+          <div class="card" id="card-replace-hardware">
+            <div class="card-header"><div class="card-heading"><h3 class="card-title">Replace Hardware</h3></div></div>
+            <div class="card-content settings-list">
+              <div class="settings-row">
+                <div class="settings-row-text"><span class="row-label">Move This Device to New Hardware</span><p class="row-description">Opens Latter in Home Assistant. On this Device, choose Reconfigure or Replace Hardware; its settings move to the new hardware.</p></div>
+                <div class="settings-row-control"><button type="button" class="btn btn-secondary btn-compact" onclick="openHaPage('/config/integrations/integration/latter')">Open Latter</button></div>
+              </div>
+            </div>
+          </div>
           <div class="card danger">
           <div class="card-header"><div class="card-heading"><h3 class="card-title">Danger Zone</h3></div></div>
           <div class="card-content settings-list">
@@ -1868,7 +1877,7 @@ const SYSTEM_VIEWS = [
   "remotes",
   "system_sync",
   "area_tracking",
-  "system_admin"
+  "system_tools"
 ];
 
 const DEVICE_VIEWS = [
@@ -1877,7 +1886,8 @@ const DEVICE_VIEWS = [
   "home_display",
   "audio_voice",
   "power",
-  "system"
+  "presence",
+  "tools"
 ];
 
 const ALL_VIEWS = SYSTEM_VIEWS.concat(DEVICE_VIEWS);
@@ -2206,13 +2216,14 @@ const VIEW_TITLES = {
   remotes: "Media & Remotes",
   system_sync: "Groups & Profiles",
   area_tracking: "BLE & Area Presence",
-  system_admin: "Settings",
+  system_tools: "Tools",
   select_device_prompt: "All Devices",
   dashboard: "Overview",
   home_display: "Display & Home",
   audio_voice: "Audio & Voice",
   power: "Power & Battery",
-  system: "Settings"
+  presence: "BLE & Area Presence",
+  tools: "Tools"
 };
 let CURRENT_VIEW_ID = "select_device_prompt";
 
@@ -2343,8 +2354,8 @@ function switchView(viewId, btnEl) {
 
 // The URL follows the page (/latter, /latter/devices/<id>[/<page>], /latter/system/<page>), so a reload or
 // Back keeps the user's place. Navigation uses the history API plus Home Assistant's location-changed event.
-const DEVICE_VIEW_SLUGS = {dashboard: "overview", home_display: "display", audio_voice: "audio", power: "power", system: "settings"};
-const SYSTEM_VIEW_SLUGS = {system_overview: "overview", shared_entities: "shared", remotes: "remotes", system_sync: "groups", area_tracking: "presence", system_admin: "settings"};
+const DEVICE_VIEW_SLUGS = {dashboard: "overview", home_display: "display", audio_voice: "audio", power: "power", presence: "presence", tools: "tools"};
+const SYSTEM_VIEW_SLUGS = {system_overview: "overview", shared_entities: "shared", remotes: "remotes", system_sync: "groups", area_tracking: "presence", system_tools: "tools"};
 const slugToView = (map, slug) => Object.keys(map).find(k => map[k] === slug);
 let ROUTE_APPLYING = false;
 
@@ -3207,9 +3218,6 @@ function getSectionItems(secId) {
 function renderCohesiveDeviceSections() {
   const esp = STATE?.esphome;
   if (!esp) return;
-  const sections = esp.sections || [];
-  const totalCount = sections.reduce((acc, s) => acc + s.count, 0);
-  doc.getElementById("nav-esp-badge").textContent = totalCount;
 
   const sortByOrder = (items, keywords) => {
     return [...items].sort((a, b) => {
@@ -4228,9 +4236,9 @@ function applyStateToDom(data, forceFormUpdate=false) {
   renderSystemIssues();
   renderDoorbells();
   const links = data.links || {};
-  doc.getElementById("row-open-in-ha")?.classList.toggle("hidden", !links.esphome_device_id);
+  doc.getElementById("btn-open-in-ha")?.classList.toggle("hidden", !links.esphome_device_id);
   doc.getElementById("row-diagnostics")?.classList.toggle("hidden", !links.latter_device_id);
-  doc.getElementById("row-replace-hardware")?.classList.toggle("hidden", isBleOnly);
+  doc.getElementById("card-replace-hardware")?.classList.toggle("hidden", isBleOnly);
   doc.getElementById("st-battery").textContent = batText;
   doc.getElementById("dash-row-battery")?.classList.toggle("hidden", !caps.has_power && batText === "—");
   doc.getElementById("st-wifi").textContent = wifiText;
@@ -4246,10 +4254,6 @@ function applyStateToDom(data, forceFormUpdate=false) {
       ? (live.fw_update_available ? `v${rawDevSw} (update available)` : `v${rawDevSw}`)
       : "—";
   }
-
-  const grpList = data.device_groups || [];
-  const grpObj = grpList.find(g => g.id === cfg.device_group);
-  doc.getElementById("st-group").textContent = grpObj ? grpObj.name : (cfg.device_group || "—");
 
   doc.getElementById("dash-hw-model").textContent = curDevEntry.model_label || esp?.device?.model || "—";
   doc.getElementById("dash-ip-addr").textContent = ipStr;
@@ -4320,7 +4324,7 @@ function loadSystemForm(data) {
 function loadDeviceForm(data) {
   const cfg = data.config || {};
   const cat = data.catalog || {};
-  doc.getElementById("cfg-device_slug").value = cfg.device_slug || "";
+  doc.getElementById("dash-node-name").textContent = cfg.device_slug || "—";
   doc.getElementById("cfg-default_page_size").value = cfg.default_page_size ?? 3;
   doc.getElementById("cfg-native_ble_tracking").checked = !!cfg.native_ble_tracking;
   doc.getElementById("cfg-ble_auto_switch").checked = !!cfg.ble_auto_switch;

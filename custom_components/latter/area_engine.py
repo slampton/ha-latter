@@ -322,7 +322,6 @@ def get_esphome_device_entities(
                 "id": sec_id,
                 "title": sec_title,
                 "description": sec_desc,
-                "count": len(sec_items),
                 "items": sec_items,
             }
         )
@@ -339,7 +338,6 @@ def get_esphome_device_entities(
                 "id": sec_id,
                 "title": sec_title,
                 "description": f"Entities grouped under the '{sec_title}:' prefix.",
-                "count": len(sec_items),
                 "items": sec_items,
             }
         )
@@ -354,7 +352,6 @@ def get_esphome_device_entities(
                 "id": "other",
                 "title": "General & custom entities",
                 "description": "Additional sensors, switches, and custom project entities (spillover).",
-                "count": len(other_items),
                 "items": other_items,
             }
         )

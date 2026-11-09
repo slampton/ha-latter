@@ -118,7 +118,7 @@ Sensors are discovered automatically by device class (occupancy, presence, motio
 
 ### Using both
 
-You don't have to choose. On a device's **Settings** page, under **Location & BLE**, set **External Area Sensor** to a Bermuda area sensor. When its state matches an Area name or ID, Latter switches the device to that area. It also moves the device's Home Assistant Area and rescopes Area Control, just as it would with its own engine.
+You don't have to choose. On a device's **BLE & Area Presence** page, under **Area Tracking**, set **External Area Sensor** to a Bermuda area sensor. When its state matches an Area name or ID, Latter switches the device to that area. It also moves the device's Home Assistant Area and rescopes Area Control, just as it would with its own engine.
 
 Per-area occupancy sensors and `occupied_areas` routing are different: they come only from Latter's own engine and ignore the override.
 

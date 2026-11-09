@@ -38,6 +38,7 @@ Settings here live in `.storage/latter.site` and apply to every device.
 ### Groups & Profiles
 - **Configuration Profiles:** choose a device and capture its display, dock, wake word, and timeout settings, then apply them to one device, a group, or all devices.
 - **Device Groups:** logical groupings such as handhelds, bedrooms, or wall panels, used for organization and when applying profiles.
+- **Custom Color Library:** up to 24 saved theme colors shared by every device; **Add Color** opens a color picker. Apply one to a device from that device's **Display & Home** page.
 - **Bulk Device Controls:** change a display, sleep, voice, sound, music, or Area setting on every device in a group (or all roaming or stationary devices) at once. When the devices disagree, the control shows **Mixed**.
 
 ### BLE & Area Presence
@@ -47,13 +48,11 @@ Settings here live in `.storage/latter.site` and apply to every device.
 
 → [Presence guide](presence.md)
 
-### Settings
+### Tools
 | Card | What it does |
 | :--- | :--- |
-| **Export Settings** | Download the whole System's settings, or one device's, as a `.json` file. Device exports include the device's live ESPHome select, switch, and number values. Full backups are Home Assistant's own: Latter's storage is included in every Home Assistant backup. |
-| **Restore From File** | Upload an exported `.json` file to restore it. For a device export, choose the device to restore it onto; it can be a different device, to clone a setup. |
-| **Notifications & Announcements** | Choose **Notification** (an on-screen alert with a chime on one device, every device, or the devices in occupied Areas, optionally with a snapshot from the primary camera) or **Announcement** (the message spoken with text-to-speech on every speaker, or on the speakers in occupied Areas), then **Send**. |
-| **Custom Color Library** | Up to 24 saved theme colors; **Add Color** opens a color picker. Apply one to a device from that device's **Display & Home** page. |
+| **Notifications & Announcements** | Choose **Notification** (an on-screen alert with a chime on one device, every device, or the devices in occupied Areas, optionally with a snapshot from the primary camera) or **Announcement** (the message spoken with text-to-speech on every speaker, or on the speakers in occupied Areas), then **Send**. Use it to test how alerts look and sound. |
+| **Backup & Restore** | **Export**: download the whole System's settings, or one device's, as a `.json` file (device exports include the device's live ESPHome select, switch, and number values). **Restore**: upload an exported file; for a device export, choose the device to restore it onto (it can be a different device, to clone a setup). Full backups are Home Assistant's own: Latter's storage is included in every Home Assistant backup. |
 | **System & Device Logs** | Latter's own events plus the Latter, ESPHome and Music Assistant entries from the Home Assistant log. Show all entries, Latter only, warnings and errors, or one device's; **Open in Home Assistant** opens Home Assistant's log page filtered the same way. **Copy** and **Clear** act on Latter's list. |
 
 ---
@@ -62,15 +61,16 @@ Settings here live in `.storage/latter.site` and apply to every device.
 
 The **All Devices** page lists onboarded devices. **Add Device** opens Latter in Home Assistant, where **Add Device** adds a Latter Device, with or without a screen (Home Assistant's ESPHome discovery offers new Devices too). **Add BLE Tag** adds a phone, watch, or Bluetooth tag as a **BLE Tag** entry (you can also add one from **Settings → Devices & Services → Latter → Add BLE Tag**). What a device can do comes from its hardware manifest (display, roaming, wearable), not from a type setting. → [Existing ESPHome devices](existing-esphome.md)
 
-Each device has five pages. The options on each page depend on what the device's hardware reports. A headless sensor won't show display settings.
+Each device has up to six pages. The options on each page depend on what the device's hardware reports. A headless sensor won't show display settings.
 
 | Page | Contents |
 | :--- | :--- |
-| **Overview** | A **Needs Attention** banner when the device has open repairs; **Status** (online or offline, firmware, SDK revision, Area, battery, Wi-Fi signal, IP address, active speaker and what's playing, location mode, nearest BLE proxy, hardware model and group); quick actions, power profile, apply a profile, and assigned person. A value the device hasn't reported shows as —. |
+| **Overview** | A **Needs Attention** banner when the device has open repairs; **Status** (online or offline, firmware, SDK revision, Area, battery, Wi-Fi signal, IP address, active speaker and what's playing, location mode, nearest BLE proxy, hardware model and ESPHome node name), with **Tools**, **Open in Home Assistant** (the ESPHome device page) and **Download Backup**; **Quick Actions**: the device's quick actions, power profile, **Device Group**, apply a profile, and assigned person. A value the device hasn't reported shows as —. |
 | **Display & Home** | Color profile, Area cards per page, home dock apps and their order (the device shows exactly these apps, plus Settings, and **Settings → Home** on the device edits the same list), and wallpapers (5 built-in presets, plus uploads that can rotate on a schedule). Screen shape and resolution come from the device's hardware manifest. |
 | **Audio & Voice** | **Voice Assistant & Wake Word**: Wake Word Mode; the wake words (Home Assistant's Wake Word and Wake Word 2, the one wake-word control) and per-model sensitivity, which hide while Wake Word Mode is Disabled; Home Assistant's Assistant and Finished Speaking Detection; Visual Profile and Wake Screen on Assist, which stay because the action button and Home Assistant can still start the assistant; **Voice Follows Me** and its delay (roaming devices: how long Bluetooth must place the device in a new Area before its Home Assistant Area follows, 3 to 60 s), **Media Follows This Device to Its New Area** (one setting for Bluetooth moves and Area picks on the device), and **Sound & Media Player**, grouped as **Sound** (alert volume), **Music Screen** (album art, overlay, shortcuts), **Speaker** (default speaker, the device's **Music Assistant Player**, needed for library playback) and **Library Sorting** |
 | **Power & Battery** | **Sleep & Wake** timeouts, plus **Power & Battery** readings |
-| **Settings** | **Device**: the ESPHome node name (read-only) and group. **Location & BLE**: BLE Area tracking (the BLE presence beacon follows **Track the Area with BLE Proxies** and is shown read-only), fallback Area, BLE target and external Area sensor. **In Home Assistant**: **Open in Home Assistant** (the ESPHome device page), **Download Diagnostics**, and **Replace Hardware** (opens Latter in Home Assistant to reconfigure or replace the hardware). **Diagnostics** (collapsed): network and status entities, a **Developer** group (profiler, memory, weather simulation) and every entity. **Danger Zone**: **Reset…** and **Remove…** |
+| **BLE & Area Presence** | **Area Tracking**: track the Area with BLE proxies, switch the active Area on movement (the BLE presence beacon follows **Track the Area with BLE Proxies** and is shown read-only), fallback Area and external Area sensor. **BLE Identity**: BLE target and iBeacon UUID. |
+| **Tools** | **Diagnostics**: **Download Diagnostics** (a redacted JSON file), network and status entities, a **Developer** group (profiler, memory, weather simulation) and **All Entities**. **Replace Hardware**: opens Latter in Home Assistant to reconfigure or replace the hardware. **Danger Zone**: **Reset…** and **Remove…** |
 
 **Reset…** opens a confirmation with two options, both on by default: **Settings Saved on the Device** (erases everything saved on the device; it restarts) and **Latter Settings for This Device**. Wi-Fi and pairing are kept, as are the device's ESPHome binding and Music Assistant player link. It does the same as the [`latter.reset_device`](reference/services.md#latterreset_device) service; BLE tags only offer the Latter settings.
 
