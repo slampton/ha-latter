@@ -37,6 +37,7 @@ assets = _load("studio/assets")
 issue_ids = _load("issue_ids")
 dock_policy = _load("dock_policy")
 catalog_gate = _load("studio/catalog_gate")
+entity_sections = _load("entity_sections")
 
 
 class TestPayloadDiet(unittest.TestCase):
@@ -145,6 +146,25 @@ class TestViewLayout(unittest.TestCase):
         self.assertIn('card.classList.toggle("hidden", !card.querySelector(".settings-row"));', js)
         render = js[js.index("function renderCohesiveDeviceSections()"):]
         self.assertIn("  syncEntityCards();\n}", render[: render.index("\n}\n") + 3])
+
+    def test_home_sun_and_moon_switches_in_home_section(self) -> None:
+        self.assertEqual(
+            entity_sections.classify_esphome_entity_section(
+                "switch.pocket_home_sun", "Home: Sun", "switch", "", "config"
+            ),
+            ("home", None),
+        )
+        self.assertEqual(
+            entity_sections.classify_esphome_entity_section(
+                "switch.pocket_home_moon", "Home: Moon", "switch", "", "config"
+            ),
+            ("home", None),
+        )
+        js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
+        self.assertIn(
+            '"wake greeting", "weather background", "sun", "moon", "default category", "show all category"',
+            js,
+        )
 
     def test_sidebar_icon_module(self) -> None:
         # D-017: the panel's sidebar icon is "latter:logo", registered by a tiny static frontend module.

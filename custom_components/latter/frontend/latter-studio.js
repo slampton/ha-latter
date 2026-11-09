@@ -3285,7 +3285,7 @@ function renderCohesiveDeviceSections() {
   // 2. Home screen & Area UI (the dock itself is the Home dock apps setting below)
   const rawHomeItems = getSectionItems("home");
   const homeItems = sortByOrder(rawHomeItems.concat(areaUiItems), [
-    "wake greeting", "weather background", "default category", "show all category"
+    "wake greeting", "weather background", "sun", "moon", "default category", "show all category"
   ]);
   doc.getElementById("embedded-home").innerHTML = homeItems.length
     ? homeItems.map(it => renderNativeControlRow(it)).join("")
