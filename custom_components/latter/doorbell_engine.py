@@ -346,7 +346,6 @@ async def async_execute_doorbell_intercom(
     cams = coordinator.camera_entities
     if camera_index is not None and cams:
         idx = max(0, min(len(cams) - 1, int(camera_index)))
-        coordinator.active_camera_index = idx
         coordinator.active_carousel_camera = cams[idx]
 
     cam_ent = (

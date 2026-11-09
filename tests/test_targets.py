@@ -178,6 +178,23 @@ class BleDeviceTrackerAndPersonTests(unittest.TestCase):
         self.assertIn("fabric.register_occupancy_listener(self._handle_person_update)", sensor_src)
         self.assertIn("resolve_person_area_and_distance(self.hass, self._person_entity)", sensor_src)
 
+    def test_ble_tag_skips_display_sensors_and_listeners(self) -> None:
+        sensor_src = (LATTER_DIR / "sensor.py").read_text(encoding="utf-8")
+        ble_branch = sensor_src.split("if coordinator.is_ble_tag:", 1)[1].split("else:", 1)[0]
+        self.assertIn("LatterCurrentAreaSensor(coordinator)", ble_branch)
+        self.assertIn("LatterBleDistanceSensor(coordinator)", ble_branch)
+        self.assertNotIn("LatterAreaContextSensor", ble_branch)
+
+        coord_src = (LATTER_DIR / "coordinator.py").read_text(encoding="utf-8")
+        self.assertNotIn("def _notify_listeners", coord_src)
+        self.assertNotIn("self._notify_listeners()", coord_src)
+        self.assertNotIn("_cached_hw_manifest", coord_src)
+        self.assertNotIn("active_camera_index", coord_src)
+        self.assertIn("def _bind_all_listeners(self) -> None:", coord_src)
+        self.assertIn("self._doorbell_reply_task.cancel()", coord_src)
+        area_body = coord_src.split("def async_set_active_area(", 1)[1].split("\n    @property", 1)[0]
+        self.assertIn("self._bind_remotes_listener()", area_body)
+
 
 if __name__ == "__main__":
     unittest.main()

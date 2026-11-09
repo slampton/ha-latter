@@ -47,7 +47,6 @@ async def async_setup_entry(
                 [
                     LatterCurrentAreaSensor(coordinator),
                     LatterBleDistanceSensor(coordinator),
-                    LatterAreaContextSensor(coordinator),
                 ]
             )
         else:

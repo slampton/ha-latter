@@ -309,7 +309,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._area_follow = LatterAreaFollowController(hass)
 
         self._cached_esphome_device_id: str | None = None
-        self._cached_hw_manifest: tuple[str, dict[str, Any]] | None = None
         self.rev: int = 1
         self._notify_debouncer: Debouncer[None] = Debouncer(
             hass,
@@ -408,7 +407,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.alert_duration: int = 8
         self.alert_chime: bool = True
         self.alert_camera_url: str = ""
-        self.active_camera_index: int = 0
         self.active_carousel_camera: str = ""
         self.doorbell_talk_state: str = "idle"
         self.last_device_health: dict[str, Any] | None = None
@@ -497,16 +495,10 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.active_speaker = target_def_spk
             self._schedule_persist_runtime_state()
 
-        self._bind_speaker_listener()
-        self._bind_weather_listener()
-        self._bind_alarm_listener()
-        self._bind_remotes_listener()
-        self._bind_area_entities_listener()
-        self._bind_doorbell_ring_listener()
-        self._bind_wallpaper_cycle_timer()
+        self._bind_all_listeners()
         await self.async_sync_presence_beacon("options")
         get_ble_fabric(self.hass).notify_occupancy_listeners()
-        self._notify_listeners()
+        self.async_notify_listeners()
 
     async def async_sync_presence_beacon(self, trigger: Trigger) -> None:
         """Turn the bound device's BLE presence beacon switch on or off per `presence_beacon.decide_beacon_action`.
@@ -590,17 +582,13 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Refresh listeners, BLE offsets, weather, and calendar when System-Wide config changes."""
         if self._ble_tracker is not None:
             self._ble_tracker.set_area_offsets(self.ble_area_offsets)
-        self._bind_speaker_listener()
-        self._bind_weather_listener()
-        self._bind_alarm_listener()
-        self._bind_remotes_listener()
-        self._bind_area_entities_listener()
-        self._bind_doorbell_ring_listener()
-        if changed_keys is None or CONF_WEATHER_ENTITY in changed_keys:
-            await self.async_refresh_weather_forecast()
-        if changed_keys is None or CONF_CALENDAR_ENTITIES in changed_keys:
-            await self.async_refresh_calendar_agenda()
-        self._notify_listeners()
+        self._bind_all_listeners()
+        if not self.is_ble_tag:
+            if changed_keys is None or CONF_WEATHER_ENTITY in changed_keys:
+                await self.async_refresh_weather_forecast()
+            if changed_keys is None or CONF_CALENDAR_ENTITIES in changed_keys:
+                await self.async_refresh_calendar_agenda()
+        self.async_notify_listeners()
 
     @property
     def device_slug(self) -> str:
@@ -1128,7 +1116,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             },
         )
         self._schedule_persist_runtime_state()
-        self._notify_listeners()
+        self.async_notify_listeners()
 
     def build_wallpaper_url(self) -> str:
         """Build the device-scoped baseline-JPEG photo wallpaper URL (always local LAN HTTP for ESP32 online_image)."""
@@ -1234,12 +1222,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if dev_area:
                 self.active_area_id = dev_area
 
-        self._bind_speaker_listener()
-        self._bind_weather_listener()
-        self._bind_alarm_listener()
-        self._bind_remotes_listener()
-        self._bind_area_entities_listener()
-        self._bind_doorbell_ring_listener()
+        self._bind_all_listeners()
 
         self._unsub_core_config = self.hass.bus.async_listen(
             EVENT_CORE_CONFIG_UPDATE, self._async_on_core_config_update
@@ -1258,20 +1241,20 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
             self._ble_tracker.async_start()
 
-        await self.async_refresh_weather_forecast()
-        await self.async_refresh_calendar_agenda()
+        if not self.is_ble_tag:
+            await self.async_refresh_weather_forecast()
+            await self.async_refresh_calendar_agenda()
 
-        self._unsub_forecast_timer = async_track_time_interval(
-            self.hass,
-            self._async_periodic_weather_refresh,
-            timedelta(minutes=FORECAST_REFRESH_INTERVAL_MINUTES),
-        )
-        self._unsub_calendar_timer = async_track_time_interval(
-            self.hass,
-            self._async_periodic_calendar_refresh,
-            timedelta(minutes=CALENDAR_REFRESH_INTERVAL_MINUTES),
-        )
-        self._bind_wallpaper_cycle_timer()
+            self._unsub_forecast_timer = async_track_time_interval(
+                self.hass,
+                self._async_periodic_weather_refresh,
+                timedelta(minutes=FORECAST_REFRESH_INTERVAL_MINUTES),
+            )
+            self._unsub_calendar_timer = async_track_time_interval(
+                self.hass,
+                self._async_periodic_calendar_refresh,
+                timedelta(minutes=CALENDAR_REFRESH_INTERVAL_MINUTES),
+            )
         # Onboarding / reload: mirror the tracking option (no-op until the device's switch is available).
         await self.async_sync_presence_beacon("options")
         try:
@@ -1282,10 +1265,26 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             _LOGGER.debug("Repairs audit skipped: %s", err)
 
     @callback
+    def _bind_all_listeners(self) -> None:
+        """Bind or rebind all entity state listeners and the wallpaper timer (skipped for BLE tags)."""
+        if self.is_ble_tag:
+            return
+        self._bind_speaker_listener()
+        self._bind_weather_listener()
+        self._bind_alarm_listener()
+        self._bind_remotes_listener()
+        self._bind_area_entities_listener()
+        self._bind_doorbell_ring_listener()
+        self._bind_wallpaper_cycle_timer()
+
+    @callback
     def async_cleanup(self) -> None:
         """Clean up all Latter subscriptions and timers on entry unload."""
         self._notify_debouncer.async_cancel()
         self._area_follow.cancel()
+        if self._doorbell_reply_task is not None and not self._doorbell_reply_task.done():
+            self._doorbell_reply_task.cancel()
+        self._doorbell_reply_task = None
         if self._ble_tracker is not None:
             self._ble_tracker.async_stop()
             self._ble_tracker = None
@@ -1345,7 +1344,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self, event: Event[EventStateChangedData]
     ) -> None:
         """Debounce active area entity state changes (250ms) and push updated area slots to ESPHome."""
-        self._notify_listeners()
+        self.async_notify_listeners()
         if self._unsub_area_debounce is not None:
             self._unsub_area_debounce()
             self._unsub_area_debounce = None
@@ -1476,7 +1475,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Handle device-initiated handshake on ESPHome API connection."""
         is_new_boot, parsed = self._runtime.apply_device_hello(boot_id, manifest_raw)
         if parsed is not None:
-            self._cached_hw_manifest = (manifest_raw, parsed)
             if self._ble_tracker is not None:
                 self._ble_tracker.update_manifest_beacon(parsed.get("beacon"))
             self._apply_device_health(parsed, str(boot_id or "").strip())
@@ -1585,7 +1583,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     sync_device_registry=True,
                     ble_driven=True,
                 )
-        self._notify_listeners()
+        self.async_notify_listeners()
         await asyncio.sleep(1.5)
         self._enforce_local_speaker_if_remote_idle("device_reconnect_post_delay")
         if (
@@ -1599,7 +1597,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 sync_device_registry=True,
                 ble_driven=True,
             )
-        self._notify_listeners()
+        self.async_notify_listeners()
         if self.on_area_changed_push_slots is not None:
             await self.on_area_changed_push_slots(self)
 
@@ -1617,7 +1615,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         if resumed:
             self._local_needs_cold_resume = False
-            self._notify_listeners()
+            self.async_notify_listeners()
 
     async def async_execute_media_command(
         self,
@@ -1775,10 +1773,10 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Handle area transition or Away timeout detected by Latter's BLE proxy tracker."""
         if area_id == "away":
             self._area_follow.cancel()
-            self._notify_listeners()
+            self.async_notify_listeners()
             return
         if not self.ble_auto_switch_enabled:
-            self._notify_listeners()
+            self.async_notify_listeners()
             return
         if area_id and area_id != self.active_area_id:
             _LOGGER.info(
@@ -1795,14 +1793,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 ble_driven=True,
             )
         else:
-            self._notify_listeners()
-
-    @callback
-    def async_add_listener(
-        self, update_callback: Callable[[], None], context: Any = None
-    ) -> Callable[[], None]:
-        """Register an entity state update callback via DataUpdateCoordinator."""
-        return super().async_add_listener(update_callback, context)
+            self.async_notify_listeners()
 
     def get_person_area_and_distance(self, person_entity: str) -> tuple[str, dict[str, Any]]:
         """Resolve the freshest area and BLE distance across all Latter devices carried by a person."""
@@ -1852,11 +1843,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._schedule_persist_runtime_state()
         self._notify_debouncer.async_schedule_call()
 
-    @callback
-    def _notify_listeners(self) -> None:
-        """Notify all registered sensors of a state update."""
-        self.async_notify_listeners()
-
     async def _async_execute_ma_queue_transfer(
         self,
         source_speaker: str,
@@ -1877,7 +1863,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             media_content_id,
             media_content_type,
         )
-        self._notify_listeners()
+        self.async_notify_listeners()
 
     @callback
     def async_set_active_speaker(
@@ -1941,7 +1927,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
 
         self._bind_speaker_listener()
-        self._notify_listeners()
+        self.async_notify_listeners()
 
     @callback
     def async_set_active_area(
@@ -1957,7 +1943,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return
         prev_area = self.active_area_id
         self.active_area_id = matched_id
-        self._bind_area_entities_listener()
         if prev_area != matched_id:
             self.hass.bus.async_fire(
                 EVENT_LATTER,
@@ -1969,6 +1954,13 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "assigned_person": self.assigned_person,
                 },
             )
+
+        if self.is_ble_tag:
+            self._schedule_persist_runtime_state()
+            self.async_notify_listeners()
+            return
+
+        self._bind_area_entities_listener()
 
         if sync_device_registry:
             self._area_follow.schedule_or_commit(
@@ -1997,6 +1989,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if slot_info["area_id"] == matched_id:
                 self.active_remote_slot = slot_idx
                 break
+        self._bind_remotes_listener()
 
         self._schedule_persist_runtime_state()
 
@@ -2017,7 +2010,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 media_map["speaker"], transfer_queue=auto_transfer
             )
         else:
-            self._notify_listeners()
+            self.async_notify_listeners()
 
         if self.on_area_changed_push_slots is not None:
             self.entry.async_create_background_task(
@@ -2413,7 +2406,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self, event: Event[EventStateChangedData]
     ) -> None:
         """Notify sensors when alarm or remote entities change state."""
-        self._notify_listeners()
+        self.async_notify_listeners()
 
     @callback
     def _async_on_speaker_state_change(
@@ -2421,7 +2414,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     ) -> None:
         """Handle target media_player state/attribute updates."""
         self._cached_media_anchor = None
-        self._notify_listeners()
+        self.async_notify_listeners()
 
     def _read_volume_from_target(
         self, vol_target: str, fallback_attrs: dict[str, Any]
@@ -2826,7 +2819,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             idx = 0
         self.current_wallpaper = favs[idx]
         self._schedule_persist_runtime_state()
-        self._notify_listeners()
+        self.async_notify_listeners()
 
     async def _async_periodic_calendar_refresh(self, _now: datetime) -> None:
         """Refresh system calendar agenda every 15 minutes."""
@@ -2842,7 +2835,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         self.calendar_records = records
         self.calendar_events = events
-        self._notify_listeners()
+        self.async_notify_listeners()
 
     def get_calendar_agenda_payload(self) -> tuple[int, dict[str, Any]]:
         """Return the upcoming event count (the sensor state) and the Protocol v3 calendar_agenda payload."""
@@ -2884,7 +2877,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "rev": w_rev,
                 "payload": w_payload,
             }
-            self._notify_listeners()
+            self.async_notify_listeners()
             return
         snap = await async_fetch_weather_snapshot(self.hass, weather_ent)
         if snap is None:
@@ -2908,4 +2901,4 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "rev": w_rev,
             "payload": w_payload,
         }
-        self._notify_listeners()
+        self.async_notify_listeners()
