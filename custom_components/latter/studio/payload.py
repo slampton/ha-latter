@@ -42,6 +42,8 @@ from ..const import (
     CONF_DEVICE_CUSTOM_COLOR,
     CONF_DEVICE_GROUP,
     CONF_DEVICE_SLUG,
+    CONF_ACTIVITY_CARD,
+    CONF_ACTIVITY_SOURCES,
     CONF_DOCK_APPS,
     CONF_MA_PLAYER_ENTITY,
     CONF_NATIVE_BLE_TRACKING,
@@ -852,6 +854,8 @@ def build_studio_state_payload(
         CONF_AREA_HANDOFF: coordinator.area_handoff_enabled,
         CONF_DEVICE_CUSTOM_COLOR: coordinator.device_custom_color,
         CONF_DOCK_APPS: coordinator.dock_apps_csv,
+        CONF_ACTIVITY_CARD: coordinator.activity_card_enabled,
+        CONF_ACTIVITY_SOURCES: coordinator.activity_sources_csv,
         CONF_WALLPAPER_CYCLE_MINUTES: coordinator.wallpaper_cycle_minutes,
     }
 

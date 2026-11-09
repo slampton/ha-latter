@@ -52,6 +52,8 @@ CONF_DEVICE_REMOTE_GROUP: Final = "device_remote_group"
 DEFAULT_DEVICE_REMOTE_GROUP: Final = "area_auto"
 CONF_CALENDAR_ENTITIES: Final = "calendar_entities"
 CONF_DOCK_APPS: Final = "dock_apps"
+CONF_ACTIVITY_CARD: Final = "activity_card"
+CONF_ACTIVITY_SOURCES: Final = "activity_sources"
 CONF_WALLPAPER_SOURCE: Final = "wallpaper_source"
 CONF_WALLPAPER_FAVORITES: Final = "wallpaper_favorites"
 CONF_WALLPAPER_CYCLE_MINUTES: Final = "wallpaper_cycle_minutes"
@@ -72,6 +74,9 @@ DEFAULT_SYNC_DEVICE_AREA: Final = True
 DEFAULT_AREA_FOLLOW_DWELL_S: Final = 10
 DEFAULT_AREA_HANDOFF: Final = False
 DEFAULT_DOCK_APPS: Final = "music,alarm,area,remote,games,tools"
+# Home Activity Card: protocol_v3.json defaults.activity_card / defaults.activity_sources (checked by the tests)
+DEFAULT_ACTIVITY_CARD: Final = True
+DEFAULT_ACTIVITY_SOURCES: Final = "calendar,music_queue,stopwatch,alarms,timers"
 DEFAULT_WALLPAPER_CYCLE_MINUTES: Final = 0
 DEFAULT_ART_SIZE: Final = 466  # artwork edge until the Device reports its hardware manifest
 

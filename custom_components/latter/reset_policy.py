@@ -34,6 +34,8 @@ DEVICE_OPTION_KEYS: tuple[str, ...] = (
     "site_id",
     "default_page_size",
     "dock_apps",
+    "activity_card",
+    "activity_sources",
     "default_speaker",
     "default_area",
     "area_handoff",

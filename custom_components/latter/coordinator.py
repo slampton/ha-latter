@@ -43,6 +43,7 @@ from homeassistant.helpers.event import (
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
+from .activity_policy import activity_payload, normalize_activity_sources
 from .area_controller import (
     LatterAreaFollowController,
     compute_current_area_and_distance,
@@ -86,6 +87,8 @@ from .const import (
     CONF_DEVICE_GROUP,
     CONF_DEVICE_REMOTE_GROUP,
     CONF_DEVICE_SLUG,
+    CONF_ACTIVITY_CARD,
+    CONF_ACTIVITY_SOURCES,
     CONF_DOCK_APPS,
     CONF_DOORBELL_NOISE_REDUCTION,
     CONF_ESPHOME_DEVICE_ID,
@@ -113,6 +116,8 @@ from .const import (
     DEFAULT_DEVICE_GROUP,
     DEFAULT_DEVICE_REMOTE_GROUP,
     DEFAULT_DISPLAY_SHAPE,
+    DEFAULT_ACTIVITY_CARD,
+    DEFAULT_ACTIVITY_SOURCES,
     DEFAULT_DOCK_APPS,
     DEFAULT_DOORBELL_NOISE_REDUCTION,
     DEFAULT_NATIVE_BLE_TRACKING,
@@ -683,6 +688,19 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def dock_apps_csv(self) -> str:
         """Return comma-separated Home Dock app order."""
         return str(self.get_opt(CONF_DOCK_APPS, DEFAULT_DOCK_APPS)).strip()
+
+    @property
+    def activity_card_enabled(self) -> bool:
+        """Return whether the Home Activity Card is switched on."""
+        return bool(self.get_opt(CONF_ACTIVITY_CARD, DEFAULT_ACTIVITY_CARD))
+
+    @property
+    def activity_sources_csv(self) -> str:
+        """Return the Activity Card sources that are on, as canonical CSV ("" = every source off)."""
+        try:
+            return normalize_activity_sources(self.get_opt(CONF_ACTIVITY_SOURCES, DEFAULT_ACTIVITY_SOURCES))
+        except ValueError:
+            return DEFAULT_ACTIVITY_SOURCES
 
     @property
     def wallpaper_source(self) -> str:
@@ -2195,6 +2213,8 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "display_shape": self.display_shape,
             "default_page_size": self.default_page_size,
             "dock_apps": self.dock_apps_csv,
+            "activity_card": self.activity_card_enabled,
+            "activity_sources": self.activity_sources_csv,
             "wallpaper_url": self.build_wallpaper_url(),
             "entity_count": len(entities),
             "available_domains": avail_domains,
@@ -2297,6 +2317,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 if self.alert_id
                 else (0, "", "", "", None, None, "")
             ),
+            *activity_payload(self.activity_card_enabled, self.activity_sources_csv),
         )
         area_attrs["rev"] = area_rev
         area_attrs["payload"] = area_payload

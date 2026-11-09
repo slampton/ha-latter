@@ -193,6 +193,61 @@ class TestViewLayout(unittest.TestCase):
             self.assertEqual(body.count('<div class="column">'), 2, view)
 
 
+class TestActivityCard(unittest.TestCase):
+    """The Home Activity Card: a Device setting, carried as area_context.activity_card / activity_sources."""
+
+    def setUp(self) -> None:
+        self.policy = _load("activity_policy")
+
+    def test_normalize_sources(self) -> None:
+        n = self.policy.normalize_activity_sources
+        self.assertEqual(n("timers, Calendar,timers"), "calendar,timers")
+        self.assertEqual(n(["alarms", "music_queue"]), "music_queue,alarms")
+        self.assertEqual(n(""), "")
+        with self.assertRaises(ValueError):
+            n("calendar,weather")
+
+    def test_payload_never_sends_an_on_card_without_sources(self) -> None:
+        p = self.policy.activity_payload
+        self.assertEqual(p(True, "calendar,timers"), (1, "calendar,timers"))
+        self.assertEqual(p(False, "calendar,timers"), (0, "calendar,timers"))
+        self.assertEqual(p(True, ""), (0, ""))
+
+    def test_defaults_match_the_protocol_and_the_setting_is_everywhere(self) -> None:
+        protocol = json.loads((LATTER_DIR / "protocol_v3.json").read_text(encoding="utf-8"))
+        self.assertEqual(protocol["defaults"]["activity_card"], "1")
+        self.assertEqual(protocol["defaults"]["activity_sources"], ",".join(self.policy.ACTIVITY_SOURCE_KEYS))
+        const_src = (LATTER_DIR / "const.py").read_text(encoding="utf-8")
+        self.assertIn("DEFAULT_ACTIVITY_CARD: Final = True\n", const_src)
+        self.assertIn(f'DEFAULT_ACTIVITY_SOURCES: Final = "{protocol["defaults"]["activity_sources"]}"\n', const_src)
+        fields = {f["name"]: f for f in protocol["domains"]["area_context"]["fields"]}
+        self.assertEqual((fields["activity_card"]["index"], fields["activity_card"]["type"]), (38, "bool"))
+        self.assertEqual((fields["activity_sources"]["index"], fields["activity_sources"]["type"]), (39, "csv"))
+        # A Device setting: Studio save, reset, backups and Configuration Profiles all carry it.
+        self.assertIn("activity_card", settings.DEVICE_BOOL_KEYS)
+        self.assertIn("activity_sources", settings.DEVICE_TEXT_KEYS)
+        for name in ("reset_policy.py", "backup_engine.py"):
+            src = (LATTER_DIR / name).read_text(encoding="utf-8")
+            self.assertIn("activity_card" if name == "reset_policy.py" else "CONF_ACTIVITY_CARD", src, name)
+        backup_src = (LATTER_DIR / "backup_engine.py").read_text(encoding="utf-8")
+        profile_keys = backup_src[backup_src.index("PROFILE_DEVICE_KEYS"):backup_src.index("DEFAULT_DEVICE_GROUPS")]
+        self.assertIn("CONF_ACTIVITY_SOURCES", profile_keys)
+        coord_src = (LATTER_DIR / "coordinator.py").read_text(encoding="utf-8")
+        self.assertIn("*activity_payload(self.activity_card_enabled, self.activity_sources_csv),", coord_src)
+
+    def test_studio_rows(self) -> None:
+        js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
+        start = js.index('<section id="view-home_display"')
+        view = js[start:js.index("</section>", start)]
+        self.assertIn('<h3 class="card-title">Activity Card</h3>', view)
+        self.assertIn('id="cfg-activity_card"', view)
+        for key in self.policy.ACTIVITY_SOURCE_KEYS:
+            self.assertIn(f'data-src="{key}"', view)
+        for label in ("Show the Activity Card", "Calendar", "Music Queue", "Stopwatch", "Alarms", "Timers"):
+            self.assertIn(f">{label}</label>", view)
+        self.assertIn("window.onActivityCardChanged = onActivityCardChanged;", js)
+
+
 class TestDockPolicy(unittest.TestCase):
     """dock_apps is the one source for the Home dock: the firmware shows exactly the listed apps."""
 

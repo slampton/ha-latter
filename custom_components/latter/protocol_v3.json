@@ -4,7 +4,9 @@
   "record_separator": "\u001e",
   "absent_value": "A field with no value is the empty string, never a placeholder (none, NONE, None, unknown, unavailable, Idle, Unassigned) or a made-up number. A state field carries only the values its description lists.",
   "defaults": {
-    "dock_apps": "music,alarm,area,remote,games,tools"
+    "dock_apps": "music,alarm,area,remote,games,tools",
+    "activity_card": "1",
+    "activity_sources": "calendar,music_queue,stopwatch,alarms,timers"
   },
   "header": [
     {
@@ -69,7 +71,9 @@
         {"index": 34, "name": "alert_priority", "cpp_enum": "ALERT_PRIORITY", "type": "string", "description": "Alert priority level (normal|warning|critical)"},
         {"index": 35, "name": "alert_duration", "cpp_enum": "ALERT_DURATION", "type": "u16", "description": "Alert display duration in seconds"},
         {"index": 36, "name": "alert_chime", "cpp_enum": "ALERT_CHIME", "type": "bool", "description": "1 = play the alert chime (embedded WAV: sfx 9 for warning/critical, otherwise sfx 6), else 0"},
-        {"index": 37, "name": "alert_camera_url", "cpp_enum": "ALERT_CAMERA_URL", "type": "url", "description": "Signed HTTP URL for alert camera snapshot"}
+        {"index": 37, "name": "alert_camera_url", "cpp_enum": "ALERT_CAMERA_URL", "type": "url", "description": "Signed HTTP URL for alert camera snapshot"},
+        {"index": 38, "name": "activity_card", "cpp_enum": "ACTIVITY_CARD", "type": "bool", "description": "1 = show the Home Activity Card, 0 = hide it (also sent when every source is off); empty until set: the device uses defaults.activity_card"},
+        {"index": 39, "name": "activity_sources", "cpp_enum": "ACTIVITY_SOURCES", "type": "csv", "description": "Activity Card sources that are on, in this order: calendar, music_queue, stopwatch, alarms, timers (unknown keys are ignored); empty until set: the device uses defaults.activity_sources"}
       ]
     },
     "active_media": {

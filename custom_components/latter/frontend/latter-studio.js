@@ -1461,6 +1461,24 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
               </div>
             </div>
           </div>
+          <div class="card" id="card-activity">
+            <div class="card-header"><div class="card-heading"><h3 class="card-title">Activity Card</h3></div></div>
+            <div class="card-content">
+              <div class="settings-list">
+                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-activity_card">Show the Activity Card</label><p class="row-description">On the Home screen, while an enabled source has something to show.</p></div><div class="settings-row-control"><input type="checkbox" class="switch" role="switch" id="cfg-activity_card" onchange="onActivityCardChanged(this)"></div></div>
+              </div>
+              <div id="activity-sources">
+                <h4 class="subsection-title">Sources</h4>
+                <div class="settings-list">
+                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="activity-src-calendar">Calendar</label></div><div class="settings-row-control"><input type="checkbox" class="switch activity-src" role="switch" id="activity-src-calendar" data-src="calendar" onchange="saveSetting('device', 'activity_sources')"></div></div>
+                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="activity-src-music_queue">Music Queue</label></div><div class="settings-row-control"><input type="checkbox" class="switch activity-src" role="switch" id="activity-src-music_queue" data-src="music_queue" onchange="saveSetting('device', 'activity_sources')"></div></div>
+                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="activity-src-stopwatch">Stopwatch</label></div><div class="settings-row-control"><input type="checkbox" class="switch activity-src" role="switch" id="activity-src-stopwatch" data-src="stopwatch" onchange="saveSetting('device', 'activity_sources')"></div></div>
+                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="activity-src-alarms">Alarms</label></div><div class="settings-row-control"><input type="checkbox" class="switch activity-src" role="switch" id="activity-src-alarms" data-src="alarms" onchange="saveSetting('device', 'activity_sources')"></div></div>
+                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="activity-src-timers">Timers</label></div><div class="settings-row-control"><input type="checkbox" class="switch activity-src" role="switch" id="activity-src-timers" data-src="timers" onchange="saveSetting('device', 'activity_sources')"></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
           </div>
           <div class="column">
           <div class="card">
@@ -2174,6 +2192,17 @@ function saveSetting(scope, key, delayMs = 250) {
   PENDING_KEYS[scope].add(key);
   clearTimeout(SAVE_TIMERS[scope]);
   SAVE_TIMERS[scope] = setTimeout(() => flushSettings(scope), delayMs);
+}
+
+// The Activity Card's source switches show only while the card is on.
+function syncActivitySourcesVisibility() {
+  const on = !!doc.getElementById("cfg-activity_card")?.checked;
+  doc.getElementById("activity-sources")?.classList.toggle("hidden", !on);
+}
+
+function onActivityCardChanged(el) {
+  syncActivitySourcesVisibility();
+  saveField("device", el);
 }
 
 // A cfg-<key> control saves its own key.
@@ -4339,6 +4368,11 @@ function loadDeviceForm(data) {
   doc.getElementById("cfg-ble_target_address").value = cfg.ble_target_address || "";
   doc.getElementById("cfg-dock_apps").value = cfg.dock_apps || "";
   renderDockPillsFromInput();
+  const actCard = doc.getElementById("cfg-activity_card");
+  if (actCard) actCard.checked = cfg.activity_card !== false;
+  const actOn = new Set(String(cfg.activity_sources ?? "").split(",").filter(Boolean));
+  doc.querySelectorAll("#activity-sources .activity-src").forEach(el => { el.checked = actOn.has(el.dataset.src); });
+  syncActivitySourcesVisibility();
   doc.getElementById("cfg-wallpaper_cycle_minutes").value = String(cfg.wallpaper_cycle_minutes || 0);
   populateSelect("cfg-default_area", cat.areas, cfg.default_area);
   populateSelect("cfg-presence_entity", cat.presence_sensors, cfg.presence_entity);
@@ -4409,6 +4443,8 @@ function collectDeviceSettings() {
     ma_player_entity: doc.getElementById("cfg-ma_player_entity")?.value ?? "",
     default_area: doc.getElementById("cfg-default_area")?.value ?? "",
     dock_apps: doc.getElementById("cfg-dock_apps")?.value?.trim() || "",
+    activity_card: Boolean(doc.getElementById("cfg-activity_card")?.checked),
+    activity_sources: [...doc.querySelectorAll("#activity-sources .activity-src")].filter(el => el.checked).map(el => el.dataset.src).join(","),
     wallpaper_cycle_minutes: parseInt(doc.getElementById("cfg-wallpaper_cycle_minutes")?.value || "0", 10) || 0,
     area_follow_dwell_s: parseInt(doc.getElementById("cfg-area_follow_dwell_s")?.value || "10", 10) || 10
   };
@@ -4650,6 +4686,7 @@ function bindStudioGlobals() {
   window.espNumber = espNumber;
   window.espSelect = espSelect;
   window.exportBackupToComputer = exportBackupToComputer;
+  window.onActivityCardChanged = onActivityCardChanged;
   window.fallbackCopyText = fallbackCopyText;
     window.getInventoryRemoteIds = getInventoryRemoteIds;
   window.getRemoteFriendlyLabel = getRemoteFriendlyLabel;

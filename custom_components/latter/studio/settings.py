@@ -44,12 +44,14 @@ DEVICE_TEXT_KEYS: tuple[str, ...] = (
     "presence_entity",
     "assigned_person",
     "dock_apps",
+    "activity_sources",
 )
 DEVICE_BOOL_KEYS: tuple[str, ...] = (
     "native_ble_tracking",
     "ble_auto_switch",
     "sync_device_area",
     "area_handoff",
+    "activity_card",
 )
 DEVICE_SETTING_KEYS: tuple[str, ...] = (
     *DEVICE_TEXT_KEYS,
