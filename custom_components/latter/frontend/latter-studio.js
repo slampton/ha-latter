@@ -3294,7 +3294,7 @@ function renderCohesiveDeviceSections() {
   const sleepItems = sortByOrder(filteredSleep, [
     "power profile",
     "battery screen timeout", "docked idle timeout", "battery hibernate timeout",
-    "stay awake", "pickup to wake", "tap to wake", "docked screensaver",
+    "pickup to wake", "tap to wake", "docked screensaver",
     "screensaver style", "hold crown"
   ]);
   doc.getElementById("embedded-sleep").innerHTML = sleepItems.length

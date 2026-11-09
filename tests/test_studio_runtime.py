@@ -63,7 +63,7 @@ class TestEntityLabels(unittest.TestCase):
             "iBeacon uuid": "iBeacon UUID",
             "Front door": "Front Door",
             "Ram low water": "RAM Low Water",
-            "Stay awake when docked": "Stay Awake When Docked",
+            "Pickup to wake when docked": "Pickup to Wake When Docked",
             "Turn on": "Turn On",
         }
         got = _run_node(code + f"\nprocess.stdout.write(JSON.stringify({json.dumps(list(cases))}.map(entityLabel)));")

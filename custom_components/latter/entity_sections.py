@@ -128,7 +128,7 @@ def classify_esphome_entity_section(
     if any(k in clean_low or k in ent_suffix for k in ("clock", "weather_background", "shortcut_", "dock", "home_")):
         return "home", None
 
-    if any(k in clean_low or k in ent_suffix for k in ("sleep", "wake_on", "pickup_to_wake", "tap_to_wake", "screensaver", "hibernate", "stay_awake", "timeout")):
+    if any(k in clean_low or k in ent_suffix for k in ("sleep", "wake_on", "pickup_to_wake", "tap_to_wake", "screensaver", "hibernate", "timeout")):
         return "sleep", None
 
     if any(k in clean_low or k in ent_suffix for k in ("display", "screen", "brightness", "backlight", "amoled", "theme", "color_profile", "boot")):
