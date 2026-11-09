@@ -16,6 +16,8 @@ from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import HomeAssistant, State
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 
+from .ma_browse import album_track_slots, artist_album_slots, choose_browse_entity, text_slot
+
 _LOGGER = logging.getLogger(__name__)
 
 LIBRARY_MEDIA_TYPES: set[str] = {
@@ -102,48 +104,66 @@ def _extract_artist_name(item: dict[str, Any]) -> str:
     return ""
 
 
-async def _browse_ma_media_children(
-    hass: HomeAssistant,
-    speaker: str,
-    media_content_type: str,
-    media_content_id: str,
-) -> list[dict[str, Any]]:
-    """Use Home Assistant's media_player.browse_media on the speaker's Music Assistant counterpart to get child items."""
-    if not hass.services.has_service("media_player", "browse_media"):
-        return []
+NO_MA_PLAYER_TEXT = "No Music Assistant player to browse with"
 
+
+def _ma_browse_entity(hass: HomeAssistant, preferred_speakers: list[str]) -> str | None:
+    """Pick the Music Assistant player that media_player.browse_media runs on (see choose_browse_entity).
+
+    The library is global to the Music Assistant config entry, so any of its available players works;
+    `preferred_speakers` (the Device's own speaker, its default speaker, the active speaker) only make
+    the choice the Device's own MA player when it has one.
+    """
     from .media_engine import resolve_ma_counterpart_entity
 
-    ma_entity = resolve_ma_counterpart_entity(hass, speaker)
-    if not ma_entity:
-        return []
+    entry_id = _get_ma_config_entry_id(hass)
+    if not entry_id:
+        return None
+    ma_players = [
+        ent.entity_id
+        for ent in er.async_entries_for_config_entry(er.async_get(hass), entry_id)
+        if ent.domain == "media_player"
+        and ent.disabled_by is None
+        and (st := hass.states.get(ent.entity_id)) is not None
+        and st.state not in ("unavailable", "unknown")
+    ]
+    preferred = [resolve_ma_counterpart_entity(hass, spk) for spk in preferred_speakers if spk]
+    return choose_browse_entity(preferred, ma_players)
 
+
+async def _browse_ma_node(
+    hass: HomeAssistant,
+    browse_entity: str,
+    media_content_type: str,
+    media_content_id: str,
+) -> dict[str, Any] | None:
+    """Return Music Assistant's browse node (title and children) for an item, or None if the call fails."""
     try:
         resp = await hass.services.async_call(
             "media_player",
             "browse_media",
             {
-                "entity_id": ma_entity,
+                "entity_id": browse_entity,
                 "media_content_type": media_content_type,
                 "media_content_id": media_content_id,
             },
             blocking=True,
             return_response=True,
         )
-        if isinstance(resp, dict):
-            node = resp.get(ma_entity) or resp
-            if isinstance(node, dict):
-                children = node.get("children") or []
-                return [_extract_item_dict(c) for c in children]
     except Exception as err:  # noqa: BLE001
         _LOGGER.debug(
             "media_player.browse_media(%s, %s) on %s failed: %s",
-            media_content_type,
-            media_content_id,
-            ma_entity,
-            err,
+            media_content_type, media_content_id, browse_entity, err,
         )
-    return []
+        return None
+    node = resp.get(browse_entity) if isinstance(resp, dict) else None
+    if not isinstance(node, dict):
+        _LOGGER.debug(
+            "media_player.browse_media(%s, %s) on %s returned no node", media_content_type, media_content_id, browse_entity
+        )
+        return None
+    node["children"] = [_extract_item_dict(c) for c in node.get("children") or []]
+    return node
 
 
 async def _call_ma_get_library(
@@ -378,187 +398,85 @@ async def _browse_library_category(
 async def _browse_artist_albums(
     hass: HomeAssistant,
     config_entry_id: str,
-    speaker: str,
+    browse_entity: str,
     artist_search: str,
     artist_album_sort: str,
 ) -> list[dict[str, Any]]:
-    """Fetch albums belonging to a specific artist (by URI or artist name)."""
+    """An artist's albums: browse_media on the artist (by URI, or by exact library name)."""
     artist_query = artist_search.strip()
     if not artist_query:
         return []
-
-    filtered: list[dict[str, Any]] = []
-
     artist_uri = artist_query if "://" in artist_query else ""
     if not artist_uri:
         artists = await _call_ma_get_library(
-            hass,
-            config_entry_id=config_entry_id,
-            media_type="artist",
-            search=artist_query,
-            limit=25,
+            hass, config_entry_id=config_entry_id, media_type="artist", search=artist_query, limit=25
         )
         q_low = artist_query.lower()
-        for art in artists:
-            if str(art.get("name") or "").strip().lower() == q_low:
-                artist_uri = str(art.get("uri") or "")
-                break
-        if not artist_uri and artists:
-            artist_uri = str(artists[0].get("uri") or "")
-
-    if artist_uri:
-        children = await _browse_ma_media_children(
-            hass, speaker, "artist", artist_uri
+        artist_uri = next(
+            (str(a.get("uri") or "") for a in artists if str(a.get("name") or "").strip().lower() == q_low), ""
         )
-        for child in children:
-            ctype = str(child.get("media_content_type") or child.get("media_type") or "").lower()
-            cid = str(child.get("media_content_id") or child.get("uri") or "")
-            if "album" in ctype or "://album/" in cid:
-                filtered.append(child)
+        if not artist_uri:
+            _LOGGER.debug("No library artist named %r", artist_query)
+            return text_slot("Artist not found in the library")
 
-    if not filtered:
-        raw_items = await _call_ma_get_library(
+    node = await _browse_ma_node(hass, browse_entity, "artist", artist_uri)
+    if node is None:
+        return []
+    artist_name = str(node.get("title") or "")
+    year_order: list[str] = []
+    if artist_album_sort in ("year", "year_desc") and artist_name:
+        # Browse results carry no year: order by Music Assistant's own year sort of this artist's albums.
+        ranked = await _call_ma_get_library(
             hass,
             config_entry_id=config_entry_id,
             media_type="album",
-            search=artist_query,
-            limit=250,
+            search=artist_name,
+            limit=500,
+            order_by=artist_album_sort,
         )
-        query_lower = artist_query.lower()
-        for item in raw_items:
-            artist_name = _extract_artist_name(item).lower()
-            if query_lower in artist_name or not artist_name:
-                filtered.append(item)
-        if not filtered:
-            filtered = raw_items
-
-    if artist_album_sort == "year_desc":
-        filtered.sort(
-            key=lambda x: (
-                int(x.get("year") or 0),
-                str(x.get("name") or x.get("title") or "").lower(),
-            ),
-            reverse=True,
-        )
-    elif artist_album_sort == "name":
-        filtered.sort(
-            key=lambda x: str(x.get("name") or x.get("title") or "").lower()
-        )
-    else:
-        filtered.sort(
-            key=lambda x: (
-                int(x.get("year") or 9999),
-                str(x.get("name") or x.get("title") or "").lower(),
-            )
-        )
-
-    results: list[dict[str, Any]] = []
-    for item in filtered:
-        uri = str(item.get("uri") or item.get("media_content_id") or "")
-        name = str(item.get("name") or item.get("title") or "")
-        if not uri or not name:
-            continue
-        year = item.get("year")
-        display_name = f"{name} ({year})" if year else name
-        results.append(
-            {
-                "name": display_name,
-                "id": uri,
-                "type": "album",
-                "active": False,
-            }
-        )
-    return results
+        year_order = [
+            str(a.get("uri") or "")
+            for a in ranked
+            if any(_extract_item_dict(x).get("uri") == artist_uri for x in a.get("artists") or [])
+        ]
+    return artist_album_slots(node["children"], artist_name, artist_album_sort, year_order)
 
 
 async def _browse_album_tracks(
     hass: HomeAssistant,
     config_entry_id: str,
-    speaker: str,
+    browse_entity: str,
     album_ref: str,
     current_track_title: str,
+    current_artist: str = "",
 ) -> list[dict[str, Any]]:
-    """Browse tracks of an album by URI or album title across the entire library."""
+    """An album's tracks in album order: browse_media on the album (by URI, or by exact library name)."""
     album_ref = album_ref.strip()
     if not album_ref:
         return []
-
-    tracks: list[dict[str, Any]] = []
-
     album_uri = album_ref if "://" in album_ref else ""
     if not album_uri:
-        matched_albums = await _call_ma_get_library(
-            hass,
-            config_entry_id=config_entry_id,
-            media_type="album",
-            search=album_ref,
-            limit=50,
-        )
-        ref_lower = album_ref.lower()
-        for alb in matched_albums:
-            if str(alb.get("name") or "").strip().lower() == ref_lower:
-                album_uri = str(alb.get("uri") or "")
-                break
-        if not album_uri and matched_albums:
-            album_uri = str(matched_albums[0].get("uri") or "")
-
-    if album_uri:
-        children = await _browse_ma_media_children(
-            hass, speaker, "album", album_uri
-        )
-        if children:
-            tracks = children
-
-    if not tracks and not ("library://" in album_ref):
-        raw_tracks = await _call_ma_get_library(
-            hass,
-            config_entry_id=config_entry_id,
-            media_type="track",
-            search=album_ref,
-            limit=200,
-        )
-        tracks = raw_tracks
-
-    has_track_numbers = any(
-        x.get("track_number") is not None or x.get("position") is not None
-        for x in tracks
-    )
-    if has_track_numbers:
-        tracks.sort(
-            key=lambda x: (
-                int(x.get("disc_number") or 1),
-                int(x.get("track_number") or x.get("position") or 999),
-                str(x.get("name") or x.get("title") or "").lower(),
+        # The playing album is known by name: take the library album with exactly that name, preferring
+        # the one by the playing artist.
+        matches = [
+            alb
+            for alb in await _call_ma_get_library(
+                hass, config_entry_id=config_entry_id, media_type="album", search=album_ref, limit=50
             )
-        )
+            if str(alb.get("name") or "").strip().lower() == album_ref.lower()
+        ]
+        artist_low = current_artist.strip().lower()
+        by_artist = [a for a in matches if artist_low and _extract_artist_name(a).strip().lower() == artist_low]
+        chosen = (by_artist or matches)[:1]
+        album_uri = str(chosen[0].get("uri") or "") if chosen else ""
+        if not album_uri:
+            _LOGGER.debug("No library album named %r", album_ref)
+            return text_slot("Album not found in the library")
 
-    cur_lower = current_track_title.strip().lower()
-    results: list[dict[str, Any]] = []
-    for idx, trk in enumerate(tracks, start=1):
-        uri = str(trk.get("uri") or trk.get("media_content_id") or "")
-        name = str(trk.get("name") or trk.get("title") or "")
-        if not uri or not name:
-            continue
-        t_num = trk.get("track_number") or idx
-        if re.match(r"^\d+\.\s+", name):
-            display_name = name
-            clean_compare = re.sub(r"^\d+\.\s+", "", name).strip().lower()
-        else:
-            display_name = f"{t_num}. {name}"
-            clean_compare = name.strip().lower()
-
-        is_active = bool(
-            cur_lower and (clean_compare == cur_lower or name.strip().lower() == cur_lower)
-        )
-        results.append(
-            {
-                "name": display_name,
-                "id": uri,
-                "type": "track",
-                "active": is_active,
-            }
-        )
-    return results
+    node = await _browse_ma_node(hass, browse_entity, "album", album_uri)
+    if node is None:
+        return []
+    return album_track_slots(node["children"], current_track_title)
 
 
 async def _browse_active_queue(
@@ -643,7 +561,7 @@ async def _browse_active_queue(
 async def _browse_podcast_episodes(
     hass: HomeAssistant,
     config_entry_id: str | None,
-    speaker: str,
+    browse_entity: str,
     podcast_ref: str,
     podcast_sort: str,
     current_track_title: str,
@@ -673,9 +591,8 @@ async def _browse_podcast_episodes(
     if not podcast_uri:
         podcast_uri = podcast_ref
 
-    raw_episodes = await _browse_ma_media_children(
-        hass, speaker, "podcast", podcast_uri
-    )
+    node = await _browse_ma_node(hass, browse_entity, "podcast", podcast_uri)
+    raw_episodes = node["children"] if node else []
 
     has_positions = any(
         x.get("position") is not None or x.get("track_number") is not None
@@ -721,6 +638,7 @@ async def async_browse_media_items(
     last_speaker: str,
     local_speaker: str,
     search: str = "",
+    default_speaker: str = "",
     album_sort: str = "name",
     artist_album_sort: str = "year",
     podcast_sort: str = "newest",
@@ -738,15 +656,24 @@ async def async_browse_media_items(
     current_album = (
         str(state_obj.attributes.get("media_album_name") or "") if state_obj else ""
     )
+    current_artist = (
+        str(state_obj.attributes.get("media_artist") or "") if state_obj else ""
+    )
 
     if mode == "active_queue":
         return await _browse_active_queue(hass, speaker, current_title)
 
     config_entry_id = _get_ma_config_entry_id(hass)
+    browse_entity = ""
+    if mode in ("podcast_episodes", "artist_albums", "album_tracks", "current_album_tracks"):
+        browse_entity = _ma_browse_entity(hass, [local_speaker, default_speaker, speaker]) or ""
+        if not browse_entity:
+            _LOGGER.debug("No available Music Assistant player to browse %s with", mode)
+            return text_slot(NO_MA_PLAYER_TEXT)
 
     if mode == "podcast_episodes":
         return await _browse_podcast_episodes(
-            hass, config_entry_id, speaker, search, podcast_sort, current_title
+            hass, config_entry_id, browse_entity, search, podcast_sort, current_title
         )
 
     if not config_entry_id:
@@ -765,18 +692,18 @@ async def async_browse_media_items(
 
     if mode == "artist_albums":
         return await _browse_artist_albums(
-            hass, config_entry_id, speaker, search, artist_album_sort
+            hass, config_entry_id, browse_entity, search, artist_album_sort
         )
 
     if mode == "album_tracks":
         return await _browse_album_tracks(
-            hass, config_entry_id, speaker, search, current_title
+            hass, config_entry_id, browse_entity, search, current_title
         )
 
     if mode == "current_album_tracks":
         album_ref = search.strip() or current_album
         return await _browse_album_tracks(
-            hass, config_entry_id, speaker, album_ref, current_title
+            hass, config_entry_id, browse_entity, album_ref, current_title, current_artist
         )
 
     if mode in ("lyrics", "bio"):

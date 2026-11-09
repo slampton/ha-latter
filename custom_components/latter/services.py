@@ -20,6 +20,7 @@ from .browse_engine import async_browse_media_items, is_music_assistant_player
 from .media_engine import async_announce_on_targets, resolve_assist_satellite_entity
 from .const import (
     CONF_ALARM_ENTITY,
+    CONF_DEFAULT_SPEAKER,
     DOMAIN,
     DOORBELL_NOISE_REDUCTION_LEVELS,
     SERVICE_CALENDAR_CREATE_EVENT,
@@ -625,6 +626,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             last_speaker=last_speaker,
             local_speaker=local_speaker,
             search=search,
+            default_speaker=str(coord.get_opt(CONF_DEFAULT_SPEAKER) or ""),
             album_sort=album_sort,
             artist_album_sort=artist_album_sort,
             podcast_sort=podcast_sort,
