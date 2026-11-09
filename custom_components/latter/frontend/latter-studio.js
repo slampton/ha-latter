@@ -1578,13 +1578,13 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
       <section id="view-power" class="hidden">
         <div class="columns">
           <div class="column">
-          <div class="card">
+          <div class="card" data-entity-card>
             <div class="card-header"><div class="card-heading"><h3 class="card-title">Sleep &amp; Wake</h3></div></div>
             <div class="card-content"><div id="embedded-sleep" class="settings-list"></div></div>
           </div>
           </div>
           <div class="column">
-          <div class="card">
+          <div class="card" data-entity-card>
             <div class="card-header"><div class="card-heading"><h3 class="card-title">Power &amp; Battery</h3></div></div>
             <div class="card-content"><div id="embedded-battery" class="settings-list"></div></div>
           </div>
@@ -3244,6 +3244,13 @@ function getSectionItems(secId) {
   return found ? (found.items || []) : [];
 }
 
+// A card that only lists the Device's own entities (data-entity-card) hides when the Device has none.
+function syncEntityCards() {
+  doc.querySelectorAll("[data-entity-card]").forEach(card => {
+    card.classList.toggle("hidden", !card.querySelector(".settings-row"));
+  });
+}
+
 function renderCohesiveDeviceSections() {
   const esp = STATE?.esphome;
   if (!esp) return;
@@ -3443,6 +3450,7 @@ function renderCohesiveDeviceSections() {
   }
 
   renderRawEntityList();
+  syncEntityCards();
 }
 
 function renderRawEntityList() {

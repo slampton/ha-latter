@@ -137,7 +137,7 @@ The `:host` block holds only declarations (no nested rules and no `}` inside com
 
 Studio has one implementation of each component. A new pattern is added here first, then built once and reused.
 
-- **Card**: header (title and actions on the right) → content → optional footer actions separated by a divider. A card has a description line only for a warning, a consequence or a prerequisite the controls don't show (D-012).
+- **Card**: header (title and actions on the right) → content → optional footer actions separated by a divider. A card has a description line only for a warning, a consequence or a prerequisite the controls don't show (D-012). A card that only lists the Device's own entities (marked `data-entity-card`, such as Sleep & Wake and Power & Battery) hides when the Device has none of them, as an empty group hides its title.
   ```html
   <section class="card">
     <div class="card-header">
@@ -157,7 +157,7 @@ Studio has one implementation of each component. A new pattern is added here fir
 - **Lists**: `.list-row` (with `.list-row-main` and `.list-row-grow`) for short item lists with actions; `.list-block` for an item with a heading row (`.list-row-head`) and stacked fields (`.stacked-field`, `.field-label`).
 - **Tables**: for lists longer than a few rows: `.table-wrap` > `table.data-table`. Sortable headers are `button.sort-btn` inside a `th` with `aria-sort`. Each row is focusable (`tabindex="0"`) and opens its item on click, Enter or Space.
 - **Chips**: one shape, `.chip`, with variants `.chip-primary`, `.chip-success`, `.chip-warning`, `.chip-error` (no class is neutral). Status dots (`.status-dot`) use the same variants.
-- **Empty state**: `emptyStateHtml()` renders `.empty-state`: a sentence that says what's missing and, where possible, how to add it. Never hidden.
+- **Empty state**: `emptyStateHtml()` renders `.empty-state`: a sentence that says what's missing and, where possible, how to add it. Never hidden, except inside an entity-only card, which hides as a whole.
 - **Loading state**: `.loading-state`, shown until the first payload arrives; the page is never pre-filled with fake values. If the first load fails, an `.alert.alert-error` with a Retry button replaces it.
 - **Error state**: every failed command shows an error toast (`.toast.error`) with the reason, from the one place that sends commands. A persistent problem (a Device health issue, a missing required entity) shows as an inline `.alert` (`.alert-warning`, `.alert-error`) in the card it affects.
 - **Buttons**: pill-shaped like ha-button. `.btn` plus one variant: `.btn-primary` (accent: the main action), `.btn-secondary` (filled: a tonal primary fill), `.btn-text` (plain), `.btn-danger` (danger fill), `.btn-danger-filled` (loud danger, only inside a confirmation dialog). At most **one primary button per card** (D-009); the page header has no Save button (D-010). Two sizes: regular, and `.btn-compact` for buttons inside rows. Icon-only buttons are `.btn-icon` (`.btn-icon.danger` for delete) and always have an `aria-label`.

@@ -136,6 +136,16 @@ class TestViewLayout(unittest.TestCase):
         # The entity-count badge's data is gone from the payload too.
         self.assertNotIn('"count": len(', (LATTER_DIR / "area_engine.py").read_text(encoding="utf-8"))
 
+    def test_entity_only_cards_hide_when_empty(self) -> None:
+        # A card that only lists the Device's entities hides when there are none (Desk has no battery entities).
+        js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
+        start = js.index('<section id="view-power"')
+        power = js[start:js.index("</section>", start)]
+        self.assertEqual(power.count('<div class="card" data-entity-card>'), 2)
+        self.assertIn('card.classList.toggle("hidden", !card.querySelector(".settings-row"));', js)
+        render = js[js.index("function renderCohesiveDeviceSections()"):]
+        self.assertIn("  syncEntityCards();\n}", render[: render.index("\n}\n") + 3])
+
     def test_sidebar_icon_module(self) -> None:
         # D-017: the panel's sidebar icon is "latter:logo", registered by a tiny static frontend module.
         init_src = (LATTER_DIR / "studio" / "__init__.py").read_text(encoding="utf-8")
