@@ -483,7 +483,7 @@ def _build_system_section(
 
     system_devices: list[dict[str, Any]] = []
     for c in _get_all_coordinators(hass):
-        c_area_name, c_area_attrs = c.get_area_context_payload()
+        c_area_name = c.active_area_name
         c_grp = c.device_group
         c_manifest = c.hardware_manifest
         c_has_native_svc = bool(
@@ -765,7 +765,6 @@ def build_studio_state_payload(
 
     local_spk_id = coordinator.local_speaker
     local_ma_id = coordinator.local_ma_speaker
-    _, area_attrs = coordinator.get_area_context_payload()
     esphome_inspector = get_esphome_device_entities(
         hass, coordinator.esphome_device_id, coordinator.device_slug
     )
@@ -895,9 +894,9 @@ def build_studio_state_payload(
             "latter_device_id": latter_dev.id if latter_dev is not None else "",
         },
         "live": {
-            "active_area_name": str(area_attrs.get("area_name") or ""),
-            "ble_closest_proxy": str(area_attrs.get("ble_closest_proxy") or ""),
-            "ble_packets_seen": area_attrs.get("ble_packets_seen", 0),
+            "active_area_name": coordinator.active_area_name,
+            "ble_closest_proxy": coordinator._ble_tracker.closest_scanner if coordinator._ble_tracker else "",
+            "ble_packets_seen": coordinator._ble_tracker.packets_seen if coordinator._ble_tracker else 0,
             "ble_survey_rows": ble_survey_rows,
             "area_presence_grid": presence_grid,
             "now": _build_now_playing(hass, coordinator),

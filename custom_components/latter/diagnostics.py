@@ -9,6 +9,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 
+from .ble_engine import get_all_scanners_diagnostic_map
 from .coordinator import LatterCoordinator, resolve_coordinator
 from .system import LatterSystem, get_latter_system
 
@@ -25,9 +26,29 @@ TO_REDACT: set[str] = {
 
 def _build_coordinator_diagnostics(coordinator: LatterCoordinator) -> dict[str, Any]:
     """Build diagnostic snapshot for a single LatterCoordinator."""
-    media_state, media_attrs = coordinator.get_active_media_payload()
-    area_state, area_attrs = coordinator.get_area_context_payload()
-    remote_state, remote_attrs = coordinator.get_remote_config_payload()
+    cur_area_state, cur_area_attrs = coordinator.get_current_area_and_distance()
+    if coordinator.is_ble_tag:
+        sensors_diag: dict[str, Any] = {
+            "current_area": {"state": cur_area_state, "attributes": cur_area_attrs},
+        }
+    else:
+        media_state, media_attrs = coordinator.get_active_media_payload()
+        area_state, area_attrs = coordinator.get_area_context_payload()
+        remote_state, remote_attrs = coordinator.get_remote_config_payload()
+        sensors_diag = {
+            "current_area": {"state": cur_area_state, "attributes": cur_area_attrs},
+            "active_media": {"state": media_state, "attributes": media_attrs},
+            "area_context": {"state": area_state, "attributes": area_attrs},
+            "remote_config": {"state": remote_state, "attributes": remote_attrs},
+            "weather_forecast": {
+                "records": [list(rec) for rec in coordinator.forecast_records],
+                "attributes": coordinator.weather_attributes,
+            },
+            "calendar_agenda": {
+                "records": [list(rec) for rec in coordinator.calendar_records],
+                "event_count": len(coordinator.calendar_events),
+            },
+        }
     return {
         "subentry_id": coordinator.subentry_id,
         "title": coordinator.device_title,
@@ -50,19 +71,7 @@ def _build_coordinator_diagnostics(coordinator: LatterCoordinator) -> dict[str, 
         },
         # Last device_hello health report: sdk, reset reason, crash record held, rollback, boot_id.
         "device_health": coordinator.last_device_health,
-        "sensors": {
-            "active_media": {"state": media_state, "attributes": media_attrs},
-            "area_context": {"state": area_state, "attributes": area_attrs},
-            "remote_config": {"state": remote_state, "attributes": remote_attrs},
-            "weather_forecast": {
-                "records": [list(rec) for rec in coordinator.forecast_records],
-                "attributes": coordinator.weather_attributes,
-            },
-            "calendar_agenda": {
-                "records": [list(rec) for rec in coordinator.calendar_records],
-                "event_count": len(coordinator.calendar_events),
-            },
-        },
+        "sensors": sensors_diag,
     }
 
 
@@ -87,6 +96,7 @@ async def async_get_config_entry_diagnostics(
             "subentry_count": len(entry.subentries),
         },
         "system_config": dict(sys_obj.config),
+        "ble_scanners": get_all_scanners_diagnostic_map(hass),
         "devices": {
             sub_id: _build_coordinator_diagnostics(coord)
             for sub_id, coord in sys_obj.coordinators.items()

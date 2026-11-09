@@ -1143,13 +1143,18 @@ def get_area_available_domains(
     hass: HomeAssistant,
     area_id: str | None,
     local_speaker: str = "",
+    entities: list[dict[str, Any]] | None = None,
 ) -> str:
     """Return comma-separated canonical area categories ('scene,light,cover,fan,switch') present in the active area."""
-    all_items = get_area_entities(
-        hass,
-        area_id=area_id,
-        domain_filter="all",
-        local_speaker=local_speaker,
+    all_items = (
+        entities
+        if entities is not None
+        else get_area_entities(
+            hass,
+            area_id=area_id,
+            domain_filter="all",
+            local_speaker=local_speaker,
+        )
     )
     present_types = {str(it.get("type") or "") for it in all_items}
     ordered: list[str] = []

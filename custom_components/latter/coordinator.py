@@ -63,7 +63,6 @@ from .area_engine import (
 )
 from .ble_engine import (
     LatterNativeBleTracker,
-    get_all_scanners_diagnostic_map,
     get_ble_fabric,
     get_ble_proxy_area_ids,
 )
@@ -2092,64 +2091,54 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 )
         populated_count = len(slot_rows)
         clamped_active = max(1, min(max(1, len(slots)), self.active_remote_slot))
-        attrs: dict[str, Any] = {
-            "active_slot": clamped_active,
-            "configured_count": populated_count,
-            "device_remote_group": self.device_remote_group,
-            "active_area_id": self.active_area_id or "",
-        }
-        if populated_count == 0:
-            attrs["slots_summary"] = V3Records()
-            rem_rev, rem_payload = self._pack_domain_payload(
-                "remote_config", None, 0, attrs["slots_summary"]
-            )
-            attrs["rev"] = rem_rev
-            attrs["payload"] = rem_payload
-            res = (None, attrs)
-            self._cached_remote_payload = (now_m, res)
-            return res
-
-        for idx, slot in enumerate(slots, start=1):
-            attrs[f"slot_{idx}_name"] = slot["name"]
-            attrs[f"slot_{idx}_remote"] = slot["remote_entity"]
-            attrs[f"slot_{idx}_media_player"] = slot["media_player_entity"]
-            attrs[f"slot_{idx}_area_id"] = slot["area_id"]
-            attrs[f"slot_{idx}_state"] = slot["state"]
-
-        active_slot_data = slots[clamped_active - 1]
-        state_str = active_slot_data["name"] or None
-        attrs["slots_summary"] = remote_slot_records(slot_rows)
+        active_slot = clamped_active if populated_count else None
+        slots_summary = remote_slot_records(slot_rows) if populated_count else V3Records()
+        state_str = (slots[clamped_active - 1]["name"] or None) if populated_count else None
         rem_rev, rem_payload = self._pack_domain_payload(
             "remote_config",
-            clamped_active,
+            active_slot,
             populated_count,
-            attrs["slots_summary"],
+            slots_summary,
         )
-        attrs["rev"] = rem_rev
-        attrs["payload"] = rem_payload
+        attrs: dict[str, Any] = {
+            "active_slot": active_slot,
+            "configured_count": populated_count,
+            "slots_summary": slots_summary,
+            "rev": rem_rev,
+            "payload": rem_payload,
+        }
         res = (state_str, attrs)
         self._cached_remote_payload = (now_m, res)
         return res
 
-    def get_area_context_payload(self) -> tuple[str, dict[str, Any]]:
-        """Compute state and attributes for sensor.<device_slug>_area_context."""
-        now_m = time.monotonic()
-        if self._cached_area_payload is not None and (now_m - self._cached_area_payload[0]) < 0.05:
-            return self._cached_area_payload[1]
+    def _resolve_active_area_entry(self) -> ar.AreaEntry | None:
+        """Resolve the current AreaEntry for this device from BLE lock, active_area_id, or explicit default."""
         area_reg = ar.async_get(self.hass)
         explicit_default = str(self.get_opt(CONF_DEFAULT_AREA) or "").strip()
         has_ble_lock = bool(
             self._ble_tracker is not None and self._ble_tracker.current_area_id
         )
         if self.native_ble_tracking_enabled and not has_ble_lock and not explicit_default:
-            area_entry = None
-        else:
-            eff_id = (
-                self._ble_tracker.current_area_id
-                if (self.native_ble_tracking_enabled and has_ble_lock and self._ble_tracker)
-                else (self.active_area_id or explicit_default)
-            )
-            area_entry = area_reg.async_get_area(eff_id) if eff_id else None
+            return None
+        eff_id = (
+            self._ble_tracker.current_area_id
+            if (self.native_ble_tracking_enabled and has_ble_lock and self._ble_tracker)
+            else (self.active_area_id or explicit_default)
+        )
+        return area_reg.async_get_area(eff_id) if eff_id else None
+
+    @property
+    def active_area_name(self) -> str:
+        """Return the friendly name of the device's effective active area, or 'Unassigned'."""
+        area_entry = self._resolve_active_area_entry()
+        return area_entry.name if area_entry else "Unassigned"
+
+    def get_area_context_payload(self) -> tuple[str, dict[str, Any]]:
+        """Compute state and attributes for sensor.<device_slug>_area_context."""
+        now_m = time.monotonic()
+        if self._cached_area_payload is not None and (now_m - self._cached_area_payload[0]) < 0.05:
+            return self._cached_area_payload[1]
+        area_entry = self._resolve_active_area_entry()
         area_name = area_entry.name if area_entry else "Unassigned"
 
         entities = get_area_entities(
@@ -2162,15 +2151,13 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.hass,
             area_id=self.active_area_id,
             local_speaker=self.local_speaker,
+            entities=entities,
         )
         lights_on = sum(
             1 for e in entities if e["type"] == "light" and e["active"]
         )
         covers_open = sum(
             1 for e in entities if e["type"] == "cover" and e["active"]
-        )
-        media_map = find_area_media_entities(
-            self.hass, self.active_area_id, self.local_speaker
         )
         climate_telemetry = get_area_climate_telemetry(
             self.hass, self.active_area_id
@@ -2185,39 +2172,28 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             garage_entity=self.garage_entity,
             vacuum_entity=self.vacuum_entity,
         )
+        active_cam = self.active_carousel_camera or self.camera_entity
+        camera_snapshot_url = (
+            self.build_camera_snapshot_url(active_cam) if active_cam else ""
+        )
 
-        summary_items = [
-            f"{e['id']}:{e['name']}:{int(e['active'])}:{e['level']}"
-            for e in entities[:8]
-        ]
-
-        if self._ble_tracker and self._ble_tracker.current_area_id:
-            pres_state = f"native_ble:{self._ble_tracker.current_area_id}"
-        else:
-            pres_state = ""
-
-        area_attrs = {
+        area_attrs: dict[str, Any] = {
             "site_id": self.site_id,
             "area_id": self.active_area_id or "",
             "area_name": area_name,
-            "display_shape": self.display_shape,
-            "default_page_size": self.default_page_size,
+            "ble_closest_proxy": self._ble_tracker.closest_scanner if self._ble_tracker else "",
             "dock_apps": self.dock_apps_csv,
             "activity_card": self.activity_card_enabled,
             "activity_sources": self.activity_sources_csv,
             "wallpaper_url": self.build_wallpaper_url(),
-            "entity_count": len(entities),
+            "theme_color_hex": self.device_custom_color,
             "available_domains": avail_domains,
-            "lights_on": lights_on,
-            "covers_open": covers_open,
             "area_temp": climate_telemetry["temperature"],
             "area_humidity": climate_telemetry["humidity"],
-            "area_speaker": media_map["speaker"] or self.active_speaker,
-            "area_remote": media_map["remote"] or self.active_remote,
+            "lights_on": lights_on,
+            "covers_open": covers_open,
             "alarm_entity": alarm_info["entity_id"],
             "alarm_state": alarm_info["state"],
-            "alarm_name": alarm_info["name"],
-            "alarm_code_required": alarm_info["code_arm_required"],
             "thermostat_entity": wh_info["thermostat_entity"],
             "thermostat_state": wh_info["thermostat_state"],
             "thermostat_temp": wh_info["thermostat_temp"],
@@ -2228,27 +2204,9 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "garage_state": wh_info["garage_state"],
             "vacuum_entity": wh_info["vacuum_entity"],
             "vacuum_state": wh_info["vacuum_state"],
-            "native_ble_tracking": self.native_ble_tracking_enabled,
-            "ble_beacon_uuid": self.ble_beacon_uuid,
-            "ble_closest_proxy": self._ble_tracker.closest_scanner if self._ble_tracker else "",
-            "ble_packets_seen": self._ble_tracker.packets_seen if self._ble_tracker else 0,
-            "ble_rssi_by_area": self._ble_tracker.get_live_rssi_summary() if self._ble_tracker else {},
-            "ble_area_offsets": self.ble_area_offsets,
-            "ble_scanners_map": get_all_scanners_diagnostic_map(self.hass),
-            "ble_target_macs": self._ble_tracker.target_macs_formatted if self._ble_tracker else [],
-            "assigned_person": self.assigned_person,
-            "presence_state": pres_state,
-            "ble_auto_switch": self.ble_auto_switch_enabled,
-            "voice_area_synced": self.sync_device_area_enabled,
-            "entities_summary": ";".join(summary_items),
-            "camera_entity": self.camera_entity or "",
-            "camera_entities": self.camera_entities,
+            "camera_snapshot_url": camera_snapshot_url,
             "cameras_summary": self._build_cameras_summary(),
-            "camera_snapshot_url": self.build_camera_snapshot_url(
-                self.active_carousel_camera or self.camera_entity
-            ) if (self.active_carousel_camera or self.camera_entity) else "",
             "doorbell_talk_state": self.doorbell_talk_state,
-            "doorbell_noise_reduction": self.doorbell_noise_reduction,
             "intercom_targets_summary": self._build_intercom_targets_summary(),
             "alert_id": self.alert_id,
             "alert_title": self.alert_title,
@@ -2257,10 +2215,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "alert_duration": self.alert_duration,
             "alert_chime": self.alert_chime,
             "alert_camera_url": self.alert_camera_url,
-            "theme_color_hex": self.device_custom_color,
-            "custom_palettes": self.custom_palettes,
-            "hardware_manifest": self.hardware_manifest,
-            "rev": self.rev,
         }
         area_rev, area_payload = self._pack_domain_payload(
             "area_context",
@@ -2338,6 +2292,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if np_title and np_title not in tracked:
                 tracked.append(np_title)
 
+        self._sync_active_speaker_media_snapshot()
         self._unsub_speaker_state = async_track_state_change_event(
             self.hass,
             tracked,
@@ -2414,6 +2369,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     ) -> None:
         """Handle target media_player state/attribute updates."""
         self._cached_media_anchor = None
+        self._sync_active_speaker_media_snapshot()
         self.async_notify_listeners()
 
     def _read_volume_from_target(
@@ -2422,11 +2378,23 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Read normalized 0.0..1.0 volume from media_player, number, or input_number, or None when unknown."""
         return read_volume_from_target(self.hass, vol_target, fallback_attrs)
 
-    def get_active_media_payload(self) -> tuple[str | None, dict[str, Any]]:
-        """Compute state and attributes for sensor.<device_slug>_active_media."""
-        now_m = time.monotonic()
-        if self._cached_media_payload is not None and (now_m - self._cached_media_payload[0]) < 0.05:
-            return self._cached_media_payload[1]
+    def _resolve_speaker_media_snapshot(
+        self,
+    ) -> tuple[
+        State | None,
+        State | None,
+        str,
+        dict[str, Any],
+        dict[str, Any],
+        str,
+        str,
+        str,
+        float,
+        float,
+        str,
+        int,
+    ]:
+        """Resolve live speaker state, counterpart attributes, and active track metadata without side effects."""
         state_obj = self.hass.states.get(self.active_speaker)
         ma_counterpart = _resolve_ma_counterpart_entity(
             self.hass, self.active_speaker
@@ -2442,8 +2410,146 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         ) and ma_st is not None:
             state_obj = ma_st
 
-        vol_target = self.get_volume_target_entity(self.active_speaker)
         is_local_flag = 1 if self.is_local_speaker_entity(self.active_speaker) else 0
+        if state_obj is None or state_obj.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+            return None, ma_st, "", {}, {}, "", "", "", 0.0, 0.0, "", is_local_flag
+
+        state = state_obj.state
+        if (
+            state in (STATE_IDLE, STATE_OFF)
+            and ma_st is not None
+            and ma_st.state in (STATE_PLAYING, STATE_PAUSED, STATE_BUFFERING)
+        ):
+            state = ma_st.state
+        if state not in (
+            STATE_PLAYING,
+            STATE_PAUSED,
+            STATE_IDLE,
+            STATE_BUFFERING,
+            STATE_OFF,
+        ):
+            state = STATE_IDLE
+
+        attrs: dict[str, Any] = dict(state_obj.attributes)
+        m_attrs: dict[str, Any] = dict(ma_st.attributes) if ma_st is not None else {}
+
+        title = str(attrs.get("media_title") or "")
+        artist = str(
+            attrs.get("media_artist")
+            or attrs.get("media_series_title")
+            or attrs.get("media_album_artist")
+            or ""
+        )
+        album = str(attrs.get("media_album_name") or "")
+        duration = float(attrs.get("media_duration") or 0.0)
+        position = _interpolate_speaker_position(state_obj)
+
+        # When playing on the local ESPHome Sendspin speaker, media_player.<slug>_music often omits media_title
+        # and entity_picture in HA; fall back to the Music Assistant counterpart entity or ESPHome text_sensors.
+        if not title and m_attrs.get("media_title"):
+            title = str(m_attrs.get("media_title") or title)
+            artist = str(
+                m_attrs.get("media_artist")
+                or m_attrs.get("media_series_title")
+                or m_attrs.get("media_album_artist")
+                or artist
+            )
+            album = str(m_attrs.get("media_album_name") or album)
+        if duration <= 0 and m_attrs.get("media_duration"):
+            duration = float(m_attrs.get("media_duration") or duration)
+        if position <= 0 and ma_st is not None:
+            position = _interpolate_speaker_position(ma_st) or position
+
+        if not title and bool(is_local_flag):
+            t_st = self.device_state("sensor", "_now_playing_title")
+            a_st = self.device_state("sensor", "_now_playing_artist")
+            al_st = self.device_state("sensor", "_now_playing_album")
+            if t_st is not None and ha_value(t_st.state):
+                title = str(t_st.state)
+                if a_st is not None and ha_value(a_st.state):
+                    artist = str(a_st.state)
+                if al_st is not None and ha_value(al_st.state):
+                    album = str(al_st.state)
+
+        raw_type = str(
+            attrs.get("media_content_type") or m_attrs.get("media_content_type") or ""
+        ).lower()
+        if not raw_type:
+            media_type = ""
+        elif "podcast" in raw_type:
+            media_type = "podcast"
+        elif "audiobook" in raw_type or "book" in raw_type:
+            media_type = "audiobook"
+        else:
+            media_type = "music"
+
+        return (
+            state_obj,
+            ma_st,
+            state,
+            attrs,
+            m_attrs,
+            title,
+            artist,
+            album,
+            duration,
+            position,
+            media_type,
+            is_local_flag,
+        )
+
+    @callback
+    def _sync_active_speaker_media_snapshot(self) -> None:
+        """Update persisted last_media_* fields when the active speaker is playing, paused, or buffering."""
+        (
+            state_obj,
+            _ma_st,
+            state,
+            attrs,
+            m_attrs,
+            title,
+            artist,
+            album,
+            duration,
+            position,
+            media_type,
+            _is_local_flag,
+        ) = self._resolve_speaker_media_snapshot()
+        if state_obj is None or not title or state not in (STATE_PLAYING, STATE_PAUSED, STATE_BUFFERING):
+            return
+        cid = str(attrs.get("media_content_id") or m_attrs.get("media_content_id") or "")
+        if cid:
+            self.last_media_uri = cid
+        self.last_media_type = media_type
+        self.last_media_title = title
+        self.last_media_artist = artist
+        self.last_media_album = album
+        if duration > 0:
+            self.last_media_duration = duration
+        if position > 0:
+            self.last_media_position = position
+
+    def get_active_media_payload(self) -> tuple[str | None, dict[str, Any]]:
+        """Compute state and attributes for sensor.<device_slug>_active_media."""
+        now_m = time.monotonic()
+        if self._cached_media_payload is not None and (now_m - self._cached_media_payload[0]) < 0.05:
+            return self._cached_media_payload[1]
+        (
+            state_obj,
+            _ma_st,
+            state,
+            attrs,
+            m_attrs,
+            title,
+            artist,
+            album,
+            duration,
+            position,
+            media_type,
+            is_local_flag,
+        ) = self._resolve_speaker_media_snapshot()
+
+        vol_target = self.get_volume_target_entity(self.active_speaker)
         fallback_spk_name = (
             self.device_title
             if is_local_flag
@@ -2454,7 +2560,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
         )
 
-        if state_obj is None or state_obj.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+        if state_obj is None:
             # The speaker is missing or unavailable: its state is unknown (""); the last track stays on screen.
             idle_title = self.last_media_title
             idle_artist = self.last_media_artist
@@ -2514,87 +2620,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
             self._cached_media_payload = (now_m, res)
             return res
-
-        state = state_obj.state
-        if (
-            state in (STATE_IDLE, STATE_OFF)
-            and ma_st is not None
-            and ma_st.state in (STATE_PLAYING, STATE_PAUSED, STATE_BUFFERING)
-        ):
-            state = ma_st.state
-        if state not in (
-            STATE_PLAYING,
-            STATE_PAUSED,
-            STATE_IDLE,
-            STATE_BUFFERING,
-            STATE_OFF,
-        ):
-            state = STATE_IDLE
-
-        attrs = state_obj.attributes
-        title = str(attrs.get("media_title") or "")
-        artist = str(
-            attrs.get("media_artist")
-            or attrs.get("media_series_title")
-            or attrs.get("media_album_artist")
-            or ""
-        )
-        album = str(attrs.get("media_album_name") or "")
-        duration = float(attrs.get("media_duration") or 0)
-        position = _interpolate_speaker_position(state_obj)
-
-        # When playing on the local ESPHome Sendspin speaker, media_player.<slug>_music often omits media_title
-        # and entity_picture in HA; fall back to the Music Assistant counterpart entity or ESPHome text_sensors.
-        m_attrs: dict[str, Any] = dict(ma_st.attributes) if ma_st is not None else {}
-
-        if not title and m_attrs.get("media_title"):
-            title = str(m_attrs.get("media_title") or title)
-            artist = str(
-                m_attrs.get("media_artist")
-                or m_attrs.get("media_series_title")
-                or m_attrs.get("media_album_artist")
-                or artist
-            )
-            album = str(m_attrs.get("media_album_name") or album)
-        if duration <= 0 and m_attrs.get("media_duration"):
-            duration = float(m_attrs.get("media_duration") or duration)
-        if position <= 0 and ma_st is not None:
-            position = _interpolate_speaker_position(ma_st) or position
-
-        if not title and bool(is_local_flag):
-            t_st = self.device_state("sensor", "_now_playing_title")
-            a_st = self.device_state("sensor", "_now_playing_artist")
-            al_st = self.device_state("sensor", "_now_playing_album")
-            if t_st is not None and ha_value(t_st.state):
-                title = str(t_st.state)
-                if a_st is not None and ha_value(a_st.state):
-                    artist = str(a_st.state)
-                if al_st is not None and ha_value(al_st.state):
-                    album = str(al_st.state)
-
-        raw_type = str(attrs.get("media_content_type") or m_attrs.get("media_content_type") or "").lower()
-        if not raw_type:
-            media_type = ""
-        elif "podcast" in raw_type:
-            media_type = "podcast"
-        elif "audiobook" in raw_type or "book" in raw_type:
-            media_type = "audiobook"
-        else:
-            media_type = "music"
-
-        if title and state in (STATE_PLAYING, STATE_PAUSED, STATE_BUFFERING):
-            cid = str(attrs.get("media_content_id") or "")
-            if cid:
-                self.last_media_uri = cid
-            self.last_media_type = media_type
-            self.last_media_title = title
-            self.last_media_artist = artist
-            self.last_media_album = album
-            if duration > 0:
-                self.last_media_duration = duration
-            if position > 0:
-                self.last_media_position = position
-            self._schedule_persist_runtime_state()
 
         in_transfer_window = time.monotonic() < self._transfer_hold_until
         if in_transfer_window:

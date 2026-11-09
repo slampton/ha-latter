@@ -198,6 +198,22 @@ class BleDeviceTrackerAndPersonTests(unittest.TestCase):
         area_body = coord_src.split("def async_set_active_area(", 1)[1].split("\n    @property", 1)[0]
         self.assertIn("self._bind_remotes_listener()", area_body)
 
+    def test_coordinator_pass2_hot_path_hygiene(self) -> None:
+        coord_src = (LATTER_DIR / "coordinator.py").read_text(encoding="utf-8")
+        for legacy in ("ble_scanners_map", "entities_summary", "presence_state", "slot_{idx}_name", "get_all_scanners_diagnostic_map"):
+            self.assertNotIn(legacy, coord_src)
+        area_ctx_body = coord_src.split("def get_area_context_payload(", 1)[1].split("\n    @callback", 1)[0]
+        self.assertIn("entities=entities", area_ctx_body)
+        self.assertNotIn("find_area_media_entities", area_ctx_body)
+        media_body = coord_src.split("def get_active_media_payload(", 1)[1].split("\n    @callback", 1)[0]
+        self.assertNotIn("self._schedule_persist_runtime_state()", media_body)
+        self.assertNotIn("self.last_media_title =", media_body)
+        spk_body = coord_src.split("def _async_on_speaker_state_change(", 1)[1].split("\n    def ", 1)[0]
+        self.assertIn("self._sync_active_speaker_media_snapshot()", spk_body)
+        studio_payload_src = (LATTER_DIR / "studio" / "payload.py").read_text(encoding="utf-8")
+        self.assertNotIn("get_area_context_payload", studio_payload_src)
+        self.assertIn(".active_area_name", studio_payload_src)
+
 
 if __name__ == "__main__":
     unittest.main()
