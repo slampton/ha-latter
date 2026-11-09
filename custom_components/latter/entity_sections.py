@@ -153,3 +153,17 @@ def classify_esphome_entity_section(
         return "network", None
 
     return "other", None
+
+
+def present_section_ids(sections: object) -> set[str]:
+    """Return the ids of the Device's entity sections that hold at least one entity.
+
+    Studio's page capabilities (Power & Battery, Audio & Voice, Display & Home) come from these.
+    """
+    if not isinstance(sections, (list, tuple)):
+        return set()
+    return {
+        str(sec.get("id"))
+        for sec in sections
+        if isinstance(sec, dict) and sec.get("id") and sec.get("items")
+    }

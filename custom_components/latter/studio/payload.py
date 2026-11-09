@@ -28,6 +28,7 @@ from ..ble_engine import (
     get_discovered_ble_candidates,
 )
 from ..browse_engine import is_music_assistant_player
+from ..entity_sections import present_section_ids
 from ..const import (
     API_BRAND_ICON_PATH,
     CONF_AREA_FOLLOW_DWELL_S,
@@ -796,11 +797,7 @@ def build_studio_state_payload(
         or coordinator.hardware_manifest
     )
 
-    sec_ids = {
-        s.get("id")
-        for s in esphome_inspector.get("sections", [])
-        if s.get("count", 0) > 0
-    }
+    sec_ids = present_section_ids(esphome_inspector.get("sections"))
     all_esp_items: list[dict[str, Any]] = []
     for s in esphome_inspector.get("sections", []):
         all_esp_items.extend(s.get("items") or [])

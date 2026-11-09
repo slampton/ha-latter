@@ -151,6 +151,32 @@ class TestEntitySections(unittest.TestCase):
         self.assertEqual(self.classify("select.desk_display_voice_visual_profile", "Voice: Visual Profile"), "voice")
         self.assertEqual(self.classify("select.desk_display_display_clock_face", "Display: Clock Face"), "display")
 
+    def test_desk_power_and_battery_page_regression(self) -> None:
+        # Desk Assistant (mains, no battery sensor), 2026-11-09: the Power & Battery page vanished because the
+        # capability check still read the sections' "count", which 187c1c9 removed. Its Sleep & Wake entities:
+        desk = [
+            ("select.desk_assistant_sleep_wake_battery_screen_timeout", "Sleep & Wake: Battery Screen Timeout"),
+            ("select.desk_assistant_sleep_wake_docked_idle_timeout", "Sleep & Wake: Docked Idle Timeout"),
+            ("select.desk_assistant_sleep_wake_pickup_to_wake", "Sleep & Wake: Pickup to Wake"),
+            ("select.desk_assistant_sleep_wake_power_profile", "Sleep & Wake: Power Profile"),
+            ("select.desk_assistant_sleep_wake_screensaver_style", "Sleep & Wake: Screensaver Style"),
+            ("switch.desk_assistant_sleep_wake_docked_screensaver", "Sleep & Wake: Docked Screensaver"),
+        ]
+        sections: dict[str, list[dict]] = {}
+        for ent, name in desk:
+            sec = entity_sections.classify_esphome_entity_section(
+                ent, name, ent.split(".")[0], "", "config", device_object_prefixes=("desk_assistant",)
+            )[0]
+            sections.setdefault(sec, []).append({"entity_id": ent})
+        payload_sections = [{"id": sid, "title": sid, "items": items} for sid, items in sections.items()]
+        self.assertEqual(set(sections), {"sleep"})
+        self.assertEqual(entity_sections.present_section_ids(payload_sections), {"sleep"})
+        self.assertEqual(entity_sections.present_section_ids([{"id": "sleep", "items": []}, "junk"]), set())
+        payload_src = (LATTER_DIR / "studio" / "payload.py").read_text(encoding="utf-8")
+        self.assertIn('sec_ids = present_section_ids(esphome_inspector.get("sections"))', payload_src)
+        self.assertIn('"has_power": ("sleep" in sec_ids) or ("battery" in sec_ids),', payload_src)
+        self.assertNotIn('s.get("count"', payload_src)
+
     def test_ha_wake_word_is_the_one_wake_word_control(self) -> None:
         # Home Assistant's Wake Word / Wake Word 2 are canonical; the firmware has no wake-word select of its own,
         # so Studio has no special case for one.
