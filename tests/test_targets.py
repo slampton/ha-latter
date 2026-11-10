@@ -292,6 +292,23 @@ class BleDeviceTrackerAndPersonTests(unittest.TestCase):
         self.assertIn("def render_builtin_preset_image(", wp_src)
         self.assertEqual(wp_src.count("evict_wallpaper_lru_cache("), 2)
 
+    def test_lifecycle_backup_and_sensor_audit(self) -> None:
+        backup_src = (LATTER_DIR / "backup_engine.py").read_text(encoding="utf-8")
+        export_block = backup_src.split("DEVICE_CONFIG_EXPORT_KEYS", 1)[1].split("PROFILE_DEVICE_KEYS", 1)[0]
+        profile_block = backup_src.split("PROFILE_DEVICE_KEYS", 1)[1].split("DEFAULT_DEVICE_GROUPS", 1)[0]
+        self.assertIn("CONF_AREA_FOLLOW_DWELL_S", export_block)
+        self.assertIn("CONF_MA_PLAYER_ENTITY", export_block)
+        self.assertIn("CONF_AREA_FOLLOW_DWELL_S", profile_block)
+        self.assertIn("sys_obj.config = global_cfg", backup_src)
+
+        flow_src = (LATTER_DIR / "config_flow.py").read_text(encoding="utf-8")
+        self.assertIn("async def _async_save_system_options(", flow_src)
+        self.assertEqual(flow_src.count("await _async_save_system_options(self.hass, user_input)"), 2)
+
+        sensor_src = (LATTER_DIR / "sensor.py").read_text(encoding="utf-8")
+        self.assertIn("self._cached_person", sensor_src)
+        self.assertIn("def _get_person_state(self)", sensor_src)
+
 
 if __name__ == "__main__":
     unittest.main()

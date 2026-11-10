@@ -14,6 +14,7 @@ from homeassistant.util import dt as dt_util
 from .const import (
     CONF_ACTIVITY_CARD,
     CONF_ACTIVITY_SOURCES,
+    CONF_AREA_FOLLOW_DWELL_S,
     CONF_AREA_HANDOFF,
     CONF_ASSIGNED_PERSON,
     CONF_BLE_AUTO_SWITCH,
@@ -27,6 +28,7 @@ from .const import (
     CONF_DEVICE_GROUPS,
     CONF_DEVICE_SLUG,
     CONF_DOCK_APPS,
+    CONF_MA_PLAYER_ENTITY,
     CONF_NATIVE_BLE_TRACKING,
     CONF_SAVED_PROFILES,
     CONF_SITE_ID,
@@ -43,6 +45,7 @@ from .const import (
     INTEGRATION_VERSION,
 )
 from .area_engine import async_execute_area_action, get_esphome_device_entities
+from .system import get_latter_system
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -51,6 +54,7 @@ DEVICE_CONFIG_EXPORT_KEYS: tuple[str, ...] = (
     CONF_DEVICE_GROUP,
     CONF_DEFAULT_PAGE_SIZE,
     CONF_DEFAULT_SPEAKER,
+    CONF_MA_PLAYER_ENTITY,
     CONF_DEFAULT_AREA,
     CONF_NATIVE_BLE_TRACKING,
     CONF_BLE_BEACON_UUID,
@@ -58,6 +62,7 @@ DEVICE_CONFIG_EXPORT_KEYS: tuple[str, ...] = (
     CONF_ASSIGNED_PERSON,
     CONF_BLE_AUTO_SWITCH,
     CONF_SYNC_DEVICE_AREA,
+    CONF_AREA_FOLLOW_DWELL_S,
     CONF_AREA_HANDOFF,
     CONF_DOCK_APPS,
     CONF_ACTIVITY_CARD,
@@ -75,6 +80,7 @@ PROFILE_DEVICE_KEYS: tuple[str, ...] = (
     CONF_NATIVE_BLE_TRACKING,
     CONF_BLE_AUTO_SWITCH,
     CONF_SYNC_DEVICE_AREA,
+    CONF_AREA_FOLLOW_DWELL_S,
     CONF_AREA_HANDOFF,
     CONF_DOCK_APPS,
     CONF_ACTIVITY_CARD,
@@ -388,6 +394,9 @@ async def async_restore_backup_bundle(
             for k in GLOBAL_CONFIG_KEYS:
                 if k in global_cfg_in:
                     global_cfg[k] = global_cfg_in[k]
+            sys_obj = get_latter_system(hass)
+            if sys_obj is not None:
+                sys_obj.config = global_cfg
             store = domain_data.get(DATA_GLOBAL_STORE)
             if store is not None:
                 await store.async_save(global_cfg)

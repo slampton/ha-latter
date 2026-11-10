@@ -372,6 +372,13 @@ class _BaseLatterPersonSensor(SensorEntity):
             if p_st
             else ""
         ) or self._person_slug.replace("_", " ").title()
+        self._cached_person: tuple[str, dict[str, Any]] | None = None
+
+    def _get_person_state(self) -> tuple[str, dict[str, Any]]:
+        """Return cached or freshly evaluated person area and distance snapshot."""
+        if self._cached_person is None:
+            self._cached_person = resolve_person_area_and_distance(self.hass, self._person_entity)
+        return self._cached_person
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -382,6 +389,7 @@ class _BaseLatterPersonSensor(SensorEntity):
         """Subscribe to real-time updates from the shared BLE Fabric and all device coordinators."""
         await super().async_added_to_hass()
         fabric = get_ble_fabric(self.hass)
+        self._cached_person = resolve_person_area_and_distance(self.hass, self._person_entity)
         self.async_on_remove(
             fabric.register_occupancy_listener(self._handle_person_update)
         )
@@ -403,6 +411,7 @@ class _BaseLatterPersonSensor(SensorEntity):
     @callback
     def _handle_person_update(self) -> None:
         """Write updated person location/distance state to Home Assistant."""
+        self._cached_person = resolve_person_area_and_distance(self.hass, self._person_entity)
         self.async_write_ha_state()
 
 
@@ -424,13 +433,13 @@ class LatterPersonCurrentAreaSensor(_BaseLatterPersonSensor):
     @property
     def native_value(self) -> str:
         """Return freshest area name across all devices carried by this person."""
-        area_name, _ = resolve_person_area_and_distance(self.hass, self._person_entity)
+        area_name, _ = self._get_person_state()
         return area_name
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return person BLE area tracking attributes."""
-        _, attrs = resolve_person_area_and_distance(self.hass, self._person_entity)
+        _, attrs = self._get_person_state()
         return attrs
 
 
@@ -452,13 +461,13 @@ class LatterPersonBleDistanceSensor(_BaseLatterPersonSensor):
     @property
     def native_value(self) -> float | None:
         """Return estimated distance in feet for this person."""
-        _, attrs = resolve_person_area_and_distance(self.hass, self._person_entity)
+        _, attrs = self._get_person_state()
         return attrs.get("distance_ft")
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return person BLE distance attributes."""
-        _, attrs = resolve_person_area_and_distance(self.hass, self._person_entity)
+        _, attrs = self._get_person_state()
         return attrs
 
 

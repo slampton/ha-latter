@@ -488,18 +488,7 @@ class LatterConfigFlow(ConfigFlow, domain=DOMAIN):
         domain_data = self.hass.data.get(DOMAIN, {})
         global_cfg = dict(domain_data.get(DATA_GLOBAL_CONFIG, {}))
         if user_input is not None:
-            for k in (CONF_WEATHER_ENTITY, CONF_ALARM_ENTITY):
-                if k in user_input:
-                    global_cfg[k] = user_input[k]
-            domain_data[DATA_GLOBAL_CONFIG] = global_cfg
-            store = domain_data.get(DATA_GLOBAL_STORE)
-            if store is not None:
-                await store.async_save(global_cfg)
-            sys_obj = get_latter_system(self.hass)
-            if sys_obj is not None:
-                sys_obj.config = global_cfg
-                for coord in list(sys_obj.coordinators.values()):
-                    await coord.async_on_global_config_updated()
+            await _async_save_system_options(self.hass, user_input)
             return self.async_update_and_abort(
                 reconfigure_entry,
                 data_updates={},
@@ -696,6 +685,27 @@ def _build_system_options_schema(
     )
 
 
+async def _async_save_system_options(
+    hass: HomeAssistant, user_input: dict[str, Any]
+) -> None:
+    """Persist System-level weather and alarm options and notify coordinators of changed keys."""
+    domain_data = hass.data.setdefault(DOMAIN, {})
+    global_cfg: dict[str, Any] = domain_data.setdefault(DATA_GLOBAL_CONFIG, {})
+    changed_keys: set[str] = set()
+    for k in (CONF_WEATHER_ENTITY, CONF_ALARM_ENTITY):
+        if k in user_input and global_cfg.get(k) != user_input[k]:
+            global_cfg[k] = user_input[k]
+            changed_keys.add(k)
+    store = domain_data.get(DATA_GLOBAL_STORE)
+    if store is not None:
+        await store.async_save(global_cfg)
+    sys_obj = get_latter_system(hass)
+    if sys_obj is not None:
+        sys_obj.config = global_cfg
+        for coord in list(sys_obj.coordinators.values()):
+            await coord.async_on_global_config_updated(changed_keys)
+
+
 class LatterOptionsFlowHandler(OptionsFlow):
     """Handle System-level options flow updates for the Latter hub."""
 
@@ -706,18 +716,7 @@ class LatterOptionsFlowHandler(OptionsFlow):
         domain_data = self.hass.data.get(DOMAIN, {})
         global_cfg = dict(domain_data.get(DATA_GLOBAL_CONFIG, {}))
         if user_input is not None:
-            for k in (CONF_WEATHER_ENTITY, CONF_ALARM_ENTITY):
-                if k in user_input:
-                    global_cfg[k] = user_input[k]
-            domain_data[DATA_GLOBAL_CONFIG] = global_cfg
-            store = domain_data.get(DATA_GLOBAL_STORE)
-            if store is not None:
-                await store.async_save(global_cfg)
-            sys_obj = get_latter_system(self.hass)
-            if sys_obj is not None:
-                sys_obj.config = global_cfg
-                for coord in list(sys_obj.coordinators.values()):
-                    await coord.async_on_global_config_updated()
+            await _async_save_system_options(self.hass, user_input)
             return self.async_create_entry(title="", data={})
 
         return self.async_show_form(
