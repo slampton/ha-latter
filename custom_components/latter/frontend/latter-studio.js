@@ -1466,15 +1466,17 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
             <div class="card-content">
               <div class="settings-list">
                 <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-activity_card">Show the Activity Card</label><p class="row-description">On the Home screen, while an enabled source has something to show.</p></div><div class="settings-row-control"><input type="checkbox" class="switch" role="switch" id="cfg-activity_card" onchange="onActivityCardChanged(this)"></div></div>
-              </div>
-              <div id="activity-sources">
-                <h4 class="subsection-title">Sources</h4>
-                <div class="settings-list">
-                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="activity-src-calendar">Calendar</label></div><div class="settings-row-control"><input type="checkbox" class="switch activity-src" role="switch" id="activity-src-calendar" data-src="calendar" onchange="saveSetting('device', 'activity_sources')"></div></div>
-                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="activity-src-music_queue">Music Queue</label></div><div class="settings-row-control"><input type="checkbox" class="switch activity-src" role="switch" id="activity-src-music_queue" data-src="music_queue" onchange="saveSetting('device', 'activity_sources')"></div></div>
-                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="activity-src-stopwatch">Stopwatch</label></div><div class="settings-row-control"><input type="checkbox" class="switch activity-src" role="switch" id="activity-src-stopwatch" data-src="stopwatch" onchange="saveSetting('device', 'activity_sources')"></div></div>
-                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="activity-src-alarms">Alarms</label></div><div class="settings-row-control"><input type="checkbox" class="switch activity-src" role="switch" id="activity-src-alarms" data-src="alarms" onchange="saveSetting('device', 'activity_sources')"></div></div>
-                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="activity-src-timers">Timers</label></div><div class="settings-row-control"><input type="checkbox" class="switch activity-src" role="switch" id="activity-src-timers" data-src="timers" onchange="saveSetting('device', 'activity_sources')"></div></div>
+                <div class="settings-row stacked" id="activity-sources">
+                  <div class="settings-row-text"><span class="row-label" id="lbl-activity-sources">Sources</span><p class="row-description">Select a source to show or hide it on the Activity Card.</p></div>
+                  <div class="settings-row-control">
+                    <div class="pill-list" role="group" aria-labelledby="lbl-activity-sources">
+                      <button type="button" class="pill activity-src enabled" data-src="calendar" data-label="Calendar" aria-pressed="true" onclick="toggleActivitySource(this)">✓ Calendar</button>
+                      <button type="button" class="pill activity-src enabled" data-src="music_queue" data-label="Music Queue" aria-pressed="true" onclick="toggleActivitySource(this)">✓ Music Queue</button>
+                      <button type="button" class="pill activity-src enabled" data-src="stopwatch" data-label="Stopwatch" aria-pressed="true" onclick="toggleActivitySource(this)">✓ Stopwatch</button>
+                      <button type="button" class="pill activity-src enabled" data-src="alarms" data-label="Alarms" aria-pressed="true" onclick="toggleActivitySource(this)">✓ Alarms</button>
+                      <button type="button" class="pill activity-src enabled" data-src="timers" data-label="Timers" aria-pressed="true" onclick="toggleActivitySource(this)">✓ Timers</button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1482,16 +1484,24 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
           </div>
           <div class="column">
           <div class="card">
-            <div class="card-header"><div class="card-heading"><h3 class="card-title">Home Screen &amp; Area UI</h3></div></div>
+            <div class="card-header"><div class="card-heading"><h3 class="card-title">Home Screen</h3></div></div>
             <div class="card-content">
+              <div class="settings-list">
+                <div class="settings-row stacked">
+                  <div class="settings-row-text"><span class="row-label">Home Dock Apps</span><p class="row-description">Select an app to show or hide it, and use the arrows to reorder.</p></div>
+                  <div class="settings-row-control"><div id="dock-pills-container" class="pill-list" role="group" aria-label="Home dock apps"></div></div>
+                  <input type="hidden" id="cfg-dock_apps">
+                </div>
+              </div>
               <div id="embedded-home" class="settings-list"></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-heading"><h3 class="card-title">Area Controls</h3></div></div>
+            <div class="card-content">
+              <div id="embedded-area-ui" class="settings-list"></div>
               <div class="settings-list">
                 <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-default_page_size">Area Cards Per Page</label></div><div class="settings-row-control"><input type="number" id="cfg-default_page_size" min="1" max="20" value="3" onchange="saveField('device', this)" onkeydown="if (event.key === 'Enter') this.blur()"></div></div>
-              </div>
-              <div class="settings-row stacked">
-                <div class="settings-row-text"><span class="row-label">Home Dock Apps</span><p class="row-description">Select an app to show or hide it, and use the arrows to reorder.</p></div>
-                <div class="settings-row-control"><div id="dock-pills-container" class="pill-list" role="group" aria-label="Home dock apps"></div></div>
-                <input type="hidden" id="cfg-dock_apps">
               </div>
             </div>
           </div>
@@ -2203,6 +2213,18 @@ function syncActivitySourcesVisibility() {
 function onActivityCardChanged(el) {
   syncActivitySourcesVisibility();
   saveField("device", el);
+}
+
+function setActivitySourcePill(el, on) {
+  const label = el.dataset.label || "";
+  el.classList.toggle("enabled", on);
+  el.setAttribute("aria-pressed", String(on));
+  el.textContent = `${on ? "✓ " : "+ "}${label}`;
+}
+
+function toggleActivitySource(el) {
+  setActivitySourcePill(el, el.getAttribute("aria-pressed") !== "true");
+  saveSetting("device", "activity_sources");
 }
 
 // A cfg-<key> control saves its own key.
@@ -3213,7 +3235,7 @@ function entityLabel(name) {
   }).join(" ");
 }
 
-function renderNativeControlRow(item, showEntityId=false, readOnlyNote="") {
+function renderNativeControlRow(item, showEntityId=false, readOnlyNote="", helpText="") {
   const stateText = `${item.state}${item.unit ? ' ' + item.unit : ''}`;
   const idArg = jsArg(item.entity_id);
   const name = esc(entityLabel(item.name));
@@ -3236,7 +3258,7 @@ function renderNativeControlRow(item, showEntityId=false, readOnlyNote="") {
     const numVal = parseFloat(item.state) || 0;
     widgetHtml = `<input type="range" ${entAttr} aria-label="${name}" min="${esc(item.min ?? 0)}" max="${esc(item.max ?? 100)}" step="${esc(item.step ?? 1)}" value="${esc(numVal)}" onchange="espNumber(${idArg}, this.value)"><span class="chip">${esc(stateText)}</span>`;
   }
-  const desc = showEntityId ? esc(item.entity_id) : esc(readOnlyNote || "");
+  const desc = showEntityId ? esc(item.entity_id) : esc(readOnlyNote || helpText || "");
   return settingsRowHtml(name, desc, widgetHtml);
 }
 
@@ -3284,14 +3306,29 @@ function renderCohesiveDeviceSections() {
     ? renderNativeControlRow(it, false, "Follows Track the Area with BLE Proxies")
     : renderNativeControlRow(it)).join("");
 
-  // 2. Home screen & Area UI (the dock itself is the Home dock apps setting below)
+  // 2. Home Screen (Home Dock Apps sits at the top of the card) & Area Controls
   const rawHomeItems = getSectionItems("home");
-  const homeItems = sortByOrder(rawHomeItems.concat(areaUiItems), [
-    "wake greeting", "weather background", "sun", "moon", "default category", "show all category"
-  ]);
+  const isWeatherBgItem = (it) => /weather[ _]bg|weather[ _]background/.test(`${it.name} ${it.entity_id}`.toLowerCase());
+  const isCelestialItem = (it) => /\b(sun|moon)\b/.test(`${it.name} ${it.entity_id}`.toLowerCase());
+  const weatherBgItem = rawHomeItems.find(isWeatherBgItem);
+  const weatherBgOff = weatherBgItem && weatherBgItem.state !== "on";
+  const homeItems = sortByOrder(
+    rawHomeItems.filter(it => !(weatherBgOff && isCelestialItem(it))),
+    ["wake greeting", "weather background", "sun", "moon"]
+  );
   doc.getElementById("embedded-home").innerHTML = homeItems.length
-    ? homeItems.map(it => renderNativeControlRow(it)).join("")
+    ? homeItems.map(it => renderNativeControlRow(
+        it,
+        false,
+        "",
+        isWeatherBgItem(it) ? "Live sky on the Home screen; when off, Home uses the active wallpaper." : ""
+      )).join("")
     : emptyStateHtml("No on-device Home Screen entities exposed.");
+  const sortedAreaUiItems = sortByOrder(areaUiItems, ["default category", "show all category"]);
+  const areaUiEl = doc.getElementById("embedded-area-ui");
+  if (areaUiEl) {
+    areaUiEl.innerHTML = sortedAreaUiItems.map(it => renderNativeControlRow(it)).join("");
+  }
 
   // 3. Display & Appearance: Logical order + Conditional Brightness visibility based on Auto Brightness Mode
   const rawDispItems = getSectionItems("display");
@@ -4379,7 +4416,7 @@ function loadDeviceForm(data) {
   const actCard = doc.getElementById("cfg-activity_card");
   if (actCard) actCard.checked = cfg.activity_card !== false;
   const actOn = new Set(String(cfg.activity_sources ?? "").split(",").filter(Boolean));
-  doc.querySelectorAll("#activity-sources .activity-src").forEach(el => { el.checked = actOn.has(el.dataset.src); });
+  doc.querySelectorAll("#activity-sources .activity-src").forEach(el => setActivitySourcePill(el, actOn.has(el.dataset.src)));
   syncActivitySourcesVisibility();
   doc.getElementById("cfg-wallpaper_cycle_minutes").value = String(cfg.wallpaper_cycle_minutes || 0);
   populateSelect("cfg-default_area", cat.areas, cfg.default_area);
@@ -4450,7 +4487,7 @@ function collectDeviceSettings() {
     default_area: doc.getElementById("cfg-default_area")?.value ?? "",
     dock_apps: doc.getElementById("cfg-dock_apps")?.value?.trim() || "",
     activity_card: Boolean(doc.getElementById("cfg-activity_card")?.checked),
-    activity_sources: [...doc.querySelectorAll("#activity-sources .activity-src")].filter(el => el.checked).map(el => el.dataset.src).join(","),
+    activity_sources: [...doc.querySelectorAll("#activity-sources .activity-src")].filter(el => el.getAttribute("aria-pressed") === "true").map(el => el.dataset.src).join(","),
     wallpaper_cycle_minutes: parseInt(doc.getElementById("cfg-wallpaper_cycle_minutes")?.value || "0", 10) || 0,
     area_follow_dwell_s: parseInt(doc.getElementById("cfg-area_follow_dwell_s")?.value || "10", 10) || 10
   };
@@ -4704,6 +4741,7 @@ function bindStudioGlobals() {
   window.exportBackupToComputer = exportBackupToComputer;
   window.fmtPercent = fmtPercent;
   window.onActivityCardChanged = onActivityCardChanged;
+  window.toggleActivitySource = toggleActivitySource;
   window.fallbackCopyText = fallbackCopyText;
   window.getInventoryRemoteIds = getInventoryRemoteIds;
   window.getRemoteFriendlyLabel = getRemoteFriendlyLabel;

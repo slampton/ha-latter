@@ -172,9 +172,19 @@ class TestViewLayout(unittest.TestCase):
         )
         js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
         self.assertIn(
-            '"wake greeting", "weather background", "sun", "moon", "default category", "show all category"',
+            '["wake greeting", "weather background", "sun", "moon"]',
             js,
         )
+        self.assertIn(
+            '["default category", "show all category"]',
+            js,
+        )
+        start = js.index('<section id="view-home_display"')
+        view = js[start:js.index("</section>", start)]
+        self.assertIn('<h3 class="card-title">Home Screen</h3>', view)
+        self.assertIn('<h3 class="card-title">Area Controls</h3>', view)
+        self.assertIn('id="embedded-area-ui"', view)
+        self.assertLess(view.index('id="dock-pills-container"'), view.index('id="embedded-home"'))
 
     def test_sidebar_icon_module(self) -> None:
         # D-017: the panel's sidebar icon is "latter:logo", registered by a tiny static frontend module.
@@ -281,11 +291,14 @@ class TestActivityCard(unittest.TestCase):
         view = js[start:js.index("</section>", start)]
         self.assertIn('<h3 class="card-title">Activity Card</h3>', view)
         self.assertIn('id="cfg-activity_card"', view)
+        self.assertIn(">Show the Activity Card</label>", view)
         for key in self.policy.ACTIVITY_SOURCE_KEYS:
             self.assertIn(f'data-src="{key}"', view)
-        for label in ("Show the Activity Card", "Calendar", "Music Queue", "Stopwatch", "Alarms", "Timers"):
-            self.assertIn(f">{label}</label>", view)
+        for label in ("Calendar", "Music Queue", "Stopwatch", "Alarms", "Timers"):
+            self.assertIn(f'data-label="{label}"', view)
+            self.assertIn(f">✓ {label}</button>", view)
         self.assertIn("window.onActivityCardChanged = onActivityCardChanged;", js)
+        self.assertIn("window.toggleActivitySource = toggleActivitySource;", js)
 
 
 class TestDockPolicy(unittest.TestCase):
