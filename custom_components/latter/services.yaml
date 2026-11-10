@@ -415,9 +415,9 @@ calendar_fetch:
           integration: latter
     days:
       name: Lookahead Days
-      description: Number of days ahead to query (default 7).
+      description: Number of days ahead to query (default 30).
       required: false
-      default: 7
+      default: 30
       selector:
         number:
           min: 1

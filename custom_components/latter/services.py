@@ -6,6 +6,7 @@ import asyncio
 from datetime import timedelta
 import logging
 import math
+import re
 import time
 from typing import Any
 import voluptuous as vol
@@ -13,10 +14,17 @@ import voluptuous as vol
 from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import HomeAssistant, ServiceCall, ServiceResponse, SupportsResponse
 from homeassistant.exceptions import ServiceValidationError
-from homeassistant.helpers import config_validation as cv, device_registry as dr, issue_registry as ir
+from homeassistant.helpers import (
+    area_registry as ar,
+    config_validation as cv,
+    device_registry as dr,
+    entity_registry as er,
+    issue_registry as ir,
+)
 from homeassistant.util import dt as dt_util
 
 from .browse_engine import async_browse_media_items, is_music_assistant_player
+from .media_controller import async_execute_volume_action
 from .media_engine import async_announce_on_targets, resolve_assist_satellite_entity
 from .const import (
     CONF_ALARM_ENTITY,
@@ -37,7 +45,6 @@ from .const import (
     CONF_DEVICE_CUSTOM_COLOR,
     CONF_DOCK_APPS,
     DATA_GLOBAL_CONFIG,
-    DATA_GLOBAL_STORE,
     SERVICE_AREA_ACTION,
     SERVICE_AREA_BROWSE,
     SERVICE_RESET_DEVICE,
@@ -52,8 +59,11 @@ from .coordinator import (
     resolve_person_area_and_distance,
 )
 from .dock_policy import normalize_dock_apps
-from .identity import esphome_service
+from .identity import device_entities, esphome_service
 from .issue_ids import slot_push_failing_issue_id
+from .site_feeds import async_fetch_calendar_snapshot
+from .studio.payload import async_save_and_broadcast_global_config
+from .system import get_latter_system
 from .targets import target_kind
 from .area_engine import (
     async_execute_area_action,
@@ -303,15 +313,46 @@ def _is_esphome_device_online(hass: HomeAssistant, coord: LatterCoordinator) -> 
             return st.state not in ("unavailable", "unknown")
     esp_dev_id = coord.esphome_device_id
     if esp_dev_id:
-        from homeassistant.helpers import entity_registry as er
-
-        ent_reg = er.async_get(hass)
-        for entry in er.async_entries_for_device(ent_reg, esp_dev_id):
+        for entry in device_entities(hass, esp_dev_id):
             if entry.platform == "esphome":
                 st = hass.states.get(entry.entity_id)
                 if st is not None and st.state not in ("unavailable", "unknown"):
                     return True
     return False
+
+
+def _resolve_occupied_area_ids(
+    hass: HomeAssistant, kind: str, target_low: str
+) -> set[str]:
+    """Return the set of occupied area_ids for 'occupied_areas' or a 'person.*' target."""
+    from .ble_engine import get_ble_fabric
+
+    fabric = get_ble_fabric(hass)
+    area_reg = ar.async_get(hass)
+    occupied_areas: set[str] = set()
+    if kind == "person":
+        _, p_attrs = resolve_person_area_and_distance(hass, target_low)
+        if p_attrs.get("is_home") and p_attrs.get("area_id"):
+            occupied_areas.add(str(p_attrs["area_id"]))
+        for area_entry in area_reg.async_list_areas():
+            occ_persons = [
+                str(p).lower()
+                for p in (
+                    fabric.get_area_occupancy(area_entry.id).get("persons")
+                    or []
+                )
+            ]
+            if target_low in occ_persons:
+                occupied_areas.add(area_entry.id)
+    else:
+        for c in hass.data.get(DOMAIN, {}).values():
+            if isinstance(c, LatterCoordinator) and c.active_area_id:
+                if fabric.get_area_occupancy(c.active_area_id).get("is_occupied"):
+                    occupied_areas.add(c.active_area_id)
+        for area_entry in area_reg.async_list_areas():
+            if fabric.get_area_occupancy(area_entry.id).get("is_occupied"):
+                occupied_areas.add(area_entry.id)
+    return occupied_areas
 
 
 async def async_push_active_area_entities(
@@ -388,10 +429,6 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             return
 
         vol_target = coord.get_volume_target_entity(speaker)
-        state_obj = hass.states.get(vol_target)
-        target_domain = (
-            state_obj.domain if state_obj else vol_target.split(".")[0]
-        )
         action = str(data.get("action") or "set").strip().lower()
 
         raw_lvl = data.get("volume_level")
@@ -402,76 +439,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             except ValueError:
                 parsed_lvl = None
 
-        if target_domain in ("number", "input_number"):
-            cur_val = float(state_obj.state) if (state_obj and state_obj.state not in ("unavailable", "unknown")) else 50.0
-            min_v = float(state_obj.attributes.get("min", 0.0)) if state_obj else 0.0
-            max_v = float(state_obj.attributes.get("max", 100.0)) if state_obj else 100.0
-            native_step = state_obj.attributes.get("step") if state_obj else None
-            step = float(native_step) if native_step else max(1.0, (max_v - min_v) * 0.05)
-
-            if action == "up":
-                new_val = min(max_v, cur_val + step)
-            elif action == "down":
-                new_val = max(min_v, cur_val - step)
-            elif parsed_lvl is not None:
-                lvl = parsed_lvl / 100.0 if parsed_lvl > 1.0 else parsed_lvl
-                new_val = min_v + max(0.0, min(1.0, lvl)) * (max_v - min_v)
-            else:
-                return
-
-            await hass.services.async_call(
-                target_domain,
-                "set_value",
-                {ATTR_ENTITY_ID: vol_target, "value": round(new_val, 2)},
-                blocking=False,
-            )
-            return
-
-        supports_vol_set = bool(
-            state_obj is not None and state_obj.attributes.get("volume_level") is not None
-        )
-        if action in ("up", "down") and parsed_lvl is not None and supports_vol_set:
-            lvl = parsed_lvl / 100.0 if parsed_lvl > 1.0 else parsed_lvl
-            lvl = max(0.0, min(1.0, lvl))
-            await hass.services.async_call(
-                "media_player",
-                "volume_set",
-                {ATTR_ENTITY_ID: vol_target, "volume_level": round(lvl, 2)},
-                blocking=False,
-            )
-        elif action == "up":
-            await hass.services.async_call(
-                "media_player",
-                "volume_up",
-                {ATTR_ENTITY_ID: vol_target},
-                blocking=False,
-            )
-        elif action == "down":
-            await hass.services.async_call(
-                "media_player",
-                "volume_down",
-                {ATTR_ENTITY_ID: vol_target},
-                blocking=False,
-            )
-        elif action == "mute":
-            is_muted = bool(
-                state_obj.attributes.get("is_volume_muted", False)
-            ) if state_obj else False
-            await hass.services.async_call(
-                "media_player",
-                "volume_mute",
-                {ATTR_ENTITY_ID: vol_target, "is_volume_muted": not is_muted},
-                blocking=False,
-            )
-        elif parsed_lvl is not None:
-            lvl = parsed_lvl / 100.0 if parsed_lvl > 1.0 else parsed_lvl
-            lvl = max(0.0, min(1.0, lvl))
-            await hass.services.async_call(
-                "media_player",
-                "volume_set",
-                {ATTR_ENTITY_ID: vol_target, "volume_level": round(lvl, 2)},
-                blocking=False,
-            )
+        await async_execute_volume_action(hass, vol_target, action, parsed_lvl)
 
     async def _handle_set_active_area(call: ServiceCall) -> None:
         coord = _resolve_coordinator_from_call(hass, call)
@@ -517,29 +485,25 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
         effective_media_cmd = cmd_low if action == "command" else action
         if effective_media_cmd in ("volume_up", "volume_down", "volume_mute", "media_play_pause"):
-            vol_override = (
-                coord.volume_overrides.get(mp_ent)
-                or coord.volume_overrides.get(remote_ent)
-            )
-            eff_mp = vol_override or mp_ent
-            if eff_mp and eff_mp.startswith("media_player."):
-                if effective_media_cmd == "volume_mute":
-                    st = hass.states.get(eff_mp)
-                    muted = bool(st.attributes.get("is_volume_muted", False)) if st else False
+            if effective_media_cmd == "media_play_pause":
+                if mp_ent and mp_ent.startswith("media_player."):
                     await hass.services.async_call(
                         "media_player",
-                        "volume_mute",
-                        {ATTR_ENTITY_ID: eff_mp, "is_volume_muted": not muted},
+                        "media_play_pause",
+                        {ATTR_ENTITY_ID: mp_ent},
                         blocking=False,
                     )
-                else:
-                    await hass.services.async_call(
-                        "media_player",
-                        effective_media_cmd,
-                        {ATTR_ENTITY_ID: eff_mp},
-                        blocking=False,
-                    )
-                return
+                    return
+            else:
+                vol_override = (
+                    coord.volume_overrides.get(mp_ent)
+                    or coord.volume_overrides.get(remote_ent)
+                )
+                eff_vol_target = vol_override or mp_ent
+                if eff_vol_target and await async_execute_volume_action(
+                    hass, eff_vol_target, effective_media_cmd
+                ):
+                    return
             if remote_ent and remote_ent.startswith("remote."):
                 await hass.services.async_call(
                     "remote",
@@ -672,11 +636,9 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             coord.last_area_filter = domain_filter
             coord.last_area_page = page
         if area_id and area_id != coord.active_area_id:
-            coord.on_area_changed_push_slots = None
             coord.async_set_active_area(
                 area_id, handoff_media=False, sync_device_registry=False
             )
-            coord.on_area_changed_push_slots = lambda c: async_push_active_area_entities(hass, c)
 
         if mode == "areas":
             items = get_areas_summary(
@@ -746,6 +708,9 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             )
             if coord:
                 await asyncio.sleep(0.15)
+                if coord._unsub_area_debounce is not None:
+                    coord._unsub_area_debounce()
+                    coord._unsub_area_debounce = None
                 coord.async_notify_listeners()
                 await async_push_active_area_entities(hass, coord)
 
@@ -757,8 +722,25 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         page = int(data.get("page") or 1)
         page_size = int(data.get("page_size") or 5)
 
-        await coord.async_refresh_calendar_agenda(days=days)
-        items = coord.calendar_events
+        if days == 30:
+            sys_obj = get_latter_system(hass)
+            if page > 1 and coord.calendar_events:
+                items = coord.calendar_events
+            elif sys_obj is not None:
+                await sys_obj.async_refresh_calendar_agenda(
+                    days=30, coalesce=(page > 1)
+                )
+                items = coord.calendar_events
+            else:
+                await coord.async_refresh_calendar_agenda(days=30)
+                items = coord.calendar_events
+        else:
+            _, items = await async_fetch_calendar_snapshot(
+                hass,
+                coord.calendar_entities,
+                days=days,
+                map_url_builder=coord.build_map_snapshot_url,
+            )
 
         await async_push_browse_slots(
             hass=hass,
@@ -835,36 +817,11 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 and is_music_assistant_player(hass, s)
             ]
             if scoped_mode:
-                from homeassistant.helpers import area_registry as ar, entity_registry as er
-                from .ble_engine import get_ble_fabric
-
-                fabric = get_ble_fabric(hass)
-                area_reg = ar.async_get(hass)
                 ent_reg = er.async_get(hass)
                 dev_reg = dr.async_get(hass)
-                occupied_areas: set[str] = set()
-                if kind == "person":
-                    _, p_attrs = resolve_person_area_and_distance(hass, target_low)
-                    if p_attrs.get("is_home") and p_attrs.get("area_id"):
-                        occupied_areas.add(str(p_attrs["area_id"]))
-                    for area_entry in area_reg.async_list_areas():
-                        occ_persons = [
-                            str(p).lower()
-                            for p in (
-                                fabric.get_area_occupancy(area_entry.id).get("persons")
-                                or []
-                            )
-                        ]
-                        if target_low in occ_persons:
-                            occupied_areas.add(area_entry.id)
-                else:
-                    for c in hass.data.get(DOMAIN, {}).values():
-                        if isinstance(c, LatterCoordinator) and c.active_area_id:
-                            if fabric.get_area_occupancy(c.active_area_id).get("is_occupied"):
-                                occupied_areas.add(c.active_area_id)
-                    for area_entry in area_reg.async_list_areas():
-                        if fabric.get_area_occupancy(area_entry.id).get("is_occupied"):
-                            occupied_areas.add(area_entry.id)
+                occupied_areas = _resolve_occupied_area_ids(
+                    hass, kind, target_low
+                )
 
                 matched_speakers: list[str] = []
                 seen_dev_ids: set[str] = set()
@@ -1071,7 +1028,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         schema=vol.Schema(
             {
                 **BASE_TARGET_FIELDS,
-                vol.Optional("days", default=7): vol.Coerce(int),
+                vol.Optional("days", default=30): vol.Coerce(int),
                 vol.Optional("page", default=1): vol.Coerce(int),
                 vol.Optional("page_size", default=5): vol.Coerce(int),
             }
@@ -1094,6 +1051,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             }
         ),
     )
+
     async def _handle_notify(call: ServiceCall) -> None:
         """Dispatch a toast notification, chime, and optional camera snapshot to one Latter display, the displays in occupied Areas ('occupied_areas'), a person's displays ('person.*'), or all displays ('all')."""
         data = call.data
@@ -1113,44 +1071,16 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         if kind == "all":
             target_coords = list(all_coords)
         elif kind in ("occupied_areas", "person"):
-            from .ble_engine import get_ble_fabric
-
-            fabric = get_ble_fabric(hass)
-            person_area_name = ""
-            person_area_id = ""
-            if kind == "person":
-                _, p_attrs = resolve_person_area_and_distance(hass, target_low)
-                if p_attrs.get("is_home") and p_attrs.get("area_id"):
-                    person_area_id = str(p_attrs["area_id"]).strip().lower()
-                p_slug = raw_target.split(".", 1)[-1].lower()
-                p_st = hass.states.get(f"sensor.{p_slug}_current_area")
-                if p_st and p_st.state not in ("unknown", "unavailable", "Away", ""):
-                    person_area_name = p_st.state.strip().lower()
-
+            occupied_areas = _resolve_occupied_area_ids(hass, kind, target_low)
             for c in all_coords:
-                if kind == "person":
-                    if c.assigned_person.lower() == target_low and not c.is_device_away():
-                        target_coords.append(c)
-                        continue
-                    if c.active_area_id:
-                        c_area_low = c.active_area_id.lower()
-                        if person_area_id and c_area_low == person_area_id:
-                            target_coords.append(c)
-                            continue
-                        if person_area_name:
-                            occ = fabric.get_area_occupancy(c.active_area_id)
-                            if (
-                                c_area_low == person_area_name
-                                or any(
-                                    person_area_name in str(n).lower()
-                                    for n in (occ.get("occupant_names") or [])
-                                )
-                            ):
-                                target_coords.append(c)
-                elif c.active_area_id:
-                    occ = fabric.get_area_occupancy(c.active_area_id)
-                    if occ.get("is_occupied"):
-                        target_coords.append(c)
+                if (
+                    kind == "person"
+                    and c.assigned_person.lower() == target_low
+                    and not c.is_device_away()
+                ):
+                    target_coords.append(c)
+                elif c.active_area_id and c.active_area_id in occupied_areas:
+                    target_coords.append(c)
 
             if not target_coords:
                 return
@@ -1255,13 +1185,17 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         raw_hex = str(call.data.get("hex_color") or "").strip().upper()
         if not raw_hex.startswith("#"):
             raw_hex = f"#{raw_hex}"
-        if len(raw_hex) != 7:
-            return
+        if not re.fullmatch(r"#[0-9A-F]{6}", raw_hex):
+            raise ServiceValidationError(
+                f"Invalid hex color '{raw_hex}' (expected #RRGGBB)."
+            )
         name = str(call.data.get("name") or f"Custom ({raw_hex})").strip()
 
         domain_data = hass.data.setdefault(DOMAIN, {})
         global_cfg: dict[str, Any] = domain_data.setdefault(DATA_GLOBAL_CONFIG, {})
-        palettes: list[dict[str, str]] = list(global_cfg.get(CONF_CUSTOM_PALETTES) or [])
+        palettes: list[dict[str, str]] = [
+            dict(p) for p in (global_cfg.get(CONF_CUSTOM_PALETTES) or []) if isinstance(p, dict)
+        ]
         existing = next((p for p in palettes if str(p.get("hex", "")).upper() == raw_hex), None)
         if existing is not None:
             if call.data.get("name"):
@@ -1269,18 +1203,16 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         else:
             palettes.insert(0, {"name": name, "hex": raw_hex})
             palettes = palettes[:24]
-        global_cfg[CONF_CUSTOM_PALETTES] = palettes
-        store = domain_data.get(DATA_GLOBAL_STORE)
-        if store is not None:
-            await store.async_save(global_cfg)
 
-        merged = {
-            **coord.device_data,
-            CONF_CUSTOM_PALETTES: palettes,
-            CONF_DEVICE_CUSTOM_COLOR: raw_hex,
-        }
-        coord.update_device_config(merged)
-        coord.async_notify_listeners()
+        coord.update_device_config(
+            {
+                **coord.device_data,
+                CONF_DEVICE_CUSTOM_COLOR: raw_hex,
+            }
+        )
+        await async_save_and_broadcast_global_config(
+            hass, {CONF_CUSTOM_PALETTES: palettes}
+        )
 
     hass.services.async_register(
         DOMAIN,

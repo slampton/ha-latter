@@ -116,10 +116,12 @@ class ServiceSourceTests(unittest.TestCase):
         self.assertEqual(self.SRC.count("target_kind("), 2, "notify and intercom_broadcast both classify targets")
 
     def test_intercom_device_target_must_resolve(self) -> None:
+        helper_body = self.SRC.split("def _resolve_occupied_area_ids(", 1)[1].split("\nasync def ", 1)[0]
+        self.assertIn("resolve_person_area_and_distance(hass, target_low)", helper_body)
         body = self.SRC.split("async def _handle_intercom_broadcast", 1)[1].split("\n    async def ", 1)[0]
         self.assertRegex(body, r'if kind == "device":\s+#[^\n]*\n\s+_resolve_coordinator_from_call\(hass, call\)')
         self.assertIn('scoped_mode = kind in ("occupied_areas", "person")', body)
-        self.assertIn("resolve_person_area_and_distance(hass, target_low)", body)
+        self.assertIn("_resolve_occupied_area_ids(", body)
 
     def test_target_speakers_schema_is_media_player_entities(self) -> None:
         self.assertRegex(
@@ -237,6 +239,23 @@ class BleDeviceTrackerAndPersonTests(unittest.TestCase):
         init_src = (LATTER_DIR / "__init__.py").read_text(encoding="utf-8")
         self.assertIn("sys_obj.bind_feed_listeners()", init_src)
         self.assertIn("sys_obj.async_cleanup_feeds()", init_src)
+
+    def test_browse_media_services_audit(self) -> None:
+        browse_src = (LATTER_DIR / "browse_engine.py").read_text(encoding="utf-8")
+        self.assertIn("def _resolve_speaker_playing_metadata(", browse_src)
+        self.assertIn("asyncio.gather(", browse_src)
+        self.assertNotIn("HomeAssistant-Latter/2.0", browse_src)
+
+        media_ctrl_src = (LATTER_DIR / "media_controller.py").read_text(encoding="utf-8")
+        self.assertIn("async def async_execute_volume_action(", media_ctrl_src)
+        self.assertIn("await async_play_media_with_ma_fallback(", media_ctrl_src)
+
+        services_src = (LATTER_DIR / "services.py").read_text(encoding="utf-8")
+        self.assertIn("def _resolve_occupied_area_ids(", services_src)
+        self.assertIn("await async_execute_volume_action(", services_src)
+        self.assertIn("await async_save_and_broadcast_global_config(", services_src)
+        self.assertNotIn("occupant_names", services_src)
+        self.assertNotIn("coord.on_area_changed_push_slots = None", services_src)
 
 
 if __name__ == "__main__":
