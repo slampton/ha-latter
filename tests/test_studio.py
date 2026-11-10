@@ -60,6 +60,10 @@ class TestPayloadDiet(unittest.TestCase):
             self.assertIn(event, cmds)
         # Every other answer that isn't get_state or the subscription's first answer leaves it out.
         self.assertEqual(cmds.count("include_catalog=False"), 3)
+        self.assertIn("        _track_coordinators()\n        _track_device_states()\n        _schedule_push()", cmds)
+        self.assertIn("_apply_wallpaper_config(", cmds)
+        self.assertIn("inspector_by_subentry", payload_src)
+        self.assertIn("self._cached_bytes", payload_src)
         js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
         self.assertIn("if (!data.catalog && STATE?.catalog) data.catalog = STATE.catalog;", js)
 

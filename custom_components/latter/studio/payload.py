@@ -188,14 +188,25 @@ async def async_save_and_broadcast_global_config(
         await coord.async_on_global_config_updated(changed_keys or set(updates.keys()))
 
 
-def _build_system_shared_controls(hass: HomeAssistant) -> list[dict[str, Any]]:
+def _build_system_shared_controls(
+    hass: HomeAssistant,
+    coords: list[LatterCoordinator] | None = None,
+    inspector_by_subentry: dict[str, dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
     """Discover shared ESPHome select/switch/number controls across all onboarded devices for 1-click System Sync."""
-    coords = _get_all_coordinators(hass)
+    all_coords = coords if coords is not None else _get_all_coordinators(hass)
     by_label: dict[str, dict[str, Any]] = {}
-    for coord in coords:
-        esp_info = get_esphome_device_entities(
-            hass, coord.esphome_device_id, coord.device_slug
-        )
+    for coord in all_coords:
+        if coord.is_ble_tag:
+            continue
+        if inspector_by_subentry is not None and coord.subentry_id in inspector_by_subentry:
+            esp_info = inspector_by_subentry[coord.subentry_id]
+        else:
+            esp_info = get_esphome_device_entities(
+                hass, coord.esphome_device_id, coord.device_slug
+            )
+            if inspector_by_subentry is not None:
+                inspector_by_subentry[coord.subentry_id] = esp_info
         for sec in esp_info.get("sections", []):
             sec_id = sec.get("id", "")
             if sec_id not in ("voice", "sleep", "display", "sound", "music", "area"):
@@ -467,7 +478,11 @@ def _build_doorbells(
 
 
 def _build_system_section(
-    hass: HomeAssistant, current_subentry_id: str
+    hass: HomeAssistant,
+    current_subentry_id: str,
+    *,
+    all_coords: list[LatterCoordinator] | None = None,
+    inspector_by_subentry: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Build the System-scoped part of the Studio payload (no Device needed)."""
     area_reg = ar.async_get(hass)
@@ -480,9 +495,10 @@ def _build_system_section(
 
     dev_reg = dr.async_get(hass)
     ent_reg = er.async_get(hass)
+    coords = all_coords if all_coords is not None else _get_all_coordinators(hass)
 
     system_devices: list[dict[str, Any]] = []
-    for c in _get_all_coordinators(hass):
+    for c in coords:
         c_area_name = c.active_area_name
         c_grp = c.device_group
         c_manifest = c.hardware_manifest
@@ -675,29 +691,30 @@ def _build_system_section(
 
     internal_logs = _get_combined_system_and_studio_logs(hass)
 
-    all_coords = _get_all_coordinators(hass)
     system_view = system_settings_view(hass.data.get(DOMAIN, {}).get(DATA_GLOBAL_CONFIG) or {})
-    onboarded_slugs = {c.device_slug for c in all_coords}
+    onboarded_slugs = {c.device_slug for c in coords}
 
     return {
         "internal_logs": internal_logs,
         "system_devices": system_devices,
-        "issues": _build_issues(hass, all_coords),
+        "issues": _build_issues(hass, coords),
         "ble_proxy_count": count_area_ble_proxies(hass),
         "discovered_ble_devices": get_discovered_ble_candidates(
             hass,
             onboarded_slugs,
             {
                 c.ble_target_address
-                for c in _get_all_coordinators(hass)
+                for c in coords
                 if c.ble_target_address
             },
         ),
-        "system_controls": _build_system_shared_controls(hass),
+        "system_controls": _build_system_shared_controls(
+            hass, coords, inspector_by_subentry
+        ),
         "device_groups": device_groups,
         "saved_profiles": saved_profiles,
         "system_config": system_view,
-        "doorbells": _build_doorbells(hass, all_coords, system_view["camera_entities"]),
+        "doorbells": _build_doorbells(hass, coords, system_view["camera_entities"]),
     }
 
 
@@ -742,12 +759,17 @@ def build_studio_state_payload(
     that Device's own settings. The entity `catalog` is included only when asked (catalog_gate.py):
     Studio keeps the last one it received.
     """
+    all_coords = _get_all_coordinators(hass)
+    inspector_by_subentry: dict[str, dict[str, Any]] = {}
     base: dict[str, Any] = {
         "subentry_id": coordinator.subentry_id if coordinator is not None else "",
         "title": coordinator.device_title if coordinator is not None else "",
         "version": INTEGRATION_VERSION,
         **_build_system_section(
-            hass, coordinator.subentry_id if coordinator is not None else ""
+            hass,
+            coordinator.subentry_id if coordinator is not None else "",
+            all_coords=all_coords,
+            inspector_by_subentry=inspector_by_subentry,
         ),
     }
     if include_catalog:
@@ -765,9 +787,11 @@ def build_studio_state_payload(
 
     local_spk_id = coordinator.local_speaker
     local_ma_id = coordinator.local_ma_speaker
-    esphome_inspector = get_esphome_device_entities(
-        hass, coordinator.esphome_device_id, coordinator.device_slug
-    )
+    esphome_inspector = inspector_by_subentry.get(coordinator.subentry_id)
+    if esphome_inspector is None:
+        esphome_inspector = get_esphome_device_entities(
+            hass, coordinator.esphome_device_id, coordinator.device_slug
+        )
     wallpapers_catalog = list_wallpaper_catalog(
         hass,
         coordinator.device_slug,
@@ -923,16 +947,18 @@ class LatterBrandIconView(HomeAssistantView):
         """Initialize the brand icon view."""
         self.hass = hass
         self._icon_path = Path(__file__).parent.parent / "brand" / "icon.png"
+        self._cached_bytes: bytes | None = None
 
     async def get(self, request: web.Request) -> web.Response:
         """Return the PNG icon bytes."""
-        if not self._icon_path.is_file():
-            return web.Response(status=404, text="Icon not found")
-        data = await self.hass.async_add_executor_job(
-            self._icon_path.read_bytes
-        )
+        if self._cached_bytes is None:
+            if not self._icon_path.is_file():
+                return web.Response(status=404, text="Icon not found")
+            self._cached_bytes = await self.hass.async_add_executor_job(
+                self._icon_path.read_bytes
+            )
         return web.Response(
-            body=data,
+            body=self._cached_bytes,
             content_type="image/png",
             headers={"Cache-Control": "public, max-age=86400"},
         )

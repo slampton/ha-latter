@@ -129,6 +129,26 @@ def _optional_option(body: dict[str, Any]) -> str | None:
     return str(option) if option is not None else None
 
 
+def _apply_wallpaper_config(
+    coordinator: LatterCoordinator,
+    *,
+    source: str | None = None,
+    favorites: list[str] | None = None,
+) -> None:
+    """Persist wallpaper source/favorites, re-bind the rotation timer, and notify listeners."""
+    merged: dict[str, Any] = dict(coordinator.device_data)
+    if source is not None:
+        merged[CONF_WALLPAPER_SOURCE] = source
+        coordinator.current_wallpaper = source
+        coordinator._configured_wallpaper_source = source
+        coordinator._schedule_persist_runtime_state()
+    if favorites is not None:
+        merged[CONF_WALLPAPER_FAVORITES] = favorites
+    coordinator.update_device_config(merged)
+    coordinator._bind_wallpaper_cycle_timer()
+    coordinator.async_notify_listeners()
+
+
 async def _async_execute_studio_command(
     hass: HomeAssistant,
     coordinator: LatterCoordinator | None,
@@ -185,10 +205,7 @@ async def _async_execute_studio_command(
                 "invalid_format",
                 "survey_subentry_id is required: select the BLE survey device",
             )
-        survey_coord = next(
-            (c for c in _get_all_coordinators(hass) if c.subentry_id == survey_id),
-            None,
-        )
+        survey_coord = find_by_subentry_id(_get_all_coordinators(hass), survey_id)
         if survey_coord is None:
             raise StudioCommandError(
                 "not_found", f"No Latter device with subentry_id '{survey_id}'"
@@ -291,7 +308,7 @@ async def _async_execute_studio_command(
 
     elif cmd == "send_announcement":
         announcement = clean_announcement(
-            body, {c.device_slug for c in _get_all_coordinators(hass)}
+            body, {c.device_slug for c in _get_all_coordinators(hass) if not c.is_ble_tag}
         )
         data = dict(announcement["data"])
         if announcement["include_camera"]:
@@ -357,16 +374,7 @@ async def _async_execute_studio_command(
         favs = list(coordinator.wallpaper_favorites)
         if new_source not in favs:
             favs.append(new_source)
-        merged_wp: dict[str, Any] = {
-            **coordinator.device_data,
-            CONF_WALLPAPER_SOURCE: new_source,
-            CONF_WALLPAPER_FAVORITES: favs,
-        }
-        coordinator.current_wallpaper = new_source
-        coordinator._configured_wallpaper_source = new_source
-        coordinator._schedule_persist_runtime_state()
-        coordinator.update_device_config(merged_wp)
-        coordinator.async_notify_listeners()
+        _apply_wallpaper_config(coordinator, source=new_source, favorites=favs)
 
     elif cmd == "select_wallpaper":
         source_id = str(body.get("source_id") or "").strip()
@@ -376,15 +384,7 @@ async def _async_execute_studio_command(
                 raise StudioCommandError(
                     "not_allowed", "Unknown wallpaper: pick one from this Device's gallery"
                 )
-        merged_sel: dict[str, Any] = {
-            **coordinator.device_data,
-            CONF_WALLPAPER_SOURCE: source_id,
-        }
-        coordinator.current_wallpaper = source_id
-        coordinator._configured_wallpaper_source = source_id
-        coordinator._schedule_persist_runtime_state()
-        coordinator.update_device_config(merged_sel)
-        coordinator.async_notify_listeners()
+        _apply_wallpaper_config(coordinator, source=source_id)
 
     elif cmd == "toggle_wallpaper_favorite":
         source_id = str(body.get("source_id") or "").strip()
@@ -398,13 +398,7 @@ async def _async_execute_studio_command(
                     "not_allowed", "Unknown wallpaper: pick one from this Device's gallery"
                 )
             favs.append(source_id)
-        merged_fav: dict[str, Any] = {
-            **coordinator.device_data,
-            CONF_WALLPAPER_FAVORITES: favs,
-        }
-        coordinator.update_device_config(merged_fav)
-        coordinator._bind_wallpaper_cycle_timer()
-        coordinator.async_notify_listeners()
+        _apply_wallpaper_config(coordinator, favorites=favs)
 
     elif cmd == "delete_wallpaper":
         source_id = str(body.get("source_id") or "").strip()
@@ -424,16 +418,7 @@ async def _async_execute_studio_command(
             if coordinator.wallpaper_source == source_id
             else coordinator.wallpaper_source
         )
-        merged_del: dict[str, Any] = {
-            **coordinator.device_data,
-            CONF_WALLPAPER_SOURCE: new_active,
-            CONF_WALLPAPER_FAVORITES: favs,
-        }
-        coordinator.current_wallpaper = new_active
-        coordinator._configured_wallpaper_source = new_active
-        coordinator._schedule_persist_runtime_state()
-        coordinator.update_device_config(merged_del)
-        coordinator.async_notify_listeners()
+        _apply_wallpaper_config(coordinator, source=new_active, favorites=favs)
 
     elif cmd == "save_system_config":
         updates = clean_system_settings(dict(body.get("config") or {}))
@@ -697,8 +682,23 @@ async def ws_handle_subscribe(
             return
         debounce_cancel[0] = async_call_later(hass, 0.4, _push_now)
 
-    for c in _get_all_coordinators(hass):
-        unsubs.append(c.async_add_listener(_schedule_push))
+    coord_unsubs: dict[int, Any] = {}
+
+    @callback
+    def _track_coordinators() -> None:
+        current = _get_all_coordinators(hass)
+        current_ids = {id(c) for c in current}
+        for cid in list(coord_unsubs):
+            if cid not in current_ids:
+                u = coord_unsubs.pop(cid)
+                if callable(u):
+                    u()
+        for c in current:
+            cid = id(c)
+            if cid not in coord_unsubs:
+                coord_unsubs[cid] = c.async_add_listener(_schedule_push)
+
+    _track_coordinators()
 
     ble_fabric = get_ble_fabric(hass)
     unsubs.append(ble_fabric.register_occupancy_listener(_schedule_push))
@@ -735,6 +735,7 @@ async def ws_handle_subscribe(
     @callback
     def _registry_changed(_event: Any) -> None:
         catalog_gate.mark_dirty()
+        _track_coordinators()
         _track_device_states()
         _schedule_push()
 
@@ -753,6 +754,10 @@ async def ws_handle_subscribe(
         if callable(state_unsub[0]):
             state_unsub[0]()
             state_unsub[0] = None
+        for u in coord_unsubs.values():
+            if callable(u):
+                u()
+        coord_unsubs.clear()
         for u in unsubs:
             if callable(u):
                 u()
