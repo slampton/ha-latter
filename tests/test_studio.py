@@ -108,8 +108,11 @@ class TestViewLayout(unittest.TestCase):
         self.assertEqual(names.count("Tools"), 2)
         self.assertEqual(names.count("BLE & Area Presence"), 2)
         self.assertNotIn("Settings", names)
+        self.assertIn("Device Groups", names)
         for name in names:
-            self.assertFalse(name.startswith(("System ", "Device ")), name)
+            self.assertFalse(name.startswith("System "), name)
+            if name != "Device Groups":
+                self.assertFalse(name.startswith("Device "), name)
         self.assertNotRegex(js, r"<span>(System|Device) (Overview|Settings)</span>")
 
     def test_information_architecture(self) -> None:
@@ -129,17 +132,30 @@ class TestViewLayout(unittest.TestCase):
             start = js.index(f'<section id="view-{view}"')
             return js[start:js.index("</section>", start)]
 
-        tools, sys_tools, groups, overview = section("tools"), section("system_tools"), section("system_sync"), section("dashboard")
+        tools, sys_tools, groups, overview, home_display = (
+            section("tools"),
+            section("system_tools"),
+            section("system_sync"),
+            section("dashboard"),
+            section("home_display"),
+        )
         for title in ("Diagnostics", "Replace Hardware", "Danger Zone"):
             self.assertIn(f'<h3 class="card-title">{title}</h3>', tools)
         for title in ("Notifications &amp; Announcements", "Backup &amp; Restore", "System &amp; Device Logs"):
             self.assertIn(f'<h3 class="card-title">{title}</h3>', sys_tools)
         self.assertNotIn("Export Settings", js)
         self.assertNotIn("Restore From File", js)
-        self.assertIn("Custom Color Library", groups)
+        self.assertIn('<h3 class="card-title">Device Groups</h3>', groups)
+        self.assertIn('<h3 class="card-title">Group Controls &amp; Baseline</h3>', groups)
+        self.assertNotIn("Configuration Profiles", js)
+        self.assertNotIn("dash-power-profile-select", overview)
+        self.assertNotIn("quick-profile-select", overview)
+        self.assertIn("Saved Custom Colors", home_display)
         self.assertNotIn("Custom Color Library", sys_tools)
         self.assertIn('id="dash-node-name"', overview)
         self.assertIn('id="cfg-device_group"', overview)
+        self.assertIn('id="dash-group-sync-chip"', overview)
+        self.assertIn('id="btn-reset-to-group"', overview)
         self.assertIn('id="btn-open-in-ha"', overview)
         self.assertIn('id="cfg-ble_target_address"', section("presence"))
         for gone in ("In Home Assistant</h3>", "Location &amp; BLE</h3>", 'id="cfg-device_slug"', 'id="st-group"'):

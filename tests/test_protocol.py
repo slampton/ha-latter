@@ -750,9 +750,9 @@ class TestStudioTargeting(unittest.TestCase):
         self.assertEqual(scope("save_device_config"), "device")
         self.assertEqual(scope("esphome_entity_action"), "device")
         # System actions that act on one Device name it in their payload, so they stay System commands.
-        for cmd in ("capture_profile", "test_doorbell_speaker", "remove_device", "apply_profile"):
+        for cmd in ("seed_group_baseline", "test_doorbell_speaker", "remove_device", "sync_device_group"):
             self.assertEqual(scope(cmd), "system", cmd)
-        for retired in ("save_config", "log_client_error", "export_backup_json", "restore_backup", "format_disk"):
+        for retired in ("save_config", "log_client_error", "export_backup_json", "restore_backup", "format_disk", "capture_profile", "apply_profile"):
             with self.assertRaises(studio_scope.UnknownStudioCommand):
                 scope(retired)
 

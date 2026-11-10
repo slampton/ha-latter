@@ -26,11 +26,14 @@ from homeassistant.helpers.event import async_call_later, async_track_state_chan
 
 from ..area_engine import area_fusion_sensor_choices, async_execute_area_action
 from ..backup_engine import (
-    async_apply_profile_to_coordinators,
+    GROUP_APPEARANCE_DEVICE_KEYS,
+    GROUP_BEHAVIOR_DEVICE_KEYS,
+    async_apply_group_baseline_to_coordinators,
     async_restore_backup_bundle,
     build_backup_bundle,
-    capture_profile_from_coordinator,
-    get_device_groups_and_profiles,
+    get_device_groups,
+    seed_group_baseline_from_coordinator,
+    update_group_baseline_esphome_control,
 )
 from ..ble_engine import get_ble_fabric
 from ..const import (
@@ -38,12 +41,12 @@ from ..const import (
     CONF_ASSIGNED_PERSON,
     CONF_BLE_AREA_OFFSETS,
     CONF_BLE_TARGET_ADDRESS,
+    CONF_DEVICE_GROUP,
     CONF_DEVICE_GROUPS,
     CONF_DEVICE_REMOTE_GROUP,
     CONF_ACTIVITY_SOURCES,
     CONF_DOCK_APPS,
     CONF_MA_PLAYER_ENTITY,
-    CONF_SAVED_PROFILES,
     CONF_WALLPAPER_FAVORITES,
     CONF_WALLPAPER_SOURCE,
     DATA_GLOBAL_CONFIG,
@@ -254,9 +257,10 @@ async def _async_execute_studio_command(
         )
 
     elif cmd == "system_entity_action":
+        shared_controls = _build_system_shared_controls(hass)
         allowed = {
             str(target["entity_id"])
-            for ctrl in _build_system_shared_controls(hass)
+            for ctrl in shared_controls
             for target in ctrl["targets"]
             if target.get("entity_id")
         }
@@ -264,14 +268,44 @@ async def _async_execute_studio_command(
             body.get("entity_ids") or [], allowed, "a shared control of a Latter Device"
         )
         action = checked_entity_verb(body, SYSTEM_ENTITY_VERBS)
+        level_val = _optional_level(body)
+        opt_val = _optional_option(body)
         for ent_id in entity_ids:
             await async_execute_area_action(
                 hass,
                 entity_id=ent_id,
                 action=action or "toggle",
-                level=_optional_level(body),
-                option=_optional_option(body),
+                level=level_val,
+                option=opt_val,
             )
+        target_grp_id = str(body.get("group_id") or "").strip()
+        ckey = str(body.get("canonical_key") or "").strip()
+        if not ckey and entity_ids:
+            matched_ctrl = next(
+                (
+                    c
+                    for c in shared_controls
+                    if any(t.get("entity_id") == entity_ids[0] for t in c.get("targets", []))
+                ),
+                None,
+            )
+            if matched_ctrl:
+                ckey = str(matched_ctrl.get("canonical_key") or "")
+        if target_grp_id and target_grp_id not in ("all", "roaming", "stationary") and ckey:
+            groups = get_device_groups(hass)
+            grp = next((g for g in groups if g.get("id") == target_grp_id), None)
+            if grp is not None:
+                saved_val: Any = opt_val
+                if saved_val is None and level_val is not None:
+                    saved_val = level_val
+                elif saved_val is None and action in ("turn_on", "turn_off"):
+                    saved_val = "on" if action == "turn_on" else "off"
+                if saved_val is not None and update_group_baseline_esphome_control(
+                    grp, ckey, saved_val
+                ):
+                    await async_save_and_broadcast_global_config(
+                        hass, {CONF_DEVICE_GROUPS: groups}
+                    )
 
     elif cmd == "esphome_entity_action":
         allowed = {e.entity_id for e in device_entities(hass, coordinator.esphome_device_id)}
@@ -443,9 +477,19 @@ async def _async_execute_studio_command(
         ma_link_changed = merged_device.get(CONF_MA_PLAYER_ENTITY, "") != current.get(
             CONF_MA_PLAYER_ENTITY, ""
         )
+        new_grp_id = str(merged_device.get(CONF_DEVICE_GROUP) or "").strip()
+        old_grp_id = str(current.get(CONF_DEVICE_GROUP) or "").strip()
+        group_changed = bool(new_grp_id and new_grp_id != old_grp_id)
         if merged_device != current:
             coordinator.update_device_config(merged_device)
             await coordinator.async_apply_options()
+        if group_changed and new_grp_id != "unassigned":
+            groups = get_device_groups(hass)
+            grp = next((g for g in groups if g.get("id") == new_grp_id), None)
+            if grp is not None:
+                await async_apply_group_baseline_to_coordinators(
+                    hass, grp, [coordinator]
+                )
         if ma_link_changed:
             async_refresh_ma_link(hass, coordinator)
         coordinator._bind_wallpaper_cycle_timer()
@@ -531,9 +575,9 @@ async def _async_execute_studio_command(
         g_name = str(body.get("name") or "").strip()
         g_desc = str(body.get("description") or "").strip()
         if not g_name:
-            raise StudioCommandError("invalid_format", "A Device group needs a name")
+            raise StudioCommandError("invalid_format", "A Device Group needs a name")
         g_id = re.sub(r"[^a-z0-9]+", "_", g_name.lower()).strip("_") or "group"
-        groups, _ = get_device_groups_and_profiles(hass)
+        groups = get_device_groups(hass)
         if any(g.get("id") == g_id for g in groups):
             raise StudioCommandError("already_configured", f"A group named '{g_name}' already exists")
         groups.append(
@@ -541,6 +585,8 @@ async def _async_execute_studio_command(
                 "id": g_id,
                 "name": g_name,
                 "description": g_desc or f"Custom group ({g_name})",
+                "device_config": {},
+                "esphome_controls": {},
             }
         )
         await async_save_and_broadcast_global_config(
@@ -549,59 +595,96 @@ async def _async_execute_studio_command(
 
     elif cmd == "delete_device_group":
         g_id = str(body.get("group_id") or "").strip()
-        groups, _ = get_device_groups_and_profiles(hass)
+        groups = get_device_groups(hass)
         groups = [g for g in groups if g.get("id") != g_id]
         await async_save_and_broadcast_global_config(
             hass, {CONF_DEVICE_GROUPS: groups}
         )
 
-    elif cmd == "capture_profile":
-        source_coord = _payload_device(hass, body, "the Device to capture from")
-        p_name = str(body.get("name") or "").strip()
-        p_desc = str(body.get("description") or "").strip()
-        _, profiles = get_device_groups_and_profiles(hass)
-        new_prof = capture_profile_from_coordinator(
-            hass, source_coord, name=p_name, description=p_desc
-        )
-        profiles = [p for p in profiles if p.get("name") != new_prof["name"]]
-        profiles.insert(0, new_prof)
-        await async_save_and_broadcast_global_config(
-            hass, {CONF_SAVED_PROFILES: profiles[:30]}
-        )
-
-    elif cmd == "delete_profile":
-        p_id = str(body.get("profile_id") or "").strip()
-        _, profiles = get_device_groups_and_profiles(hass)
-        profiles = [p for p in profiles if p.get("id") != p_id]
-        await async_save_and_broadcast_global_config(
-            hass, {CONF_SAVED_PROFILES: profiles}
-        )
-
-    elif cmd == "apply_profile":
-        p_id = str(body.get("profile_id") or "").strip()
-        target_scope = str(body.get("target_scope") or "").strip()
-        _, profiles = get_device_groups_and_profiles(hass)
-        prof = next((p for p in profiles if p.get("id") == p_id), None)
-        if prof is None:
-            raise StudioCommandError("not_found", f"Unknown profile '{p_id}'")
+    elif cmd == "sync_device_group":
+        g_id = str(body.get("group_id") or "").strip()
+        sub_id = str(body.get("subentry_id") or "").strip()
+        groups = get_device_groups(hass)
         all_coords = _get_all_coordinators(hass)
-        if target_scope == "all":
-            targets = all_coords
-        elif target_scope.startswith("group:"):
-            grp_id = target_scope.split(":", 1)[1]
-            targets = [c for c in all_coords if c.device_group == grp_id]
-        elif target_scope.startswith("device:"):
-            d_coord = find_by_subentry_id(all_coords, target_scope.split(":", 1)[1])
-            if d_coord is None:
+        if sub_id:
+            target_coord = find_by_subentry_id(all_coords, sub_id)
+            if target_coord is None:
                 raise StudioCommandError(
-                    "not_found", f"Unknown Device in target scope '{target_scope}'"
+                    "not_found", f"No Latter Device with subentry_id '{sub_id}'"
                 )
-            targets = [d_coord]
+            g_id = g_id or target_coord.device_group
+            targets = [target_coord]
         else:
+            targets = [c for c in all_coords if c.device_group == g_id]
+        grp = next((g for g in groups if g.get("id") == g_id), None)
+        if grp is None:
+            raise StudioCommandError("not_found", f"Unknown Device Group '{g_id}'")
+        await async_apply_group_baseline_to_coordinators(hass, grp, targets)
+        log_studio_event(
+            hass,
+            "INFO",
+            "studio",
+            f"Synced {len(targets)} device(s) to group '{grp.get('name', g_id)}' baseline",
+        )
+
+    elif cmd == "seed_group_baseline":
+        g_id = str(body.get("group_id") or "").strip()
+        source_coord = _payload_device(hass, body, "the Device to seed the group baseline from")
+        groups = get_device_groups(hass)
+        grp = next((g for g in groups if g.get("id") == g_id), None)
+        if grp is None:
+            raise StudioCommandError("not_found", f"Unknown Device Group '{g_id}'")
+        seed_group_baseline_from_coordinator(hass, grp, source_coord)
+        await async_save_and_broadcast_global_config(
+            hass, {CONF_DEVICE_GROUPS: groups}
+        )
+        log_studio_event(
+            hass,
+            "INFO",
+            "studio",
+            f"Updated '{grp.get('name', g_id)}' baseline from '{source_coord.device_slug}'",
+        )
+
+    elif cmd == "set_group_device_setting":
+        g_id = str(body.get("group_id") or "all").strip()
+        raw_updates = dict(body.get("config") or {})
+        allowed_keys = GROUP_BEHAVIOR_DEVICE_KEYS | GROUP_APPEARANCE_DEVICE_KEYS
+        filtered = {k: v for k, v in raw_updates.items() if k in allowed_keys}
+        if not filtered:
             raise StudioCommandError(
-                "invalid_format", f"Unknown target scope '{target_scope}'"
+                "invalid_format", "No supported group device settings in payload"
             )
-        await async_apply_profile_to_coordinators(hass, prof, targets)
+        cleaned = clean_device_settings(filtered)
+        all_coords = _get_all_coordinators(hass)
+        if g_id == "all":
+            targets = [c for c in all_coords if not c.is_ble_tag]
+        elif g_id == "roaming":
+            targets = [c for c in all_coords if not c.is_ble_tag and c.is_roaming_device]
+        elif g_id == "stationary":
+            targets = [c for c in all_coords if not c.is_ble_tag and not c.is_roaming_device]
+        else:
+            targets = [c for c in all_coords if not c.is_ble_tag and c.device_group == g_id]
+        for c in targets:
+            merged = {**c.device_data, **cleaned}
+            if merged != c.device_data:
+                c.update_device_config(merged)
+                await c.async_apply_options()
+                c._bind_wallpaper_cycle_timer()
+                c.async_notify_listeners()
+        if g_id not in ("all", "roaming", "stationary"):
+            groups = get_device_groups(hass)
+            grp = next((g for g in groups if g.get("id") == g_id), None)
+            if grp is not None:
+                behavior_updates = {
+                    k: v for k, v in cleaned.items() if k in GROUP_BEHAVIOR_DEVICE_KEYS
+                }
+                if behavior_updates:
+                    dev_cfg = dict(grp.get("device_config") or {})
+                    dev_cfg.update(behavior_updates)
+                    grp["device_config"] = dev_cfg
+                    await async_save_and_broadcast_global_config(
+                        hass, {CONF_DEVICE_GROUPS: groups}
+                    )
 
     else:
         raise StudioCommandError("unknown_command", f"Unsupported Studio command: {cmd}")

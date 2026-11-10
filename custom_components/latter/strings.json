@@ -6,12 +6,12 @@
         "description": "Create the Latter System and connect your first Latter Device (an ESPHome device running Latter firmware, with or without a screen). Add more Devices later with Add Device on the Latter integration page.",
         "data": {
           "esphome_device_id": "ESPHome Device",
-          "apply_profile": "Configuration Profile",
+          "device_group": "Device Group",
           "native_ble_tracking": "Track the Area with BLE Proxies"
         },
         "data_description": {
           "esphome_device_id": "The ESPHome device running Latter firmware (or a Latter Core build). Latter binds to this device and its MAC address.",
-          "apply_profile": "Auto-detect screen geometry and capabilities from hardware, or apply a saved Latter profile.",
+          "device_group": "Auto-detect the Device Group and baseline settings from hardware, or assign a Device Group directly.",
           "native_ble_tracking": "Use your Bluetooth proxies to work out which Area this device is in. Turn off for devices that never move."
         }
       },
@@ -60,15 +60,15 @@
         },
         "reconfigure": {
           "title": "Reconfigure or Replace Device Hardware",
-          "description": "Update this device's profile and Bluetooth area tracking, or pick a different ESPHome device to replace its physical hardware in place while preserving all Studio settings, entities, and Area assignments.",
+          "description": "Update this device's Device Group and Bluetooth area tracking, or pick a different ESPHome device to replace its physical hardware in place while preserving all Studio settings, entities, and Area assignments.",
           "data": {
             "esphome_device_id": "ESPHome Device",
-            "apply_profile": "Configuration Profile",
+            "device_group": "Device Group",
             "native_ble_tracking": "Track the Area with BLE Proxies"
           },
           "data_description": {
             "esphome_device_id": "Keep the current device to update settings, or pick a replacement ESPHome device to rebind the hardware in place.",
-            "apply_profile": "Auto-detect screen geometry and capabilities from hardware, or apply a saved Latter profile.",
+            "device_group": "Auto-detect the Device Group and baseline settings from hardware, or assign a Device Group directly.",
             "native_ble_tracking": "Use your Bluetooth proxies to work out which Area this device is in. Turn off for devices that never move."
           }
         }

@@ -122,13 +122,12 @@ GLOBAL_STORAGE_KEY: Final = "latter.site"
 DATA_GLOBAL_CONFIG: Final = "global_config"
 DATA_GLOBAL_STORE: Final = "global_store"
 
-# Multi-Site, Device Groups & Reusable Profiles
+# Multi-Site & Device Groups
 CONF_SITE_ID: Final = "site_id"
 DEFAULT_SITE_ID: Final = "primary"
 CONF_DEVICE_GROUP: Final = "device_group"
 DEFAULT_DEVICE_GROUP: Final = "unassigned"
 CONF_DEVICE_GROUPS: Final = "device_groups"
-CONF_SAVED_PROFILES: Final = "saved_profiles"
 
 # Area Sensor Fusion & Event Bus
 CONF_AREA_FUSION_CONFIG: Final = "area_fusion_config"
@@ -151,7 +150,6 @@ GLOBAL_CONFIG_KEYS: Final[tuple[str, ...]] = (
     CONF_CUSTOM_PALETTES,
     CONF_DOORBELL_NOISE_REDUCTION,
     CONF_DEVICE_GROUPS,
-    CONF_SAVED_PROFILES,
     CONF_AREA_FUSION_CONFIG,
 )
 

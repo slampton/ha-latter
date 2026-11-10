@@ -13,7 +13,7 @@ from __future__ import annotations
 from collections.abc import Collection, Iterable, Mapping
 from typing import Any, Literal, Protocol, TypeVar
 
-# Commands that act on the whole System (Site config, BLE fabric, groups, profiles, logs), or on a
+# Commands that act on the whole System (Site config, BLE fabric, Device Groups, logs), or on a
 # Device the payload names explicitly.
 SYSTEM_COMMANDS: frozenset[str] = frozenset(
     {
@@ -29,9 +29,9 @@ SYSTEM_COMMANDS: frozenset[str] = frozenset(
         "set_device_remote_group",
         "create_device_group",
         "delete_device_group",
-        "capture_profile",
-        "delete_profile",
-        "apply_profile",
+        "sync_device_group",
+        "seed_group_baseline",
+        "set_group_device_setting",
         "test_doorbell_speaker",
         "save_system_config",
     }

@@ -1016,7 +1016,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
       <button class="nav-btn" data-view="system_overview" onclick="switchView('system_overview', this)"><span>Overview</span></button>
       <button class="nav-btn" data-view="shared_entities" onclick="switchView('shared_entities', this)"><span>Shared Entities</span></button>
       <button class="nav-btn" data-view="remotes" onclick="switchView('remotes', this)"><span>Media &amp; Remotes</span></button>
-      <button class="nav-btn" data-view="system_sync" onclick="switchView('system_sync', this)"><span>Groups &amp; Profiles</span></button>
+      <button class="nav-btn" data-view="system_sync" onclick="switchView('system_sync', this)"><span>Device Groups</span></button>
       <button class="nav-btn" data-view="area_tracking" onclick="switchView('area_tracking', this)"><span>BLE &amp; Area Presence</span></button>
       <button class="nav-btn" data-view="system_tools" onclick="switchView('system_tools', this)"><span>Tools</span></button>
     </nav>
@@ -1082,7 +1082,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
               <button type="button" class="kv-row" onclick="openSystemSection('remotes', 'card-vol-overrides')"><span>Speaker Volume Overrides</span><strong id="sys-sum-vol">—</strong></button>
               <button type="button" class="kv-row" onclick="openSystemSection('shared_entities', 'card-cameras')"><span>Cameras</span><strong id="sys-sum-cameras">—</strong></button>
               <button type="button" class="kv-row" onclick="openSystemSection('shared_entities', 'card-calendars')"><span>Calendars</span><strong id="sys-sum-calendars">—</strong></button>
-              <button type="button" class="kv-row" onclick="openSystemSection('system_sync', '')"><span>Groups &amp; Profiles</span><strong id="sys-sum-groups-profiles">—</strong></button>
+              <button type="button" class="kv-row" onclick="openSystemSection('system_sync', '')"><span>Device Groups</span><strong id="sys-sum-groups">—</strong></button>
             </div>
           </div>
           </div>
@@ -1199,32 +1199,15 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
         </div>
       </section>
 
-      <!-- SYSTEM: GROUPS & PROFILES -->
+      <!-- SYSTEM: DEVICE GROUPS -->
       <section id="view-system_sync" class="hidden">
         <div class="columns">
           <div class="column">
           <div class="card">
-            <div class="card-header"><div class="card-heading"><h3 class="card-title">Configuration Profiles</h3></div></div>
-            <div class="card-content">
-              <div class="settings-list">
-                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="profile-source-device">Capture From</label></div><div class="settings-row-control"><select id="profile-source-device"></select></div></div>
-                <div class="settings-row stacked"><div class="settings-row-text"><span class="row-label">Profile Name and Description</span></div>
-                  <div class="settings-row-control"><input type="text" id="new-profile-name" placeholder="Profile name (e.g. Nightstand)"><input type="text" id="new-profile-desc" placeholder="Description (optional)"></div>
-                </div>
-              </div>
-            </div>
-            <div class="card-actions"><button type="button" class="btn btn-primary" onclick="captureDeviceProfile()">Capture Profile</button></div>
-            <div class="card-content">
-              <div class="settings-list">
-                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="profile-target-scope">Apply Profiles To</label></div><div class="settings-row-control"><select id="profile-target-scope"></select></div></div>
-              </div>
-              <div id="saved-profiles-list" class="settings-list"></div>
-            </div>
-          </div>
-          </div>
-          <div class="column">
-          <div class="card">
-            <div class="card-header"><div class="card-heading"><h3 class="card-title">Device Groups</h3></div></div>
+            <div class="card-header"><div class="card-heading">
+              <h3 class="card-title">Device Groups</h3>
+              <p class="card-description">Each group holds a stored baseline for sleep, brightness, voice and BLE tracking.</p>
+            </div></div>
             <div class="card-content">
               <div class="input-action-row">
                 <input type="text" id="new-group-name" placeholder="New group name" aria-label="New group name">
@@ -1232,42 +1215,58 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
                 <button type="button" class="btn btn-secondary" onclick="createDeviceGroup()">Add Group</button>
               </div>
               <div id="device-groups-list" class="settings-list"></div>
-            </div>
-          </div>
-          <div class="card" id="sys-custom-palettes-card">
-            <div class="card-header">
-              <div class="card-heading">
-                <h3 class="card-title">Custom Color Library</h3>
-                <p class="card-description">Apply a color from a Device's Display &amp; Home page.</p>
-              </div>
-              <div class="card-header-actions"><button type="button" class="btn btn-secondary btn-compact" onclick="openColorWheelModal('system')">Add Color</button></div>
-            </div>
-            <div class="card-content"><div id="sys-custom-palettes-list" class="settings-list"></div></div>
-          </div>
-          <details class="card">
-          <summary class="card-header"><div class="card-heading"><h3 class="card-title">Bulk Device Controls</h3></div></summary>
-          <div class="card-content">
-            <div class="list-row-main">
-              <div class="stacked-field">
-                <label for="group-ctrl-cat-filter">Category</label>
-                <select id="group-ctrl-cat-filter" onchange="renderSystemOverview(STATE.system_devices, STATE.system_controls, STATE.config)">
-                  <option value="display">Display &amp; appearance</option>
-                  <option value="sleep">Sleep &amp; wake</option>
-                  <option value="voice">Voice assistant</option>
-                  <option value="sound">Sound &amp; alerts</option>
-                  <option value="music">Music &amp; media</option>
-                  <option value="area">Area &amp; presence</option>
-                  <option value="all">All categories</option>
-                </select>
-              </div>
-              <div class="stacked-field">
-                <label for="group-ctrl-filter">Target Devices</label>
-                <select id="group-ctrl-filter" onchange="renderSystemOverview(STATE.system_devices, STATE.system_controls, STATE.config)"></select>
+              <h4 class="subsection-title">Seed Baseline From Device</h4>
+              <div class="settings-list">
+                <div class="settings-row">
+                  <div class="settings-row-text"><label class="row-label" for="seed-group-target">Target Group</label></div>
+                  <div class="settings-row-control"><select id="seed-group-target"></select></div>
+                </div>
+                <div class="settings-row">
+                  <div class="settings-row-text"><label class="row-label" for="seed-source-device">Source Device</label><p class="row-description">Copies this Device's operational behavior settings into the target group's baseline.</p></div>
+                  <div class="settings-row-control">
+                    <select id="seed-source-device"></select>
+                    <button type="button" class="btn btn-secondary" onclick="seedGroupBaselineFromDevice()">Save Baseline</button>
+                  </div>
+                </div>
               </div>
             </div>
-            <div id="system-controls-list" class="settings-list"></div>
           </div>
-        </details>
+          </div>
+          <div class="column">
+          <div class="card">
+            <div class="card-header"><div class="card-heading">
+              <h3 class="card-title">Group Controls &amp; Baseline</h3>
+              <p class="card-description">Changes apply live to matching Devices and update the selected group's baseline.</p>
+            </div></div>
+            <div class="card-content">
+              <div class="list-row-main">
+                <div class="stacked-field">
+                  <label for="group-ctrl-filter">Target Group</label>
+                  <select id="group-ctrl-filter" onchange="renderSystemOverview(STATE.system_devices, STATE.system_controls, STATE.config)"></select>
+                </div>
+                <div class="stacked-field">
+                  <label for="group-ctrl-cat-filter">Category</label>
+                  <select id="group-ctrl-cat-filter" onchange="renderSystemOverview(STATE.system_devices, STATE.system_controls, STATE.config)">
+                    <option value="all">All categories</option>
+                    <option value="sleep">Sleep &amp; wake</option>
+                    <option value="display">Display &amp; brightness</option>
+                    <option value="voice">Voice assistant</option>
+                    <option value="sound">Sound &amp; alerts</option>
+                    <option value="area">Area &amp; presence</option>
+                    <option value="home">Home screen</option>
+                    <option value="music">Music &amp; media</option>
+                  </select>
+                </div>
+              </div>
+              <h4 class="subsection-title">Operational Behavior (Synced with Group)</h4>
+              <div id="group-latter-behavior-list" class="settings-list"></div>
+              <div id="system-controls-list" class="settings-list"></div>
+              <details class="sub-collapsible">
+                <summary>Appearance &amp; Personalization (Bulk Override)</summary>
+                <div class="card-content"><div id="system-appearance-controls-list" class="settings-list"></div></div>
+              </details>
+            </div>
+          </div>
           </div>
         </div>
       </section>
@@ -1427,9 +1426,14 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
               <div class="card-content">
                 <div id="dash-quick-actions" class="input-action-row"></div>
                 <div class="settings-list">
-                  <div class="settings-row hidden" id="dash-power-profile-wrap"><div class="settings-row-text"><label class="row-label" for="dash-power-profile-select">Sleep &amp; Wake Power Profile</label></div><div class="settings-row-control"><select id="dash-power-profile-select" onchange="if (this.dataset.ent) espSelect(this.dataset.ent, this.value)"></select></div></div>
-                  <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-device_group">Device Group</label></div><div class="settings-row-control"><select id="cfg-device_group" onchange="saveField('device', this)"></select></div></div>
-                  <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="quick-profile-select">Configuration Profile</label></div><div class="settings-row-control"><select id="quick-profile-select"></select><button type="button" class="btn btn-secondary" onclick="applyQuickProfileFromOverview()">Apply</button></div></div>
+                  <div class="settings-row">
+                    <div class="settings-row-text"><label class="row-label" for="cfg-device_group">Device Group</label><p class="row-description">Syncs sleep, brightness, voice and BLE tracking to the group baseline.</p></div>
+                    <div class="settings-row-control">
+                      <span class="chip hidden" id="dash-group-sync-chip">—</span>
+                      <button type="button" class="btn btn-text btn-compact hidden" id="btn-reset-to-group" onclick="syncCurrentDeviceToGroup()">Reset to Group</button>
+                      <select id="cfg-device_group" onchange="saveField('device', this)"></select>
+                    </div>
+                  </div>
                   <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-assigned_person">Assigned Person</label><p class="row-description">Creates <code>sensor.&lt;person&gt;_current_area</code>.</p></div><div class="settings-row-control"><select id="cfg-assigned_person" onchange="saveField('device', this)"></select></div></div>
                 </div>
               </div>
@@ -1456,9 +1460,14 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
                   <div class="settings-row-control">
                     <span id="dev-color-swatch" class="swatch" aria-hidden="true"></span>
                     <select id="dev-custom-palette-select" onchange="onSelectDeviceCustomPalette(this.value)"></select>
+                    <button type="button" class="btn btn-secondary btn-compact" onclick="openColorWheelModal('device')">Add Color</button>
                   </div>
                 </div>
               </div>
+              <details class="sub-collapsible" id="details-custom-palettes">
+                <summary>Saved Custom Colors</summary>
+                <div class="card-content"><div id="sys-custom-palettes-list" class="settings-list"></div></div>
+              </details>
             </div>
           </div>
           <div class="card" id="card-activity">
@@ -1943,9 +1952,9 @@ const SYSTEM_WS_COMMANDS = new Set([
   "set_device_remote_group",
   "create_device_group",
   "delete_device_group",
-  "capture_profile",
-  "delete_profile",
-  "apply_profile",
+  "sync_device_group",
+  "seed_group_baseline",
+  "set_group_device_setting",
   "test_doorbell_speaker",
   "save_system_config"
 ]);
@@ -2265,7 +2274,7 @@ const VIEW_TITLES = {
   system_overview: "Overview",
   shared_entities: "Shared Entities",
   remotes: "Media & Remotes",
-  system_sync: "Groups & Profiles",
+  system_sync: "Device Groups",
   area_tracking: "BLE & Area Presence",
   system_tools: "Tools",
   select_device_prompt: "All Devices",
@@ -2614,21 +2623,20 @@ function renderSystemOverview(systemDevices, systemControls, cfg) {
   if (countBadge) countBadge.textContent = String((systemDevices || []).length);
 
   const groups = STATE?.device_groups || [];
-  const profiles = STATE?.saved_profiles || [];
 
   // Pickers for System actions that act on one Device: the action names its Device (studio-design.md section 5).
   const allDevices = systemDevices || [];
   const latterDevices = allDevices.filter(d => d.kind !== "ble_tag");
-  fillDevicePicker("profile-source-device", latterDevices, "— Choose a Device —");
+  fillDevicePicker("seed-source-device", latterDevices, "— Choose a Device —");
   fillDevicePicker("doorbell-test-device", latterDevices, "— Choose a Device —");
   fillDevicePicker("bkp-restore-device", allDevices, "— Choose a Device —");
   fillDevicePicker("bkp-scope-select", allDevices, null, [{value: "system", label: "Full System & all Devices"}], "device:");
 
-  const quickProfSel = doc.getElementById("quick-profile-select");
-  if (quickProfSel && profiles.length) {
-    const prevP = quickProfSel.value;
-    quickProfSel.innerHTML = profiles.map(p =>
-      `<option value="${esc(p.id)}" ${p.id === prevP ? 'selected' : ''}>${esc(p.name)}</option>`
+  const seedGrpSel = doc.getElementById("seed-group-target");
+  if (seedGrpSel && groups.length) {
+    const prevG = seedGrpSel.value || (groups.find(g => g.id !== "unassigned")?.id || groups[0]?.id || "");
+    seedGrpSel.innerHTML = groups.filter(g => g.id !== "unassigned").map(g =>
+      `<option value="${esc(g.id)}" ${g.id === prevG ? 'selected' : ''}>${esc(g.name)}</option>`
     ).join("");
   }
 
@@ -2640,21 +2648,22 @@ function renderSystemOverview(systemDevices, systemControls, cfg) {
     ).join("");
   }
 
-  const targetScopes = [
-    {id: "", name: "— Choose where to apply —"},
-    {id: "all", name: `All Devices (${allDevices.length})`}
-  ];
-  groups.forEach(g => {
-    const cnt = allDevices.filter(d => d.device_group === g.id).length;
-    targetScopes.push({id: `group:${g.id}`, name: `Group: ${g.name} (${cnt})`});
-  });
-  allDevices.forEach(d => targetScopes.push({id: `device:${d.subentry_id}`, name: `Device: ${d.title}`}));
-  const profScopeSel = doc.getElementById("profile-target-scope");
-  if (profScopeSel) {
-    const prevVal = profScopeSel.value || "";
-    profScopeSel.innerHTML = targetScopes.map(o =>
-      `<option value="${esc(o.id)}" ${o.id === prevVal ? 'selected' : ''}>${esc(o.name)}</option>`
-    ).join("");
+  const syncChip = doc.getElementById("dash-group-sync-chip");
+  const resetGrpBtn = doc.getElementById("btn-reset-to-group");
+  const curSyncStatus = STATE?.live?.group_sync_status || "";
+  if (syncChip) {
+    if (curSyncStatus === "in_sync") {
+      syncChip.textContent = "In Sync";
+      syncChip.className = "chip chip-success";
+    } else if (curSyncStatus === "customized") {
+      syncChip.textContent = "Customized";
+      syncChip.className = "chip chip-warning";
+    } else {
+      syncChip.className = "chip hidden";
+    }
+  }
+  if (resetGrpBtn) {
+    resetGrpBtn.classList.toggle("hidden", curSyncStatus !== "customized");
   }
 
   const grpFilterSel = doc.getElementById("group-ctrl-filter");
@@ -2668,6 +2677,7 @@ function renderSystemOverview(systemDevices, systemControls, cfg) {
     });
     filterOpts.push({id: "trait:roaming", name: "Roaming Devices"});
     filterOpts.push({id: "trait:stationary", name: "Stationary Devices"});
+    if (!filterOpts.some(o => o.id === activeFilter)) activeFilter = "all";
     grpFilterSel.innerHTML = filterOpts.map(o =>
       `<option value="${esc(o.id)}" ${o.id === activeFilter ? 'selected' : ''}>${esc(o.name)}</option>`
     ).join("");
@@ -2775,76 +2785,139 @@ function renderSystemOverview(systemDevices, systemControls, cfg) {
   setSysTxt("sys-sum-vol", (sysCfg.volume_overrides || []).length);
   setSysTxt("sys-sum-cameras", (sysCfg.camera_entities || []).length);
   setSysTxt("sys-sum-calendars", (sysCfg.calendar_entities || []).length);
-  setSysTxt("sys-sum-groups-profiles", `${groups.length} group${groups.length === 1 ? "" : "s"} / ${profiles.length} profile${profiles.length === 1 ? "" : "s"}`);
+  setSysTxt("sys-sum-groups", `${groups.length} group${groups.length === 1 ? "" : "s"}`);
 
   renderAnnounceTargets();
-
-  const profBox = doc.getElementById("saved-profiles-list");
-  if (profBox) {
-    profBox.innerHTML = profiles.length
-      ? profiles.map(p => {
-          const ctrlCnt = Object.keys(p.esphome_controls || {}).length;
-          const isBuiltin = String(p.id || "").startsWith("preset_");
-          return settingsRowHtml(
-            `${esc(p.name)} <span class="chip">${ctrlCnt} controls</span>`,
-            esc(p.description || ""),
-            `<button type="button" class="btn btn-secondary btn-compact" onclick="applySavedProfile(${jsArg(p.id)})">Apply</button>
-             ${isBuiltin ? "" : iconButtonHtml(ICON_DELETE, `Delete profile ${p.name}`, `deleteSavedProfile(${jsArg(p.id)})`, "danger")}`
-          );
-        }).join("")
-      : emptyStateHtml("No profiles saved yet.");
-  }
 
   const grpBox = doc.getElementById("device-groups-list");
   if (grpBox) {
     grpBox.innerHTML = groups.map(g => {
       const members = allDevices.filter(d => d.device_group === g.id);
-      const isDefault = ["unassigned", "handhelds", "bedrooms", "common_areas", "wall_panels", "sensors"].includes(g.id);
-      const desc = [g.description || "", members.length ? `Devices: ${members.map(m => m.title).join(", ")}` : "No Devices"].filter(Boolean).join(" • ");
+      const isDefault = ["unassigned", "handhelds", "wearables", "bedrooms", "common_areas", "wall_panels"].includes(g.id);
+      const customizedCnt = members.filter(m => m.group_sync_status === "customized").length;
+      const syncMeta = g.id === "unassigned" || !members.length
+        ? ""
+        : (customizedCnt ? `${customizedCnt} customized` : "All in sync");
+      const desc = [g.description || "", members.length ? `Devices: ${members.map(m => m.title).join(", ")}` : "No Devices", syncMeta].filter(Boolean).join(" • ");
+      const focusBtn = `<button type="button" class="btn btn-text btn-compact" onclick="focusGroupControls(${jsArg(g.id)})">Edit Controls</button>`;
+      const syncBtn = (g.id !== "unassigned" && members.length)
+        ? `<button type="button" class="btn btn-secondary btn-compact" onclick="syncDeviceGroup(${jsArg(g.id)})">Sync Group</button>`
+        : "";
+      const delBtn = isDefault ? "" : iconButtonHtml(ICON_DELETE, `Delete group ${g.name}`, `deleteDeviceGroup(${jsArg(g.id)})`, "danger");
       return settingsRowHtml(
         `${esc(g.name)} <span class="chip">${members.length}</span>`,
         esc(desc),
-        isDefault ? "" : iconButtonHtml(ICON_DELETE, `Delete group ${g.name}`, `deleteDeviceGroup(${jsArg(g.id)})`, "danger")
+        `${focusBtn}${syncBtn}${delBtn}`
       );
     }).join("");
   }
 
+  const activeGrpId = activeFilter.startsWith("group:") ? activeFilter.split(":")[1] : (
+    activeFilter === "trait:roaming" ? "roaming" : (activeFilter === "trait:stationary" ? "stationary" : "all")
+  );
+  const selectedGrpObj = groups.find(g => g.id === activeGrpId) || null;
+  const activeCat = doc.getElementById("group-ctrl-cat-filter")?.value || "all";
+
+  const latterBehaviorBox = doc.getElementById("group-latter-behavior-list");
+  if (latterBehaviorBox) {
+    if (activeCat !== "all" && activeCat !== "area" && activeCat !== "voice" && activeCat !== "music") {
+      latterBehaviorBox.innerHTML = "";
+    } else {
+      const matchingDevs = latterDevices.filter(d => {
+        if (activeFilter === "all") return true;
+        if (activeFilter.startsWith("group:")) return d.device_group === activeGrpId;
+        if (activeFilter === "trait:roaming") return !!d.is_roaming;
+        if (activeFilter === "trait:stationary") return !d.is_roaming;
+        return true;
+      });
+      const baseCfg = selectedGrpObj?.device_config || {};
+      const grpArg = jsArg(activeGrpId);
+      const rows = [];
+      if (activeCat === "all" || activeCat === "area") {
+        const bleOn = selectedGrpObj && baseCfg.native_ble_tracking !== undefined
+          ? !!baseCfg.native_ble_tracking
+          : (matchingDevs.length ? matchingDevs.every(d => d.ble_tracked) : false);
+        rows.push(settingsRowHtml(
+          "Track the Area with BLE Proxies",
+          selectedGrpObj ? `Group Baseline • ${matchingDevs.length} Device(s)` : `${matchingDevs.length} Device(s)`,
+          `<input type="checkbox" class="switch" role="switch" aria-label="Track the Area with BLE Proxies" ${bleOn ? "checked" : ""} onchange="setGroupDeviceSetting(${grpArg}, 'native_ble_tracking', this.checked)">`
+        ));
+        const autoSw = selectedGrpObj && baseCfg.ble_auto_switch !== undefined ? !!baseCfg.ble_auto_switch : bleOn;
+        rows.push(settingsRowHtml(
+          "Auto-Switch Active Area",
+          "Follows BLE Area changes automatically.",
+          `<input type="checkbox" class="switch" role="switch" aria-label="Auto-Switch Active Area" ${autoSw ? "checked" : ""} onchange="setGroupDeviceSetting(${grpArg}, 'ble_auto_switch', this.checked)">`
+        ));
+      }
+      if (activeCat === "all" || activeCat === "voice") {
+        const vfm = selectedGrpObj && baseCfg.sync_device_area !== undefined ? !!baseCfg.sync_device_area : false;
+        rows.push(settingsRowHtml(
+          "Voice Follows Me",
+          "Moves roaming Devices' Home Assistant Area with them.",
+          `<input type="checkbox" class="switch" role="switch" aria-label="Voice Follows Me" ${vfm ? "checked" : ""} onchange="setGroupDeviceSetting(${grpArg}, 'sync_device_area', this.checked)">`
+        ));
+      }
+      if (activeCat === "all" || activeCat === "music") {
+        const handoff = selectedGrpObj && baseCfg.area_handoff !== undefined ? !!baseCfg.area_handoff : false;
+        rows.push(settingsRowHtml(
+          "Media Follows Device to New Area",
+          "Hands off active playback when the Area changes.",
+          `<input type="checkbox" class="switch" role="switch" aria-label="Media Follows Device to New Area" ${handoff ? "checked" : ""} onchange="setGroupDeviceSetting(${grpArg}, 'area_handoff', this.checked)">`
+        ));
+      }
+      latterBehaviorBox.innerHTML = rows.join("");
+    }
+  }
+
+  const renderBulkControlRow = (fc) => {
+    if (activeCat !== "all" && fc.section !== activeCat) return "";
+    const targets = (fc.targets || []).filter(t => {
+      if (activeFilter === "all") return true;
+      if (activeFilter.startsWith("group:")) return t.device_group === activeGrpId;
+      if (activeFilter === "trait:roaming") return !!t.is_roaming;
+      if (activeFilter === "trait:stationary") return !t.is_roaming;
+      return true;
+    });
+    const baselineVal = (selectedGrpObj && selectedGrpObj.esphome_controls && fc.canonical_key)
+      ? selectedGrpObj.esphome_controls[fc.canonical_key]
+      : undefined;
+    if (!targets.length && baselineVal === undefined) return "";
+    const idsArg = jsArg(targets.map(t => t.entity_id));
+    const grpArg = jsArg(activeGrpId);
+    const ckeyArg = jsArg(fc.canonical_key || "");
+    const states = targets.length
+      ? [...new Set(targets.map(t => String(t.state ?? "")))]
+      : (baselineVal !== undefined ? [String(baselineVal)] : []);
+    const mixed = states.length > 1;
+    const curState = mixed ? "" : (states[0] ?? "");
+    let widget = `<span class="chip">${esc(mixed ? "Mixed" : curState)}</span>`;
+    if (fc.domain === "select" && fc.options && fc.options.length) {
+      const opts = (mixed ? [`<option value="" selected disabled>Mixed</option>`] : []).concat(
+        fc.options.map(o => `<option value="${esc(o)}" ${o === curState ? 'selected' : ''}>${esc(o)}</option>`)
+      ).join("");
+      widget = `<select aria-label="${esc(fc.name)}" onchange="bulkSelect(${idsArg}, this.value, ${grpArg}, ${ckeyArg})">${opts}</select>`;
+    } else if (fc.domain === "switch") {
+      widget = `${mixed ? `<span class="chip">Mixed</span>` : ""}<input type="checkbox" class="switch" role="switch" aria-label="${esc(fc.name)}" ${curState === "on" ? "checked" : ""} onchange="bulkToggle(${idsArg}, this.checked ? 'turn_on' : 'turn_off', ${grpArg}, ${ckeyArg})">`;
+    } else if (fc.domain === "number") {
+      const numVal = mixed ? (fc.min ?? 0) : (parseFloat(curState) || 0);
+      widget = `<input type="range" aria-label="${esc(fc.name)}" min="${esc(fc.min ?? 0)}" max="${esc(fc.max ?? 100)}" step="${esc(fc.step ?? 1)}" value="${esc(numVal)}" onchange="bulkNumber(${idsArg}, this.value, ${grpArg}, ${ckeyArg})"><span class="chip">${esc(mixed ? "Mixed" : `${curState} ${fc.unit || ""}`.trim())}</span>`;
+    }
+    const baseNote = baselineVal !== undefined ? ` • Baseline: ${baselineVal}` : "";
+    const desc = `${fc.section_title} • ${targets.length} Device${targets.length === 1 ? "" : "s"}${mixed ? " • Mixed values" : ""}${baseNote}`;
+    return settingsRowHtml(esc(entityLabel(fc.name)), esc(desc), widget);
+  };
+
   const fBox = doc.getElementById("system-controls-list");
+  const appBox = doc.getElementById("system-appearance-controls-list");
   if (fBox) {
     if (!systemControls || !systemControls.length) {
       fBox.innerHTML = emptyStateHtml("No shared Device controls found.");
+      if (appBox) appBox.innerHTML = emptyStateHtml("No appearance controls found.");
     } else {
-      const activeCat = doc.getElementById("group-ctrl-cat-filter")?.value || "display";
-      const rows = systemControls.map(fc => {
-        if (activeCat !== "all" && fc.section !== activeCat) return "";
-        const targets = (fc.targets || []).filter(t => {
-          if (activeFilter === "all") return true;
-          if (activeFilter.startsWith("group:")) return t.device_group === activeFilter.split(":")[1];
-          if (activeFilter === "trait:roaming") return !!t.is_roaming;
-          if (activeFilter === "trait:stationary") return !t.is_roaming;
-          return true;
-        });
-        if (!targets.length) return "";
-        const idsArg = jsArg(targets.map(t => t.entity_id));
-        const states = [...new Set(targets.map(t => String(t.state ?? "")))];
-        const mixed = states.length > 1;
-        const curState = mixed ? "" : states[0];
-        let widget = `<span class="chip">${esc(mixed ? "Mixed" : curState)}</span>`;
-        if (fc.domain === "select" && fc.options && fc.options.length) {
-          const opts = (mixed ? [`<option value="" selected disabled>Mixed</option>`] : []).concat(
-            fc.options.map(o => `<option value="${esc(o)}" ${o === curState ? 'selected' : ''}>${esc(o)}</option>`)
-          ).join("");
-          widget = `<select aria-label="${esc(fc.name)}" onchange="bulkSelect(${idsArg}, this.value)">${opts}</select>`;
-        } else if (fc.domain === "switch") {
-          widget = `${mixed ? `<span class="chip">Mixed</span>` : ""}<input type="checkbox" class="switch" role="switch" aria-label="${esc(fc.name)}" ${curState === "on" ? "checked" : ""} onchange="bulkToggle(${idsArg}, this.checked ? 'turn_on' : 'turn_off')">`;
-        } else if (fc.domain === "number") {
-          const numVal = mixed ? (fc.min ?? 0) : (parseFloat(curState) || 0);
-          widget = `<input type="range" aria-label="${esc(fc.name)}" min="${esc(fc.min ?? 0)}" max="${esc(fc.max ?? 100)}" step="${esc(fc.step ?? 1)}" value="${esc(numVal)}" onchange="bulkNumber(${idsArg}, this.value)"><span class="chip">${esc(mixed ? "Mixed" : `${curState} ${fc.unit || ""}`.trim())}</span>`;
-        }
-        const desc = `${fc.section_title} • ${targets.length} Device${targets.length > 1 ? "s" : ""}${mixed ? " • Mixed values" : ""}`;
-        return settingsRowHtml(esc(entityLabel(fc.name)), esc(desc), widget);
-      }).filter(Boolean).join("");
-      fBox.innerHTML = rows || emptyStateHtml("No Devices match this filter.");
+      const behaviorRows = systemControls.filter(fc => fc.tier !== "appearance").map(renderBulkControlRow).filter(Boolean).join("");
+      const appearanceRows = systemControls.filter(fc => fc.tier === "appearance").map(renderBulkControlRow).filter(Boolean).join("");
+      fBox.innerHTML = behaviorRows || emptyStateHtml("No operational controls match this filter.");
+      if (appBox) appBox.innerHTML = appearanceRows || emptyStateHtml("No appearance controls match this filter.");
     }
   }
 }
@@ -2861,37 +2934,75 @@ function fillDevicePicker(selId, devices, placeholder, leadOptions = [], valuePr
   ).join("");
 }
 
-async function applyQuickProfileFromOverview() {
-  const sel = doc.getElementById("quick-profile-select");
-  if (!sel || !sel.value || !ACTIVE_SUBENTRY_ID) return;
-  const data = await callStudioCommand({command: "apply_profile", profile_id: sel.value, target_scope: `device:${ACTIVE_SUBENTRY_ID}`});
+function focusGroupControls(groupId) {
+  const grpFilterSel = doc.getElementById("group-ctrl-filter");
+  if (grpFilterSel) {
+    grpFilterSel.value = groupId ? `group:${groupId}` : "all";
+    renderSystemOverview(STATE?.system_devices, STATE?.system_controls, STATE?.config || {});
+  }
+}
+
+async function syncDeviceGroup(groupId) {
+  const data = await callStudioCommand({command: "sync_device_group", group_id: groupId});
   if (data) {
     applyStateToDom(data, true);
-    showToast("Applied configuration profile to device");
+    showToast("Synced group baseline to Devices");
   }
 }
 
-async function bulkSelect(entityIds, option) {
-  const data = await callStudioCommand({command: "system_entity_action", entity_ids: entityIds, option});
+async function syncCurrentDeviceToGroup() {
+  if (!ACTIVE_SUBENTRY_ID) return;
+  const grpId = doc.getElementById("cfg-device_group")?.value || STATE?.config?.device_group || "";
+  const data = await callStudioCommand({command: "sync_device_group", group_id: grpId, subentry_id: ACTIVE_SUBENTRY_ID});
   if (data) {
-    applyStateToDom(data, false);
-    showToast(`Applied '${option}' across ${entityIds.length} device(s)`);
+    applyStateToDom(data, true);
+    showToast("Reset Device to its group baseline");
   }
 }
 
-async function bulkToggle(entityIds, action) {
-  const data = await callStudioCommand({command: "system_entity_action", entity_ids: entityIds, action});
+async function seedGroupBaselineFromDevice() {
+  const groupId = doc.getElementById("seed-group-target")?.value || "";
+  const subentryId = doc.getElementById("seed-source-device")?.value || "";
+  if (!groupId || !subentryId) {
+    showToast("Failed: choose both a Target Group and a Source Device", "error");
+    return;
+  }
+  const data = await callStudioCommand({command: "seed_group_baseline", group_id: groupId, subentry_id: subentryId});
   if (data) {
     applyStateToDom(data, false);
-    showToast(`Applied ${action} across ${entityIds.length} device(s)`);
+    showToast("Updated group baseline from Device");
   }
 }
 
-async function bulkNumber(entityIds, level) {
-  const data = await callStudioCommand({command: "system_entity_action", entity_ids: entityIds, level});
+async function setGroupDeviceSetting(groupId, key, val) {
+  const data = await callStudioCommand({command: "set_group_device_setting", group_id: groupId || "all", config: {[key]: val}});
+  if (data) {
+    applyStateToDom(data, true);
+    showToast("Updated group setting");
+  }
+}
+
+async function bulkSelect(entityIds, option, groupId="", canonicalKey="") {
+  const data = await callStudioCommand({command: "system_entity_action", entity_ids: entityIds, option, group_id: groupId, canonical_key: canonicalKey});
   if (data) {
     applyStateToDom(data, false);
-    showToast(`Applied ${level} across ${entityIds.length} device(s)`);
+    showToast(`Applied '${option}'`);
+  }
+}
+
+async function bulkToggle(entityIds, action, groupId="", canonicalKey="") {
+  const data = await callStudioCommand({command: "system_entity_action", entity_ids: entityIds, action, group_id: groupId, canonical_key: canonicalKey});
+  if (data) {
+    applyStateToDom(data, false);
+    showToast(`Applied ${action}`);
+  }
+}
+
+async function bulkNumber(entityIds, level, groupId="", canonicalKey="") {
+  const data = await callStudioCommand({command: "system_entity_action", entity_ids: entityIds, level, group_id: groupId, canonical_key: canonicalKey});
+  if (data) {
+    applyStateToDom(data, false);
+    showToast(`Applied ${level}`);
   }
 }
 
@@ -3375,21 +3486,6 @@ function renderCohesiveDeviceSections() {
   doc.getElementById("embedded-sleep").innerHTML = sleepItems.length
     ? sleepItems.map(it => renderNativeControlRow(it)).join("")
     : emptyStateHtml("No on-device Sleep & Wake entities exposed.");
-
-  const pwrProfItem = rawSleepItems.find(it => `${it.name} ${it.entity_id}`.toLowerCase().includes("power_profile") || (it.name || "").toLowerCase().includes("power profile"));
-  const pwrWrap = doc.getElementById("dash-power-profile-wrap");
-  const pwrSel = doc.getElementById("dash-power-profile-select");
-  if (pwrWrap && pwrSel) {
-    if (pwrProfItem && pwrProfItem.options && pwrProfItem.options.length) {
-      pwrWrap.classList.remove("hidden");
-      pwrSel.dataset.ent = pwrProfItem.entity_id;
-      pwrSel.innerHTML = pwrProfItem.options.map(o =>
-        `<option value="${esc(o)}" ${o === pwrProfItem.state ? 'selected' : ''}>${esc(o)}</option>`
-      ).join("");
-    } else {
-      pwrWrap.classList.add("hidden");
-    }
-  }
 
   // 5. Voice Assistant: Latter's voice settings plus Home Assistant's own Assist satellite selects (key: pipeline,
   // vad_sensitivity, wake_word, wake_word_n). With Wake Word Mode Disabled the wake words and their sensitivity
@@ -4131,47 +4227,6 @@ async function deleteDeviceGroup(groupId) {
   }
 }
 
-async function captureDeviceProfile() {
-  const subentryId = doc.getElementById("profile-source-device")?.value || "";
-  const source = (STATE?.system_devices || []).find(d => d.subentry_id === subentryId);
-  if (!source) {
-    showToast("Failed: choose the Device to capture from", "error");
-    return;
-  }
-  const nameEl = doc.getElementById("new-profile-name");
-  const descEl = doc.getElementById("new-profile-desc");
-  const name = (nameEl?.value || "").trim() || `${source.title} Profile`;
-  const data = await callStudioCommand({command: "capture_profile", subentry_id: subentryId, name, description: (descEl?.value || "").trim()});
-  if (data) {
-    if (nameEl) nameEl.value = "";
-    if (descEl) descEl.value = "";
-    applyStateToDom(data, false);
-    showToast(`Saved profile '${name}'`);
-  }
-}
-
-async function applySavedProfile(profileId) {
-  const scopeSel = doc.getElementById("profile-target-scope");
-  const scope = scopeSel?.value || "";
-  if (!scope) {
-    showToast("Failed: choose where to apply the profile", "error");
-    return;
-  }
-  const data = await callStudioCommand({command: "apply_profile", profile_id: profileId, target_scope: scope});
-  if (data) {
-    applyStateToDom(data, {system: false, device: true});
-    showToast(`Applied the profile to ${scopeSel?.selectedOptions?.[0]?.textContent || scope}`);
-  }
-}
-
-async function deleteSavedProfile(profileId) {
-  const data = await callStudioCommand({command: "delete_profile", profile_id: profileId});
-  if (data) {
-    applyStateToDom(data, false);
-    showToast("Deleted profile");
-  }
-}
-
 function triggerJsonDownload(bundle) {
   const dateStr = new Date().toISOString().slice(0, 10);
   const slugPart = bundle.scope === "system" ? "system" : `device-${bundle.target_device || 'esphome'}`;
@@ -4710,8 +4765,6 @@ function bindStudioGlobals() {
   window.addRemoteGroupRow = addRemoteGroupRow;
   window.addVolumeOverrideRow = addVolumeOverrideRow;
   window.applyDeviceCustomColor = applyDeviceCustomColor;
-  window.applyQuickProfileFromOverview = applyQuickProfileFromOverview;
-  window.applySavedProfile = applySavedProfile;
   window.applyStateToDom = applyStateToDom;
   window.assignDeviceRemoteGroup = assignDeviceRemoteGroup;
   window.autoCalibrateHere = autoCalibrateHere;
@@ -4719,7 +4772,6 @@ function bindStudioGlobals() {
   window.bulkSelect = bulkSelect;
   window.bulkToggle = bulkToggle;
   window.callStudioCommand = callStudioCommand;
-  window.captureDeviceProfile = captureDeviceProfile;
   window.checkSystemUpdates = checkSystemUpdates;
   window.clearInternalLogs = clearInternalLogs;
   window.closeAddDeviceModal = closeAddDeviceModal;
@@ -4733,13 +4785,17 @@ function bindStudioGlobals() {
   window.createDeviceGroup = createDeviceGroup;
   window.deleteCustomPalette = deleteCustomPalette;
   window.deleteDeviceGroup = deleteDeviceGroup;
-  window.deleteSavedProfile = deleteSavedProfile;
   window.deleteWallpaper = deleteWallpaper;
   window.espAction = espAction;
   window.espNumber = espNumber;
   window.espSelect = espSelect;
   window.exportBackupToComputer = exportBackupToComputer;
   window.fmtPercent = fmtPercent;
+  window.focusGroupControls = focusGroupControls;
+  window.seedGroupBaselineFromDevice = seedGroupBaselineFromDevice;
+  window.setGroupDeviceSetting = setGroupDeviceSetting;
+  window.syncCurrentDeviceToGroup = syncCurrentDeviceToGroup;
+  window.syncDeviceGroup = syncDeviceGroup;
   window.onActivityCardChanged = onActivityCardChanged;
   window.toggleActivitySource = toggleActivitySource;
   window.fallbackCopyText = fallbackCopyText;

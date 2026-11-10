@@ -22,7 +22,7 @@ from homeassistant.config_entries import (
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr, entity_registry as er, selector
 
-from .backup_engine import get_device_groups_and_profiles
+from .backup_engine import GROUP_BEHAVIOR_DEVICE_KEYS, get_device_groups
 from .ble_engine import _iter_devices
 from .const import (
     CONF_ALARM_ENTITY,
@@ -60,8 +60,6 @@ from .identity import (
     read_device_hardware_manifest,
 )
 from .system import get_latter_system
-
-CONF_APPLY_PROFILE = "apply_profile"
 
 
 def _iter_configured_device_records(hass: HomeAssistant) -> list[tuple[dict[str, Any], str | None]]:
@@ -161,8 +159,14 @@ def _detect_hardware_defaults(
 
     if manifest and "w" in manifest and "h" in manifest:
         is_stationary = bool(int(manifest.get("stationary") or 0) == 1)
+        is_wearable = bool(int(manifest.get("wearable") or 0) == 1)
+        default_grp = (
+            "wall_panels"
+            if is_stationary
+            else ("wearables" if is_wearable else "handhelds")
+        )
         return {
-            CONF_DEVICE_GROUP: "wall_panels" if is_stationary else "handhelds",
+            CONF_DEVICE_GROUP: default_grp,
             CONF_DEFAULT_PAGE_SIZE: DEFAULT_PAGE_SIZE,
             CONF_NATIVE_BLE_TRACKING: not is_stationary,
             CONF_BLE_AUTO_SWITCH: not is_stationary,
@@ -249,14 +253,17 @@ def _apply_onboarding_profile_and_defaults(
     if rebind_hardware or not merged.get(CONF_DEFAULT_SPEAKER):
         merged[CONF_DEFAULT_SPEAKER] = _discover_default_speaker(hass, dev.id)
 
-    prof_id = str(user_input.get(CONF_APPLY_PROFILE) or "auto").strip()
-    if prof_id and prof_id != "auto":
-        _, profiles = get_device_groups_and_profiles(hass)
-        matched_prof = next((p for p in profiles if p.get("id") == prof_id), None)
-        if matched_prof and isinstance(matched_prof.get("device_config"), dict):
-            for k, v in matched_prof["device_config"].items():
-                if v is not None and k not in (CONF_ESPHOME_DEVICE_ID, CONF_DEVICE_SLUG, "mac"):
-                    merged[k] = v
+    grp_id = str(user_input.get(CONF_DEVICE_GROUP) or "auto").strip()
+    groups = get_device_groups(hass)
+    if grp_id == "auto":
+        grp_id = str(hw_defaults.get(CONF_DEVICE_GROUP) or DEFAULT_DEVICE_GROUP)
+    matched_grp = next((g for g in groups if g.get("id") == grp_id), None)
+    if matched_grp:
+        merged[CONF_DEVICE_GROUP] = str(matched_grp["id"])
+        if isinstance(matched_grp.get("device_config"), dict):
+            for k in GROUP_BEHAVIOR_DEVICE_KEYS:
+                if k in matched_grp["device_config"] and matched_grp["device_config"][k] is not None:
+                    merged[k] = matched_grp["device_config"][k]
 
     if CONF_NATIVE_BLE_TRACKING in user_input:
         is_roaming = bool(user_input[CONF_NATIVE_BLE_TRACKING])
@@ -305,7 +312,7 @@ def _build_schema(
     hass: HomeAssistant,
     current: dict[str, Any],
 ) -> vol.Schema:
-    """Build the device onboarding/reconfigure schema (ESPHome device picker, profile, Bluetooth tracking)."""
+    """Build the device onboarding/reconfigure schema (ESPHome device picker, Device Group, Bluetooth tracking)."""
     default_dev_id = str(
         current.get(CONF_ESPHOME_DEVICE_ID) or _discover_unconfigured_latter_device_id(hass)
     )
@@ -319,27 +326,31 @@ def _build_schema(
         )
     )
 
-    _, profiles = get_device_groups_and_profiles(hass)
+    groups = get_device_groups(hass)
     hw_w, hw_h = int(hw_manifest.get("w") or 0), int(hw_manifest.get("h") or 0)
     hw_shape_lbl = (
         f"{hw_w}x{hw_h} {'round' if hw_manifest.get('shape') == 'circle' else 'rectangular'} display"
         if hw_w and hw_h
         else "no hardware manifest reported yet"
     )
-    profile_options = [
+    group_options = [
         selector.SelectOptionDict(
             value="auto",
             label=f"Auto-Detect from Device Hardware ({hw_shape_lbl})",
         )
     ]
-    for p in profiles:
-        if isinstance(p, dict) and p.get("id") and p.get("name"):
-            profile_options.append(
+    for g in groups:
+        if isinstance(g, dict) and g.get("id") and g.get("name"):
+            group_options.append(
                 selector.SelectOptionDict(
-                    value=str(p["id"]),
-                    label=f"Profile: {p['name']}",
+                    value=str(g["id"]),
+                    label=f"Group: {g['name']}",
                 )
             )
+
+    current_group = str(current.get(CONF_DEVICE_GROUP) or "auto")
+    if current_group not in {opt["value"] for opt in group_options}:
+        current_group = "auto"
 
     device_key = (
         vol.Required(CONF_ESPHOME_DEVICE_ID, default=default_dev_id)
@@ -351,9 +362,9 @@ def _build_schema(
             device_key: selector.DeviceSelector(
                 selector.DeviceSelectorConfig(integration="esphome")
             ),
-            vol.Required(CONF_APPLY_PROFILE, default="auto"): selector.SelectSelector(
+            vol.Required(CONF_DEVICE_GROUP, default=current_group): selector.SelectSelector(
                 selector.SelectSelectorConfig(
-                    options=profile_options,
+                    options=group_options,
                     mode=selector.SelectSelectorMode.DROPDOWN,
                 )
             ),

@@ -21,7 +21,12 @@ from homeassistant.helpers import (
 from homeassistant.util import dt as dt_util
 
 from ..area_engine import get_esphome_device_entities
-from ..backup_engine import get_device_groups_and_profiles
+from ..backup_engine import (
+    canonical_control_key,
+    compute_device_group_sync_status,
+    get_device_groups,
+    is_behavior_esphome_control,
+)
 from ..ble_engine import (
     count_area_ble_proxies,
     get_all_areas_presence_summary,
@@ -209,7 +214,7 @@ def _build_system_shared_controls(
                 inspector_by_subentry[coord.subentry_id] = esp_info
         for sec in esp_info.get("sections", []):
             sec_id = sec.get("id", "")
-            if sec_id not in ("voice", "sleep", "display", "sound", "music", "area"):
+            if sec_id not in ("voice", "sleep", "display", "sound", "music", "area", "home"):
                 continue
             for item in sec.get("items", []):
                 dom = item.get("domain")
@@ -218,11 +223,14 @@ def _build_system_shared_controls(
                 lbl = str(item.get("name") or "").strip()
                 if not lbl:
                     continue
+                ckey = canonical_control_key(dom, lbl)
                 key = f"{sec_id}:{dom}:{lbl.lower()}"
                 bucket = by_label.setdefault(
                     key,
                     {
                         "key": key,
+                        "canonical_key": ckey,
+                        "tier": "behavior" if is_behavior_esphome_control(ckey) else "appearance",
                         "section": sec_id,
                         "section_title": sec.get("title", sec_id.title()),
                         "name": lbl,
@@ -506,7 +514,7 @@ def _build_system_section(
 ) -> dict[str, Any]:
     """Build the System-scoped part of the Studio payload (no Device needed)."""
     area_reg = ar.async_get(hass)
-    device_groups, saved_profiles = get_device_groups_and_profiles(hass)
+    device_groups = get_device_groups(hass)
     group_name_map = {
         g["id"]: g["name"]
         for g in device_groups
@@ -693,6 +701,9 @@ def _build_system_section(
                 "device_group_name": group_name_map.get(
                     c_grp, c_grp.replace("_", " ").title()
                 ),
+                "group_sync_status": compute_device_group_sync_status(
+                    hass, c, device_groups
+                ),
                 "assigned_person": c.assigned_person,
                 "active_area_name": c_area_name,
                 "is_latter_native": c_is_latter_native,
@@ -732,7 +743,6 @@ def _build_system_section(
             hass, coords, inspector_by_subentry
         ),
         "device_groups": device_groups,
-        "saved_profiles": saved_profiles,
         "system_config": system_view,
         "doorbells": _build_doorbells(hass, coords, system_view["camera_entities"]),
     }
@@ -941,6 +951,9 @@ def build_studio_state_payload(
         },
         "live": {
             "active_area_name": coordinator.active_area_name,
+            "group_sync_status": compute_device_group_sync_status(
+                hass, coordinator, base.get("device_groups")
+            ),
             "ble_closest_proxy": coordinator._ble_tracker.closest_scanner if coordinator._ble_tracker else "",
             "ble_packets_seen": coordinator._ble_tracker.packets_seen if coordinator._ble_tracker else 0,
             "ble_survey_rows": ble_survey_rows,
