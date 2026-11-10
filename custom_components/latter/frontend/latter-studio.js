@@ -1512,7 +1512,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
                 <option value="360">Rotate every 6 h</option>
                 <option value="1440">Rotate daily</option>
               </select>
-              <button type="button" class="btn btn-secondary btn-compact" onclick="selectWallpaperSource('')">Turn Off Wallpaper</button>
+              <button type="button" class="btn btn-secondary btn-compact" id="btn-clear-wallpaper" onclick="selectWallpaperSource('')">Turn Off Wallpaper</button>
             </div>
           </div>
           <div class="card-content">
@@ -3477,13 +3477,15 @@ function renderWallpaperGallery(wallpapers, slug, shape) {
   if (!box) return;
   const shapeClass = shape === "square" ? "square" : "circle";
   const items = wallpapers || [];
+  const clearBtn = doc.getElementById("btn-clear-wallpaper");
+  if (clearBtn) clearBtn.disabled = !items.some(wp => wp.active);
   box.innerHTML = items.length ? items.map(wp => {
     const idArg = jsArg(wp.id);
     return `<div class="wp-card ${wp.active ? 'active' : ''}">
       <img class="wp-thumb ${shapeClass}" src="${esc(wp.thumb_url || "")}" loading="lazy" alt="${esc(wp.name)}">
       <div class="wp-title">${esc(wp.name)}</div>
       <div class="wp-actions">
-        ${wp.active ? '<span class="chip chip-primary">Active</span>' : `<button type="button" class="btn btn-secondary btn-compact" onclick="selectWallpaperSource(${idArg})">Use</button>`}
+        ${wp.active ? `<span class="chip chip-primary">Active</span><button type="button" class="btn btn-text btn-compact" onclick="selectWallpaperSource('')">Clear</button>` : `<button type="button" class="btn btn-secondary btn-compact" onclick="selectWallpaperSource(${idArg})">Use</button>`}
         <button type="button" class="btn btn-text btn-compact" aria-pressed="${!!wp.favorite}" aria-label="${wp.favorite ? 'Remove from favorites' : 'Add to favorites'}" onclick="toggleWallpaperFav(${idArg})">${wp.favorite ? '★' : '☆'}</button>
         ${wp.deletable ? iconButtonHtml(ICON_DELETE, `Delete ${wp.name}`, `deleteWallpaper(${idArg})`, "danger") : ''}
       </div>

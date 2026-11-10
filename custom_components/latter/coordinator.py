@@ -2795,7 +2795,7 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._unsub_wallpaper_timer = None
 
         mins = self.wallpaper_cycle_minutes
-        if mins > 0 and len(self.wallpaper_favorites) >= 2:
+        if mins > 0 and self.wallpaper_source and len(self.wallpaper_favorites) >= 2:
             self._unsub_wallpaper_timer = async_track_time_interval(
                 self.hass,
                 self._async_on_wallpaper_cycle_tick,
@@ -2806,9 +2806,9 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def _async_on_wallpaper_cycle_tick(self, _now: datetime) -> None:
         """Advance to the next favorite wallpaper and notify listeners."""
         favs = self.wallpaper_favorites
-        if len(favs) < 2:
-            return
         cur = self.wallpaper_source
+        if not cur or len(favs) < 2:
+            return
         try:
             idx = (favs.index(cur) + 1) % len(favs)
         except ValueError:

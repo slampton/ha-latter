@@ -1,4 +1,4 @@
-"""AMOLED-Optimized Procedural Wallpaper Generator & Gallery File Manager for Latter."""
+"""Procedural Wallpaper Generator & Gallery File Manager for Latter."""
 
 from __future__ import annotations
 
@@ -30,28 +30,28 @@ _LOGGER = logging.getLogger(__name__)
 
 BUILTIN_WALLPAPER_PRESETS: tuple[dict[str, str], ...] = (
     {
-        "id": "preset:amoled_rings",
-        "name": "AMOLED Concentric Rings (Ultra-Low Power)",
+        "id": "preset:steel_horizon",
+        "name": "Deep Steel Horizon",
         "kind": "preset",
     },
     {
-        "id": "preset:amoled_grid",
-        "name": "AMOLED Precision Telemetry Grid",
+        "id": "preset:pine_ridges",
+        "name": "Cascade Pine Ridges",
         "kind": "preset",
     },
     {
-        "id": "preset:amoled_horizon",
-        "name": "AMOLED Deep Steel Horizon",
+        "id": "preset:twilight_dunes",
+        "name": "Sahara Twilight Dunes",
         "kind": "preset",
     },
     {
-        "id": "preset:amoled_nebula",
-        "name": "AMOLED Midnight Indigo Glow",
+        "id": "preset:aurora_veil",
+        "name": "Northern Aurora Veil",
         "kind": "preset",
     },
     {
-        "id": "preset:amoled_ember",
-        "name": "AMOLED Warm Amber Eclipse",
+        "id": "preset:topographic_waves",
+        "name": "Obsidian Topographic Waves",
         "kind": "preset",
     },
 )
@@ -67,86 +67,343 @@ def get_device_wallpaper_dir(hass: HomeAssistant, device_slug: str) -> Path:
     return get_wallpaper_root(hass) / normalize_device_slug(device_slug)
 
 
+def _smoothstep(edge0: float, edge1: float, x: float) -> float:
+    """Hermite smoothstep interpolation in [0.0, 1.0]."""
+    t = max(0.0, min(1.0, (x - edge0) / max(1e-6, edge1 - edge0)))
+    return t * t * (3.0 - 2.0 * t)
+
+
+def _render_pine_ridges_buf(side: int) -> bytearray:
+    """Render Cascade Pine Ridges onto a (side x side) RGB bytearray."""
+    buf = bytearray(side * side * 3)
+    ridges = (
+        (0.51, 0.055, 0.45, (28, 66, 72), (16, 40, 46), 0.59, (54, 118, 118), 0.055),
+        (0.62, 0.048, 2.05, (20, 50, 56), (11, 28, 34), 0.70, (42, 96, 98), 0.050),
+        (0.73, 0.040, 3.65, (13, 34, 40), (7, 18, 23), 0.81, (30, 72, 76), 0.045),
+        (0.84, 0.030, 5.20, (7, 18, 22), (3, 8, 11), 1.00, (0, 0, 0), 0.0),
+    )
+    ridge_y: list[list[float]] = []
+    mist_line_y: list[list[float]] = []
+    for idx, (base_y, amp, ph, _ct, _cb, mist_y, _cm, _ms) in enumerate(ridges):
+        prof: list[float] = []
+        mprof: list[float] = []
+        for x in range(side):
+            xf = x / max(1, side - 1)
+            h = (
+                0.52 * math.sin(xf * math.tau * 0.95 + ph)
+                + 0.27 * math.cos(xf * math.tau * 1.90 - ph * 0.65)
+                + 0.13 * math.sin(xf * math.tau * 3.40 + ph * 1.25)
+                + 0.08 * math.cos(xf * math.tau * 5.80 - ph * 1.80)
+            )
+            prof.append(base_y + amp * h)
+            mprof.append(mist_y + 0.008 * math.sin(xf * math.tau * 0.70 + idx * 1.4))
+        ridge_y.append(prof)
+        mist_line_y.append(mprof)
+
+    aa = 1.6 / side
+    for y in range(side):
+        yf = y / max(1, side - 1)
+        sky_t = min(1.0, yf / 0.54)
+        glow_h = math.exp(-(((yf - 0.49) / 0.14) ** 2))
+        sr = 3.0 + 11.0 * (sky_t**1.8) + 20.0 * glow_h
+        sg = 7.0 + 28.0 * (sky_t**1.6) + 50.0 * glow_h
+        sb = 11.0 + 34.0 * (sky_t**1.5) + 56.0 * glow_h
+
+        row_off = y * side * 3
+        for x in range(side):
+            r, g, b = sr, sg, sb
+            for r_idx, (_base_y, _amp, _ph, c_top, c_bot, _mist_y, c_mist, mist_span) in enumerate(ridges):
+                ry = ridge_y[r_idx][x]
+                if yf >= ry - aa:
+                    cov = _smoothstep(ry - aa, ry + aa, yf)
+                    depth_t = min(1.0, max(0.0, (yf - ry) / 0.16))
+                    rr = c_top[0] + (c_bot[0] - c_top[0]) * depth_t
+                    rg = c_top[1] + (c_bot[1] - c_top[1]) * depth_t
+                    rb = c_top[2] + (c_bot[2] - c_top[2]) * depth_t
+                    if mist_span > 0.0:
+                        my = mist_line_y[r_idx][x]
+                        dy_mist = (yf - my) / mist_span
+                        mist_w = math.exp(-(dy_mist * dy_mist)) * 0.58
+                        crest_clear = min(1.0, max(0.0, (yf - ry) / 0.025))
+                        mist_w *= crest_clear
+                        rr = rr * (1.0 - mist_w) + c_mist[0] * mist_w
+                        rg = rg * (1.0 - mist_w) + c_mist[1] * mist_w
+                        rb = rb * (1.0 - mist_w) + c_mist[2] * mist_w
+                    r = r * (1.0 - cov) + rr * cov
+                    g = g * (1.0 - cov) + rg * cov
+                    b = b * (1.0 - cov) + rb * cov
+
+            idx = row_off + x * 3
+            buf[idx] = int(min(255.0, max(0.0, r)))
+            buf[idx + 1] = int(min(255.0, max(0.0, g)))
+            buf[idx + 2] = int(min(255.0, max(0.0, b)))
+    return buf
+
+
+def _render_twilight_dunes_buf(side: int) -> bytearray:
+    """Render Sahara Twilight Dunes onto a (side x side) RGB bytearray."""
+    buf = bytearray(side * side * 3)
+    dunes = (
+        (0.52, -0.055, 0.044, 0.35, (118, 56, 25), (42, 18, 9), (168, 92, 42)),
+        (0.65, 0.075, 0.050, 2.25, (48, 21, 11), (16, 7, 5), (136, 68, 30)),
+        (0.79, -0.065, 0.045, 4.05, (96, 44, 20), (18, 8, 5), (152, 80, 35)),
+    )
+    dune_y: list[list[float]] = []
+    for base_y, slope, amp, ph, *_rest in dunes:
+        prof: list[float] = []
+        for x in range(side):
+            xf = x / max(1, side - 1)
+            curve = (
+                slope * (xf - 0.5)
+                + amp * math.sin(xf * math.tau * 0.85 + ph)
+                + (amp * 0.34) * math.cos(xf * math.tau * 1.70 - ph * 0.6)
+            )
+            prof.append(base_y + curve)
+        dune_y.append(prof)
+
+    aa = 1.5 / side
+    rim_w = 2.8 / side
+    for y in range(side):
+        yf = y / max(1, side - 1)
+        sky_t = min(1.0, yf / 0.52)
+        glow = math.exp(-(((yf - 0.48) / 0.13) ** 2))
+        sr = 6.0 + 26.0 * (sky_t**2.0) + 54.0 * glow
+        sg = 4.0 + 11.0 * (sky_t**2.0) + 23.0 * glow
+        sb = 5.0 + 8.0 * (sky_t**1.8) + 11.0 * glow
+
+        row_off = y * side * 3
+        for x in range(side):
+            xf = x / max(1, side - 1)
+            sun_x = math.exp(-(((xf - 0.35) / 0.45) ** 2))
+            r = sr + 16.0 * glow * sun_x
+            g = sg + 7.0 * glow * sun_x
+            b = sb + 2.0 * glow * sun_x
+
+            for d_idx, (_base_y, _slope, _amp, _ph, c_top, c_bot, c_rim) in enumerate(dunes):
+                dy = dune_y[d_idx][x]
+                if yf >= dy - aa:
+                    cov = _smoothstep(dy - aa, dy + aa, yf)
+                    depth_t = min(1.0, max(0.0, (yf - dy) / 0.22))
+                    sun_slope = 0.82 + 0.18 * math.cos(xf * math.tau * 0.85 + d_idx * 1.7)
+                    dr = (c_top[0] + (c_bot[0] - c_top[0]) * depth_t) * sun_slope
+                    dg = (c_top[1] + (c_bot[1] - c_top[1]) * depth_t) * sun_slope
+                    db = (c_top[2] + (c_bot[2] - c_top[2]) * depth_t) * sun_slope
+                    crest_dist = yf - dy
+                    if 0.0 <= crest_dist <= rim_w:
+                        rim_k = ((1.0 - crest_dist / rim_w) ** 2) * 0.75
+                        dr = dr * (1.0 - rim_k) + c_rim[0] * rim_k
+                        dg = dg * (1.0 - rim_k) + c_rim[1] * rim_k
+                        db = db * (1.0 - rim_k) + c_rim[2] * rim_k
+                    r = r * (1.0 - cov) + dr * cov
+                    g = g * (1.0 - cov) + dg * cov
+                    b = b * (1.0 - cov) + db * cov
+
+            idx = row_off + x * 3
+            buf[idx] = int(min(255.0, max(0.0, r)))
+            buf[idx + 1] = int(min(255.0, max(0.0, g)))
+            buf[idx + 2] = int(min(255.0, max(0.0, b)))
+    return buf
+
+
+def _render_aurora_veil_buf(side: int) -> bytearray:
+    """Render Northern Aurora Veil onto a (side x side) RGB bytearray."""
+    buf = bytearray(side * side * 3)
+    for y in range(side):
+        yf = y / max(1, side - 1)
+        clock_band = _smoothstep(0.26, 0.52, yf)
+        row_off = y * side * 3
+        for x in range(side):
+            xf = x / max(1, side - 1)
+            r = 3.0 + 5.0 * (yf**1.5)
+            g = 4.0 + 9.0 * (yf**1.5)
+            b = 10.0 + 20.0 * (yf**1.2)
+
+            c1_y = (
+                0.67
+                - 0.09 * math.sin(xf * math.tau * 0.70 + 0.35)
+                + 0.035 * math.cos(xf * math.tau * 1.45 - 0.7)
+            )
+            dy1 = yf - c1_y
+            env1 = math.exp(-((dy1 / (0.18 if dy1 < 0.0 else 0.032)) ** 2))
+            ray_u = xf + dy1 * 0.18
+            rays1 = (
+                0.70
+                + 0.15 * math.sin(ray_u * math.tau * 3.5 + 0.5)
+                + 0.09 * math.cos(ray_u * math.tau * 9.0 - 1.1)
+                + 0.06 * math.sin(ray_u * math.tau * 17.0 + 2.4)
+            )
+            w1 = env1 * rays1 * (0.25 + 0.75 * clock_band)
+            alt1 = max(0.0, min(1.0, -dy1 / 0.21))
+            ar1 = 16.0 * (1.0 - alt1) + 74.0 * alt1
+            ag1 = 132.0 * (1.0 - alt1) + 32.0 * alt1
+            ab1 = 106.0 * (1.0 - alt1) + 128.0 * alt1
+
+            c2_y = (
+                0.56
+                + 0.08 * math.cos(xf * math.tau * 0.65 - 0.4)
+                + 0.025 * math.sin(xf * math.tau * 1.3 + 1.1)
+            )
+            dy2 = yf - c2_y
+            env2 = math.exp(-((dy2 / (0.15 if dy2 < 0.0 else 0.045)) ** 2))
+            ray_u2 = xf - dy2 * 0.14
+            rays2 = (
+                0.74
+                + 0.16 * math.sin(ray_u2 * math.tau * 4.5 + 1.9)
+                + 0.10 * math.cos(ray_u2 * math.tau * 11.0 - 0.6)
+            )
+            w2 = env2 * rays2 * (0.20 + 0.80 * clock_band) * 0.78
+            alt2 = max(0.0, min(1.0, -dy2 / 0.18))
+            ar2 = 44.0 * (1.0 - alt2) + 86.0 * alt2
+            ag2 = 58.0 * (1.0 - alt2) + 28.0 * alt2
+            ab2 = 122.0 * (1.0 - alt2) + 136.0 * alt2
+
+            r = min(255.0, r + ar1 * w1 + ar2 * w2)
+            g = min(255.0, g + ag1 * w1 + ag2 * w2)
+            b = min(255.0, b + ab1 * w1 + ab2 * w2)
+
+            hor_y = 0.89 + 0.022 * math.sin(xf * math.tau * 1.1 + 0.8)
+            if yf > hor_y:
+                fade = max(0.0, 1.0 - (yf - hor_y) / 0.022)
+                r = r * fade + 3.0 * (1.0 - fade)
+                g = g * fade + 6.0 * (1.0 - fade)
+                b = b * fade + 10.0 * (1.0 - fade)
+
+            idx = row_off + x * 3
+            buf[idx] = int(r)
+            buf[idx + 1] = int(g)
+            buf[idx + 2] = int(b)
+    return buf
+
+
+def _render_topographic_waves_buf(side: int) -> bytearray:
+    """Render Obsidian Topographic Waves onto a (side x side) RGB bytearray."""
+    buf = bytearray(side * side * 3)
+    num_levels = 10.0
+    for y in range(side):
+        yf = y / max(1, side - 1)
+        vert_vis = 0.16 + 0.84 * _smoothstep(0.22, 0.56, yf)
+        dy_clock = (yf - 0.26) / 0.20
+        row_off = y * side * 3
+        for x in range(side):
+            xf = x / max(1, side - 1)
+            dx_clock = (xf - 0.50) / 0.36
+            clock_pocket = min(
+                1.0, max(0.25, (dx_clock * dx_clock + dy_clock * dy_clock) * 0.75)
+            )
+            vis = vert_vis * clock_pocket
+
+            h = (
+                yf * 0.85
+                + 0.24 * math.sin(xf * 4.4 + yf * 2.2 + 0.4)
+                + 0.18 * math.cos(xf * 2.8 - yf * 3.6 + 1.2)
+                + 0.11 * math.sin(xf * 6.2 + yf * 4.0 - 0.7)
+            )
+            dh_dx = (
+                0.24 * 4.4 * math.cos(xf * 4.4 + yf * 2.2 + 0.4)
+                - 0.18 * 2.8 * math.sin(xf * 2.8 - yf * 3.6 + 1.2)
+                + 0.11 * 6.2 * math.cos(xf * 6.2 + yf * 4.0 - 0.7)
+            )
+            dh_dy = (
+                0.85
+                + 0.24 * 2.2 * math.cos(xf * 4.4 + yf * 2.2 + 0.4)
+                + 0.18 * 3.6 * math.sin(xf * 2.8 - yf * 3.6 + 1.2)
+                + 0.11 * 4.0 * math.cos(xf * 6.2 + yf * 4.0 - 0.7)
+            )
+            grad_mag = max(0.008, math.hypot(dh_dx, dh_dy) * num_levels / side)
+
+            scaled = h * num_levels
+            level_idx = int(math.floor(scaled + 0.5))
+            dist_px = abs(scaled - level_idx) / grad_mag
+
+            is_major = (level_idx % 3) == 0
+            line_half_w = 1.05 if is_major else 0.72
+            line_alpha = (
+                max(0.0, min(1.0, (line_half_w + 0.65 - dist_px) / 1.15)) * vis
+            )
+
+            shade = max(0.0, min(1.0, 0.50 + 0.10 * dh_dx - 0.12 * dh_dy))
+            elev_norm = max(0.0, min(1.0, (h + 0.2) / 1.4)) * vis
+            base_r = 5.0 + 22.0 * elev_norm * shade
+            base_g = 6.0 + 23.0 * elev_norm * shade
+            base_b = 8.0 + 27.0 * elev_norm * shade
+
+            if is_major:
+                cr, cg, cb = 128.0, 118.0, 102.0
+            else:
+                cr, cg, cb = 64.0, 68.0, 76.0
+
+            r = base_r * (1.0 - line_alpha) + cr * line_alpha
+            g = base_g * (1.0 - line_alpha) + cg * line_alpha
+            b = base_b * (1.0 - line_alpha) + cb * line_alpha
+
+            idx = row_off + x * 3
+            buf[idx] = int(min(255.0, r))
+            buf[idx + 1] = int(min(255.0, g))
+            buf[idx + 2] = int(min(255.0, b))
+    return buf
+
+
 def render_builtin_preset_image(
     preset_id: str, width: int = 466, height: int = 466
 ) -> Image.Image:
-    """Generate a crisp, low-power (>80% pure black) AMOLED procedural wallpaper as an RGB PIL Image."""
-    img = Image.new("RGB", (width, height), (0, 0, 0))
-    draw = ImageDraw.Draw(img)
-    cx, cy = width // 2, height // 2
-    max_r = min(cx, cy)
+    """Generate a square-master procedural wallpaper and center-crop to (width, height)."""
+    width = max(64, min(1920, int(width)))
+    height = max(64, min(1920, int(height)))
+    side = max(width, height)
 
-    if preset_id == "preset:amoled_grid":
-        step = max(24, width // 12)
-        for x in range(step // 2, width, step):
-            dist = abs(x - cx) / max(1, cx)
-            val = max(6, int(26 * (1.0 - dist * 0.55)))
-            draw.line([(x, 0), (x, height)], fill=(val // 2, val, int(val * 1.4)), width=1)
-        for y in range(step // 2, height, step):
-            dist = abs(y - cy) / max(1, cy)
-            val = max(6, int(26 * (1.0 - dist * 0.55)))
-            draw.line([(0, y), (width, y)], fill=(val // 2, val, int(val * 1.4)), width=1)
-        for r_frac, col in ((0.96, (14, 52, 84)), (0.72, (10, 32, 52)), (0.42, (8, 22, 36))):
-            r = int(max_r * r_frac)
-            draw.ellipse((cx - r, cy - r, cx + r, cy + r), outline=col, width=1)
-
-    elif preset_id == "preset:amoled_horizon":
-        horizon_y = int(height * 0.62)
-        for y in range(horizon_y - 60, height):
+    if preset_id == "preset:pine_ridges":
+        grid = min(side, 280)
+        buf = _render_pine_ridges_buf(grid)
+        master = Image.frombytes("RGB", (grid, grid), bytes(buf))
+        if grid != side:
+            master = master.resize((side, side), resample=Image.Resampling.BICUBIC)
+    elif preset_id == "preset:twilight_dunes":
+        grid = min(side, 280)
+        buf = _render_twilight_dunes_buf(grid)
+        master = Image.frombytes("RGB", (grid, grid), bytes(buf))
+        if grid != side:
+            master = master.resize((side, side), resample=Image.Resampling.BICUBIC)
+    elif preset_id == "preset:aurora_veil":
+        grid = min(side, 260)
+        buf = _render_aurora_veil_buf(grid)
+        master = Image.frombytes("RGB", (grid, grid), bytes(buf))
+        if grid != side:
+            master = master.resize((side, side), resample=Image.Resampling.BICUBIC)
+    elif preset_id == "preset:topographic_waves":
+        grid = min(side, 320)
+        buf = _render_topographic_waves_buf(grid)
+        master = Image.frombytes("RGB", (grid, grid), bytes(buf))
+        if grid != side:
+            master = master.resize((side, side), resample=Image.Resampling.BICUBIC)
+    else:  # Default: preset:steel_horizon (Deep Steel Horizon)
+        master = Image.new("RGB", (side, side), (0, 0, 0))
+        draw = ImageDraw.Draw(master)
+        cx = side // 2
+        horizon_y = int(side * 0.62)
+        band_h = max(1, int(side * 0.13))
+        for y in range(max(0, horizon_y - band_h), side):
             if y < horizon_y:
-                t = (y - (horizon_y - 60)) / 60.0
+                t = (y - (horizon_y - band_h)) / float(band_h)
                 r_c = int(10 * (t**2))
                 g_c = int(42 * (t**2))
                 b_c = int(78 * (t**2))
             else:
-                t = 1.0 - min(1.0, (y - horizon_y) / max(1, height - horizon_y))
+                t = 1.0 - min(1.0, (y - horizon_y) / max(1, side - horizon_y))
                 r_c = int(8 * (t**1.8))
                 g_c = int(28 * (t**1.8))
                 b_c = int(52 * (t**1.8))
-            draw.line([(0, y), (width, y)], fill=(r_c, g_c, b_c))
-        draw.line([(0, horizon_y), (width, horizon_y)], fill=(28, 96, 156), width=2)
+            draw.line([(0, y), (side, y)], fill=(r_c, g_c, b_c))
+        draw.line([(0, horizon_y), (side, horizon_y)], fill=(28, 96, 156), width=2)
         for deg in range(-75, 80, 15):
             rad = math.radians(deg)
-            x_end = cx + int(math.sin(rad) * width * 0.9)
-            draw.line([(cx, horizon_y), (x_end, height)], fill=(12, 38, 64), width=1)
+            x_end = cx + int(math.sin(rad) * side * 0.9)
+            draw.line([(cx, horizon_y), (x_end, side)], fill=(12, 38, 64), width=1)
 
-    elif preset_id == "preset:amoled_nebula":
-        for r in range(max_r, 4, -3):
-            t = 1.0 - (r / max_r)
-            glow = math.exp(-((r / (max_r * 0.52)) ** 2))
-            r_c = int(24 * glow)
-            g_c = int(18 * (t**1.5))
-            b_c = int(68 * glow + 16 * t)
-            draw.ellipse((cx - r, cy - r, cx + r, cy + r), fill=(r_c, g_c, b_c))
-        inner = int(max_r * 0.58)
-        draw.ellipse((cx - inner, cy - inner, cx + inner, cy + inner), fill=(0, 0, 0))
-        draw.ellipse((cx - inner, cy - inner, cx + inner, cy + inner), outline=(28, 42, 88), width=2)
-
-    elif preset_id == "preset:amoled_ember":
-        for r in range(int(max_r * 0.98), int(max_r * 0.78), -2):
-            t = (r - max_r * 0.78) / (max_r * 0.20)
-            intensity = math.sin(t * math.pi)
-            draw.ellipse(
-                (cx - r, cy - r, cx + r, cy + r),
-                outline=(int(92 * intensity), int(38 * intensity), int(6 * intensity)),
-                width=2,
-            )
-
-    else:  # Default: preset:amoled_rings
-        for idx, frac in enumerate((0.97, 0.88, 0.76, 0.62, 0.46, 0.28)):
-            r = int(max_r * frac)
-            shade = max(12, 46 - idx * 6)
-            col = (shade // 3, int(shade * 0.85), int(shade * 1.35))
-            draw.ellipse((cx - r, cy - r, cx + r, cy + r), outline=col, width=2 if idx == 0 else 1)
-        for deg in range(0, 360, 30):
-            rad = math.radians(deg)
-            r1 = int(max_r * 0.90)
-            r2 = int(max_r * 0.96)
-            x1, y1 = cx + int(r1 * math.cos(rad)), cy + int(r1 * math.sin(rad))
-            x2, y2 = cx + int(r2 * math.cos(rad)), cy + int(r2 * math.sin(rad))
-            draw.line([(x1, y1), (x2, y2)], fill=(20, 68, 108), width=2 if deg % 90 == 0 else 1)
-
-    return img
+    if width != side or height != side:
+        left = (side - width) // 2
+        top = (side - height) // 2
+        return master.crop((left, top, left + width, top + height))
+    return master
 
 
 def render_builtin_preset_bytes(
