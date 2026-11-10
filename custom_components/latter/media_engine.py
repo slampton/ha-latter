@@ -28,7 +28,7 @@ from .browse_engine import (
 )
 from .const import CONF_MA_PLAYER_ENTITY, DOMAIN
 from .issue_ids import link_ma_player_issue_id
-from .ma_link import configured_link, suggest_ma_player
+from .ma_link import configured_link, slug_matched_ma_player, suggest_ma_player
 from .identity import (
     device_entities,
     find_device_entity_by_suffix,
@@ -353,6 +353,13 @@ def resolve_ma_counterpart_entity(
             if target_macs & cand_macs:
                 matched_entity = c_entry.entity_id
                 break
+
+    # Pass 3: exact node slug match for a Latter Device's Sendspin player (`media_player.<device_slug>`)
+    if matched_entity is None and owner_coord is not None:
+        matched_entity = slug_matched_ma_player(
+            getattr(owner_coord, "device_slug", None),
+            (c_entry.entity_id for c_entry, _c_dev in ma_candidates),
+        )
 
     if owner_coord is not None:
         _update_ma_link_issue(

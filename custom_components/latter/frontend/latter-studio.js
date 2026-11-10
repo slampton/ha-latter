@@ -1604,8 +1604,8 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
               <div id="embedded-music" class="settings-list"></div>
               <h4 class="subsection-title">Speaker</h4>
               <div class="settings-list">
-                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-default_speaker">Default Speaker</label></div><div class="settings-row-control"><select id="cfg-default_speaker" onchange="saveField('device', this)"></select></div></div>
-                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-ma_player_entity">Music Assistant Player</label><p class="row-description">This Device's own player in Music Assistant, needed for library playback, queues and lyrics.</p></div><div class="settings-row-control"><select id="cfg-ma_player_entity" onchange="saveField('device', this)"></select></div></div>
+                <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-default_speaker">Default Speaker</label><p class="row-description">The speaker this Device controls and shows on its Music screen.</p></div><div class="settings-row-control"><select id="cfg-default_speaker" onchange="saveField('device', this)"></select></div></div>
+                <div class="settings-row hidden" id="row-ma-player-entity"><div class="settings-row-text"><label class="row-label" for="cfg-ma_player_entity">Music Assistant Player</label><p class="row-description" id="desc-ma-player-entity">Automatic match did not find this Device's player in Music Assistant. Choose it here for library playback, queues and lyrics.</p></div><div class="settings-row-control"><select id="cfg-ma_player_entity" onchange="saveField('device', this)"></select></div></div>
                 <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-area_handoff">Media Follows This Device to Its New Area</label><p class="row-description">When Bluetooth moves this Device to another Area, or you pick one on it, its speaker switches to that Area's speaker and playing music moves along.</p></div><div class="settings-row-control"><input type="checkbox" class="switch" role="switch" id="cfg-area_handoff" onchange="saveField('device', this)"></div></div>
               </div>
               <details class="sub-collapsible">
@@ -3551,7 +3551,7 @@ function renderCohesiveDeviceSections() {
 
   // 6. Sound & Media: Split player appearance/shortcuts vs Library Sorting drawer
   const soundItems = sortByOrder(getSectionItems("sound"), [
-    "alert volume", "volume step", "game sound"
+    "speaker volume", "alert volume", "volume step", "game sound"
   ]);
   doc.getElementById("embedded-sound").innerHTML = soundItems.map(it => renderNativeControlRow(it)).join("");
 
@@ -4565,6 +4565,18 @@ function loadDeviceForm(data) {
   populateSelect("cfg-assigned_person", cat.persons, cfg.assigned_person);
   populateSelect("cfg-default_speaker", cat.ma_speakers, cfg.default_speaker, true);
   populateSelect("cfg-ma_player_entity", cat.ma_players, cfg.ma_player_entity, true);
+  const autoMaEntity = cfg.device_slug ? `media_player.${cfg.device_slug}` : "";
+  const savedMa = String(cfg.ma_player_entity || "").trim();
+  const maUnmatched = data.live?.ma_link_matched === false;
+  const hasCustomMaOverride = Boolean(savedMa && savedMa !== autoMaEntity);
+  const maRow = doc.getElementById("row-ma-player-entity");
+  const maDesc = doc.getElementById("desc-ma-player-entity");
+  if (maRow) maRow.classList.toggle("hidden", !(maUnmatched || hasCustomMaOverride));
+  if (maDesc) {
+    maDesc.textContent = maUnmatched
+      ? `Automatic match did not find ${autoMaEntity || "this Device's player"} in Music Assistant. Choose this Device's player for library playback, queues and lyrics.`
+      : `Linked manually (${autoMaEntity || "default slug"} was not used). Clear to return to automatic matching.`;
+  }
 }
 
 async function refreshState(forceForm=false) {

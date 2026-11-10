@@ -137,7 +137,7 @@ def classify_esphome_entity_section(
     if any(k in clean_low or k in ent_suffix for k in ("voice", "wake_word", "micro_wake", "mic", "microphone", "sensitivity", "assist")):
         return "voice", None
 
-    if any(k in clean_low or k in ent_suffix for k in ("sound", "chime", "beep", "ringtone", "alert_volume", "volume_step", "dac", "es8311")):
+    if any(k in clean_low or k in ent_suffix for k in ("sound", "chime", "beep", "ringtone", "speaker_volume", "alert_volume", "volume_step", "dac", "es8311")):
         return "sound", None
 
     if any(k in clean_low or k in ent_suffix for k in ("ble", "beacon", "ibeacon", "presence", "area")):

@@ -884,6 +884,21 @@ class TestMaPlayerLink(unittest.TestCase):
         self.assertIsNone(suggest((None, "desk-assistant-p4-86"), self.CANDIDATES))
         self.assertIsNone(suggest(("Slampton", "desk-assistant-p4-86"), self.CANDIDATES), "exact match only")
 
+    def test_slug_matched_ma_player_matches_exact_node_slug_only(self) -> None:
+        ma_ids = [c[0] for c in self.CANDIDATES]
+        self.assertEqual(
+            ma_link.slug_matched_ma_player("desk_assistant", ma_ids),
+            "media_player.desk_assistant",
+        )
+        self.assertEqual(
+            ma_link.slug_matched_ma_player("  DESK_ASSISTANT ", ma_ids),
+            "media_player.desk_assistant",
+        )
+        self.assertIsNone(ma_link.slug_matched_ma_player("desk", ma_ids))
+        self.assertIsNone(ma_link.slug_matched_ma_player("desk_assistant_music", ma_ids))
+        self.assertIsNone(ma_link.slug_matched_ma_player("", ma_ids))
+        self.assertIsNone(ma_link.slug_matched_ma_player(None, ma_ids))
+
 
 def _const_conf_values() -> set[str]:
     """Return every CONF_* string value defined in const.py."""

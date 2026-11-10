@@ -963,6 +963,11 @@ def build_studio_state_payload(
         },
         "live": {
             "active_area_name": coordinator.active_area_name,
+            "ma_link_matched": bool(
+                local_ma_id
+                or not local_spk_id
+                or not hass.config_entries.async_entries("music_assistant")
+            ),
             "group_sync_status": compute_device_group_sync_status(
                 hass, coordinator, base.get("device_groups")
             ),
