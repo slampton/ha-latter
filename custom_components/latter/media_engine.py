@@ -272,8 +272,9 @@ def resolve_ma_counterpart_entity(
     )
     if speaker_entity_id in cache:
         cached_ent = cache[speaker_entity_id]
-        if cached_ent is None or ent_reg.async_get(cached_ent) is not None:
+        if cached_ent is not None and ent_reg.async_get(cached_ent) is not None:
             return cached_ent
+        cache.pop(speaker_entity_id, None)
 
     dev_reg = dr.async_get(hass)
     target_dev_ids: set[str] = set()
@@ -318,20 +319,13 @@ def resolve_ma_counterpart_entity(
             target_macs.update(_extract_macs_from_device_or_entry(d_obj, None))
 
     ma_candidates: list[tuple[er.RegistryEntry, dr.DeviceEntry | None]] = []
-    for ma_cfg in hass.config_entries.async_entries("music_assistant"):
-        for entry in er.async_entries_for_config_entry(ent_reg, ma_cfg.entry_id):
-            if (
-                entry.domain != "media_player"
-                or entry.platform != "music_assistant"
-                or entry.disabled_by
-            ):
-                continue
-            c_dev = dev_reg.async_get(entry.device_id) if entry.device_id else None
-            st = hass.states.get(entry.entity_id)
-            if st is not None and st.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN):
-                ma_candidates.insert(0, (entry, c_dev))
-            else:
-                ma_candidates.append((entry, c_dev))
+    for entry in ma_player_entities(hass):
+        c_dev = dev_reg.async_get(entry.device_id) if entry.device_id else None
+        st = hass.states.get(entry.entity_id)
+        if st is not None and st.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+            ma_candidates.insert(0, (entry, c_dev))
+        else:
+            ma_candidates.append((entry, c_dev))
 
     matched_entity: str | None = None
 
@@ -365,7 +359,8 @@ def resolve_ma_counterpart_entity(
             hass, owner_coord, speaker_entity_id, matched_entity is not None
         )
 
-    cache[speaker_entity_id] = matched_entity
+    if matched_entity is not None:
+        cache[speaker_entity_id] = matched_entity
     return matched_entity
 
 
@@ -670,7 +665,8 @@ async def async_announce_on_targets(
         ma_speakers = [
             s
             for s in fallback_speakers
-            if hass.states.get(s) and is_music_assistant_player(hass, hass.states.get(s))
+            if (st := hass.states.get(s)) is not None
+            and is_music_assistant_player(hass, st)
         ]
         other_speakers = [s for s in fallback_speakers if s not in ma_speakers]
 

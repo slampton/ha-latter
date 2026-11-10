@@ -52,6 +52,112 @@ def read_volume_from_target(
     return None
 
 
+async def async_execute_volume_action(
+    hass: HomeAssistant,
+    vol_target: str,
+    action: str,
+    volume_level: float | None = None,
+) -> bool:
+    """Execute a volume action ('set', 'up', 'down', 'mute', 'volume_up', 'volume_down', 'volume_mute') on a media_player, number, or input_number."""
+    if not vol_target:
+        return False
+    state_obj = hass.states.get(vol_target)
+    target_domain = state_obj.domain if state_obj else vol_target.split(".", 1)[0]
+    norm_action = action.strip().lower()
+    if norm_action == "volume_up":
+        norm_action = "up"
+    elif norm_action == "volume_down":
+        norm_action = "down"
+    elif norm_action == "volume_mute":
+        norm_action = "mute"
+
+    if target_domain in ("number", "input_number"):
+        cur_val = (
+            float(state_obj.state)
+            if (state_obj and state_obj.state not in ("unavailable", "unknown"))
+            else 50.0
+        )
+        min_v = float(state_obj.attributes.get("min", 0.0)) if state_obj else 0.0
+        max_v = float(state_obj.attributes.get("max", 100.0)) if state_obj else 100.0
+        native_step = state_obj.attributes.get("step") if state_obj else None
+        step = float(native_step) if native_step else max(1.0, (max_v - min_v) * 0.05)
+
+        if norm_action == "up":
+            new_val = min(max_v, cur_val + step)
+        elif norm_action == "down":
+            new_val = max(min_v, cur_val - step)
+        elif volume_level is not None:
+            lvl = volume_level / 100.0 if volume_level > 1.0 else volume_level
+            new_val = min_v + max(0.0, min(1.0, lvl)) * (max_v - min_v)
+        else:
+            return False
+
+        await hass.services.async_call(
+            target_domain,
+            "set_value",
+            {ATTR_ENTITY_ID: vol_target, "value": round(new_val, 2)},
+            blocking=False,
+        )
+        return True
+
+    if target_domain != "media_player":
+        return False
+
+    supports_vol_set = bool(
+        state_obj is not None and state_obj.attributes.get("volume_level") is not None
+    )
+    if norm_action in ("up", "down") and volume_level is not None and supports_vol_set:
+        lvl = volume_level / 100.0 if volume_level > 1.0 else volume_level
+        lvl = max(0.0, min(1.0, lvl))
+        await hass.services.async_call(
+            "media_player",
+            "volume_set",
+            {ATTR_ENTITY_ID: vol_target, "volume_level": round(lvl, 2)},
+            blocking=False,
+        )
+        return True
+    if norm_action == "up":
+        await hass.services.async_call(
+            "media_player",
+            "volume_up",
+            {ATTR_ENTITY_ID: vol_target},
+            blocking=False,
+        )
+        return True
+    if norm_action == "down":
+        await hass.services.async_call(
+            "media_player",
+            "volume_down",
+            {ATTR_ENTITY_ID: vol_target},
+            blocking=False,
+        )
+        return True
+    if norm_action == "mute":
+        is_muted = (
+            bool(state_obj.attributes.get("is_volume_muted", False))
+            if state_obj
+            else False
+        )
+        await hass.services.async_call(
+            "media_player",
+            "volume_mute",
+            {ATTR_ENTITY_ID: vol_target, "is_volume_muted": not is_muted},
+            blocking=False,
+        )
+        return True
+    if volume_level is not None:
+        lvl = volume_level / 100.0 if volume_level > 1.0 else volume_level
+        lvl = max(0.0, min(1.0, lvl))
+        await hass.services.async_call(
+            "media_player",
+            "volume_set",
+            {ATTR_ENTITY_ID: vol_target, "volume_level": round(lvl, 2)},
+            blocking=False,
+        )
+        return True
+    return False
+
+
 async def async_execute_ma_queue_transfer(
     hass: HomeAssistant,
     local_speaker: str,
@@ -65,6 +171,7 @@ async def async_execute_ma_queue_transfer(
     """Execute Music Assistant 2.10.8+ queue transfer, quiesce local Sendspin speaker, and verify position handoff."""
     src_ma = resolve_ma_counterpart_entity(hass, source_speaker)
     tgt_ma = resolve_ma_counterpart_entity(hass, target_speaker)
+    cmd_target = tgt_ma or target_speaker
     is_from_local = bool(local_speaker and source_speaker == local_speaker)
 
     transferred_via_ma = False
@@ -106,38 +213,23 @@ async def async_execute_ma_queue_transfer(
                 await hass.services.async_call(
                     "media_player",
                     "media_pause",
-                    {ATTR_ENTITY_ID: source_speaker},
+                    {ATTR_ENTITY_ID: src_ma or source_speaker},
                     blocking=False,
                 )
-            if tgt_ma and hass.services.has_service("music_assistant", "play_media"):
-                await hass.services.async_call(
-                    "music_assistant",
-                    "play_media",
-                    {
-                        ATTR_ENTITY_ID: tgt_ma,
-                        "media_id": media_content_id,
-                        "enqueue": "replace",
-                    },
-                    blocking=True,
-                )
-            else:
-                await hass.services.async_call(
-                    "media_player",
-                    "play_media",
-                    {
-                        ATTR_ENTITY_ID: target_speaker,
-                        "media_content_id": media_content_id,
-                        "media_content_type": media_content_type or "music",
-                    },
-                    blocking=True,
-                )
+            await async_play_media_with_ma_fallback(
+                hass,
+                target_speaker,
+                media_content_id,
+                media_type=media_content_type or "music",
+                enqueue="replace",
+            )
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("Fallback play_media handoff failed: %s", err)
 
     try:
         async with asyncio.timeout(4.5):
             await asyncio.sleep(1.2)
-            updated_tgt = hass.states.get(target_speaker)
+            updated_tgt = hass.states.get(cmd_target) or hass.states.get(target_speaker)
             if updated_tgt is None:
                 return
 
@@ -146,7 +238,7 @@ async def async_execute_ma_queue_transfer(
                     await hass.services.async_call(
                         "media_player",
                         "media_play",
-                        {ATTR_ENTITY_ID: target_speaker},
+                        {ATTR_ENTITY_ID: cmd_target},
                         blocking=False,
                     )
                 except Exception:  # noqa: BLE001
@@ -159,7 +251,7 @@ async def async_execute_ma_queue_transfer(
                         "media_player",
                         "media_seek",
                         {
-                            ATTR_ENTITY_ID: target_speaker,
+                            ATTR_ENTITY_ID: cmd_target,
                             "seek_position": round(handoff_position, 1),
                         },
                         blocking=False,
@@ -248,7 +340,7 @@ async def async_resume_idle_speaker_queue(
                 "media_player",
                 "media_seek",
                 {
-                    ATTR_ENTITY_ID: speaker_entity_id,
+                    ATTR_ENTITY_ID: play_target,
                     "seek_position": round(resume_pos, 1),
                 },
                 blocking=False,

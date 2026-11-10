@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 import textwrap
@@ -16,6 +17,7 @@ from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import HomeAssistant, State
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 
+from .const import INTEGRATION_VERSION
 from .ma_browse import album_track_slots, artist_album_slots, browse_node_dict, choose_browse_entity, text_slot
 
 _LOGGER = logging.getLogger(__name__)
@@ -248,6 +250,7 @@ async def _browse_speakers(
         and st_loc.state not in ("unavailable", "unknown")
     )
 
+    ent_reg = er.async_get(hass)
     items: list[dict[str, Any]] = []
     for state_obj in hass.states.async_all("media_player"):
         if state_obj.state in ("unavailable", "unknown"):
@@ -264,8 +267,10 @@ async def _browse_speakers(
 
         is_local = ent_id in local_ids
 
-        if not is_local and not is_music_assistant_player(hass, state_obj):
-            continue
+        if not is_local:
+            reg_ent = ent_reg.async_get(ent_id)
+            if reg_ent is None or reg_ent.platform != "music_assistant":
+                continue
 
         friendly = (
             _format_local_speaker_name(hass, state_obj)
@@ -302,30 +307,41 @@ async def _browse_speakers(
             x["name"].lower(),
         )
     )
+    for item in items:
+        item.pop("_is_local", None)
+        item.pop("_is_last", None)
     return items
+
+
+_FAVORITE_MEDIA_TYPES: tuple[str, ...] = (
+    "playlist",
+    "artist",
+    "album",
+    "radio",
+    "podcast",
+    "audiobook",
+    "track",
+)
 
 
 async def _browse_favorites(
     hass: HomeAssistant, config_entry_id: str
 ) -> list[dict[str, Any]]:
-    """Aggregate favorite playlists, artists, albums, radio, podcasts, audiobooks, tracks."""
-    results: list[dict[str, Any]] = []
-    for mtype in (
-        "playlist",
-        "artist",
-        "album",
-        "radio",
-        "podcast",
-        "audiobook",
-        "track",
-    ):
-        raw_items = await _call_ma_get_library(
-            hass,
-            config_entry_id=config_entry_id,
-            media_type=mtype,
-            favorite=True,
-            limit=100,
+    """Aggregate favorite playlists, artists, albums, radio, podcasts, audiobooks, tracks concurrently."""
+    batches = await asyncio.gather(
+        *(
+            _call_ma_get_library(
+                hass,
+                config_entry_id=config_entry_id,
+                media_type=mtype,
+                favorite=True,
+                limit=100,
+            )
+            for mtype in _FAVORITE_MEDIA_TYPES
         )
+    )
+    results: list[dict[str, Any]] = []
+    for mtype, raw_items in zip(_FAVORITE_MEDIA_TYPES, batches, strict=True):
         for item in raw_items:
             uri = str(item.get("uri") or item.get("media_content_id") or "")
             name = str(item.get("name") or item.get("title") or "")
@@ -635,6 +651,41 @@ async def _browse_podcast_episodes(
     return results
 
 
+def _resolve_speaker_playing_metadata(
+    hass: HomeAssistant, speaker: str
+) -> tuple[str, str, str]:
+    """Resolve (title, artist, album) for a speaker, falling back to its Music Assistant counterpart."""
+    from .media_engine import resolve_ma_counterpart_entity
+
+    state_obj = hass.states.get(speaker) if speaker else None
+    attrs = state_obj.attributes if state_obj is not None else {}
+    title = str(attrs.get("media_title") or "")
+    artist = str(
+        attrs.get("media_artist")
+        or attrs.get("media_album_artist")
+        or ""
+    )
+    album = str(attrs.get("media_album_name") or "")
+
+    if speaker and (not title or not artist or not album):
+        ma_target = resolve_ma_counterpart_entity(hass, speaker)
+        if ma_target and ma_target != speaker:
+            ma_st = hass.states.get(ma_target)
+            if ma_st is not None:
+                m_attrs = ma_st.attributes
+                if not title:
+                    title = str(m_attrs.get("media_title") or "")
+                if not artist:
+                    artist = str(
+                        m_attrs.get("media_artist")
+                        or m_attrs.get("media_album_artist")
+                        or ""
+                    )
+                if not album:
+                    album = str(m_attrs.get("media_album_name") or "")
+    return title, artist, album
+
+
 async def async_browse_media_items(
     hass: HomeAssistant,
     mode: str,
@@ -653,15 +704,8 @@ async def async_browse_media_items(
     if mode == "speakers":
         return await _browse_speakers(hass, speaker, last_speaker, local_speaker)
 
-    state_obj = hass.states.get(speaker)
-    current_title = (
-        str(state_obj.attributes.get("media_title") or "") if state_obj else ""
-    )
-    current_album = (
-        str(state_obj.attributes.get("media_album_name") or "") if state_obj else ""
-    )
-    current_artist = (
-        str(state_obj.attributes.get("media_artist") or "") if state_obj else ""
+    current_title, current_artist, current_album = _resolve_speaker_playing_metadata(
+        hass, speaker
     )
 
     if mode == "active_queue":
@@ -751,18 +795,16 @@ async def _browse_track_lyrics_or_bio(
     artist = parts[1] if len(parts) >= 2 else ""
     album = parts[2] if len(parts) >= 3 else ""
 
-    state_obj = hass.states.get(speaker)
-    if state_obj is not None:
+    if not title or not artist or not album:
+        cur_title, cur_artist, cur_album = _resolve_speaker_playing_metadata(
+            hass, speaker
+        )
         if not title:
-            title = str(state_obj.attributes.get("media_title") or "")
+            title = cur_title
         if not artist:
-            artist = str(
-                state_obj.attributes.get("media_artist")
-                or state_obj.attributes.get("media_album_artist")
-                or ""
-            )
+            artist = cur_artist
         if not album:
-            album = str(state_obj.attributes.get("media_album_name") or "")
+            album = cur_album
 
     clean_title = re.sub(
         r"\s*[\(\[][^\)\]]*(?:remaster|edition|version|mix|live|deluxe|mono|stereo)[^\)\]]*[\)\]]",
@@ -844,8 +886,18 @@ async def _browse_track_lyrics_or_bio(
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("music_assistant.get_queue lyrics/bio lookup failed: %s", err)
 
-    if config_entry_id:
-        if not raw_lyrics and clean_title:
+    session = async_get_clientsession(hass)
+    timeout = aiohttp.ClientTimeout(total=5.0)
+    headers = {
+        "User-Agent": f"HomeAssistant-Latter/{INTEGRATION_VERSION} (https://github.com/slampton/ha-latter)"
+    }
+
+    if len(_BROWSE_LYRICS_BIO_CACHE) >= 32 and cache_key not in _BROWSE_LYRICS_BIO_CACHE:
+        _BROWSE_LYRICS_BIO_CACHE.pop(next(iter(_BROWSE_LYRICS_BIO_CACHE)), None)
+    cache_entry = _BROWSE_LYRICS_BIO_CACHE.setdefault(cache_key, {})
+
+    if mode == "lyrics":
+        if config_entry_id and not raw_lyrics and clean_title:
             tracks = await _call_ma_get_library(
                 hass,
                 config_entry_id=config_entry_id,
@@ -859,6 +911,45 @@ async def _browse_track_lyrics_or_bio(
                     raw_lyrics = lyr
                     break
 
+        if not raw_lyrics and clean_title:
+            for s_title in (
+                [title.strip(), clean_title]
+                if clean_title.lower() != title.strip().lower()
+                else [clean_title]
+            ):
+                if raw_lyrics:
+                    break
+                try:
+                    q_url = f"https://lrclib.net/api/search?track_name={quote(s_title)}"
+                    if artist:
+                        q_url += f"&artist_name={quote(artist)}"
+                    async with session.get(q_url, timeout=timeout, headers=headers) as resp:
+                        if resp.status == 200:
+                            items = await resp.json()
+                            if isinstance(items, list) and items:
+                                first = items[0]
+                                if isinstance(first, dict):
+                                    raw_lyrics = str(
+                                        first.get("plainLyrics")
+                                        or first.get("syncedLyrics")
+                                        or ""
+                                    ).strip()
+                except Exception as err:  # noqa: BLE001
+                    _LOGGER.debug("LRCLIB fallback failed for '%s': %s", s_title, err)
+
+        if raw_lyrics:
+            lyrics_lines = _wrap_text_to_slot_lines(raw_lyrics, width=32)
+            cache_entry["lyrics"] = lyrics_lines
+        else:
+            lyrics_lines = ["No lyrics found for this track."]
+        if raw_album_bio and "bio" not in cache_entry:
+            cache_entry["bio"] = _wrap_text_to_slot_lines(f"ALBUM: {raw_album_bio}", width=32)
+        return [
+            {"name": ln, "id": "", "type": "text", "active": False}
+            for ln in lyrics_lines
+        ]
+
+    if config_entry_id:
         if not raw_artist_bio and artist:
             artists = await _call_ma_get_library(
                 hass,
@@ -887,34 +978,6 @@ async def _browse_track_lyrics_or_bio(
                     raw_album_bio = desc
                     break
 
-    session = async_get_clientsession(hass)
-    timeout = aiohttp.ClientTimeout(total=5.0)
-    headers = {"User-Agent": "HomeAssistant-Latter/2.0 (https://github.com/slampton/ha-latter)"}
-
-    # 2. Fallback to LRCLIB if MA didn't return lyrics
-    if not raw_lyrics and clean_title:
-        for s_title in ([title.strip(), clean_title] if clean_title.lower() != title.strip().lower() else [clean_title]):
-            if raw_lyrics:
-                break
-            try:
-                q_url = f"https://lrclib.net/api/search?track_name={quote(s_title)}"
-                if artist:
-                    q_url += f"&artist_name={quote(artist)}"
-                async with session.get(q_url, timeout=timeout, headers=headers) as resp:
-                    if resp.status == 200:
-                        items = await resp.json()
-                        if isinstance(items, list) and items:
-                            first = items[0]
-                            if isinstance(first, dict):
-                                raw_lyrics = str(
-                                    first.get("plainLyrics")
-                                    or first.get("syncedLyrics")
-                                    or ""
-                                ).strip()
-            except Exception as err:  # noqa: BLE001
-                _LOGGER.debug("LRCLIB fallback failed for '%s': %s", s_title, err)
-
-    # 3. Fallback to Wikipedia REST API if MA didn't return Artist / Album Bio
     if not raw_artist_bio and not raw_album_bio and artist:
         for query_term in (
             f"{clean_album} ({artist} album)",
@@ -945,23 +1008,19 @@ async def _browse_track_lyrics_or_bio(
     if raw_artist_bio and raw_artist_bio != raw_album_bio:
         combined_bio_parts.append(f"ARTIST: {raw_artist_bio}")
     combined_bio = "\n".join(combined_bio_parts).strip()
+    has_rich_bio = bool(combined_bio)
     if not combined_bio:
         combined_bio = f"{clean_title} by {artist or 'Unknown Artist'}" + (
             f" — Album: {clean_album}" if clean_album else ""
         )
 
-    lyrics_lines = _wrap_text_to_slot_lines(raw_lyrics, width=32) if raw_lyrics else ["No lyrics found for this track."]
     bio_lines = _wrap_text_to_slot_lines(combined_bio, width=32)
+    if has_rich_bio:
+        cache_entry["bio"] = bio_lines
+    if raw_lyrics and "lyrics" not in cache_entry:
+        cache_entry["lyrics"] = _wrap_text_to_slot_lines(raw_lyrics, width=32)
 
-    if len(_BROWSE_LYRICS_BIO_CACHE) >= 32:
-        _BROWSE_LYRICS_BIO_CACHE.pop(next(iter(_BROWSE_LYRICS_BIO_CACHE)), None)
-    _BROWSE_LYRICS_BIO_CACHE[cache_key] = {
-        "lyrics": lyrics_lines,
-        "bio": bio_lines,
-    }
-
-    target_lines = lyrics_lines if mode == "lyrics" else bio_lines
     return [
         {"name": ln, "id": "", "type": "text", "active": False}
-        for ln in target_lines
+        for ln in bio_lines
     ]
