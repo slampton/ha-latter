@@ -724,6 +724,17 @@ def _build_system_section(
 
     system_view = system_settings_view(hass.data.get(DOMAIN, {}).get(DATA_GLOBAL_CONFIG) or {})
     onboarded_slugs = {c.device_slug for c in coords}
+    sig_coord = next((c for c in coords if c.subentry_id == current_subentry_id), None) or (
+        coords[0] if coords else None
+    )
+    system_wallpapers = list_wallpaper_catalog(
+        hass,
+        sig_coord.device_slug if sig_coord else "system",
+        "",
+        [],
+        sign_resource=sig_coord.sign_payload_resource if sig_coord else None,
+        display_shape="square",
+    )
 
     return {
         "internal_logs": internal_logs,
@@ -744,6 +755,7 @@ def _build_system_section(
         ),
         "device_groups": device_groups,
         "system_config": system_view,
+        "system_wallpapers": system_wallpapers,
         "doorbells": _build_doorbells(hass, coords, system_view["camera_entities"]),
     }
 

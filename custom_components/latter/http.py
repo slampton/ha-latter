@@ -118,9 +118,12 @@ def _render_preset_to_baseline_jpeg(
     width: int,
     height: int,
     circular_mask: bool = False,
+    darken: float = 0.78,
 ) -> bytes:
-    """Render a built-in AMOLED preset directly to Baseline JPEG in a single pass."""
+    """Render a bundled default wallpaper directly to Baseline JPEG in a single pass."""
     fitted = render_builtin_preset_image(preset_id, width, height)
+    if darken < 1.0:
+        fitted = ImageEnhance.Brightness(fitted).enhance(darken)
     if circular_mask:
         mask, black_bg = _get_circular_mask_surfaces(width, height)
         fitted = Image.composite(fitted, black_bg, mask)
@@ -325,7 +328,7 @@ class LatterWallpaperProxyView(HomeAssistantView):
         ):
             return web.Response(status=HTTPStatus.FORBIDDEN, text="Invalid signature")
 
-        darken_factor = 1.0 if wp_source.startswith("preset:") else 0.78
+        darken_factor = 0.78
         cache_key = (f"wp:{wp_source}", width, height, is_circle, darken_factor)
         cached_bytes = _ARTWORK_LRU_CACHE.get(cache_key)
         if cached_bytes is not None:
@@ -344,6 +347,7 @@ class LatterWallpaperProxyView(HomeAssistantView):
                     width,
                     height,
                     is_circle,
+                    darken_factor,
                 )
             except Exception as err:  # noqa: BLE001
                 _LOGGER.debug("Wallpaper preset rendering failed: %s", err)

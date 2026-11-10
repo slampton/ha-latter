@@ -33,6 +33,8 @@ SYSTEM_COMMANDS: frozenset[str] = frozenset(
         "seed_group_baseline",
         "set_group_device_setting",
         "test_doorbell_speaker",
+        "upload_system_wallpaper",
+        "delete_system_wallpaper",
         "save_system_config",
     }
 )

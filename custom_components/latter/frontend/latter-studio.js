@@ -486,7 +486,8 @@ const STUDIO_STYLES = `
     flex-wrap: wrap;
     gap: var(--studio-space-2);
   }
-  .input-action-row > input, .input-action-row > select { flex: 1 1 180px; min-width: 0; }
+  .input-action-row > input:not([type="file"]), .input-action-row > select { flex: 1 1 180px; min-width: 0; }
+  .input-action-row > input[type="file"] { flex: 0 1 auto; max-width: 100%; }
   .segmented {
     display: inline-flex;
     gap: var(--studio-space-1);
@@ -1082,6 +1083,8 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
               <button type="button" class="kv-row" onclick="openSystemSection('remotes', 'card-vol-overrides')"><span>Speaker Volume Overrides</span><strong id="sys-sum-vol">—</strong></button>
               <button type="button" class="kv-row" onclick="openSystemSection('shared_entities', 'card-cameras')"><span>Cameras</span><strong id="sys-sum-cameras">—</strong></button>
               <button type="button" class="kv-row" onclick="openSystemSection('shared_entities', 'card-calendars')"><span>Calendars</span><strong id="sys-sum-calendars">—</strong></button>
+              <button type="button" class="kv-row" onclick="openSystemSection('shared_entities', 'card-custom-colors')"><span>Custom Colors</span><strong id="sys-sum-colors">—</strong></button>
+              <button type="button" class="kv-row" onclick="openSystemSection('shared_entities', 'card-system-wallpapers')"><span>Wallpapers</span><strong id="sys-sum-wallpapers">—</strong></button>
               <button type="button" class="kv-row" onclick="openSystemSection('system_sync', '')"><span>Device Groups</span><strong id="sys-sum-groups">—</strong></button>
             </div>
           </div>
@@ -1159,6 +1162,32 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
               </div>
             </div>
           </div>
+          <div class="card" id="card-custom-colors">
+            <div class="card-header">
+              <div class="card-heading">
+                <h3 class="card-title">Custom Colors</h3>
+                <p class="card-description">Shared theme colors available on every Device.</p>
+              </div>
+              <div class="card-header-actions"><button type="button" class="btn btn-secondary btn-compact" onclick="openColorWheelModal('system')">Add Color</button></div>
+            </div>
+            <div class="card-content"><div id="sys-custom-palettes-list" class="settings-list"></div></div>
+          </div>
+          </div>
+        </div>
+
+        <div class="card" id="card-system-wallpapers">
+          <div class="card-header">
+            <div class="card-heading">
+              <h3 class="card-title">Wallpapers</h3>
+              <p class="card-description">Shared across every Device. Pick the active wallpaper or rotation schedule on each Device's Display &amp; Home page.</p>
+            </div>
+          </div>
+          <div class="card-content">
+            <div class="input-action-row">
+              <input type="file" id="sys-wp-file-input" accept="image/*" aria-label="Wallpaper image" onchange="onWallpaperFileChange(this, 'btn-upload-sys-wp')">
+              <button type="button" class="btn btn-primary" id="btn-upload-sys-wp" disabled onclick="uploadSystemWallpaperFile()">Upload Photo</button>
+            </div>
+            <div id="sys-wp-gallery-grid" class="wp-gallery"></div>
           </div>
         </div>
       </section>
@@ -1464,10 +1493,6 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
                   </div>
                 </div>
               </div>
-              <details class="sub-collapsible" id="details-custom-palettes">
-                <summary>Saved Custom Colors</summary>
-                <div class="card-content"><div id="sys-custom-palettes-list" class="settings-list"></div></div>
-              </details>
             </div>
           </div>
           <div class="card" id="card-activity">
@@ -1536,8 +1561,8 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
           </div>
           <div class="card-content">
             <div class="input-action-row">
-              <input type="file" id="wp-file-input" accept="image/*" aria-label="Wallpaper image">
-              <button type="button" class="btn btn-primary" onclick="uploadWallpaperFile()">Upload Photo</button>
+              <input type="file" id="wp-file-input" accept="image/*" aria-label="Wallpaper image" onchange="onWallpaperFileChange(this, 'btn-upload-wp')">
+              <button type="button" class="btn btn-primary" id="btn-upload-wp" disabled onclick="uploadWallpaperFile()">Upload Photo</button>
             </div>
             <div id="wp-gallery-grid" class="wp-gallery"></div>
           </div>
@@ -1956,6 +1981,8 @@ const SYSTEM_WS_COMMANDS = new Set([
   "seed_group_baseline",
   "set_group_device_setting",
   "test_doorbell_speaker",
+  "upload_system_wallpaper",
+  "delete_system_wallpaper",
   "save_system_config"
 ]);
 
@@ -2785,6 +2812,8 @@ function renderSystemOverview(systemDevices, systemControls, cfg) {
   setSysTxt("sys-sum-vol", (sysCfg.volume_overrides || []).length);
   setSysTxt("sys-sum-cameras", (sysCfg.camera_entities || []).length);
   setSysTxt("sys-sum-calendars", (sysCfg.calendar_entities || []).length);
+  setSysTxt("sys-sum-colors", (sysCfg.custom_palettes || []).length);
+  setSysTxt("sys-sum-wallpapers", (STATE?.system_wallpapers || []).length);
   setSysTxt("sys-sum-groups", `${groups.length} group${groups.length === 1 ? "" : "s"}`);
 
   renderAnnounceTargets();
@@ -3605,6 +3634,28 @@ function renderRawEntityList() {
   }
 }
 
+function onWallpaperFileChange(inputEl, btnId) {
+  const btn = doc.getElementById(btnId);
+  if (btn) btn.disabled = !(inputEl && inputEl.files && inputEl.files.length > 0);
+}
+
+function renderSystemWallpaperGallery(wallpapers) {
+  const box = doc.getElementById("sys-wp-gallery-grid");
+  if (!box) return;
+  const items = wallpapers || [];
+  box.innerHTML = items.length ? items.map(wp => {
+    const idArg = jsArg(wp.id);
+    return `<div class="wp-card">
+      <img class="wp-thumb square" src="${esc(wp.thumb_url || "")}" loading="lazy" alt="${esc(wp.name)}">
+      <div class="wp-title">${esc(wp.name)}</div>
+      <div class="wp-actions">
+        <span class="chip">${wp.deletable ? "Uploaded" : "Default"}</span>
+        ${wp.deletable ? iconButtonHtml(ICON_DELETE, `Delete ${wp.name}`, `deleteSystemWallpaper(${idArg})`, "danger") : ""}
+      </div>
+    </div>`;
+  }).join("") : emptyStateHtml("No wallpapers available.");
+}
+
 function renderWallpaperGallery(wallpapers, slug, shape) {
   const box = doc.getElementById("wp-gallery-grid");
   if (!box) return;
@@ -3626,9 +3677,43 @@ function renderWallpaperGallery(wallpapers, slug, shape) {
   }).join("") : emptyStateHtml("No wallpapers available.");
 }
 
+async function uploadSystemWallpaperFile() {
+  const input = doc.getElementById("sys-wp-file-input");
+  const btn = doc.getElementById("btn-upload-sys-wp");
+  if (!input || !input.files || !input.files.length) {
+    showToast("Failed: select an image file first", "error");
+    return;
+  }
+  const file = input.files[0];
+  const reader = new FileReader();
+  reader.onload = async () => {
+    const data = await callStudioCommand({
+      command: "upload_system_wallpaper",
+      filename: file.name,
+      data_b64: reader.result
+    });
+    if (data) {
+      input.value = "";
+      if (btn) btn.disabled = true;
+      applyStateToDom(data, false);
+      showToast("Wallpaper uploaded to System library");
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
+async function deleteSystemWallpaper(sourceId) {
+  const data = await callStudioCommand({command: "delete_system_wallpaper", source_id: sourceId});
+  if (data) {
+    applyStateToDom(data, false);
+    showToast("Deleted wallpaper");
+  }
+}
+
 async function uploadWallpaperFile() {
   const input = doc.getElementById("wp-file-input");
-  if (!input.files || !input.files.length) {
+  const btn = doc.getElementById("btn-upload-wp");
+  if (!input || !input.files || !input.files.length) {
     showToast("Failed: select an image file first", "error");
     return;
   }
@@ -3640,8 +3725,9 @@ async function uploadWallpaperFile() {
         filename: file.name,
         data_b64: reader.result
       });
-  if (data) {
+    if (data) {
       input.value = "";
+      if (btn) btn.disabled = true;
       applyStateToDom(data, true);
       showToast("Wallpaper uploaded & activated");
     }
@@ -4395,6 +4481,7 @@ function applyStateToDom(data, forceFormUpdate=false) {
 
   renderLogsView();
   renderActiveSurveyDeviceBars();
+  renderSystemWallpaperGallery(data.system_wallpapers);
   renderWallpaperGallery(data.wallpapers, cfg.device_slug, cfg.display_shape);
   renderEntitySectionsWhenIdle();
 
@@ -4707,11 +4794,6 @@ async function applyDeviceCustomColor(hexColor, alsoSwitchSelect) {
 }
 
 async function onSelectDeviceCustomPalette(val) {
-  if (val === "__new__") {
-    openColorWheelModal("device");
-    renderCustomColorPalettes();
-    return;
-  }
   if (val && val.startsWith("#")) {
     await applyDeviceCustomColor(val, true);
   }
@@ -4731,14 +4813,19 @@ function renderCustomColorPalettes() {
   const sel = doc.getElementById("dev-custom-palette-select");
   if (sel) {
     let optsHtml = "";
-    if (curHex && !pals.some(p => (p.hex || "").toUpperCase() === curHex)) {
-      optsHtml += `<option value="${esc(curHex)}" selected>Current (${esc(curHex)})</option>`;
+    if (!pals.length) {
+      optsHtml += curHex
+        ? `<option value="${esc(curHex)}" selected>Current (${esc(curHex)})</option>`
+        : `<option value="" selected>No custom colors saved yet</option>`;
+    } else {
+      if (curHex && !pals.some(p => (p.hex || "").toUpperCase() === curHex)) {
+        optsHtml += `<option value="${esc(curHex)}" selected>Current (${esc(curHex)})</option>`;
+      }
+      for (const p of pals) {
+        const h = (p.hex || "").toUpperCase();
+        optsHtml += `<option value="${esc(h)}" ${h === curHex ? "selected" : ""}>${esc(p.name || h)} (${esc(h)})</option>`;
+      }
     }
-    for (const p of pals) {
-      const h = (p.hex || "").toUpperCase();
-      optsHtml += `<option value="${esc(h)}" ${h === curHex ? "selected" : ""}>${esc(p.name || h)} (${esc(h)})</option>`;
-    }
-    optsHtml += `<option value="__new__">Add a color…</option>`;
     sel.innerHTML = optsHtml;
   }
   const sysBox = doc.getElementById("sys-custom-palettes-list");
@@ -4785,6 +4872,7 @@ function bindStudioGlobals() {
   window.createDeviceGroup = createDeviceGroup;
   window.deleteCustomPalette = deleteCustomPalette;
   window.deleteDeviceGroup = deleteDeviceGroup;
+  window.deleteSystemWallpaper = deleteSystemWallpaper;
   window.deleteWallpaper = deleteWallpaper;
   window.espAction = espAction;
   window.espNumber = espNumber;
@@ -4797,6 +4885,7 @@ function bindStudioGlobals() {
   window.syncCurrentDeviceToGroup = syncCurrentDeviceToGroup;
   window.syncDeviceGroup = syncDeviceGroup;
   window.onActivityCardChanged = onActivityCardChanged;
+  window.onWallpaperFileChange = onWallpaperFileChange;
   window.toggleActivitySource = toggleActivitySource;
   window.fallbackCopyText = fallbackCopyText;
   window.getInventoryRemoteIds = getInventoryRemoteIds;
@@ -4846,6 +4935,7 @@ function bindStudioGlobals() {
   window.renderRemoteGroupsEditor = renderRemoteGroupsEditor;
   window.renderRssiBars = renderRssiBars;
   window.renderSystemOverview = renderSystemOverview;
+  window.renderSystemWallpaperGallery = renderSystemWallpaperGallery;
   window.renderWallpaperGallery = renderWallpaperGallery;
   window.renumberCameraRows = renumberCameraRows;
   window.renumberRemoteControlRows = renumberRemoteControlRows;
@@ -4877,6 +4967,7 @@ function bindStudioGlobals() {
   window.updateRemoteGroupField = updateRemoteGroupField;
   window.updateTopHeaderForScope = updateTopHeaderForScope;
   window.updateUnifiedPageTitle = updateUnifiedPageTitle;
+  window.uploadSystemWallpaperFile = uploadSystemWallpaperFile;
   window.uploadWallpaperFile = uploadWallpaperFile;
   Object.defineProperty(window, "STATE", {
     get: () => STATE,

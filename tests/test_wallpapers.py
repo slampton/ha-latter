@@ -50,7 +50,7 @@ class TestPrivateWallpapers(unittest.TestCase):
             "upload:kitchen/x.exe",
             "upload:kitchen/",
             "/local/latter_wallpapers/kitchen/x.jpg",
-            "preset:ocean_swell",
+            "preset:forest_mountains",
             "",
         ):
             self.assertIsNone(wallpaper_refs.parse_upload_source(bad), bad)
@@ -81,12 +81,12 @@ class TestPrivateWallpapers(unittest.TestCase):
         self.assertFalse(resource_signing.verify(secret, "sub_office", f"wallpaper:{src}|240|240|circle", sig, now))
         self.assertFalse(resource_signing.verify(secret, "sub_kitchen", f"wallpaper:{src}|240|240|circle", sig, exp + 1))
 
-    def test_builtin_presets_and_procedural_buffers(self) -> None:
-        """The 5 built-in presets cover distinct themes and span the full canvas."""
+    def test_builtin_presets_and_bundled_jpegs(self) -> None:
+        """The 5 built-in presets map to bundled 720x720 baseline JPEGs under custom_components/latter/wallpapers/."""
         import ast
 
         tree = ast.parse((LATTER_DIR / "wallpaper_engine.py").read_text(encoding="utf-8"))
-        ns: dict[str, object] = {"math": __import__("math")}
+        presets = None
         for node in tree.body:
             if (
                 isinstance(node, ast.AnnAssign)
@@ -94,57 +94,50 @@ class TestPrivateWallpapers(unittest.TestCase):
                 and node.target.id == "BUILTIN_WALLPAPER_PRESETS"
                 and node.value is not None
             ):
-                ns["BUILTIN_WALLPAPER_PRESETS"] = ast.literal_eval(node.value)
-            elif isinstance(node, ast.FunctionDef) and node.name in {
-                "_smoothstep",
-                "_render_ocean_swell_buf",
-                "_render_pine_ridges_buf",
-                "_render_twilight_dunes_buf",
-                "_render_aurora_veil_buf",
-                "_render_topographic_waves_buf",
-            }:
-                mod = ast.Module(body=[node], type_ignores=[])
-                exec(compile(mod, "wallpaper_engine.py", "exec"), ns)
+                presets = ast.literal_eval(node.value)
 
-        presets = ns["BUILTIN_WALLPAPER_PRESETS"]
+        self.assertIsNotNone(presets)
+        assert presets is not None
         self.assertEqual(
-            [p["id"] for p in presets],
+            [(p["id"], p["name"], p["file"]) for p in presets],
             [
-                "preset:ocean_swell",
-                "preset:pine_ridges",
-                "preset:twilight_dunes",
-                "preset:aurora_veil",
-                "preset:topographic_waves",
+                ("preset:forest_mountains", "Forest Mountains", "forest_mountains.jpg"),
+                ("preset:wheat_field", "Wheat Field", "wheat_field.jpg"),
+                ("preset:ocean_waves", "Ocean Waves", "ocean_waves.jpg"),
+                ("preset:sahara_dunes", "Sahara Dunes", "sahara_dunes.jpg"),
+                ("preset:andromeda_galaxy", "Andromeda Galaxy", "andromeda_galaxy.jpg"),
             ],
         )
-        for p in presets:
-            self.assertNotIn("AMOLED", p["name"])
 
-        side = 64
-        for fn_name in (
-            "_render_ocean_swell_buf",
-            "_render_pine_ridges_buf",
-            "_render_twilight_dunes_buf",
-            "_render_aurora_veil_buf",
-            "_render_topographic_waves_buf",
-        ):
-            buf = ns[fn_name](side)
-            self.assertEqual(len(buf), side * side * 3, fn_name)
-            # Full-canvas check: both the upper half (y = 20%..45%) and lower half (y = 55%..85%) have active detail
-            upper_sum = sum(
-                buf[(y * side + x) * 3 + c]
-                for y in range(int(side * 0.20), int(side * 0.45))
-                for x in range(int(side * 0.20), int(side * 0.80))
-                for c in range(3)
-            )
-            lower_sum = sum(
-                buf[(y * side + x) * 3 + c]
-                for y in range(int(side * 0.55), int(side * 0.85))
-                for x in range(int(side * 0.20), int(side * 0.80))
-                for c in range(3)
-            )
-            self.assertGreater(upper_sum, 0, fn_name)
-            self.assertGreater(lower_sum, 0, fn_name)
+        wp_dir = LATTER_DIR / "wallpapers"
+        for p in presets:
+            jpg_path = wp_dir / p["file"]
+            self.assertTrue(jpg_path.is_file(), f"Missing bundled wallpaper {jpg_path}")
+            raw = jpg_path.read_bytes()
+            self.assertTrue(raw.startswith(b"\xff\xd8\xff"), p["file"])
+            self.assertTrue(raw.endswith(b"\xff\xd9"), p["file"])
+            # Parse JPEG SOF markers before SOS to confirm baseline SOF0 (0xFFC0) and 720x720 dimensions.
+            idx = 2
+            sof_marker = None
+            dims = None
+            while idx < len(raw) - 1:
+                if raw[idx] != 0xFF:
+                    break
+                marker = raw[idx + 1]
+                idx += 2
+                if marker in (0xD8, 0xD9) or 0xD0 <= marker <= 0xD7:
+                    continue
+                if marker == 0xDA:
+                    break
+                seg_len = int.from_bytes(raw[idx : idx + 2], "big")
+                if marker in (0xC0, 0xC2):
+                    sof_marker = marker
+                    height = int.from_bytes(raw[idx + 3 : idx + 5], "big")
+                    width = int.from_bytes(raw[idx + 5 : idx + 7], "big")
+                    dims = (width, height)
+                idx += seg_len
+            self.assertEqual(sof_marker, 0xC0, f"{p['file']} must be baseline SOF0 JPEG")
+            self.assertEqual(dims, (720, 720), p["file"])
 
 
 if __name__ == "__main__":

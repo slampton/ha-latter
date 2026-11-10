@@ -444,15 +444,44 @@ async def _async_execute_studio_command(
         )
         if not deleted:
             raise StudioCommandError(
-                "not_found", "That wallpaper isn't one of this Device's uploads"
+                "not_found", "That wallpaper isn't an uploaded photo"
             )
-        favs = [f for f in coordinator.wallpaper_favorites if f != source_id]
-        new_active = (
-            ""
-            if coordinator.wallpaper_source == source_id
-            else coordinator.wallpaper_source
+        for c in _get_all_coordinators(hass):
+            if source_id in c.wallpaper_favorites or c.wallpaper_source == source_id:
+                favs = [f for f in c.wallpaper_favorites if f != source_id]
+                new_active = "" if c.wallpaper_source == source_id else c.wallpaper_source
+                _apply_wallpaper_config(c, source=new_active, favorites=favs)
+
+    elif cmd == "upload_system_wallpaper":
+        filename = str(body.get("filename") or "wallpaper.jpg")
+        data_b64 = str(body.get("data_b64") or "")
+        if not data_b64:
+            raise StudioCommandError("invalid_format", "No image data in the upload")
+        await hass.async_add_executor_job(
+            save_uploaded_wallpaper,
+            hass,
+            "system",
+            filename,
+            data_b64,
         )
-        _apply_wallpaper_config(coordinator, source=new_active, favorites=favs)
+
+    elif cmd == "delete_system_wallpaper":
+        source_id = str(body.get("source_id") or "").strip()
+        deleted = await hass.async_add_executor_job(
+            delete_uploaded_wallpaper,
+            hass,
+            "system",
+            source_id,
+        )
+        if not deleted:
+            raise StudioCommandError(
+                "not_found", "That wallpaper isn't an uploaded photo"
+            )
+        for c in _get_all_coordinators(hass):
+            if source_id in c.wallpaper_favorites or c.wallpaper_source == source_id:
+                favs = [f for f in c.wallpaper_favorites if f != source_id]
+                new_active = "" if c.wallpaper_source == source_id else c.wallpaper_source
+                _apply_wallpaper_config(c, source=new_active, favorites=favs)
 
     elif cmd == "save_system_config":
         updates = clean_system_settings(dict(body.get("config") or {}))

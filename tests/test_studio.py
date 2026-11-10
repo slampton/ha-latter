@@ -132,17 +132,20 @@ class TestViewLayout(unittest.TestCase):
             start = js.index(f'<section id="view-{view}"')
             return js[start:js.index("</section>", start)]
 
-        tools, sys_tools, groups, overview, home_display = (
+        tools, sys_tools, groups, overview, home_display, shared_entities = (
             section("tools"),
             section("system_tools"),
             section("system_sync"),
             section("dashboard"),
             section("home_display"),
+            section("shared_entities"),
         )
         for title in ("Diagnostics", "Replace Hardware", "Danger Zone"):
             self.assertIn(f'<h3 class="card-title">{title}</h3>', tools)
         for title in ("Notifications &amp; Announcements", "Backup &amp; Restore", "System &amp; Device Logs"):
             self.assertIn(f'<h3 class="card-title">{title}</h3>', sys_tools)
+        for title in ("Whole-Home Entities", "Calendars", "Cameras &amp; Doorbell Audio", "Custom Colors", "Wallpapers"):
+            self.assertIn(f'<h3 class="card-title">{title}</h3>', shared_entities)
         self.assertNotIn("Export Settings", js)
         self.assertNotIn("Restore From File", js)
         self.assertIn('<h3 class="card-title">Device Groups</h3>', groups)
@@ -150,8 +153,11 @@ class TestViewLayout(unittest.TestCase):
         self.assertNotIn("Configuration Profiles", js)
         self.assertNotIn("dash-power-profile-select", overview)
         self.assertNotIn("quick-profile-select", overview)
-        self.assertIn("Saved Custom Colors", home_display)
+        self.assertNotIn("Saved Custom Colors", home_display)
+        self.assertNotIn("Add a color…", js)
         self.assertNotIn("Custom Color Library", sys_tools)
+        self.assertIn('id="btn-upload-wp" disabled', home_display)
+        self.assertIn('id="btn-upload-sys-wp" disabled', shared_entities)
         self.assertIn('id="dash-node-name"', overview)
         self.assertIn('id="cfg-device_group"', overview)
         self.assertIn('id="dash-group-sync-chip"', overview)
