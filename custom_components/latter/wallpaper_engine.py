@@ -67,10 +67,10 @@ def get_device_wallpaper_dir(hass: HomeAssistant, device_slug: str) -> Path:
     return get_wallpaper_root(hass) / normalize_device_slug(device_slug)
 
 
-def render_builtin_preset_bytes(
+def render_builtin_preset_image(
     preset_id: str, width: int = 466, height: int = 466
-) -> bytes:
-    """Generate a crisp, low-power (>80% pure black) AMOLED procedural wallpaper as raw PNG bytes."""
+) -> Image.Image:
+    """Generate a crisp, low-power (>80% pure black) AMOLED procedural wallpaper as an RGB PIL Image."""
     img = Image.new("RGB", (width, height), (0, 0, 0))
     draw = ImageDraw.Draw(img)
     cx, cy = width // 2, height // 2
@@ -146,6 +146,14 @@ def render_builtin_preset_bytes(
             x2, y2 = cx + int(r2 * math.cos(rad)), cy + int(r2 * math.sin(rad))
             draw.line([(x1, y1), (x2, y2)], fill=(20, 68, 108), width=2 if deg % 90 == 0 else 1)
 
+    return img
+
+
+def render_builtin_preset_bytes(
+    preset_id: str, width: int = 466, height: int = 466
+) -> bytes:
+    """Generate a crisp, low-power (>80% pure black) AMOLED procedural wallpaper as raw PNG bytes."""
+    img = render_builtin_preset_image(preset_id, width, height)
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     return buf.getvalue()
@@ -279,7 +287,11 @@ def save_uploaded_wallpaper(
 
     slug = normalize_device_slug(device_slug)
     _scan_wallpaper_dir_sync(wp_dir, slug)
-    return make_upload_source(slug, out_name)
+    source_id = make_upload_source(slug, out_name)
+    from .http import evict_wallpaper_lru_cache
+
+    evict_wallpaper_lru_cache(source_id)
+    return source_id
 
 
 def delete_uploaded_wallpaper(
@@ -297,5 +309,8 @@ def delete_uploaded_wallpaper(
     if target is not None and target.is_file():
         target.unlink()
         _scan_wallpaper_dir_sync(wp_dir, slug)
+        from .http import evict_wallpaper_lru_cache
+
+        evict_wallpaper_lru_cache(source_id)
         return True
     return False

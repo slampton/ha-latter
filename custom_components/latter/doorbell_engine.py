@@ -42,8 +42,8 @@ SILENCE_FALLBACK_MS: int = 250
 _FFMPEG_STREAM_SEMAPHORE = asyncio.Semaphore(2)
 
 
-def _build_silence_wav(duration_ms: int = SILENCE_FALLBACK_MS, sample_rate: int = 16000) -> bytes:
-    """Build a short PCM16 mono silent WAV buffer."""
+def _build_silence_wav(duration_ms: int = SILENCE_FALLBACK_MS, sample_rate: int = 48000) -> bytes:
+    """Build a short PCM16 mono silent WAV buffer at the device's I2S bus sample rate."""
     num_samples = max(160, int(sample_rate * (duration_ms / 1000.0)))
     out_io = io.BytesIO()
     with wave.open(out_io, "wb") as wf_out:
@@ -161,13 +161,6 @@ def build_noise_reduction_filter(level: str) -> str:
     )
 
 
-def _resolve_coordinator_by_slug(hass: HomeAssistant, target_slug: str) -> Any | None:
-    """Find a loaded LatterCoordinator by device slug or entry_id."""
-    from .coordinator import resolve_coordinator
-
-    return resolve_coordinator(hass, target_slug)
-
-
 class LatterCameraAudioStreamView(HomeAssistantView):
     """Streams live RTSP camera audio through an FFmpeg noise-reduction filter to a Latter device."""
 
@@ -181,7 +174,9 @@ class LatterCameraAudioStreamView(HomeAssistantView):
 
     async def get(self, request: web.Request, target_device: str) -> web.StreamResponse:
         """Stream live de-noised FLAC/WAV audio from a camera's RTSP source."""
-        coord = _resolve_coordinator_by_slug(self.hass, target_device)
+        from .coordinator import resolve_coordinator
+
+        coord = resolve_coordinator(self.hass, target_device)
         if coord is None:
             return web.Response(status=HTTPStatus.NOT_FOUND)
 
@@ -213,6 +208,23 @@ class LatterCameraAudioStreamView(HomeAssistantView):
         )
         fmt = (request.query.get("fmt") or "flac").strip().lower()
 
+        # Output format comes only from the device's declared audio traits (hardware manifest),
+        # never from board-name matching. Default is 48000 Hz (Latter's full-duplex I2S bus rate).
+        manifest = coord.hardware_manifest
+        audio_info = manifest.get("audio")
+        out_rate = (
+            int(audio_info.get("out_rate") or 48000)
+            if isinstance(audio_info, dict)
+            else 48000
+        )
+        out_ch = (
+            int(audio_info.get("out_ch") or 1)
+            if isinstance(audio_info, dict)
+            else 1
+        )
+        out_rate = out_rate if out_rate in (16000, 22050, 24000, 44100, 48000) else 48000
+        out_ch = 2 if out_ch == 2 else 1
+
         stream_url: str | None = None
         try:
             from homeassistant.components import camera as ha_camera
@@ -230,7 +242,10 @@ class LatterCameraAudioStreamView(HomeAssistantView):
             ffmpeg_bin = shutil.which("ffmpeg")
 
         if not stream_url or not ffmpeg_bin:
-            return web.Response(body=_build_silence_wav(), content_type="audio/wav")
+            return web.Response(
+                body=_build_silence_wav(sample_rate=out_rate),
+                content_type="audio/wav",
+            )
 
         if _FFMPEG_STREAM_SEMAPHORE.locked():
             return web.Response(
@@ -243,23 +258,6 @@ class LatterCameraAudioStreamView(HomeAssistantView):
         out_codec = "flac" if fmt == "flac" else "pcm_s16le"
         out_fmt = "flac" if fmt == "flac" else "wav"
         content_type = "audio/flac" if fmt == "flac" else "audio/wav"
-
-        # Output format comes only from the device's declared audio traits (hardware manifest),
-        # never from board-name matching.
-        manifest = coord.hardware_manifest
-        audio_info = manifest.get("audio")
-        out_rate = (
-            int(audio_info.get("out_rate") or 16000)
-            if isinstance(audio_info, dict)
-            else 16000
-        )
-        out_ch = (
-            int(audio_info.get("out_ch") or 1)
-            if isinstance(audio_info, dict)
-            else 1
-        )
-        out_rate = out_rate if out_rate in (16000, 22050, 24000, 44100, 48000) else 16000
-        out_ch = 2 if out_ch == 2 else 1
 
         cmd = [
             ffmpeg_bin,
@@ -410,7 +408,15 @@ async def async_execute_doorbell_intercom(
             else "listen_start"
         )
 
+    def _cancel_pending_reply() -> None:
+        prev_task = coordinator._doorbell_reply_task
+        if prev_task is not None and not prev_task.done():
+            prev_task.cancel()
+        coordinator._doorbell_reply_task = None
+        coordinator._doorbell_reply_resume_listen = False
+
     if act == "listen_stop":
+        _cancel_pending_reply()
         coordinator.doorbell_talk_state = "idle"
         coordinator.async_notify_listeners()
         if local_spk:
@@ -428,6 +434,7 @@ async def async_execute_doorbell_intercom(
     if act == "listen_start":
         if not local_spk or not cam_ent:
             return target_info
+        _cancel_pending_reply()
         coordinator.doorbell_talk_state = "listening"
         coordinator.async_notify_listeners()
         base_url = coordinator.get_lan_base_url()
@@ -579,6 +586,12 @@ def resolve_doorbell_ring_entities(
         "chime_type",
     )
 
+    candidate_entries = [
+        reg_ent
+        for reg_ent in _iter_entities(ent_reg)
+        if reg_ent.disabled_by is None and reg_ent.domain in ("binary_sensor", "event")
+    ]
+
     for cam_ent in camera_entities:
         if not cam_ent or not cam_ent.startswith("camera."):
             continue
@@ -600,14 +613,8 @@ def resolve_doorbell_ring_entities(
         event_matches: list[str] = []
         binary_matches: list[str] = []
 
-        from .ble_engine import _iter_entities
-
-        for reg_ent in _iter_entities(ent_reg):
-            if reg_ent.disabled_by is not None:
-                continue
+        for reg_ent in candidate_entries:
             domain = reg_ent.domain
-            if domain not in ("binary_sensor", "event"):
-                continue
 
             same_device = bool(cam_dev_id and reg_ent.device_id == cam_dev_id)
             eid_low = reg_ent.entity_id.lower()

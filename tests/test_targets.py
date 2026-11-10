@@ -274,6 +274,24 @@ class BleDeviceTrackerAndPersonTests(unittest.TestCase):
         self.assertIn('state_obj.attributes.get("temperature")', action_body)
         self.assertIn('state_obj.attributes.get("volume_level")', action_body)
 
+    def test_http_doorbell_wallpaper_audit(self) -> None:
+        http_src = (LATTER_DIR / "http.py").read_text(encoding="utf-8")
+        self.assertIn("def _parse_render_params(", http_src)
+        self.assertIn("def _render_preset_to_baseline_jpeg(", http_src)
+        self.assertIn("def evict_wallpaper_lru_cache(", http_src)
+        self.assertNotIn("def _resolve_coordinator_by_target(", http_src)
+        self.assertNotIn("HomeAssistant-Latter/1.9.4", http_src)
+
+        doorbell_src = (LATTER_DIR / "doorbell_engine.py").read_text(encoding="utf-8")
+        self.assertIn("sample_rate: int = 48000", doorbell_src)
+        self.assertIn("_build_silence_wav(sample_rate=out_rate)", doorbell_src)
+        self.assertIn("def _cancel_pending_reply()", doorbell_src)
+        self.assertNotIn("def _resolve_coordinator_by_slug(", doorbell_src)
+
+        wp_src = (LATTER_DIR / "wallpaper_engine.py").read_text(encoding="utf-8")
+        self.assertIn("def render_builtin_preset_image(", wp_src)
+        self.assertEqual(wp_src.count("evict_wallpaper_lru_cache("), 2)
+
 
 if __name__ == "__main__":
     unittest.main()

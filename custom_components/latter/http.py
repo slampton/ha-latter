@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from http import HTTPStatus
 import io
 import logging
+import math
 import time
 
 from aiohttp import ClientTimeout, web
@@ -24,13 +25,18 @@ from .const import (
     API_CAMERA_PROXY_PATH,
     API_MAP_PROXY_PATH,
     API_WALLPAPER_PROXY_PATH,
+    INTEGRATION_VERSION,
 )
 from .coordinator import LatterCoordinator, resolve_coordinator
 from .media_engine import resolve_ma_counterpart_entity
-from .wallpaper_engine import get_wallpaper_root, render_builtin_preset_bytes
+from .wallpaper_engine import get_wallpaper_root, render_builtin_preset_image
 from .wallpaper_refs import parse_upload_source, read_upload_bytes
 
 _LOGGER = logging.getLogger(__name__)
+
+HTTP_USER_AGENT = (
+    f"HomeAssistant-Latter/{INTEGRATION_VERSION} (+https://github.com/slampton/ha-latter)"
+)
 
 MAX_ART_CACHE_ENTRIES = 24
 # (pic_url, width, height, circular_mask, darken) -> encoded_baseline_jpeg_bytes
@@ -107,11 +113,63 @@ def _transcode_to_baseline_jpeg(
         return out.getvalue()
 
 
-def _resolve_coordinator_by_target(
-    hass: HomeAssistant, target_id_or_slug: str
-) -> LatterCoordinator | None:
-    """Resolve a LatterCoordinator by config entry_id or ESPHome device_slug."""
-    return resolve_coordinator(hass, target_id_or_slug)
+def _render_preset_to_baseline_jpeg(
+    preset_id: str,
+    width: int,
+    height: int,
+    circular_mask: bool = False,
+) -> bytes:
+    """Render a built-in AMOLED preset directly to Baseline JPEG in a single pass."""
+    fitted = render_builtin_preset_image(preset_id, width, height)
+    if circular_mask:
+        mask, black_bg = _get_circular_mask_surfaces(width, height)
+        fitted = Image.composite(fitted, black_bg, mask)
+    out = io.BytesIO()
+    fitted.save(
+        out,
+        format="JPEG",
+        quality=85,
+        optimize=True,
+        progressive=False,
+        subsampling=2,
+    )
+    return out.getvalue()
+
+
+def evict_wallpaper_lru_cache(source_id: str) -> None:
+    """Evict all cached resolutions/shapes for a deleted or updated wallpaper source."""
+    prefix = f"wp:{source_id}"
+    stale_keys = [k for k in _ARTWORK_LRU_CACHE if k[0] == prefix]
+    for k in stale_keys:
+        _ARTWORK_LRU_CACHE.pop(k, None)
+
+
+def _parse_render_params(
+    request: web.Request,
+    coordinator: LatterCoordinator,
+    *,
+    min_dim: int = 32,
+    max_dim: int = 1200,
+    default_circle: bool | None = None,
+) -> tuple[int, int, bool, str]:
+    """Parse and clamp (width, height, is_circle, shape_str) query parameters."""
+    default_w, default_h = coordinator.art_dimensions
+    try:
+        width = max(min_dim, min(max_dim, int(request.query.get("w") or default_w)))
+        height = max(min_dim, min(max_dim, int(request.query.get("h") or default_h)))
+    except ValueError:
+        width, height = default_w, default_h
+
+    if default_circle is None:
+        is_circle = (
+            request.query.get("mask") == "circle"
+            or request.query.get("shape") == "circle"
+        )
+    else:
+        is_circle = default_circle
+        if request.query.get("shape") in ("circle", "square"):
+            is_circle = request.query.get("shape") == "circle"
+    return width, height, is_circle, ("circle" if is_circle else "square")
 
 
 async def _async_serve_speaker_artwork(
@@ -120,15 +178,9 @@ async def _async_serve_speaker_artwork(
     coordinator: LatterCoordinator,
 ) -> web.Response:
     """Fetch active speaker artwork, transcode to Baseline JPEG (with RAM LRU cache), and serve over HTTP."""
-    default_w, default_h = coordinator.art_dimensions
-    try:
-        width = max(32, min(1200, int(request.query.get("w") or default_w)))
-        height = max(32, min(1200, int(request.query.get("h") or default_h)))
-    except ValueError:
-        width, height = default_w, default_h
-
-    circular = request.query.get("mask") == "circle" or request.query.get("shape") == "circle"
-    shape_str = "circle" if circular else "square"
+    width, height, circular, shape_str = _parse_render_params(
+        request, coordinator, default_circle=None
+    )
 
     if not coordinator.verify_resource(
         f"artwork|{width}|{height}|{shape_str}",
@@ -236,7 +288,7 @@ class LatterArtworkTranscoderView(HomeAssistantView):
 
     async def get(self, request: web.Request, target_device: str) -> web.Response:
         """Handle GET /api/latter/artwork/{target_device}?w=...&h=...&v=..."""
-        coordinator = _resolve_coordinator_by_target(self.hass, target_device)
+        coordinator = resolve_coordinator(self.hass, target_device)
         if coordinator is None:
             return web.Response(status=HTTPStatus.NOT_FOUND, text="Unknown target device")
         return await _async_serve_speaker_artwork(self.hass, request, coordinator)
@@ -255,7 +307,7 @@ class LatterWallpaperProxyView(HomeAssistantView):
 
     async def get(self, request: web.Request, target_device: str) -> web.Response:
         """Handle GET /api/latter/wallpaper/{target_device}?w=...&h=...&src=..."""
-        coordinator = _resolve_coordinator_by_target(self.hass, target_device)
+        coordinator = resolve_coordinator(self.hass, target_device)
         if coordinator is None:
             return web.Response(status=HTTPStatus.NOT_FOUND, text="Unknown target device")
 
@@ -263,17 +315,9 @@ class LatterWallpaperProxyView(HomeAssistantView):
         if not wp_source:
             return web.Response(status=HTTPStatus.NOT_FOUND, text="No wallpaper configured")
 
-        default_w, default_h = coordinator.art_dimensions
-        try:
-            width = max(32, min(1200, int(request.query.get("w") or default_w)))
-            height = max(32, min(1200, int(request.query.get("h") or default_h)))
-        except ValueError:
-            width, height = default_w, default_h
-
-        is_circle = coordinator.display_shape == "circle"
-        if request.query.get("shape") in ("circle", "square"):
-            is_circle = request.query.get("shape") == "circle"
-        shape_str = "circle" if is_circle else "square"
+        width, height, is_circle, shape_str = _parse_render_params(
+            request, coordinator, default_circle=(coordinator.display_shape == "circle")
+        )
 
         if not coordinator.verify_resource(
             f"wallpaper:{wp_source}|{width}|{height}|{shape_str}",
@@ -292,36 +336,42 @@ class LatterWallpaperProxyView(HomeAssistantView):
                 headers={"Cache-Control": "private, max-age=300", "X-Latter-Cache": "HIT"},
             )
 
-        raw_bytes: bytes | None = None
-
         if wp_source.startswith("preset:"):
-            raw_bytes = await self.hass.async_add_executor_job(
-                render_builtin_preset_bytes, wp_source, width, height
-            )
+            try:
+                jpeg_bytes = await self.hass.async_add_executor_job(
+                    _render_preset_to_baseline_jpeg,
+                    wp_source,
+                    width,
+                    height,
+                    is_circle,
+                )
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.debug("Wallpaper preset rendering failed: %s", err)
+                return web.Response(
+                    status=HTTPStatus.UNPROCESSABLE_ENTITY, text="Wallpaper processing error"
+                )
         elif parse_upload_source(wp_source) is not None:
             raw_bytes = await self.hass.async_add_executor_job(
                 read_upload_bytes, get_wallpaper_root(self.hass), wp_source
             )
+            if not raw_bytes:
+                return web.Response(status=HTTPStatus.NOT_FOUND, text="Wallpaper source unreadable")
+            try:
+                jpeg_bytes = await self.hass.async_add_executor_job(
+                    _transcode_to_baseline_jpeg,
+                    raw_bytes,
+                    width,
+                    height,
+                    is_circle,
+                    darken_factor,
+                )
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.debug("Wallpaper Pillow processing failed: %s", err)
+                return web.Response(
+                    status=HTTPStatus.UNPROCESSABLE_ENTITY, text="Wallpaper processing error"
+                )
         else:
             return web.Response(status=HTTPStatus.FORBIDDEN, text="Unsupported wallpaper source")
-
-        if not raw_bytes:
-            return web.Response(status=HTTPStatus.NOT_FOUND, text="Wallpaper source unreadable")
-
-        try:
-            jpeg_bytes = await self.hass.async_add_executor_job(
-                _transcode_to_baseline_jpeg,
-                raw_bytes,
-                width,
-                height,
-                is_circle,
-                darken_factor,
-            )
-        except Exception as err:  # noqa: BLE001
-            _LOGGER.debug("Wallpaper Pillow processing failed: %s", err)
-            return web.Response(
-                status=HTTPStatus.UNPROCESSABLE_ENTITY, text="Wallpaper processing error"
-            )
 
         _ARTWORK_LRU_CACHE[cache_key] = jpeg_bytes
         if len(_ARTWORK_LRU_CACHE) > MAX_ART_CACHE_ENTRIES:
@@ -530,7 +580,7 @@ class LatterCameraSnapshotView(HomeAssistantView):
 
     async def get(self, request: web.Request, target_device: str) -> web.Response:
         """Handle GET /api/latter/camera/{target_device}?entity_id=camera.front_door&w=466&h=466&shape=circle"""
-        coordinator = _resolve_coordinator_by_target(self.hass, target_device)
+        coordinator = resolve_coordinator(self.hass, target_device)
         if coordinator is None:
             return web.Response(status=HTTPStatus.NOT_FOUND, text="Unknown target device")
 
@@ -540,17 +590,9 @@ class LatterCameraSnapshotView(HomeAssistantView):
         if not cam_entity or not cam_entity.startswith("camera."):
             return web.Response(status=HTTPStatus.NOT_FOUND, text="No camera entity specified")
 
-        default_w, default_h = coordinator.art_dimensions
-        try:
-            width = max(32, min(1200, int(request.query.get("w") or default_w)))
-            height = max(32, min(1200, int(request.query.get("h") or default_h)))
-        except ValueError:
-            width, height = default_w, default_h
-
-        is_circle = coordinator.display_shape == "circle"
-        if request.query.get("shape") in ("circle", "square"):
-            is_circle = request.query.get("shape") == "circle"
-        shape_str = "circle" if is_circle else "square"
+        width, height, is_circle, shape_str = _parse_render_params(
+            request, coordinator, default_circle=(coordinator.display_shape == "circle")
+        )
 
         if not coordinator.verify_resource(
             f"camera:{cam_entity}|{width}|{height}|{shape_str}",
@@ -602,8 +644,6 @@ MAX_OSM_TILE_CACHE = 128
 
 def _latlon_to_tile_xy(lat: float, lon: float, zoom: int) -> tuple[float, float]:
     """Convert (lat, lon) in degrees to fractional Web Mercator tile coordinates at zoom."""
-    import math
-
     lat_rad = math.radians(max(-85.0511, min(85.0511, lat)))
     n = float(1 << zoom)
     xtile = (lon + 180.0) / 360.0 * n
@@ -702,10 +742,7 @@ def _compose_map_snapshot_jpeg(
         )
 
     if circular_mask:
-        mask = Image.new("L", (width, height), 0)
-        md = ImageDraw.Draw(mask)
-        md.ellipse((0, 0, width - 1, height - 1), fill=255)
-        black_bg = Image.new("RGB", (width, height), (0, 0, 0))
+        mask, black_bg = _get_circular_mask_surfaces(width, height)
         cropped = Image.composite(cropped, black_bg, mask)
 
     out = io.BytesIO()
@@ -778,7 +815,7 @@ class LatterMapSnapshotView(HomeAssistantView):
             async with session.get(
                 "https://nominatim.openstreetmap.org/search",
                 params={"q": q_clean, "format": "json", "limit": "1"},
-                headers={"User-Agent": "HomeAssistant-Latter/2.2.1 (+https://github.com/slampton/ha-latter)"},
+                headers={"User-Agent": HTTP_USER_AGENT},
                 timeout=ClientTimeout(total=5),
             ) as resp:
                 if resp.status == HTTPStatus.OK:
@@ -798,22 +835,18 @@ class LatterMapSnapshotView(HomeAssistantView):
 
     async def get(self, request: web.Request, target_device: str) -> web.Response:
         """Handle GET /api/latter/map/{target_device}?q=...&z=15&pan_x=0&pan_y=0&w=466&h=466"""
-        coordinator = _resolve_coordinator_by_target(self.hass, target_device)
+        coordinator = resolve_coordinator(self.hass, target_device)
         if coordinator is None:
             return web.Response(status=HTTPStatus.NOT_FOUND, text="Unknown target device")
 
         query = str(request.query.get("q") or "").strip()
-        default_w, default_h = coordinator.art_dimensions
-        try:
-            width = max(128, min(768, int(request.query.get("w") or default_w)))
-            height = max(128, min(768, int(request.query.get("h") or default_h)))
-        except ValueError:
-            width, height = default_w, default_h
-
-        is_circle = (coordinator.display_shape == "circle") if coordinator else True
-        if request.query.get("shape") in ("circle", "square"):
-            is_circle = request.query.get("shape") == "circle"
-        shape_str = "circle" if is_circle else "square"
+        width, height, is_circle, shape_str = _parse_render_params(
+            request,
+            coordinator,
+            min_dim=128,
+            max_dim=768,
+            default_circle=(coordinator.display_shape == "circle"),
+        )
 
         if not coordinator.verify_resource(
             f"map:{query}|{width}|{height}|{shape_str}",
@@ -872,8 +905,6 @@ class LatterMapSnapshotView(HomeAssistantView):
         base_tx = int(view_tx) - 1
         base_ty = int(view_ty) - 1
 
-        import asyncio
-
         session = async_get_clientsession(self.hass)
         tile_images: dict[tuple[int, int], bytes] = {}
         n_tiles = 1 << zoom
@@ -892,7 +923,7 @@ class LatterMapSnapshotView(HomeAssistantView):
                 async with session.get(
                     tile_url,
                     headers={
-                        "User-Agent": "HomeAssistant-Latter/1.9.4 (+https://github.com/slampton/ha-latter)",
+                        "User-Agent": HTTP_USER_AGENT,
                         "Accept": "image/png,image/*;q=0.8",
                     },
                     timeout=ClientTimeout(total=4.0),
