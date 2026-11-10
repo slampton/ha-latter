@@ -4,7 +4,7 @@ Technical reference for people building on Latter.
 
 | Document | Contents |
 | :--- | :--- |
-| [Services](services.md) | All 14 user-facing `latter.*` services (plus the internal `device_hello`), with every field |
+| [Services](services.md) | All 16 user-facing `latter.*` services (plus the internal `device_hello`), with every field |
 | [Entities](entities.md) | Every entity Latter creates, its attributes and update cadence, and `latter_event` |
 | [HTTP API](http-api.md) | Image endpoints, URL signing, and the transcoder output |
 

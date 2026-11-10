@@ -21,10 +21,14 @@ async def async_pre_backup(hass: HomeAssistant) -> None:
         await global_store.async_save(global_cfg)
 
     for item in list(domain_data.values()):
-        store = getattr(item, "_store", None)
+        runtime = getattr(item, "_runtime", None)
+        store = getattr(runtime, "store", None)
         build_snap = getattr(item, "_build_persisted_snapshot", None)
         if store is not None and callable(build_snap):
-            await store.async_save(build_snap())
+            snap = build_snap()
+            if hasattr(runtime, "seed_snapshot"):
+                runtime.seed_snapshot(snap)
+            await store.async_save(snap)
 
 
 async def async_post_backup(hass: HomeAssistant) -> None:

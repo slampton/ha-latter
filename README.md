@@ -120,7 +120,7 @@ Everything the finished devices use is documented and open to you:
 
 | Reference | Covers |
 | :--- | :--- |
-| [Services](docs/reference/services.md) | All 14 user-facing `latter.*` services (plus the internal `device_hello`), their fields, and special targets such as `occupied_areas` |
+| [Services](docs/reference/services.md) | All 16 user-facing `latter.*` services (plus the internal `device_hello`), their fields, and special targets such as `occupied_areas` |
 | [Entities](docs/reference/entities.md) | Every entity Latter creates, its attributes, update cadence, and the `latter_event` bus event |
 | [HTTP API](docs/reference/http-api.md) | Image endpoints, the signed-URL model, and the transcoder output spec |
 | [Device protocol](https://github.com/slampton/esphome-latter-core/blob/main/docs/device-protocol.md) | What a device must implement to be discovered and receive data |

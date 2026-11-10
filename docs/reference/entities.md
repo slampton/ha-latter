@@ -10,34 +10,33 @@ Latter creates **sensor**, **binary_sensor**, and **device_tracker** entities on
 
 ## Per device
 
-`<slug>` is the device slug, for example `pocket_assistant`. BLE tags (phones, watches and tags added as **BLE Tag** entries) get only the four entities marked ★.
+`<slug>` is the device slug, for example `pocket_assistant`. BLE tags (phones, watches and tags added as **BLE Tag** entries) get only the three entities marked ★.
 
 | Entity | State | Key attributes | Updates when |
 | :--- | :--- | :--- | :--- |
 | ★ `device_tracker.<slug>` | `home`, `not_home`, or `unknown` | `area_id`, `area_name`, `closest_proxy`, `distance_ft`, `distance_m`, `rssi`, `assigned_person` | A BLE reading arrives, or the device goes away |
 | ★ `sensor.<slug>_current_area` | Area name, `Away`, or `Unassigned` | `area_id`, `is_home`, `closest_proxy`, `distance_ft`, `distance_m`, `rssi`, `assigned_person` | The area changes, or the device goes away |
-| ★ `sensor.<slug>_ble_distance` | Feet (device class `distance`) | — | A BLE reading arrives |
-| `sensor.<slug>_active_media` | `off`, `idle`, `playing`, `paused`, `buffering` | `title`, `artist`, `album`, `duration`, `position`, `volume`, `media_type`, `art_url`, `active_speaker`, `local_speaker`, `volume_entity` | The speaker's state changes. While playing, there is also a position update every 15 s; the device interpolates between updates. |
-| ★ `sensor.<slug>_area_context` | Current area name | See [below](#area_context-attributes) | Any mapped entity changes. Area entity changes are debounced to 250 ms. |
+| ★ `sensor.<slug>_ble_distance` | Feet (device class `distance`) | `area_id`, `is_home`, `closest_proxy`, `distance_ft`, `distance_m`, `rssi`, `assigned_person` | A BLE reading arrives |
+| `sensor.<slug>_active_media` | `off`, `idle`, `playing`, `paused`, `buffering` | `payload` (Protocol v3: active/local speaker, volume entity, playback state, title, artist, album, duration, position, volume, media type, and signed `art_url`), `rev` | The speaker's state changes. While playing, there is also a position update every 15 s; the device interpolates between updates. |
+| `sensor.<slug>_area_context` | Current area name | `payload` (Protocol v3; see [below](#area_context-payload-fields)), `rev` | Any mapped entity changes. Area entity changes are debounced to 250 ms. |
 | `sensor.<slug>_weather_forecast` | The weather entity's current condition | `payload` (Protocol v3: current weather and up to 5 `day\|cond\|high\|low` daily records joined with 0x1E), `rev` | The weather entity changes, and every 30 min |
 | `sensor.<slug>_calendar_agenda` | Number of upcoming events (up to 25) | `payload` (Protocol v3: up to 5 `time\|title\|location\|all_day` records joined with 0x1E, the event count, and the next event), `rev` | Every 15 min |
 | `sensor.<slug>_remote_config` | Active remote slot name | `payload` (Protocol v3: active slot, configured count, and up to 10 `index\|label\|entity_id\|kind\|area_id\|state` slot records joined with 0x1E), `rev` | Remote entities change |
 
-### `area_context` attributes
+### `area_context` payload fields
 
-This sensor is the main channel from Home Assistant to the device. It has about 70 attributes, grouped like this:
+`sensor.<slug>_area_context` is the main channel from Home Assistant to the device. Its `payload` attribute packs 40 positional Protocol v3 fields (`v3\x1f<epoch>\x1f<rev>\x1f...`), grouped like this:
 
-| Group | Attributes |
+| Group | Fields in `payload` |
 | :--- | :--- |
-| Area | `area_id`, `area_temp`, `area_humidity`, `available_domains`, `entities_summary` |
-| Whole-home | `alarm_entity`, `alarm_state`, `thermostat_state`, `thermostat_temp`, `lock_state`, `garage_state`, `vacuum_state` |
+| Area | `area_id`, `area_name`, `area_temp`, `area_humidity`, `available_domains` |
+| Whole-home | `alarm_entity`, `alarm_state`, `thermostat_entity`, `thermostat_state`, `thermostat_temp`, `lock_entity`, `lock_state`, `garage_entity`, `garage_state`, `vacuum_entity`, `vacuum_state` |
 | Notification | `alert_id` (increments with each notification), `alert_title`, `alert_message`, `alert_priority`, `alert_duration`, `alert_chime`, `alert_camera_url` |
-| Appearance | `wallpaper_url`, `theme_color_hex`, `dock_apps` |
-| Cameras and doorbell | `camera_snapshot_url`, `cameras_summary`, `doorbell_talk_state`, `intercom_targets_summary` |
-| Presence | `ble_closest_proxy`, `ble_rssi_by_area`, `ble_scanners_map` |
-| Hardware | `hardware_manifest` (parsed from the device; see [device protocol](https://github.com/slampton/esphome-latter-core/blob/main/docs/device-protocol.md#2-hardware-manifest)) |
+| Appearance & Home | `wallpaper_url`, `theme_color_hex`, `dock_apps`, `activity_card`, `activity_sources` |
+| Cameras and doorbell | `camera_entity`, `camera_name`, `camera_snapshot_url`, `cameras_count`, `cameras_summary`, `doorbell_ring_state`, `doorbell_audio_url`, `doorbell_talk_state`, `doorbell_noise_reduction`, `intercom_targets_summary` |
+| Presence | `ble_closest_proxy`, `ble_rssi_by_area` |
 
-The field formats the firmware parses, such as `slots_summary` and `cameras_summary`, are specified in the [device protocol](https://github.com/slampton/esphome-latter-core/blob/main/docs/device-protocol.md).
+The exact field indices and record formats (`cameras_summary`, `intercom_targets_summary`, `slots_summary`, `forecast_5d`, `summary`) are defined in [`protocol_v3.json`](../../custom_components/latter/protocol_v3.json) and specified in the [device protocol](https://github.com/slampton/esphome-latter-core/blob/main/docs/device-protocol.md).
 
 ---
 

@@ -19,13 +19,13 @@ There are two expiry modes:
 | Studio camera preview, wallpaper thumbnail | Day-bucketed | 7 days | 7 to 8 days |
 | Camera audio (doorbell listen stream) | Exact | 10 minutes | 10 minutes (a new URL is signed each time listening starts; the signature is checked when the stream opens) |
 
-You shouldn't build these URLs yourself. Latter publishes the image URLs, already signed, in sensor attributes (`art_url`, `wallpaper_url`, `camera_snapshot_url`, `alert_camera_url`, and the calendar `map_url`).
+You shouldn't build these URLs yourself. Latter publishes the image URLs, already signed, in its Protocol v3 payloads (`art_url` in `active_media`; `wallpaper_url`, `camera_snapshot_url`, `cameras_summary`, `alert_camera_url`, and `doorbell_audio_url` in `area_context`) and in the `latter.calendar_fetch` response (`map_url`).
 
 URLs use Home Assistant's numeric LAN IPv4 address, not a `.local` name. Latter finds the address by opening a UDP socket and caches it until Home Assistant's core config changes.
 
 ## Image output
 
-Every image endpoint returns a **baseline (non-progressive) JPEG with 4:2:0 chroma subsampling**, center-cropped to the requested size. When `shape=circle` is set, a circular mask is applied over black. Decoding and encoding run in an executor thread, so they never block Home Assistant's event loop.
+Every image endpoint returns a **baseline (non-progressive) JPEG with 4:2:0 chroma subsampling**, center-cropped to the device's panel resolution (from its hardware manifest). On round displays (`shape=circle` in the signed resource), a circular mask is applied over black. Decoding and encoding run in an executor thread, so they never block Home Assistant's event loop.
 
 | Source | Resampling | JPEG quality |
 | :--- | :--- | :--- |
@@ -44,27 +44,24 @@ Album art for the device's active speaker. Latter tries `entity_picture_local`, 
 
 | Param | Notes |
 | :--- | :--- |
-| `w`, `h` | 32–1200 |
-| `shape` or `mask` | `circle` for round displays |
-| `v` | Cache buster |
+| `sig` | **Required.** Signed resource `artwork:<media_key>\|<w>\|<h>\|<shape>` |
+| `v` | Optional cache buster |
 
 ### `GET /api/latter/wallpaper/{slug}`
 
 | Param | Notes |
 | :--- | :--- |
+| `sig` | **Required.** Signed resource `wallpaper:<src>\|<w>\|<h>\|<shape>` |
 | `src` | `preset:<name>` for one of the 5 generated presets, or `upload:<slug>/<file>` for an uploaded photo in Latter's private storage (`.storage/latter/wallpapers/`). Anything else is rejected. Without `src`, the device's current wallpaper is served. |
-| `w`, `h`, `shape` | |
 
 Photos are darkened to 78% brightness so text stays readable on top of them.
 
 ### `GET /api/latter/camera/{slug}`
-A snapshot from a camera configured for this device. Cameras that aren't configured return `404`; a missing or invalid signature returns `403`.
+A snapshot from a camera configured for this device. The camera `entity_id` and target dimensions are bound inside the signed resource (`camera:<entity_id>|<w>|<h>|<shape>`); a missing or invalid signature returns `403`, and an unconfigured camera returns `404`.
 
 | Param | Notes |
 | :--- | :--- |
-| `entity_id` | `camera.*` |
-| `w`, `h`, `shape` | |
-| `rot` | `90`, `180`, or `270` |
+| `sig` | **Required.** Signed resource `camera:<entity_id>\|<w>\|<h>\|<shape>` |
 
 Responses are cached for 200 ms and sent with `Cache-Control: no-store`.
 
@@ -73,22 +70,20 @@ A map of a calendar event's location, stitched from a 3×3 grid of OpenStreetMap
 
 | Param | Notes |
 | :--- | :--- |
+| `sig` | **Required.** Signed resource `map:<q>\|<w>\|<h>\|<shape>` |
 | `q` | An address, `lat,lon`, or a zone name. Addresses are geocoded with Nominatim. |
 | `z` | Zoom level, 10–18. Default 15. |
 | `pan_x`, `pan_y` | ±30 steps |
-| `w`, `h` | 128–768 |
-| `shape` | |
 
 ### `GET /api/latter/camera_audio/{slug}` *(experimental)*
 Streams a camera's RTSP audio through `ffmpeg` with a noise-reduction filter chain. The sample rate and channel count come from the device's hardware manifest (`audio.out_rate`, `audio.out_ch`), so current Latter boards get 48 kHz mono. Latter firmware requests FLAC. If the camera has no stream source or `ffmpeg` isn't available, a short silent WAV is returned.
 
 | Param | Notes |
 | :--- | :--- |
-| `entity_id` | A camera configured for this device. Others return `403`. |
-| `nr` | Noise reduction: `strong` (speech band-limit, spectral denoise, presence EQ, compressor, limiter), `light` (wider band, milder denoise, compressor, limiter), or `off` (rumble high-pass and limiter only). Defaults to the Studio setting. |
+| `sig` | **Required.** Short-lived (10 min) signed resource `camera_audio:<entity_id>` |
 | `fmt` | `flac` (default) or `wav` |
 
-At most 2 streams can run at once. Further requests get `429`.
+The noise-reduction filter level (`strong`, `light`, or `off`) comes from the device's active doorbell noise-reduction setting (or the Studio System default). At most 2 streams can run at once; further requests get `429`.
 
 ### Studio
 Studio has no HTTP API of its own. It's a `panel_custom` web component at `/latter` (admin only), loaded from the static path `/latter_ui`. It talks to Home Assistant only through admin-gated WebSocket commands: `latter/system/*` (`get_state`, `subscribe`, `command`, `export`, `import`) and `latter/device/*` (`command`, `export`, `import`). These are internal, not a stable API.

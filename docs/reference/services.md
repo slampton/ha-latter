@@ -1,6 +1,6 @@
 # Services Reference
 
-Latter registers 14 user-facing services (plus the internal `latter.device_hello` handshake service) under the `latter` domain. Latter firmware calls most of them from the device. You can also call them from automations, scripts, or your own firmware.
+Latter registers 16 user-facing services (plus the internal `latter.device_hello` handshake service) under the `latter` domain. Latter firmware calls most of them from the device. You can also call them from automations, scripts, or your own firmware.
 
 - **Source:** [`services.py`](../../custom_components/latter/services.py), with UI schemas in [`services.yaml`](../../custom_components/latter/services.yaml).
 - **Schema validation.** Every service rejects unknown keys. Most values (for example `priority`, `mode`, `action`, `command`) are free-form strings checked by the handler, which ignores or defaults values it doesn't recognize; `doorbell_intercom`'s `noise_reduction` is validated by the schema.

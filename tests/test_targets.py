@@ -309,6 +309,18 @@ class BleDeviceTrackerAndPersonTests(unittest.TestCase):
         self.assertIn("self._cached_person", sensor_src)
         self.assertIn("def _get_person_state(self)", sensor_src)
 
+        backup_agent_src = (LATTER_DIR / "backup.py").read_text(encoding="utf-8")
+        self.assertIn('getattr(item, "_runtime", None)', backup_agent_src)
+        self.assertNotIn('getattr(item, "_store", None)', backup_agent_src)
+
+        entities_doc = (REPO_ROOT / "docs" / "reference" / "entities.md").read_text(encoding="utf-8")
+        self.assertNotIn("ble_scanners_map", entities_doc)
+        self.assertNotIn("entities_summary", entities_doc)
+        self.assertIn("three entities marked ★", entities_doc)
+
+        services_doc = (REPO_ROOT / "docs" / "reference" / "services.md").read_text(encoding="utf-8")
+        self.assertIn("16 user-facing services", services_doc)
+
 
 if __name__ == "__main__":
     unittest.main()
