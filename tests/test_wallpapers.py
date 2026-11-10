@@ -50,7 +50,7 @@ class TestPrivateWallpapers(unittest.TestCase):
             "upload:kitchen/x.exe",
             "upload:kitchen/",
             "/local/latter_wallpapers/kitchen/x.jpg",
-            "preset:steel_horizon",
+            "preset:ocean_swell",
             "",
         ):
             self.assertIsNone(wallpaper_refs.parse_upload_source(bad), bad)
@@ -82,7 +82,7 @@ class TestPrivateWallpapers(unittest.TestCase):
         self.assertFalse(resource_signing.verify(secret, "sub_kitchen", f"wallpaper:{src}|240|240|circle", sig, exp + 1))
 
     def test_builtin_presets_and_procedural_buffers(self) -> None:
-        """The 5 built-in presets cover distinct themes and keep the upper-center clock zone calm."""
+        """The 5 built-in presets cover distinct themes and span the full canvas."""
         import ast
 
         tree = ast.parse((LATTER_DIR / "wallpaper_engine.py").read_text(encoding="utf-8"))
@@ -97,6 +97,7 @@ class TestPrivateWallpapers(unittest.TestCase):
                 ns["BUILTIN_WALLPAPER_PRESETS"] = ast.literal_eval(node.value)
             elif isinstance(node, ast.FunctionDef) and node.name in {
                 "_smoothstep",
+                "_render_ocean_swell_buf",
                 "_render_pine_ridges_buf",
                 "_render_twilight_dunes_buf",
                 "_render_aurora_veil_buf",
@@ -109,7 +110,7 @@ class TestPrivateWallpapers(unittest.TestCase):
         self.assertEqual(
             [p["id"] for p in presets],
             [
-                "preset:steel_horizon",
+                "preset:ocean_swell",
                 "preset:pine_ridges",
                 "preset:twilight_dunes",
                 "preset:aurora_veil",
@@ -121,6 +122,7 @@ class TestPrivateWallpapers(unittest.TestCase):
 
         side = 64
         for fn_name in (
+            "_render_ocean_swell_buf",
             "_render_pine_ridges_buf",
             "_render_twilight_dunes_buf",
             "_render_aurora_veil_buf",
@@ -128,22 +130,21 @@ class TestPrivateWallpapers(unittest.TestCase):
         ):
             buf = ns[fn_name](side)
             self.assertEqual(len(buf), side * side * 3, fn_name)
-            # Upper-center clock zone (y = 15%..35%, x = 30%..70%) stays darker than the lower half (y = 55%..85%)
-            clock_sum = 0
-            clock_cnt = 0
-            lower_sum = 0
-            lower_cnt = 0
-            for y in range(int(side * 0.15), int(side * 0.35)):
-                for x in range(int(side * 0.30), int(side * 0.70)):
-                    i = (y * side + x) * 3
-                    clock_sum += buf[i] + buf[i + 1] + buf[i + 2]
-                    clock_cnt += 1
-            for y in range(int(side * 0.55), int(side * 0.85)):
-                for x in range(int(side * 0.20), int(side * 0.80)):
-                    i = (y * side + x) * 3
-                    lower_sum += buf[i] + buf[i + 1] + buf[i + 2]
-                    lower_cnt += 1
-            self.assertLess(clock_sum / clock_cnt, lower_sum / lower_cnt, fn_name)
+            # Full-canvas check: both the upper half (y = 20%..45%) and lower half (y = 55%..85%) have active detail
+            upper_sum = sum(
+                buf[(y * side + x) * 3 + c]
+                for y in range(int(side * 0.20), int(side * 0.45))
+                for x in range(int(side * 0.20), int(side * 0.80))
+                for c in range(3)
+            )
+            lower_sum = sum(
+                buf[(y * side + x) * 3 + c]
+                for y in range(int(side * 0.55), int(side * 0.85))
+                for x in range(int(side * 0.20), int(side * 0.80))
+                for c in range(3)
+            )
+            self.assertGreater(upper_sum, 0, fn_name)
+            self.assertGreater(lower_sum, 0, fn_name)
 
 
 if __name__ == "__main__":

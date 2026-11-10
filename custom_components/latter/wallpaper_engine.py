@@ -13,7 +13,7 @@ import re
 from typing import Any
 from urllib.parse import quote
 
-from PIL import Image, ImageDraw, ImageOps
+from PIL import Image, ImageOps
 
 from homeassistant.core import HomeAssistant
 
@@ -30,8 +30,8 @@ _LOGGER = logging.getLogger(__name__)
 
 BUILTIN_WALLPAPER_PRESETS: tuple[dict[str, str], ...] = (
     {
-        "id": "preset:steel_horizon",
-        "name": "Deep Steel Horizon",
+        "id": "preset:ocean_swell",
+        "name": "Pacific Ocean Swell",
         "kind": "preset",
     },
     {
@@ -73,14 +73,101 @@ def _smoothstep(edge0: float, edge1: float, x: float) -> float:
     return t * t * (3.0 - 2.0 * t)
 
 
+def _render_ocean_swell_buf(side: int) -> bytearray:
+    """Render Pacific Ocean Swell onto a (side x side) RGB bytearray."""
+    buf = bytearray(side * side * 3)
+    swells = (
+        (0.19, -0.022, 0.024, 0.45, (58, 120, 158), (24, 58, 88), (7, 20, 36), (154, 198, 224)),
+        (0.35, 0.036, 0.032, 2.20, (68, 136, 174), (26, 66, 98), (8, 22, 40), (176, 216, 238)),
+        (0.51, -0.044, 0.038, 3.90, (76, 148, 188), (28, 72, 106), (7, 20, 36), (192, 228, 246)),
+        (0.68, 0.038, 0.042, 5.45, (64, 130, 168), (22, 56, 86), (5, 16, 30), (178, 218, 240)),
+        (0.84, -0.030, 0.034, 1.30, (50, 108, 144), (16, 42, 68), (4, 11, 20), (152, 196, 222)),
+    )
+    swell_y: list[list[float]] = []
+    swell_slope: list[list[float]] = []
+    for base_y, slope, amp, ph, *_rest in swells:
+        prof: list[float] = []
+        sprof: list[float] = []
+        for x in range(side):
+            xf = x / max(1, side - 1)
+            u1 = xf * math.tau * 0.85 + ph
+            u2 = xf * math.tau * 1.70 - ph * 0.65
+            s1 = math.sin(u1)
+            wave = (
+                slope * (xf - 0.5)
+                + amp * (0.66 * s1 - 0.16 * (s1 * s1 - 0.5) + 0.28 * math.cos(u2))
+            )
+            dw_dx = slope + amp * (
+                0.66 * math.cos(u1) * math.tau * 0.85
+                - 0.28 * math.sin(u2) * math.tau * 1.70
+            )
+            prof.append(base_y + wave)
+            sprof.append(dw_dx)
+        swell_y.append(prof)
+        swell_slope.append(sprof)
+
+    aa = 1.6 / side
+    foam_w = 3.0 / side
+    subsurf_w = 0.068
+    for y in range(side):
+        yf = y / max(1, side - 1)
+        sky_t = min(1.0, yf / 0.21)
+        glow = math.exp(-(((yf - 0.17) / 0.09) ** 2))
+        sr = 4.0 + 12.0 * (sky_t**1.6) + 22.0 * glow
+        sg = 10.0 + 28.0 * (sky_t**1.5) + 50.0 * glow
+        sb = 18.0 + 48.0 * (sky_t**1.4) + 76.0 * glow
+
+        row_off = y * side * 3
+        for x in range(side):
+            xf = x / max(1, side - 1)
+            r, g, b = sr, sg, sb
+            for s_idx, (_by, _sl, _amp, ph, c_crest, c_face, c_trough, c_foam) in enumerate(swells):
+                wy = swell_y[s_idx][x]
+                if yf >= wy - aa:
+                    cov = _smoothstep(wy - aa, wy + aa, yf)
+                    dist = max(0.0, yf - wy)
+                    depth_t = min(1.0, dist / 0.19)
+                    face_k = depth_t ** 0.78
+                    swell_shade = 0.86 + 0.14 * math.cos(xf * math.tau * 0.85 + ph * 0.8)
+                    wr = (c_face[0] + (c_trough[0] - c_face[0]) * face_k) * swell_shade
+                    wg = (c_face[1] + (c_trough[1] - c_face[1]) * face_k) * swell_shade
+                    wb = (c_face[2] + (c_trough[2] - c_face[2]) * face_k) * swell_shade
+
+                    if dist < subsurf_w:
+                        sub_k = ((1.0 - dist / subsurf_w) ** 1.9) * (
+                            0.72 + 0.28 * math.sin(xf * math.tau * 0.85 + ph)
+                        )
+                        wr = wr * (1.0 - sub_k) + c_crest[0] * sub_k
+                        wg = wg * (1.0 - sub_k) + c_crest[1] * sub_k
+                        wb = wb * (1.0 - sub_k) + c_crest[2] * sub_k
+
+                    if dist <= foam_w:
+                        slope_boost = min(1.0, max(0.40, 0.72 - swell_slope[s_idx][x] * 1.2))
+                        foam_k = ((1.0 - dist / foam_w) ** 2.1) * 0.80 * slope_boost
+                        wr = wr * (1.0 - foam_k) + c_foam[0] * foam_k
+                        wg = wg * (1.0 - foam_k) + c_foam[1] * foam_k
+                        wb = wb * (1.0 - foam_k) + c_foam[2] * foam_k
+
+                    r = r * (1.0 - cov) + wr * cov
+                    g = g * (1.0 - cov) + wg * cov
+                    b = b * (1.0 - cov) + wb * cov
+
+            idx = row_off + x * 3
+            buf[idx] = int(min(255.0, max(0.0, r)))
+            buf[idx + 1] = int(min(255.0, max(0.0, g)))
+            buf[idx + 2] = int(min(255.0, max(0.0, b)))
+    return buf
+
+
 def _render_pine_ridges_buf(side: int) -> bytearray:
     """Render Cascade Pine Ridges onto a (side x side) RGB bytearray."""
     buf = bytearray(side * side * 3)
     ridges = (
-        (0.51, 0.055, 0.45, (28, 66, 72), (16, 40, 46), 0.59, (54, 118, 118), 0.055),
-        (0.62, 0.048, 2.05, (20, 50, 56), (11, 28, 34), 0.70, (42, 96, 98), 0.050),
-        (0.73, 0.040, 3.65, (13, 34, 40), (7, 18, 23), 0.81, (30, 72, 76), 0.045),
-        (0.84, 0.030, 5.20, (7, 18, 22), (3, 8, 11), 1.00, (0, 0, 0), 0.0),
+        (0.21, 0.048, 1.10, (34, 78, 84), (19, 46, 52), 0.29, (60, 128, 128), 0.050),
+        (0.36, 0.055, 0.45, (28, 66, 72), (16, 40, 46), 0.45, (54, 118, 118), 0.055),
+        (0.52, 0.048, 2.05, (20, 50, 56), (11, 28, 34), 0.61, (42, 96, 98), 0.050),
+        (0.68, 0.040, 3.65, (13, 34, 40), (7, 18, 23), 0.77, (30, 72, 76), 0.045),
+        (0.83, 0.030, 5.20, (7, 18, 22), (3, 8, 11), 1.00, (0, 0, 0), 0.0),
     )
     ridge_y: list[list[float]] = []
     mist_line_y: list[list[float]] = []
@@ -103,11 +190,11 @@ def _render_pine_ridges_buf(side: int) -> bytearray:
     aa = 1.6 / side
     for y in range(side):
         yf = y / max(1, side - 1)
-        sky_t = min(1.0, yf / 0.54)
-        glow_h = math.exp(-(((yf - 0.49) / 0.14) ** 2))
-        sr = 3.0 + 11.0 * (sky_t**1.8) + 20.0 * glow_h
-        sg = 7.0 + 28.0 * (sky_t**1.6) + 50.0 * glow_h
-        sb = 11.0 + 34.0 * (sky_t**1.5) + 56.0 * glow_h
+        sky_t = min(1.0, yf / 0.25)
+        glow_h = math.exp(-(((yf - 0.19) / 0.11) ** 2))
+        sr = 5.0 + 14.0 * (sky_t**1.5) + 22.0 * glow_h
+        sg = 12.0 + 34.0 * (sky_t**1.4) + 52.0 * glow_h
+        sb = 18.0 + 40.0 * (sky_t**1.3) + 58.0 * glow_h
 
         row_off = y * side * 3
         for x in range(side):
@@ -144,8 +231,9 @@ def _render_twilight_dunes_buf(side: int) -> bytearray:
     """Render Sahara Twilight Dunes onto a (side x side) RGB bytearray."""
     buf = bytearray(side * side * 3)
     dunes = (
-        (0.52, -0.055, 0.044, 0.35, (118, 56, 25), (42, 18, 9), (168, 92, 42)),
-        (0.65, 0.075, 0.050, 2.25, (48, 21, 11), (16, 7, 5), (136, 68, 30)),
+        (0.24, 0.048, 0.038, 1.40, (132, 64, 28), (52, 22, 11), (182, 102, 48)),
+        (0.43, -0.055, 0.044, 0.35, (118, 56, 25), (42, 18, 9), (168, 92, 42)),
+        (0.61, 0.075, 0.050, 2.25, (54, 24, 12), (18, 8, 5), (142, 72, 32)),
         (0.79, -0.065, 0.045, 4.05, (96, 44, 20), (18, 8, 5), (152, 80, 35)),
     )
     dune_y: list[list[float]] = []
@@ -165,19 +253,19 @@ def _render_twilight_dunes_buf(side: int) -> bytearray:
     rim_w = 2.8 / side
     for y in range(side):
         yf = y / max(1, side - 1)
-        sky_t = min(1.0, yf / 0.52)
-        glow = math.exp(-(((yf - 0.48) / 0.13) ** 2))
-        sr = 6.0 + 26.0 * (sky_t**2.0) + 54.0 * glow
-        sg = 4.0 + 11.0 * (sky_t**2.0) + 23.0 * glow
-        sb = 5.0 + 8.0 * (sky_t**1.8) + 11.0 * glow
+        sky_t = min(1.0, yf / 0.26)
+        glow = math.exp(-(((yf - 0.21) / 0.11) ** 2))
+        sr = 12.0 + 34.0 * (sky_t**1.6) + 58.0 * glow
+        sg = 6.0 + 15.0 * (sky_t**1.6) + 26.0 * glow
+        sb = 8.0 + 10.0 * (sky_t**1.5) + 12.0 * glow
 
         row_off = y * side * 3
         for x in range(side):
             xf = x / max(1, side - 1)
             sun_x = math.exp(-(((xf - 0.35) / 0.45) ** 2))
-            r = sr + 16.0 * glow * sun_x
-            g = sg + 7.0 * glow * sun_x
-            b = sb + 2.0 * glow * sun_x
+            r = sr + 18.0 * glow * sun_x
+            g = sg + 8.0 * glow * sun_x
+            b = sb + 3.0 * glow * sun_x
 
             for d_idx, (_base_y, _slope, _amp, _ph, c_top, c_bot, c_rim) in enumerate(dunes):
                 dy = dune_y[d_idx][x]
@@ -210,16 +298,53 @@ def _render_aurora_veil_buf(side: int) -> bytearray:
     buf = bytearray(side * side * 3)
     for y in range(side):
         yf = y / max(1, side - 1)
-        clock_band = _smoothstep(0.26, 0.52, yf)
         row_off = y * side * 3
         for x in range(side):
             xf = x / max(1, side - 1)
-            r = 3.0 + 5.0 * (yf**1.5)
-            g = 4.0 + 9.0 * (yf**1.5)
-            b = 10.0 + 20.0 * (yf**1.2)
+            r = 4.0 + 6.0 * (yf**1.3)
+            g = 6.0 + 11.0 * (yf**1.3)
+            b = 14.0 + 22.0 * (yf**1.1)
+
+            c0_y = (
+                0.31
+                + 0.075 * math.sin(xf * math.tau * 0.75 - 0.55)
+                + 0.030 * math.cos(xf * math.tau * 1.60 + 0.9)
+            )
+            dy0 = yf - c0_y
+            env0 = math.exp(-((dy0 / (0.16 if dy0 < 0.0 else 0.036)) ** 2))
+            ray_u0 = xf + dy0 * 0.16
+            rays0 = (
+                0.72
+                + 0.15 * math.sin(ray_u0 * math.tau * 4.0 + 1.2)
+                + 0.09 * math.cos(ray_u0 * math.tau * 9.5 - 0.8)
+            )
+            w0 = env0 * rays0 * 0.85
+            alt0 = max(0.0, min(1.0, -dy0 / 0.19))
+            ar0 = 18.0 * (1.0 - alt0) + 78.0 * alt0
+            ag0 = 126.0 * (1.0 - alt0) + 34.0 * alt0
+            ab0 = 108.0 * (1.0 - alt0) + 132.0 * alt0
+
+            c2_y = (
+                0.52
+                + 0.08 * math.cos(xf * math.tau * 0.65 - 0.4)
+                + 0.025 * math.sin(xf * math.tau * 1.3 + 1.1)
+            )
+            dy2 = yf - c2_y
+            env2 = math.exp(-((dy2 / (0.15 if dy2 < 0.0 else 0.045)) ** 2))
+            ray_u2 = xf - dy2 * 0.14
+            rays2 = (
+                0.74
+                + 0.16 * math.sin(ray_u2 * math.tau * 4.5 + 1.9)
+                + 0.10 * math.cos(ray_u2 * math.tau * 11.0 - 0.6)
+            )
+            w2 = env2 * rays2 * 0.82
+            alt2 = max(0.0, min(1.0, -dy2 / 0.18))
+            ar2 = 44.0 * (1.0 - alt2) + 86.0 * alt2
+            ag2 = 58.0 * (1.0 - alt2) + 28.0 * alt2
+            ab2 = 122.0 * (1.0 - alt2) + 136.0 * alt2
 
             c1_y = (
-                0.67
+                0.70
                 - 0.09 * math.sin(xf * math.tau * 0.70 + 0.35)
                 + 0.035 * math.cos(xf * math.tau * 1.45 - 0.7)
             )
@@ -232,34 +357,15 @@ def _render_aurora_veil_buf(side: int) -> bytearray:
                 + 0.09 * math.cos(ray_u * math.tau * 9.0 - 1.1)
                 + 0.06 * math.sin(ray_u * math.tau * 17.0 + 2.4)
             )
-            w1 = env1 * rays1 * (0.25 + 0.75 * clock_band)
+            w1 = env1 * rays1
             alt1 = max(0.0, min(1.0, -dy1 / 0.21))
             ar1 = 16.0 * (1.0 - alt1) + 74.0 * alt1
             ag1 = 132.0 * (1.0 - alt1) + 32.0 * alt1
             ab1 = 106.0 * (1.0 - alt1) + 128.0 * alt1
 
-            c2_y = (
-                0.56
-                + 0.08 * math.cos(xf * math.tau * 0.65 - 0.4)
-                + 0.025 * math.sin(xf * math.tau * 1.3 + 1.1)
-            )
-            dy2 = yf - c2_y
-            env2 = math.exp(-((dy2 / (0.15 if dy2 < 0.0 else 0.045)) ** 2))
-            ray_u2 = xf - dy2 * 0.14
-            rays2 = (
-                0.74
-                + 0.16 * math.sin(ray_u2 * math.tau * 4.5 + 1.9)
-                + 0.10 * math.cos(ray_u2 * math.tau * 11.0 - 0.6)
-            )
-            w2 = env2 * rays2 * (0.20 + 0.80 * clock_band) * 0.78
-            alt2 = max(0.0, min(1.0, -dy2 / 0.18))
-            ar2 = 44.0 * (1.0 - alt2) + 86.0 * alt2
-            ag2 = 58.0 * (1.0 - alt2) + 28.0 * alt2
-            ab2 = 122.0 * (1.0 - alt2) + 136.0 * alt2
-
-            r = min(255.0, r + ar1 * w1 + ar2 * w2)
-            g = min(255.0, g + ag1 * w1 + ag2 * w2)
-            b = min(255.0, b + ab1 * w1 + ab2 * w2)
+            r = min(255.0, r + ar0 * w0 + ar1 * w1 + ar2 * w2)
+            g = min(255.0, g + ag0 * w0 + ag1 * w1 + ag2 * w2)
+            b = min(255.0, b + ab0 * w0 + ab1 * w1 + ab2 * w2)
 
             hor_y = 0.89 + 0.022 * math.sin(xf * math.tau * 1.1 + 0.8)
             if yf > hor_y:
@@ -278,19 +384,12 @@ def _render_aurora_veil_buf(side: int) -> bytearray:
 def _render_topographic_waves_buf(side: int) -> bytearray:
     """Render Obsidian Topographic Waves onto a (side x side) RGB bytearray."""
     buf = bytearray(side * side * 3)
-    num_levels = 10.0
+    num_levels = 11.0
     for y in range(side):
         yf = y / max(1, side - 1)
-        vert_vis = 0.16 + 0.84 * _smoothstep(0.22, 0.56, yf)
-        dy_clock = (yf - 0.26) / 0.20
         row_off = y * side * 3
         for x in range(side):
             xf = x / max(1, side - 1)
-            dx_clock = (xf - 0.50) / 0.36
-            clock_pocket = min(
-                1.0, max(0.25, (dx_clock * dx_clock + dy_clock * dy_clock) * 0.75)
-            )
-            vis = vert_vis * clock_pocket
 
             h = (
                 yf * 0.85
@@ -317,20 +416,18 @@ def _render_topographic_waves_buf(side: int) -> bytearray:
 
             is_major = (level_idx % 3) == 0
             line_half_w = 1.05 if is_major else 0.72
-            line_alpha = (
-                max(0.0, min(1.0, (line_half_w + 0.65 - dist_px) / 1.15)) * vis
-            )
+            line_alpha = max(0.0, min(1.0, (line_half_w + 0.65 - dist_px) / 1.15))
 
-            shade = max(0.0, min(1.0, 0.50 + 0.10 * dh_dx - 0.12 * dh_dy))
-            elev_norm = max(0.0, min(1.0, (h + 0.2) / 1.4)) * vis
-            base_r = 5.0 + 22.0 * elev_norm * shade
-            base_g = 6.0 + 23.0 * elev_norm * shade
-            base_b = 8.0 + 27.0 * elev_norm * shade
+            shade = max(0.0, min(1.0, 0.52 + 0.12 * dh_dx - 0.14 * dh_dy))
+            elev_norm = max(0.0, min(1.0, (h + 0.35) / 1.55))
+            base_r = 7.0 + 24.0 * elev_norm * shade
+            base_g = 8.0 + 25.0 * elev_norm * shade
+            base_b = 10.0 + 30.0 * elev_norm * shade
 
             if is_major:
-                cr, cg, cb = 128.0, 118.0, 102.0
+                cr, cg, cb = 134.0, 122.0, 104.0
             else:
-                cr, cg, cb = 64.0, 68.0, 76.0
+                cr, cg, cb = 68.0, 72.0, 82.0
 
             r = base_r * (1.0 - line_alpha) + cr * line_alpha
             g = base_g * (1.0 - line_alpha) + cg * line_alpha
@@ -354,50 +451,22 @@ def render_builtin_preset_image(
     if preset_id == "preset:pine_ridges":
         grid = min(side, 280)
         buf = _render_pine_ridges_buf(grid)
-        master = Image.frombytes("RGB", (grid, grid), bytes(buf))
-        if grid != side:
-            master = master.resize((side, side), resample=Image.Resampling.BICUBIC)
     elif preset_id == "preset:twilight_dunes":
         grid = min(side, 280)
         buf = _render_twilight_dunes_buf(grid)
-        master = Image.frombytes("RGB", (grid, grid), bytes(buf))
-        if grid != side:
-            master = master.resize((side, side), resample=Image.Resampling.BICUBIC)
     elif preset_id == "preset:aurora_veil":
         grid = min(side, 260)
         buf = _render_aurora_veil_buf(grid)
-        master = Image.frombytes("RGB", (grid, grid), bytes(buf))
-        if grid != side:
-            master = master.resize((side, side), resample=Image.Resampling.BICUBIC)
     elif preset_id == "preset:topographic_waves":
         grid = min(side, 320)
         buf = _render_topographic_waves_buf(grid)
-        master = Image.frombytes("RGB", (grid, grid), bytes(buf))
-        if grid != side:
-            master = master.resize((side, side), resample=Image.Resampling.BICUBIC)
-    else:  # Default: preset:steel_horizon (Deep Steel Horizon)
-        master = Image.new("RGB", (side, side), (0, 0, 0))
-        draw = ImageDraw.Draw(master)
-        cx = side // 2
-        horizon_y = int(side * 0.62)
-        band_h = max(1, int(side * 0.13))
-        for y in range(max(0, horizon_y - band_h), side):
-            if y < horizon_y:
-                t = (y - (horizon_y - band_h)) / float(band_h)
-                r_c = int(10 * (t**2))
-                g_c = int(42 * (t**2))
-                b_c = int(78 * (t**2))
-            else:
-                t = 1.0 - min(1.0, (y - horizon_y) / max(1, side - horizon_y))
-                r_c = int(8 * (t**1.8))
-                g_c = int(28 * (t**1.8))
-                b_c = int(52 * (t**1.8))
-            draw.line([(0, y), (side, y)], fill=(r_c, g_c, b_c))
-        draw.line([(0, horizon_y), (side, horizon_y)], fill=(28, 96, 156), width=2)
-        for deg in range(-75, 80, 15):
-            rad = math.radians(deg)
-            x_end = cx + int(math.sin(rad) * side * 0.9)
-            draw.line([(cx, horizon_y), (x_end, side)], fill=(12, 38, 64), width=1)
+    else:  # Default: preset:ocean_swell (Pacific Ocean Swell)
+        grid = min(side, 280)
+        buf = _render_ocean_swell_buf(grid)
+
+    master = Image.frombytes("RGB", (grid, grid), bytes(buf))
+    if grid != side:
+        master = master.resize((side, side), resample=Image.Resampling.BICUBIC)
 
     if width != side or height != side:
         left = (side - width) // 2
