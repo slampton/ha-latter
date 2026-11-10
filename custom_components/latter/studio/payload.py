@@ -251,10 +251,27 @@ def _build_system_shared_controls(
     )
 
 
+def _camera_preview_url(
+    coordinator: LatterCoordinator | None, cam_entity: str
+) -> str:
+    """Return a signed 320x180 square snapshot URL for `cam_entity`, or '' when no Device can sign it."""
+    if coordinator is None or not cam_entity:
+        return ""
+    cam_sig = coordinator.sign_payload_resource(
+        f"camera:{cam_entity}|320|180|square"
+    )
+    return (
+        f"/api/latter/camera/{coordinator.device_slug}"
+        f"?entity_id={quote(cam_entity, safe='')}&w=320&h=180&shape=square&sig={cam_sig}"
+    )
+
+
 def _build_entity_catalog(
-    hass: HomeAssistant, coordinator: LatterCoordinator | None
+    hass: HomeAssistant,
+    coordinator: LatterCoordinator | None,
+    all_coords: list[LatterCoordinator] | None = None,
 ) -> dict[str, Any]:
-    """Build the entity pickers for Studio (camera previews and speaker de-duplication need a Device)."""
+    """Build the entity pickers for Studio (speaker de-duplication uses the selected Device)."""
     area_reg = ar.async_get(hass)
     areas_list = [
         {"id": a.id, "name": a.name}
@@ -274,13 +291,18 @@ def _build_entity_catalog(
     calendars_list: list[dict[str, str]] = []
     persons_list: list[dict[str, str]] = []
 
+    coords = all_coords if all_coords is not None else _get_all_coordinators(hass)
+    sig_coord = coordinator or next(
+        (c for c in coords if not c.is_ble_tag), coords[0] if coords else None
+    )
     allowed_cams_set: set[str] = set()
     local_spk_id = ""
     local_ma_id = ""
+    if sig_coord is not None:
+        allowed_cams_set = set(sig_coord.camera_entities)
+        if sig_coord.camera_entity:
+            allowed_cams_set.add(sig_coord.camera_entity)
     if coordinator is not None:
-        allowed_cams_set = set(coordinator.camera_entities)
-        if coordinator.camera_entity:
-            allowed_cams_set.add(coordinator.camera_entity)
         local_spk_id = coordinator.local_speaker
         local_ma_id = coordinator.local_ma_speaker
 
@@ -338,14 +360,8 @@ def _build_entity_catalog(
             alarms_list.append(item)
         elif domain == "camera":
             cam_item: dict[str, Any] = dict(item)
-            if coordinator is not None and ent_id in allowed_cams_set:
-                cam_sig = coordinator.sign_payload_resource(
-                    f"camera:{ent_id}|320|180|square"
-                )
-                cam_item["preview_url"] = (
-                    f"/api/latter/camera/{coordinator.device_slug}"
-                    f"?entity_id={quote(ent_id, safe='')}&w=320&h=180&shape=square&sig={cam_sig}"
-                )
+            if sig_coord is not None and ent_id in allowed_cams_set:
+                cam_item["preview_url"] = _camera_preview_url(sig_coord, ent_id)
             cameras_list.append(cam_item)
         elif domain == "climate":
             climates_list.append(item)
@@ -442,6 +458,9 @@ def _build_doorbells(
 
     The ring entities are the ones the Devices already watch (each coordinator's doorbell ring map).
     """
+    sig_coord = next(
+        (c for c in coords if not c.is_ble_tag), coords[0] if coords else None
+    )
     ring_for_cam: dict[str, str] = {}
     for coord in coords:
         for ring_ent, cam in coord.doorbell_ring_map.items():
@@ -462,6 +481,7 @@ def _build_doorbells(
             {
                 "camera_entity": cam,
                 "camera_name": str((cam_st.attributes.get("friendly_name") if cam_st else "") or cam),
+                "preview_url": _camera_preview_url(sig_coord, cam),
                 "ring_entity": ring_ent,
                 "ring_name": str((ring_st.attributes.get("friendly_name") if ring_st else "") or ring_ent),
                 "ring_state": str(ring_st.state) if ring_known else "",
@@ -773,7 +793,9 @@ def build_studio_state_payload(
         ),
     }
     if include_catalog:
-        base["catalog"] = _build_entity_catalog(hass, coordinator)
+        base["catalog"] = _build_entity_catalog(
+            hass, coordinator, all_coords=all_coords
+        )
     presence_grid = get_all_areas_presence_summary(hass)
     if coordinator is None:
         return {

@@ -71,12 +71,18 @@ class TestPayloadDiet(unittest.TestCase):
         # Every payload field is read by Studio (studio-design.md section 2).
         payload_src = (LATTER_DIR / "studio" / "payload.py").read_text(encoding="utf-8")
         self.assertIn('"doorbells": _build_doorbells(', payload_src)
-        for field in ("camera_name", "ring_entity", "ring_name", "ring_state", "ring_at", "talk"):
+        for field in ("camera_name", "preview_url", "ring_entity", "ring_name", "ring_state", "ring_at", "talk"):
             self.assertIn(f'"{field}":', payload_src)
         js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
         self.assertIn("const bells = STATE?.doorbells || [];", js)
         for field in ("camera_name", "ring_entity", "ring_name", "ring_state", "ring_at", "talk"):
             self.assertIn(f"b.{field}", js)
+        self.assertIn("const previewUrl = dbObj?.preview_url || camObj?.preview_url || \"\";", js)
+        self.assertIn("bustCache ? `${previewUrl}&_ts=${Date.now()}` : previewUrl", js)
+        self.assertIn("window.fmtPercent = fmtPercent;", js)
+        self.assertIn('window.removeEventListener("mousemove", onCwWindowMove);', js)
+        self.assertNotIn("dialog-title danger", js)
+        self.assertNotIn("onAssignedPersonChanged", js)
 
     def test_status_card_renders_its_fields(self) -> None:
         # One Status card on a Device's Overview; the SDK revision comes from the hardware manifest.
@@ -390,6 +396,12 @@ class TestSaveScopes(unittest.TestCase):
         self.assertTrue(set(settings.SYSTEM_SETTING_KEYS) <= set(self.GLOBAL_KEYS))
         self.assertFalse(set(settings.DEVICE_SETTING_KEYS) & set(self.GLOBAL_KEYS))
         self.assertNotIn("companion_base_url", self.GLOBAL_KEYS)
+        reset_policy = _load("reset_policy")
+        reset_keys = set(reset_policy.DEVICE_OPTION_KEYS) | set(reset_policy.DEVICE_IDENTITY_KEYS)
+        self.assertTrue(
+            set(settings.DEVICE_SETTING_KEYS) <= reset_keys,
+            f"Device settings missing from reset_policy.py: {set(settings.DEVICE_SETTING_KEYS) - reset_keys}",
+        )
 
     def test_each_save_rejects_the_other_scope(self) -> None:
         with self.assertRaises(settings.SettingsScopeError):

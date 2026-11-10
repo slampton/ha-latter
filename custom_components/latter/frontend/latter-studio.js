@@ -1430,7 +1430,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
                   <div class="settings-row hidden" id="dash-power-profile-wrap"><div class="settings-row-text"><label class="row-label" for="dash-power-profile-select">Sleep &amp; Wake Power Profile</label></div><div class="settings-row-control"><select id="dash-power-profile-select" onchange="if (this.dataset.ent) espSelect(this.dataset.ent, this.value)"></select></div></div>
                   <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-device_group">Device Group</label></div><div class="settings-row-control"><select id="cfg-device_group" onchange="saveField('device', this)"></select></div></div>
                   <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="quick-profile-select">Configuration Profile</label></div><div class="settings-row-control"><select id="quick-profile-select"></select><button type="button" class="btn btn-secondary" onclick="applyQuickProfileFromOverview()">Apply</button></div></div>
-                  <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-assigned_person">Assigned Person</label><p class="row-description">Creates <code>sensor.&lt;person&gt;_current_area</code>.</p></div><div class="settings-row-control"><select id="cfg-assigned_person" onchange="onAssignedPersonChanged(this.value)"></select></div></div>
+                  <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="cfg-assigned_person">Assigned Person</label><p class="row-description">Creates <code>sensor.&lt;person&gt;_current_area</code>.</p></div><div class="settings-row-control"><select id="cfg-assigned_person" onchange="saveField('device', this)"></select></div></div>
                 </div>
               </div>
             </div>
@@ -1682,7 +1682,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
 
 <dialog id="latter-rm-modal" class="studio-dialog" aria-labelledby="latter-rm-title">
   <div class="dialog-body">
-    <h3 class="dialog-title danger" id="latter-rm-title">Remove Device From Latter?</h3>
+    <h3 class="dialog-title" id="latter-rm-title">Remove Device From Latter?</h3>
     <p class="dialog-text" id="latter-rm-desc">Your ESPHome device stays in Home Assistant.</p>
     <div class="dialog-actions">
       <button type="button" class="btn btn-secondary" onclick="closeRemoveDeviceModal()">Cancel</button>
@@ -1693,7 +1693,7 @@ const STUDIO_TEMPLATE = `<div class="studio-root is-loading" id="studio-root">
 
 <dialog id="latter-reset-modal" class="studio-dialog" aria-labelledby="latter-reset-title">
   <div class="dialog-body">
-    <h3 class="dialog-title danger" id="latter-reset-title">Reset to Defaults?</h3>
+    <h3 class="dialog-title" id="latter-reset-title">Reset to Defaults?</h3>
     <div class="settings-list">
       <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="latter-reset-device-settings">Settings Saved on the Device</label><p class="row-description">Erases everything saved on the Device; it restarts.</p></div><div class="settings-row-control"><input type="checkbox" class="switch" role="switch" id="latter-reset-device-settings" checked onchange="updateResetDeviceConfirm()"></div></div>
       <div class="settings-row"><div class="settings-row-text"><label class="row-label" for="latter-reset-latter-options">Latter Settings for This Device</label></div><div class="settings-row-control"><input type="checkbox" class="switch" role="switch" id="latter-reset-latter-options" checked onchange="updateResetDeviceConfirm()"></div></div>
@@ -1871,7 +1871,6 @@ function bindDialogs() {
   }));
 }
 let STATE = null;
-let CALENDARS = [];
 // D-010: every setting applies as soon as it changes. Changes are coalesced per scope and sent as one
 // partial save of just the changed keys; a failure shows the error toast and reverts the form.
 const PENDING_KEYS = {system: new Set(), device: new Set()};
@@ -1994,6 +1993,8 @@ function toggleParentHaSidebar() {
 }
 
 function closeCameraPreviewBox() {
+  PREVIEW_CAMERA_ENTITY = "";
+  doc.getElementById("cam-preview-img")?.removeAttribute("src");
   doc.getElementById("cam-preview-box")?.classList.add("hidden");
 }
 
@@ -3081,30 +3082,32 @@ async function autoCalibrateHere(areaId) {
   }
 }
 
-function renderCameraPreview(camEntityId) {
+function renderCameraPreview(camEntityId, bustCache = false) {
   const box = doc.getElementById("cam-preview-box");
   const img = doc.getElementById("cam-preview-img");
   const lbl = doc.getElementById("cam-preview-label");
   if (!box || !img) return;
   if (!camEntityId) {
-    box.classList.add("hidden");
+    closeCameraPreviewBox();
     return;
   }
+  const dbObj = (STATE?.doorbells || []).find(b => b.camera_entity === camEntityId);
   const camObj = (STATE?.catalog?.cameras || []).find(c => c.id === camEntityId);
-  if (!camObj || !camObj.preview_url) {
+  const previewUrl = dbObj?.preview_url || camObj?.preview_url || "";
+  if (!previewUrl) {
     box.classList.add("hidden");
-    showToast("Save the cameras and open a Device to preview this camera", "error");
+    showToast("Add a Latter Device to preview cameras", "error");
     return;
   }
   PREVIEW_CAMERA_ENTITY = camEntityId;
   if (lbl) lbl.textContent = `Preview: ${camEntityId}`;
-  img.src = camObj.preview_url;
+  img.src = bustCache ? `${previewUrl}&_ts=${Date.now()}` : previewUrl;
   box.classList.remove("hidden");
 }
 
 function refreshActiveCameraPreview() {
   if (PREVIEW_CAMERA_ENTITY) {
-    renderCameraPreview(PREVIEW_CAMERA_ENTITY);
+    renderCameraPreview(PREVIEW_CAMERA_ENTITY, true);
   }
 }
 
@@ -4045,10 +4048,6 @@ async function confirmAddDeviceModal() {
   }
 }
 
-function onAssignedPersonChanged(personEnt) {
-  saveSetting("device", "assigned_person");
-}
-
 function toggleDeviceTableSort(col) {
   if (DEVICE_SORT_COL === col) {
     DEVICE_SORT_ASC = !DEVICE_SORT_ASC;
@@ -4465,6 +4464,16 @@ function renderDwellValue() {
 
 let cwTargetScope = "device";
 let cwSelectedHex = "";
+let CW_DRAGGING = false;
+let CW_PICK_FN = null;
+
+function onCwWindowMove(e) {
+  if (CW_DRAGGING && CW_PICK_FN) CW_PICK_FN(e);
+}
+
+function onCwWindowUp() {
+  CW_DRAGGING = false;
+}
 
 function initColorWheel() {
   const canvas = doc.getElementById("latter-cw-canvas");
@@ -4489,23 +4498,23 @@ function initColorWheel() {
     }
   }
   ctx.putImageData(img, 0, 0);
-  let dragging = false;
   const pickAt = (ev) => {
     const rect = canvas.getBoundingClientRect();
-    const x = (ev.touches ? ev.touches[0].clientX : ev.clientX) - rect.left;
-    const y = (ev.touches ? ev.touches[0].clientY : ev.clientY) - rect.top;
+    const scaleX = size / (rect.width || size);
+    const scaleY = size / (rect.height || size);
+    const x = ((ev.touches ? ev.touches[0].clientX : ev.clientX) - rect.left) * scaleX;
+    const y = ((ev.touches ? ev.touches[0].clientY : ev.clientY) - rect.top) * scaleY;
     const dx = x - cx, dy = y - cy;
     const dist = Math.min(r, Math.sqrt(dx * dx + dy * dy));
     const hue = (Math.atan2(dy, dx) * 180 / Math.PI + 360) % 360;
     const [cr, cg, cb] = hsvToRgbJS(hue, dist / r, 1.0);
     setCwHex("#" + [cr, cg, cb].map(v => v.toString(16).padStart(2, "0")).join("").toUpperCase());
   };
-  canvas.addEventListener("mousedown", (e) => { dragging = true; pickAt(e); });
-  window.addEventListener("mousemove", (e) => { if (dragging) pickAt(e); });
-  window.addEventListener("mouseup", () => { dragging = false; });
-  canvas.addEventListener("touchstart", (e) => { dragging = true; pickAt(e); e.preventDefault(); }, {passive: false});
-  canvas.addEventListener("touchmove", (e) => { if (dragging) pickAt(e); e.preventDefault(); }, {passive: false});
-  canvas.addEventListener("touchend", () => { dragging = false; });
+  CW_PICK_FN = pickAt;
+  canvas.addEventListener("mousedown", (e) => { CW_DRAGGING = true; pickAt(e); });
+  canvas.addEventListener("touchstart", (e) => { CW_DRAGGING = true; pickAt(e); e.preventDefault(); }, {passive: false});
+  canvas.addEventListener("touchmove", (e) => { if (CW_DRAGGING) pickAt(e); e.preventDefault(); }, {passive: false});
+  canvas.addEventListener("touchend", () => { CW_DRAGGING = false; });
 }
 
 function hsvToRgbJS(h, s, v) {
@@ -4691,9 +4700,10 @@ function bindStudioGlobals() {
   window.espNumber = espNumber;
   window.espSelect = espSelect;
   window.exportBackupToComputer = exportBackupToComputer;
+  window.fmtPercent = fmtPercent;
   window.onActivityCardChanged = onActivityCardChanged;
   window.fallbackCopyText = fallbackCopyText;
-    window.getInventoryRemoteIds = getInventoryRemoteIds;
+  window.getInventoryRemoteIds = getInventoryRemoteIds;
   window.getRemoteFriendlyLabel = getRemoteFriendlyLabel;
   window.getSectionItems = getSectionItems;
   window.hsvToRgbJS = hsvToRgbJS;
@@ -4702,7 +4712,6 @@ function bindStudioGlobals() {
   window.renderDwellValue = renderDwellValue;
   window.moveDockAppToken = moveDockAppToken;
   window.navigateToView = navigateToView;
-  window.onAssignedPersonChanged = onAssignedPersonChanged;
   window.onCwHexInput = onCwHexInput;
   window.onFilterDeviceCategory = onFilterDeviceCategory;
   window.onSelectBleCandidate = onSelectBleCandidate;
@@ -4795,6 +4804,8 @@ class LatterStudio extends HTMLElement {
     SHADOW_ROOT = this.shadowRoot;
     HOST_ELEMENT = this;
     bindStudioGlobals();
+    window.addEventListener("mousemove", onCwWindowMove);
+    window.addEventListener("mouseup", onCwWindowUp);
     if (!this._initialized) {
       this.shadowRoot.innerHTML = `<style>${STUDIO_STYLES}</style>${STUDIO_TEMPLATE}`;
       this._initialized = true;
@@ -4809,10 +4820,19 @@ class LatterStudio extends HTMLElement {
   }
 
   disconnectedCallback() {
+    CW_DRAGGING = false;
+    window.removeEventListener("mousemove", onCwWindowMove);
+    window.removeEventListener("mouseup", onCwWindowUp);
     if (POLL_TIMER) {
       clearInterval(POLL_TIMER);
       POLL_TIMER = null;
     }
+    if (TOAST_TIMER) {
+      clearTimeout(TOAST_TIMER);
+      TOAST_TIMER = null;
+    }
+    if (PENDING_KEYS.system.size) flushSettings("system");
+    if (PENDING_KEYS.device.size) flushSettings("device");
     this._teardownSubscription();
   }
 
