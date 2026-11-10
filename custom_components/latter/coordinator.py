@@ -67,7 +67,6 @@ from .ble_engine import (
     get_ble_proxy_area_ids,
 )
 from .const import (
-    CALENDAR_REFRESH_INTERVAL_MINUTES,
     CONF_ALARM_ENTITY,
     CONF_AREA_FOLLOW_DWELL_S,
     CONF_AREA_HANDOFF,
@@ -126,7 +125,6 @@ from .const import (
     DEFAULT_WALLPAPER_CYCLE_MINUTES,
     DOMAIN,
     EVENT_LATTER,
-    FORECAST_REFRESH_INTERVAL_MINUTES,
     GLOBAL_CONFIG_KEYS,
     INTEGRATION_VERSION,
     SUBENTRY_BLE_TAG,
@@ -169,7 +167,12 @@ from .payloads import (
     remote_slot_records,
 )
 from .presence_beacon import Trigger, decide_beacon_action
-from .site_feeds import async_fetch_calendar_snapshot, async_fetch_weather_snapshot
+from .site_feeds import (
+    async_fetch_calendar_snapshot,
+    async_fetch_weather_snapshot,
+    build_calendar_browse_items,
+)
+from .system import get_latter_system
 from .targets import other_latter_devices
 from .traits import manifest_has_display, manifest_is_roaming, manifest_is_wearable
 from .url_signer import UrlSigner
@@ -192,8 +195,6 @@ def resolve_coordinator(
     target: str | None = None,
 ) -> LatterCoordinator | None:
     """Resolve a loaded LatterCoordinator by subentry_id, Latter or ESPHome device_id, or the Device's own slug (exact)."""
-    from .system import get_latter_system
-
     domain_data = hass.data.get(DOMAIN, {})
     sys_obj = get_latter_system(hass)
     coords = (
@@ -322,13 +323,10 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._cached_remote_payload: tuple[float, tuple[str, dict[str, Any]]] | None = None
         self._unsub_core_config: Callable[[], None] | None = None
         self._unsub_speaker_state: Callable[[], None] | None = None
-        self._unsub_weather_state: Callable[[], None] | None = None
         self._unsub_alarm_state: Callable[[], None] | None = None
         self._unsub_remotes_state: Callable[[], None] | None = None
         self._unsub_area_entities_state: Callable[[], None] | None = None
         self._unsub_area_debounce: Callable[[], None] | None = None
-        self._unsub_forecast_timer: Callable[[], None] | None = None
-        self._unsub_calendar_timer: Callable[[], None] | None = None
         self._unsub_wallpaper_timer: Callable[[], None] | None = None
         self._unsub_doorbell_ring_state: Callable[[], None] | None = None
         self._doorbell_ring_map: dict[str, str] = {}
@@ -583,10 +581,17 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._ble_tracker.set_area_offsets(self.ble_area_offsets)
         self._bind_all_listeners()
         if not self.is_ble_tag:
+            sys_obj = get_latter_system(self.hass)
             if changed_keys is None or CONF_WEATHER_ENTITY in changed_keys:
-                await self.async_refresh_weather_forecast()
+                if sys_obj is not None:
+                    await sys_obj.async_refresh_weather_forecast(coalesce=True)
+                else:
+                    await self.async_refresh_weather_forecast()
             if changed_keys is None or CONF_CALENDAR_ENTITIES in changed_keys:
-                await self.async_refresh_calendar_agenda()
+                if sys_obj is not None:
+                    await sys_obj.async_refresh_calendar_agenda(coalesce=True)
+                else:
+                    await self.async_refresh_calendar_agenda()
         self.async_notify_listeners()
 
     @property
@@ -1241,19 +1246,24 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._ble_tracker.async_start()
 
         if not self.is_ble_tag:
-            await self.async_refresh_weather_forecast()
-            await self.async_refresh_calendar_agenda()
-
-            self._unsub_forecast_timer = async_track_time_interval(
-                self.hass,
-                self._async_periodic_weather_refresh,
-                timedelta(minutes=FORECAST_REFRESH_INTERVAL_MINUTES),
-            )
-            self._unsub_calendar_timer = async_track_time_interval(
-                self.hass,
-                self._async_periodic_calendar_refresh,
-                timedelta(minutes=CALENDAR_REFRESH_INTERVAL_MINUTES),
-            )
+            sys_obj = get_latter_system(self.hass)
+            if sys_obj is not None:
+                sys_obj.bind_feed_listeners()
+                if sys_obj.weather_loaded:
+                    self.apply_weather_snapshot(
+                        sys_obj.weather_entity, sys_obj.weather_snapshot
+                    )
+                else:
+                    await self.async_refresh_weather_forecast()
+                if sys_obj.calendar_loaded:
+                    self.apply_calendar_snapshot(
+                        sys_obj.calendar_records, sys_obj.calendar_raw_rows
+                    )
+                else:
+                    await self.async_refresh_calendar_agenda()
+            else:
+                await self.async_refresh_weather_forecast()
+                await self.async_refresh_calendar_agenda()
         # Onboarding / reload: mirror the tracking option (no-op until the device's switch is available).
         await self.async_sync_presence_beacon("options")
         try:
@@ -1269,7 +1279,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if self.is_ble_tag:
             return
         self._bind_speaker_listener()
-        self._bind_weather_listener()
         self._bind_alarm_listener()
         self._bind_remotes_listener()
         self._bind_area_entities_listener()
@@ -1291,13 +1300,10 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         for unsub in (
             self._unsub_core_config,
             self._unsub_speaker_state,
-            self._unsub_weather_state,
             self._unsub_alarm_state,
             self._unsub_remotes_state,
             self._unsub_area_entities_state,
             self._unsub_area_debounce,
-            self._unsub_forecast_timer,
-            self._unsub_calendar_timer,
             self._unsub_wallpaper_timer,
             self._unsub_doorbell_ring_state,
         ):
@@ -1305,13 +1311,10 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 unsub()
         self._unsub_core_config = None
         self._unsub_speaker_state = None
-        self._unsub_weather_state = None
         self._unsub_alarm_state = None
         self._unsub_remotes_state = None
         self._unsub_area_entities_state = None
         self._unsub_area_debounce = None
-        self._unsub_forecast_timer = None
-        self._unsub_calendar_timer = None
         self._unsub_wallpaper_timer = None
         self._unsub_doorbell_ring_state = None
 
@@ -2785,38 +2788,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return res
 
     @callback
-    def _bind_weather_listener(self) -> None:
-        """Subscribe to state changes on the configured weather entity."""
-        if self._unsub_weather_state is not None:
-            self._unsub_weather_state()
-            self._unsub_weather_state = None
-
-        weather_ent = self.weather_entity
-        if not weather_ent:
-            return
-
-        self._unsub_weather_state = async_track_state_change_event(
-            self.hass,
-            [weather_ent],
-            self._async_on_weather_state_change,
-        )
-
-    @callback
-    def _async_on_weather_state_change(
-        self, event: Event[EventStateChangedData]
-    ) -> None:
-        """Update current weather attributes and refresh forecast."""
-        self.entry.async_create_background_task(
-            self.hass,
-            self.async_refresh_weather_forecast(),
-            f"latter_weather_refresh_{self.device_slug}",
-        )
-
-    async def _async_periodic_weather_refresh(self, _now: datetime) -> None:
-        """Refresh 5-day weather forecast every 30 minutes."""
-        await self.async_refresh_weather_forecast()
-
-    @callback
     def _bind_wallpaper_cycle_timer(self) -> None:
         """Start or stop the automatic favorite wallpaper rotation timer."""
         if self._unsub_wallpaper_timer is not None:
@@ -2846,12 +2817,25 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._schedule_persist_runtime_state()
         self.async_notify_listeners()
 
-    async def _async_periodic_calendar_refresh(self, _now: datetime) -> None:
-        """Refresh system calendar agenda every 15 minutes."""
-        await self.async_refresh_calendar_agenda()
+    @callback
+    def apply_calendar_snapshot(
+        self, records: V3Records, raw_rows: list[dict[str, Any]]
+    ) -> None:
+        """Apply a Site-level calendar agenda snapshot and build device-scoped map snapshot URLs."""
+        self.calendar_records = records
+        self.calendar_events = build_calendar_browse_items(
+            raw_rows, map_url_builder=self.build_map_snapshot_url
+        )
+        self.async_notify_listeners()
 
     async def async_refresh_calendar_agenda(self, days: int = 30) -> None:
-        """Fetch upcoming calendar events and update sensor state."""
+        """Fetch upcoming calendar events (via the shared Site feed for 30-day agendas) and update sensor state."""
+        sys_obj = get_latter_system(self.hass)
+        if sys_obj is not None and days == 30:
+            records, raw_rows = await sys_obj.async_refresh_calendar_agenda(days=30)
+            if self.subentry_id not in sys_obj.coordinators:
+                self.apply_calendar_snapshot(records, raw_rows)
+            return
         records, events = await async_fetch_calendar_snapshot(
             self.hass,
             self.calendar_entities,
@@ -2881,9 +2865,13 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "payload": cal_payload,
         }
 
-    async def async_refresh_weather_forecast(self) -> None:
-        """Fetch the daily forecast via weather.get_forecasts and pack the weather_forecast payload."""
-        weather_ent = self.weather_entity
+    @callback
+    def apply_weather_snapshot(
+        self,
+        weather_ent: str | None,
+        snap: tuple[V3Records, dict[str, Any]] | None,
+    ) -> None:
+        """Apply a Site-level weather forecast snapshot and pack the weather_forecast payload."""
         if not weather_ent:
             # No weather entity: everything is unknown (empty fields; the device shows "—").
             self.forecast_records = V3Records()
@@ -2904,7 +2892,6 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             }
             self.async_notify_listeners()
             return
-        snap = await async_fetch_weather_snapshot(self.hass, weather_ent)
         if snap is None:
             return
         records, w_fields = snap
@@ -2927,3 +2914,20 @@ class LatterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "payload": w_payload,
         }
         self.async_notify_listeners()
+
+    async def async_refresh_weather_forecast(self) -> None:
+        """Fetch the daily forecast (via the shared Site feed) and pack the weather_forecast payload."""
+        sys_obj = get_latter_system(self.hass)
+        if sys_obj is not None:
+            await sys_obj.async_refresh_weather_forecast()
+            if self.subentry_id not in sys_obj.coordinators:
+                self.apply_weather_snapshot(
+                    sys_obj.weather_entity, sys_obj.weather_snapshot
+                )
+            return
+        weather_ent = self.weather_entity
+        if not weather_ent:
+            self.apply_weather_snapshot(None, None)
+            return
+        snap = await async_fetch_weather_snapshot(self.hass, weather_ent)
+        self.apply_weather_snapshot(weather_ent, snap)

@@ -63,17 +63,13 @@ def _parse_event_dict(
     }
 
 
-async def async_fetch_calendar_agenda(
+async def async_fetch_raw_calendar_events(
     hass: HomeAssistant,
     calendar_entities: list[str],
     days: int = 30,
     max_events: int = MAX_AGENDA_EVENTS,
-    map_url_builder: Callable[[str], str] | None = None,
 ) -> tuple[V3Records, list[dict[str, Any]]]:
-    """Fetch upcoming events across calendars with calendar.get_events.
-
-    Returns (summary records for the calendar_agenda payload, browse slot items for up to `max_events`).
-    """
+    """Fetch and deduplicate upcoming events once across calendars for the entire Site."""
     targets = _discover_calendars(hass, calendar_entities)
     if not targets:
         return V3Records(), []
@@ -124,9 +120,31 @@ async def async_fetch_calendar_agenda(
             break
 
     records = calendar_agenda_records(unique_events, now_local.date())
-    slot_items: list[dict[str, Any]] = []
-    for idx, ev in enumerate(unique_events):
+    raw_rows: list[dict[str, Any]] = []
+    for ev in unique_events:
         time_label, title, location, _all_day = calendar_agenda_records([ev], now_local.date())[0]
+        raw_rows.append(
+            {
+                "time_label": time_label,
+                "title": title,
+                "location": location,
+                "start": ev["start_raw"],
+                "end": ev["end_raw"],
+            }
+        )
+    return records, raw_rows
+
+
+def build_calendar_browse_items(
+    raw_rows: list[dict[str, Any]],
+    map_url_builder: Callable[[str], str] | None = None,
+) -> list[dict[str, Any]]:
+    """Build device-scoped calendar browse slots (with signed map snapshot URLs) from fetched event rows."""
+    slot_items: list[dict[str, Any]] = []
+    for idx, row in enumerate(raw_rows):
+        time_label = row["time_label"]
+        title = row["title"]
+        location = row["location"]
         map_url = (
             map_url_builder(location)
             if (location and callable(map_url_builder))
@@ -139,11 +157,30 @@ async def async_fetch_calendar_agenda(
                 "type": "calendar_event",
                 "active": idx == 0,
                 "summary": title,
-                "start": ev["start_raw"],
-                "end": ev["end_raw"],
+                "start": row["start"],
+                "end": row["end"],
                 "location": location,
                 "map_url": map_url,
             }
         )
+    return slot_items
 
-    return records, slot_items
+
+async def async_fetch_calendar_agenda(
+    hass: HomeAssistant,
+    calendar_entities: list[str],
+    days: int = 30,
+    max_events: int = MAX_AGENDA_EVENTS,
+    map_url_builder: Callable[[str], str] | None = None,
+) -> tuple[V3Records, list[dict[str, Any]]]:
+    """Fetch upcoming events across calendars with calendar.get_events.
+
+    Returns (summary records for the calendar_agenda payload, browse slot items for up to `max_events`).
+    """
+    records, raw_rows = await async_fetch_raw_calendar_events(
+        hass,
+        calendar_entities,
+        days=days,
+        max_events=max_events,
+    )
+    return records, build_calendar_browse_items(raw_rows, map_url_builder=map_url_builder)

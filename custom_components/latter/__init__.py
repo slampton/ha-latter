@@ -256,6 +256,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
     )
 
     entry.runtime_data = sys_obj
+    sys_obj.bind_feed_listeners()
 
     device_subentries = [
         sub
@@ -349,6 +350,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> b
         domain_data = hass.data.get(DOMAIN, {})
         sys_obj = get_latter_system(hass)
         if sys_obj is not None:
+            sys_obj.async_cleanup_feeds()
             for sub_id, coord in list(sys_obj.coordinators.items()):
                 if coord.entry.entry_id == entry.entry_id:
                     sys_obj.coordinators.pop(sub_id, None)

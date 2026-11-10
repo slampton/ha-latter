@@ -214,6 +214,30 @@ class BleDeviceTrackerAndPersonTests(unittest.TestCase):
         self.assertNotIn("get_area_context_payload", studio_payload_src)
         self.assertIn(".active_area_name", studio_payload_src)
 
+    def test_coordinator_pass3_shared_site_feeds(self) -> None:
+        coord_src = (LATTER_DIR / "coordinator.py").read_text(encoding="utf-8")
+        for per_device_feed in (
+            "_unsub_weather_state",
+            "_unsub_forecast_timer",
+            "_unsub_calendar_timer",
+            "_bind_weather_listener",
+            "_async_periodic_weather_refresh",
+            "_async_periodic_calendar_refresh",
+        ):
+            self.assertNotIn(per_device_feed, coord_src)
+        self.assertIn("def apply_weather_snapshot(", coord_src)
+        self.assertIn("def apply_calendar_snapshot(", coord_src)
+
+        sys_src = (LATTER_DIR / "system.py").read_text(encoding="utf-8")
+        self.assertIn("def bind_feed_listeners(self) -> None:", sys_src)
+        self.assertIn("def async_cleanup_feeds(self) -> None:", sys_src)
+        self.assertIn("async def async_refresh_weather_forecast(", sys_src)
+        self.assertIn("async def async_refresh_calendar_agenda(", sys_src)
+
+        init_src = (LATTER_DIR / "__init__.py").read_text(encoding="utf-8")
+        self.assertIn("sys_obj.bind_feed_listeners()", init_src)
+        self.assertIn("sys_obj.async_cleanup_feeds()", init_src)
+
 
 if __name__ == "__main__":
     unittest.main()
