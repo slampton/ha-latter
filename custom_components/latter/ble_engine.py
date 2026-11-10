@@ -15,6 +15,12 @@ from homeassistant.helpers import (
 )
 from homeassistant.helpers.event import async_track_time_interval
 
+from .area_engine import (
+    area_fusion_sensor_choices,
+    area_fusion_settings,
+    evaluate_area_sensor_fusion,
+    invalidate_area_fusion_index,
+)
 from .ble_math import (
     STALE_PROXY_SECONDS,
     decide_area,
@@ -139,7 +145,7 @@ def _resolve_device_area_or_entity_area(
     return None
 
 
-def _resolve_scanner_area_id(
+def _resolve_scanner_area_id_uncached(
     hass: HomeAssistant, scanner_source: str
 ) -> str | None:
     """Resolve an ESPHome BLE Proxy source (MAC or name) to its Home Assistant area_id with strict priority."""
@@ -236,6 +242,26 @@ def _resolve_scanner_area_id(
     return None
 
 
+def _resolve_scanner_area_id(
+    hass: HomeAssistant, scanner_source: str
+) -> str | None:
+    """Resolve an ESPHome BLE Proxy source to its Home Assistant area_id (using shared Fabric cache when active)."""
+    if not scanner_source:
+        return None
+    domain_data = hass.data.get("latter")
+    fabric: LatterBleFabric | None = (
+        domain_data.get("ble_fabric") if isinstance(domain_data, dict) else None
+    )
+    if fabric is not None and fabric._unsub_ble is not None:
+        cached = fabric._scanner_area_cache.get(scanner_source)
+        if cached is not None:
+            return None if cached == _UNMAPPED else cached
+        resolved = _resolve_scanner_area_id_uncached(hass, scanner_source)
+        fabric._scanner_area_cache[scanner_source] = resolved if resolved else _UNMAPPED
+        return resolved
+    return _resolve_scanner_area_id_uncached(hass, scanner_source)
+
+
 def get_ble_proxy_area_ids(hass: HomeAssistant) -> set[str]:
     """Return the set of Home Assistant area_ids that actually have a Bluetooth proxy/scanner."""
     proxy_areas: set[str] = set()
@@ -319,8 +345,6 @@ class LatterNativeBleTracker:
             str(k): float(v) for k, v in (area_offsets or {}).items()
         }
 
-        self._unsub_ble: Callable[[], None] | None = None
-        self._unsub_poll: Callable[[], None] | None = None
         # area_id -> (ema_effective_rssi, last_seen_monotonic)
         self._area_rssi: dict[str, tuple[float, float]] = {}
         # area_id -> (ema_raw_rssi, last_seen_monotonic, scanner_name)
@@ -453,11 +477,6 @@ class LatterNativeBleTracker:
                     minor_val = None
         return major_val, minor_val
 
-    def _resolve_beacon_minor(self) -> int | None:
-        """Return expected iBeacon minor ID from the device's hardware manifest."""
-        _major, minor = self._resolve_beacon_major_minor()
-        return minor
-
     @property
     def target_macs_formatted(self) -> list[str]:
         """Return the list of candidate Wi-Fi/BLE MAC addresses for the target ESPHome device."""
@@ -483,8 +502,10 @@ class LatterNativeBleTracker:
         if self.last_packet_monotonic > 0.0 and (now - self.last_packet_monotonic) < 6.0:
             return
         self._area_rssi.clear()
+        self._area_raw_rssi.clear()
         self._unmapped_rssi.clear()
         self._scanner_area_cache.clear()
+        get_ble_fabric(self.hass)._scanner_area_cache.clear()
         self._last_adv_ts_by_scanner.clear()
         self.current_area_id = None
         self._last_switch_monotonic = 0.0
@@ -621,10 +642,9 @@ class LatterNativeBleTracker:
     def _matches_raw_adv(
         self,
         address: str,
-        name: str,
         mfg_data: dict[int, bytes],
     ) -> bool:
-        """Return True if raw advertisement fields match this specific device's MAC/name or iBeacon UUID."""
+        """Return True if raw advertisement fields match this specific device's MAC or iBeacon UUID."""
         adv_int = _mac_to_int(address) if address else None
 
         # 1. Exact hardware Wi-Fi/BLE MAC range match (+/-2 offset from HA Device Registry)
@@ -664,20 +684,17 @@ class LatterNativeBleTracker:
                         return True
                     if minor_val >= 1 and minor_val != expected_minor:
                         return False
-                if self._target_mac_ints and adv_int is not None and adv_int in self._target_mac_ints:
-                    return True
                 return True
 
         return False
 
     def _matches_target_device(self, service_info: object) -> bool:
-        """Return True if a BluetoothServiceInfoBleak object matches iBeacon UUID, MAC, or local name."""
+        """Return True if a BluetoothServiceInfoBleak object matches iBeacon UUID or MAC."""
         mfg_data: dict[int, bytes] = getattr(
             service_info, "manufacturer_data", {}
         ) or {}
         adv_address = str(getattr(service_info, "address", "") or "")
-        adv_name = str(getattr(service_info, "name", "") or "")
-        matched = self._matches_raw_adv(adv_address, adv_name, mfg_data)
+        matched = self._matches_raw_adv(adv_address, mfg_data)
         if matched and adv_address:
             self._record_matched_ble_address(adv_address)
         return matched
@@ -827,13 +844,6 @@ class LatterNativeBleTracker:
         self._on_area_detected(best_area, self.closest_scanner)
         get_ble_fabric(self.hass).notify_occupancy_listeners()
 
-from .area_engine import (  # noqa: E402
-    area_fusion_sensor_choices,
-    area_fusion_settings,
-    evaluate_area_sensor_fusion,
-    invalidate_area_fusion_index,
-)
-
 
 class LatterBleFabric:
     """Domain-level singleton Bluetooth scanner fabric shared across all Latter & generic BLE trackers."""
@@ -843,6 +853,7 @@ class LatterBleFabric:
         self.hass = hass
         self._trackers: list[LatterNativeBleTracker] = []
         self._occupancy_listeners: list[Callable[[], None]] = []
+        self._scanner_area_cache: dict[str, str | None] = {}
         self._unsub_ble: Callable[[], None] | None = None
         self._unsub_poll: Callable[[], None] | None = None
         self._unsub_sensor_events: Callable[[], None] | None = None
@@ -850,6 +861,7 @@ class LatterBleFabric:
     @callback
     def _invalidate_caches(self, _event: Any = None) -> None:
         """Invalidate scanner-to-area caches and area sensor fusion index on registry changes."""
+        self._scanner_area_cache.clear()
         for tracker in self._trackers:
             tracker._scanner_area_cache.clear()
         invalidate_area_fusion_index(self.hass)
@@ -1064,6 +1076,7 @@ class LatterBleFabric:
     @callback
     def _async_stop_fabric(self) -> None:
         """Stop the shared Bluetooth callback and timer."""
+        self._scanner_area_cache.clear()
         if self._unsub_ble is not None:
             self._unsub_ble()
             self._unsub_ble = None
@@ -1129,11 +1142,6 @@ class LatterBleFabric:
                     if last_ts is not None and (now_mono - obs_mono) > SURVEY_RETENTION_SECONDS:
                         continue
                     mfg_data = getattr(adv_data, "manufacturer_data", {}) or {}
-                    local_name = str(
-                        getattr(adv_data, "local_name", "")
-                        or getattr(ble_dev, "name", "")
-                        or ""
-                    )
                     rssi = getattr(adv_data, "rssi", None)
                     if rssi is None:
                         rssi = getattr(ble_dev, "rssi", None)
@@ -1141,7 +1149,7 @@ class LatterBleFabric:
                         continue
                     addr_str = str(addr)
                     for tracker in list(self._trackers):
-                        if tracker._matches_raw_adv(addr_str, local_name, mfg_data):
+                        if tracker._matches_raw_adv(addr_str, mfg_data):
                             tracker._record_matched_ble_address(addr_str)
                             tracker._ingest_proxy_observation(
                                 source,

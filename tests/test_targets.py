@@ -257,6 +257,23 @@ class BleDeviceTrackerAndPersonTests(unittest.TestCase):
         self.assertNotIn("occupant_names", services_src)
         self.assertNotIn("coord.on_area_changed_push_slots = None", services_src)
 
+    def test_ble_and_area_engine_audit(self) -> None:
+        ble_src = (LATTER_DIR / "ble_engine.py").read_text(encoding="utf-8")
+        self.assertNotIn("noqa: E402", ble_src)
+        self.assertNotIn("def _resolve_beacon_minor(", ble_src)
+        self.assertIn("def _resolve_scanner_area_id_uncached(", ble_src)
+        wake_body = ble_src.split("def reset_for_device_wake(", 1)[1].split("\n    @callback", 1)[0]
+        self.assertIn("self._area_raw_rssi.clear()", wake_body)
+
+        area_src = (LATTER_DIR / "area_engine.py").read_text(encoding="utf-8")
+        self.assertNotIn("def get_indexed_fusion_sensor_entity_ids(", area_src)
+        self.assertIn('"input_boolean": 6', area_src)
+        summary_body = area_src.split("def get_areas_summary(", 1)[1].split("\ndef _parse_domain_filter(", 1)[0]
+        self.assertNotIn("get_area_climate_telemetry(", summary_body)
+        action_body = area_src.split("async def async_execute_area_action(", 1)[1]
+        self.assertIn('state_obj.attributes.get("temperature")', action_body)
+        self.assertIn('state_obj.attributes.get("volume_level")', action_body)
+
 
 if __name__ == "__main__":
     unittest.main()

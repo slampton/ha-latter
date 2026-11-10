@@ -24,7 +24,6 @@ from homeassistant.helpers import (
 )
 from homeassistant.util import dt as dt_util, slugify
 
-from .ble_engine import get_ble_proxy_area_ids
 from .browse_engine import is_music_assistant_player
 from .const import CONF_ESPHOME_DEVICE_ID, DOMAIN, SUBENTRY_DEVICE
 from .entity_sections import classify_esphome_entity_section
@@ -82,11 +81,15 @@ UNIVERSAL_SECTION_META: tuple[tuple[str, str, str], ...] = (
 
 
 def resolve_entity_area_id(
-    hass: HomeAssistant, entity_id: str
+    hass: HomeAssistant,
+    entity_id: str,
+    *,
+    ent_reg: er.EntityRegistry | None = None,
+    dev_reg: dr.DeviceRegistry | None = None,
 ) -> str | None:
     """Resolve the Home Assistant area_id for an entity (directly or via device)."""
-    ent_reg = er.async_get(hass)
-    dev_reg = dr.async_get(hass)
+    if ent_reg is None:
+        ent_reg = er.async_get(hass)
 
     entry = ent_reg.async_get(entity_id)
     if entry is None:
@@ -94,6 +97,8 @@ def resolve_entity_area_id(
     if entry.area_id:
         return entry.area_id
     if entry.device_id:
+        if dev_reg is None:
+            dev_reg = dr.async_get(hass)
         device = dev_reg.async_get(entry.device_id)
         if device and device.area_id:
             return device.area_id
@@ -373,6 +378,8 @@ def sync_esphome_device_area(
         return None
 
     if require_ble_proxy_area:
+        from .ble_engine import get_ble_proxy_area_ids
+
         proxy_areas = get_ble_proxy_area_ids(hass)
         if proxy_areas and area_id not in proxy_areas:
             _LOGGER.debug(
@@ -414,23 +421,6 @@ def invalidate_area_fusion_index(hass: HomeAssistant) -> None:
     domain_data = hass.data.get(DOMAIN)
     if isinstance(domain_data, dict):
         domain_data.pop("_area_fusion_index", None)
-
-
-def get_indexed_fusion_sensor_entity_ids(hass: HomeAssistant) -> set[str]:
-    """Return the set of all indexed physical occupancy/motion/door binary_sensor entity IDs across all Areas."""
-    area_reg = ar.async_get(hass)
-    for area_entry in area_reg.async_list_areas():
-        discover_area_fusion_sensors(hass, area_entry.id)
-    domain_data = hass.data.get(DOMAIN, {})
-    idx: dict[str, list[str]] = (
-        domain_data.get("_area_fusion_index", {})
-        if isinstance(domain_data, dict)
-        else {}
-    )
-    out: set[str] = set()
-    for eids in idx.values():
-        out.update(eids)
-    return out
 
 
 def discover_area_fusion_sensors(
@@ -715,10 +705,16 @@ def resolve_remote_slot_pair(
 
 
 def _is_curated_area_entity(
-    hass: HomeAssistant, state_obj: State, local_speaker: str = ""
+    hass: HomeAssistant,
+    state_obj: State,
+    local_speaker: str = "",
+    *,
+    ent_reg: er.EntityRegistry | None = None,
+    bound_device_ids: set[str] | None = None,
 ) -> bool:
     """Strictly filter out config/diagnostic entities, companion display backlights/switches, and non-MA speakers."""
-    ent_reg = er.async_get(hass)
+    if ent_reg is None:
+        ent_reg = er.async_get(hass)
     entry = ent_reg.async_get(state_obj.entity_id)
     if entry is not None:
         if entry.disabled_by or entry.hidden_by:
@@ -731,12 +727,11 @@ def _is_curated_area_entity(
     dev_class = str(attrs.get("device_class") or "").lower()
 
     # Never include a Latter Device's own entities (backlight, switches, ...) in Area Control
-    if (
-        entry is not None
-        and entry.device_id
-        and entry.device_id in latter_bound_esphome_device_ids(hass)
-    ):
-        return False
+    if entry is not None and entry.device_id:
+        if bound_device_ids is None:
+            bound_device_ids = latter_bound_esphome_device_ids(hass)
+        if entry.device_id in bound_device_ids:
+            return False
 
     if domain in ("light", "scene", "fan", "climate"):
         return True
@@ -834,6 +829,7 @@ def get_area_climate_telemetry(
         return result
 
     ent_reg = er.async_get(hass)
+    dev_reg = dr.async_get(hass)
     latter_dev_ids = latter_bound_esphome_device_ids(hass)
 
     for state_obj in hass.states.async_all("sensor"):
@@ -849,7 +845,7 @@ def get_area_climate_telemetry(
             if entry.device_id and entry.device_id in latter_dev_ids:
                 continue
 
-        if resolve_entity_area_id(hass, state_obj.entity_id) != area_id:
+        if resolve_entity_area_id(hass, state_obj.entity_id, ent_reg=ent_reg, dev_reg=dev_reg) != area_id:
             continue
 
         dev_class = str(state_obj.attributes.get("device_class") or "").lower()
@@ -870,12 +866,14 @@ def get_area_climate_telemetry(
                 )
             except ValueError:
                 pass
+        if result["temperature"] is not None and result["humidity"] is not None:
+            break
 
     if result["temperature"] is None or result["humidity"] is None:
         for state_obj in hass.states.async_all("climate"):
             if state_obj.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
                 continue
-            if resolve_entity_area_id(hass, state_obj.entity_id) != area_id:
+            if resolve_entity_area_id(hass, state_obj.entity_id, ent_reg=ent_reg, dev_reg=dev_reg) != area_id:
                 continue
             attrs = state_obj.attributes
             if result["temperature"] is None and attrs.get("current_temperature") is not None:
@@ -888,6 +886,8 @@ def get_area_climate_telemetry(
                     result["humidity"] = round(float(attrs["current_humidity"]), 1)
                 except ValueError:
                     pass
+            if result["temperature"] is not None and result["humidity"] is not None:
+                break
 
     return result
 
@@ -1055,24 +1055,67 @@ def get_areas_summary(
 ) -> list[dict[str, Any]]:
     """Return a sorted list of Home Assistant areas that contain curated controllable entities."""
     area_reg = ar.async_get(hass)
+    ent_reg = er.async_get(hass)
+    dev_reg = dr.async_get(hass)
+    bound_device_ids = latter_bound_esphome_device_ids(hass)
 
     area_counts: dict[str, dict[str, int]] = {}
+    area_temps: dict[str, int | float] = {}
+    climate_fallback_temps: dict[str, float] = {}
+
     for state_obj in hass.states.async_all():
-        if state_obj.domain not in AREA_CONTROL_DOMAINS:
-            continue
         if state_obj.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
             continue
-        if not _is_curated_area_entity(hass, state_obj, local_speaker):
+        domain = state_obj.domain
+        if domain == "sensor":
+            if str(state_obj.attributes.get("device_class") or "").lower() != "temperature":
+                continue
+            entry = ent_reg.async_get(state_obj.entity_id)
+            if entry is not None:
+                if entry.disabled_by or entry.hidden_by or entry.entity_category is not None:
+                    continue
+                if entry.device_id and entry.device_id in bound_device_ids:
+                    continue
+            a_id = resolve_entity_area_id(hass, state_obj.entity_id, ent_reg=ent_reg, dev_reg=dev_reg)
+            if a_id and a_id not in area_temps:
+                try:
+                    area_temps[a_id] = _apply_ha_display_precision(
+                        entry, float(state_obj.state), default_precision=0
+                    )
+                except ValueError:
+                    pass
             continue
 
-        a_id = resolve_entity_area_id(hass, state_obj.entity_id)
+        if domain not in AREA_CONTROL_DOMAINS:
+            continue
+        if not _is_curated_area_entity(
+            hass,
+            state_obj,
+            local_speaker,
+            ent_reg=ent_reg,
+            bound_device_ids=bound_device_ids,
+        ):
+            continue
+
+        a_id = resolve_entity_area_id(hass, state_obj.entity_id, ent_reg=ent_reg, dev_reg=dev_reg)
         if not a_id:
             continue
 
         counts = area_counts.setdefault(a_id, {"total": 0, "lights_on": 0})
         counts["total"] += 1
-        if state_obj.domain == "light" and state_obj.state == STATE_ON:
+        if domain == "light" and state_obj.state == STATE_ON:
             counts["lights_on"] += 1
+        elif (
+            domain == "climate"
+            and a_id not in climate_fallback_temps
+            and state_obj.attributes.get("current_temperature") is not None
+        ):
+            try:
+                climate_fallback_temps[a_id] = round(
+                    float(state_obj.attributes["current_temperature"]), 1
+                )
+            except ValueError:
+                pass
 
     items: list[dict[str, Any]] = []
     for area in area_reg.async_list_areas():
@@ -1080,8 +1123,7 @@ def get_areas_summary(
         if not counts or counts["total"] == 0:
             continue
         lights_on = counts["lights_on"]
-        climate_info = get_area_climate_telemetry(hass, area.id)
-        temp_val = climate_info.get("temperature")
+        temp_val = area_temps.get(area.id, climate_fallback_temps.get(area.id))
 
         suffix_parts: list[str] = []
         if temp_val is not None:
@@ -1183,6 +1225,9 @@ def get_area_entities(
 ) -> list[dict[str, Any]]:
     """Return curated controllable entities for a specific area (supports single or comma-separated domain_filter)."""
     area_reg = ar.async_get(hass)
+    ent_reg = er.async_get(hass)
+    dev_reg = dr.async_get(hass)
+    bound_device_ids = latter_bound_esphome_device_ids(hass)
     area_entry = area_reg.async_get_area(area_id) if area_id else None
     area_name = area_entry.name if area_entry else ""
 
@@ -1196,21 +1241,28 @@ def get_area_entities(
         "scene": 4,
         "climate": 5,
         "switch": 6,
+        "input_boolean": 6,
         "media_player": 7,
     }
 
     for state_obj in hass.states.async_all():
-        ent_id = state_obj.entity_id
+        if state_obj.domain not in allowed_domains:
+            continue
         if state_obj.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
             continue
 
-        ent_area = resolve_entity_area_id(hass, ent_id)
+        ent_id = state_obj.entity_id
+        ent_area = resolve_entity_area_id(hass, ent_id, ent_reg=ent_reg, dev_reg=dev_reg)
         if area_id and ent_area != area_id:
             continue
 
-        if state_obj.domain not in allowed_domains:
-            continue
-        if not _is_curated_area_entity(hass, state_obj, local_speaker):
+        if not _is_curated_area_entity(
+            hass,
+            state_obj,
+            local_speaker,
+            ent_reg=ent_reg,
+            bound_device_ids=bound_device_ids,
+        ):
             continue
 
         is_active = state_obj.state in (
@@ -1368,8 +1420,26 @@ async def async_execute_area_action(
         return
 
     if action in ("step_up", "step_down") and level is None:
-        step = 10 if domain != "climate" else 1
-        level = max(0, min(100, cur_level + (step if action == "step_up" else -step)))
+        if domain == "climate":
+            raw_t = (
+                state_obj.attributes.get("temperature")
+                or state_obj.attributes.get("target_temp_low")
+                or state_obj.attributes.get("current_temperature")
+            )
+            try:
+                base_t = int(round(float(raw_t))) if raw_t is not None else 20
+            except (ValueError, TypeError):
+                base_t = 20
+            level = max(5, min(100, base_t + (1 if action == "step_up" else -1)))
+        elif domain == "media_player":
+            raw_v = state_obj.attributes.get("volume_level")
+            try:
+                base_v = int(round(float(raw_v) * 100)) if raw_v is not None else 0
+            except (ValueError, TypeError):
+                base_v = 0
+            level = max(0, min(100, base_v + (10 if action == "step_up" else -10)))
+        else:
+            level = max(0, min(100, cur_level + (10 if action == "step_up" else -10)))
         action = "set_level"
 
     if domain in ("scene", "script"):
