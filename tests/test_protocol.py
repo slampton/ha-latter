@@ -6,52 +6,38 @@ area_follow.py, traits.py, ble_math.py, resource_signing.py, ...) is standard-li
 
 from __future__ import annotations
 
-import importlib.util
 import json
 from pathlib import Path
 import re
-import sys
-from types import ModuleType
-from typing import Any
+from typing import Any, ClassVar
 import unittest
 
+from custom_components.latter.core import (
+    diagnostics_sanitizer,
+    health,
+    issue_ids,
+    payloads as _PAYLOADS_MOD,
+    reset_policy,
+    rpc_protocol,
+    security_policy,
+    traits,
+)
+from custom_components.latter.http import resource_signing
+from custom_components.latter.media import ma_link
+from custom_components.latter.presence import area_follow, ble_math
+from custom_components.latter.studio import scope as studio_scope
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 LATTER_DIR = REPO_ROOT / "custom_components" / "latter"
 HA_PROTO_JSON = LATTER_DIR / "protocol_v3.json"
 CORE_PROTO_JSON = REPO_ROOT.parent / "esphome-latter-core" / "protocol" / "latter_v3.json"
 
-
-def _load_ha_free_module(name: str) -> ModuleType:
-    """Load a Home Assistant-free production module from custom_components/latter by file path."""
-    spec = importlib.util.spec_from_file_location(
-        f"latter_{name.replace('/', '_')}", LATTER_DIR / f"{name}.py"
-    )
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-_PAYLOADS_MOD = _load_ha_free_module("payloads")
 DomainPayloadPacker = _PAYLOADS_MOD.DomainPayloadPacker
 sanitize_v3_field = _PAYLOADS_MOD.sanitize_v3_field
-
-area_follow = _load_ha_free_module("area_follow")
 AreaFollowDwell = area_follow.AreaFollowDwell
 FollowAction = area_follow.FollowAction
-traits = _load_ha_free_module("traits")
 manifest_is_roaming = traits.manifest_is_roaming
-
-ble_math = _load_ha_free_module("ble_math")
-resource_signing = _load_ha_free_module("resource_signing")
-issue_ids = _load_ha_free_module("issue_ids")
-health = _load_ha_free_module("health")
-ma_link = _load_ha_free_module("ma_link")
-reset_policy = _load_ha_free_module("reset_policy")
-presence_beacon = _load_ha_free_module("presence_beacon")
-studio_scope = _load_ha_free_module("studio/scope")
+presence_beacon = area_follow
 STUDIO_JS = LATTER_DIR / "frontend" / "latter-studio.js"
 
 
@@ -74,10 +60,10 @@ class TestProtocolV3Contract(unittest.TestCase):
     def test_domain_field_counts_and_contiguous_indices(self) -> None:
         """Every v3 domain must have contiguous 3..COUNT-1 indices matching expected counts."""
         expected_counts = {
-            "area_context": 37,
+            "area_context": 38,
             "active_media": 17,
             "remote_config": 3,
-            "weather_forecast": 8,
+            "weather_forecast": 14,
             "calendar_agenda": 3,
         }
         domains = self.schema.get("domains", {})
@@ -298,12 +284,12 @@ class TestRecordsFields(unittest.TestCase):
                 ("calendar_agenda", "summary"),
             },
         )
-        coord = (LATTER_DIR / "coordinator.py").read_text(encoding="utf-8")
-        feeds = (LATTER_DIR / "site_feeds.py").read_text(encoding="utf-8")
+        ctx_src = (LATTER_DIR / "areas" / "context_builder.py").read_text(encoding="utf-8")
+        cal_src = (LATTER_DIR / "areas" / "calendar.py").read_text(encoding="utf-8")
         for builder in ("camera_records(", "intercom_target_records(", "remote_slot_records("):
-            self.assertIn(builder, coord)
-        self.assertIn("forecast_records(", feeds)
-        self.assertIn("calendar_agenda_records(", (LATTER_DIR / "calendar_engine.py").read_text(encoding="utf-8"))
+            self.assertIn(builder, ctx_src)
+        self.assertIn("forecast_records(", cal_src)
+        self.assertIn("calendar_agenda_records(", cal_src)
 
     def test_cameras(self) -> None:
         self.assertEqual(self.layout("area_context", "cameras_summary"), ["entity_id", "name", "area_id", "snapshot_url"])
@@ -366,11 +352,16 @@ class TestRecordsFields(unittest.TestCase):
         self.assertEqual(recs[0], ("SUN", "partlycloudy", "72", "55"))
         self.assertEqual(recs[1], ("MON", "rainy", "", "50"))
         self.assertEqual(len(recs), self.p.FORECAST_MAX_RECORDS)
-        packed = DomainPayloadPacker(epoch=9).pack("weather_forecast", "sunny", 70, None, None, None, 72, 55, recs)[1]
+        packed = DomainPayloadPacker(epoch=9).pack(
+            "weather_forecast", "sunny", 70, None, None, None, 72, 55, recs,
+            "above_horizon", 42.5, 180.0, "2026-11-09T06:45:00Z", "2026-11-08T17:02:00Z", "waxing_gibbous",
+        )[1]
         fields = packed.split("\x1f")
-        self.assertEqual(len(fields), 11)
+        self.assertEqual(len(fields), 17)
         self.assertEqual(fields[10].split("\x1e")[0], "SUN|partlycloudy|72|55")
         self.assertEqual(fields[4:6], ["70", ""])
+        self.assertEqual(fields[11], "above_horizon")
+        self.assertEqual(fields[16], "waxing_gibbous")
 
     def test_records_revs_are_content_hashed(self) -> None:
         packer = DomainPayloadPacker(epoch=9)
@@ -387,13 +378,12 @@ class TestAbsentValues(unittest.TestCase):
     """Protocol v3 sends "" for a missing value: no none/None/NONE/unknown/Idle placeholders, no made-up states."""
 
     SOURCES = (
-        "coordinator.py",
-        "area_engine.py",
-        "url_signer.py",
-        "site_feeds.py",
-        "calendar_engine.py",
-        "payloads.py",
-        "browse_engine.py",
+        "core/device_coordinator.py",
+        "areas/context_builder.py",
+        "http/url_signer.py",
+        "areas/calendar.py",
+        "core/payloads.py",
+        "media/browse.py",
     )
     FORBIDDEN = (
         r'return "none"',
@@ -437,9 +427,9 @@ class TestAbsentValues(unittest.TestCase):
             src = (LATTER_DIR / name).read_text(encoding="utf-8")
             for pat in self.FORBIDDEN:
                 self.assertNotRegex(src, pat, f"{name}: {pat}")
-        coord = (LATTER_DIR / "coordinator.py").read_text(encoding="utf-8")
+        ctx_src = (LATTER_DIR / "areas" / "context_builder.py").read_text(encoding="utf-8")
         # The area_context payload sends "" without an Area (the HA sensor state may still say Unassigned).
-        self.assertIn('area_entry.name if area_entry else "",', coord)
+        self.assertIn('area_entry.name if area_entry else "",', ctx_src)
 
 
 class _FollowHarness:
@@ -673,13 +663,14 @@ class TestResourceSigning(unittest.TestCase):
         self.assertFalse(verify(self.SECRET, "sub_abc", "camera:camera.front_door|480|480|circle", sig_t0, now))
 
     def test_day_bucketed_lifetime_is_ttl_to_ttl_plus_one_day(self) -> None:
-        """A 7-day URL signed at any time of day stays valid for 7 to 8 days."""
+        """A 2-day (48 h) payload URL signed at any time of day stays valid for 2 to 3 days."""
+        self.assertEqual(resource_signing.PAYLOAD_TTL_DAYS, 2)
         for offset in (0, 43200, 86399):
             now = self.DAY_START + offset
-            exp = resource_signing.day_bucketed_expiry(now, 7)
+            exp = resource_signing.day_bucketed_expiry(now, resource_signing.PAYLOAD_TTL_DAYS)
             self.assertEqual(exp % 86400, 0)
-            self.assertGreaterEqual(exp - now, 7 * 86400)
-            self.assertLessEqual(exp - now, 8 * 86400)
+            self.assertGreaterEqual(exp - now, 2 * 86400)
+            self.assertLessEqual(exp - now, 3 * 86400)
         sig = self._sign_bucketed("map:Home|480|480|circle", self.DAY_START)
         exp = int(sig.split(".", 1)[0])
         self.assertTrue(resource_signing.verify(self.SECRET, "sub_abc", "map:Home|480|480|circle", sig, exp))
@@ -704,7 +695,7 @@ class TestResourceSigning(unittest.TestCase):
         now = self.DAY_START + 100
         verify = resource_signing.verify
         tampered = f"{sig[:-1]}{'0' if sig[-1] != '0' else '1'}"
-        for bad in (tampered, "malformed", None, "", ".", "abc.def", f"{sig}é", "１２３.abcd", f"+{sig}"):
+        for bad in (tampered, "malformed", None, "", ".", "abc.def", f"{sig}é", "\uff11\uff12\uff13.abcd", f"+{sig}"):
             self.assertFalse(verify(self.SECRET, "sub_abc", res, bad, now), bad)
         with self.assertRaises(ValueError):
             resource_signing.day_bucketed_expiry(now, 0)
@@ -855,7 +846,7 @@ class TestDeviceHealth(unittest.TestCase):
 class TestMaPlayerLink(unittest.TestCase):
     """Music Assistant player link for a Latter Device, exercised through `ma_link.py`."""
 
-    CANDIDATES = [
+    CANDIDATES: ClassVar[list[tuple[str, str, str]]] = [
         ("media_player.desk_assistant", "slampton", "desk-assistant-p4-86"),
         ("media_player.pocket_assistant", "slampton", "pocket-assistant-s3-206"),
         ("media_player.office_amp", "Music Assistant", "Sendspin"),
@@ -878,26 +869,14 @@ class TestMaPlayerLink(unittest.TestCase):
             "media_player.desk_assistant",
         )
         self.assertIsNone(suggest(("slampton", "remote-assistant-p4-35"), self.CANDIDATES))
-        twins = self.CANDIDATES + [("media_player.desk_assistant_2", "slampton", "desk-assistant-p4-86")]
+        twins = [*self.CANDIDATES, ("media_player.desk_assistant_2", "slampton", "desk-assistant-p4-86")]
         self.assertIsNone(suggest(("slampton", "desk-assistant-p4-86"), twins))
         self.assertIsNone(suggest(("slampton", None), self.CANDIDATES))
         self.assertIsNone(suggest((None, "desk-assistant-p4-86"), self.CANDIDATES))
         self.assertIsNone(suggest(("Slampton", "desk-assistant-p4-86"), self.CANDIDATES), "exact match only")
 
-    def test_slug_matched_ma_player_matches_exact_node_slug_only(self) -> None:
-        ma_ids = [c[0] for c in self.CANDIDATES]
-        self.assertEqual(
-            ma_link.slug_matched_ma_player("desk_assistant", ma_ids),
-            "media_player.desk_assistant",
-        )
-        self.assertEqual(
-            ma_link.slug_matched_ma_player("  DESK_ASSISTANT ", ma_ids),
-            "media_player.desk_assistant",
-        )
-        self.assertIsNone(ma_link.slug_matched_ma_player("desk", ma_ids))
-        self.assertIsNone(ma_link.slug_matched_ma_player("desk_assistant_music", ma_ids))
-        self.assertIsNone(ma_link.slug_matched_ma_player("", ma_ids))
-        self.assertIsNone(ma_link.slug_matched_ma_player(None, ma_ids))
+    def test_no_slug_matching_helper_exists(self) -> None:
+        self.assertFalse(hasattr(ma_link, "slug_matched_ma_player"))
 
 
 def _const_conf_values() -> set[str]:
@@ -916,7 +895,7 @@ def _const_conf_values() -> set[str]:
 class TestResetPolicy(unittest.TestCase):
     """Reset to defaults: keep/reset decision and flag validation, exercised through `reset_policy.py`."""
 
-    CURRENT = {
+    CURRENT: ClassVar[dict[str, Any]] = {
         "esphome_device_id": "dev123",
         "mac": "aa:bb:cc:dd:ee:ff",
         "device_slug": "desk_assistant",
@@ -929,7 +908,7 @@ class TestResetPolicy(unittest.TestCase):
         "native_ble_tracking": True,
         "custom_palettes": [{"name": "x", "hex": "#000000"}],
     }
-    DEFAULTS = {
+    DEFAULTS: ClassVar[dict[str, Any]] = {
         "device_group": "wall_panels",
         "default_page_size": 3,
         "native_ble_tracking": False,
@@ -1013,6 +992,168 @@ class TestPresenceBeacon(unittest.TestCase):
             for tracking in (True, False):
                 for trigger in ("hello", "options"):
                     self.assertIsNone(d(tracking, state, trigger), (state, tracking, trigger))
+
+
+class TestBoundRpcReassembler(unittest.TestCase):
+    """Bound Device-to-HA text_sensor RPC framing, multi-part reassembly, and replay rejection."""
+
+    def test_single_part_and_replay_dedup(self) -> None:
+        rx = rpc_protocol.RpcReassembler()
+        msg = rx.feed('1a2b3c4d:1:1/1|{"s":"area_action","d":{"entity_id":"light.kitchen","action":"turn_on"}}', now_mono=10.0)
+        assert msg is not None
+        self.assertEqual(msg[0], "area_action")
+        self.assertEqual(msg[1]["entity_id"], "light.kitchen")
+        # Duplicate HA reconnect replay with identical (boot_id, seq) is ignored
+        self.assertIsNone(
+            rx.feed('1a2b3c4d:1:1/1|{"s":"area_action","d":{"entity_id":"light.kitchen","action":"turn_on"}}', now_mono=11.0)
+        )
+
+    def test_multipart_utf8_reassembly_and_reboot_reset(self) -> None:
+        rx = rpc_protocol.RpcReassembler()
+        body = json.dumps(
+            {
+                "s": "latter.device_hello",
+                "d": {
+                    "manifest": {
+                        "v": 2,
+                        "board": "waveshare_p4_86_panel",
+                        "label": "Café Living — Panel ✨",
+                        "w": 720,
+                        "h": 720,
+                    }
+                },
+            },
+            ensure_ascii=False,
+        )
+        p1, p2, p3 = body[:45], body[45:95], body[95:]
+        self.assertIsNone(rx.feed(f"00aa11bb:7:1/3|{p1}", now_mono=20.0))
+        self.assertIsNone(rx.feed(f"00aa11bb:7:2/3|{p2}", now_mono=20.1))
+        msg = rx.feed(f"00aa11bb:7:3/3|{p3}", now_mono=20.2)
+        assert msg is not None
+        self.assertEqual(msg[0], "device_hello")
+        self.assertEqual(msg[1]["manifest"]["label"], "Café Living — Panel ✨")
+
+        # Partial message from old boot is discarded on new boot_id
+        self.assertIsNone(rx.feed('00aa11bb:8:1/2|{"s":"music_', now_mono=30.0))
+        fresh = rx.feed('99ff0011:1:1/1|{"s":"calendar_fetch","d":{"req_id":4}}', now_mono=31.0)
+        assert fresh is not None
+        self.assertEqual((fresh[0], fresh[1]["req_id"]), ("calendar_fetch", 4))
+
+
+class TestPerimeterSecurityPolicy(unittest.TestCase):
+    """3-tier Perimeter Security Policy (auto/allow/require_pin/block) and PBKDF2 PIN verification."""
+
+    def test_pbkdf2_pin_roundtrip_and_validation(self) -> None:
+        hashed = security_policy.hash_security_pin("2580")
+        self.assertTrue(security_policy.verify_security_pin("2580", hashed))
+        self.assertFalse(security_policy.verify_security_pin("2581", hashed))
+        self.assertFalse(security_policy.verify_security_pin("", hashed))
+        for bad_pin in ("123", "1234567890123", "12ab", ""):
+            with self.assertRaises(ValueError):
+                security_policy.hash_security_pin(bad_pin)
+
+    def test_closing_actions_always_permitted_even_when_blocked(self) -> None:
+        for domain, verb, ent in (
+            ("lock", "lock", "lock.front_door"),
+            ("alarm_control_panel", "arm_away", "alarm_control_panel.home"),
+            ("alarm_control_panel", "arm_home", "alarm_control_panel.home"),
+            ("cover", "close_cover", "cover.garage_door"),
+            ("cover", "open_cover", "cover.living_room_shades"),  # non-perimeter window shade
+        ):
+            self.assertFalse(
+                security_policy.is_sensitive_perimeter_action(domain, verb, entity_id=ent),
+                (domain, verb, ent),
+            )
+        for domain, verb, ent in (
+            ("lock", "unlock", "lock.front_door"),
+            ("alarm_control_panel", "disarm", "alarm_control_panel.home"),
+            ("cover", "open_cover", "cover.garage_door"),
+            ("doorbell", "unlock_door", "camera.front_door"),
+        ):
+            self.assertTrue(
+                security_policy.is_sensitive_perimeter_action(domain, verb, entity_id=ent),
+                (domain, verb, ent),
+            )
+
+    def test_three_tier_opening_enforcement(self) -> None:
+        pin_hash = security_policy.hash_security_pin("4826")
+        # Stationary panels default 'auto' -> 'require_pin'
+        self.assertEqual(
+            security_policy.effective_security_pin_policy(
+                "auto", is_roaming=False, alarm_has_code=False
+            ),
+            "require_pin",
+        )
+        # Roaming without alarm code defaults 'auto' -> 'allow'
+        self.assertEqual(
+            security_policy.effective_security_pin_policy(
+                "auto", is_roaming=True, alarm_has_code=False
+            ),
+            "allow",
+        )
+        # Block rejects even with a valid PIN
+        self.assertEqual(
+            security_policy.check_perimeter_action_allowed(
+                "block", provided_code="4826", stored_pin_hash=pin_hash
+            ),
+            (False, "security_action_blocked"),
+        )
+        # Require PIN rejects missing/wrong PIN, accepts matching PIN
+        self.assertEqual(
+            security_policy.check_perimeter_action_allowed(
+                "require_pin", provided_code="", stored_pin_hash=pin_hash
+            ),
+            (False, "security_pin_required"),
+        )
+        self.assertEqual(
+            security_policy.check_perimeter_action_allowed(
+                "require_pin", provided_code="0000", stored_pin_hash=pin_hash
+            ),
+            (False, "security_pin_invalid"),
+        )
+        self.assertEqual(
+            security_policy.check_perimeter_action_allowed(
+                "require_pin", provided_code="4826", stored_pin_hash=pin_hash
+            ),
+            (True, ""),
+        )
+
+
+class TestDiagnosticsSanitizer(unittest.TestCase):
+    """Recursive diagnostics sanitizer strips sig=, payload, MAC keys, and calendar PII."""
+
+    def test_sanitizes_sigs_macs_payloads_and_calendar_pii(self) -> None:
+        raw = {
+            "system_config": {
+                "security_pin_hash": "pbkdf2_sha256$200000$aa$bb",
+                "system_ble_uuid": "11223344-5566-7788-99aa-bbccddeeff00",
+            },
+            "ble_scanners": {
+                "AA:BB:CC:DD:EE:FF": {
+                    "url": "http://192.168.1.10:8123/api/latter/camera/desk?w=466&sig=1762000000.deadbeef"
+                }
+            },
+            "sensors": {
+                "area_context": {"payload": "v3\x1f1\x1f1\x1fsecret", "rev": 4},
+                "calendar_agenda": {
+                    "records": [["TODAY 14:30", "Doctor Appointment", "123 Private Way", "0"]],
+                    "event_count": 1,
+                },
+            },
+        }
+        clean = diagnostics_sanitizer.sanitize_diagnostics_payload(raw)
+        self.assertEqual(clean["system_config"]["security_pin_hash"], "**REDACTED**")
+        self.assertEqual(clean["system_config"]["system_ble_uuid"], "**REDACTED**")
+        self.assertNotIn("AA:BB:CC:DD:EE:FF", clean["ble_scanners"])
+        scanner_key = next(iter(clean["ble_scanners"]))
+        self.assertTrue(scanner_key.startswith("mac_"))
+        self.assertIn("sig=**REDACTED**", clean["ble_scanners"][scanner_key]["url"])
+        self.assertNotIn("deadbeef", clean["ble_scanners"][scanner_key]["url"])
+        self.assertEqual(clean["sensors"]["area_context"]["payload"], "**REDACTED**")
+        self.assertEqual(
+            clean["sensors"]["calendar_agenda"]["records"],
+            [["TODAY 14:30", "**REDACTED**", "**REDACTED**", "0"]],
+        )
 
 
 if __name__ == "__main__":

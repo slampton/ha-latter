@@ -8,7 +8,8 @@ from typing import Final
 from homeassistant.const import Platform
 
 DOMAIN: Final = "latter"
-INTEGRATION_VERSION: Final = "2.2.9"
+INTEGRATION_VERSION: Final = "3.0.0"
+STUDIO_REV: Final = 3
 PLATFORMS: Final[list[Platform]] = [
     Platform.SENSOR,
     Platform.BINARY_SENSOR,
@@ -63,8 +64,14 @@ CONF_WALLPAPER_CYCLE_MINUTES: Final = "wallpaper_cycle_minutes"
 CONF_CUSTOM_PALETTES: Final = "custom_palettes"
 CONF_DEVICE_CUSTOM_COLOR: Final = "device_custom_color"
 CONF_DOORBELL_NOISE_REDUCTION: Final = "doorbell_noise_reduction"
+CONF_SECURITY_PIN_POLICY: Final = "security_pin_policy"
+CONF_SECURITY_PIN_HASH: Final = "security_pin_hash"
+CONF_SECURITY_PIN: Final = "security_pin"
+CONF_CLEAR_SECURITY_PIN: Final = "clear_security_pin"
+CONF_SYSTEM_BLE_UUID: Final = "system_ble_uuid"
 
 # Defaults
+DEFAULT_SECURITY_PIN_POLICY: Final = "auto"
 DEFAULT_DOORBELL_NOISE_REDUCTION: Final = "strong"
 DOORBELL_NOISE_REDUCTION_LEVELS: Final[tuple[str, ...]] = ("strong", "light", "off")
 # Used only until the Device reports its hardware manifest (screen shape and size live there)
@@ -102,9 +109,10 @@ SERVICE_SET_DOCK_APPS: Final = "set_dock_apps"
 SERVICE_DOORBELL_INTERCOM: Final = "doorbell_intercom"
 SERVICE_RESET_DEVICE: Final = "reset_device"
 
-# HTTP Endpoints (Artwork, Wallpaper, Camera Snapshot, Camera Audio, Map & Brand)
+# HTTP Endpoints (Artwork, Wallpaper, Wallpaper Upload, Camera Snapshot, Camera Audio, Map & Brand)
 API_ARTWORK_PROXY_PATH: Final = "/api/latter/artwork/{target_device}"
 API_WALLPAPER_PROXY_PATH: Final = "/api/latter/wallpaper/{target_device}"
+API_WALLPAPER_UPLOAD_PATH: Final = "/api/latter/wallpaper/upload"
 API_CAMERA_PROXY_PATH: Final = "/api/latter/camera/{target_device}"
 API_CAMERA_AUDIO_STREAM_PATH: Final = "/api/latter/camera_audio/{target_device}"
 API_MAP_PROXY_PATH: Final = "/api/latter/map/{target_device}"
@@ -132,6 +140,7 @@ CONF_DEVICE_GROUPS: Final = "device_groups"
 # Area Sensor Fusion & Event Bus
 CONF_AREA_FUSION_CONFIG: Final = "area_fusion_config"
 EVENT_LATTER: Final = "latter_event"
+TRANSFER_HOLD_WINDOW_SECONDS: Final = 6.0
 
 GLOBAL_CONFIG_KEYS: Final[tuple[str, ...]] = (
     CONF_WEATHER_ENTITY,
@@ -151,6 +160,7 @@ GLOBAL_CONFIG_KEYS: Final[tuple[str, ...]] = (
     CONF_DOORBELL_NOISE_REDUCTION,
     CONF_DEVICE_GROUPS,
     CONF_AREA_FUSION_CONFIG,
+    CONF_SYSTEM_BLE_UUID,
 )
 
 

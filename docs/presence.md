@@ -16,14 +16,14 @@ Latter tracks which area each device is in using the Bluetooth proxies you alrea
 
 | Target | How it's identified | How to add it |
 | :--- | :--- | :--- |
-| Latter firmware devices | The device's MAC address from Home Assistant's device registry (±2, to cover the ESP32 BLE MAC offset). The Latter iBeacon UUID and minor are also accepted, which covers ESP32-P4 boards where BLE runs on a separate C6 chip with its own MAC. | Check **Track the Area with BLE Proxies** when adding the device |
+| Latter firmware devices | The device's MAC address from Home Assistant's device registry (±2, to cover the ESP32 BLE MAC offset), paired with the unique 128-bit CSPRNG System BLE UUID (`latter_set_beacon_uuid`, saved in NVS) and verified `major` + `minor` + MAC identity (covering ESP32-P4 boards where BLE runs on a separate C6 chip while rejecting spoofed public UUIDs). | Check **Track the Area with BLE Proxies** when adding the device |
 | Phones and watches | Home Assistant's [Private BLE Device](https://www.home-assistant.io/integrations/private_ble_device/) integration resolves the rotating address from the device's IRK. Latter re-reads the current address every 2 seconds. | Set up Private BLE Device, then **Studio → BLE & Area Presence → Discovered Bluetooth Devices → Adopt** |
 | iBeacons, including any ESPHome node running `esp32_ble_beacon` | UUID, or an `ibeacon` device tracker entity | Adopt from the same list, or enter the UUID |
 | Other BLE devices with a static address | MAC address | Adopt from the same list, or enter the MAC |
 
 Latter parses Apple-format iBeacons only. Eddystone and AltBeacon frames are not supported.
 
-Latter firmware ships with the device's **Area: BLE Presence Beacon** switch off, so a new or reset device doesn't advertise until presence is set up. For a device with **Track the Area with BLE Proxies** on, Latter turns the beacon on whenever the device connects, and turns it off when you switch tracking off in Studio or the device's options.
+Latter firmware ships with the device's **Area: BLE Presence Beacon** switch off, so a new or reset device doesn't advertise until presence is set up. For a device with **Track the Area with BLE Proxies** on, Latter provisions the System's random 128-bit BLE UUID and turns the beacon on whenever the device connects, and turns it off when you switch tracking off in Studio or the device's options. Roaming Latter devices also pause `latter_beacon` automatically whenever Wi-Fi is disconnected (`!wifi_connected`), preventing off-site public BLE tracking and saving battery.
 
 To link a tracked device to a person, set **Assigned person** on the device's Overview page. You'll get `sensor.<person>_current_area` and `sensor.<person>_ble_distance`, which follow whichever of that person's devices was heard most recently, plus `device_tracker.<slug>` (`home` / `not_home`) on each tracked device so you can attach it to a `person` entity in Home Assistant (**Settings → People**) for Home/Away zone tracking.
 
@@ -31,13 +31,9 @@ To link a tracked device to a person, set **Assigned person** on the device's Ov
 
 ## How it decides
 
-All of these values are constants in [`ble_engine.py`](../custom_components/latter/ble_engine.py), so you can check them.
+All of these values are constants in [`presence/ble_fabric.py`](../custom_components/latter/presence/ble_fabric.py) and [`presence/ble_math.py`](../custom_components/latter/presence/ble_math.py) (with area sensor fusion in [`presence/fusion.py`](../custom_components/latter/presence/fusion.py)), so you can check them.
 
-1. **Collect.** Latter gets advertisements in two ways:
-   - It registers for Home Assistant Bluetooth callbacks.
-   - Every **2 s** it reads each scanner's advertisement table directly, because Home Assistant's Bluetooth stack suppresses repeated identical advertisements from static beacons.
-
-   Readings at or below −100 dBm are dropped.
+1. **Collect.** Latter registers targeted Home Assistant Bluetooth callbacks (`BluetoothCallbackMatcher(connectable=False)`) matching Latter's System UUID, adopted iBeacons, and tracked MACs directly, and refreshes rotating `private_ble_device` addresses when needed—without an unconditional 2-second full scanner-table poll. Readings at or below −100 dBm are dropped, and a **3.0 dBm RSSI hysteresis deadband** suppresses 1 dBm noise fluctuations while the confirmed Area is unchanged.
 2. **Smooth.** Each area keeps one exponential moving average of RSSI with α = 0.5; readings from every scanner in that area feed the same average. After **2 s** without a reading, an area loses **1.5 dB per second**. After **12 s** without a reading, its average resets and it drops out of the decision.
 3. **Adjust.** The per-area calibration offset is added. Offsets are limited to ±25 dB. If the device's current area has a floor and a candidate area is on a different floor, the candidate gets **−6 dB**.
 4. **Decide.**
@@ -130,5 +126,4 @@ Sensors are discovered automatically by device class (occupancy, presence, motio
 
 - **Calibration is per area, not per scanner.** Offsets are shared by all tracked devices, and the path-loss constants (−59 dBm at 1 m, exponent 2.2) can't be configured.
 - **Areas share an average.** If two scanners are in the same area, their readings are blended into one per-area average.
-- **The 2-second table poll sets the smoothing rate.** The moving average updates at the poll rate, not the advertisement rate.
-- **Timing constants are fixed.** These are the 4 s hold, 5 and 8 dB thresholds, and 180 s away timeout.
+- **Timing constants are fixed.** These are the 4 s hold, 3.0 dBm RSSI deadband, 5 and 8 dB thresholds, and 180 s away timeout.

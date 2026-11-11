@@ -6,7 +6,7 @@ Studio has two scopes, selected with the switcher at the top: **Devices** (where
 
 There's no Save button: a setting applies as soon as you change it, like Home Assistant's own controls. Text and number fields apply when you press Enter or leave the field. If a change fails, Studio shows the reason in a red message at the bottom of the page and puts the setting back.
 
-The address bar follows the page you're on (for example `/latter/devices/<id>/display` or `/latter/system/presence`), so reloading or pressing Back keeps your place, and you can bookmark a page. The **Visit** link on a Latter device's page in Home Assistant opens that device in Studio.
+The address bar follows the page you're on (for example `/latter/devices/<id>/display` or `/latter/system/presence`), so reloading or pressing Back keeps your place, and you can bookmark a page. The **Visit** link on a Latter device's page in Home Assistant opens that device in Studio. If Latter is updated in HACS while Studio is open, Studio shows a **Latter Studio was updated — Reload Page** banner so the browser picks up the new bundle cleanly.
 
 <!-- MEDIA: docs/media/studio-overview.png — System → Overview. -->
 
@@ -28,7 +28,7 @@ Settings here live in `.storage/latter.site` and apply to every device.
 | **Cameras & Doorbell Audio** | Up to 10 cameras for the on-device camera carousel and doorbell popups, plus the **Doorbell Audio Noise Reduction** level (Strong, Light, Off) for listening to a doorbell, and **Test the Door Speaker**, which speaks a test sentence on the primary camera's speaker with TTS, from the device you choose. Under **Doorbells**, each camera shows, read-only, the doorbell ring entity Latter found for it (and when it last rang or changed) and which devices are listening or replying right now. Listen and push-to-talk replies are experimental. |
 | **Calendars** | Calendars merged into the on-device agenda. Duplicate events across calendars are removed, and events with a location get a map. |
 | **Custom Colors** | Up to 24 shared theme colors available across every device when **Color Profile** is set to **Custom**. |
-| **Wallpapers** | The 5 built-in presets (**Forest Mountains**, **Wheat Field**, **Ocean Waves**, **Sahara Dunes**, **Andromeda Galaxy**) plus uploaded photos shared across every device. |
+| **Wallpapers** | The 5 built-in presets (**Forest Mountains**, **Wheat Field**, **Ocean Waves**, **Sahara Dunes**, **Andromeda Galaxy**) plus uploaded photos (up to 15 MB via signed multipart upload) shared across every device. |
 
 ### Media & Remotes
 | Card | What it does |
@@ -43,7 +43,7 @@ Settings here live in `.storage/latter.site` and apply to every device.
 
 ### BLE & Area Presence
 - **Live Area Presence & Sensor Fusion:** per-area occupancy, the devices and people in each area, and each area's fusion mode. **Fusion Settings** under each area set the occupancy threshold (weighted mode, 20 to 95%) and which of the area's sensors count (none picked means all of them). Changes apply at once.
-- **Per-Area BLE Signal Calibration:** live raw and effective RSSI per area for a selected device. Includes **Calibrate Current Area**, ±1 dB adjustment, and a **Fast Refresh** switch (updates every 1.5 s while the page is open; off, the page updates when something changes).
+- **Per-Area BLE Signal Calibration:** live raw and effective RSSI per area for a selected device. Includes **Calibrate Current Area**, ±1 dB adjustment, and a **Fast Refresh** switch (streams live `ble_survey_delta` readings over the WebSocket subscription while the page is open).
 - **Discovered Bluetooth Devices:** named BLE devices, `private_ble_device` entities, and iBeacons your scanners can hear. **Adopt** one to track it as a BLE tag, or use **Add BLE Tag** to enter an address.
 
 → [Presence guide](presence.md)
@@ -52,7 +52,7 @@ Settings here live in `.storage/latter.site` and apply to every device.
 | Card | What it does |
 | :--- | :--- |
 | **Notifications & Announcements** | Choose **Notification** (an on-screen alert with a chime on one device, every device, or the devices in occupied Areas, optionally with a snapshot from the primary camera) or **Announcement** (the message spoken with text-to-speech on every speaker, or on the speakers in occupied Areas), then **Send**. Use it to test how alerts look and sound. |
-| **Backup & Restore** | **Export**: download the whole System's settings, or one device's, as a `.json` file (device exports include the device's live ESPHome select, switch, and number values). **Restore**: upload an exported file; for a device export, choose the device to restore it onto (it can be a different device, to clone a setup). Full backups are Home Assistant's own: Latter's storage is included in every Home Assistant backup. |
+| **Backup & Restore** | **Export**: download the whole System's settings, or one device's, as a `.json` file (device exports include the device's live ESPHome select, switch, and number values). **Restore**: upload an exported file; for a device export, choose the device to restore it onto (it can be a different device, to clone a setup). **Rotate Signing Key**: rotates the System HMAC key so previously issued image and stream signatures expire immediately and active payloads re-sign. Full backups are Home Assistant's own: Latter's storage is included in every Home Assistant backup. |
 | **System & Device Logs** | Latter's own events plus the Latter, ESPHome and Music Assistant entries from the Home Assistant log. Show all entries, Latter only, warnings and errors, or one device's; **Open in Home Assistant** opens Home Assistant's log page filtered the same way. **Copy** and **Clear** act on Latter's list. |
 
 ---
@@ -70,7 +70,7 @@ Each device has up to six pages. The options on each page depend on what the dev
 | **Audio & Voice** | **Voice Assistant & Wake Word**: Wake Word Mode; the wake words (Home Assistant's Wake Word and Wake Word 2, the one wake-word control) and per-model sensitivity, which hide while Wake Word Mode is Disabled; Home Assistant's Assistant and Finished Speaking Detection; Visual Profile and Wake Screen on Assist, which stay because the action button and Home Assistant can still start the assistant; **Voice Follows Me** and its delay (roaming devices: how long Bluetooth must place the device in a new Area before its Home Assistant Area follows, 3 to 60 s), **Media Follows This Device to Its New Area** (one setting for Bluetooth moves and Area picks on the device), and **Sound & Media Player**, grouped as **Sound** (speaker volume, alert volume, volume step size, game sound effects), **Music Screen** (album art, overlay, shortcuts), **Speaker** (default speaker, plus **Music Assistant Player** if automatic matching by node slug needs a manual override) and **Library Sorting** |
 | **Power & Battery** | **Sleep & Wake** timeouts, plus **Power & Battery** readings |
 | **BLE & Area Presence** | **Area Tracking**: track the Area with BLE proxies, switch the active Area on movement (the BLE presence beacon follows **Track the Area with BLE Proxies** and is shown read-only), and fallback Area. **BLE Identity**: BLE target and iBeacon UUID. |
-| **Tools** | **Diagnostics**: **Download Diagnostics** (a redacted JSON file), network and status entities, a **Developer** group (profiler, memory, weather simulation) and **All Entities**. **Replace Hardware**: opens Latter in Home Assistant to reconfigure or replace the hardware. **Danger Zone**: **Reset…** and **Remove…** |
+| **Tools** | **Diagnostics**: **Download Diagnostics** (a redacted JSON file), network and status entities, a **Developer** group (profiler, memory, weather simulation) and **All Entities**. **Perimeter Security Policy**: per-device policy (`Auto`, `Allow`, `Require PIN`, or `Block`) and Device Security PIN for opening actions (unlocking locks, disarming alarms, and opening garage/gate/door covers; `Auto` requires a PIN on stationary panels or when a Home Assistant alarm code exists). **Replace Hardware**: opens Latter in Home Assistant to reconfigure or replace the hardware. **Danger Zone**: **Reset…** and **Remove…** |
 
 **Reset…** opens a confirmation with two options, both on by default: **Settings Saved on the Device** (erases everything saved on the device; it restarts) and **Latter Settings for This Device**. Wi-Fi and pairing are kept, as are the device's ESPHome binding and Music Assistant player link. It does the same as the [`latter.reset_device`](reference/services.md#latterreset_device) service; BLE tags only offer the Latter settings.
 

@@ -1,9 +1,9 @@
 # Services Reference
 
-Latter registers 16 user-facing services (plus the internal `latter.device_hello` handshake service) under the `latter` domain. Latter firmware calls most of them from the device. You can also call them from automations, scripts, or your own firmware.
+Latter registers 16 user-facing services (plus the internal `latter.device_hello` handshake service) under the `latter` domain. Latter firmware invokes these operations over its bound Zero-Privilege **System: RPC Outbox** (`core/rpc_receiver.py`, authenticated by `esphome_device_id` so `allow_service_calls` is never required), while Home Assistant automations, scripts, and custom integrations call the `latter.*` services directly.
 
-- **Source:** [`services.py`](../../custom_components/latter/services.py), with UI schemas in [`services.yaml`](../../custom_components/latter/services.yaml).
-- **Schema validation.** Every service rejects unknown keys. Most values (for example `priority`, `mode`, `action`, `command`) are free-form strings checked by the handler, which ignores or defaults values it doesn't recognize; `doorbell_intercom`'s `noise_reduction` is validated by the schema.
+- **Source:** [`services.py`](../../custom_components/latter/services.py) and [`core/security_policy.py`](../../custom_components/latter/core/security_policy.py), with UI schemas in [`services.yaml`](../../custom_components/latter/services.yaml).
+- **Schema validation & RBAC.** Every service rejects unknown keys and forwards `context=call.context` to downstream Home Assistant actions. Administrative mutations (`reset_device`, `save_custom_color`, `set_dock_apps`) require an admin user when invoked from a Home Assistant user context. Most values (for example `priority`, `mode`, `action`, `command`) are validated by the handler; `doorbell_intercom`'s `noise_reduction` is validated by the schema.
 
 ## Targeting
 
@@ -38,7 +38,7 @@ Shows a banner on the device, with an optional chime and an optional camera snap
 | Field | Type | Default | Notes |
 | :--- | :--- | :--- | :--- |
 | `message` | string | **required** | Truncated to 160 characters on the device |
-| `title` | string | `Notification` | Truncated to 48 characters |
+| `title` | string | `Alert` | Truncated to 48 characters |
 | `priority` | `normal` \| `warning` \| `critical` | `normal` | |
 | `duration` | int (seconds) | `8` | Clamped to 2–60 |
 | `chime` | bool | `true` | |
@@ -53,7 +53,7 @@ Speaks a TTS message or plays an audio clip on speakers.
 | Field | Type | Notes |
 | :--- | :--- | :--- |
 | `message` | string | Spoken with `tts.speak` |
-| `media_url` | string | Audio clip URL. Played through `music_assistant.play_announcement` on Music Assistant players, and through `media_player.play_media` with `announce: true` elsewhere. |
+| `media_url` | string | Audio clip URL (`media-source://` URI or a signed local `/api/latter/` URL; arbitrary external URLs are rejected). Played through `music_assistant.play_announcement` on Music Assistant players, and through `media_player.play_media` with `announce: true` elsewhere. |
 | `target_speakers` | `media_player` entity list | When empty, all online Music Assistant players. Ignored when `target_device` is `occupied_areas` or `person.<id>`. |
 | `tts_entity` | `tts.*` | When empty, the first TTS entity |
 
@@ -101,8 +101,9 @@ Fetches one page of items and sends them to the device with `set_browse_slots`. 
 | `album_sort` | `name` \| `year` \| `year_desc` | `name` | |
 | `artist_album_sort` | `year` \| `year_desc` \| `name` | `year` | |
 | `podcast_sort` | `newest` \| `oldest` | `newest` | |
+| `req_id` | int | `0` | Monotonic correlation ID echoed in `set_browse_slots` so out-of-order responses from rapid taps are discarded |
 
-Where lyrics and bios come from, in order:
+Where lyrics and bios come from, in order (cached in a bounded 64-entry LRU cache in `media/browse.py`):
 1. **Music Assistant metadata.**
 2. **[LRCLIB](https://lrclib.net)** for lyrics. Plain lyrics are preferred; synced lyrics are passed through as text.
 3. **Wikipedia's REST summary API** for bios.
@@ -132,6 +133,7 @@ Sends a page of areas or entities to the device. `entities` and `home` pages use
 | `domain_filter` | string | `all` | `scene`, `light`, `cover`, `fan`, `switch`, `media` / `media_player`, `climate`, or a comma-separated list |
 | `page` | int | `1` | |
 | `page_size` | int | `3` (`5` for `areas`) | |
+| `req_id` | int | `0` | Monotonic correlation ID echoed in `set_area_slots` / `set_browse_slots` |
 
 ### `latter.area_action`
 | Field | Type | Default | Notes |
@@ -139,10 +141,12 @@ Sends a page of areas or entities to the device. `entities` and `home` pages use
 | `entity_id` | string | — | Any entity, or one of `whole_home.thermostat`, `whole_home.lock`, `whole_home.garage`, `whole_home.vacuum`, which resolve to the entities configured in Studio |
 | `action` | string | — | `toggle`, `turn_on`, `turn_off`, `set_level`, `set_color`, `set_kelvin`, `step_up`, `step_down`, `arm_home`, `arm_away`, `arm_night`, `disarm`, `heat`, `cool`, `auto`, `off`, `lock`, `unlock`, `open`, `start`, `pause`, `dock` (`lock` and `alarm_control_panel` require an explicit verb; `toggle` is rejected) |
 | `level` | number | — | 0–100 for brightness, position, and fan speed; Kelvin for `set_kelvin` |
-| `code` | string | — | Alarm PIN, or `#RRGGBB` for `set_color` |
+| `code` | string | — | Security PIN / Alarm PIN (for opening actions under `require_pin`), or `#RRGGBB` for `set_color` |
 | `area_id` | area | — | |
 
 Alarm actions with no `entity_id` use the alarm panel configured in Studio. `lock` (`lock`, `unlock`, `open`) and `alarm_control_panel` (`arm_home`, `arm_away`, `arm_night`, `disarm`) require an explicit action verb and never accept `toggle`.
+
+**3-Tier Perimeter Security Policy (`core/security_policy.py`).** Opening actions (`lock`: `unlock`/`open`; `alarm_control_panel`: `disarm`; `cover` garage/gate/door: opening actions) are checked against the calling Device's `security_pin_policy` (`allow`, `require_pin`, or `block`; `auto` resolves to `require_pin` on stationary panels or when a Home Assistant alarm code exists). Under `require_pin`, `code` is verified in constant time against the Device's PBKDF2-HMAC-SHA256 Security PIN (or delegated to Home Assistant's `alarm_control_panel` code). Closing and arming actions (`lock`, `arm_*`, closing covers) are always permitted.
 
 ---
 
@@ -169,10 +173,11 @@ Key names are translated per platform:
 ### `latter.calendar_fetch`
 | Field | Type | Default |
 | :--- | :--- | :--- |
-| `days` | int 1–60 | `7` |
+| `days` | int 1–60 | `30` |
 | `page`, `page_size` | int | `1`, `5` |
+| `req_id` | int | `0` |
 
-Returns at most 25 events, with duplicates (same summary and start) removed. Events with a location get a signed map URL.
+Returns at most 25 events, with duplicates (same summary and start) removed and `req_id` echoed in `set_browse_slots`. Events with a location get a signed map URL.
 
 ### `latter.calendar_create_event`
 | Field | Type | Default | Notes |
@@ -192,7 +197,7 @@ Doorbell listen, push-to-talk reply, and unlock actions, plus `call_target`, whi
 
 - **Listen** (`listen_start` / `listen_stop` / `listen_toggle`): the camera's RTSP audio runs through an FFmpeg noise-reduction filter and plays on the device as FLAC.
 - **Reply** (`talk_message` / `quick_reply`): Home Assistant speaks `message` with TTS on the camera's `media_player` (a sibling entity on the camera's device, or a Studio volume override). Latter firmware sends the text its push-to-talk speech recognition produced. Listening pauses during the reply and resumes after it, unless the call ended in the meantime. A new reply replaces a pending one, so listening resumes only after the last reply.
-- **Unlock** (`unlock_door`): calls `lock.unlock` on the camera's lock, or the lock configured in Studio.
+- **Unlock** (`unlock_door`): calls `lock.unlock` on the camera's lock, or the lock configured in Studio, after enforcing the calling Device's 3-tier Perimeter Security Policy (`code` verified when `require_pin` is active).
 - **`call_target`**: sends a critical `latter.notify` ("Tap to answer") to the display named in `message`, or to every other display. No audio path is opened between displays, and it does not start listening on the calling device (the device sends its own listen_start).
 
 There is no live audio from the device to the door and no echo cancellation.
@@ -203,6 +208,7 @@ There is no live audio from the device to the door and no echo cancellation.
 | `camera_entity` / `camera_index` | `camera.*` / int 0–9 | |
 | `message` | string | Text to speak or target device slug (`all` or `<slug>`), depending on `action` |
 | `noise_reduction` | `strong` \| `light` \| `off` | FFmpeg noise-reduction level for the listen stream. Applies to this device until the integration reloads or Studio settings are saved; the default comes from Studio (`strong`). `set_noise_reduction` applies it and restarts listening if active. |
+| `code` | string | Security PIN for `unlock_door` when the Device's `security_pin_policy` is `require_pin` |
 
 ### `latter.save_custom_color`
 | Field | Type | Notes |

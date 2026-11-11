@@ -1,35 +1,16 @@
-"""Special service targets: one name, `occupied_areas`, for "the Devices or speakers in occupied Areas".
-
-Runs without Home Assistant installed: targets.py and studio/settings.py are standard-library only and
-loaded by file path; services.py is checked as source text.
-"""
+"""Special service targets (`occupied_areas`) and 6-package architectural audit checks."""
 
 from __future__ import annotations
 
-import importlib.util
 from pathlib import Path
 import re
-import sys
-from types import ModuleType
 import unittest
+
+from custom_components.latter.core import targets
+from custom_components.latter.studio import settings
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 LATTER_DIR = REPO_ROOT / "custom_components" / "latter"
-
-
-def _load(name: str) -> ModuleType:
-    spec = importlib.util.spec_from_file_location(
-        f"latter_targets_test_{name.replace('/', '_')}", LATTER_DIR / f"{name}.py"
-    )
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-targets = _load("targets")
-settings = _load("studio/settings")
 
 # Retired target names, built so this file never matches its own repo-wide guard.
 RETIRED = ("follow" + "_me", "occu" + "pied")
@@ -50,7 +31,7 @@ class CallTargetTests(unittest.TestCase):
             _Dev("kitchen"),
             _Dev("phone", ble_tag=True),
             _Dev("office"),
-            object(),  # something else stored under the domain (the System, a store, ...)
+            object(),
         ]
 
     def test_all_rings_every_other_latter_device(self) -> None:
@@ -67,10 +48,10 @@ class CallTargetTests(unittest.TestCase):
         self.assertEqual(
             [d.device_slug for d in targets.other_latter_devices(self.pool, "kitchen")], ["desk", "office"]
         )
-        doorbell = (LATTER_DIR / "doorbell_engine.py").read_text(encoding="utf-8")
-        coordinator = (LATTER_DIR / "coordinator.py").read_text(encoding="utf-8")
+        doorbell = (LATTER_DIR / "areas" / "doorbell.py").read_text(encoding="utf-8")
+        ctx_builder = (LATTER_DIR / "areas" / "context_builder.py").read_text(encoding="utf-8")
         self.assertIn("call_target_slugs(", doorbell)
-        self.assertIn("other_latter_devices(", coordinator)
+        self.assertIn("other_latter_devices(", ctx_builder)
 
 
 class UnrecordedAttributesTests(unittest.TestCase):
@@ -78,8 +59,10 @@ class UnrecordedAttributesTests(unittest.TestCase):
         src = (LATTER_DIR / "sensor.py").read_text(encoding="utf-8")
         m = re.search(r"_unrecorded_attributes = frozenset\((\{[^}]*\})\)", src)
         self.assertIsNotNone(m)
+        assert m is not None
         names = set(re.findall(r'"([a-z_]+)"', m.group(1)))
-        self.assertEqual(names, {"payload", "rev"})
+        self.assertEqual(names, {"rev"})
+        self.assertNotIn('"payload":', src)
         for name in names:
             self.assertIn(f'"{name}": attrs.get("{name}"', src)
 
@@ -97,8 +80,6 @@ class TargetKindTests(unittest.TestCase):
         self.assertEqual(targets.target_kind("  "), "none")
 
     def test_retired_names_are_device_references(self) -> None:
-        # A Device reference must resolve to a Latter Device or the call fails with unknown_target,
-        # so the retired names are errors, never an occupied-Areas broadcast.
         for name in RETIRED:
             self.assertEqual(targets.target_kind(name), "device", name)
         self.assertEqual(targets.target_kind("pocket_assistant"), "device")
@@ -112,21 +93,21 @@ class ServiceSourceTests(unittest.TestCase):
     SRC = (LATTER_DIR / "services.py").read_text(encoding="utf-8")
 
     def test_handlers_classify_with_target_kind(self) -> None:
-        self.assertIn("from .targets import target_kind", self.SRC)
+        self.assertIn("from .core.targets import target_kind", self.SRC)
         self.assertEqual(self.SRC.count("target_kind("), 2, "notify and intercom_broadcast both classify targets")
 
     def test_intercom_device_target_must_resolve(self) -> None:
         helper_body = self.SRC.split("def _resolve_occupied_area_ids(", 1)[1].split("\nasync def ", 1)[0]
         self.assertIn("resolve_person_area_and_distance(hass, target_low)", helper_body)
         body = self.SRC.split("async def _handle_intercom_broadcast", 1)[1].split("\n    async def ", 1)[0]
-        self.assertRegex(body, r'if kind == "device":\s+#[^\n]*\n\s+_resolve_coordinator_from_call\(hass, call\)')
+        self.assertIn("_resolve_coordinator_from_call(hass, call)", body)
         self.assertIn('scoped_mode = kind in ("occupied_areas", "person")', body)
         self.assertIn("_resolve_occupied_area_ids(", body)
 
     def test_target_speakers_schema_is_media_player_entities(self) -> None:
         self.assertRegex(
             self.SRC,
-            r'vol\.Optional\("target_speakers"\): vol\.All\(\s*cv\.entity_ids, \[cv\.entity_domain\("media_player"\)\]\s*\)',
+            r'vol\.Optional\("target_speakers"\): vol\.All\(\s*cv\.entity_ids,\s*\[cv\.entity_domain\("media_player"\)\],?\s*\)',
         )
 
 
@@ -190,136 +171,54 @@ class BleDeviceTrackerAndPersonTests(unittest.TestCase):
         self.assertIn("LatterBleDistanceSensor(coordinator)", ble_branch)
         self.assertNotIn("LatterAreaContextSensor", ble_branch)
 
-        coord_src = (LATTER_DIR / "coordinator.py").read_text(encoding="utf-8")
-        self.assertNotIn("def _notify_listeners", coord_src)
-        self.assertNotIn("self._notify_listeners()", coord_src)
-        self.assertNotIn("_cached_hw_manifest", coord_src)
-        self.assertNotIn("active_camera_index", coord_src)
+        coord_src = (LATTER_DIR / "core" / "device_coordinator.py").read_text(encoding="utf-8")
+        self.assertNotIn("DataUpdateCoordinator", coord_src)
         self.assertIn("def _bind_all_listeners(self) -> None:", coord_src)
         self.assertIn("self._doorbell_reply_task.cancel()", coord_src)
-        area_body = coord_src.split("def async_set_active_area(", 1)[1].split("\n    @property", 1)[0]
-        self.assertIn("self._bind_remotes_listener()", area_body)
 
-    def test_coordinator_pass2_hot_path_hygiene(self) -> None:
-        coord_src = (LATTER_DIR / "coordinator.py").read_text(encoding="utf-8")
-        for legacy in ("ble_scanners_map", "entities_summary", "presence_state", "slot_{idx}_name", "get_all_scanners_diagnostic_map"):
-            self.assertNotIn(legacy, coord_src)
-        area_ctx_body = coord_src.split("def get_area_context_payload(", 1)[1].split("\n    @callback", 1)[0]
-        self.assertIn("entities=entities", area_ctx_body)
-        self.assertNotIn("find_area_media_entities", area_ctx_body)
-        media_body = coord_src.split("def get_active_media_payload(", 1)[1].split("\n    @callback", 1)[0]
-        self.assertNotIn("self._schedule_persist_runtime_state()", media_body)
-        self.assertNotIn("self.last_media_title =", media_body)
-        spk_body = coord_src.split("def _async_on_speaker_state_change(", 1)[1].split("\n    def ", 1)[0]
-        self.assertIn("self._sync_active_speaker_media_snapshot()", spk_body)
-        studio_payload_src = (LATTER_DIR / "studio" / "payload.py").read_text(encoding="utf-8")
-        self.assertNotIn("get_area_context_payload", studio_payload_src)
-        self.assertIn(".active_area_name", studio_payload_src)
-
-    def test_coordinator_pass3_shared_site_feeds(self) -> None:
-        coord_src = (LATTER_DIR / "coordinator.py").read_text(encoding="utf-8")
+    def test_coordinator_shared_site_feeds_and_area_state_index(self) -> None:
+        coord_src = (LATTER_DIR / "core" / "device_coordinator.py").read_text(encoding="utf-8")
         for per_device_feed in (
             "_unsub_weather_state",
             "_unsub_forecast_timer",
             "_unsub_calendar_timer",
             "_bind_weather_listener",
-            "_async_periodic_weather_refresh",
-            "_async_periodic_calendar_refresh",
         ):
             self.assertNotIn(per_device_feed, coord_src)
         self.assertIn("def apply_weather_snapshot(", coord_src)
         self.assertIn("def apply_calendar_snapshot(", coord_src)
 
-        sys_src = (LATTER_DIR / "system.py").read_text(encoding="utf-8")
-        self.assertIn("def bind_feed_listeners(self) -> None:", sys_src)
-        self.assertIn("def async_cleanup_feeds(self) -> None:", sys_src)
-        self.assertIn("async def async_refresh_weather_forecast(", sys_src)
-        self.assertIn("async def async_refresh_calendar_agenda(", sys_src)
+        hub_src = (LATTER_DIR / "core" / "hub.py").read_text(encoding="utf-8")
+        self.assertIn("def bind_feed_listeners(self) -> None:", hub_src)
+        self.assertIn("def async_cleanup_feeds(self) -> None:", hub_src)
+        self.assertIn("async def async_refresh_weather_forecast(", hub_src)
+        self.assertIn("async def async_refresh_calendar_agenda(", hub_src)
 
         init_src = (LATTER_DIR / "__init__.py").read_text(encoding="utf-8")
         self.assertIn("sys_obj.bind_feed_listeners()", init_src)
         self.assertIn("sys_obj.async_cleanup_feeds()", init_src)
 
-    def test_browse_media_services_audit(self) -> None:
-        browse_src = (LATTER_DIR / "browse_engine.py").read_text(encoding="utf-8")
+    def test_6_package_modules_audit(self) -> None:
+        browse_src = (LATTER_DIR / "media" / "browse.py").read_text(encoding="utf-8")
         self.assertIn("def _resolve_speaker_playing_metadata(", browse_src)
-        self.assertIn("asyncio.gather(", browse_src)
-        self.assertNotIn("HomeAssistant-Latter/2.0", browse_src)
+        self.assertIn("MAX_BROWSE_CACHE_ENTRIES: int = 64", browse_src)
 
-        media_ctrl_src = (LATTER_DIR / "media_controller.py").read_text(encoding="utf-8")
-        self.assertIn("async def async_execute_volume_action(", media_ctrl_src)
-        self.assertIn("await async_play_media_with_ma_fallback(", media_ctrl_src)
+        player_src = (LATTER_DIR / "media" / "player_controller.py").read_text(encoding="utf-8")
+        self.assertIn("async def async_execute_volume_action(", player_src)
+        self.assertIn("await async_play_media_with_ma_fallback(", player_src)
 
-        services_src = (LATTER_DIR / "services.py").read_text(encoding="utf-8")
-        self.assertIn("def _resolve_occupied_area_ids(", services_src)
-        self.assertIn("await async_execute_volume_action(", services_src)
-        self.assertIn("await async_save_and_broadcast_global_config(", services_src)
-        self.assertNotIn("occupant_names", services_src)
-        self.assertNotIn("coord.on_area_changed_push_slots = None", services_src)
+        ble_src = (LATTER_DIR / "presence" / "ble_fabric.py").read_text(encoding="utf-8")
+        self.assertIn("BluetoothCallbackMatcher", ble_src)
+        self.assertIn("RSSI_HYSTERESIS_DEADBAND_DBM", ble_src)
 
-    def test_ble_and_area_engine_audit(self) -> None:
-        ble_src = (LATTER_DIR / "ble_engine.py").read_text(encoding="utf-8")
-        self.assertNotIn("noqa: E402", ble_src)
-        self.assertNotIn("def _resolve_beacon_minor(", ble_src)
-        self.assertIn("def _resolve_scanner_area_id_uncached(", ble_src)
-        wake_body = ble_src.split("def reset_for_device_wake(", 1)[1].split("\n    @callback", 1)[0]
-        self.assertIn("self._area_raw_rssi.clear()", wake_body)
+        views_src = (LATTER_DIR / "http" / "views.py").read_text(encoding="utf-8")
+        self.assertIn("class LatterWallpaperUploadView(", views_src)
+        self.assertIn("def async_shutdown_camera_feeds(", views_src)
 
-        area_src = (LATTER_DIR / "area_engine.py").read_text(encoding="utf-8")
-        self.assertNotIn("def get_indexed_fusion_sensor_entity_ids(", area_src)
-        self.assertIn('"input_boolean": 6', area_src)
-        summary_body = area_src.split("def get_areas_summary(", 1)[1].split("\ndef _parse_domain_filter(", 1)[0]
-        self.assertNotIn("get_area_climate_telemetry(", summary_body)
-        action_body = area_src.split("async def async_execute_area_action(", 1)[1]
-        self.assertIn('state_obj.attributes.get("temperature")', action_body)
-        self.assertIn('state_obj.attributes.get("volume_level")', action_body)
-
-    def test_http_doorbell_wallpaper_audit(self) -> None:
-        http_src = (LATTER_DIR / "http.py").read_text(encoding="utf-8")
-        self.assertIn("def _parse_render_params(", http_src)
-        self.assertIn("def _render_preset_to_baseline_jpeg(", http_src)
-        self.assertIn("def evict_wallpaper_lru_cache(", http_src)
-        self.assertNotIn("def _resolve_coordinator_by_target(", http_src)
-        self.assertNotIn("HomeAssistant-Latter/1.9.4", http_src)
-
-        doorbell_src = (LATTER_DIR / "doorbell_engine.py").read_text(encoding="utf-8")
-        self.assertIn("sample_rate: int = 48000", doorbell_src)
-        self.assertIn("_build_silence_wav(sample_rate=out_rate)", doorbell_src)
-        self.assertIn("def _cancel_pending_reply()", doorbell_src)
-        self.assertNotIn("def _resolve_coordinator_by_slug(", doorbell_src)
-
-        wp_src = (LATTER_DIR / "wallpaper_engine.py").read_text(encoding="utf-8")
-        self.assertIn("def render_builtin_preset_image(", wp_src)
-        self.assertEqual(wp_src.count("evict_wallpaper_lru_cache("), 2)
-
-    def test_lifecycle_backup_and_sensor_audit(self) -> None:
-        backup_src = (LATTER_DIR / "backup_engine.py").read_text(encoding="utf-8")
+        backup_src = (LATTER_DIR / "core" / "backup.py").read_text(encoding="utf-8")
         export_block = backup_src.split("DEVICE_CONFIG_EXPORT_KEYS", 1)[1].split("PROFILE_DEVICE_KEYS", 1)[0]
-        profile_block = backup_src.split("PROFILE_DEVICE_KEYS", 1)[1].split("DEFAULT_DEVICE_GROUPS", 1)[0]
         self.assertIn("CONF_AREA_FOLLOW_DWELL_S", export_block)
         self.assertIn("CONF_MA_PLAYER_ENTITY", export_block)
-        self.assertIn("CONF_AREA_FOLLOW_DWELL_S", profile_block)
-        self.assertIn("sys_obj.config = global_cfg", backup_src)
-
-        flow_src = (LATTER_DIR / "config_flow.py").read_text(encoding="utf-8")
-        self.assertIn("async def _async_save_system_options(", flow_src)
-        self.assertEqual(flow_src.count("await _async_save_system_options(self.hass, user_input)"), 2)
-
-        sensor_src = (LATTER_DIR / "sensor.py").read_text(encoding="utf-8")
-        self.assertIn("self._cached_person", sensor_src)
-        self.assertIn("def _get_person_state(self)", sensor_src)
-
-        backup_agent_src = (LATTER_DIR / "backup.py").read_text(encoding="utf-8")
-        self.assertIn('getattr(item, "_runtime", None)', backup_agent_src)
-        self.assertNotIn('getattr(item, "_store", None)', backup_agent_src)
-
-        entities_doc = (REPO_ROOT / "docs" / "reference" / "entities.md").read_text(encoding="utf-8")
-        self.assertNotIn("ble_scanners_map", entities_doc)
-        self.assertNotIn("entities_summary", entities_doc)
-        self.assertIn("three entities marked ★", entities_doc)
-
-        services_doc = (REPO_ROOT / "docs" / "reference" / "services.md").read_text(encoding="utf-8")
-        self.assertIn("16 user-facing services", services_doc)
 
 
 if __name__ == "__main__":

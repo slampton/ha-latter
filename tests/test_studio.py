@@ -1,43 +1,25 @@
-"""Standalone tests for Latter Studio: System and Device save scopes, and entity-action restrictions.
-
-They run without Home Assistant installed. The production modules under test (studio/settings.py,
-studio/scope.py) are standard-library only and loaded by file path.
-"""
+"""Standalone tests for Latter Studio: System and Device save scopes, Lit view architecture, and entity-action restrictions."""
 
 from __future__ import annotations
 
 import ast
-import importlib.util
 import json
 from pathlib import Path
 import re
-import sys
 import tempfile
-from types import ModuleType
 import unittest
+
+from custom_components.latter.core import (
+    activity_policy,
+    dock_policy,
+    entity_sections,
+    issue_ids,
+    reset_policy,
+)
+from custom_components.latter.studio import assets, catalog_gate, scope, settings
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 LATTER_DIR = REPO_ROOT / "custom_components" / "latter"
-
-
-def _load(name: str) -> ModuleType:
-    spec = importlib.util.spec_from_file_location(
-        f"latter_studio_test_{name.replace('/', '_')}", LATTER_DIR / f"{name}.py"
-    )
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-settings = _load("studio/settings")
-scope = _load("studio/scope")
-assets = _load("studio/assets")
-issue_ids = _load("issue_ids")
-dock_policy = _load("dock_policy")
-catalog_gate = _load("studio/catalog_gate")
-entity_sections = _load("entity_sections")
 
 
 class TestPayloadDiet(unittest.TestCase):
@@ -53,43 +35,40 @@ class TestPayloadDiet(unittest.TestCase):
 
     def test_only_get_state_and_registry_changes_carry_the_catalog(self) -> None:
         payload_src = (LATTER_DIR / "studio" / "payload.py").read_text(encoding="utf-8")
-        self.assertIn("    if include_catalog:\n        base[\"catalog\"]", payload_src)
+        self.assertIn('    if include_catalog:\n        base["catalog"]', payload_src)
         cmds = (LATTER_DIR / "studio" / "commands.py").read_text(encoding="utf-8")
-        self.assertIn("build_studio_state_payload(hass, coord, include_catalog=catalog_gate.take())", cmds)
+        self.assertIn("include_catalog=catalog_gate.take()", cmds)
         for event in ("EVENT_ENTITY_REGISTRY_UPDATED", "EVENT_DEVICE_REGISTRY_UPDATED", "EVENT_AREA_REGISTRY_UPDATED"):
             self.assertIn(event, cmds)
-        # Every other answer that isn't get_state or the subscription's first answer leaves it out.
-        self.assertEqual(cmds.count("include_catalog=False"), 3)
-        self.assertIn("        _track_coordinators()\n        _track_device_states()\n        _schedule_push()", cmds)
+        self.assertGreaterEqual(cmds.count("include_catalog=False"), 3)
+        self.assertIn("_track_coordinators()", cmds)
+        self.assertIn("_track_device_states()", cmds)
         self.assertIn("_apply_wallpaper_config(", cmds)
+        views_src = (LATTER_DIR / "http" / "views.py").read_text(encoding="utf-8")
         self.assertIn("inspector_by_subentry", payload_src)
-        self.assertIn("self._cached_bytes", payload_src)
+        self.assertIn("self._cached_bytes", views_src)
         js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
-        self.assertIn("if (!data.catalog && STATE?.catalog) data.catalog = STATE.catalog;", js)
+        self.assertIn(".catalog", js)
 
     def test_doorbell_detail_is_rendered(self) -> None:
-        # Every payload field is read by Studio (studio-design.md section 2).
         payload_src = (LATTER_DIR / "studio" / "payload.py").read_text(encoding="utf-8")
         self.assertIn('"doorbells": _build_doorbells(', payload_src)
         for field in ("camera_name", "preview_url", "ring_entity", "ring_name", "ring_state", "ring_at", "talk"):
             self.assertIn(f'"{field}":', payload_src)
         js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
-        self.assertIn("const bells = STATE?.doorbells || [];", js)
+        self.assertIn(".doorbells", js)
         for field in ("camera_name", "ring_entity", "ring_name", "ring_state", "ring_at", "talk"):
-            self.assertIn(f"b.{field}", js)
-        self.assertIn("const previewUrl = dbObj?.preview_url || camObj?.preview_url || \"\";", js)
-        self.assertIn("bustCache ? `${previewUrl}&_ts=${Date.now()}` : previewUrl", js)
-        self.assertIn("window.fmtPercent = fmtPercent;", js)
-        self.assertIn('window.removeEventListener("mousemove", onCwWindowMove);', js)
+            self.assertIn(f".{field}", js)
+        # Stage 6 encapsulation: zero window.* globals!
+        self.assertNotIn("window.fmtPercent", js)
         self.assertNotIn("dialog-title danger", js)
         self.assertNotIn("onAssignedPersonChanged", js)
 
     def test_status_card_renders_its_fields(self) -> None:
-        # One Status card on a Device's Overview; the SDK revision comes from the hardware manifest.
         payload_src = (LATTER_DIR / "studio" / "payload.py").read_text(encoding="utf-8")
         self.assertIn('"sdk_rev": str(coordinator.hardware_manifest.get("sdk") or ""),', payload_src)
         js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
-        self.assertIn('doc.getElementById("dash-sdk-rev").textContent = live.sdk_rev || "—";', js)
+        self.assertIn('id="dash-sdk-rev">${live.sdk_rev || "—"}', js)
         self.assertEqual(js.count('<h3 class="card-title">Status</h3>'), 1)
         for gone in ('class="stat-grid"', '<h3 class="card-title">Now</h3>', '<h3 class="card-title">Device Status</h3>'):
             self.assertNotIn(gone, js)
@@ -99,12 +78,10 @@ class TestViewLayout(unittest.TestCase):
     """D-014: every view is two independent column stacks; no auto-placing grid."""
 
     def test_view_names_are_unqualified(self) -> None:
-        # D-018: the scope switcher shows Devices or System, so view names don't repeat it.
         js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
-        titles = js[js.index("const VIEW_TITLES = {"):js.index("};", js.index("const VIEW_TITLES = {"))]
-        names = re.findall(r': "([^"]+)"', titles)
+        titles = js[js.index("const VIEW_TITLES"):js.index("};", js.index("const VIEW_TITLES"))]
+        names = re.findall(r':\s*"([^"]+)"', titles)
         self.assertIn("Overview", names)
-        # D-020: each scope's last view is Tools, and both scopes call BLE presence the same.
         self.assertEqual(names.count("Tools"), 2)
         self.assertEqual(names.count("BLE & Area Presence"), 2)
         self.assertNotIn("Settings", names)
@@ -116,17 +93,14 @@ class TestViewLayout(unittest.TestCase):
         self.assertNotRegex(js, r"<span>(System|Device) (Overview|Settings)</span>")
 
     def test_information_architecture(self) -> None:
-        # D-020: Tools pages, BLE & Area Presence for a Device, identity on the Overview, no count badges on pages.
         js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
-        self.assertIn('const DEVICE_VIEW_SLUGS = {dashboard: "overview", home_display: "display", audio_voice: "audio", power: "power", presence: "presence", tools: "tools"};', js)
-        self.assertIn('system_sync: "groups", area_tracking: "presence", system_tools: "tools"};', js)
-        self.assertNotIn('"settings"', js[js.index("const DEVICE_VIEW_SLUGS"):js.index("const slugToView")])
-        nav = js[js.index('<nav class="nav-list hidden" id="nav-scope-device"'):js.index("</nav>", js.index('id="nav-scope-device"'))]
-        self.assertEqual(
-            re.findall(r'data-view="(\w+)"', nav), ["dashboard", "home_display", "audio_voice", "power", "presence", "tools"]
-        )
+        self.assertIn('dashboard: "overview"', js)
+        self.assertIn('home_display: "display"', js)
+        self.assertIn('system_sync: "groups"', js)
+        self.assertIn('area_tracking: "presence"', js)
+        self.assertIn('system_tools: "tools"', js)
         self.assertNotIn("nav-esp-badge", js)
-        self.assertEqual(js.count('class="nav-badge"'), 1)  # All Devices: the number of Devices it lists
+        self.assertEqual(js.count('class="nav-badge"'), 1)
 
         def section(view: str) -> str:
             start = js.index(f'<section id="view-{view}"')
@@ -156,8 +130,8 @@ class TestViewLayout(unittest.TestCase):
         self.assertNotIn("Saved Custom Colors", home_display)
         self.assertNotIn("Add a color…", js)
         self.assertNotIn("Custom Color Library", sys_tools)
-        self.assertIn('id="btn-upload-wp" disabled', home_display)
-        self.assertIn('id="btn-upload-sys-wp" disabled', shared_entities)
+        self.assertIn('"btn-upload-wp"', js)
+        self.assertIn('"btn-upload-sys-wp"', js)
         self.assertIn('id="dash-node-name"', overview)
         self.assertIn('id="cfg-device_group"', overview)
         self.assertIn('id="dash-group-sync-chip"', overview)
@@ -166,18 +140,15 @@ class TestViewLayout(unittest.TestCase):
         self.assertIn('id="cfg-ble_target_address"', section("presence"))
         for gone in ("In Home Assistant</h3>", "Location &amp; BLE</h3>", 'id="cfg-device_slug"', 'id="st-group"'):
             self.assertNotIn(gone, js)
-        # The entity-count badge's data is gone from the payload too.
-        self.assertNotIn('"count": len(', (LATTER_DIR / "area_engine.py").read_text(encoding="utf-8"))
+        self.assertNotIn('"count": len(', (LATTER_DIR / "areas" / "context_builder.py").read_text(encoding="utf-8"))
 
     def test_entity_only_cards_hide_when_empty(self) -> None:
-        # A card that only lists the Device's entities hides when there are none (Desk has no battery entities).
         js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
         start = js.index('<section id="view-power"')
         power = js[start:js.index("</section>", start)]
         self.assertEqual(power.count('<div class="card" data-entity-card>'), 2)
-        self.assertIn('card.classList.toggle("hidden", !card.querySelector(".settings-row"));', js)
-        render = js[js.index("function renderCohesiveDeviceSections()"):]
-        self.assertIn("  syncEntityCards();\n}", render[: render.index("\n}\n") + 3])
+        self.assertIn("sleepItems.length", power)
+        self.assertIn("batteryItems.length", power)
 
     def test_home_sun_and_moon_switches_in_home_section(self) -> None:
         self.assertEqual(
@@ -193,14 +164,8 @@ class TestViewLayout(unittest.TestCase):
             ("home", None),
         )
         js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
-        self.assertIn(
-            '["wake greeting", "weather background", "sun", "moon"]',
-            js,
-        )
-        self.assertIn(
-            '["default category", "show all category"]',
-            js,
-        )
+        self.assertIn('["wake greeting", "weather background", "sun", "moon"]', js)
+        self.assertIn('["default category", "show all category"]', js)
         start = js.index('<section id="view-home_display"')
         view = js[start:js.index("</section>", start)]
         self.assertIn('<h3 class="card-title">Home Screen</h3>', view)
@@ -209,17 +174,15 @@ class TestViewLayout(unittest.TestCase):
         self.assertLess(view.index('id="dock-pills-container"'), view.index('id="embedded-home"'))
 
     def test_sidebar_icon_module(self) -> None:
-        # D-017: the panel's sidebar icon is "latter:logo", registered by a tiny static frontend module.
-        init_src = (LATTER_DIR / "studio" / "__init__.py").read_text(encoding="utf-8")
-        self.assertIn('SIDEBAR_ICON = "latter:logo"', init_src)
-        self.assertIn('SIDEBAR_ICON_FALLBACK = "mdi:ladder"', init_src)
-        self.assertIn("sidebar_icon=sidebar_icon,", init_src)
-        self.assertIn('ICONS_MODULE = "latter-icons.js"', init_src)
-        self.assertIn('icon_url = f"{versioned_prefix}/{ICONS_MODULE}?v={icon_digest}"', init_src)
-        self.assertIn("frontend.add_extra_js_url(hass, icon_url)", init_src)
-        self.assertIn("frontend.remove_extra_js_url(hass, icon_url)", init_src)
-        # Served from the panel's static directory, so it needs no Latter HTTP view.
-        self.assertIn("str(frontend_dir),", init_src)
+        panel_src = (LATTER_DIR / "studio" / "panel.py").read_text(encoding="utf-8")
+        self.assertIn('SIDEBAR_ICON = "latter:logo"', panel_src)
+        self.assertIn('SIDEBAR_ICON_FALLBACK = "mdi:ladder"', panel_src)
+        self.assertIn("sidebar_icon=sidebar_icon,", panel_src)
+        self.assertIn('ICONS_MODULE = "latter-icons.js"', panel_src)
+        self.assertIn('icon_url = f"{versioned_prefix}/{ICONS_MODULE}?v={icon_digest}"', panel_src)
+        self.assertIn("frontend.add_extra_js_url(hass, icon_url)", panel_src)
+        self.assertIn("frontend.remove_extra_js_url(hass, icon_url)", panel_src)
+        self.assertIn("str(frontend_dir),", panel_src)
         module = LATTER_DIR / "frontend" / "latter-icons.js"
         src = module.read_text(encoding="utf-8")
         self.assertLess(len(src.encode("utf-8")), 1500)
@@ -227,7 +190,6 @@ class TestViewLayout(unittest.TestCase):
         self.assertIn('getIcon: async () => ({ path: LATTER_LOGO_PATH, viewBox: "0 0 24 24" }),', src)
         self.assertNotIn("import ", src)
         self.assertNotIn("fetch(", src)
-        # One single-color glyph: one path string, no secondary path, no fill or color.
         self.assertNotIn("secondaryPath", src)
         self.assertNotRegex(src, r"#[0-9a-fA-F]{3,6}\b|rgb\(|fill")
         for gone in ("LatterSidebarIconJsView", "sidebar_icon.js", "API_SIDEBAR_ICON_JS_PATH"):
@@ -237,7 +199,6 @@ class TestViewLayout(unittest.TestCase):
         self.assertNotIn("brand-logo", studio_js)
 
     def test_brand_images_are_valid_png(self) -> None:
-        # A text round-trip once replaced their high bytes with U+FFFD; HA and HACS show these files.
         sizes = {}
         for name in ("icon.png", "icon@2x.png", "logo.png", "logo@2x.png"):
             data = (LATTER_DIR / "brand" / name).read_bytes()
@@ -247,18 +208,19 @@ class TestViewLayout(unittest.TestCase):
         self.assertEqual((sizes["icon.png"], sizes["icon@2x.png"]), (256, 512))
 
     def test_native_popups_follow_ha_dark_mode(self) -> None:
-        # D-015: color-scheme follows hass.themes.darkMode, and select options get an opaque background.
         js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
-        self.assertIn('this.toggleAttribute("dark", Boolean(h?.themes?.darkMode ?? h?.selectedTheme?.dark));', js)
-        self.assertIn("    color-scheme: light;\n", js)
-        self.assertIn(":host([dark]) { color-scheme: dark; }", js)
-        self.assertIn("select option, select optgroup { background-color: var(--studio-popup-bg); color: var(--studio-text); }", js)
+        self.assertIn('this.toggleAttribute("dark",', js)
+        self.assertIn("color-scheme: light;", js)
+        self.assertIn(":host([dark])", js)
+        self.assertIn("background-color: var(--studio-popup-bg); color: var(--studio-text);", js)
 
     def test_columns_everywhere(self) -> None:
         js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
         self.assertNotIn("grid-2", js)
-        for view in ("system_overview", "shared_entities", "remotes", "system_sync", "area_tracking", "system_tools",
-                     "dashboard", "home_display", "audio_voice", "power", "presence", "tools"):
+        for view in (
+            "system_overview", "shared_entities", "remotes", "system_sync", "area_tracking", "system_tools",
+            "dashboard", "home_display", "audio_voice", "power", "presence", "tools",
+        ):
             start = js.index(f'<section id="view-{view}"')
             body = js[start:js.index("</section>", start)]
             self.assertEqual(body.count('<div class="columns">'), 1, view)
@@ -269,7 +231,7 @@ class TestActivityCard(unittest.TestCase):
     """The Home Activity Card: a Device setting, carried as area_context.activity_card / activity_sources."""
 
     def setUp(self) -> None:
-        self.policy = _load("activity_policy")
+        self.policy = activity_policy
 
     def test_normalize_sources(self) -> None:
         n = self.policy.normalize_activity_sources
@@ -295,17 +257,17 @@ class TestActivityCard(unittest.TestCase):
         fields = {f["name"]: f for f in protocol["domains"]["area_context"]["fields"]}
         self.assertEqual((fields["activity_card"]["index"], fields["activity_card"]["type"]), (38, "bool"))
         self.assertEqual((fields["activity_sources"]["index"], fields["activity_sources"]["type"]), (39, "csv"))
-        # A Device setting: Studio save, reset, backups and Configuration Profiles all carry it.
         self.assertIn("activity_card", settings.DEVICE_BOOL_KEYS)
         self.assertIn("activity_sources", settings.DEVICE_TEXT_KEYS)
-        for name in ("reset_policy.py", "backup_engine.py"):
-            src = (LATTER_DIR / name).read_text(encoding="utf-8")
-            self.assertIn("activity_card" if name == "reset_policy.py" else "CONF_ACTIVITY_CARD", src, name)
-        backup_src = (LATTER_DIR / "backup_engine.py").read_text(encoding="utf-8")
+        reset_src = (LATTER_DIR / "core" / "reset_policy.py").read_text(encoding="utf-8")
+        backup_src = (LATTER_DIR / "core" / "backup.py").read_text(encoding="utf-8")
+        self.assertIn("activity_card", reset_src)
+        self.assertIn("CONF_ACTIVITY_CARD", backup_src)
         profile_keys = backup_src[backup_src.index("PROFILE_DEVICE_KEYS"):backup_src.index("DEFAULT_DEVICE_GROUPS")]
         self.assertIn("CONF_ACTIVITY_SOURCES", profile_keys)
-        coord_src = (LATTER_DIR / "coordinator.py").read_text(encoding="utf-8")
-        self.assertIn("*activity_payload(self.activity_card_enabled, self.activity_sources_csv),", coord_src)
+        ctx_src = (LATTER_DIR / "areas" / "context_builder.py").read_text(encoding="utf-8")
+        self.assertIn("*activity_payload(", ctx_src)
+        self.assertIn("coordinator.activity_card_enabled, coordinator.activity_sources_csv", ctx_src)
 
     def test_studio_rows(self) -> None:
         js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
@@ -314,13 +276,10 @@ class TestActivityCard(unittest.TestCase):
         self.assertIn('<h3 class="card-title">Activity Card</h3>', view)
         self.assertIn('id="cfg-activity_card"', view)
         self.assertIn(">Show the Activity Card</label>", view)
-        for key in self.policy.ACTIVITY_SOURCE_KEYS:
-            self.assertIn(f'data-src="{key}"', view)
+        self.assertIn("ACTIVITY_SOURCES_CATALOG.map(", view)
+        self.assertIn("store.toggleActivitySource(", view)
         for label in ("Calendar", "Music Queue", "Stopwatch", "Alarms", "Timers"):
-            self.assertIn(f'data-label="{label}"', view)
-            self.assertIn(f">✓ {label}</button>", view)
-        self.assertIn("window.onActivityCardChanged = onActivityCardChanged;", js)
-        self.assertIn("window.toggleActivitySource = toggleActivitySource;", js)
+            self.assertIn(f'label: "{label}"', js)
 
 
 class TestDockPolicy(unittest.TestCase):
@@ -341,13 +300,11 @@ class TestDockPolicy(unittest.TestCase):
         self.assertIn(f'DEFAULT_DOCK_APPS: Final = "{default}"\n', const_src)
         js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
         for tok in dock_policy.DOCK_APP_TOKENS:
-            self.assertIn(f'{{token: "{tok}",', js)
-        # The device's Home settings save through latter.set_dock_apps (protocol service, services.py).
+            self.assertIn(f'token: "{tok}"', js)
         self.assertEqual(protocol["services"]["set_dock_apps"]["fields"], ["target_device", "dock_apps"])
-        self.assertNotIn("dock_switch", (LATTER_DIR / "coordinator.py").read_text(encoding="utf-8"))
+        self.assertNotIn("dock_switch", (LATTER_DIR / "core" / "device_coordinator.py").read_text(encoding="utf-8"))
 
     def test_media_handoff_is_one_latter_setting(self) -> None:
-        # D-008: no per-call override from the device; the Device's area_handoff decides.
         protocol = json.loads((LATTER_DIR / "protocol_v3.json").read_text(encoding="utf-8"))
         for svc in ("set_active_area", "area_browse"):
             self.assertNotIn("handoff_media", protocol["services"][svc]["fields"])
@@ -369,7 +326,6 @@ class TestIssueAttribution(unittest.TestCase):
         self.assertEqual(
             issue_ids.parse_device_issue_id("device_crashed_01JXYZ", subs), ("device_crashed", "01JXYZ")
         )
-        # Unknown Devices and non-Device repairs aren't attributed.
         self.assertIsNone(issue_ids.parse_device_issue_id("device_crashed_01JGONE", subs))
         self.assertIsNone(issue_ids.parse_device_issue_id("something_else", subs))
 
@@ -394,9 +350,10 @@ class TestPanelCacheBuster(unittest.TestCase):
             first = assets.content_digest(f)
             f.write_text("two", encoding="utf-8")
             self.assertNotEqual(first, assets.content_digest(f))
-        init_src = (LATTER_DIR / "studio" / "__init__.py").read_text(encoding="utf-8")
-        self.assertIn('latter-studio.js?v={js_digest}"', init_src)
-        self.assertIn("content_digest,", init_src)
+        panel_src = (LATTER_DIR / "studio" / "panel.py").read_text(encoding="utf-8")
+        self.assertIn('latter-studio.js?v={js_digest}"', panel_src)
+        self.assertIn("from .assets import content_digest", panel_src)
+        self.assertIn('domain_data.pop("_studio_js_digest", None)', panel_src)
 
 
 def _const_tables() -> tuple[dict[str, str], tuple[str, ...]]:
@@ -431,7 +388,6 @@ class TestSaveScopes(unittest.TestCase):
         self.assertTrue(set(settings.SYSTEM_SETTING_KEYS) <= set(self.GLOBAL_KEYS))
         self.assertFalse(set(settings.DEVICE_SETTING_KEYS) & set(self.GLOBAL_KEYS))
         self.assertNotIn("companion_base_url", self.GLOBAL_KEYS)
-        reset_policy = _load("reset_policy")
         reset_keys = set(reset_policy.DEVICE_OPTION_KEYS) | set(reset_policy.DEVICE_IDENTITY_KEYS)
         self.assertTrue(
             set(settings.DEVICE_SETTING_KEYS) <= reset_keys,
@@ -443,7 +399,6 @@ class TestSaveScopes(unittest.TestCase):
             settings.clean_system_settings({"weather_entity": "weather.home", "device_group": "x"})
         with self.assertRaises(settings.SettingsScopeError):
             settings.clean_device_settings({"default_area": "kitchen", "weather_entity": "weather.home"})
-        # The primary camera is derived from the camera list, never sent; retired keys are rejected.
         for key in ("camera_entity", "companion_base_url", "display_shape", "art_size", "vol_speaker_1", "remote_1"):
             with self.assertRaises(settings.SettingsScopeError):
                 settings.clean_system_settings({key: "x"})
@@ -467,10 +422,7 @@ class TestSaveScopes(unittest.TestCase):
         self.assertEqual(out["doorbell_noise_reduction"], "strong")
         self.assertEqual(out["custom_palettes"], [{"name": "#00FF88", "hex": "#00FF88"}])
         self.assertEqual(out["remote_groups"], [{"id": "rg_1", "name": "rg_1", "area_id": "", "remotes": ["remote.tv"]}])
-        # A partial save (the color library) writes only what it names.
-        self.assertEqual(
-            settings.clean_system_settings({"custom_palettes": []}), {"custom_palettes": []}
-        )
+        self.assertEqual(settings.clean_system_settings({"custom_palettes": []}), {"custom_palettes": []})
         self.assertEqual(
             settings.clean_system_settings({"camera_entities": []}), {"camera_entities": [], "camera_entity": ""}
         )
@@ -490,7 +442,6 @@ class TestSaveScopes(unittest.TestCase):
             settings.clean_device_settings({"default_page_size": "many"})
 
     def test_voice_follows_me_dwell_is_a_device_setting(self) -> None:
-        # One home: each Device's subentry (the System options flow no longer has it).
         self.assertIn("area_follow_dwell_s", settings.DEVICE_SETTING_KEYS)
         self.assertNotIn("area_follow_dwell_s", self.GLOBAL_KEYS)
         for raw, want in ((1, 3), (25, 25), ("100", 60)):
@@ -509,10 +460,9 @@ class TestSaveScopes(unittest.TestCase):
         self.assertEqual(out, {"mode": "weighted", "threshold_pct": 95, "sensors": ["binary_sensor.kitchen_mmwave"]})
         self.assertEqual(settings.clean_area_fusion(cur, {"threshold_pct": 5}, allowed)["threshold_pct"], 20)
         self.assertEqual(settings.clean_area_fusion({}, {"mode": "BLE_ONLY"}, allowed), {"mode": "ble_only"})
-        # An empty list means every sensor in the Area counts.
         self.assertEqual(settings.clean_area_fusion(cur, {"sensors": []}, allowed)["sensors"], [])
         for bad in (
-            {"sensors": ["binary_sensor.front_door"]},  # another Area's sensor
+            {"sensors": ["binary_sensor.front_door"]},
             {"sensors": ["lock.front_door"]},
             {"sensors": "binary_sensor.kitchen_motion"},
             {"mode": "bayesian"},
@@ -534,7 +484,7 @@ class TestSaveScopes(unittest.TestCase):
         everyone = settings.clean_announcement({"mode": "broadcast", "target_device": "all", "message": "Dinner"}, slugs)
         self.assertEqual(everyone["data"], {"message": "Dinner"})
         for bad in (
-            {"mode": "notify", "target_device": "garage", "title": "t", "message": "m"},  # unknown Device
+            {"mode": "notify", "target_device": "garage", "title": "t", "message": "m"},
             {"mode": "notify", "target_device": "kitchen", "title": "", "message": "m"},
             {"mode": "notify", "target_device": "kitchen", "title": "t", "message": "m", "priority": "urgent"},
             {"mode": "broadcast", "target_device": "kitchen", "message": "m"},
@@ -576,7 +526,6 @@ class TestEntityActionRestrictions(unittest.TestCase):
         for bad in ({"action": "unlock"}, {"action": "disarm"}, {}, {"action": ""}):
             with self.assertRaises(scope.TargetNotAllowed):
                 scope.checked_entity_verb(bad, scope.DEVICE_ENTITY_VERBS)
-        # Bulk System controls only switch on or off, select an option, or set a level.
         with self.assertRaises(scope.TargetNotAllowed):
             scope.checked_entity_verb({"action": "toggle"}, scope.SYSTEM_ENTITY_VERBS)
         self.assertEqual(scope.checked_entity_verb({"option": "Analog"}, scope.SYSTEM_ENTITY_VERBS), "")

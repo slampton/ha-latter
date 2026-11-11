@@ -6,18 +6,21 @@
 
 Latter discovers devices from Home Assistant's device and service registries, not from the network. Check these in order:
 1. **The device is in the ESPHome integration and online.** Latter needs the ESPHome device first.
-2. **The device registers at least one Latter action.** Look in **Developer Tools → Actions** for `esphome.<name>_latter_ping` or `esphome.<name>_set_browse_slots`. If neither is there, the device isn't running Latter firmware.
+2. **The device registers at least one Latter action.** Look in **Developer Tools → Actions** for `esphome.<name>_latter_ping`, `esphome.<name>_latter_push_v3`, or `esphome.<name>_set_browse_slots`. If none of them are there, the device isn't running Latter firmware.
 3. **A rescan has run.** Latter rescans 5 seconds after any device-registry change, and when ESPHome registers a new action. Reloading the ESPHome integration triggers a rescan.
 
 You can also add the device by hand: **Settings → Devices & Services → Add Integration → Latter**.
 
 **The device shows up, but Music, Area, and Remote screens stay empty or taps do nothing**
 
-The device can't call Home Assistant services. Go to **Settings → Devices & Services → ESPHome → (device) → Configure** and enable **Allow the device to perform Home Assistant actions**.
+Latter communicates over Zero-Privilege RPC—you do **not** need *"Allow the device to perform Home Assistant actions"*. Instead, check:
+1. **The bound ESPHome device is online** in **Settings → Devices & Services → ESPHome**.
+2. **The diagnostic `System: RPC Outbox` entity is enabled** on the ESPHome device (`text_sensor.<node>_system_rpc_outbox`). Latter listens to that entity for every tap and browse request from the device.
+3. **Both `ha-latter` and `esphome-latter-core` are on `v3.0.0` or newer**, so `esphome.<node>_latter_push_v3` is registered under **Developer Tools → Actions**.
 
-**I renamed the device and now nothing updates**
+**I renamed the device and want to know if anything needs updating**
 
-Latter finds the ESPHome device by its device ID (or by its MAC address if the ESPHome device was re-created), so renaming the device in Home Assistant changes nothing. The Device's slug is the ESPHome node name, which Latter firmware also uses (the `device_slug` substitution). If you rename the ESPHome node, set `device_slug` in its YAML to match, lowercase with underscores (for example, `Kitchen Pocket` becomes `kitchen_pocket`). Then open **Settings → Devices & Services → Latter**, choose the Device, and run **Reconfigure or Replace Hardware** with the same ESPHome device selected. Latter picks up the new node name and reloads.
+Renaming a device in Home Assistant works immediately—nothing breaks and there is **no `device_slug` YAML substitution** to keep in sync. Latter resolves both inbound `latter_push_v3` actions and outbound `System: RPC Outbox` frames directly from the bound `esphome_device_id` (falling back to MAC address if the ESPHome entry was re-created). If you flashed new hardware and Home Assistant created a brand-new ESPHome device entry, open **Settings → Devices & Services → Latter**, choose the Device, and run **Reconfigure or Replace Hardware** to bind the new ESPHome device.
 
 ---
 
@@ -94,4 +97,4 @@ Start one update at a time: ESPHome Device Builder runs simultaneous uploads in 
 
 ## Getting help
 
-When you [open an issue](https://github.com/slampton/ha-latter/issues), attach the integration's diagnostics: **Settings → Devices & Services → Latter → ⋮ → Download diagnostics**. Read the file before posting it. It can contain your LAN IP address and signed image URLs.
+When you [open an issue](https://github.com/slampton/ha-latter/issues), attach the integration's diagnostics: **Settings → Devices & Services → Latter → ⋮ → Download diagnostics**. Latter automatically redacts URL `sig=` signatures, Protocol v3 `payload` blobs, calendar titles and locations, and MAC dictionary keys, though you should still review the file (for example, LAN IP addresses) before posting it publicly.

@@ -9,11 +9,16 @@ import math
 import re
 import time
 from typing import Any
-import voluptuous as vol
 
 from homeassistant.const import ATTR_ENTITY_ID
-from homeassistant.core import HomeAssistant, ServiceCall, ServiceResponse, SupportsResponse
-from homeassistant.exceptions import ServiceValidationError
+from homeassistant.core import (
+    Context,
+    HomeAssistant,
+    ServiceCall,
+    ServiceResponse,
+    SupportsResponse,
+)
+from homeassistant.exceptions import ServiceValidationError, Unauthorized
 from homeassistant.helpers import (
     area_registry as ar,
     config_validation as cv,
@@ -22,15 +27,28 @@ from homeassistant.helpers import (
     issue_registry as ir,
 )
 from homeassistant.util import dt as dt_util
+import voluptuous as vol
 
-from .browse_engine import async_browse_media_items, is_music_assistant_player
-from .media_controller import async_execute_volume_action
-from .media_engine import async_announce_on_targets, resolve_assist_satellite_entity
+from .areas.calendar import async_fetch_calendar_snapshot
+from .areas.context_builder import (
+    async_execute_area_action,
+    get_area_entities,
+    get_areas_summary,
+    get_home_wide_entities,
+)
+from .areas.doorbell import async_execute_doorbell_intercom
+from .areas.state_index import get_area_state_index
 from .const import (
     CONF_ALARM_ENTITY,
+    CONF_CUSTOM_PALETTES,
     CONF_DEFAULT_SPEAKER,
+    CONF_DEVICE_CUSTOM_COLOR,
+    CONF_DOCK_APPS,
+    DATA_GLOBAL_CONFIG,
     DOMAIN,
     DOORBELL_NOISE_REDUCTION_LEVELS,
+    SERVICE_AREA_ACTION,
+    SERVICE_AREA_BROWSE,
     SERVICE_CALENDAR_CREATE_EVENT,
     SERVICE_CALENDAR_FETCH,
     SERVICE_DEVICE_HELLO,
@@ -41,36 +59,35 @@ from .const import (
     SERVICE_MUSIC_BROWSE,
     SERVICE_NOTIFY,
     SERVICE_REMOTE_ACTION,
-    CONF_CUSTOM_PALETTES,
-    CONF_DEVICE_CUSTOM_COLOR,
-    CONF_DOCK_APPS,
-    DATA_GLOBAL_CONFIG,
-    SERVICE_AREA_ACTION,
-    SERVICE_AREA_BROWSE,
     SERVICE_RESET_DEVICE,
     SERVICE_SAVE_CUSTOM_COLOR,
     SERVICE_SET_ACTIVE_AREA,
-    SERVICE_SET_DOCK_APPS,
     SERVICE_SET_ACTIVE_SPEAKER,
+    SERVICE_SET_DOCK_APPS,
 )
-from .coordinator import (
+from .core.device_coordinator import (
     LatterCoordinator,
     resolve_coordinator,
     resolve_person_area_and_distance,
 )
-from .dock_policy import normalize_dock_apps
-from .identity import device_entities, esphome_service
-from .issue_ids import slot_push_failing_issue_id
-from .site_feeds import async_fetch_calendar_snapshot
-from .studio.payload import async_save_and_broadcast_global_config
-from .system import get_latter_system
-from .targets import target_kind
-from .area_engine import (
-    async_execute_area_action,
-    get_area_entities,
-    get_areas_summary,
-    get_home_wide_entities,
+from .core.device_reset import async_reset_device
+from .core.dock_policy import normalize_dock_apps
+from .core.hub import get_latter_system
+from .core.identity import device_entities, esphome_service
+from .core.issue_ids import slot_push_failing_issue_id
+from .core.security_policy import (
+    check_perimeter_action_allowed,
+    is_sensitive_perimeter_action,
 )
+from .core.targets import target_kind
+from .media.browse import async_browse_media_items, is_music_assistant_player
+from .media.player_controller import (
+    async_announce_on_targets,
+    async_execute_volume_action,
+    resolve_assist_satellite_entity,
+)
+from .presence.ble_fabric import get_ble_fabric
+from .studio.payload import async_save_and_broadcast_global_config
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -200,6 +217,66 @@ def _resolve_coordinator_from_call(
     return coord
 
 
+async def _require_admin_if_user_call(
+    hass: HomeAssistant, call: ServiceCall
+) -> None:
+    """Reject non-admin Home Assistant user invocations of configuration-mutating services."""
+    user_id = call.context.user_id if call.context else None
+    if not user_id:
+        return
+    user = await hass.auth.async_get_user(user_id)
+    if user is not None and not user.is_admin:
+        raise Unauthorized(context=call.context, user_id=user_id, permission="admin")
+
+
+def _enforce_perimeter_security_policy(
+    hass: HomeAssistant,
+    coord: LatterCoordinator,
+    entity_id: str,
+    action: str,
+    *,
+    level: int | None = None,
+    provided_code: str | None = None,
+) -> None:
+    """Enforce the Device's Perimeter Security Policy on sensitive opening actions."""
+    resolved_ent = entity_id.strip()
+    if resolved_ent == "whole_home.lock":
+        resolved_ent = coord.lock_entity or ""
+    elif resolved_ent == "whole_home.garage":
+        resolved_ent = coord.garage_entity or ""
+    elif resolved_ent == "whole_home.alarm":
+        resolved_ent = coord.alarm_entity or ""
+    if not resolved_ent or "." not in resolved_ent:
+        return
+
+    dom = resolved_ent.split(".", 1)[0].lower()
+    st = hass.states.get(resolved_ent)
+    dclass = str(st.attributes.get("device_class") or "") if st is not None else ""
+    if not is_sensitive_perimeter_action(
+        dom,
+        action,
+        device_class=dclass,
+        entity_id=resolved_ent,
+        level=level,
+    ):
+        return
+
+    stored_hash = coord.security_pin_hash or None
+    alarm_passthrough = dom == "alarm_control_panel" and not stored_hash
+    allowed, err_key = check_perimeter_action_allowed(
+        coord.security_pin_policy,
+        provided_code=provided_code,
+        stored_pin_hash=stored_hash,
+        alarm_accepts_passthrough_code=alarm_passthrough,
+    )
+    if not allowed:
+        raise ServiceValidationError(
+            f"Perimeter action '{action}' on '{resolved_ent}' denied ({err_key}).",
+            translation_domain=DOMAIN,
+            translation_key=err_key,
+        )
+
+
 _SLOT_PUSH_WARN_INTERVAL_S = 600.0
 _SLOT_PUSH_REPAIR_THRESHOLD = 5
 
@@ -212,6 +289,7 @@ async def async_push_browse_slots(
     page_size: int,
     items: list[dict[str, Any]],
     preferred_suffix: str = "set_browse_slots",
+    req_id: int = 0,
 ) -> None:
     """Paginate items and push them to the Device's bound esphome.<node>_<suffix> action (Protocol v3 packed slots)."""
     device_slug = coord.device_slug
@@ -242,6 +320,7 @@ async def async_push_browse_slots(
 
     payload: dict[str, Any] = {
         "contract": 3,
+        "req_id": max(0, int(req_id)),
         "mode": str(mode),
         "page": int(page),
         "total_pages": int(total_pages),
@@ -325,8 +404,6 @@ def _resolve_occupied_area_ids(
     hass: HomeAssistant, kind: str, target_low: str
 ) -> set[str]:
     """Return the set of occupied area_ids for 'occupied_areas' or a 'person.*' target."""
-    from .ble_engine import get_ble_fabric
-
     fabric = get_ble_fabric(hass)
     area_reg = ar.async_get(hass)
     occupied_areas: set[str] = set()
@@ -346,9 +423,12 @@ def _resolve_occupied_area_ids(
                 occupied_areas.add(area_entry.id)
     else:
         for c in hass.data.get(DOMAIN, {}).values():
-            if isinstance(c, LatterCoordinator) and c.active_area_id:
-                if fabric.get_area_occupancy(c.active_area_id).get("is_occupied"):
-                    occupied_areas.add(c.active_area_id)
+            if (
+                isinstance(c, LatterCoordinator)
+                and c.active_area_id
+                and fabric.get_area_occupancy(c.active_area_id).get("is_occupied")
+            ):
+                occupied_areas.add(c.active_area_id)
         for area_entry in area_reg.async_list_areas():
             if fabric.get_area_occupancy(area_entry.id).get("is_occupied"):
                 occupied_areas.add(area_entry.id)
@@ -411,6 +491,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         media_id = str(data.get("media_id") or "").strip() or None
         media_type = str(data.get("media_type") or "").strip() or None
         enqueue = str(data.get("enqueue") or "").strip() or None
+        group_members = data.get("group_members")
 
         await coord.async_execute_media_command(
             command=command,
@@ -419,6 +500,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             media_id=media_id,
             media_type=media_type,
             enqueue=enqueue,
+            group_members=group_members,
         )
 
     async def _handle_media_volume(call: ServiceCall) -> None:
@@ -445,7 +527,6 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         coord = _resolve_coordinator_from_call(hass, call)
         area_val = str(call.data.get("area_id") or "").strip()
         if area_val:
-            # Whether media follows is the Device's one setting (area_handoff, D-008).
             coord.async_set_active_area(area_val, sync_device_registry=True)
 
     async def _handle_remote_action(call: ServiceCall) -> None:
@@ -576,6 +657,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         coord = _resolve_coordinator_from_call(hass, call)
         data = call.data
 
+        req_id = int(data.get("req_id") or 0)
         mode = str(data.get("mode") or "speakers")
         page = int(data.get("page") or 1)
         page_size = int(data.get("page_size") or 5)
@@ -617,12 +699,14 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             page_size=page_size,
             items=items,
             preferred_suffix="set_browse_slots",
+            req_id=req_id,
         )
 
     async def _handle_area_browse(call: ServiceCall) -> None:
         coord = _resolve_coordinator_from_call(hass, call)
         data = call.data
 
+        req_id = int(data.get("req_id") or 0)
         mode = str(data.get("mode") or "entities").strip().lower()
         page = int(data.get("page") or 1)
         configured_ps = coord.default_page_size
@@ -671,6 +755,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             page_size=page_size,
             items=items,
             preferred_suffix=target_suffix,
+            req_id=req_id,
         )
 
     async def _handle_area_action(call: ServiceCall) -> None:
@@ -699,6 +784,15 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             raw_level = data.get("level")
             level = int(float(raw_level)) if raw_level is not None and str(raw_level).strip() != "" else None
             code = str(data.get("code")) if data.get("code") is not None else None
+            if coord:
+                _enforce_perimeter_security_policy(
+                    hass,
+                    coord,
+                    entity_id,
+                    action,
+                    level=level,
+                    provided_code=code,
+                )
             await async_execute_area_action(
                 hass,
                 entity_id=entity_id,
@@ -718,6 +812,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         coord = _resolve_coordinator_from_call(hass, call)
         data = call.data
 
+        req_id = int(data.get("req_id") or 0)
         days = int(data.get("days") or 30)
         page = int(data.get("page") or 1)
         page_size = int(data.get("page_size") or 5)
@@ -749,6 +844,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             page=page,
             page_size=page_size,
             items=items,
+            req_id=req_id,
         )
 
     async def _handle_calendar_create_event(call: ServiceCall) -> None:
@@ -759,7 +855,10 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         if not cal_entity and coord and coord.calendar_entities:
             cal_entity = coord.calendar_entities[0]
         if not cal_entity:
-            states = hass.states.async_all("calendar")
+            states = sorted(
+                get_area_state_index(hass).states_for_domain("calendar"),
+                key=lambda s: s.entity_id,
+            )
             if states:
                 cal_entity = states[0].entity_id
 
@@ -788,7 +887,11 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             payload["description"] = str(data["description"])
 
         await hass.services.async_call(
-            "calendar", "create_event", payload, blocking=True
+            "calendar",
+            "create_event",
+            payload,
+            blocking=True,
+            context=call.context,
         )
         if coord:
             await coord.async_refresh_calendar_agenda()
@@ -797,6 +900,15 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         data = call.data
         message = str(data.get("message") or "").strip()
         media_url = str(data.get("media_url") or "").strip()
+        if media_url and not (
+            media_url.startswith("media-source://")
+            or media_url.startswith("/api/latter/")
+        ):
+            raise ServiceValidationError(
+                "Intercom media_url must be a Home Assistant media-source:// URI or local /api/latter/ resource.",
+                translation_domain=DOMAIN,
+                translation_key="invalid_intercom_media_url",
+            )
         target_speakers = data.get("target_speakers") or []
         tts_entity = str(data.get("tts_entity") or "").strip()
 
@@ -805,14 +917,16 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         target_low = raw_target.lower()
         kind = target_kind(raw_target)
         if kind == "device":
-            # The calling Device: it must resolve, so a mistyped target never broadcasts everywhere.
             _resolve_coordinator_from_call(hass, call)
 
         scoped_mode = kind in ("occupied_areas", "person")
         if scoped_mode or not speakers:
             all_online_speakers = [
                 s.entity_id
-                for s in hass.states.async_all("media_player")
+                for s in sorted(
+                    get_area_state_index(hass).states_for_domain("media_player"),
+                    key=lambda st: st.entity_id,
+                )
                 if s.state not in ("unavailable", "unknown")
                 and is_music_assistant_player(hass, s)
             ]
@@ -932,6 +1046,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 vol.Optional("media_id"): cv.string,
                 vol.Optional("media_type"): cv.string,
                 vol.Optional("enqueue"): cv.string,
+                vol.Optional("group_members"): vol.Any(cv.string, [cv.string]),
             }
         ),
     )
@@ -979,6 +1094,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         schema=vol.Schema(
             {
                 **BASE_TARGET_FIELDS,
+                vol.Optional("req_id", default=0): vol.Coerce(int),
                 vol.Optional("mode", default="speakers"): cv.string,
                 vol.Optional("page", default=1): vol.Coerce(int),
                 vol.Optional("page_size", default=5): vol.Coerce(int),
@@ -998,6 +1114,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         schema=vol.Schema(
             {
                 **BASE_TARGET_FIELDS,
+                vol.Optional("req_id", default=0): vol.Coerce(int),
                 vol.Optional("mode", default="entities"): cv.string,
                 vol.Optional("area_id"): cv.string,
                 vol.Optional("domain_filter", default="all"): cv.string,
@@ -1028,6 +1145,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         schema=vol.Schema(
             {
                 **BASE_TARGET_FIELDS,
+                vol.Optional("req_id", default=0): vol.Coerce(int),
                 vol.Optional("days", default=30): vol.Coerce(int),
                 vol.Optional("page", default=1): vol.Coerce(int),
                 vol.Optional("page_size", default=5): vol.Coerce(int),
@@ -1053,7 +1171,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     )
 
     async def _handle_notify(call: ServiceCall) -> None:
-        """Dispatch a toast notification, chime, and optional camera snapshot to one Latter display, the displays in occupied Areas ('occupied_areas'), a person's displays ('person.*'), or all displays ('all')."""
+        """Dispatch a toast notification, chime, and optional camera snapshot to displays."""
         data = call.data
         raw_target = str(data.get("target_device") or "").strip()
         target_low = raw_target.lower()
@@ -1077,9 +1195,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                     kind == "person"
                     and c.assigned_person.lower() == target_low
                     and not c.is_device_away()
-                ):
-                    target_coords.append(c)
-                elif c.active_area_id and c.active_area_id in occupied_areas:
+                ) or (c.active_area_id and c.active_area_id in occupied_areas):
                     target_coords.append(c)
 
             if not target_coords:
@@ -1181,13 +1297,17 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     )
 
     async def _handle_save_custom_color(call: ServiceCall) -> None:
+        await _require_admin_if_user_call(hass, call)
         coord = _resolve_coordinator_from_call(hass, call)
         raw_hex = str(call.data.get("hex_color") or "").strip().upper()
         if not raw_hex.startswith("#"):
             raw_hex = f"#{raw_hex}"
         if not re.fullmatch(r"#[0-9A-F]{6}", raw_hex):
             raise ServiceValidationError(
-                f"Invalid hex color '{raw_hex}' (expected #RRGGBB)."
+                f"Invalid hex color '{raw_hex}' (expected #RRGGBB).",
+                translation_domain=DOMAIN,
+                translation_key="invalid_hex_color",
+                translation_placeholders={"hex_color": raw_hex},
             )
         name = str(call.data.get("name") or f"Custom ({raw_hex})").strip()
 
@@ -1229,11 +1349,17 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
     async def _handle_set_dock_apps(call: ServiceCall) -> None:
         """Save the Home dock chosen on the device (Home settings) as the Device's dock_apps setting."""
+        await _require_admin_if_user_call(hass, call)
         coord = _resolve_coordinator_from_call(hass, call)
         try:
             dock_csv = normalize_dock_apps(call.data.get("dock_apps"))
         except ValueError as err:
-            raise ServiceValidationError(str(err)) from err
+            raise ServiceValidationError(
+                str(err),
+                translation_domain=DOMAIN,
+                translation_key="invalid_dock_apps",
+                translation_placeholders={"error": str(err)},
+            ) from err
         if dock_csv != coord.dock_apps_csv:
             coord.update_device_config({**coord.device_data, CONF_DOCK_APPS: dock_csv})
             await coord.async_apply_options()
@@ -1251,13 +1377,8 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     )
 
     async def _handle_reset_device(call: ServiceCall) -> None:
-        """Reset a Latter Device: the settings saved on the device and/or its Latter options.
-
-        Unlike the other per-device services, the target is required: a destructive reset never
-        falls back to the single-device default.
-        """
-        from .device_reset import async_reset_device
-
+        """Reset a Latter Device: the settings saved on the device and/or its Latter options."""
+        await _require_admin_if_user_call(hass, call)
         coord = _resolve_coordinator_from_call(hass, call)
         await async_reset_device(
             hass,
@@ -1281,8 +1402,6 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
     async def _handle_doorbell_intercom(call: ServiceCall) -> ServiceResponse:
         """Execute a doorbell listen, push-to-talk reply, unlock or call_target action and return target metadata."""
-        from .doorbell_engine import async_execute_doorbell_intercom
-
         coord = _resolve_coordinator_from_call(hass, call)
         data = call.data
         action = str(data.get("action") or "listen_toggle").strip()
@@ -1291,6 +1410,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         nr_level = str(data.get("noise_reduction") or "").strip() or None
         raw_idx = data.get("camera_index")
         cam_idx = int(raw_idx) if raw_idx is not None and str(raw_idx).strip() != "" else None
+        code = str(data.get("code") or "").strip() or None
         info = await async_execute_doorbell_intercom(
             hass=hass,
             coordinator=coord,
@@ -1299,6 +1419,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             message=msg,
             noise_reduction=nr_level,
             camera_index=cam_idx,
+            code=code,
         )
         return {
             "status": "ok",
@@ -1323,7 +1444,64 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 vol.Optional("noise_reduction"): vol.Any(
                     vol.In(DOORBELL_NOISE_REDUCTION_LEVELS), ""
                 ),
+                vol.Optional("code"): cv.string,
             }
         ),
         supports_response=SupportsResponse.OPTIONAL,
+    )
+
+
+_BOUND_DEVICE_RPC_SERVICES: frozenset[str] = frozenset(
+    {
+        SERVICE_DEVICE_HELLO,
+        SERVICE_MUSIC_BROWSE,
+        SERVICE_SET_ACTIVE_SPEAKER,
+        SERVICE_MEDIA_COMMAND,
+        SERVICE_MEDIA_VOLUME,
+        SERVICE_AREA_BROWSE,
+        SERVICE_AREA_ACTION,
+        SERVICE_SET_ACTIVE_AREA,
+        SERVICE_REMOTE_ACTION,
+        SERVICE_CALENDAR_FETCH,
+        SERVICE_CALENDAR_CREATE_EVENT,
+        SERVICE_INTERCOM_BROADCAST,
+        SERVICE_NOTIFY,
+        SERVICE_SAVE_CUSTOM_COLOR,
+        SERVICE_SET_DOCK_APPS,
+        SERVICE_DOORBELL_INTERCOM,
+    }
+)
+
+
+async def async_dispatch_bound_rpc(
+    hass: HomeAssistant,
+    coord: LatterCoordinator,
+    service_name: str,
+    data: dict[str, Any],
+) -> None:
+    """Dispatch a reassembled RPC from `coord`'s bound `System: RPC Outbox` entity."""
+    svc = str(service_name or "").strip()
+    if svc not in _BOUND_DEVICE_RPC_SERVICES:
+        _LOGGER.warning(
+            "Rejected unsupported RPC '%s' from device '%s'", svc, coord.device_slug
+        )
+        return
+
+    sanitized: dict[str, Any] = dict(data or {})
+    if svc in (SERVICE_INTERCOM_BROADCAST, SERVICE_NOTIFY):
+        raw_t = str(sanitized.get("target_device") or "").strip()
+        raw_low = raw_t.lower()
+        if raw_low in ("all", "occupied_areas") or raw_low.startswith("person."):
+            sanitized["target_device"] = raw_t
+        else:
+            sanitized["target_device"] = coord.subentry_id
+    else:
+        sanitized["target_device"] = coord.subentry_id
+
+    await hass.services.async_call(
+        DOMAIN,
+        svc,
+        sanitized,
+        blocking=True,
+        context=Context(),
     )

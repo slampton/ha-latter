@@ -6,18 +6,15 @@ from typing import Any
 
 from homeassistant.components.device_tracker import SourceType, TrackerEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import (
-    STATE_UNAVAILABLE,
-    STATE_UNKNOWN,
-)
+from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .ble_engine import get_ble_fabric
-from .coordinator import LatterCoordinator
-from .identity import find_device_entity_by_suffix
-from .system import LatterSystem, get_latter_system
+from .core.device_coordinator import LatterCoordinator
+from .core.hub import LatterSystem, get_latter_system
+from .core.identity import find_device_entity_by_suffix
+from .presence.ble_fabric import get_ble_fabric
 
 PARALLEL_UPDATES = 0
 

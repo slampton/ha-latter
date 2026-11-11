@@ -1,16 +1,12 @@
-"""State payload builder and brand icon views for Latter Studio."""
+"""State payload builder for Latter Studio."""
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from pathlib import Path
 import re
 from typing import Any
 from urllib.parse import quote
 
-from aiohttp import web
-
-from homeassistant.components.http import HomeAssistantView
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import (
     area_registry as ar,
@@ -20,22 +16,11 @@ from homeassistant.helpers import (
 )
 from homeassistant.util import dt as dt_util
 
-from ..area_engine import get_esphome_device_entities
-from ..backup_engine import (
-    canonical_control_key,
-    compute_device_group_sync_status,
-    get_device_groups,
-    is_behavior_esphome_control,
-)
-from ..ble_engine import (
-    count_area_ble_proxies,
-    get_all_areas_presence_summary,
-    get_discovered_ble_candidates,
-)
-from ..browse_engine import is_music_assistant_player
-from ..entity_sections import present_section_ids
+from ..areas.context_builder import get_esphome_device_entities
+from ..areas.state_index import get_area_state_index
 from ..const import (
-    API_BRAND_ICON_PATH,
+    CONF_ACTIVITY_CARD,
+    CONF_ACTIVITY_SOURCES,
     CONF_AREA_FOLLOW_DWELL_S,
     CONF_AREA_HANDOFF,
     CONF_ASSIGNED_PERSON,
@@ -48,30 +33,69 @@ from ..const import (
     CONF_DEVICE_CUSTOM_COLOR,
     CONF_DEVICE_GROUP,
     CONF_DEVICE_SLUG,
-    CONF_ACTIVITY_CARD,
-    CONF_ACTIVITY_SOURCES,
     CONF_DOCK_APPS,
     CONF_MA_PLAYER_ENTITY,
     CONF_NATIVE_BLE_TRACKING,
+    CONF_SECURITY_PIN_HASH,
+    CONF_SECURITY_PIN_POLICY,
     CONF_SYNC_DEVICE_AREA,
     CONF_WALLPAPER_CYCLE_MINUTES,
     DATA_GLOBAL_CONFIG,
     DATA_GLOBAL_STORE,
     DOMAIN,
     INTEGRATION_VERSION,
+    STUDIO_REV,
 )
-from ..coordinator import LatterCoordinator
-from ..identity import esphome_service
-from ..issue_ids import parse_device_issue_id
-from ..media_engine import ma_player_entities
-from ..system import get_latter_system
-from ..wallpaper_engine import list_wallpaper_catalog
+from ..core.backup import (
+    canonical_control_key,
+    compute_device_group_sync_status,
+    get_device_groups,
+    is_behavior_esphome_control,
+)
+from ..core.device_coordinator import LatterCoordinator
+from ..core.entity_sections import present_section_ids
+from ..core.hub import get_latter_system
+from ..core.identity import esphome_service
+from ..core.issue_ids import parse_device_issue_id
+from ..http.views import LatterBrandIconView
+from ..http.wallpapers import list_wallpaper_catalog
+from ..media.browse import is_music_assistant_player
+from ..media.ma_link import ma_player_entities
+from ..presence.ble_fabric import (
+    count_area_ble_proxies,
+    get_all_areas_presence_summary,
+    get_discovered_ble_candidates,
+)
 from .scope import find_by_subentry_id
 from .settings import system_settings_view
 
+__all__ = [
+    "MAX_INTERNAL_LOGS",
+    "STUDIO_BULK_CONTROL_DOMAINS",
+    "LatterBrandIconView",
+    "async_save_and_broadcast_global_config",
+    "build_studio_state_payload",
+    "log_studio_event",
+    "resolve_target_coordinator",
+]
+
 MAX_INTERNAL_LOGS = 150
-# Device controls the System's bulk-control list offers (and a System subscription watches).
 STUDIO_BULK_CONTROL_DOMAINS: frozenset[str] = frozenset({"select", "switch", "number"})
+_CATALOG_DOMAINS: tuple[str, ...] = (
+    "media_player",
+    "remote",
+    "number",
+    "input_number",
+    "alarm_control_panel",
+    "camera",
+    "climate",
+    "lock",
+    "cover",
+    "vacuum",
+    "weather",
+    "calendar",
+    "person",
+)
 
 
 def log_studio_event(
@@ -279,7 +303,7 @@ def _build_entity_catalog(
     coordinator: LatterCoordinator | None,
     all_coords: list[LatterCoordinator] | None = None,
 ) -> dict[str, Any]:
-    """Build the entity pickers for Studio (speaker de-duplication uses the selected Device)."""
+    """Build the entity pickers for Studio using `AreaStateIndex` (zero full-state scans)."""
     area_reg = ar.async_get(hass)
     areas_list = [
         {"id": a.id, "name": a.name}
@@ -314,9 +338,12 @@ def _build_entity_catalog(
         local_spk_id = coordinator.local_speaker
         local_ma_id = coordinator.local_ma_speaker
 
-    for state_obj in sorted(
-        hass.states.async_all(), key=lambda s: s.entity_id
-    ):
+    idx = get_area_state_index(hass)
+    catalog_states = []
+    for dom in _CATALOG_DOMAINS:
+        catalog_states.extend(idx.states_for_domain(dom))
+
+    for state_obj in sorted(catalog_states, key=lambda s: s.entity_id):
         ent_id = state_obj.entity_id
         domain = state_obj.domain
         friendly = str(state_obj.attributes.get("friendly_name") or ent_id)
@@ -338,8 +365,6 @@ def _build_entity_catalog(
                 and ent_id == local_ma_id
                 and local_ma_id != local_spk_id
             ):
-                # Avoid listing two speaker entities for the same physical device;
-                # local_speaker represents the built-in speaker and links to local_ma_speaker automatically.
                 continue
             if (
                 ent_id == local_spk_id
@@ -405,7 +430,9 @@ def _build_entity_catalog(
             or ma_entry.original_name
             or ma_entry.entity_id
         )
-        ma_players.append({"id": ma_entry.entity_id, "name": f"{ma_name} ({ma_entry.entity_id})"})
+        ma_players.append(
+            {"id": ma_entry.entity_id, "name": f"{ma_name} ({ma_entry.entity_id})"}
+        )
     ma_players.sort(key=lambda item: item["name"].lower())
 
     return {
@@ -429,11 +456,7 @@ def _build_entity_catalog(
 def _build_issues(
     hass: HomeAssistant, coords: list[LatterCoordinator]
 ) -> list[dict[str, str]]:
-    """Return Latter's active Home Assistant repairs (the same ones Settings › Repairs shows).
-
-    `kind` is the repair's translation key; per-Device repairs name their Device. `detail` carries the
-    one placeholder Studio shows (the crash reason, or the list of missing entities).
-    """
+    """Return Latter's active Home Assistant repairs (the same ones Settings -> Repairs shows)."""
     by_sub = {c.subentry_id: c for c in coords}
     out: list[dict[str, str]] = []
     for issue in ir.async_get(hass).issues.values():
@@ -462,10 +485,7 @@ def _build_issues(
 def _build_doorbells(
     hass: HomeAssistant, coords: list[LatterCoordinator], cameras: list[str]
 ) -> list[dict[str, Any]]:
-    """Return each System camera's doorbell ring entity (if one was found) and who is talking on it.
-
-    The ring entities are the ones the Devices already watch (each coordinator's doorbell ring map).
-    """
+    """Return each System camera's doorbell ring entity (if one was found) and who is talking on it."""
     sig_coord = next(
         (c for c in coords if not c.is_ble_tag), coords[0] if coords else None
     )
@@ -511,6 +531,7 @@ def _build_system_section(
     *,
     all_coords: list[LatterCoordinator] | None = None,
     inspector_by_subentry: dict[str, dict[str, Any]] | None = None,
+    include_logs: bool = False,
 ) -> dict[str, Any]:
     """Build the System-scoped part of the Studio payload (no Device needed)."""
     area_reg = ar.async_get(hass)
@@ -579,13 +600,13 @@ def _build_system_section(
         c_bat_val: int | None = None
         if c_bat_st and c_bat_st.state not in ("unavailable", "unknown", ""):
             try:
-                c_bat_val = int(round(float(c_bat_st.state)))
+                c_bat_val = round(float(c_bat_st.state))
             except ValueError:
                 c_bat_val = None
         c_wifi_val: int | None = None
         if c_wifi_st and c_wifi_st.state not in ("unavailable", "unknown", ""):
             try:
-                c_wifi_val = int(round(float(c_wifi_st.state)))
+                c_wifi_val = round(float(c_wifi_st.state))
             except ValueError:
                 c_wifi_val = None
 
@@ -720,19 +741,28 @@ def _build_system_section(
             }
         )
 
-    internal_logs = _get_combined_system_and_studio_logs(hass)
+    internal_logs = (
+        _get_combined_system_and_studio_logs(hass) if include_logs else []
+    )
 
-    system_view = system_settings_view(hass.data.get(DOMAIN, {}).get(DATA_GLOBAL_CONFIG) or {})
+    raw_global_cfg = hass.data.get(DOMAIN, {}).get(DATA_GLOBAL_CONFIG) or {}
+    system_view = system_settings_view(raw_global_cfg)
     onboarded_slugs = {c.device_slug for c in coords}
     sig_coord = next((c for c in coords if c.subentry_id == current_subentry_id), None) or (
         coords[0] if coords else None
     )
+    sys_obj = get_latter_system(hass)
+    sign_fn = (
+        sig_coord.sign_payload_resource
+        if sig_coord is not None
+        else (sys_obj.url_signer.sign_payload_resource if sys_obj is not None else None)
+    )
     system_wallpapers = list_wallpaper_catalog(
         hass,
-        sig_coord.device_slug if sig_coord else "system",
+        sig_coord.device_slug if sig_coord is not None else "system",
         "",
         [],
-        sign_resource=sig_coord.sign_payload_resource if sig_coord else None,
+        sign_resource=sign_fn,
         display_shape="square",
     )
 
@@ -755,6 +785,7 @@ def _build_system_section(
         ),
         "device_groups": device_groups,
         "system_config": system_view,
+        "has_security_pin": bool(raw_global_cfg.get(CONF_SECURITY_PIN_HASH)),
         "system_wallpapers": system_wallpapers,
         "doorbells": _build_doorbells(hass, coords, system_view["camera_entities"]),
     }
@@ -794,24 +825,22 @@ def build_studio_state_payload(
     coordinator: LatterCoordinator | None,
     *,
     include_catalog: bool = True,
+    include_logs: bool = False,
 ) -> dict[str, Any]:
-    """Build the Studio payload: the System part always, plus the Device part when a Device is targeted.
-
-    `system_config` (System settings) never depends on the selected Device; `config` holds only
-    that Device's own settings. The entity `catalog` is included only when asked (catalog_gate.py):
-    Studio keeps the last one it received.
-    """
+    """Build the Studio payload: the System part always, plus the Device part when a Device is targeted."""
     all_coords = _get_all_coordinators(hass)
     inspector_by_subentry: dict[str, dict[str, Any]] = {}
     base: dict[str, Any] = {
         "subentry_id": coordinator.subentry_id if coordinator is not None else "",
         "title": coordinator.device_title if coordinator is not None else "",
         "version": INTEGRATION_VERSION,
+        "studio_rev": STUDIO_REV,
         **_build_system_section(
             hass,
             coordinator.subentry_id if coordinator is not None else "",
             all_coords=all_coords,
             inspector_by_subentry=inspector_by_subentry,
+            include_logs=include_logs,
         ),
     }
     if include_catalog:
@@ -915,6 +944,8 @@ def build_studio_state_payload(
         CONF_ACTIVITY_CARD: coordinator.activity_card_enabled,
         CONF_ACTIVITY_SOURCES: coordinator.activity_sources_csv,
         CONF_WALLPAPER_CYCLE_MINUTES: coordinator.wallpaper_cycle_minutes,
+        CONF_SECURITY_PIN_POLICY: coordinator.configured_security_pin_policy,
+        "has_security_pin": coordinator.has_security_pin,
     }
 
     ble_survey_rows: list[dict[str, Any]] = []
@@ -955,7 +986,6 @@ def build_studio_state_payload(
         "config": config_data,
         "esphome": esphome_inspector,
         "wallpapers": wallpapers_catalog,
-        # Home Assistant's own pages for this Device: its ESPHome device page and Latter's diagnostics.
         "links": {
             "entry_id": coordinator.entry.entry_id,
             "esphome_device_id": coordinator.esphome_device_id or "",
@@ -984,33 +1014,7 @@ def build_studio_state_payload(
                 (fw_latest_state.attributes.get("latest_version") if fw_latest_state else "")
                 or ""
             ),
+            "effective_security_pin_policy": coordinator.security_pin_policy,
+            "has_security_pin": coordinator.has_security_pin,
         },
     }
-
-
-class LatterBrandIconView(HomeAssistantView):
-    """Serve the Latter brand icon PNG for Studio and HACS."""
-
-    url = API_BRAND_ICON_PATH
-    name = "api:latter:brand_icon"
-    requires_auth = False
-
-    def __init__(self, hass: HomeAssistant) -> None:
-        """Initialize the brand icon view."""
-        self.hass = hass
-        self._icon_path = Path(__file__).parent.parent / "brand" / "icon.png"
-        self._cached_bytes: bytes | None = None
-
-    async def get(self, request: web.Request) -> web.Response:
-        """Return the PNG icon bytes."""
-        if self._cached_bytes is None:
-            if not self._icon_path.is_file():
-                return web.Response(status=404, text="Icon not found")
-            self._cached_bytes = await self.hass.async_add_executor_job(
-                self._icon_path.read_bytes
-            )
-        return web.Response(
-            body=self._cached_bytes,
-            content_type="image/png",
-            headers={"Cache-Control": "public, max-age=86400"},
-        )

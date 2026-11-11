@@ -24,7 +24,7 @@ def _load(name: str) -> ModuleType:
     return module
 
 
-device_ping = _load("device_ping")
+device_ping = _load("core/device_ping")
 
 
 def _drive(coro):

@@ -8,7 +8,6 @@ node name of that device. Nothing is looked up by typed names or slugs.
 from __future__ import annotations
 
 from typing import Any
-import voluptuous as vol
 
 from homeassistant.config_entries import (
     ConfigEntry,
@@ -21,13 +20,13 @@ from homeassistant.config_entries import (
 )
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr, entity_registry as er, selector
+import voluptuous as vol
 
-from .backup_engine import GROUP_BEHAVIOR_DEVICE_KEYS, get_device_groups
-from .ble_engine import _iter_devices
+from .areas.state_index import get_area_state_index
 from .const import (
     CONF_ALARM_ENTITY,
-    CONF_ASSIGNED_PERSON,
     CONF_AREA_HANDOFF,
+    CONF_ASSIGNED_PERSON,
     CONF_BLE_AUTO_SWITCH,
     CONF_BLE_TARGET_ADDRESS,
     CONF_DEFAULT_AREA,
@@ -50,7 +49,9 @@ from .const import (
     SUBENTRY_DEVICE,
     normalize_device_slug,
 )
-from .identity import (
+from .core.backup import GROUP_BEHAVIOR_DEVICE_KEYS, get_device_groups
+from .core.hub import get_latter_system
+from .core.identity import (
     esphome_node_name,
     esphome_service,
     find_device_entity_by_suffix,
@@ -59,7 +60,7 @@ from .identity import (
     is_latter_compatible_esphome_device,
     read_device_hardware_manifest,
 )
-from .system import get_latter_system
+from .presence.ble_fabric import _iter_devices
 
 
 def _iter_configured_device_records(hass: HomeAssistant) -> list[tuple[dict[str, Any], str | None]]:
@@ -110,7 +111,10 @@ def _discover_unconfigured_latter_device_id(hass: HomeAssistant) -> str:
 
 def _discover_default_weather(hass: HomeAssistant) -> str | None:
     """Return the first available weather.* entity in Home Assistant."""
-    states = hass.states.async_all("weather")
+    states = sorted(
+        get_area_state_index(hass).states_for_domain("weather"),
+        key=lambda s: s.entity_id,
+    )
     if states:
         return states[0].entity_id
     return None
@@ -118,7 +122,10 @@ def _discover_default_weather(hass: HomeAssistant) -> str | None:
 
 def _discover_default_alarm(hass: HomeAssistant) -> str | None:
     """Return the first available alarm_control_panel.* entity in Home Assistant."""
-    states = hass.states.async_all("alarm_control_panel")
+    states = sorted(
+        get_area_state_index(hass).states_for_domain("alarm_control_panel"),
+        key=lambda s: s.entity_id,
+    )
     if states:
         return states[0].entity_id
     return None
@@ -139,7 +146,7 @@ def _detect_hardware_defaults(
     dev: dr.DeviceEntry | None,
     manifest: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Auto-detect group, area, and roaming BLE capability from the device's hardware manifest (screen traits stay in the manifest)."""
+    """Auto-detect group, area, and roaming BLE capability from the device's hardware manifest."""
     ent_reg = er.async_get(hass)
     dev_id = dev.id if dev is not None else None
     if manifest is None:
@@ -240,7 +247,6 @@ def _apply_onboarding_profile_and_defaults(
     """Merge auto-detected hardware defaults, the device binding, roaming flag, optional Profile, and global defaults."""
     hw_defaults = _detect_hardware_defaults(hass, dev)
     merged: dict[str, Any] = {**hw_defaults, **(existing or {})}
-    # The slug always follows the bound device's ESPHome node name (reconfigure picks up a rename).
     merged[CONF_DEVICE_SLUG] = esphome_node_name(hass, dev)
     if rebind_hardware or not merged.get(CONF_ESPHOME_DEVICE_ID):
         merged[CONF_ESPHOME_DEVICE_ID] = dev.id
@@ -312,7 +318,7 @@ def _build_schema(
     hass: HomeAssistant,
     current: dict[str, Any],
 ) -> vol.Schema:
-    """Build the device onboarding/reconfigure schema (ESPHome device picker, Device Group, Bluetooth tracking)."""
+    """Build the device onboarding/reconfigure schema."""
     default_dev_id = str(
         current.get(CONF_ESPHOME_DEVICE_ID) or _discover_unconfigured_latter_device_id(hass)
     )
@@ -415,6 +421,7 @@ class LatterConfigFlow(ConfigFlow, domain=DOMAIN):
 
     def __init__(self) -> None:
         """Initialize config flow."""
+        super().__init__()
         self._discovered_device_id: str = ""
 
     @classmethod
@@ -627,7 +634,7 @@ class LatterBleTagSubentryFlow(ConfigSubentryFlow):
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> SubentryFlowResult:
-        """Create the BLE tag from the form (or from Studio's Add Device, which passes the same fields)."""
+        """Create the BLE tag from the form."""
         entry = self._get_entry()
         errors: dict[str, str] = {}
         if user_input is not None:

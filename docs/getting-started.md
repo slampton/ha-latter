@@ -19,19 +19,14 @@ This guide takes one device from the box to fully working. It should take about 
 Open the [web installer](https://slampton.github.io/esphome-latter-core/), pick your device, click **Connect & Install**, and choose the USB serial port.
 
 The firmware repository's [flashing guide](https://github.com/slampton/esphome-latter-core/blob/main/docs/flashing.md) covers:
-- Getting the device onto Wi-Fi. This step differs by device.
-- Building the firmware yourself in ESPHome Device Builder instead.
+- Setting up Wi-Fi right in the browser over USB (Improv Serial on all five devices).
+- Building the firmware yourself in ESPHome Device Builder instead (`api: encryption:` and `ota: password:`).
 
 ## 2. Add it to Home Assistant through ESPHome
 
 Once the device is on Wi-Fi, Home Assistant shows **Discovered: ESPHome**. Click **Add**, and assign the device to the Area where it usually lives.
 
-Then turn on the setting that lets the device call Home Assistant services. **Without it, music browsing, area control, and remotes won't respond:**
-
-1. Go to **Settings → Devices & Services → ESPHome**.
-2. Find your device, click **Configure**, and enable **Allow the device to perform Home Assistant actions**.
-
-<!-- MEDIA: docs/media/esphome-allow-actions.png — the ESPHome options dialog with the actions checkbox enabled. -->
+> **No extra ESPHome permissions needed:** Latter communicates with your device over a bound Zero-Privilege RPC channel (**System: RPC Outbox** + `esphome.<node>_latter_push_v3` authenticated by `esphome_device_id`). Leave **Allow the device to perform Home Assistant actions** turned **off**.
 
 ## 3. Install Latter
 
@@ -45,8 +40,8 @@ Latter watches Home Assistant's device registry for ESPHome devices that impleme
 
 | Field | What to enter |
 | :--- | :--- |
-| **ESPHome Device** | Pre-selected. Latter binds to this ESPHome device and its MAC address. The Device's slug is its ESPHome node name. |
-| **Configuration Profile** | Leave **Auto-detect**. Latter reads the screen size and shape from the device. |
+| **ESPHome Device** | Pre-selected. Latter binds to this ESPHome device ID and its MAC address. |
+| **Device Group** | Pick an initial operational group (**Handhelds**, **Wearables**, **Bedrooms**, **Common Areas**, **Wall & Desk Panels**, or **Unassigned**). Latter reads screen size and hardware capabilities automatically from the device's manifest. |
 | **Track the Area with BLE Proxies** | Leave it checked for handhelds and the watch. Uncheck it for something fixed in one Area, like the Desk Assistant. |
 
 The device's entities now appear under a **Latter** device card linked to the ESPHome device.
@@ -58,6 +53,7 @@ Click **Latter** in the Home Assistant sidebar. It's visible to admin users only
 1. **System → Shared Entities**: choose your weather entity, then any alarm panel, thermostat, lock, garage door, vacuum, cameras, and calendars you want on the device.
 2. **System → Media & Remotes**: add TVs or streaming boxes as remote slots. If your speakers' volume is controlled by an AV receiver, map them under **Speaker Volume Overrides**.
 3. **Devices → your device → Audio & Voice**: pick the device's default speaker and wake word.
+4. **Devices → your device → Tools → Perimeter Security Policy** *(optional)*: choose how opening actions (unlocking doors, disarming alarms, opening garage/gate covers) are guarded (`Auto`, `Allow`, `Require PIN`, or `Block`) and set a Device Security PIN if desired. `Auto` requires a PIN on stationary panels or when your Home Assistant alarm panel uses a code.
 
 Changes reach the device within a second or two. There is nothing to reflash.
 
@@ -84,6 +80,6 @@ After that, open **System → BLE & Area Presence** in Studio, walk the device a
 ## If something doesn't work
 
 - **"Discovered: Latter" never appears.** Check that the device shows up in the ESPHome integration and is online. Latter rescans 5 seconds after any device-registry change. Reloading the ESPHome integration also triggers a rescan.
-- **Screens are empty or taps do nothing.** The "Allow the device to perform Home Assistant actions" setting is almost certainly off. See [step 2](#2-add-it-to-home-assistant-through-esphome).
+- **Screens are empty or taps do nothing.** Verify the ESPHome device is online, its **System: RPC Outbox** entity is enabled in Home Assistant, and both `esphome-latter-core` and `ha-latter` are on `v3.0.0` or newer (`esphome.<node>_latter_push_v3` appears under **Developer Tools → Actions**).
 
 → [Troubleshooting](troubleshooting.md)

@@ -1,0 +1,803 @@
+"""Doorbell listen stream, push-to-talk TTS replies, and doorbell ring auto-detection.
+
+Listen: the camera's RTSP audio runs through an FFmpeg noise-reduction filter and streams
+to the device as FLAC. Talk: push-to-talk relay; the device transcribes speech and sends
+the text (`talk_message`), and Home Assistant speaks it with TTS on the camera's
+media_player.
+"""
+
+from __future__ import annotations
+
+import asyncio
+from http import HTTPStatus
+import io
+import logging
+import shutil
+import time
+from typing import Any
+import wave
+
+from aiohttp import web
+from homeassistant.components.http import HomeAssistantView
+from homeassistant.const import ATTR_ENTITY_ID, STATE_UNAVAILABLE, STATE_UNKNOWN
+from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
+from homeassistant.exceptions import ServiceValidationError
+from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.util import dt as dt_util
+
+from ..const import (
+    API_CAMERA_AUDIO_STREAM_PATH,
+    CONF_SECURITY_PIN_HASH,
+    DATA_GLOBAL_CONFIG,
+    DOMAIN,
+    DOORBELL_NOISE_REDUCTION_LEVELS,
+    normalize_noise_reduction,
+)
+from ..core.identity import esphome_service
+from ..core.security_policy import check_perimeter_action_allowed
+from ..core.targets import call_target_slugs
+from ..media.player_controller import async_announce_on_targets
+from .context_builder import resolve_entity_area_id
+from .state_index import _iter_registry_entities, get_area_state_index
+
+_LOGGER = logging.getLogger(__name__)
+
+SILENCE_FALLBACK_MS: int = 250
+_FFMPEG_STREAM_SEMAPHORE = asyncio.Semaphore(2)
+_ACTIVE_DEVICE_STREAMS: dict[str, asyncio.subprocess.Process] = {}
+
+
+async def async_shutdown_doorbell_streams(hass: HomeAssistant | None = None) -> None:
+    """Terminate all active FFmpeg camera audio subprocesses on integration unload."""
+    _ = hass
+    active = list(_ACTIVE_DEVICE_STREAMS.items())
+    _ACTIVE_DEVICE_STREAMS.clear()
+    for _sub_id, proc in active:
+        if proc.returncode is None:
+            try:
+                proc.terminate()
+                await asyncio.wait_for(proc.wait(), timeout=1.5)
+            except TimeoutError:
+                proc.kill()
+            except ProcessLookupError:
+                pass
+
+
+def _build_silence_wav(
+    duration_ms: int = SILENCE_FALLBACK_MS, sample_rate: int = 48000
+) -> bytes:
+    """Build a short PCM16 mono silent WAV buffer at the device's I2S bus sample rate."""
+    num_samples = max(160, int(sample_rate * (duration_ms / 1000.0)))
+    out_io = io.BytesIO()
+    with wave.open(out_io, "wb") as wf_out:
+        wf_out.setnchannels(1)
+        wf_out.setsampwidth(2)
+        wf_out.setframerate(sample_rate)
+        wf_out.writeframes(b"\x00\x00" * num_samples)
+    return out_io.getvalue()
+
+
+def resolve_doorbell_targets(
+    hass: HomeAssistant,
+    camera_entity_id: str | None,
+    volume_overrides: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    """Auto-discover the door speaker media_player and lock for a camera."""
+    info: dict[str, Any] = {
+        "camera_entity": "",
+        "friendly_name": "Camera",
+        "door_speaker": "",
+        "platform": "",
+        "tts_lead_in": False,
+        "area_id": "",
+        "lock_entity": "",
+    }
+    if not camera_entity_id:
+        return info
+
+    cam_ent = camera_entity_id.strip()
+    info["camera_entity"] = cam_ent
+    cam_state = hass.states.get(cam_ent)
+    if cam_state is not None:
+        info["friendly_name"] = str(
+            cam_state.attributes.get("friendly_name") or cam_ent
+        )
+
+    if volume_overrides and cam_ent in volume_overrides:
+        mapped_spk = str(volume_overrides[cam_ent]).strip()
+        if mapped_spk.startswith("media_player."):
+            info["door_speaker"] = mapped_spk
+
+    ent_reg = er.async_get(hass)
+    cam_entry = ent_reg.async_get(cam_ent)
+
+    if cam_entry is not None:
+        info["platform"] = str(cam_entry.platform or "")
+
+        if cam_entry.device_id:
+            for sib in er.async_entries_for_device(ent_reg, cam_entry.device_id):
+                if sib.disabled_by:
+                    continue
+                if sib.domain == "media_player" and not info["door_speaker"]:
+                    info["door_speaker"] = sib.entity_id
+                elif sib.domain == "lock" and not info["lock_entity"]:
+                    info["lock_entity"] = sib.entity_id
+
+    if not info["door_speaker"]:
+        base_slug = cam_ent.split(".", 1)[-1]
+        for suffix in (
+            "_high",
+            "_medium",
+            "_low",
+            "_package",
+            "_camera",
+            "_rtsp",
+            "_fluent",
+            "_clear",
+        ):
+            if base_slug.endswith(suffix):
+                base_slug = base_slug[: -len(suffix)]
+                break
+        for cand_mp in (
+            f"media_player.{base_slug}_speaker",
+            f"media_player.{base_slug}",
+        ):
+            if hass.states.get(cand_mp) is not None:
+                info["door_speaker"] = cand_mp
+                break
+
+        if not info["door_speaker"]:
+            for entry in _iter_registry_entities(ent_reg):
+                if entry.domain == "media_player" and not entry.disabled_by and (
+                    base_slug
+                    and base_slug in entry.entity_id
+                    and "speaker" in entry.entity_id
+                ):
+                    info["door_speaker"] = entry.entity_id
+                    break
+
+    spk_entry = ent_reg.async_get(info["door_speaker"]) if info["door_speaker"] else None
+    info["tts_lead_in"] = info["platform"] == "unifiprotect" or bool(
+        spk_entry is not None and spk_entry.platform == "unifiprotect"
+    )
+
+    info["area_id"] = resolve_entity_area_id(hass, cam_ent) or ""
+    return info
+
+
+def build_noise_reduction_filter(level: str) -> str:
+    """Build the FFmpeg audio filter chain for a doorbell listen stream."""
+    if level == "off":
+        return "highpass=f=60,alimiter=limit=0.95"
+    if level == "light":
+        return (
+            "highpass=f=100,lowpass=f=4000,"
+            "afftdn=nf=-20,"
+            "acompressor=threshold=-18dB:ratio=2.5:attack=5:release=90,"
+            "alimiter=limit=0.91"
+        )
+    return (
+        "highpass=f=120,lowpass=f=3600,"
+        "afftdn=nf=-26,"
+        "equalizer=f=1800:t=q:w=1.2:g=3,"
+        "acompressor=threshold=-20dB:ratio=3.2:attack=4:release=75:makeup=2,"
+        "alimiter=limit=0.89"
+    )
+
+
+class LatterCameraAudioStreamView(HomeAssistantView):
+    """Streams live RTSP camera audio through an FFmpeg noise-reduction filter to a Latter device."""
+
+    requires_auth = False
+    url = API_CAMERA_AUDIO_STREAM_PATH
+    name = "api:latter:camera_audio_stream"
+
+    def __init__(self, hass: HomeAssistant) -> None:
+        """Initialize the camera audio stream view."""
+        self.hass = hass
+
+    async def get(self, request: web.Request, target_device: str) -> web.StreamResponse:
+        """Stream live de-noised FLAC/WAV audio from a camera's RTSP source."""
+        from ..core.device_coordinator import resolve_coordinator
+
+        coord = resolve_coordinator(self.hass, target_device)
+        if coord is None:
+            return web.Response(status=HTTPStatus.NOT_FOUND)
+
+        cam_ent = (
+            request.query.get("entity_id")
+            or coord.active_carousel_camera
+            or coord.camera_entity
+            or ""
+        ).strip()
+        if not cam_ent:
+            return web.Response(
+                status=HTTPStatus.NOT_FOUND, text="No camera entity configured"
+            )
+
+        if not coord.verify_resource(
+            f"camera_audio:{cam_ent}",
+            sig=request.query.get("sig"),
+        ):
+            return web.Response(
+                status=HTTPStatus.FORBIDDEN, text="Invalid or missing signature"
+            )
+
+        allowed_cams = set(coord.camera_entities)
+        if coord.camera_entity:
+            allowed_cams.add(coord.camera_entity)
+        if coord.active_carousel_camera:
+            allowed_cams.add(coord.active_carousel_camera)
+        if cam_ent not in allowed_cams:
+            return web.Response(
+                status=HTTPStatus.FORBIDDEN, text="Camera entity not authorized"
+            )
+
+        nr_level = normalize_noise_reduction(
+            request.query.get("nr") or coord.doorbell_noise_reduction
+        )
+        fmt = (request.query.get("fmt") or "flac").strip().lower()
+
+        manifest = coord.hardware_manifest
+        audio_info = manifest.get("audio")
+        out_rate = (
+            int(audio_info.get("out_rate") or 48000)
+            if isinstance(audio_info, dict)
+            else 48000
+        )
+        out_ch = (
+            int(audio_info.get("out_ch") or 1)
+            if isinstance(audio_info, dict)
+            else 1
+        )
+        out_rate = out_rate if out_rate in (16000, 22050, 24000, 44100, 48000) else 48000
+        out_ch = 2 if out_ch == 2 else 1
+
+        stream_url: str | None = None
+        try:
+            from homeassistant.components import camera as ha_camera
+
+            stream_url = await ha_camera.async_get_stream_source(self.hass, cam_ent)
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("camera.async_get_stream_source(%s) failed: %s", cam_ent, err)
+
+        ffmpeg_bin: str | None = None
+        try:
+            from homeassistant.components.ffmpeg import get_ffmpeg_manager
+
+            ffmpeg_bin = get_ffmpeg_manager(self.hass).binary
+        except Exception:  # noqa: BLE001
+            ffmpeg_bin = shutil.which("ffmpeg")
+
+        if not stream_url or not ffmpeg_bin:
+            return web.Response(
+                body=_build_silence_wav(sample_rate=out_rate),
+                content_type="audio/wav",
+            )
+
+        prev_proc = _ACTIVE_DEVICE_STREAMS.pop(coord.subentry_id, None)
+        if prev_proc is not None and prev_proc.returncode is None:
+            try:
+                prev_proc.terminate()
+                await asyncio.wait_for(prev_proc.wait(), timeout=1.5)
+            except TimeoutError:
+                prev_proc.kill()
+            except ProcessLookupError:
+                pass
+
+        try:
+            await asyncio.wait_for(_FFMPEG_STREAM_SEMAPHORE.acquire(), timeout=0.25)
+        except TimeoutError:
+            return web.Response(
+                status=HTTPStatus.TOO_MANY_REQUESTS,
+                text="Maximum concurrent camera audio streams reached",
+            )
+
+        filtergraph = build_noise_reduction_filter(nr_level)
+        out_codec = "flac" if fmt == "flac" else "pcm_s16le"
+        out_fmt = "flac" if fmt == "flac" else "wav"
+        content_type = "audio/flac" if fmt == "flac" else "audio/wav"
+
+        cmd = [
+            ffmpeg_bin,
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-rtsp_transport",
+            "tcp",
+            "-rw_timeout",
+            "5000000",
+            "-i",
+            stream_url,
+            "-t",
+            "120",
+            "-vn",
+            "-af",
+            filtergraph,
+            "-ar",
+            str(out_rate),
+            "-ac",
+            str(out_ch),
+            "-c:a",
+            out_codec,
+            "-f",
+            out_fmt,
+            "pipe:1",
+        ]
+
+        try:
+            resp = web.StreamResponse(
+                status=HTTPStatus.OK,
+                headers={
+                    "Content-Type": content_type,
+                    "Cache-Control": "no-store, no-cache, must-revalidate",
+                },
+            )
+            await resp.prepare(request)
+
+            proc: asyncio.subprocess.Process | None = None
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.DEVNULL,
+                )
+                _ACTIVE_DEVICE_STREAMS[coord.subentry_id] = proc
+                if proc.stdout is not None:
+                    while True:
+                        chunk = await proc.stdout.read(4096)
+                        if not chunk:
+                            break
+                        await resp.write(chunk)
+            except (asyncio.CancelledError, ConnectionResetError):
+                pass
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.debug("Camera audio stream ended for %s: %s", cam_ent, err)
+            finally:
+                if _ACTIVE_DEVICE_STREAMS.get(coord.subentry_id) is proc:
+                    _ACTIVE_DEVICE_STREAMS.pop(coord.subentry_id, None)
+                if proc is not None and proc.returncode is None:
+                    try:
+                        proc.terminate()
+                        await asyncio.wait_for(proc.wait(), timeout=3.0)
+                    except TimeoutError:
+                        proc.kill()
+                        await proc.wait()
+                    except ProcessLookupError:
+                        pass
+
+            return resp
+        finally:
+            _FFMPEG_STREAM_SEMAPHORE.release()
+
+
+async def async_execute_doorbell_intercom(
+    hass: HomeAssistant,
+    coordinator: Any,
+    action: str,
+    camera_entity: str | None = None,
+    message: str = "",
+    noise_reduction: str | None = None,
+    camera_index: int | None = None,
+    code: str | None = None,
+) -> dict[str, Any]:
+    """Execute a doorbell listen / push-to-talk reply / unlock action, or ring other displays."""
+    act = (action or "listen_toggle").strip().lower()
+
+    if noise_reduction:
+        nr_val = noise_reduction.strip().lower()
+        if nr_val in DOORBELL_NOISE_REDUCTION_LEVELS:
+            coordinator.doorbell_noise_reduction = nr_val
+
+    cams = coordinator.camera_entities
+    if camera_index is not None and cams:
+        idx = max(0, min(len(cams) - 1, int(camera_index)))
+        coordinator.active_carousel_camera = cams[idx]
+
+    cam_ent = (
+        (camera_entity or "").strip()
+        or coordinator.active_carousel_camera
+        or coordinator.camera_entity
+        or (cams[0] if cams else "")
+    )
+    if cam_ent:
+        coordinator.active_carousel_camera = cam_ent
+
+    target_info = resolve_doorbell_targets(
+        hass, cam_ent, coordinator.volume_overrides
+    )
+    local_spk = coordinator.local_speaker
+
+    if act == "unlock_door":
+        stored_hash = getattr(coordinator, "security_pin_hash", None)
+        if not stored_hash:
+            global_cfg = (hass.data.get(DOMAIN, {}) or {}).get(DATA_GLOBAL_CONFIG) or {}
+            stored_hash = str(global_cfg.get(CONF_SECURITY_PIN_HASH) or "").strip() or None
+        allowed, err_key = check_perimeter_action_allowed(
+            getattr(coordinator, "security_pin_policy", "require_pin"),
+            provided_code=code,
+            stored_pin_hash=stored_hash,
+        )
+        if not allowed:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key=err_key,
+            )
+        lock_ent = target_info.get("lock_entity") or coordinator.lock_entity
+        if lock_ent and hass.states.get(lock_ent) is not None:
+            await hass.services.async_call(
+                "lock", "unlock", {ATTR_ENTITY_ID: lock_ent}, blocking=True
+            )
+        return target_info
+
+    if act == "call_target":
+        from ..core.hub import get_latter_system
+
+        sys_obj = get_latter_system(hass)
+        pool = (
+            sys_obj.coordinators.values()
+            if sys_obj is not None and sys_obj.coordinators
+            else hass.data.get(DOMAIN, {}).values()
+        )
+        slugs = call_target_slugs(pool, coordinator.device_slug, message)
+        for slug in slugs:
+            await hass.services.async_call(
+                DOMAIN,
+                "notify",
+                {
+                    "target_device": slug,
+                    "title": f"Intercom: {coordinator.device_title}",
+                    "message": "Tap to answer",
+                    "priority": "critical",
+                    "duration": 20,
+                    "chime": True,
+                },
+                blocking=False,
+            )
+        return target_info
+
+    if act == "select_camera":
+        coordinator.async_notify_listeners()
+        return target_info
+
+    if act == "set_noise_reduction":
+        if coordinator.doorbell_talk_state == "listening" and local_spk and cam_ent:
+            act = "listen_start"
+        else:
+            coordinator.async_notify_listeners()
+            return target_info
+
+    if act == "listen_toggle":
+        act = (
+            "listen_stop"
+            if coordinator.doorbell_talk_state == "listening"
+            else "listen_start"
+        )
+
+    def _cancel_pending_reply() -> None:
+        prev_task = coordinator._doorbell_reply_task
+        if prev_task is not None and not prev_task.done():
+            prev_task.cancel()
+        coordinator._doorbell_reply_task = None
+        coordinator._doorbell_reply_resume_listen = False
+
+    if act == "listen_stop":
+        _cancel_pending_reply()
+        coordinator.doorbell_talk_state = "idle"
+        coordinator.async_notify_listeners()
+        if local_spk:
+            try:
+                await hass.services.async_call(
+                    "media_player",
+                    "media_stop",
+                    {ATTR_ENTITY_ID: local_spk},
+                    blocking=False,
+                )
+            except Exception:  # noqa: BLE001
+                pass
+        return target_info
+
+    if act == "listen_start":
+        if not local_spk or not cam_ent:
+            return target_info
+        _cancel_pending_reply()
+        coordinator.doorbell_talk_state = "listening"
+        coordinator.async_notify_listeners()
+        base_url = coordinator.get_lan_base_url()
+        sig = coordinator.sign_on_demand_resource(f"camera_audio:{cam_ent}")
+        stream_url = (
+            f"{base_url}/api/latter/camera_audio/{coordinator.device_slug}"
+            f"?entity_id={cam_ent}&nr={coordinator.doorbell_noise_reduction}&fmt=flac"
+            f"&v={int(time.time())}&sig={sig}"
+        )
+        try:
+            await hass.services.async_call(
+                "media_player",
+                "play_media",
+                {
+                    ATTR_ENTITY_ID: local_spk,
+                    "media_content_id": stream_url,
+                    "media_content_type": "music",
+                    "announce": True,
+                },
+                blocking=False,
+            )
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("Failed starting camera audio listen on %s: %s", local_spk, err)
+        return target_info
+
+    if act in ("talk_message", "quick_reply", "talk"):
+        spoken_text = (message or "").strip()
+        if not spoken_text:
+            spoken_text = "Please leave the package at the door, thank you."
+
+        prev_task = coordinator._doorbell_reply_task
+        inherit_resume = False
+        if prev_task is not None and not prev_task.done():
+            prev_task.cancel()
+            inherit_resume = coordinator._doorbell_reply_resume_listen
+        was_listening = coordinator.doorbell_talk_state == "listening" or (
+            coordinator.doorbell_talk_state == "talking" and inherit_resume
+        )
+        coordinator._doorbell_reply_resume_listen = was_listening
+        coordinator.doorbell_talk_state = "talking"
+        coordinator.async_notify_listeners()
+
+        if local_spk and was_listening:
+            try:
+                await hass.services.async_call(
+                    "media_player",
+                    "media_stop",
+                    {ATTR_ENTITY_ID: local_spk},
+                    blocking=False,
+                )
+            except Exception:  # noqa: BLE001
+                pass
+
+        door_spk = target_info["door_speaker"]
+        if door_spk:
+            mp_st = hass.states.get(door_spk)
+            if mp_st is not None:
+                cur_vol = mp_st.attributes.get("volume_level")
+                if cur_vol is not None and float(cur_vol) < 0.25:
+                    try:
+                        await hass.services.async_call(
+                            "media_player",
+                            "volume_set",
+                            {ATTR_ENTITY_ID: door_spk, "volume_level": 0.80},
+                            blocking=True,
+                        )
+                    except Exception:  # noqa: BLE001
+                        pass
+
+            tts_text = f"... {spoken_text}" if target_info["tts_lead_in"] else spoken_text
+            tts_states = get_area_state_index(hass).states_for_domain("tts")
+            tts_ent = tts_states[0].entity_id if tts_states else ""
+
+            try:
+                await async_announce_on_targets(
+                    hass,
+                    speakers=[door_spk],
+                    message=tts_text,
+                    tts_entity=tts_ent,
+                    blocking=True,
+                )
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.debug("Doorbell TTS announce to %s failed: %s", door_spk, err)
+
+        est_duration = max(2.2, min(8.0, len(spoken_text) * 0.085 + 1.2))
+
+        async def _post_reply_restore() -> None:
+            await asyncio.sleep(est_duration)
+            if coordinator.doorbell_talk_state != "talking":
+                return
+            if was_listening:
+                await async_execute_doorbell_intercom(
+                    hass, coordinator, action="listen_start", camera_entity=cam_ent
+                )
+            else:
+                coordinator.doorbell_talk_state = "idle"
+                coordinator.async_notify_listeners()
+
+        coordinator._doorbell_reply_task = coordinator.entry.async_create_background_task(
+            hass,
+            _post_reply_restore(),
+            f"latter_doorbell_reply_{coordinator.device_slug}",
+        )
+        return target_info
+
+    return target_info
+
+
+def resolve_doorbell_ring_entities(
+    hass: HomeAssistant, camera_entities: list[str]
+) -> dict[str, str]:
+    """Discover sibling doorbell ring / visitor binary_sensor or event entities for configured cameras."""
+    if not camera_entities:
+        return {}
+
+    ent_reg = er.async_get(hass)
+    ring_to_cam: dict[str, str] = {}
+
+    ring_keywords = (
+        "doorbell",
+        "visitor",
+        "ring",
+        "ding",
+        "chime_button",
+        "button_press",
+    )
+    exclude_keywords = (
+        "motion",
+        "person",
+        "package",
+        "vehicle",
+        "animal",
+        "pet",
+        "light",
+        "dark",
+        "battery",
+        "tamper",
+        "wifi",
+        "signal",
+        "volume",
+        "status",
+        "chime_duration",
+        "chime_type",
+    )
+
+    candidate_entries = [
+        reg_ent
+        for reg_ent in _iter_registry_entities(ent_reg)
+        if reg_ent.disabled_by is None and reg_ent.domain in ("binary_sensor", "event")
+    ]
+
+    for cam_ent in camera_entities:
+        if not cam_ent or not cam_ent.startswith("camera."):
+            continue
+        cam_entry = ent_reg.async_get(cam_ent)
+        cam_dev_id = cam_entry.device_id if cam_entry else None
+        cam_slug = cam_ent.split(".", 1)[-1].lower()
+        for suffix in (
+            "_high_resolution_channel",
+            "_medium_resolution_channel",
+            "_low_resolution_channel",
+            "_package_camera",
+            "_camera",
+            "_live",
+        ):
+            if cam_slug.endswith(suffix):
+                cam_slug = cam_slug[: -len(suffix)]
+                break
+
+        event_matches: list[str] = []
+        binary_matches: list[str] = []
+
+        for reg_ent in candidate_entries:
+            domain = reg_ent.domain
+            same_device = bool(cam_dev_id and reg_ent.device_id == cam_dev_id)
+            eid_low = reg_ent.entity_id.lower()
+            slug_match = bool(cam_slug and len(cam_slug) >= 4 and cam_slug in eid_low)
+            if not same_device and not slug_match:
+                continue
+
+            meta_low = " ".join(
+                filter(
+                    None,
+                    [
+                        eid_low,
+                        str(reg_ent.translation_key or "").lower(),
+                        str(reg_ent.original_device_class or "").lower(),
+                        str(reg_ent.device_class or "").lower(),
+                        str(reg_ent.original_name or "").lower(),
+                    ],
+                )
+            )
+            if any(k in meta_low for k in ring_keywords) and not any(
+                ex in eid_low for ex in exclude_keywords
+            ):
+                if domain == "event":
+                    event_matches.append(reg_ent.entity_id)
+                else:
+                    binary_matches.append(reg_ent.entity_id)
+
+        chosen_entities = event_matches if event_matches else binary_matches
+        for ent_id in chosen_entities:
+            ring_to_cam[ent_id] = cam_ent
+
+    return ring_to_cam
+
+
+@callback
+def bind_coordinator_doorbell_listener(coordinator: Any) -> None:
+    """Auto-detect sibling doorbell ring / visitor entities on configured cameras and subscribe."""
+    if coordinator._unsub_doorbell_ring_state is not None:
+        coordinator._unsub_doorbell_ring_state()
+        coordinator._unsub_doorbell_ring_state = None
+
+    if coordinator.is_ble_tag or not coordinator.has_display:
+        return
+
+    coordinator._doorbell_ring_map = resolve_doorbell_ring_entities(
+        coordinator.hass, coordinator.camera_entities
+    )
+    if not coordinator._doorbell_ring_map:
+        return
+
+    @callback
+    def _on_doorbell_ring(event: Event[EventStateChangedData]) -> None:
+        entity_id = event.data.get("entity_id")
+        old_state = event.data.get("old_state")
+        new_state = event.data.get("new_state")
+        if not entity_id or new_state is None or old_state is None:
+            return
+        if old_state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+            return
+        if new_state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN, "off"):
+            return
+        if entity_id.startswith("binary_sensor.") and new_state.state != "on":
+            return
+        if old_state.state == new_state.state:
+            return
+        if entity_id.startswith("event."):
+            ev_dt = dt_util.parse_datetime(new_state.state)
+            if ev_dt is None or abs((dt_util.utcnow() - ev_dt).total_seconds()) > 15.0:
+                return
+
+        cam_ent = coordinator._doorbell_ring_map.get(entity_id) or coordinator.camera_entity
+        if not cam_ent:
+            return
+
+        now_mono = time.monotonic()
+        if now_mono < coordinator._doorbell_ring_cooldown_until.get(cam_ent, 0.0):
+            return
+        coordinator._doorbell_ring_cooldown_until[cam_ent] = now_mono + 15.0
+
+        cam_st = coordinator.hass.states.get(cam_ent)
+        cam_friendly = (
+            str(cam_st.attributes.get("friendly_name") if cam_st else "")
+            or cam_ent.split(".", 1)[-1].replace("_", " ").title()
+        )
+        title = "Doorbell Ringing"
+        message = f"Visitor at {cam_friendly}"
+
+        coordinator.async_dispatch_notification(
+            title=title,
+            message=message,
+            priority="critical",
+            duration=20,
+            chime=True,
+            camera_entity=cam_ent,
+        )
+
+        esp_notify_svc = esphome_service(
+            coordinator.hass,
+            coordinator.esphome_device_id,
+            "show_notification",
+        )
+        if esp_notify_svc:
+            coordinator.entry.async_create_background_task(
+                coordinator.hass,
+                coordinator.hass.services.async_call(
+                    "esphome",
+                    esp_notify_svc,
+                    {
+                        "title": title[:48],
+                        "message": message[:160],
+                        "priority": "critical",
+                        "duration": 20,
+                        "chime": True,
+                        "camera_url": coordinator.alert_camera_url,
+                        "alert_id": coordinator.alert_id,
+                    },
+                    blocking=False,
+                ),
+                f"latter_doorbell_notify_{coordinator.device_slug}",
+            )
+
+    coordinator._unsub_doorbell_ring_state = async_track_state_change_event(
+        coordinator.hass,
+        list(coordinator._doorbell_ring_map.keys()),
+        _on_doorbell_ring,
+    )

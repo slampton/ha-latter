@@ -1,0 +1,19 @@
+Latter Home Assistant Integration (ha-latter)
+Copyright 2026 Sean Lampton
+
+This product includes software and visual assets developed for the Latter
+project (https://github.com/slampton/ha-latter), licensed under the
+Apache License, Version 2.0.
+
+Bundled Asset & Third-Party Attributions
+----------------------------------------
+
+1. Preset Wallpapers (`custom_components/latter/wallpapers/*.jpg`)
+   Original project artwork created for Latter.
+   Copyright 2026 Sean Lampton
+   Licensed under the Apache License, Version 2.0.
+
+2. Lit & Reactive Element Runtime (bundled in `custom_components/latter/frontend/latter-studio.js`)
+   Source: https://github.com/lit/lit
+   Copyright Google LLC
+   Licensed under the BSD 3-Clause License.

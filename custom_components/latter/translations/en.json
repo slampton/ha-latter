@@ -49,12 +49,12 @@
           "description": "Connect an ESPHome device running Latter firmware, with or without a screen, to the Latter System.",
           "data": {
             "esphome_device_id": "ESPHome Device",
-            "apply_profile": "Configuration Profile",
+            "device_group": "Device Group",
             "native_ble_tracking": "Track the Area with BLE Proxies"
           },
           "data_description": {
             "esphome_device_id": "The ESPHome device running Latter firmware (or a Latter Core build). Latter binds to this device and its MAC address.",
-            "apply_profile": "Auto-detect screen geometry and capabilities from hardware, or apply a saved Latter profile.",
+            "device_group": "Auto-detect the Device Group and baseline settings from hardware, or assign a Device Group directly.",
             "native_ble_tracking": "Use your Bluetooth proxies to work out which Area this device is in. Turn off for devices that never move."
           }
         },
@@ -144,6 +144,25 @@
       },
       "remote_config": {
         "name": "Remote Config"
+      },
+      "person_current_area": {
+        "name": "{person_name} Current Area"
+      },
+      "person_ble_distance": {
+        "name": "{person_name} BLE Distance"
+      },
+      "area_occupants": {
+        "name": "{area_name} Occupants"
+      }
+    },
+    "binary_sensor": {
+      "area_ble_occupancy": {
+        "name": "{area_name} BLE Occupancy"
+      }
+    },
+    "device_tracker": {
+      "ble_tracker": {
+        "name": "BLE Tracker"
       }
     }
   },
@@ -259,6 +278,27 @@
     },
     "reset_ble_tag_has_no_device_settings": {
       "message": "A BLE tag has no settings saved on a device. Reset only its Latter settings."
+    },
+    "security_action_blocked": {
+      "message": "This security action is blocked on this Device's Perimeter Security Policy."
+    },
+    "security_pin_required": {
+      "message": "A security PIN is required on this Device to unlock, disarm, or open perimeter doors."
+    },
+    "security_pin_invalid": {
+      "message": "The security PIN entered is invalid."
+    },
+    "security_pin_not_configured": {
+      "message": "This Device requires a security PIN, and no Latter Security PIN has been configured in Latter Studio yet."
+    },
+    "invalid_intercom_media_url": {
+      "message": "Intercom media_url must be a Home Assistant media-source:// URI or local /api/latter/ resource."
+    },
+    "invalid_hex_color": {
+      "message": "Invalid hex color {hex_color}; expected #RRGGBB."
+    },
+    "invalid_dock_apps": {
+      "message": "Invalid dock_apps selection: {error}"
     }
   }
 }

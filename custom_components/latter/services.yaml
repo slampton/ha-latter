@@ -43,6 +43,16 @@ music_browse:
       selector:
         device:
           integration: latter
+    req_id:
+      name: Request ID
+      description: Optional monotonically increasing request correlation ID echoed back in set_browse_slots.
+      required: false
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 2147483647
+          mode: box
     mode:
       name: Browse Mode
       description: Category, drill-down, or metadata reader mode to browse.
@@ -278,6 +288,16 @@ area_browse:
       selector:
         device:
           integration: latter
+    req_id:
+      name: Request ID
+      description: Optional monotonically increasing request correlation ID echoed back in set_area_slots.
+      required: false
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 2147483647
+          mode: box
     mode:
       name: Browse Mode
       description: Browse areas list, entities inside an area, or home-wide alarm/entities.
@@ -413,6 +433,16 @@ calendar_fetch:
       selector:
         device:
           integration: latter
+    req_id:
+      name: Request ID
+      description: Optional monotonically increasing request correlation ID echoed back in set_browse_slots.
+      required: false
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 2147483647
+          mode: box
     days:
       name: Lookahead Days
       description: Number of days ahead to query (default 30).
@@ -573,6 +603,8 @@ media_command:
             - "seek"
             - "play_media"
             - "clear_queue"
+            - "join"
+            - "unjoin"
     entity_id:
       name: Speaker
       description: Optional media_player to command instead of the device's active speaker.
@@ -612,6 +644,14 @@ media_command:
             - "next"
             - "add"
             - "replace"
+    group_members:
+      name: Group Member Speakers
+      description: Media player entity IDs to join with the target speaker when command is join.
+      required: false
+      selector:
+        entity:
+          domain: media_player
+          multiple: true
 
 notify:
   name: Send Notification
@@ -782,6 +822,12 @@ doorbell_intercom:
             - "strong"
             - "light"
             - "off"
+    code:
+      name: Security PIN Code
+      description: Optional security PIN code when action is unlock_door and the device requires a PIN.
+      required: false
+      selector:
+        text:
 
 reset_device:
   name: Reset Device to Defaults

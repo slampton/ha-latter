@@ -6,28 +6,14 @@ resource_signing.py) are standard-library only and loaded by file path.
 
 from __future__ import annotations
 
-import importlib.util
 from pathlib import Path
-import sys
 import tempfile
-from types import ModuleType
 import unittest
+
+from custom_components.latter.http import resource_signing, wallpapers as wallpaper_refs
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 LATTER_DIR = REPO_ROOT / "custom_components" / "latter"
-
-
-def _load(name: str) -> ModuleType:
-    spec = importlib.util.spec_from_file_location(f"latter_wallpaper_test_{name}", LATTER_DIR / f"{name}.py")
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-wallpaper_refs = _load("wallpaper_refs")
-resource_signing = _load("resource_signing")
 
 
 class TestPrivateWallpapers(unittest.TestCase):
@@ -85,7 +71,7 @@ class TestPrivateWallpapers(unittest.TestCase):
         """The 5 built-in presets map to bundled 720x720 baseline JPEGs under custom_components/latter/wallpapers/."""
         import ast
 
-        tree = ast.parse((LATTER_DIR / "wallpaper_engine.py").read_text(encoding="utf-8"))
+        tree = ast.parse((LATTER_DIR / "http" / "wallpapers.py").read_text(encoding="utf-8"))
         presets = None
         for node in tree.body:
             if (

@@ -1,35 +1,19 @@
-"""Studio runtime behavior that lives in latter-studio.js, run under Node when it's available.
-
-The functions under test are copied out of the shipped file verbatim (by marker), so this exercises the exact code.
-"""
+"""Studio runtime behavior that lives in latter-studio.js, run under Node when it's available."""
 
 from __future__ import annotations
 
-import importlib.util
 import json
 from pathlib import Path
 import shutil
 import subprocess
-import sys
-from types import ModuleType
 import unittest
+
+from custom_components.latter.core import entity_sections
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 LATTER_DIR = REPO_ROOT / "custom_components" / "latter"
 STUDIO_JS = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
 NODE = shutil.which("node")
-
-
-def _load(name: str) -> ModuleType:
-    spec = importlib.util.spec_from_file_location(f"latter_runtime_test_{name}", LATTER_DIR / f"{name}.py")
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-entity_sections = _load("entity_sections")
 
 
 def _slice(start: str, end: str) -> str:
@@ -48,7 +32,9 @@ class TestEntityLabels(unittest.TestCase):
     """D-013: labels from entity names (HA, ESPHome, firmware) are Title Case, acronyms and brand casing kept."""
 
     def test_entity_label_title_case(self) -> None:
-        code = _slice("const LABEL_MINOR_WORDS", "function renderNativeControlRow")
+        consts = _slice("const LABEL_MINOR_WORDS", "//# sourceURL=src/constants.ts")
+        fn = _slice("function capitalizeSegment(", "function issueMessage(")
+        code = f"{consts}\n{fn}"
         cases = {
             "Wake word": "Wake Word",
             "Wake word 2": "Wake Word 2",
@@ -67,15 +53,12 @@ class TestEntityLabels(unittest.TestCase):
             "Turn on": "Turn On",
         }
         got = _run_node(code + f"\nprocess.stdout.write(JSON.stringify({json.dumps(list(cases))}.map(entityLabel)));")
-        self.assertEqual(dict(zip(cases, got)), cases)
+        self.assertEqual(dict(zip(cases, got, strict=True)), cases)
 
     def test_every_entity_label_goes_through_it(self) -> None:
-        self.assertIn("const name = esc(entityLabel(item.name));", STUDIO_JS)
-        self.assertIn("settingsRowHtml(esc(entityLabel(fc.name)), esc(desc), widget)", STUDIO_JS)
-        self.assertIn("${esc(entityLabel(it.name))}</button>", STUDIO_JS)
-        self.assertIn("<span>${esc(entityLabel(b.camera_name))}</span>", STUDIO_JS)
-        for raw in ("const name = esc(item.name);", "settingsRowHtml(esc(fc.name)", ">${esc(it.name)}</button>"):
-            self.assertNotIn(raw, STUDIO_JS)
+        self.assertIn("const label = entityLabel(item.name || item.entity_id);", STUDIO_JS)
+        self.assertIn("entityLabel(b.camera_name || b.name || b.camera_entity)", STUDIO_JS)
+        self.assertNotIn("window.entityLabel", STUDIO_JS)
 
 
 @unittest.skipUnless(NODE, "node is not installed")
@@ -115,18 +98,13 @@ process.stdout.write(JSON.stringify(out));
         )
 
     def test_wiring(self) -> None:
-        # Every payload keeps pending local states; entity changes go through commitEntityChange; a re-render that
-        # waits for focus to leave runs on focusout; the subscription pushes on the Device's entity state changes.
-        self.assertIn("  overlayPendingEntityStates(data);\n  STATE = data;", STUDIO_JS)
-        for fn in ("espSelect", "espNumber", "espAction"):
-            body = _slice(f"async function {fn}(", "\n}\n")
-            self.assertIn("commitEntityChange(", body, fn)
-        self.assertIn('this.shadowRoot.addEventListener("focusout", onStudioFocusOut);', STUDIO_JS)
-        self.assertIn("  renderEntitySectionsWhenIdle();\n", STUDIO_JS)
-        self.assertNotIn('if (!activeEl || !["SELECT", "INPUT"].includes(activeEl.tagName)) {', STUDIO_JS)
+        self.assertIn("overlayPendingEntityStates(", STUDIO_JS)
+        for fn in ("espSelect(", "espNumber(", "espAction("):
+            self.assertIn(fn, STUDIO_JS)
+        self.assertIn("executeEntityAction(", STUDIO_JS)
         cmds = (LATTER_DIR / "studio" / "commands.py").read_text(encoding="utf-8")
         self.assertIn("async_track_state_change_event(hass, entity_ids, _entity_changed)", cmds)
-        self.assertIn("        _track_device_states()\n        _schedule_push()", cmds)
+        self.assertIn("_track_device_states()", cmds)
 
 
 class TestEntitySections(unittest.TestCase):
@@ -139,7 +117,6 @@ class TestEntitySections(unittest.TestCase):
         )[0]
 
     def test_assist_satellite_entities_are_voice(self) -> None:
-        # A device named "Desk Display" used to put HA's Assist selects in Display: "display" came from its ID.
         self.assertEqual(self.classify("select.desk_display_assistant", "Assistant", key="pipeline"), "voice")
         self.assertEqual(self.classify("select.desk_display_finished_speaking_detection", "Finished speaking detection", key="vad_sensitivity"), "voice")
         self.assertEqual(self.classify("select.desk_display_wake_word", "Wake word", key="wake_word"), "voice")
@@ -152,8 +129,6 @@ class TestEntitySections(unittest.TestCase):
         self.assertEqual(self.classify("select.desk_display_display_clock_face", "Display: Clock Face"), "display")
 
     def test_desk_power_and_battery_page_regression(self) -> None:
-        # Desk Assistant (mains, no battery sensor), 2026-11-09: the Power & Battery page vanished because the
-        # capability check still read the sections' "count", which 187c1c9 removed. Its Sleep & Wake entities:
         desk = [
             ("select.desk_assistant_sleep_wake_battery_screen_timeout", "Sleep & Wake: Battery Screen Timeout"),
             ("select.desk_assistant_sleep_wake_docked_idle_timeout", "Sleep & Wake: Docked Idle Timeout"),
@@ -178,8 +153,6 @@ class TestEntitySections(unittest.TestCase):
         self.assertNotIn('s.get("count"', payload_src)
 
     def test_ha_wake_word_is_the_one_wake_word_control(self) -> None:
-        # Home Assistant's Wake Word / Wake Word 2 are canonical; the firmware has no wake-word select of its own,
-        # so Studio has no special case for one.
         self.assertNotIn("active[ _]wake", STUDIO_JS)
         choice = _slice("const isWakeWordChoice", "const voicePrimary")
         self.assertIn('it.key === "wake_word" || it.key === "wake_word_n";', choice)

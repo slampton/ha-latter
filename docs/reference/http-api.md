@@ -1,12 +1,12 @@
 # HTTP API Reference
 
-Latter registers its HTTP endpoints under `/api/latter/`. Source: [`http.py`](../../custom_components/latter/http.py), [`doorbell_engine.py`](../../custom_components/latter/doorbell_engine.py) (camera audio), [`url_signer.py`](../../custom_components/latter/url_signer.py) and [`resource_signing.py`](../../custom_components/latter/resource_signing.py) (signatures).
+Latter registers its HTTP endpoints under `/api/latter/`. Source: [`http/views.py`](../../custom_components/latter/http/views.py), [`areas/doorbell.py`](../../custom_components/latter/areas/doorbell.py) (camera audio), [`http/wallpapers.py`](../../custom_components/latter/http/wallpapers.py), [`http/url_signer.py`](../../custom_components/latter/http/url_signer.py) and [`http/resource_signing.py`](../../custom_components/latter/http/resource_signing.py) (signatures).
 
-These endpoints exist so an ESP32 can fetch images without Home Assistant's bearer token. Each request is authorized by a signature in the URL instead.
+These endpoints exist so an ESP32 can fetch images and audio streams without Home Assistant's bearer token, and so Studio can stream multipart wallpaper uploads. Each request is authorized by a scoped, expiring HMAC signature.
 
 ## URL signing
 
-Latter keeps a 256-bit secret in `.storage/latter.site`. URLs carry a `sig` parameter of the form `<expiry>.<HMAC-SHA256, truncated to 128 bits>`. The signature covers the Device (its config subentry), the resource including the server-chosen render parameters (for example `camera:camera.front_door|480|480|circle`), and the expiry time. Signatures are compared in constant time.
+Latter keeps a 256-bit secret in `.storage/latter.site` (rotatable at any time via **Rotate Signing Key** in Studio). URLs carry a `sig` parameter of the form `<expiry>.<HMAC-SHA256, truncated to 128 bits>`. The signature covers the Device (its config subentry, or `system` for Studio system previews/uploads), the resource including the server-chosen render parameters (for example `camera:camera.front_door|480|480|circle`), and the expiry time. Signatures are compared in constant time.
 
 There are two expiry modes:
 
@@ -15,13 +15,14 @@ There are two expiry modes:
 
 | Resource | Mode | Lifetime | Actually valid for |
 | :--- | :--- | :--- | :--- |
-| Artwork, wallpaper, camera snapshot, map | Day-bucketed | 7 days | 7 to 8 days |
-| Studio camera preview, wallpaper thumbnail | Day-bucketed | 7 days | 7 to 8 days |
+| Artwork, wallpaper, camera snapshot, map | Day-bucketed | 48 hours (2 days) | 2 to 3 days |
+| Studio camera preview, wallpaper thumbnail | Day-bucketed | 48 hours (2 days) | 2 to 3 days |
 | Camera audio (doorbell listen stream) | Exact | 10 minutes | 10 minutes (a new URL is signed each time listening starts; the signature is checked when the stream opens) |
+| Studio multipart wallpaper upload | Exact | Short-lived (minted per upload) | Checked when `POST /api/latter/wallpaper/upload` receives the upload |
 
 You shouldn't build these URLs yourself. Latter publishes the image URLs, already signed, in its Protocol v3 payloads (`art_url` in `active_media`; `wallpaper_url`, `camera_snapshot_url`, `cameras_summary`, `alert_camera_url`, and `doorbell_audio_url` in `area_context`) and in the `latter.calendar_fetch` response (`map_url`).
 
-URLs use Home Assistant's numeric LAN IPv4 address, not a `.local` name. Latter finds the address by opening a UDP socket and caches it until Home Assistant's core config changes.
+URLs use Home Assistant's numeric LAN IPv4 address, not a `.local` name. Latter resolves the LAN IPv4 address asynchronously on an executor thread (zero event-loop socket calls) and caches it until Home Assistant's core config changes.
 
 ## Image output
 
@@ -40,7 +41,7 @@ The device converts the JPEG to RGB565 itself, using ESPHome's `online_image`.
 ## Endpoints
 
 ### `GET /api/latter/artwork/{slug}`
-Album art for the device's active speaker. Latter tries `entity_picture_local`, then `entity_picture`, then `media_image_url`, and keeps the last good image when none of them work.
+Album art for the device's active speaker. Latter tries `entity_picture_local`, then `entity_picture`, then `media_image_url`, and keeps the last good image when none of them work. External upstream fetches stream-cap downloads at **8 MB** and reject URLs resolving to private, loopback, or link-local IP addresses.
 
 | Param | Notes |
 | :--- | :--- |
@@ -66,26 +67,29 @@ A snapshot from a camera configured for this device. The camera `entity_id` and 
 Responses are cached for 200 ms and sent with `Cache-Control: no-store`.
 
 ### `GET /api/latter/map/{slug}`
-A map of a calendar event's location, stitched from a 3×3 grid of OpenStreetMap tiles, with pins for the event and for home.
+A map of a calendar event's location, stitched from a 3×3 grid of OpenStreetMap tiles, with a pin for the event location (Home Assistant's home coordinates are never plotted).
 
 | Param | Notes |
 | :--- | :--- |
 | `sig` | **Required.** Signed resource `map:<q>\|<w>\|<h>\|<shape>` |
 | `q` | An address, `lat,lon`, or a zone name. Addresses are geocoded with Nominatim. |
 | `z` | Zoom level, 10–18. Default 15. |
-| `pan_x`, `pan_y` | ±30 steps |
+| `pan_x`, `pan_y` | Clamped to `±4` tiles |
 
 ### `GET /api/latter/camera_audio/{slug}` *(experimental)*
-Streams a camera's RTSP audio through `ffmpeg` with a noise-reduction filter chain. The sample rate and channel count come from the device's hardware manifest (`audio.out_rate`, `audio.out_ch`), so current Latter boards get 48 kHz mono. Latter firmware requests FLAC. If the camera has no stream source or `ffmpeg` isn't available, a short silent WAV is returned.
+Streams a camera's RTSP audio through `ffmpeg` with a noise-reduction filter chain (`-t 120` 120-second maximum stream duration and `-rw_timeout 5000000` 5-second RTSP I/O timeout). The sample rate and channel count come from the device's hardware manifest (`audio.out_rate`, `audio.out_ch`), so current Latter boards get 48 kHz mono. Latter firmware requests FLAC. If the camera has no stream source or `ffmpeg` isn't available, a short silent WAV is returned.
 
 | Param | Notes |
 | :--- | :--- |
 | `sig` | **Required.** Short-lived (10 min) signed resource `camera_audio:<entity_id>` |
 | `fmt` | `flac` (default) or `wav` |
 
-The noise-reduction filter level (`strong`, `light`, or `off`) comes from the device's active doorbell noise-reduction setting (or the Studio System default). At most 2 streams can run at once; further requests get `429`.
+The noise-reduction filter level (`strong`, `light`, or `off`) comes from the device's active doorbell noise-reduction setting (or the Studio System default). Opening a new stream on a Device terminates any prior stream on that same Device; at most 2 streams can run concurrently across the System (`429` when full).
+
+### `POST /api/latter/wallpaper/upload`
+Accepts a `multipart/form-data` photo upload (up to **15 MB**) from Latter Studio (`XMLHttpRequest`), authorized by a short-lived HMAC `sig` minted over Studio's admin WebSocket (`mint_wallpaper_upload_url`), validates and stores the image under `.storage/latter/wallpapers/`, and refreshes the frozen wallpaper snapshot without touching Home Assistant's 4 MB WebSocket frame limit.
 
 ### Studio
-Studio has no HTTP API of its own. It's a `panel_custom` web component at `/latter` (admin only), loaded from the static path `/latter_ui`. It talks to Home Assistant only through admin-gated WebSocket commands: `latter/system/*` (`get_state`, `subscribe`, `command`, `export`, `import`) and `latter/device/*` (`command`, `export`, `import`). These are internal, not a stable API.
+Studio is a `panel_custom` web component at `/latter` (admin only), loaded from the static path `/latter_ui`. Aside from `POST /api/latter/wallpaper/upload`, it talks to Home Assistant exclusively through admin-gated WebSocket commands: `latter/system/*` (`get_state`, `subscribe`, `command`, `export`, `import`) and `latter/device/*` (`command`, `export`, `import`). These are internal, not a stable API.
 
 One unauthenticated branding asset is also served: `GET /api/latter/brand/icon.png`. Studio's sidebar icon is a static frontend module (`/latter_ui_<version>/latter-icons.js?v=<content hash>`), served like the panel JavaScript and loaded by Home Assistant on every page; it only defines the `latter:logo` icon.

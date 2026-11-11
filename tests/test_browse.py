@@ -5,25 +5,12 @@ ma_browse.py is standard-library only and loaded by file path; browse_engine.py 
 
 from __future__ import annotations
 
-import importlib.util
 from pathlib import Path
-import sys
-from types import ModuleType
 import unittest
 
+from custom_components.latter.media import browse as ma_browse
+
 LATTER_DIR = Path(__file__).resolve().parent.parent / "custom_components" / "latter"
-
-
-def _load(name: str) -> ModuleType:
-    spec = importlib.util.spec_from_file_location(f"latter_browse_test_{name}", LATTER_DIR / f"{name}.py")
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-ma_browse = _load("ma_browse")
 
 # A live browse_media answer for library://album/67 (Music Assistant, 2026.11), trimmed.
 DIRT_CHILDREN = [
@@ -52,7 +39,7 @@ class _BrowseMedia:
 
 
 class TestDeskRegression(unittest.TestCase):
-    """Desk Assistant, 2026-11-08: Albums › Dirt showed "No items found".
+    """Desk Assistant, 2026-11-08: Albums > Dirt showed "No items found".
 
     Desk's active speaker is its own media_player.desk_assistant_music, linked to the available Music
     Assistant player media_player.desk_assistant (ma_player_entity), so the browse handle was right.
@@ -82,7 +69,7 @@ class TestDeskRegression(unittest.TestCase):
         )
 
     def test_browse_engine_reads_the_object(self) -> None:
-        src = (LATTER_DIR / "browse_engine.py").read_text(encoding="utf-8")
+        src = (LATTER_DIR / "media" / "browse.py").read_text(encoding="utf-8")
         self.assertIn("browse_node_dict(resp.get(browse_entity))", src)
 
 
@@ -142,11 +129,26 @@ class TestArtistAlbums(unittest.TestCase):
 
 class TestOnePath(unittest.TestCase):
     def test_browse_engine_has_no_track_title_search_or_speaker_bound_browse(self) -> None:
-        src = (LATTER_DIR / "browse_engine.py").read_text(encoding="utf-8")
+        src = (LATTER_DIR / "media" / "browse.py").read_text(encoding="utf-8")
         self.assertNotIn("_browse_ma_media_children", src)
         self.assertNotIn('media_type="track",\n            search=album_ref', src)
         self.assertNotIn('not ("library://" in album_ref)', src)
         self.assertIn("choose_browse_entity(preferred, ma_players)", src)
+
+    def test_bounded_64_entry_lru_cache(self) -> None:
+        self.assertEqual(ma_browse.MAX_BROWSE_CACHE_ENTRIES, 64)
+        ma_browse.clear_browse_cache()
+        for i in range(80):
+            ma_browse._cache_put(f"key_{i}", {"slots": [f"line_{i}"]})
+        self.assertEqual(len(ma_browse._BROWSE_LYRICS_BIO_CACHE), 64)
+        self.assertIsNone(ma_browse._cache_get("key_0"))
+        self.assertIsNotNone(ma_browse._cache_get("key_16"))
+        # Touching key_16 moves it to MRU so adding key_80 evicts key_17 instead of key_16
+        ma_browse._cache_put("key_80", {"slots": ["line_80"]})
+        self.assertIsNotNone(ma_browse._cache_get("key_16"))
+        self.assertIsNone(ma_browse._cache_get("key_17"))
+        ma_browse.clear_browse_cache()
+        self.assertEqual(len(ma_browse._BROWSE_LYRICS_BIO_CACHE), 0)
 
 
 if __name__ == "__main__":

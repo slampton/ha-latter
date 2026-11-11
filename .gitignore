@@ -5,6 +5,7 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 .esphome/
+node_modules/
 .coverage
 htmlcov/
 *.zip

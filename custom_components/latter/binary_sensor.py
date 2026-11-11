@@ -10,13 +10,13 @@ from homeassistant.components.binary_sensor import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import Event, HomeAssistant, callback
-from homeassistant.helpers import area_registry as ar
+from homeassistant.helpers import area_registry as ar, entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .ble_engine import get_ble_fabric, get_ble_proxy_area_ids
 from .const import DOMAIN, normalize_device_slug
-from .system import get_system_device_info
+from .core.hub import get_system_device_info
+from .presence.ble_fabric import get_ble_fabric, get_ble_proxy_area_ids
 
 PARALLEL_UPDATES = 0
 DATA_CREATED_AREA_OCCUPANCY_IDS = "created_area_occupancy_ids"
@@ -33,6 +33,7 @@ async def async_setup_entry(
         DATA_CREATED_AREA_OCCUPANCY_IDS, set()
     )
     entry_area_ids: set[str] = set()
+    area_entities_by_id: dict[str, LatterAreaBleOccupancyBinarySensor] = {}
 
     area_reg = ar.async_get(hass)
     proxy_areas = get_ble_proxy_area_ids(hass)
@@ -47,35 +48,49 @@ async def async_setup_entry(
             continue
         created_areas.add(area_id)
         entry_area_ids.add(area_id)
-        new_entities.append(
-            LatterAreaBleOccupancyBinarySensor(
-                hass, area_entry.id, area_entry.name
-            )
-        )
+        ent = LatterAreaBleOccupancyBinarySensor(hass, area_entry.id, area_entry.name)
+        area_entities_by_id[area_id] = ent
+        new_entities.append(ent)
 
     @callback
     def _async_on_area_registry_updated(event: Event) -> None:
-        if event.data.get("action") != "create":
-            return
+        action = event.data.get("action")
         area_id = str(event.data.get("area_id") or "").strip()
-        if not area_id or area_id in created_areas:
+        if not area_id:
             return
-        area_entry = ar.async_get(hass).async_get_area(area_id)
-        if area_entry is None:
-            return
-        created_areas.add(area_id)
-        entry_area_ids.add(area_id)
-        async_add_entities(
-            [
-                LatterAreaBleOccupancyBinarySensor(
-                    hass, area_entry.id, area_entry.name
-                )
-            ]
-        )
+        if action == "create":
+            if area_id in created_areas:
+                return
+            area_entry = ar.async_get(hass).async_get_area(area_id)
+            if area_entry is None:
+                return
+            created_areas.add(area_id)
+            entry_area_ids.add(area_id)
+            ent = LatterAreaBleOccupancyBinarySensor(
+                hass, area_entry.id, area_entry.name
+            )
+            area_entities_by_id[area_id] = ent
+            async_add_entities([ent])
+        elif action == "update":
+            ent = area_entities_by_id.get(area_id)
+            area_entry = ar.async_get(hass).async_get_area(area_id)
+            if ent is not None and area_entry is not None:
+                ent.update_area_metadata(area_entry.name)
+        elif action == "remove":
+            created_areas.discard(area_id)
+            entry_area_ids.discard(area_id)
+            ent = area_entities_by_id.pop(area_id, None)
+            if ent is not None:
+                ent_reg = er.async_get(hass)
+                if ent_reg.async_get(ent.entity_id) is not None:
+                    ent_reg.async_remove(ent.entity_id)
+                if ent.hass is not None:
+                    hass.async_create_task(ent.async_remove())
 
     @callback
     def _cleanup_entry_areas() -> None:
         created_areas.difference_update(entry_area_ids)
+        area_entities_by_id.clear()
 
     entry.async_on_unload(_cleanup_entry_areas)
     entry.async_on_unload(
@@ -91,9 +106,10 @@ async def async_setup_entry(
 class LatterAreaBleOccupancyBinarySensor(BinarySensorEntity):
     """Binary sensor representing aggregated BLE presence occupancy in a Home Assistant Area."""
 
-    _attr_has_entity_name = False
+    _attr_has_entity_name = True
     _attr_should_poll = False
     _attr_device_class = BinarySensorDeviceClass.OCCUPANCY
+    _attr_translation_key = "area_ble_occupancy"
 
     def __init__(
         self,
@@ -106,11 +122,20 @@ class LatterAreaBleOccupancyBinarySensor(BinarySensorEntity):
         self._area_id = area_id
         self._area_name = area_name
         a_slug = normalize_device_slug(area_id or area_name)
-        self._attr_name = f"{area_name} BLE Occupancy"
         self._attr_unique_id = f"latter_area_ble_occupancy_{area_id}"
         self._attr_suggested_area = area_name
+        self._attr_translation_placeholders = {"area_name": area_name}
         self.entity_id = f"binary_sensor.{a_slug}_ble_occupancy"
         self._cached_occ: dict[str, Any] | None = None
+
+    @callback
+    def update_area_metadata(self, area_name: str) -> None:
+        """Refresh the Area name when the Area registry entry is renamed."""
+        self._area_name = area_name
+        self._attr_suggested_area = area_name
+        self._attr_translation_placeholders = {"area_name": area_name}
+        if self.hass is not None:
+            self.async_write_ha_state()
 
     def _get_occ(self) -> dict[str, Any]:
         """Return cached or freshly evaluated occupancy snapshot for this Area."""

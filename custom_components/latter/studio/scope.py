@@ -36,6 +36,8 @@ SYSTEM_COMMANDS: frozenset[str] = frozenset(
         "upload_system_wallpaper",
         "delete_system_wallpaper",
         "save_system_config",
+        "rotate_signing_key",
+        "set_security_pin",
     }
 )
 
@@ -84,7 +86,7 @@ def command_scope(cmd: str) -> Scope:
     raise UnknownStudioCommand(cmd)
 
 
-def find_by_subentry_id(items: Iterable[T], subentry_id: str | None) -> T | None:
+def find_by_subentry_id[T: _HasSubentryId](items: Iterable[T], subentry_id: str | None) -> T | None:
     """Return the item whose `subentry_id` equals `subentry_id` exactly, else None (no other matching)."""
     target = str(subentry_id or "").strip()
     if not target:

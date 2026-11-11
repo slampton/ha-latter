@@ -44,6 +44,7 @@ DEVICE_TEXT_KEYS: tuple[str, ...] = (
     "assigned_person",
     "dock_apps",
     "activity_sources",
+    "security_pin_policy",
 )
 DEVICE_BOOL_KEYS: tuple[str, ...] = (
     "native_ble_tracking",
@@ -69,6 +70,7 @@ DWELL_MIN_S = 3
 DWELL_MAX_S = 60
 NOISE_REDUCTION_LEVELS: tuple[str, ...] = ("strong", "light", "off")
 DEFAULT_NOISE_REDUCTION = "strong"
+SECURITY_PIN_POLICIES: tuple[str, ...] = ("auto", "allow", "require_pin", "block")
 _HEX_COLOR = re.compile(r"^#[0-9A-F]{6}$")
 
 
@@ -244,6 +246,11 @@ def clean_device_settings(incoming: Mapping[str, Any]) -> dict[str, Any]:
         if not _HEX_COLOR.match(color):
             raise SettingsScopeError(f"Not a #RRGGBB color: {color or '(empty)'}")
         out["device_custom_color"] = color
+    if "security_pin_policy" in out:
+        pol = out["security_pin_policy"].lower()
+        if pol not in SECURITY_PIN_POLICIES:
+            raise SettingsScopeError(f"Unknown security PIN policy: {pol or '(empty)'}")
+        out["security_pin_policy"] = pol
     return out
 
 

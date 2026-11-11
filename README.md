@@ -49,13 +49,13 @@ The device's current area drives its controls:
 - Lights: brightness, color, and color temperature.
 - Covers, fans, climate, and media.
 
-Whole-home tiles cover the alarm panel, thermostat, lock, garage door, and robot vacuum.
+Whole-home tiles cover the alarm panel, thermostat, lock, garage door, and robot vacuum. Per-device **Perimeter Security Policies** (`Auto`, `Allow`, `Require PIN`, or `Block`) protect opening actions—unlocking locks, disarming alarms, and opening garage/gate/door covers—behind an on-device PIN keypad verified server-side, while locking, arming, and closing covers remain one-tap.
 
 ### Doorbell popups
 Latter finds your doorbell's ring entity on its own. A press wakes the displays and shows a camera snapshot for 20 seconds. From the popup you can:
 - **Listen:** the camera's audio plays on the device, cleaned up by an FFmpeg noise-reduction filter (Strong, Light, or Off).
 - **Reply by push-to-talk:** the device transcribes what you say, and Home Assistant speaks it on the doorbell's speaker with TTS. Quick replies work the same way.
-- **Unlock** the door's lock.
+- **Unlock** the door's lock (guarded by the device's Perimeter Security Policy).
 
 This is not a live call: no audio goes from the device to the door, and there is no echo cancellation. Listen and reply are [experimental](#project-status).
 
@@ -68,11 +68,11 @@ Latter re-encodes album art, wallpapers, camera snapshots, and calendar-event ma
 
 ### Latter Studio
 Latter Studio is an admin-only sidebar panel for everything that isn't an automation:
-- Shared entities.
+- Shared entities, custom colors, and wallpapers (up to 15 MB multipart uploads).
 - TV remotes and AV receiver volume routing.
-- BLE calibration.
-- Device groups and reusable profiles.
-- Wallpapers.
+- Live streaming BLE calibration.
+- Device groups with two-tier operational baselines.
+- Per-device Perimeter Security Policies (`Auto` / `Allow` / `Require PIN` / `Block`) and HMAC signing-key rotation.
 - Settings export and import (`.json`). Full backups are Home Assistant's own.
 
 <!-- MEDIA: docs/media/studio-overview.png — Studio, System → Overview. -->
@@ -133,7 +133,7 @@ Everything the finished devices use is documented and open to you:
 | | Version | Notes |
 | :--- | :--- | :--- |
 | Home Assistant | 2026.10 or newer | |
-| ESPHome | 2026.10 or newer | Only needed if you build Latter firmware yourself |
+| ESPHome | 2026.11.0b2 or newer | Only needed if you build Latter firmware yourself |
 | Music Assistant | 2.10.8 or newer, optional | Required for library browsing, queue transfer, and the default intercom speaker set. Basic transport and volume work without it. |
 | Bluetooth proxies | At least one per area you want to detect | ESPHome proxies are tested. Other HA Bluetooth scanners should work but are unverified. |
 | `ffmpeg` | Optional | Used to stream doorbell camera audio to devices. Bundled with Home Assistant OS. |
@@ -144,7 +144,7 @@ Everything the finished devices use is documented and open to you:
 
 ## Project status
 
-This is version **2.2.9**, built and maintained by one person and tested on the five devices listed above.
+This is version **3.0.0**, built and maintained by one person and tested on the five devices listed above.
 
 | Area | Status |
 | :--- | :--- |
@@ -157,7 +157,7 @@ What's not here yet:
 - BLE calibration is a single offset per area. There is no per-scanner calibration.
 - No live two-way doorbell calls. The device can't send live audio to the door, and there is no echo cancellation.
 
-CI runs `hassfest`, HACS validation, `ruff` (syntax and unused-import checks), and the unit tests in `tests/`. The Protocol v3 tests run against the integration's own packer. The Voice Follows Me, BLE Area scoring, URL signing, Studio targeting, repair-ID and device-health tests import the integration's own Home Assistant-free modules (`area_follow.py`, `ble_math.py`, `resource_signing.py`, `studio/scope.py`, `issue_ids.py`, `health.py`), which the integration itself uses; the Home Assistant glue around them (timers, registry writes, repairs) is not covered.
+CI runs `hassfest`, HACS validation, `ruff`, `tools/verify_ha.py`, TypeScript + Lit Studio bundle parity (`npm --prefix frontend_src run check`), and the `pytest` integration and unit suite in `tests/` (`≥75%` coverage across the 6-package backend: `core/`, `presence/`, `areas/`, `media/`, `http/`, and `studio/`). Devices communicate over Zero-Privilege RPC (`System: RPC Outbox` + direct `esphome.<node>_latter_push_v3` bound by `esphome_device_id`), requiring neither `allow_service_calls` nor `device_slug` YAML substitutions, while `AreaStateIndex` indexes Home Assistant registries and domain states in `O(1)`.
 
 Bugs and feature requests: [issues](https://github.com/slampton/ha-latter/issues).
 

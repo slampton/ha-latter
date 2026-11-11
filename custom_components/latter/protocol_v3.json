@@ -73,7 +73,8 @@
         {"index": 36, "name": "alert_chime", "cpp_enum": "ALERT_CHIME", "type": "bool", "description": "1 = play the alert chime (embedded WAV: sfx 9 for warning/critical, otherwise sfx 6), else 0"},
         {"index": 37, "name": "alert_camera_url", "cpp_enum": "ALERT_CAMERA_URL", "type": "url", "description": "Signed HTTP URL for alert camera snapshot"},
         {"index": 38, "name": "activity_card", "cpp_enum": "ACTIVITY_CARD", "type": "bool", "description": "1 = show the Home Activity Card, 0 = hide it (also sent when every source is off); empty until set: the device uses defaults.activity_card"},
-        {"index": 39, "name": "activity_sources", "cpp_enum": "ACTIVITY_SOURCES", "type": "csv", "description": "Activity Card sources that are on, in this order: calendar, music_queue, stopwatch, alarms, timers (unknown keys are ignored); empty until set: the device uses defaults.activity_sources"}
+        {"index": 39, "name": "activity_sources", "cpp_enum": "ACTIVITY_SOURCES", "type": "csv", "description": "Activity Card sources that are on, in this order: calendar, music_queue, stopwatch, alarms, timers (unknown keys are ignored); empty until set: the device uses defaults.activity_sources"},
+        {"index": 40, "name": "security_pin_policy", "cpp_enum": "SECURITY_PIN_POLICY", "type": "string", "description": "Perimeter action policy for unlock, disarm, and open_cover (allow|require_pin|block)"}
       ]
     },
     "active_media": {
@@ -122,7 +123,13 @@
         {"index": 7, "name": "wind_bearing", "cpp_enum": "WIND_BEARING", "type": "string", "description": "Wind cardinal direction or bearing"},
         {"index": 8, "name": "high", "cpp_enum": "HIGH", "type": "f32", "description": "Today's forecast high temperature"},
         {"index": 9, "name": "low", "cpp_enum": "LOW", "type": "f32", "description": "Today's forecast low temperature"},
-        {"index": 10, "name": "forecast_5d", "cpp_enum": "FORECAST_5D", "type": "records", "description": "0x1E-joined day|cond|high|low daily forecast records (up to 5; day MON..SUN in local time; cond is the Home Assistant condition; high and low are whole degrees in the weather entity's unit, empty when unknown)"}
+        {"index": 10, "name": "forecast_5d", "cpp_enum": "FORECAST_5D", "type": "records", "description": "0x1E-joined day|cond|high|low daily forecast records (up to 5; day MON..SUN in local time; cond is the Home Assistant condition; high and low are whole degrees in the weather entity's unit, empty when unknown)"},
+        {"index": 11, "name": "sun_state", "cpp_enum": "SUN_STATE", "type": "string", "description": "Sun horizon state from Home Assistant (above_horizon|below_horizon)"},
+        {"index": 12, "name": "sun_elevation", "cpp_enum": "SUN_ELEVATION", "type": "f32", "description": "Solar elevation angle in degrees"},
+        {"index": 13, "name": "sun_azimuth", "cpp_enum": "SUN_AZIMUTH", "type": "f32", "description": "Solar azimuth angle in degrees (0..360)"},
+        {"index": 14, "name": "sun_next_rising", "cpp_enum": "SUN_NEXT_RISING", "type": "string", "description": "Next sunrise ISO-8601 UTC timestamp"},
+        {"index": 15, "name": "sun_next_setting", "cpp_enum": "SUN_NEXT_SETTING", "type": "string", "description": "Next sunset ISO-8601 UTC timestamp"},
+        {"index": 16, "name": "moon_phase", "cpp_enum": "MOON_PHASE", "type": "string", "description": "Lunar phase slug (new_moon|waxing_crescent|first_quarter|waxing_gibbous|full_moon|waning_gibbous|last_quarter|waning_crescent)"}
       ]
     },
     "calendar_agenda": {
@@ -141,6 +148,19 @@
       "description": "No-op discovery marker action announcing Latter Protocol v3 compatibility and hardware manifest",
       "variables": {}
     },
+    "latter_push_v3": {
+      "description": "Push a revision-guarded Protocol v3 domain payload directly to the bound Device over the ESPHome Native API",
+      "variables": {
+        "domain": "string",
+        "payload": "string"
+      }
+    },
+    "latter_set_beacon_uuid": {
+      "description": "Provision the System's random 128-bit BLE iBeacon UUID into NVS and restart advertising if active",
+      "variables": {
+        "uuid": "string"
+      }
+    },
     "latter_factory_reset": {
       "description": "Reset to defaults: erases every saved setting (the whole NVS partition, including the Wi-Fi driver's cached network data and RF calibration) and reboots. Compiled-in Wi-Fi credentials and the API key are kept, so the device rejoins Home Assistant unchanged",
       "variables": {}
@@ -156,6 +176,7 @@
       "description": "Push paginated media/speaker/search browse slots to the device",
       "variables": {
         "contract": "int",
+        "req_id": "int",
         "mode": "string",
         "page": "int",
         "total_pages": "int",
@@ -166,6 +187,7 @@
       "description": "Push paginated Area/Site entity control slots to the device",
       "variables": {
         "contract": "int",
+        "req_id": "int",
         "mode": "string",
         "page": "int",
         "total_pages": "int",
@@ -192,15 +214,15 @@
     },
     "music_browse": {
       "description": "Browse speakers, favorites, playlists, artists, albums, tracks, radio, or search",
-      "fields": ["target_device", "mode", "page", "page_size", "speaker", "last_speaker", "search", "album_sort", "artist_album_sort", "podcast_sort"]
+      "fields": ["target_device", "req_id", "mode", "page", "page_size", "speaker", "last_speaker", "search", "album_sort", "artist_album_sort", "podcast_sort"]
     },
     "set_active_speaker": {
       "description": "Select the active media_player target for a Latter device",
       "fields": ["target_device", "entity_id", "transfer_queue"]
     },
     "media_command": {
-      "description": "Execute transport, seek, queue, or play_media command on the active speaker",
-      "fields": ["target_device", "command", "entity_id", "seek_position", "media_id", "media_type", "enqueue"]
+      "description": "Execute transport, seek, queue, speaker grouping, or play_media command on the active speaker",
+      "fields": ["target_device", "command", "entity_id", "seek_position", "media_id", "media_type", "enqueue", "group_members"]
     },
     "media_volume": {
       "description": "Adjust or set volume on the active speaker or volume override target",
@@ -208,7 +230,7 @@
     },
     "area_browse": {
       "description": "Browse Areas, Area domains, or paginated controllable entities",
-      "fields": ["target_device", "mode", "area_id", "domain_filter", "page", "page_size"]
+      "fields": ["target_device", "req_id", "mode", "area_id", "domain_filter", "page", "page_size"]
     },
     "area_action": {
       "description": "Execute an explicit domain action on an Area or specific entity",
@@ -224,7 +246,7 @@
     },
     "calendar_fetch": {
       "description": "Refresh upcoming calendar agenda events for a Latter device",
-      "fields": ["target_device", "days", "page", "page_size"]
+      "fields": ["target_device", "req_id", "days", "page", "page_size"]
     },
     "calendar_create_event": {
       "description": "Create a new event on the primary configured calendar",
@@ -236,7 +258,7 @@
     },
     "doorbell_intercom": {
       "description": "Doorbell talkback and requests. action: talk_message (push-to-talk speech transcribed on the device, spoken at the door by Home Assistant), quick_reply, listen_start|listen_stop (door audio played on the device), call_target (rings other displays with a notification; no display-to-display audio), unlock_door (unlock request to Home Assistant), set_noise_reduction. noise_reduction: strong|light|off, the noise filter preset Home Assistant applies to door audio (FFmpeg). No echo cancellation; camera is auto-refreshing snapshots",
-      "fields": ["target_device", "action", "camera_entity", "camera_index", "message", "noise_reduction"]
+      "fields": ["target_device", "action", "camera_entity", "camera_index", "message", "noise_reduction", "code"]
     },
     "save_custom_color": {
       "description": "Save a custom RGB accent color from the on-device color wheel",

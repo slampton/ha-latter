@@ -7,7 +7,7 @@ rules:
   brands: done
   common-modules: done
   config-flow: done
-  config-flow-test-coverage: todo
+  config-flow-test-coverage: done
   dependency-transparency: done
   docs-actions: done
   docs-conditions:
@@ -23,8 +23,10 @@ rules:
   entity-unique-id: done
   has-entity-name: done
   runtime-data: done
-  test-before-configure: todo
-  test-before-setup: todo
+  test-before-configure: done
+  test-before-setup:
+    status: exempt
+    comment: Local push middleware bound to ESPHome devices that may sleep on battery at startup and answer latter_ping asynchronously when awake.
   unique-config-entry: done
 
   # Silver
@@ -39,7 +41,7 @@ rules:
   reauthentication-flow:
     status: exempt
     comment: Local push ESPHome middleware; authentication is managed by the ESPHome integration and signed local resource signatures.
-  test-coverage: todo
+  test-coverage: done
 
   # Gold
   devices: done
@@ -72,4 +74,3 @@ rules:
     status: exempt
     comment: Integration does not use an external API client library; local HTTP proxy views use Home Assistant's shared aiohttp session.
   strict-typing: todo
-

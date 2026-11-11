@@ -12,8 +12,6 @@ import logging
 import re
 from typing import Any
 
-import voluptuous as vol
-
 from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
@@ -23,9 +21,37 @@ from homeassistant.helpers import (
     entity_registry as er,
 )
 from homeassistant.helpers.event import async_call_later, async_track_state_change_event
+import voluptuous as vol
 
-from ..area_engine import area_fusion_sensor_choices, async_execute_area_action
-from ..backup_engine import (
+from ..areas.context_builder import async_execute_area_action
+from ..areas.doorbell import async_execute_doorbell_intercom
+from ..const import (
+    CONF_ACTIVITY_SOURCES,
+    CONF_AREA_FUSION_CONFIG,
+    CONF_ASSIGNED_PERSON,
+    CONF_BLE_AREA_OFFSETS,
+    CONF_BLE_TARGET_ADDRESS,
+    CONF_CLEAR_SECURITY_PIN,
+    CONF_DEVICE_GROUP,
+    CONF_DEVICE_GROUPS,
+    CONF_DEVICE_REMOTE_GROUP,
+    CONF_DOCK_APPS,
+    CONF_MA_PLAYER_ENTITY,
+    CONF_SECURITY_PIN,
+    CONF_SECURITY_PIN_HASH,
+    CONF_WALLPAPER_FAVORITES,
+    CONF_WALLPAPER_SOURCE,
+    DATA_GLOBAL_CONFIG,
+    DEFAULT_DEVICE_REMOTE_GROUP,
+    DOMAIN,
+    GLOBAL_CONFIG_KEYS,
+    INTEGRATION_VERSION,
+    STUDIO_REV,
+    SUBENTRY_BLE_TAG,
+    normalize_device_slug,
+)
+from ..core.activity_policy import normalize_activity_sources
+from ..core.backup import (
     GROUP_APPEARANCE_DEVICE_KEYS,
     GROUP_BEHAVIOR_DEVICE_KEYS,
     async_apply_group_baseline_to_coordinators,
@@ -35,41 +61,21 @@ from ..backup_engine import (
     seed_group_baseline_from_coordinator,
     update_group_baseline_esphome_control,
 )
-from ..ble_engine import get_ble_fabric
-from ..const import (
-    CONF_AREA_FUSION_CONFIG,
-    CONF_ASSIGNED_PERSON,
-    CONF_BLE_AREA_OFFSETS,
-    CONF_BLE_TARGET_ADDRESS,
-    CONF_DEVICE_GROUP,
-    CONF_DEVICE_GROUPS,
-    CONF_DEVICE_REMOTE_GROUP,
-    CONF_ACTIVITY_SOURCES,
-    CONF_DOCK_APPS,
-    CONF_MA_PLAYER_ENTITY,
-    CONF_WALLPAPER_FAVORITES,
-    CONF_WALLPAPER_SOURCE,
-    DATA_GLOBAL_CONFIG,
-    DEFAULT_DEVICE_REMOTE_GROUP,
-    DOMAIN,
-    GLOBAL_CONFIG_KEYS,
-    INTEGRATION_VERSION,
-    SUBENTRY_BLE_TAG,
-    normalize_device_slug,
-)
-from ..coordinator import LatterCoordinator
-from ..device_reset import async_reset_device
-from ..activity_policy import normalize_activity_sources
-from ..dock_policy import normalize_dock_apps
-from ..doorbell_engine import async_execute_doorbell_intercom
-from ..identity import device_entities
-from ..media_engine import async_refresh_ma_link
-from ..wallpaper_engine import (
+from ..core.device_coordinator import LatterCoordinator
+from ..core.device_reset import async_reset_device
+from ..core.dock_policy import normalize_dock_apps
+from ..core.hub import get_latter_system
+from ..core.identity import device_entities
+from ..core.security_policy import hash_security_pin
+from ..http.wallpapers import (
     async_refresh_wallpaper_cache,
     delete_uploaded_wallpaper,
     known_wallpaper_ids,
     save_uploaded_wallpaper,
 )
+from ..media.ma_link import async_refresh_ma_link
+from ..presence.ble_fabric import get_all_areas_presence_summary, get_ble_fabric
+from ..presence.fusion import area_fusion_sensor_choices
 from .catalog_gate import CatalogGate
 from .payload import (
     STUDIO_BULK_CONTROL_DOMAINS,
@@ -102,8 +108,6 @@ from .settings import (
 
 _LOGGER = logging.getLogger(__name__)
 
-STUDIO_REV = 3
-
 
 class StudioCommandError(Exception):
     """A Studio command rejected its input; sent to the panel as a websocket error with `code`."""
@@ -112,6 +116,22 @@ class StudioCommandError(Exception):
         """Store the websocket error code alongside the message."""
         super().__init__(message)
         self.code = code
+
+
+def _check_studio_rev(
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> bool:
+    """Validate `studio_rev` when supplied; send `studio_rev_mismatch` and return False on mismatch."""
+    rev = msg.get("studio_rev")
+    if rev is not None and rev != STUDIO_REV:
+        connection.send_error(
+            msg["id"],
+            "studio_rev_mismatch",
+            f"Studio client revision ({rev}) does not match backend revision ({STUDIO_REV}); reload Latter Studio.",
+        )
+        return False
+    return True
 
 
 def _payload_device(hass: HomeAssistant, body: dict[str, Any], purpose: str) -> LatterCoordinator:
@@ -158,10 +178,7 @@ async def _async_execute_studio_command(
     cmd: str,
     body: dict[str, Any],
 ) -> dict[str, Any]:
-    """Execute a Studio command and return extra response fields.
-
-    `coordinator` is the Device of a Device command and None for System commands.
-    """
+    """Execute a Studio command and return extra response fields."""
     extra: dict[str, Any] = {}
     global_cfg: dict[str, Any] = hass.data.get(DOMAIN, {}).get(DATA_GLOBAL_CONFIG) or {}
 
@@ -196,7 +213,9 @@ async def _async_execute_studio_command(
         await async_save_and_broadcast_global_config(
             hass, {CONF_AREA_FUSION_CONFIG: fusion_cfg}
         )
-        get_ble_fabric(hass).notify_occupancy_listeners()
+        fabric = get_ble_fabric(hass)
+        fabric.rebind_fusion_sensor_listener()
+        fabric.notify_occupancy_listeners()
 
     elif cmd == "auto_calibrate_here":
         target_area_id = str(body.get("area_id") or "").strip()
@@ -308,6 +327,7 @@ async def _async_execute_studio_command(
                     )
 
     elif cmd == "esphome_entity_action":
+        assert coordinator is not None
         allowed = {e.entity_id for e in device_entities(hass, coordinator.esphome_device_id)}
         (entity_id,) = allowed_entity_targets(
             [body.get("entity_id")], allowed, f"an entity of {coordinator.device_title}"
@@ -358,7 +378,6 @@ async def _async_execute_studio_command(
         )
 
     elif cmd == "check_system_updates":
-        # Device firmware only: Latter itself updates through HACS.
         coords = [c for c in _get_all_coordinators(hass) if not c.is_ble_tag]
         update_ids = {
             c.subentry_id: [
@@ -394,6 +413,7 @@ async def _async_execute_studio_command(
         }
 
     elif cmd == "upload_wallpaper":
+        assert coordinator is not None
         filename = str(body.get("filename") or "wallpaper.jpg")
         data_b64 = str(body.get("data_b64") or "")
         if not data_b64:
@@ -405,12 +425,14 @@ async def _async_execute_studio_command(
             filename,
             data_b64,
         )
+        await async_refresh_wallpaper_cache(hass, coordinator.device_slug)
         favs = list(coordinator.wallpaper_favorites)
         if new_source not in favs:
             favs.append(new_source)
         _apply_wallpaper_config(coordinator, source=new_source, favorites=favs)
 
     elif cmd == "select_wallpaper":
+        assert coordinator is not None
         source_id = str(body.get("source_id") or "").strip()
         if source_id:
             await async_refresh_wallpaper_cache(hass, coordinator.device_slug)
@@ -421,6 +443,7 @@ async def _async_execute_studio_command(
         _apply_wallpaper_config(coordinator, source=source_id)
 
     elif cmd == "toggle_wallpaper_favorite":
+        assert coordinator is not None
         source_id = str(body.get("source_id") or "").strip()
         favs = list(coordinator.wallpaper_favorites)
         if source_id in favs:
@@ -435,6 +458,7 @@ async def _async_execute_studio_command(
         _apply_wallpaper_config(coordinator, favorites=favs)
 
     elif cmd == "delete_wallpaper":
+        assert coordinator is not None
         source_id = str(body.get("source_id") or "").strip()
         deleted = await hass.async_add_executor_job(
             delete_uploaded_wallpaper,
@@ -446,6 +470,7 @@ async def _async_execute_studio_command(
             raise StudioCommandError(
                 "not_found", "That wallpaper isn't an uploaded photo"
             )
+        await async_refresh_wallpaper_cache(hass, coordinator.device_slug)
         for c in _get_all_coordinators(hass):
             if source_id in c.wallpaper_favorites or c.wallpaper_source == source_id:
                 favs = [f for f in c.wallpaper_favorites if f != source_id]
@@ -464,6 +489,7 @@ async def _async_execute_studio_command(
             filename,
             data_b64,
         )
+        await async_refresh_wallpaper_cache(hass, "system")
 
     elif cmd == "delete_system_wallpaper":
         source_id = str(body.get("source_id") or "").strip()
@@ -477,6 +503,7 @@ async def _async_execute_studio_command(
             raise StudioCommandError(
                 "not_found", "That wallpaper isn't an uploaded photo"
             )
+        await async_refresh_wallpaper_cache(hass, "system")
         for c in _get_all_coordinators(hass):
             if source_id in c.wallpaper_favorites or c.wallpaper_source == source_id:
                 favs = [f for f in c.wallpaper_favorites if f != source_id]
@@ -491,18 +518,39 @@ async def _async_execute_studio_command(
         log_studio_event(hass, "INFO", "studio", "Saved System settings")
 
     elif cmd == "save_device_config":
-        updates = clean_device_settings(dict(body.get("config") or {}))
+        assert coordinator is not None
+        raw_cfg = dict(body.get("config") or {})
+        has_pin_write = CONF_SECURITY_PIN in raw_cfg
+        raw_pin_val = str(raw_cfg.pop(CONF_SECURITY_PIN, "") or "").strip()
+        clear_pin_val = bool(raw_cfg.pop(CONF_CLEAR_SECURITY_PIN, False))
+
+        updates = clean_device_settings(raw_cfg)
+        if clear_pin_val:
+            updates[CONF_SECURITY_PIN_HASH] = ""
+        elif has_pin_write and raw_pin_val:
+            try:
+                updates[CONF_SECURITY_PIN_HASH] = hash_security_pin(raw_pin_val)
+            except ValueError as err:
+                raise SettingsScopeError(str(err)) from None
+
         try:
             if CONF_DOCK_APPS in updates:
                 updates[CONF_DOCK_APPS] = normalize_dock_apps(updates[CONF_DOCK_APPS])
             if CONF_ACTIVITY_SOURCES in updates:
-                updates[CONF_ACTIVITY_SOURCES] = normalize_activity_sources(updates[CONF_ACTIVITY_SOURCES])
+                updates[CONF_ACTIVITY_SOURCES] = normalize_activity_sources(
+                    updates[CONF_ACTIVITY_SOURCES]
+                )
         except ValueError as err:
             raise SettingsScopeError(str(err)) from None
+
         current = coordinator.device_data
         merged_device: dict[str, Any] = {**current, **updates}
-        for gk in GLOBAL_CONFIG_KEYS:
+        # Never allow raw PIN keys to enter persisted subentry config.
+        merged_device.pop(CONF_SECURITY_PIN, None)
+        merged_device.pop(CONF_CLEAR_SECURITY_PIN, None)
+        for gk in set(GLOBAL_CONFIG_KEYS) - {CONF_SECURITY_PIN_HASH}:
             merged_device.pop(gk, None)
+
         ma_link_changed = merged_device.get(CONF_MA_PLAYER_ENTITY, "") != current.get(
             CONF_MA_PLAYER_ENTITY, ""
         )
@@ -608,7 +656,9 @@ async def _async_execute_studio_command(
         g_id = re.sub(r"[^a-z0-9]+", "_", g_name.lower()).strip("_") or "group"
         groups = get_device_groups(hass)
         if any(g.get("id") == g_id for g in groups):
-            raise StudioCommandError("already_configured", f"A group named '{g_name}' already exists")
+            raise StudioCommandError(
+                "already_configured", f"A group named '{g_name}' already exists"
+            )
         groups.append(
             {
                 "id": g_id,
@@ -677,7 +727,7 @@ async def _async_execute_studio_command(
     elif cmd == "set_group_device_setting":
         g_id = str(body.get("group_id") or "all").strip()
         raw_updates = dict(body.get("config") or {})
-        allowed_keys = GROUP_BEHAVIOR_DEVICE_KEYS | GROUP_APPEARANCE_DEVICE_KEYS
+        allowed_keys = set(GROUP_BEHAVIOR_DEVICE_KEYS) | set(GROUP_APPEARANCE_DEVICE_KEYS)
         filtered = {k: v for k, v in raw_updates.items() if k in allowed_keys}
         if not filtered:
             raise StudioCommandError(
@@ -715,6 +765,56 @@ async def _async_execute_studio_command(
                         hass, {CONF_DEVICE_GROUPS: groups}
                     )
 
+    elif cmd == "rotate_signing_key":
+        sys_obj = get_latter_system(hass)
+        if sys_obj is None:
+            raise StudioCommandError("not_ready", "Latter System is not initialized")
+        await sys_obj.async_rotate_hmac_secret()
+        log_studio_event(hass, "INFO", "system", "Rotated HTTP resource signing key")
+
+    elif cmd == "set_security_pin":
+        target_sub_id = str(body.get("subentry_id") or "").strip()
+        if target_sub_id:
+            target_coord = find_by_subentry_id(_get_all_coordinators(hass), target_sub_id)
+            if target_coord is None:
+                raise StudioCommandError(
+                    "not_found", f"No Latter Device with subentry_id '{target_sub_id}'"
+                )
+            if body.get("clear"):
+                pin_hash = ""
+                log_msg = f"Cleared security PIN for '{target_coord.device_slug}'"
+            else:
+                raw_pin = str(body.get("pin") or "").strip()
+                try:
+                    pin_hash = hash_security_pin(raw_pin)
+                except ValueError as err:
+                    raise StudioCommandError("invalid_format", str(err)) from err
+                log_msg = f"Updated security PIN for '{target_coord.device_slug}'"
+            merged_pin_cfg: dict[str, Any] = {
+                **target_coord.device_data,
+                CONF_SECURITY_PIN_HASH: pin_hash,
+            }
+            merged_pin_cfg.pop(CONF_SECURITY_PIN, None)
+            target_coord.update_device_config(merged_pin_cfg)
+            await target_coord.async_apply_options()
+            target_coord.async_notify_listeners()
+            log_studio_event(hass, "INFO", target_coord.device_slug, log_msg)
+        elif body.get("clear"):
+            await async_save_and_broadcast_global_config(
+                hass, {CONF_SECURITY_PIN_HASH: ""}
+            )
+            log_studio_event(hass, "INFO", "system", "Cleared System security PIN")
+        else:
+            raw_pin = str(body.get("pin") or "").strip()
+            try:
+                pin_hash = hash_security_pin(raw_pin)
+            except ValueError as err:
+                raise StudioCommandError("invalid_format", str(err)) from err
+            await async_save_and_broadcast_global_config(
+                hass, {CONF_SECURITY_PIN_HASH: pin_hash}
+            )
+            log_studio_event(hass, "INFO", "system", "Updated System security PIN")
+
     else:
         raise StudioCommandError("unknown_command", f"Unsupported Studio command: {cmd}")
 
@@ -726,6 +826,7 @@ async def _async_execute_studio_command(
     {
         vol.Required("type"): "latter/system/get_state",
         vol.Optional("subentry_id"): vol.Any(str, None),
+        vol.Optional("include_logs", default=False): bool,
         vol.Optional("studio_rev"): vol.Any(int, None),
     }
 )
@@ -736,18 +837,19 @@ async def ws_handle_get_state(
     msg: dict[str, Any],
 ) -> None:
     """Return the current Latter Studio state payload."""
-    if msg.get("studio_rev") != STUDIO_REV:
-        _LOGGER.debug(
-            "Ignoring get_state from a stale cached Studio client (studio_rev != %s)", STUDIO_REV
-        )
-        connection.send_result(msg["id"], None)
+    if not _check_studio_rev(connection, msg):
         return
     coord = resolve_target_coordinator(hass, msg.get("subentry_id"))
     if coord is not None:
         await async_refresh_wallpaper_cache(hass, coord.device_slug)
+    await async_refresh_wallpaper_cache(hass, "system")
     connection.send_result(
         msg["id"],
-        build_studio_state_payload(hass, coord),
+        build_studio_state_payload(
+            hass,
+            coord,
+            include_logs=bool(msg.get("include_logs", False)),
+        ),
     )
 
 
@@ -756,6 +858,8 @@ async def ws_handle_get_state(
     {
         vol.Required("type"): "latter/system/subscribe",
         vol.Optional("subentry_id"): vol.Any(str, None),
+        vol.Optional("survey_subentry_id"): vol.Any(str, None),
+        vol.Optional("include_logs", default=False): bool,
         vol.Optional("studio_rev"): vol.Any(int, None),
     }
 )
@@ -766,13 +870,11 @@ async def ws_handle_subscribe(
     msg: dict[str, Any],
 ) -> None:
     """Subscribe to live Latter Studio state and BLE survey updates."""
-    if msg.get("studio_rev") != STUDIO_REV:
-        _LOGGER.debug(
-            "Ignoring subscribe from a stale cached Studio client (studio_rev != %s)", STUDIO_REV
-        )
-        connection.send_result(msg["id"], None)
+    if not _check_studio_rev(connection, msg):
         return
     sub_id = msg.get("subentry_id")
+    survey_sub_id = str(msg.get("survey_subentry_id") or "").strip()
+    include_logs = bool(msg.get("include_logs", False))
     unsubs: list[Any] = []
     debounce_cancel: list[Any] = [None]
     catalog_gate = CatalogGate()
@@ -784,7 +886,12 @@ async def ws_handle_subscribe(
         connection.send_message(
             websocket_api.event_message(
                 msg["id"],
-                build_studio_state_payload(hass, coord, include_catalog=catalog_gate.take()),
+                build_studio_state_payload(
+                    hass,
+                    coord,
+                    include_catalog=catalog_gate.take(),
+                    include_logs=include_logs,
+                ),
             )
         )
 
@@ -815,9 +922,34 @@ async def ws_handle_subscribe(
     ble_fabric = get_ble_fabric(hass)
     unsubs.append(ble_fabric.register_occupancy_listener(_schedule_push))
 
-    # The bound ESPHome device's own entities change outside Latter (a select set from Studio lands when the
-    # device reports it back), so their state changes push too: a Device subscription watches every entity of
-    # its Device, a System subscription the controls the bulk-control list shows.
+    @callback
+    def _on_survey_delta(delta: dict[str, Any]) -> None:
+        target_id = survey_sub_id or str(sub_id or "")
+        coords = _get_all_coordinators(hass)
+        target_coord = find_by_subentry_id(coords, target_id) if target_id else None
+        if target_coord is None:
+            slug = str(delta.get("device_slug") or "")
+            target_coord = next((c for c in coords if c.device_slug == slug), None)
+        if target_coord is None or target_coord._ble_tracker is None:
+            return
+        if survey_sub_id and target_coord.subentry_id != survey_sub_id:
+            return
+        connection.send_message(
+            websocket_api.event_message(
+                msg["id"],
+                {
+                    "type": "ble_survey_delta",
+                    "subentry_id": target_coord.subentry_id,
+                    "ble_packets_seen": target_coord._ble_tracker.packets_seen,
+                    "ble_closest_proxy": target_coord._ble_tracker.closest_scanner,
+                    "ble_survey_rows": target_coord._ble_tracker.get_area_calibration_telemetry(),
+                    "area_presence_grid": get_all_areas_presence_summary(hass),
+                },
+            )
+        )
+
+    unsubs.append(ble_fabric.register_survey_listener(_on_survey_delta))
+
     state_unsub: list[Any] = [None]
 
     @callback
@@ -879,9 +1011,10 @@ async def ws_handle_subscribe(
     coord = resolve_target_coordinator(hass, sub_id)
     if coord is not None:
         await async_refresh_wallpaper_cache(hass, coord.device_slug)
+    await async_refresh_wallpaper_cache(hass, "system")
     connection.send_result(
         msg["id"],
-        build_studio_state_payload(hass, coord),
+        build_studio_state_payload(hass, coord, include_logs=include_logs),
     )
 
 
@@ -891,11 +1024,9 @@ async def _async_handle_ws_command_impl(
     msg: dict[str, Any],
     scope: Scope,
 ) -> None:
-    """Run a Studio command on its own websocket type and answer with the Studio state.
-
-    The state in the answer is built for the Studio's selected Device (`subentry_id`), so the page
-    keeps its Device; a System command never acts on that Device.
-    """
+    """Run a Studio command on its own websocket type and answer with the Studio state."""
+    if not _check_studio_rev(connection, msg):
+        return
     cmd = str(msg["command"]).strip()
     body = dict(msg.get("payload") or {})
     selected = resolve_target_coordinator(hass, msg.get("subentry_id"))
@@ -926,7 +1057,7 @@ async def _async_handle_ws_command_impl(
     except SettingsScopeError as err:
         connection.send_error(msg["id"], "invalid_format", str(err))
         return
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         _LOGGER.exception("Latter Studio command '%s' failed: %s", cmd, err)
         connection.send_error(msg["id"], "command_failed", str(err))
         return
@@ -936,7 +1067,12 @@ async def _async_handle_ws_command_impl(
     connection.send_result(
         msg["id"],
         {
-            **build_studio_state_payload(hass, selected, include_catalog=False),
+            **build_studio_state_payload(
+                hass,
+                selected,
+                include_catalog=False,
+                include_logs=(cmd == "clear_internal_logs"),
+            ),
             **extra,
         },
     )
@@ -949,6 +1085,7 @@ async def _async_handle_ws_command_impl(
         vol.Required("command"): str,
         vol.Optional("subentry_id"): vol.Any(str, None),
         vol.Optional("payload", default={}): dict,
+        vol.Optional("studio_rev"): vol.Any(int, None),
     }
 )
 @websocket_api.async_response
@@ -968,6 +1105,7 @@ async def ws_handle_system_command(
         vol.Required("command"): str,
         vol.Required("subentry_id"): str,
         vol.Optional("payload", default={}): dict,
+        vol.Optional("studio_rev"): vol.Any(int, None),
     }
 )
 @websocket_api.async_response
@@ -984,6 +1122,7 @@ async def ws_handle_device_command(
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "latter/system/export",
+        vol.Optional("studio_rev"): vol.Any(int, None),
     }
 )
 @websocket_api.async_response
@@ -993,6 +1132,8 @@ async def ws_handle_system_export(
     msg: dict[str, Any],
 ) -> None:
     """Export the System's non-secret settings and every Device's settings as JSON."""
+    if not _check_studio_rev(connection, msg):
+        return
     bundle = build_backup_bundle(
         hass=hass,
         scope="system",
@@ -1006,6 +1147,7 @@ async def ws_handle_system_export(
     {
         vol.Required("type"): "latter/device/export",
         vol.Required("subentry_id"): str,
+        vol.Optional("studio_rev"): vol.Any(int, None),
     }
 )
 @websocket_api.async_response
@@ -1015,6 +1157,8 @@ async def ws_handle_device_export(
     msg: dict[str, Any],
 ) -> None:
     """Export one Device's non-secret settings as JSON."""
+    if not _check_studio_rev(connection, msg):
+        return
     coord = resolve_target_coordinator(hass, msg["subentry_id"])
     if coord is None:
         connection.send_error(
@@ -1063,6 +1207,7 @@ async def _async_restore_bundle(
         vol.Optional("subentry_id"): vol.Any(str, None),
         vol.Required("bundle"): dict,
         vol.Optional("restore_esphome_entities", default=True): bool,
+        vol.Optional("studio_rev"): vol.Any(int, None),
     }
 )
 @websocket_api.async_response
@@ -1072,6 +1217,8 @@ async def ws_handle_system_import(
     msg: dict[str, Any],
 ) -> None:
     """Restore a System backup (System settings and every Device it names)."""
+    if not _check_studio_rev(connection, msg):
+        return
     if str(msg["bundle"].get("scope") or "") != "system":
         connection.send_error(
             msg["id"], "invalid_format", "This is a Device backup: choose the Device to restore it onto"
@@ -1087,6 +1234,7 @@ async def ws_handle_system_import(
         vol.Required("subentry_id"): str,
         vol.Required("bundle"): dict,
         vol.Optional("restore_esphome_entities", default=True): bool,
+        vol.Optional("studio_rev"): vol.Any(int, None),
     }
 )
 @websocket_api.async_response
@@ -1095,7 +1243,9 @@ async def ws_handle_device_import(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    """Restore a Device backup onto the Device named by `subentry_id` (it may be a different Device)."""
+    """Restore a Device backup onto the Device named by `subentry_id`."""
+    if not _check_studio_rev(connection, msg):
+        return
     if str(msg["bundle"].get("scope") or "") != "device":
         connection.send_error(
             msg["id"], "invalid_format", "This is a System backup: restore it without choosing a Device"
@@ -1117,6 +1267,7 @@ async def ws_handle_device_import(
         vol.Required("subentry_id"): str,
         vol.Optional("device_settings", default=True): bool,
         vol.Optional("latter_options", default=True): bool,
+        vol.Optional("studio_rev"): vol.Any(int, None),
     }
 )
 @websocket_api.async_response
@@ -1125,7 +1276,9 @@ async def ws_handle_device_reset(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    """Reset a Device to defaults (device settings and/or Latter options) through the same path as latter.reset_device."""
+    """Reset a Device to defaults through the same path as latter.reset_device."""
+    if not _check_studio_rev(connection, msg):
+        return
     coord = resolve_target_coordinator(hass, msg["subentry_id"])
     if coord is None:
         connection.send_error(
@@ -1160,7 +1313,9 @@ async def ws_handle_device_reset(
         )
         + ")",
     )
-    connection.send_result(msg["id"], build_studio_state_payload(hass, coord, include_catalog=False))
+    connection.send_result(
+        msg["id"], build_studio_state_payload(hass, coord, include_catalog=False)
+    )
 
 
 @callback
