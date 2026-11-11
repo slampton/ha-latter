@@ -362,10 +362,14 @@ class LatterCoordinator(LatterCoordinatorConfigMixin):
         return cur_rev, packed
 
     async def async_push_beacon_uuid(self) -> None:
-        if self.is_ble_tag or not (svc := esphome_service(self.hass, self.esphome_device_id, "latter_set_beacon_uuid")):
+        if (
+            self.is_ble_tag
+            or self._rpc_receiver.is_device_unavailable()
+            or not (svc := esphome_service(self.hass, self.esphome_device_id, "latter_set_beacon_uuid"))
+        ):
             return
         try:
-            await self.hass.services.async_call("esphome", svc, {"uuid": self.ble_beacon_uuid}, blocking=False)
+            await self.hass.services.async_call("esphome", svc, {"uuid": self.ble_beacon_uuid}, blocking=True)
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("esphome.%s failed: %s", svc, err)
 

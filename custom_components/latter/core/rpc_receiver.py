@@ -20,6 +20,8 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 RPC_OUTBOX_SUFFIXES: tuple[str, ...] = ("_system_rpc_outbox", "_rpc_outbox")
+RPC_OUTBOX_ORIGINAL_NAMES: tuple[str, ...] = ("System: RPC Outbox", "RPC Outbox")
+RPC_OUTBOX_UNIQUE_ID_SUFFIXES: tuple[str, ...] = ("/text_sensor/System: RPC Outbox",)
 
 
 class LatterRpcReceiver:
@@ -32,6 +34,18 @@ class LatterRpcReceiver:
         self._tracked_entity_id: str | None = None
         self._unsub_state: Callable[[], None] | None = None
         self._unsub_ent_reg: Callable[[], None] | None = None
+
+    @property
+    def tracked_entity_id(self) -> str | None:
+        """Return the currently bound `sensor.<node>_system_rpc_outbox` entity ID, or None."""
+        return self._tracked_entity_id
+
+    def is_device_unavailable(self) -> bool:
+        """Return True when the bound RPC outbox entity exists in HA and reports `unavailable`."""
+        if not self._tracked_entity_id:
+            return False
+        st = self.hass.states.get(self._tracked_entity_id)
+        return st is not None and st.state == STATE_UNAVAILABLE
 
     @callback
     def start(self) -> None:
@@ -56,7 +70,7 @@ class LatterRpcReceiver:
 
     @callback
     def rebind(self) -> None:
-        """Resolve the bound ESPHome Device's RPC outbox `text_sensor` and subscribe if changed."""
+        """Resolve the bound ESPHome Device's RPC outbox `sensor` entity and subscribe if changed."""
         if self.coordinator.is_ble_tag:
             self.stop()
             return
@@ -65,8 +79,10 @@ class LatterRpcReceiver:
             find_device_entity_by_suffix(
                 self.hass,
                 dev_id,
-                "text_sensor",
+                "sensor",
                 RPC_OUTBOX_SUFFIXES,
+                original_names=RPC_OUTBOX_ORIGINAL_NAMES,
+                unique_id_suffixes=RPC_OUTBOX_UNIQUE_ID_SUFFIXES,
             )
             if dev_id
             else None
@@ -95,8 +111,10 @@ class LatterRpcReceiver:
         if action not in ("create", "update", "remove"):
             return
         ent_id = str(event.data.get("entity_id") or "")
-        if ent_id == self._tracked_entity_id or any(
-            ent_id.endswith(sfx) for sfx in RPC_OUTBOX_SUFFIXES
+        if (
+            self._tracked_entity_id is None
+            or ent_id == self._tracked_entity_id
+            or any(ent_id.endswith(sfx) for sfx in RPC_OUTBOX_SUFFIXES)
         ):
             self.rebind()
 
@@ -104,8 +122,17 @@ class LatterRpcReceiver:
     def _async_on_outbox_state_change(
         self, event: Event[EventStateChangedData]
     ) -> None:
+        old_state = event.data.get("old_state")
         new_state = event.data.get("new_state")
-        if new_state is None or new_state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN, ""):
+        if new_state is None:
+            return
+        if new_state.state == STATE_UNAVAILABLE:
+            self.coordinator._last_pushed_v3.clear()
+            return
+        if old_state is not None and old_state.state == STATE_UNAVAILABLE:
+            self.coordinator._last_pushed_v3.clear()
+            self.coordinator.force_republish_all_domains()
+        if new_state.state in (STATE_UNKNOWN, ""):
             return
         self._ingest_raw_state(new_state.state)
 

@@ -148,12 +148,22 @@ def find_device_entity_by_suffix(
     device_or_id: dr.DeviceEntry | str | None,
     domain: str,
     suffixes: tuple[str, ...] | list[str],
+    original_names: tuple[str, ...] = (),
+    unique_id_suffixes: tuple[str, ...] = (),
 ) -> str | None:
-    """Find an enabled entity on the bound device in `domain` matching one of `suffixes` in priority order."""
+    """Find an enabled entity on the bound device in `domain` matching `suffixes` (or `original_names` / `unique_id_suffixes` if renamed)."""
     entries = device_entities(hass, device_or_id, domain=domain)
     for sfx in suffixes:
         for entry in entries:
             if not sfx or entry.entity_id.endswith(sfx):
+                return entry.entity_id
+    for orig in original_names:
+        for entry in entries:
+            if (entry.original_name or "") == orig:
+                return entry.entity_id
+    for uid_sfx in unique_id_suffixes:
+        for entry in entries:
+            if uid_sfx and (entry.unique_id or "").endswith(uid_sfx):
                 return entry.entity_id
     return None
 
@@ -181,8 +191,10 @@ def read_device_hardware_manifest(
     manifest_ent_id = find_device_entity_by_suffix(
         hass,
         device_or_id,
-        "text_sensor",
+        "sensor",
         ("_system_hardware_manifest", "_hardware_manifest"),
+        original_names=("System: Hardware Manifest", "Hardware Manifest"),
+        unique_id_suffixes=("/text_sensor/System: Hardware Manifest",),
     )
     if manifest_ent_id:
         st = hass.states.get(manifest_ent_id)

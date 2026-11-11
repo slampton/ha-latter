@@ -15,7 +15,7 @@ You can also add the device by hand: **Settings → Devices & Services → Add I
 
 Latter communicates over Zero-Privilege RPC—you do **not** need *"Allow the device to perform Home Assistant actions"*. Instead, check:
 1. **The bound ESPHome device is online** in **Settings → Devices & Services → ESPHome**.
-2. **The diagnostic `System: RPC Outbox` entity is enabled** on the ESPHome device (`text_sensor.<node>_system_rpc_outbox`). Latter listens to that entity for every tap and browse request from the device.
+2. **The diagnostic `System: RPC Outbox` entity is enabled** on the ESPHome device (`sensor.<node>_system_rpc_outbox`). Latter listens to that entity for every tap and browse request from the device.
 3. **Both `ha-latter` and `esphome-latter-core` are on `v3.0.0` or newer**, so `esphome.<node>_latter_push_v3` is registered under **Developer Tools → Actions**.
 
 **I renamed the device and want to know if anything needs updating**

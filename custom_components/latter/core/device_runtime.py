@@ -893,6 +893,10 @@ async def async_push_coordinator_v3_domains(coord: Any) -> None:
         svc := esphome_service(coord.hass, coord.esphome_device_id, "latter_push_v3")
     ):
         return
+    rpc_rx = getattr(coord, "_rpc_receiver", None)
+    if rpc_rx is not None and rpc_rx.is_device_unavailable():
+        coord._last_pushed_v3.clear()
+        return
     for dom, payload in (
         ("active_media", str(coord.get_active_media_payload()[1].get("payload") or "")),
         ("weather_forecast", str(coord.weather_attributes.get("payload") or "")),
@@ -908,11 +912,11 @@ async def async_push_coordinator_v3_domains(coord: Any) -> None:
     ):
         if not payload or coord._last_pushed_v3.get(dom) == payload:
             continue
-        coord._last_pushed_v3[dom] = payload
         try:
             await coord.hass.services.async_call(
-                "esphome", svc, {"domain": dom, "payload": payload}, blocking=False
+                "esphome", svc, {"domain": dom, "payload": payload}, blocking=True
             )
+            coord._last_pushed_v3[dom] = payload
         except Exception as err:  # noqa: BLE001
             coord._last_pushed_v3.pop(dom, None)
             _LOGGER.debug("esphome.%s (%s) failed: %s", svc, dom, err)

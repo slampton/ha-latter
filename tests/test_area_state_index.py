@@ -384,7 +384,7 @@ async def test_calendar_feeds_and_doorbell_ring_reflex(
 
     hass.states.async_set("calendar.family", "off", {"friendly_name": "Family"})
     now_local = dt_util.now()
-    tomorrow_str = (now_local + timedelta(days=1)).strftime("%Y-%m-%d")
+    tomorrow_str = (now_local + timedelta(days=2)).strftime("%Y-%m-%d")
     event_iso = (now_local + timedelta(hours=2)).isoformat()
 
     hass.services.async_register(

@@ -4,7 +4,7 @@ All Latter entities are push-updated: none of them poll. Per-device entities sit
 
 Protocol v3 domain payloads (`active_media`, `area_context`, `weather_forecast`, `calendar_agenda`, `remote_config`) push directly to the bound ESPHome device over the Native API via `esphome.<node>_latter_push_v3` (`domain`, `payload`)—keeping `~8 KB` of signed URLs off Home Assistant's `state_changed` bus and SQLite recorder. The corresponding diagnostic sensors in Home Assistant expose `<255`-character human-readable states and only `rev` (`_unrecorded_attributes = {"rev"}`). Source: [`sensor.py`](../../custom_components/latter/sensor.py), [`binary_sensor.py`](../../custom_components/latter/binary_sensor.py), [`device_tracker.py`](../../custom_components/latter/device_tracker.py).
 
-Latter creates **sensor**, **binary_sensor**, and **device_tracker** entities only. There are no `switch` or `select` platforms. A device's own settings (such as wake word or clock face) and its outbound Zero-Privilege RPC channel (**System: RPC Outbox**, `text_sensor.<node>_system_rpc_outbox`) are ESPHome entities on the bound ESPHome device. They are listed in [esphome-latter-core: Using your device](https://github.com/slampton/esphome-latter-core/blob/main/docs/using-your-device.md).
+Latter creates **sensor**, **binary_sensor**, and **device_tracker** entities only. There are no `switch` or `select` platforms. A device's own settings (such as wake word or clock face) and its outbound Zero-Privilege RPC channel (**System: RPC Outbox**, `sensor.<node>_system_rpc_outbox`) are ESPHome entities on the bound ESPHome device. They are listed in [esphome-latter-core: Using your device](https://github.com/slampton/esphome-latter-core/blob/main/docs/using-your-device.md).
 
 ---
 

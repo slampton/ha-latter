@@ -2238,7 +2238,7 @@ def make_esphome_device() -> Callable[..., tuple[Any, str]]:
             },
             separators=(",", ":"),
         )
-        hw_eid = f"text_sensor.{slug}_system_hardware_manifest"
+        hw_eid = f"sensor.{slug}_system_hardware_manifest"
         ent_reg.async_register(
             er.RegistryEntry(
                 entity_id=hw_eid,
@@ -2246,11 +2246,12 @@ def make_esphome_device() -> Callable[..., tuple[Any, str]]:
                 device_id=dev.id,
                 config_entry_id=esp_entry.entry_id,
                 original_name="System: Hardware Manifest",
+                unique_id=f"{mac.upper()}/0/text_sensor/System: Hardware Manifest",
             )
         )
         hass.states.async_set(hw_eid, manifest_json)
 
-        rpc_eid = f"text_sensor.{slug}_system_rpc_outbox"
+        rpc_eid = f"sensor.{slug}_system_rpc_outbox"
         ent_reg.async_register(
             er.RegistryEntry(
                 entity_id=rpc_eid,
@@ -2258,6 +2259,7 @@ def make_esphome_device() -> Callable[..., tuple[Any, str]]:
                 device_id=dev.id,
                 config_entry_id=esp_entry.entry_id,
                 original_name="System: RPC Outbox",
+                unique_id=f"{mac.upper()}/0/text_sensor/System: RPC Outbox",
             )
         )
         hass.states.async_set(rpc_eid, "")

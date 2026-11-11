@@ -76,7 +76,7 @@ async def test_rpc_outbox_single_and_multipart_dispatch_and_target_pinning(
     spoof_envelope = json.dumps(
         {"s": "set_active_area", "d": {"target_device": "panel_b", "area_id": "kitchen"}}
     )
-    hass.states.async_set("text_sensor.pocket_assistant_system_rpc_outbox", f"a1b2:1:1/1|{spoof_envelope}")
+    hass.states.async_set("sensor.pocket_assistant_system_rpc_outbox", f"a1b2:1:1/1|{spoof_envelope}")
     await hass.async_block_till_done()
 
     # Device A moved to kitchen; Device B stayed in bedroom!
@@ -85,8 +85,8 @@ async def test_rpc_outbox_single_and_multipart_dispatch_and_target_pinning(
 
     # 2. Replay of exact same (boot_id, seq) is ignored
     coord_a.active_area_id = "living_room"
-    hass.states.async_set("text_sensor.pocket_assistant_system_rpc_outbox", "")
-    hass.states.async_set("text_sensor.pocket_assistant_system_rpc_outbox", f"a1b2:1:1/1|{spoof_envelope}")
+    hass.states.async_set("sensor.pocket_assistant_system_rpc_outbox", "")
+    hass.states.async_set("sensor.pocket_assistant_system_rpc_outbox", f"a1b2:1:1/1|{spoof_envelope}")
     await hass.async_block_till_done()
     assert coord_a.active_area_id == "living_room"
 
@@ -98,13 +98,47 @@ async def test_rpc_outbox_single_and_multipart_dispatch_and_target_pinning(
         }
     )
     c1, c2, c3 = full_env[:25], full_env[25:55], full_env[55:]
-    hass.states.async_set("text_sensor.pocket_assistant_system_rpc_outbox", f"a1b2:2:1/3|{c1}")
-    hass.states.async_set("text_sensor.pocket_assistant_system_rpc_outbox", f"a1b2:2:2/3|{c2}")
-    hass.states.async_set("text_sensor.pocket_assistant_system_rpc_outbox", f"a1b2:2:3/3|{c3}")
+    hass.states.async_set("sensor.pocket_assistant_system_rpc_outbox", f"a1b2:2:1/3|{c1}")
+    hass.states.async_set("sensor.pocket_assistant_system_rpc_outbox", f"a1b2:2:2/3|{c2}")
+    hass.states.async_set("sensor.pocket_assistant_system_rpc_outbox", f"a1b2:2:3/3|{c3}")
     await hass.async_block_till_done()
     assert any(c.domain == "light" and c.service == "turn_on" for c in hass.services.calls)
 
-    # 4. Malformed / oversize / unauthorized service RPCs are rejected safely
+    # 4. Disconnect (`unavailable`) -> reconnect (`unknown`) clears push cache and republishes all 5 v3 domains
+    push_calls = [
+        c for c in hass.services.calls
+        if c.domain == "esphome" and c.service == "pocket_assistant_latter_push_v3"
+    ]
+    before_reconnect_count = len(push_calls)
+    hass.states.async_set("sensor.pocket_assistant_system_rpc_outbox", "unavailable")
+    await hass.async_block_till_done()
+    assert coord_a._last_pushed_v3 == {}
+
+    # Pushing while unavailable is skipped cleanly without poisoning _last_pushed_v3
+    await coord_a.async_push_dirty_v3_domains()
+    assert coord_a._last_pushed_v3 == {}
+
+    hass.states.async_set("sensor.pocket_assistant_system_rpc_outbox", "unknown")
+    await hass.async_block_till_done()
+    reconnected_domains = {
+        c.data.get("domain")
+        for c in hass.services.calls[before_reconnect_count:]
+        if c.domain == "esphome" and c.service == "pocket_assistant_latter_push_v3"
+    }
+    assert {"active_media", "weather_forecast", "area_context", "calendar_agenda", "remote_config"} <= reconnected_domains
+
+    # 5. Transient ESPHome service failure (e.g., ConnectionNotEstablishedAPIError) never poisons _last_pushed_v3
+    from homeassistant.exceptions import HomeAssistantError
+
+    async def _failing_push(_call: Any) -> None:
+        raise HomeAssistantError("Not connected to panel_b")
+
+    hass.services.async_register("esphome", "panel_b_latter_push_v3", _failing_push)
+    coord_b._last_pushed_v3.clear()
+    await coord_b.async_push_dirty_v3_domains()
+    assert coord_b._last_pushed_v3 == {}
+
+    # 6. Malformed / oversize / unauthorized service RPCs are rejected safely
     assert parse_rpc_frame("not_a_valid_frame") is None
     assert parse_rpc_frame("zzzz:1:1/1|{}") is None
     assert parse_rpc_frame("a1b2:1:1/1|" + ("x" * (MAX_RPC_BYTES + 10))) is None
