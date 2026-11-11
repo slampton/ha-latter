@@ -133,7 +133,7 @@ Everything the finished devices use is documented and open to you:
 | | Version | Notes |
 | :--- | :--- | :--- |
 | Home Assistant | 2026.10 or newer | |
-| ESPHome | 2026.11.0b2 or newer | Only needed if you build Latter firmware yourself |
+| ESPHome | 2026.11.0b3 or newer | Only needed if you build Latter firmware yourself |
 | Music Assistant | 2.10.8 or newer, optional | Required for library browsing, queue transfer, and the default intercom speaker set. Basic transport and volume work without it. |
 | Bluetooth proxies | At least one per area you want to detect | ESPHome proxies are tested. Other HA Bluetooth scanners should work but are unverified. |
 | `ffmpeg` | Optional | Used to stream doorbell camera audio to devices. Bundled with Home Assistant OS. |
