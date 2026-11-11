@@ -43,7 +43,7 @@ from custom_components.latter.http.wallpapers import (
 
 def _make_jpeg_bytes(w: int = 64, h: int = 64) -> bytes:
     buf = io.BytesIO()
-    Image.new("RGB", (w, h), (40, 90, 160)).save(buf, format="JPEG")
+    Image.new("RGB", (w, h), (40, 90, 160)).save(buf, format="JPEG", progressive=False)
     return buf.getvalue()
 
 
@@ -386,6 +386,8 @@ async def test_artwork_camera_map_and_brand_icon_views(
         coord.device_slug,
     )
     assert r_cam_ok.status == 200
+    assert r_cam_ok.content_type == "image/jpeg"
+    assert r_cam_ok.body.startswith(b"\xff\xd8")
 
     # 3) Map Snapshot View: zone.home ignored, non-home zone.office resolved, pan_x/pan_y clamped to ±4
     map_view = LatterMapSnapshotView(hass)

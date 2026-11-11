@@ -43,9 +43,10 @@ jobs:
         with:
           python-version: "3.13"
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "22"
+          package-manager-cache: false
       - name: Install lint and test dependencies
         run: pip install --upgrade pip ruff pytest pytest-asyncio pytest-cov voluptuous Pillow aiohttp
       - name: Verify static architecture, security, and Studio guardrails

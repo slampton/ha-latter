@@ -20,7 +20,7 @@ from custom_components.latter.studio.payload import log_studio_event
 
 def _make_b64_jpeg() -> str:
     buf = io.BytesIO()
-    Image.new("RGB", (64, 64), (80, 120, 200)).save(buf, format="JPEG")
+    Image.new("RGB", (64, 64), (80, 120, 200)).save(buf, format="JPEG", progressive=False)
     return base64.b64encode(buf.getvalue()).decode("ascii")
 
 

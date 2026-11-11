@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from enum import StrEnum
 import importlib.util
+import io
 import json
 from pathlib import Path
 import re
@@ -43,10 +44,19 @@ def _ensure_module(name: str) -> ModuleType:
 # ---------------------------------------------------------------------------
 # Minimal PIL stub (used ONLY when Pillow is not installed in local sandbox)
 # ---------------------------------------------------------------------------
+_HAS_REAL_PIL = importlib.util.find_spec("PIL") is not None
+
+
 def _build_minimal_baseline_jpeg(width: int, height: int) -> bytes:
-    """Build a valid SOF0 (0xFFC0) JPEG byte stream with exact dimensions."""
+    """Encode a real non-progressive Baseline JPEG via Pillow (with SOF0 stub fallback when PIL is absent)."""
     w = max(1, min(65535, int(width)))
     h = max(1, min(65535, int(height)))
+    if _HAS_REAL_PIL:
+        from PIL import Image
+
+        buf = io.BytesIO()
+        Image.new("RGB", (w, h), (48, 96, 160)).save(buf, format="JPEG", progressive=False)
+        return buf.getvalue()
     sof0 = (
         b"\xff\xc0"
         + (11).to_bytes(2, "big")
@@ -59,7 +69,7 @@ def _build_minimal_baseline_jpeg(width: int, height: int) -> bytes:
     return b"\xff\xd8" + sof0 + sos + b"\xff\xd9"
 
 
-if importlib.util.find_spec("PIL") is None:
+if not _HAS_REAL_PIL:
     pil_mod = _ensure_module("PIL")
     image_mod = _ensure_module("PIL.Image")
     draw_mod = _ensure_module("PIL.ImageDraw")
