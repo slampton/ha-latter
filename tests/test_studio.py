@@ -210,12 +210,25 @@ class TestViewLayout(unittest.TestCase):
 
     def test_brand_images_are_valid_png(self) -> None:
         sizes = {}
-        for name in ("icon.png", "icon@2x.png", "logo.png", "logo@2x.png"):
+        for name in (
+            "icon.png",
+            "icon@2x.png",
+            "dark_icon.png",
+            "dark_icon@2x.png",
+            "logo.png",
+            "logo@2x.png",
+            "dark_logo.png",
+            "dark_logo@2x.png",
+        ):
             data = (LATTER_DIR / "brand" / name).read_bytes()
             self.assertTrue(data.startswith(b"\x89PNG\r\n\x1a\n"), name)
             self.assertNotIn(b"\xef\xbf\xbd", data[:64], name)
+            self.assertEqual(data[25], 6, f"{name} must be RGBA (color type 6) with transparent background")
             sizes[name] = int.from_bytes(data[16:20], "big")
         self.assertEqual((sizes["icon.png"], sizes["icon@2x.png"]), (256, 512))
+        self.assertEqual((sizes["dark_icon.png"], sizes["dark_icon@2x.png"]), (256, 512))
+        self.assertEqual((sizes["logo.png"], sizes["logo@2x.png"]), (256, 512))
+        self.assertEqual((sizes["dark_logo.png"], sizes["dark_logo@2x.png"]), (256, 512))
 
     def test_native_popups_follow_ha_dark_mode(self) -> None:
         js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
