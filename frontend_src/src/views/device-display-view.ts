@@ -2,7 +2,12 @@
  * Device Display & Home View (`home_display`): Appearance, Custom Color, Activity Card, Dock Apps, Area Controls & Wallpapers.
  */
 
-import { renderNativeControlRow } from "../components/controls.js";
+import {
+  renderCard,
+  renderNativeControlRow,
+  renderSelectRow,
+  renderSettingsRow,
+} from "../components/controls.js";
 import {
   renderWallpaperGalleryItems,
   renderWallpaperUploadBar,
@@ -86,23 +91,16 @@ export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
   return html`<section id="view-home_display">
     <div class="columns">
       <div class="column">
-        <div class="card">
-          <div class="card-header">
-            <h3 class="card-title">Display &amp; Appearance</h3>
-          </div>
-          <div class="card-content settings-list">
-            ${visibleDisplayItems.map((it) => renderNativeControlRow(store, it))}
-
+        ${renderCard({
+          title: "Display & Appearance",
+          contentClass: "settings-list",
+          body: html`${visibleDisplayItems.map((it) => renderNativeControlRow(store, it))}
             ${colorProfileItem || palettes.length || cfg.device_custom_color
-              ? html`<div class="settings-row">
-                  <div class="settings-row-text">
-                    <label for="dev-custom-palette-select" class="row-label">Custom Color</label>
-                    <p class="row-description">
-                      Used when Color Profile is set to Custom.
-                    </p>
-                  </div>
-                  <div class="settings-row-control">
-                    <span class="swatch" style=${swatchStyle} aria-hidden="true"></span>
+              ? renderSettingsRow({
+                  label: "Custom Color",
+                  forId: "dev-custom-palette-select",
+                  description: "Used when Color Profile is set to Custom.",
+                  control: html`<span class="swatch" style=${swatchStyle} aria-hidden="true"></span>
                     <select
                       id="dev-custom-palette-select"
                       .value=${curHex}
@@ -131,112 +129,92 @@ export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
                       class="btn btn-secondary btn-compact"
                     >
                       Add Color
-                    </button>
-                  </div>
-                </div>`
-              : nothing}
-          </div>
-        </div>
+                    </button>`,
+                })
+              : nothing}`,
+        })}
 
-        <div class="card">
-          <div class="card-header">
-            <h3 class="card-title">Activity Card</h3>
-          </div>
-          <div class="card-content settings-list">
-            <div class="settings-row">
-              <div class="settings-row-text">
-                <label for="cfg-activity_card" class="row-label">Show the Activity Card</label>
-                <p class="row-description">
-                  Shows live timers, alarms, media queue, stopwatch, and next calendar event on Home.
-                </p>
-              </div>
-              <div class="settings-row-control">
-                <input
-                  type="checkbox"
-                  id="cfg-activity_card"
-                  role="switch"
-                  .checked=${activityCardOn}
-                  @change=${(ev: Event) =>
-                    store.stageDeviceSetting(
-                      "activity_card",
-                      (ev.currentTarget as HTMLInputElement).checked,
-                      "cfg-activity_card",
-                    )}
-                  class="switch"
-                />
-              </div>
-            </div>
-
-            ${activityCardOn
-              ? html`<div id="activity-sources" class="settings-row stacked">
-                  <div class="settings-row-text">
-                    <span class="row-label">Activity Card Sources</span>
-                    <p class="row-description">Choose which live items appear in the Activity Card.</p>
-                  </div>
-                  <div class="settings-row-control">
-                    <div class="pill-list" role="group" aria-label="Activity Card sources">
-                      ${ACTIVITY_SOURCES_CATALOG.map((src) => {
-                        const on = enabledSources.has(src.id);
-                        return html`<span
-                          data-src=${src.id}
-                          data-label=${src.label}
-                          class="pill ${on ? "enabled" : ""}"
-                        >
-                          <button
-                            type="button"
-                            aria-pressed=${String(on)}
-                            @click=${() => store.toggleActivitySource(src.id)}
-                            class="pill-toggle"
-                          >
-                            ${on ? `✓ ${src.label}` : `+ ${src.label}`}
-                          </button>
-                        </span>`;
-                      })}
-                    </div>
-                  </div>
-                </div>`
-              : nothing}
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-header">
-            <div class="card-heading">
-              <h3 class="card-title">Wallpapers</h3>
-              <p class="card-subtitle">
-                Photos and presets cropped for this Device's display shape. Star favorites to rotate automatically.
-              </p>
-            </div>
-            <div class="card-header-actions">
-              <select
-                id="cfg-wallpaper_cycle_minutes"
-                aria-label="Wallpaper rotation interval"
-                .value=${String(curCycle)}
+        ${renderCard({
+          heading: html`<h3 class="card-title">Activity Card</h3>`,
+          contentClass: "settings-list",
+          body: html`${renderSettingsRow({
+              labelHtml: html`<label for="cfg-activity_card" class="row-label">Show the Activity Card</label>`,
+              description:
+                "Shows live timers, alarms, media queue, stopwatch, and next calendar event on Home.",
+              control: html`<input
+                type="checkbox"
+                id="cfg-activity_card"
+                role="switch"
+                .checked=${activityCardOn}
                 @change=${(ev: Event) =>
                   store.stageDeviceSetting(
-                    "wallpaper_cycle_minutes",
-                    Number((ev.currentTarget as HTMLSelectElement).value) || 0,
-                    "cfg-wallpaper_cycle_minutes",
+                    "activity_card",
+                    (ev.currentTarget as HTMLInputElement).checked,
+                    "cfg-activity_card",
                   )}
-              >
-                ${WALLPAPER_ROTATION_OPTIONS.map(
-                  (opt) =>
-                    html`<option value=${String(opt.value)} ?selected=${opt.value === curCycle}>
-                      ${opt.label}
-                    </option>`,
+                class="switch"
+              />`,
+            })}
+            ${activityCardOn
+              ? renderSettingsRow({
+                  id: "activity-sources",
+                  label: "Activity Card Sources",
+                  description: "Choose which live items appear in the Activity Card.",
+                  stacked: true,
+                  control: html`<div class="pill-list" role="group" aria-label="Activity Card sources">
+                    ${ACTIVITY_SOURCES_CATALOG.map((src) => {
+                      const on = enabledSources.has(src.id);
+                      return html`<span
+                        data-src=${src.id}
+                        data-label=${src.label}
+                        class="pill ${on ? "enabled" : ""}"
+                      >
+                        <button
+                          type="button"
+                          aria-pressed=${String(on)}
+                          @click=${() => store.toggleActivitySource(src.id)}
+                          class="pill-toggle"
+                        >
+                          ${on ? `✓ ${src.label}` : `+ ${src.label}`}
+                        </button>
+                      </span>`;
+                    })}
+                  </div>`,
+                })
+              : nothing}`,
+        })}
+
+        ${renderCard({
+          title: "Wallpapers",
+          subtitle:
+            "Photos and presets cropped for this Device's display shape. Star favorites to rotate automatically.",
+          headerActions: html`<select
+              id="cfg-wallpaper_cycle_minutes"
+              aria-label="Wallpaper rotation interval"
+              .value=${String(curCycle)}
+              @change=${(ev: Event) =>
+                store.stageDeviceSetting(
+                  "wallpaper_cycle_minutes",
+                  Number((ev.currentTarget as HTMLSelectElement).value) || 0,
+                  "cfg-wallpaper_cycle_minutes",
                 )}
-              </select>
-              <button
-                type="button"
-                @click=${() => void store.selectWallpaperSource("")}
-                class="btn btn-secondary"
-              >
-                Turn Off Wallpaper
-              </button>
-            </div>
-          </div>
-          <div class="card-content stack">
-            ${renderWallpaperUploadBar(store, "device")}
+            >
+              ${WALLPAPER_ROTATION_OPTIONS.map(
+                (opt) =>
+                  html`<option value=${String(opt.value)} ?selected=${opt.value === curCycle}>
+                    ${opt.label}
+                  </option>`,
+              )}
+            </select>
+            <button
+              type="button"
+              @click=${() => void store.selectWallpaperSource("")}
+              class="btn btn-secondary"
+            >
+              Turn Off Wallpaper
+            </button>`,
+          contentClass: "stack",
+          body: html`${renderWallpaperUploadBar(store, "device")}
             <div class="wp-gallery">
               ${renderWallpaperGalleryItems(
                 store,
@@ -244,120 +222,92 @@ export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
                 wallpapers,
                 String(cfg.display_shape || "square"),
               )}
-            </div>
-          </div>
-        </div>
+            </div>`,
+        })}
       </div>
 
       <div class="column">
-        <div class="card">
-          <div class="card-header">
-            <h3 class="card-title">Home Screen</h3>
-          </div>
-          <div class="card-content settings-list">
-            <div class="settings-row stacked">
-              <div class="settings-row-text">
-                <span class="row-label">Dock Apps</span>
-                <p class="row-description">
-                  Toggle and reorder apps shown in the Home Dock.
-                </p>
-              </div>
-              <div class="settings-row-control">
-                <div id="dock-pills-container" class="pill-list" role="group" aria-label="Dock apps">
-                  ${enabledDock.map((tok, idx) => {
-                    const meta = DOCK_APPS_CATALOG.find((a) => a.token === tok);
-                    const lbl = meta ? meta.label : tok;
-                    return html`<span class="pill enabled">
-                      ${idx > 0
-                        ? html`<button
-                            type="button"
-                            aria-label=${`Move ${lbl} left`}
-                            @click=${() => store.moveDockAppToken(tok, -1)}
-                            class="pill-move"
-                          >
-                            ‹
-                          </button>`
-                        : nothing}
-                      <button
-                        type="button"
-                        aria-pressed="true"
-                        @click=${() => store.toggleDockAppToken(tok)}
-                        class="pill-toggle"
-                      >
-                        ✓ ${lbl}
-                      </button>
-                      ${idx < enabledDock.length - 1
-                        ? html`<button
-                            type="button"
-                            aria-label=${`Move ${lbl} right`}
-                            @click=${() => store.moveDockAppToken(tok, 1)}
-                            class="pill-move"
-                          >
-                            ›
-                          </button>`
-                        : nothing}
-                    </span>`;
-                  })}
-                  ${disabledDock.map(
-                    (app) => html`<span class="pill">
-                      <button
-                        type="button"
-                        aria-pressed="false"
-                        @click=${() => store.toggleDockAppToken(app.token)}
-                        class="pill-toggle"
-                      >
-                        + ${app.label}
-                      </button>
-                    </span>`,
-                  )}
-                </div>
-              </div>
-            </div>
-
+        ${renderCard({
+          heading: html`<h3 class="card-title">Home Screen</h3>`,
+          contentClass: "settings-list",
+          body: html`${renderSettingsRow({
+              label: "Dock Apps",
+              description: "Toggle and reorder apps shown in the Home Dock.",
+              stacked: true,
+              control: html`<div id="dock-pills-container" class="pill-list" role="group" aria-label="Dock apps">
+                ${enabledDock.map((tok, idx) => {
+                  const meta = DOCK_APPS_CATALOG.find((a) => a.token === tok);
+                  const lbl = meta ? meta.label : tok;
+                  return html`<span class="pill enabled">
+                    ${idx > 0
+                      ? html`<button
+                          type="button"
+                          aria-label=${`Move ${lbl} left`}
+                          @click=${() => store.moveDockAppToken(tok, -1)}
+                          class="pill-move"
+                        >
+                          ‹
+                        </button>`
+                      : nothing}
+                    <button
+                      type="button"
+                      aria-pressed="true"
+                      @click=${() => store.toggleDockAppToken(tok)}
+                      class="pill-toggle"
+                    >
+                      ✓ ${lbl}
+                    </button>
+                    ${idx < enabledDock.length - 1
+                      ? html`<button
+                          type="button"
+                          aria-label=${`Move ${lbl} right`}
+                          @click=${() => store.moveDockAppToken(tok, 1)}
+                          class="pill-move"
+                        >
+                          ›
+                        </button>`
+                      : nothing}
+                  </span>`;
+                })}
+                ${disabledDock.map(
+                  (app) => html`<span class="pill">
+                    <button
+                      type="button"
+                      aria-pressed="false"
+                      @click=${() => store.toggleDockAppToken(app.token)}
+                      class="pill-toggle"
+                    >
+                      + ${app.label}
+                    </button>
+                  </span>`,
+                )}
+              </div>`,
+            })}
             <div id="embedded-home" class="settings-list">
               ${visibleHomeItems.map((it) => renderNativeControlRow(store, it))}
-            </div>
-          </div>
-        </div>
+            </div>`,
+        })}
 
-        <div class="card">
-          <div class="card-header">
-            <h3 class="card-title">Area Controls</h3>
-          </div>
-          <div class="card-content settings-list">
-            <div class="settings-row">
-              <div class="settings-row-text">
-                <label for="cfg-default_page_size" class="row-label">Area Cards Per Page</label>
-                <p class="row-description">
-                  Number of entity tiles shown per page in the Area screen.
-                </p>
-              </div>
-              <div class="settings-row-control">
-                <select
-                  id="cfg-default_page_size"
-                  .value=${String(cfg.default_page_size ?? 3)}
-                  @change=${(ev: Event) =>
-                    store.stageDeviceSetting(
-                      "default_page_size",
-                      Number((ev.currentTarget as HTMLSelectElement).value) || 3,
-                      "cfg-default_page_size",
-                    )}
-                >
-                  ${[2, 3, 4, 6, 8].map(
-                    (n) =>
-                      html`<option value=${String(n)} ?selected=${Number(cfg.default_page_size ?? 3) === n}>
-                        ${n} cards
-                      </option>`,
-                  )}
-                </select>
-              </div>
-            </div>
-
+        ${renderCard({
+          heading: html`<h3 class="card-title">Area Controls</h3>`,
+          contentClass: "settings-list",
+          body: html`${renderSelectRow({
+              id: "cfg-default_page_size",
+              label: "Area Cards Per Page",
+              description: "Number of entity tiles shown per page in the Area screen.",
+              value: String(cfg.default_page_size ?? 3),
+              rawOptions: [2, 3, 4, 6, 8].map((n) => ({ value: String(n), label: `${n} cards` })),
+              onChange: (val) =>
+                store.stageDeviceSetting(
+                  "default_page_size",
+                  Number(val) || 3,
+                  "cfg-default_page_size",
+                ),
+            })}
             <div id="embedded-area-ui" class="settings-list">
               ${areaEspItems.map((it) => renderNativeControlRow(store, it))}
-            </div>
-          </div>
-        </div>
+            </div>`,
+        })}
       </div>
     </div>
   </section>`;

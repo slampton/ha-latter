@@ -24,7 +24,7 @@ const SYSTEM_NAV_ITEMS: ReadonlyArray<{ viewId: SystemViewId; label: string }> =
 ];
 
 export class LatterStudio extends LitElement {
-  static styles = STUDIO_STYLES;
+  static override styles = STUDIO_STYLES;
 
   readonly store: StudioStore;
 
@@ -302,12 +302,10 @@ export class LatterStudio extends LitElement {
           @focusout=${() => void this.store.flushAllPendingSettings()}
         >
           <div class="content-wrap">
-            <div class="page-header">
-              <h2 id="unified-page-title" class="page-title">
-                <span>${this.store.pageTitle}</span>
-                ${subtitle ? html`<span class="page-subtitle">${subtitle}</span>` : nothing}
-              </h2>
-            </div>
+            <h2 id="unified-page-title" class="page-title">
+              <span>${this.store.pageTitle}</span>
+              ${subtitle ? html`<span class="page-subtitle">${subtitle}</span>` : nothing}
+            </h2>
 
             ${isInitialLoading
               ? html`<div id="studio-loading" role="status" class="loading-state">
@@ -320,7 +318,7 @@ export class LatterStudio extends LitElement {
                   <span id="studio-load-error-text">${this.store.loadError}</span>
                   <button
                     type="button"
-                    @click=${() => void this.store.refreshState({ forceCatalog: true })}
+                    @click=${() => void this.store.refreshState()}
                     class="btn btn-secondary btn-compact"
                   >
                     Retry

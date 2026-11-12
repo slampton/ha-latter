@@ -1,8 +1,8 @@
 # Services Reference
 
-Latter registers 16 user-facing services (plus the internal `latter.device_hello` handshake service) under the `latter` domain. Latter firmware invokes these operations over its bound Zero-Privilege **System: RPC Outbox** (`core/rpc_receiver.py`, authenticated by `esphome_device_id` so `allow_service_calls` is never required), while Home Assistant automations, scripts, and custom integrations call the `latter.*` services directly.
+Latter registers 16 user-facing services (plus the internal `latter.device_hello` handshake service) under the `latter` domain. Latter firmware invokes these operations over its bound Zero-Privilege **System: RPC Outbox** (`identity.py`, authenticated by `esphome_device_id` so `allow_service_calls` is never required), while Home Assistant automations, scripts, and custom integrations call the `latter.*` services directly.
 
-- **Source:** [`services.py`](../../custom_components/latter/services.py) and [`core/security_policy.py`](../../custom_components/latter/core/security_policy.py), with UI schemas in [`services.yaml`](../../custom_components/latter/services.yaml).
+- **Source:** [`services.py`](../../custom_components/latter/services.py) and [`protocol.py`](../../custom_components/latter/protocol.py), with UI schemas in [`services.yaml`](../../custom_components/latter/services.yaml).
 - **Schema validation & RBAC.** Every service rejects unknown keys and forwards `context=call.context` to downstream Home Assistant actions. Administrative mutations (`reset_device`, `save_custom_color`, `set_dock_apps`) require an admin user when invoked from a Home Assistant user context. Most values (for example `priority`, `mode`, `action`, `command`) are validated by the handler; `doorbell_intercom`'s `noise_reduction` is validated by the schema.
 
 ## Targeting
@@ -103,7 +103,7 @@ Fetches one page of items and sends them to the device with `set_browse_slots`. 
 | `podcast_sort` | `newest` \| `oldest` | `newest` | |
 | `req_id` | int | `0` | Monotonic correlation ID echoed in `set_browse_slots` so out-of-order responses from rapid taps are discarded |
 
-Where lyrics and bios come from, in order (cached in a bounded 64-entry LRU cache in `media/browse.py`):
+Where lyrics and bios come from, in order (cached in a bounded 64-entry LRU cache in `media_browse.py`):
 1. **Music Assistant metadata.**
 2. **[LRCLIB](https://lrclib.net)** for lyrics. Plain lyrics are preferred; synced lyrics are passed through as text.
 3. **Wikipedia's REST summary API** for bios.
@@ -146,7 +146,7 @@ Sends a page of areas or entities to the device. `entities` and `home` pages use
 
 Alarm actions with no `entity_id` use the alarm panel configured in Studio. `lock` (`lock`, `unlock`, `open`) and `alarm_control_panel` (`arm_home`, `arm_away`, `arm_night`, `disarm`) require an explicit action verb and never accept `toggle`.
 
-**3-Tier Perimeter Security Policy (`core/security_policy.py`).** Opening actions (`lock`: `unlock`/`open`; `alarm_control_panel`: `disarm`; `cover` garage/gate/door: opening actions) are checked against the calling Device's `security_pin_policy` (`allow`, `require_pin`, or `block`; `auto` resolves to `require_pin` on stationary panels or when a Home Assistant alarm code exists). Under `require_pin`, `code` is verified in constant time against the Device's PBKDF2-HMAC-SHA256 Security PIN (or delegated to Home Assistant's `alarm_control_panel` code). Closing and arming actions (`lock`, `arm_*`, closing covers) are always permitted.
+**3-Tier Perimeter Security Policy (`protocol.py`).** Opening actions (`lock`: `unlock`/`open`; `alarm_control_panel`: `disarm`; `cover` garage/gate/door: opening actions) are checked against the calling Device's `security_pin_policy` (`allow`, `require_pin`, or `block`; `auto` resolves to `require_pin` on stationary panels or when a Home Assistant alarm code exists). Under `require_pin`, `code` is verified in constant time against the Device's PBKDF2-HMAC-SHA256 Security PIN (or delegated to Home Assistant's `alarm_control_panel` code). Closing and arming actions (`lock`, `arm_*`, closing covers) are always permitted.
 
 ---
 

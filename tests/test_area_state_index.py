@@ -18,38 +18,40 @@ from homeassistant.util import dt as dt_util
 import pytest
 
 from custom_components.latter import async_unload_entry
-from custom_components.latter.areas.calendar import (
+from custom_components.latter.areas import (
+    async_execute_area_action,
+    find_area_media_entities,
+    get_area_available_domains,
+    get_area_entities,
+    get_areas_summary,
+    get_home_wide_entities,
+    get_whole_home_summary,
+    match_area_by_name_or_id,
+)
+from custom_components.latter.const import CONF_CAMERA_ENTITIES, DATA_GLOBAL_CONFIG, DOMAIN
+from custom_components.latter.doorbell import (
+    bind_coordinator_doorbell_listener,
+    resolve_doorbell_ring_entities,
+    resolve_doorbell_targets,
+)
+from custom_components.latter.feeds import (
     async_fetch_calendar_agenda,
     async_fetch_calendar_snapshot,
     compute_moon_phase,
     read_sun_and_moon_fields,
 )
-from custom_components.latter.areas.context_builder import (
-    async_execute_area_action,
-    build_remote_config_payload,
-    find_area_media_entities,
-    get_area_available_domains,
-    get_area_entities,
-    get_areas_summary,
-    get_esphome_device_entities,
-    get_home_wide_entities,
-    get_whole_home_summary,
-    match_area_by_name_or_id,
-)
-from custom_components.latter.areas.doorbell import (
+from custom_components.latter.groups import get_esphome_device_entities
+from custom_components.latter.http import (
     LatterCameraAudioStreamView,
     _build_silence_wav,
     async_shutdown_doorbell_streams,
-    bind_coordinator_doorbell_listener,
     build_noise_reduction_filter,
-    resolve_doorbell_ring_entities,
-    resolve_doorbell_targets,
 )
-from custom_components.latter.areas.state_index import (
+from custom_components.latter.hub import (
     get_area_state_index,
     is_media_position_only_tick,
 )
-from custom_components.latter.const import CONF_CAMERA_ENTITIES, DATA_GLOBAL_CONFIG, DOMAIN
+from custom_components.latter.remotes import build_remote_config_payload
 
 
 def _make_query_request(url: str) -> Any:
@@ -109,9 +111,8 @@ async def test_area_state_index_reactive_lookup_and_media_tick_filtering(
     )
     await hass.async_block_till_done()
 
-    assert "light.floor_lamp" in idx.entity_ids_in_area("living_room", "light")
+    assert "light.floor_lamp" in [s.entity_id for s in idx.entities_in_area("living_room", ("light",))]
     assert idx.resolve_entity_area_id("light.floor_lamp") == "living_room"
-    assert "living_room" in idx.all_indexed_area_ids()
 
     fired_events: list[str] = []
     unsub_lr = idx.register_area_listener(
@@ -151,8 +152,8 @@ async def test_area_state_index_reactive_lookup_and_media_tick_filtering(
     dev_reg.async_update_device(lamp_dev.id, area_id="kitchen")
     await hass.async_block_till_done()
     assert idx.resolve_entity_area_id("light.floor_lamp") == "kitchen"
-    assert "light.floor_lamp" in idx.entity_ids_in_area("kitchen", "light")
-    assert "light.floor_lamp" not in idx.entity_ids_in_area("living_room", "light")
+    assert "light.floor_lamp" in [s.entity_id for s in idx.entities_in_area("kitchen", ("light",))]
+    assert "light.floor_lamp" not in [s.entity_id for s in idx.entities_in_area("living_room", ("light",))]
 
     # Dynamic new Area creation & deletion
     area_reg.async_create("Patio", area_id="patio")
@@ -244,6 +245,11 @@ async def test_context_builder_curated_entities_and_area_actions(
     assert match_area_by_name_or_id(hass, "Living Room") == "living_room"
     assert match_area_by_name_or_id(hass, "living-room") == "living_room"
     assert match_area_by_name_or_id(hass, "away") is None
+
+    # Exact non-substring matching: Area "Garden" ("garden") MUST NOT match query "den"
+    ar.async_get(hass).async_create("Garden", area_id="garden")
+    assert match_area_by_name_or_id(hass, "Garden") == "garden"
+    assert match_area_by_name_or_id(hass, "den") is None
 
     areas_summary = get_areas_summary(
         hass, active_area_id="living_room", local_speaker=coord.local_speaker
@@ -482,6 +488,29 @@ async def test_calendar_feeds_and_doorbell_ring_reflex(
     assert targets["lock_entity"] == "lock.front_door_deadbolt"
     assert targets["tts_lead_in"] is True
 
+    # Exact device_id sibling matching: a standalone camera MUST NOT substring-match an unrelated speaker
+    patio_cam_dev = dev_reg.async_get_or_create(
+        config_entry_id="protect_entry",
+        identifiers={("unifiprotect", "patio_cam")},
+        name="Patio Cam",
+    )
+    other_spk_dev = dev_reg.async_get_or_create(
+        config_entry_id="sonos_entry",
+        identifiers={("sonos", "patio_spk")},
+        name="Patio Cam Speaker",
+    )
+    ent_reg.async_register(
+        er.RegistryEntry(entity_id="camera.patio_cam", platform="unifiprotect", device_id=patio_cam_dev.id)
+    )
+    ent_reg.async_register(
+        er.RegistryEntry(
+            entity_id="media_player.patio_cam_speaker", platform="sonos", device_id=other_spk_dev.id
+        )
+    )
+    hass.states.async_set("camera.patio_cam", "streaming")
+    hass.states.async_set("media_player.patio_cam_speaker", "idle")
+    assert resolve_doorbell_targets(hass, "camera.patio_cam")["door_speaker"] == ""
+
     assert "afftdn" not in build_noise_reduction_filter("off")
     assert "nf=-20" in build_noise_reduction_filter("light")
     assert "nf=-26" in build_noise_reduction_filter("strong")
@@ -501,7 +530,7 @@ async def test_calendar_feeds_and_doorbell_ring_reflex(
     assert coord.alert_title == "Doorbell Ringing"
     assert "/api/latter/camera/" in coord.alert_camera_url
 
-    # Camera Audio Stream HTTP View auth & signature checks
+    # Camera Audio Stream HTTP View auth & HMAC render-parameter binding (`camera_audio:<cam>|<nr>|<fmt>`)
     audio_view = LatterCameraAudioStreamView(hass)
     r_404 = await audio_view.get(_make_query_request("/api/latter/camera_audio/unknown"), "unknown")
     assert r_404.status == 404
@@ -514,22 +543,32 @@ async def test_calendar_feeds_and_doorbell_ring_reflex(
     )
     assert r_403.status == 403
 
-    unauth_sig = coord.sign_on_demand_resource("camera_audio:camera.secret_cam")
+    unauth_sig = coord.sign_on_demand_resource("camera_audio:camera.secret_cam|strong|flac")
     r_unauth = await audio_view.get(
         _make_query_request(
-            f"/api/latter/camera_audio/{coord.device_slug}?entity_id=camera.secret_cam&sig={unauth_sig}"
+            f"/api/latter/camera_audio/{coord.device_slug}?entity_id=camera.secret_cam&nr=strong&fmt=flac&sig={unauth_sig}"
         ),
         coord.device_slug,
     )
     assert r_unauth.status == 403
 
-    valid_sig = coord.sign_on_demand_resource("camera_audio:camera.front_door_high")
-    r_no_rtsp = await audio_view.get(
-        _make_query_request(
-            f"/api/latter/camera_audio/{coord.device_slug}?entity_id=camera.front_door_high&fmt=wav&sig={valid_sig}"
-        ),
+    # Query tampering on nr= or fmt= MUST be rejected with 403!
+    signed_flac_url = coord.build_camera_audio_url("camera.front_door_high", "strong", "flac")
+    assert "&nr=strong&fmt=flac&" in signed_flac_url
+    assert "&sig=" in signed_flac_url
+    r_tampered_nr = await audio_view.get(
+        _make_query_request(signed_flac_url.replace("&nr=strong", "&nr=off")),
         coord.device_slug,
     )
+    assert r_tampered_nr.status == 403
+    r_tampered_fmt = await audio_view.get(
+        _make_query_request(signed_flac_url.replace("&fmt=flac", "&fmt=wav")),
+        coord.device_slug,
+    )
+    assert r_tampered_fmt.status == 403
+
+    signed_wav_url = coord.build_camera_audio_url("camera.front_door_high", "strong", "wav")
+    r_no_rtsp = await audio_view.get(_make_query_request(signed_wav_url), coord.device_slug)
     # Without RTSP stream URL configured, returns silent WAV fallback cleanly
     assert r_no_rtsp.status == 200
     assert r_no_rtsp.body[:4] == b"RIFF"

@@ -12,20 +12,25 @@ import re
 from typing import Any, ClassVar
 import unittest
 
-from custom_components.latter.core import (
-    diagnostics_sanitizer,
-    health,
-    issue_ids,
-    payloads as _PAYLOADS_MOD,
-    reset_policy,
-    rpc_protocol,
-    security_policy,
-    traits,
+from custom_components.latter import (
+    diagnostics as diagnostics_sanitizer,
+    groups as reset_policy,
+    http as resource_signing,
+    identity,
+    media as ma_link,
+    presence,
+    protocol as _PAYLOADS_MOD,
+    repairs,
 )
-from custom_components.latter.http import resource_signing
-from custom_components.latter.media import ma_link
-from custom_components.latter.presence import area_follow, ble_math
-from custom_components.latter.studio import scope as studio_scope
+from custom_components.latter.studio import settings as studio_scope
+
+health = repairs
+issue_ids = repairs
+rpc_protocol = identity
+security_policy = _PAYLOADS_MOD
+traits = identity
+area_follow = presence
+ble_math = presence
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 LATTER_DIR = REPO_ROOT / "custom_components" / "latter"
@@ -284,12 +289,14 @@ class TestRecordsFields(unittest.TestCase):
                 ("calendar_agenda", "summary"),
             },
         )
-        ctx_src = (LATTER_DIR / "areas" / "context_builder.py").read_text(encoding="utf-8")
-        cal_src = (LATTER_DIR / "areas" / "calendar.py").read_text(encoding="utf-8")
-        for builder in ("camera_records(", "intercom_target_records(", "remote_slot_records("):
+        ctx_src = (LATTER_DIR / "areas.py").read_text(encoding="utf-8")
+        rem_src = (LATTER_DIR / "remotes.py").read_text(encoding="utf-8")
+        feeds_src = (LATTER_DIR / "feeds.py").read_text(encoding="utf-8")
+        for builder in ("camera_records(", "intercom_target_records("):
             self.assertIn(builder, ctx_src)
-        self.assertIn("forecast_records(", cal_src)
-        self.assertIn("calendar_agenda_records(", cal_src)
+        self.assertIn("remote_slot_records(", rem_src)
+        self.assertIn("forecast_records(", feeds_src)
+        self.assertIn("calendar_agenda_records(", feeds_src)
 
     def test_cameras(self) -> None:
         self.assertEqual(self.layout("area_context", "cameras_summary"), ["entity_id", "name", "area_id", "snapshot_url"])
@@ -378,12 +385,12 @@ class TestAbsentValues(unittest.TestCase):
     """Protocol v3 sends "" for a missing value: no none/None/NONE/unknown/Idle placeholders, no made-up states."""
 
     SOURCES = (
-        "core/device_coordinator.py",
-        "areas/context_builder.py",
-        "http/url_signer.py",
-        "areas/calendar.py",
-        "core/payloads.py",
-        "media/browse.py",
+        "coordinator.py",
+        "areas.py",
+        "http.py",
+        "feeds.py",
+        "protocol.py",
+        "media_browse.py",
     )
     FORBIDDEN = (
         r'return "none"',
@@ -427,7 +434,7 @@ class TestAbsentValues(unittest.TestCase):
             src = (LATTER_DIR / name).read_text(encoding="utf-8")
             for pat in self.FORBIDDEN:
                 self.assertNotRegex(src, pat, f"{name}: {pat}")
-        ctx_src = (LATTER_DIR / "areas" / "context_builder.py").read_text(encoding="utf-8")
+        ctx_src = (LATTER_DIR / "areas.py").read_text(encoding="utf-8")
         # The area_context payload sends "" without an Area (the HA sensor state may still say Unassigned).
         self.assertIn('area_entry.name if area_entry else "",', ctx_src)
 
@@ -710,7 +717,7 @@ class _Dev:
 
 
 def _js_command_set(js_src: str, const_name: str) -> set[str]:
-    match = re.search(rf"const {const_name} = new Set\(\[(.*?)\]\);", js_src, re.S)
+    match = re.search(rf"const {const_name}\s*=\s*new Set\(\[(.*?)\]\);", js_src, re.S)
     assert match is not None, const_name
     return set(re.findall(r'"([a-z_]+)"', match.group(1)))
 
@@ -748,11 +755,11 @@ class TestStudioTargeting(unittest.TestCase):
                 scope(retired)
 
     def test_studio_js_command_sets_match_backend(self) -> None:
-        """latter-studio.js must classify every command exactly as studio/scope.py does."""
+        """latter-studio.js must classify every command exactly as studio/settings.py does."""
         js_src = STUDIO_JS.read_text(encoding="utf-8")
         self.assertEqual(_js_command_set(js_src, "SYSTEM_WS_COMMANDS"), set(studio_scope.SYSTEM_COMMANDS))
         self.assertEqual(_js_command_set(js_src, "DEVICE_WS_COMMANDS"), set(studio_scope.DEVICE_COMMANDS))
-        sent = set(re.findall(r'command: "([a-z_]+)"', js_src))
+        sent = set(re.findall(r'command:\s*"([a-z_]+)"', js_src))
         known = studio_scope.SYSTEM_COMMANDS | studio_scope.DEVICE_COMMANDS
         self.assertFalse(sent - known, f"Studio sends unknown commands: {sorted(sent - known)}")
 
@@ -957,11 +964,11 @@ class TestResetPolicy(unittest.TestCase):
         self.assertEqual(err(True, True, is_ble_tag=True), "reset_ble_tag_has_no_device_settings")
 
     def test_field_lists_name_real_subentry_keys(self) -> None:
-        """Every enumerated key is a real config key (const.py CONF_* value), and the lists don't overlap."""
+        """Every enumerated key is a real config key (const.py CONF_* value), and identity lists only share device_slug."""
         conf_values = _const_conf_values() | {"mac"}
-        keys = reset_policy.DEVICE_IDENTITY_KEYS + reset_policy.BLE_TAG_IDENTITY_KEYS + reset_policy.DEVICE_OPTION_KEYS
+        keys = reset_policy.DEVICE_IDENTITY_KEYS + reset_policy.BLE_TAG_IDENTITY_KEYS
         self.assertFalse(set(keys) - conf_values, sorted(set(keys) - conf_values))
-        self.assertFalse(set(reset_policy.DEVICE_IDENTITY_KEYS) & set(reset_policy.DEVICE_OPTION_KEYS))
+        self.assertEqual(set(reset_policy.DEVICE_IDENTITY_KEYS) & set(reset_policy.BLE_TAG_IDENTITY_KEYS), {"device_slug"})
 
     def test_reset_error_keys_are_translated(self) -> None:
         strings = json.loads((LATTER_DIR / "strings.json").read_text(encoding="utf-8"))

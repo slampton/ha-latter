@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
- * Deterministic TypeScript -> Single-File ESM Bundler & Verifier for Latter Studio.
+ * Deterministic TypeScript -> Single-File ESM Bundler & Verifier for Latter Studio (`D-024`).
  *
  * Modes:
- *   node build.mjs              -> Type-strip, link, syntax-verify, and write ../custom_components/latter/frontend/latter-studio.js
- *   node build.mjs --typecheck  -> Run `tsc --noEmit` (when installed) + TS strip + ESM graph & V8 module parse check
+ *   node build.mjs              -> Run mandatory `tsc --noEmit`, type-strip, compact, verify, and write latter-studio.js
+ *   node build.mjs --typecheck  -> Run mandatory `tsc --noEmit` + TS strip + ESM graph & V8 module parse check
  *   node build.mjs --check      -> Run `--typecheck` + verify committed `latter-studio.js` is byte-identical + Studio guardrails
  */
 
@@ -44,9 +44,13 @@ function collectTsFiles(dir) {
   return out.sort((a, b) => a.localeCompare(b));
 }
 
-function runOptionalTsc() {
+function runMandatoryTsc() {
   const tscBin = path.join(FRONTEND_DIR, "node_modules", "typescript", "bin", "tsc");
-  if (!fs.existsSync(tscBin)) return;
+  if (!fs.existsSync(tscBin)) {
+    throw new Error(
+      "Missing local TypeScript compiler (`node_modules/typescript/bin/tsc`) — install local devDependencies before building",
+    );
+  }
   const res = spawnSync(
     process.execPath,
     [tscBin, "--noEmit", "-p", path.join(FRONTEND_DIR, "tsconfig.json")],
@@ -130,6 +134,7 @@ function parseRuntimeExports(jsCode) {
 
 function transformModuleBody(jsCode) {
   let out = jsCode;
+  out = out.replace(/^\/\/#\s*sourceURL=.*$/gm, "");
   // Remove multi-line and single-line ES module import declarations
   out = out.replace(/^\s*import\s+[\s\S]*?\s+from\s+["'][^"']+["']\s*;?[ \t]*$/gm, "");
   out = out.replace(/^\s*import\s*\{\s*\}\s*from\s*["'][^"']+["']\s*;?[ \t]*$/gm, "");
@@ -144,55 +149,191 @@ function transformModuleBody(jsCode) {
   return out.trim();
 }
 
-function collapseBlankLinesOutsideBackticks(code) {
-  let result = "";
-  let inBacktick = false;
-  let escaped = false;
-  let newlineRun = 0;
+function compactCodeSegment(seg, isLineStart) {
+  if (!seg) return seg;
+  let indent = "";
+  let rest = seg;
+  if (isLineStart) {
+    const m = seg.match(/^[ \t]+/);
+    if (m) {
+      indent = m[0];
+      rest = seg.slice(indent.length);
+    }
+  }
+  rest = rest
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/ ([),;])/g, "$1")
+    .replace(/([A-Za-z0-9_$]) \(\)/g, "$1()");
+  return indent + rest;
+}
+
+/**
+ * Lexer-aware compactor that strips `stripTypeScriptTypes` whitespace/blank "type hole" lines
+ * and inline type-erasure space runs outside literals/comments while preserving template literals verbatim.
+ */
+function compactBundleOutsideTemplates(code) {
+  const stack = [{ kind: "code", braces: 0 }];
+  const outLines = [];
+  let lineBuf = "";
+  let codeSeg = "";
+  let lineTouchedTemplate = false;
+
+  const top = () => stack[stack.length - 1];
+  const flushCodeSeg = () => {
+    if (codeSeg) {
+      lineBuf += compactCodeSegment(codeSeg, lineBuf.length === 0);
+      codeSeg = "";
+    }
+  };
 
   for (let i = 0; i < code.length; i += 1) {
     const ch = code[i];
-    if (inBacktick) {
-      result += ch;
-      if (escaped) {
-        escaped = false;
-      } else if (ch === "\\") {
-        escaped = true;
-      } else if (ch === "`") {
-        inBacktick = false;
-      }
-      continue;
-    }
-
-    if (ch === "`") {
-      inBacktick = true;
-      newlineRun = 0;
-      result += ch;
-      continue;
-    }
+    const next = i + 1 < code.length ? code[i + 1] : "";
+    const cur = top();
 
     if (ch === "\n") {
-      newlineRun += 1;
-      if (newlineRun <= 2) {
-        result += ch;
+      flushCodeSeg();
+      if (lineTouchedTemplate) {
+        outLines.push({ text: lineBuf, rawTemplate: true });
+      } else {
+        const trimmed = lineBuf.replace(/[ \t]+$/, "");
+        if (trimmed.length > 0) {
+          outLines.push({ text: trimmed, rawTemplate: false });
+        }
       }
-    } else {
-      newlineRun = 0;
-      result += ch;
+      lineBuf = "";
+      lineTouchedTemplate = top().kind === "template";
+      continue;
+    }
+
+    if (cur.kind === "template") {
+      lineTouchedTemplate = true;
+      if (ch === "\\") {
+        lineBuf += ch;
+        if (next && next !== "\n") {
+          lineBuf += next;
+          i += 1;
+        }
+        continue;
+      }
+      if (ch === "`") {
+        lineBuf += ch;
+        stack.pop();
+        continue;
+      }
+      if (ch === "$" && next === "{") {
+        lineBuf += "${";
+        i += 1;
+        stack.push({ kind: "code", braces: 0 });
+        continue;
+      }
+      lineBuf += ch;
+      continue;
+    }
+
+    if (cur.kind === "block_comment") {
+      lineBuf += ch;
+      if (ch === "*" && next === "/") {
+        lineBuf += "/";
+        i += 1;
+        stack.pop();
+      }
+      continue;
+    }
+
+    if (ch === "/" && next === "/") {
+      flushCodeSeg();
+      const nlIdx = code.indexOf("\n", i);
+      if (nlIdx === -1) {
+        lineBuf += code.slice(i);
+        i = code.length - 1;
+      } else {
+        lineBuf += code.slice(i, nlIdx);
+        i = nlIdx - 1;
+      }
+      continue;
+    }
+    if (ch === "/" && next === "*") {
+      flushCodeSeg();
+      lineBuf += "/*";
+      i += 1;
+      stack.push({ kind: "block_comment" });
+      continue;
+    }
+    if (ch === "'" || ch === '"') {
+      flushCodeSeg();
+      const quote = ch;
+      lineBuf += ch;
+      i += 1;
+      while (i < code.length && code[i] !== "\n") {
+        const c = code[i];
+        lineBuf += c;
+        if (c === "\\" && i + 1 < code.length && code[i + 1] !== "\n") {
+          i += 1;
+          lineBuf += code[i];
+        } else if (c === quote) {
+          break;
+        }
+        i += 1;
+      }
+      if (i < code.length && code[i] === "\n") {
+        i -= 1;
+      }
+      continue;
+    }
+    if (ch === "`") {
+      flushCodeSeg();
+      lineBuf += ch;
+      lineTouchedTemplate = true;
+      stack.push({ kind: "template" });
+      continue;
+    }
+    if (ch === "{") {
+      cur.braces += 1;
+      codeSeg += ch;
+      continue;
+    }
+    if (ch === "}") {
+      if (cur.braces === 0 && stack.length > 1 && stack[stack.length - 2].kind === "template") {
+        flushCodeSeg();
+        stack.pop();
+        lineTouchedTemplate = true;
+        lineBuf += ch;
+      } else {
+        if (cur.braces > 0) cur.braces -= 1;
+        codeSeg += ch;
+      }
+      continue;
+    }
+    codeSeg += ch;
+  }
+
+  flushCodeSeg();
+  if (lineBuf.length > 0 || lineTouchedTemplate) {
+    const finalText = lineTouchedTemplate ? lineBuf : lineBuf.replace(/[ \t]+$/, "");
+    if (lineTouchedTemplate || finalText.length > 0) {
+      outLines.push({ text: finalText, rawTemplate: lineTouchedTemplate });
     }
   }
-  return result;
+
+  const rendered = [];
+  for (const entry of outLines) {
+    if (!entry.rawTemplate && entry.text.startsWith("// --- src/") && rendered.length > 0) {
+      rendered.push("");
+    }
+    rendered.push(entry.text);
+  }
+  return rendered.join("\n").trim() + "\n";
 }
 
 function buildBundle() {
-  runOptionalTsc();
+  runMandatoryTsc();
 
   const allTsFiles = collectTsFiles(SRC_DIR);
   const strippedByFile = new Map();
   for (const file of allTsFiles) {
     const raw = fs.readFileSync(file, "utf8").replace(/\r\n/g, "\n");
-    const rel = path.relative(FRONTEND_DIR, file).replace(/\\/g, "/");
-    const stripped = stripTypeScriptTypes(raw, { mode: "strip", sourceUrl: rel });
+    const stripped = stripTypeScriptTypes(raw, { mode: "strip" });
     strippedByFile.set(file, stripped);
   }
 
@@ -245,17 +386,17 @@ function buildBundle() {
 
   const chunks = [
     "// AUTO-GENERATED FILE — DO NOT EDIT DIRECTLY.",
-    "// Source: ha-latter/frontend_src/src/ (build via `npm --prefix ha-latter/frontend_src run build`).",
+    "// Source: ha-latter/frontend_src/src/ (build via `node ha-latter/frontend_src/build.mjs`).",
   ];
 
   for (const file of ordered) {
     const rel = path.relative(FRONTEND_DIR, file).replace(/\\/g, "/");
     const body = transformModuleBody(strippedByFile.get(file) || "");
     if (!body) continue;
-    chunks.push(`\n// --- ${rel} ---\n${body}`);
+    chunks.push(`// --- ${rel} ---\n${body}`);
   }
 
-  const combined = collapseBlankLinesOutsideBackticks(chunks.join("\n")).trim() + "\n";
+  const combined = compactBundleOutsideTemplates(chunks.join("\n"));
 
   // Verify the entire generated bundle parses cleanly with V8's ES Module parser
   const parseRes = spawnSync(
@@ -369,10 +510,11 @@ function runStaticGuardrails(bundleText) {
 
 try {
   const { bundle, moduleCount, totalTsFiles } = buildBundle();
+  const lineCount = bundle.split("\n").length - 1;
 
   if (modeTypecheckOnly) {
     process.stdout.write(
-      `Type-strip & ESM graph verified (${moduleCount}/${totalTsFiles} TypeScript modules).\n`,
+      `tsc --noEmit, type-strip & ESM graph verified (${moduleCount}/${totalTsFiles} TypeScript modules, ${lineCount} JS lines).\n`,
     );
     process.exit(0);
   }
@@ -388,12 +530,12 @@ try {
     const committed = committedBuf.toString("utf8");
     if (committed !== bundle) {
       throw new Error(
-        "custom_components/latter/frontend/latter-studio.js is out of sync with frontend_src/src/ — run `npm --prefix ha-latter/frontend_src run build`",
+        "custom_components/latter/frontend/latter-studio.js is out of sync with frontend_src/src/ — run `node ha-latter/frontend_src/build.mjs`",
       );
     }
     runStaticGuardrails(bundle);
     process.stdout.write(
-      `Studio check PASSED (${moduleCount} modules, ${Buffer.byteLength(bundle, "utf8")} bytes, bundle in sync, 0 guardrail issues).\n`,
+      `Studio check PASSED (${moduleCount} modules, ${lineCount} lines, ${Buffer.byteLength(bundle, "utf8")} bytes, tsc --noEmit clean, bundle in sync, 0 guardrail issues).\n`,
     );
     process.exit(0);
   }
@@ -402,7 +544,7 @@ try {
   fs.writeFileSync(OUT_FILE, Buffer.from(bundle, "utf8"));
   runStaticGuardrails(bundle);
   process.stdout.write(
-    `Built custom_components/latter/frontend/latter-studio.js (${moduleCount} modules, ${Buffer.byteLength(bundle, "utf8")} bytes).\n`,
+    `Built custom_components/latter/frontend/latter-studio.js (${moduleCount} modules, ${lineCount} lines, ${Buffer.byteLength(bundle, "utf8")} bytes).\n`,
   );
 } catch (err) {
   process.stderr.write(`Studio build error: ${err instanceof Error ? err.message : String(err)}\n`);

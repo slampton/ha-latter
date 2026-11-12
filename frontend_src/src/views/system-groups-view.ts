@@ -2,7 +2,12 @@
  * System Device Groups View (`system_sync`, D-021): Device Groups, Baseline Seeding, Tier 2 Operational & Tier 3 Appearance Bulk Controls.
  */
 
-import { renderTrashIconButton } from "../components/controls.js";
+import {
+  renderCard,
+  renderSettingsRow,
+  renderSwitchRow,
+  renderTrashIconButton,
+} from "../components/controls.js";
 import { DEFAULT_DEVICE_GROUP_IDS } from "../constants.js";
 import { html, nothing, type TemplateResult } from "../lib/lit.js";
 import type { StudioStore } from "../state/store.js";
@@ -115,13 +120,7 @@ export function renderSystemGroupsView(store: StudioStore): TemplateResult {
       control = html`<span class="chip">${mixed ? "Mixed" : curState}</span>`;
     }
 
-    return html`<div class="settings-row">
-      <div class="settings-row-text">
-        <span class="row-label">${entityLabel(fc.name)}</span>
-        <p class="row-description">${desc}</p>
-      </div>
-      <div class="settings-row-control">${control}</div>
-    </div>`;
+    return renderSettingsRow({ label: entityLabel(fc.name), description: desc, control });
   };
 
   const behaviorControls = systemControls.filter((fc) => fc.tier !== "appearance");
@@ -130,17 +129,12 @@ export function renderSystemGroupsView(store: StudioStore): TemplateResult {
   return html`<section id="view-system_sync">
     <div class="columns">
       <div class="column">
-        <div class="card">
-          <div class="card-header">
-            <div class="card-heading">
-              <h3 class="card-title">Device Groups</h3>
-              <p class="card-subtitle">
-                Operational baselines (sleep, wake word, BLE) shared across assigned Devices without overwriting personal appearance.
-              </p>
-            </div>
-          </div>
-          <div class="card-content stack">
-            <div class="input-action-row">
+        ${renderCard({
+          heading: html`<h3 class="card-title">Device Groups</h3>`,
+          subtitle:
+            "Operational baselines (sleep, wake word, BLE) shared across assigned Devices without overwriting personal appearance.",
+          contentClass: "stack",
+          body: html`<div class="input-action-row">
               <input
                 type="text"
                 id="new-group-name"
@@ -191,15 +185,12 @@ export function renderSystemGroupsView(store: StudioStore): TemplateResult {
                   .filter(Boolean)
                   .join(" • ");
 
-                return html`<div class="settings-row">
-                  <div class="settings-row-text">
-                    <span class="row-label">
-                      ${g.name} <span class="chip">${members.length}</span>
-                    </span>
-                    <p class="row-description">${desc}</p>
-                  </div>
-                  <div class="settings-row-control">
-                    <button
+                return renderSettingsRow({
+                  labelHtml: html`<span class="row-label">
+                    ${g.name} <span class="chip">${members.length}</span>
+                  </span>`,
+                  description: desc,
+                  control: html`<button
                       type="button"
                       @click=${() => {
                         store.groupCtrlFilter = `group:${g.id}`;
@@ -222,25 +213,17 @@ export function renderSystemGroupsView(store: StudioStore): TemplateResult {
                       ? renderTrashIconButton(`Delete group ${g.name}`, () =>
                           void store.deleteDeviceGroup(g.id),
                         )
-                      : nothing}
-                  </div>
-                </div>`;
+                      : nothing}`,
+                });
               })}
-            </div>
-          </div>
-        </div>
+            </div>`,
+        })}
 
-        <div class="card">
-          <div class="card-header">
-            <div class="card-heading">
-              <h3 class="card-title">Seed Baseline From Device</h3>
-              <p class="card-subtitle">
-                Captures an existing Device's operational settings as a group's baseline.
-              </p>
-            </div>
-          </div>
-          <div class="card-content stack">
-            <div class="list-row-main">
+        ${renderCard({
+          title: "Seed Baseline From Device",
+          subtitle: "Captures an existing Device's operational settings as a group's baseline.",
+          contentClass: "stack",
+          body: html`<div class="list-row-main">
               <div class="stacked-field">
                 <label for="seed-group-target">Target Group</label>
                 <select
@@ -291,163 +274,98 @@ export function renderSystemGroupsView(store: StudioStore): TemplateResult {
               >
                 Save Group Baseline
               </button>
-            </div>
-          </div>
-        </div>
+            </div>`,
+        })}
       </div>
 
       <div class="column">
-        <div class="card">
-          <div class="card-header">
-            <div class="card-heading">
-              <h3 class="card-title">Group Controls &amp; Baseline</h3>
-            </div>
-            <div class="card-header-actions">
-              <select
-                id="group-ctrl-filter"
-                aria-label="Target Devices or group"
-                .value=${activeFilter}
-                @change=${(ev: Event) => {
-                  store.groupCtrlFilter = (ev.currentTarget as HTMLSelectElement).value || "all";
-                  store.host.requestUpdate();
-                }}
-              >
-                <option value="all" ?selected=${activeFilter === "all"}>All Latter Devices</option>
-                <option value="trait:roaming" ?selected=${activeFilter === "trait:roaming"}>
-                  Roaming Devices
-                </option>
-                <option value="trait:stationary" ?selected=${activeFilter === "trait:stationary"}>
-                  Stationary Devices
-                </option>
-                ${groups
-                  .filter((g) => g.id !== "unassigned")
-                  .map(
-                    (g) =>
-                      html`<option
-                        value=${`group:${g.id}`}
-                        ?selected=${activeFilter === `group:${g.id}`}
-                      >
-                        Group: ${g.name}
-                      </option>`,
-                  )}
-              </select>
-
-              <select
-                id="group-ctrl-cat-filter"
-                aria-label="Filter controls by category"
-                .value=${activeCat}
-                @change=${(ev: Event) => {
-                  store.groupCtrlCategoryFilter =
-                    (ev.currentTarget as HTMLSelectElement).value || "all";
-                  store.host.requestUpdate();
-                }}
-              >
-                <option value="all" ?selected=${activeCat === "all"}>All Categories</option>
-                <option value="sleep" ?selected=${activeCat === "sleep"}>Sleep &amp; Wake</option>
-                <option value="voice" ?selected=${activeCat === "voice"}>Voice &amp; Wake Word</option>
-                <option value="sound" ?selected=${activeCat === "sound"}>Sound</option>
-                <option value="area" ?selected=${activeCat === "area"}>Area &amp; BLE</option>
-                <option value="display" ?selected=${activeCat === "display"}>Display</option>
-                <option value="home" ?selected=${activeCat === "home"}>Home</option>
-                <option value="music" ?selected=${activeCat === "music"}>Music</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="card-content stack">
-            <h4 class="subsection-title">Operational Behavior (Synced with Group)</h4>
+        ${renderCard({
+          heading: html`<h3 class="card-title">Group Controls &amp; Baseline</h3>`,
+          headerActions: html`<select
+              id="group-ctrl-filter"
+              aria-label="Target Devices or group"
+              .value=${activeFilter}
+              @change=${(ev: Event) => {
+                store.groupCtrlFilter = (ev.currentTarget as HTMLSelectElement).value || "all";
+                store.host.requestUpdate();
+              }}
+            >
+              <option value="all" ?selected=${activeFilter === "all"}>All Latter Devices</option>
+              <option value="trait:roaming" ?selected=${activeFilter === "trait:roaming"}>
+                Roaming Devices
+              </option>
+              <option value="trait:stationary" ?selected=${activeFilter === "trait:stationary"}>
+                Stationary Devices
+              </option>
+              ${groups
+                .filter((g) => g.id !== "unassigned")
+                .map(
+                  (g) =>
+                    html`<option
+                      value=${`group:${g.id}`}
+                      ?selected=${activeFilter === `group:${g.id}`}
+                    >
+                      Group: ${g.name}
+                    </option>`,
+                )}
+            </select>
+            <select
+              id="group-ctrl-cat-filter"
+              aria-label="Filter controls by category"
+              .value=${activeCat}
+              @change=${(ev: Event) => {
+                store.groupCtrlCategoryFilter =
+                  (ev.currentTarget as HTMLSelectElement).value || "all";
+                store.host.requestUpdate();
+              }}
+            >
+              <option value="all" ?selected=${activeCat === "all"}>All Categories</option>
+              <option value="sleep" ?selected=${activeCat === "sleep"}>Sleep &amp; Wake</option>
+              <option value="voice" ?selected=${activeCat === "voice"}>Voice &amp; Wake Word</option>
+              <option value="sound" ?selected=${activeCat === "sound"}>Sound</option>
+              <option value="area" ?selected=${activeCat === "area"}>Area &amp; BLE</option>
+              <option value="display" ?selected=${activeCat === "display"}>Display</option>
+              <option value="home" ?selected=${activeCat === "home"}>Home</option>
+              <option value="music" ?selected=${activeCat === "music"}>Music</option>
+            </select>`,
+          contentClass: "stack",
+          body: html`<h4 class="subsection-title">Operational Behavior (Synced with Group)</h4>
             <div id="group-latter-behavior-list" class="settings-list">
               ${activeCat === "all" || activeCat === "area"
-                ? html`<div class="settings-row">
-                      <div class="settings-row-text">
-                        <span class="row-label">Track the Area with BLE Proxies</span>
-                        <p class="row-description">
-                          ${selectedGrpObj
-                            ? `Group Baseline • ${matchingDevs.length} Device(s)`
-                            : `${matchingDevs.length} Device(s)`}
-                        </p>
-                      </div>
-                      <div class="settings-row-control">
-                        <input
-                          type="checkbox"
-                          role="switch"
-                          aria-label="Track the Area with BLE Proxies"
-                          .checked=${bleOn}
-                          @change=${(ev: Event) =>
-                            void store.setGroupDeviceSetting({
-                              native_ble_tracking: (ev.currentTarget as HTMLInputElement).checked,
-                            })}
-                          class="switch"
-                        />
-                      </div>
-                    </div>
-                    <div class="settings-row">
-                      <div class="settings-row-text">
-                        <span class="row-label">Auto-Switch Active Area</span>
-                        <p class="row-description">Follows BLE Area changes automatically.</p>
-                      </div>
-                      <div class="settings-row-control">
-                        <input
-                          type="checkbox"
-                          role="switch"
-                          aria-label="Auto-Switch Active Area"
-                          .checked=${autoSw}
-                          @change=${(ev: Event) =>
-                            void store.setGroupDeviceSetting({
-                              ble_auto_switch: (ev.currentTarget as HTMLInputElement).checked,
-                            })}
-                          class="switch"
-                        />
-                      </div>
-                    </div>`
+                ? html`${renderSwitchRow({
+                      label: "Track the Area with BLE Proxies",
+                      description: selectedGrpObj
+                        ? `Group Baseline • ${matchingDevs.length} Device(s)`
+                        : `${matchingDevs.length} Device(s)`,
+                      checked: bleOn,
+                      onChange: (checked) =>
+                        void store.setGroupDeviceSetting({ native_ble_tracking: checked }),
+                    })}
+                    ${renderSwitchRow({
+                      label: "Auto-Switch Active Area",
+                      description: "Follows BLE Area changes automatically.",
+                      checked: autoSw,
+                      onChange: (checked) =>
+                        void store.setGroupDeviceSetting({ ble_auto_switch: checked }),
+                    })}`
                 : nothing}
-
               ${activeCat === "all" || activeCat === "voice"
-                ? html`<div class="settings-row">
-                    <div class="settings-row-text">
-                      <span class="row-label">Voice Follows Me</span>
-                      <p class="row-description">
-                        Moves roaming Devices' Home Assistant Area with them.
-                      </p>
-                    </div>
-                    <div class="settings-row-control">
-                      <input
-                        type="checkbox"
-                        role="switch"
-                        aria-label="Voice Follows Me"
-                        .checked=${vfm}
-                        @change=${(ev: Event) =>
-                          void store.setGroupDeviceSetting({
-                            sync_device_area: (ev.currentTarget as HTMLInputElement).checked,
-                          })}
-                        class="switch"
-                      />
-                    </div>
-                  </div>`
+                ? renderSwitchRow({
+                    label: "Voice Follows Me",
+                    description: "Moves roaming Devices' Home Assistant Area with them.",
+                    checked: vfm,
+                    onChange: (checked) =>
+                      void store.setGroupDeviceSetting({ sync_device_area: checked }),
+                  })
                 : nothing}
-
               ${activeCat === "all" || activeCat === "music"
-                ? html`<div class="settings-row">
-                    <div class="settings-row-text">
-                      <span class="row-label">Media Follows Device to New Area</span>
-                      <p class="row-description">
-                        Hands off active playback when the Area changes.
-                      </p>
-                    </div>
-                    <div class="settings-row-control">
-                      <input
-                        type="checkbox"
-                        role="switch"
-                        aria-label="Media Follows Device to New Area"
-                        .checked=${handoff}
-                        @change=${(ev: Event) =>
-                          void store.setGroupDeviceSetting({
-                            area_handoff: (ev.currentTarget as HTMLInputElement).checked,
-                          })}
-                        class="switch"
-                      />
-                    </div>
-                  </div>`
+                ? renderSwitchRow({
+                    label: "Media Follows Device to New Area",
+                    description: "Hands off active playback when the Area changes.",
+                    checked: handoff,
+                    onChange: (checked) =>
+                      void store.setGroupDeviceSetting({ area_handoff: checked }),
+                  })
                 : nothing}
             </div>
 
@@ -464,9 +382,8 @@ export function renderSystemGroupsView(store: StudioStore): TemplateResult {
                   ? appearanceControls.map((fc) => renderBulkControlRow(fc))
                   : html`<p class="empty-state">No appearance controls match this filter.</p>`}
               </div>
-            </details>
-          </div>
-        </div>
+            </details>`,
+        })}
       </div>
     </div>
   </section>`;

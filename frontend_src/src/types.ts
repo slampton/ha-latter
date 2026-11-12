@@ -40,7 +40,11 @@ export interface HassConnection {
 
 export interface HomeAssistant {
   language?: string;
-  locale?: { language?: string };
+  locale?: { language?: string; time_zone?: string };
+  config?: {
+    unit_system?: { length?: string };
+    time_zone?: string;
+  };
   themes?: { darkMode?: boolean };
   selectedTheme?: { dark?: boolean };
   states?: Record<string, HassEntityState>;
@@ -56,9 +60,6 @@ export interface HassRoute {
 export interface CatalogChoice {
   id: string;
   name: string;
-  domain?: string;
-  friendly?: string;
-  area_sensor?: string;
   preview_url?: string;
 }
 
@@ -70,19 +71,16 @@ export interface AreaChoice {
 export interface EntityCatalog {
   areas?: AreaChoice[];
   ma_speakers?: CatalogChoice[];
-  speakers?: CatalogChoice[];
   ma_players?: CatalogChoice[];
   volume_targets?: CatalogChoice[];
   remotes?: CatalogChoice[];
   alarms?: CatalogChoice[];
   cameras?: CatalogChoice[];
   climates?: CatalogChoice[];
-  thermostats?: CatalogChoice[];
   locks?: CatalogChoice[];
   garages?: CatalogChoice[];
   vacuums?: CatalogChoice[];
   weathers?: CatalogChoice[];
-  weather?: CatalogChoice[];
   calendars?: CatalogChoice[];
   persons?: CatalogChoice[];
 }
@@ -95,9 +93,9 @@ export interface BleSurveyRow {
   effective_rssi: number | null;
   is_winner: boolean;
   scanner?: string;
-  scanner_name?: string;
   age_seconds?: number | null;
   distance_m?: number | null;
+  distance_ft?: number | null;
 }
 
 export type GroupSyncStatus =
@@ -106,8 +104,6 @@ export type GroupSyncStatus =
   | string
   | {
       in_sync?: boolean;
-      drift_count?: number;
-      drifted_labels?: string[];
       status?: string;
     };
 
@@ -150,7 +146,6 @@ export interface IssueItem {
   subentry_id?: string;
   device_title?: string;
   detail?: string;
-  placeholders?: Record<string, string>;
 }
 
 export interface DiscoveredBleCandidate {
@@ -162,7 +157,6 @@ export interface DiscoveredBleCandidate {
   area_name?: string;
   address?: string;
   name?: string;
-  closest_area_name?: string;
 }
 
 export interface VolumeOverride {
@@ -247,7 +241,6 @@ export interface EspHomeEntityItem {
   max?: number;
   step?: number;
   mode?: string;
-  entity_category?: string;
 }
 
 export interface EspHomeSection {
@@ -273,11 +266,8 @@ export interface WallpaperItem {
   thumb_url?: string;
   preview_url?: string;
   active?: boolean;
-  is_active?: boolean;
   favorite?: boolean;
-  is_favorite?: boolean;
   deletable?: boolean;
-  can_delete?: boolean;
   kind?: "preset" | "upload" | string;
   scope?: "device" | "system" | string;
 }
@@ -290,11 +280,9 @@ export interface DoorbellTalkEntry {
 export interface DoorbellStatusItem {
   camera_entity: string;
   camera_name?: string;
-  name?: string;
   preview_url?: string;
   ring_entity?: string;
   ring_name?: string;
-  ring_sensor?: string;
   ring_state?: string;
   ring_at?: string;
   talk?: DoorbellTalkEntry[];
@@ -311,24 +299,18 @@ export interface AreaPresenceRow {
   area_id: string;
   area_name: string;
   is_occupied?: boolean;
-  occupied?: boolean;
   confidence_pct?: number;
-  probability_pct?: number;
   occupant_names?: string[];
-  occupants?: string[];
   winning_rssi?: number | null;
   closest_distance_m?: number | null;
+  closest_distance_ft?: number | null;
   active_sensors?: string[];
   available_sensors?: string[];
   floor_id?: string | null;
   fusion_mode?: string;
-  mode?: string;
   fusion_threshold_pct?: number;
-  threshold_pct?: number;
   fusion_sensors?: string[];
-  selected_sensors?: string[];
   fusion_sensor_choices?: AreaFusionSensorChoice[];
-  sensor_choices?: AreaFusionSensorChoice[];
 }
 
 export interface SharedControlTarget {
@@ -386,15 +368,12 @@ export interface LiveDeviceSection {
   ma_link_matched?: boolean;
   group_sync_status?: GroupSyncStatus | null;
   ble_closest_proxy?: string;
-  ble_packets_seen?: number;
-  ble_survey_rows?: BleSurveyRow[];
   area_presence_grid?: AreaPresenceRow[];
   now?: NowPlayingInfo;
   device_sw_version?: string;
   sdk_rev?: string;
   fw_update_entity?: string;
   fw_update_available?: boolean;
-  fw_latest_version?: string;
   effective_security_pin_policy?: string;
   has_security_pin?: boolean;
 }

@@ -17,19 +17,17 @@ from custom_components.latter.const import (
     DATA_GLOBAL_CONFIG,
     DOMAIN,
 )
-from custom_components.latter.presence.ble_fabric import (
+from custom_components.latter.presence import (
     APPLE_COMPANY_ID,
     AWAY_TIMEOUT_SECONDS,
+    CROSS_FLOOR_ATTENUATION_DB,
     IBEACON_PREFIX,
+    RSSI_HYSTERESIS_DEADBAND_DBM,
     count_area_ble_proxies,
     get_all_areas_presence_summary,
     get_all_scanners_diagnostic_map,
     get_ble_fabric,
     get_ble_proxy_area_ids,
-)
-from custom_components.latter.presence.ble_math import (
-    CROSS_FLOOR_ATTENUATION_DB,
-    RSSI_HYSTERESIS_DEADBAND_DBM,
 )
 
 
@@ -186,9 +184,7 @@ async def test_ble_passive_matcher_rssi_hysteresis_and_cross_floor_penalty(
     # Calibration offset application & telemetry snapshot
     tracker.set_area_offsets({"living_room": 8.0})
     cal_rows = tracker.get_area_calibration_telemetry()
-    assert any(r["area_id"] == "kitchen" for r in cal_rows)
-    rssi_summary = tracker.get_live_rssi_summary()
-    assert "Kitchen" in rssi_summary
+    assert any(r["area_id"] == "kitchen" and r["area_name"] == "Kitchen" for r in cal_rows)
 
     unsub_occ()
     unsub_survey()

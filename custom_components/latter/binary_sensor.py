@@ -15,8 +15,8 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .const import DOMAIN, normalize_device_slug
-from .core.hub import get_system_device_info
-from .presence.ble_fabric import get_ble_fabric, get_ble_proxy_area_ids
+from .hub import get_system_device_info
+from .presence import get_ble_fabric, get_ble_proxy_area_ids
 
 PARALLEL_UPDATES = 0
 DATA_CREATED_AREA_OCCUPANCY_IDS = "created_area_occupancy_ids"

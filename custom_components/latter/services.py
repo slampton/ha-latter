@@ -29,15 +29,13 @@ from homeassistant.helpers import (
 from homeassistant.util import dt as dt_util
 import voluptuous as vol
 
-from .areas.calendar import async_fetch_calendar_snapshot
-from .areas.context_builder import (
+from .areas import (
     async_execute_area_action,
     get_area_entities,
     get_areas_summary,
     get_home_wide_entities,
+    resolve_person_area_and_distance,
 )
-from .areas.doorbell import async_execute_doorbell_intercom
-from .areas.state_index import get_area_state_index
 from .const import (
     CONF_ALARM_ENTITY,
     CONF_CUSTOM_PALETTES,
@@ -64,118 +62,35 @@ from .const import (
     SERVICE_SET_ACTIVE_AREA,
     SERVICE_SET_ACTIVE_SPEAKER,
     SERVICE_SET_DOCK_APPS,
+    target_kind,
 )
-from .core.device_coordinator import (
-    LatterCoordinator,
-    resolve_coordinator,
-    resolve_person_area_and_distance,
+from .coordinator import LatterCoordinator, resolve_coordinator
+from .doorbell import async_execute_doorbell_intercom
+from .feeds import async_fetch_calendar_snapshot
+from .groups import async_reset_device
+from .hub import (
+    async_save_and_broadcast_global_config,
+    get_area_state_index,
+    get_latter_system,
+    iter_coordinators,
 )
-from .core.device_reset import async_reset_device
-from .core.dock_policy import normalize_dock_apps
-from .core.hub import get_latter_system
-from .core.identity import device_entities, esphome_service
-from .core.issue_ids import slot_push_failing_issue_id
-from .core.security_policy import (
-    check_perimeter_action_allowed,
-    is_sensitive_perimeter_action,
-)
-from .core.targets import target_kind
-from .media.browse import async_browse_media_items, is_music_assistant_player
-from .media.player_controller import (
+from .identity import device_entities, esphome_service
+from .media import (
     async_announce_on_targets,
     async_execute_volume_action,
     resolve_assist_satellite_entity,
 )
-from .presence.ble_fabric import get_ble_fabric
-from .studio.payload import async_save_and_broadcast_global_config
+from .media_browse import async_browse_media_items, is_music_assistant_player
+from .presence import get_ble_fabric
+from .protocol import (
+    check_perimeter_action_allowed,
+    is_sensitive_perimeter_action,
+    normalize_dock_apps,
+)
+from .remotes import async_execute_remote_action
+from .repairs import slot_push_failing_issue_id
 
 _LOGGER = logging.getLogger(__name__)
-
-CANONICAL_NAV_INTENT: dict[str, str] = {
-    "up": "up",
-    "dpad_up": "up",
-    "cursor_up": "up",
-    "down": "down",
-    "dpad_down": "down",
-    "cursor_down": "down",
-    "left": "left",
-    "dpad_left": "left",
-    "cursor_left": "left",
-    "right": "right",
-    "dpad_right": "right",
-    "cursor_right": "right",
-    "select": "select",
-    "enter": "select",
-    "ok": "select",
-    "dpad_center": "select",
-    "key_enter": "select",
-    "back": "back",
-    "return": "back",
-    "key_return": "back",
-    "home": "home",
-    "top_menu": "home",
-    "key_home": "home",
-    "menu": "menu",
-    "info": "info",
-    "option": "option",
-    "exit": "exit",
-    "play": "play",
-    "pause": "pause",
-}
-
-ANDROIDTV_COMMAND_MAP: dict[str, str] = {
-    "up": "DPAD_UP",
-    "down": "DPAD_DOWN",
-    "left": "DPAD_LEFT",
-    "right": "DPAD_RIGHT",
-    "select": "DPAD_CENTER",
-    "back": "BACK",
-    "home": "HOME",
-    "menu": "MENU",
-    "info": "INFO",
-    "play": "MEDIA_PLAY",
-    "pause": "MEDIA_PAUSE",
-}
-
-STANDARD_REMOTE_COMMAND_MAP: dict[str, str] = {
-    "up": "up",
-    "down": "down",
-    "left": "left",
-    "right": "right",
-    "select": "select",
-    "back": "back",
-    "home": "home",
-    "menu": "menu",
-    "info": "info",
-}
-
-DENONAVR_COMMAND_MAP: dict[str, str] = {
-    "up": "/goform/formiPhoneAppDirect.xml?MNCUP",
-    "down": "/goform/formiPhoneAppDirect.xml?MNCDN",
-    "left": "/goform/formiPhoneAppDirect.xml?MNCLT",
-    "right": "/goform/formiPhoneAppDirect.xml?MNCRT",
-    "select": "/goform/formiPhoneAppDirect.xml?MNENT",
-    "back": "/goform/formiPhoneAppDirect.xml?MNRTN",
-    "home": "/goform/formiPhoneAppDirect.xml?MNMEN%20ON",
-    "menu": "/goform/formiPhoneAppDirect.xml?MNMEN%20ON",
-    "info": "/goform/formiPhoneAppDirect.xml?MNINF",
-    "option": "/goform/formiPhoneAppDirect.xml?MNOPT",
-}
-
-WEBOSTV_BUTTON_MAP: dict[str, str] = {
-    "up": "UP",
-    "down": "DOWN",
-    "left": "LEFT",
-    "right": "RIGHT",
-    "select": "ENTER",
-    "back": "BACK",
-    "home": "HOME",
-    "menu": "MENU",
-    "info": "INFO",
-    "exit": "EXIT",
-    "play": "PLAY",
-    "pause": "PAUSE",
-}
 
 BASE_TARGET_FIELDS: dict[Any, Any] = {
     vol.Optional("target_device"): cv.string,
@@ -422,10 +337,9 @@ def _resolve_occupied_area_ids(
             if target_low in occ_persons:
                 occupied_areas.add(area_entry.id)
     else:
-        for c in hass.data.get(DOMAIN, {}).values():
+        for c in iter_coordinators(hass):
             if (
-                isinstance(c, LatterCoordinator)
-                and c.active_area_id
+                c.active_area_id
                 and fabric.get_area_occupancy(c.active_area_id).get("is_occupied")
             ):
                 occupied_areas.add(c.active_area_id)
@@ -531,127 +445,15 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
     async def _handle_remote_action(call: ServiceCall) -> None:
         coord = _resolve_coordinator_from_call(hass, call)
-        if not coord:
-            return
-
-        data = call.data
-        slots = coord.get_remote_slots()
-        slot_num = int(data.get("slot") or coord.active_remote_slot or 1)
-        slot_num = max(1, min(max(1, len(slots)), slot_num))
-        if slot_num != coord.active_remote_slot:
-            coord.active_remote_slot = slot_num
-            coord._schedule_persist_runtime_state()
-            coord.async_notify_listeners()
-
-        action = str(data.get("action") or "").strip().lower()
-        raw_cmd = str(data.get("command") or action).strip()
-        cmd_low = raw_cmd.lower()
-        if action in ("select_slot", ""):
-            return
-
-        slot_info = slots[slot_num - 1]
-        remote_ent = slot_info["remote_entity"]
-        mp_ent = slot_info["media_player_entity"]
-        platform = str(slot_info.get("platform") or "").lower()
-        combined_ident = f"{platform} {mp_ent} {remote_ent} {slot_info.get('name', '')}".lower()
-
-        if action == "toggle" or cmd_low in ("toggle", "power"):
-            target = mp_ent or remote_ent
-            if target:
-                domain = target.split(".")[0]
-                await hass.services.async_call(
-                    domain, "toggle", {ATTR_ENTITY_ID: target}, blocking=False
-                )
-            return
-
-        effective_media_cmd = cmd_low if action == "command" else action
-        if effective_media_cmd in ("volume_up", "volume_down", "volume_mute", "media_play_pause"):
-            if effective_media_cmd == "media_play_pause":
-                if mp_ent and mp_ent.startswith("media_player."):
-                    await hass.services.async_call(
-                        "media_player",
-                        "media_play_pause",
-                        {ATTR_ENTITY_ID: mp_ent},
-                        blocking=False,
-                    )
-                    return
-            else:
-                vol_override = (
-                    coord.volume_overrides.get(mp_ent)
-                    or coord.volume_overrides.get(remote_ent)
-                )
-                eff_vol_target = vol_override or mp_ent
-                if eff_vol_target and await async_execute_volume_action(
-                    hass, eff_vol_target, effective_media_cmd
-                ):
-                    return
-            if remote_ent and remote_ent.startswith("remote."):
-                await hass.services.async_call(
-                    "remote",
-                    "send_command",
-                    {
-                        ATTR_ENTITY_ID: remote_ent,
-                        "command": effective_media_cmd.upper() if "android" in combined_ident else effective_media_cmd,
-                    },
-                    blocking=False,
-                )
-                return
-
-        if not raw_cmd:
-            return
-
-        intent = CANONICAL_NAV_INTENT.get(cmd_low)
-
-        is_denon = platform == "denonavr" or any(
-            k in combined_ident for k in ("denon", "marantz")
+        raw_slot = call.data.get("slot")
+        slot_val = int(raw_slot) if raw_slot is not None else None
+        await async_execute_remote_action(
+            hass,
+            coord,
+            slot=slot_val,
+            action=str(call.data.get("action") or ""),
+            command=call.data.get("command"),
         )
-        if is_denon and mp_ent and hass.services.has_service("denonavr", "get_command"):
-            denon_path = DENONAVR_COMMAND_MAP.get(intent or cmd_low)
-            if not denon_path and raw_cmd.startswith("/goform/"):
-                denon_path = raw_cmd
-            if denon_path:
-                await hass.services.async_call(
-                    "denonavr",
-                    "get_command",
-                    {ATTR_ENTITY_ID: mp_ent, "command": denon_path},
-                    blocking=False,
-                )
-                return
-
-        is_webos = platform == "webostv" or any(
-            k in combined_ident for k in ("webos", "lg_tv", "lg_oled", "lg webos")
-        )
-        if is_webos and mp_ent and hass.services.has_service("webostv", "button"):
-            webos_btn = WEBOSTV_BUTTON_MAP.get(intent or cmd_low, raw_cmd.upper())
-            await hass.services.async_call(
-                "webostv",
-                "button",
-                {ATTR_ENTITY_ID: mp_ent, "button": webos_btn},
-                blocking=False,
-            )
-            return
-
-        is_android_tv = platform in ("androidtv_remote", "androidtv", "braviatv", "firetv") or any(
-            k in combined_ident
-            for k in ("shield", "android", "google_tv", "chromecast", "bravia", "fire_tv", "onn")
-        )
-        if remote_ent and remote_ent.startswith("remote."):
-            if is_android_tv:
-                out_cmd = ANDROIDTV_COMMAND_MAP.get(intent or cmd_low, raw_cmd.upper())
-            elif intent is not None:
-                if platform == "apple_tv" and intent == "back":
-                    out_cmd = "menu"
-                else:
-                    out_cmd = STANDARD_REMOTE_COMMAND_MAP.get(intent, raw_cmd)
-            else:
-                out_cmd = raw_cmd
-
-            await hass.services.async_call(
-                "remote",
-                "send_command",
-                {ATTR_ENTITY_ID: remote_ent, "command": out_cmd},
-                blocking=False,
-            )
 
     async def _handle_music_browse(call: ServiceCall) -> None:
         coord = _resolve_coordinator_from_call(hass, call)
@@ -763,7 +565,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         data = call.data
 
         area_id = data.get("area_id")
-        if coord and area_id and str(area_id) != coord.active_area_id:
+        if area_id and str(area_id) != coord.active_area_id:
             coord.async_set_active_area(
                 str(area_id),
                 handoff_media=False,
@@ -772,7 +574,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
         entity_id = str(data.get("entity_id") or "").strip()
         action = str(data.get("action") or "").strip().lower()
-        if not entity_id and coord and action in (
+        if not entity_id and action in (
             "arm_home",
             "arm_away",
             "arm_night",
@@ -784,15 +586,14 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             raw_level = data.get("level")
             level = int(float(raw_level)) if raw_level is not None and str(raw_level).strip() != "" else None
             code = str(data.get("code")) if data.get("code") is not None else None
-            if coord:
-                _enforce_perimeter_security_policy(
-                    hass,
-                    coord,
-                    entity_id,
-                    action,
-                    level=level,
-                    provided_code=code,
-                )
+            _enforce_perimeter_security_policy(
+                hass,
+                coord,
+                entity_id,
+                action,
+                level=level,
+                provided_code=code,
+            )
             await async_execute_area_action(
                 hass,
                 entity_id=entity_id,
@@ -800,13 +601,12 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 level=level,
                 code=code,
             )
-            if coord:
-                await asyncio.sleep(0.15)
-                if coord._unsub_area_debounce is not None:
-                    coord._unsub_area_debounce()
-                    coord._unsub_area_debounce = None
-                coord.async_notify_listeners()
-                await async_push_active_area_entities(hass, coord)
+            await asyncio.sleep(0.15)
+            if coord._unsub_area_debounce is not None:
+                coord._unsub_area_debounce()
+                coord._unsub_area_debounce = None
+            coord.async_notify_listeners()
+            await async_push_active_area_entities(hass, coord)
 
     async def _handle_calendar_fetch(call: ServiceCall) -> None:
         coord = _resolve_coordinator_from_call(hass, call)
@@ -852,7 +652,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         data = call.data
 
         cal_entity = str(data.get("calendar_entity") or "").strip()
-        if not cal_entity and coord and coord.calendar_entities:
+        if not cal_entity and coord.calendar_entities:
             cal_entity = coord.calendar_entities[0]
         if not cal_entity:
             states = sorted(
@@ -893,8 +693,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             blocking=True,
             context=call.context,
         )
-        if coord:
-            await coord.async_refresh_calendar_agenda()
+        await coord.async_refresh_calendar_agenda()
 
     async def _handle_intercom_broadcast(call: ServiceCall) -> ServiceResponse:
         data = call.data
@@ -940,11 +739,8 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 matched_speakers: list[str] = []
                 seen_dev_ids: set[str] = set()
                 if occupied_areas:
-                    for c in hass.data.get(DOMAIN, {}).values():
-                        if (
-                            isinstance(c, LatterCoordinator)
-                            and c.active_area_id in occupied_areas
-                        ):
+                    for c in iter_coordinators(hass):
+                        if c.active_area_id in occupied_areas:
                             for cand_spk in (c.active_speaker, c.local_speaker):
                                 if not cand_spk or cand_spk in matched_speakers:
                                     continue
@@ -1178,11 +974,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         kind = target_kind(raw_target)
 
         all_coords = [
-            c
-            for c in hass.data.get(DOMAIN, {}).values()
-            if isinstance(c, LatterCoordinator)
-            and not c.is_ble_tag
-            and c.has_display
+            c for c in iter_coordinators(hass) if not c.is_ble_tag and c.has_display
         ]
         target_coords: list[LatterCoordinator] = []
 
@@ -1202,8 +994,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 return
         else:
             single = _resolve_coordinator_from_call(hass, call)
-            if single:
-                target_coords = [single]
+            target_coords = [single]
 
         if not target_coords:
             return

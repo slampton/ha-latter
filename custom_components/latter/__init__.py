@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable, Iterable
 import logging
 import secrets
 import time
@@ -26,11 +27,6 @@ from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.typing import ConfigType
 
-from .areas.doorbell import (
-    LatterCameraAudioStreamView,
-    async_shutdown_doorbell_streams,
-)
-from .areas.state_index import async_stop_area_state_index, get_area_state_index
 from .config_flow import _device_unique_id
 from .const import (
     CONF_ESPHOME_DEVICE_ID,
@@ -47,37 +43,71 @@ from .const import (
     PLATFORMS,
     STORAGE_VERSION,
 )
-from .core.device_coordinator import LatterCoordinator
-from .core.device_ping import async_ping_bound_devices
-from .core.hub import LatterSystem, get_latter_system
-from .core.identity import (
-    LATTER_CONTRACT_ACTION_SUFFIXES,
-    esphome_service,
-    is_esphome_device,
-    is_latter_compatible_esphome_device,
-)
-from .core.repairs import async_delete_device_issues
-from .http.views import (
+from .coordinator import LatterCoordinator
+from .http import (
     LatterArtworkTranscoderView,
     LatterBrandIconView,
+    LatterCameraAudioStreamView,
     LatterCameraSnapshotView,
     LatterMapSnapshotView,
     LatterWallpaperProxyView,
     LatterWallpaperUploadView,
     async_shutdown_camera_feeds,
+    async_shutdown_doorbell_streams,
 )
-from .http.wallpapers import async_refresh_wallpaper_cache
-from .media.browse import clear_browse_cache
-from .media.ma_link import clear_ma_counterpart_cache
-from .presence.ble_fabric import _iter_devices
+from .hub import (
+    LatterSystemHub,
+    async_stop_area_state_index,
+    get_area_state_index,
+    get_latter_system,
+)
+from .identity import (
+    LATTER_CONTRACT_ACTION_SUFFIXES,
+    esphome_service,
+    is_esphome_device,
+    is_latter_compatible_esphome_device,
+)
+from .media import clear_ma_counterpart_cache
+from .media_browse import clear_browse_cache
+from .presence import _iter_devices
+from .repairs import async_delete_device_issues
 from .services import async_push_active_area_entities, async_setup_services
-from .studio.panel import async_register_studio_panel, async_unregister_studio_panel
+from .studio import async_register_studio_panel, async_unregister_studio_panel
+from .wallpapers import async_refresh_wallpaper_cache
 
 _LOGGER = logging.getLogger(__name__)
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
-type LatterConfigEntry = ConfigEntry[LatterSystem]
+type LatterConfigEntry = ConfigEntry[LatterSystemHub]
+
+PING_ACTION = "latter_ping"
+
+
+async def async_ping_bound_devices(
+    esphome_device_ids: Iterable[str | None],
+    resolve_service: Callable[[str, str], str | None],
+    call_service: Callable[[str], Awaitable[None]],
+    on_error: Callable[[str, Exception], None] | None = None,
+) -> list[str]:
+    """Call `latter_ping` on every bound Device whose ESPHome action is registered."""
+    pinged: list[str] = []
+    seen: set[str] = set()
+    for dev_id in esphome_device_ids:
+        if not dev_id or dev_id in seen:
+            continue
+        seen.add(dev_id)
+        service = resolve_service(dev_id, PING_ACTION)
+        if not service:
+            continue
+        try:
+            await call_service(service)
+        except Exception as err:  # noqa: BLE001
+            if on_error is not None:
+                on_error(service, err)
+            continue
+        pinged.append(service)
+    return pinged
 
 
 async def _async_ensure_global_store(hass: HomeAssistant) -> dict[str, Any]:
@@ -318,7 +348,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
     return True
 
 
-async def _async_ping_bound_devices(hass: HomeAssistant, sys_obj: LatterSystem) -> None:
+async def _async_ping_bound_devices(
+    hass: HomeAssistant, sys_obj: LatterSystemHub
+) -> None:
     """Call each bound Device's latter_ping action; the firmware answers with latter.device_hello."""
 
     async def _call(service: str) -> None:
@@ -336,7 +368,7 @@ async def _async_ping_bound_devices(hass: HomeAssistant, sys_obj: LatterSystem) 
 
 async def _async_update_listener(hass: HomeAssistant, entry: LatterConfigEntry) -> None:
     """Reload when device subentries are added/removed or structural keys change; otherwise apply options in-place."""
-    sys_obj: LatterSystem = entry.runtime_data
+    sys_obj: LatterSystemHub = entry.runtime_data
     current_sub_ids = {
         sub.subentry_id
         for sub in entry.subentries.values()
@@ -416,7 +448,7 @@ async def async_remove_config_entry_device(
                         active_identifiers.add((DOMAIN, dr.format_mac(str(cval))))
 
     sys_obj = getattr(config_entry, "runtime_data", None)
-    if isinstance(sys_obj, LatterSystem):
+    if isinstance(sys_obj, LatterSystemHub):
         for coord in sys_obj.coordinators.values():
             active_identifiers.update(coord.get_device_info().get("identifiers", set()))
 

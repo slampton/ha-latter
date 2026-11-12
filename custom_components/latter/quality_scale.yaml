@@ -5,7 +5,9 @@ rules:
     status: exempt
     comment: Event-driven local push middleware for ESPHome and Home Assistant state changes.
   brands: done
-  common-modules: done
+  common-modules:
+    status: done
+    comment: Flat 24-module root layout (__init__.py, config_flow.py, const.py, hub.py, coordinator.py, identity.py, protocol.py, http.py, diagnostics.py, repairs.py, backup.py) plus 4 studio/ modules.
   config-flow: done
   config-flow-test-coverage: done
   dependency-transparency: done

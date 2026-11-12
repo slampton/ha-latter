@@ -53,7 +53,7 @@ export const ISSUE_TEXT: Record<string, (issue: IssueItem) => string> = {
     "A firmware update failed to start; the previous firmware is running.",
 };
 
-// Canonical 7 Dock App tokens (`dock_policy.py` DOCK_APP_TOKENS).
+// Canonical 7 Dock App tokens (`protocol.py` DOCK_APP_TOKENS).
 export const DOCK_APPS_CATALOG = [
   {token: "music", label: "Music"},
   {token: "alarm", label: "Home Hub"},
@@ -64,7 +64,7 @@ export const DOCK_APPS_CATALOG = [
   {token: "tools", label: "Tools"},
 ];
 
-// Canonical 5 Activity Card source keys (`activity_policy.py` ACTIVITY_SOURCE_KEYS).
+// Canonical 5 Activity Card source keys (`protocol.py` ACTIVITY_SOURCE_KEYS).
 export const ACTIVITY_SOURCES_CATALOG: ReadonlyArray<{ id: string; label: string }> = [
   { id: "calendar", label: "Calendar" },
   { id: "music_queue", label: "Music Queue" },

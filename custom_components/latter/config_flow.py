@@ -22,7 +22,6 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr, entity_registry as er, selector
 import voluptuous as vol
 
-from .areas.state_index import get_area_state_index
 from .const import (
     CONF_ALARM_ENTITY,
     CONF_AREA_HANDOFF,
@@ -49,9 +48,9 @@ from .const import (
     SUBENTRY_DEVICE,
     normalize_device_slug,
 )
-from .core.backup import GROUP_BEHAVIOR_DEVICE_KEYS, get_device_groups
-from .core.hub import get_latter_system
-from .core.identity import (
+from .groups import GROUP_BEHAVIOR_DEVICE_KEYS, get_device_groups
+from .hub import get_area_state_index, get_latter_system
+from .identity import (
     esphome_node_name,
     esphome_service,
     find_device_entity_by_suffix,
@@ -60,7 +59,7 @@ from .core.identity import (
     is_latter_compatible_esphome_device,
     read_device_hardware_manifest,
 )
-from .presence.ble_fabric import _iter_devices
+from .presence import _iter_devices
 
 
 def _iter_configured_device_records(hass: HomeAssistant) -> list[tuple[dict[str, Any], str | None]]:
@@ -244,7 +243,7 @@ def _apply_onboarding_profile_and_defaults(
     *,
     rebind_hardware: bool = False,
 ) -> dict[str, Any]:
-    """Merge auto-detected hardware defaults, the device binding, roaming flag, optional Profile, and global defaults."""
+    """Merge auto-detected hardware defaults, the device binding, roaming flag, optional Group, and global defaults."""
     hw_defaults = _detect_hardware_defaults(hass, dev)
     merged: dict[str, Any] = {**hw_defaults, **(existing or {})}
     merged[CONF_DEVICE_SLUG] = esphome_node_name(hass, dev)

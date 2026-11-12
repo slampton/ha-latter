@@ -1,18 +1,12 @@
-"""Browsing the Music Assistant library: the browse handle, album track order and artist albums.
-
-ma_browse.py is standard-library only and loaded by file path; browse_engine.py is checked as source text.
-"""
+"""Browsing the Music Assistant library: the browse handle, album track order, and artist albums."""
 
 from __future__ import annotations
 
-from pathlib import Path
+import inspect
 import unittest
 
-from custom_components.latter.media import browse as ma_browse
+from custom_components.latter import media_browse as ma_browse
 
-LATTER_DIR = Path(__file__).resolve().parent.parent / "custom_components" / "latter"
-
-# A live browse_media answer for library://album/67 (Music Assistant, 2026.11), trimmed.
 DIRT_CHILDREN = [
     {"title": "Alice In Chains - Them Bones", "media_class": "track", "media_content_type": "music", "media_content_id": "library://track/831"},
     {"title": "Alice In Chains - Dam That River", "media_class": "track", "media_content_type": "music", "media_content_id": "library://track/832"},
@@ -39,48 +33,49 @@ class _BrowseMedia:
 
 
 class TestDeskRegression(unittest.TestCase):
-    """Desk Assistant, 2026-11-08: Albums > Dirt showed "No items found".
-
-    Desk's active speaker is its own media_player.desk_assistant_music, linked to the available Music
-    Assistant player media_player.desk_assistant (ma_player_entity), so the browse handle was right.
-    The in-process browse_media response is {entity_id: BrowseMedia}; the code read it only as a dict
-    and returned no children.
-    """
+    """Desk Assistant, 2026-11-08: Albums > Dirt showed 'No items found'."""
 
     def test_in_process_response_object_is_read(self) -> None:
         resp = {"media_player.desk_assistant": _BrowseMedia("Dirt", DIRT_CHILDREN)}
         node = ma_browse.browse_node_dict(resp["media_player.desk_assistant"])
         self.assertIsNotNone(node)
+        assert node is not None
         self.assertEqual(
             [s["name"] for s in ma_browse.album_track_slots(node["children"])],
             ["1. Them Bones", "2. Dam That River", "3. Rain When I Die", "4. Would?"],
         )
-        # Over the websocket API the same response arrives as JSON (a dict); both read the same.
         self.assertEqual(ma_browse.browse_node_dict(_BrowseMedia("Dirt", DIRT_CHILDREN).as_dict()), node)
         self.assertIsNone(ma_browse.browse_node_dict(None))
         self.assertIsNone(ma_browse.browse_node_dict("Dirt"))
 
     def test_desk_browses_on_its_own_ma_player(self) -> None:
         available = ["media_player.desk_assistant", "media_player.garage_hifi", "media_player.kitchen_speaker"]
-        # Preferred: the counterpart of Desk's own speaker (desk_assistant_music -> desk_assistant).
         self.assertEqual(
             ma_browse.choose_browse_entity(["media_player.desk_assistant", None, None], available),
             "media_player.desk_assistant",
         )
 
     def test_browse_engine_reads_the_object(self) -> None:
-        src = (LATTER_DIR / "media" / "browse.py").read_text(encoding="utf-8")
+        src = inspect.getsource(ma_browse)
         self.assertIn("browse_node_dict(resp.get(browse_entity))", src)
 
 
 class TestBrowseEntity(unittest.TestCase):
     def test_prefers_the_devices_own_player_then_a_stable_first(self) -> None:
         players = ["media_player.office_amp", "media_player.kitchen_speaker", "media_player.desk_assistant"]
-        self.assertEqual(ma_browse.choose_browse_entity(["media_player.desk_assistant"], players), "media_player.desk_assistant")
-        # No MA player of its own (e.g. a pocket Device): the default speaker's, else the first by entity_id.
-        self.assertEqual(ma_browse.choose_browse_entity([None, "media_player.office_amp"], players), "media_player.office_amp")
+        self.assertEqual(
+            ma_browse.choose_browse_entity(["media_player.desk_assistant"], players),
+            "media_player.desk_assistant",
+        )
+        self.assertEqual(
+            ma_browse.choose_browse_entity([None, "media_player.office_amp"], players),
+            "media_player.office_amp",
+        )
         self.assertEqual(ma_browse.choose_browse_entity([None, None], players), "media_player.desk_assistant")
-        self.assertEqual(ma_browse.choose_browse_entity(["media_player.gone"], list(reversed(players))), "media_player.desk_assistant")
+        self.assertEqual(
+            ma_browse.choose_browse_entity(["media_player.gone"], list(reversed(players))),
+            "media_player.desk_assistant",
+        )
 
     def test_no_player(self) -> None:
         self.assertIsNone(ma_browse.choose_browse_entity(["media_player.x"], []))
@@ -110,7 +105,11 @@ class TestAlbumTracks(unittest.TestCase):
 
     def test_title_equal_to_prefix_and_bad_children(self) -> None:
         self.assertEqual(ma_browse.strip_artist_prefix("Alice In Chains - ", "Alice In Chains"), "Alice In Chains - ")
-        rows = [{"title": "A - One", "media_content_id": ""}, {"title": "", "media_content_id": "x"}, {"title": "A - Two", "media_content_id": "u"}]
+        rows = [
+            {"title": "A - One", "media_content_id": ""},
+            {"title": "", "media_content_id": "x"},
+            {"title": "A - Two", "media_content_id": "u"},
+        ]
         self.assertEqual([s["name"] for s in ma_browse.album_track_slots(rows)], ["1. Two"])
 
 
@@ -120,7 +119,6 @@ class TestArtistAlbums(unittest.TestCase):
         self.assertEqual([s["name"] for s in by_name], ["Alice In Chains", "Dirt", "Facelift", "Jar Of Flies"])
         year = ["library://album/89", "library://album/67", "library://album/144"]
         by_year = ma_browse.artist_album_slots(ARTIST_CHILDREN, "Alice In Chains", "year", year)
-        # Albums missing from Music Assistant's year order keep the browse order, last.
         self.assertEqual([s["name"] for s in by_year], ["Facelift", "Dirt", "Jar Of Flies", "Alice In Chains"])
         unranked = ma_browse.artist_album_slots(ARTIST_CHILDREN, "Alice In Chains", "year_desc")
         self.assertEqual([s["id"] for s in unranked], [c["media_content_id"] for c in ARTIST_CHILDREN])
@@ -129,7 +127,7 @@ class TestArtistAlbums(unittest.TestCase):
 
 class TestOnePath(unittest.TestCase):
     def test_browse_engine_has_no_track_title_search_or_speaker_bound_browse(self) -> None:
-        src = (LATTER_DIR / "media" / "browse.py").read_text(encoding="utf-8")
+        src = inspect.getsource(ma_browse)
         self.assertNotIn("_browse_ma_media_children", src)
         self.assertNotIn('media_type="track",\n            search=album_ref', src)
         self.assertNotIn('not ("library://" in album_ref)', src)
@@ -143,7 +141,6 @@ class TestOnePath(unittest.TestCase):
         self.assertEqual(len(ma_browse._BROWSE_LYRICS_BIO_CACHE), 64)
         self.assertIsNone(ma_browse._cache_get("key_0"))
         self.assertIsNotNone(ma_browse._cache_get("key_16"))
-        # Touching key_16 moves it to MRU so adding key_80 evicts key_17 instead of key_16
         ma_browse._cache_put("key_80", {"slots": ["line_80"]})
         self.assertIsNotNone(ma_browse._cache_get("key_16"))
         self.assertIsNone(ma_browse._cache_get("key_17"))

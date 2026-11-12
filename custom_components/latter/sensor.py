@@ -16,13 +16,16 @@ from homeassistant.helpers import area_registry as ar, entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
+from .areas import resolve_person_area_and_distance
 from .const import DOMAIN, build_device_entity_id, normalize_device_slug
-from .core.device_coordinator import (
-    LatterCoordinator,
-    resolve_person_area_and_distance,
+from .coordinator import LatterCoordinator
+from .hub import (
+    LatterSystemHub,
+    get_latter_system,
+    get_system_device_info,
+    iter_coordinators,
 )
-from .core.hub import LatterSystem, get_latter_system, get_system_device_info
-from .presence.ble_fabric import get_ble_fabric, get_ble_proxy_area_ids
+from .presence import get_ble_fabric, get_ble_proxy_area_ids
 
 PARALLEL_UPDATES = 0
 DATA_CREATED_AREA_OCCUPANT_IDS = "created_area_occupant_ids"
@@ -36,10 +39,8 @@ async def async_setup_entry(
 ) -> None:
     """Set up Latter sensors for all device subentries and System-level Area/Person entities."""
     runtime = entry.runtime_data
-    if isinstance(runtime, LatterSystem):
+    if isinstance(runtime, LatterSystemHub):
         coordinators = list(runtime.coordinators.values())
-    elif isinstance(runtime, LatterCoordinator):
-        coordinators = [runtime]
     else:
         sys_obj = get_latter_system(hass)
         coordinators = list(sys_obj.coordinators.values()) if sys_obj else []
@@ -400,17 +401,7 @@ class _BaseLatterPersonSensor(SensorEntity):
         self.async_on_remove(
             fabric.register_occupancy_listener(self._handle_person_update)
         )
-        sys_obj = get_latter_system(self.hass)
-        coords = (
-            list(sys_obj.coordinators.values())
-            if sys_obj and sys_obj.coordinators
-            else [
-                v
-                for v in self.hass.data.get(DOMAIN, {}).values()
-                if isinstance(v, LatterCoordinator)
-            ]
-        )
-        for coord in coords:
+        for coord in iter_coordinators(self.hass):
             self.async_on_remove(
                 coord.async_add_listener(self._handle_person_update)
             )

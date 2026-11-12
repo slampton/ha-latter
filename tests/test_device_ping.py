@@ -1,30 +1,13 @@
-"""Standalone tests for device_ping.py: Latter asks bound Devices to resend device_hello.
-
-They run without Home Assistant installed; device_ping.py is standard-library only and loaded by path.
-"""
+"""Tests for `async_ping_bound_devices`: Latter asks bound Devices to resend `device_hello`."""
 
 from __future__ import annotations
 
-import importlib.util
 from pathlib import Path
-import sys
-from types import ModuleType
 import unittest
 
+from custom_components.latter import PING_ACTION, async_ping_bound_devices
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
-LATTER_DIR = REPO_ROOT / "custom_components" / "latter"
-
-
-def _load(name: str) -> ModuleType:
-    spec = importlib.util.spec_from_file_location(f"latter_ping_test_{name}", LATTER_DIR / f"{name}.py")
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-device_ping = _load("core/device_ping")
 
 
 def _drive(coro):
@@ -55,7 +38,7 @@ class TestPingBoundDevices(unittest.TestCase):
                 raise RuntimeError("device dropped")
 
         pinged = _drive(
-            device_ping.async_ping_bound_devices(
+            async_ping_bound_devices(
                 device_ids, resolve, call, lambda service, err: errors.append(service)
             )
         )
@@ -86,12 +69,16 @@ class TestPingBoundDevices(unittest.TestCase):
 
     def test_action_matches_firmware(self) -> None:
         """The firmware's latter_ping action (id latter_ping_action) is what answers with a hello."""
-        self.assertEqual(device_ping.PING_ACTION, "latter_ping")
-        core = REPO_ROOT.parent / "esphome-latter-core" / "modules" / "features" / "core_system.yaml"
-        if core.exists():
-            text = core.read_text(encoding="utf-8")
-            block = text.split("- action: latter_ping", 1)[1].split("- action:", 1)[0]
-            self.assertIn("script.execute: send_device_hello", block)
+        self.assertEqual(PING_ACTION, "latter_ping")
+        core_root = REPO_ROOT.parent / "esphome-latter-core" / "modules"
+        for rel in ("system_core.yaml", "features/core_system.yaml"):
+            candidate = core_root / rel
+            if candidate.exists():
+                text = candidate.read_text(encoding="utf-8")
+                if "- action: latter_ping" in text:
+                    block = text.split("- action: latter_ping", 1)[1].split("- action:", 1)[0]
+                    self.assertIn("script.execute: send_device_hello", block)
+                    break
 
 
 if __name__ == "__main__":

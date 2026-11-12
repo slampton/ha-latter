@@ -2,7 +2,7 @@
  * Devices Scope Landing View (`select_device_prompt`): Filterable, keyboard-accessible sortable Devices table.
  */
 
-import { renderSortHeader } from "../components/controls.js";
+import { renderCard, renderSortHeader } from "../components/controls.js";
 import { html, repeat, type TemplateResult } from "../lib/lit.js";
 import type { StudioStore } from "../state/store.js";
 import type { SystemDeviceEntry } from "../types.js";
@@ -70,97 +70,89 @@ export function renderDevicesListView(store: StudioStore): TemplateResult {
   });
 
   return html`<section id="view-select_device_prompt">
-    <div class="card">
-      <div class="card-header">
-        <div class="card-header-text">
-          <h3 class="card-title">Devices</h3>
-        </div>
-        <div class="card-header-actions">
-          <select
-            id="device-category-filter"
-            aria-label="Filter Devices by category"
-            .value=${cat}
-            @change=${(ev: Event) => {
-              store.deviceCategoryFilter = (ev.currentTarget as HTMLSelectElement).value || "all";
-              store.host.requestUpdate();
-            }}
-          >
-            ${baseCategories.map(
-              (o) => html`<option value=${o.id} ?selected=${o.id === cat}>${o.label}</option>`,
-            )}
-          </select>
-          <button
-            type="button"
-            @click=${() => store.openHaPage("/config/integrations/integration/latter")}
-            class="btn btn-primary"
-          >
-            Add Device
-          </button>
-          <button
-            type="button"
-            @click=${() => store.openAddBleModal()}
-            class="btn btn-secondary"
-          >
-            Add BLE Tag
-          </button>
-        </div>
-      </div>
-      <div class="card-content">
-        ${filtered.length
-          ? html`<div class="table-wrap">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    ${renderSortHeader(store, "title", "Device")}
-                    ${renderSortHeader(store, "model", "Model")}
-                    ${renderSortHeader(store, "area", "Area")}
-                    ${renderSortHeader(store, "group", "Group")}
-                    ${renderSortHeader(store, "status", "Status")}
-                    <th><span class="sort-btn" aria-hidden="true"></span></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${repeat(
-                    filtered,
-                    (d) => d.subentry_id,
-                    (d) => {
-                      const st = d.status_label || "—";
-                      const dotCls =
-                        st === "Update available" ? "update" : st === "Offline" ? "" : "online";
-                      const openRow = (): void => {
-                        void store.switchSystemDevice(d.subentry_id);
-                      };
-                      const onRowKey = (ev: Event): void => {
-                        const kev = ev as KeyboardEvent;
-                        if (kev.key === "Enter" || kev.key === " ") {
-                          kev.preventDefault();
-                          openRow();
-                        }
-                      };
-                      return html`<tr
-                        tabindex="0"
-                        aria-label=${`Open ${d.title}`}
-                        @click=${openRow}
-                        @keydown=${onRowKey}
-                      >
-                        <td class="col-name">${d.title}</td>
-                        <td>${d.model_label || "—"}</td>
-                        <td>${d.area_label || "—"}</td>
-                        <td>${d.device_group_name || "—"}</td>
-                        <td><span class="status-dot ${dotCls}"></span>${st}</td>
-                        <td class="col-open" aria-hidden="true">›</td>
-                      </tr>`;
-                    },
-                  )}
-                </tbody>
-              </table>
-            </div>`
-          : html`<p class="empty-state">
-              ${allDevices.length
-                ? "No Devices match this category."
-                : "No Devices yet. Latter Devices appear here after you add them in Home Assistant."}
-            </p>`}
-      </div>
-    </div>
+    ${renderCard({
+      title: "Devices",
+      headerActions: html`<select
+          id="device-category-filter"
+          aria-label="Filter Devices by category"
+          .value=${cat}
+          @change=${(ev: Event) => {
+            store.deviceCategoryFilter = (ev.currentTarget as HTMLSelectElement).value || "all";
+            store.host.requestUpdate();
+          }}
+        >
+          ${baseCategories.map(
+            (o) => html`<option value=${o.id} ?selected=${o.id === cat}>${o.label}</option>`,
+          )}
+        </select>
+        <button
+          type="button"
+          @click=${() => store.openHaPage("/config/integrations/integration/latter")}
+          class="btn btn-primary"
+        >
+          Add Device
+        </button>
+        <button
+          type="button"
+          @click=${() => store.openAddBleModal()}
+          class="btn btn-secondary"
+        >
+          Add BLE Tag
+        </button>`,
+      body: filtered.length
+        ? html`<div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  ${renderSortHeader(store, "title", "Device")}
+                  ${renderSortHeader(store, "model", "Model")}
+                  ${renderSortHeader(store, "area", "Area")}
+                  ${renderSortHeader(store, "group", "Group")}
+                  ${renderSortHeader(store, "status", "Status")}
+                  <th><span class="sort-btn" aria-hidden="true"></span></th>
+                </tr>
+              </thead>
+              <tbody>
+                ${repeat(
+                  filtered,
+                  (d) => d.subentry_id,
+                  (d) => {
+                    const st = d.status_label || "—";
+                    const dotCls =
+                      st === "Update available" ? "update" : st === "Offline" ? "" : "online";
+                    const openRow = (): void => {
+                      void store.switchSystemDevice(d.subentry_id);
+                    };
+                    const onRowKey = (ev: Event): void => {
+                      const kev = ev as KeyboardEvent;
+                      if (kev.key === "Enter" || kev.key === " ") {
+                        kev.preventDefault();
+                        openRow();
+                      }
+                    };
+                    return html`<tr
+                      tabindex="0"
+                      aria-label=${`Open ${d.title}`}
+                      @click=${openRow}
+                      @keydown=${onRowKey}
+                    >
+                      <td class="col-name">${d.title}</td>
+                      <td>${d.model_label || "—"}</td>
+                      <td>${d.area_label || "—"}</td>
+                      <td>${d.device_group_name || "—"}</td>
+                      <td><span class="status-dot ${dotCls}"></span>${st}</td>
+                      <td class="col-open" aria-hidden="true">›</td>
+                    </tr>`;
+                  },
+                )}
+              </tbody>
+            </table>
+          </div>`
+        : html`<p class="empty-state">
+            ${allDevices.length
+              ? "No Devices match this category."
+              : "No Devices yet. Latter Devices appear here after you add them in Home Assistant."}
+          </p>`,
+    })}
   </section>`;
 }

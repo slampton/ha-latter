@@ -13,11 +13,11 @@ from custom_components.latter.const import (
     DATA_GLOBAL_CONFIG,
     DOMAIN,
 )
-from custom_components.latter.core.security_policy import hash_security_pin
 from custom_components.latter.diagnostics import (
     async_get_config_entry_diagnostics,
     async_get_device_diagnostics,
 )
+from custom_components.latter.protocol import hash_security_pin
 
 
 async def test_diagnostics_redacts_secrets_pins_ble_uuids_macs_and_signed_urls(

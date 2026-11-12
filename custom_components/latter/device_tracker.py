@@ -11,10 +11,10 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .core.device_coordinator import LatterCoordinator
-from .core.hub import LatterSystem, get_latter_system
-from .core.identity import find_device_entity_by_suffix
-from .presence.ble_fabric import get_ble_fabric
+from .coordinator import LatterCoordinator
+from .hub import LatterSystemHub, get_latter_system
+from .identity import find_device_entity_by_suffix
+from .presence import get_ble_fabric
 
 PARALLEL_UPDATES = 0
 
@@ -26,10 +26,8 @@ async def async_setup_entry(
 ) -> None:
     """Set up `device_tracker.<device_slug>` entities for each Latter device and BLE tag subentry."""
     runtime = entry.runtime_data
-    if isinstance(runtime, LatterSystem):
+    if isinstance(runtime, LatterSystemHub):
         coordinators = list(runtime.coordinators.values())
-    elif isinstance(runtime, LatterCoordinator):
-        coordinators = [runtime]
     else:
         sys_obj = get_latter_system(hass)
         coordinators = list(sys_obj.coordinators.values()) if sys_obj else []

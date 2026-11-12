@@ -2,7 +2,12 @@
  * Device BLE & Area Presence View (`presence`): Built-in BLE tracking, Fallback Area, and BLE Identity.
  */
 
-import { renderNativeControlRow, renderSelectOptions } from "../components/controls.js";
+import {
+  renderCard,
+  renderNativeControlRow,
+  renderSelectRow,
+  renderSwitchRow,
+} from "../components/controls.js";
 import { html, nothing, type TemplateResult } from "../lib/lit.js";
 import type { StudioStore } from "../state/store.js";
 
@@ -18,99 +23,57 @@ export function renderDevicePresenceView(store: StudioStore): TemplateResult {
   return html`<section id="view-presence">
     <div class="columns">
       <div class="column">
-        <div class="card">
-          <div class="card-header">
-            <h3 class="card-title">Area Tracking</h3>
-          </div>
-          <div class="card-content settings-list">
-            ${!isBleOnly
-              ? html`<div class="settings-row">
-                    <div class="settings-row-text">
-                      <label for="cfg-native_ble_tracking" class="row-label">Track the Area with BLE Proxies</label>
-                      <p class="row-description">
-                        Uses Home Assistant Area-assigned Bluetooth proxies to locate this Device automatically.
-                      </p>
-                    </div>
-                    <div class="settings-row-control">
-                      <input
-                        type="checkbox"
-                        id="cfg-native_ble_tracking"
-                        role="switch"
-                        .checked=${Boolean(cfg.native_ble_tracking)}
-                        @change=${(ev: Event) =>
-                          store.stageDeviceSetting(
-                            "native_ble_tracking",
-                            (ev.currentTarget as HTMLInputElement).checked,
-                            "cfg-native_ble_tracking",
-                          )}
-                        class="switch"
-                      />
-                    </div>
-                  </div>
-                  <div class="settings-row">
-                    <div class="settings-row-text">
-                      <label for="cfg-ble_auto_switch" class="row-label">Auto-Switch Active Area</label>
-                      <p class="row-description">
-                        Switches the Device's active Area controls automatically when BLE detects a move.
-                      </p>
-                    </div>
-                    <div class="settings-row-control">
-                      <input
-                        type="checkbox"
-                        id="cfg-ble_auto_switch"
-                        role="switch"
-                        .checked=${Boolean(cfg.ble_auto_switch)}
-                        @change=${(ev: Event) =>
-                          store.stageDeviceSetting(
-                            "ble_auto_switch",
-                            (ev.currentTarget as HTMLInputElement).checked,
-                            "cfg-ble_auto_switch",
-                          )}
-                        class="switch"
-                      />
-                    </div>
-                  </div>`
+        ${renderCard({
+          title: "Area Tracking",
+          contentClass: "settings-list",
+          body: html`${!isBleOnly
+              ? html`${renderSwitchRow({
+                    id: "cfg-native_ble_tracking",
+                    label: "Track the Area with BLE Proxies",
+                    description:
+                      "Uses Home Assistant Area-assigned Bluetooth proxies to locate this Device automatically.",
+                    checked: Boolean(cfg.native_ble_tracking),
+                    onChange: (checked) =>
+                      store.stageDeviceSetting(
+                        "native_ble_tracking",
+                        checked,
+                        "cfg-native_ble_tracking",
+                      ),
+                  })}
+                  ${renderSwitchRow({
+                    id: "cfg-ble_auto_switch",
+                    label: "Auto-Switch Active Area",
+                    description:
+                      "Switches the Device's active Area controls automatically when BLE detects a move.",
+                    checked: Boolean(cfg.ble_auto_switch),
+                    onChange: (checked) =>
+                      store.stageDeviceSetting(
+                        "ble_auto_switch",
+                        checked,
+                        "cfg-ble_auto_switch",
+                      ),
+                  })}`
               : nothing}
-
-            <div class="settings-row">
-              <div class="settings-row-text">
-                <label for="cfg-default_area" class="row-label">Fallback Area</label>
-                <p class="row-description">
-                  Default Home Assistant Area when BLE tracking is off or no proxy is in range.
-                </p>
-              </div>
-              <div class="settings-row-control">
-                <select
-                  id="cfg-default_area"
-                  .value=${String(cfg.default_area || "")}
-                  @change=${(ev: Event) =>
-                    store.stageDeviceSetting(
-                      "default_area",
-                      (ev.currentTarget as HTMLSelectElement).value,
-                      "cfg-default_area",
-                    )}
-                >
-                  ${renderSelectOptions(
-                    data?.catalog?.areas,
-                    cfg.default_area,
-                    "— Automatic (ESPHome Area) —",
-                  )}
-                </select>
-              </div>
-            </div>
-
-            ${bleAreaItems.map((it) => renderNativeControlRow(store, it))}
-          </div>
-        </div>
+            ${renderSelectRow({
+              id: "cfg-default_area",
+              label: "Fallback Area",
+              description:
+                "Default Home Assistant Area when BLE tracking is off or no proxy is in range.",
+              value: cfg.default_area,
+              choices: data?.catalog?.areas,
+              emptyOptionLabel: "— Automatic (ESPHome Area) —",
+              onChange: (val) =>
+                store.stageDeviceSetting("default_area", val, "cfg-default_area"),
+            })}
+            ${bleAreaItems.map((it) => renderNativeControlRow(store, it))}`,
+        })}
       </div>
 
       <div class="column">
-        <div class="card">
-          <div class="card-header">
-            <h3 class="card-title">BLE Identity</h3>
-          </div>
-          <div class="card-content stack">
-            <div class="stacked-field">
+        ${renderCard({
+          title: "BLE Identity",
+          contentClass: "stack",
+          body: html`<div class="stacked-field">
               <label for="cfg-ble_target_address">BLE Target Address or Entity</label>
               <input
                 type="text"
@@ -128,7 +91,6 @@ export function renderDevicePresenceView(store: StudioStore): TemplateResult {
                 Leave blank on Latter displays to track their built-in BLE beacon MAC automatically.
               </span>
             </div>
-
             ${!isBleOnly
               ? html`<div class="stacked-field">
                   <label for="cfg-ble_beacon_uuid">iBeacon UUID</label>
@@ -145,9 +107,8 @@ export function renderDevicePresenceView(store: StudioStore): TemplateResult {
                       )}
                   />
                 </div>`
-              : nothing}
-          </div>
-        </div>
+              : nothing}`,
+        })}
       </div>
     </div>
   </section>`;

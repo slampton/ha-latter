@@ -45,7 +45,24 @@ export function fmtPercent(
 export function fmtDistance(
   meters: number | null | undefined,
   hass?: HomeAssistant | null,
+  feet?: number | null,
 ): string {
+  const isImperial = hass?.config?.unit_system?.length === "mi";
+  if (isImperial) {
+    const hasFeet = feet !== null && feet !== undefined && Number.isFinite(Number(feet));
+    const hasMeters = meters !== null && meters !== undefined && Number.isFinite(Number(meters));
+    if (!hasFeet && !hasMeters) return "—";
+    const ft = hasFeet ? Number(feet) : Number(meters) * 3.28084;
+    try {
+      return new Intl.NumberFormat(hassLanguage(hass), {
+        style: "unit",
+        unit: "foot",
+        maximumFractionDigits: 1,
+      }).format(ft);
+    } catch {
+      return `${ft.toFixed(1)} ft`;
+    }
+  }
   if (meters === null || meters === undefined || !Number.isFinite(Number(meters))) return "—";
   const m = Number(meters);
   try {
@@ -85,12 +102,20 @@ export function fmtDateTime(
   if (ts === null || ts === undefined || ts === "") return "";
   const date = typeof ts === "number" ? new Date(ts < 1e12 ? ts * 1000 : ts) : new Date(ts);
   if (Number.isNaN(date.getTime())) return String(ts);
+  const useServerTz = hass?.locale?.time_zone === "server" && Boolean(hass?.config?.time_zone);
+  const opts: Intl.DateTimeFormatOptions = {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  };
+  if (useServerTz && hass?.config?.time_zone) {
+    opts.timeZone = hass.config.time_zone;
+  }
   try {
-    return new Intl.DateTimeFormat(hassLanguage(hass), {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    }).format(date);
+    return new Intl.DateTimeFormat(hassLanguage(hass), opts).format(date);
   } catch {
     return date.toISOString();
   }

@@ -2,7 +2,7 @@
  * Device Power & Battery View (`power`): Sleep & Wake controls and Power & Battery telemetry (D-014).
  */
 
-import { renderNativeControlRow } from "../components/controls.js";
+import { renderCard, renderNativeControlRow } from "../components/controls.js";
 import { html, nothing, type TemplateResult } from "../lib/lit.js";
 import type { StudioStore } from "../state/store.js";
 
@@ -24,14 +24,12 @@ export function renderDevicePowerView(store: StudioStore): TemplateResult {
               </div>
             </div>`
           : bothEmpty
-            ? html`<div class="card">
-                <div class="card-header">
-                  <h3 class="card-title">Power &amp; Battery</h3>
-                </div>
-                <div class="card-content">
-                  <p class="empty-state">No sleep or battery entities reported by this Device.</p>
-                </div>
-              </div>`
+            ? renderCard({
+                title: "Power & Battery",
+                body: html`<p class="empty-state">
+                  No sleep or battery entities reported by this Device.
+                </p>`,
+              })
             : nothing}
       </div>
       <div class="column">

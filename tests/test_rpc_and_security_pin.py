@@ -20,8 +20,9 @@ from custom_components.latter.const import (
     DOMAIN,
     SUBENTRY_DEVICE,
 )
-from custom_components.latter.core.rpc_protocol import MAX_RPC_BYTES, RpcReassembler, parse_rpc_frame
-from custom_components.latter.core.security_policy import (
+from custom_components.latter.coordinator import LatterCoordinator
+from custom_components.latter.identity import MAX_RPC_BYTES, RpcReassembler, parse_rpc_frame
+from custom_components.latter.protocol import (
     check_perimeter_action_allowed,
     hash_security_pin,
     is_sensitive_perimeter_action,
@@ -53,7 +54,6 @@ async def test_rpc_outbox_single_and_multipart_dispatch_and_target_pinning(
         subentry_id="sub_panel_b",
     )
     hass.config_entries.async_add_subentry(entry, sub_b)
-    from custom_components.latter.core.device_coordinator import LatterCoordinator
 
     coord_b = LatterCoordinator(
         hass=hass,

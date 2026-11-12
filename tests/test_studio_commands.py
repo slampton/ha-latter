@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import base64
 import io
 import json
 from typing import Any
@@ -13,15 +12,16 @@ import pytest
 
 from custom_components.latter import async_unload_entry
 from custom_components.latter.const import CONF_SECURITY_PIN_HASH
-from custom_components.latter.presence.ble_fabric import get_ble_fabric
+from custom_components.latter.presence import get_ble_fabric
 from custom_components.latter.studio.commands import STUDIO_REV
 from custom_components.latter.studio.payload import log_studio_event
+from custom_components.latter.wallpapers import save_uploaded_wallpaper_bytes
 
 
-def _make_b64_jpeg() -> str:
+def _make_jpeg_bytes() -> bytes:
     buf = io.BytesIO()
     Image.new("RGB", (64, 64), (80, 120, 200)).save(buf, format="JPEG", progressive=False)
-    return base64.b64encode(buf.getvalue()).decode("ascii")
+    return buf.getvalue()
 
 
 async def _call_ws(
@@ -169,15 +169,18 @@ async def test_studio_commands_security_pin_secrecy_groups_and_backup_restore(
 
     # 1) Write-only security_pin & security_pin_policy: NEVER leak raw PIN or hash in Studio payload!
     secret_pin = "846291"
-    state_after_pin = await _dev_cmd(
+    await _dev_cmd(
         "save_device_config",
         {
             "config": {
                 "security_pin_policy": "require_pin",
-                "security_pin": secret_pin,
                 "dock_apps": "music,alarm,area,remote",
             }
         },
+    )
+    state_after_pin = await _sys_cmd(
+        "set_security_pin",
+        {"subentry_id": coord.subentry_id, "pin": secret_pin},
     )
     serialized = json.dumps(state_after_pin)
     assert secret_pin not in serialized
@@ -192,10 +195,11 @@ async def test_studio_commands_security_pin_secrecy_groups_and_backup_restore(
     await _sys_cmd("set_security_pin", {"clear": True})
     await _sys_cmd("rotate_signing_key", {})
 
-    # Clear device PIN
+    # Clear device PIN via canonical set_security_pin + reset policy to auto
+    await _sys_cmd("set_security_pin", {"subentry_id": coord.subentry_id, "clear": True})
     state_cleared = await _dev_cmd(
         "save_device_config",
-        {"config": {"clear_security_pin": True, "security_pin_policy": "auto"}},
+        {"config": {"security_pin_policy": "auto"}},
     )
     assert state_cleared["config"]["has_security_pin"] is False
 
@@ -210,15 +214,28 @@ async def test_studio_commands_security_pin_secrecy_groups_and_backup_restore(
     await _sys_cmd("check_system_updates", {})
     await _sys_cmd("clear_internal_logs", {})
 
-    b64_img = _make_b64_jpeg()
-    await _sys_cmd("upload_system_wallpaper", {"filename": "sys_bg.jpg", "data_b64": b64_img})
-    st_wp = await _dev_cmd("upload_wallpaper", {"filename": "dev_bg.jpg", "data_b64": b64_img})
-    dev_wp_id = coord.wallpaper_source
+    # Retired base64 WS wallpaper upload commands must be rejected as unknown_command
+    msg_seq += 1
+    await _call_ws(
+        hass,
+        conn,
+        msg_seq,
+        "latter/device/command",
+        command="upload_wallpaper",
+        subentry_id=coord.subentry_id,
+        payload={"filename": "dev_bg.jpg", "data_b64": ""},
+        studio_rev=STUDIO_REV,
+    )
+    assert conn.errors[-1][1] == "unknown_command"
+    conn.errors.clear()
+
+    dev_wp_id, _ = save_uploaded_wallpaper_bytes(hass, coord.device_slug, "dev_bg.jpg", _make_jpeg_bytes())
     assert dev_wp_id.startswith("upload:")
+    await _dev_cmd("select_wallpaper", {"source_id": dev_wp_id})
+    assert coord.wallpaper_source == dev_wp_id
     await _dev_cmd("toggle_wallpaper_favorite", {"source_id": "preset:forest_mountains"})
     await _dev_cmd("select_wallpaper", {"source_id": "preset:forest_mountains"})
     await _dev_cmd("delete_wallpaper", {"source_id": dev_wp_id})
-    _ = st_wp
 
     # Device Groups lifecycle: create -> seed -> set_group_device_setting -> sync -> delete
     await _sys_cmd("create_device_group", {"name": "Guest Suites", "description": "Guest displays"})

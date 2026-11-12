@@ -9,10 +9,6 @@ export interface CSSResult {
   readonly styleSheetText: string;
 }
 
-export function unsafeCSS(value: string): CSSResult {
-  return { styleSheetText: String(value) };
-}
-
 export function css(strings: TemplateStringsArray, ...values: unknown[]): CSSResult {
   let out = "";
   for (let i = 0; i < strings.length; i += 1) {
@@ -321,6 +317,14 @@ class AttrPart implements LivePart {
       this.statics[1] === ""
     ) {
       const raw = values[this.partIndices[0]];
+      if (this.attrName.startsWith("aria-") && typeof raw === "boolean") {
+        const str = raw ? "true" : "false";
+        if (str !== this.prev) {
+          this.prev = str;
+          this.el.setAttribute(this.attrName, str);
+        }
+        return;
+      }
       if (raw === nothing || raw === null || raw === undefined || raw === false) {
         if (this.prev !== nothing) {
           this.prev = nothing;

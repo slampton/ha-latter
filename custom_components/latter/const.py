@@ -1,15 +1,17 @@
-"""Constants for the Latter integration."""
+"""Constants and target classifiers for the Latter integration."""
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 import re
-from typing import Final
+from typing import Any, Final, Literal
 
 from homeassistant.const import Platform
 
 DOMAIN: Final = "latter"
 INTEGRATION_VERSION: Final = "3.0.0"
 STUDIO_REV: Final = 3
+MIN_FIRMWARE_SDK_REV: Final = 2026111039
 PLATFORMS: Final[list[Platform]] = [
     Platform.SENSOR,
     Platform.BINARY_SENSOR,
@@ -67,7 +69,6 @@ CONF_DOORBELL_NOISE_REDUCTION: Final = "doorbell_noise_reduction"
 CONF_SECURITY_PIN_POLICY: Final = "security_pin_policy"
 CONF_SECURITY_PIN_HASH: Final = "security_pin_hash"
 CONF_SECURITY_PIN: Final = "security_pin"
-CONF_CLEAR_SECURITY_PIN: Final = "clear_security_pin"
 CONF_SYSTEM_BLE_UUID: Final = "system_ble_uuid"
 
 # Defaults
@@ -120,11 +121,9 @@ API_BRAND_ICON_PATH: Final = "/api/latter/brand/icon.png"
 DATA_HMAC_SECRET: Final = "hmac_secret"
 DATA_DISCOVERY_UNSUB: Final = "discovery_unsub"
 
-# Timing & Recorder Idle-Guard (MCU interpolates progress locally via millis(); 15s sync cuts Wi-Fi wakeups by 87%)
-POSITION_UPDATE_INTERVAL_SECONDS: Final = 15
+# Feed refresh intervals
 FORECAST_REFRESH_INTERVAL_MINUTES: Final = 30
 CALENDAR_REFRESH_INTERVAL_MINUTES: Final = 15
-
 
 GLOBAL_STORAGE_KEY: Final = "latter.site"
 DATA_GLOBAL_CONFIG: Final = "global_config"
@@ -163,6 +162,13 @@ GLOBAL_CONFIG_KEYS: Final[tuple[str, ...]] = (
     CONF_SYSTEM_BLE_UUID,
 )
 
+# Special values for `target_device` in `latter.notify` and `latter.intercom_broadcast`
+TARGET_ALL: Final = "all"
+TARGET_OCCUPIED_AREAS: Final = "occupied_areas"
+PERSON_PREFIX: Final = "person."
+
+TargetKind = Literal["none", "all", "occupied_areas", "person", "device"]
+
 
 def normalize_device_slug(raw_slug: str) -> str:
     """Normalize an ESPHome device name or slug to lowercase underscore format."""
@@ -180,3 +186,37 @@ def build_device_entity_id(device_slug: str, suffix: str) -> str:
     """Build a device-scoped sensor entity_id (`sensor.<device_slug>_<suffix>`)."""
     norm = normalize_device_slug(device_slug)
     return f"sensor.{norm}_{suffix}"
+
+
+def target_kind(value: Any) -> TargetKind:
+    """Classify a `target_device` value."""
+    text = str(value or "").strip().lower()
+    if not text:
+        return "none"
+    if text == TARGET_ALL:
+        return "all"
+    if text == TARGET_OCCUPIED_AREAS:
+        return "occupied_areas"
+    if text.startswith(PERSON_PREFIX):
+        return "person"
+    return "device"
+
+
+def other_latter_devices(candidates: Iterable[Any], caller_slug: str) -> list[Any]:
+    """Return the Latter Devices other than the caller: objects with a `device_slug` that aren't BLE tags."""
+    return [
+        c
+        for c in candidates
+        if getattr(c, "device_slug", None)
+        and not getattr(c, "is_ble_tag", False)
+        and c.device_slug != caller_slug
+    ]
+
+
+def call_target_slugs(candidates: Iterable[Any], caller_slug: str, target: Any) -> list[str]:
+    """Return the slugs `call_target` rings: every other Latter Device for `all` (or empty), else the named one."""
+    others = other_latter_devices(candidates, caller_slug)
+    text = str(target or "").strip()
+    if text.lower() in ("", TARGET_ALL):
+        return [c.device_slug for c in others]
+    return [c.device_slug for c in others if c.device_slug == text]

@@ -21,9 +21,9 @@ export function renderWallpaperGalleryItems(
     items,
     (wp) => wp.id,
     (wp) => {
-      const isActive = Boolean(wp.active ?? wp.is_active);
-      const isFav = Boolean(wp.favorite ?? wp.is_favorite);
-      const canDelete = Boolean(wp.deletable ?? wp.can_delete ?? wp.kind === "upload");
+      const isActive = Boolean(wp.active);
+      const isFav = Boolean(wp.favorite);
+      const canDelete = Boolean(wp.deletable ?? wp.kind === "upload");
       const thumbSrc = wp.thumb_url || wp.preview_url || "";
       const activeCls = isActive ? "wp-card active" : "wp-card";
       const onUse = (): void => {

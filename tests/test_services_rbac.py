@@ -21,6 +21,7 @@ from custom_components.latter.const import (
     CONF_VOLUME_OVERRIDES,
     DATA_GLOBAL_CONFIG,
     DOMAIN,
+    MIN_FIRMWARE_SDK_REV,
     SERVICE_AREA_ACTION,
     SERVICE_AREA_BROWSE,
     SERVICE_CALENDAR_CREATE_EVENT,
@@ -39,17 +40,17 @@ from custom_components.latter.const import (
     SERVICE_SET_ACTIVE_SPEAKER,
     SERVICE_SET_DOCK_APPS,
 )
-from custom_components.latter.media.browse import (
+from custom_components.latter.media import (
+    clear_ma_counterpart_cache,
+    resolve_ma_counterpart_entity,
+)
+from custom_components.latter.media_browse import (
     _BROWSE_LYRICS_BIO_CACHE,
     MAX_BROWSE_CACHE_ENTRIES,
     _cache_put,
     clear_browse_cache,
 )
-from custom_components.latter.media.ma_link import (
-    clear_ma_counterpart_cache,
-    resolve_ma_counterpart_entity,
-)
-from custom_components.latter.presence.ble_fabric import get_ble_fabric
+from custom_components.latter.presence import get_ble_fabric
 
 
 @pytest.mark.asyncio
@@ -299,7 +300,7 @@ async def test_all_domain_services_ma_link_and_browse_lru(
             "shape": "circle",
             "display": 1,
             "stationary": 0,
-            "sdk": 41,
+            "sdk": MIN_FIRMWARE_SDK_REV,
             "beacon": {"uuid": "E2C56DB5-DFFB-48D2-B060-D0F5A71096E1", "major": 1, "minor": 2},
         }
     )

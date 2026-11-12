@@ -1,12 +1,12 @@
 # HTTP API Reference
 
-Latter registers its HTTP endpoints under `/api/latter/`. Source: [`http/views.py`](../../custom_components/latter/http/views.py), [`areas/doorbell.py`](../../custom_components/latter/areas/doorbell.py) (camera audio), [`http/wallpapers.py`](../../custom_components/latter/http/wallpapers.py), [`http/url_signer.py`](../../custom_components/latter/http/url_signer.py) and [`http/resource_signing.py`](../../custom_components/latter/http/resource_signing.py) (signatures).
+Latter registers its HTTP endpoints under `/api/latter/`. Source: [`http.py`](../../custom_components/latter/http.py) (URL signing + all 7 `HomeAssistantView` classes), [`doorbell.py`](../../custom_components/latter/doorbell.py) (doorbell audio URL minting), and [`wallpapers.py`](../../custom_components/latter/wallpapers.py) (preset & uploaded wallpaper storage).
 
-These endpoints exist so an ESP32 can fetch images and audio streams without Home Assistant's bearer token, and so Studio can stream multipart wallpaper uploads. Each request is authorized by a scoped, expiring HMAC signature.
+These endpoints exist so an ESP32 can fetch images and audio streams without Home Assistant's bearer token, and so Studio can stream multipart wallpaper uploads. Device media/image/audio requests are authorized by a scoped, expiring HMAC signature; Studio multipart uploads require an authenticated Home Assistant administrator session.
 
 ## URL signing
 
-Latter keeps a 256-bit secret in `.storage/latter.site` (rotatable at any time via **Rotate Signing Key** in Studio). URLs carry a `sig` parameter of the form `<expiry>.<HMAC-SHA256, truncated to 128 bits>`. The signature covers the Device (its config subentry, or `system` for Studio system previews/uploads), the resource including the server-chosen render parameters (for example `camera:camera.front_door|480|480|circle`), and the expiry time. Signatures are compared in constant time.
+Latter keeps a 256-bit secret in `.storage/latter.site` (rotatable at any time via **Rotate Signing Key** in Studio). URLs carry a `sig` parameter of the form `<expiry>.<HMAC-SHA256, truncated to 128 bits>`. The signature covers the Device (its config subentry, or `system` for Studio system previews), the resource including the server-chosen render/filter parameters (for example `camera:camera.front_door|480|480|circle` or `camera_audio:camera.front_door|strong|flac`), and the expiry time. Signatures are compared in constant time (`http.py`).
 
 There are two expiry modes:
 
@@ -18,7 +18,7 @@ There are two expiry modes:
 | Artwork, wallpaper, camera snapshot, map | Day-bucketed | 48 hours (2 days) | 2 to 3 days |
 | Studio camera preview, wallpaper thumbnail | Day-bucketed | 48 hours (2 days) | 2 to 3 days |
 | Camera audio (doorbell listen stream) | Exact | 10 minutes | 10 minutes (a new URL is signed each time listening starts; the signature is checked when the stream opens) |
-| Studio multipart wallpaper upload | Exact | Short-lived (minted per upload) | Checked when `POST /api/latter/wallpaper/upload` receives the upload |
+| Studio multipart wallpaper upload | HA Admin Auth | Current session | Verified via Home Assistant `requires_auth = True` + `hass_user.is_admin` when `POST /api/latter/wallpaper/upload` receives the upload |
 
 You shouldn't build these URLs yourself. Latter publishes the image URLs, already signed, in its Protocol v3 payloads (`art_url` in `active_media`; `wallpaper_url`, `camera_snapshot_url`, `cameras_summary`, `alert_camera_url`, and `doorbell_audio_url` in `area_context`) and in the `latter.calendar_fetch` response (`map_url`).
 
@@ -81,15 +81,16 @@ Streams a camera's RTSP audio through `ffmpeg` with a noise-reduction filter cha
 
 | Param | Notes |
 | :--- | :--- |
-| `sig` | **Required.** Short-lived (10 min) signed resource `camera_audio:<entity_id>` |
-| `fmt` | `flac` (default) or `wav` |
+| `sig` | **Required.** Short-lived (10 min) signed resource `camera_audio:<entity_id>\|<nr>\|<fmt>` |
+| `nr` | `strong` (default), `light`, or `off` (bound into `sig`; tampering returns `403`) |
+| `fmt` | `flac` (default) or `wav` (bound into `sig`; tampering returns `403`) |
 
-The noise-reduction filter level (`strong`, `light`, or `off`) comes from the device's active doorbell noise-reduction setting (or the Studio System default). Opening a new stream on a Device terminates any prior stream on that same Device; at most 2 streams can run concurrently across the System (`429` when full).
+The noise-reduction filter level (`strong`, `light`, or `off`) and output format (`flac` or `wav`) are both bound inside the signed resource minted by `doorbell.py` (`coordinator.build_camera_audio_url(cam_ent, nr_norm, "flac")`). Opening a new stream on a Device terminates any prior stream on that same Device; at most 2 streams can run concurrently across the System (`429` when full).
 
 ### `POST /api/latter/wallpaper/upload`
-Accepts a `multipart/form-data` photo upload (up to **15 MB**) from Latter Studio (`XMLHttpRequest`), authorized by a short-lived HMAC `sig` minted over Studio's admin WebSocket (`mint_wallpaper_upload_url`), validates and stores the image under `.storage/latter/wallpapers/`, and refreshes the frozen wallpaper snapshot without touching Home Assistant's 4 MB WebSocket frame limit.
+Accepts a `multipart/form-data` photo upload (up to **15 MB**) from Latter Studio (`XMLHttpRequest`), authorized by Home Assistant's bearer-token session (`requires_auth = True` + `hass_user.is_admin`), validates and stores the image under `.storage/latter/wallpapers/`, and returns the refreshed wallpaper catalogs without touching Home Assistant's 4 MB WebSocket frame limit.
 
 ### Studio
-Studio is a `panel_custom` web component at `/latter` (admin only), loaded from the static path `/latter_ui`. Aside from `POST /api/latter/wallpaper/upload`, it talks to Home Assistant exclusively through admin-gated WebSocket commands: `latter/system/*` (`get_state`, `subscribe`, `command`, `export`, `import`) and `latter/device/*` (`command`, `export`, `import`). These are internal, not a stable API.
+Studio is a `panel_custom` web component at `/latter` (admin only), loaded from the single versioned static path `/latter_ui_<version>` (for example `/latter_ui_3_0_0`). Aside from `POST /api/latter/wallpaper/upload`, it talks to Home Assistant exclusively through admin-gated WebSocket commands: `latter/system/*` (`get_state`, `subscribe`, `command`, `export`, `import`) and `latter/device/*` (`command`, `export`, `import`, `reset`). These are internal, not a stable API.
 
 One unauthenticated branding asset is also served: `GET /api/latter/brand/icon.png`. Studio's sidebar icon is a static frontend module (`/latter_ui_<version>/latter-icons.js?v=<content hash>`), served like the panel JavaScript and loaded by Home Assistant on every page; it only defines the `latter:logo` icon.

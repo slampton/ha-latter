@@ -6,7 +6,7 @@
 import { html, type TemplateResult } from "../lib/lit.js";
 import type { StudioStore } from "../state/store.js";
 import { hsvToHex, hsvToRgbJS, isValidHexColor } from "../utils/format.js";
-import { renderSelectOptions } from "./controls.js";
+import { renderSelectOptions, renderSwitchRow } from "./controls.js";
 
 let cwWheelPainted = false;
 
@@ -187,49 +187,25 @@ export function renderStudioDialogs(store: StudioStore): TemplateResult {
       <div class="dialog-body">
         <h3 id="latter-reset-title" class="dialog-title">Reset to Defaults?</h3>
         <div class="settings-list">
-          <div class="settings-row">
-            <div class="settings-row-text">
-              <label for="latter-reset-device-settings" class="row-label">Settings Saved on the Device</label>
-              <p class="row-description">Erases everything saved on the Device; it restarts.</p>
-            </div>
-            <div class="settings-row-control">
-              <input
-                type="checkbox"
-                id="latter-reset-device-settings"
-                role="switch"
-                .checked=${store.resetModal.deviceSettings}
-                @change=${(ev: Event) => {
-                  store.resetModal = {
-                    ...store.resetModal,
-                    deviceSettings: (ev.currentTarget as HTMLInputElement).checked,
-                  };
-                  store.host.requestUpdate();
-                }}
-                class="switch"
-              />
-            </div>
-          </div>
-          <div class="settings-row">
-            <div class="settings-row-text">
-              <label for="latter-reset-latter-options" class="row-label">Latter Settings for This Device</label>
-            </div>
-            <div class="settings-row-control">
-              <input
-                type="checkbox"
-                id="latter-reset-latter-options"
-                role="switch"
-                .checked=${store.resetModal.latterOptions}
-                @change=${(ev: Event) => {
-                  store.resetModal = {
-                    ...store.resetModal,
-                    latterOptions: (ev.currentTarget as HTMLInputElement).checked,
-                  };
-                  store.host.requestUpdate();
-                }}
-                class="switch"
-              />
-            </div>
-          </div>
+          ${renderSwitchRow({
+            id: "latter-reset-device-settings",
+            label: "Settings Saved on the Device",
+            description: "Erases everything saved on the Device; it restarts.",
+            checked: store.resetModal.deviceSettings,
+            onChange: (checked) => {
+              store.resetModal = { ...store.resetModal, deviceSettings: checked };
+              store.host.requestUpdate();
+            },
+          })}
+          ${renderSwitchRow({
+            id: "latter-reset-latter-options",
+            label: "Latter Settings for This Device",
+            checked: store.resetModal.latterOptions,
+            onChange: (checked) => {
+              store.resetModal = { ...store.resetModal, latterOptions: checked };
+              store.host.requestUpdate();
+            },
+          })}
         </div>
         <p class="dialog-text">
           Wi-Fi and pairing are kept, so the Device rejoins Home Assistant by itself. Its ESPHome binding and Music Assistant player link are kept too.
@@ -280,7 +256,7 @@ export function renderStudioDialogs(store: StudioStore): TemplateResult {
               const addr = c.target_address || c.address || "";
               const lbl =
                 c.label ||
-                `${c.title || c.name || addr}${c.area_name || c.closest_area_name ? ` (${c.area_name || c.closest_area_name})` : ""}`;
+                `${c.title || c.name || addr}${c.area_name ? ` (${c.area_name})` : ""}`;
               return html`<option value=${addr} ?selected=${addr === store.addBleModal.candidateAddr}>
                 ${lbl}
               </option>`;

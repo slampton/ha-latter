@@ -59,7 +59,6 @@ export const STUDIO_STYLES = css`
     --studio-text-secondary: var(--secondary-text-color, #9b9b9b);
     --studio-text-disabled: var(--disabled-text-color, #6f6f6f);
     --studio-primary: var(--primary-color, #009ac7);
-    --studio-on-primary: var(--text-primary-color, #ffffff);
     --studio-primary-tint: rgba(var(--rgb-primary-color, 0, 154, 199), 0.12);
     --studio-primary-tint-strong: rgba(var(--rgb-primary-color, 0, 154, 199), 0.24);
     --studio-hover: rgba(var(--rgb-primary-text-color, 225, 225, 225), 0.06);
@@ -341,7 +340,7 @@ export const STUDIO_STYLES = css`
     letter-spacing: var(--studio-card-title-tracking);
     line-height: var(--studio-line-height-condensed);
   }
-  .card-description, .card-subtitle, .row-description, .help-text {
+  .card-subtitle, .row-description, .help-text {
     color: var(--studio-text-secondary);
     font-size:var(--studio-font-secondary);
   }
@@ -818,7 +817,6 @@ export const STUDIO_STYLES = css`
     background: var(--studio-primary);
     transition: width 0.15s ease;
   }
-  .signal-fill.no-signal { opacity: 0.2; }
 
   /* ---------- Wallpapers ---------- */
   .wp-gallery {

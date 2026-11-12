@@ -9,14 +9,23 @@ import re
 import tempfile
 import unittest
 
-from custom_components.latter.core import (
-    activity_policy,
-    dock_policy,
-    entity_sections,
-    issue_ids,
-    reset_policy,
+from custom_components.latter import (
+    backup,
+    groups,
+    protocol,
+    repairs,
+    studio as studio_init,
 )
-from custom_components.latter.studio import assets, catalog_gate, scope, settings
+from custom_components.latter.studio import settings
+
+activity_policy = protocol
+dock_policy = protocol
+entity_sections = groups
+issue_ids = repairs
+reset_policy = groups
+assets = studio_init
+catalog_gate = settings
+scope = settings
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 LATTER_DIR = REPO_ROOT / "custom_components" / "latter"
@@ -44,7 +53,7 @@ class TestPayloadDiet(unittest.TestCase):
         self.assertIn("_track_coordinators()", cmds)
         self.assertIn("_track_device_states()", cmds)
         self.assertIn("_apply_wallpaper_config(", cmds)
-        views_src = (LATTER_DIR / "http" / "views.py").read_text(encoding="utf-8")
+        views_src = (LATTER_DIR / "http.py").read_text(encoding="utf-8")
         self.assertIn("inspector_by_subentry", payload_src)
         self.assertIn("self._cached_bytes", views_src)
         js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
@@ -140,7 +149,7 @@ class TestViewLayout(unittest.TestCase):
         self.assertIn('id="cfg-ble_target_address"', section("presence"))
         for gone in ("In Home Assistant</h3>", "Location &amp; BLE</h3>", 'id="cfg-device_slug"', 'id="st-group"'):
             self.assertNotIn(gone, js)
-        self.assertNotIn('"count": len(', (LATTER_DIR / "areas" / "context_builder.py").read_text(encoding="utf-8"))
+        self.assertNotIn('"count": len(', (LATTER_DIR / "areas.py").read_text(encoding="utf-8"))
 
     def test_entity_only_cards_hide_when_empty(self) -> None:
         js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
@@ -174,7 +183,7 @@ class TestViewLayout(unittest.TestCase):
         self.assertLess(view.index('id="dock-pills-container"'), view.index('id="embedded-home"'))
 
     def test_sidebar_icon_module(self) -> None:
-        panel_src = (LATTER_DIR / "studio" / "panel.py").read_text(encoding="utf-8")
+        panel_src = (LATTER_DIR / "studio" / "__init__.py").read_text(encoding="utf-8")
         self.assertIn('SIDEBAR_ICON = "latter:logo"', panel_src)
         self.assertIn('SIDEBAR_ICON_FALLBACK = "mdi:ladder"', panel_src)
         self.assertIn("sidebar_icon=sidebar_icon,", panel_src)
@@ -183,6 +192,7 @@ class TestViewLayout(unittest.TestCase):
         self.assertIn("frontend.add_extra_js_url(hass, icon_url)", panel_src)
         self.assertIn("frontend.remove_extra_js_url(hass, icon_url)", panel_src)
         self.assertIn("str(frontend_dir),", panel_src)
+        self.assertNotIn("/latter_static", panel_src)
         module = LATTER_DIR / "frontend" / "latter-icons.js"
         src = module.read_text(encoding="utf-8")
         self.assertLess(len(src.encode("utf-8")), 1500)
@@ -259,13 +269,14 @@ class TestActivityCard(unittest.TestCase):
         self.assertEqual((fields["activity_sources"]["index"], fields["activity_sources"]["type"]), (39, "csv"))
         self.assertIn("activity_card", settings.DEVICE_BOOL_KEYS)
         self.assertIn("activity_sources", settings.DEVICE_TEXT_KEYS)
-        reset_src = (LATTER_DIR / "core" / "reset_policy.py").read_text(encoding="utf-8")
-        backup_src = (LATTER_DIR / "core" / "backup.py").read_text(encoding="utf-8")
-        self.assertIn("activity_card", reset_src)
-        self.assertIn("CONF_ACTIVITY_CARD", backup_src)
-        profile_keys = backup_src[backup_src.index("PROFILE_DEVICE_KEYS"):backup_src.index("DEFAULT_DEVICE_GROUPS")]
-        self.assertIn("CONF_ACTIVITY_SOURCES", profile_keys)
-        ctx_src = (LATTER_DIR / "areas" / "context_builder.py").read_text(encoding="utf-8")
+        self.assertNotIn(
+            "activity_card",
+            groups.reset_subentry_data({"activity_card": False}, {}, groups.DEVICE_IDENTITY_KEYS),
+        )
+        self.assertIn("activity_card", backup.DEVICE_CONFIG_EXPORT_KEYS)
+        self.assertIn("activity_sources", backup.DEVICE_CONFIG_EXPORT_KEYS)
+        self.assertIn("activity_sources", groups.GROUP_APPEARANCE_DEVICE_KEYS)
+        ctx_src = (LATTER_DIR / "areas.py").read_text(encoding="utf-8")
         self.assertIn("*activity_payload(", ctx_src)
         self.assertIn("coordinator.activity_card_enabled, coordinator.activity_sources_csv", ctx_src)
 
@@ -302,7 +313,7 @@ class TestDockPolicy(unittest.TestCase):
         for tok in dock_policy.DOCK_APP_TOKENS:
             self.assertIn(f'token: "{tok}"', js)
         self.assertEqual(protocol["services"]["set_dock_apps"]["fields"], ["target_device", "dock_apps"])
-        self.assertNotIn("dock_switch", (LATTER_DIR / "core" / "device_coordinator.py").read_text(encoding="utf-8"))
+        self.assertNotIn("dock_switch", (LATTER_DIR / "coordinator.py").read_text(encoding="utf-8"))
 
     def test_media_handoff_is_one_latter_setting(self) -> None:
         protocol = json.loads((LATTER_DIR / "protocol_v3.json").read_text(encoding="utf-8"))
@@ -334,7 +345,7 @@ class TestIssueAttribution(unittest.TestCase):
         self.assertTrue(set(issue_ids.DEVICE_ISSUE_KINDS) <= set(strings["issues"]))
         js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
         for kind in issue_ids.DEVICE_ISSUE_KINDS:
-            self.assertIn(f"  {kind}: ", js, f"Studio has no message for the {kind} repair")
+            self.assertRegex(js, rf"\b{kind}:\s*", f"Studio has no message for the {kind} repair")
 
 
 class TestPanelCacheBuster(unittest.TestCase):
@@ -350,9 +361,9 @@ class TestPanelCacheBuster(unittest.TestCase):
             first = assets.content_digest(f)
             f.write_text("two", encoding="utf-8")
             self.assertNotEqual(first, assets.content_digest(f))
-        panel_src = (LATTER_DIR / "studio" / "panel.py").read_text(encoding="utf-8")
+        panel_src = (LATTER_DIR / "studio" / "__init__.py").read_text(encoding="utf-8")
         self.assertIn('latter-studio.js?v={js_digest}"', panel_src)
-        self.assertIn("from .assets import content_digest", panel_src)
+        self.assertIn("def content_digest(", panel_src)
         self.assertIn('domain_data.pop("_studio_js_digest", None)', panel_src)
 
 
@@ -388,11 +399,9 @@ class TestSaveScopes(unittest.TestCase):
         self.assertTrue(set(settings.SYSTEM_SETTING_KEYS) <= set(self.GLOBAL_KEYS))
         self.assertFalse(set(settings.DEVICE_SETTING_KEYS) & set(self.GLOBAL_KEYS))
         self.assertNotIn("companion_base_url", self.GLOBAL_KEYS)
-        reset_keys = set(reset_policy.DEVICE_OPTION_KEYS) | set(reset_policy.DEVICE_IDENTITY_KEYS)
-        self.assertTrue(
-            set(settings.DEVICE_SETTING_KEYS) <= reset_keys,
-            f"Device settings missing from reset_policy.py: {set(settings.DEVICE_SETTING_KEYS) - reset_keys}",
-        )
+        seeded = dict.fromkeys(settings.DEVICE_SETTING_KEYS, "custom")
+        after_reset = reset_policy.reset_subentry_data(seeded, {}, reset_policy.DEVICE_IDENTITY_KEYS)
+        self.assertTrue(set(after_reset) <= set(reset_policy.DEVICE_IDENTITY_KEYS))
 
     def test_each_save_rejects_the_other_scope(self) -> None:
         with self.assertRaises(settings.SettingsScopeError):

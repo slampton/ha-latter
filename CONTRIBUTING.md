@@ -19,11 +19,12 @@ git commit -s -m "Short summary of your change"
 
 ## Architectural Ground Rules
 
-1. **Bound Identity Only**: Devices bind by `esphome_device_id` and MAC address (`{(DOMAIN, format_mac(mac))}` with `via_device_id`). Never match ESPHome entities or services by substring or first-device fallback, and never mutate entities or devices owned by other integrations (outside the documented roaming *Voice Follows Me* `area_id` update on the bound ESPHome device).
-2. **Signed HTTP Views**: Every `/api/latter/*` endpoint verifies a scoped, expiring HMAC signature (`resource_signing.py`). Never trust client-supplied `entity_id` or file paths.
-3. **Latter Studio Standards**: Read [`docs/studio-design.md`](docs/studio-design.md) before changing Latter Studio (`frontend_src/` or `studio/`). Studio uses HA theme CSS tokens in `:host`, Title Case labels (`D-013`), immediate debounced saves (`D-010`), and talks exclusively over `websocket_api` (`hass.callWS`).
-4. **Standard Terminology**: Use Home Assistant terminology (`System`, `Sites`, `Areas`, `Devices`, `Roles`, `Policies`, `Bridges`).
-5. **Translation Parity**: Keep `custom_components/latter/strings.json` and `custom_components/latter/translations/en.json` byte-identical.
+1. **28-Module Canonical Topology**: `custom_components/latter/` contains 24 flat root `.py` modules plus 4 `studio/` `.py` modules (`28` total), and `tests/harness/` holds the deterministic Home Assistant test doubles. Do not add backward-compatibility shims or `try/except ImportError` wrappers.
+2. **Bound Identity Only**: Devices bind by `esphome_device_id` and MAC address (`{(DOMAIN, format_mac(mac))}` with `via_device_id` in `identity.py`). Never match ESPHome entities, Areas, or camera sibling speakers by substring or first-device fallback, and never mutate entities or devices owned by other integrations (outside the documented roaming *Voice Follows Me* `area_id` update on the bound ESPHome device in `areas.py`).
+3. **Signed HTTP Views**: Every unauthenticated `/api/latter/*` endpoint verifies a scoped, expiring HMAC signature (`http.py`) binding target parameters (`camera_audio:<entity_id>|<nr>|<fmt>`, `camera:<entity_id>|<w>|<h>|<shape>`, etc.); `POST /api/latter/wallpaper/upload` requires an authenticated Home Assistant administrator session. Never trust client-supplied `entity_id` or file paths.
+4. **Latter Studio Standards**: Read [`docs/studio-design.md`](docs/studio-design.md) before changing Latter Studio (`frontend_src/` or `studio/`). Studio mounts its versioned static bundle at `/latter_ui_<version>`, uses HA theme CSS tokens in `:host`, Title Case labels (`D-013`), immediate debounced saves (`D-010`), and talks over `websocket_api` (`hass.callWS`).
+5. **Standard Terminology**: Use Home Assistant terminology (`System`, `Sites`, `Areas`, `Devices`, `Roles`, `Policies`, `Bridges`).
+6. **Translation Parity**: Keep `custom_components/latter/strings.json` and `custom_components/latter/translations/en.json` byte-identical.
 
 ## Local Pre-Flight Checks
 
@@ -31,6 +32,7 @@ Before opening a pull request, run the verification suite from the root of `ha-l
 
 ```bash
 python tools/verify_ha.py
+npm --prefix frontend_src run check
 ruff check custom_components/latter tests
-python -m unittest discover -s tests -v
+pytest tests --cov=custom_components.latter --cov-fail-under=75 -q
 ```

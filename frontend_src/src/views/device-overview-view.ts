@@ -2,7 +2,12 @@
  * Device Overview View (`dashboard`): Health repairs alert, Status card (13 rows + footer), Quick Actions & Sensors.
  */
 
-import { renderNativeControlRow, renderSelectOptions } from "../components/controls.js";
+import {
+  renderCard,
+  renderNativeControlRow,
+  renderSelectRow,
+  renderSettingsRow,
+} from "../components/controls.js";
 import { html, nothing, type TemplateResult } from "../lib/lit.js";
 import type { StudioStore } from "../state/store.js";
 import {
@@ -34,7 +39,7 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
   );
 
   // Live Status calculations
-  const winRow = (live.ble_survey_rows || []).find((r) => r.is_winner);
+  const winRow = (curDevEntry?.ble_survey_rows || []).find((r) => r.is_winner);
   let batText = "—";
   if (!isBleOnly && curDevEntry?.battery_level !== null && curDevEntry?.battery_level !== undefined) {
     if (curDevEntry.is_charging) {
@@ -87,11 +92,10 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
 
   const distSuffix =
     live.ble_closest_proxy && winRow && winRow.distance_m !== null && winRow.distance_m !== undefined
-      ? ` (~${fmtDistance(winRow.distance_m, store.hass)})`
+      ? ` (~${fmtDistance(winRow.distance_m, store.hass, winRow.distance_ft)})`
       : "";
   const showProxyRow = Boolean(caps.has_ble_beacon && cfg.native_ble_tracking);
 
-  // Quick Actions entities (Find My Device, Check Firmware, Restart, etc.)
   const quickActionItems = store
     .getSectionItems("actions")
     .concat(store.getSectionItems("overview"));
@@ -123,60 +127,52 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
 
     <div class="columns">
       <div class="column">
-        <div class="card">
-          <div class="card-header">
-            <h3 class="card-title">Status</h3>
-          </div>
-          <div class="card-content">
-            <div class="kv-list">
-              <div class="kv-row"><span>Status</span><strong>${statusText}</strong></div>
-              <div class="kv-row">
-                <span id="st-area-label">${hasAssignedArea ? "Area" : "Current Area"}</span>
-                <strong>${areaText}</strong>
-              </div>
-              <div class="kv-row"><span>Speaker</span><strong>${now.speaker_name || "—"}</strong></div>
-              <div class="kv-row"><span>Now Playing</span><strong>${nowPlayingText}</strong></div>
-              ${showBatteryRow
-                ? html`<div class="kv-row"><span>Battery</span><strong>${batText}</strong></div>`
-                : nothing}
-              <div class="kv-row">
-                <span id="st-wifi-label">${isBleOnly ? "BLE Signal" : "Wi-Fi Signal"}</span>
-                <strong>${wifiText}</strong>
-              </div>
-              ${showProxyRow
-                ? html`<div class="kv-row">
-                    <span>Closest Proxy</span>
-                    <strong>${(live.ble_closest_proxy || "—") + distSuffix}</strong>
-                  </div>`
-                : nothing}
-              <div class="kv-row">
-                <span>Model</span>
-                <strong>${curDevEntry?.model_label || esp?.device?.model || "—"}</strong>
-              </div>
-              <div class="kv-row">
-                <span>Firmware</span>
-                <strong>${fwText}</strong>
-              </div>
-              <div class="kv-row">
-                <span>Latter SDK</span>
-                <strong id="dash-sdk-rev">${live.sdk_rev || "—"}</strong>
-              </div>
-              <div class="kv-row">
-                <span>ESPHome Node</span>
-                <strong><code id="dash-node-name">${cfg.device_slug || "—"}</code></strong>
-              </div>
-              <div class="kv-row">
-                <span>${isBleOnly ? "Target" : "IP Address"}</span>
-                <strong><code>${ipStr}</code></strong>
-              </div>
-              <div class="kv-row">
-                <span>Placement</span>
-                <strong>${hasAssignedArea ? "Stationary" : "Roaming"}</strong>
-              </div>
+        ${renderCard({
+          heading: html`<h3 class="card-title">Status</h3>`,
+          body: html`<div class="kv-list">
+            <div class="kv-row"><span>Status</span><strong>${statusText}</strong></div>
+            <div class="kv-row">
+              <span id="st-area-label">${hasAssignedArea ? "Area" : "Current Area"}</span>
+              <strong>${areaText}</strong>
             </div>
-          </div>
-          <div class="card-actions">
-            <button
+            <div class="kv-row"><span>Speaker</span><strong>${now.speaker_name || "—"}</strong></div>
+            <div class="kv-row"><span>Now Playing</span><strong>${nowPlayingText}</strong></div>
+            ${showBatteryRow
+              ? html`<div class="kv-row"><span>Battery</span><strong>${batText}</strong></div>`
+              : nothing}
+            <div class="kv-row">
+              <span id="st-wifi-label">${isBleOnly ? "BLE Signal" : "Wi-Fi Signal"}</span>
+              <strong>${wifiText}</strong>
+            </div>
+            ${showProxyRow
+              ? html`<div class="kv-row">
+                  <span>Closest Proxy</span>
+                  <strong>${(live.ble_closest_proxy || "—") + distSuffix}</strong>
+                </div>`
+              : nothing}
+            <div class="kv-row">
+              <span>Model</span>
+              <strong>${curDevEntry?.model_label || esp?.device?.model || "—"}</strong>
+            </div>
+            <div class="kv-row"><span>Firmware</span><strong>${fwText}</strong></div>
+            <div class="kv-row">
+              <span>Latter SDK</span>
+              <strong id="dash-sdk-rev">${live.sdk_rev || "—"}</strong>
+            </div>
+            <div class="kv-row">
+              <span>ESPHome Node</span>
+              <strong><code id="dash-node-name">${cfg.device_slug || "—"}</code></strong>
+            </div>
+            <div class="kv-row">
+              <span>${isBleOnly ? "Target" : "IP Address"}</span>
+              <strong><code>${ipStr}</code></strong>
+            </div>
+            <div class="kv-row">
+              <span>Placement</span>
+              <strong>${hasAssignedArea ? "Stationary" : "Roaming"}</strong>
+            </div>
+          </div>`,
+          footerActions: html`<button
               type="button"
               @click=${() => store.switchView("tools")}
               class="btn btn-secondary"
@@ -199,27 +195,21 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
               class="btn btn-text"
             >
               Download Backup
-            </button>
-          </div>
-        </div>
+            </button>`,
+        })}
       </div>
 
       <div class="column">
-        <div class="card">
-          <div class="card-header">
-            <h3 class="card-title">Quick Actions</h3>
-          </div>
-          <div class="card-content settings-list">
-            ${!isBleOnly
-              ? html`<div class="settings-row">
-                  <div class="settings-row-text">
-                    <label for="cfg-device_group" class="row-label">Device Group</label>
-                    <p class="row-description">
-                      Shares operational behavior (sleep, wake word, BLE) across matching Devices.
-                    </p>
-                  </div>
-                  <div class="settings-row-control">
-                    ${curGroupId !== "unassigned"
+        ${renderCard({
+          title: "Quick Actions",
+          contentClass: "settings-list",
+          body: html`${!isBleOnly
+              ? renderSettingsRow({
+                  label: "Device Group",
+                  forId: "cfg-device_group",
+                  description:
+                    "Shares operational behavior (sleep, wake word, BLE) across matching Devices.",
+                  control: html`${curGroupId !== "unassigned"
                       ? html`<span
                           id="dash-group-sync-chip"
                           class="chip ${isCustomized ? "chip-warning" : "chip-success"}"
@@ -253,51 +243,28 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
                         >
                           Reset to Group
                         </button>`
-                      : nothing}
-                  </div>
-                </div>`
+                      : nothing}`,
+                })
               : nothing}
-
-            <div class="settings-row">
-              <div class="settings-row-text">
-                <label for="cfg-assigned_person" class="row-label">Assigned Person</label>
-                <p class="row-description">
-                  Links this Device's Area presence to a Home Assistant person entity.
-                </p>
-              </div>
-              <div class="settings-row-control">
-                <select
-                  id="cfg-assigned_person"
-                  .value=${String(cfg.assigned_person || "")}
-                  @change=${(ev: Event) =>
-                    store.stageDeviceSetting(
-                      "assigned_person",
-                      (ev.currentTarget as HTMLSelectElement).value,
-                      "cfg-assigned_person",
-                    )}
-                >
-                  ${renderSelectOptions(
-                    data?.catalog?.persons,
-                    cfg.assigned_person,
-                    "— Unassigned —",
-                  )}
-                </select>
-              </div>
-            </div>
-
-            ${quickActionItems.map((it) => renderNativeControlRow(store, it))}
-          </div>
-        </div>
+            ${renderSelectRow({
+              id: "cfg-assigned_person",
+              label: "Assigned Person",
+              description: "Links this Device's Area presence to a Home Assistant person entity.",
+              value: cfg.assigned_person,
+              choices: data?.catalog?.persons,
+              emptyOptionLabel: "— Unassigned —",
+              onChange: (val) =>
+                store.stageDeviceSetting("assigned_person", val, "cfg-assigned_person"),
+            })}
+            ${quickActionItems.map((it) => renderNativeControlRow(store, it))}`,
+        })}
 
         ${otherSensorItems.length
-          ? html`<div class="card">
-              <div class="card-header">
-                <h3 class="card-title">Sensors &amp; Controls</h3>
-              </div>
-              <div class="card-content settings-list">
-                ${otherSensorItems.map((it) => renderNativeControlRow(store, it))}
-              </div>
-            </div>`
+          ? renderCard({
+              title: "Sensors & Controls",
+              contentClass: "settings-list",
+              body: otherSensorItems.map((it) => renderNativeControlRow(store, it)),
+            })
           : nothing}
       </div>
     </div>

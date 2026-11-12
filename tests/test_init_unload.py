@@ -15,7 +15,7 @@ from custom_components.latter import (
 )
 from custom_components.latter.backup import async_post_backup, async_pre_backup
 from custom_components.latter.const import CONF_DEFAULT_AREA, CONF_DEVICE_SLUG, DOMAIN
-from custom_components.latter.http.views import _LiveCameraFeed, _LiveCameraFeeds
+from custom_components.latter.http import _LiveCameraFeed, _LiveCameraFeeds
 from custom_components.latter.repairs import (
     LinkMaPlayerRepairFlow,
     async_audit_coordinator_health,

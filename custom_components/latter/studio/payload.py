@@ -16,8 +16,6 @@ from homeassistant.helpers import (
 )
 from homeassistant.util import dt as dt_util
 
-from ..areas.context_builder import get_esphome_device_entities
-from ..areas.state_index import get_area_state_index
 from ..const import (
     CONF_ACTIVITY_CARD,
     CONF_ACTIVITY_SOURCES,
@@ -41,39 +39,35 @@ from ..const import (
     CONF_SYNC_DEVICE_AREA,
     CONF_WALLPAPER_CYCLE_MINUTES,
     DATA_GLOBAL_CONFIG,
-    DATA_GLOBAL_STORE,
     DOMAIN,
     INTEGRATION_VERSION,
     STUDIO_REV,
 )
-from ..core.backup import (
+from ..coordinator import LatterCoordinator
+from ..groups import (
     canonical_control_key,
     compute_device_group_sync_status,
     get_device_groups,
+    get_esphome_device_entities,
     is_behavior_esphome_control,
+    present_section_ids,
 )
-from ..core.device_coordinator import LatterCoordinator
-from ..core.entity_sections import present_section_ids
-from ..core.hub import get_latter_system
-from ..core.identity import esphome_service
-from ..core.issue_ids import parse_device_issue_id
-from ..http.views import LatterBrandIconView
-from ..http.wallpapers import list_wallpaper_catalog
-from ..media.browse import is_music_assistant_player
-from ..media.ma_link import ma_player_entities
-from ..presence.ble_fabric import (
+from ..hub import get_area_state_index, get_latter_system, iter_coordinators
+from ..identity import esphome_service
+from ..media import ma_player_entities
+from ..media_browse import is_music_assistant_player
+from ..presence import (
     count_area_ble_proxies,
     get_all_areas_presence_summary,
     get_discovered_ble_candidates,
 )
-from .scope import find_by_subentry_id
-from .settings import system_settings_view
+from ..repairs import parse_device_issue_id
+from ..wallpapers import list_wallpaper_catalog
+from .settings import find_by_subentry_id, system_settings_view
 
 __all__ = [
     "MAX_INTERNAL_LOGS",
     "STUDIO_BULK_CONTROL_DOMAINS",
-    "LatterBrandIconView",
-    "async_save_and_broadcast_global_config",
     "build_studio_state_payload",
     "log_studio_event",
     "resolve_target_coordinator",
@@ -179,42 +173,11 @@ def _get_combined_system_and_studio_logs(hass: HomeAssistant) -> list[dict[str, 
     return combined[:MAX_INTERNAL_LOGS]
 
 
-def _get_all_coordinators(hass: HomeAssistant) -> list[LatterCoordinator]:
-    """Return all active LatterCoordinator instances sorted by device_slug."""
-    sys_obj = get_latter_system(hass)
-    if sys_obj is not None and sys_obj.coordinators:
-        return sorted(
-            sys_obj.coordinators.values(), key=lambda c: c.device_slug
-        )
-    domain_data = hass.data.get(DOMAIN, {})
-    coords = [
-        v for v in domain_data.values() if isinstance(v, LatterCoordinator)
-    ]
-    return sorted(coords, key=lambda c: c.device_slug)
-
-
 def resolve_target_coordinator(
     hass: HomeAssistant, subentry_id: str | None
 ) -> LatterCoordinator | None:
     """Return the Device coordinator whose subentry_id equals subentry_id exactly, else None."""
-    return find_by_subentry_id(_get_all_coordinators(hass), subentry_id)
-
-
-async def async_save_and_broadcast_global_config(
-    hass: HomeAssistant, updates: dict[str, Any]
-) -> None:
-    """Persist updates to `.storage/latter.site` and broadcast to all loaded device coordinators."""
-    if not updates:
-        return
-    domain_data = hass.data.setdefault(DOMAIN, {})
-    global_cfg: dict[str, Any] = domain_data.setdefault(DATA_GLOBAL_CONFIG, {})
-    changed_keys = {k for k, v in updates.items() if global_cfg.get(k) != v}
-    global_cfg.update(updates)
-    store = domain_data.get(DATA_GLOBAL_STORE)
-    if store is not None:
-        await store.async_save(global_cfg)
-    for coord in _get_all_coordinators(hass):
-        await coord.async_on_global_config_updated(changed_keys or set(updates.keys()))
+    return find_by_subentry_id(iter_coordinators(hass), subentry_id)
 
 
 def _build_system_shared_controls(
@@ -223,7 +186,7 @@ def _build_system_shared_controls(
     inspector_by_subentry: dict[str, dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """Discover shared ESPHome select/switch/number controls across all onboarded devices for 1-click System Sync."""
-    all_coords = coords if coords is not None else _get_all_coordinators(hass)
+    all_coords = coords if coords is not None else iter_coordinators(hass)
     by_label: dict[str, dict[str, Any]] = {}
     for coord in all_coords:
         if coord.is_ble_tag:
@@ -323,7 +286,7 @@ def _build_entity_catalog(
     calendars_list: list[dict[str, str]] = []
     persons_list: list[dict[str, str]] = []
 
-    coords = all_coords if all_coords is not None else _get_all_coordinators(hass)
+    coords = all_coords if all_coords is not None else iter_coordinators(hass)
     sig_coord = coordinator or next(
         (c for c in coords if not c.is_ble_tag), coords[0] if coords else None
     )
@@ -353,7 +316,6 @@ def _build_entity_catalog(
         item = {
             "id": ent_id,
             "name": f"{friendly} ({ent_id}){suffix_state}",
-            "domain": domain,
         }
 
         if domain == "media_player":
@@ -380,7 +342,6 @@ def _build_entity_catalog(
                         {
                             "id": ent_id,
                             "name": f"{clean_lbl} — built-in speaker ({ent_id}){suffix_state}",
-                            "domain": domain,
                         }
                     )
                 else:
@@ -416,8 +377,6 @@ def _build_entity_catalog(
                 {
                     "id": ent_id,
                     "name": f"{friendly} (sensor.{p_slug}_current_area)",
-                    "friendly": friendly,
-                    "area_sensor": f"sensor.{p_slug}_current_area",
                 }
             )
 
@@ -544,7 +503,7 @@ def _build_system_section(
 
     dev_reg = dr.async_get(hass)
     ent_reg = er.async_get(hass)
-    coords = all_coords if all_coords is not None else _get_all_coordinators(hass)
+    coords = all_coords if all_coords is not None else iter_coordinators(hass)
 
     system_devices: list[dict[str, Any]] = []
     for c in coords:
@@ -828,7 +787,7 @@ def build_studio_state_payload(
     include_logs: bool = False,
 ) -> dict[str, Any]:
     """Build the Studio payload: the System part always, plus the Device part when a Device is targeted."""
-    all_coords = _get_all_coordinators(hass)
+    all_coords = iter_coordinators(hass)
     inspector_by_subentry: dict[str, dict[str, Any]] = {}
     base: dict[str, Any] = {
         "subentry_id": coordinator.subentry_id if coordinator is not None else "",
@@ -948,14 +907,6 @@ def build_studio_state_payload(
         "has_security_pin": coordinator.has_security_pin,
     }
 
-    ble_survey_rows: list[dict[str, Any]] = []
-    if coordinator._ble_tracker is not None and hasattr(
-        coordinator._ble_tracker, "get_area_calibration_telemetry"
-    ):
-        ble_survey_rows = (
-            coordinator._ble_tracker.get_area_calibration_telemetry()
-        )
-
     fw_st = coordinator.device_state("sensor", "_firmware_version")
     fw_version = (
         str(fw_st.state)
@@ -966,7 +917,6 @@ def build_studio_state_payload(
         it for it in all_esp_items if it.get("domain") == "update" and it.get("entity_id")
     ]
     fw_update_entity = str(update_items[0]["entity_id"]) if update_items else ""
-    fw_latest_state = hass.states.get(fw_update_entity) if fw_update_entity else None
 
     latter_idents = coordinator.get_device_info()["identifiers"]
     latter_dev = next(
@@ -1002,18 +952,12 @@ def build_studio_state_payload(
                 hass, coordinator, base.get("device_groups")
             ),
             "ble_closest_proxy": coordinator._ble_tracker.closest_scanner if coordinator._ble_tracker else "",
-            "ble_packets_seen": coordinator._ble_tracker.packets_seen if coordinator._ble_tracker else 0,
-            "ble_survey_rows": ble_survey_rows,
             "area_presence_grid": presence_grid,
             "now": _build_now_playing(hass, coordinator),
             "device_sw_version": fw_version,
             "sdk_rev": str(coordinator.hardware_manifest.get("sdk") or ""),
             "fw_update_entity": fw_update_entity,
             "fw_update_available": any(it.get("state") == "on" for it in update_items),
-            "fw_latest_version": str(
-                (fw_latest_state.attributes.get("latest_version") if fw_latest_state else "")
-                or ""
-            ),
             "effective_security_pin_policy": coordinator.security_pin_policy,
             "has_security_pin": coordinator.has_security_pin,
         },

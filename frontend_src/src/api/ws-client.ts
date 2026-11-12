@@ -23,7 +23,6 @@ export const SYSTEM_WS_COMMANDS = new Set([
   "seed_group_baseline",
   "set_group_device_setting",
   "test_doorbell_speaker",
-  "upload_system_wallpaper",
   "delete_system_wallpaper",
   "save_system_config",
   "rotate_signing_key",
@@ -32,43 +31,11 @@ export const SYSTEM_WS_COMMANDS = new Set([
 
 export const DEVICE_WS_COMMANDS = new Set([
   "esphome_entity_action",
-  "upload_wallpaper",
   "select_wallpaper",
   "toggle_wallpaper_favorite",
   "delete_wallpaper",
   "save_device_config",
 ]);
-
-// Explicit command registry descriptor table (also verified statically by `[STUDIO COMMANDS]`).
-export const STUDIO_COMMAND_DESCRIPTORS = [
-  { scope: "system" as const, command: "set_ble_area_offset" },
-  { scope: "system" as const, command: "set_area_fusion" },
-  { scope: "system" as const, command: "auto_calibrate_here" },
-  { scope: "system" as const, command: "system_entity_action" },
-  { scope: "system" as const, command: "send_announcement" },
-  { scope: "system" as const, command: "check_system_updates" },
-  { scope: "system" as const, command: "clear_internal_logs" },
-  { scope: "system" as const, command: "remove_device" },
-  { scope: "system" as const, command: "add_ble_device" },
-  { scope: "system" as const, command: "set_device_remote_group" },
-  { scope: "system" as const, command: "create_device_group" },
-  { scope: "system" as const, command: "delete_device_group" },
-  { scope: "system" as const, command: "sync_device_group" },
-  { scope: "system" as const, command: "seed_group_baseline" },
-  { scope: "system" as const, command: "set_group_device_setting" },
-  { scope: "system" as const, command: "test_doorbell_speaker" },
-  { scope: "system" as const, command: "upload_system_wallpaper" },
-  { scope: "system" as const, command: "delete_system_wallpaper" },
-  { scope: "system" as const, command: "save_system_config" },
-  { scope: "system" as const, command: "rotate_signing_key" },
-  { scope: "system" as const, command: "set_security_pin" },
-  { scope: "device" as const, command: "esphome_entity_action" },
-  { scope: "device" as const, command: "upload_wallpaper" },
-  { scope: "device" as const, command: "select_wallpaper" },
-  { scope: "device" as const, command: "toggle_wallpaper_favorite" },
-  { scope: "device" as const, command: "delete_wallpaper" },
-  { scope: "device" as const, command: "save_device_config" },
-] as const;
 
 export interface WsErrorLike {
   code?: string;

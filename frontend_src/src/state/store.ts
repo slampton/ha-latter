@@ -11,25 +11,17 @@
  */
 
 import { formatWsError, StudioWsClient } from "../api/ws-client.js";
-import {
-  ACTIVITY_SOURCES_CATALOG,
-  DEVICE_VIEW_SLUGS,
-  DOCK_APPS_CATALOG,
-  SYSTEM_VIEW_SLUGS,
-  VIEW_TITLES,
-} from "../constants.js";
+import { DEVICE_VIEW_SLUGS, SYSTEM_VIEW_SLUGS, VIEW_TITLES } from "../constants.js";
 import type { ReactiveController, ReactiveControllerHost } from "../lib/lit.js";
 import type {
   AreaPresenceRow,
   BleSurveyDeltaEvent,
   BleSurveyRow,
-  CustomPalette,
   DeviceConfig,
   DeviceViewId,
   EspHomeEntityItem,
   HassRoute,
   HomeAssistant,
-  RemoteGroup,
   SharedControlItem,
   StudioScope,
   StudioStatePayload,
@@ -37,82 +29,85 @@ import type {
   SystemConfig,
   SystemDeviceEntry,
   SystemViewId,
-  VolumeOverride,
 } from "../types.js";
+import { navigateHaPath } from "../utils/format.js";
 import {
-  copyTextToClipboard,
-  defaultThemeHex,
-  isValidHexColor,
-  navigateHaPath,
-  triggerJsonDownload,
-} from "../utils/format.js";
+  checkSystemUpdatesOp,
+  clearInternalLogsOp,
+  clearSecurityPinOp,
+  confirmAddBleModalOp,
+  confirmRemoveDeviceOp,
+  confirmResetDeviceOp,
+  copyLogsToClipboardOp,
+  downloadDeviceDiagnosticsOp,
+  exportBackupOp,
+  formatVisibleLogsOp,
+  openColorWheelModalOp,
+  quickAdoptBleCandidateOp,
+  restoreFromUploadedFileOp,
+  rotateSigningKeyOp,
+  saveColorWheelSelectionOp,
+  saveSecurityPinOp,
+  selectBleCandidateInModalOp,
+  sendAnnouncementOp,
+} from "./dialogs-tools-ops.js";
+import {
+  addRemoteGroupRowOp,
+  addStringListRowOp,
+  addVolumeOverrideRowOp,
+  applyDeviceCustomColorOp,
+  assignDeviceRemoteGroupOp,
+  commitEntityChange,
+  deleteCustomPaletteOp,
+  deleteWallpaperOp,
+  type DevicePendingBucket,
+  executeEntityActionOp,
+  flushDeviceBucketOp,
+  flushSystemSettingsOp,
+  getEnabledActivitySourcesOp,
+  getEnabledDockTokensOp,
+  moveDockAppTokenOp,
+  overlayPendingEntityStates,
+  PENDING_ENTITY_STATES,
+  type PendingEntityEntry,
+  previewCameraOp,
+  removeRemoteGroupRowOp,
+  removeStringListRowOp,
+  removeVolumeOverrideRowOp,
+  selectWallpaperSourceOp,
+  stageDeviceSettingOp,
+  stageSystemSettingOp,
+  testDoorbellSpeakerOp,
+  toggleActivitySourceOp,
+  toggleDockAppTokenOp,
+  toggleRemoteInGroupOp,
+  toggleWallpaperFavOp,
+  updateRemoteGroupFieldOp,
+  updateStringListRowOp,
+  updateVolumeOverrideRowOp,
+  uploadWallpaperOp,
+} from "./entity-config-ops.js";
+import {
+  autoCalibrateHereOp,
+  bulkNumberOp,
+  bulkSelectOp,
+  bulkToggleOp,
+  createDeviceGroupOp,
+  deleteDeviceGroupOp,
+  filteredControlTargetsOp,
+  getActiveSurveyDeviceOp,
+  resolvedGroupCtrlIdOp,
+  seedGroupBaselineFromDeviceOp,
+  setAreaFusionOp,
+  setBleOffsetOp,
+  setGroupDeviceSettingOp,
+  syncDeviceGroupOp,
+} from "./groups-presence-ops.js";
 
-interface DevicePendingBucket {
-  targetSubentryId: string;
-  patch: Record<string, unknown>;
-  previousValues: Record<string, unknown>;
-  timer: ReturnType<typeof setTimeout> | null;
-}
-
-export interface PendingEntityEntry {
-  state: string;
-  previousValue?: string;
-  expires: number;
-}
+export { commitEntityChange, overlayPendingEntityStates, PENDING_ENTITY_STATES, type PendingEntityEntry };
 
 interface PendingDomRevert {
   controlIds: Record<string, string | boolean>;
-}
-
-const SAVE_DEBOUNCE_MS = 220;
-const ENTITY_OPTIMISTIC_TTL_MS = 8000;
-
-export const PENDING_ENTITY_STATES = new Map<string, PendingEntityEntry>();
-
-export function overlayPendingEntityStates(
-  payload: StudioStatePayload,
-  pendingMap: Map<string, PendingEntityEntry> = PENDING_ENTITY_STATES,
-): void {
-  const now = Date.now();
-  for (const [eid, entry] of pendingMap.entries()) {
-    if (entry.expires <= now) {
-      pendingMap.delete(eid);
-    }
-  }
-  const sections = payload?.esphome?.sections;
-  if (!sections || pendingMap.size === 0) return;
-  payload.esphome = {
-    ...payload.esphome,
-    sections: sections.map((sec) => ({
-      ...sec,
-      items: (sec.items || []).map((item) => {
-        const pending = pendingMap.get(item.entity_id);
-        if (!pending) return item;
-        const curState = String(item.state ?? "");
-        const sameNumeric =
-          curState !== "" &&
-          pending.state !== "" &&
-          Number.isFinite(Number(curState)) &&
-          Number.isFinite(Number(pending.state)) &&
-          Number(curState) === Number(pending.state);
-        if (curState === pending.state || sameNumeric) {
-          pendingMap.delete(item.entity_id);
-          return item;
-        }
-        return { ...item, state: pending.state };
-      }),
-    })),
-  };
-}
-
-export async function commitEntityChange(
-  store: StudioStore,
-  entityId: string,
-  optimisticState: string | undefined,
-  body: Record<string, unknown>,
-  errorPrefix: string,
-): Promise<void> {
-  await store.executeEntityAction(entityId, optimisticState, body, errorPrefix);
 }
 
 function slugToView<T extends string>(map: Record<T, string>, slug: string): T | null {
@@ -213,15 +208,14 @@ export class StudioStore implements ReactiveController {
   };
 
   pendingScrollCardId = "";
-  revertEpoch = 0;
   pendingDomRevert: PendingDomRevert | null = null;
 
-  // Snapshot-isolated pending settings queues
-  private pendingSystemPatch: Record<string, unknown> = {};
-  private pendingSystemPrevious: Record<string, unknown> = {};
-  private systemSaveTimer: ReturnType<typeof setTimeout> | null = null;
-  private readonly pendingDeviceBuckets = new Map<string, DevicePendingBucket>();
-  private readonly pendingEntityStates = new Map<string, PendingEntityEntry>();
+  // Snapshot-isolated pending settings queues (shared with `state/*-ops.ts`)
+  pendingSystemPatch: Record<string, unknown> = {};
+  pendingSystemPrevious: Record<string, unknown> = {};
+  systemSaveTimer: ReturnType<typeof setTimeout> | null = null;
+  readonly pendingDeviceBuckets = new Map<string, DevicePendingBucket>();
+  readonly pendingEntityStates = new Map<string, PendingEntityEntry>();
 
   // Subscription management
   private subGen = 0;
@@ -358,7 +352,6 @@ export class StudioStore implements ReactiveController {
         const prevSubId = this.activeSubentryId;
         const subChanged = prevSubId !== nextSubId;
         if (prevSubId && subChanged) {
-          // Flush pending edits strictly to previousSubentryId BEFORE switching to nextSubId!
           void this.flushDeviceBucket(prevSubId);
         }
         this.activeSubentryId = nextSubId;
@@ -410,7 +403,7 @@ export class StudioStore implements ReactiveController {
     }
   }
 
-  private syncUrlFromState(replace = false): void {
+  syncUrl(replace = false): void {
     if (this.routeApplying) return;
     let targetPath = "/latter";
     if (this.currentScope === "system") {
@@ -436,7 +429,7 @@ export class StudioStore implements ReactiveController {
     this.deviceSelected = false;
     this.currentScope = "device";
     this.currentViewId = "select_device_prompt";
-    this.syncUrlFromState();
+    this.syncUrl();
     this.host.requestUpdate();
   }
 
@@ -459,7 +452,7 @@ export class StudioStore implements ReactiveController {
     } else {
       this.currentViewId = this.deviceSelected && this.activeSubentryId ? "dashboard" : "select_device_prompt";
     }
-    this.syncUrlFromState();
+    this.syncUrl();
     this.host.requestUpdate();
     if (this.shouldIncludeLogs()) {
       void this.refreshState({ includeLogs: true });
@@ -474,7 +467,7 @@ export class StudioStore implements ReactiveController {
     const isSys = Object.prototype.hasOwnProperty.call(SYSTEM_VIEW_SLUGS, viewId);
     this.currentScope = isSys ? "system" : "device";
     this.currentViewId = viewId;
-    this.syncUrlFromState();
+    this.syncUrl();
     this.host.requestUpdate();
     if (viewId === "area_tracking") {
       this.ensureDefaultSurveyDevice();
@@ -494,7 +487,6 @@ export class StudioStore implements ReactiveController {
     if (!cleanNext) return;
     const prevSubId = this.activeSubentryId;
     if (prevSubId && prevSubId !== cleanNext) {
-      // Flush Device A strictly using snapshotted `prevSubId` before loading Device B!
       await this.flushDeviceBucket(prevSubId);
     }
     this.activeSubentryId = cleanNext;
@@ -503,7 +495,7 @@ export class StudioStore implements ReactiveController {
     this.currentViewId = targetView === "select_device_prompt" ? "dashboard" : targetView;
     this.entitySearchQuery = "";
     this.devicePinDraft = "";
-    this.syncUrlFromState();
+    this.syncUrl();
     this.host.requestUpdate();
     await this.ensureSubscription(true);
   }
@@ -613,7 +605,7 @@ export class StudioStore implements ReactiveController {
       if (payload) {
         this.loadError = "";
         this.loading = false;
-        this.ingestStatePayload(payload, includeLogs);
+        this.ingestPayload(payload, includeLogs);
       }
     } catch (err) {
       this.loading = false;
@@ -646,7 +638,7 @@ export class StudioStore implements ReactiveController {
     }
     this.loading = false;
     this.loadError = "";
-    this.ingestStatePayload(payload, false);
+    this.ingestPayload(payload, false);
   }
 
   private applyBleSurveyDelta(delta: BleSurveyDeltaEvent): void {
@@ -654,6 +646,7 @@ export class StudioStore implements ReactiveController {
     const targetId = String(delta.subentry_id || this.bleSurveySubentryId || this.state.subentry_id || "");
     if (Array.isArray(delta.ble_survey_rows)) {
       const nextRows: BleSurveyRow[] = delta.ble_survey_rows;
+      const winRow = nextRows.find((r) => r.is_winner);
       if (Array.isArray(this.state.system_devices) && targetId) {
         this.state.system_devices = this.state.system_devices.map((dev) => {
           if (dev.subentry_id !== targetId) return dev;
@@ -662,21 +655,14 @@ export class StudioStore implements ReactiveController {
             ble_survey_rows: nextRows,
             ble_packets_seen:
               typeof delta.ble_packets_seen === "number" ? delta.ble_packets_seen : dev.ble_packets_seen,
+            active_area_name: winRow?.area_name || dev.active_area_name,
           };
         });
       }
-      if (this.state.subentry_id === targetId && this.state.live) {
+      if (this.state.subentry_id === targetId && this.state.live && typeof delta.ble_closest_proxy === "string") {
         this.state.live = {
           ...this.state.live,
-          ble_survey_rows: nextRows,
-          ble_packets_seen:
-            typeof delta.ble_packets_seen === "number"
-              ? delta.ble_packets_seen
-              : this.state.live.ble_packets_seen,
-          ble_closest_proxy:
-            typeof delta.ble_closest_proxy === "string"
-              ? delta.ble_closest_proxy
-              : this.state.live.ble_closest_proxy,
+          ble_closest_proxy: delta.ble_closest_proxy,
         };
       }
     }
@@ -689,11 +675,10 @@ export class StudioStore implements ReactiveController {
     this.host.requestUpdate();
   }
 
-  private ingestStatePayload(incoming: StudioStatePayload, logsWereRequested: boolean): void {
+  ingestPayload(incoming: StudioStatePayload, logsWereRequested: boolean): void {
     const prevCatalog = this.state?.catalog;
     const prevLogs = this.state?.internal_logs;
 
-    // Validate deep-linked `/latter/devices/<unknown_id>` against known `system_devices`
     if (
       this.deviceSelected &&
       this.activeSubentryId &&
@@ -718,7 +703,6 @@ export class StudioStore implements ReactiveController {
           : prevLogs || [],
     };
 
-    // Preserve optimistic System edits not yet flushed
     if (Object.keys(this.pendingSystemPatch).length > 0 && merged.system_config) {
       merged.system_config = {
         ...merged.system_config,
@@ -726,7 +710,6 @@ export class StudioStore implements ReactiveController {
       };
     }
 
-    // Preserve optimistic Device edits for the matching Device
     const devBucket = merged.subentry_id ? this.pendingDeviceBuckets.get(merged.subentry_id) : undefined;
     if (devBucket && merged.config) {
       merged.config = {
@@ -735,10 +718,8 @@ export class StudioStore implements ReactiveController {
       };
     }
 
-    // Overlay optimistic ESPHome entity states within TTL
     overlayPendingEntityStates(merged, this.pendingEntityStates);
 
-    // Redirect Device-only hidden capability tab back to dashboard if device lacks that capability
     if (this.currentScope === "device" && this.deviceSelected && merged.subentry_id === this.activeSubentryId) {
       const caps = merged.capabilities || {};
       const isBleTag = merged.config?.kind === "ble_tag";
@@ -748,7 +729,7 @@ export class StudioStore implements ReactiveController {
         (this.currentViewId === "power" && (isBleTag || !caps.has_power))
       ) {
         this.currentViewId = "dashboard";
-        this.syncUrlFromState(true);
+        this.syncUrl(true);
       }
     }
 
@@ -788,193 +769,22 @@ export class StudioStore implements ReactiveController {
     }
   }
 
-  // ---------- Snapshot-Isolated Settings Staging & Flushing (Fixes P1 Cross-Device Save Race) ----------
+  // ---------- Delegated Domain Operations ----------
 
   stageDeviceSetting(key: keyof DeviceConfig, value: unknown, controlDomId?: string): void {
-    const targetSubentryId = this.activeSubentryId;
-    if (!targetSubentryId) return;
-
-    let bucket = this.pendingDeviceBuckets.get(targetSubentryId);
-    if (!bucket) {
-      bucket = {
-        targetSubentryId,
-        patch: {},
-        previousValues: {},
-        timer: null,
-      };
-      this.pendingDeviceBuckets.set(targetSubentryId, bucket);
-    }
-
-    if (!(key in bucket.previousValues)) {
-      const prev =
-        this.state && this.state.subentry_id === targetSubentryId
-          ? (this.state.config as Record<string, unknown>)?.[key]
-          : undefined;
-      bucket.previousValues[key] = prev;
-    }
-    if (controlDomId) {
-      bucket.previousValues[`__dom:${controlDomId}`] = bucket.previousValues[key];
-    }
-
-    bucket.patch[key] = value;
-    if (this.state && this.state.subentry_id === targetSubentryId) {
-      this.state = {
-        ...this.state,
-        config: {
-          ...this.state.config,
-          [key]: value,
-        },
-      };
-    }
-
-    if (bucket.timer) clearTimeout(bucket.timer);
-    bucket.timer = setTimeout(() => {
-      void this.flushDeviceBucket(targetSubentryId);
-    }, SAVE_DEBOUNCE_MS);
-    this.host.requestUpdate();
+    stageDeviceSettingOp(this, key, value, controlDomId);
   }
 
   async flushDeviceBucket(targetSubentryId: string): Promise<void> {
-    const bucket = this.pendingDeviceBuckets.get(targetSubentryId);
-    if (!bucket) return;
-    if (bucket.timer) {
-      clearTimeout(bucket.timer);
-      bucket.timer = null;
-    }
-    const patch = { ...bucket.patch };
-    const previousValues = { ...bucket.previousValues };
-    this.pendingDeviceBuckets.delete(targetSubentryId);
-
-    if (Object.keys(patch).length === 0) return;
-
-    try {
-      const res = await this.ws.runDeviceCommand(targetSubentryId, "save_device_config", {
-        config: patch,
-      });
-      if (res) {
-        if (this.activeSubentryId === targetSubentryId) {
-          this.ingestStatePayload(res, false);
-        } else if (this.state && Array.isArray(res.system_devices)) {
-          // User already switched to Device B: refresh summary list only, never overwrite Device B!
-          this.state = {
-            ...this.state,
-            system_devices: res.system_devices,
-            issues: res.issues ?? this.state.issues,
-          };
-          this.host.requestUpdate();
-        }
-      }
-      this.showToast("Saved");
-    } catch (err) {
-      // Revert optimistic values cleanly even if an input still retains focus!
-      const controlRevert: Record<string, string | boolean> = {};
-      for (const [k, v] of Object.entries(previousValues)) {
-        if (k.startsWith("__dom:")) {
-          const domId = k.slice(6);
-          if (typeof v === "boolean") controlRevert[domId] = v;
-          else if (v !== undefined && v !== null) controlRevert[domId] = String(v);
-          else controlRevert[domId] = "";
-        }
-      }
-      if (this.state && this.state.subentry_id === targetSubentryId) {
-        const restoredConfig: Record<string, unknown> = { ...(this.state.config as Record<string, unknown>) };
-        for (const [k, v] of Object.entries(previousValues)) {
-          if (!k.startsWith("__dom:")) {
-            restoredConfig[k] = v;
-          }
-        }
-        this.state = {
-          ...this.state,
-          config: restoredConfig as DeviceConfig,
-        };
-      }
-      this.revertEpoch += 1;
-      if (Object.keys(controlRevert).length > 0) {
-        this.pendingDomRevert = { controlIds: controlRevert };
-      }
-      this.showToast(formatWsError(err, "Could not save Device settings"), true);
-      this.host.requestUpdate();
-    }
+    await flushDeviceBucketOp(this, targetSubentryId);
   }
 
   stageSystemSetting(key: keyof SystemConfig, value: unknown, controlDomId?: string): void {
-    if (!(key in this.pendingSystemPrevious)) {
-      const prev = (this.state?.system_config as unknown as Record<string, unknown>)?.[key];
-      this.pendingSystemPrevious[key] = prev !== undefined ? structuredClone(prev) : undefined;
-    }
-    if (controlDomId && !(`__dom:${controlDomId}` in this.pendingSystemPrevious)) {
-      const prevScalar = this.pendingSystemPrevious[key];
-      if (typeof prevScalar === "string" || typeof prevScalar === "number" || typeof prevScalar === "boolean") {
-        this.pendingSystemPrevious[`__dom:${controlDomId}`] = prevScalar;
-      }
-    }
-
-    this.pendingSystemPatch[key] = value;
-    if (this.state?.system_config) {
-      this.state = {
-        ...this.state,
-        system_config: {
-          ...this.state.system_config,
-          [key]: value,
-        },
-      };
-    }
-
-    if (this.systemSaveTimer) clearTimeout(this.systemSaveTimer);
-    this.systemSaveTimer = setTimeout(() => {
-      void this.flushSystemSettings();
-    }, SAVE_DEBOUNCE_MS);
-    this.host.requestUpdate();
+    stageSystemSettingOp(this, key, value, controlDomId);
   }
 
   async flushSystemSettings(): Promise<void> {
-    if (this.systemSaveTimer) {
-      clearTimeout(this.systemSaveTimer);
-      this.systemSaveTimer = null;
-    }
-    const patch = { ...this.pendingSystemPatch };
-    const previousValues = { ...this.pendingSystemPrevious };
-    this.pendingSystemPatch = {};
-    this.pendingSystemPrevious = {};
-
-    if (Object.keys(patch).length === 0) return;
-
-    try {
-      const res = await this.ws.runSystemCommand(
-        "save_system_config",
-        { config: patch },
-        this.activeSubentryId || null,
-      );
-      if (res) {
-        this.ingestStatePayload(res, false);
-      }
-      this.showToast("Saved System settings");
-    } catch (err) {
-      const controlRevert: Record<string, string | boolean> = {};
-      if (this.state?.system_config) {
-        const restored: Record<string, unknown> = {
-          ...(this.state.system_config as unknown as Record<string, unknown>),
-        };
-        for (const [k, v] of Object.entries(previousValues)) {
-          if (k.startsWith("__dom:")) {
-            const domId = k.slice(6);
-            controlRevert[domId] = typeof v === "boolean" ? v : String(v ?? "");
-          } else if (v !== undefined) {
-            restored[k] = v;
-          }
-        }
-        this.state = {
-          ...this.state,
-          system_config: restored as unknown as SystemConfig,
-        };
-      }
-      this.revertEpoch += 1;
-      if (Object.keys(controlRevert).length > 0) {
-        this.pendingDomRevert = { controlIds: controlRevert };
-      }
-      this.showToast(formatWsError(err, "Could not save System settings"), true);
-      this.host.requestUpdate();
-    }
+    await flushSystemSettingsOp(this);
   }
 
   async flushAllPendingSettings(): Promise<void> {
@@ -988,56 +798,9 @@ export class StudioStore implements ReactiveController {
     await Promise.allSettled(tasks);
   }
 
-  // ---------- ESPHome Entity Actions (Optimistic + Scoped to Snapshot Device) ----------
-
   getSectionItems(sectionId: string): EspHomeEntityItem[] {
     const sec = (this.state?.esphome?.sections || []).find((s) => s.id === sectionId);
     return sec?.items || [];
-  }
-
-  private currentEntityState(entityId: string): string {
-    for (const sec of this.state?.esphome?.sections || []) {
-      for (const it of sec.items || []) {
-        if (it.entity_id === entityId) return it.state;
-      }
-    }
-    return "";
-  }
-
-  private applyOptimisticEntity(entityId: string, nextState: string): string {
-    const prev = this.currentEntityState(entityId);
-    this.pendingEntityStates.set(entityId, {
-      state: nextState,
-      previousValue: prev,
-      expires: Date.now() + ENTITY_OPTIMISTIC_TTL_MS,
-    });
-    if (this.state?.esphome?.sections) {
-      const nextPayload: StudioStatePayload = { ...this.state };
-      overlayPendingEntityStates(nextPayload, this.pendingEntityStates);
-      this.state = nextPayload;
-      this.host.requestUpdate();
-    }
-    return prev;
-  }
-
-  private rollbackOptimisticEntity(entityId: string, prev: string): void {
-    this.pendingEntityStates.delete(entityId);
-    if (this.state?.esphome?.sections) {
-      this.state = {
-        ...this.state,
-        esphome: {
-          ...this.state.esphome,
-          sections: this.state.esphome.sections.map((sec) => ({
-            ...sec,
-            items: (sec.items || []).map((it) =>
-              it.entity_id === entityId ? { ...it, state: prev } : it,
-            ),
-          })),
-        },
-      };
-    }
-    this.revertEpoch += 1;
-    this.host.requestUpdate();
   }
 
   async executeEntityAction(
@@ -1046,22 +809,7 @@ export class StudioStore implements ReactiveController {
     body: Record<string, unknown>,
     errorPrefix: string,
   ): Promise<void> {
-    const targetSubentryId = this.activeSubentryId;
-    if (!targetSubentryId || !entityId) return;
-    const prev =
-      optimisticState !== undefined ? this.applyOptimisticEntity(entityId, optimisticState) : "";
-    try {
-      const res = await this.ws.runDeviceCommand(targetSubentryId, "esphome_entity_action", {
-        entity_id: entityId,
-        ...body,
-      });
-      if (res && this.activeSubentryId === targetSubentryId) {
-        this.ingestStatePayload(res, false);
-      }
-    } catch (err) {
-      if (optimisticState !== undefined) this.rollbackOptimisticEntity(entityId, prev);
-      this.showToast(formatWsError(err, errorPrefix), true);
-    }
+    await executeEntityActionOp(this, entityId, optimisticState, body, errorPrefix);
   }
 
   async espAction(entityId: string, action: string, optimisticState?: string): Promise<void> {
@@ -1074,13 +822,7 @@ export class StudioStore implements ReactiveController {
 
   async espNumber(entityId: string, level: number): Promise<void> {
     if (!Number.isFinite(level)) return;
-    await commitEntityChange(
-      this,
-      entityId,
-      String(level),
-      { level },
-      "Could not update level",
-    );
+    await commitEntityChange(this, entityId, String(level), { level }, "Could not update level");
   }
 
   async triggerHeaderFirmwareUpdate(): Promise<void> {
@@ -1090,98 +832,32 @@ export class StudioStore implements ReactiveController {
     this.showToast("Firmware update started");
   }
 
-  // ---------- Dock Apps, Activity Sources, Custom Colors & Wallpapers ----------
-
   getEnabledDockTokens(): string[] {
-    const raw = String(this.state?.config?.dock_apps ?? "");
-    if (!raw.trim()) {
-      return DOCK_APPS_CATALOG.map((a) => a.token);
-    }
-    return raw
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
+    return getEnabledDockTokensOp(this);
   }
 
   toggleDockAppToken(appId: string): void {
-    const current = this.getEnabledDockTokens();
-    const idx = current.indexOf(appId);
-    if (idx >= 0) {
-      if (current.length <= 1) {
-        this.showToast("Keep at least one Dock app enabled", true);
-        return;
-      }
-      current.splice(idx, 1);
-    } else {
-      current.push(appId);
-    }
-    this.stageDeviceSetting("dock_apps", current.join(","));
+    toggleDockAppTokenOp(this, appId);
   }
 
   moveDockAppToken(appId: string, delta: -1 | 1): void {
-    const current = this.getEnabledDockTokens();
-    const idx = current.indexOf(appId);
-    const nextIdx = idx + delta;
-    if (idx < 0 || nextIdx < 0 || nextIdx >= current.length) return;
-    const [moved] = current.splice(idx, 1);
-    current.splice(nextIdx, 0, moved);
-    this.stageDeviceSetting("dock_apps", current.join(","));
+    moveDockAppTokenOp(this, appId, delta);
   }
 
   getEnabledActivitySources(): string[] {
-    const rawCfg = this.state?.config?.activity_sources;
-    if (rawCfg === undefined || rawCfg === null) {
-      return ACTIVITY_SOURCES_CATALOG.map((s) => s.id);
-    }
-    return String(rawCfg)
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
+    return getEnabledActivitySourcesOp(this);
   }
 
   toggleActivitySource(sourceId: string): void {
-    const current = this.getEnabledActivitySources();
-    const idx = current.indexOf(sourceId);
-    if (idx >= 0) {
-      current.splice(idx, 1);
-    } else {
-      current.push(sourceId);
-    }
-    this.stageDeviceSetting("activity_sources", current.join(","));
+    toggleActivitySourceOp(this, sourceId);
   }
 
   applyDeviceCustomColor(hex: string, switchColorProfile = true): void {
-    if (!isValidHexColor(hex)) return;
-    this.stageDeviceSetting("device_custom_color", hex.toUpperCase());
-    if (switchColorProfile) {
-      for (const sec of this.state?.esphome?.sections || []) {
-        for (const it of sec.items || []) {
-          if (
-            it.domain === "select" &&
-            (it.name || "").toLowerCase().includes("color profile") &&
-            (it.options || []).includes("Custom") &&
-            it.state !== "Custom"
-          ) {
-            void this.espSelect(it.entity_id, "Custom");
-          }
-        }
-      }
-    }
+    applyDeviceCustomColorOp(this, hex, switchColorProfile);
   }
 
   openColorWheelModal(targetScope: StudioScope): void {
-    const initial =
-      targetScope === "device" && isValidHexColor(this.state?.config?.device_custom_color)
-        ? String(this.state?.config?.device_custom_color).toUpperCase()
-        : defaultThemeHex(this.host);
-    this.colorWheelModal = {
-      open: true,
-      targetScope,
-      hex: initial,
-      name: "",
-      busy: false,
-    };
-    this.host.requestUpdate();
+    openColorWheelModalOp(this, targetScope);
   }
 
   closeColorWheelModal(): void {
@@ -1190,142 +866,28 @@ export class StudioStore implements ReactiveController {
   }
 
   async saveColorWheelSelection(): Promise<void> {
-    const hex = this.colorWheelModal.hex.trim().toUpperCase();
-    if (!isValidHexColor(hex)) {
-      this.showToast("Enter a valid 6-digit hex color", true);
-      return;
-    }
-    const name = this.colorWheelModal.name.trim() || hex;
-    const existing: CustomPalette[] = [...(this.state?.system_config?.custom_palettes || [])];
-    if (!existing.some((p) => p.hex.toUpperCase() === hex)) {
-      existing.push({ name, hex });
-      this.stageSystemSetting("custom_palettes", existing);
-      await this.flushSystemSettings();
-    }
-    if (this.colorWheelModal.targetScope === "device" && this.activeSubentryId) {
-      this.stageDeviceSetting("device_custom_color", hex);
-      await this.flushDeviceBucket(this.activeSubentryId);
-    }
-    this.closeColorWheelModal();
+    await saveColorWheelSelectionOp(this);
   }
 
   deleteCustomPalette(hex: string): void {
-    const target = hex.toUpperCase();
-    const next = (this.state?.system_config?.custom_palettes || []).filter(
-      (p) => p.hex.toUpperCase() !== target,
-    );
-    this.stageSystemSetting("custom_palettes", next);
+    deleteCustomPaletteOp(this, hex);
   }
 
   async uploadWallpaper(scope: StudioScope): Promise<void> {
-    const file = scope === "device" ? this.selectedDeviceWallpaperFile : this.selectedSystemWallpaperFile;
-    if (!file) {
-      this.showToast("Choose an image file first", true);
-      return;
-    }
-    const targetSubentryId = scope === "device" ? this.activeSubentryId : undefined;
-    if (scope === "device" && !targetSubentryId) {
-      this.showToast("Choose a Device first", true);
-      return;
-    }
-
-    this.uploadScope = scope;
-    this.uploadBusy = true;
-    this.uploadPercent = 0;
-    this.host.requestUpdate();
-
-    try {
-      const result = await this.ws.uploadWallpaperMultipart({
-        scope,
-        subentryId: targetSubentryId,
-        file,
-        onProgress: (pct) => {
-          this.uploadPercent = pct;
-          this.host.requestUpdate();
-        },
-      });
-      if (scope === "device") {
-        this.selectedDeviceWallpaperFile = null;
-      } else {
-        this.selectedSystemWallpaperFile = null;
-      }
-      if (this.state) {
-        if (result.wallpapers && scope === "device" && this.activeSubentryId === targetSubentryId) {
-          this.state = { ...this.state, wallpapers: result.wallpapers };
-        }
-        if (result.system_wallpapers) {
-          this.state = { ...this.state, system_wallpapers: result.system_wallpapers };
-        }
-      }
-      await this.refreshState();
-      this.showToast("Uploaded wallpaper");
-    } catch (err) {
-      this.showToast(formatWsError(err, "Wallpaper upload failed"), true);
-    } finally {
-      this.uploadBusy = false;
-      this.uploadScope = null;
-      this.uploadPercent = 0;
-      this.host.requestUpdate();
-    }
+    await uploadWallpaperOp(this, scope);
   }
 
   async selectWallpaperSource(sourceId: string): Promise<void> {
-    const targetSubentryId = this.activeSubentryId;
-    if (!targetSubentryId) return;
-    try {
-      const res = await this.ws.runDeviceCommand(targetSubentryId, "select_wallpaper", {
-        source_id: sourceId,
-      });
-      if (res && this.activeSubentryId === targetSubentryId) {
-        this.ingestStatePayload(res, false);
-      }
-      this.showToast(sourceId ? "Wallpaper applied" : "Wallpaper turned off");
-    } catch (err) {
-      this.showToast(formatWsError(err, "Could not select wallpaper"), true);
-    }
+    await selectWallpaperSourceOp(this, sourceId);
   }
 
   async toggleWallpaperFav(sourceId: string): Promise<void> {
-    const targetSubentryId = this.activeSubentryId;
-    if (!targetSubentryId) return;
-    try {
-      const res = await this.ws.runDeviceCommand(targetSubentryId, "toggle_wallpaper_favorite", {
-        source_id: sourceId,
-      });
-      if (res && this.activeSubentryId === targetSubentryId) {
-        this.ingestStatePayload(res, false);
-      }
-    } catch (err) {
-      this.showToast(formatWsError(err, "Could not update favorite"), true);
-    }
+    await toggleWallpaperFavOp(this, sourceId);
   }
 
   async deleteWallpaper(scope: StudioScope, sourceId: string): Promise<void> {
-    try {
-      if (scope === "device") {
-        const targetSubentryId = this.activeSubentryId;
-        if (!targetSubentryId) return;
-        const res = await this.ws.runDeviceCommand(targetSubentryId, "delete_wallpaper", {
-          source_id: sourceId,
-        });
-        if (res && this.activeSubentryId === targetSubentryId) {
-          this.ingestStatePayload(res, false);
-        }
-      } else {
-        const res = await this.ws.runSystemCommand(
-          "delete_system_wallpaper",
-          { source_id: sourceId },
-          this.activeSubentryId || null,
-        );
-        if (res) this.ingestStatePayload(res, false);
-      }
-      this.showToast("Deleted wallpaper");
-    } catch (err) {
-      this.showToast(formatWsError(err, "Could not delete wallpaper"), true);
-    }
+    await deleteWallpaperOp(this, scope, sourceId);
   }
-
-  // ---------- Security PIN, Signing Key, Diagnostics & Device Lifecycle ----------
 
   get hasConfiguredSecurityPin(): boolean {
     return Boolean(
@@ -1336,93 +898,19 @@ export class StudioStore implements ReactiveController {
   }
 
   async saveSecurityPin(fromScope: StudioScope): Promise<void> {
-    const rawPin = (fromScope === "device" ? this.devicePinDraft : this.systemPinDraft).trim();
-    if (!/^\d{4,12}$/.test(rawPin)) {
-      this.showToast("Security PIN must be 4 to 12 digits", true);
-      return;
-    }
-    const targetSubentryId = fromScope === "device" ? this.activeSubentryId : "";
-    this.pinBusy = true;
-    this.host.requestUpdate();
-    try {
-      const payload: Record<string, unknown> = { pin: rawPin };
-      if (targetSubentryId) payload.subentry_id = targetSubentryId;
-      const res = await this.ws.runSystemCommand(
-        "set_security_pin",
-        payload,
-        this.activeSubentryId || null,
-      );
-      this.devicePinDraft = "";
-      this.systemPinDraft = "";
-      if (res) this.ingestStatePayload(res, false);
-      this.showToast("Saved Security PIN");
-    } catch (err) {
-      this.showToast(formatWsError(err, "Could not save Security PIN"), true);
-    } finally {
-      this.pinBusy = false;
-      this.host.requestUpdate();
-    }
+    await saveSecurityPinOp(this, fromScope);
   }
 
   async clearSecurityPin(fromScope: StudioScope): Promise<void> {
-    const targetSubentryId = fromScope === "device" ? this.activeSubentryId : "";
-    this.pinBusy = true;
-    this.host.requestUpdate();
-    try {
-      const payload: Record<string, unknown> = { clear: true };
-      if (targetSubentryId) payload.subentry_id = targetSubentryId;
-      const res = await this.ws.runSystemCommand(
-        "set_security_pin",
-        payload,
-        this.activeSubentryId || null,
-      );
-      this.devicePinDraft = "";
-      this.systemPinDraft = "";
-      if (res) this.ingestStatePayload(res, false);
-      this.showToast("Cleared Security PIN");
-    } catch (err) {
-      this.showToast(formatWsError(err, "Could not clear Security PIN"), true);
-    } finally {
-      this.pinBusy = false;
-      this.host.requestUpdate();
-    }
+    await clearSecurityPinOp(this, fromScope);
   }
 
   async rotateSigningKey(): Promise<void> {
-    try {
-      const res = await this.ws.runSystemCommand(
-        "rotate_signing_key",
-        {},
-        this.activeSubentryId || null,
-      );
-      if (res) this.ingestStatePayload(res, false);
-      this.showToast("Rotated HTTP resource signing key");
-    } catch (err) {
-      this.showToast(formatWsError(err, "Could not rotate signing key"), true);
-    }
+    await rotateSigningKeyOp(this);
   }
 
   async downloadDeviceDiagnostics(): Promise<void> {
-    const entryId = this.state?.links?.entry_id || "";
-    const latterDeviceId = this.state?.links?.latter_device_id || "";
-    if (!entryId) {
-      this.showToast("Diagnostics entry ID is not available", true);
-      return;
-    }
-    const rawPath = latterDeviceId
-      ? `/api/diagnostics/config_entry/${encodeURIComponent(entryId)}/device/${encodeURIComponent(latterDeviceId)}`
-      : `/api/diagnostics/config_entry/${encodeURIComponent(entryId)}`;
-    try {
-      const signedPath = await this.ws.signHaPath(rawPath, 300);
-      const a = document.createElement("a");
-      a.href = signedPath;
-      a.download = "";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-    } catch (err) {
-      this.showToast(formatWsError(err, "Could not download diagnostics"), true);
-    }
+    await downloadDeviceDiagnosticsOp(this);
   }
 
   openRemoveDeviceModal(subentryId: string, title: string): void {
@@ -1437,31 +925,7 @@ export class StudioStore implements ReactiveController {
   }
 
   async confirmRemoveDevice(): Promise<void> {
-    const subId = this.removeModal.subentryId;
-    if (!subId) return;
-    this.removeModal = { ...this.removeModal, busy: true };
-    this.host.requestUpdate();
-    try {
-      const res = await this.ws.runSystemCommand(
-        "remove_device",
-        { subentry_id: subId },
-        this.activeSubentryId || null,
-      );
-      this.closeRemoveDeviceModal();
-      if (this.activeSubentryId === subId) {
-        this.activeSubentryId = "";
-        this.deviceSelected = false;
-        this.currentScope = "device";
-        this.currentViewId = "select_device_prompt";
-        this.syncUrlFromState(true);
-      }
-      if (res) this.ingestStatePayload(res, false);
-      this.showToast("Removed Device from Latter");
-    } catch (err) {
-      this.removeModal = { ...this.removeModal, busy: false };
-      this.showToast(formatWsError(err, "Could not remove Device"), true);
-      this.host.requestUpdate();
-    }
+    await confirmRemoveDeviceOp(this);
   }
 
   openResetDeviceModal(): void {
@@ -1482,27 +946,7 @@ export class StudioStore implements ReactiveController {
   }
 
   async confirmResetDevice(): Promise<void> {
-    const targetSubentryId = this.activeSubentryId;
-    if (!targetSubentryId) return;
-    if (!this.resetModal.deviceSettings && !this.resetModal.latterOptions) return;
-    this.resetModal = { ...this.resetModal, busy: true };
-    this.host.requestUpdate();
-    try {
-      const res = await this.ws.resetDevice({
-        subentryId: targetSubentryId,
-        deviceSettings: this.resetModal.deviceSettings,
-        latterOptions: this.resetModal.latterOptions,
-      });
-      this.closeResetDeviceModal();
-      if (res && this.activeSubentryId === targetSubentryId) {
-        this.ingestStatePayload(res, false);
-      }
-      this.showToast("Reset Device to defaults");
-    } catch (err) {
-      this.resetModal = { ...this.resetModal, busy: false };
-      this.showToast(formatWsError(err, "Could not reset Device"), true);
-      this.host.requestUpdate();
-    }
+    await confirmResetDeviceOp(this);
   }
 
   openAddBleModal(prefill?: { name?: string; address?: string }): void {
@@ -1523,98 +967,19 @@ export class StudioStore implements ReactiveController {
   }
 
   selectBleCandidateInModal(addr: string): void {
-    const cand = (this.state?.discovered_ble_devices || []).find(
-      (c) => (c.target_address || c.address) === addr,
-    );
-    const candAddr = cand ? cand.target_address || cand.address || addr : addr;
-    const candTitle = cand ? cand.title || cand.name || "" : "";
-    this.addBleModal = {
-      ...this.addBleModal,
-      candidateAddr: addr,
-      address: cand ? candAddr : this.addBleModal.address,
-      name: candTitle || this.addBleModal.name,
-    };
-    this.host.requestUpdate();
+    selectBleCandidateInModalOp(this, addr);
   }
 
-  async quickAdoptBleCandidate(
-    title: string,
-    targetAddress: string,
-    assignedPerson = "",
-  ): Promise<void> {
-    if (!title || !targetAddress) return;
-    try {
-      const res = await this.ws.runSystemCommand(
-        "add_ble_device",
-        {
-          name: title,
-          target_address: targetAddress,
-          assigned_person: assignedPerson,
-        },
-        this.activeSubentryId || null,
-      );
-      if (res) this.ingestStatePayload(res, false);
-      this.showToast(`Added BLE tag "${title}"`);
-    } catch (err) {
-      this.showToast(formatWsError(err, "Could not add BLE tag"), true);
-    }
+  async quickAdoptBleCandidate(title: string, targetAddress: string, assignedPerson = ""): Promise<void> {
+    await quickAdoptBleCandidateOp(this, title, targetAddress, assignedPerson);
   }
 
   async confirmAddBleModal(): Promise<void> {
-    const name = this.addBleModal.name.trim();
-    const targetAddress = this.addBleModal.address.trim();
-    if (!name || !targetAddress) {
-      this.showToast("Enter both a name and a Bluetooth address or entity", true);
-      return;
-    }
-    this.addBleModal = { ...this.addBleModal, busy: true };
-    this.host.requestUpdate();
-    try {
-      const res = await this.ws.runSystemCommand(
-        "add_ble_device",
-        {
-          name,
-          target_address: targetAddress,
-          assigned_person: this.addBleModal.assignedPerson,
-        },
-        this.activeSubentryId || null,
-      );
-      this.closeAddBleModal();
-      if (res) this.ingestStatePayload(res, false);
-      this.showToast(`Added BLE tag "${name}"`);
-    } catch (err) {
-      this.addBleModal = { ...this.addBleModal, busy: false };
-      this.showToast(formatWsError(err, "Could not add BLE tag"), true);
-      this.host.requestUpdate();
-    }
+    await confirmAddBleModalOp(this);
   }
 
-  // ---------- System Shared Entities, Remotes, Groups, BLE & Tools Actions ----------
-
   async checkSystemUpdates(): Promise<void> {
-    this.showToast("Checking firmware updates…");
-    try {
-      const res = await this.ws.runSystemCommand(
-        "check_system_updates",
-        {},
-        this.activeSubentryId || null,
-      );
-      if (res) {
-        this.ingestStatePayload(res, false);
-        const info = res.update_check;
-        if (info) {
-          this.showToast(
-            info.available > 0
-              ? `${info.available} firmware update(s) available across ${info.checked} checked Device(s)`
-              : `Checked ${info.checked} Device(s) — all firmware is up to date`,
-          );
-          return;
-        }
-      }
-      this.showToast("Firmware update check finished");
-    } catch (err) {
-      this.showToast(formatWsError(err, "Firmware update check failed"), true);
-    }
+    await checkSystemUpdatesOp(this);
   }
 
   updateStringListRow(
@@ -1622,9 +987,7 @@ export class StudioStore implements ReactiveController {
     index: number,
     value: string,
   ): void {
-    const list = [...(this.state?.system_config?.[key] || [])];
-    list[index] = value;
-    this.stageSystemSetting(key, list);
+    updateStringListRowOp(this, key, index, value);
   }
 
   addStringListRow(
@@ -1632,127 +995,47 @@ export class StudioStore implements ReactiveController {
     defaultEntity = "",
     maxLen = 10,
   ): void {
-    const list = [...(this.state?.system_config?.[key] || [])];
-    if (list.length >= maxLen) {
-      this.showToast(`Maximum of ${maxLen} entries reached`, true);
-      return;
-    }
-    list.push(defaultEntity);
-    this.stageSystemSetting(key, list);
+    addStringListRowOp(this, key, defaultEntity, maxLen);
   }
 
   removeStringListRow(key: "calendar_entities" | "camera_entities" | "remotes_list", index: number): void {
-    const list = [...(this.state?.system_config?.[key] || [])];
-    list.splice(index, 1);
-    this.stageSystemSetting(key, list);
+    removeStringListRowOp(this, key, index);
   }
 
   addVolumeOverrideRow(): void {
-    const list: VolumeOverride[] = [...(this.state?.system_config?.volume_overrides || [])];
-    if (list.length >= 10) {
-      this.showToast("Maximum of 10 volume overrides reached", true);
-      return;
-    }
-    const speakers = this.state?.catalog?.ma_speakers || this.state?.catalog?.speakers || [];
-    const targets = this.state?.catalog?.volume_targets || this.state?.catalog?.remotes || [];
-    list.push({
-      speaker: speakers[0]?.id || "",
-      target: targets[0]?.id || speakers[0]?.id || "",
-    });
-    this.stageSystemSetting("volume_overrides", list);
+    addVolumeOverrideRowOp(this);
   }
 
   updateVolumeOverrideRow(index: number, field: "speaker" | "target", value: string): void {
-    const list: VolumeOverride[] = (this.state?.system_config?.volume_overrides || []).map((v) => ({
-      ...v,
-    }));
-    if (!list[index]) return;
-    list[index][field] = value;
-    this.stageSystemSetting("volume_overrides", list);
+    updateVolumeOverrideRowOp(this, index, field, value);
   }
 
   removeVolumeOverrideRow(index: number): void {
-    const list: VolumeOverride[] = [...(this.state?.system_config?.volume_overrides || [])];
-    list.splice(index, 1);
-    this.stageSystemSetting("volume_overrides", list);
+    removeVolumeOverrideRowOp(this, index);
   }
 
   addRemoteGroupRow(): void {
-    const groups: RemoteGroup[] = (this.state?.system_config?.remote_groups || []).map((g) => ({
-      ...g,
-      remotes: [...(g.remotes || [])],
-    }));
-    const id = `group_${Date.now().toString(36)}`;
-    groups.push({ id, name: "New Remote Group", area_id: "", remotes: [] });
-    this.stageSystemSetting("remote_groups", groups);
+    addRemoteGroupRowOp(this);
   }
 
   updateRemoteGroupField(groupId: string, field: "name" | "area_id", value: string): void {
-    const groups: RemoteGroup[] = (this.state?.system_config?.remote_groups || []).map((g) =>
-      g.id === groupId ? { ...g, [field]: value } : { ...g, remotes: [...(g.remotes || [])] },
-    );
-    this.stageSystemSetting("remote_groups", groups);
+    updateRemoteGroupFieldOp(this, groupId, field, value);
   }
 
   toggleRemoteInGroup(groupId: string, remoteEntity: string): void {
-    const groups: RemoteGroup[] = (this.state?.system_config?.remote_groups || []).map((g) => {
-      if (g.id !== groupId) return { ...g, remotes: [...(g.remotes || [])] };
-      const remotes = [...(g.remotes || [])];
-      const idx = remotes.indexOf(remoteEntity);
-      if (idx >= 0) remotes.splice(idx, 1);
-      else remotes.push(remoteEntity);
-      return { ...g, remotes };
-    });
-    this.stageSystemSetting("remote_groups", groups);
+    toggleRemoteInGroupOp(this, groupId, remoteEntity);
   }
 
   removeRemoteGroupRow(groupId: string): void {
-    const groups = (this.state?.system_config?.remote_groups || []).filter((g) => g.id !== groupId);
-    this.stageSystemSetting("remote_groups", groups);
+    removeRemoteGroupRowOp(this, groupId);
   }
 
   async assignDeviceRemoteGroup(subentryId: string, remoteGroup: string): Promise<void> {
-    try {
-      await this.flushSystemSettings();
-      const res = await this.ws.runSystemCommand(
-        "set_device_remote_group",
-        { subentry_id: subentryId, device_remote_group: remoteGroup },
-        this.activeSubentryId || null,
-      );
-      if (res) this.ingestStatePayload(res, false);
-      this.showToast("Updated remote group assignment");
-    } catch (err) {
-      this.showToast(formatWsError(err, "Could not assign remote group"), true);
-    }
+    await assignDeviceRemoteGroupOp(this, subentryId, remoteGroup);
   }
 
   async previewCamera(cameraEntity: string, bustCache = false): Promise<void> {
-    if (!cameraEntity) {
-      this.closeCameraPreview();
-      return;
-    }
-    const dbObj = (this.state?.doorbells || []).find((b) => b.camera_entity === cameraEntity);
-    const camObj = (this.state?.catalog?.cameras || []).find((c) => c.id === cameraEntity);
-    const existingSigned = dbObj?.preview_url || camObj?.preview_url || "";
-    if (existingSigned) {
-      const sep = existingSigned.includes("?") ? "&" : "?";
-      this.activeCameraPreviewEntity = cameraEntity;
-      this.cameraPreviewUrl = bustCache ? `${existingSigned}${sep}_ts=${Date.now()}` : existingSigned;
-      this.host.requestUpdate();
-      return;
-    }
-    try {
-      const signed = await this.ws.signHaPath(
-        `/api/camera_proxy/${encodeURIComponent(cameraEntity)}`,
-        300,
-      );
-      const sep = signed.includes("?") ? "&" : "?";
-      this.activeCameraPreviewEntity = cameraEntity;
-      this.cameraPreviewUrl = `${signed}${sep}_ts=${Date.now()}`;
-      this.host.requestUpdate();
-    } catch (err) {
-      this.showToast(formatWsError(err, "Add a Latter Device to preview cameras"), true);
-    }
+    await previewCameraOp(this, cameraEntity, bustCache);
   }
 
   closeCameraPreview(): void {
@@ -1762,207 +1045,48 @@ export class StudioStore implements ReactiveController {
   }
 
   async testDoorbellSpeaker(): Promise<void> {
-    const cams = this.state?.system_config?.camera_entities || [];
-    if (!cams[0]) {
-      this.showToast("Add a camera in Shared Entities first", true);
-      return;
-    }
-    if (!this.doorbellTestSubentryId) {
-      this.showToast("Choose a Device to test from", true);
-      return;
-    }
-    await this.flushSystemSettings();
-    try {
-      const res = await this.ws.runSystemCommand(
-        "test_doorbell_speaker",
-        {
-          subentry_id: this.doorbellTestSubentryId,
-          camera_entity: cams[0],
-          message: "Testing Latter doorbell audio.",
-        },
-        this.activeSubentryId || null,
-      );
-      if (res) this.ingestStatePayload(res, false);
-      this.showToast("Played test message on door speaker");
-    } catch (err) {
-      this.showToast(formatWsError(err, "Door speaker test failed"), true);
-    }
+    await testDoorbellSpeakerOp(this);
   }
 
-  // ---------- Device Groups & Bulk Controls ----------
-
   async createDeviceGroup(): Promise<void> {
-    const name = this.newGroupName.trim();
-    const description = this.newGroupDesc.trim();
-    if (!name) {
-      this.showToast("Enter a Device Group name", true);
-      return;
-    }
-    try {
-      const res = await this.ws.runSystemCommand(
-        "create_device_group",
-        { name, description },
-        this.activeSubentryId || null,
-      );
-      this.newGroupName = "";
-      this.newGroupDesc = "";
-      if (res) this.ingestStatePayload(res, false);
-      this.showToast(`Created group "${name}"`);
-    } catch (err) {
-      this.showToast(formatWsError(err, "Could not create Device Group"), true);
-    }
+    await createDeviceGroupOp(this);
   }
 
   async deleteDeviceGroup(groupId: string): Promise<void> {
-    try {
-      const res = await this.ws.runSystemCommand(
-        "delete_device_group",
-        { group_id: groupId },
-        this.activeSubentryId || null,
-      );
-      if (res) this.ingestStatePayload(res, false);
-      this.showToast("Deleted Device Group");
-    } catch (err) {
-      this.showToast(formatWsError(err, "Could not delete Device Group"), true);
-    }
+    await deleteDeviceGroupOp(this, groupId);
   }
 
   async syncDeviceGroup(groupId: string, singleSubentryId?: string): Promise<void> {
-    try {
-      const payload: Record<string, unknown> = { group_id: groupId };
-      if (singleSubentryId) payload.subentry_id = singleSubentryId;
-      const res = await this.ws.runSystemCommand(
-        "sync_device_group",
-        payload,
-        this.activeSubentryId || null,
-      );
-      if (res) this.ingestStatePayload(res, false);
-      this.showToast("Synced to group baseline");
-    } catch (err) {
-      this.showToast(formatWsError(err, "Could not sync Device Group"), true);
-    }
+    await syncDeviceGroupOp(this, groupId, singleSubentryId);
   }
 
   async seedGroupBaselineFromDevice(): Promise<void> {
-    if (!this.seedGroupTargetId || !this.seedSourceSubentryId) {
-      this.showToast("Choose both a target group and a source Device", true);
-      return;
-    }
-    try {
-      const res = await this.ws.runSystemCommand(
-        "seed_group_baseline",
-        {
-          group_id: this.seedGroupTargetId,
-          subentry_id: this.seedSourceSubentryId,
-        },
-        this.activeSubentryId || null,
-      );
-      if (res) this.ingestStatePayload(res, false);
-      this.showToast("Saved group baseline from Device");
-    } catch (err) {
-      this.showToast(formatWsError(err, "Could not seed group baseline"), true);
-    }
+    await seedGroupBaselineFromDeviceOp(this);
   }
 
   resolvedGroupCtrlId(): string {
-    const filter = this.groupCtrlFilter || "all";
-    if (filter.startsWith("group:")) return filter.slice(6);
-    if (filter === "trait:roaming") return "roaming";
-    if (filter === "trait:stationary") return "stationary";
-    return filter;
+    return resolvedGroupCtrlIdOp(this);
   }
 
   async setGroupDeviceSetting(patch: Record<string, unknown>): Promise<void> {
-    try {
-      const res = await this.ws.runSystemCommand(
-        "set_group_device_setting",
-        {
-          group_id: this.resolvedGroupCtrlId() || "all",
-          config: patch,
-        },
-        this.activeSubentryId || null,
-      );
-      if (res) this.ingestStatePayload(res, false);
-      this.showToast("Applied group setting");
-    } catch (err) {
-      this.showToast(formatWsError(err, "Could not apply group setting"), true);
-    }
+    await setGroupDeviceSettingOp(this, patch);
   }
 
   filteredControlTargets(ctrl: SharedControlItem): string[] {
-    const grpId = this.resolvedGroupCtrlId();
-    return (ctrl.targets || [])
-      .filter((t) => {
-        if (grpId === "all") return true;
-        if (grpId === "roaming") return Boolean(t.is_roaming);
-        if (grpId === "stationary") return !t.is_roaming;
-        return t.device_group === grpId;
-      })
-      .map((t) => t.entity_id)
-      .filter(Boolean);
+    return filteredControlTargetsOp(this, ctrl);
   }
 
   async bulkToggle(ctrl: SharedControlItem, turnOn: boolean): Promise<void> {
-    const entityIds = this.filteredControlTargets(ctrl);
-    if (!entityIds.length) return;
-    try {
-      const res = await this.ws.runSystemCommand(
-        "system_entity_action",
-        {
-          entity_ids: entityIds,
-          action: turnOn ? "turn_on" : "turn_off",
-          group_id: this.resolvedGroupCtrlId() || "all",
-          canonical_key: ctrl.canonical_key,
-        },
-        this.activeSubentryId || null,
-      );
-      if (res) this.ingestStatePayload(res, false);
-    } catch (err) {
-      this.showToast(formatWsError(err, "Bulk switch update failed"), true);
-    }
+    await bulkToggleOp(this, ctrl, turnOn);
   }
 
   async bulkSelect(ctrl: SharedControlItem, option: string): Promise<void> {
-    const entityIds = this.filteredControlTargets(ctrl);
-    if (!entityIds.length) return;
-    try {
-      const res = await this.ws.runSystemCommand(
-        "system_entity_action",
-        {
-          entity_ids: entityIds,
-          option,
-          group_id: this.resolvedGroupCtrlId() || "all",
-          canonical_key: ctrl.canonical_key,
-        },
-        this.activeSubentryId || null,
-      );
-      if (res) this.ingestStatePayload(res, false);
-    } catch (err) {
-      this.showToast(formatWsError(err, "Bulk option update failed"), true);
-    }
+    await bulkSelectOp(this, ctrl, option);
   }
 
   async bulkNumber(ctrl: SharedControlItem, level: number): Promise<void> {
-    const entityIds = this.filteredControlTargets(ctrl);
-    if (!entityIds.length || !Number.isFinite(level)) return;
-    try {
-      const res = await this.ws.runSystemCommand(
-        "system_entity_action",
-        {
-          entity_ids: entityIds,
-          level,
-          group_id: this.resolvedGroupCtrlId() || "all",
-          canonical_key: ctrl.canonical_key,
-        },
-        this.activeSubentryId || null,
-      );
-      if (res) this.ingestStatePayload(res, false);
-    } catch (err) {
-      this.showToast(formatWsError(err, "Bulk number update failed"), true);
-    }
+    await bulkNumberOp(this, ctrl, level);
   }
-
-  // ---------- BLE Calibration & Sensor Fusion ----------
 
   selectBleSurveyDevice(subentryId: string): void {
     this.bleSurveySubentryId = subentryId;
@@ -1977,153 +1101,34 @@ export class StudioStore implements ReactiveController {
   }
 
   getActiveSurveyDevice(): SystemDeviceEntry | undefined {
-    const devs = this.state?.system_devices || [];
-    return devs.find((d) => d.subentry_id === this.bleSurveySubentryId);
+    return getActiveSurveyDeviceOp(this);
   }
 
   async setBleOffset(areaId: string, offsetDb: number): Promise<void> {
-    try {
-      const res = await this.ws.runSystemCommand(
-        "set_ble_area_offset",
-        { area_id: areaId, offset_db: offsetDb },
-        this.activeSubentryId || null,
-      );
-      if (res) this.ingestStatePayload(res, false);
-    } catch (err) {
-      this.showToast(formatWsError(err, "Could not update BLE offset"), true);
-    }
+    await setBleOffsetOp(this, areaId, offsetDb);
   }
 
   async autoCalibrateHere(areaId: string): Promise<void> {
-    if (!this.bleSurveySubentryId) {
-      this.showToast("Select a calibration Device first", true);
-      return;
-    }
-    try {
-      const res = await this.ws.runSystemCommand(
-        "auto_calibrate_here",
-        { area_id: areaId, survey_subentry_id: this.bleSurveySubentryId },
-        this.activeSubentryId || null,
-      );
-      if (res) this.ingestStatePayload(res, false);
-      this.showToast("Calibrated Area offset");
-    } catch (err) {
-      this.showToast(formatWsError(err, "Calibration failed"), true);
-    }
+    await autoCalibrateHereOp(this, areaId);
   }
 
   async setAreaFusion(
     areaId: string,
     update: { mode?: string; threshold_pct?: number; sensors?: string[] },
   ): Promise<void> {
-    try {
-      const res = await this.ws.runSystemCommand(
-        "set_area_fusion",
-        { area_id: areaId, ...update },
-        this.activeSubentryId || null,
-      );
-      if (res) this.ingestStatePayload(res, false);
-    } catch (err) {
-      this.showToast(formatWsError(err, "Could not update Area fusion"), true);
-    }
+    await setAreaFusionOp(this, areaId, update);
   }
 
-  // ---------- Announcements, Backups & Logs ----------
-
   async sendAnnouncement(): Promise<void> {
-    const message = this.announceMessage.trim();
-    if (!message) {
-      this.showToast("Enter a message", true);
-      return;
-    }
-    const payload: Record<string, unknown> = {
-      mode: this.announceMode,
-      target_device: this.announceTarget || "all",
-      message,
-    };
-    if (this.announceMode === "notify") {
-      const title = this.announceTitle.trim();
-      if (!title) {
-        this.showToast("Enter a notification title", true);
-        return;
-      }
-      payload.title = title;
-      payload.priority = this.announcePriority;
-      payload.include_camera = this.announceIncludeCamera;
-    }
-    try {
-      const res = await this.ws.runSystemCommand(
-        "send_announcement",
-        payload,
-        this.activeSubentryId || null,
-      );
-      if (res) this.ingestStatePayload(res, false);
-      this.showToast(
-        this.announceMode === "notify" ? "Sent notification" : "Broadcast announcement sent",
-      );
-    } catch (err) {
-      this.showToast(formatWsError(err, "Could not send announcement"), true);
-    }
+    await sendAnnouncementOp(this);
   }
 
   async exportBackup(explicitSubentryId?: string): Promise<void> {
-    try {
-      const dateStr = new Date().toISOString().slice(0, 10);
-      if (explicitSubentryId) {
-        const { bundle } = await this.ws.exportBackup("device", explicitSubentryId);
-        const slug = String(bundle.target_device || this.state?.config?.device_slug || "esphome");
-        triggerJsonDownload(`latter-device-${slug}-backup-${dateStr}.json`, bundle);
-        this.showToast("Downloaded the Device backup");
-        return;
-      }
-      const choice = this.backupExportScope || "system";
-      const deviceId = choice.startsWith("device:") ? choice.slice(7) : choice !== "system" ? choice : "";
-      if (!deviceId) {
-        const { bundle } = await this.ws.exportBackup("system");
-        triggerJsonDownload(`latter-system-backup-${dateStr}.json`, bundle);
-        this.showToast("Downloaded the System backup");
-      } else {
-        const { bundle } = await this.ws.exportBackup("device", deviceId);
-        const slug = String(bundle.target_device || deviceId);
-        triggerJsonDownload(`latter-device-${slug}-backup-${dateStr}.json`, bundle);
-        this.showToast("Downloaded the Device backup");
-      }
-    } catch (err) {
-      this.showToast(formatWsError(err, "Backup export failed"), true);
-    }
+    await exportBackupOp(this, explicitSubentryId);
   }
 
   async restoreFromUploadedFile(): Promise<void> {
-    if (!this.selectedBackupFile) {
-      this.showToast("Choose a JSON backup file first", true);
-      return;
-    }
-    try {
-      const text = await this.selectedBackupFile.text();
-      const raw = JSON.parse(text) as Record<string, unknown>;
-      const bundle =
-        raw.bundle && typeof raw.bundle === "object"
-          ? (raw.bundle as Record<string, unknown>)
-          : raw;
-      const scope: StudioScope = String(bundle.scope || "") === "device" ? "device" : "system";
-      const targetId = scope === "device" ? this.backupRestoreSubentryId || "" : "";
-      if (scope === "device" && !targetId) {
-        this.showToast("Choose the Device to restore this Device backup onto", true);
-        return;
-      }
-      const res = await this.ws.importBackup({
-        scope,
-        bundle,
-        targetSubentryId: targetId || null,
-        selectedSubentryId: this.activeSubentryId || null,
-        restoreEspHomeEntities: this.backupRestoreEsp,
-      });
-      this.selectedBackupFile = null;
-      if (res) this.ingestStatePayload(res, false);
-      this.showToast(scope === "device" ? "Restored the Device backup" : "Restored the System backup");
-    } catch (err) {
-      this.showToast(formatWsError(err, "Backup restore failed"), true);
-    }
+    await restoreFromUploadedFileOp(this);
   }
 
   onToggleLogsDetails(open: boolean): void {
@@ -2135,46 +1140,14 @@ export class StudioStore implements ReactiveController {
   }
 
   formatVisibleLogs(): string {
-    const entries = this.state?.internal_logs || [];
-    const filter = this.logFilter || "all";
-    const filtered = entries.filter((e) => {
-      const lvl = String(e.level || "").toUpperCase();
-      const src = String(e.source || "").toLowerCase();
-      if (filter === "latter") return src === "studio" || src === "system" || src.includes("latter");
-      if (filter === "errors") return lvl === "WARNING" || lvl === "WARN" || lvl === "ERROR" || lvl === "CRITICAL";
-      if (filter.startsWith("device:") || filter.startsWith("dev:")) {
-        const slug = (filter.startsWith("device:") ? filter.slice(7) : filter.slice(4)).toLowerCase();
-        return src === slug || String(e.message || "").toLowerCase().includes(slug);
-      }
-      return true;
-    });
-    if (!filtered.length) return "No events logged yet.";
-    return filtered
-      .map((e) => {
-        const rawTs = e.timestamp || (typeof e.ts === "number" ? new Date(e.ts * 1000).toISOString() : String(e.ts || ""));
-        const lvl = String(e.level || "INFO").toUpperCase();
-        const src = String(e.source || "latter");
-        return `${rawTs ? `[${rawTs}] ` : ""}${lvl} (${src}): ${String(e.message || "")}`;
-      })
-      .join("\n");
+    return formatVisibleLogsOp(this);
   }
 
   async copyLogsToClipboard(): Promise<void> {
-    const ok = await copyTextToClipboard(this.formatVisibleLogs());
-    this.showToast(ok ? "Copied logs to clipboard" : "Could not copy logs", !ok);
+    await copyLogsToClipboardOp(this);
   }
 
   async clearInternalLogs(): Promise<void> {
-    try {
-      const res = await this.ws.runSystemCommand(
-        "clear_internal_logs",
-        {},
-        this.activeSubentryId || null,
-      );
-      if (res) this.ingestStatePayload(res, true);
-      this.showToast("Cleared internal logs");
-    } catch (err) {
-      this.showToast(formatWsError(err, "Could not clear logs"), true);
-    }
+    await clearInternalLogsOp(this);
   }
 }

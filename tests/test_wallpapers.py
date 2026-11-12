@@ -1,8 +1,4 @@
-"""Standalone tests for uploaded wallpapers: private storage, references and signed serving.
-
-They run without Home Assistant installed. The production modules under test (wallpaper_refs.py,
-resource_signing.py) are standard-library only and loaded by file path.
-"""
+"""Tests for uploaded & built-in wallpapers: private storage, references, and signed serving."""
 
 from __future__ import annotations
 
@@ -10,7 +6,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from custom_components.latter.http import resource_signing, wallpapers as wallpaper_refs
+from custom_components.latter import http as resource_signing, wallpapers as wallpaper_refs
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 LATTER_DIR = REPO_ROOT / "custom_components" / "latter"
@@ -63,27 +59,17 @@ class TestPrivateWallpapers(unittest.TestCase):
         sig = resource_signing.sign(secret, "sub_kitchen", f"wallpaper:{src}|240|240|circle", exp)
         self.assertTrue(resource_signing.verify(secret, "sub_kitchen", f"wallpaper:{src}|240|240|circle", sig, now))
         for other in ("upload:office/beach_1a2b3c.jpg", "upload:kitchen/other_1a2b3c.jpg"):
-            self.assertFalse(resource_signing.verify(secret, "sub_kitchen", f"wallpaper:{other}|240|240|circle", sig, now))
+            self.assertFalse(
+                resource_signing.verify(secret, "sub_kitchen", f"wallpaper:{other}|240|240|circle", sig, now)
+            )
         self.assertFalse(resource_signing.verify(secret, "sub_office", f"wallpaper:{src}|240|240|circle", sig, now))
-        self.assertFalse(resource_signing.verify(secret, "sub_kitchen", f"wallpaper:{src}|240|240|circle", sig, exp + 1))
+        self.assertFalse(
+            resource_signing.verify(secret, "sub_kitchen", f"wallpaper:{src}|240|240|circle", sig, exp + 1)
+        )
 
     def test_builtin_presets_and_bundled_jpegs(self) -> None:
         """The 5 built-in presets map to bundled 720x720 baseline JPEGs under custom_components/latter/wallpapers/."""
-        import ast
-
-        tree = ast.parse((LATTER_DIR / "http" / "wallpapers.py").read_text(encoding="utf-8"))
-        presets = None
-        for node in tree.body:
-            if (
-                isinstance(node, ast.AnnAssign)
-                and isinstance(node.target, ast.Name)
-                and node.target.id == "BUILTIN_WALLPAPER_PRESETS"
-                and node.value is not None
-            ):
-                presets = ast.literal_eval(node.value)
-
-        self.assertIsNotNone(presets)
-        assert presets is not None
+        presets = wallpaper_refs.BUILTIN_WALLPAPER_PRESETS
         self.assertEqual(
             [(p["id"], p["name"], p["file"]) for p in presets],
             [
@@ -102,7 +88,6 @@ class TestPrivateWallpapers(unittest.TestCase):
             raw = jpg_path.read_bytes()
             self.assertTrue(raw.startswith(b"\xff\xd8\xff"), p["file"])
             self.assertTrue(raw.endswith(b"\xff\xd9"), p["file"])
-            # Parse JPEG SOF markers before SOS to confirm baseline SOF0 (0xFFC0) and 720x720 dimensions.
             idx = 2
             sof_marker = None
             dims = None

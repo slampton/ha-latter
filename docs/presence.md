@@ -31,7 +31,7 @@ To link a tracked device to a person, set **Assigned person** on the device's Ov
 
 ## How it decides
 
-All of these values are constants in [`presence/ble_fabric.py`](../custom_components/latter/presence/ble_fabric.py) and [`presence/ble_math.py`](../custom_components/latter/presence/ble_math.py) (with area sensor fusion in [`presence/fusion.py`](../custom_components/latter/presence/fusion.py)), so you can check them.
+All of these values — BLE RSSI smoothing, hysteresis, calibration, and Area sensor fusion — are constants in [`presence.py`](../custom_components/latter/presence.py), so you can check them.
 
 1. **Collect.** Latter registers targeted Home Assistant Bluetooth callbacks (`BluetoothCallbackMatcher(connectable=False)`) matching Latter's System UUID, adopted iBeacons, and tracked MACs directly, and refreshes rotating `private_ble_device` addresses when needed—without an unconditional 2-second full scanner-table poll. Readings at or below −100 dBm are dropped, and a **3.0 dBm RSSI hysteresis deadband** suppresses 1 dBm noise fluctuations while the confirmed Area is unchanged.
 2. **Smooth.** Each area keeps one exponential moving average of RSSI with α = 0.5; readings from every scanner in that area feed the same average. After **2 s** without a reading, an area loses **1.5 dB per second**. After **12 s** without a reading, its average resets and it drops out of the decision.
