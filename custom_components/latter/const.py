@@ -11,7 +11,7 @@ from homeassistant.const import Platform
 DOMAIN: Final = "latter"
 INTEGRATION_VERSION: Final = "3.0.0"
 STUDIO_REV: Final = 4
-MIN_FIRMWARE_SDK_REV: Final = 2026111201
+MIN_FIRMWARE_SDK_REV: Final = 2026111202
 PLATFORMS: Final[list[Platform]] = [
     Platform.SENSOR,
     Platform.BINARY_SENSOR,
