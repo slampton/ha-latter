@@ -94,6 +94,7 @@ export function renderWallpaperUploadBar(store: StudioStore, scope: StudioScope)
     <div class="input-action-row">
       <input
         type="file"
+        id=${scope === "device" ? "input-upload-wp" : "input-upload-sys-wp"}
         accept="image/*"
         aria-label="Wallpaper image (up to 15 MB)"
         @change=${onFilePick}

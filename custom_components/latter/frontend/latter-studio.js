@@ -1733,7 +1733,7 @@ function renderStudioDialogs(store) {
 
 // --- src/api/ws-client.ts ---
 /**
- * Admin-gated WebSocket & signed XHR multipart client for Latter Studio.
+ * Admin-gated WebSocket & Bearer-authenticated XHR multipart client for Latter Studio.
  * Enforces `studio_rev` on every read/mutation call and surfaces `studio_rev_mismatch`.
  */
 const SYSTEM_WS_COMMANDS = new Set([
@@ -1939,6 +1939,21 @@ class StudioWsClient {
     }
     return signed.path;
   }
+          async getAccessToken(forceRefresh = false) {
+    const hass = this.requireHass();
+    const auth = hass.auth;
+    if (!auth) {
+      throw new Error("Home Assistant authentication session is not ready");
+    }
+    if ((forceRefresh || auth.expired) && typeof auth.refreshAccessToken === "function") {
+      await auth.refreshAccessToken();
+    }
+    const token = auth.data?.access_token;
+    if (!token) {
+      throw new Error("Home Assistant access token is unavailable");
+    }
+    return token;
+  }
   async uploadWallpaperMultipart(options
    ) {
     if (!options.file) {
@@ -1950,56 +1965,69 @@ class StudioWsClient {
     if (options.scope === "device" && !options.subentryId) {
       throw new Error("Choose a Device before uploading a Device wallpaper");
     }
-    const signedUrl = await this.signHaPath("/api/latter/wallpaper/upload", 300);
+    const UPLOAD_PATH = "/api/latter/wallpaper/upload";
     const form = new FormData();
     form.append("file", options.file, options.file.name || "wallpaper.jpg");
     form.append("scope", options.scope);
     if (options.subentryId) {
       form.append("subentry_id", options.subentryId);
     }
-    return new Promise ((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.open("POST", signedUrl, true);
-      xhr.responseType = "json";
-      if (xhr.upload && options.onProgress) {
-        xhr.upload.onprogress = (ev) => {
-          if (ev.lengthComputable && ev.total > 0) {
-            options.onProgress?.(Math.min(100, Math.round((ev.loaded / ev.total) * 100)));
-          }
-        };
-      }
-      xhr.onload = () => {
-        const body = xhr.response && typeof xhr.response === "object"
-          ? (xhr.response)
-          : null;
-        if (xhr.status >= 200 && xhr.status < 300) {
-          options.onProgress?.(100);
-          resolve({
-            ok: true,
-            filename: body?.filename ? String(body.filename) : undefined,
-            source_id: body?.source_id ? String(body.source_id) : undefined,
-            wallpapers: Array.isArray(body?.wallpapers) ? (body.wallpapers) : undefined,
-            system_wallpapers: Array.isArray(body?.system_wallpapers)
-              ? (body.system_wallpapers)
-              : undefined,
-          });
-          return;
+    const sendOnce = (bearerToken) =>
+      new Promise ((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", UPLOAD_PATH, true);
+        xhr.setRequestHeader("Authorization", `Bearer ${bearerToken}`);
+        xhr.responseType = "json";
+        if (xhr.upload && options.onProgress) {
+          xhr.upload.onprogress = (ev) => {
+            if (ev.lengthComputable && ev.total > 0) {
+              options.onProgress?.(Math.min(100, Math.round((ev.loaded / ev.total) * 100)));
+            }
+          };
         }
-        const errMsg = body?.error
-          ? String(body.error)
-          : body?.message
-            ? String(body.message)
-            : `Wallpaper upload failed (HTTP ${xhr.status})`;
-        reject(new Error(errMsg));
+        xhr.onload = () => {
+          const body =
+            xhr.response && typeof xhr.response === "object"
+              ? (xhr.response)
+              : null;
+          resolve({ status: xhr.status, body });
+        };
+        xhr.onerror = () => {
+          reject(new Error("Network error while uploading wallpaper"));
+        };
+        xhr.onabort = () => {
+          reject(new Error("Wallpaper upload was canceled"));
+        };
+        xhr.send(form);
+      });
+    let token = await this.getAccessToken(false);
+    let response = await sendOnce(token);
+    if (
+      response.status === 401 &&
+      typeof this.hassRef?.auth?.refreshAccessToken === "function"
+    ) {
+      token = await this.getAccessToken(true);
+      response = await sendOnce(token);
+    }
+    const { status, body } = response;
+    if (status >= 200 && status < 300) {
+      options.onProgress?.(100);
+      return {
+        ok: true,
+        filename: body?.filename ? String(body.filename) : undefined,
+        source_id: body?.source_id ? String(body.source_id) : undefined,
+        wallpapers: Array.isArray(body?.wallpapers) ? (body.wallpapers) : undefined,
+        system_wallpapers: Array.isArray(body?.system_wallpapers)
+          ? (body.system_wallpapers)
+          : undefined,
       };
-      xhr.onerror = () => {
-        reject(new Error("Network error while uploading wallpaper"));
-      };
-      xhr.onabort = () => {
-        reject(new Error("Wallpaper upload was canceled"));
-      };
-      xhr.send(form);
-    });
+    }
+    const errMsg = body?.error
+      ? String(body.error)
+      : body?.message
+        ? String(body.message)
+        : `Wallpaper upload failed (HTTP ${status})`;
+    throw new Error(errMsg);
   }
 }
 
@@ -2808,6 +2836,10 @@ async function uploadWallpaperOp(store, scope) {
     } else {
       store.selectedSystemWallpaperFile = null;
     }
+    const inputId = scope === "device" ? "input-upload-wp" : "input-upload-sys-wp";
+    store.pendingDomRevert = {
+      controlIds: { ...(store.pendingDomRevert?.controlIds || {}), [inputId]: "" },
+    };
     if (store.state) {
       if (result.wallpapers && scope === "device" && store.activeSubentryId === targetSubentryId) {
         store.state = { ...store.state, wallpapers: result.wallpapers };
@@ -5479,6 +5511,7 @@ function renderWallpaperUploadBar(store, scope) {
     <div class="input-action-row">
       <input
         type="file"
+        id=${scope === "device" ? "input-upload-wp" : "input-upload-sys-wp"}
         accept="image/*"
         aria-label="Wallpaper image (up to 15 MB)"
         @change=${onFilePick}

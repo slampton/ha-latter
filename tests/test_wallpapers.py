@@ -68,7 +68,7 @@ class TestPrivateWallpapers(unittest.TestCase):
         )
 
     def test_builtin_presets_and_bundled_jpegs(self) -> None:
-        """The 5 built-in presets map to bundled 720x720 baseline JPEGs under custom_components/latter/wallpapers/."""
+        """The 6 built-in presets map to bundled 720x720 baseline JPEGs under custom_components/latter/wallpapers/."""
         presets = wallpaper_refs.BUILTIN_WALLPAPER_PRESETS
         self.assertEqual(
             [(p["id"], p["name"], p["file"]) for p in presets],
@@ -78,6 +78,7 @@ class TestPrivateWallpapers(unittest.TestCase):
                 ("preset:ocean_waves", "Ocean Waves", "ocean_waves.jpg"),
                 ("preset:sahara_dunes", "Sahara Dunes", "sahara_dunes.jpg"),
                 ("preset:andromeda_galaxy", "Andromeda Galaxy", "andromeda_galaxy.jpg"),
+                ("preset:mars_crater", "Mars Crater", "mars_crater.jpg"),
             ],
         )
 

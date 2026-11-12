@@ -32,7 +32,7 @@ def _run_node_ts(ts_sources: list[Path], runner_js: str) -> object:
         f"const tsSrc = {json.dumps(combined_ts)};\n"
         "const jsSrc = stripTypeScriptTypes(tsSrc);\n"
         f"const fn = new Function(jsSrc + '\\n' + {json.dumps(runner_js)});\n"
-        "process.stdout.write(JSON.stringify(fn()));\n"
+        "Promise.resolve(fn()).then((res) => process.stdout.write(JSON.stringify(res)));\n"
     )
     out = subprocess.run(
         [NODE, "-"],
@@ -210,6 +210,168 @@ class TestEntitySections(unittest.TestCase):
         self.assertNotIn("active wake", STUDIO_JS)
         audio_ts = (FRONTEND_SRC / "views" / "device-audio-view.ts").read_text(encoding="utf-8")
         self.assertIn('it.key === "wake_word" || it.key === "wake_word_n"', audio_ts)
+
+
+@unittest.skipUnless(NODE, "node is not installed")
+class TestWallpaperUploadBearerAuth(unittest.TestCase):
+    """D-025: POST /api/latter/wallpaper/upload uses live hass.auth Bearer token, never auth/sign_path."""
+
+    def test_xhr_bearer_header_preflight_refresh_and_401_retry(self) -> None:
+        runner = """
+return (async () => {
+  const wsCalls = [];
+  const xhrLog = [];
+  let nextResponses = [];
+
+  globalThis.XMLHttpRequest = class MockXHR {
+    constructor() {
+      this.headers = {};
+      this.upload = {};
+      this.status = 0;
+      this.response = null;
+      this.responseType = "";
+    }
+    open(method, url) {
+      this.method = method;
+      this.url = url;
+    }
+    setRequestHeader(k, v) {
+      this.headers[k] = v;
+    }
+    send(form) {
+      const step = nextResponses.shift() || { status: 200, body: { ok: true } };
+      xhrLog.push({
+        method: this.method,
+        url: this.url,
+        auth: this.headers.Authorization || "",
+        scope: form.get("scope"),
+        subentryId: form.get("subentry_id"),
+      });
+      if (this.upload && this.upload.onprogress) {
+        this.upload.onprogress({ lengthComputable: true, loaded: 50, total: 100 });
+      }
+      this.status = step.status;
+      this.response = step.body;
+      this.onload();
+    }
+  };
+
+  let refreshCalls = 0;
+  const auth = {
+    data: { access_token: "tok_live" },
+    expired: false,
+    async refreshAccessToken() {
+      refreshCalls += 1;
+      auth.expired = false;
+      auth.data.access_token = `tok_refreshed_${refreshCalls}`;
+    },
+  };
+  const client = new StudioWsClient(() => {});
+  client.setHass({
+    auth,
+    async callWS(msg) {
+      wsCalls.push(msg.type);
+      throw new Error(`Unexpected WS call: ${msg.type}`);
+    },
+  });
+
+  const file = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], "crater.png", { type: "image/png" });
+  const progress = [];
+
+  // 1. Live token on System scope: direct Bearer POST, zero auth/sign_path WS calls
+  nextResponses = [{ status: 200, body: { ok: true, source_id: "upload:_system/crater_1a2b3c.jpg" } }];
+  const sysRes = await client.uploadWallpaperMultipart({
+    scope: "system",
+    file,
+    onProgress: (p) => progress.push(p),
+  });
+
+  // 2. Expired token on Device scope: pre-flight refresh before sending XHR
+  auth.expired = true;
+  nextResponses = [{ status: 200, body: { ok: true, source_id: "upload:desk/crater_1a2b3c.jpg" } }];
+  const devRes = await client.uploadWallpaperMultipart({
+    scope: "device",
+    subentryId: "sub_desk",
+    file,
+  });
+
+  // 3. Clock-skew 401 when auth.expired === false: refreshes once and retries cleanly
+  nextResponses = [
+    { status: 401, body: null },
+    { status: 200, body: { ok: true, source_id: "upload:_system/retry_ok.jpg" } },
+  ];
+  const skewRes = await client.uploadWallpaperMultipart({ scope: "system", file });
+
+  // 4. Persistent 401 after single refresh retry: rejects cleanly without looping
+  nextResponses = [{ status: 401, body: null }, { status: 401, body: null }];
+  let persistentErr = "";
+  try {
+    await client.uploadWallpaperMultipart({ scope: "system", file });
+  } catch (err) {
+    persistentErr = err.message;
+  }
+
+  return { wsCalls, refreshCalls, progress, sysRes, devRes, skewRes, persistentErr, xhrLog };
+})();
+"""
+        got = _run_node_ts(
+            [FRONTEND_SRC / "constants.ts", FRONTEND_SRC / "api" / "ws-client.ts"],
+            runner,
+        )
+        self.assertEqual(got["wsCalls"], [])
+        self.assertEqual(got["refreshCalls"], 3)
+        self.assertEqual(got["progress"], [50, 100])
+        self.assertEqual(got["sysRes"]["source_id"], "upload:_system/crater_1a2b3c.jpg")
+        self.assertEqual(got["devRes"]["source_id"], "upload:desk/crater_1a2b3c.jpg")
+        self.assertEqual(got["skewRes"]["source_id"], "upload:_system/retry_ok.jpg")
+        self.assertEqual(got["persistentErr"], "Wallpaper upload failed (HTTP 401)")
+        self.assertEqual(
+            got["xhrLog"],
+            [
+                {
+                    "method": "POST",
+                    "url": "/api/latter/wallpaper/upload",
+                    "auth": "Bearer tok_live",
+                    "scope": "system",
+                    "subentryId": None,
+                },
+                {
+                    "method": "POST",
+                    "url": "/api/latter/wallpaper/upload",
+                    "auth": "Bearer tok_refreshed_1",
+                    "scope": "device",
+                    "subentryId": "sub_desk",
+                },
+                {
+                    "method": "POST",
+                    "url": "/api/latter/wallpaper/upload",
+                    "auth": "Bearer tok_refreshed_1",
+                    "scope": "system",
+                    "subentryId": None,
+                },
+                {
+                    "method": "POST",
+                    "url": "/api/latter/wallpaper/upload",
+                    "auth": "Bearer tok_refreshed_2",
+                    "scope": "system",
+                    "subentryId": None,
+                },
+                {
+                    "method": "POST",
+                    "url": "/api/latter/wallpaper/upload",
+                    "auth": "Bearer tok_refreshed_2",
+                    "scope": "system",
+                    "subentryId": None,
+                },
+                {
+                    "method": "POST",
+                    "url": "/api/latter/wallpaper/upload",
+                    "auth": "Bearer tok_refreshed_3",
+                    "scope": "system",
+                    "subentryId": None,
+                },
+            ],
+        )
 
 
 if __name__ == "__main__":

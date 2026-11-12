@@ -38,7 +38,14 @@ export interface HassConnection {
   ): Promise<() => void>;
 }
 
+export interface HassAuth {
+  data?: { access_token?: string };
+  expired?: boolean;
+  refreshAccessToken?: () => Promise<void>;
+}
+
 export interface HomeAssistant {
+  auth?: HassAuth;
   language?: string;
   locale?: { language?: string; time_zone?: string };
   config?: {

@@ -463,6 +463,10 @@ export async function uploadWallpaperOp(store: StudioStore, scope: StudioScope):
     } else {
       store.selectedSystemWallpaperFile = null;
     }
+    const inputId = scope === "device" ? "input-upload-wp" : "input-upload-sys-wp";
+    store.pendingDomRevert = {
+      controlIds: { ...(store.pendingDomRevert?.controlIds || {}), [inputId]: "" },
+    };
     if (store.state) {
       if (result.wallpapers && scope === "device" && store.activeSubentryId === targetSubentryId) {
         store.state = { ...store.state, wallpapers: result.wallpapers };

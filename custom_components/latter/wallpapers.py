@@ -62,6 +62,12 @@ BUILTIN_WALLPAPER_PRESETS: tuple[dict[str, str], ...] = (
         "file": "andromeda_galaxy.jpg",
         "kind": "preset",
     },
+    {
+        "id": "preset:mars_crater",
+        "name": "Mars Crater",
+        "file": "mars_crater.jpg",
+        "kind": "preset",
+    },
 )
 
 _PRESET_FILE_BY_ID: dict[str, str] = {
