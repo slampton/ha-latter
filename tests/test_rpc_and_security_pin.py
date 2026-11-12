@@ -5,8 +5,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from homeassistant.config_entries import ConfigSubentry
-from homeassistant.exceptions import ServiceValidationError
+from homeassistant.config_entries import ConfigEntry, ConfigSubentry
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import entity_registry as er
 import pytest
 
@@ -22,6 +22,12 @@ from custom_components.latter.const import (
 )
 from custom_components.latter.coordinator import LatterCoordinator
 from custom_components.latter.identity import MAX_RPC_BYTES, RpcReassembler, parse_rpc_frame
+from custom_components.latter.media import (
+    async_set_ma_player_link,
+    build_active_media_payload,
+    execute_coordinator_media_command,
+    set_coordinator_active_speaker,
+)
 from custom_components.latter.protocol import (
     check_perimeter_action_allowed,
     hash_security_pin,
@@ -251,3 +257,110 @@ async def test_three_tier_security_pin_policy_and_pbkdf2_verification(
             blocking=True,
         )
     assert exc_blk.value.translation_key == "security_action_blocked"
+
+
+async def test_remote_speaker_queue_transfer_spinup_hold_pause_and_empty_queue_recovery(
+    hass: Any, setup_latter_hub: Any
+) -> None:
+    """Verify queue transfer holds playing state during MA spin-up, honors immediate pause, and recovers empty queues."""
+    _entry, _sys_obj, coord = await setup_latter_hub(hass)
+
+    # Local Sendspin speaker is playing while track metadata lives on its linked MA counterpart
+    ma_entry = hass.config_entries.add_entry(
+        ConfigEntry(
+            entry_id="ma_entry_1",
+            domain="music_assistant",
+            title="Music Assistant",
+            data={},
+        )
+    )
+    ent_reg = er.async_get(hass)
+    ent_reg.async_register(
+        er.RegistryEntry(
+            entity_id="media_player.pocket_assistant",
+            platform="music_assistant",
+            unique_id="ma_pocket_assistant",
+            config_entry_id=ma_entry.entry_id,
+        )
+    )
+    ent_reg.async_register(
+        er.RegistryEntry(
+            entity_id="media_player.garage_hifi",
+            platform="music_assistant",
+            unique_id="ma_garage_hifi",
+            config_entry_id=ma_entry.entry_id,
+        )
+    )
+    async_set_ma_player_link(hass, coord, "media_player.pocket_assistant")
+    hass.states.async_set(
+        coord.local_speaker,
+        "playing",
+        {"friendly_name": "Pocket Assistant Music", "volume_level": 0.65},
+    )
+    hass.states.async_set(
+        "media_player.pocket_assistant",
+        "playing",
+        {
+            "friendly_name": "Pocket Assistant",
+            "media_title": "Up From The Sea",
+            "media_artist": "Swervedriver",
+            "media_album_name": "99th Dream",
+            "media_duration": 212.0,
+            "media_position": 18.0,
+            "media_content_id": "library://track/42",
+            "media_content_type": "music",
+            "volume_level": 0.65,
+        },
+    )
+    # Remote target speaker starts idle while Music Assistant spins up the transferred stream
+    hass.states.async_set(
+        "media_player.garage_hifi",
+        "idle",
+        {"friendly_name": "Garage HiFi", "volume_level": 0.50},
+    )
+
+    set_coordinator_active_speaker(coord, "media_player.garage_hifi", transfer_queue=True)
+    await hass.async_block_till_done()
+
+    coord._cached_media_payload = None
+    state_during_spinup, attrs_during_spinup = build_active_media_payload(coord)
+    assert state_during_spinup == "playing"
+    assert attrs_during_spinup["title"] == "Up From The Sea"
+    assert attrs_during_spinup["is_local"] is False
+
+    # User taps Pause while remote speaker is still spinning up -> clears spinup hold & calls media_pause
+    await execute_coordinator_media_command(coord, "pause")
+    assert coord._transfer_hold_spinup_until == 0.0
+    assert any(
+        c.domain == "media_player"
+        and c.service == "media_pause"
+        and c.data.get("entity_id") == "media_player.garage_hifi"
+        for c in hass.services.calls
+    )
+
+    # Empty MA queue on media_play is caught cleanly (never raises uncaught HomeAssistantError) and falls back to play_media
+    coord._resuming_guard_until = 0.0
+    coord.last_media_uri = "library://album/4"
+    coord.last_media_type = "album"
+
+    orig_async_call = hass.services.async_call
+    play_media_calls: list[dict[str, Any]] = []
+
+    async def _mock_service_call(
+        domain: str, service: str, service_data: dict[str, Any] | None = None, **kwargs: Any
+    ) -> Any:
+        if domain == "media_player" and service == "media_play":
+            raise HomeAssistantError("The queue is empty")
+        if domain == "media_player" and service == "play_media":
+            play_media_calls.append(dict(service_data or {}))
+            return None
+        return await orig_async_call(domain, service, service_data, **kwargs)
+
+    hass.services.async_call = _mock_service_call
+    try:
+        await execute_coordinator_media_command(coord, "play")
+    finally:
+        hass.services.async_call = orig_async_call
+
+    assert len(play_media_calls) >= 1
+    assert play_media_calls[0]["media_content_id"] == "library://album/4"

@@ -435,6 +435,7 @@ class LatterCoordinator:
         self._last_art_track_key: str = ""
         self._last_art_proxy_url: str = ""
         self._transfer_hold_until: float = 0.0
+        self._transfer_hold_spinup_until: float = 0.0
         self._transfer_hold_position: float = 0.0
         self._transfer_hold_title: str = ""
         self._transfer_hold_artist: str = ""

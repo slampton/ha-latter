@@ -21,7 +21,7 @@ from homeassistant.const import (
     STATE_UNKNOWN,
 )
 from homeassistant.core import Event, EventStateChangedData, HomeAssistant, State, callback
-from homeassistant.exceptions import ServiceValidationError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import (
     device_registry as dr,
     entity_registry as er,
@@ -916,8 +916,15 @@ async def async_execute_ma_queue_transfer(
     """Execute Music Assistant 2.10.8+ queue transfer, quiesce local Sendspin speaker, and verify position handoff."""
     src_ma = resolve_ma_counterpart_entity(hass, source_speaker)
     tgt_ma = resolve_ma_counterpart_entity(hass, target_speaker)
+    local_ma = resolve_ma_counterpart_entity(hass, local_speaker) if local_speaker else None
     cmd_target = tgt_ma or target_speaker
-    is_from_local = bool(local_speaker and source_speaker == local_speaker)
+    is_from_local = bool(
+        local_speaker
+        and (
+            source_speaker == local_speaker
+            or (local_ma and (source_speaker == local_ma or src_ma == local_ma))
+        )
+    )
 
     transferred_via_ma = False
     if (
@@ -941,16 +948,21 @@ async def async_execute_ma_queue_transfer(
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("music_assistant.transfer_queue failed: %s", err)
 
-    if is_from_local and source_speaker != target_speaker:
+    if (
+        is_from_local
+        and source_speaker != target_speaker
+        and target_speaker != local_speaker
+        and (not local_ma or tgt_ma != local_ma)
+    ):
         try:
             await hass.services.async_call(
                 "media_player",
                 "media_pause",
-                {ATTR_ENTITY_ID: source_speaker},
+                {ATTR_ENTITY_ID: local_speaker},
                 blocking=False,
             )
         except Exception as err:  # noqa: BLE001
-            _LOGGER.debug("Failed quiescing local speaker %s: %s", source_speaker, err)
+            _LOGGER.debug("Failed quiescing local speaker %s: %s", local_speaker, err)
 
     if not transferred_via_ma and media_content_id:
         try:
@@ -1340,33 +1352,76 @@ def set_coordinator_active_speaker(
     prev_speaker = coordinator.active_speaker
     if speaker_entity_id != prev_speaker:
         prev_state = coordinator.hass.states.get(prev_speaker)
+        prev_ma = resolve_ma_counterpart_entity(coordinator.hass, prev_speaker)
+        prev_ma_st = (
+            coordinator.hass.states.get(prev_ma)
+            if prev_ma and prev_ma != prev_speaker
+            else None
+        )
         was_playing = bool(
-            prev_state and prev_state.state in (STATE_PLAYING, STATE_BUFFERING)
+            (prev_state and prev_state.state in (STATE_PLAYING, STATE_BUFFERING))
+            or (prev_ma_st and prev_ma_st.state in (STATE_PLAYING, STATE_BUFFERING))
         )
         was_active = bool(
-            prev_state
-            and prev_state.state in (STATE_PLAYING, STATE_PAUSED, STATE_BUFFERING)
+            (
+                prev_state
+                and prev_state.state in (STATE_PLAYING, STATE_PAUSED, STATE_BUFFERING)
+            )
+            or (
+                prev_ma_st
+                and prev_ma_st.state in (STATE_PLAYING, STATE_PAUSED, STATE_BUFFERING)
+            )
         )
-        handoff_pos = interpolate_speaker_position(prev_state)
+        handoff_src = (
+            prev_ma_st
+            if (
+                prev_ma_st is not None
+                and (
+                    prev_state is None
+                    or prev_state.attributes.get("media_position") is None
+                )
+            )
+            else prev_state
+        )
+        handoff_pos = interpolate_speaker_position(handoff_src)
+        coordinator._transfer_hold_spinup_until = (
+            time.monotonic() + 2.5 if (transfer_queue and was_playing) else 0.0
+        )
 
-        if was_active and prev_state is not None:
-            p_attrs = prev_state.attributes
+        if was_active and (prev_state is not None or prev_ma_st is not None):
+            p_attrs = dict(prev_ma_st.attributes) if prev_ma_st is not None else {}
+            if prev_state is not None:
+                for k, v in prev_state.attributes.items():
+                    if v not in (None, "") or k not in p_attrs:
+                        p_attrs[k] = v
+            prev_is_local = coordinator.is_local_speaker_entity(prev_speaker)
             coordinator._transfer_hold_until = (
                 time.monotonic() + TRANSFER_HOLD_WINDOW_SECONDS
             )
-            coordinator._transfer_hold_position = handoff_pos
-            coordinator._transfer_hold_title = str(p_attrs.get("media_title") or "")
+            coordinator._transfer_hold_position = handoff_pos or (
+                coordinator.last_media_position if prev_is_local else 0.0
+            )
+            coordinator._transfer_hold_title = str(
+                p_attrs.get("media_title")
+                or (coordinator.last_media_title if prev_is_local else "")
+                or ""
+            )
             coordinator._transfer_hold_artist = str(
                 p_attrs.get("media_artist")
                 or p_attrs.get("media_series_title")
                 or p_attrs.get("media_album_artist")
+                or (coordinator.last_media_artist if prev_is_local else "")
                 or ""
             )
             coordinator._transfer_hold_album = str(
-                p_attrs.get("media_album_name") or ""
+                p_attrs.get("media_album_name")
+                or (coordinator.last_media_album if prev_is_local else "")
+                or ""
             )
             coordinator._transfer_hold_duration = float(
-                p_attrs.get("media_duration") or 0.0
+                p_attrs.get("media_duration")
+                or (coordinator.last_media_duration if prev_is_local else 0.0)
+                or 0.0
             )
 
             if transfer_queue:
@@ -1460,18 +1515,26 @@ async def execute_coordinator_media_command(
         if now < coordinator._resuming_guard_until:
             return
         coordinator._resuming_guard_until = now + 2.5
-        await hass.services.async_call(
-            "media_player",
-            "media_play",
-            {ATTR_ENTITY_ID: cmd_target},
-            blocking=False,
-        )
+        play_failed_empty = False
+        try:
+            await hass.services.async_call(
+                "media_player",
+                "media_play",
+                {ATTR_ENTITY_ID: cmd_target},
+                blocking=True,
+            )
+        except HomeAssistantError as err:
+            _LOGGER.debug("media_play on %s failed (%s); attempting queue fallback", cmd_target, err)
+            play_failed_empty = True
         is_local = coordinator.is_local_speaker_entity(target_spk)
         if (
-            is_local
-            and coordinator._local_needs_cold_resume
-            and cur_state in (STATE_IDLE, STATE_OFF, "stopped")
-        ):
+            play_failed_empty
+            or (
+                is_local
+                and coordinator._local_needs_cold_resume
+                and cur_state in (STATE_IDLE, STATE_OFF, "stopped")
+            )
+        ) and coordinator.last_media_uri:
             coordinator._resuming_guard_until = time.monotonic() + 3.5
             resumed = await async_resume_idle_speaker_queue(
                 hass,
@@ -1486,6 +1549,7 @@ async def execute_coordinator_media_command(
         return
 
     if cmd == "pause":
+        coordinator._transfer_hold_spinup_until = 0.0
         await hass.services.async_call(
             "media_player", "media_pause", {ATTR_ENTITY_ID: cmd_target}, blocking=False
         )
@@ -1510,12 +1574,14 @@ async def execute_coordinator_media_command(
         return
 
     if cmd == "stop":
+        coordinator._transfer_hold_spinup_until = 0.0
         await hass.services.async_call(
             "media_player", "media_stop", {ATTR_ENTITY_ID: cmd_target}, blocking=False
         )
         return
 
     if cmd == "clear_queue":
+        coordinator._transfer_hold_spinup_until = 0.0
         await hass.services.async_call(
             "media_player",
             "clear_playlist",
@@ -1669,7 +1735,16 @@ def build_active_media_payload(
         coordinator._cached_media_payload = (now_m, res)
         return res
 
-    in_transfer_window = time.monotonic() < coordinator._transfer_hold_until
+    if coordinator._transfer_hold_spinup_until > 0.0:
+        if state in (STATE_PLAYING, STATE_PAUSED):
+            coordinator._transfer_hold_spinup_until = 0.0
+        elif now_m < coordinator._transfer_hold_spinup_until and state in (
+            STATE_IDLE,
+            STATE_OFF,
+        ):
+            state = STATE_PLAYING
+
+    in_transfer_window = now_m < coordinator._transfer_hold_until
     if in_transfer_window:
         if not title and coordinator._transfer_hold_title:
             title = coordinator._transfer_hold_title
