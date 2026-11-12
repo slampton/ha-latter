@@ -218,7 +218,8 @@ async def test_studio_commands_security_pin_secrecy_groups_and_backup_restore(
     for btn_id, btn_name in (
         ("button.pocket_actions_find_my_device", "Actions: Find My Device"),
         ("button.pocket_actions_trigger_voice_assistant", "Actions: Trigger Voice Assistant"),
-        ("button.pocket_actions_screensaver_now", "Actions: Screensaver Now"),
+        ("button.pocket_actions_activate_screensaver", "Actions: Activate Screensaver"),
+        ("button.pocket_actions_hibernate_device", "Actions: Hibernate Device"),
         ("button.pocket_actions_restart_device", "Actions: Restart Device"),
     ):
         ent_reg.async_register(
@@ -243,7 +244,8 @@ async def test_studio_commands_security_pin_secrecy_groups_and_backup_restore(
     assert {it["entity_id"] for it in actions_sec["items"]} >= {
         "button.pocket_actions_find_my_device",
         "button.pocket_actions_trigger_voice_assistant",
-        "button.pocket_actions_screensaver_now",
+        "button.pocket_actions_activate_screensaver",
+        "button.pocket_actions_hibernate_device",
         "button.pocket_actions_restart_device",
     }
 

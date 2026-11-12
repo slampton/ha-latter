@@ -155,6 +155,8 @@ class TestViewLayout(unittest.TestCase):
         self.assertIn('id="dash-group-sync-chip"', overview)
         self.assertIn('id="btn-reset-to-group"', overview)
         self.assertIn('id="btn-open-in-ha"', overview)
+        self.assertIn("Open in ESPHome", overview)
+        self.assertNotIn("Open in Home Assistant", overview)
         self.assertIn("Download Backup", overview)
         self.assertNotIn('switchView("tools")', overview)
         self.assertIn('id="cfg-ble_target_address"', section("presence"))

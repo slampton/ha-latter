@@ -1352,39 +1352,84 @@ function renderNativeControlRow(store, item) {
     <strong>${displayVal}</strong>
   </div>`;
 }
-const QUICK_ACTION_ORDER = [
-  "find my",
-  "trigger voice",
-  "screensaver",
-  "restart",
-];
-function renderQuickActionIcon(item) {
-  const hay = `${item.name || ""} ${item.entity_id}`.toLowerCase();
-  if (hay.includes("find my") || hay.includes("find_my") || item.device_class === "identify") {
+const QUICK_ACTION_RANK = {
+  find_my: 0,
+  voice: 1,
+  screensaver: 2,
+  hibernate: 3,
+  restart: 4,
+  other: 5,
+};
+function quickActionKind(item) {
+  const nameLow = (item.name || "").toLowerCase();
+  const idTail = item.entity_id.includes(".")
+    ? item.entity_id.split(".", 2)[1].toLowerCase()
+    : item.entity_id.toLowerCase();
+  if (
+    item.device_class === "identify" ||
+    nameLow.includes("find my") ||
+    idTail.endsWith("find_my_device") ||
+    idTail.includes("_find_my")
+  ) {
+    return "find_my";
+  }
+  if (
+    item.device_class === "restart" ||
+    nameLow.includes("restart") ||
+    idTail.endsWith("_restart_device") ||
+    idTail.endsWith("_restart")
+  ) {
+    return "restart";
+  }
+  if (nameLow.includes("screensaver") || idTail.includes("screensaver")) {
+    return "screensaver";
+  }
+  if (nameLow.includes("hibernate") || idTail.includes("hibernate")) {
+    return "hibernate";
+  }
+  if (
+    nameLow.includes("voice") ||
+    nameLow.includes("assist") ||
+    idTail.includes("trigger_voice") ||
+    idTail.includes("trigger_va")
+  ) {
+    return "voice";
+  }
+  return "other";
+}
+function renderQuickActionIcon(kind) {
+  if (kind === "find_my") {
     return html`<svg viewBox="0 0 24 24" aria-hidden="true">
       <path
         d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2m0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8m0-14a6 6 0 1 0 6 6 6 6 0 0 0-6-6m0 10a4 4 0 1 1 4-4 4 4 0 0 1-4 4m0-6a2 2 0 1 0 2 2 2 2 0 0 0-2-2Z"
       />
     </svg>`;
   }
-  if (hay.includes("voice") || hay.includes("trigger_va") || hay.includes("assist")) {
+  if (kind === "voice") {
     return html`<svg viewBox="0 0 24 24" aria-hidden="true">
       <path
         d="M12 2a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3m7 9c0 3.53-2.61 6.44-6 6.93V21h-2v-3.07c-3.39-.49-6-3.4-6-6.93h2a5 5 0 0 0 10 0h2Z"
       />
     </svg>`;
   }
-  if (hay.includes("screensaver") || hay.includes("sleep")) {
+  if (kind === "screensaver") {
     return html`<svg viewBox="0 0 24 24" aria-hidden="true">
       <path
-        d="M17.75 4.09L15.22 6.03l.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3 3.19.09m3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95 2.06.05m-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31Z"
+        d="M20 3H4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h6v2H7v2h10v-2h-3v-2h6a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2m0 13H4V5h16v11M11.2 6.8a3.8 3.8 0 1 0 2.4 6 3.5 3.5 0 0 1-2.4-6m5.3-.6.65 1.65 1.65.65-1.65.65-.65 1.65-.65-1.65-1.65-.65 1.65-.65.65-1.65Z"
       />
     </svg>`;
   }
-  if (hay.includes("restart") || item.device_class === "restart") {
+  if (kind === "hibernate") {
     return html`<svg viewBox="0 0 24 24" aria-hidden="true">
       <path
-        d="M12 4c2.1 0 4.1.8 5.6 2.3 3.1 3.1 3.1 8.2 0 11.3-1.8 1.9-4.3 2.6-6.7 2.3l.5-2c1.7.2 3.5-.4 4.8-1.7 2.3-2.3 2.3-6.1 0-8.5C15.1 6.6 13.5 6 12 6v4.6l-5-5 5-5V4M6.3 17.6C3.7 15 3.3 11 5.1 7.9l1.5 1.5c-1.1 2.2-.7 5 1.2 6.8.5.5 1.1.9 1.8 1.2l-.6 2c-1-.4-1.9-1-2.7-1.8Z"
+        d="M16.56 5.44l-1.45 1.45A5.969 5.969 0 0 1 18 12a6 6 0 0 1-6 6 6 6 0 0 1-6-6c0-2.17 1.16-4.06 2.88-5.12L7.44 5.44A7.961 7.961 0 0 0 4 12a8 8 0 0 0 8 8 8 8 0 0 0 8-8c0-2.72-1.36-5.12-3.44-6.56M13 3h-2v10h2V3Z"
+      />
+    </svg>`;
+  }
+  if (kind === "restart") {
+    return html`<svg viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35Z"
       />
     </svg>`;
   }
@@ -1396,14 +1441,12 @@ function sortQuickActionButtons(
   items,
 ) {
   return [...items].sort((a, b) => {
-    const ha = `${a.name || ""} ${a.entity_id}`.toLowerCase();
-    const hb = `${b.name || ""} ${b.entity_id}`.toLowerCase();
-    const ia = QUICK_ACTION_ORDER.findIndex((k) => ha.includes(k));
-    const ib = QUICK_ACTION_ORDER.findIndex((k) => hb.includes(k));
-    const ra = ia >= 0 ? ia : QUICK_ACTION_ORDER.length;
-    const rb = ib >= 0 ? ib : QUICK_ACTION_ORDER.length;
+    const ra = QUICK_ACTION_RANK[quickActionKind(a)];
+    const rb = QUICK_ACTION_RANK[quickActionKind(b)];
     if (ra !== rb) return ra - rb;
-    return ha.localeCompare(hb);
+    return `${a.name || ""} ${a.entity_id}`
+      .toLowerCase()
+      .localeCompare(`${b.name || ""} ${b.entity_id}`.toLowerCase());
   });
 }
 function renderQuickActionGrid(
@@ -1414,11 +1457,15 @@ function renderQuickActionGrid(
   const ordered = sortQuickActionButtons(buttons);
   return html`<div class="quick-action-grid" role="group" aria-label="Device Quick Actions">
     ${ordered.map((item) => {
+      const kind = quickActionKind(item);
       const label = entityLabel(item.name || item.entity_id);
       const buttonUnavailable = String(item.state ?? "") === "unavailable";
-      const toastMsg = label.toLowerCase().includes("restart")
-        ? "Restarting Device…"
-        : `Triggered "${label}"`;
+      const toastMsg =
+        kind === "restart"
+          ? "Restarting Device…"
+          : kind === "hibernate"
+            ? "Hibernating Device…"
+            : `Triggered "${label}"`;
       return html`<button
         type="button"
         data-entity-id=${item.entity_id}
@@ -1426,7 +1473,7 @@ function renderQuickActionGrid(
         @click=${() => void store.espAction(item.entity_id, "press", undefined, toastMsg)}
         class="btn btn-secondary quick-action-btn"
       >
-        ${renderQuickActionIcon(item)}
+        ${renderQuickActionIcon(kind)}
         <span>${label}</span>
       </button>`;
     })}
@@ -5541,6 +5588,7 @@ function renderDeviceAudioView(store) {
   const isWakeWordChoice = (it) =>
     it.key === "wake_word" || it.key === "wake_word_n";
   const voicePrimary = voiceItems.filter((it) => {
+    if (it.domain === "assist_satellite") return false;
     const low = (it.name || "").toLowerCase();
     if (low.includes("cutoff") || low.includes("sensitivity")) return false;
     if (wwDisabled && isWakeWordChoice(it)) return false;
@@ -5556,7 +5604,7 @@ function renderDeviceAudioView(store) {
   const soundItems = store.getSectionItems("sound");
   const musicItems = store.getSectionItems("music");
   const primaryMusicItems = musicItems.filter(
-    (it) => !(it.name || "").toLowerCase().includes("sort"),
+    (it) => it.domain !== "media_player" && !(it.name || "").toLowerCase().includes("sort"),
   );
   const sortMusicItems = musicItems.filter((it) =>
     (it.name || "").toLowerCase().includes("sort"),
@@ -5860,15 +5908,40 @@ function renderDeviceDisplayView(store) {
   const data = store.state;
   const cfg = data?.config || {};
   const palettes = data?.system_config?.custom_palettes || [];
-  const displayItems = store.getSectionItems("display");
-  const autoBrtSwitch = displayItems.find((it) =>
+  const displayOrder = [
+    "clock face",
+    "time format",
+    "start screen",
+    "color profile",
+    "auto brightness mode",
+    "manual brightness",
+    "day brightness",
+    "night brightness",
+    "day start hour",
+    "night start hour",
+  ];
+  const displayItems = sortByKeywords(store.getSectionItems("display"), displayOrder);
+  const autoBrtItem = displayItems.find((it) =>
     (it.name || "").toLowerCase().includes("auto brightness"),
   );
-  const autoBrtOn = autoBrtSwitch ? autoBrtSwitch.state === "on" : false;
+  const autoBrtState = String(autoBrtItem?.state ?? "").trim();
+  const autoBrtKnown =
+    Boolean(autoBrtItem) && autoBrtState !== "" && autoBrtState !== "unavailable" && autoBrtState !== "unknown";
+  const autoBrtOff = autoBrtKnown && (autoBrtState === "Disabled" || autoBrtState === "off");
+  const autoBrtTimeSchedule = autoBrtKnown && autoBrtState === "Time Schedule";
   const visibleDisplayItems = displayItems.filter((it) => {
+    if (it.domain === "light") return false;
     const low = (it.name || "").toLowerCase();
-    if (!autoBrtOn && (low.includes("day brightness") || low.includes("night brightness"))) {
-      return false;
+    if (autoBrtKnown) {
+      if (autoBrtOff && (low.includes("day brightness") || low.includes("night brightness"))) {
+        return false;
+      }
+      if (!autoBrtOff && low.includes("manual brightness")) {
+        return false;
+      }
+      if (!autoBrtTimeSchedule && (low.includes("day start hour") || low.includes("night start hour"))) {
+        return false;
+      }
     }
     return true;
   });
@@ -6448,7 +6521,7 @@ function renderDeviceOverviewView(store) {
                   @click=${() => store.openDeviceInHa()}
                   class="btn btn-text"
                 >
-                  Open in Home Assistant
+                  Open in ESPHome
                 </button>`
               : nothing}
             <button

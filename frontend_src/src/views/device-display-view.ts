@@ -40,15 +40,40 @@ export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
   const cfg = data?.config || {};
   const palettes = data?.system_config?.custom_palettes || [];
 
-  const displayItems = store.getSectionItems("display");
-  const autoBrtSwitch = displayItems.find((it) =>
+  const displayOrder = [
+    "clock face",
+    "time format",
+    "start screen",
+    "color profile",
+    "auto brightness mode",
+    "manual brightness",
+    "day brightness",
+    "night brightness",
+    "day start hour",
+    "night start hour",
+  ];
+  const displayItems = sortByKeywords(store.getSectionItems("display"), displayOrder);
+  const autoBrtItem = displayItems.find((it) =>
     (it.name || "").toLowerCase().includes("auto brightness"),
   );
-  const autoBrtOn = autoBrtSwitch ? autoBrtSwitch.state === "on" : false;
+  const autoBrtState = String(autoBrtItem?.state ?? "").trim();
+  const autoBrtKnown =
+    Boolean(autoBrtItem) && autoBrtState !== "" && autoBrtState !== "unavailable" && autoBrtState !== "unknown";
+  const autoBrtOff = autoBrtKnown && (autoBrtState === "Disabled" || autoBrtState === "off");
+  const autoBrtTimeSchedule = autoBrtKnown && autoBrtState === "Time Schedule";
   const visibleDisplayItems = displayItems.filter((it) => {
+    if (it.domain === "light") return false;
     const low = (it.name || "").toLowerCase();
-    if (!autoBrtOn && (low.includes("day brightness") || low.includes("night brightness"))) {
-      return false;
+    if (autoBrtKnown) {
+      if (autoBrtOff && (low.includes("day brightness") || low.includes("night brightness"))) {
+        return false;
+      }
+      if (!autoBrtOff && low.includes("manual brightness")) {
+        return false;
+      }
+      if (!autoBrtTimeSchedule && (low.includes("day start hour") || low.includes("night start hour"))) {
+        return false;
+      }
     }
     return true;
   });

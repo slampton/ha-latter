@@ -28,6 +28,7 @@ export function renderDeviceAudioView(store: StudioStore): TemplateResult {
   const isWakeWordChoice = (it: EspHomeEntityItem): boolean =>
     it.key === "wake_word" || it.key === "wake_word_n";
   const voicePrimary = voiceItems.filter((it) => {
+    if (it.domain === "assist_satellite") return false;
     const low = (it.name || "").toLowerCase();
     if (low.includes("cutoff") || low.includes("sensitivity")) return false;
     if (wwDisabled && isWakeWordChoice(it)) return false;
@@ -44,7 +45,7 @@ export function renderDeviceAudioView(store: StudioStore): TemplateResult {
   const soundItems = store.getSectionItems("sound");
   const musicItems = store.getSectionItems("music");
   const primaryMusicItems = musicItems.filter(
-    (it) => !(it.name || "").toLowerCase().includes("sort"),
+    (it) => it.domain !== "media_player" && !(it.name || "").toLowerCase().includes("sort"),
   );
   const sortMusicItems = musicItems.filter((it) =>
     (it.name || "").toLowerCase().includes("sort"),

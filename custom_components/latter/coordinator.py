@@ -26,7 +26,11 @@ from homeassistant.helpers import (
 )
 from homeassistant.helpers.debounce import Debouncer
 from homeassistant.helpers.device_registry import DeviceInfo
-from homeassistant.helpers.event import async_call_later, async_track_time_interval
+from homeassistant.helpers.event import (
+    async_call_later,
+    async_track_state_change_event,
+    async_track_time_interval,
+)
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
@@ -411,6 +415,8 @@ class LatterCoordinator:
         self._unsub_area_debounce: Callable[[], None] | None = None
         self._unsub_wallpaper_timer: Callable[[], None] | None = None
         self._unsub_doorbell_ring_state: Callable[[], None] | None = None
+        self._unsub_link_report_state: Callable[[], None] | None = None
+        self._entered_hibernate: bool = False
         self._doorbell_ring_map: dict[str, str] = {}
         self._doorbell_ring_cooldown_until: dict[str, float] = {}
         self._ble_tracker: LatterNativeBleTracker | None = None
@@ -1065,6 +1071,9 @@ class LatterCoordinator:
             "last_media_duration": round(self.last_media_duration, 1),
             "last_media_position": round(self.last_media_position, 1),
             "last_device_health": self.last_device_health,
+            "hello_manifest": self._runtime.hello_manifest,
+            "last_boot_id": self._runtime.last_boot_id,
+            "entered_hibernate": self._entered_hibernate,
         }
 
     def _apply_stored_runtime(self, stored: dict[str, Any]) -> None:
@@ -1094,6 +1103,12 @@ class LatterCoordinator:
         self.last_device_health = (
             saved_health if isinstance(saved_health, dict) else None
         )
+        saved_manifest = stored.get("hello_manifest")
+        if isinstance(saved_manifest, dict) and "w" in saved_manifest and "h" in saved_manifest:
+            self._runtime.hello_manifest = dict(saved_manifest)
+        if saved_boot_id := str(stored.get("last_boot_id") or "").strip():
+            self._runtime.last_boot_id = saved_boot_id
+        self._entered_hibernate = bool(stored.get("entered_hibernate"))
 
     @callback
     def _schedule_persist_runtime_state(self) -> None:
@@ -1274,12 +1289,57 @@ class LatterCoordinator:
         self.async_notify_listeners()
 
     @callback
+    def _bind_link_report_listener(self) -> None:
+        if self._unsub_link_report_state is not None:
+            self._unsub_link_report_state()
+            self._unsub_link_report_state = None
+        link_ent = find_device_entity_by_suffix(
+            self.hass,
+            self.esphome_device_id,
+            "sensor",
+            ("_system_link_report",),
+        )
+        if not link_ent:
+            return
+        cur_st = self.hass.states.get(link_ent)
+        if cur_st is not None and cur_st.state == "hibernating":
+            self._entered_hibernate = True
+        elif cur_st is not None and cur_st.state not in (
+            STATE_UNAVAILABLE,
+            STATE_UNKNOWN,
+            "",
+            "hibernating",
+        ):
+            self._entered_hibernate = False
+
+        @callback
+        def _on_link_report_change(event: Event) -> None:
+            new_st: State | None = event.data.get("new_state")
+            if new_st is None:
+                return
+            if new_st.state == "hibernating":
+                if not self._entered_hibernate:
+                    self._entered_hibernate = True
+                    self._schedule_persist_runtime_state()
+            elif (
+                new_st.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN, "")
+                and self._entered_hibernate
+            ):
+                self._entered_hibernate = False
+                self._schedule_persist_runtime_state()
+
+        self._unsub_link_report_state = async_track_state_change_event(
+            self.hass, [link_ent], _on_link_report_change
+        )
+
+    @callback
     def _bind_all_listeners(self) -> None:
         if self.is_ble_tag:
             return
         bind_coordinator_speaker_listener(self)
         bind_coordinator_area_listeners(self)
         bind_coordinator_doorbell_listener(self)
+        self._bind_link_report_listener()
         self._bind_wallpaper_cycle_timer()
 
     def resolve_wallpaper_rotation_pool(self) -> list[str]:
@@ -1377,6 +1437,7 @@ class LatterCoordinator:
                     target_address=self.ble_target_address,
                     esphome_device_id=self.esphome_device_id,
                     manifest_beacon=self.hardware_manifest.get("beacon"),
+                    should_hold_during_ble_sleep=self.is_ble_sleep_expected,
                 )
                 self._ble_tracker.async_start()
         elif self._ble_tracker is not None:
@@ -1403,6 +1464,7 @@ class LatterCoordinator:
             "_unsub_area_debounce",
             "_unsub_wallpaper_timer",
             "_unsub_doorbell_ring_state",
+            "_unsub_link_report_state",
         ):
             if (unsub := getattr(self, attr, None)) is not None:
                 unsub()
@@ -1531,6 +1593,7 @@ class LatterCoordinator:
         self, contract: int, boot_id: str, manifest_raw: str
     ) -> None:
         _ = contract
+        self._entered_hibernate = False
         is_new_boot, parsed = self._runtime.apply_device_hello(boot_id, manifest_raw)
         if parsed is not None:
             if self._ble_tracker is not None:
@@ -1538,6 +1601,7 @@ class LatterCoordinator:
             self._apply_device_health(parsed, str(boot_id or "").strip())
         if is_new_boot:
             self._local_needs_cold_resume = True
+        self._schedule_persist_runtime_state()
         self._last_pushed_v3.clear()
         self.force_republish_all_domains()
         await self.async_push_beacon_uuid()
@@ -1573,13 +1637,10 @@ class LatterCoordinator:
             self, speaker_entity_id, transfer_queue=transfer_queue
         )
 
-    def is_device_away(self) -> bool:
-        if not self.native_ble_tracking_enabled or self._ble_tracker is None:
-            return False
-        if not self._ble_tracker.is_away:
-            return False
+    def is_device_online(self) -> bool:
+        """Return True when the bound ESPHome device has an active Wi-Fi/IP state in Home Assistant."""
         if self.is_ble_tag:
-            return True
+            return False
         wifi_ent_id = find_device_entity_by_suffix(
             self.hass,
             self.esphome_device_id,
@@ -1587,10 +1648,49 @@ class LatterCoordinator:
             ("_wi_fi_signal", "_wifi_signal", "_ip_address"),
         )
         wifi_st = self.hass.states.get(wifi_ent_id) if wifi_ent_id else None
-        return not (
+        return bool(
             wifi_st is not None
             and wifi_st.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN, "")
         )
+
+    def is_ble_sleep_expected(self) -> bool:
+        """Return True when BLE silence is intentional (screen-off light sleep/docked pause or battery hibernate)."""
+        if self.is_ble_tag:
+            return False
+        if self.is_device_online():
+            if self._entered_hibernate:
+                self._entered_hibernate = False
+                self._schedule_persist_runtime_state()
+            ble_ent_id = find_device_entity_by_suffix(
+                self.hass,
+                self.esphome_device_id,
+                "binary_sensor",
+                ("_ble_radio_active",),
+            )
+            ble_st = self.hass.states.get(ble_ent_id) if ble_ent_id else None
+            return bool(ble_st is not None and ble_st.state == "off")
+        return bool(
+            self._entered_hibernate
+            and int(self.hardware_manifest.get("battery", 0) or 0) == 1
+        )
+
+    def is_device_away(self) -> bool:
+        if not self.native_ble_tracking_enabled or self._ble_tracker is None:
+            return False
+        if not self._ble_tracker.is_away:
+            return False
+        if self.is_ble_tag:
+            return True
+        if not self.is_device_online():
+            return not self.is_ble_sleep_expected()
+        ble_ent_id = find_device_entity_by_suffix(
+            self.hass,
+            self.esphome_device_id,
+            "binary_sensor",
+            ("_ble_radio_active",),
+        )
+        ble_st = self.hass.states.get(ble_ent_id) if ble_ent_id else None
+        return bool(ble_st is not None and ble_st.state == "on")
 
     def get_current_area_and_distance(self) -> tuple[str, dict[str, Any]]:
         away = self.is_device_away()
@@ -1598,10 +1698,16 @@ class LatterCoordinator:
         area_reg = ar.async_get(self.hass)
         if self.native_ble_tracking_enabled:
             ble_area_id = (
-                self._ble_tracker.current_area_id
-                if (self._ble_tracker is not None and not away)
+                (
+                    self._ble_tracker.current_area_id
+                    if self._ble_tracker is not None
+                    else None
+                )
+                or self.active_area_id
+                or explicit_default
+                if not away
                 else None
-            ) or (explicit_default if not away else None)
+            )
             area_entry = area_reg.async_get_area(ble_area_id) if ble_area_id else None
             if away:
                 area_state = "Away"

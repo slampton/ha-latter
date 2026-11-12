@@ -215,12 +215,14 @@ class TestEntitySections(unittest.TestCase):
         cases = [
             ("button.desk_display_actions_find_my_device", "Actions: Find My Device"),
             ("button.desk_display_actions_trigger_voice_assistant", "Actions: Trigger Voice Assistant"),
-            ("button.desk_display_actions_screensaver_now", "Actions: Screensaver Now"),
+            ("button.desk_display_actions_activate_screensaver", "Actions: Activate Screensaver"),
+            ("button.desk_display_actions_hibernate_device", "Actions: Hibernate Device"),
             ("button.desk_display_actions_restart_device", "Actions: Restart Device"),
-            # Legacy or user-customized prefixes never scatter the four quick actions across views
+            # User-customized prefixes never scatter the quick actions across views
             ("button.desk_display_ble_find_my_device", "BLE: Find My Device"),
             ("button.desk_display_voice_trigger_voice_assistant", "Voice: Trigger Voice Assistant"),
-            ("button.desk_display_sleep_wake_screensaver_now", "Sleep & Wake: Screensaver Now"),
+            ("button.desk_display_sleep_wake_activate_screensaver", "Sleep & Wake: Activate Screensaver"),
+            ("button.desk_display_sleep_wake_hibernate_device", "Sleep & Wake: Hibernate Device"),
             ("button.desk_display_system_restart_device", "System: Restart Device"),
             ("button.desk_display_find_my_device", "Find My Device"),
             ("button.desk_display_restart", "Restart"),
@@ -228,7 +230,7 @@ class TestEntitySections(unittest.TestCase):
         for ent_id, friendly in cases:
             with self.subTest(entity_id=ent_id, friendly=friendly):
                 self.assertEqual(self.classify(ent_id, friendly, domain="button"), "actions")
-        # Diagnostic memory report button stays in Diagnostics (network), never Quick Actions
+        # Developer & diagnostic entities route cleanly to developer / network, never Quick Actions or Sleep
         self.assertEqual(
             entity_sections.classify_esphome_entity_section(
                 "button.desk_display_system_log_memory_report",
@@ -238,7 +240,41 @@ class TestEntitySections(unittest.TestCase):
                 "diagnostic",
                 device_object_prefixes=("desk_display",),
             )[0],
+            "developer",
+        )
+        self.assertEqual(
+            self.classify("select.desk_display_developer_weather_simulation", "Developer: Weather Simulation"),
+            "developer",
+        )
+        self.assertEqual(
+            self.classify("switch.desk_display_system_telemetry_profiler", "System: Telemetry Profiler", domain="switch"),
+            "developer",
+        )
+        self.assertEqual(
+            entity_sections.classify_esphome_entity_section(
+                "sensor.desk_display_system_internal_ram_low_water",
+                "System: Internal RAM Low Water",
+                "sensor",
+                "",
+                "diagnostic",
+                device_object_prefixes=("desk_display",),
+            )[0],
+            "developer",
+        )
+        self.assertEqual(
+            entity_sections.classify_esphome_entity_section(
+                "sensor.desk_display_timer_remaining",
+                "Timer Remaining",
+                "sensor",
+                "",
+                "diagnostic",
+                device_object_prefixes=("desk_display",),
+            )[0],
             "network",
+        )
+        self.assertEqual(
+            self.classify("select.desk_display_area_ble_presence_beacon_mode", "Area: BLE Presence Beacon Mode"),
+            "area",
         )
 
 
@@ -255,10 +291,11 @@ function html(strings, ...values) { return { _$litType$: 1, strings, values }; }
             stub_lit
             + """
 const shuffled = [
-  { entity_id: "button.pocket_actions_restart_device", domain: "button", name: "Restart Device", state: "unknown" },
-  { entity_id: "button.pocket_actions_screensaver_now", domain: "button", name: "Screensaver Now", state: "unavailable" },
-  { entity_id: "button.pocket_actions_trigger_voice_assistant", domain: "button", name: "Trigger Voice Assistant", state: "unknown" },
-  { entity_id: "button.pocket_actions_find_my_device", domain: "button", name: "Find My Device", state: "2026-11-12T18:00:00+00:00" },
+  { entity_id: "button.pocket_assistant_actions_restart_device", domain: "button", name: "Restart Device", state: "unknown" },
+  { entity_id: "button.pocket_assistant_actions_hibernate_device", domain: "button", name: "Hibernate Device", state: "unknown" },
+  { entity_id: "button.pocket_assistant_actions_activate_screensaver", domain: "button", name: "Activate Screensaver", state: "unavailable" },
+  { entity_id: "button.pocket_assistant_actions_trigger_voice_assistant", domain: "button", name: "Trigger Voice Assistant", state: "unknown" },
+  { entity_id: "button.pocket_assistant_actions_find_my_device", domain: "button", name: "Find My Device", state: "2026-11-12T18:00:00+00:00" },
 ];
 const sorted = sortQuickActionButtons(shuffled);
 const calls = [];
@@ -274,10 +311,13 @@ const btnTemplates = gridTpl.values[0];
 const gridStates = btnTemplates.map((tpl) => ({
   entityId: tpl.values[0],
   disabled: tpl.values[1],
+  iconSvg: tpl.values[3].strings.join(""),
   label: tpl.values[4],
 }));
 btnTemplates[0].values[2]();
+btnTemplates[2].values[2]();
 btnTemplates[3].values[2]();
+btnTemplates[4].values[2]();
 
 const rowUnknown = renderNativeControlRow(fakeStore, {
   entity_id: "button.pocket_system_log_memory_report",
@@ -319,35 +359,66 @@ return {
         self.assertEqual(
             got["sortedIds"],
             [
-                "button.pocket_actions_find_my_device",
-                "button.pocket_actions_trigger_voice_assistant",
-                "button.pocket_actions_screensaver_now",
-                "button.pocket_actions_restart_device",
+                "button.pocket_assistant_actions_find_my_device",
+                "button.pocket_assistant_actions_trigger_voice_assistant",
+                "button.pocket_assistant_actions_activate_screensaver",
+                "button.pocket_assistant_actions_hibernate_device",
+                "button.pocket_assistant_actions_restart_device",
             ],
         )
         self.assertEqual(
-            got["gridStates"],
+            [{k: v for k, v in st.items() if k != "iconSvg"} for st in got["gridStates"]],
             [
-                {"entityId": "button.pocket_actions_find_my_device", "disabled": False, "label": "Find My Device"},
                 {
-                    "entityId": "button.pocket_actions_trigger_voice_assistant",
+                    "entityId": "button.pocket_assistant_actions_find_my_device",
+                    "disabled": False,
+                    "label": "Find My Device",
+                },
+                {
+                    "entityId": "button.pocket_assistant_actions_trigger_voice_assistant",
                     "disabled": False,
                     "label": "Trigger Voice Assistant",
                 },
-                {"entityId": "button.pocket_actions_screensaver_now", "disabled": True, "label": "Screensaver Now"},
-                {"entityId": "button.pocket_actions_restart_device", "disabled": False, "label": "Restart Device"},
+                {
+                    "entityId": "button.pocket_assistant_actions_activate_screensaver",
+                    "disabled": True,
+                    "label": "Activate Screensaver",
+                },
+                {
+                    "entityId": "button.pocket_assistant_actions_hibernate_device",
+                    "disabled": False,
+                    "label": "Hibernate Device",
+                },
+                {
+                    "entityId": "button.pocket_assistant_actions_restart_device",
+                    "disabled": False,
+                    "label": "Restart Device",
+                },
             ],
         )
+        # Every Quick Action button must render its own distinct icon even when the device slug contains "assistant"
+        icon_svgs = [st["iconSvg"] for st in got["gridStates"]]
+        self.assertEqual(len(set(icon_svgs)), 5)
         self.assertEqual(
             got["calls"],
             [
                 {
-                    "eid": "button.pocket_actions_find_my_device",
+                    "eid": "button.pocket_assistant_actions_find_my_device",
                     "action": "press",
                     "toast": 'Triggered "Find My Device"',
                 },
                 {
-                    "eid": "button.pocket_actions_restart_device",
+                    "eid": "button.pocket_assistant_actions_activate_screensaver",
+                    "action": "press",
+                    "toast": 'Triggered "Activate Screensaver"',
+                },
+                {
+                    "eid": "button.pocket_assistant_actions_hibernate_device",
+                    "action": "press",
+                    "toast": "Hibernating Device…",
+                },
+                {
+                    "eid": "button.pocket_assistant_actions_restart_device",
                     "action": "press",
                     "toast": "Restarting Device…",
                 },
@@ -387,7 +458,7 @@ function flattenHtml(node) {
         runner = (
             stub_lit
             + """
-function makeStore({ weatherBgState = "Dynamic", cycleMins = 0, activeId = "", favIds = [] }) {
+function makeStore({ weatherBgState = "Dynamic", cycleMins = 0, activeId = "", favIds = [], autoBrtState = "Disabled" }) {
   const favSet = new Set(favIds);
   const wallpapers = [
     { id: "preset:forest_mountains", name: "Forest Mountains", kind: "preset", active: activeId === "preset:forest_mountains", favorite: favSet.has("preset:forest_mountains"), deletable: false, thumb_url: "/thumb1" },
@@ -398,6 +469,15 @@ function makeStore({ weatherBgState = "Dynamic", cycleMins = 0, activeId = "", f
     { entity_id: "select.pocket_home_weather_background", domain: "select", name: "Weather Background", state: weatherBgState, options: ["off", "Dynamic"] },
     { entity_id: "switch.pocket_home_moon", domain: "switch", name: "Home: Moon", state: "off" },
     { entity_id: "switch.pocket_home_sun", domain: "switch", name: "Home: Sun", state: "on" },
+  ];
+  const displaySection = [
+    { entity_id: "light.pocket_display_screen_backlight", domain: "light", name: "Display: Screen Backlight", state: "on" },
+    { entity_id: "select.pocket_display_auto_brightness_mode", domain: "select", name: "Display: Auto Brightness Mode", state: autoBrtState, options: ["Disabled", "Sun Synchronized", "Time Schedule"] },
+    { entity_id: "number.pocket_display_manual_brightness", domain: "number", name: "Display: Manual Brightness", state: "80", min: 5, max: 100, step: 1, unit: "%" },
+    { entity_id: "number.pocket_display_day_brightness", domain: "number", name: "Display: Day Brightness", state: "90", min: 5, max: 100, step: 1, unit: "%" },
+    { entity_id: "number.pocket_display_night_brightness", domain: "number", name: "Display: Night Brightness", state: "25", min: 5, max: 100, step: 1, unit: "%" },
+    { entity_id: "number.pocket_display_day_start_hour", domain: "number", name: "Display: Day Start Hour", state: "7", min: 0, max: 23, step: 1, unit: "h" },
+    { entity_id: "number.pocket_display_night_start_hour", domain: "number", name: "Display: Night Start Hour", state: "22", min: 0, max: 23, step: 1, unit: "h" },
   ];
   return {
     host: null,
@@ -415,16 +495,18 @@ function makeStore({ weatherBgState = "Dynamic", cycleMins = 0, activeId = "", f
       wallpapers,
     },
     getSectionItems(sec) {
-      return sec === "home" ? homeSection : [];
+      if (sec === "home") return homeSection;
+      if (sec === "display") return displaySection;
+      return [];
     },
     getEnabledActivitySources() { return ["calendar"]; },
     getEnabledDockTokens() { return ["area", "music"]; },
   };
 }
 
-const offMarkup = flattenHtml(renderDeviceDisplayView(makeStore({ weatherBgState: "Dynamic", cycleMins: 0, activeId: "" })));
-const staticMarkup = flattenHtml(renderDeviceDisplayView(makeStore({ weatherBgState: "Dynamic", cycleMins: 0, activeId: "preset:ocean_waves" })));
-const rotatingMarkup = flattenHtml(renderDeviceDisplayView(makeStore({ weatherBgState: "off", cycleMins: 5, activeId: "preset:ocean_waves", favIds: ["preset:forest_mountains", "preset:ocean_waves"] })));
+const offMarkup = flattenHtml(renderDeviceDisplayView(makeStore({ weatherBgState: "Dynamic", cycleMins: 0, activeId: "", autoBrtState: "Disabled" })));
+const staticMarkup = flattenHtml(renderDeviceDisplayView(makeStore({ weatherBgState: "Dynamic", cycleMins: 0, activeId: "preset:ocean_waves", autoBrtState: "Sun Synchronized" })));
+const rotatingMarkup = flattenHtml(renderDeviceDisplayView(makeStore({ weatherBgState: "off", cycleMins: 5, activeId: "preset:ocean_waves", favIds: ["preset:forest_mountains", "preset:ocean_waves"], autoBrtState: "Time Schedule" })));
 
 return { offMarkup, staticMarkup, rotatingMarkup };
 """
@@ -439,7 +521,7 @@ return { offMarkup, staticMarkup, rotatingMarkup };
             ],
             runner,
         )
-        # 1. Off state: Enable Rotation shown, Turn Off Wallpaper & Stop Rotation hidden; Sun & Moon rendered as pills
+        # 1. Off state + Auto Brightness Disabled: Manual Brightness shown, Day/Night Brightness & Start Hours & raw light hidden
         self.assertIn('id="btn-enable-wp-rotation"', got["offMarkup"])
         self.assertNotIn('id="btn-turn-off-wp"', got["offMarkup"])
         self.assertNotIn('id="btn-stop-wp-rotation"', got["offMarkup"])
@@ -447,19 +529,31 @@ return { offMarkup, staticMarkup, rotatingMarkup };
         self.assertIn("✓ Sun", got["offMarkup"])
         self.assertIn("+ Moon", got["offMarkup"])
         self.assertLess(got["offMarkup"].index("✓ Sun"), got["offMarkup"].index("+ Moon"))
+        self.assertNotIn("Screen Backlight", got["offMarkup"])
+        self.assertIn("Manual Brightness", got["offMarkup"])
+        self.assertNotIn("Day Brightness", got["offMarkup"])
+        self.assertNotIn("Day Start Hour", got["offMarkup"])
 
-        # 2. Static wallpaper active: Enable Rotation + Turn Off Wallpaper shown, Stop Rotation hidden
+        # 2. Static wallpaper + Sun Synchronized: Day/Night Brightness shown, Manual Brightness & Start Hours hidden
         self.assertIn('id="btn-enable-wp-rotation"', got["staticMarkup"])
         self.assertIn('id="btn-turn-off-wp"', got["staticMarkup"])
         self.assertNotIn('id="btn-stop-wp-rotation"', got["staticMarkup"])
         self.assertIn('<span class="chip chip-primary">Active</span>', got["staticMarkup"])
+        self.assertNotIn("Manual Brightness", got["staticMarkup"])
+        self.assertIn("Day Brightness", got["staticMarkup"])
+        self.assertIn("Night Brightness", got["staticMarkup"])
+        self.assertNotIn("Day Start Hour", got["staticMarkup"])
 
-        # 3. Rotating wallpaper + Weather Background off: Stop Rotation + Turn Off Wallpaper + Clear Stars shown; Sun & Moon hidden
+        # 3. Rotating wallpaper + Weather Background off + Time Schedule: Day/Night Brightness & Start Hours shown
         self.assertIn('id="btn-stop-wp-rotation"', got["rotatingMarkup"])
         self.assertIn('id="btn-turn-off-wp"', got["rotatingMarkup"])
         self.assertIn('id="btn-clear-stars-wp"', got["rotatingMarkup"])
         self.assertNotIn('id="btn-star-all-wp"', got["rotatingMarkup"])
         self.assertNotIn("id=weather-celestial-bodies", got["rotatingMarkup"])
+        self.assertNotIn("Manual Brightness", got["rotatingMarkup"])
+        self.assertIn("Day Brightness", got["rotatingMarkup"])
+        self.assertIn("Day Start Hour", got["rotatingMarkup"])
+        self.assertIn("Night Start Hour", got["rotatingMarkup"])
 
 
 @unittest.skipUnless(NODE, "node is not installed")

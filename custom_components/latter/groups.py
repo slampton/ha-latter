@@ -55,7 +55,9 @@ QUICK_ACTION_BUTTON_KEYWORDS: tuple[str, ...] = (
     "trigger_voice",
     "voice_assistant",
     "voice assistant",
+    "activate_screensaver",
     "screensaver",
+    "hibernate",
     "restart",
     "identify",
 )
@@ -65,6 +67,17 @@ DIAGNOSTIC_BUTTON_KEYWORDS: tuple[str, ...] = (
     "log_memory",
     "factory_reset",
     "safe_mode",
+)
+
+DEVELOPER_ENTITY_KEYWORDS: tuple[str, ...] = (
+    "telemetry_profiler",
+    "log_memory",
+    "memory_report",
+    "ram_low_water",
+    "ram_largest_block",
+    "psram_low_water",
+    "weather_sim",
+    "weather_simulation",
 )
 
 UNIVERSAL_SECTION_META: tuple[tuple[str, str, str], ...] = (
@@ -121,7 +134,12 @@ UNIVERSAL_SECTION_META: tuple[tuple[str, str, str], ...] = (
     (
         "network",
         "Network & diagnostics",
-        "Wi-Fi signal strength, IP/MAC address, uptime, memory, and firmware updates.",
+        "Wi-Fi signal strength, IP/MAC address, status sensors, and firmware updates.",
+    ),
+    (
+        "developer",
+        "Developer",
+        "Telemetry profiler, memory reports, heap low-water marks, and weather simulation.",
     ),
     (
         "other",
@@ -156,6 +174,9 @@ def classify_esphome_entity_section(
             break
     clean_low = name_clean.lower()
 
+    if any(k in clean_low or k in ent_suffix for k in DEVELOPER_ENTITY_KEYWORDS):
+        return "developer", None
+
     if domain == "button" or dev_cls in ("restart", "identify"):
         if dev_cls in ("restart", "identify") or any(
             k in clean_low or k in ent_suffix for k in QUICK_ACTION_BUTTON_KEYWORDS
@@ -174,7 +195,7 @@ def classify_esphome_entity_section(
         prefix_low = prefix_raw.lower()
         if prefix_low in ("home", "home screen", "clock"):
             return "home", None
-        if prefix_low in ("display", "ui", "screen", "theme", "appearance", "weather"):
+        if prefix_low in ("display", "ui", "screen", "theme", "appearance"):
             return "display", None
         if prefix_low in ("sleep & wake", "sleep", "wake"):
             return "sleep", None
@@ -192,14 +213,13 @@ def classify_esphome_entity_section(
             return "battery", None
         if prefix_low in ("action", "actions"):
             return "actions", None
+        if prefix_low == "developer":
+            return "developer", None
         if prefix_low in ("system", "network", "wifi", "diagnostics"):
             return "network", None
         if 2 <= len(prefix_raw) <= 24:
             sec_slug = "custom_" + re.sub(r"[^a-z0-9]+", "_", prefix_low).strip("_")
             return sec_slug, prefix_raw
-
-    if any(k in ent_suffix for k in ("timer_remaining", "timer_active", "alarm_ringing")):
-        return "sleep", None
 
     if dev_cls in ("battery", "voltage", "current", "power", "energy") or any(
         k in clean_low or k in ent_suffix
@@ -626,7 +646,7 @@ APPEARANCE_ESPHOME_CONTROL_KEYS: frozenset[str] = frozenset(
 EXCLUDED_ESPHOME_CONTROL_KEYS: frozenset[str] = frozenset(
     {
         "switch:telemetry_profiler",
-        "select:condition_simulation",
+        "select:weather_simulation",
     }
 )
 

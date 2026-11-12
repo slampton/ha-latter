@@ -21,7 +21,7 @@ from homeassistant.helpers.event import (
     async_track_time_interval,
 )
 
-from .const import DOMAIN, normalize_device_slug
+from .const import DEFAULT_BLE_BEACON_UUID, DOMAIN, normalize_device_slug
 from .identity import get_bound_esphome_device, read_device_hardware_manifest
 
 _LOGGER = logging.getLogger(__name__)
@@ -774,6 +774,7 @@ class LatterNativeBleTracker:
         target_address: str = "",
         esphome_device_id: str | None = None,
         manifest_beacon: dict[str, Any] | None = None,
+        should_hold_during_ble_sleep: Callable[[], bool] | None = None,
     ) -> None:
         """Initialize the native BLE proxy area tracker."""
         self.hass = hass
@@ -786,6 +787,7 @@ class LatterNativeBleTracker:
         self._manifest_beacon: dict[str, Any] = (
             dict(manifest_beacon) if isinstance(manifest_beacon, dict) else {}
         )
+        self._should_hold_during_ble_sleep = should_hold_during_ble_sleep
         self._on_area_detected = on_area_detected
         self._area_offsets: dict[str, float] = {
             str(k): float(v) for k, v in (area_offsets or {}).items()
@@ -800,6 +802,7 @@ class LatterNativeBleTracker:
         self._last_mac_discovery_mono: float = 0.0
         self._matched_ble_addresses: dict[str, float] = {}
         self.current_area_id: str | None = None
+        self._awaiting_fresh_wake_lock: bool = False
         self.closest_scanner: str = ""
         self.packets_seen: int = 0
         self.last_packet_monotonic: float = 0.0
@@ -814,15 +817,21 @@ class LatterNativeBleTracker:
     @callback
     def _record_matched_ble_address(self, addr: str) -> None:
         """Record a matched BLE address with a monotonic timestamp, bounding cache to 64 entries."""
-        if not addr:
+        norm = str(addr or "").strip().upper()
+        if not norm:
             return
-        self._matched_ble_addresses[addr] = time.monotonic()
+        is_new = norm not in self._matched_ble_addresses
+        self._matched_ble_addresses[norm] = time.monotonic()
+        evicted = False
         if len(self._matched_ble_addresses) > 64:
             oldest = min(
                 self._matched_ble_addresses,
                 key=lambda k: self._matched_ble_addresses[k],
             )
             self._matched_ble_addresses.pop(oldest, None)
+            evicted = True
+        if is_new or evicted:
+            get_ble_fabric(self.hass).sync_tracker_addresses()
 
     @callback
     def _seed_explicit_target_address(self) -> None:
@@ -867,6 +876,8 @@ class LatterNativeBleTracker:
         ]
         for a in stale_addrs:
             self._matched_ble_addresses.pop(a, None)
+        if stale_addrs:
+            get_ble_fabric(self.hass).sync_tracker_addresses()
         self._seed_explicit_target_address()
         ref_mono = (
             self.last_packet_monotonic
@@ -878,8 +889,14 @@ class LatterNativeBleTracker:
             and ref_mono > 0.0
             and (now_mono - ref_mono) >= AWAY_TIMEOUT_SECONDS
         ):
+            if (
+                self._should_hold_during_ble_sleep is not None
+                and self._should_hold_during_ble_sleep()
+            ):
+                return
             self.is_away = True
             self.current_area_id = None
+            self._awaiting_fresh_wake_lock = False
             self.winning_rssi = None
             self.winning_distance_m = None
             self.winning_distance_ft = None
@@ -892,8 +909,14 @@ class LatterNativeBleTracker:
         if isinstance(beacon, dict):
             self._manifest_beacon = dict(beacon)
             u_raw = str(beacon.get("uuid") or "").strip()
-            if len(_normalize_uuid_hex(u_raw)) == 32 and not self._target_address:
-                self._target_uuid_hex = _normalize_uuid_hex(u_raw)
+            norm_u = _normalize_uuid_hex(u_raw)
+            default_u = _normalize_uuid_hex(DEFAULT_BLE_BEACON_UUID)
+            if (
+                len(norm_u) == 32
+                and not self._target_address
+                and (not self._target_uuid_hex or norm_u != default_u)
+            ):
+                self._target_uuid_hex = norm_u
 
     def _resolve_beacon_major_minor(self) -> tuple[int | None, int | None]:
         """Return expected iBeacon (major, minor) IDs from the device's hardware manifest."""
@@ -938,21 +961,23 @@ class LatterNativeBleTracker:
 
     @callback
     def reset_for_device_wake(self) -> None:
-        """Clear stale RSSI history only if no packet was received in the last 6 seconds."""
+        """Clear stale RSSI history on wake while preserving sticky current_area_id until fresh BLE lock."""
         now = time.monotonic()
         if self.last_packet_monotonic > 0.0 and (now - self.last_packet_monotonic) < 6.0:
             return
+        fabric = get_ble_fabric(self.hass)
         self._area_rssi.clear()
         self._area_raw_rssi.clear()
         self._unmapped_rssi.clear()
         self._scanner_area_cache.clear()
-        get_ble_fabric(self.hass)._scanner_area_cache.clear()
+        fabric._scanner_area_cache.clear()
         self._last_adv_ts_by_scanner.clear()
-        self.current_area_id = None
+        self._awaiting_fresh_wake_lock = True
         self._last_switch_monotonic = 0.0
         self._target_mac_ints = _discover_target_device_macs(
             self.hass, self._esphome_device_id
         )
+        fabric.sync_tracker_addresses()
 
     @callback
     def async_start(self) -> None:
@@ -1141,9 +1166,12 @@ class LatterNativeBleTracker:
         """Ingest a (scanner_source, rssi) observation and evaluate area transitions."""
         now = time.monotonic()
         prev_adv_ts = self._last_adv_ts_by_scanner.get(source)
-        if from_poll and prev_adv_ts is not None and obs_time <= (prev_adv_ts + 1e-4):
-            self._evaluate_best_area(now, "")
-            return
+        if prev_adv_ts is not None:
+            if from_poll and obs_time <= (prev_adv_ts + 1e-4):
+                self._evaluate_best_area(now, "")
+                return
+            if not from_poll and abs(obs_time - prev_adv_ts) < 1e-6:
+                return
 
         self._last_adv_ts_by_scanner[source] = obs_time
         just_woke_from_standby = (
@@ -1158,6 +1186,8 @@ class LatterNativeBleTracker:
             self._target_mac_ints = _discover_target_device_macs(
                 self.hass, self._esphome_device_id
             )
+            if self._target_mac_ints:
+                get_ble_fabric(self.hass).sync_tracker_addresses()
 
         cached_area = self._scanner_area_cache.get(source)
         if cached_area is None:
@@ -1175,7 +1205,8 @@ class LatterNativeBleTracker:
         if just_woke_from_standby:
             self._area_rssi.clear()
             self._area_raw_rssi.clear()
-            self.current_area_id = None
+            self._last_switch_monotonic = 0.0
+            self._awaiting_fresh_wake_lock = True
 
         prev_raw = self._area_raw_rssi.get(area_id)
         raw_ema = smooth_rssi(
@@ -1196,14 +1227,15 @@ class LatterNativeBleTracker:
     def _evaluate_best_area(self, now: float, latest_source: str = "") -> None:
         """Evaluate fresh effective RSSI scores with 6.0 dB floor penalty & 3.0 dBm deadband."""
         area_reg = ar.async_get(self.hass)
+        prior_area_id = None if self._awaiting_fresh_wake_lock else self.current_area_id
         cur_floor_id: str | None = None
-        if self.current_area_id:
-            cur_area_entry = area_reg.async_get_area(self.current_area_id)
+        if prior_area_id:
+            cur_area_entry = area_reg.async_get_area(prior_area_id)
             if cur_area_entry:
                 cur_floor_id = getattr(cur_area_entry, "floor_id", None)
 
         def _is_cross_floor(area_id: str) -> bool:
-            if not cur_floor_id or area_id == self.current_area_id:
+            if not cur_floor_id or area_id == prior_area_id:
                 return False
             cand_entry = area_reg.async_get_area(area_id)
             cand_floor_id = getattr(cand_entry, "floor_id", None) if cand_entry else None
@@ -1211,12 +1243,13 @@ class LatterNativeBleTracker:
 
         scores = score_areas(self._area_rssi, now, _is_cross_floor)
         decision = decide_area(
-            scores, self.current_area_id, now, self._last_switch_monotonic
+            scores, prior_area_id, now, self._last_switch_monotonic
         )
         fabric = get_ble_fabric(self.hass)
         if decision is None:
             fabric.emit_survey_delta(self)
             return
+        self._awaiting_fresh_wake_lock = False
         self.is_away = False
         best_area = decision.best_area_id
 
@@ -1279,6 +1312,7 @@ class LatterBleFabric:
         self._survey_listeners: list[Callable[[dict[str, Any]], None]] = []
         self._scanner_area_cache: dict[str, str | None] = {}
         self._unsub_ble: Callable[[], None] | None = None
+        self._adv_unsubs: dict[str, Callable[[], None]] = {}
         self._unsub_away_timer: Callable[[], None] | None = None
         self._unsub_sensor_events: Callable[[], None] | None = None
 
@@ -1288,6 +1322,11 @@ class LatterBleFabric:
         self._scanner_area_cache.clear()
         for tracker in self._trackers:
             tracker._scanner_area_cache.clear()
+            if tracker._esphome_device_id:
+                tracker._target_mac_ints = _discover_target_device_macs(
+                    self.hass, tracker._esphome_device_id
+                )
+        self.sync_tracker_addresses()
         invalidate_area_fusion_index(self.hass)
         if self._occupancy_listeners:
             self.rebind_fusion_sensor_listener()
@@ -1463,12 +1502,50 @@ class LatterBleFabric:
         }
 
     @callback
+    def sync_tracker_addresses(self) -> None:
+        """Subscribe directly to every advertisement for known tracker MACs (bypassing static-payload dedupe)."""
+        if self._unsub_ble is None:
+            return
+        wanted: set[str] = set()
+        for tracker in self._trackers:
+            for mac in tracker.target_macs_formatted:
+                if mac:
+                    wanted.add(mac.upper())
+            for matched in tracker._matched_ble_addresses:
+                if matched:
+                    wanted.add(matched.upper())
+
+        for stale_addr in list(self._adv_unsubs):
+            if stale_addr not in wanted:
+                unsub = self._adv_unsubs.pop(stale_addr, None)
+                if unsub is not None:
+                    unsub()
+
+        missing = sorted(wanted - set(self._adv_unsubs))
+        if not missing:
+            return
+        try:
+            from homeassistant.components import bluetooth
+
+            reg_adv_cb = getattr(bluetooth, "async_register_advertisement_callback", None)
+            if callable(reg_adv_cb):
+                for addr in missing:
+                    self._adv_unsubs[addr] = reg_adv_cb(
+                        self.hass,
+                        self._async_on_raw_ble_advertisement,
+                        addr,
+                    )
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("Raw BLE advertisement callback sync skipped: %s", err)
+
+    @callback
     def register_tracker(self, tracker: LatterNativeBleTracker) -> None:
         """Register a BLE tracker and start the shared passive callback fabric if needed."""
         if tracker not in self._trackers:
             self._trackers.append(tracker)
         if len(self._trackers) == 1 and self._unsub_ble is None:
             self._async_start_fabric()
+        self.sync_tracker_addresses()
         self._async_seed_tracker_from_scanners_once(tracker)
         self.notify_occupancy_listeners()
 
@@ -1479,6 +1556,8 @@ class LatterBleFabric:
             self._trackers.remove(tracker)
         if not self._trackers:
             self._async_stop_fabric()
+        else:
+            self.sync_tracker_addresses()
         self.notify_occupancy_listeners()
 
     @callback
@@ -1537,8 +1616,11 @@ class LatterBleFabric:
 
     @callback
     def _async_stop_fabric(self) -> None:
-        """Stop the shared Bluetooth callback and away-timeout timer."""
+        """Stop the shared Bluetooth callback, per-address raw callbacks, and away-timeout timer."""
         self._scanner_area_cache.clear()
+        for unsub_adv in list(self._adv_unsubs.values()):
+            unsub_adv()
+        self._adv_unsubs.clear()
         if self._unsub_ble is not None:
             self._unsub_ble()
             self._unsub_ble = None
@@ -1602,6 +1684,11 @@ class LatterBleFabric:
             tracker._ingest_proxy_observation(source, int(rssi), now_mono, source)
 
     @callback
+    def _async_on_raw_ble_advertisement(self, service_info: object) -> None:
+        """Fan out per-address raw advertisements (including static payloads) to all registered trackers."""
+        self._async_on_shared_ble_advertisement(service_info, None)
+
+    @callback
     def _async_on_shared_ble_advertisement(
         self, service_info: object, change: object
     ) -> None:
@@ -1615,6 +1702,7 @@ class LatterBleFabric:
         if not self._trackers:
             return
         now_mono = time.monotonic()
+        discovered_any = False
         for tracker in list(self._trackers):
             tracker.check_away_timeout(now_mono)
             if (
@@ -1625,6 +1713,10 @@ class LatterBleFabric:
                 tracker._target_mac_ints = _discover_target_device_macs(
                     self.hass, tracker._esphome_device_id
                 )
+                if tracker._target_mac_ints:
+                    discovered_any = True
+        if discovered_any:
+            self.sync_tracker_addresses()
 
     @callback
     def _async_seed_tracker_from_scanners_once(

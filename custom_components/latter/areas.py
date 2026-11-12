@@ -1107,28 +1107,20 @@ async def async_execute_area_action(
 
 
 def resolve_active_area_entry(coordinator: Any) -> ar.AreaEntry | None:
-    """Resolve the current AreaEntry for `coordinator` from BLE lock, active_area_id, or explicit default."""
+    """Resolve the current AreaEntry for `coordinator` from BLE lock, sticky active_area_id, or explicit default."""
+    if coordinator.is_device_away():
+        return None
     area_reg = ar.async_get(coordinator.hass)
     explicit_default = str(coordinator.get_opt(CONF_DEFAULT_AREA) or "").strip()
-    has_ble_lock = bool(
-        coordinator._ble_tracker is not None
-        and coordinator._ble_tracker.current_area_id
-    )
-    if (
-        coordinator.native_ble_tracking_enabled
-        and not has_ble_lock
-        and not explicit_default
-    ):
-        return None
-    eff_id = (
+    ble_area_id = (
         coordinator._ble_tracker.current_area_id
         if (
             coordinator.native_ble_tracking_enabled
-            and has_ble_lock
-            and coordinator._ble_tracker
+            and coordinator._ble_tracker is not None
         )
-        else (coordinator.active_area_id or explicit_default)
+        else None
     )
+    eff_id = ble_area_id or coordinator.active_area_id or explicit_default
     return area_reg.async_get_area(eff_id) if eff_id else None
 
 
@@ -1219,23 +1211,24 @@ def build_area_context_payload(coordinator: Any) -> tuple[str, dict[str, Any]]:
         return coordinator._cached_area_payload[1]
     area_entry = resolve_active_area_entry(coordinator)
     area_name = area_entry.name if area_entry else "Unassigned"
+    eff_area_id = area_entry.id if area_entry else ("" if coordinator.is_device_away() else (coordinator.active_area_id or ""))
 
     entities = get_area_entities(
         coordinator.hass,
-        area_id=coordinator.active_area_id,
+        area_id=eff_area_id or None,
         domain_filter="all",
         local_speaker=coordinator.local_speaker,
     )
     avail_domains = get_area_available_domains(
         coordinator.hass,
-        area_id=coordinator.active_area_id,
+        area_id=eff_area_id or None,
         local_speaker=coordinator.local_speaker,
         entities=entities,
     )
     lights_on = sum(1 for e in entities if e["type"] == "light" and e["active"])
     covers_open = sum(1 for e in entities if e["type"] == "cover" and e["active"])
     climate_telemetry = get_area_climate_telemetry(
-        coordinator.hass, coordinator.active_area_id
+        coordinator.hass, eff_area_id or None
     )
     alarm_info = get_home_alarm_summary(
         coordinator.hass, coordinator.get_opt(CONF_ALARM_ENTITY)
@@ -1255,7 +1248,7 @@ def build_area_context_payload(coordinator: Any) -> tuple[str, dict[str, Any]]:
     eff_pin_policy = coordinator.security_pin_policy
     area_attrs: dict[str, Any] = {
         "site_id": coordinator.site_id,
-        "area_id": coordinator.active_area_id or "",
+        "area_id": eff_area_id,
         "area_name": area_name,
         "ble_closest_proxy": (
             coordinator._ble_tracker.closest_scanner if coordinator._ble_tracker else ""

@@ -245,9 +245,25 @@ def install_fake_ha_components(callback_dec: Callable[..., Any]) -> None:
 
         return _unsub
 
+    def _bt_register_advertisement_callback(
+        hass: Any,
+        callback_fn: Callable[..., None],
+        address: str,
+    ) -> Callable[[], None]:
+        rec = (callback_fn, str(address or "").strip().upper())
+        adv_list = hass.data.setdefault("_bt_adv_callbacks", [])
+        adv_list.append(rec)
+
+        def _unsub() -> None:
+            if rec in adv_list:
+                adv_list.remove(rec)
+
+        return _unsub
+
     bt_mod.BluetoothCallbackMatcher = BluetoothCallbackMatcher  # type: ignore[attr-defined]
     bt_mod.BluetoothScanningMode = BluetoothScanningMode  # type: ignore[attr-defined]
     bt_mod.async_register_callback = _bt_register_callback  # type: ignore[attr-defined]
+    bt_mod.async_register_advertisement_callback = _bt_register_advertisement_callback  # type: ignore[attr-defined]
     bt_mod.async_current_scanners = lambda hass: hass.data.get("_bt_scanners", [])  # type: ignore[attr-defined]
     bt_mod.async_scanner_by_source = lambda hass, source: next(  # type: ignore[attr-defined]
         (s for s in hass.data.get("_bt_scanners", []) if getattr(s, "source", None) == source),

@@ -182,7 +182,7 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
                   @click=${() => store.openDeviceInHa()}
                   class="btn btn-text"
                 >
-                  Open in Home Assistant
+                  Open in ESPHome
                 </button>`
               : nothing}
             <button

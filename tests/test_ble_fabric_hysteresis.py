@@ -297,3 +297,159 @@ async def test_sensor_fusion_modes_and_voice_follows_me_invariant(
     await asyncio.sleep(0)
     assert esp_stat.area_id == "living_room"
     assert await async_unload_entry(hass_stat, entry_s) is True
+
+
+@pytest.mark.asyncio
+async def test_static_ibeacon_roaming_wake_sticky_hot_swap_and_ble_sleep_hold(
+    hass: Any, setup_latter_hub: Any
+) -> None:
+    """Verify static-payload BLE roaming via raw address callbacks, custom UUID preservation, sticky wake hot-swap, and BLE sleep hold."""
+    from custom_components.latter.areas import build_area_context_payload
+    from custom_components.latter.const import (
+        CONF_SYSTEM_BLE_UUID,
+        DEFAULT_BLE_BEACON_UUID,
+        MIN_FIRMWARE_SDK_REV,
+    )
+    from custom_components.latter.presence import WAKE_GAP_SECONDS
+
+    _seed_ble_proxies(hass)
+    custom_uuid = "12345678-1234-5678-9ABC-DEF012345678"
+    entry, _sys_obj, coord = await setup_latter_hub(
+        hass,
+        stationary=0,
+        sync_device_area=True,
+        extra_device_data={
+            "area_follow_dwell_s": 0,
+            "default_area": "",
+        },
+    )
+    hass.data[DOMAIN][DATA_GLOBAL_CONFIG][CONF_SYSTEM_BLE_UUID] = custom_uuid
+    await coord.async_on_global_config_updated({CONF_SYSTEM_BLE_UUID})
+    coord._sync_ble_tracker()
+
+    tracker = coord._ble_tracker
+    assert tracker is not None
+    assert tracker.beacon_uuid == custom_uuid
+
+    # 1) device_hello with compile-time DEFAULT_BLE_BEACON_UUID MUST NOT clobber custom system_ble_uuid
+    await coord.async_handle_device_hello(
+        3,
+        "42",
+        '{"v":2,"contract":3,"board":"waveshare_s3_175c","w":466,"h":466,"shape":"circle",'
+        '"display":1,"touch":1,"audio":1,"mic":1,"spk":1,"imu":1,"battery":1,"stationary":0,"wearable":0,'
+        f'"beacon":{{"uuid":"{DEFAULT_BLE_BEACON_UUID}","major":1,"minor":1}},"sdk":{MIN_FIRMWARE_SDK_REV}}}',
+    )
+    assert tracker._target_uuid_hex == custom_uuid.replace("-", "").lower()
+
+    # 2) Raw per-address advertisement callbacks registered for ESP32 BLE MAC (Wi-Fi MAC + 2 = AA:BB:CC:DD:EE:03)
+    adv_cbs = dict(hass.data.get("_bt_adv_callbacks", []))
+    raw_cb = next(
+        (cb for cb, addr in hass.data.get("_bt_adv_callbacks", []) if addr == "AA:BB:CC:DD:EE:03"),
+        None,
+    )
+    _ = adv_cbs
+    assert raw_cb is not None
+    shared_cb, _matcher, _mode = hass.data["_bt_callbacks"][0]
+
+    # Simulate habluetooth: packet 1 in living_room fires BOTH shared_cb and raw_cb (deduped cleanly!)
+    t0 = time.monotonic()
+    pkt_lr = _make_ibeacon_adv(
+        custom_uuid,
+        rssi=-58,
+        source="AA:BB:CC:00:00:11",
+        obs_time=t0,
+        address="AA:BB:CC:DD:EE:03",
+    )
+    raw_cb(pkt_lr)
+    shared_cb(pkt_lr, "adv")
+    assert tracker.packets_seen == 1
+    assert tracker.current_area_id == "living_room"
+    assert coord.active_area_id == "living_room"
+
+    # Simulate static payload roam to kitchen: habluetooth suppresses shared_cb, ONLY raw_cb fires!
+    tracker._last_switch_monotonic = t0 - 10.0
+    for step in range(3):
+        raw_cb(
+            _make_ibeacon_adv(
+                custom_uuid,
+                rssi=-44,
+                source="AA:BB:CC:00:00:22",
+                obs_time=t0 + 1.0 + step * 0.3,
+                address="AA:BB:CC:DD:EE:03",
+            )
+        )
+    assert tracker.current_area_id == "kitchen"
+    assert coord.active_area_id == "kitchen"
+
+    # 3) Sticky Area across device wake + immediate single-packet hot-swap to cross-floor bedroom (-85 dBm)
+    tracker.last_packet_monotonic = t0 - 20.0
+    tracker.reset_for_device_wake()
+    assert tracker.current_area_id == "kitchen"  # Sticky before fresh BLE packet arrives!
+    area_state, area_attrs = build_area_context_payload(coord)
+    assert area_state == "Kitchen"
+    assert area_attrs["area_id"] == "kitchen"
+
+    t_wake = time.monotonic()
+    raw_cb(
+        _make_ibeacon_adv(
+            custom_uuid,
+            rssi=-85,
+            source="AA:BB:CC:00:00:33",
+            obs_time=t_wake + WAKE_GAP_SECONDS + 1.0,
+            address="AA:BB:CC:DD:EE:03",
+        )
+    )
+    assert tracker.current_area_id == "bedroom"
+    assert coord.active_area_id == "bedroom"
+
+    # 4) Persisted hello_manifest keeps is_roaming_device accurate across runtime snapshot restore
+    snap = coord._build_persisted_snapshot()
+    assert snap["hello_manifest"]["stationary"] == 0
+    coord._runtime.hello_manifest = None
+    coord._apply_stored_runtime(snap)
+    assert coord.is_roaming_device is True
+
+    # 5) Intentional BLE sleep (screen-off on Wi-Fi -> ble_radio_active == "off") holds last Area past 180s
+    ent_reg = er.async_get(hass)
+    for eid, suffix, init_state in (
+        ("sensor.pocket_assistant_wifi_signal", "WiFi Signal", "-58"),
+        ("binary_sensor.pocket_assistant_ble_radio_active", "BLE Radio Active", "off"),
+        ("sensor.pocket_assistant_system_link_report", "System: Link Report", "ok"),
+    ):
+        ent_reg.async_register(
+            er.RegistryEntry(
+                entity_id=eid,
+                platform="esphome",
+                device_id=coord.esphome_device_id,
+                original_name=suffix,
+            )
+        )
+        hass.states.async_set(eid, init_state)
+    coord._bind_link_report_listener()
+
+    t_hold = tracker.last_packet_monotonic + AWAY_TIMEOUT_SECONDS + 60.0
+    tracker.check_away_timeout(t_hold)
+    assert tracker.is_away is False
+    assert tracker.current_area_id == "bedroom"
+    cur_name, _ = coord.get_current_area_and_distance()
+    assert cur_name == "Bedroom"
+
+    # Battery hibernation latch also holds Area when Wi-Fi goes unavailable after "hibernating" report
+    hass.states.async_set("sensor.pocket_assistant_system_link_report", "hibernating")
+    await hass.async_block_till_done()
+    hass.states.async_set("sensor.pocket_assistant_wifi_signal", "unavailable")
+    tracker.check_away_timeout(t_hold + 60.0)
+    assert tracker.is_away is False
+    assert coord.get_current_area_and_distance()[0] == "Bedroom"
+
+    # Whereas actively advertising unseen (ble_radio_active == "on") marks Away cleanly
+    hass.states.async_set("sensor.pocket_assistant_wifi_signal", "-60")
+    hass.states.async_set("sensor.pocket_assistant_system_link_report", "ok")
+    hass.states.async_set("binary_sensor.pocket_assistant_ble_radio_active", "on")
+    await hass.async_block_till_done()
+    tracker.check_away_timeout(t_hold + 120.0)
+    assert tracker.is_away is True
+    assert coord.is_device_away() is True
+    assert coord.get_current_area_and_distance()[0] == "Away"
+
+    assert await async_unload_entry(hass, entry) is True
