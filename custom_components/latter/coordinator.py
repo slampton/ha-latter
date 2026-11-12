@@ -169,6 +169,7 @@ from .repairs import (
     evaluate_device_health,
     parse_device_health,
 )
+from .wallpapers import ordered_wallpaper_ids
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -1281,6 +1282,37 @@ class LatterCoordinator:
         bind_coordinator_doorbell_listener(self)
         self._bind_wallpaper_cycle_timer()
 
+    def resolve_wallpaper_rotation_pool(self) -> list[str]:
+        """Return valid starred wallpaper IDs, or the full gallery when none are starred."""
+        all_ids = ordered_wallpaper_ids(self.device_slug)
+        known = set(all_ids)
+        valid_favs = [f for f in self.wallpaper_favorites if f in known]
+        return valid_favs if valid_favs else all_ids
+
+    @callback
+    def ensure_active_wallpaper_for_rotation(self) -> bool:
+        """Seed an active wallpaper from the rotation pool when rotation is enabled."""
+        if self.is_ble_tag or self.wallpaper_cycle_minutes <= 0:
+            return False
+        all_ids = ordered_wallpaper_ids(self.device_slug)
+        known = set(all_ids)
+        valid_favs = [f for f in self.wallpaper_favorites if f in known]
+        pool = valid_favs if valid_favs else all_ids
+        if not pool:
+            return False
+        cur = self.wallpaper_source
+        if cur and cur in known and (not valid_favs or cur in valid_favs):
+            return False
+        picked = pool[0]
+        self.current_wallpaper = picked
+        self._configured_wallpaper_source = picked
+        merged = dict(self.device_data)
+        if merged.get(CONF_WALLPAPER_SOURCE) != picked:
+            merged[CONF_WALLPAPER_SOURCE] = picked
+            self.update_device_config(merged)
+        self._schedule_persist_runtime_state()
+        return True
+
     @callback
     def _bind_wallpaper_cycle_timer(self) -> None:
         if self._unsub_wallpaper_timer is not None:
@@ -1288,23 +1320,24 @@ class LatterCoordinator:
             self._unsub_wallpaper_timer = None
 
         mins = self.wallpaper_cycle_minutes
-        if (
-            mins > 0
-            and self.wallpaper_source
-            and len(self.wallpaper_favorites) >= 2
-        ):
+        if mins <= 0:
+            return
+
+        self.ensure_active_wallpaper_for_rotation()
+        pool = self.resolve_wallpaper_rotation_pool()
+        if self.wallpaper_source and len(pool) >= 2:
 
             @callback
             def _on_wallpaper_tick(_now: datetime) -> None:
-                favs = self.wallpaper_favorites
-                cur = self.wallpaper_source
-                if not cur or len(favs) < 2:
+                tick_pool = self.resolve_wallpaper_rotation_pool()
+                if len(tick_pool) < 2:
                     return
+                cur = self.wallpaper_source
                 try:
-                    idx = (favs.index(cur) + 1) % len(favs)
+                    idx = (tick_pool.index(cur) + 1) % len(tick_pool)
                 except ValueError:
                     idx = 0
-                self.current_wallpaper = favs[idx]
+                self.current_wallpaper = tick_pool[idx]
                 self._schedule_persist_runtime_state()
                 self.async_notify_listeners()
 

@@ -203,7 +203,50 @@ async def test_studio_commands_security_pin_secrecy_groups_and_backup_restore(
     )
     assert state_cleared["config"]["has_security_pin"] is False
 
-    # 2) BLE calibration, Area fusion, System settings, Wallpapers, Device Groups
+    # 2) Quick Action button press ('unknown' stateless HA button) + BLE/System/Wallpapers/Device Groups
+    from homeassistant.helpers import entity_registry as er
+
+    ent_reg = er.async_get(hass)
+    pressed_entities: list[str] = []
+
+    async def _handle_button_press(call: Any) -> None:
+        ent = call.data.get("entity_id")
+        if isinstance(ent, str):
+            pressed_entities.append(ent)
+
+    hass.services.async_register("button", "press", _handle_button_press)
+    for btn_id, btn_name in (
+        ("button.pocket_actions_find_my_device", "Actions: Find My Device"),
+        ("button.pocket_actions_trigger_voice_assistant", "Actions: Trigger Voice Assistant"),
+        ("button.pocket_actions_screensaver_now", "Actions: Screensaver Now"),
+        ("button.pocket_actions_restart_device", "Actions: Restart Device"),
+    ):
+        ent_reg.async_register(
+            er.RegistryEntry(
+                entity_id=btn_id,
+                platform="esphome",
+                device_id=coord.esphome_device_id,
+                original_name=btn_name,
+                has_entity_name=True,
+            )
+        )
+        hass.states.async_set(btn_id, "unknown", {"friendly_name": btn_name})
+
+    st_with_actions = await _dev_cmd(
+        "esphome_entity_action",
+        {"entity_id": "button.pocket_actions_find_my_device", "action": "press"},
+    )
+    assert pressed_entities == ["button.pocket_actions_find_my_device"]
+    actions_sec = next(
+        s for s in st_with_actions["esphome"]["sections"] if s["id"] == "actions"
+    )
+    assert {it["entity_id"] for it in actions_sec["items"]} >= {
+        "button.pocket_actions_find_my_device",
+        "button.pocket_actions_trigger_voice_assistant",
+        "button.pocket_actions_screensaver_now",
+        "button.pocket_actions_restart_device",
+    }
+
     await _sys_cmd("set_ble_area_offset", {"area_id": "living_room", "offset_db": 4.5})
     await _sys_cmd("set_area_fusion", {"area_id": "living_room", "mode": "weighted", "threshold_pct": 60})
     await _sys_cmd(
@@ -236,6 +279,67 @@ async def test_studio_commands_security_pin_secrecy_groups_and_backup_restore(
     await _dev_cmd("toggle_wallpaper_favorite", {"source_id": "preset:forest_mountains"})
     await _dev_cmd("select_wallpaper", {"source_id": "preset:forest_mountains"})
     await _dev_cmd("delete_wallpaper", {"source_id": dev_wp_id})
+
+    # Wallpaper rotation state machine: Off -> bulk star -> enable rotation seeds active photo -> Turn Off resets both
+    off_state = await _dev_cmd("select_wallpaper", {"source_id": ""})
+    assert coord.wallpaper_source == ""
+    assert coord.wallpaper_cycle_minutes == 0
+    assert coord._unsub_wallpaper_timer is None
+    assert not any(w["active"] for w in off_state["wallpapers"])
+
+    starred_state = await _dev_cmd(
+        "toggle_wallpaper_favorite",
+        {"source_ids": ["preset:ocean_waves", "preset:mars_crater"]},
+    )
+    assert coord.wallpaper_favorites == ["preset:ocean_waves", "preset:mars_crater"]
+    assert coord.wallpaper_source == ""
+    assert [w["id"] for w in starred_state["wallpapers"] if w["favorite"]] == [
+        "preset:ocean_waves",
+        "preset:mars_crater",
+    ]
+
+    rot_state = await _dev_cmd(
+        "save_device_config",
+        {"config": {"wallpaper_cycle_minutes": 5}},
+    )
+    assert coord.wallpaper_cycle_minutes == 5
+    assert coord.wallpaper_source == "preset:ocean_waves"
+    assert coord._unsub_wallpaper_timer is not None
+    assert [w["id"] for w in rot_state["wallpapers"] if w["active"]] == [
+        "preset:ocean_waves"
+    ]
+
+    # Selecting an unstarred photo explicitly pauses starred rotation so that photo stays displayed
+    unstarred_state = await _dev_cmd(
+        "select_wallpaper",
+        {"source_id": "preset:sahara_dunes"},
+    )
+    assert coord.wallpaper_source == "preset:sahara_dunes"
+    assert coord.wallpaper_cycle_minutes == 0
+    assert coord._unsub_wallpaper_timer is None
+    assert unstarred_state["config"]["wallpaper_cycle_minutes"] == 0
+
+    # Enabling rotation with zero starred photos rotates through all gallery items starting at first preset
+    await _dev_cmd("toggle_wallpaper_favorite", {"source_ids": []})
+    await _dev_cmd("select_wallpaper", {"source_id": ""})
+    all_rot_state = await _dev_cmd(
+        "save_device_config",
+        {"config": {"wallpaper_cycle_minutes": 15}},
+    )
+    assert coord.wallpaper_favorites == []
+    assert coord.wallpaper_cycle_minutes == 15
+    assert coord.wallpaper_source == "preset:forest_mountains"
+    assert coord._unsub_wallpaper_timer is not None
+    assert [w["id"] for w in all_rot_state["wallpapers"] if w["active"]] == [
+        "preset:forest_mountains"
+    ]
+
+    # Turn Off Wallpaper resets both active source and rotation interval
+    final_off = await _dev_cmd("select_wallpaper", {"source_id": ""})
+    assert coord.wallpaper_source == ""
+    assert coord.wallpaper_cycle_minutes == 0
+    assert coord._unsub_wallpaper_timer is None
+    assert final_off["config"]["wallpaper_cycle_minutes"] == 0
 
     # Device Groups lifecycle: create -> seed -> set_group_device_setting -> sync -> delete
     await _sys_cmd("create_device_group", {"name": "Guest Suites", "description": "Guest displays"})

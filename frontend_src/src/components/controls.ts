@@ -315,12 +315,16 @@ export function renderNativeControlRow(store: StudioStore, item: EspHomeEntityIt
   }
 
   if (dom === "button") {
+    const buttonUnavailable = st === "unavailable";
+    const toastMsg = label.toLowerCase().includes("restart")
+      ? "Restarting Device…"
+      : `Triggered "${label}"`;
     return renderSettingsRow({
       label,
       control: html`<button
         type="button"
-        ?disabled=${unavailable}
-        @click=${() => void store.espAction(item.entity_id, "press")}
+        ?disabled=${buttonUnavailable}
+        @click=${() => void store.espAction(item.entity_id, "press", undefined, toastMsg)}
         class="btn btn-secondary btn-compact"
       >
         Run
@@ -354,5 +358,89 @@ export function renderNativeControlRow(store: StudioStore, item: EspHomeEntityIt
   return html`<div class="kv-row">
     <span>${label}</span>
     <strong>${displayVal}</strong>
+  </div>`;
+}
+
+const QUICK_ACTION_ORDER: readonly string[] = [
+  "find my",
+  "trigger voice",
+  "screensaver",
+  "restart",
+];
+
+function renderQuickActionIcon(item: EspHomeEntityItem): TemplateResult {
+  const hay = `${item.name || ""} ${item.entity_id}`.toLowerCase();
+  if (hay.includes("find my") || hay.includes("find_my") || item.device_class === "identify") {
+    return html`<svg viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2m0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8m0-14a6 6 0 1 0 6 6 6 6 0 0 0-6-6m0 10a4 4 0 1 1 4-4 4 4 0 0 1-4 4m0-6a2 2 0 1 0 2 2 2 2 0 0 0-2-2Z"
+      />
+    </svg>`;
+  }
+  if (hay.includes("voice") || hay.includes("trigger_va") || hay.includes("assist")) {
+    return html`<svg viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M12 2a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3m7 9c0 3.53-2.61 6.44-6 6.93V21h-2v-3.07c-3.39-.49-6-3.4-6-6.93h2a5 5 0 0 0 10 0h2Z"
+      />
+    </svg>`;
+  }
+  if (hay.includes("screensaver") || hay.includes("sleep")) {
+    return html`<svg viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M17.75 4.09L15.22 6.03l.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3 3.19.09m3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95 2.06.05m-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31Z"
+      />
+    </svg>`;
+  }
+  if (hay.includes("restart") || item.device_class === "restart") {
+    return html`<svg viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M12 4c2.1 0 4.1.8 5.6 2.3 3.1 3.1 3.1 8.2 0 11.3-1.8 1.9-4.3 2.6-6.7 2.3l.5-2c1.7.2 3.5-.4 4.8-1.7 2.3-2.3 2.3-6.1 0-8.5C15.1 6.6 13.5 6 12 6v4.6l-5-5 5-5V4M6.3 17.6C3.7 15 3.3 11 5.1 7.9l1.5 1.5c-1.1 2.2-.7 5 1.2 6.8.5.5 1.1.9 1.8 1.2l-.6 2c-1-.4-1.9-1-2.7-1.8Z"
+      />
+    </svg>`;
+  }
+  return html`<svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M7 2h10l-3.5 7H17l-7 13v-8H6l1-12Z" />
+  </svg>`;
+}
+
+export function sortQuickActionButtons(
+  items: readonly EspHomeEntityItem[],
+): EspHomeEntityItem[] {
+  return [...items].sort((a, b) => {
+    const ha = `${a.name || ""} ${a.entity_id}`.toLowerCase();
+    const hb = `${b.name || ""} ${b.entity_id}`.toLowerCase();
+    const ia = QUICK_ACTION_ORDER.findIndex((k) => ha.includes(k));
+    const ib = QUICK_ACTION_ORDER.findIndex((k) => hb.includes(k));
+    const ra = ia >= 0 ? ia : QUICK_ACTION_ORDER.length;
+    const rb = ib >= 0 ? ib : QUICK_ACTION_ORDER.length;
+    if (ra !== rb) return ra - rb;
+    return ha.localeCompare(hb);
+  });
+}
+
+export function renderQuickActionGrid(
+  store: StudioStore,
+  buttons: readonly EspHomeEntityItem[],
+): TemplateResult | typeof nothing {
+  if (!buttons.length) return nothing;
+  const ordered = sortQuickActionButtons(buttons);
+  return html`<div class="quick-action-grid" role="group" aria-label="Device Quick Actions">
+    ${ordered.map((item) => {
+      const label = entityLabel(item.name || item.entity_id);
+      const buttonUnavailable = String(item.state ?? "") === "unavailable";
+      const toastMsg = label.toLowerCase().includes("restart")
+        ? "Restarting Device…"
+        : `Triggered "${label}"`;
+      return html`<button
+        type="button"
+        data-entity-id=${item.entity_id}
+        ?disabled=${buttonUnavailable}
+        @click=${() => void store.espAction(item.entity_id, "press", undefined, toastMsg)}
+        class="btn btn-secondary quick-action-btn"
+      >
+        ${renderQuickActionIcon(item)}
+        <span>${label}</span>
+      </button>`;
+    })}
   </div>`;
 }

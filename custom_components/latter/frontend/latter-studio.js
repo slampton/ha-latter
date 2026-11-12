@@ -1310,12 +1310,16 @@ function renderNativeControlRow(store, item) {
     });
   }
   if (dom === "button") {
+    const buttonUnavailable = st === "unavailable";
+    const toastMsg = label.toLowerCase().includes("restart")
+      ? "Restarting Device…"
+      : `Triggered "${label}"`;
     return renderSettingsRow({
       label,
       control: html`<button
         type="button"
-        ?disabled=${unavailable}
-        @click=${() => void store.espAction(item.entity_id, "press")}
+        ?disabled=${buttonUnavailable}
+        @click=${() => void store.espAction(item.entity_id, "press", undefined, toastMsg)}
         class="btn btn-secondary btn-compact"
       >
         Run
@@ -1346,6 +1350,86 @@ function renderNativeControlRow(store, item) {
   return html`<div class="kv-row">
     <span>${label}</span>
     <strong>${displayVal}</strong>
+  </div>`;
+}
+const QUICK_ACTION_ORDER = [
+  "find my",
+  "trigger voice",
+  "screensaver",
+  "restart",
+];
+function renderQuickActionIcon(item) {
+  const hay = `${item.name || ""} ${item.entity_id}`.toLowerCase();
+  if (hay.includes("find my") || hay.includes("find_my") || item.device_class === "identify") {
+    return html`<svg viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2m0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8m0-14a6 6 0 1 0 6 6 6 6 0 0 0-6-6m0 10a4 4 0 1 1 4-4 4 4 0 0 1-4 4m0-6a2 2 0 1 0 2 2 2 2 0 0 0-2-2Z"
+      />
+    </svg>`;
+  }
+  if (hay.includes("voice") || hay.includes("trigger_va") || hay.includes("assist")) {
+    return html`<svg viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M12 2a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3m7 9c0 3.53-2.61 6.44-6 6.93V21h-2v-3.07c-3.39-.49-6-3.4-6-6.93h2a5 5 0 0 0 10 0h2Z"
+      />
+    </svg>`;
+  }
+  if (hay.includes("screensaver") || hay.includes("sleep")) {
+    return html`<svg viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M17.75 4.09L15.22 6.03l.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3 3.19.09m3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95 2.06.05m-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31Z"
+      />
+    </svg>`;
+  }
+  if (hay.includes("restart") || item.device_class === "restart") {
+    return html`<svg viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M12 4c2.1 0 4.1.8 5.6 2.3 3.1 3.1 3.1 8.2 0 11.3-1.8 1.9-4.3 2.6-6.7 2.3l.5-2c1.7.2 3.5-.4 4.8-1.7 2.3-2.3 2.3-6.1 0-8.5C15.1 6.6 13.5 6 12 6v4.6l-5-5 5-5V4M6.3 17.6C3.7 15 3.3 11 5.1 7.9l1.5 1.5c-1.1 2.2-.7 5 1.2 6.8.5.5 1.1.9 1.8 1.2l-.6 2c-1-.4-1.9-1-2.7-1.8Z"
+      />
+    </svg>`;
+  }
+  return html`<svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M7 2h10l-3.5 7H17l-7 13v-8H6l1-12Z" />
+  </svg>`;
+}
+function sortQuickActionButtons(
+  items,
+) {
+  return [...items].sort((a, b) => {
+    const ha = `${a.name || ""} ${a.entity_id}`.toLowerCase();
+    const hb = `${b.name || ""} ${b.entity_id}`.toLowerCase();
+    const ia = QUICK_ACTION_ORDER.findIndex((k) => ha.includes(k));
+    const ib = QUICK_ACTION_ORDER.findIndex((k) => hb.includes(k));
+    const ra = ia >= 0 ? ia : QUICK_ACTION_ORDER.length;
+    const rb = ib >= 0 ? ib : QUICK_ACTION_ORDER.length;
+    if (ra !== rb) return ra - rb;
+    return ha.localeCompare(hb);
+  });
+}
+function renderQuickActionGrid(
+  store,
+  buttons,
+) {
+  if (!buttons.length) return nothing;
+  const ordered = sortQuickActionButtons(buttons);
+  return html`<div class="quick-action-grid" role="group" aria-label="Device Quick Actions">
+    ${ordered.map((item) => {
+      const label = entityLabel(item.name || item.entity_id);
+      const buttonUnavailable = String(item.state ?? "") === "unavailable";
+      const toastMsg = label.toLowerCase().includes("restart")
+        ? "Restarting Device…"
+        : `Triggered "${label}"`;
+      return html`<button
+        type="button"
+        data-entity-id=${item.entity_id}
+        ?disabled=${buttonUnavailable}
+        @click=${() => void store.espAction(item.entity_id, "press", undefined, toastMsg)}
+        class="btn btn-secondary quick-action-btn"
+      >
+        ${renderQuickActionIcon(item)}
+        <span>${label}</span>
+      </button>`;
+    })}
   </div>`;
 }
 
@@ -2479,7 +2563,7 @@ async function commitEntityChange(
   body,
   errorPrefix,
 ) {
-  await store.executeEntityAction(entityId, optimisticState, body, errorPrefix);
+  return store.executeEntityAction(entityId, optimisticState, body, errorPrefix);
 }
 function stageDeviceSettingOp(
   store,
@@ -2709,7 +2793,7 @@ async function executeEntityActionOp(
   errorPrefix,
 ) {
   const targetSubentryId = store.activeSubentryId;
-  if (!targetSubentryId || !entityId) return;
+  if (!targetSubentryId || !entityId) return false;
   const prev = optimisticState !== undefined ? applyOptimisticEntity(store, entityId, optimisticState) : "";
   try {
     const res = await store.ws.runDeviceCommand(targetSubentryId, "esphome_entity_action", {
@@ -2719,9 +2803,11 @@ async function executeEntityActionOp(
     if (res && store.activeSubentryId === targetSubentryId) {
       store.ingestPayload(res, false);
     }
+    return true;
   } catch (err) {
     if (optimisticState !== undefined) rollbackOptimisticEntity(store, entityId, prev);
     store.showToast(formatWsError(err, errorPrefix), true);
+    return false;
   }
 }
 function getEnabledDockTokensOp(store) {
@@ -2859,9 +2945,21 @@ async function uploadWallpaperOp(store, scope) {
     store.host.requestUpdate();
   }
 }
+function clearPendingWallpaperCycle(store, targetSubentryId) {
+  const bucket = store.pendingDeviceBuckets.get(targetSubentryId);
+  if (!bucket || !("wallpaper_cycle_minutes" in bucket.patch)) return;
+  delete bucket.patch.wallpaper_cycle_minutes;
+  delete bucket.previousValues.wallpaper_cycle_minutes;
+  delete bucket.previousValues["__dom:cfg-wallpaper_cycle_minutes"];
+  if (Object.keys(bucket.patch).length === 0) {
+    if (bucket.timer) clearTimeout(bucket.timer);
+    store.pendingDeviceBuckets.delete(targetSubentryId);
+  }
+}
 async function selectWallpaperSourceOp(store, sourceId) {
   const targetSubentryId = store.activeSubentryId;
   if (!targetSubentryId) return;
+  clearPendingWallpaperCycle(store, targetSubentryId);
   try {
     const res = await store.ws.runDeviceCommand(targetSubentryId, "select_wallpaper", {
       source_id: sourceId,
@@ -2872,6 +2970,53 @@ async function selectWallpaperSourceOp(store, sourceId) {
     store.showToast(sourceId ? "Wallpaper applied" : "Wallpaper turned off");
   } catch (err) {
     store.showToast(formatWsError(err, "Could not select wallpaper"), true);
+  }
+}
+async function setWallpaperRotationOp(store, minutes) {
+  const targetSubentryId = store.activeSubentryId;
+  if (!targetSubentryId) return;
+  const cleanMins = Math.max(0, Math.round(Number(minutes) || 0));
+  clearPendingWallpaperCycle(store, targetSubentryId);
+  const prevMins =
+    store.state && store.state.subentry_id === targetSubentryId
+      ? Number(store.state.config?.wallpaper_cycle_minutes || 0)
+      : 0;
+  if (store.state && store.state.subentry_id === targetSubentryId) {
+    store.state = {
+      ...store.state,
+      config: {
+        ...store.state.config,
+        wallpaper_cycle_minutes: cleanMins,
+      },
+    };
+    store.host.requestUpdate();
+  }
+  try {
+    const res = await store.ws.runDeviceCommand(targetSubentryId, "save_device_config", {
+      config: { wallpaper_cycle_minutes: cleanMins },
+    });
+    if (res && store.activeSubentryId === targetSubentryId) {
+      store.ingestPayload(res, false);
+    }
+    store.showToast(cleanMins > 0 ? "Wallpaper rotation enabled" : "Wallpaper rotation stopped");
+  } catch (err) {
+    if (store.state && store.state.subentry_id === targetSubentryId) {
+      store.state = {
+        ...store.state,
+        config: {
+          ...store.state.config,
+          wallpaper_cycle_minutes: prevMins,
+        },
+      };
+      store.pendingDomRevert = {
+        controlIds: {
+          ...(store.pendingDomRevert?.controlIds || {}),
+          "cfg-wallpaper_cycle_minutes": String(prevMins),
+        },
+      };
+      store.host.requestUpdate();
+    }
+    store.showToast(formatWsError(err, "Could not update wallpaper rotation"), true);
   }
 }
 async function toggleWallpaperFavOp(store, sourceId) {
@@ -2886,6 +3031,26 @@ async function toggleWallpaperFavOp(store, sourceId) {
     }
   } catch (err) {
     store.showToast(formatWsError(err, "Could not update favorite"), true);
+  }
+}
+async function setAllWallpaperFavoritesOp(
+  store,
+  sourceIds,
+) {
+  const targetSubentryId = store.activeSubentryId;
+  if (!targetSubentryId) return;
+  try {
+    const res = await store.ws.runDeviceCommand(targetSubentryId, "toggle_wallpaper_favorite", {
+      source_ids: [...sourceIds],
+    });
+    if (res && store.activeSubentryId === targetSubentryId) {
+      store.ingestPayload(res, false);
+    }
+    store.showToast(
+      sourceIds.length > 0 ? "Starred all wallpapers" : "Cleared starred wallpapers",
+    );
+  } catch (err) {
+    store.showToast(formatWsError(err, "Could not update favorites"), true);
   }
 }
 async function deleteWallpaperOp(
@@ -3977,10 +4142,19 @@ class StudioStore {
     body,
     errorPrefix,
   ) {
-    await executeEntityActionOp(this, entityId, optimisticState, body, errorPrefix);
+    return executeEntityActionOp(this, entityId, optimisticState, body, errorPrefix);
   }
-  async espAction(entityId, action, optimisticState) {
-    await commitEntityChange(this, entityId, optimisticState, { action }, "Device action failed");
+  async espAction(
+    entityId,
+    action,
+    optimisticState,
+    toastMessage,
+  ) {
+    const ok = await commitEntityChange(this, entityId, optimisticState, { action }, "Device action failed");
+    if (ok && toastMessage) {
+      this.showToast(toastMessage);
+    }
+    return ok;
   }
   async espSelect(entityId, option) {
     await commitEntityChange(this, entityId, option, { option }, "Could not update option");
@@ -3992,8 +4166,9 @@ class StudioStore {
   async triggerHeaderFirmwareUpdate() {
     const updEntity = this.state?.live?.fw_update_entity || "";
     if (!updEntity) return;
-    await this.espAction(updEntity, "install");
-    this.showToast("Firmware update started");
+    if (await this.espAction(updEntity, "install")) {
+      this.showToast("Firmware update started");
+    }
   }
   getEnabledDockTokens() {
     return getEnabledDockTokensOp(this);
@@ -4032,8 +4207,14 @@ class StudioStore {
   async selectWallpaperSource(sourceId) {
     await selectWallpaperSourceOp(this, sourceId);
   }
+  async setWallpaperRotation(minutes) {
+    await setWallpaperRotationOp(this, minutes);
+  }
   async toggleWallpaperFav(sourceId) {
     await toggleWallpaperFavOp(this, sourceId);
+  }
+  async setAllWallpaperFavorites(sourceIds) {
+    await setAllWallpaperFavoritesOp(this, sourceIds);
   }
   async deleteWallpaper(scope, sourceId) {
     await deleteWallpaperOp(this, scope, sourceId);
@@ -4869,6 +5050,33 @@ const STUDIO_STYLES = css`
   .btn-icon:hover { background: var(--studio-hover); }
   .btn-icon.danger { color: var(--studio-error); }
   .btn-icon svg { width: 20px; height: 20px; fill: currentColor; }
+  .quick-action-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--studio-space-2);
+    padding-bottom: var(--studio-space-3);
+    border-bottom: 1px solid var(--studio-divider);
+  }
+  .quick-action-grid:last-child {
+    padding-bottom: 0;
+    border-bottom: none;
+  }
+  .quick-action-btn {
+    justify-content: flex-start;
+    gap: var(--studio-space-2);
+    min-height: var(--studio-control-height);
+    padding: var(--studio-space-2) var(--studio-space-3);
+    border-radius: var(--studio-radius-control);
+    white-space: normal;
+    text-align: left;
+    line-height: var(--studio-line-height-condensed);
+  }
+  .quick-action-btn svg {
+    width: 18px;
+    height: 18px;
+    fill: currentColor;
+    flex-shrink: 0;
+  }
 
   /* ---------- Data display ---------- */
   .kv-list { display: flex; flex-direction: column; gap: 0; }
@@ -5012,6 +5220,7 @@ const STUDIO_STYLES = css`
     font: inherit;
     cursor: pointer;
   }
+  .pill-toggle:disabled { opacity: 0.5; cursor: not-allowed; }
   .swatch {
     display: inline-block;
     width: 20px;
@@ -5067,6 +5276,18 @@ const STUDIO_STYLES = css`
   }
 
   /* ---------- Wallpapers ---------- */
+  .wp-upload-trigger {
+    display: inline-flex;
+    align-items: center;
+  }
+  .wp-upload-status {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--studio-space-2);
+    font-size:var(--studio-font-secondary);
+    color: var(--studio-text-secondary);
+  }
   .wp-gallery {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
@@ -5085,6 +5306,20 @@ const STUDIO_STYLES = css`
   }
   .wp-gallery > .empty-state { grid-column: 1 / -1; }
   .wp-card.active { border-color: var(--studio-primary); background: var(--studio-primary-tint); }
+  .wp-thumb-btn {
+    padding: 0;
+    border: none;
+    background: transparent;
+    border-radius: var(--studio-radius-control);
+    cursor: pointer;
+    line-height: 0;
+  }
+  .wp-thumb-btn.circle { border-radius: 50%; }
+  .wp-thumb-btn:hover .wp-thumb { border-color: var(--studio-primary); }
+  .wp-thumb-btn:focus-visible {
+    outline: 2px solid var(--studio-primary);
+    outline-offset: 2px;
+  }
   .wp-thumb {
     width: 104px;
     height: 104px;
@@ -5094,12 +5329,30 @@ const STUDIO_STYLES = css`
   }
   .wp-thumb.circle { border-radius: 50%; }
   .wp-thumb.square { border-radius: var(--studio-radius-control); }
-  .wp-title { font-size:var(--studio-font-secondary); font-weight: var(--studio-weight-medium); }
+  .wp-title {
+    font-size:var(--studio-font-secondary);
+    font-weight: var(--studio-weight-medium);
+    overflow-wrap: anywhere;
+  }
   .wp-actions {
     display: flex;
+    align-items: center;
     justify-content: center;
+    flex-wrap: wrap;
     gap: var(--studio-space-1);
     margin-top: auto;
+    width: 100%;
+  }
+  .btn-icon.wp-star-btn {
+    width: var(--studio-control-height-compact);
+    height: var(--studio-control-height-compact);
+  }
+  .btn-icon.wp-star-btn:hover {
+    color: var(--studio-warning);
+    background: var(--studio-warning-tint);
+  }
+  .btn-icon.wp-star-btn.starred {
+    color: var(--studio-warning);
   }
   .cam-preview {
     display: flex;
@@ -5235,6 +5488,9 @@ const STUDIO_STYLES = css`
     .settings-row + .settings-row { border-top: 1px solid var(--studio-divider); }
     .settings-row-control { justify-content: flex-start; }
     .settings-row-control select, .settings-row-control input[type="text"], .settings-row-control input[type="password"] { width: 100%; }
+  }
+  @container (max-width: 360px) {
+    .quick-action-grid { grid-template-columns: minmax(0, 1fr); }
   }
   @media (max-width: 860px) {
     .titlebar-brand .ha-menu-btn { display: inline-flex; }
@@ -5429,6 +5685,20 @@ function renderDeviceAudioView(store) {
 /**
  * Wallpaper Gallery & Multipart XHR Upload Component (Device & System scopes).
  */
+function renderStarIcon(filled) {
+  if (filled) {
+    return html`<svg viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.62L12 2 9.19 8.62 2 9.24l5.45 4.73L5.82 21 12 17.27Z"
+      />
+    </svg>`;
+  }
+  return html`<svg viewBox="0 0 24 24" aria-hidden="true">
+    <path
+      d="M12 15.39l-3.76 2.27.99-4.28-3.32-2.88 4.38-.38L12 6.09l1.71 4.03 4.38.38-3.32 2.88.99 4.28L12 15.39M22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.45 4.73L5.82 21 12 17.27 18.18 21l-1.64-7.03L22 9.24Z"
+    />
+  </svg>`;
+}
 function renderWallpaperGalleryItems(
   store,
   scope,
@@ -5443,6 +5713,7 @@ function renderWallpaperGalleryItems(
     items,
     (wp) => wp.id,
     (wp) => {
+      const label = wp.name || wp.id;
       const isActive = Boolean(wp.active);
       const isFav = Boolean(wp.favorite);
       const canDelete = Boolean(wp.deletable ?? wp.kind === "upload");
@@ -5457,43 +5728,55 @@ function renderWallpaperGalleryItems(
       const onDel = () => {
         void store.deleteWallpaper(scope, wp.id);
       };
+      const thumbImg = thumbSrc
+        ? html`<img src=${thumbSrc} alt=${label} loading="lazy" class="wp-thumb ${shapeClass}" />`
+        : html`<div class="wp-thumb ${shapeClass}"></div>`;
       return html`<div class=${activeCls}>
-        ${thumbSrc
-          ? html`<img src=${thumbSrc} alt=${wp.name || wp.id} loading="lazy" class="wp-thumb ${shapeClass}" />`
-          : html`<div class="wp-thumb ${shapeClass}"></div>`}
-        <div class="wp-title">${wp.name || wp.id}</div>
+        ${scope === "device" && !isActive
+          ? html`<button
+              type="button"
+              aria-label=${`Use wallpaper ${label}`}
+              @click=${onUse}
+              class="wp-thumb-btn ${shapeClass}"
+            >
+              ${thumbImg}
+            </button>`
+          : thumbImg}
+        <div class="wp-title">${label}</div>
         <div class="wp-actions">
           ${scope === "device"
-            ? html`<button
-                  type="button"
-                  ?disabled=${isActive}
-                  @click=${onUse}
-                  class="btn ${isActive ? "btn-primary" : "btn-secondary"} btn-compact"
-                >
-                  ${isActive ? "Active" : "Use"}
-                </button>
+            ? html`${isActive
+                  ? html`<span class="chip chip-primary">Active</span>`
+                  : html`<button type="button" @click=${onUse} class="btn btn-secondary btn-compact">
+                      Use
+                    </button>`}
                 <button
                   type="button"
-                  aria-label=${isFav ? "Remove from Favorites" : "Add to Favorites"}
+                  aria-label=${isFav ? `Remove ${label} from favorites` : `Star ${label} for rotation`}
+                  aria-pressed=${String(isFav)}
+                  title=${isFav ? "Starred for rotation" : "Star for rotation"}
                   @click=${onFav}
-                  class="btn btn-text btn-compact"
+                  class="btn-icon wp-star-btn${isFav ? " starred" : ""}"
                 >
-                  ${isFav ? "Starred" : "Star"}
-                </button>`
-            : nothing}
-          ${canDelete
-            ? html`<button type="button" @click=${onDel} class="btn btn-danger btn-compact">Delete</button>`
-            : nothing}
+                  ${renderStarIcon(isFav)}
+                </button>
+                ${canDelete ? renderTrashIconButton(`Delete wallpaper ${label}`, onDel) : nothing}`
+            : canDelete
+              ? html`<span class="chip chip-primary">Uploaded</span>
+                  ${renderTrashIconButton(`Delete wallpaper ${label}`, onDel)}`
+              : html`<span class="chip">Built-in</span>`}
         </div>
       </div>`;
     },
   )}`;
 }
-function renderWallpaperUploadBar(store, scope) {
-  const selectedFile =
-    scope === "device" ? store.selectedDeviceWallpaperFile : store.selectedSystemWallpaperFile;
+function renderWallpaperUploadTrigger(
+  store,
+  scope,
+) {
   const isUploadingThisScope = store.uploadBusy && store.uploadScope === scope;
-  const pctStyle = `--upload-pct:${store.uploadPercent}%`;
+  const inputId = scope === "device" ? "input-upload-wp" : "input-upload-sys-wp";
+  const btnId = scope === "device" ? "btn-upload-wp" : "btn-upload-sys-wp";
   const onFilePick = (ev) => {
     const input = ev.currentTarget;
     const f = input.files && input.files[0] ? input.files[0] : null;
@@ -5502,38 +5785,59 @@ function renderWallpaperUploadBar(store, scope) {
     } else {
       store.selectedSystemWallpaperFile = f;
     }
-    store.host.requestUpdate();
+    if (f) {
+      void store.uploadWallpaper(scope);
+    } else {
+      store.host.requestUpdate();
+    }
   };
-  const onUpload = () => {
-    void store.uploadWallpaper(scope);
+  const onTriggerPick = (ev) => {
+    const btn = ev.currentTarget;
+    const fileInput = btn?.parentElement?.querySelector("input[type='file']")
+            ;
+    fileInput?.click();
   };
+  return html`<span class="wp-upload-trigger">
+    <input
+      type="file"
+      id=${inputId}
+      accept="image/*"
+      aria-label="Wallpaper image (up to 15 MB)"
+      @change=${onFilePick}
+      class="offscreen"
+    />
+    <button
+      type="button"
+      id=${btnId}
+      ?disabled=${store.uploadBusy}
+      @click=${onTriggerPick}
+      class="btn btn-secondary btn-compact"
+    >
+      ${isUploadingThisScope ? "Uploading…" : "Upload Photo"}
+    </button>
+  </span>`;
+}
+function renderWallpaperUploadProgress(
+  store,
+  scope,
+) {
+  const isUploadingThisScope = store.uploadBusy && store.uploadScope === scope;
+  if (!isUploadingThisScope) return nothing;
+  const pctStyle = `--upload-pct:${store.uploadPercent}%`;
   return html`<div class="stack">
-    <div class="input-action-row">
-      <input
-        type="file"
-        id=${scope === "device" ? "input-upload-wp" : "input-upload-sys-wp"}
-        accept="image/*"
-        aria-label="Wallpaper image (up to 15 MB)"
-        @change=${onFilePick}
-      />
-      <button
-        type="button"
-        id=${scope === "device" ? "btn-upload-wp" : "btn-upload-sys-wp"}
-        ?disabled=${!selectedFile || store.uploadBusy}
-        @click=${onUpload}
-        class="btn btn-primary"
-      >
-        ${isUploadingThisScope ? "Uploading…" : "Upload Photo"}
-      </button>
-      ${isUploadingThisScope
-        ? html`<span class="chip chip-primary">${store.uploadPercent}%</span>`
-        : nothing}
+    <div class="wp-upload-status">
+      <span>Uploading photo…</span>
+      <span class="chip chip-primary">${store.uploadPercent}%</span>
     </div>
-    ${isUploadingThisScope
-      ? html`<div class="upload-progress" role="progressbar" aria-valuenow=${String(store.uploadPercent)} aria-valuemin="0" aria-valuemax="100">
-          <div class="upload-progress-fill" style=${pctStyle}></div>
-        </div>`
-      : nothing}
+    <div
+      class="upload-progress"
+      role="progressbar"
+      aria-valuenow=${String(store.uploadPercent)}
+      aria-valuemin="0"
+      aria-valuemax="100"
+    >
+      <div class="upload-progress-fill" style=${pctStyle}></div>
+    </div>
   </div>`;
 }
 
@@ -5581,13 +5885,10 @@ function renderDeviceDisplayView(store) {
     (it.name || "").toLowerCase().includes("weather background"),
   );
   const weatherBgOff = weatherBgSwitch ? weatherBgSwitch.state === "off" : false;
-  const visibleHomeItems = homeItems.filter((it) => {
-    const low = (it.name || "").toLowerCase();
-    if (weatherBgOff && (low.includes("sun") || low.includes("moon"))) {
-      return false;
-    }
-    return true;
-  });
+  const isCelestialSwitch = (it) =>
+    it.domain === "switch" && /^(?:home:\s*)?(?:sun|moon)$/i.test((it.name || "").trim());
+  const celestialItems = homeItems.filter(isCelestialSwitch);
+  const visibleHomeItems = homeItems.filter((it) => !isCelestialSwitch(it));
   const areaOrder = ["default category", "show all category"];
   const areaEspItems = sortByKeywords(
     store.getSectionItems("area").filter((it) => !(it.name || "").toLowerCase().includes("ble")),
@@ -5599,6 +5900,26 @@ function renderDeviceDisplayView(store) {
   const disabledDock = DOCK_APPS_CATALOG.filter((a) => !enabledDock.includes(a.token));
   const curCycle = Number(cfg.wallpaper_cycle_minutes || 0);
   const wallpapers = data?.wallpapers || [];
+  const activeWp = wallpapers.find((wp) => Boolean(wp.active)) || null;
+  const hasActiveWallpaper = Boolean(activeWp);
+  const isRotating = curCycle > 0;
+  const starredCount = wallpapers.filter((wp) => Boolean(wp.favorite)).length;
+  const allStarred = wallpapers.length > 0 && starredCount === wallpapers.length;
+  const wpStatusText = isRotating
+    ? `${activeWp ? `${activeWp.name} • rotating` : "Rotating"} ${
+        starredCount > 0
+          ? `${starredCount} starred wallpaper${starredCount === 1 ? "" : "s"}`
+          : `all ${wallpapers.length} wallpapers`
+      }.`
+    : hasActiveWallpaper
+      ? `${activeWp?.name || "Selected"} (static — not rotating).`
+      : "Off — click Use on a wallpaper below or enable rotation.";
+  const wpRotationHint =
+    starredCount === 0
+      ? "No wallpapers starred — rotation cycles through all wallpapers."
+      : starredCount === 1
+        ? "1 wallpaper starred — star at least 2 to cycle between favorites."
+        : `${starredCount} of ${wallpapers.length} wallpapers starred for rotation.`;
   return html`<section id="view-home_display">
     <div class="columns">
       <div class="column">
@@ -5697,35 +6018,106 @@ function renderDeviceDisplayView(store) {
 
         ${renderCard({
           title: "Wallpapers",
-          subtitle:
-            "Photos and presets cropped for this Device's display shape. Star favorites to rotate automatically.",
-          headerActions: html`<select
-              id="cfg-wallpaper_cycle_minutes"
-              aria-label="Wallpaper rotation interval"
-              .value=${String(curCycle)}
-              @change=${(ev) =>
-                store.stageDeviceSetting(
-                  "wallpaper_cycle_minutes",
-                  Number((ev.currentTarget).value) || 0,
-                  "cfg-wallpaper_cycle_minutes",
-                )}
-            >
-              ${WALLPAPER_ROTATION_OPTIONS.map(
-                (opt) =>
-                  html`<option value=${String(opt.value)} ?selected=${opt.value === curCycle}>
-                    ${opt.label}
-                  </option>`,
-              )}
-            </select>
-            <button
-              type="button"
-              @click=${() => void store.selectWallpaperSource("")}
-              class="btn btn-secondary"
-            >
-              Turn Off Wallpaper
-            </button>`,
+          subtitle: "Shared presets and uploaded photos cropped for this display.",
+          headerActions: renderWallpaperUploadTrigger(store, "device"),
           contentClass: "stack",
-          body: html`${renderWallpaperUploadBar(store, "device")}
+          body: html`${renderWallpaperUploadProgress(store, "device")}
+            <div class="settings-list">
+              ${renderSettingsRow({
+                id: "wp-status-row",
+                label: "Active Wallpaper",
+                description: wpStatusText,
+                control: isRotating
+                  ? html`<button
+                        type="button"
+                        id="btn-stop-wp-rotation"
+                        @click=${() => void store.setWallpaperRotation(0)}
+                        class="btn btn-secondary btn-compact"
+                      >
+                        Stop Rotation
+                      </button>
+                      <button
+                        type="button"
+                        id="btn-turn-off-wp"
+                        @click=${() => void store.selectWallpaperSource("")}
+                        class="btn btn-secondary btn-compact"
+                      >
+                        Turn Off Wallpaper
+                      </button>`
+                  : hasActiveWallpaper
+                    ? html`${wallpapers.length >= 2
+                          ? html`<button
+                              type="button"
+                              id="btn-enable-wp-rotation"
+                              @click=${() => void store.setWallpaperRotation(15)}
+                              class="btn btn-secondary btn-compact"
+                            >
+                              Enable Rotation
+                            </button>`
+                          : nothing}
+                        <button
+                          type="button"
+                          id="btn-turn-off-wp"
+                          @click=${() => void store.selectWallpaperSource("")}
+                          class="btn btn-secondary btn-compact"
+                        >
+                          Turn Off Wallpaper
+                        </button>`
+                    : wallpapers.length >= 2
+                      ? html`<button
+                          type="button"
+                          id="btn-enable-wp-rotation"
+                          @click=${() => void store.setWallpaperRotation(15)}
+                          class="btn btn-primary btn-compact"
+                        >
+                          Enable Rotation
+                        </button>`
+                      : nothing,
+              })}
+              ${renderSettingsRow({
+                id: "wp-rotation-row",
+                label: "Rotation Interval",
+                forId: "cfg-wallpaper_cycle_minutes",
+                description: wpRotationHint,
+                control: html`<select
+                    id="cfg-wallpaper_cycle_minutes"
+                    aria-label="Wallpaper rotation interval"
+                    .value=${String(curCycle)}
+                    @change=${(ev) =>
+                      void store.setWallpaperRotation(
+                        Number((ev.currentTarget).value) || 0,
+                      )}
+                  >
+                    ${WALLPAPER_ROTATION_OPTIONS.map(
+                      (opt) =>
+                        html`<option value=${String(opt.value)} ?selected=${opt.value === curCycle}>
+                          ${opt.label}
+                        </option>`,
+                    )}
+                  </select>
+                  ${wallpapers.length > 0 && !allStarred
+                    ? html`<button
+                        type="button"
+                        id="btn-star-all-wp"
+                        @click=${() =>
+                          void store.setAllWallpaperFavorites(wallpapers.map((w) => w.id))}
+                        class="btn btn-text btn-compact"
+                      >
+                        Star All
+                      </button>`
+                    : nothing}
+                  ${starredCount > 0
+                    ? html`<button
+                        type="button"
+                        id="btn-clear-stars-wp"
+                        @click=${() => void store.setAllWallpaperFavorites([])}
+                        class="btn btn-text btn-compact"
+                      >
+                        Clear Stars
+                      </button>`
+                    : nothing}`,
+              })}
+            </div>
             <div class="wp-gallery">
               ${renderWallpaperGalleryItems(
                 store,
@@ -5795,7 +6187,84 @@ function renderDeviceDisplayView(store) {
               </div>`,
             })}
             <div id="embedded-home" class="settings-list">
-              ${visibleHomeItems.map((it) => renderNativeControlRow(store, it))}
+              ${visibleHomeItems.map((it) => {
+                const row = renderNativeControlRow(store, it);
+                if (weatherBgSwitch && it.entity_id === weatherBgSwitch.entity_id) {
+                  return html`${row}
+                    ${!weatherBgOff && celestialItems.length > 0
+                      ? renderSettingsRow({
+                          id: "weather-celestial-bodies",
+                          label: "Sun & Moon",
+                          description:
+                            "Choose which sky bodies appear on the live Weather Background.",
+                          control: html`<div
+                            class="pill-list"
+                            role="group"
+                            aria-label="Sun and Moon"
+                          >
+                            ${celestialItems.map((cel) => {
+                              const st = String(cel.state ?? "");
+                              const isOn = st === "on";
+                              const unavailable = st === "unavailable" || st === "unknown";
+                              const lbl = entityLabel(
+                                (cel.name || cel.entity_id).replace(/^home:\s*/i, ""),
+                              );
+                              return html`<span class="pill ${isOn ? "enabled" : ""}">
+                                <button
+                                  type="button"
+                                  aria-pressed=${String(isOn)}
+                                  ?disabled=${unavailable}
+                                  @click=${() =>
+                                    void store.espAction(
+                                      cel.entity_id,
+                                      isOn ? "turn_off" : "turn_on",
+                                      isOn ? "off" : "on",
+                                    )}
+                                  class="pill-toggle"
+                                >
+                                  ${isOn ? `✓ ${lbl}` : `+ ${lbl}`}
+                                </button>
+                              </span>`;
+                            })}
+                          </div>`,
+                        })
+                      : nothing}`;
+                }
+                return row;
+              })}
+              ${!weatherBgSwitch && !weatherBgOff && celestialItems.length > 0
+                ? renderSettingsRow({
+                    id: "weather-celestial-bodies",
+                    label: "Sun & Moon",
+                    description: "Choose which sky bodies appear on the live Weather Background.",
+                    control: html`<div class="pill-list" role="group" aria-label="Sun and Moon">
+                      ${celestialItems.map((cel) => {
+                        const st = String(cel.state ?? "");
+                        const isOn = st === "on";
+                        const unavailable = st === "unavailable" || st === "unknown";
+                        const lbl = entityLabel(
+                          (cel.name || cel.entity_id).replace(/^home:\s*/i, ""),
+                        );
+                        return html`<span class="pill ${isOn ? "enabled" : ""}">
+                          <button
+                            type="button"
+                            aria-pressed=${String(isOn)}
+                            ?disabled=${unavailable}
+                            @click=${() =>
+                              void store.espAction(
+                                cel.entity_id,
+                                isOn ? "turn_off" : "turn_on",
+                                isOn ? "off" : "on",
+                              )}
+                            class="pill-toggle"
+                          >
+                            ${isOn ? `✓ ${lbl}` : `+ ${lbl}`}
+                          </button>
+                        </span>`;
+                      })}
+                    </div>`,
+                  })
+                : nothing}
             </div>`,
         })}
 
@@ -5899,6 +6368,8 @@ function renderDeviceOverviewView(store) {
   const quickActionItems = store
     .getSectionItems("actions")
     .concat(store.getSectionItems("overview"));
+  const quickActionButtons = quickActionItems.filter((it) => it.domain === "button");
+  const otherQuickItems = quickActionItems.filter((it) => it.domain !== "button");
   const otherSensorItems = store.getSectionItems("other");
   const groups = data?.device_groups || [];
   const curGroupId = cfg.device_group || "unassigned";
@@ -5970,14 +6441,7 @@ function renderDeviceOverviewView(store) {
               <strong>${hasAssignedArea ? "Stationary" : "Roaming"}</strong>
             </div>
           </div>`,
-          footerActions: html`<button
-              type="button"
-              @click=${() => store.switchView("tools")}
-              class="btn btn-secondary"
-            >
-              Tools
-            </button>
-            ${links.esphome_device_id
+          footerActions: html`${links.esphome_device_id
               ? html`<button
                   type="button"
                   id="btn-open-in-ha"
@@ -6001,7 +6465,8 @@ function renderDeviceOverviewView(store) {
         ${renderCard({
           title: "Quick Actions",
           contentClass: "settings-list",
-          body: html`${!isBleOnly
+          body: html`${renderQuickActionGrid(store, quickActionButtons)}
+            ${!isBleOnly
               ? renderSettingsRow({
                   label: "Device Group",
                   forId: "cfg-device_group",
@@ -6054,7 +6519,7 @@ function renderDeviceOverviewView(store) {
               onChange: (val) =>
                 store.stageDeviceSetting("assigned_person", val, "cfg-assigned_person"),
             })}
-            ${quickActionItems.map((it) => renderNativeControlRow(store, it))}`,
+            ${otherQuickItems.map((it) => renderNativeControlRow(store, it))}`,
         })}
 
         ${otherSensorItems.length
@@ -7726,8 +8191,9 @@ function renderSystemSharedView(store) {
           id: "card-system-wallpapers",
           heading: html`<h3 class="card-title">Wallpapers</h3>`,
           subtitle: "Shared System wallpapers and presets available to every Latter display.",
+          headerActions: renderWallpaperUploadTrigger(store, "system"),
           contentClass: "stack",
-          body: html`${renderWallpaperUploadBar(store, "system")}
+          body: html`${renderWallpaperUploadProgress(store, "system")}
             <div class="wp-gallery">
               ${renderWallpaperGalleryItems(store, "system", wallpapers, "square")}
             </div>`,

@@ -5,6 +5,7 @@
 import {
   renderCard,
   renderNativeControlRow,
+  renderQuickActionGrid,
   renderSelectRow,
   renderSettingsRow,
 } from "../components/controls.js";
@@ -99,6 +100,8 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
   const quickActionItems = store
     .getSectionItems("actions")
     .concat(store.getSectionItems("overview"));
+  const quickActionButtons = quickActionItems.filter((it) => it.domain === "button");
+  const otherQuickItems = quickActionItems.filter((it) => it.domain !== "button");
   const otherSensorItems = store.getSectionItems("other");
 
   const groups = data?.device_groups || [];
@@ -172,14 +175,7 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
               <strong>${hasAssignedArea ? "Stationary" : "Roaming"}</strong>
             </div>
           </div>`,
-          footerActions: html`<button
-              type="button"
-              @click=${() => store.switchView("tools")}
-              class="btn btn-secondary"
-            >
-              Tools
-            </button>
-            ${links.esphome_device_id
+          footerActions: html`${links.esphome_device_id
               ? html`<button
                   type="button"
                   id="btn-open-in-ha"
@@ -203,7 +199,8 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
         ${renderCard({
           title: "Quick Actions",
           contentClass: "settings-list",
-          body: html`${!isBleOnly
+          body: html`${renderQuickActionGrid(store, quickActionButtons)}
+            ${!isBleOnly
               ? renderSettingsRow({
                   label: "Device Group",
                   forId: "cfg-device_group",
@@ -256,7 +253,7 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
               onChange: (val) =>
                 store.stageDeviceSetting("assigned_person", val, "cfg-assigned_person"),
             })}
-            ${quickActionItems.map((it) => renderNativeControlRow(store, it))}`,
+            ${otherQuickItems.map((it) => renderNativeControlRow(store, it))}`,
         })}
 
         ${otherSensorItems.length

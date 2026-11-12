@@ -48,6 +48,25 @@ ASSIST_SATELLITE_TRANSLATION_KEYS: frozenset[str] = frozenset(
     {"pipeline", "pipeline_n", "vad_sensitivity", "wake_word", "wake_word_n"}
 )
 
+QUICK_ACTION_BUTTON_KEYWORDS: tuple[str, ...] = (
+    "find_my",
+    "find my",
+    "trigger_va",
+    "trigger_voice",
+    "voice_assistant",
+    "voice assistant",
+    "screensaver",
+    "restart",
+    "identify",
+)
+
+DIAGNOSTIC_BUTTON_KEYWORDS: tuple[str, ...] = (
+    "memory_report",
+    "log_memory",
+    "factory_reset",
+    "safe_mode",
+)
+
 UNIVERSAL_SECTION_META: tuple[tuple[str, str, str], ...] = (
     (
         "home",
@@ -130,6 +149,26 @@ def classify_esphome_entity_section(
     ):
         return "voice", None
 
+    ent_suffix = entity_id.split(".", 1)[-1].lower()
+    for prefix in device_object_prefixes:
+        if prefix and ent_suffix.startswith(prefix + "_"):
+            ent_suffix = ent_suffix[len(prefix) + 1 :]
+            break
+    clean_low = name_clean.lower()
+
+    if domain == "button" or dev_cls in ("restart", "identify"):
+        if dev_cls in ("restart", "identify") or any(
+            k in clean_low or k in ent_suffix for k in QUICK_ACTION_BUTTON_KEYWORDS
+        ):
+            return "actions", None
+        is_diag_button = any(
+            k in clean_low or k in ent_suffix for k in DIAGNOSTIC_BUTTON_KEYWORDS
+        )
+        if not is_diag_button:
+            prefix_low = name_clean.split(":", 1)[0].strip().lower() if ":" in name_clean else ""
+            if prefix_low not in ("system", "network", "wifi", "diagnostics", "developer"):
+                return "actions", None
+
     if ":" in name_clean:
         prefix_raw = name_clean.split(":", 1)[0].strip()
         prefix_low = prefix_raw.lower()
@@ -158,16 +197,6 @@ def classify_esphome_entity_section(
         if 2 <= len(prefix_raw) <= 24:
             sec_slug = "custom_" + re.sub(r"[^a-z0-9]+", "_", prefix_low).strip("_")
             return sec_slug, prefix_raw
-
-    ent_suffix = entity_id.split(".", 1)[-1].lower()
-    for prefix in device_object_prefixes:
-        if prefix and ent_suffix.startswith(prefix + "_"):
-            ent_suffix = ent_suffix[len(prefix) + 1 :]
-            break
-    clean_low = name_clean.lower()
-
-    if domain == "button" or dev_cls in ("restart", "identify"):
-        return "actions", None
 
     if any(k in ent_suffix for k in ("timer_remaining", "timer_active", "alarm_ringing")):
         return "sleep", None

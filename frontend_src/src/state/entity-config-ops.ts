@@ -77,8 +77,8 @@ export async function commitEntityChange(
   optimisticState: string | undefined,
   body: Record<string, unknown>,
   errorPrefix: string,
-): Promise<void> {
-  await store.executeEntityAction(entityId, optimisticState, body, errorPrefix);
+): Promise<boolean> {
+  return store.executeEntityAction(entityId, optimisticState, body, errorPrefix);
 }
 
 export function stageDeviceSettingOp(
@@ -324,9 +324,9 @@ export async function executeEntityActionOp(
   optimisticState: string | undefined,
   body: Record<string, unknown>,
   errorPrefix: string,
-): Promise<void> {
+): Promise<boolean> {
   const targetSubentryId = store.activeSubentryId;
-  if (!targetSubentryId || !entityId) return;
+  if (!targetSubentryId || !entityId) return false;
   const prev = optimisticState !== undefined ? applyOptimisticEntity(store, entityId, optimisticState) : "";
   try {
     const res = await store.ws.runDeviceCommand(targetSubentryId, "esphome_entity_action", {
@@ -336,9 +336,11 @@ export async function executeEntityActionOp(
     if (res && store.activeSubentryId === targetSubentryId) {
       store.ingestPayload(res, false);
     }
+    return true;
   } catch (err) {
     if (optimisticState !== undefined) rollbackOptimisticEntity(store, entityId, prev);
     store.showToast(formatWsError(err, errorPrefix), true);
+    return false;
   }
 }
 
@@ -487,9 +489,22 @@ export async function uploadWallpaperOp(store: StudioStore, scope: StudioScope):
   }
 }
 
+function clearPendingWallpaperCycle(store: StudioStore, targetSubentryId: string): void {
+  const bucket = store.pendingDeviceBuckets.get(targetSubentryId);
+  if (!bucket || !("wallpaper_cycle_minutes" in bucket.patch)) return;
+  delete bucket.patch.wallpaper_cycle_minutes;
+  delete bucket.previousValues.wallpaper_cycle_minutes;
+  delete bucket.previousValues["__dom:cfg-wallpaper_cycle_minutes"];
+  if (Object.keys(bucket.patch).length === 0) {
+    if (bucket.timer) clearTimeout(bucket.timer);
+    store.pendingDeviceBuckets.delete(targetSubentryId);
+  }
+}
+
 export async function selectWallpaperSourceOp(store: StudioStore, sourceId: string): Promise<void> {
   const targetSubentryId = store.activeSubentryId;
   if (!targetSubentryId) return;
+  clearPendingWallpaperCycle(store, targetSubentryId);
   try {
     const res = await store.ws.runDeviceCommand(targetSubentryId, "select_wallpaper", {
       source_id: sourceId,
@@ -500,6 +515,56 @@ export async function selectWallpaperSourceOp(store: StudioStore, sourceId: stri
     store.showToast(sourceId ? "Wallpaper applied" : "Wallpaper turned off");
   } catch (err) {
     store.showToast(formatWsError(err, "Could not select wallpaper"), true);
+  }
+}
+
+export async function setWallpaperRotationOp(store: StudioStore, minutes: number): Promise<void> {
+  const targetSubentryId = store.activeSubentryId;
+  if (!targetSubentryId) return;
+  const cleanMins = Math.max(0, Math.round(Number(minutes) || 0));
+  clearPendingWallpaperCycle(store, targetSubentryId);
+
+  const prevMins =
+    store.state && store.state.subentry_id === targetSubentryId
+      ? Number(store.state.config?.wallpaper_cycle_minutes || 0)
+      : 0;
+  if (store.state && store.state.subentry_id === targetSubentryId) {
+    store.state = {
+      ...store.state,
+      config: {
+        ...store.state.config,
+        wallpaper_cycle_minutes: cleanMins,
+      },
+    };
+    store.host.requestUpdate();
+  }
+
+  try {
+    const res = await store.ws.runDeviceCommand(targetSubentryId, "save_device_config", {
+      config: { wallpaper_cycle_minutes: cleanMins },
+    });
+    if (res && store.activeSubentryId === targetSubentryId) {
+      store.ingestPayload(res, false);
+    }
+    store.showToast(cleanMins > 0 ? "Wallpaper rotation enabled" : "Wallpaper rotation stopped");
+  } catch (err) {
+    if (store.state && store.state.subentry_id === targetSubentryId) {
+      store.state = {
+        ...store.state,
+        config: {
+          ...store.state.config,
+          wallpaper_cycle_minutes: prevMins,
+        },
+      };
+      store.pendingDomRevert = {
+        controlIds: {
+          ...(store.pendingDomRevert?.controlIds || {}),
+          "cfg-wallpaper_cycle_minutes": String(prevMins),
+        },
+      };
+      store.host.requestUpdate();
+    }
+    store.showToast(formatWsError(err, "Could not update wallpaper rotation"), true);
   }
 }
 
@@ -515,6 +580,27 @@ export async function toggleWallpaperFavOp(store: StudioStore, sourceId: string)
     }
   } catch (err) {
     store.showToast(formatWsError(err, "Could not update favorite"), true);
+  }
+}
+
+export async function setAllWallpaperFavoritesOp(
+  store: StudioStore,
+  sourceIds: readonly string[],
+): Promise<void> {
+  const targetSubentryId = store.activeSubentryId;
+  if (!targetSubentryId) return;
+  try {
+    const res = await store.ws.runDeviceCommand(targetSubentryId, "toggle_wallpaper_favorite", {
+      source_ids: [...sourceIds],
+    });
+    if (res && store.activeSubentryId === targetSubentryId) {
+      store.ingestPayload(res, false);
+    }
+    store.showToast(
+      sourceIds.length > 0 ? "Starred all wallpapers" : "Cleared starred wallpapers",
+    );
+  } catch (err) {
+    store.showToast(formatWsError(err, "Could not update favorites"), true);
   }
 }
 

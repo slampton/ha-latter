@@ -243,6 +243,8 @@ export interface EspHomeEntityItem {
   state: string;
   key?: string;
   unit?: string;
+  device_class?: string;
+  category?: string;
   options?: string[];
   min?: number;
   max?: number;

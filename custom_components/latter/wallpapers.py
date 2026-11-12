@@ -221,12 +221,17 @@ async def async_refresh_wallpaper_cache(
     )
 
 
+def ordered_wallpaper_ids(device_slug: str = "system") -> list[str]:
+    """Return gallery wallpaper IDs in deterministic display order (presets, then shared uploads)."""
+    _ = device_slug
+    return [p["id"] for p in BUILTIN_WALLPAPER_PRESETS] + [
+        source_id for source_id, _ in _all_cached_uploads()
+    ]
+
+
 def known_wallpaper_ids(device_slug: str = "system") -> set[str]:
     """Return the wallpaper IDs a Device may select: the built-in presets and all shared uploads."""
-    _ = device_slug
-    return {p["id"] for p in BUILTIN_WALLPAPER_PRESETS} | {
-        source_id for source_id, _ in _all_cached_uploads()
-    }
+    return set(ordered_wallpaper_ids(device_slug))
 
 
 def list_wallpaper_catalog(

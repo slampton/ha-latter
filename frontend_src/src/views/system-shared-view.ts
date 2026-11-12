@@ -11,7 +11,8 @@ import {
 } from "../components/controls.js";
 import {
   renderWallpaperGalleryItems,
-  renderWallpaperUploadBar,
+  renderWallpaperUploadProgress,
+  renderWallpaperUploadTrigger,
 } from "../components/wallpaper-gallery.js";
 import { html, nothing, type TemplateResult } from "../lib/lit.js";
 import type { StudioStore } from "../state/store.js";
@@ -109,8 +110,9 @@ export function renderSystemSharedView(store: StudioStore): TemplateResult {
           id: "card-system-wallpapers",
           heading: html`<h3 class="card-title">Wallpapers</h3>`,
           subtitle: "Shared System wallpapers and presets available to every Latter display.",
+          headerActions: renderWallpaperUploadTrigger(store, "system"),
           contentClass: "stack",
-          body: html`${renderWallpaperUploadBar(store, "system")}
+          body: html`${renderWallpaperUploadProgress(store, "system")}
             <div class="wp-gallery">
               ${renderWallpaperGalleryItems(store, "system", wallpapers, "square")}
             </div>`,

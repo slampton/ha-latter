@@ -75,6 +75,8 @@ import {
   removeStringListRowOp,
   removeVolumeOverrideRowOp,
   selectWallpaperSourceOp,
+  setAllWallpaperFavoritesOp,
+  setWallpaperRotationOp,
   stageDeviceSettingOp,
   stageSystemSettingOp,
   testDoorbellSpeakerOp,
@@ -808,12 +810,21 @@ export class StudioStore implements ReactiveController {
     optimisticState: string | undefined,
     body: Record<string, unknown>,
     errorPrefix: string,
-  ): Promise<void> {
-    await executeEntityActionOp(this, entityId, optimisticState, body, errorPrefix);
+  ): Promise<boolean> {
+    return executeEntityActionOp(this, entityId, optimisticState, body, errorPrefix);
   }
 
-  async espAction(entityId: string, action: string, optimisticState?: string): Promise<void> {
-    await commitEntityChange(this, entityId, optimisticState, { action }, "Device action failed");
+  async espAction(
+    entityId: string,
+    action: string,
+    optimisticState?: string,
+    toastMessage?: string,
+  ): Promise<boolean> {
+    const ok = await commitEntityChange(this, entityId, optimisticState, { action }, "Device action failed");
+    if (ok && toastMessage) {
+      this.showToast(toastMessage);
+    }
+    return ok;
   }
 
   async espSelect(entityId: string, option: string): Promise<void> {
@@ -828,8 +839,9 @@ export class StudioStore implements ReactiveController {
   async triggerHeaderFirmwareUpdate(): Promise<void> {
     const updEntity = this.state?.live?.fw_update_entity || "";
     if (!updEntity) return;
-    await this.espAction(updEntity, "install");
-    this.showToast("Firmware update started");
+    if (await this.espAction(updEntity, "install")) {
+      this.showToast("Firmware update started");
+    }
   }
 
   getEnabledDockTokens(): string[] {
@@ -881,8 +893,16 @@ export class StudioStore implements ReactiveController {
     await selectWallpaperSourceOp(this, sourceId);
   }
 
+  async setWallpaperRotation(minutes: number): Promise<void> {
+    await setWallpaperRotationOp(this, minutes);
+  }
+
   async toggleWallpaperFav(sourceId: string): Promise<void> {
     await toggleWallpaperFavOp(this, sourceId);
+  }
+
+  async setAllWallpaperFavorites(sourceIds: readonly string[]): Promise<void> {
+    await setAllWallpaperFavoritesOp(this, sourceIds);
   }
 
   async deleteWallpaper(scope: StudioScope, sourceId: string): Promise<void> {

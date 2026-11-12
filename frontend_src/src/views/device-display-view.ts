@@ -10,7 +10,8 @@ import {
 } from "../components/controls.js";
 import {
   renderWallpaperGalleryItems,
-  renderWallpaperUploadBar,
+  renderWallpaperUploadProgress,
+  renderWallpaperUploadTrigger,
 } from "../components/wallpaper-gallery.js";
 import {
   ACTIVITY_SOURCES_CATALOG,
@@ -20,7 +21,7 @@ import {
 import { html, nothing, type TemplateResult } from "../lib/lit.js";
 import type { StudioStore } from "../state/store.js";
 import type { EspHomeEntityItem } from "../types.js";
-import { defaultThemeHex, isValidHexColor } from "../utils/format.js";
+import { defaultThemeHex, entityLabel, isValidHexColor } from "../utils/format.js";
 
 function sortByKeywords(items: readonly EspHomeEntityItem[], order: readonly string[]): EspHomeEntityItem[] {
   return [...items].sort((a, b) => {
@@ -66,13 +67,10 @@ export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
     (it.name || "").toLowerCase().includes("weather background"),
   );
   const weatherBgOff = weatherBgSwitch ? weatherBgSwitch.state === "off" : false;
-  const visibleHomeItems = homeItems.filter((it) => {
-    const low = (it.name || "").toLowerCase();
-    if (weatherBgOff && (low.includes("sun") || low.includes("moon"))) {
-      return false;
-    }
-    return true;
-  });
+  const isCelestialSwitch = (it: EspHomeEntityItem): boolean =>
+    it.domain === "switch" && /^(?:home:\s*)?(?:sun|moon)$/i.test((it.name || "").trim());
+  const celestialItems = homeItems.filter(isCelestialSwitch);
+  const visibleHomeItems = homeItems.filter((it) => !isCelestialSwitch(it));
 
   const areaOrder = ["default category", "show all category"];
   const areaEspItems = sortByKeywords(
@@ -87,6 +85,26 @@ export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
 
   const curCycle = Number(cfg.wallpaper_cycle_minutes || 0);
   const wallpapers = data?.wallpapers || [];
+  const activeWp = wallpapers.find((wp) => Boolean(wp.active)) || null;
+  const hasActiveWallpaper = Boolean(activeWp);
+  const isRotating = curCycle > 0;
+  const starredCount = wallpapers.filter((wp) => Boolean(wp.favorite)).length;
+  const allStarred = wallpapers.length > 0 && starredCount === wallpapers.length;
+  const wpStatusText = isRotating
+    ? `${activeWp ? `${activeWp.name} • rotating` : "Rotating"} ${
+        starredCount > 0
+          ? `${starredCount} starred wallpaper${starredCount === 1 ? "" : "s"}`
+          : `all ${wallpapers.length} wallpapers`
+      }.`
+    : hasActiveWallpaper
+      ? `${activeWp?.name || "Selected"} (static — not rotating).`
+      : "Off — click Use on a wallpaper below or enable rotation.";
+  const wpRotationHint =
+    starredCount === 0
+      ? "No wallpapers starred — rotation cycles through all wallpapers."
+      : starredCount === 1
+        ? "1 wallpaper starred — star at least 2 to cycle between favorites."
+        : `${starredCount} of ${wallpapers.length} wallpapers starred for rotation.`;
 
   return html`<section id="view-home_display">
     <div class="columns">
@@ -186,35 +204,106 @@ export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
 
         ${renderCard({
           title: "Wallpapers",
-          subtitle:
-            "Photos and presets cropped for this Device's display shape. Star favorites to rotate automatically.",
-          headerActions: html`<select
-              id="cfg-wallpaper_cycle_minutes"
-              aria-label="Wallpaper rotation interval"
-              .value=${String(curCycle)}
-              @change=${(ev: Event) =>
-                store.stageDeviceSetting(
-                  "wallpaper_cycle_minutes",
-                  Number((ev.currentTarget as HTMLSelectElement).value) || 0,
-                  "cfg-wallpaper_cycle_minutes",
-                )}
-            >
-              ${WALLPAPER_ROTATION_OPTIONS.map(
-                (opt) =>
-                  html`<option value=${String(opt.value)} ?selected=${opt.value === curCycle}>
-                    ${opt.label}
-                  </option>`,
-              )}
-            </select>
-            <button
-              type="button"
-              @click=${() => void store.selectWallpaperSource("")}
-              class="btn btn-secondary"
-            >
-              Turn Off Wallpaper
-            </button>`,
+          subtitle: "Shared presets and uploaded photos cropped for this display.",
+          headerActions: renderWallpaperUploadTrigger(store, "device"),
           contentClass: "stack",
-          body: html`${renderWallpaperUploadBar(store, "device")}
+          body: html`${renderWallpaperUploadProgress(store, "device")}
+            <div class="settings-list">
+              ${renderSettingsRow({
+                id: "wp-status-row",
+                label: "Active Wallpaper",
+                description: wpStatusText,
+                control: isRotating
+                  ? html`<button
+                        type="button"
+                        id="btn-stop-wp-rotation"
+                        @click=${() => void store.setWallpaperRotation(0)}
+                        class="btn btn-secondary btn-compact"
+                      >
+                        Stop Rotation
+                      </button>
+                      <button
+                        type="button"
+                        id="btn-turn-off-wp"
+                        @click=${() => void store.selectWallpaperSource("")}
+                        class="btn btn-secondary btn-compact"
+                      >
+                        Turn Off Wallpaper
+                      </button>`
+                  : hasActiveWallpaper
+                    ? html`${wallpapers.length >= 2
+                          ? html`<button
+                              type="button"
+                              id="btn-enable-wp-rotation"
+                              @click=${() => void store.setWallpaperRotation(15)}
+                              class="btn btn-secondary btn-compact"
+                            >
+                              Enable Rotation
+                            </button>`
+                          : nothing}
+                        <button
+                          type="button"
+                          id="btn-turn-off-wp"
+                          @click=${() => void store.selectWallpaperSource("")}
+                          class="btn btn-secondary btn-compact"
+                        >
+                          Turn Off Wallpaper
+                        </button>`
+                    : wallpapers.length >= 2
+                      ? html`<button
+                          type="button"
+                          id="btn-enable-wp-rotation"
+                          @click=${() => void store.setWallpaperRotation(15)}
+                          class="btn btn-primary btn-compact"
+                        >
+                          Enable Rotation
+                        </button>`
+                      : nothing,
+              })}
+              ${renderSettingsRow({
+                id: "wp-rotation-row",
+                label: "Rotation Interval",
+                forId: "cfg-wallpaper_cycle_minutes",
+                description: wpRotationHint,
+                control: html`<select
+                    id="cfg-wallpaper_cycle_minutes"
+                    aria-label="Wallpaper rotation interval"
+                    .value=${String(curCycle)}
+                    @change=${(ev: Event) =>
+                      void store.setWallpaperRotation(
+                        Number((ev.currentTarget as HTMLSelectElement).value) || 0,
+                      )}
+                  >
+                    ${WALLPAPER_ROTATION_OPTIONS.map(
+                      (opt) =>
+                        html`<option value=${String(opt.value)} ?selected=${opt.value === curCycle}>
+                          ${opt.label}
+                        </option>`,
+                    )}
+                  </select>
+                  ${wallpapers.length > 0 && !allStarred
+                    ? html`<button
+                        type="button"
+                        id="btn-star-all-wp"
+                        @click=${() =>
+                          void store.setAllWallpaperFavorites(wallpapers.map((w) => w.id))}
+                        class="btn btn-text btn-compact"
+                      >
+                        Star All
+                      </button>`
+                    : nothing}
+                  ${starredCount > 0
+                    ? html`<button
+                        type="button"
+                        id="btn-clear-stars-wp"
+                        @click=${() => void store.setAllWallpaperFavorites([])}
+                        class="btn btn-text btn-compact"
+                      >
+                        Clear Stars
+                      </button>`
+                    : nothing}`,
+              })}
+            </div>
             <div class="wp-gallery">
               ${renderWallpaperGalleryItems(
                 store,
@@ -284,7 +373,84 @@ export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
               </div>`,
             })}
             <div id="embedded-home" class="settings-list">
-              ${visibleHomeItems.map((it) => renderNativeControlRow(store, it))}
+              ${visibleHomeItems.map((it) => {
+                const row = renderNativeControlRow(store, it);
+                if (weatherBgSwitch && it.entity_id === weatherBgSwitch.entity_id) {
+                  return html`${row}
+                    ${!weatherBgOff && celestialItems.length > 0
+                      ? renderSettingsRow({
+                          id: "weather-celestial-bodies",
+                          label: "Sun & Moon",
+                          description:
+                            "Choose which sky bodies appear on the live Weather Background.",
+                          control: html`<div
+                            class="pill-list"
+                            role="group"
+                            aria-label="Sun and Moon"
+                          >
+                            ${celestialItems.map((cel) => {
+                              const st = String(cel.state ?? "");
+                              const isOn = st === "on";
+                              const unavailable = st === "unavailable" || st === "unknown";
+                              const lbl = entityLabel(
+                                (cel.name || cel.entity_id).replace(/^home:\s*/i, ""),
+                              );
+                              return html`<span class="pill ${isOn ? "enabled" : ""}">
+                                <button
+                                  type="button"
+                                  aria-pressed=${String(isOn)}
+                                  ?disabled=${unavailable}
+                                  @click=${() =>
+                                    void store.espAction(
+                                      cel.entity_id,
+                                      isOn ? "turn_off" : "turn_on",
+                                      isOn ? "off" : "on",
+                                    )}
+                                  class="pill-toggle"
+                                >
+                                  ${isOn ? `✓ ${lbl}` : `+ ${lbl}`}
+                                </button>
+                              </span>`;
+                            })}
+                          </div>`,
+                        })
+                      : nothing}`;
+                }
+                return row;
+              })}
+              ${!weatherBgSwitch && !weatherBgOff && celestialItems.length > 0
+                ? renderSettingsRow({
+                    id: "weather-celestial-bodies",
+                    label: "Sun & Moon",
+                    description: "Choose which sky bodies appear on the live Weather Background.",
+                    control: html`<div class="pill-list" role="group" aria-label="Sun and Moon">
+                      ${celestialItems.map((cel) => {
+                        const st = String(cel.state ?? "");
+                        const isOn = st === "on";
+                        const unavailable = st === "unavailable" || st === "unknown";
+                        const lbl = entityLabel(
+                          (cel.name || cel.entity_id).replace(/^home:\s*/i, ""),
+                        );
+                        return html`<span class="pill ${isOn ? "enabled" : ""}">
+                          <button
+                            type="button"
+                            aria-pressed=${String(isOn)}
+                            ?disabled=${unavailable}
+                            @click=${() =>
+                              void store.espAction(
+                                cel.entity_id,
+                                isOn ? "turn_off" : "turn_on",
+                                isOn ? "off" : "on",
+                              )}
+                            class="pill-toggle"
+                          >
+                            ${isOn ? `✓ ${lbl}` : `+ ${lbl}`}
+                          </button>
+                        </span>`;
+                      })}
+                    </div>`,
+                  })
+                : nothing}
             </div>`,
         })}
 

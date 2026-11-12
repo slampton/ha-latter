@@ -142,10 +142,21 @@ class TestViewLayout(unittest.TestCase):
         self.assertIn('"btn-upload-wp"', js)
         self.assertIn('"btn-upload-sys-wp"', js)
         self.assertIn('id="dash-node-name"', overview)
+        self.assertIn("renderQuickActionGrid(store, quickActionButtons)", overview)
         self.assertIn('id="cfg-device_group"', overview)
+        self.assertLess(
+            overview.index("renderQuickActionGrid(store, quickActionButtons)"),
+            overview.index('id="cfg-device_group"'),
+        )
+        self.assertLess(
+            overview.index('id="cfg-device_group"'),
+            overview.index('id: "cfg-assigned_person"'),
+        )
         self.assertIn('id="dash-group-sync-chip"', overview)
         self.assertIn('id="btn-reset-to-group"', overview)
         self.assertIn('id="btn-open-in-ha"', overview)
+        self.assertIn("Download Backup", overview)
+        self.assertNotIn('switchView("tools")', overview)
         self.assertIn('id="cfg-ble_target_address"', section("presence"))
         for gone in ("In Home Assistant</h3>", "Location &amp; BLE</h3>", 'id="cfg-device_slug"', 'id="st-group"'):
             self.assertNotIn(gone, js)
@@ -179,6 +190,8 @@ class TestViewLayout(unittest.TestCase):
         view = js[start:js.index("</section>", start)]
         self.assertIn('<h3 class="card-title">Home Screen</h3>', view)
         self.assertIn('<h3 class="card-title">Area Controls</h3>', view)
+        self.assertIn('id: "weather-celestial-bodies"', view)
+        self.assertIn('label: "Sun & Moon"', view)
         self.assertIn('id="embedded-area-ui"', view)
         self.assertLess(view.index('id="dock-pills-container"'), view.index('id="embedded-home"'))
 

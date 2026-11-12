@@ -862,6 +862,11 @@ async def async_execute_area_action(
             entity_id = mapped_id
             state_obj = hass.states.get(entity_id)
     if state_obj is None:
+        if entity_id.startswith("button."):
+            await hass.services.async_call(
+                "button", "press", {ATTR_ENTITY_ID: entity_id}, blocking=False
+            )
+            return
         _LOGGER.debug("Action target entity not found: %s", entity_id)
         return
 

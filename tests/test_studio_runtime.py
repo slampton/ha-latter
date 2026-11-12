@@ -211,6 +211,256 @@ class TestEntitySections(unittest.TestCase):
         audio_ts = (FRONTEND_SRC / "views" / "device-audio-view.ts").read_text(encoding="utf-8")
         self.assertIn('it.key === "wake_word" || it.key === "wake_word_n"', audio_ts)
 
+    def test_quick_action_buttons_always_classify_as_actions(self) -> None:
+        cases = [
+            ("button.desk_display_actions_find_my_device", "Actions: Find My Device"),
+            ("button.desk_display_actions_trigger_voice_assistant", "Actions: Trigger Voice Assistant"),
+            ("button.desk_display_actions_screensaver_now", "Actions: Screensaver Now"),
+            ("button.desk_display_actions_restart_device", "Actions: Restart Device"),
+            # Legacy or user-customized prefixes never scatter the four quick actions across views
+            ("button.desk_display_ble_find_my_device", "BLE: Find My Device"),
+            ("button.desk_display_voice_trigger_voice_assistant", "Voice: Trigger Voice Assistant"),
+            ("button.desk_display_sleep_wake_screensaver_now", "Sleep & Wake: Screensaver Now"),
+            ("button.desk_display_system_restart_device", "System: Restart Device"),
+            ("button.desk_display_find_my_device", "Find My Device"),
+            ("button.desk_display_restart", "Restart"),
+        ]
+        for ent_id, friendly in cases:
+            with self.subTest(entity_id=ent_id, friendly=friendly):
+                self.assertEqual(self.classify(ent_id, friendly, domain="button"), "actions")
+        # Diagnostic memory report button stays in Diagnostics (network), never Quick Actions
+        self.assertEqual(
+            entity_sections.classify_esphome_entity_section(
+                "button.desk_display_system_log_memory_report",
+                "System: Log Memory Report",
+                "button",
+                "",
+                "diagnostic",
+                device_object_prefixes=("desk_display",),
+            )[0],
+            "network",
+        )
+
+
+@unittest.skipUnless(NODE, "node is not installed")
+class TestQuickActionsControls(unittest.TestCase):
+    """Stateless HA button entities (`state === 'unknown'`) render enabled and sort canonically at the top of Quick Actions."""
+
+    def test_quick_action_ordering_and_unknown_state_enablement(self) -> None:
+        stub_lit = """
+const nothing = Symbol.for("latter.lit.nothing");
+function html(strings, ...values) { return { _$litType$: 1, strings, values }; }
+"""
+        runner = (
+            stub_lit
+            + """
+const shuffled = [
+  { entity_id: "button.pocket_actions_restart_device", domain: "button", name: "Restart Device", state: "unknown" },
+  { entity_id: "button.pocket_actions_screensaver_now", domain: "button", name: "Screensaver Now", state: "unavailable" },
+  { entity_id: "button.pocket_actions_trigger_voice_assistant", domain: "button", name: "Trigger Voice Assistant", state: "unknown" },
+  { entity_id: "button.pocket_actions_find_my_device", domain: "button", name: "Find My Device", state: "2026-11-12T18:00:00+00:00" },
+];
+const sorted = sortQuickActionButtons(shuffled);
+const calls = [];
+const fakeStore = {
+  hass: null,
+  espAction(eid, action, opt, toast) {
+    calls.push({ eid, action, opt, toast });
+    return Promise.resolve(true);
+  },
+};
+const gridTpl = renderQuickActionGrid(fakeStore, shuffled);
+const btnTemplates = gridTpl.values[0];
+const gridStates = btnTemplates.map((tpl) => ({
+  entityId: tpl.values[0],
+  disabled: tpl.values[1],
+  label: tpl.values[4],
+}));
+btnTemplates[0].values[2]();
+btnTemplates[3].values[2]();
+
+const rowUnknown = renderNativeControlRow(fakeStore, {
+  entity_id: "button.pocket_system_log_memory_report",
+  domain: "button",
+  name: "Log Memory Report",
+  state: "unknown",
+});
+const rowUnavail = renderNativeControlRow(fakeStore, {
+  entity_id: "button.pocket_system_log_memory_report",
+  domain: "button",
+  name: "Log Memory Report",
+  state: "unavailable",
+});
+const swUnknown = renderNativeControlRow(fakeStore, {
+  entity_id: "switch.pocket_home_sun",
+  domain: "switch",
+  name: "Sun",
+  state: "unknown",
+});
+
+return {
+  sortedIds: sorted.map((it) => it.entity_id),
+  gridStates,
+  calls,
+  rowButtonUnknownDisabled: rowUnknown.values[4].values[0],
+  rowButtonUnavailDisabled: rowUnavail.values[4].values[0],
+  switchUnknownDisabled: swUnknown.values[4].values[1],
+};
+"""
+        )
+        got = _run_node_ts(
+            [
+                FRONTEND_SRC / "constants.ts",
+                FRONTEND_SRC / "utils" / "format.ts",
+                FRONTEND_SRC / "components" / "controls.ts",
+            ],
+            runner,
+        )
+        self.assertEqual(
+            got["sortedIds"],
+            [
+                "button.pocket_actions_find_my_device",
+                "button.pocket_actions_trigger_voice_assistant",
+                "button.pocket_actions_screensaver_now",
+                "button.pocket_actions_restart_device",
+            ],
+        )
+        self.assertEqual(
+            got["gridStates"],
+            [
+                {"entityId": "button.pocket_actions_find_my_device", "disabled": False, "label": "Find My Device"},
+                {
+                    "entityId": "button.pocket_actions_trigger_voice_assistant",
+                    "disabled": False,
+                    "label": "Trigger Voice Assistant",
+                },
+                {"entityId": "button.pocket_actions_screensaver_now", "disabled": True, "label": "Screensaver Now"},
+                {"entityId": "button.pocket_actions_restart_device", "disabled": False, "label": "Restart Device"},
+            ],
+        )
+        self.assertEqual(
+            got["calls"],
+            [
+                {
+                    "eid": "button.pocket_actions_find_my_device",
+                    "action": "press",
+                    "toast": 'Triggered "Find My Device"',
+                },
+                {
+                    "eid": "button.pocket_actions_restart_device",
+                    "action": "press",
+                    "toast": "Restarting Device…",
+                },
+            ],
+        )
+        self.assertFalse(got["rowButtonUnknownDisabled"])
+        self.assertTrue(got["rowButtonUnavailDisabled"])
+        self.assertTrue(got["switchUnknownDisabled"])
+
+
+@unittest.skipUnless(NODE, "node is not installed")
+class TestDisplayViewControls(unittest.TestCase):
+    """Display & Home view renders Sun & Moon pill toggles and state-driven Wallpaper controls."""
+
+    def test_sun_moon_pills_and_wallpaper_states(self) -> None:
+        stub_lit = """
+const nothing = Symbol.for("latter.lit.nothing");
+function html(strings, ...values) { return { _$litType$: 1, strings, values }; }
+function repeat(items, keyFn, tplFn) { return items.map((it, idx) => tplFn(it, idx)); }
+function flattenHtml(node) {
+  if (node === null || node === undefined || node === nothing || typeof node === "boolean") return "";
+  if (Array.isArray(node)) return node.map(flattenHtml).join("");
+  if (typeof node === "object" && node._$litType$ === 1) {
+    let out = "";
+    for (let i = 0; i < node.strings.length; i += 1) {
+      out += node.strings[i];
+      if (i < node.values.length) {
+        const v = node.values[i];
+        out += typeof v === "function" ? "[fn]" : flattenHtml(v);
+      }
+    }
+    return out;
+  }
+  return String(node);
+}
+"""
+        runner = (
+            stub_lit
+            + """
+function makeStore({ weatherBgState = "Dynamic", cycleMins = 0, activeId = "", favIds = [] }) {
+  const favSet = new Set(favIds);
+  const wallpapers = [
+    { id: "preset:forest_mountains", name: "Forest Mountains", kind: "preset", active: activeId === "preset:forest_mountains", favorite: favSet.has("preset:forest_mountains"), deletable: false, thumb_url: "/thumb1" },
+    { id: "preset:ocean_waves", name: "Ocean Waves", kind: "preset", active: activeId === "preset:ocean_waves", favorite: favSet.has("preset:ocean_waves"), deletable: false, thumb_url: "/thumb2" },
+  ];
+  const homeSection = [
+    { entity_id: "switch.pocket_home_wake_greeting", domain: "switch", name: "Wake Greeting", state: "on" },
+    { entity_id: "select.pocket_home_weather_background", domain: "select", name: "Weather Background", state: weatherBgState, options: ["off", "Dynamic"] },
+    { entity_id: "switch.pocket_home_moon", domain: "switch", name: "Home: Moon", state: "off" },
+    { entity_id: "switch.pocket_home_sun", domain: "switch", name: "Home: Sun", state: "on" },
+  ];
+  return {
+    host: null,
+    uploadBusy: false,
+    uploadScope: null,
+    uploadPercent: 0,
+    state: {
+      config: {
+        activity_card: true,
+        wallpaper_cycle_minutes: cycleMins,
+        display_shape: "square",
+        default_page_size: 3,
+      },
+      system_config: { custom_palettes: [] },
+      wallpapers,
+    },
+    getSectionItems(sec) {
+      return sec === "home" ? homeSection : [];
+    },
+    getEnabledActivitySources() { return ["calendar"]; },
+    getEnabledDockTokens() { return ["area", "music"]; },
+  };
+}
+
+const offMarkup = flattenHtml(renderDeviceDisplayView(makeStore({ weatherBgState: "Dynamic", cycleMins: 0, activeId: "" })));
+const staticMarkup = flattenHtml(renderDeviceDisplayView(makeStore({ weatherBgState: "Dynamic", cycleMins: 0, activeId: "preset:ocean_waves" })));
+const rotatingMarkup = flattenHtml(renderDeviceDisplayView(makeStore({ weatherBgState: "off", cycleMins: 5, activeId: "preset:ocean_waves", favIds: ["preset:forest_mountains", "preset:ocean_waves"] })));
+
+return { offMarkup, staticMarkup, rotatingMarkup };
+"""
+        )
+        got = _run_node_ts(
+            [
+                FRONTEND_SRC / "constants.ts",
+                FRONTEND_SRC / "utils" / "format.ts",
+                FRONTEND_SRC / "components" / "controls.ts",
+                FRONTEND_SRC / "components" / "wallpaper-gallery.ts",
+                FRONTEND_SRC / "views" / "device-display-view.ts",
+            ],
+            runner,
+        )
+        # 1. Off state: Enable Rotation shown, Turn Off Wallpaper & Stop Rotation hidden; Sun & Moon rendered as pills
+        self.assertIn('id="btn-enable-wp-rotation"', got["offMarkup"])
+        self.assertNotIn('id="btn-turn-off-wp"', got["offMarkup"])
+        self.assertNotIn('id="btn-stop-wp-rotation"', got["offMarkup"])
+        self.assertIn("id=weather-celestial-bodies", got["offMarkup"])
+        self.assertIn("✓ Sun", got["offMarkup"])
+        self.assertIn("+ Moon", got["offMarkup"])
+        self.assertLess(got["offMarkup"].index("✓ Sun"), got["offMarkup"].index("+ Moon"))
+
+        # 2. Static wallpaper active: Enable Rotation + Turn Off Wallpaper shown, Stop Rotation hidden
+        self.assertIn('id="btn-enable-wp-rotation"', got["staticMarkup"])
+        self.assertIn('id="btn-turn-off-wp"', got["staticMarkup"])
+        self.assertNotIn('id="btn-stop-wp-rotation"', got["staticMarkup"])
+        self.assertIn('<span class="chip chip-primary">Active</span>', got["staticMarkup"])
+
+        # 3. Rotating wallpaper + Weather Background off: Stop Rotation + Turn Off Wallpaper + Clear Stars shown; Sun & Moon hidden
+        self.assertIn('id="btn-stop-wp-rotation"', got["rotatingMarkup"])
+        self.assertIn('id="btn-turn-off-wp"', got["rotatingMarkup"])
+        self.assertIn('id="btn-clear-stars-wp"', got["rotatingMarkup"])
+        self.assertNotIn('id="btn-star-all-wp"', got["rotatingMarkup"])
+        self.assertNotIn("id=weather-celestial-bodies", got["rotatingMarkup"])
+
 
 @unittest.skipUnless(NODE, "node is not installed")
 class TestWallpaperUploadBearerAuth(unittest.TestCase):

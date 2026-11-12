@@ -39,6 +39,7 @@ from ..const import (
     CONF_MA_PLAYER_ENTITY,
     CONF_SECURITY_PIN,
     CONF_SECURITY_PIN_HASH,
+    CONF_WALLPAPER_CYCLE_MINUTES,
     CONF_WALLPAPER_FAVORITES,
     CONF_WALLPAPER_SOURCE,
     DATA_GLOBAL_CONFIG,
@@ -160,8 +161,9 @@ def _apply_wallpaper_config(
     *,
     source: str | None = None,
     favorites: list[str] | None = None,
+    cycle_minutes: int | None = None,
 ) -> None:
-    """Persist wallpaper source/favorites, re-bind the rotation timer, and notify listeners."""
+    """Persist wallpaper source/favorites/rotation, re-bind the rotation timer, and notify listeners."""
     merged: dict[str, Any] = dict(coordinator.device_data)
     if source is not None:
         merged[CONF_WALLPAPER_SOURCE] = source
@@ -170,7 +172,11 @@ def _apply_wallpaper_config(
         coordinator._schedule_persist_runtime_state()
     if favorites is not None:
         merged[CONF_WALLPAPER_FAVORITES] = favorites
+    if cycle_minutes is not None:
+        merged[CONF_WALLPAPER_CYCLE_MINUTES] = max(0, int(cycle_minutes))
     coordinator.update_device_config(merged)
+    if coordinator.wallpaper_cycle_minutes > 0 and source != "":
+        coordinator.ensure_active_wallpaper_for_rotation()
     coordinator._bind_wallpaper_cycle_timer()
     coordinator.async_notify_listeners()
 
@@ -469,13 +475,24 @@ async def _cmd_select_wallpaper(
 ) -> None:
     assert coordinator is not None
     source_id = str(body.get("source_id") or "").strip()
-    if source_id:
-        await async_refresh_wallpaper_cache(hass, coordinator.device_slug)
-        if source_id not in known_wallpaper_ids(coordinator.device_slug):
-            raise StudioCommandError(
-                "not_allowed", "Unknown wallpaper: pick one from this Device's gallery"
-            )
-    _apply_wallpaper_config(coordinator, source=source_id)
+    if not source_id:
+        _apply_wallpaper_config(coordinator, source="", cycle_minutes=0)
+        return
+    await async_refresh_wallpaper_cache(hass, coordinator.device_slug)
+    known = known_wallpaper_ids(coordinator.device_slug)
+    if source_id not in known:
+        raise StudioCommandError(
+            "not_allowed", "Unknown wallpaper: pick one from this Device's gallery"
+        )
+    valid_favs = [f for f in coordinator.wallpaper_favorites if f in known]
+    next_cycle: int | None = None
+    if (
+        coordinator.wallpaper_cycle_minutes > 0
+        and valid_favs
+        and source_id not in valid_favs
+    ):
+        next_cycle = 0
+    _apply_wallpaper_config(coordinator, source=source_id, cycle_minutes=next_cycle)
 
 
 async def _cmd_toggle_wallpaper_favorite(
@@ -486,6 +503,28 @@ async def _cmd_toggle_wallpaper_favorite(
     _extra: dict[str, Any],
 ) -> None:
     assert coordinator is not None
+    if "source_ids" in body:
+        raw_ids = body.get("source_ids")
+        if not isinstance(raw_ids, list):
+            raise StudioCommandError("invalid_format", "source_ids must be a list")
+        cleaned: list[str] = []
+        seen: set[str] = set()
+        for item in raw_ids:
+            sid = str(item or "").strip()
+            if sid and sid not in seen:
+                seen.add(sid)
+                cleaned.append(sid)
+        if cleaned:
+            await async_refresh_wallpaper_cache(hass, coordinator.device_slug)
+            known = known_wallpaper_ids(coordinator.device_slug)
+            if any(sid not in known for sid in cleaned):
+                raise StudioCommandError(
+                    "not_allowed",
+                    "Unknown wallpaper: pick one from this Device's gallery",
+                )
+        _apply_wallpaper_config(coordinator, favorites=cleaned)
+        return
+
     source_id = str(body.get("source_id") or "").strip()
     favs = list(coordinator.wallpaper_favorites)
     if source_id in favs:
@@ -498,6 +537,27 @@ async def _cmd_toggle_wallpaper_favorite(
             )
         favs.append(source_id)
     _apply_wallpaper_config(coordinator, favorites=favs)
+
+
+def _prune_deleted_wallpaper_from_coordinators(
+    hass: HomeAssistant, source_id: str
+) -> None:
+    """Remove a deleted wallpaper from favorites and advance rotation (or clear static source)."""
+    for c in iter_coordinators(hass):
+        if source_id not in c.wallpaper_favorites and c.wallpaper_source != source_id:
+            continue
+        favs = [f for f in c.wallpaper_favorites if f != source_id]
+        was_active = c.wallpaper_source == source_id
+        if was_active and c.wallpaper_cycle_minutes > 0:
+            _apply_wallpaper_config(c, source="", favorites=favs)
+            if c.ensure_active_wallpaper_for_rotation():
+                c._bind_wallpaper_cycle_timer()
+                c.async_notify_listeners()
+            else:
+                _apply_wallpaper_config(c, source="", favorites=favs, cycle_minutes=0)
+        else:
+            new_active = "" if was_active else c.wallpaper_source
+            _apply_wallpaper_config(c, source=new_active, favorites=favs)
 
 
 async def _cmd_delete_wallpaper(
@@ -518,11 +578,7 @@ async def _cmd_delete_wallpaper(
     if not deleted:
         raise StudioCommandError("not_found", "That wallpaper isn't an uploaded photo")
     await async_refresh_wallpaper_cache(hass, coordinator.device_slug)
-    for c in iter_coordinators(hass):
-        if source_id in c.wallpaper_favorites or c.wallpaper_source == source_id:
-            favs = [f for f in c.wallpaper_favorites if f != source_id]
-            new_active = "" if c.wallpaper_source == source_id else c.wallpaper_source
-            _apply_wallpaper_config(c, source=new_active, favorites=favs)
+    _prune_deleted_wallpaper_from_coordinators(hass, source_id)
 
 
 async def _cmd_delete_system_wallpaper(
@@ -542,11 +598,7 @@ async def _cmd_delete_system_wallpaper(
     if not deleted:
         raise StudioCommandError("not_found", "That wallpaper isn't an uploaded photo")
     await async_refresh_wallpaper_cache(hass, "system")
-    for c in iter_coordinators(hass):
-        if source_id in c.wallpaper_favorites or c.wallpaper_source == source_id:
-            favs = [f for f in c.wallpaper_favorites if f != source_id]
-            new_active = "" if c.wallpaper_source == source_id else c.wallpaper_source
-            _apply_wallpaper_config(c, source=new_active, favorites=favs)
+    _prune_deleted_wallpaper_from_coordinators(hass, source_id)
 
 
 async def _cmd_save_system_config(
@@ -585,6 +637,19 @@ async def _cmd_save_device_config(
         raise SettingsScopeError(str(err)) from None
 
     current = coordinator.device_data
+    if (
+        CONF_WALLPAPER_CYCLE_MINUTES in updates
+        and updates[CONF_WALLPAPER_CYCLE_MINUTES] > 0
+    ):
+        await async_refresh_wallpaper_cache(hass, coordinator.device_slug)
+    elif (
+        CONF_WALLPAPER_CYCLE_MINUTES in updates
+        and updates[CONF_WALLPAPER_CYCLE_MINUTES] == 0
+        and CONF_WALLPAPER_SOURCE not in updates
+        and coordinator.current_wallpaper
+    ):
+        updates[CONF_WALLPAPER_SOURCE] = coordinator.current_wallpaper
+
     merged_device: dict[str, Any] = {**current, **updates}
     merged_device.pop(CONF_SECURITY_PIN, None)
     for gk in set(GLOBAL_CONFIG_KEYS) - {CONF_SECURITY_PIN_HASH}:
