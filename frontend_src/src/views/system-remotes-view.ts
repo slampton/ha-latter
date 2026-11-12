@@ -1,12 +1,12 @@
 /**
- * System Media & Remotes View (`remotes`): Remote Controls, Volume Overrides, Remote Groups & Device Assignments.
+ * System Media & Remotes View (`remotes`): Remote Controls, Volume Overrides, Remote Groups & Device Assignment Status.
  */
 
 import {
   renderCard,
   renderEntitySlotList,
   renderSelectOptions,
-  renderSelectRow,
+  renderSettingsRow,
   renderTrashIconButton,
 } from "../components/controls.js";
 import { html, type TemplateResult } from "../lib/lit.js";
@@ -31,6 +31,17 @@ export function renderSystemRemotesView(store: StudioStore): TemplateResult {
   const friendlyRemoteLabel = (entId: string): string => {
     const found = (cat.remotes || []).find((r) => r.id === entId);
     return found ? found.name.split(" (")[0] : entId;
+  };
+
+  const remoteAssignmentChipLabel = (rawMode: string): string => {
+    const mode = String(rawMode || "area_auto").trim() || "area_auto";
+    if (mode === "all") return "All System remotes";
+    if (mode.startsWith("group:")) {
+      const grpId = mode.slice(6);
+      const matched = remoteGroups.find((g) => g.id === grpId);
+      return matched ? `Group: ${matched.name}` : `Missing group (${grpId})`;
+    }
+    return "Follows active Area";
   };
 
   return html`<section id="view-remotes">
@@ -216,28 +227,25 @@ export function renderSystemRemotesView(store: StudioStore): TemplateResult {
 
         ${renderCard({
           title: "Device Assignments",
+          subtitle: "Assigned on each Device's Interface page.",
           contentClass: "settings-list",
           body: html`<div id="device-remote-assignments-list" class="settings-list">
             ${screenDevs.length
-              ? screenDevs.map((d) => {
-                  const curMode = d.device_remote_group || "area_auto";
-                  const modeOptions = [
-                    { value: "area_auto", label: "Follow the active Area" },
-                    ...remoteGroups.map((g) => ({
-                      value: `group:${g.id}`,
-                      label: `Group: ${g.name}`,
-                    })),
-                    { value: "all", label: "All System remotes" },
-                  ];
-                  return renderSelectRow({
+              ? screenDevs.map((d) =>
+                  renderSettingsRow({
                     label: d.title,
-                    ariaLabel: `Remotes for ${d.title}`,
                     description: `Active Area: ${d.active_area_name || "—"}`,
-                    value: curMode,
-                    rawOptions: modeOptions,
-                    onChange: (val) => void store.assignDeviceRemoteGroup(d.subentry_id, val),
-                  });
-                })
+                    control: html`<span class="chip">${remoteAssignmentChipLabel(d.device_remote_group)}</span>
+                      <button
+                        type="button"
+                        aria-label=${`Configure remotes for ${d.title}`}
+                        @click=${() => void store.switchSystemDevice(d.subentry_id, "interface")}
+                        class="btn btn-secondary btn-compact"
+                      >
+                        Configure
+                      </button>`,
+                  }),
+                )
               : html`<p class="empty-state">No Devices with a screen yet.</p>`}
           </div>`,
         })}

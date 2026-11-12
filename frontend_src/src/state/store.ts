@@ -56,7 +56,6 @@ import {
   addStringListRowOp,
   addVolumeOverrideRowOp,
   applyDeviceCustomColorOp,
-  assignDeviceRemoteGroupOp,
   commitEntityChange,
   deleteCustomPaletteOp,
   deleteWallpaperOp,
@@ -726,7 +725,8 @@ export class StudioStore implements ReactiveController {
       const caps = merged.capabilities || {};
       const isBleTag = merged.config?.kind === "ble_tag";
       if (
-        (this.currentViewId === "home_display" && (isBleTag || !caps.has_display)) ||
+        ((this.currentViewId === "display" || this.currentViewId === "interface") &&
+          (isBleTag || !caps.has_display)) ||
         (this.currentViewId === "audio_voice" && (isBleTag || (!caps.has_audio && !caps.has_voice))) ||
         (this.currentViewId === "power" && (isBleTag || !caps.has_power))
       ) {
@@ -1048,10 +1048,6 @@ export class StudioStore implements ReactiveController {
 
   removeRemoteGroupRow(groupId: string): void {
     removeRemoteGroupRowOp(this, groupId);
-  }
-
-  async assignDeviceRemoteGroup(subentryId: string, remoteGroup: string): Promise<void> {
-    await assignDeviceRemoteGroupOp(this, subentryId, remoteGroup);
   }
 
   async previewCamera(cameraEntity: string, bustCache = false): Promise<void> {

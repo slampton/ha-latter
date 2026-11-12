@@ -136,15 +136,16 @@ export class LatterStudio extends LitElement {
       { viewId: "dashboard", label: "Overview" },
     ];
     if (!isBleOnly && caps.has_display !== false) {
-      items.push({ viewId: "home_display", label: "Display & Home", id: "nav-btn-home_display" });
+      items.push({ viewId: "display", label: "Display", id: "nav-btn-display" });
+      items.push({ viewId: "interface", label: "Interface", id: "nav-btn-interface" });
     }
     if (!isBleOnly && (caps.has_audio !== false || caps.has_voice !== false)) {
-      items.push({ viewId: "audio_voice", label: "Audio & Voice", id: "nav-btn-audio_voice" });
+      items.push({ viewId: "audio_voice", label: "Audio", id: "nav-btn-audio_voice" });
     }
     if (!isBleOnly && caps.has_power) {
-      items.push({ viewId: "power", label: "Power & Battery", id: "nav-btn-power" });
+      items.push({ viewId: "power", label: "Power", id: "nav-btn-power" });
     }
-    items.push({ viewId: "presence", label: "BLE & Area Presence" });
+    items.push({ viewId: "presence", label: "Presence" });
     items.push({ viewId: "tools", label: "Tools" });
 
     return html`<nav id="nav-scope-device" aria-label="Device pages" class="nav-list">

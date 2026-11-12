@@ -619,12 +619,21 @@ async def _cmd_save_device_config(
     hass: HomeAssistant,
     coordinator: LatterCoordinator | None,
     body: dict[str, Any],
-    _global_cfg: dict[str, Any],
+    global_cfg: dict[str, Any],
     _extra: dict[str, Any],
 ) -> None:
     assert coordinator is not None
     raw_cfg = dict(body.get("config") or {})
     updates = clean_device_settings(raw_cfg)
+
+    if CONF_DEVICE_REMOTE_GROUP in updates:
+        valid_groups = {DEFAULT_DEVICE_REMOTE_GROUP, "all"} | {
+            f"group:{g['id']}" for g in system_settings_view(global_cfg)["remote_groups"]
+        }
+        if updates[CONF_DEVICE_REMOTE_GROUP] not in valid_groups:
+            raise StudioCommandError(
+                "not_found", "Unknown remote group: save the System settings first"
+            )
 
     try:
         if CONF_DOCK_APPS in updates:
@@ -753,32 +762,6 @@ async def _cmd_add_ble_device(
             CONF_ASSIGNED_PERSON: assigned_person,
         },
     )
-
-
-async def _cmd_set_device_remote_group(
-    hass: HomeAssistant,
-    _coordinator: LatterCoordinator | None,
-    body: dict[str, Any],
-    global_cfg: dict[str, Any],
-    _extra: dict[str, Any],
-) -> None:
-    rg_coord = _payload_device(hass, body, "a Device")
-    rem_grp = str(
-        body.get("device_remote_group") or DEFAULT_DEVICE_REMOTE_GROUP
-    ).strip()
-    valid_groups = {DEFAULT_DEVICE_REMOTE_GROUP, "all"} | {
-        f"group:{g['id']}" for g in system_settings_view(global_cfg)["remote_groups"]
-    }
-    if rem_grp not in valid_groups:
-        raise StudioCommandError(
-            "not_found", "Unknown remote group: save the System settings first"
-        )
-    merged_rg: dict[str, Any] = {
-        **rg_coord.device_data,
-        CONF_DEVICE_REMOTE_GROUP: rem_grp,
-    }
-    rg_coord.update_device_config(merged_rg)
-    rg_coord.async_notify_listeners()
 
 
 async def _cmd_create_device_group(
@@ -1026,7 +1009,6 @@ _STUDIO_COMMAND_HANDLERS: dict[str, _CommandHandler] = {
     "clear_internal_logs": _cmd_clear_internal_logs,
     "remove_device": _cmd_remove_device,
     "add_ble_device": _cmd_add_ble_device,
-    "set_device_remote_group": _cmd_set_device_remote_group,
     "create_device_group": _cmd_create_device_group,
     "delete_device_group": _cmd_delete_device_group,
     "sync_device_group": _cmd_sync_device_group,

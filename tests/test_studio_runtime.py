@@ -431,7 +431,7 @@ return {
 
 @unittest.skipUnless(NODE, "node is not installed")
 class TestDisplayViewControls(unittest.TestCase):
-    """Display & Home view renders Sun & Moon pill toggles and state-driven Wallpaper controls."""
+    """Display, Interface, and Media & Remotes views render split controls and read-only assignment shortcuts."""
 
     def test_sun_moon_pills_and_wallpaper_states(self) -> None:
         stub_lit = """
@@ -458,7 +458,7 @@ function flattenHtml(node) {
         runner = (
             stub_lit
             + """
-function makeStore({ weatherBgState = "Dynamic", cycleMins = 0, activeId = "", favIds = [], autoBrtState = "Disabled" }) {
+function makeStore({ weatherBgState = "Dynamic", cycleMins = 0, activeId = "", favIds = [], autoBrtState = "Disabled", remoteMode = "group:living_tv" }) {
   const favSet = new Set(favIds);
   const wallpapers = [
     { id: "preset:forest_mountains", name: "Forest Mountains", kind: "preset", active: activeId === "preset:forest_mountains", favorite: favSet.has("preset:forest_mountains"), deletable: false, thumb_url: "/thumb1" },
@@ -472,6 +472,8 @@ function makeStore({ weatherBgState = "Dynamic", cycleMins = 0, activeId = "", f
   ];
   const displaySection = [
     { entity_id: "light.pocket_display_screen_backlight", domain: "light", name: "Display: Screen Backlight", state: "on" },
+    { entity_id: "select.pocket_display_clock_face", domain: "select", name: "Display: Clock Face", state: "Modern", options: ["Modern", "Analog"] },
+    { entity_id: "select.pocket_display_start_screen", domain: "select", name: "Display: Start Screen", state: "Home", options: ["Home", "Area"] },
     { entity_id: "select.pocket_display_auto_brightness_mode", domain: "select", name: "Display: Auto Brightness Mode", state: autoBrtState, options: ["Disabled", "Sun Synchronized", "Time Schedule"] },
     { entity_id: "number.pocket_display_manual_brightness", domain: "number", name: "Display: Manual Brightness", state: "80", min: 5, max: 100, step: 1, unit: "%" },
     { entity_id: "number.pocket_display_day_brightness", domain: "number", name: "Display: Day Brightness", state: "90", min: 5, max: 100, step: 1, unit: "%" },
@@ -481,6 +483,7 @@ function makeStore({ weatherBgState = "Dynamic", cycleMins = 0, activeId = "", f
   ];
   return {
     host: null,
+    activeSubentryId: "sub_1",
     uploadBusy: false,
     uploadScope: null,
     uploadPercent: 0,
@@ -490,8 +493,18 @@ function makeStore({ weatherBgState = "Dynamic", cycleMins = 0, activeId = "", f
         wallpaper_cycle_minutes: cycleMins,
         display_shape: "square",
         default_page_size: 3,
+        device_remote_group: remoteMode,
       },
-      system_config: { custom_palettes: [] },
+      system_config: {
+        custom_palettes: [],
+        remotes_list: ["remote.living_tv"],
+        volume_overrides: [],
+        remote_groups: [{ id: "living_tv", name: "Living Area TV", area_id: "living", remotes: ["remote.living_tv"] }],
+      },
+      system_devices: [
+        { subentry_id: "sub_1", title: "Desk Panel", kind: "device", has_display: true, active_area_name: "Office", device_remote_group: remoteMode },
+      ],
+      catalog: { remotes: [{ id: "remote.living_tv", name: "Living TV" }], areas: [] },
       wallpapers,
     },
     getSectionItems(sec) {
@@ -504,11 +517,14 @@ function makeStore({ weatherBgState = "Dynamic", cycleMins = 0, activeId = "", f
   };
 }
 
-const offMarkup = flattenHtml(renderDeviceDisplayView(makeStore({ weatherBgState: "Dynamic", cycleMins: 0, activeId: "", autoBrtState: "Disabled" })));
-const staticMarkup = flattenHtml(renderDeviceDisplayView(makeStore({ weatherBgState: "Dynamic", cycleMins: 0, activeId: "preset:ocean_waves", autoBrtState: "Sun Synchronized" })));
-const rotatingMarkup = flattenHtml(renderDeviceDisplayView(makeStore({ weatherBgState: "off", cycleMins: 5, activeId: "preset:ocean_waves", favIds: ["preset:forest_mountains", "preset:ocean_waves"], autoBrtState: "Time Schedule" })));
+const offMarkup = flattenHtml(renderDeviceDisplayView(makeStore({ cycleMins: 0, activeId: "", autoBrtState: "Disabled" })));
+const staticMarkup = flattenHtml(renderDeviceDisplayView(makeStore({ cycleMins: 0, activeId: "preset:ocean_waves", autoBrtState: "Sun Synchronized" })));
+const rotatingMarkup = flattenHtml(renderDeviceDisplayView(makeStore({ cycleMins: 5, activeId: "preset:ocean_waves", favIds: ["preset:forest_mountains", "preset:ocean_waves"], autoBrtState: "Time Schedule" })));
+const ifaceWeatherOn = flattenHtml(renderDeviceInterfaceView(makeStore({ weatherBgState: "Dynamic" })));
+const ifaceWeatherOff = flattenHtml(renderDeviceInterfaceView(makeStore({ weatherBgState: "off" })));
+const sysRemotesMarkup = flattenHtml(renderSystemRemotesView(makeStore({ remoteMode: "group:living_tv" })));
 
-return { offMarkup, staticMarkup, rotatingMarkup };
+return { offMarkup, staticMarkup, rotatingMarkup, ifaceWeatherOn, ifaceWeatherOff, sysRemotesMarkup };
 """
         )
         got = _run_node_ts(
@@ -518,23 +534,39 @@ return { offMarkup, staticMarkup, rotatingMarkup };
                 FRONTEND_SRC / "components" / "controls.ts",
                 FRONTEND_SRC / "components" / "wallpaper-gallery.ts",
                 FRONTEND_SRC / "views" / "device-display-view.ts",
+                FRONTEND_SRC / "views" / "device-interface-view.ts",
+                FRONTEND_SRC / "views" / "system-remotes-view.ts",
             ],
             runner,
         )
-        # 1. Off state + Auto Brightness Disabled: Manual Brightness shown, Day/Night Brightness & Start Hours & raw light hidden
+        # 1. Display view: Auto Brightness Disabled + Clock Face / Start Screen moved to Interface view
         self.assertIn('id="btn-enable-wp-rotation"', got["offMarkup"])
         self.assertNotIn('id="btn-turn-off-wp"', got["offMarkup"])
         self.assertNotIn('id="btn-stop-wp-rotation"', got["offMarkup"])
-        self.assertIn("id=weather-celestial-bodies", got["offMarkup"])
-        self.assertIn("✓ Sun", got["offMarkup"])
-        self.assertIn("+ Moon", got["offMarkup"])
-        self.assertLess(got["offMarkup"].index("✓ Sun"), got["offMarkup"].index("+ Moon"))
         self.assertNotIn("Screen Backlight", got["offMarkup"])
+        self.assertNotIn("Clock Face", got["offMarkup"])
+        self.assertNotIn("Start Screen", got["offMarkup"])
         self.assertIn("Manual Brightness", got["offMarkup"])
         self.assertNotIn("Day Brightness", got["offMarkup"])
         self.assertNotIn("Day Start Hour", got["offMarkup"])
 
-        # 2. Static wallpaper + Sun Synchronized: Day/Night Brightness shown, Manual Brightness & Start Hours hidden
+        # 2. Interface view: Start Screen, Clock Face, Sun & Moon pills, and Remote Control Group selector
+        self.assertIn("Start Screen", got["ifaceWeatherOn"])
+        self.assertIn("Clock Face", got["ifaceWeatherOn"])
+        self.assertLess(got["ifaceWeatherOn"].index("Start Screen"), got["ifaceWeatherOn"].index("Clock Face"))
+        self.assertIn("id=weather-celestial-bodies", got["ifaceWeatherOn"])
+        self.assertIn("✓ Sun", got["ifaceWeatherOn"])
+        self.assertIn("+ Moon", got["ifaceWeatherOn"])
+        self.assertLess(got["ifaceWeatherOn"].index("✓ Sun"), got["ifaceWeatherOn"].index("+ Moon"))
+        self.assertIn("id=cfg-device_remote_group", got["ifaceWeatherOn"])
+        self.assertIn("Group: Living Area TV", got["ifaceWeatherOn"])
+        self.assertNotIn("id=weather-celestial-bodies", got["ifaceWeatherOff"])
+
+        # 3. System -> Media & Remotes: read-only assignment chip + Configure shortcut
+        self.assertIn('<span class="chip">Group: Living Area TV</span>', got["sysRemotesMarkup"])
+        self.assertIn("Configure remotes for Desk Panel", got["sysRemotesMarkup"])
+
+        # 4. Static wallpaper + Sun Synchronized: Day/Night Brightness shown, Manual Brightness & Start Hours hidden
         self.assertIn('id="btn-enable-wp-rotation"', got["staticMarkup"])
         self.assertIn('id="btn-turn-off-wp"', got["staticMarkup"])
         self.assertNotIn('id="btn-stop-wp-rotation"', got["staticMarkup"])
@@ -544,12 +576,11 @@ return { offMarkup, staticMarkup, rotatingMarkup };
         self.assertIn("Night Brightness", got["staticMarkup"])
         self.assertNotIn("Day Start Hour", got["staticMarkup"])
 
-        # 3. Rotating wallpaper + Weather Background off + Time Schedule: Day/Night Brightness & Start Hours shown
+        # 5. Rotating wallpaper + Time Schedule: Day/Night Brightness & Start Hours shown
         self.assertIn('id="btn-stop-wp-rotation"', got["rotatingMarkup"])
         self.assertIn('id="btn-turn-off-wp"', got["rotatingMarkup"])
         self.assertIn('id="btn-clear-stars-wp"', got["rotatingMarkup"])
         self.assertNotIn('id="btn-star-all-wp"', got["rotatingMarkup"])
-        self.assertNotIn("id=weather-celestial-bodies", got["rotatingMarkup"])
         self.assertNotIn("Manual Brightness", got["rotatingMarkup"])
         self.assertIn("Day Brightness", got["rotatingMarkup"])
         self.assertIn("Day Start Hour", got["rotatingMarkup"])

@@ -4,11 +4,19 @@
 
 import type { DeviceViewId, IssueItem, SecurityPinPolicy, StudioViewId, SystemViewId } from "./types.js";
 
-export const STUDIO_REV = 3;
+export const STUDIO_REV = 4;
 
 export const MAX_WALLPAPER_UPLOAD_BYTES = 15 * 1024 * 1024;
 
-export const DEVICE_VIEW_SLUGS = {dashboard: "overview", home_display: "display", audio_voice: "audio", power: "power", presence: "presence", tools: "tools"};
+export const DEVICE_VIEW_SLUGS = {
+  dashboard: "overview",
+  display: "display",
+  interface: "interface",
+  audio_voice: "audio",
+  power: "power",
+  presence: "presence",
+  tools: "tools",
+};
 
 export const SYSTEM_VIEW_SLUGS = {system_overview: "overview", shared_entities: "shared", remotes: "remotes", system_sync: "groups", area_tracking: "presence", system_tools: "tools"};
 
@@ -21,10 +29,11 @@ export const VIEW_TITLES = {
   system_tools: "Tools",
   select_device_prompt: "All Devices",
   dashboard: "Overview",
-  home_display: "Display & Home",
-  audio_voice: "Audio & Voice",
-  power: "Power & Battery",
-  presence: "BLE & Area Presence",
+  display: "Display",
+  interface: "Interface",
+  audio_voice: "Audio",
+  power: "Power",
+  presence: "Presence",
   tools: "Tools",
 };
 

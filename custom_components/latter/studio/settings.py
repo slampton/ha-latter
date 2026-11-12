@@ -49,7 +49,6 @@ SYSTEM_COMMANDS: frozenset[str] = frozenset(
         "clear_internal_logs",
         "remove_device",
         "add_ble_device",
-        "set_device_remote_group",
         "create_device_group",
         "delete_device_group",
         "sync_device_group",
@@ -167,6 +166,7 @@ SYSTEM_SETTING_KEYS: tuple[str, ...] = (
 
 DEVICE_TEXT_KEYS: tuple[str, ...] = (
     "device_group",
+    "device_remote_group",
     "default_speaker",
     "ma_player_entity",
     "default_area",
@@ -202,6 +202,7 @@ NOISE_REDUCTION_LEVELS: tuple[str, ...] = ("strong", "light", "off")
 DEFAULT_NOISE_REDUCTION = "strong"
 SECURITY_PIN_POLICIES: tuple[str, ...] = ("auto", "allow", "require_pin", "block")
 _HEX_COLOR = re.compile(r"^#[0-9A-F]{6}$")
+_REMOTE_GROUP_REF = re.compile(r"^group:[A-Za-z0-9_-]+$")
 
 
 class SettingsScopeError(ValueError):
@@ -396,6 +397,13 @@ def clean_device_settings(incoming: Mapping[str, Any]) -> dict[str, Any]:
                 f"Unknown security PIN policy: {pol or '(empty)'}"
             )
         out["security_pin_policy"] = pol
+    if "device_remote_group" in out:
+        rem_grp = out["device_remote_group"] or "area_auto"
+        if rem_grp not in ("area_auto", "all") and not _REMOTE_GROUP_REF.match(rem_grp):
+            raise SettingsScopeError(
+                f"Unknown remote group mode: {rem_grp}"
+            )
+        out["device_remote_group"] = rem_grp
     return out
 
 

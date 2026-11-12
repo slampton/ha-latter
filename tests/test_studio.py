@@ -92,7 +92,12 @@ class TestViewLayout(unittest.TestCase):
         names = re.findall(r':\s*"([^"]+)"', titles)
         self.assertIn("Overview", names)
         self.assertEqual(names.count("Tools"), 2)
-        self.assertEqual(names.count("BLE & Area Presence"), 2)
+        self.assertEqual(names.count("BLE & Area Presence"), 1)
+        for short_dev_title in ("Display", "Interface", "Audio", "Power", "Presence"):
+            self.assertIn(short_dev_title, names)
+        self.assertNotIn("Display & Home", names)
+        self.assertNotIn("Audio & Voice", names)
+        self.assertNotIn("Power & Battery", names)
         self.assertNotIn("Settings", names)
         self.assertIn("Device Groups", names)
         for name in names:
@@ -104,23 +109,28 @@ class TestViewLayout(unittest.TestCase):
     def test_information_architecture(self) -> None:
         js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
         self.assertIn('dashboard: "overview"', js)
-        self.assertIn('home_display: "display"', js)
+        self.assertIn('display: "display"', js)
+        self.assertIn('interface: "interface"', js)
         self.assertIn('system_sync: "groups"', js)
         self.assertIn('area_tracking: "presence"', js)
         self.assertIn('system_tools: "tools"', js)
         self.assertNotIn("nav-esp-badge", js)
+        self.assertNotIn("set_device_remote_group", js)
+        self.assertNotIn("assignDeviceRemoteGroup", js)
         self.assertEqual(js.count('class="nav-badge"'), 1)
 
         def section(view: str) -> str:
             start = js.index(f'<section id="view-{view}"')
             return js[start:js.index("</section>", start)]
 
-        tools, sys_tools, groups, overview, home_display, shared_entities = (
+        tools, sys_tools, groups, overview, display_view, interface_view, remotes_view, shared_entities = (
             section("tools"),
             section("system_tools"),
             section("system_sync"),
             section("dashboard"),
-            section("home_display"),
+            section("display"),
+            section("interface"),
+            section("remotes"),
             section("shared_entities"),
         )
         for title in ("Diagnostics", "Replace Hardware", "Danger Zone"):
@@ -129,6 +139,13 @@ class TestViewLayout(unittest.TestCase):
             self.assertIn(f'<h3 class="card-title">{title}</h3>', sys_tools)
         for title in ("Whole-Home Entities", "Calendars", "Cameras &amp; Doorbell Audio", "Custom Colors", "Wallpapers"):
             self.assertIn(f'<h3 class="card-title">{title}</h3>', shared_entities)
+        for title in ("Brightness &amp; Theme", "Wallpapers"):
+            self.assertIn(f'title: "{title.replace("&amp;", "&")}"', display_view)
+        for title in ("Home Screen", "Activity Card", "Area Controls", "Remote Controls"):
+            self.assertIn(f'<h3 class="card-title">{title}</h3>', interface_view)
+        self.assertIn('id: "cfg-device_remote_group"', interface_view)
+        self.assertIn("Manage Remote Groups", interface_view)
+        self.assertIn('switchSystemDevice(d.subentry_id, "interface")', remotes_view)
         self.assertNotIn("Export Settings", js)
         self.assertNotIn("Restore From File", js)
         self.assertIn('<h3 class="card-title">Device Groups</h3>', groups)
@@ -136,7 +153,7 @@ class TestViewLayout(unittest.TestCase):
         self.assertNotIn("Configuration Profiles", js)
         self.assertNotIn("dash-power-profile-select", overview)
         self.assertNotIn("quick-profile-select", overview)
-        self.assertNotIn("Saved Custom Colors", home_display)
+        self.assertNotIn("Saved Custom Colors", display_view)
         self.assertNotIn("Add a color…", js)
         self.assertNotIn("Custom Color Library", sys_tools)
         self.assertIn('"btn-upload-wp"', js)
@@ -188,10 +205,11 @@ class TestViewLayout(unittest.TestCase):
         js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
         self.assertIn('["wake greeting", "weather background", "sun", "moon"]', js)
         self.assertIn('["default category", "show all category"]', js)
-        start = js.index('<section id="view-home_display"')
+        start = js.index('<section id="view-interface"')
         view = js[start:js.index("</section>", start)]
         self.assertIn('<h3 class="card-title">Home Screen</h3>', view)
         self.assertIn('<h3 class="card-title">Area Controls</h3>', view)
+        self.assertIn('<h3 class="card-title">Remote Controls</h3>', view)
         self.assertIn('id: "weather-celestial-bodies"', view)
         self.assertIn('label: "Sun & Moon"', view)
         self.assertIn('id="embedded-area-ui"', view)
@@ -257,7 +275,7 @@ class TestViewLayout(unittest.TestCase):
         self.assertNotIn("grid-2", js)
         for view in (
             "system_overview", "shared_entities", "remotes", "system_sync", "area_tracking", "system_tools",
-            "dashboard", "home_display", "audio_voice", "power", "presence", "tools",
+            "dashboard", "display", "interface", "audio_voice", "power", "presence", "tools",
         ):
             start = js.index(f'<section id="view-{view}"')
             body = js[start:js.index("</section>", start)]
@@ -310,7 +328,7 @@ class TestActivityCard(unittest.TestCase):
 
     def test_studio_rows(self) -> None:
         js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
-        start = js.index('<section id="view-home_display"')
+        start = js.index('<section id="view-interface"')
         view = js[start:js.index("</section>", start)]
         self.assertIn('<h3 class="card-title">Activity Card</h3>', view)
         self.assertIn('id="cfg-activity_card"', view)
@@ -473,6 +491,16 @@ class TestSaveScopes(unittest.TestCase):
             {"default_page_size": 20, "wallpaper_cycle_minutes": 0, "area_handoff": True, "assigned_person": "person.a"},
         )
         self.assertEqual(settings.clean_device_settings({"device_custom_color": "#3898ff"}), {"device_custom_color": "#3898FF"})
+        self.assertEqual(
+            settings.clean_device_settings({"device_remote_group": " group:living_tv "}),
+            {"device_remote_group": "group:living_tv"},
+        )
+        self.assertEqual(
+            settings.clean_device_settings({"device_remote_group": ""}),
+            {"device_remote_group": "area_auto"},
+        )
+        with self.assertRaises(settings.SettingsScopeError):
+            settings.clean_device_settings({"device_remote_group": "bogus"})
         with self.assertRaises(settings.SettingsScopeError):
             settings.clean_device_settings({"device_custom_color": "red"})
         with self.assertRaises(settings.SettingsScopeError):

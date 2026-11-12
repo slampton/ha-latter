@@ -7,7 +7,8 @@ export type StudioScope = "device" | "system";
 export type DeviceViewId =
   | "select_device_prompt"
   | "dashboard"
-  | "home_display"
+  | "display"
+  | "interface"
   | "audio_voice"
   | "power"
   | "presence"
@@ -205,6 +206,7 @@ export interface DeviceConfig {
   is_roaming?: boolean;
   display_shape?: "circle" | "square" | string;
   device_group?: string;
+  device_remote_group?: string;
   default_page_size?: number;
   default_speaker?: string;
   ma_player_entity?: string;

@@ -16,7 +16,6 @@ export const SYSTEM_WS_COMMANDS = new Set([
   "clear_internal_logs",
   "remove_device",
   "add_ble_device",
-  "set_device_remote_group",
   "create_device_group",
   "delete_device_group",
   "sync_device_group",

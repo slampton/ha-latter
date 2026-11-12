@@ -675,9 +675,17 @@ class LitElement extends HTMLElement {
 /**
  * Canonical constants, route maps, issue messages, and Title Case dictionaries for Latter Studio.
  */
-const STUDIO_REV = 3;
+const STUDIO_REV = 4;
 const MAX_WALLPAPER_UPLOAD_BYTES = 15 * 1024 * 1024;
-const DEVICE_VIEW_SLUGS = {dashboard: "overview", home_display: "display", audio_voice: "audio", power: "power", presence: "presence", tools: "tools"};
+const DEVICE_VIEW_SLUGS = {
+  dashboard: "overview",
+  display: "display",
+  interface: "interface",
+  audio_voice: "audio",
+  power: "power",
+  presence: "presence",
+  tools: "tools",
+};
 const SYSTEM_VIEW_SLUGS = {system_overview: "overview", shared_entities: "shared", remotes: "remotes", system_sync: "groups", area_tracking: "presence", system_tools: "tools"};
 const VIEW_TITLES = {
   system_overview: "Overview",
@@ -688,10 +696,11 @@ const VIEW_TITLES = {
   system_tools: "Tools",
   select_device_prompt: "All Devices",
   dashboard: "Overview",
-  home_display: "Display & Home",
-  audio_voice: "Audio & Voice",
-  power: "Power & Battery",
-  presence: "BLE & Area Presence",
+  display: "Display",
+  interface: "Interface",
+  audio_voice: "Audio",
+  power: "Power",
+  presence: "Presence",
   tools: "Tools",
 };
 const _typecheckViewMaps
@@ -1877,7 +1886,6 @@ const SYSTEM_WS_COMMANDS = new Set([
   "clear_internal_logs",
   "remove_device",
   "add_ble_device",
-  "set_device_remote_group",
   "create_device_group",
   "delete_device_group",
   "sync_device_group",
@@ -2641,13 +2649,25 @@ function stageDeviceSettingOp(
     bucket.previousValues[`__dom:${controlDomId}`] = bucket.previousValues[key];
   }
   bucket.patch[key] = value;
-  if (store.state && store.state.subentry_id === targetSubentryId) {
+  if (store.state) {
+    const nextSystemDevices =
+      key === "device_remote_group" && Array.isArray(store.state.system_devices)
+        ? store.state.system_devices.map((d) =>
+            d.subentry_id === targetSubentryId
+              ? { ...d, device_remote_group: String(value || "area_auto") }
+              : d,
+          )
+        : store.state.system_devices;
     store.state = {
       ...store.state,
-      config: {
-        ...store.state.config,
-        [key]: value,
-      },
+      system_devices: nextSystemDevices,
+      config:
+        store.state.subentry_id === targetSubentryId
+          ? {
+              ...store.state.config,
+              [key]: value,
+            }
+          : store.state.config,
     };
   }
   if (bucket.timer) clearTimeout(bucket.timer);
@@ -2694,19 +2714,38 @@ async function flushDeviceBucketOp(store, targetSubentryId) {
         else controlRevert[domId] = "";
       }
     }
-    if (store.state && store.state.subentry_id === targetSubentryId) {
-      const restoredConfig = {
-        ...(store.state.config),
-      };
-      for (const [k, v] of Object.entries(previousValues)) {
-        if (!k.startsWith("__dom:")) {
-          restoredConfig[k] = v;
+    if (store.state) {
+      const nextSystemDevices =
+        "device_remote_group" in previousValues && Array.isArray(store.state.system_devices)
+          ? store.state.system_devices.map((d) =>
+              d.subentry_id === targetSubentryId
+                ? {
+                    ...d,
+                    device_remote_group: String(previousValues.device_remote_group || "area_auto"),
+                  }
+                : d,
+            )
+          : store.state.system_devices;
+      if (store.state.subentry_id === targetSubentryId) {
+        const restoredConfig = {
+          ...(store.state.config),
+        };
+        for (const [k, v] of Object.entries(previousValues)) {
+          if (!k.startsWith("__dom:")) {
+            restoredConfig[k] = v;
+          }
         }
+        store.state = {
+          ...store.state,
+          system_devices: nextSystemDevices,
+          config: restoredConfig,
+        };
+      } else if (nextSystemDevices !== store.state.system_devices) {
+        store.state = {
+          ...store.state,
+          system_devices: nextSystemDevices,
+        };
       }
-      store.state = {
-        ...store.state,
-        config: restoredConfig,
-      };
     }
     if (Object.keys(controlRevert).length > 0) {
       store.pendingDomRevert = { controlIds: controlRevert };
@@ -3231,24 +3270,6 @@ function toggleRemoteInGroupOp(
 function removeRemoteGroupRowOp(store, groupId) {
   const groups = (store.state?.system_config?.remote_groups || []).filter((g) => g.id !== groupId);
   store.stageSystemSetting("remote_groups", groups);
-}
-async function assignDeviceRemoteGroupOp(
-  store,
-  subentryId,
-  remoteGroup,
-) {
-  try {
-    await store.flushSystemSettings();
-    const res = await store.ws.runSystemCommand(
-      "set_device_remote_group",
-      { subentry_id: subentryId, device_remote_group: remoteGroup },
-      store.activeSubentryId || null,
-    );
-    if (res) store.ingestPayload(res, false);
-    store.showToast("Updated remote group assignment");
-  } catch (err) {
-    store.showToast(formatWsError(err, "Could not assign remote group"), true);
-  }
 }
 async function previewCameraOp(
   store,
@@ -4116,7 +4137,8 @@ class StudioStore {
       const caps = merged.capabilities || {};
       const isBleTag = merged.config?.kind === "ble_tag";
       if (
-        (this.currentViewId === "home_display" && (isBleTag || !caps.has_display)) ||
+        ((this.currentViewId === "display" || this.currentViewId === "interface") &&
+          (isBleTag || !caps.has_display)) ||
         (this.currentViewId === "audio_voice" && (isBleTag || (!caps.has_audio && !caps.has_voice))) ||
         (this.currentViewId === "power" && (isBleTag || !caps.has_power))
       ) {
@@ -4379,9 +4401,6 @@ class StudioStore {
   }
   removeRemoteGroupRow(groupId) {
     removeRemoteGroupRowOp(this, groupId);
-  }
-  async assignDeviceRemoteGroup(subentryId, remoteGroup) {
-    await assignDeviceRemoteGroupOp(this, subentryId, remoteGroup);
   }
   async previewCamera(cameraEntity, bustCache = false) {
     await previewCameraOp(this, cameraEntity, bustCache);
@@ -5891,9 +5910,12 @@ function renderWallpaperUploadProgress(
 
 // --- src/views/device-display-view.ts ---
 /**
- * Device Display & Home View (`home_display`): Appearance, Custom Color, Activity Card, Dock Apps, Area Controls & Wallpapers.
+ * Device Display View (`display`, D-026): Panel Brightness, Theme / Custom Color & Wallpapers.
  */
-function sortByKeywords(items, order) {
+function sortEntitiesByKeywords(
+  items,
+  order,
+) {
   return [...items].sort((a, b) => {
     const la = (a.name || "").toLowerCase();
     const lb = (b.name || "").toLowerCase();
@@ -5904,14 +5926,19 @@ function sortByKeywords(items, order) {
     return ra - rb;
   });
 }
+function isInterfaceDisplayEntity(it) {
+  const low = (it.name || "").toLowerCase();
+  return (
+    low.includes("clock face") ||
+    low.includes("time format") ||
+    low.includes("start screen")
+  );
+}
 function renderDeviceDisplayView(store) {
   const data = store.state;
   const cfg = data?.config || {};
   const palettes = data?.system_config?.custom_palettes || [];
   const displayOrder = [
-    "clock face",
-    "time format",
-    "start screen",
     "color profile",
     "auto brightness mode",
     "manual brightness",
@@ -5920,13 +5947,19 @@ function renderDeviceDisplayView(store) {
     "day start hour",
     "night start hour",
   ];
-  const displayItems = sortByKeywords(store.getSectionItems("display"), displayOrder);
+  const displayItems = sortEntitiesByKeywords(
+    store.getSectionItems("display").filter((it) => !isInterfaceDisplayEntity(it)),
+    displayOrder,
+  );
   const autoBrtItem = displayItems.find((it) =>
     (it.name || "").toLowerCase().includes("auto brightness"),
   );
   const autoBrtState = String(autoBrtItem?.state ?? "").trim();
   const autoBrtKnown =
-    Boolean(autoBrtItem) && autoBrtState !== "" && autoBrtState !== "unavailable" && autoBrtState !== "unknown";
+    Boolean(autoBrtItem) &&
+    autoBrtState !== "" &&
+    autoBrtState !== "unavailable" &&
+    autoBrtState !== "unknown";
   const autoBrtOff = autoBrtKnown && (autoBrtState === "Disabled" || autoBrtState === "off");
   const autoBrtTimeSchedule = autoBrtKnown && autoBrtState === "Time Schedule";
   const visibleDisplayItems = displayItems.filter((it) => {
@@ -5952,25 +5985,6 @@ function renderDeviceDisplayView(store) {
     ? String(cfg.device_custom_color).toUpperCase()
     : defaultThemeHex(store.host);
   const swatchStyle = `--swatch-color:${curHex}`;
-  const homeOrder = ["wake greeting", "weather background", "sun", "moon"];
-  const homeItems = sortByKeywords(store.getSectionItems("home"), homeOrder);
-  const weatherBgSwitch = homeItems.find((it) =>
-    (it.name || "").toLowerCase().includes("weather background"),
-  );
-  const weatherBgOff = weatherBgSwitch ? weatherBgSwitch.state === "off" : false;
-  const isCelestialSwitch = (it) =>
-    it.domain === "switch" && /^(?:home:\s*)?(?:sun|moon)$/i.test((it.name || "").trim());
-  const celestialItems = homeItems.filter(isCelestialSwitch);
-  const visibleHomeItems = homeItems.filter((it) => !isCelestialSwitch(it));
-  const areaOrder = ["default category", "show all category"];
-  const areaEspItems = sortByKeywords(
-    store.getSectionItems("area").filter((it) => !(it.name || "").toLowerCase().includes("ble")),
-    areaOrder,
-  );
-  const activityCardOn = cfg.activity_card !== false;
-  const enabledSources = new Set(store.getEnabledActivitySources());
-  const enabledDock = store.getEnabledDockTokens();
-  const disabledDock = DOCK_APPS_CATALOG.filter((a) => !enabledDock.includes(a.token));
   const curCycle = Number(cfg.wallpaper_cycle_minutes || 0);
   const wallpapers = data?.wallpapers || [];
   const activeWp = wallpapers.find((wp) => Boolean(wp.active)) || null;
@@ -5993,11 +6007,11 @@ function renderDeviceDisplayView(store) {
       : starredCount === 1
         ? "1 wallpaper starred — star at least 2 to cycle between favorites."
         : `${starredCount} of ${wallpapers.length} wallpapers starred for rotation.`;
-  return html`<section id="view-home_display">
+  return html`<section id="view-display">
     <div class="columns">
       <div class="column">
         ${renderCard({
-          title: "Display & Appearance",
+          title: "Brightness & Theme",
           contentClass: "settings-list",
           body: html`${visibleDisplayItems.map((it) => renderNativeControlRow(store, it))}
             ${colorProfileItem || palettes.length || cfg.device_custom_color
@@ -6038,57 +6052,9 @@ function renderDeviceDisplayView(store) {
                 })
               : nothing}`,
         })}
+      </div>
 
-        ${renderCard({
-          heading: html`<h3 class="card-title">Activity Card</h3>`,
-          contentClass: "settings-list",
-          body: html`${renderSettingsRow({
-              labelHtml: html`<label for="cfg-activity_card" class="row-label">Show the Activity Card</label>`,
-              description:
-                "Shows live timers, alarms, media queue, stopwatch, and next calendar event on Home.",
-              control: html`<input
-                type="checkbox"
-                id="cfg-activity_card"
-                role="switch"
-                .checked=${activityCardOn}
-                @change=${(ev) =>
-                  store.stageDeviceSetting(
-                    "activity_card",
-                    (ev.currentTarget).checked,
-                    "cfg-activity_card",
-                  )}
-                class="switch"
-              />`,
-            })}
-            ${activityCardOn
-              ? renderSettingsRow({
-                  id: "activity-sources",
-                  label: "Activity Card Sources",
-                  description: "Choose which live items appear in the Activity Card.",
-                  stacked: true,
-                  control: html`<div class="pill-list" role="group" aria-label="Activity Card sources">
-                    ${ACTIVITY_SOURCES_CATALOG.map((src) => {
-                      const on = enabledSources.has(src.id);
-                      return html`<span
-                        data-src=${src.id}
-                        data-label=${src.label}
-                        class="pill ${on ? "enabled" : ""}"
-                      >
-                        <button
-                          type="button"
-                          aria-pressed=${String(on)}
-                          @click=${() => store.toggleActivitySource(src.id)}
-                          class="pill-toggle"
-                        >
-                          ${on ? `✓ ${src.label}` : `+ ${src.label}`}
-                        </button>
-                      </span>`;
-                    })}
-                  </div>`,
-                })
-              : nothing}`,
-        })}
-
+      <div class="column">
         ${renderCard({
           title: "Wallpapers",
           subtitle: "Shared presets and uploaded photos cropped for this display.",
@@ -6201,12 +6167,72 @@ function renderDeviceDisplayView(store) {
             </div>`,
         })}
       </div>
+    </div>
+  </section>`;
+}
 
+// --- src/views/device-interface-view.ts ---
+/**
+ * Device Interface View (`interface`, D-026): Home Screen, Dock Apps, Activity Card, Area Controls & Remote Controls.
+ */
+function renderDeviceInterfaceView(store) {
+  const data = store.state;
+  const cfg = data?.config || {};
+  const remoteGroups = data?.system_config?.remote_groups || [];
+  const homeDisplayOrder = ["start screen", "clock face", "time format"];
+  const homeDisplayItems = sortEntitiesByKeywords(
+    store.getSectionItems("display").filter(isInterfaceDisplayEntity),
+    homeDisplayOrder,
+  );
+  const homeOrder = ["wake greeting", "weather background", "sun", "moon"];
+  const homeItems = sortEntitiesByKeywords(store.getSectionItems("home"), homeOrder);
+  const weatherBgSwitch = homeItems.find((it) =>
+    (it.name || "").toLowerCase().includes("weather background"),
+  );
+  const weatherBgOff = weatherBgSwitch ? weatherBgSwitch.state === "off" : false;
+  const isCelestialSwitch = (it) =>
+    it.domain === "switch" && /^(?:home:\s*)?(?:sun|moon)$/i.test((it.name || "").trim());
+  const celestialItems = homeItems.filter(isCelestialSwitch);
+  const visibleHomeItems = homeItems.filter((it) => !isCelestialSwitch(it));
+  const areaOrder = ["default category", "show all category"];
+  const areaEspItems = sortEntitiesByKeywords(
+    store.getSectionItems("area").filter((it) => !(it.name || "").toLowerCase().includes("ble")),
+    areaOrder,
+  );
+  const remoteEspItems = store.getSectionItems("remote");
+  const activityCardOn = cfg.activity_card !== false;
+  const enabledSources = new Set(store.getEnabledActivitySources());
+  const enabledDock = store.getEnabledDockTokens();
+  const disabledDock = DOCK_APPS_CATALOG.filter((a) => !enabledDock.includes(a.token));
+  const curDevEntry = (data?.system_devices || []).find(
+    (d) => d.subentry_id === store.activeSubentryId,
+  );
+  const curRemoteMode =
+    String(cfg.device_remote_group || curDevEntry?.device_remote_group || "area_auto").trim() ||
+    "area_auto";
+  const remoteModeOptions = [
+    { value: "area_auto", label: "Follow the active Area" },
+    ...remoteGroups.map((g) => ({
+      value: `group:${g.id}`,
+      label: `Group: ${g.name}`,
+    })),
+    { value: "all", label: "All System remotes" },
+  ];
+  if (!remoteModeOptions.some((o) => o.value === curRemoteMode)) {
+    const rawId = curRemoteMode.startsWith("group:") ? curRemoteMode.slice(6) : curRemoteMode;
+    remoteModeOptions.push({
+      value: curRemoteMode,
+      label: `Missing group (${rawId})`,
+    });
+  }
+  return html`<section id="view-interface">
+    <div class="columns">
       <div class="column">
         ${renderCard({
           heading: html`<h3 class="card-title">Home Screen</h3>`,
           contentClass: "settings-list",
-          body: html`${renderSettingsRow({
+          body: html`${homeDisplayItems.map((it) => renderNativeControlRow(store, it))}
+            ${renderSettingsRow({
               label: "Dock Apps",
               description: "Toggle and reorder apps shown in the Home Dock.",
               stacked: true,
@@ -6342,6 +6368,58 @@ function renderDeviceDisplayView(store) {
         })}
 
         ${renderCard({
+          heading: html`<h3 class="card-title">Activity Card</h3>`,
+          contentClass: "settings-list",
+          body: html`${renderSettingsRow({
+              labelHtml: html`<label for="cfg-activity_card" class="row-label">Show the Activity Card</label>`,
+              description:
+                "Shows live timers, alarms, media queue, stopwatch, and next calendar event on Home.",
+              control: html`<input
+                type="checkbox"
+                id="cfg-activity_card"
+                role="switch"
+                .checked=${activityCardOn}
+                @change=${(ev) =>
+                  store.stageDeviceSetting(
+                    "activity_card",
+                    (ev.currentTarget).checked,
+                    "cfg-activity_card",
+                  )}
+                class="switch"
+              />`,
+            })}
+            ${activityCardOn
+              ? renderSettingsRow({
+                  id: "activity-sources",
+                  label: "Activity Card Sources",
+                  description: "Choose which live items appear in the Activity Card.",
+                  stacked: true,
+                  control: html`<div class="pill-list" role="group" aria-label="Activity Card sources">
+                    ${ACTIVITY_SOURCES_CATALOG.map((src) => {
+                      const on = enabledSources.has(src.id);
+                      return html`<span
+                        data-src=${src.id}
+                        data-label=${src.label}
+                        class="pill ${on ? "enabled" : ""}"
+                      >
+                        <button
+                          type="button"
+                          aria-pressed=${String(on)}
+                          @click=${() => store.toggleActivitySource(src.id)}
+                          class="pill-toggle"
+                        >
+                          ${on ? `✓ ${src.label}` : `+ ${src.label}`}
+                        </button>
+                      </span>`;
+                    })}
+                  </div>`,
+                })
+              : nothing}`,
+        })}
+      </div>
+
+      <div class="column">
+        ${renderCard({
           heading: html`<h3 class="card-title">Area Controls</h3>`,
           contentClass: "settings-list",
           body: html`${renderSelectRow({
@@ -6360,6 +6438,32 @@ function renderDeviceDisplayView(store) {
             <div id="embedded-area-ui" class="settings-list">
               ${areaEspItems.map((it) => renderNativeControlRow(store, it))}
             </div>`,
+        })}
+
+        ${renderCard({
+          heading: html`<h3 class="card-title">Remote Controls</h3>`,
+          contentClass: "settings-list",
+          body: html`${renderSelectRow({
+              id: "cfg-device_remote_group",
+              label: "Remote Control Group",
+              description: "Choose which remotes appear on this Device's Remote screen.",
+              value: curRemoteMode,
+              rawOptions: remoteModeOptions,
+              onChange: (val) =>
+                store.stageDeviceSetting(
+                  "device_remote_group",
+                  val,
+                  "cfg-device_remote_group",
+                ),
+            })}
+            ${remoteEspItems.map((it) => renderNativeControlRow(store, it))}`,
+          footerActions: html`<button
+            type="button"
+            @click=${() => store.openSystemSection("remotes")}
+            class="btn btn-text"
+          >
+            Manage Remote Groups
+          </button>`,
         })}
       </div>
     </div>
@@ -7952,7 +8056,7 @@ function renderSystemPresenceView(store) {
 
 // --- src/views/system-remotes-view.ts ---
 /**
- * System Media & Remotes View (`remotes`): Remote Controls, Volume Overrides, Remote Groups & Device Assignments.
+ * System Media & Remotes View (`remotes`): Remote Controls, Volume Overrides, Remote Groups & Device Assignment Status.
  */
 function renderSystemRemotesView(store) {
   const data = store.state;
@@ -7971,6 +8075,16 @@ function renderSystemRemotesView(store) {
   const friendlyRemoteLabel = (entId) => {
     const found = (cat.remotes || []).find((r) => r.id === entId);
     return found ? found.name.split(" (")[0] : entId;
+  };
+  const remoteAssignmentChipLabel = (rawMode) => {
+    const mode = String(rawMode || "area_auto").trim() || "area_auto";
+    if (mode === "all") return "All System remotes";
+    if (mode.startsWith("group:")) {
+      const grpId = mode.slice(6);
+      const matched = remoteGroups.find((g) => g.id === grpId);
+      return matched ? `Group: ${matched.name}` : `Missing group (${grpId})`;
+    }
+    return "Follows active Area";
   };
   return html`<section id="view-remotes">
     <div class="columns">
@@ -8154,28 +8268,25 @@ function renderSystemRemotesView(store) {
 
         ${renderCard({
           title: "Device Assignments",
+          subtitle: "Assigned on each Device's Interface page.",
           contentClass: "settings-list",
           body: html`<div id="device-remote-assignments-list" class="settings-list">
             ${screenDevs.length
-              ? screenDevs.map((d) => {
-                  const curMode = d.device_remote_group || "area_auto";
-                  const modeOptions = [
-                    { value: "area_auto", label: "Follow the active Area" },
-                    ...remoteGroups.map((g) => ({
-                      value: `group:${g.id}`,
-                      label: `Group: ${g.name}`,
-                    })),
-                    { value: "all", label: "All System remotes" },
-                  ];
-                  return renderSelectRow({
+              ? screenDevs.map((d) =>
+                  renderSettingsRow({
                     label: d.title,
-                    ariaLabel: `Remotes for ${d.title}`,
                     description: `Active Area: ${d.active_area_name || "—"}`,
-                    value: curMode,
-                    rawOptions: modeOptions,
-                    onChange: (val) => void store.assignDeviceRemoteGroup(d.subentry_id, val),
-                  });
-                })
+                    control: html`<span class="chip">${remoteAssignmentChipLabel(d.device_remote_group)}</span>
+                      <button
+                        type="button"
+                        aria-label=${`Configure remotes for ${d.title}`}
+                        @click=${() => void store.switchSystemDevice(d.subentry_id, "interface")}
+                        class="btn btn-secondary btn-compact"
+                      >
+                        Configure
+                      </button>`,
+                  }),
+                )
               : html`<p class="empty-state">No Devices with a screen yet.</p>`}
           </div>`,
         })}
@@ -8860,7 +8971,7 @@ function renderSystemToolsView(store) {
 
 // --- src/views/index.ts ---
 /**
- * Active-View-Only Router (`D-023`): Renders ONLY the currently active Studio view.
+ * Active-View-Only Router (`D-023`, `D-026`): Renders ONLY the currently active Studio view.
  */
 function renderActiveView(store) {
   if (store.currentScope === "system") {
@@ -8884,8 +8995,10 @@ function renderActiveView(store) {
     return renderDevicesListView(store);
   }
   switch (store.currentViewId) {
-    case "home_display":
+    case "display":
       return renderDeviceDisplayView(store);
+    case "interface":
+      return renderDeviceInterfaceView(store);
     case "audio_voice":
       return renderDeviceAudioView(store);
     case "power":
@@ -9012,15 +9125,16 @@ class LatterStudio extends LitElement {
       { viewId: "dashboard", label: "Overview" },
     ];
     if (!isBleOnly && caps.has_display !== false) {
-      items.push({ viewId: "home_display", label: "Display & Home", id: "nav-btn-home_display" });
+      items.push({ viewId: "display", label: "Display", id: "nav-btn-display" });
+      items.push({ viewId: "interface", label: "Interface", id: "nav-btn-interface" });
     }
     if (!isBleOnly && (caps.has_audio !== false || caps.has_voice !== false)) {
-      items.push({ viewId: "audio_voice", label: "Audio & Voice", id: "nav-btn-audio_voice" });
+      items.push({ viewId: "audio_voice", label: "Audio", id: "nav-btn-audio_voice" });
     }
     if (!isBleOnly && caps.has_power) {
-      items.push({ viewId: "power", label: "Power & Battery", id: "nav-btn-power" });
+      items.push({ viewId: "power", label: "Power", id: "nav-btn-power" });
     }
-    items.push({ viewId: "presence", label: "BLE & Area Presence" });
+    items.push({ viewId: "presence", label: "Presence" });
     items.push({ viewId: "tools", label: "Tools" });
     return html`<nav id="nav-scope-device" aria-label="Device pages" class="nav-list">
       <button

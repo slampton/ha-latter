@@ -1,11 +1,12 @@
 /**
- * Active-View-Only Router (`D-023`): Renders ONLY the currently active Studio view.
+ * Active-View-Only Router (`D-023`, `D-026`): Renders ONLY the currently active Studio view.
  */
 
 import type { TemplateResult } from "../lib/lit.js";
 import type { StudioStore } from "../state/store.js";
 import { renderDeviceAudioView } from "./device-audio-view.js";
 import { renderDeviceDisplayView } from "./device-display-view.js";
+import { renderDeviceInterfaceView } from "./device-interface-view.js";
 import { renderDeviceOverviewView } from "./device-overview-view.js";
 import { renderDevicePowerView } from "./device-power-view.js";
 import { renderDevicePresenceView } from "./device-presence-view.js";
@@ -42,8 +43,10 @@ export function renderActiveView(store: StudioStore): TemplateResult {
   }
 
   switch (store.currentViewId) {
-    case "home_display":
+    case "display":
       return renderDeviceDisplayView(store);
+    case "interface":
+      return renderDeviceInterfaceView(store);
     case "audio_voice":
       return renderDeviceAudioView(store);
     case "power":

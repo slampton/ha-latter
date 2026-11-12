@@ -60,7 +60,7 @@ Library browsing, queue transfer, and the default intercom speaker list need the
 
 **A repair asks you to pick the Music Assistant player for a device**
 
-Music Assistant identifies a Latter device's Sendspin player by a key hash, not by its MAC address, and doesn't link it to the ESPHome device. So Latter can't find the device's own Music Assistant player by itself, and library playback, queues and lyrics on that device fail until it's linked. Open the repair (**Settings → Repairs**), pick the device's player (it's pre-selected when exactly one Music Assistant player has the same manufacturer and model as the ESPHome device), and submit. You can change the link later in **Studio → (device) → Audio & Voice → Music Assistant Player**.
+Music Assistant identifies a Latter device's Sendspin player by a key hash, not by its MAC address, and doesn't link it to the ESPHome device. So Latter can't find the device's own Music Assistant player by itself, and library playback, queues and lyrics on that device fail until it's linked. Open the repair (**Settings → Repairs**), pick the device's player (it's pre-selected when exactly one Music Assistant player has the same manufacturer and model as the ESPHome device), and submit. You can change the link later in **Studio → (device) → Audio → Music Assistant Player**.
 
 **Volume buttons do nothing**
 

@@ -119,7 +119,7 @@ Text is wrapped to 32 characters per line.
 | :--- | :--- | :--- |
 | `area_id` | string | **Required.** An Area ID or Area name. |
 
-Whether the device's speaker follows to the new Area is the device's own setting, **Media Follows This Device to Its New Area** in Studio (**Audio & Voice**). The same setting applies when Bluetooth moves the device.
+Whether the device's speaker follows to the new Area is the device's own setting, **Media Follows This Device to Its New Area** in Studio (**Audio**). The same setting applies when Bluetooth moves the device.
 
 On roaming devices (the hardware reports it isn't stationary) with **Voice Follows Me** on, this also moves the device's Home Assistant Area. Stationary devices are never moved.
 

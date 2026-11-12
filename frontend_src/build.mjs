@@ -466,7 +466,7 @@ function runStaticGuardrails(bundleText) {
     errors.push("[STUDIO DEFAULT VIEW] Bundle must invoke _applyRoute / applyRoute");
   }
 
-  // D-014 two-column layout & heading hierarchy checks across all 12 views
+  // D-014 two-column layout & heading hierarchy checks across all 13 views
   const twoColumnViews = [
     "system_overview",
     "shared_entities",
@@ -475,7 +475,8 @@ function runStaticGuardrails(bundleText) {
     "area_tracking",
     "system_tools",
     "dashboard",
-    "home_display",
+    "display",
+    "interface",
     "audio_voice",
     "power",
     "presence",

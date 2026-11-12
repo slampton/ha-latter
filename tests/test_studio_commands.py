@@ -39,7 +39,7 @@ async def test_studio_rev_mismatch_on_all_read_and_mutation_endpoints(
     hass: Any, setup_latter_hub: Any
 ) -> None:
     """Verify studio_rev mismatch rejects BOTH read (get_state, subscribe) and mutation WS commands."""
-    assert STUDIO_REV == 3
+    assert STUDIO_REV == 4
     entry, _sys_obj, coord = await setup_latter_hub(hass)
     from homeassistant.helpers import area_registry as ar
 
@@ -256,6 +256,51 @@ async def test_studio_commands_security_pin_secrecy_groups_and_backup_restore(
         {"area_id": "living_room", "survey_subentry_id": coord.subentry_id},
     )
     await _sys_cmd("save_system_config", {"config": {"weather_entity": "weather.home"}})
+    await _sys_cmd(
+        "save_system_config",
+        {
+            "config": {
+                "remote_groups": [
+                    {"id": "living_tv", "name": "Living Area TV", "area_id": "living_room", "remotes": []}
+                ]
+            }
+        },
+    )
+    rg_saved = await _dev_cmd(
+        "save_device_config",
+        {"config": {"device_remote_group": "group:living_tv"}},
+    )
+    assert coord.device_remote_group == "group:living_tv"
+    assert rg_saved["config"]["device_remote_group"] == "group:living_tv"
+
+    # Unknown remote group in save_device_config and retired set_device_remote_group must fail
+    msg_seq += 1
+    await _call_ws(
+        hass,
+        conn,
+        msg_seq,
+        "latter/device/command",
+        command="save_device_config",
+        subentry_id=coord.subentry_id,
+        payload={"config": {"device_remote_group": "group:missing"}},
+        studio_rev=STUDIO_REV,
+    )
+    assert conn.errors[-1][1] == "not_found"
+    conn.errors.clear()
+
+    msg_seq += 1
+    await _call_ws(
+        hass,
+        conn,
+        msg_seq,
+        "latter/system/command",
+        command="set_device_remote_group",
+        payload={"subentry_id": coord.subentry_id, "device_remote_group": "all"},
+        studio_rev=STUDIO_REV,
+    )
+    assert conn.errors[-1][1] == "unknown_command"
+    conn.errors.clear()
+
     await _sys_cmd("check_system_updates", {})
     await _sys_cmd("clear_internal_logs", {})
 

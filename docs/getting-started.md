@@ -52,7 +52,7 @@ Click **Latter** in the Home Assistant sidebar. It's visible to admin users only
 
 1. **System → Shared Entities**: choose your weather entity, then any alarm panel, thermostat, lock, garage door, vacuum, cameras, and calendars you want on the device.
 2. **System → Media & Remotes**: add TVs or streaming boxes as remote slots. If your speakers' volume is controlled by an AV receiver, map them under **Speaker Volume Overrides**.
-3. **Devices → your device → Audio & Voice**: pick the device's default speaker and wake word.
+3. **Devices → your device → Audio**: pick the device's default speaker and wake word.
 4. **Devices → your device → Tools → Perimeter Security Policy** *(optional)*: choose how opening actions (unlocking doors, disarming alarms, opening garage/gate covers) are guarded (`Auto`, `Allow`, `Require PIN`, or `Block`) and set a Device Security PIN if desired. `Auto` requires a PIN on stationary panels or when your Home Assistant alarm panel uses a code.
 
 Changes reach the device within a second or two. There is nothing to reflash.
@@ -65,7 +65,7 @@ On the device:
 - **Swipe up** from the bottom edge, or **tap the pill** at the bottom, to go home.
 - Open **Music**, pick a speaker, and browse your library.
 - Open **Area**. You'll see controls for the Area the device is assigned to.
-- Say **"Okay Nabu"**. The wake word works while the device is docked, by default. You can change this in Studio under **Audio & Voice**, or with the device's **Voice: Wake Word Mode** entity.
+- Say **"Okay Nabu"**. The wake word works while the device is docked, by default. You can change this in Studio under **Audio**, or with the device's **Voice: Wake Word Mode** entity.
 
 ## 7. Optional: area presence for handhelds
 

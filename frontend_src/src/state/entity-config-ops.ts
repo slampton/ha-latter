@@ -113,13 +113,25 @@ export function stageDeviceSettingOp(
   }
 
   bucket.patch[key] = value;
-  if (store.state && store.state.subentry_id === targetSubentryId) {
+  if (store.state) {
+    const nextSystemDevices =
+      key === "device_remote_group" && Array.isArray(store.state.system_devices)
+        ? store.state.system_devices.map((d) =>
+            d.subentry_id === targetSubentryId
+              ? { ...d, device_remote_group: String(value || "area_auto") }
+              : d,
+          )
+        : store.state.system_devices;
     store.state = {
       ...store.state,
-      config: {
-        ...store.state.config,
-        [key]: value,
-      },
+      system_devices: nextSystemDevices,
+      config:
+        store.state.subentry_id === targetSubentryId
+          ? {
+              ...store.state.config,
+              [key]: value,
+            }
+          : store.state.config,
     };
   }
 
@@ -170,19 +182,38 @@ export async function flushDeviceBucketOp(store: StudioStore, targetSubentryId: 
         else controlRevert[domId] = "";
       }
     }
-    if (store.state && store.state.subentry_id === targetSubentryId) {
-      const restoredConfig: Record<string, unknown> = {
-        ...(store.state.config as Record<string, unknown>),
-      };
-      for (const [k, v] of Object.entries(previousValues)) {
-        if (!k.startsWith("__dom:")) {
-          restoredConfig[k] = v;
+    if (store.state) {
+      const nextSystemDevices =
+        "device_remote_group" in previousValues && Array.isArray(store.state.system_devices)
+          ? store.state.system_devices.map((d) =>
+              d.subentry_id === targetSubentryId
+                ? {
+                    ...d,
+                    device_remote_group: String(previousValues.device_remote_group || "area_auto"),
+                  }
+                : d,
+            )
+          : store.state.system_devices;
+      if (store.state.subentry_id === targetSubentryId) {
+        const restoredConfig: Record<string, unknown> = {
+          ...(store.state.config as Record<string, unknown>),
+        };
+        for (const [k, v] of Object.entries(previousValues)) {
+          if (!k.startsWith("__dom:")) {
+            restoredConfig[k] = v;
+          }
         }
+        store.state = {
+          ...store.state,
+          system_devices: nextSystemDevices,
+          config: restoredConfig as DeviceConfig,
+        };
+      } else if (nextSystemDevices !== store.state.system_devices) {
+        store.state = {
+          ...store.state,
+          system_devices: nextSystemDevices,
+        };
       }
-      store.state = {
-        ...store.state,
-        config: restoredConfig as DeviceConfig,
-      };
     }
     if (Object.keys(controlRevert).length > 0) {
       store.pendingDomRevert = { controlIds: controlRevert };
@@ -745,25 +776,6 @@ export function toggleRemoteInGroupOp(
 export function removeRemoteGroupRowOp(store: StudioStore, groupId: string): void {
   const groups = (store.state?.system_config?.remote_groups || []).filter((g) => g.id !== groupId);
   store.stageSystemSetting("remote_groups", groups);
-}
-
-export async function assignDeviceRemoteGroupOp(
-  store: StudioStore,
-  subentryId: string,
-  remoteGroup: string,
-): Promise<void> {
-  try {
-    await store.flushSystemSettings();
-    const res = await store.ws.runSystemCommand(
-      "set_device_remote_group",
-      { subentry_id: subentryId, device_remote_group: remoteGroup },
-      store.activeSubentryId || null,
-    );
-    if (res) store.ingestPayload(res, false);
-    store.showToast("Updated remote group assignment");
-  } catch (err) {
-    store.showToast(formatWsError(err, "Could not assign remote group"), true);
-  }
 }
 
 export async function previewCameraOp(
