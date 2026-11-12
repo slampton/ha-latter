@@ -403,6 +403,7 @@ class LatterCoordinator:
         self._cached_remote_payload: tuple[float, tuple[str | None, dict[str, Any]]] | None = None
         self._unsub_core_config: Callable[[], None] | None = None
         self._unsub_speaker_state: Callable[[], None] | None = None
+        self._tracked_ma_counterpart: str | None = None
         self._unsub_alarm_state: Callable[[], None] | None = None
         self._unsub_remotes_state: Callable[[], None] | None = None
         self._unsub_area_entities_state: Callable[[], None] | None = None

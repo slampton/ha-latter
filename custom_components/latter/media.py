@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 from homeassistant.const import (
     ATTR_ENTITY_ID,
+    EVENT_STATE_CHANGED,
     STATE_BUFFERING,
     STATE_IDLE,
     STATE_OFF,
@@ -37,7 +38,11 @@ from .identity import (
     find_device_entity_by_suffix,
     get_bound_esphome_device,
 )
-from .media_browse import async_browse_media_items, is_music_assistant_player
+from .media_browse import (
+    async_browse_media_items,
+    async_lookup_ma_track_uri,
+    is_music_assistant_player,
+)
 from .protocol import ha_value
 from .repairs import link_ma_player_issue_id
 
@@ -74,6 +79,7 @@ __all__ = [
     "async_execute_ma_queue_transfer",
     "async_execute_volume_action",
     "async_find_queue_resume_item",
+    "async_heal_coordinator_ma_links",
     "async_play_media_with_ma_fallback",
     "async_refresh_ma_link",
     "async_resume_idle_speaker_queue",
@@ -167,9 +173,17 @@ def clear_ma_counterpart_cache(hass: HomeAssistant) -> None:
                 unsub()
 
 
+def _is_entity_live(hass: HomeAssistant, entity_id: str | None) -> bool:
+    """Return True when `entity_id` has a live Home Assistant state (not unavailable/unknown)."""
+    if not entity_id:
+        return False
+    st = hass.states.get(entity_id)
+    return st is not None and st.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN)
+
+
 @callback
 def _ensure_ma_cache_listeners(hass: HomeAssistant) -> None:
-    """Subscribe once to entity and device registry updates to invalidate the MA counterpart cache."""
+    """Subscribe once to registry and availability updates to invalidate the MA cache and heal stale links."""
     domain_data = hass.data.setdefault(DOMAIN, {})
     if "_ma_cache_unsubs" in domain_data:
         return
@@ -180,13 +194,39 @@ def _ensure_ma_cache_listeners(hass: HomeAssistant) -> None:
         if isinstance(cache, dict):
             cache.clear()
 
+    @callback
+    def _on_ma_state_changed(event: Event) -> None:
+        entity_id = str(event.data.get("entity_id") or "")
+        if not entity_id.startswith("media_player."):
+            return
+        old_st = event.data.get("old_state")
+        new_st = event.data.get("new_state")
+        old_live = old_st is not None and old_st.state not in (
+            STATE_UNAVAILABLE,
+            STATE_UNKNOWN,
+        )
+        new_live = new_st is not None and new_st.state not in (
+            STATE_UNAVAILABLE,
+            STATE_UNKNOWN,
+        )
+        if old_live == new_live:
+            return
+        ent = er.async_get(hass).async_get(entity_id)
+        if ent is None or ent.platform not in ("music_assistant", "esphome"):
+            return
+        cache = domain_data.get("_ma_counterpart_cache")
+        if isinstance(cache, dict):
+            cache.clear()
+        async_heal_coordinator_ma_links(hass)
+
     unsub_ent = hass.bus.async_listen(
         er.EVENT_ENTITY_REGISTRY_UPDATED, _on_registry_updated
     )
     unsub_dev = hass.bus.async_listen(
         dr.EVENT_DEVICE_REGISTRY_UPDATED, _on_registry_updated
     )
-    domain_data["_ma_cache_unsubs"] = (unsub_ent, unsub_dev)
+    unsub_state = hass.bus.async_listen(EVENT_STATE_CHANGED, _on_ma_state_changed)
+    domain_data["_ma_cache_unsubs"] = (unsub_ent, unsub_dev, unsub_state)
 
 
 def resolve_esphome_local_speaker(
@@ -249,15 +289,29 @@ def ma_player_entities(hass: HomeAssistant) -> list[RegistryEntry]:
 
 
 def suggest_ma_player_for(hass: HomeAssistant, coordinator: Any) -> str | None:
-    """Suggest the MA player whose device's manufacturer AND model equal the bound ESPHome device's."""
+    """Suggest the live MA player whose device's manufacturer AND model equal the bound ESPHome device's."""
     esp_dev = get_bound_esphome_device(
         hass, getattr(coordinator, "esphome_device_id", None)
     )
     if esp_dev is None:
         return None
     dev_reg = dr.async_get(hass)
+    claimed_by_others = {
+        str(c.get_opt(CONF_MA_PLAYER_ENTITY) or "").strip()
+        for c in iter_coordinators(hass)
+        if c is not coordinator
+        and _is_entity_live(hass, str(c.get_opt(CONF_MA_PLAYER_ENTITY) or "").strip())
+    }
+    all_entries = ma_player_entities(hass)
+    live_entries = [
+        entry
+        for entry in all_entries
+        if _is_entity_live(hass, entry.entity_id)
+        and entry.entity_id not in claimed_by_others
+    ]
+    pool = live_entries if live_entries else all_entries
     candidates: list[tuple[str, str | None, str | None]] = []
-    for entry in ma_player_entities(hass):
+    for entry in pool:
         c_dev = dev_reg.async_get(entry.device_id) if entry.device_id else None
         candidates.append(
             (
@@ -271,7 +325,7 @@ def suggest_ma_player_for(hass: HomeAssistant, coordinator: Any) -> str | None:
 
 @callback
 def async_refresh_ma_link(hass: HomeAssistant, coordinator: Any) -> str:
-    """Drop cached counterparts and re-resolve this Device's link (raises or clears its repair)."""
+    """Drop cached counterparts, re-resolve this Device's link, and rebind its speaker listener."""
     domain_data = hass.data.get(DOMAIN, {})
     cache = (
         domain_data.get("_ma_counterpart_cache")
@@ -281,7 +335,14 @@ def async_refresh_ma_link(hass: HomeAssistant, coordinator: Any) -> str:
     if isinstance(cache, dict):
         cache.clear()
     local_spk = str(getattr(coordinator, "local_speaker", "") or "")
-    return (resolve_ma_counterpart_entity(hass, local_spk) or "") if local_spk else ""
+    resolved = (
+        (resolve_ma_counterpart_entity(hass, local_spk) or "") if local_spk else ""
+    )
+    if hasattr(coordinator, "_unsub_speaker_state") and getattr(
+        coordinator, "active_speaker", None
+    ):
+        bind_coordinator_speaker_listener(coordinator)
+    return resolved
 
 
 @callback
@@ -295,10 +356,84 @@ def async_set_ma_player_link(
     async_refresh_ma_link(hass, coordinator)
 
 
+@callback
+def async_heal_coordinator_ma_links(hass: HomeAssistant) -> None:
+    """Heal stale Music Assistant links when a recreated live MA player replaces an unavailable ghost."""
+    domain_data = hass.data.setdefault(DOMAIN, {})
+    if domain_data.get("_healing_ma_links"):
+        return
+    domain_data["_healing_ma_links"] = True
+    try:
+        cache = domain_data.get("_ma_counterpart_cache")
+        if isinstance(cache, dict):
+            cache.clear()
+        for coord in list(iter_coordinators(hass)):
+            local_spk = str(getattr(coord, "local_speaker", "") or "")
+            if not local_spk:
+                continue
+            resolved_ma = resolve_ma_counterpart_entity(hass, local_spk)
+            saved_ma = str(coord.get_opt(CONF_MA_PLAYER_ENTITY) or "").strip()
+            healed_cfg = False
+            if (
+                resolved_ma
+                and _is_entity_live(hass, resolved_ma)
+                and saved_ma
+                and saved_ma != resolved_ma
+            ):
+                _LOGGER.info(
+                    "Healed stale Music Assistant player link for '%s': %s -> %s",
+                    getattr(coord, "device_slug", local_spk),
+                    saved_ma,
+                    resolved_ma,
+                )
+                coord.update_device_config(
+                    {**coord.device_data, CONF_MA_PLAYER_ENTITY: resolved_ma}
+                )
+                healed_cfg = True
+            active_spk = str(getattr(coord, "active_speaker", "") or "")
+            desired_tracked_ma = (
+                resolve_ma_counterpart_entity(hass, active_spk) if active_spk else None
+            )
+            if (
+                active_spk
+                and hasattr(coord, "_unsub_speaker_state")
+                and getattr(coord, "_tracked_ma_counterpart", None) != desired_tracked_ma
+            ):
+                bind_coordinator_speaker_listener(coord)
+                if hasattr(coord, "async_notify_listeners"):
+                    coord.async_notify_listeners()
+            elif healed_cfg and hasattr(coord, "async_notify_listeners"):
+                coord.async_notify_listeners()
+    finally:
+        domain_data.pop("_healing_ma_links", None)
+
+
+def _match_ma_by_identity(
+    candidates: Iterable[tuple[RegistryEntry, DeviceEntry | None]],
+    target_dev_ids: set[str],
+    target_macs: set[str],
+) -> str | None:
+    """Match a Music Assistant candidate by exact device_id/via_device_id first, then exact MAC."""
+    cand_list = list(candidates)
+    if target_dev_ids:
+        for c_entry, c_dev in cand_list:
+            if c_entry.device_id and (
+                c_entry.device_id in target_dev_ids
+                or (c_dev is not None and c_dev.via_device_id in target_dev_ids)
+            ):
+                return c_entry.entity_id
+    if target_macs:
+        for c_entry, c_dev in cand_list:
+            cand_macs = _extract_macs_from_device_or_entry(c_dev, c_entry)
+            if target_macs & cand_macs:
+                return c_entry.entity_id
+    return None
+
+
 def resolve_ma_counterpart_entity(
     hass: HomeAssistant, speaker_entity_id: str
 ) -> str | None:
-    """Find the Music Assistant media_player for a speaker by explicit link, exact device_id, or exact MAC; else None."""
+    """Find the live Music Assistant media_player for a speaker by explicit link, device_id, MAC, or unique hardware model."""
     if not speaker_entity_id:
         return None
 
@@ -312,13 +447,18 @@ def resolve_ma_counterpart_entity(
     cache: dict[str, str | None] = domain_data.setdefault("_ma_counterpart_cache", {})
     if speaker_entity_id in cache:
         cached_ent = cache[speaker_entity_id]
-        if cached_ent is not None and ent_reg.async_get(cached_ent) is not None:
+        if (
+            cached_ent is not None
+            and ent_reg.async_get(cached_ent) is not None
+            and _is_entity_live(hass, cached_ent)
+        ):
             return cached_ent
         cache.pop(speaker_entity_id, None)
 
     dev_reg = dr.async_get(hass)
     target_dev_ids: set[str] = set()
     target_macs: set[str] = set()
+    spk_dev: DeviceEntry | None = None
 
     owner_coord: Any = next(
         (
@@ -352,48 +492,113 @@ def resolve_ma_counterpart_entity(
                 target_dev_ids.add(d_obj.via_device_id)
             target_macs.update(_extract_macs_from_device_or_entry(d_obj, None))
 
-    ma_candidates: list[tuple[RegistryEntry, DeviceEntry | None]] = []
+    live_candidates: list[tuple[RegistryEntry, DeviceEntry | None]] = []
+    offline_candidates: list[tuple[RegistryEntry, DeviceEntry | None]] = []
     for entry in ma_player_entities(hass):
         c_dev = dev_reg.async_get(entry.device_id) if entry.device_id else None
-        st = hass.states.get(entry.entity_id)
-        if st is not None and st.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN):
-            ma_candidates.insert(0, (entry, c_dev))
+        if _is_entity_live(hass, entry.entity_id):
+            live_candidates.append((entry, c_dev))
         else:
-            ma_candidates.append((entry, c_dev))
+            offline_candidates.append((entry, c_dev))
 
+    raw_configured = (
+        str(owner_coord.get_opt(CONF_MA_PLAYER_ENTITY) or "").strip()
+        if owner_coord is not None
+        else ""
+    )
     matched_entity: str | None = None
 
-    # Pass 0: explicit configured link on the Device subentry
-    if owner_coord is not None:
+    # Pass 0: live explicit configured link on the Device subentry
+    if raw_configured:
         matched_entity = configured_link(
-            owner_coord.get_opt(CONF_MA_PLAYER_ENTITY),
-            (c_entry.entity_id for c_entry, _c_dev in ma_candidates),
+            raw_configured,
+            (c_entry.entity_id for c_entry, _c_dev in live_candidates),
         )
 
-    # Pass 1: exact device_id (or via_device_id) match
-    if matched_entity is None and target_dev_ids:
-        for c_entry, c_dev in ma_candidates:
-            if c_entry.device_id and (
-                c_entry.device_id in target_dev_ids
-                or (c_dev is not None and c_dev.via_device_id in target_dev_ids)
-            ):
-                matched_entity = c_entry.entity_id
-                break
+    # Pass 1 & 2: live exact device_id/via_device_id or exact MAC match
+    if matched_entity is None and live_candidates:
+        matched_entity = _match_ma_by_identity(
+            live_candidates, target_dev_ids, target_macs
+        )
 
-    # Pass 2: exact MAC match
-    if matched_entity is None and target_macs:
-        for c_entry, c_dev in ma_candidates:
-            cand_macs = _extract_macs_from_device_or_entry(c_dev, c_entry)
-            if target_macs & cand_macs:
-                matched_entity = c_entry.entity_id
-                break
+    # Pass 3: live 1-to-1 hardware (manufacturer, model) bijection for a unique bound ESPHome Device
+    if matched_entity is None and live_candidates:
+        esp_dev = (
+            get_bound_esphome_device(
+                hass, getattr(owner_coord, "esphome_device_id", None)
+            )
+            if owner_coord is not None
+            else (
+                spk_dev
+                if spk_entry is not None and spk_entry.platform == "esphome"
+                else None
+            )
+        )
+        if esp_dev is not None and esp_dev.manufacturer and esp_dev.model:
+            same_model_esp_ids: set[str] = {esp_dev.id}
+            for esp_ce in hass.config_entries.async_entries("esphome"):
+                for d_esp in dr.async_entries_for_config_entry(
+                    dev_reg, esp_ce.entry_id
+                ):
+                    if (
+                        d_esp.manufacturer == esp_dev.manufacturer
+                        and d_esp.model == esp_dev.model
+                    ):
+                        same_model_esp_ids.add(d_esp.id)
+            if len(same_model_esp_ids) == 1:
+                claimed_by_others = {
+                    str(c.get_opt(CONF_MA_PLAYER_ENTITY) or "").strip()
+                    for c in iter_coordinators(hass)
+                    if c is not owner_coord
+                    and _is_entity_live(
+                        hass, str(c.get_opt(CONF_MA_PLAYER_ENTITY) or "").strip()
+                    )
+                }
+                matched_entity = suggest_ma_player(
+                    (esp_dev.manufacturer, esp_dev.model),
+                    [
+                        (
+                            c_entry.entity_id,
+                            c_dev.manufacturer if c_dev is not None else None,
+                            c_dev.model if c_dev is not None else None,
+                        )
+                        for c_entry, c_dev in live_candidates
+                        if c_entry.entity_id not in claimed_by_others
+                    ],
+                )
+
+    # Offline fallback: preserve configured/bound link while sleeping or MA is restarting,
+    # never masking an orphaned unavailable link when both the speaker and MA are live.
+    if matched_entity is None and offline_candidates:
+        both_speaker_and_ma_online = _is_entity_live(
+            hass, speaker_entity_id
+        ) and bool(live_candidates)
+        fallback_pool = (
+            [
+                (c_entry, c_dev)
+                for c_entry, c_dev in offline_candidates
+                if hass.states.get(c_entry.entity_id) is None
+            ]
+            if both_speaker_and_ma_online
+            else offline_candidates
+        )
+        if fallback_pool:
+            if raw_configured:
+                matched_entity = configured_link(
+                    raw_configured,
+                    (c_entry.entity_id for c_entry, _c_dev in fallback_pool),
+                )
+            if matched_entity is None:
+                matched_entity = _match_ma_by_identity(
+                    fallback_pool, target_dev_ids, target_macs
+                )
 
     if owner_coord is not None:
         _update_ma_link_issue(
             hass, owner_coord, speaker_entity_id, matched_entity is not None
         )
 
-    if matched_entity is not None:
+    if matched_entity is not None and _is_entity_live(hass, matched_entity):
         cache[speaker_entity_id] = matched_entity
     return matched_entity
 
@@ -567,10 +772,18 @@ async def async_find_queue_resume_item(
     speaker_entity_id: str,
     last_media_uri: str,
     last_media_position: float,
+    *,
+    last_media_title: str = "",
+    last_media_artist: str = "",
 ) -> tuple[str, float]:
-    """Query Music Assistant get_queue for the current queue item URI and position, falling back to persisted store."""
+    """Query Music Assistant get_queue for the current queue item URI and position, falling back to persisted store or library lookup."""
     ma_entity = resolve_ma_counterpart_entity(hass, speaker_entity_id)
-    if ma_entity and hass.services.has_service("music_assistant", "get_queue"):
+    ma_st = hass.states.get(ma_entity) if ma_entity else None
+    ma_usable = bool(
+        ma_entity
+        and (ma_st is None or ma_st.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN))
+    )
+    if ma_usable and hass.services.has_service("music_assistant", "get_queue"):
         try:
             resp = await hass.services.async_call(
                 "music_assistant",
@@ -605,7 +818,17 @@ async def async_find_queue_resume_item(
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("music_assistant.get_queue resume lookup failed: %s", err)
 
-    return last_media_uri, last_media_position
+    if last_media_uri:
+        return last_media_uri, last_media_position
+
+    if last_media_title:
+        looked_up_uri = await async_lookup_ma_track_uri(
+            hass, last_media_title, last_media_artist
+        )
+        if looked_up_uri:
+            return looked_up_uri, last_media_position
+
+    return "", last_media_position
 
 
 async def async_play_media_with_ma_fallback(
@@ -627,7 +850,12 @@ async def async_play_media_with_ma_fallback(
         if parsed_uri_type:
             eff_type = parsed_uri_type
 
-    if ma_target and hass.services.has_service("music_assistant", "play_media"):
+    ma_st = hass.states.get(ma_target) if ma_target else None
+    ma_usable = bool(
+        ma_target
+        and (ma_st is None or ma_st.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN))
+    )
+    if ma_usable and hass.services.has_service("music_assistant", "play_media"):
         payload: dict[str, Any] = {
             ATTR_ENTITY_ID: ma_target,
             "media_id": media_id,
@@ -1025,37 +1253,49 @@ async def async_resume_idle_speaker_queue(
     last_media_uri: str,
     last_media_position: float,
     last_media_type: str,
+    *,
+    last_media_title: str = "",
+    last_media_artist: str = "",
+    immediate: bool = False,
+    already_tried_ma: bool = False,
 ) -> bool:
-    """Resume playback on an idle speaker if native media_play does not start within 2.2s after cold boot."""
-    await asyncio.sleep(2.2)
-    cur_state = hass.states.get(speaker_entity_id)
-    if cur_state is not None and cur_state.state in (STATE_PLAYING, STATE_BUFFERING):
-        return True
-
+    """Resume playback on an idle speaker when native media_play has no active queue stream."""
     ma_entity = resolve_ma_counterpart_entity(hass, speaker_entity_id)
-    if ma_entity and ma_entity != speaker_entity_id:
-        try:
-            await hass.services.async_call(
-                "media_player",
-                "media_play",
-                {ATTR_ENTITY_ID: ma_entity},
-                blocking=True,
-            )
-            await asyncio.sleep(1.0)
-            cur_state = hass.states.get(speaker_entity_id)
-            if cur_state is not None and cur_state.state in (
-                STATE_PLAYING,
-                STATE_BUFFERING,
-            ):
-                return True
-        except Exception:  # noqa: BLE001
-            pass
 
+    def _is_playing_or_buffering() -> bool:
+        return any(
+            ent_id
+            and (st := hass.states.get(ent_id)) is not None
+            and st.state in (STATE_PLAYING, STATE_BUFFERING)
+            for ent_id in (speaker_entity_id, ma_entity)
+        )
+
+    if not immediate:
+        await asyncio.sleep(0.8)
+        if _is_playing_or_buffering():
+            return True
+        if ma_entity and ma_entity != speaker_entity_id and not already_tried_ma:
+            try:
+                await hass.services.async_call(
+                    "media_player",
+                    "media_play",
+                    {ATTR_ENTITY_ID: ma_entity},
+                    blocking=True,
+                )
+                await asyncio.sleep(0.8)
+                if _is_playing_or_buffering():
+                    return True
+            except Exception:  # noqa: BLE001
+                pass
+
+    cur_state = hass.states.get(speaker_entity_id)
     resume_uri, resume_pos = await async_find_queue_resume_item(
         hass,
         speaker_entity_id,
         last_media_uri,
         last_media_position,
+        last_media_title=last_media_title,
+        last_media_artist=last_media_artist,
     )
     if not resume_uri:
         _LOGGER.debug(
@@ -1268,6 +1508,7 @@ def bind_coordinator_speaker_listener(coordinator: LatterCoordinator) -> None:
     if coordinator._unsub_speaker_state is not None:
         coordinator._unsub_speaker_state()
         coordinator._unsub_speaker_state = None
+    coordinator._tracked_ma_counterpart = None
 
     if not coordinator.active_speaker:
         return
@@ -1279,6 +1520,7 @@ def bind_coordinator_speaker_listener(coordinator: LatterCoordinator) -> None:
     ma_counterpart = resolve_ma_counterpart_entity(
         coordinator.hass, coordinator.active_speaker
     )
+    coordinator._tracked_ma_counterpart = ma_counterpart
     if ma_counterpart and ma_counterpart not in tracked:
         tracked.append(ma_counterpart)
     if coordinator.is_local_speaker_entity(coordinator.active_speaker):
@@ -1501,6 +1743,7 @@ async def execute_coordinator_media_command(
 
     if cmd == "play_media" and media_id:
         coordinator._local_needs_cold_resume = False
+        coordinator._resuming_guard_until = 0.0
         await async_play_media_with_ma_fallback(
             hass,
             target_spk,
@@ -1515,26 +1758,60 @@ async def execute_coordinator_media_command(
         if now < coordinator._resuming_guard_until:
             return
         coordinator._resuming_guard_until = now + 2.5
-        play_failed_empty = False
-        try:
-            await hass.services.async_call(
-                "media_player",
-                "media_play",
-                {ATTR_ENTITY_ID: cmd_target},
-                blocking=True,
+        cmd_target_st = hass.states.get(cmd_target)
+        has_loaded_media = bool(
+            (
+                ma_state_obj
+                and (
+                    ma_state_obj.attributes.get("media_content_id")
+                    or ma_state_obj.attributes.get("media_title")
+                )
             )
-        except HomeAssistantError as err:
-            _LOGGER.debug("media_play on %s failed (%s); attempting queue fallback", cmd_target, err)
+            or (
+                state_obj
+                and (
+                    state_obj.attributes.get("media_content_id")
+                    or state_obj.attributes.get("media_title")
+                )
+            )
+        )
+        play_failed_empty = False
+        if cmd_target_st is not None and cmd_target_st.state in (
+            STATE_UNAVAILABLE,
+            STATE_UNKNOWN,
+        ):
             play_failed_empty = True
+        else:
+            try:
+                await hass.services.async_call(
+                    "media_player",
+                    "media_play",
+                    {ATTR_ENTITY_ID: cmd_target},
+                    blocking=True,
+                )
+            except HomeAssistantError as err:
+                _LOGGER.debug(
+                    "media_play on %s failed (%s); attempting queue fallback",
+                    cmd_target,
+                    err,
+                )
+                play_failed_empty = True
         is_local = coordinator.is_local_speaker_entity(target_spk)
-        if (
+        has_resumable_context = bool(
+            coordinator.last_media_uri
+            or coordinator.last_media_title
+            or (ma_target and hass.services.has_service("music_assistant", "get_queue"))
+        )
+        if has_resumable_context and (
             play_failed_empty
             or (
-                is_local
-                and coordinator._local_needs_cold_resume
-                and cur_state in (STATE_IDLE, STATE_OFF, "stopped")
+                cur_state in (STATE_IDLE, STATE_OFF, "stopped")
+                and (
+                    not has_loaded_media
+                    or (is_local and coordinator._local_needs_cold_resume)
+                )
             )
-        ) and coordinator.last_media_uri:
+        ):
             coordinator._resuming_guard_until = time.monotonic() + 3.5
             resumed = await async_resume_idle_speaker_queue(
                 hass,
@@ -1542,14 +1819,20 @@ async def execute_coordinator_media_command(
                 coordinator.last_media_uri,
                 coordinator.last_media_position,
                 coordinator.last_media_type,
+                last_media_title=coordinator.last_media_title,
+                last_media_artist=coordinator.last_media_artist,
+                immediate=play_failed_empty,
+                already_tried_ma=bool(ma_target and cmd_target == ma_target),
             )
             if resumed:
                 coordinator._local_needs_cold_resume = False
+                _sync_active_speaker_media_snapshot(coordinator)
                 coordinator.async_notify_listeners()
         return
 
     if cmd == "pause":
         coordinator._transfer_hold_spinup_until = 0.0
+        coordinator._resuming_guard_until = 0.0
         await hass.services.async_call(
             "media_player", "media_pause", {ATTR_ENTITY_ID: cmd_target}, blocking=False
         )
@@ -1575,6 +1858,7 @@ async def execute_coordinator_media_command(
 
     if cmd == "stop":
         coordinator._transfer_hold_spinup_until = 0.0
+        coordinator._resuming_guard_until = 0.0
         await hass.services.async_call(
             "media_player", "media_stop", {ATTR_ENTITY_ID: cmd_target}, blocking=False
         )

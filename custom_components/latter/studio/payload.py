@@ -389,8 +389,16 @@ def _build_entity_catalog(
             or ma_entry.original_name
             or ma_entry.entity_id
         )
+        ma_suffix = (
+            " (unavailable)"
+            if ma_st is not None and ma_st.state == "unavailable"
+            else ""
+        )
         ma_players.append(
-            {"id": ma_entry.entity_id, "name": f"{ma_name} ({ma_entry.entity_id})"}
+            {
+                "id": ma_entry.entity_id,
+                "name": f"{ma_name} ({ma_entry.entity_id}){ma_suffix}",
+            }
         )
     ma_players.sort(key=lambda item: item["name"].lower())
 

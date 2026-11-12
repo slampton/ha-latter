@@ -67,7 +67,7 @@ from .identity import (
     is_esphome_device,
     is_latter_compatible_esphome_device,
 )
-from .media import clear_ma_counterpart_cache
+from .media import async_heal_coordinator_ma_links, clear_ma_counterpart_cache
 from .media_browse import clear_browse_cache
 from .presence import _iter_devices
 from .repairs import async_delete_device_issues
@@ -337,6 +337,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
+    async_heal_coordinator_ma_links(hass)
     for coordinator in list(sys_obj.coordinators.values()):
         coordinator.async_notify_listeners()
 

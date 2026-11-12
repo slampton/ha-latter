@@ -362,6 +362,42 @@ async def _call_ma_get_library(
     return [_extract_item_dict(x) for x in raw_items]
 
 
+async def async_lookup_ma_track_uri(
+    hass: HomeAssistant,
+    title: str,
+    artist: str = "",
+) -> str:
+    """Resolve a track URI from the Music Assistant library by exact case-insensitive title (preferring matching artist)."""
+    want_title = title.strip().lower()
+    if not want_title:
+        return ""
+    entry_id = _get_ma_config_entry_id(hass)
+    if not entry_id:
+        return ""
+    items = await _call_ma_get_library(
+        hass,
+        entry_id,
+        "track",
+        search=title.strip(),
+        limit=25,
+    )
+    want_artist = artist.strip().lower()
+    fallback_uri = ""
+    for item in items:
+        cand_title = str(item.get("name") or item.get("title") or "").strip().lower()
+        if cand_title != want_title:
+            continue
+        uri = str(item.get("uri") or item.get("media_content_id") or "").strip()
+        if not uri:
+            continue
+        cand_artist = _extract_artist_name(item).strip().lower()
+        if want_artist and cand_artist == want_artist:
+            return uri
+        if not fallback_uri:
+            fallback_uri = uri
+    return fallback_uri
+
+
 def _format_local_speaker_name(hass: HomeAssistant, state_obj: State) -> str:
     """Format the friendly display name for the on-device ESPHome speaker."""
     friendly = str(state_obj.attributes.get("friendly_name") or state_obj.entity_id)
