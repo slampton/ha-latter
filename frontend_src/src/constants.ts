@@ -4,7 +4,7 @@
 
 import type { DeviceViewId, IssueItem, SecurityPinPolicy, StudioViewId, SystemViewId } from "./types.js";
 
-export const STUDIO_REV = 4;
+export const STUDIO_REV = 5;
 
 export const MAX_WALLPAPER_UPLOAD_BYTES = 15 * 1024 * 1024;
 

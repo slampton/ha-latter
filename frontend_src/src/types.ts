@@ -367,20 +367,12 @@ export interface LogEntry {
   message?: string;
 }
 
-export interface NowPlayingInfo {
-  speaker_name: string;
-  media_state: string;
-  media_title: string;
-  media_artist: string;
-}
-
 export interface LiveDeviceSection {
   active_area_name?: string;
   ma_link_matched?: boolean;
   group_sync_status?: GroupSyncStatus | null;
   ble_closest_proxy?: string;
   area_presence_grid?: AreaPresenceRow[];
-  now?: NowPlayingInfo;
   device_sw_version?: string;
   sdk_rev?: string;
   fw_update_entity?: string;

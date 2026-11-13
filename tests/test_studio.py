@@ -76,10 +76,19 @@ class TestPayloadDiet(unittest.TestCase):
     def test_status_card_renders_its_fields(self) -> None:
         payload_src = (LATTER_DIR / "studio" / "payload.py").read_text(encoding="utf-8")
         self.assertIn('"sdk_rev": str(coordinator.hardware_manifest.get("sdk") or ""),', payload_src)
+        self.assertNotIn("_build_now_playing", payload_src)
         js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
-        self.assertIn('id="dash-sdk-rev">${live.sdk_rev || "—"}', js)
+        self.assertIn('id="diag-sdk-rev">${live.sdk_rev || "—"}', js)
+        self.assertIn('class="status-tiles"', js)
         self.assertEqual(js.count('<h3 class="card-title">Status</h3>'), 1)
-        for gone in ('class="stat-grid"', '<h3 class="card-title">Now</h3>', '<h3 class="card-title">Device Status</h3>'):
+        for gone in (
+            'class="stat-grid"',
+            'id="dash-sdk-rev"',
+            'id="dash-node-name"',
+            "Now Playing",
+            '<h3 class="card-title">Now</h3>',
+            '<h3 class="card-title">Device Status</h3>',
+        ):
             self.assertNotIn(gone, js)
 
 
@@ -135,6 +144,9 @@ class TestViewLayout(unittest.TestCase):
         )
         for title in ("Diagnostics", "Replace Hardware", "Danger Zone"):
             self.assertIn(f'<h3 class="card-title">{title}</h3>', tools)
+        self.assertIn("<span>Model</span>", tools)
+        self.assertIn('id="diag-node-name"', tools)
+        self.assertIn('id="diag-sdk-rev"', tools)
         self.assertIn("<summary>Developer &amp; Telemetry</summary>", tools)
         self.assertIn("Open in ESPHome", tools)
         self.assertNotIn("All Entities", js)
@@ -143,8 +155,24 @@ class TestViewLayout(unittest.TestCase):
             self.assertIn(f'<h3 class="card-title">{title}</h3>', sys_tools)
         for title in ("Whole-Home Entities", "Calendars", "Cameras &amp; Doorbell Audio", "Custom Colors", "Wallpapers"):
             self.assertIn(f'<h3 class="card-title">{title}</h3>', shared_entities)
-        for title in ("Brightness", "Colors", "Screensavers", "Wallpapers"):
+        for title in ("Brightness", "Voice Assistant", "Screensavers", "Colors", "Wallpapers"):
             self.assertIn(f'<h3 class="card-title">{title}</h3>', display_view)
+        self.assertLess(
+            display_view.index('<h3 class="card-title">Brightness</h3>'),
+            display_view.index('<h3 class="card-title">Voice Assistant</h3>'),
+        )
+        self.assertLess(
+            display_view.index('<h3 class="card-title">Voice Assistant</h3>'),
+            display_view.index('<h3 class="card-title">Screensavers</h3>'),
+        )
+        self.assertLess(
+            display_view.index('<h3 class="card-title">Screensavers</h3>'),
+            display_view.index('<h3 class="card-title">Colors</h3>'),
+        )
+        self.assertLess(
+            display_view.index('<h3 class="card-title">Colors</h3>'),
+            display_view.index('<h3 class="card-title">Wallpapers</h3>'),
+        )
         self.assertNotIn("Brightness &amp; Theme", js)
         self.assertNotIn("Brightness & Theme", js)
         for title in ("Home Screen", "Activity Card", "Area Controls", "Media Player", "Remote Controls"):
@@ -169,7 +197,13 @@ class TestViewLayout(unittest.TestCase):
         self.assertNotIn("Custom Color Library", sys_tools)
         self.assertIn('"btn-upload-wp"', js)
         self.assertIn('"btn-upload-sys-wp"', js)
-        self.assertIn('id="dash-node-name"', overview)
+        self.assertIn('id="st-status-chip"', overview)
+        self.assertIn('class="status-tiles"', overview)
+        self.assertIn('class="kv-list status-assignments"', overview)
+        self.assertIn("<span>Device Group</span>", overview)
+        self.assertIn("<span>Remote Group</span>", overview)
+        self.assertIn('store.switchView("tools")', overview)
+        self.assertIn('store.switchView("interface")', overview)
         self.assertIn("renderQuickActionGrid(store, quickActionButtons)", overview)
         self.assertIn('id="cfg-device_group"', overview)
         self.assertLess(
@@ -186,7 +220,6 @@ class TestViewLayout(unittest.TestCase):
         self.assertIn("Open in ESPHome", overview)
         self.assertNotIn("Open in Home Assistant", overview)
         self.assertIn("Download Backup", overview)
-        self.assertNotIn('switchView("tools")', overview)
         self.assertIn('id="cfg-ble_target_address"', section("presence"))
         for gone in ("In Home Assistant</h3>", "Location &amp; BLE</h3>", 'id="cfg-device_slug"', 'id="st-group"'):
             self.assertNotIn(gone, js)

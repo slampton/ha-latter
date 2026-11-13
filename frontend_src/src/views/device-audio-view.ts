@@ -13,6 +13,7 @@ import { html, nothing, type TemplateResult } from "../lib/lit.js";
 import type { StudioStore } from "../state/store.js";
 import type { EspHomeEntityItem } from "../types.js";
 import { fmtNumber } from "../utils/format.js";
+import { isVoiceVisualProfileEntity } from "./device-display-view.js";
 
 export function renderDeviceAudioView(store: StudioStore): TemplateResult {
   const data = store.state;
@@ -29,6 +30,7 @@ export function renderDeviceAudioView(store: StudioStore): TemplateResult {
     it.key === "wake_word" || it.key === "wake_word_n";
   const voicePrimary = voiceItems.filter((it) => {
     if (it.domain === "assist_satellite") return false;
+    if (isVoiceVisualProfileEntity(it)) return false;
     const low = (it.name || "").toLowerCase();
     if (low.includes("cutoff") || low.includes("sensitivity")) return false;
     if (wwDisabled && isWakeWordChoice(it)) return false;

@@ -294,6 +294,7 @@ export function renderDeviceToolsView(store: StudioStore): TemplateResult {
     live.device_sw_version || esp?.device?.sw_version || findNetworkState("firmware version") || "",
   ).replace(/^v/i, "");
   const fwVersionText = rawSw ? `v${rawSw}` : "—";
+  const modelText = curDevEntry?.model_label || esp?.device?.model || "—";
   const ipStr = curDevEntry?.ip_address || findNetworkState("ip address") || "";
   const macStr = esp?.device?.mac || findNetworkState("mac address") || "";
 
@@ -347,12 +348,20 @@ export function renderDeviceToolsView(store: StudioStore): TemplateResult {
                       <strong>${cfg.ble_target_address ? html`<code>${cfg.ble_target_address}</code>` : "—"}</strong>
                     </div>`
                 : html`<div class="kv-row">
+                      <span>Model</span>
+                      <strong>${modelText}</strong>
+                    </div>
+                    <div class="kv-row">
+                      <span>ESPHome Node</span>
+                      <strong><code id="diag-node-name">${cfg.device_slug || "—"}</code></strong>
+                    </div>
+                    <div class="kv-row">
                       <span>Firmware Version</span>
                       <strong>${fwVersionText}</strong>
                     </div>
                     <div class="kv-row">
                       <span>Latter SDK</span>
-                      <strong>${live.sdk_rev || "—"}</strong>
+                      <strong id="diag-sdk-rev">${live.sdk_rev || "—"}</strong>
                     </div>
                     <div class="kv-row">
                       <span>Wi-Fi Signal</span>

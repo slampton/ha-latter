@@ -507,6 +507,11 @@ function makeStore({ weatherBgState = "Dynamic", cycleMins = 0, activeId = "", f
   const soundSection = [
     { entity_id: "number.pocket_sound_speaker_volume", domain: "number", name: "Speaker Volume", state: "60", min: 10, max: 100, step: 5, unit: "%" },
   ];
+  const voiceSection = [
+    { entity_id: "select.pocket_voice_wake_word_mode", domain: "select", name: "Voice: Wake Word Mode", state: "On Device", options: ["Disabled", "On Device"] },
+    { entity_id: "select.pocket_voice_visual_profile", domain: "select", name: "Voice: Visual Profile", state: "Nebula", options: ["Nebula", "Solaris", "Rings", "Light Bar", "Dot Wave"] },
+    { entity_id: "switch.pocket_voice_wake_screen_on_assist", domain: "switch", name: "Voice: Wake Screen on Assist", state: "on" },
+  ];
   return {
     host: null,
     activeSubentryId: "sub_1",
@@ -544,6 +549,7 @@ function makeStore({ weatherBgState = "Dynamic", cycleMins = 0, activeId = "", f
       if (sec === "battery") return batterySection;
       if (sec === "music") return musicSection;
       if (sec === "sound") return soundSection;
+      if (sec === "voice") return voiceSection;
       return [];
     },
     getEnabledActivitySources() { return ["calendar"]; },
@@ -577,14 +583,20 @@ return { offMarkup, staticMarkup, rotatingMarkup, powerMarkup, audioMarkup, ifac
             ],
             runner,
         )
-        # 1. Display view (D-027): Brightness, Colors, Screensavers & Wallpapers cards
-        for card_title in ("Brightness", "Colors", "Screensavers", "Wallpapers"):
+        # 1. Display view (D-027 / D-029): Column 1 Brightness -> Voice Assistant -> Screensavers; Column 2 Colors -> Wallpapers
+        for card_title in ("Brightness", "Voice Assistant", "Screensavers", "Colors", "Wallpapers"):
             self.assertIn(f'<h3 class="card-title">{card_title}</h3>', got["offMarkup"])
         self.assertNotIn("Brightness & Theme", got["offMarkup"])
-        self.assertLess(got["offMarkup"].index('<h3 class="card-title">Brightness</h3>'), got["offMarkup"].index('<h3 class="card-title">Colors</h3>'))
+        self.assertLess(got["offMarkup"].index('<h3 class="card-title">Brightness</h3>'), got["offMarkup"].index('<h3 class="card-title">Voice Assistant</h3>'))
+        self.assertLess(got["offMarkup"].index('<h3 class="card-title">Voice Assistant</h3>'), got["offMarkup"].index("Visual Profile"))
+        self.assertLess(got["offMarkup"].index("Visual Profile"), got["offMarkup"].index('<h3 class="card-title">Screensavers</h3>'))
+        self.assertLess(got["offMarkup"].index('<h3 class="card-title">Screensavers</h3>'), got["offMarkup"].index('<h3 class="card-title">Colors</h3>'))
         self.assertLess(got["offMarkup"].index('<h3 class="card-title">Colors</h3>'), got["offMarkup"].index("Color Profile"))
         self.assertLess(got["offMarkup"].index("Color Profile"), got["offMarkup"].index("Custom Color"))
-        self.assertLess(got["offMarkup"].index('<h3 class="card-title">Colors</h3>'), got["offMarkup"].index('<h3 class="card-title">Screensavers</h3>'))
+        self.assertLess(got["offMarkup"].index("Custom Color"), got["offMarkup"].index('<h3 class="card-title">Wallpapers</h3>'))
+        self.assertNotIn("Wake Screen on Assist", got["offMarkup"])
+        self.assertIn("Wake Screen on Assist", got["audioMarkup"])
+        self.assertNotIn("Visual Profile", got["audioMarkup"])
         for saver_label in ("Docked Screensaver", "Screensaver Style", "Docked Idle Timeout", "Activate Screensaver", "Preview"):
             self.assertIn(saver_label, got["offMarkup"])
         self.assertIn('id="btn-enable-wp-rotation"', got["offMarkup"])
@@ -896,7 +908,7 @@ function makeToolsStore(isBle = false) {
       system_devices: [
         isBle
           ? { subentry_id: "sub_1", kind: "ble_tag", ble_survey_rows: [{ is_winner: true, effective_rssi: -68 }] }
-          : { subentry_id: "sub_1", kind: "device", wifi_rssi: -54, ip_address: "192.168.1.44" },
+          : { subentry_id: "sub_1", kind: "device", model_label: "Latter Square 4.0", wifi_rssi: -54, ip_address: "192.168.1.44" },
       ],
     },
     getSectionItems(sec) {
@@ -907,9 +919,92 @@ function makeToolsStore(isBle = false) {
   };
 }
 
+function makeOverviewStore(mode) {
+  if (mode === "ble") {
+    return {
+      hass: null,
+      host: null,
+      activeSubentryId: "sub_ble",
+      state: {
+        config: { kind: "ble_tag", ble_target_address: "AA:BB:CC:11:22:33" },
+        capabilities: {},
+        live: { active_area_name: "Entryway", ble_closest_proxy: "Entry Proxy" },
+        links: { entry_id: "ent_1" },
+        esphome: {},
+        device_groups: [],
+        system_config: { remote_groups: [] },
+        system_devices: [
+          {
+            subentry_id: "sub_ble",
+            kind: "ble_tag",
+            status_label: "Detected",
+            has_assigned_area: false,
+            ble_survey_rows: [{ is_winner: true, effective_rssi: -64, distance_m: 1.8 }],
+          },
+        ],
+      },
+      getSectionItems() { return []; },
+    };
+  }
+  const isBattery = mode === "battery";
+  return {
+    hass: null,
+    host: null,
+    activeSubentryId: "sub_1",
+    state: {
+      config: {
+        kind: "device",
+        device_slug: "roaming_pocket",
+        device_group: "handhelds",
+        device_remote_group: isBattery ? "group:living_tv" : "area_auto",
+        native_ble_tracking: isBattery,
+      },
+      capabilities: {
+        has_display: true,
+        has_power: true,
+        has_ble_beacon: isBattery,
+        is_roaming_device: isBattery,
+      },
+      live: {
+        active_area_name: "Kitchen",
+        ble_closest_proxy: isBattery ? "Kitchen Proxy" : "",
+        device_sw_version: "3.0.0",
+        fw_update_available: !isBattery,
+        group_sync_status: isBattery ? "customized" : "in_sync",
+      },
+      links: { entry_id: "ent_1", esphome_device_id: "esp_1" },
+      esphome: { device: { sw_version: "3.0.0", model: "Pocket" } },
+      device_groups: [{ id: "handhelds", name: "Handhelds" }],
+      system_config: {
+        remote_groups: [{ id: "living_tv", name: "Living Area TV", area_id: "living", remotes: ["remote.tv"] }],
+      },
+      system_devices: [
+        {
+          subentry_id: "sub_1",
+          kind: "device",
+          is_online: true,
+          has_display: true,
+          has_assigned_area: !isBattery,
+          area_label: "Office",
+          battery_level: isBattery ? 82 : null,
+          is_charging: isBattery,
+          is_usb_connected: isBattery,
+          wifi_rssi: isBattery ? -58 : -84,
+          ip_address: "192.168.1.44",
+          ble_survey_rows: isBattery ? [{ is_winner: true, effective_rssi: -61, distance_m: 2.4 }] : [],
+        },
+      ],
+    },
+    getSectionItems() { return []; },
+  };
+}
+
 return {
   espMarkup: flattenHtml(renderDeviceToolsView(makeToolsStore(false))),
   bleMarkup: flattenHtml(renderDeviceToolsView(makeToolsStore(true))),
+  ovBattery: flattenHtml(renderDeviceOverviewView(makeOverviewStore("battery"))),
+  ovMainsUpdate: flattenHtml(renderDeviceOverviewView(makeOverviewStore("mains"))),
+  ovBle: flattenHtml(renderDeviceOverviewView(makeOverviewStore("ble"))),
 };
 """
         )
@@ -919,13 +1014,22 @@ return {
                 FRONTEND_SRC / "utils" / "format.ts",
                 FRONTEND_SRC / "components" / "controls.ts",
                 FRONTEND_SRC / "views" / "device-tools-view.ts",
+                FRONTEND_SRC / "views" / "device-overview-view.ts",
             ],
             runner,
         )
         esp = got["espMarkup"]
         ble = got["bleMarkup"]
+        ov_bat = got["ovBattery"]
+        ov_mains = got["ovMainsUpdate"]
+        ov_ble = got["ovBle"]
 
-        # Standard Diagnostics summary + Open in ESPHome footer + zero raw RPC Outbox / All Entities
+        # Standard Diagnostics summary (including Model & ESPHome Node moved from Overview) + zero raw RPC Outbox / All Entities
+        self.assertIn("Model", esp)
+        self.assertIn("Latter Square 4.0", esp)
+        self.assertIn('id="diag-node-name"', esp)
+        self.assertIn("desk_panel", esp)
+        self.assertIn('id="diag-sdk-rev"', esp)
         self.assertIn("Firmware Version", esp)
         self.assertIn("v3.0.0", esp)
         self.assertIn("2026111202", esp)
@@ -977,6 +1081,44 @@ return {
         self.assertIn("AA:BB:CC:11:22:33", ble)
         self.assertNotIn("Developer &amp; Telemetry", ble)
         self.assertNotIn("Open in ESPHome", ble)
+
+        # Overview -> Status (D-029): header status chip, 2x2 tonal tiles, assignment rows, and retired low-value rows
+        self.assertIn('class="status-tiles"', ov_bat)
+        for expected in (
+            "Online",
+            "Current Area",
+            "Kitchen",
+            "Roaming • Kitchen Proxy",
+            "Battery",
+            "82%",
+            "Charging",
+            "--signal-pct:82%",
+            "Wi-Fi Signal",
+            "-58 dBm",
+            "Excellent",
+            "Firmware",
+            "v3.0.0",
+            "Up to date",
+            "Device Group",
+            "Handhelds",
+            "Customized",
+            "Remote Group",
+            "Living Area TV",
+            "Open in ESPHome",
+            "Download Backup",
+        ):
+            self.assertIn(expected, ov_bat)
+        for retired in ("Now Playing", "IP Address", "192.168.1.44", "Latter SDK", "ESPHome Node", "roaming_pocket"):
+            self.assertNotIn(retired, ov_bat)
+
+        # Mains stationary Device with available firmware update + weak Wi-Fi
+        for expected in ("Update available", "Office", "Stationary", "Power", "Mains", "Weak", "signal-fill low", "Follow Area"):
+            self.assertIn(expected, ov_mains)
+
+        # BLE Tag Overview Status tiles
+        for expected in ("Detected", "Entryway", "Closest Proxy", "Entry Proxy", "BLE Signal", "-64 dBm", "BLE Target", "AA:BB:CC:11:22:33"):
+            self.assertIn(expected, ov_ble)
+        self.assertNotIn("status-assignments", ov_ble)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,7 @@
 /**
- * Device Display View (`display`, D-027): Brightness, Colors, Screensavers & Wallpapers.
+ * Device Display View (`display`, D-027 / D-029):
+ * Column 1: Brightness, Voice Assistant (Visual Profile) & Screensavers.
+ * Column 2: Colors & Wallpapers.
  */
 
 import {
@@ -51,6 +53,11 @@ export function isScreensaverSleepEntity(it: EspHomeEntityItem): boolean {
   );
 }
 
+export function isVoiceVisualProfileEntity(it: EspHomeEntityItem): boolean {
+  const low = `${it.name || ""} ${it.entity_id || ""}`.toLowerCase();
+  return low.includes("visual profile") || low.includes("visual_profile");
+}
+
 function isColorDisplayEntity(it: EspHomeEntityItem): boolean {
   const low = `${it.name || ""} ${it.entity_id || ""}`.toLowerCase();
   return low.includes("color profile") || low.includes("color_profile");
@@ -73,6 +80,9 @@ export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
     .getSectionItems("display")
     .filter((it) => !isInterfaceDisplayEntity(it));
   const colorItems = allDisplayItems.filter(isColorDisplayEntity);
+  const voiceVisualItems = store
+    .getSectionItems("voice")
+    .filter(isVoiceVisualProfileEntity);
   const brightnessItems = sortEntitiesByKeywords(
     allDisplayItems.filter((it) => !isColorDisplayEntity(it)),
     brightnessOrder,
@@ -161,6 +171,46 @@ export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
             })
           : nothing}
 
+        ${voiceVisualItems.length
+          ? renderCard({
+              heading: html`<h3 class="card-title">Voice Assistant</h3>`,
+              contentClass: "settings-list",
+              body: voiceVisualItems.map((it) => renderNativeControlRow(store, it)),
+            })
+          : nothing}
+
+        ${screensaverSleepItems.length || activateScreensaverBtn
+          ? renderCard({
+              heading: html`<h3 class="card-title">Screensavers</h3>`,
+              contentClass: "settings-list",
+              body: html`${screensaverSleepItems.map((it) => renderNativeControlRow(store, it))}
+                ${activateScreensaverBtn
+                  ? renderSettingsRow({
+                      label: entityLabel(
+                        activateScreensaverBtn.name || activateScreensaverBtn.entity_id,
+                      ),
+                      description: "Starts the screensaver on this Device immediately.",
+                      control: html`<button
+                        type="button"
+                        ?disabled=${String(activateScreensaverBtn.state ?? "") === "unavailable"}
+                        @click=${() =>
+                          void store.espAction(
+                            activateScreensaverBtn.entity_id,
+                            "press",
+                            undefined,
+                            `Triggered "${entityLabel(activateScreensaverBtn.name || activateScreensaverBtn.entity_id)}"`,
+                          )}
+                        class="btn btn-secondary btn-compact"
+                      >
+                        Preview
+                      </button>`,
+                    })
+                  : nothing}`,
+            })
+          : nothing}
+      </div>
+
+      <div class="column">
         ${renderCard({
           heading: html`<h3 class="card-title">Colors</h3>`,
           contentClass: "settings-list",
@@ -202,38 +252,6 @@ export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
             })}`,
         })}
 
-        ${screensaverSleepItems.length || activateScreensaverBtn
-          ? renderCard({
-              heading: html`<h3 class="card-title">Screensavers</h3>`,
-              contentClass: "settings-list",
-              body: html`${screensaverSleepItems.map((it) => renderNativeControlRow(store, it))}
-                ${activateScreensaverBtn
-                  ? renderSettingsRow({
-                      label: entityLabel(
-                        activateScreensaverBtn.name || activateScreensaverBtn.entity_id,
-                      ),
-                      description: "Starts the screensaver on this Device immediately.",
-                      control: html`<button
-                        type="button"
-                        ?disabled=${String(activateScreensaverBtn.state ?? "") === "unavailable"}
-                        @click=${() =>
-                          void store.espAction(
-                            activateScreensaverBtn.entity_id,
-                            "press",
-                            undefined,
-                            `Triggered "${entityLabel(activateScreensaverBtn.name || activateScreensaverBtn.entity_id)}"`,
-                          )}
-                        class="btn btn-secondary btn-compact"
-                      >
-                        Preview
-                      </button>`,
-                    })
-                  : nothing}`,
-            })
-          : nothing}
-      </div>
-
-      <div class="column">
         ${renderCard({
           heading: html`<h3 class="card-title">Wallpapers</h3>`,
           subtitle: "Shared presets and uploaded photos cropped for this display.",

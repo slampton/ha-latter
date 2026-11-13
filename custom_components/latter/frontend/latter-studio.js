@@ -675,7 +675,7 @@ class LitElement extends HTMLElement {
 /**
  * Canonical constants, route maps, issue messages, and Title Case dictionaries for Latter Studio.
  */
-const STUDIO_REV = 4;
+const STUDIO_REV = 5;
 const MAX_WALLPAPER_UPLOAD_BYTES = 15 * 1024 * 1024;
 const DEVICE_VIEW_SLUGS = {
   dashboard: "overview",
@@ -5240,8 +5240,81 @@ const STUDIO_STYLES = css`
     border-radius: 50%;
     background: var(--studio-text-disabled);
   }
+  .chip > .status-dot { margin-right: var(--studio-space-1); }
   .status-dot.online { background: var(--studio-success); }
   .status-dot.update { background: var(--studio-warning); }
+  .status-tiles {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--studio-space-2);
+  }
+  @media (max-width: 480px) {
+    .status-tiles { grid-template-columns: minmax(0, 1fr); }
+  }
+  .status-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--studio-space-1);
+    padding: var(--studio-space-3);
+    border: 1px solid var(--studio-divider);
+    border-radius: var(--studio-radius-control);
+    background: var(--studio-input-bg);
+    color: inherit;
+    font: inherit;
+    text-align: left;
+  }
+  button.status-tile {
+    cursor: pointer;
+    transition: background-color 0.15s ease-out, border-color 0.15s ease-out;
+  }
+  button.status-tile:hover {
+    background: var(--studio-hover);
+    border-color: var(--studio-primary);
+  }
+  button.status-tile:focus-visible {
+    outline: 2px solid var(--studio-primary);
+    outline-offset: 2px;
+  }
+  .status-tile-head {
+    display: flex;
+    align-items: center;
+    gap: var(--studio-space-2);
+    color: var(--studio-text-secondary);
+    font-size:var(--studio-font-caption);
+    font-weight: var(--studio-weight-medium);
+    line-height: var(--studio-line-height-condensed);
+  }
+  .status-tile-head svg {
+    width: 16px;
+    height: 16px;
+    fill: currentColor;
+    flex-shrink: 0;
+  }
+  .status-tile-value {
+    margin-top: var(--studio-space-1);
+    font-size:var(--studio-font-section);
+    font-weight: var(--studio-weight-medium);
+    line-height: var(--studio-line-height-condensed);
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+  }
+  .status-tile-meta {
+    color: var(--studio-text-secondary);
+    font-size:var(--studio-font-secondary);
+    line-height: var(--studio-line-height-condensed);
+  }
+  .status-tile > .signal-track { margin-top: var(--studio-space-1); }
+  .status-assignments {
+    padding-top: var(--studio-space-2);
+    border-top: 1px solid var(--studio-divider);
+  }
+  .status-assignments strong {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--studio-space-2);
+  }
   .pill-list {
     display: flex;
     flex-wrap: wrap;
@@ -5332,6 +5405,7 @@ const STUDIO_STYLES = css`
     background: var(--studio-primary);
     transition: width 0.25s ease;
   }
+  .signal-fill.low { background: var(--studio-error); }
   .upload-progress-fill {
     width: var(--upload-pct, 0%);
     height: 100%;
@@ -5588,148 +5662,6 @@ const STUDIO_STYLES = css`
   }
 `;
 
-// --- src/views/device-audio-view.ts ---
-/**
- * Device Audio & Voice View (`audio_voice`): Voice Assistant, Wake Word, Voice Follows Me, Sound & Music Assistant.
- */
-function renderDeviceAudioView(store) {
-  const data = store.state;
-  const cfg = data?.config || {};
-  const caps = data?.capabilities || {};
-  const live = data?.live || {};
-  const voiceItems = store.getSectionItems("voice");
-  const wwModeItem = voiceItems.find((it) =>
-    (it.name || "").toLowerCase().includes("wake word mode"),
-  );
-  const wwDisabled = wwModeItem ? wwModeItem.state === "Disabled" : false;
-  const isWakeWordChoice = (it) =>
-    it.key === "wake_word" || it.key === "wake_word_n";
-  const voicePrimary = voiceItems.filter((it) => {
-    if (it.domain === "assist_satellite") return false;
-    const low = (it.name || "").toLowerCase();
-    if (low.includes("cutoff") || low.includes("sensitivity")) return false;
-    if (wwDisabled && isWakeWordChoice(it)) return false;
-    return true;
-  });
-  const sensitivityVoiceItems = wwDisabled
-    ? []
-    : voiceItems.filter(
-        (it) =>
-          (it.name || "").toLowerCase().includes("cutoff") ||
-          (it.name || "").toLowerCase().includes("sensitivity"),
-      );
-  const soundItems = store.getSectionItems("sound");
-  const isRoaming = caps.is_roaming_device !== false;
-  const dwellSeconds = Number(cfg.area_follow_dwell_s ?? 10);
-  const autoMaEntity = cfg.device_slug ? `media_player.${cfg.device_slug}` : "";
-  const savedMa = String(cfg.ma_player_entity || "").trim();
-  const maUnmatched = live.ma_link_matched === false;
-  const hasCustomMaOverride = Boolean(savedMa && savedMa !== autoMaEntity);
-  const showMaOverrideRow = maUnmatched || hasCustomMaOverride;
-  const maDescription = maUnmatched
-    ? `Automatic match did not find ${autoMaEntity || "this Device's player"} in Music Assistant. Choose this Device's player for library playback, queues and lyrics.`
-    : `Linked manually (${autoMaEntity || "default slug"} was not used). Clear to return to automatic matching.`;
-  const speakerChoices = data?.catalog?.ma_speakers;
-  return html`<section id="view-audio_voice">
-    <div class="columns">
-      <div class="column">
-        ${renderCard({
-          heading: html`<h3 class="card-title">Voice Assistant &amp; Wake Word</h3>`,
-          contentClass: "settings-list",
-          body: html`${voicePrimary.map((it) => renderNativeControlRow(store, it))}
-            ${isRoaming
-              ? html`${renderSwitchRow({
-                    rowId: "row-sync-device-area",
-                    id: "cfg-sync_device_area",
-                    label: "Voice Follows Me",
-                    description:
-                      "Updates this roaming Device's Home Assistant Area when BLE presence settles in a new Area, so Area-less voice commands target where you are.",
-                    checked: Boolean(cfg.sync_device_area),
-                    onChange: (checked) =>
-                      store.stageDeviceSetting(
-                        "sync_device_area",
-                        checked,
-                        "cfg-sync_device_area",
-                      ),
-                  })}
-                  ${renderSettingsRow({
-                    id: "row-area-follow-dwell",
-                    label: "Voice Follows Me Delay",
-                    forId: "cfg-area_follow_dwell_s",
-                    description:
-                      "How long a BLE-detected Area stays stable before moving the Device (3 to 60 seconds).",
-                    control: html`<input
-                        type="range"
-                        id="cfg-area_follow_dwell_s"
-                        min="3"
-                        max="60"
-                        step="1"
-                        .value=${String(dwellSeconds)}
-                        @change=${(ev) =>
-                          store.stageDeviceSetting(
-                            "area_follow_dwell_s",
-                            Number((ev.currentTarget).value) || 10,
-                            "cfg-area_follow_dwell_s",
-                          )}
-                      />
-                      <span id="dwell-value" class="chip">${fmtNumber(dwellSeconds, store.hass, 0)} s</span>`,
-                  })}`
-              : nothing}
-            ${sensitivityVoiceItems.length
-              ? html`<details class="sub-collapsible">
-                  <summary>Wake Word Sensitivity (Per Model)</summary>
-                  <div class="card-content settings-list">
-                    ${sensitivityVoiceItems.map((it) => renderNativeControlRow(store, it))}
-                  </div>
-                </details>`
-              : nothing}`,
-        })}
-      </div>
-
-      <div class="column">
-        ${renderCard({
-          heading: html`<h3 class="card-title">Sound &amp; Playback</h3>`,
-          contentClass: "settings-list",
-          body: html`${renderSelectRow({
-              id: "cfg-default_speaker",
-              label: "Default Speaker",
-              description: "Primary speaker controlled from Music and Home when this Device starts up.",
-              value: cfg.default_speaker,
-              choices: speakerChoices,
-              emptyOptionLabel: "— Automatic (Built-in or Area) —",
-              onChange: (val) =>
-                store.stageDeviceSetting("default_speaker", val, "cfg-default_speaker"),
-            })}
-            ${showMaOverrideRow
-              ? renderSelectRow({
-                  rowId: "row-ma-player-entity",
-                  id: "cfg-ma_player_entity",
-                  label: "Music Assistant Player",
-                  description: maDescription,
-                  descId: "desc-ma-player-entity",
-                  value: savedMa,
-                  choices: data?.catalog?.ma_players,
-                  emptyOptionLabel: "— Automatic Match —",
-                  onChange: (val) =>
-                    store.stageDeviceSetting("ma_player_entity", val, "cfg-ma_player_entity"),
-                })
-              : nothing}
-            ${renderSwitchRow({
-              id: "cfg-area_handoff",
-              label: "Media Follows This Device to Its New Area",
-              description:
-                "Transfers active Music Assistant playback when this Device moves to another Area.",
-              checked: Boolean(cfg.area_handoff),
-              onChange: (checked) =>
-                store.stageDeviceSetting("area_handoff", checked, "cfg-area_handoff"),
-            })}
-            ${soundItems.map((it) => renderNativeControlRow(store, it))}`,
-        })}
-      </div>
-    </div>
-  </section>`;
-}
-
 // --- src/components/wallpaper-gallery.ts ---
 /**
  * Wallpaper Gallery & Multipart XHR Upload Component (Device & System scopes).
@@ -5892,7 +5824,9 @@ function renderWallpaperUploadProgress(
 
 // --- src/views/device-display-view.ts ---
 /**
- * Device Display View (`display`, D-027): Brightness, Colors, Screensavers & Wallpapers.
+ * Device Display View (`display`, D-027 / D-029):
+ * Column 1: Brightness, Voice Assistant (Visual Profile) & Screensavers.
+ * Column 2: Colors & Wallpapers.
  */
 function sortEntitiesByKeywords(
   items,
@@ -5924,6 +5858,10 @@ function isScreensaverSleepEntity(it) {
     low.includes("docked_idle_timeout")
   );
 }
+function isVoiceVisualProfileEntity(it) {
+  const low = `${it.name || ""} ${it.entity_id || ""}`.toLowerCase();
+  return low.includes("visual profile") || low.includes("visual_profile");
+}
 function isColorDisplayEntity(it) {
   const low = `${it.name || ""} ${it.entity_id || ""}`.toLowerCase();
   return low.includes("color profile") || low.includes("color_profile");
@@ -5944,6 +5882,9 @@ function renderDeviceDisplayView(store) {
     .getSectionItems("display")
     .filter((it) => !isInterfaceDisplayEntity(it));
   const colorItems = allDisplayItems.filter(isColorDisplayEntity);
+  const voiceVisualItems = store
+    .getSectionItems("voice")
+    .filter(isVoiceVisualProfileEntity);
   const brightnessItems = sortEntitiesByKeywords(
     allDisplayItems.filter((it) => !isColorDisplayEntity(it)),
     brightnessOrder,
@@ -6028,6 +5969,46 @@ function renderDeviceDisplayView(store) {
             })
           : nothing}
 
+        ${voiceVisualItems.length
+          ? renderCard({
+              heading: html`<h3 class="card-title">Voice Assistant</h3>`,
+              contentClass: "settings-list",
+              body: voiceVisualItems.map((it) => renderNativeControlRow(store, it)),
+            })
+          : nothing}
+
+        ${screensaverSleepItems.length || activateScreensaverBtn
+          ? renderCard({
+              heading: html`<h3 class="card-title">Screensavers</h3>`,
+              contentClass: "settings-list",
+              body: html`${screensaverSleepItems.map((it) => renderNativeControlRow(store, it))}
+                ${activateScreensaverBtn
+                  ? renderSettingsRow({
+                      label: entityLabel(
+                        activateScreensaverBtn.name || activateScreensaverBtn.entity_id,
+                      ),
+                      description: "Starts the screensaver on this Device immediately.",
+                      control: html`<button
+                        type="button"
+                        ?disabled=${String(activateScreensaverBtn.state ?? "") === "unavailable"}
+                        @click=${() =>
+                          void store.espAction(
+                            activateScreensaverBtn.entity_id,
+                            "press",
+                            undefined,
+                            `Triggered "${entityLabel(activateScreensaverBtn.name || activateScreensaverBtn.entity_id)}"`,
+                          )}
+                        class="btn btn-secondary btn-compact"
+                      >
+                        Preview
+                      </button>`,
+                    })
+                  : nothing}`,
+            })
+          : nothing}
+      </div>
+
+      <div class="column">
         ${renderCard({
           heading: html`<h3 class="card-title">Colors</h3>`,
           contentClass: "settings-list",
@@ -6069,38 +6050,6 @@ function renderDeviceDisplayView(store) {
             })}`,
         })}
 
-        ${screensaverSleepItems.length || activateScreensaverBtn
-          ? renderCard({
-              heading: html`<h3 class="card-title">Screensavers</h3>`,
-              contentClass: "settings-list",
-              body: html`${screensaverSleepItems.map((it) => renderNativeControlRow(store, it))}
-                ${activateScreensaverBtn
-                  ? renderSettingsRow({
-                      label: entityLabel(
-                        activateScreensaverBtn.name || activateScreensaverBtn.entity_id,
-                      ),
-                      description: "Starts the screensaver on this Device immediately.",
-                      control: html`<button
-                        type="button"
-                        ?disabled=${String(activateScreensaverBtn.state ?? "") === "unavailable"}
-                        @click=${() =>
-                          void store.espAction(
-                            activateScreensaverBtn.entity_id,
-                            "press",
-                            undefined,
-                            `Triggered "${entityLabel(activateScreensaverBtn.name || activateScreensaverBtn.entity_id)}"`,
-                          )}
-                        class="btn btn-secondary btn-compact"
-                      >
-                        Preview
-                      </button>`,
-                    })
-                  : nothing}`,
-            })
-          : nothing}
-      </div>
-
-      <div class="column">
         ${renderCard({
           heading: html`<h3 class="card-title">Wallpapers</h3>`,
           subtitle: "Shared presets and uploaded photos cropped for this display.",
@@ -6211,6 +6160,149 @@ function renderDeviceDisplayView(store) {
                 String(cfg.display_shape || "square"),
               )}
             </div>`,
+        })}
+      </div>
+    </div>
+  </section>`;
+}
+
+// --- src/views/device-audio-view.ts ---
+/**
+ * Device Audio & Voice View (`audio_voice`): Voice Assistant, Wake Word, Voice Follows Me, Sound & Music Assistant.
+ */
+function renderDeviceAudioView(store) {
+  const data = store.state;
+  const cfg = data?.config || {};
+  const caps = data?.capabilities || {};
+  const live = data?.live || {};
+  const voiceItems = store.getSectionItems("voice");
+  const wwModeItem = voiceItems.find((it) =>
+    (it.name || "").toLowerCase().includes("wake word mode"),
+  );
+  const wwDisabled = wwModeItem ? wwModeItem.state === "Disabled" : false;
+  const isWakeWordChoice = (it) =>
+    it.key === "wake_word" || it.key === "wake_word_n";
+  const voicePrimary = voiceItems.filter((it) => {
+    if (it.domain === "assist_satellite") return false;
+    if (isVoiceVisualProfileEntity(it)) return false;
+    const low = (it.name || "").toLowerCase();
+    if (low.includes("cutoff") || low.includes("sensitivity")) return false;
+    if (wwDisabled && isWakeWordChoice(it)) return false;
+    return true;
+  });
+  const sensitivityVoiceItems = wwDisabled
+    ? []
+    : voiceItems.filter(
+        (it) =>
+          (it.name || "").toLowerCase().includes("cutoff") ||
+          (it.name || "").toLowerCase().includes("sensitivity"),
+      );
+  const soundItems = store.getSectionItems("sound");
+  const isRoaming = caps.is_roaming_device !== false;
+  const dwellSeconds = Number(cfg.area_follow_dwell_s ?? 10);
+  const autoMaEntity = cfg.device_slug ? `media_player.${cfg.device_slug}` : "";
+  const savedMa = String(cfg.ma_player_entity || "").trim();
+  const maUnmatched = live.ma_link_matched === false;
+  const hasCustomMaOverride = Boolean(savedMa && savedMa !== autoMaEntity);
+  const showMaOverrideRow = maUnmatched || hasCustomMaOverride;
+  const maDescription = maUnmatched
+    ? `Automatic match did not find ${autoMaEntity || "this Device's player"} in Music Assistant. Choose this Device's player for library playback, queues and lyrics.`
+    : `Linked manually (${autoMaEntity || "default slug"} was not used). Clear to return to automatic matching.`;
+  const speakerChoices = data?.catalog?.ma_speakers;
+  return html`<section id="view-audio_voice">
+    <div class="columns">
+      <div class="column">
+        ${renderCard({
+          heading: html`<h3 class="card-title">Voice Assistant &amp; Wake Word</h3>`,
+          contentClass: "settings-list",
+          body: html`${voicePrimary.map((it) => renderNativeControlRow(store, it))}
+            ${isRoaming
+              ? html`${renderSwitchRow({
+                    rowId: "row-sync-device-area",
+                    id: "cfg-sync_device_area",
+                    label: "Voice Follows Me",
+                    description:
+                      "Updates this roaming Device's Home Assistant Area when BLE presence settles in a new Area, so Area-less voice commands target where you are.",
+                    checked: Boolean(cfg.sync_device_area),
+                    onChange: (checked) =>
+                      store.stageDeviceSetting(
+                        "sync_device_area",
+                        checked,
+                        "cfg-sync_device_area",
+                      ),
+                  })}
+                  ${renderSettingsRow({
+                    id: "row-area-follow-dwell",
+                    label: "Voice Follows Me Delay",
+                    forId: "cfg-area_follow_dwell_s",
+                    description:
+                      "How long a BLE-detected Area stays stable before moving the Device (3 to 60 seconds).",
+                    control: html`<input
+                        type="range"
+                        id="cfg-area_follow_dwell_s"
+                        min="3"
+                        max="60"
+                        step="1"
+                        .value=${String(dwellSeconds)}
+                        @change=${(ev) =>
+                          store.stageDeviceSetting(
+                            "area_follow_dwell_s",
+                            Number((ev.currentTarget).value) || 10,
+                            "cfg-area_follow_dwell_s",
+                          )}
+                      />
+                      <span id="dwell-value" class="chip">${fmtNumber(dwellSeconds, store.hass, 0)} s</span>`,
+                  })}`
+              : nothing}
+            ${sensitivityVoiceItems.length
+              ? html`<details class="sub-collapsible">
+                  <summary>Wake Word Sensitivity (Per Model)</summary>
+                  <div class="card-content settings-list">
+                    ${sensitivityVoiceItems.map((it) => renderNativeControlRow(store, it))}
+                  </div>
+                </details>`
+              : nothing}`,
+        })}
+      </div>
+
+      <div class="column">
+        ${renderCard({
+          heading: html`<h3 class="card-title">Sound &amp; Playback</h3>`,
+          contentClass: "settings-list",
+          body: html`${renderSelectRow({
+              id: "cfg-default_speaker",
+              label: "Default Speaker",
+              description: "Primary speaker controlled from Music and Home when this Device starts up.",
+              value: cfg.default_speaker,
+              choices: speakerChoices,
+              emptyOptionLabel: "— Automatic (Built-in or Area) —",
+              onChange: (val) =>
+                store.stageDeviceSetting("default_speaker", val, "cfg-default_speaker"),
+            })}
+            ${showMaOverrideRow
+              ? renderSelectRow({
+                  rowId: "row-ma-player-entity",
+                  id: "cfg-ma_player_entity",
+                  label: "Music Assistant Player",
+                  description: maDescription,
+                  descId: "desc-ma-player-entity",
+                  value: savedMa,
+                  choices: data?.catalog?.ma_players,
+                  emptyOptionLabel: "— Automatic Match —",
+                  onChange: (val) =>
+                    store.stageDeviceSetting("ma_player_entity", val, "cfg-ma_player_entity"),
+                })
+              : nothing}
+            ${renderSwitchRow({
+              id: "cfg-area_handoff",
+              label: "Media Follows This Device to Its New Area",
+              description:
+                "Transfers active Music Assistant playback when this Device moves to another Area.",
+              checked: Boolean(cfg.area_handoff),
+              onChange: (checked) =>
+                store.stageDeviceSetting("area_handoff", checked, "cfg-area_handoff"),
+            })}
+            ${soundItems.map((it) => renderNativeControlRow(store, it))}`,
         })}
       </div>
     </div>
@@ -6556,8 +6648,28 @@ function renderDeviceInterfaceView(store) {
 
 // --- src/views/device-overview-view.ts ---
 /**
- * Device Overview View (`dashboard`): Health repairs alert, Status card (13 rows + footer), Quick Actions & Sensors.
+ * Device Overview View (`dashboard`, D-029): Health repairs alert, high-level Status card
+ * (header state pill, 2x2 tonal metric tiles, clickable assignment summary rows + footer),
+ * Quick Actions & Sensors.
  */
+const ICON_AREA = "M12,6.5A2.5,2.5 0 0,1 14.5,9A2.5,2.5 0 0,1 12,11.5A2.5,2.5 0 0,1 9.5,9A2.5,2.5 0 0,1 12,6.5M12,2A7,7 0 0,1 19,9C19,14.25 12,22 12,22C12,22 5,14.25 5,9A7,7 0 0,1 12,2M12,4A5,5 0 0,0 7,9C7,10 7,12 12,18.71C17,12 17,10 17,9A5,5 0 0,0 12,4Z";
+const ICON_BATTERY = "M16,20H8V6H16M16.67,4H15V2H9V4H7.33A1.33,1.33 0 0,0 6,5.33V20.67C6,21.4 6.6,22 7.33,22H16.67A1.33,1.33 0 0,0 18,20.67V5.33C18,4.6 17.4,4 16.67,4Z";
+const ICON_PLUG = "M16,7V3H14V7H10V3H8V7H8C7,7 6,8 6,9V14.5L9.5,18V21H14.5V18L18,14.5V9C18,8 17,7 16,7M16,13.67L12.5,17.17V19H11.5V17.17L8,13.67V9H16V13.67Z";
+const ICON_RADAR = "M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12C22,10.84 21.79,9.69 21.39,8.61L19.79,10.21C19.93,10.8 20,11.4 20,12A8,8 0 0,1 12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4C12.6,4 13.2,4.07 13.79,4.21L15.4,2.6C14.31,2.21 13.16,2 12,2M19,2A2,2 0 0,0 17,4A2,2 0 0,0 19,6A2,2 0 0,0 21,4A2,2 0 0,0 19,2M12,6A6,6 0 0,0 6,12A6,6 0 0,0 12,18A6,6 0 0,0 18,12H16A4,4 0 0,1 12,16A4,4 0 0,1 8,12A4,4 0 0,1 12,8V6M12,10A2,2 0 0,0 10,12A2,2 0 0,0 12,14A2,2 0 0,0 14,12A2,2 0 0,0 12,10Z";
+const ICON_WIFI = "M12,21L15.6,16.2C14.6,15.45 13.35,15 12,15C10.65,15 9.4,15.45 8.4,16.2L12,21M12,3C7.95,3 4.21,4.34 1.2,6.6L3,9C5.5,7.12 8.62,6 12,6C15.38,6 18.5,7.12 21,9L22.8,6.6C19.79,4.34 16.05,3 12,3M12,9C9.3,9 6.81,9.89 4.8,11.4L6.6,13.8C8.1,12.67 9.97,12 12,12C14.03,12 15.9,12.67 17.4,13.8L19.2,11.4C17.19,9.89 14.7,9 12,9Z";
+const ICON_BLUETOOTH = "M14.88,16.29L13,18.17V14.41M13,5.83L14.88,7.71L13,9.58M17.71,7.71L12,2H11V9.58L6.41,5L5,6.41L10.59,12L5,17.58L6.41,19L11,14.41V22H12L17.71,16.29L13.41,12L17.71,7.71Z";
+const ICON_CHIP = "M17,17H7V7H17M21,11V9H19V7C19,5.89 18.1,5 17,5H15V3H13V5H11V3H9V5H7C5.89,5 5,5.89 5,7V9H3V11H5V13H3V15H5V17A2,2 0 0,0 7,19H9V21H11V19H13V21H15V19H17A2,2 0 0,0 19,17V15H21V13H19V11M15,15H9V9H15V15Z";
+const ICON_TAG = "M21.41,11.58L12.41,2.58C12.05,2.22 11.55,2 11,2H4C2.9,2 2,2.9 2,4V11C2,11.55 2.22,12.05 2.59,12.42L11.59,21.42C11.95,21.78 12.45,22 13,22C13.55,22 14.05,21.78 14.41,21.41L21.41,14.41C21.78,14.05 22,13.55 22,13C22,12.45 21.77,11.94 21.41,11.58M13,20.01L4,11V4H11V3.99L20,12.99L13,20.01M6.5,5A1.5,1.5 0 0,1 8,6.5A1.5,1.5 0 0,1 6.5,8A1.5,1.5 0 0,1 5,6.5A1.5,1.5 0 0,1 6.5,5Z";
+function renderTileIcon(pathD) {
+  return html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d=${pathD}></path></svg>`;
+}
+function rssiQualityLabel(rssi) {
+  if (rssi === null || !Number.isFinite(rssi)) return "No reading";
+  if (rssi >= -60) return "Excellent";
+  if (rssi >= -70) return "Good";
+  if (rssi >= -80) return "Fair";
+  return "Weak";
+}
 function renderDeviceOverviewView(store) {
   const data = store.state;
   const cfg = data?.config || {};
@@ -6577,55 +6689,69 @@ function renderDeviceOverviewView(store) {
   );
   // Live Status calculations
   const winRow = (curDevEntry?.ble_survey_rows || []).find((r) => r.is_winner);
-  let batText = "—";
-  if (!isBleOnly && curDevEntry?.battery_level !== null && curDevEntry?.battery_level !== undefined) {
-    if (curDevEntry.is_charging) {
-      batText = `${fmtPercent(curDevEntry.battery_level, store.hass)} (charging)`;
-    } else if (curDevEntry.is_usb_connected) {
-      batText = `${fmtPercent(curDevEntry.battery_level, store.hass)} (plugged in)`;
-    } else {
-      batText = fmtPercent(curDevEntry.battery_level, store.hass);
-    }
+  const hasBatteryReading =
+    !isBleOnly &&
+    curDevEntry?.battery_level !== null &&
+    curDevEntry?.battery_level !== undefined &&
+    Number.isFinite(Number(curDevEntry.battery_level));
+  const batPct = hasBatteryReading
+    ? Math.max(0, Math.min(100, Math.round(Number(curDevEntry?.battery_level))))
+    : 0;
+  const batMeta = curDevEntry?.is_charging
+    ? "Charging"
+    : curDevEntry?.is_usb_connected
+      ? "Plugged in"
+      : "On battery";
+  let rssiVal = null;
+  if (!isBleOnly && curDevEntry?.wifi_rssi !== null && curDevEntry?.wifi_rssi !== undefined) {
+    rssiVal = Number(curDevEntry.wifi_rssi);
+  } else if (isBleOnly && winRow && winRow.effective_rssi !== null && winRow.effective_rssi !== undefined) {
+    rssiVal = Number(winRow.effective_rssi);
   }
-  const showBatteryRow = Boolean(caps.has_power) || batText !== "—";
-  let wifiText = "—";
-  if (curDevEntry?.wifi_rssi !== null && curDevEntry?.wifi_rssi !== undefined) {
-    wifiText = `${fmtNumber(curDevEntry.wifi_rssi, store.hass, 0)} dBm`;
-  } else if (isBleOnly && winRow && winRow.effective_rssi !== null) {
-    wifiText = `${fmtNumber(winRow.effective_rssi, store.hass, 0)} dBm (BLE)`;
-  }
-  const ipStr = curDevEntry?.ip_address || (isBleOnly ? cfg.ble_target_address || "—" : "—");
+  const hasRssi = rssiVal !== null && Number.isFinite(rssiVal);
+  const rssiText = hasRssi ? `${fmtNumber(rssiVal, store.hass, 0)} dBm` : "—";
+  const rssiPct = hasRssi ? rssiToPercent(rssiVal) : 0;
   const hasAssignedArea = Boolean(curDevEntry?.has_assigned_area);
   const areaText = hasAssignedArea
     ? curDevEntry?.area_label || live.active_area_name || "—"
     : live.active_area_name || "—";
-  const now = live.now || { speaker_name: "", media_state: "", media_title: "", media_artist: "" };
-  const playingTitle = [now.media_title, now.media_artist].filter(Boolean).join(" — ");
-  const nowPlayingText = playingTitle
-    ? now.media_state === "paused"
-      ? `${playingTitle} (paused)`
-      : playingTitle
-    : now.media_state
-      ? "Nothing playing"
-      : "—";
-  const rawSw = String(live.device_sw_version || esp?.device?.sw_version || "").replace(/^v/i, "");
-  const fwText = rawSw
-    ? live.fw_update_available
-      ? `v${rawSw} (update available)`
-      : `v${rawSw}`
-    : "—";
-  const statusText = isBleOnly
-    ? curDevEntry?.status_label || "—"
-    : curDevEntry?.is_online === undefined
-      ? "—"
-      : curDevEntry.is_online
-        ? "Online"
-        : "Offline";
   const distSuffix =
     live.ble_closest_proxy && winRow && winRow.distance_m !== null && winRow.distance_m !== undefined
       ? ` (~${fmtDistance(winRow.distance_m, store.hass, winRow.distance_ft)})`
       : "";
-  const showProxyRow = Boolean(caps.has_ble_beacon && cfg.native_ble_tracking);
+  const showProxyMeta = Boolean(!isBleOnly && caps.has_ble_beacon && cfg.native_ble_tracking && live.ble_closest_proxy);
+  const areaMetaBase = isBleOnly ? "BLE tag" : hasAssignedArea ? "Stationary" : "Roaming";
+  const areaMeta = showProxyMeta
+    ? `${areaMetaBase} • ${live.ble_closest_proxy}${distSuffix}`
+    : areaMetaBase;
+  const rawSw = String(live.device_sw_version || esp?.device?.sw_version || "").replace(/^v/i, "");
+  const fwValue = rawSw ? `v${rawSw}` : "—";
+  const fwMeta = live.fw_update_available
+    ? "Update available"
+    : rawSw
+      ? "Up to date"
+      : "Not reported";
+  let statusChipClass = "chip";
+  let statusDotClass = "status-dot";
+  let statusLabel = "—";
+  if (isBleOnly) {
+    statusLabel = curDevEntry?.status_label || "—";
+    const detected = statusLabel.toLowerCase().includes("detected") || Boolean(winRow);
+    if (detected) {
+      statusChipClass = "chip chip-success";
+      statusDotClass = "status-dot online";
+    }
+  } else if (curDevEntry?.is_online && live.fw_update_available) {
+    statusChipClass = "chip chip-warning";
+    statusDotClass = "status-dot update";
+    statusLabel = "Update available";
+  } else if (curDevEntry?.is_online) {
+    statusChipClass = "chip chip-success";
+    statusDotClass = "status-dot online";
+    statusLabel = "Online";
+  } else if (curDevEntry?.is_online === false) {
+    statusLabel = "Offline";
+  }
   const quickActionItems = store
     .getSectionItems("actions")
     .concat(store.getSectionItems("overview"));
@@ -6634,8 +6760,41 @@ function renderDeviceOverviewView(store) {
   const otherSensorItems = store.getSectionItems("other");
   const groups = data?.device_groups || [];
   const curGroupId = cfg.device_group || "unassigned";
+  const curGroupName =
+    groups.find((g) => g.id === curGroupId)?.name ||
+    (curGroupId === "unassigned" ? "Unassigned" : curGroupId);
   const syncStatus = live.group_sync_status ?? curDevEntry?.group_sync_status;
   const isCustomized = curGroupId !== "unassigned" && isGroupCustomized(syncStatus);
+  const remoteGroups = data?.system_config?.remote_groups || [];
+  const curRemoteMode =
+    String(cfg.device_remote_group || curDevEntry?.device_remote_group || "area_auto").trim() ||
+    "area_auto";
+  let remoteSummary = "Follow Area";
+  if (curRemoteMode === "all") {
+    remoteSummary = "All System Remotes";
+  } else if (curRemoteMode.startsWith("group:")) {
+    const gid = curRemoteMode.slice(6);
+    remoteSummary = remoteGroups.find((g) => g.id === gid)?.name || gid;
+  }
+  const powerTileBody = hasBatteryReading
+    ? html`<div class="status-tile-head">
+          ${renderTileIcon(ICON_BATTERY)}
+          <span>Battery</span>
+        </div>
+        <strong class="status-tile-value">${fmtPercent(curDevEntry?.battery_level, store.hass)}</strong>
+        <span class="status-tile-meta">${batMeta}</span>
+        <div class="signal-track" aria-hidden="true">
+          <div
+            class="signal-fill${batPct <= 20 && !curDevEntry?.is_charging ? " low" : ""}"
+            style=${`--signal-pct:${batPct}%`}
+          ></div>
+        </div>`
+    : html`<div class="status-tile-head">
+          ${renderTileIcon(ICON_PLUG)}
+          <span>Power</span>
+        </div>
+        <strong class="status-tile-value">Mains</strong>
+        <span class="status-tile-meta">${caps.has_power ? "Sleep & wake active" : "Always on"}</span>`;
   return html`<section id="view-dashboard" class="stack">
     ${deviceIssues.length
       ? html`<div role="alert" class="alert ${hasErrorIssue ? "alert-error" : "alert-warning"}">
@@ -6659,49 +6818,131 @@ function renderDeviceOverviewView(store) {
       <div class="column">
         ${renderCard({
           heading: html`<h3 class="card-title">Status</h3>`,
-          body: html`<div class="kv-list">
-            <div class="kv-row"><span>Status</span><strong>${statusText}</strong></div>
-            <div class="kv-row">
-              <span id="st-area-label">${hasAssignedArea ? "Area" : "Current Area"}</span>
-              <strong>${areaText}</strong>
+          headerActions: html`<span id="st-status-chip" class=${statusChipClass}>
+            <span class=${statusDotClass} aria-hidden="true"></span>${statusLabel}
+          </span>`,
+          contentClass: "stack",
+          body: html`<div class="status-tiles">
+              <button
+                type="button"
+                @click=${() => store.switchView("presence")}
+                class="status-tile"
+              >
+                <div class="status-tile-head">
+                  ${renderTileIcon(ICON_AREA)}
+                  <span id="st-area-label">${hasAssignedArea ? "Area" : "Current Area"}</span>
+                </div>
+                <strong class="status-tile-value">${areaText}</strong>
+                <span class="status-tile-meta">${areaMeta}</span>
+              </button>
+
+              ${isBleOnly
+                ? html`<button
+                    type="button"
+                    @click=${() => store.switchView("presence")}
+                    class="status-tile"
+                  >
+                    <div class="status-tile-head">
+                      ${renderTileIcon(ICON_RADAR)}
+                      <span>Closest Proxy</span>
+                    </div>
+                    <strong class="status-tile-value">${live.ble_closest_proxy || "—"}</strong>
+                    <span class="status-tile-meta">
+                      ${winRow && winRow.distance_m !== null && winRow.distance_m !== undefined
+                        ? `~${fmtDistance(winRow.distance_m, store.hass, winRow.distance_ft)}`
+                        : "BLE presence"}
+                    </span>
+                  </button>`
+                : hasBatteryReading || caps.has_power
+                  ? html`<button
+                      type="button"
+                      @click=${() => store.switchView("power")}
+                      class="status-tile"
+                    >
+                      ${powerTileBody}
+                    </button>`
+                  : html`<div class="status-tile">${powerTileBody}</div>`}
+
+              <button
+                type="button"
+                @click=${() => store.switchView(isBleOnly ? "presence" : "tools")}
+                class="status-tile"
+              >
+                <div class="status-tile-head">
+                  ${renderTileIcon(isBleOnly ? ICON_BLUETOOTH : ICON_WIFI)}
+                  <span id="st-wifi-label">${isBleOnly ? "BLE Signal" : "Wi-Fi Signal"}</span>
+                </div>
+                <strong class="status-tile-value">${rssiText}</strong>
+                <span class="status-tile-meta">${rssiQualityLabel(rssiVal)}</span>
+                ${hasRssi
+                  ? html`<div class="signal-track" aria-hidden="true">
+                      <div
+                        class="signal-fill${rssiVal !== null && rssiVal < -80 ? " low" : ""}"
+                        style=${`--signal-pct:${rssiPct}%`}
+                      ></div>
+                    </div>`
+                  : nothing}
+              </button>
+
+              ${isBleOnly
+                ? html`<button
+                    type="button"
+                    @click=${() => store.switchView("presence")}
+                    class="status-tile"
+                  >
+                    <div class="status-tile-head">
+                      ${renderTileIcon(ICON_TAG)}
+                      <span>BLE Target</span>
+                    </div>
+                    <strong class="status-tile-value">
+                      <code>${cfg.ble_target_address || "—"}</code>
+                    </strong>
+                    <span class="status-tile-meta">Bluetooth address</span>
+                  </button>`
+                : html`<button
+                    type="button"
+                    @click=${() => store.switchView("tools")}
+                    class="status-tile"
+                  >
+                    <div class="status-tile-head">
+                      ${renderTileIcon(ICON_CHIP)}
+                      <span>Firmware</span>
+                    </div>
+                    <strong class="status-tile-value">${fwValue}</strong>
+                    <span class="status-tile-meta">${fwMeta}</span>
+                  </button>`}
             </div>
-            <div class="kv-row"><span>Speaker</span><strong>${now.speaker_name || "—"}</strong></div>
-            <div class="kv-row"><span>Now Playing</span><strong>${nowPlayingText}</strong></div>
-            ${showBatteryRow
-              ? html`<div class="kv-row"><span>Battery</span><strong>${batText}</strong></div>`
-              : nothing}
-            <div class="kv-row">
-              <span id="st-wifi-label">${isBleOnly ? "BLE Signal" : "Wi-Fi Signal"}</span>
-              <strong>${wifiText}</strong>
-            </div>
-            ${showProxyRow
-              ? html`<div class="kv-row">
-                  <span>Closest Proxy</span>
-                  <strong>${(live.ble_closest_proxy || "—") + distSuffix}</strong>
+
+            ${!isBleOnly
+              ? html`<div class="kv-list status-assignments">
+                  <button
+                    type="button"
+                    @click=${() => store.openSystemSection("system_sync")}
+                    class="kv-row"
+                  >
+                    <span>Device Group</span>
+                    <strong>
+                      ${curGroupId !== "unassigned"
+                        ? html`<span
+                            class="chip ${isCustomized ? "chip-warning" : "chip-success"}"
+                          >
+                            ${isCustomized ? "Customized" : "In Sync"}
+                          </span>`
+                        : nothing}${curGroupName}
+                    </strong>
+                  </button>
+                  ${caps.has_display
+                    ? html`<button
+                        type="button"
+                        @click=${() => store.switchView("interface")}
+                        class="kv-row"
+                      >
+                        <span>Remote Group</span>
+                        <strong>${remoteSummary}</strong>
+                      </button>`
+                    : nothing}
                 </div>`
-              : nothing}
-            <div class="kv-row">
-              <span>Model</span>
-              <strong>${curDevEntry?.model_label || esp?.device?.model || "—"}</strong>
-            </div>
-            <div class="kv-row"><span>Firmware</span><strong>${fwText}</strong></div>
-            <div class="kv-row">
-              <span>Latter SDK</span>
-              <strong id="dash-sdk-rev">${live.sdk_rev || "—"}</strong>
-            </div>
-            <div class="kv-row">
-              <span>ESPHome Node</span>
-              <strong><code id="dash-node-name">${cfg.device_slug || "—"}</code></strong>
-            </div>
-            <div class="kv-row">
-              <span>${isBleOnly ? "Target" : "IP Address"}</span>
-              <strong><code>${ipStr}</code></strong>
-            </div>
-            <div class="kv-row">
-              <span>Placement</span>
-              <strong>${hasAssignedArea ? "Stationary" : "Roaming"}</strong>
-            </div>
-          </div>`,
+              : nothing}`,
           footerActions: html`${links.esphome_device_id
               ? html`<button
                   type="button"
@@ -7198,6 +7439,7 @@ function renderDeviceToolsView(store) {
     live.device_sw_version || esp?.device?.sw_version || findNetworkState("firmware version") || "",
   ).replace(/^v/i, "");
   const fwVersionText = rawSw ? `v${rawSw}` : "—";
+  const modelText = curDevEntry?.model_label || esp?.device?.model || "—";
   const ipStr = curDevEntry?.ip_address || findNetworkState("ip address") || "";
   const macStr = esp?.device?.mac || findNetworkState("mac address") || "";
   const devControlItems = developerItems.filter((it) =>
@@ -7248,12 +7490,20 @@ function renderDeviceToolsView(store) {
                       <strong>${cfg.ble_target_address ? html`<code>${cfg.ble_target_address}</code>` : "—"}</strong>
                     </div>`
                 : html`<div class="kv-row">
+                      <span>Model</span>
+                      <strong>${modelText}</strong>
+                    </div>
+                    <div class="kv-row">
+                      <span>ESPHome Node</span>
+                      <strong><code id="diag-node-name">${cfg.device_slug || "—"}</code></strong>
+                    </div>
+                    <div class="kv-row">
                       <span>Firmware Version</span>
                       <strong>${fwVersionText}</strong>
                     </div>
                     <div class="kv-row">
                       <span>Latter SDK</span>
-                      <strong>${live.sdk_rev || "—"}</strong>
+                      <strong id="diag-sdk-rev">${live.sdk_rev || "—"}</strong>
                     </div>
                     <div class="kv-row">
                       <span>Wi-Fi Signal</span>

@@ -747,8 +747,81 @@ export const STUDIO_STYLES = css`
     border-radius: 50%;
     background: var(--studio-text-disabled);
   }
+  .chip > .status-dot { margin-right: var(--studio-space-1); }
   .status-dot.online { background: var(--studio-success); }
   .status-dot.update { background: var(--studio-warning); }
+  .status-tiles {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--studio-space-2);
+  }
+  @media (max-width: 480px) {
+    .status-tiles { grid-template-columns: minmax(0, 1fr); }
+  }
+  .status-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--studio-space-1);
+    padding: var(--studio-space-3);
+    border: 1px solid var(--studio-divider);
+    border-radius: var(--studio-radius-control);
+    background: var(--studio-input-bg);
+    color: inherit;
+    font: inherit;
+    text-align: left;
+  }
+  button.status-tile {
+    cursor: pointer;
+    transition: background-color 0.15s ease-out, border-color 0.15s ease-out;
+  }
+  button.status-tile:hover {
+    background: var(--studio-hover);
+    border-color: var(--studio-primary);
+  }
+  button.status-tile:focus-visible {
+    outline: 2px solid var(--studio-primary);
+    outline-offset: 2px;
+  }
+  .status-tile-head {
+    display: flex;
+    align-items: center;
+    gap: var(--studio-space-2);
+    color: var(--studio-text-secondary);
+    font-size:var(--studio-font-caption);
+    font-weight: var(--studio-weight-medium);
+    line-height: var(--studio-line-height-condensed);
+  }
+  .status-tile-head svg {
+    width: 16px;
+    height: 16px;
+    fill: currentColor;
+    flex-shrink: 0;
+  }
+  .status-tile-value {
+    margin-top: var(--studio-space-1);
+    font-size:var(--studio-font-section);
+    font-weight: var(--studio-weight-medium);
+    line-height: var(--studio-line-height-condensed);
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+  }
+  .status-tile-meta {
+    color: var(--studio-text-secondary);
+    font-size:var(--studio-font-secondary);
+    line-height: var(--studio-line-height-condensed);
+  }
+  .status-tile > .signal-track { margin-top: var(--studio-space-1); }
+  .status-assignments {
+    padding-top: var(--studio-space-2);
+    border-top: 1px solid var(--studio-divider);
+  }
+  .status-assignments strong {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--studio-space-2);
+  }
   .pill-list {
     display: flex;
     flex-wrap: wrap;
@@ -839,6 +912,7 @@ export const STUDIO_STYLES = css`
     background: var(--studio-primary);
     transition: width 0.25s ease;
   }
+  .signal-fill.low { background: var(--studio-error); }
   .upload-progress-fill {
     width: var(--upload-pct, 0%);
     height: 100%;

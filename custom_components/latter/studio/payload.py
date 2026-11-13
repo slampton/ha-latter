@@ -759,35 +759,6 @@ def _build_system_section(
     }
 
 
-def _build_now_playing(
-    hass: HomeAssistant, coordinator: LatterCoordinator
-) -> dict[str, str]:
-    """Return the Device's active speaker and what it's playing, read from Home Assistant ("" when unknown)."""
-    spk_id = coordinator.active_speaker or ""
-    st = hass.states.get(spk_id) if spk_id else None
-    if (
-        (st is None or st.state in ("unavailable", "unknown"))
-        and coordinator.is_local_speaker_entity(spk_id)
-        and coordinator.local_ma_speaker
-    ):
-        st = hass.states.get(coordinator.local_ma_speaker) or st
-    speaker_name = ""
-    if spk_id:
-        speaker_name = (
-            coordinator.device_title
-            if coordinator.is_local_speaker_entity(spk_id)
-            else str((st.attributes.get("friendly_name") if st else "") or spk_id)
-        )
-    media_state = st.state if st is not None and st.state not in ("unavailable", "unknown") else ""
-    active = media_state in ("playing", "paused", "buffering")
-    return {
-        "speaker_name": speaker_name,
-        "media_state": media_state,
-        "media_title": str(st.attributes.get("media_title") or "") if active and st else "",
-        "media_artist": str(st.attributes.get("media_artist") or "") if active and st else "",
-    }
-
-
 def build_studio_state_payload(
     hass: HomeAssistant,
     coordinator: LatterCoordinator | None,
@@ -963,7 +934,6 @@ def build_studio_state_payload(
             ),
             "ble_closest_proxy": coordinator._ble_tracker.closest_scanner if coordinator._ble_tracker else "",
             "area_presence_grid": presence_grid,
-            "now": _build_now_playing(hass, coordinator),
             "device_sw_version": fw_version,
             "sdk_rev": str(coordinator.hardware_manifest.get("sdk") or ""),
             "fw_update_entity": fw_update_entity,
