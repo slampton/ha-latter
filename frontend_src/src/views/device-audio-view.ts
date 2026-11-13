@@ -43,13 +43,6 @@ export function renderDeviceAudioView(store: StudioStore): TemplateResult {
       );
 
   const soundItems = store.getSectionItems("sound");
-  const musicItems = store.getSectionItems("music");
-  const primaryMusicItems = musicItems.filter(
-    (it) => it.domain !== "media_player" && !(it.name || "").toLowerCase().includes("sort"),
-  );
-  const sortMusicItems = musicItems.filter((it) =>
-    (it.name || "").toLowerCase().includes("sort"),
-  );
 
   const isRoaming = caps.is_roaming_device !== false;
   const dwellSeconds = Number(cfg.area_follow_dwell_s ?? 10);
@@ -69,7 +62,7 @@ export function renderDeviceAudioView(store: StudioStore): TemplateResult {
     <div class="columns">
       <div class="column">
         ${renderCard({
-          title: "Voice Assistant & Wake Word",
+          heading: html`<h3 class="card-title">Voice Assistant &amp; Wake Word</h3>`,
           contentClass: "settings-list",
           body: html`${voicePrimary.map((it) => renderNativeControlRow(store, it))}
             ${isRoaming
@@ -123,7 +116,7 @@ export function renderDeviceAudioView(store: StudioStore): TemplateResult {
 
       <div class="column">
         ${renderCard({
-          title: "Sound & Media Player",
+          heading: html`<h3 class="card-title">Sound &amp; Playback</h3>`,
           contentClass: "settings-list",
           body: html`${renderSelectRow({
               id: "cfg-default_speaker",
@@ -158,16 +151,7 @@ export function renderDeviceAudioView(store: StudioStore): TemplateResult {
               onChange: (checked) =>
                 store.stageDeviceSetting("area_handoff", checked, "cfg-area_handoff"),
             })}
-            ${soundItems.map((it) => renderNativeControlRow(store, it))}
-            ${primaryMusicItems.map((it) => renderNativeControlRow(store, it))}
-            ${sortMusicItems.length
-              ? html`<details class="sub-collapsible">
-                  <summary>Library Sorting</summary>
-                  <div class="card-content settings-list">
-                    ${sortMusicItems.map((it) => renderNativeControlRow(store, it))}
-                  </div>
-                </details>`
-              : nothing}`,
+            ${soundItems.map((it) => renderNativeControlRow(store, it))}`,
         })}
       </div>
     </div>

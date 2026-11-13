@@ -495,6 +495,18 @@ function makeStore({ weatherBgState = "Dynamic", cycleMins = 0, activeId = "", f
   const batterySection = [
     { entity_id: "sensor.pocket_battery_level", domain: "sensor", name: "Battery Level", state: "88", unit: "%" },
   ];
+  const musicSection = [
+    { entity_id: "media_player.pocket", domain: "media_player", name: "Player", state: "idle" },
+    { entity_id: "switch.pocket_music_show_library_shortcut", domain: "switch", name: "Show Library Shortcut", state: "on" },
+    { entity_id: "select.pocket_music_overlay_style", domain: "select", name: "Overlay Style", state: "Art + Metadata", options: ["Art Only", "Art + Metadata"] },
+    { entity_id: "select.pocket_music_album_art_style", domain: "select", name: "Album Art Style", state: "Full Screen", options: ["Full Screen", "Standard"] },
+    { entity_id: "switch.pocket_music_show_speaker_shortcut", domain: "switch", name: "Show Speaker Shortcut", state: "on" },
+    { entity_id: "select.pocket_music_podcast_sort_order", domain: "select", name: "Podcast Sort Order", state: "Newest on Top", options: ["Newest on Top"] },
+    { entity_id: "select.pocket_music_album_sort_order", domain: "select", name: "Album Sort Order", state: "Alphabetical", options: ["Alphabetical"] },
+  ];
+  const soundSection = [
+    { entity_id: "number.pocket_sound_speaker_volume", domain: "number", name: "Speaker Volume", state: "60", min: 10, max: 100, step: 5, unit: "%" },
+  ];
   return {
     host: null,
     activeSubentryId: "sub_1",
@@ -503,12 +515,15 @@ function makeStore({ weatherBgState = "Dynamic", cycleMins = 0, activeId = "", f
     uploadPercent: 0,
     state: {
       config: {
+        device_slug: "desk_panel",
         activity_card: true,
         wallpaper_cycle_minutes: cycleMins,
         display_shape: "square",
         default_page_size: 3,
         device_remote_group: remoteMode,
       },
+      capabilities: { is_roaming_device: true },
+      live: { ma_link_matched: true },
       system_config: {
         custom_palettes: [],
         remotes_list: ["remote.living_tv"],
@@ -518,7 +533,7 @@ function makeStore({ weatherBgState = "Dynamic", cycleMins = 0, activeId = "", f
       system_devices: [
         { subentry_id: "sub_1", title: "Desk Panel", kind: "device", has_display: true, active_area_name: "Office", device_remote_group: remoteMode },
       ],
-      catalog: { remotes: [{ id: "remote.living_tv", name: "Living TV" }], areas: [] },
+      catalog: { remotes: [{ id: "remote.living_tv", name: "Living TV" }], areas: [], ma_speakers: [] },
       wallpapers,
     },
     getSectionItems(sec) {
@@ -527,6 +542,8 @@ function makeStore({ weatherBgState = "Dynamic", cycleMins = 0, activeId = "", f
       if (sec === "sleep") return sleepSection;
       if (sec === "actions") return actionsSection;
       if (sec === "battery") return batterySection;
+      if (sec === "music") return musicSection;
+      if (sec === "sound") return soundSection;
       return [];
     },
     getEnabledActivitySources() { return ["calendar"]; },
@@ -538,11 +555,12 @@ const offMarkup = flattenHtml(renderDeviceDisplayView(makeStore({ cycleMins: 0, 
 const staticMarkup = flattenHtml(renderDeviceDisplayView(makeStore({ cycleMins: 0, activeId: "preset:ocean_waves", autoBrtState: "Sun Synchronized" })));
 const rotatingMarkup = flattenHtml(renderDeviceDisplayView(makeStore({ cycleMins: 5, activeId: "preset:ocean_waves", favIds: ["preset:forest_mountains", "preset:ocean_waves"], autoBrtState: "Time Schedule" })));
 const powerMarkup = flattenHtml(renderDevicePowerView(makeStore({})));
+const audioMarkup = flattenHtml(renderDeviceAudioView(makeStore({})));
 const ifaceWeatherOn = flattenHtml(renderDeviceInterfaceView(makeStore({ weatherBgState: "Dynamic" })));
 const ifaceWeatherOff = flattenHtml(renderDeviceInterfaceView(makeStore({ weatherBgState: "off" })));
 const sysRemotesMarkup = flattenHtml(renderSystemRemotesView(makeStore({ remoteMode: "group:living_tv" })));
 
-return { offMarkup, staticMarkup, rotatingMarkup, powerMarkup, ifaceWeatherOn, ifaceWeatherOff, sysRemotesMarkup };
+return { offMarkup, staticMarkup, rotatingMarkup, powerMarkup, audioMarkup, ifaceWeatherOn, ifaceWeatherOff, sysRemotesMarkup };
 """
         )
         got = _run_node_ts(
@@ -553,6 +571,7 @@ return { offMarkup, staticMarkup, rotatingMarkup, powerMarkup, ifaceWeatherOn, i
                 FRONTEND_SRC / "components" / "wallpaper-gallery.ts",
                 FRONTEND_SRC / "views" / "device-display-view.ts",
                 FRONTEND_SRC / "views" / "device-power-view.ts",
+                FRONTEND_SRC / "views" / "device-audio-view.ts",
                 FRONTEND_SRC / "views" / "device-interface-view.ts",
                 FRONTEND_SRC / "views" / "system-remotes-view.ts",
             ],
@@ -585,7 +604,7 @@ return { offMarkup, staticMarkup, rotatingMarkup, powerMarkup, ifaceWeatherOn, i
         for saver_label in ("Docked Screensaver", "Screensaver Style", "Docked Idle Timeout"):
             self.assertNotIn(saver_label, got["powerMarkup"])
 
-        # 2. Interface view: Start Screen, Clock Face, Sun & Moon pills, and Remote Control Group selector
+        # 2. Interface view: Start Screen, Clock Face, Sun & Moon pills, Media Player UI, and Remote Control Group selector
         self.assertIn("Start Screen", got["ifaceWeatherOn"])
         self.assertIn("Clock Face", got["ifaceWeatherOn"])
         self.assertLess(got["ifaceWeatherOn"].index("Start Screen"), got["ifaceWeatherOn"].index("Clock Face"))
@@ -593,6 +612,24 @@ return { offMarkup, staticMarkup, rotatingMarkup, powerMarkup, ifaceWeatherOn, i
         self.assertIn("✓ Sun", got["ifaceWeatherOn"])
         self.assertIn("+ Moon", got["ifaceWeatherOn"])
         self.assertLess(got["ifaceWeatherOn"].index("✓ Sun"), got["ifaceWeatherOn"].index("+ Moon"))
+        self.assertIn('<h3 class="card-title">Media Player</h3>', got["ifaceWeatherOn"])
+        self.assertIn("<summary>Library Sorting</summary>", got["ifaceWeatherOn"])
+        for media_ui_label in (
+            "Album Art Style",
+            "Overlay Style",
+            "Show Speaker Shortcut",
+            "Show Library Shortcut",
+            "Album Sort Order",
+            "Podcast Sort Order",
+        ):
+            self.assertIn(media_ui_label, got["ifaceWeatherOn"])
+            self.assertNotIn(media_ui_label, got["audioMarkup"])
+        self.assertLess(got["ifaceWeatherOn"].index("Album Art Style"), got["ifaceWeatherOn"].index("Overlay Style"))
+        self.assertLess(got["ifaceWeatherOn"].index("Overlay Style"), got["ifaceWeatherOn"].index("Show Speaker Shortcut"))
+        self.assertLess(got["ifaceWeatherOn"].index("Show Speaker Shortcut"), got["ifaceWeatherOn"].index("Show Library Shortcut"))
+        self.assertLess(got["ifaceWeatherOn"].index("Album Sort Order"), got["ifaceWeatherOn"].index("Podcast Sort Order"))
+        self.assertIn('<h3 class="card-title">Sound &amp; Playback</h3>', got["audioMarkup"])
+        self.assertIn("Speaker Volume", got["audioMarkup"])
         self.assertIn("id=cfg-device_remote_group", got["ifaceWeatherOn"])
         self.assertIn("Group: Living Area TV", got["ifaceWeatherOn"])
         self.assertNotIn("id=weather-celestial-bodies", got["ifaceWeatherOff"])

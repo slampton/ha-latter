@@ -147,10 +147,15 @@ class TestViewLayout(unittest.TestCase):
             self.assertIn(f'<h3 class="card-title">{title}</h3>', display_view)
         self.assertNotIn("Brightness &amp; Theme", js)
         self.assertNotIn("Brightness & Theme", js)
-        for title in ("Home Screen", "Activity Card", "Area Controls", "Remote Controls"):
+        for title in ("Home Screen", "Activity Card", "Area Controls", "Media Player", "Remote Controls"):
             self.assertIn(f'<h3 class="card-title">{title}</h3>', interface_view)
+        self.assertIn("<summary>Library Sorting</summary>", interface_view)
         self.assertIn('id: "cfg-device_remote_group"', interface_view)
         self.assertIn("Manage Remote Groups", interface_view)
+        audio_view = section("audio_voice")
+        for title in ("Voice Assistant &amp; Wake Word", "Sound &amp; Playback"):
+            self.assertIn(f'<h3 class="card-title">{title}</h3>', audio_view)
+        self.assertNotIn("Library Sorting", audio_view)
         self.assertIn('switchSystemDevice(d.subentry_id, "interface")', remotes_view)
         self.assertNotIn("Export Settings", js)
         self.assertNotIn("Restore From File", js)

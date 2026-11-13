@@ -1,5 +1,5 @@
 /**
- * Device Interface View (`interface`, D-026): Home Screen, Dock Apps, Activity Card, Area Controls & Remote Controls.
+ * Device Interface View (`interface`, D-026 / D-028): Home Screen, Dock Apps, Activity Card, Area Controls, Media Player & Remote Controls.
  */
 
 import {
@@ -47,6 +47,28 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
   const areaEspItems = sortEntitiesByKeywords(
     store.getSectionItems("area").filter((it) => !(it.name || "").toLowerCase().includes("ble")),
     areaOrder,
+  );
+  const musicItems = store.getSectionItems("music");
+  const mediaPlayerOrder = [
+    "album art style",
+    "overlay style",
+    "show speaker shortcut",
+    "show library shortcut",
+  ];
+  const primaryMusicItems = sortEntitiesByKeywords(
+    musicItems.filter(
+      (it) => it.domain !== "media_player" && !(it.name || "").toLowerCase().includes("sort"),
+    ),
+    mediaPlayerOrder,
+  );
+  const mediaSortOrder = [
+    "album sort order",
+    "artist album sort order",
+    "podcast sort order",
+  ];
+  const sortMusicItems = sortEntitiesByKeywords(
+    musicItems.filter((it) => (it.name || "").toLowerCase().includes("sort")),
+    mediaSortOrder,
   );
   const remoteEspItems = store.getSectionItems("remote");
 
@@ -291,6 +313,22 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
               ${areaEspItems.map((it) => renderNativeControlRow(store, it))}
             </div>`,
         })}
+
+        ${primaryMusicItems.length || sortMusicItems.length
+          ? renderCard({
+              heading: html`<h3 class="card-title">Media Player</h3>`,
+              contentClass: "settings-list",
+              body: html`${primaryMusicItems.map((it) => renderNativeControlRow(store, it))}
+                ${sortMusicItems.length
+                  ? html`<details class="sub-collapsible">
+                      <summary>Library Sorting</summary>
+                      <div class="card-content settings-list">
+                        ${sortMusicItems.map((it) => renderNativeControlRow(store, it))}
+                      </div>
+                    </details>`
+                  : nothing}`,
+            })
+          : nothing}
 
         ${renderCard({
           heading: html`<h3 class="card-title">Remote Controls</h3>`,

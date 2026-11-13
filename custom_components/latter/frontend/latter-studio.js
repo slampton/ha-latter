@@ -5619,13 +5619,6 @@ function renderDeviceAudioView(store) {
           (it.name || "").toLowerCase().includes("sensitivity"),
       );
   const soundItems = store.getSectionItems("sound");
-  const musicItems = store.getSectionItems("music");
-  const primaryMusicItems = musicItems.filter(
-    (it) => it.domain !== "media_player" && !(it.name || "").toLowerCase().includes("sort"),
-  );
-  const sortMusicItems = musicItems.filter((it) =>
-    (it.name || "").toLowerCase().includes("sort"),
-  );
   const isRoaming = caps.is_roaming_device !== false;
   const dwellSeconds = Number(cfg.area_follow_dwell_s ?? 10);
   const autoMaEntity = cfg.device_slug ? `media_player.${cfg.device_slug}` : "";
@@ -5641,7 +5634,7 @@ function renderDeviceAudioView(store) {
     <div class="columns">
       <div class="column">
         ${renderCard({
-          title: "Voice Assistant & Wake Word",
+          heading: html`<h3 class="card-title">Voice Assistant &amp; Wake Word</h3>`,
           contentClass: "settings-list",
           body: html`${voicePrimary.map((it) => renderNativeControlRow(store, it))}
             ${isRoaming
@@ -5695,7 +5688,7 @@ function renderDeviceAudioView(store) {
 
       <div class="column">
         ${renderCard({
-          title: "Sound & Media Player",
+          heading: html`<h3 class="card-title">Sound &amp; Playback</h3>`,
           contentClass: "settings-list",
           body: html`${renderSelectRow({
               id: "cfg-default_speaker",
@@ -5730,16 +5723,7 @@ function renderDeviceAudioView(store) {
               onChange: (checked) =>
                 store.stageDeviceSetting("area_handoff", checked, "cfg-area_handoff"),
             })}
-            ${soundItems.map((it) => renderNativeControlRow(store, it))}
-            ${primaryMusicItems.map((it) => renderNativeControlRow(store, it))}
-            ${sortMusicItems.length
-              ? html`<details class="sub-collapsible">
-                  <summary>Library Sorting</summary>
-                  <div class="card-content settings-list">
-                    ${sortMusicItems.map((it) => renderNativeControlRow(store, it))}
-                  </div>
-                </details>`
-              : nothing}`,
+            ${soundItems.map((it) => renderNativeControlRow(store, it))}`,
         })}
       </div>
     </div>
@@ -6235,7 +6219,7 @@ function renderDeviceDisplayView(store) {
 
 // --- src/views/device-interface-view.ts ---
 /**
- * Device Interface View (`interface`, D-026): Home Screen, Dock Apps, Activity Card, Area Controls & Remote Controls.
+ * Device Interface View (`interface`, D-026 / D-028): Home Screen, Dock Apps, Activity Card, Area Controls, Media Player & Remote Controls.
  */
 function renderDeviceInterfaceView(store) {
   const data = store.state;
@@ -6260,6 +6244,28 @@ function renderDeviceInterfaceView(store) {
   const areaEspItems = sortEntitiesByKeywords(
     store.getSectionItems("area").filter((it) => !(it.name || "").toLowerCase().includes("ble")),
     areaOrder,
+  );
+  const musicItems = store.getSectionItems("music");
+  const mediaPlayerOrder = [
+    "album art style",
+    "overlay style",
+    "show speaker shortcut",
+    "show library shortcut",
+  ];
+  const primaryMusicItems = sortEntitiesByKeywords(
+    musicItems.filter(
+      (it) => it.domain !== "media_player" && !(it.name || "").toLowerCase().includes("sort"),
+    ),
+    mediaPlayerOrder,
+  );
+  const mediaSortOrder = [
+    "album sort order",
+    "artist album sort order",
+    "podcast sort order",
+  ];
+  const sortMusicItems = sortEntitiesByKeywords(
+    musicItems.filter((it) => (it.name || "").toLowerCase().includes("sort")),
+    mediaSortOrder,
   );
   const remoteEspItems = store.getSectionItems("remote");
   const activityCardOn = cfg.activity_card !== false;
@@ -6501,6 +6507,22 @@ function renderDeviceInterfaceView(store) {
               ${areaEspItems.map((it) => renderNativeControlRow(store, it))}
             </div>`,
         })}
+
+        ${primaryMusicItems.length || sortMusicItems.length
+          ? renderCard({
+              heading: html`<h3 class="card-title">Media Player</h3>`,
+              contentClass: "settings-list",
+              body: html`${primaryMusicItems.map((it) => renderNativeControlRow(store, it))}
+                ${sortMusicItems.length
+                  ? html`<details class="sub-collapsible">
+                      <summary>Library Sorting</summary>
+                      <div class="card-content settings-list">
+                        ${sortMusicItems.map((it) => renderNativeControlRow(store, it))}
+                      </div>
+                    </details>`
+                  : nothing}`,
+            })
+          : nothing}
 
         ${renderCard({
           heading: html`<h3 class="card-title">Remote Controls</h3>`,
