@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import itertools
 import json
 from pathlib import Path
 import re
@@ -155,29 +156,29 @@ class TestViewLayout(unittest.TestCase):
             self.assertIn(f'<h3 class="card-title">{title}</h3>', sys_tools)
         for title in ("Whole-Home Entities", "Calendars", "Cameras &amp; Doorbell Audio", "Custom Colors", "Wallpapers"):
             self.assertIn(f'<h3 class="card-title">{title}</h3>', shared_entities)
-        for title in ("Brightness", "Voice Assistant", "Screensavers", "Colors", "Wallpapers"):
+        display_order = (
+            "Brightness",
+            "Home Screen",
+            "Clock",
+            "Screensavers",
+            "Colors",
+            "Wallpapers",
+            "Media Player",
+            "Voice Assistant",
+        )
+        for title in display_order:
             self.assertIn(f'<h3 class="card-title">{title}</h3>', display_view)
-        self.assertLess(
-            display_view.index('<h3 class="card-title">Brightness</h3>'),
-            display_view.index('<h3 class="card-title">Voice Assistant</h3>'),
-        )
-        self.assertLess(
-            display_view.index('<h3 class="card-title">Voice Assistant</h3>'),
-            display_view.index('<h3 class="card-title">Screensavers</h3>'),
-        )
-        self.assertLess(
-            display_view.index('<h3 class="card-title">Screensavers</h3>'),
-            display_view.index('<h3 class="card-title">Colors</h3>'),
-        )
-        self.assertLess(
-            display_view.index('<h3 class="card-title">Colors</h3>'),
-            display_view.index('<h3 class="card-title">Wallpapers</h3>'),
-        )
+        for earlier, later in itertools.pairwise(display_order):
+            self.assertLess(
+                display_view.index(f'<h3 class="card-title">{earlier}</h3>'),
+                display_view.index(f'<h3 class="card-title">{later}</h3>'),
+            )
         self.assertNotIn("Brightness &amp; Theme", js)
         self.assertNotIn("Brightness & Theme", js)
         for title in ("Home Screen", "Activity Card", "Area Controls", "Media Player", "Remote Controls"):
             self.assertIn(f'<h3 class="card-title">{title}</h3>', interface_view)
-        self.assertIn("<summary>Library Sorting</summary>", interface_view)
+        self.assertNotIn("<summary>Library Sorting</summary>", js)
+        self.assertIn('id: "media-player-shortcuts"', interface_view)
         self.assertIn('id: "cfg-device_remote_group"', interface_view)
         self.assertIn("Manage Remote Groups", interface_view)
         audio_view = section("audio_voice")
@@ -249,15 +250,21 @@ class TestViewLayout(unittest.TestCase):
         js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
         self.assertIn('["wake greeting", "weather background", "sun", "moon"]', js)
         self.assertIn('["default category", "show all category"]', js)
+        disp_fn_start = js.index("function renderDeviceDisplayView(")
+        disp_view = js[disp_fn_start:js.index("</section>", disp_fn_start)]
+        self.assertIn('<h3 class="card-title">Home Screen</h3>', disp_view)
+        self.assertIn('id="embedded-home"', disp_view)
+        self.assertIn('id: "weather-celestial-bodies"', disp_view)
+        self.assertIn('label: "Sun & Moon"', disp_view)
+        self.assertIn("renderCelestialRow()", disp_view[disp_view.index('<section id="view-display"'):])
         start = js.index('<section id="view-interface"')
         view = js[start:js.index("</section>", start)]
         self.assertIn('<h3 class="card-title">Home Screen</h3>', view)
         self.assertIn('<h3 class="card-title">Area Controls</h3>', view)
         self.assertIn('<h3 class="card-title">Remote Controls</h3>', view)
-        self.assertIn('id: "weather-celestial-bodies"', view)
-        self.assertIn('label: "Sun & Moon"', view)
+        self.assertIn('id="dock-pills-container"', view)
         self.assertIn('id="embedded-area-ui"', view)
-        self.assertLess(view.index('id="dock-pills-container"'), view.index('id="embedded-home"'))
+        self.assertNotIn('id="embedded-home"', view)
 
     def test_sidebar_icon_module(self) -> None:
         panel_src = (LATTER_DIR / "studio" / "__init__.py").read_text(encoding="utf-8")

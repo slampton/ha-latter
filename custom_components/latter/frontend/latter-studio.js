@@ -6038,9 +6038,10 @@ function renderWallpaperUploadProgress(
 
 // --- src/views/device-display-view.ts ---
 /**
- * Device Display View (`display`, D-027 / D-029):
- * Column 1: Brightness, Voice Assistant (Visual Profile) & Screensavers.
- * Column 2: Colors & Wallpapers.
+ * Device Display View (`display`, D-027 / D-029 / D-033):
+ * Visual & aesthetic preferences across screens.
+ * Column 1: Brightness, Home Screen (Wake Greeting, Weather Background & Sun & Moon), Clock & Screensavers.
+ * Column 2: Colors, Wallpapers, Media Player (Album Art & Overlay Style) & Voice Assistant (Visual Profile).
  */
 function sortEntitiesByKeywords(
   items,
@@ -6057,11 +6058,25 @@ function sortEntitiesByKeywords(
   });
 }
 function isInterfaceDisplayEntity(it) {
-  const low = (it.name || "").toLowerCase();
+  const low = `${it.name || ""} ${it.entity_id || ""}`.toLowerCase();
+  return low.includes("start screen") || low.includes("start_screen");
+}
+function isClockDisplayEntity(it) {
+  const low = `${it.name || ""} ${it.entity_id || ""}`.toLowerCase();
   return (
     low.includes("clock face") ||
+    low.includes("clock_face") ||
     low.includes("time format") ||
-    low.includes("start screen")
+    low.includes("time_format")
+  );
+}
+function isMediaAppearanceEntity(it) {
+  const low = `${it.name || ""} ${it.entity_id || ""}`.toLowerCase();
+  return (
+    low.includes("album art style") ||
+    low.includes("album_art_style") ||
+    low.includes("overlay style") ||
+    low.includes("music_overlay_style")
   );
 }
 function isScreensaverSleepEntity(it) {
@@ -6096,11 +6111,12 @@ function renderDeviceDisplayView(store) {
     .getSectionItems("display")
     .filter((it) => !isInterfaceDisplayEntity(it));
   const colorItems = allDisplayItems.filter(isColorDisplayEntity);
-  const voiceVisualItems = store
-    .getSectionItems("voice")
-    .filter(isVoiceVisualProfileEntity);
+  const clockItems = sortEntitiesByKeywords(
+    allDisplayItems.filter(isClockDisplayEntity),
+    ["clock face", "time format"],
+  );
   const brightnessItems = sortEntitiesByKeywords(
-    allDisplayItems.filter((it) => !isColorDisplayEntity(it)),
+    allDisplayItems.filter((it) => !isColorDisplayEntity(it) && !isClockDisplayEntity(it)),
     brightnessOrder,
   );
   const autoBrtItem = brightnessItems.find((it) =>
@@ -6124,12 +6140,68 @@ function renderDeviceDisplayView(store) {
       if (!autoBrtOff && low.includes("manual brightness")) {
         return false;
       }
-      if (!autoBrtTimeSchedule && (low.includes("day start hour") || low.includes("night start hour"))) {
+      if (
+        !autoBrtTimeSchedule &&
+        (low.includes("day start hour") || low.includes("night start hour"))
+      ) {
         return false;
       }
     }
     return true;
   });
+  const homeOrder = ["wake greeting", "weather background", "sun", "moon"];
+  const homeItems = sortEntitiesByKeywords(store.getSectionItems("home"), homeOrder);
+  const weatherBgSwitch = homeItems.find((it) =>
+    (it.name || "").toLowerCase().includes("weather background"),
+  );
+  const weatherBgOff = weatherBgSwitch ? weatherBgSwitch.state === "off" : false;
+  const isCelestialSwitch = (it) =>
+    it.domain === "switch" && /^(?:home:\s*)?(?:sun|moon)$/i.test((it.name || "").trim());
+  const celestialItems = homeItems.filter(isCelestialSwitch);
+  const visibleHomeItems = homeItems.filter((it) => !isCelestialSwitch(it));
+  const renderCelestialRow = () =>
+    renderSettingsRow({
+      id: "weather-celestial-bodies",
+      label: "Sun & Moon",
+      description: "Choose which sky bodies appear on the live Weather Background.",
+      control: html`<div class="pill-list" role="group" aria-label="Sun and Moon">
+        ${celestialItems.map((cel) => {
+          const st = String(cel.state ?? "");
+          const isOn = st === "on";
+          const prefKey = cel.pref_key || "";
+          const unavailable = !prefKey && (st === "unavailable" || st === "unknown");
+          const lbl = entityLabel((cel.name || cel.entity_id).replace(/^home:\s*/i, ""));
+          return html`<span class="pill ${isOn ? "enabled" : ""}">
+            <button
+              type="button"
+              aria-pressed=${String(isOn)}
+              ?disabled=${unavailable}
+              @click=${() => {
+                if (prefKey) {
+                  store.stageDeviceSetting(prefKey, !isOn);
+                } else {
+                  void store.espAction(
+                    cel.entity_id,
+                    isOn ? "turn_off" : "turn_on",
+                    isOn ? "off" : "on",
+                  );
+                }
+              }}
+              class="pill-toggle"
+            >
+              ${isOn ? `✓ ${lbl}` : `+ ${lbl}`}
+            </button>
+          </span>`;
+        })}
+      </div>`,
+    });
+  const mediaAppearanceItems = sortEntitiesByKeywords(
+    store.getSectionItems("music").filter(isMediaAppearanceEntity),
+    ["album art style", "overlay style"],
+  );
+  const voiceVisualItems = store
+    .getSectionItems("voice")
+    .filter(isVoiceVisualProfileEntity);
   const curHex = isValidHexColor(cfg.device_custom_color)
     ? String(cfg.device_custom_color).toUpperCase()
     : defaultThemeHex(store.host);
@@ -6183,11 +6255,33 @@ function renderDeviceDisplayView(store) {
             })
           : nothing}
 
-        ${voiceVisualItems.length
+        ${visibleHomeItems.length || (!weatherBgOff && celestialItems.length > 0)
           ? renderCard({
-              heading: html`<h3 class="card-title">Voice Assistant</h3>`,
+              heading: html`<h3 class="card-title">Home Screen</h3>`,
               contentClass: "settings-list",
-              body: voiceVisualItems.map((it) => renderNativeControlRow(store, it)),
+              body: html`<div id="embedded-home" class="settings-list">
+                ${visibleHomeItems.map((it) => {
+                  const row = renderNativeControlRow(store, it);
+                  if (weatherBgSwitch && it.entity_id === weatherBgSwitch.entity_id) {
+                    return html`${row}
+                      ${!weatherBgOff && celestialItems.length > 0
+                        ? renderCelestialRow()
+                        : nothing}`;
+                  }
+                  return row;
+                })}
+                ${!weatherBgSwitch && !weatherBgOff && celestialItems.length > 0
+                  ? renderCelestialRow()
+                  : nothing}
+              </div>`,
+            })
+          : nothing}
+
+        ${clockItems.length
+          ? renderCard({
+              heading: html`<h3 class="card-title">Clock</h3>`,
+              contentClass: "settings-list",
+              body: clockItems.map((it) => renderNativeControlRow(store, it)),
             })
           : nothing}
 
@@ -6384,6 +6478,22 @@ function renderDeviceDisplayView(store) {
               )}
             </div>`,
         })}
+
+        ${mediaAppearanceItems.length
+          ? renderCard({
+              heading: html`<h3 class="card-title">Media Player</h3>`,
+              contentClass: "settings-list",
+              body: mediaAppearanceItems.map((it) => renderNativeControlRow(store, it)),
+            })
+          : nothing}
+
+        ${voiceVisualItems.length
+          ? renderCard({
+              heading: html`<h3 class="card-title">Voice Assistant</h3>`,
+              contentClass: "settings-list",
+              body: voiceVisualItems.map((it) => renderNativeControlRow(store, it)),
+            })
+          : nothing}
       </div>
     </div>
   </section>`;
@@ -6534,27 +6644,19 @@ function renderDeviceAudioView(store) {
 
 // --- src/views/device-interface-view.ts ---
 /**
- * Device Interface View (`interface`, D-026 / D-028): Home Screen, Dock Apps, Activity Card, Area Controls, Media Player & Remote Controls.
+ * Device Interface View (`interface`, D-026 / D-028 / D-030 / D-033):
+ * Navigation, screen structure & content routing preferences.
+ * Column 1: Home Screen (Start Screen & Dock Apps) & Activity Card.
+ * Column 2: Area Controls, Media Player (Shortcuts & Library Sorting) & Remote Controls.
  */
 function renderDeviceInterfaceView(store) {
   const data = store.state;
   const cfg = data?.config || {};
   const remoteGroups = data?.system_config?.remote_groups || [];
-  const homeDisplayOrder = ["start screen", "clock face", "time format"];
   const homeDisplayItems = sortEntitiesByKeywords(
     store.getSectionItems("display").filter(isInterfaceDisplayEntity),
-    homeDisplayOrder,
+    ["start screen"],
   );
-  const homeOrder = ["wake greeting", "weather background", "sun", "moon"];
-  const homeItems = sortEntitiesByKeywords(store.getSectionItems("home"), homeOrder);
-  const weatherBgSwitch = homeItems.find((it) =>
-    (it.name || "").toLowerCase().includes("weather background"),
-  );
-  const weatherBgOff = weatherBgSwitch ? weatherBgSwitch.state === "off" : false;
-  const isCelestialSwitch = (it) =>
-    it.domain === "switch" && /^(?:home:\s*)?(?:sun|moon)$/i.test((it.name || "").trim());
-  const celestialItems = homeItems.filter(isCelestialSwitch);
-  const visibleHomeItems = homeItems.filter((it) => !isCelestialSwitch(it));
   const areaOrder = ["default category", "show all category"];
   const areaEspItems = sortEntitiesByKeywords(
     store.getSectionItems("area").filter((it) => !(it.name || "").toLowerCase().includes("ble")),
@@ -6563,16 +6665,6 @@ function renderDeviceInterfaceView(store) {
   const musicItems = store.getSectionItems("music");
   const isMediaShortcutSwitch = (it) =>
     it.domain === "switch" && /\b(speaker|library)\s+shortcut\b/i.test(it.name || it.entity_id);
-  const mediaPlayerOrder = ["album art style", "overlay style"];
-  const primaryMusicItems = sortEntitiesByKeywords(
-    musicItems.filter(
-      (it) =>
-        it.domain !== "media_player" &&
-        !isMediaShortcutSwitch(it) &&
-        !(it.name || "").toLowerCase().includes("sort"),
-    ),
-    mediaPlayerOrder,
-  );
   const shortcutMusicItems = sortEntitiesByKeywords(
     musicItems.filter(isMediaShortcutSwitch),
     ["speaker shortcut", "library shortcut"],
@@ -6585,6 +6677,13 @@ function renderDeviceInterfaceView(store) {
   const sortMusicItems = sortEntitiesByKeywords(
     musicItems.filter((it) => (it.name || "").toLowerCase().includes("sort")),
     mediaSortOrder,
+  );
+  const otherMusicNavItems = musicItems.filter(
+    (it) =>
+      it.domain !== "media_player" &&
+      !isMediaAppearanceEntity(it) &&
+      !isMediaShortcutSwitch(it) &&
+      !(it.name || "").toLowerCase().includes("sort"),
   );
   const remoteEspItems = store.getSectionItems("remote");
   const activityCardOn = cfg.activity_card !== false;
@@ -6671,100 +6770,7 @@ function renderDeviceInterfaceView(store) {
                   </span>`,
                 )}
               </div>`,
-            })}
-            <div id="embedded-home" class="settings-list">
-              ${visibleHomeItems.map((it) => {
-                const row = renderNativeControlRow(store, it);
-                if (weatherBgSwitch && it.entity_id === weatherBgSwitch.entity_id) {
-                  return html`${row}
-                    ${!weatherBgOff && celestialItems.length > 0
-                      ? renderSettingsRow({
-                          id: "weather-celestial-bodies",
-                          label: "Sun & Moon",
-                          description:
-                            "Choose which sky bodies appear on the live Weather Background.",
-                          control: html`<div
-                            class="pill-list"
-                            role="group"
-                            aria-label="Sun and Moon"
-                          >
-                            ${celestialItems.map((cel) => {
-                              const st = String(cel.state ?? "");
-                              const isOn = st === "on";
-                              const prefKey = cel.pref_key || "";
-                              const unavailable =
-                                !prefKey && (st === "unavailable" || st === "unknown");
-                              const lbl = entityLabel(
-                                (cel.name || cel.entity_id).replace(/^home:\s*/i, ""),
-                              );
-                              return html`<span class="pill ${isOn ? "enabled" : ""}">
-                                <button
-                                  type="button"
-                                  aria-pressed=${String(isOn)}
-                                  ?disabled=${unavailable}
-                                  @click=${() => {
-                                    if (prefKey) {
-                                      store.stageDeviceSetting(prefKey, !isOn);
-                                    } else {
-                                      void store.espAction(
-                                        cel.entity_id,
-                                        isOn ? "turn_off" : "turn_on",
-                                        isOn ? "off" : "on",
-                                      );
-                                    }
-                                  }}
-                                  class="pill-toggle"
-                                >
-                                  ${isOn ? `✓ ${lbl}` : `+ ${lbl}`}
-                                </button>
-                              </span>`;
-                            })}
-                          </div>`,
-                        })
-                      : nothing}`;
-                }
-                return row;
-              })}
-              ${!weatherBgSwitch && !weatherBgOff && celestialItems.length > 0
-                ? renderSettingsRow({
-                    id: "weather-celestial-bodies",
-                    label: "Sun & Moon",
-                    description: "Choose which sky bodies appear on the live Weather Background.",
-                    control: html`<div class="pill-list" role="group" aria-label="Sun and Moon">
-                      ${celestialItems.map((cel) => {
-                        const st = String(cel.state ?? "");
-                        const isOn = st === "on";
-                        const prefKey = cel.pref_key || "";
-                        const unavailable = !prefKey && (st === "unavailable" || st === "unknown");
-                        const lbl = entityLabel(
-                          (cel.name || cel.entity_id).replace(/^home:\s*/i, ""),
-                        );
-                        return html`<span class="pill ${isOn ? "enabled" : ""}">
-                          <button
-                            type="button"
-                            aria-pressed=${String(isOn)}
-                            ?disabled=${unavailable}
-                            @click=${() => {
-                              if (prefKey) {
-                                store.stageDeviceSetting(prefKey, !isOn);
-                              } else {
-                                void store.espAction(
-                                  cel.entity_id,
-                                  isOn ? "turn_off" : "turn_on",
-                                  isOn ? "off" : "on",
-                                );
-                              }
-                            }}
-                            class="pill-toggle"
-                          >
-                            ${isOn ? `✓ ${lbl}` : `+ ${lbl}`}
-                          </button>
-                        </span>`;
-                      })}
-                    </div>`,
-                  })
-                : nothing}
-            </div>`,
+            })}`,
         })}
 
         ${renderCard({
@@ -6840,12 +6846,11 @@ function renderDeviceInterfaceView(store) {
             </div>`,
         })}
 
-        ${primaryMusicItems.length || shortcutMusicItems.length || sortMusicItems.length
+        ${shortcutMusicItems.length || sortMusicItems.length || otherMusicNavItems.length
           ? renderCard({
               heading: html`<h3 class="card-title">Media Player</h3>`,
               contentClass: "settings-list",
-              body: html`${primaryMusicItems.map((it) => renderNativeControlRow(store, it))}
-                ${shortcutMusicItems.length
+              body: html`${shortcutMusicItems.length
                   ? renderSettingsRow({
                       id: "media-player-shortcuts",
                       label: "Shortcuts",
@@ -6893,14 +6898,8 @@ function renderDeviceInterfaceView(store) {
                       </div>`,
                     })
                   : nothing}
-                ${sortMusicItems.length
-                  ? html`<details class="sub-collapsible">
-                      <summary>Library Sorting</summary>
-                      <div class="card-content settings-list">
-                        ${sortMusicItems.map((it) => renderNativeControlRow(store, it))}
-                      </div>
-                    </details>`
-                  : nothing}`,
+                ${sortMusicItems.map((it) => renderNativeControlRow(store, it))}
+                ${otherMusicNavItems.map((it) => renderNativeControlRow(store, it))}`,
             })
           : nothing}
 

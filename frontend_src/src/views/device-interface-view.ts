@@ -1,5 +1,8 @@
 /**
- * Device Interface View (`interface`, D-026 / D-028): Home Screen, Dock Apps, Activity Card, Area Controls, Media Player & Remote Controls.
+ * Device Interface View (`interface`, D-026 / D-028 / D-030 / D-033):
+ * Navigation, screen structure & content routing preferences.
+ * Column 1: Home Screen (Start Screen & Dock Apps) & Activity Card.
+ * Column 2: Area Controls, Media Player (Shortcuts & Library Sorting) & Remote Controls.
  */
 
 import {
@@ -18,6 +21,7 @@ import type { EspHomeEntityItem } from "../types.js";
 import { entityLabel } from "../utils/format.js";
 import {
   isInterfaceDisplayEntity,
+  isMediaAppearanceEntity,
   sortEntitiesByKeywords,
 } from "./device-display-view.js";
 
@@ -26,22 +30,10 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
   const cfg = data?.config || {};
   const remoteGroups = data?.system_config?.remote_groups || [];
 
-  const homeDisplayOrder = ["start screen", "clock face", "time format"];
   const homeDisplayItems = sortEntitiesByKeywords(
     store.getSectionItems("display").filter(isInterfaceDisplayEntity),
-    homeDisplayOrder,
+    ["start screen"],
   );
-
-  const homeOrder = ["wake greeting", "weather background", "sun", "moon"];
-  const homeItems = sortEntitiesByKeywords(store.getSectionItems("home"), homeOrder);
-  const weatherBgSwitch = homeItems.find((it) =>
-    (it.name || "").toLowerCase().includes("weather background"),
-  );
-  const weatherBgOff = weatherBgSwitch ? weatherBgSwitch.state === "off" : false;
-  const isCelestialSwitch = (it: EspHomeEntityItem): boolean =>
-    it.domain === "switch" && /^(?:home:\s*)?(?:sun|moon)$/i.test((it.name || "").trim());
-  const celestialItems = homeItems.filter(isCelestialSwitch);
-  const visibleHomeItems = homeItems.filter((it) => !isCelestialSwitch(it));
 
   const areaOrder = ["default category", "show all category"];
   const areaEspItems = sortEntitiesByKeywords(
@@ -51,16 +43,6 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
   const musicItems = store.getSectionItems("music");
   const isMediaShortcutSwitch = (it: EspHomeEntityItem): boolean =>
     it.domain === "switch" && /\b(speaker|library)\s+shortcut\b/i.test(it.name || it.entity_id);
-  const mediaPlayerOrder = ["album art style", "overlay style"];
-  const primaryMusicItems = sortEntitiesByKeywords(
-    musicItems.filter(
-      (it) =>
-        it.domain !== "media_player" &&
-        !isMediaShortcutSwitch(it) &&
-        !(it.name || "").toLowerCase().includes("sort"),
-    ),
-    mediaPlayerOrder,
-  );
   const shortcutMusicItems = sortEntitiesByKeywords(
     musicItems.filter(isMediaShortcutSwitch),
     ["speaker shortcut", "library shortcut"],
@@ -73,6 +55,13 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
   const sortMusicItems = sortEntitiesByKeywords(
     musicItems.filter((it) => (it.name || "").toLowerCase().includes("sort")),
     mediaSortOrder,
+  );
+  const otherMusicNavItems = musicItems.filter(
+    (it) =>
+      it.domain !== "media_player" &&
+      !isMediaAppearanceEntity(it) &&
+      !isMediaShortcutSwitch(it) &&
+      !(it.name || "").toLowerCase().includes("sort"),
   );
   const remoteEspItems = store.getSectionItems("remote");
 
@@ -162,100 +151,7 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
                   </span>`,
                 )}
               </div>`,
-            })}
-            <div id="embedded-home" class="settings-list">
-              ${visibleHomeItems.map((it) => {
-                const row = renderNativeControlRow(store, it);
-                if (weatherBgSwitch && it.entity_id === weatherBgSwitch.entity_id) {
-                  return html`${row}
-                    ${!weatherBgOff && celestialItems.length > 0
-                      ? renderSettingsRow({
-                          id: "weather-celestial-bodies",
-                          label: "Sun & Moon",
-                          description:
-                            "Choose which sky bodies appear on the live Weather Background.",
-                          control: html`<div
-                            class="pill-list"
-                            role="group"
-                            aria-label="Sun and Moon"
-                          >
-                            ${celestialItems.map((cel) => {
-                              const st = String(cel.state ?? "");
-                              const isOn = st === "on";
-                              const prefKey = cel.pref_key || "";
-                              const unavailable =
-                                !prefKey && (st === "unavailable" || st === "unknown");
-                              const lbl = entityLabel(
-                                (cel.name || cel.entity_id).replace(/^home:\s*/i, ""),
-                              );
-                              return html`<span class="pill ${isOn ? "enabled" : ""}">
-                                <button
-                                  type="button"
-                                  aria-pressed=${String(isOn)}
-                                  ?disabled=${unavailable}
-                                  @click=${() => {
-                                    if (prefKey) {
-                                      store.stageDeviceSetting(prefKey, !isOn);
-                                    } else {
-                                      void store.espAction(
-                                        cel.entity_id,
-                                        isOn ? "turn_off" : "turn_on",
-                                        isOn ? "off" : "on",
-                                      );
-                                    }
-                                  }}
-                                  class="pill-toggle"
-                                >
-                                  ${isOn ? `✓ ${lbl}` : `+ ${lbl}`}
-                                </button>
-                              </span>`;
-                            })}
-                          </div>`,
-                        })
-                      : nothing}`;
-                }
-                return row;
-              })}
-              ${!weatherBgSwitch && !weatherBgOff && celestialItems.length > 0
-                ? renderSettingsRow({
-                    id: "weather-celestial-bodies",
-                    label: "Sun & Moon",
-                    description: "Choose which sky bodies appear on the live Weather Background.",
-                    control: html`<div class="pill-list" role="group" aria-label="Sun and Moon">
-                      ${celestialItems.map((cel) => {
-                        const st = String(cel.state ?? "");
-                        const isOn = st === "on";
-                        const prefKey = cel.pref_key || "";
-                        const unavailable = !prefKey && (st === "unavailable" || st === "unknown");
-                        const lbl = entityLabel(
-                          (cel.name || cel.entity_id).replace(/^home:\s*/i, ""),
-                        );
-                        return html`<span class="pill ${isOn ? "enabled" : ""}">
-                          <button
-                            type="button"
-                            aria-pressed=${String(isOn)}
-                            ?disabled=${unavailable}
-                            @click=${() => {
-                              if (prefKey) {
-                                store.stageDeviceSetting(prefKey, !isOn);
-                              } else {
-                                void store.espAction(
-                                  cel.entity_id,
-                                  isOn ? "turn_off" : "turn_on",
-                                  isOn ? "off" : "on",
-                                );
-                              }
-                            }}
-                            class="pill-toggle"
-                          >
-                            ${isOn ? `✓ ${lbl}` : `+ ${lbl}`}
-                          </button>
-                        </span>`;
-                      })}
-                    </div>`,
-                  })
-                : nothing}
-            </div>`,
+            })}`,
         })}
 
         ${renderCard({
@@ -331,12 +227,11 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
             </div>`,
         })}
 
-        ${primaryMusicItems.length || shortcutMusicItems.length || sortMusicItems.length
+        ${shortcutMusicItems.length || sortMusicItems.length || otherMusicNavItems.length
           ? renderCard({
               heading: html`<h3 class="card-title">Media Player</h3>`,
               contentClass: "settings-list",
-              body: html`${primaryMusicItems.map((it) => renderNativeControlRow(store, it))}
-                ${shortcutMusicItems.length
+              body: html`${shortcutMusicItems.length
                   ? renderSettingsRow({
                       id: "media-player-shortcuts",
                       label: "Shortcuts",
@@ -384,14 +279,8 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
                       </div>`,
                     })
                   : nothing}
-                ${sortMusicItems.length
-                  ? html`<details class="sub-collapsible">
-                      <summary>Library Sorting</summary>
-                      <div class="card-content settings-list">
-                        ${sortMusicItems.map((it) => renderNativeControlRow(store, it))}
-                      </div>
-                    </details>`
-                  : nothing}`,
+                ${sortMusicItems.map((it) => renderNativeControlRow(store, it))}
+                ${otherMusicNavItems.map((it) => renderNativeControlRow(store, it))}`,
             })
           : nothing}
 

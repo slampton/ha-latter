@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools
 import json
 from pathlib import Path
 import re
@@ -474,6 +475,7 @@ function makeStore({ weatherBgState = "Dynamic", cycleMins = 0, activeId = "", f
     { entity_id: "light.pocket_display_screen_backlight", domain: "light", name: "Display: Screen Backlight", state: "on" },
     { entity_id: "select.pocket_display_color_profile", domain: "select", name: "Display: Color Profile", state: "Default", options: ["Default", "Custom"] },
     { entity_id: "select.pocket_display_clock_face", domain: "select", name: "Display: Clock Face", state: "Modern", options: ["Modern", "Analog"] },
+    { entity_id: "select.pocket_display_time_format", domain: "select", name: "Display: Time Format", state: "12-Hour (AM/PM)", options: ["12-Hour (AM/PM)", "24-Hour"] },
     { entity_id: "select.pocket_display_start_screen", domain: "select", name: "Display: Start Screen", state: "Home", options: ["Home", "Area"] },
     { entity_id: "select.pocket_display_auto_brightness_mode", domain: "select", name: "Display: Auto Brightness Mode", state: autoBrtState, options: ["Disabled", "Sun Synchronized", "Time Schedule"] },
     { entity_id: "number.pocket_display_manual_brightness", domain: "number", name: "Display: Manual Brightness", state: "80", min: 5, max: 100, step: 1, unit: "%" },
@@ -558,15 +560,15 @@ function makeStore({ weatherBgState = "Dynamic", cycleMins = 0, activeId = "", f
 }
 
 const offMarkup = flattenHtml(renderDeviceDisplayView(makeStore({ cycleMins: 0, activeId: "", autoBrtState: "Disabled" })));
+const dispWeatherOff = flattenHtml(renderDeviceDisplayView(makeStore({ weatherBgState: "off", cycleMins: 0, activeId: "", autoBrtState: "Disabled" })));
 const staticMarkup = flattenHtml(renderDeviceDisplayView(makeStore({ cycleMins: 0, activeId: "preset:ocean_waves", autoBrtState: "Sun Synchronized" })));
 const rotatingMarkup = flattenHtml(renderDeviceDisplayView(makeStore({ cycleMins: 5, activeId: "preset:ocean_waves", favIds: ["preset:forest_mountains", "preset:ocean_waves"], autoBrtState: "Time Schedule" })));
 const powerMarkup = flattenHtml(renderDevicePowerView(makeStore({})));
 const audioMarkup = flattenHtml(renderDeviceAudioView(makeStore({})));
-const ifaceWeatherOn = flattenHtml(renderDeviceInterfaceView(makeStore({ weatherBgState: "Dynamic" })));
-const ifaceWeatherOff = flattenHtml(renderDeviceInterfaceView(makeStore({ weatherBgState: "off" })));
+const ifaceMarkup = flattenHtml(renderDeviceInterfaceView(makeStore({ weatherBgState: "Dynamic" })));
 const sysRemotesMarkup = flattenHtml(renderSystemRemotesView(makeStore({ remoteMode: "group:living_tv" })));
 
-return { offMarkup, staticMarkup, rotatingMarkup, powerMarkup, audioMarkup, ifaceWeatherOn, ifaceWeatherOff, sysRemotesMarkup };
+return { offMarkup, dispWeatherOff, staticMarkup, rotatingMarkup, powerMarkup, audioMarkup, ifaceMarkup, sysRemotesMarkup };
 """
         )
         got = _run_node_ts(
@@ -583,17 +585,42 @@ return { offMarkup, staticMarkup, rotatingMarkup, powerMarkup, audioMarkup, ifac
             ],
             runner,
         )
-        # 1. Display view (D-027 / D-029): Column 1 Brightness -> Voice Assistant -> Screensavers; Column 2 Colors -> Wallpapers
-        for card_title in ("Brightness", "Voice Assistant", "Screensavers", "Colors", "Wallpapers"):
+        # 1. Display view (D-033): Col 1 Brightness -> Home Screen -> Clock -> Screensavers; Col 2 Colors -> Wallpapers -> Media Player -> Voice Assistant
+        display_cards = (
+            "Brightness",
+            "Home Screen",
+            "Clock",
+            "Screensavers",
+            "Colors",
+            "Wallpapers",
+            "Media Player",
+            "Voice Assistant",
+        )
+        for card_title in display_cards:
             self.assertIn(f'<h3 class="card-title">{card_title}</h3>', got["offMarkup"])
+        for earlier, later in itertools.pairwise(display_cards):
+            self.assertLess(
+                got["offMarkup"].index(f'<h3 class="card-title">{earlier}</h3>'),
+                got["offMarkup"].index(f'<h3 class="card-title">{later}</h3>'),
+            )
         self.assertNotIn("Brightness & Theme", got["offMarkup"])
-        self.assertLess(got["offMarkup"].index('<h3 class="card-title">Brightness</h3>'), got["offMarkup"].index('<h3 class="card-title">Voice Assistant</h3>'))
-        self.assertLess(got["offMarkup"].index('<h3 class="card-title">Voice Assistant</h3>'), got["offMarkup"].index("Visual Profile"))
-        self.assertLess(got["offMarkup"].index("Visual Profile"), got["offMarkup"].index('<h3 class="card-title">Screensavers</h3>'))
-        self.assertLess(got["offMarkup"].index('<h3 class="card-title">Screensavers</h3>'), got["offMarkup"].index('<h3 class="card-title">Colors</h3>'))
+        self.assertLess(got["offMarkup"].index('<h3 class="card-title">Home Screen</h3>'), got["offMarkup"].index("Wake Greeting"))
+        self.assertLess(got["offMarkup"].index("Wake Greeting"), got["offMarkup"].index("Weather Background"))
+        self.assertLess(got["offMarkup"].index("Weather Background"), got["offMarkup"].index("id=weather-celestial-bodies"))
+        self.assertIn("✓ Sun", got["offMarkup"])
+        self.assertIn("+ Moon", got["offMarkup"])
+        self.assertLess(got["offMarkup"].index("✓ Sun"), got["offMarkup"].index("+ Moon"))
+        self.assertNotIn("id=weather-celestial-bodies", got["dispWeatherOff"])
+        self.assertLess(got["offMarkup"].index('<h3 class="card-title">Clock</h3>'), got["offMarkup"].index("Clock Face"))
+        self.assertLess(got["offMarkup"].index("Clock Face"), got["offMarkup"].index("Time Format"))
+        self.assertLess(got["offMarkup"].index("Time Format"), got["offMarkup"].index('<h3 class="card-title">Screensavers</h3>'))
         self.assertLess(got["offMarkup"].index('<h3 class="card-title">Colors</h3>'), got["offMarkup"].index("Color Profile"))
         self.assertLess(got["offMarkup"].index("Color Profile"), got["offMarkup"].index("Custom Color"))
         self.assertLess(got["offMarkup"].index("Custom Color"), got["offMarkup"].index('<h3 class="card-title">Wallpapers</h3>'))
+        self.assertLess(got["offMarkup"].index('<h3 class="card-title">Media Player</h3>'), got["offMarkup"].index("Album Art Style"))
+        self.assertLess(got["offMarkup"].index("Album Art Style"), got["offMarkup"].index("Overlay Style"))
+        self.assertLess(got["offMarkup"].index("Overlay Style"), got["offMarkup"].index('<h3 class="card-title">Voice Assistant</h3>'))
+        self.assertLess(got["offMarkup"].index('<h3 class="card-title">Voice Assistant</h3>'), got["offMarkup"].index("Visual Profile"))
         self.assertNotIn("Wake Screen on Assist", got["offMarkup"])
         self.assertIn("Wake Screen on Assist", got["audioMarkup"])
         self.assertNotIn("Visual Profile", got["audioMarkup"])
@@ -603,7 +630,6 @@ return { offMarkup, staticMarkup, rotatingMarkup, powerMarkup, audioMarkup, ifac
         self.assertNotIn('id="btn-turn-off-wp"', got["offMarkup"])
         self.assertNotIn('id="btn-stop-wp-rotation"', got["offMarkup"])
         self.assertNotIn("Screen Backlight", got["offMarkup"])
-        self.assertNotIn("Clock Face", got["offMarkup"])
         self.assertNotIn("Start Screen", got["offMarkup"])
         self.assertIn("Manual Brightness", got["offMarkup"])
         self.assertNotIn("Day Brightness", got["offMarkup"])
@@ -616,42 +642,44 @@ return { offMarkup, staticMarkup, rotatingMarkup, powerMarkup, audioMarkup, ifac
         for saver_label in ("Docked Screensaver", "Screensaver Style", "Docked Idle Timeout"):
             self.assertNotIn(saver_label, got["powerMarkup"])
 
-        # 2. Interface view: Start Screen, Clock Face, Sun & Moon pills, Media Player UI, and Remote Control Group selector
-        self.assertIn("Start Screen", got["ifaceWeatherOn"])
-        self.assertIn("Clock Face", got["ifaceWeatherOn"])
-        self.assertLess(got["ifaceWeatherOn"].index("Start Screen"), got["ifaceWeatherOn"].index("Clock Face"))
-        self.assertIn("id=weather-celestial-bodies", got["ifaceWeatherOn"])
-        self.assertIn("✓ Sun", got["ifaceWeatherOn"])
-        self.assertIn("+ Moon", got["ifaceWeatherOn"])
-        self.assertLess(got["ifaceWeatherOn"].index("✓ Sun"), got["ifaceWeatherOn"].index("+ Moon"))
-        self.assertIn('<h3 class="card-title">Media Player</h3>', got["ifaceWeatherOn"])
-        self.assertIn("id=media-player-shortcuts", got["ifaceWeatherOn"])
-        self.assertIn("✓ Speaker", got["ifaceWeatherOn"])
-        self.assertIn("+ Library", got["ifaceWeatherOn"])
-        self.assertLess(got["ifaceWeatherOn"].index("✓ Speaker"), got["ifaceWeatherOn"].index("+ Library"))
-        self.assertNotIn("Show Speaker Shortcut", got["ifaceWeatherOn"])
-        self.assertNotIn("Show Library Shortcut", got["ifaceWeatherOn"])
-        self.assertNotIn("Show Speaker Shortcut", got["audioMarkup"])
-        self.assertNotIn("Show Library Shortcut", got["audioMarkup"])
-        self.assertIn("<summary>Library Sorting</summary>", got["ifaceWeatherOn"])
-        for media_ui_label in (
+        # 2. Interface view (D-033): navigation & structure only (Start Screen, Dock Apps, uncollapsed Library Sorting, Remote Control Group)
+        self.assertIn("Start Screen", got["ifaceMarkup"])
+        self.assertIn('id="dock-pills-container"', got["ifaceMarkup"])
+        for display_only_label in (
+            "Clock Face",
+            "Time Format",
+            "Wake Greeting",
+            "Weather Background",
+            "id=weather-celestial-bodies",
             "Album Art Style",
             "Overlay Style",
+        ):
+            self.assertNotIn(display_only_label, got["ifaceMarkup"])
+        self.assertIn('<h3 class="card-title">Media Player</h3>', got["ifaceMarkup"])
+        self.assertIn("id=media-player-shortcuts", got["ifaceMarkup"])
+        self.assertIn("✓ Speaker", got["ifaceMarkup"])
+        self.assertIn("+ Library", got["ifaceMarkup"])
+        self.assertLess(got["ifaceMarkup"].index("✓ Speaker"), got["ifaceMarkup"].index("+ Library"))
+        self.assertNotIn("Show Speaker Shortcut", got["ifaceMarkup"])
+        self.assertNotIn("Show Library Shortcut", got["ifaceMarkup"])
+        self.assertNotIn("Show Speaker Shortcut", got["audioMarkup"])
+        self.assertNotIn("Show Library Shortcut", got["audioMarkup"])
+        self.assertNotIn("<summary>Library Sorting</summary>", got["ifaceMarkup"])
+        for media_nav_label in (
             "Shortcuts",
             "Album Sort Order",
             "Podcast Sort Order",
         ):
-            self.assertIn(media_ui_label, got["ifaceWeatherOn"])
-            self.assertNotIn(media_ui_label, got["audioMarkup"])
-        self.assertLess(got["ifaceWeatherOn"].index("Album Art Style"), got["ifaceWeatherOn"].index("Overlay Style"))
-        self.assertLess(got["ifaceWeatherOn"].index("Overlay Style"), got["ifaceWeatherOn"].index("id=media-player-shortcuts"))
-        self.assertLess(got["ifaceWeatherOn"].index("id=media-player-shortcuts"), got["ifaceWeatherOn"].index("Album Sort Order"))
-        self.assertLess(got["ifaceWeatherOn"].index("Album Sort Order"), got["ifaceWeatherOn"].index("Podcast Sort Order"))
+            self.assertIn(media_nav_label, got["ifaceMarkup"])
+            self.assertNotIn(media_nav_label, got["audioMarkup"])
+        self.assertNotIn("Album Art Style", got["audioMarkup"])
+        self.assertNotIn("Overlay Style", got["audioMarkup"])
+        self.assertLess(got["ifaceMarkup"].index("id=media-player-shortcuts"), got["ifaceMarkup"].index("Album Sort Order"))
+        self.assertLess(got["ifaceMarkup"].index("Album Sort Order"), got["ifaceMarkup"].index("Podcast Sort Order"))
         self.assertIn('<h3 class="card-title">Sound &amp; Playback</h3>', got["audioMarkup"])
         self.assertIn("Speaker Volume", got["audioMarkup"])
-        self.assertIn("id=cfg-device_remote_group", got["ifaceWeatherOn"])
-        self.assertIn("Group: Living Area TV", got["ifaceWeatherOn"])
-        self.assertNotIn("id=weather-celestial-bodies", got["ifaceWeatherOff"])
+        self.assertIn("id=cfg-device_remote_group", got["ifaceMarkup"])
+        self.assertIn("Group: Living Area TV", got["ifaceMarkup"])
 
         # 3. System -> Media & Remotes: read-only assignment chip + Configure shortcut
         self.assertIn('<span class="chip">Group: Living Area TV</span>', got["sysRemotesMarkup"])

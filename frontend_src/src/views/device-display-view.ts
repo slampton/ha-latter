@@ -1,7 +1,8 @@
 /**
- * Device Display View (`display`, D-027 / D-029):
- * Column 1: Brightness, Voice Assistant (Visual Profile) & Screensavers.
- * Column 2: Colors & Wallpapers.
+ * Device Display View (`display`, D-027 / D-029 / D-033):
+ * Visual & aesthetic preferences across screens.
+ * Column 1: Brightness, Home Screen (Wake Greeting, Weather Background & Sun & Moon), Clock & Screensavers.
+ * Column 2: Colors, Wallpapers, Media Player (Album Art & Overlay Style) & Voice Assistant (Visual Profile).
  */
 
 import {
@@ -36,11 +37,27 @@ export function sortEntitiesByKeywords(
 }
 
 export function isInterfaceDisplayEntity(it: EspHomeEntityItem): boolean {
-  const low = (it.name || "").toLowerCase();
+  const low = `${it.name || ""} ${it.entity_id || ""}`.toLowerCase();
+  return low.includes("start screen") || low.includes("start_screen");
+}
+
+function isClockDisplayEntity(it: EspHomeEntityItem): boolean {
+  const low = `${it.name || ""} ${it.entity_id || ""}`.toLowerCase();
   return (
     low.includes("clock face") ||
+    low.includes("clock_face") ||
     low.includes("time format") ||
-    low.includes("start screen")
+    low.includes("time_format")
+  );
+}
+
+export function isMediaAppearanceEntity(it: EspHomeEntityItem): boolean {
+  const low = `${it.name || ""} ${it.entity_id || ""}`.toLowerCase();
+  return (
+    low.includes("album art style") ||
+    low.includes("album_art_style") ||
+    low.includes("overlay style") ||
+    low.includes("music_overlay_style")
   );
 }
 
@@ -80,11 +97,12 @@ export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
     .getSectionItems("display")
     .filter((it) => !isInterfaceDisplayEntity(it));
   const colorItems = allDisplayItems.filter(isColorDisplayEntity);
-  const voiceVisualItems = store
-    .getSectionItems("voice")
-    .filter(isVoiceVisualProfileEntity);
+  const clockItems = sortEntitiesByKeywords(
+    allDisplayItems.filter(isClockDisplayEntity),
+    ["clock face", "time format"],
+  );
   const brightnessItems = sortEntitiesByKeywords(
-    allDisplayItems.filter((it) => !isColorDisplayEntity(it)),
+    allDisplayItems.filter((it) => !isColorDisplayEntity(it) && !isClockDisplayEntity(it)),
     brightnessOrder,
   );
   const autoBrtItem = brightnessItems.find((it) =>
@@ -108,12 +126,71 @@ export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
       if (!autoBrtOff && low.includes("manual brightness")) {
         return false;
       }
-      if (!autoBrtTimeSchedule && (low.includes("day start hour") || low.includes("night start hour"))) {
+      if (
+        !autoBrtTimeSchedule &&
+        (low.includes("day start hour") || low.includes("night start hour"))
+      ) {
         return false;
       }
     }
     return true;
   });
+
+  const homeOrder = ["wake greeting", "weather background", "sun", "moon"];
+  const homeItems = sortEntitiesByKeywords(store.getSectionItems("home"), homeOrder);
+  const weatherBgSwitch = homeItems.find((it) =>
+    (it.name || "").toLowerCase().includes("weather background"),
+  );
+  const weatherBgOff = weatherBgSwitch ? weatherBgSwitch.state === "off" : false;
+  const isCelestialSwitch = (it: EspHomeEntityItem): boolean =>
+    it.domain === "switch" && /^(?:home:\s*)?(?:sun|moon)$/i.test((it.name || "").trim());
+  const celestialItems = homeItems.filter(isCelestialSwitch);
+  const visibleHomeItems = homeItems.filter((it) => !isCelestialSwitch(it));
+
+  const renderCelestialRow = (): TemplateResult =>
+    renderSettingsRow({
+      id: "weather-celestial-bodies",
+      label: "Sun & Moon",
+      description: "Choose which sky bodies appear on the live Weather Background.",
+      control: html`<div class="pill-list" role="group" aria-label="Sun and Moon">
+        ${celestialItems.map((cel) => {
+          const st = String(cel.state ?? "");
+          const isOn = st === "on";
+          const prefKey = cel.pref_key || "";
+          const unavailable = !prefKey && (st === "unavailable" || st === "unknown");
+          const lbl = entityLabel((cel.name || cel.entity_id).replace(/^home:\s*/i, ""));
+          return html`<span class="pill ${isOn ? "enabled" : ""}">
+            <button
+              type="button"
+              aria-pressed=${String(isOn)}
+              ?disabled=${unavailable}
+              @click=${() => {
+                if (prefKey) {
+                  store.stageDeviceSetting(prefKey, !isOn);
+                } else {
+                  void store.espAction(
+                    cel.entity_id,
+                    isOn ? "turn_off" : "turn_on",
+                    isOn ? "off" : "on",
+                  );
+                }
+              }}
+              class="pill-toggle"
+            >
+              ${isOn ? `✓ ${lbl}` : `+ ${lbl}`}
+            </button>
+          </span>`;
+        })}
+      </div>`,
+    });
+
+  const mediaAppearanceItems = sortEntitiesByKeywords(
+    store.getSectionItems("music").filter(isMediaAppearanceEntity),
+    ["album art style", "overlay style"],
+  );
+  const voiceVisualItems = store
+    .getSectionItems("voice")
+    .filter(isVoiceVisualProfileEntity);
 
   const curHex = isValidHexColor(cfg.device_custom_color)
     ? String(cfg.device_custom_color).toUpperCase()
@@ -171,11 +248,33 @@ export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
             })
           : nothing}
 
-        ${voiceVisualItems.length
+        ${visibleHomeItems.length || (!weatherBgOff && celestialItems.length > 0)
           ? renderCard({
-              heading: html`<h3 class="card-title">Voice Assistant</h3>`,
+              heading: html`<h3 class="card-title">Home Screen</h3>`,
               contentClass: "settings-list",
-              body: voiceVisualItems.map((it) => renderNativeControlRow(store, it)),
+              body: html`<div id="embedded-home" class="settings-list">
+                ${visibleHomeItems.map((it) => {
+                  const row = renderNativeControlRow(store, it);
+                  if (weatherBgSwitch && it.entity_id === weatherBgSwitch.entity_id) {
+                    return html`${row}
+                      ${!weatherBgOff && celestialItems.length > 0
+                        ? renderCelestialRow()
+                        : nothing}`;
+                  }
+                  return row;
+                })}
+                ${!weatherBgSwitch && !weatherBgOff && celestialItems.length > 0
+                  ? renderCelestialRow()
+                  : nothing}
+              </div>`,
+            })
+          : nothing}
+
+        ${clockItems.length
+          ? renderCard({
+              heading: html`<h3 class="card-title">Clock</h3>`,
+              contentClass: "settings-list",
+              body: clockItems.map((it) => renderNativeControlRow(store, it)),
             })
           : nothing}
 
@@ -372,6 +471,22 @@ export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
               )}
             </div>`,
         })}
+
+        ${mediaAppearanceItems.length
+          ? renderCard({
+              heading: html`<h3 class="card-title">Media Player</h3>`,
+              contentClass: "settings-list",
+              body: mediaAppearanceItems.map((it) => renderNativeControlRow(store, it)),
+            })
+          : nothing}
+
+        ${voiceVisualItems.length
+          ? renderCard({
+              heading: html`<h3 class="card-title">Voice Assistant</h3>`,
+              contentClass: "settings-list",
+              body: voiceVisualItems.map((it) => renderNativeControlRow(store, it)),
+            })
+          : nothing}
       </div>
     </div>
   </section>`;
