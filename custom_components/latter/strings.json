@@ -12,7 +12,7 @@
         "data_description": {
           "esphome_device_id": "The ESPHome device running Latter firmware (or a Latter Core build). Latter binds to this device and its MAC address.",
           "device_group": "Auto-detect the Device Group and baseline settings from hardware, or assign a Device Group directly.",
-          "native_ble_tracking": "Use your Bluetooth proxies to work out which Area this device is in. Turn off for devices that never move."
+          "native_ble_tracking": "Use your Bluetooth proxies to work out which Area this device is in. Turn off to pin it to its assigned Home Assistant Area."
         }
       },
       "reconfigure": {
@@ -55,7 +55,7 @@
           "data_description": {
             "esphome_device_id": "The ESPHome device running Latter firmware (or a Latter Core build). Latter binds to this device and its MAC address.",
             "device_group": "Auto-detect the Device Group and baseline settings from hardware, or assign a Device Group directly.",
-            "native_ble_tracking": "Use your Bluetooth proxies to work out which Area this device is in. Turn off for devices that never move."
+            "native_ble_tracking": "Use your Bluetooth proxies to work out which Area this device is in. Turn off to pin it to its assigned Home Assistant Area."
           }
         },
         "reconfigure": {
@@ -69,7 +69,7 @@
           "data_description": {
             "esphome_device_id": "Keep the current device to update settings, or pick a replacement ESPHome device to rebind the hardware in place.",
             "device_group": "Auto-detect the Device Group and baseline settings from hardware, or assign a Device Group directly.",
-            "native_ble_tracking": "Use your Bluetooth proxies to work out which Area this device is in. Turn off for devices that never move."
+            "native_ble_tracking": "Use your Bluetooth proxies to work out which Area this device is in. Turn off to pin it to its assigned Home Assistant Area."
           }
         }
       },

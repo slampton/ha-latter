@@ -165,6 +165,8 @@ def _detect_hardware_defaults(
                 has_ble_beacon = True
                 break
 
+    esp_area = str(dev.area_id or "").strip() if dev is not None else ""
+
     if manifest and "w" in manifest and "h" in manifest:
         is_stationary = bool(int(manifest.get("stationary") or 0) == 1)
         is_wearable = bool(int(manifest.get("wearable") or 0) == 1)
@@ -173,14 +175,15 @@ def _detect_hardware_defaults(
             if is_stationary
             else ("wearables" if is_wearable else "handhelds")
         )
+        default_roaming = (not bool(esp_area)) if is_stationary else True
         return {
             CONF_DEVICE_GROUP: default_grp,
             CONF_DEFAULT_PAGE_SIZE: DEFAULT_PAGE_SIZE,
-            CONF_NATIVE_BLE_TRACKING: not is_stationary,
-            CONF_BLE_AUTO_SWITCH: not is_stationary,
-            CONF_SYNC_DEVICE_AREA: not is_stationary,
+            CONF_NATIVE_BLE_TRACKING: default_roaming,
+            CONF_BLE_AUTO_SWITCH: default_roaming,
+            CONF_SYNC_DEVICE_AREA: default_roaming and not is_stationary,
             CONF_AREA_HANDOFF: DEFAULT_AREA_HANDOFF,
-            CONF_DEFAULT_AREA: (dev.area_id or "") if (dev and is_stationary) else "",
+            CONF_DEFAULT_AREA: "" if default_roaming else esp_area,
             "dock_apps": DEFAULT_DOCK_APPS,
         }
 
@@ -246,7 +249,9 @@ def _apply_onboarding_profile_and_defaults(
     rebind_hardware: bool = False,
 ) -> dict[str, Any]:
     """Merge auto-detected hardware defaults, the device binding, roaming flag, optional Group, and global defaults."""
-    hw_defaults = _detect_hardware_defaults(hass, dev)
+    hw_manifest = read_device_hardware_manifest(hass, dev.id)
+    is_stationary_hw = bool(int(hw_manifest.get("stationary") or 0) == 1)
+    hw_defaults = _detect_hardware_defaults(hass, dev, hw_manifest)
     merged: dict[str, Any] = {**hw_defaults, **(existing or {})}
     merged[CONF_DEVICE_SLUG] = esphome_node_name(hass, dev)
     if rebind_hardware or not merged.get(CONF_ESPHOME_DEVICE_ID):
@@ -260,7 +265,8 @@ def _apply_onboarding_profile_and_defaults(
     if rebind_hardware or not merged.get(CONF_DEFAULT_SPEAKER):
         merged[CONF_DEFAULT_SPEAKER] = _discover_default_speaker(hass, dev.id)
 
-    grp_id = str(user_input.get(CONF_DEVICE_GROUP) or "auto").strip()
+    raw_grp_id = str(user_input.get(CONF_DEVICE_GROUP) or "auto").strip()
+    grp_id = raw_grp_id
     groups = get_device_groups(hass)
     if grp_id == "auto":
         grp_id = str(hw_defaults.get(CONF_DEVICE_GROUP) or DEFAULT_DEVICE_GROUP)
@@ -269,6 +275,18 @@ def _apply_onboarding_profile_and_defaults(
         merged[CONF_DEVICE_GROUP] = str(matched_grp["id"])
         if isinstance(matched_grp.get("device_config"), dict):
             for k in GROUP_BEHAVIOR_DEVICE_KEYS:
+                if (
+                    raw_grp_id == "auto"
+                    and not existing
+                    and CONF_NATIVE_BLE_TRACKING not in user_input
+                    and k
+                    in (
+                        CONF_NATIVE_BLE_TRACKING,
+                        CONF_BLE_AUTO_SWITCH,
+                        CONF_SYNC_DEVICE_AREA,
+                    )
+                ):
+                    continue
                 if k in matched_grp["device_config"] and matched_grp["device_config"][k] is not None:
                     merged[k] = matched_grp["device_config"][k]
 
@@ -276,7 +294,11 @@ def _apply_onboarding_profile_and_defaults(
         is_roaming = bool(user_input[CONF_NATIVE_BLE_TRACKING])
         merged[CONF_NATIVE_BLE_TRACKING] = is_roaming
         merged[CONF_BLE_AUTO_SWITCH] = is_roaming
-        merged[CONF_SYNC_DEVICE_AREA] = is_roaming
+        merged[CONF_SYNC_DEVICE_AREA] = is_roaming and not is_stationary_hw
+        if not existing or CONF_DEFAULT_AREA not in existing or rebind_hardware:
+            merged[CONF_DEFAULT_AREA] = (
+                "" if is_roaming else str(dev.area_id or "").strip()
+            )
 
     _seed_global_defaults(hass)
     return merged

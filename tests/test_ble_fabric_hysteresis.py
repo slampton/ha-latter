@@ -8,7 +8,11 @@ from types import SimpleNamespace
 from typing import Any
 import uuid
 
-from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers import (
+    area_registry as ar,
+    device_registry as dr,
+    entity_registry as er,
+)
 import pytest
 
 from custom_components.latter import async_unload_entry
@@ -451,5 +455,174 @@ async def test_static_ibeacon_roaming_wake_sticky_hot_swap_and_ble_sleep_hold(
     assert tracker.is_away is True
     assert coord.is_device_away() is True
     assert coord.get_current_area_and_distance()[0] == "Away"
+
+    assert await async_unload_entry(hass, entry) is True
+
+
+@pytest.mark.asyncio
+async def test_static_assigned_area_startup_healing_live_reassignment_and_two_way_sync(
+    hass: Any, make_esphome_device: Any
+) -> None:
+    """Verify D-032 static Area startup healing, live HA Device Registry reassignment, and Studio two-way sync."""
+    from homeassistant.config_entries import ConfigEntry, ConfigSubentry
+
+    from custom_components.latter import async_setup, async_setup_entry
+    from custom_components.latter.areas import resolve_active_area_entry
+    from custom_components.latter.const import (
+        CONF_BLE_AUTO_SWITCH,
+        CONF_DEFAULT_AREA,
+        CONF_DEVICE_SLUG,
+        CONF_ESPHOME_DEVICE_ID,
+        CONF_NATIVE_BLE_TRACKING,
+        CONF_SYNC_DEVICE_AREA,
+        STORAGE_KEY_PREFIX,
+        SUBENTRY_DEVICE,
+    )
+    from custom_components.latter.groups import coordinator_supports_pref
+    from custom_components.latter.studio.payload import build_studio_state_payload
+    from custom_components.latter.studio.settings import (
+        DEVICE_PREF_SPEC_MAP,
+        clean_device_settings,
+    )
+
+    area_reg = ar.async_get(hass)
+    area_reg.async_create("Garage", area_id="garage", floor_id="floor_1")
+    area_reg.async_create("Living Area", area_id="living_room", floor_id="floor_1")
+    area_reg.async_create("Kitchen", area_id="kitchen", floor_id="floor_1")
+
+    # ESPHome Device was reassigned in HA from Garage -> Living Area while Latter still held Garage in subentry & runtime
+    esp_dev, mac = make_esphome_device(
+        hass,
+        slug="desk_assistant",
+        mac="aa:bb:cc:dd:ee:99",
+        name="Desk Assistant",
+        area_id="living_room",
+        stationary=1,
+    )
+    dev_reg = dr.async_get(hass)
+    child_latter_dev = dev_reg.async_get_or_create(
+        config_entry_id="entry_latter_hub",
+        identifiers={(DOMAIN, dr.format_mac(mac))},
+        via_device_id=esp_dev.id,
+        name="Desk Assistant",
+        area_id="garage",
+    )
+    hass._storage_mem[f"{STORAGE_KEY_PREFIX}_sub_desk"] = {
+        "active_area_id": "garage",
+    }
+
+    await async_setup(hass, {})
+    entry = hass.config_entries.add_entry(
+        ConfigEntry(
+            entry_id="entry_latter_hub",
+            domain=DOMAIN,
+            title="Latter",
+            data={},
+            subentries_data=[
+                ConfigSubentry(
+                    data={
+                        CONF_ESPHOME_DEVICE_ID: esp_dev.id,
+                        "mac": mac,
+                        CONF_DEVICE_SLUG: "desk_assistant",
+                        CONF_DEFAULT_AREA: "garage",
+                        CONF_NATIVE_BLE_TRACKING: False,
+                        CONF_BLE_AUTO_SWITCH: False,
+                        CONF_SYNC_DEVICE_AREA: False,
+                    },
+                    subentry_type=SUBENTRY_DEVICE,
+                    title="Desk Assistant",
+                    unique_id=mac,
+                    subentry_id="sub_desk",
+                )
+            ],
+            unique_id=DOMAIN,
+        )
+    )
+    assert await async_setup_entry(hass, entry) is True
+    await hass.async_block_till_done()
+
+    coord = entry.runtime_data.coordinators["sub_desk"]
+
+    # 1) Startup heals active_area_id, CONF_DEFAULT_AREA, child Latter device, and Current Area from esp_dev.area_id
+    assert coord.active_area_id == "living_room"
+    assert coord.get_opt(CONF_DEFAULT_AREA) == "living_room"
+    assert child_latter_dev.area_id == "living_room"
+    active_entry = resolve_active_area_entry(coord)
+    assert active_entry is not None and active_entry.id == "living_room"
+    assert hass.states.get("sensor.desk_assistant_current_area").state == "Living Area"
+
+    # Non-battery panel hides battery-only ble_beacon_mode preference
+    assert (
+        coordinator_supports_pref(coord, DEVICE_PREF_SPEC_MAP["ble_beacon_mode"])
+        is False
+    )
+
+    # 2) Live HA Device Registry reassignment on ESPHome Device updates active Area + child Latter device immediately
+    dev_reg.async_update_device(esp_dev.id, area_id="kitchen")
+    await hass.async_block_till_done()
+    assert coord.active_area_id == "kitchen"
+    assert coord.get_opt(CONF_DEFAULT_AREA) == "kitchen"
+    assert child_latter_dev.area_id == "kitchen"
+    assert hass.states.get("sensor.desk_assistant_current_area").state == "Kitchen"
+
+    # Reassigning child Latter Device in HA mirrors back to parent ESPHome Device and active Area
+    dev_reg.async_update_device(child_latter_dev.id, area_id="garage")
+    await hass.async_block_till_done()
+    assert esp_dev.area_id == "garage"
+    assert coord.active_area_id == "garage"
+    assert coord.get_opt(CONF_DEFAULT_AREA) == "garage"
+
+    # Unrelated Device Registry update (e.g., rename without area_id change) leaves active Area intact
+    dev_reg.async_update_device(esp_dev.id, name_by_user="Desk Assistant Pro")
+    await hass.async_block_till_done()
+    assert coord.active_area_id == "garage"
+
+    # 3) Two-way Studio Static Assigned Area update & clearing (Unassigned)
+    cleaned_assign = clean_device_settings(
+        {"default_area": "living_room"}, coord.device_data
+    )
+    coord.update_device_config({**coord.device_data, **cleaned_assign})
+    await coord.async_apply_options()
+    await hass.async_block_till_done()
+    assert esp_dev.area_id == "living_room"
+    assert child_latter_dev.area_id == "living_room"
+    assert coord.active_area_id == "living_room"
+    assert hass.states.get("sensor.desk_assistant_current_area").state == "Living Area"
+
+    studio_state = build_studio_state_payload(hass, coord)
+    dev_row = next(
+        d for d in studio_state["system_devices"] if d["subentry_id"] == "sub_desk"
+    )
+    assert dev_row["has_assigned_area"] is True
+    assert dev_row["area_label"] == "Living Area"
+    assert studio_state["config"]["default_area"] == "living_room"
+
+    cleaned_clear = clean_device_settings({"default_area": ""}, coord.device_data)
+    coord.update_device_config({**coord.device_data, **cleaned_clear})
+    await coord.async_apply_options()
+    await hass.async_block_till_done()
+    assert esp_dev.area_id is None
+    assert child_latter_dev.area_id is None
+    assert coord.active_area_id is None
+    assert hass.states.get("sensor.desk_assistant_current_area").state == "Unassigned"
+
+    # 4) Switching Static -> BLE Roaming auto-enables ble_auto_switch; switching back pins current active Area
+    cleaned_roam = clean_device_settings(
+        {"native_ble_tracking": True}, coord.device_data
+    )
+    assert cleaned_roam["ble_auto_switch"] is True
+    coord.update_device_config({**coord.device_data, **cleaned_roam})
+    await coord.async_apply_options()
+    coord.async_set_active_area("kitchen", sync_device_registry=False)
+    assert coord.active_area_id == "kitchen"
+
+    cleaned_pin = clean_device_settings(
+        {"native_ble_tracking": False}, coord.device_data
+    )
+    coord.update_device_config({**coord.device_data, **cleaned_pin})
+    await coord.async_apply_options()
+    assert coord.get_opt(CONF_DEFAULT_AREA) == "kitchen"
+    assert esp_dev.area_id == "kitchen"
+    assert child_latter_dev.area_id == "kitchen"
 
     assert await async_unload_entry(hass, entry) is True

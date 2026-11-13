@@ -496,6 +496,12 @@ class LatterCoordinator:
         self._configured_wallpaper_source: str = str(
             self.get_opt(CONF_WALLPAPER_SOURCE, "") or ""
         ).strip()
+        self._configured_default_area: str = str(
+            self.get_opt(CONF_DEFAULT_AREA, "") or ""
+        ).strip()
+        self._configured_ble_tracking: bool = self.native_ble_tracking_enabled
+        self._last_esp_area: str = ""
+        self._last_latter_area: str = ""
         self.current_wallpaper: str = ""
         self._structural_snapshot: dict[str, Any] = self._capture_structural_snapshot()
 
@@ -1285,23 +1291,43 @@ class LatterCoordinator:
             enforce_local_speaker_if_remote_idle(self, "ha_startup")
             if not self.last_speaker:
                 self.last_speaker = self.active_speaker
-        proxy_areas = get_ble_proxy_area_ids(self.hass)
-        if (
-            self.native_ble_tracking_enabled
-            and not str(self.get_opt(CONF_DEFAULT_AREA) or "").strip()
-        ):
+        prev_stored_active = self.active_area_id
+        esp_dev = get_bound_esphome_device(self.hass, self.esphome_device_id)
+        esp_area = str(esp_dev.area_id or "").strip() if esp_dev else ""
+        conf_area = str(self.get_opt(CONF_DEFAULT_AREA) or "").strip()
+        if not self.is_ble_tag and not self.native_ble_tracking_enabled:
+            static_area = esp_area or conf_area
+            self.active_area_id = static_area or None
+            if static_area != conf_area:
+                self.update_device_config(
+                    {**self.device_data, CONF_DEFAULT_AREA: static_area},
+                    bump_prefs_seq=False,
+                )
+            self._configured_default_area = static_area
+            self._configured_ble_tracking = False
+            if static_area and self.esphome_device_id:
+                sync_esphome_device_area(
+                    self.hass,
+                    self.esphome_device_id,
+                    static_area,
+                    require_ble_proxy_area=False,
+                )
+        else:
+            proxy_areas = get_ble_proxy_area_ids(self.hass)
             if (
-                self.active_area_id
+                not conf_area
+                and self.active_area_id
                 and proxy_areas
                 and self.active_area_id not in proxy_areas
             ):
                 self.active_area_id = None
-        elif (
-            not self.active_area_id
-            and (dev := get_bound_esphome_device(self.hass, self.esphome_device_id))
-            and dev.area_id
-        ):
-            self.active_area_id = dev.area_id
+            if not self.active_area_id:
+                self.active_area_id = (conf_area or esp_area) or None
+            self._configured_default_area = conf_area
+            self._configured_ble_tracking = self.native_ble_tracking_enabled
+        if self.active_area_id != prev_stored_active:
+            self._schedule_persist_runtime_state()
+        self.async_sync_ha_device_areas()
         self._bind_all_listeners()
         self._unsub_core_config = self.hass.bus.async_listen(
             EVENT_CORE_CONFIG_UPDATE, self._async_on_core_config_update
@@ -1349,6 +1375,53 @@ class LatterCoordinator:
             )
         )
         self._sync_ble_tracker()
+        new_ble = self.native_ble_tracking_enabled
+        new_def_area = str(self.get_opt(CONF_DEFAULT_AREA) or "").strip()
+        ble_changed = new_ble != self._configured_ble_tracking
+        area_changed = new_def_area != self._configured_default_area
+        if not self.is_ble_tag and (ble_changed or area_changed):
+            esp_dev = get_bound_esphome_device(self.hass, self.esphome_device_id)
+            esp_area = str(esp_dev.area_id or "").strip() if esp_dev else ""
+            if not new_ble:
+                self._area_follow.cancel()
+                if ble_changed and not area_changed and not new_def_area:
+                    pinned = str(self.active_area_id or esp_area or "").strip()
+                    if pinned:
+                        new_def_area = pinned
+                        self.update_device_config(
+                            {**self.device_data, CONF_DEFAULT_AREA: new_def_area},
+                            bump_prefs_seq=False,
+                        )
+                if self.esphome_device_id:
+                    sync_esphome_device_area(
+                        self.hass,
+                        self.esphome_device_id,
+                        new_def_area,
+                        require_ble_proxy_area=False,
+                        allow_clear=True,
+                    )
+                self._last_esp_area = new_def_area
+                self._last_latter_area = new_def_area
+                if new_def_area:
+                    self.async_set_active_area(
+                        new_def_area, sync_device_registry=False
+                    )
+                else:
+                    self._clear_active_area()
+            else:
+                has_ble_lock = bool(
+                    self._ble_tracker and self._ble_tracker.current_area_id
+                )
+                if area_changed and not has_ble_lock:
+                    fallback_target = new_def_area or esp_area
+                    if fallback_target:
+                        self.async_set_active_area(
+                            fallback_target, sync_device_registry=False
+                        )
+                    else:
+                        self._clear_active_area()
+            self._configured_ble_tracking = new_ble
+            self._configured_default_area = new_def_area
         target_def_spk = (
             str(self.get_opt(CONF_DEFAULT_SPEAKER) or "").strip() or self.local_speaker
         )
@@ -1966,9 +2039,141 @@ class LatterCoordinator:
         ble_st = self.hass.states.get(ble_ent_id) if ble_ent_id else None
         return bool(ble_st is not None and ble_st.state == "on")
 
+    def _find_latter_device_entry(self) -> dr.DeviceEntry | None:
+        dev_reg = dr.async_get(self.hass)
+        idents = self.get_device_info()["identifiers"]
+        esp_id = self.esphome_device_id
+        for d in dr.async_entries_for_config_entry(dev_reg, self.entry.entry_id):
+            if (DOMAIN, "system") in d.identifiers:
+                continue
+            if (d.identifiers & idents) or (esp_id and d.via_device_id == esp_id):
+                return d
+        return None
+
+    @callback
+    def async_record_own_area_write(self, device_id: str, area_id: str) -> None:
+        """Record an internal Device Registry Area write so external change tracking stays aligned."""
+        if device_id == self.esphome_device_id:
+            self._last_esp_area = area_id
+        else:
+            latter_dev = self._find_latter_device_entry()
+            if latter_dev is not None and latter_dev.id == device_id:
+                self._last_latter_area = area_id
+
+    @callback
+    def async_sync_ha_device_areas(self) -> None:
+        """Mirror the authoritative Area across the bound ESPHome Device and child Latter Device."""
+        if self.is_ble_tag:
+            return
+        esp_id = self.esphome_device_id
+        esp_dev = get_bound_esphome_device(self.hass, esp_id)
+        esp_area = str(esp_dev.area_id or "").strip() if esp_dev else ""
+        latter_dev = self._find_latter_device_entry()
+        latter_area = str(latter_dev.area_id or "").strip() if latter_dev else ""
+        if esp_id:
+            if not self.native_ble_tracking_enabled:
+                target = (
+                    str(self.get_opt(CONF_DEFAULT_AREA) or "").strip() or esp_area
+                )
+                if target:
+                    sync_esphome_device_area(
+                        self.hass, esp_id, target, require_ble_proxy_area=False
+                    )
+                    esp_area = latter_area = target
+            elif esp_area and latter_dev is not None and latter_area != esp_area:
+                sync_esphome_device_area(
+                    self.hass, esp_id, esp_area, require_ble_proxy_area=False
+                )
+                latter_area = esp_area
+        self._last_esp_area = esp_area
+        self._last_latter_area = latter_area
+
+    @callback
+    def _clear_active_area(self) -> None:
+        self._area_follow.cancel()
+        prev_area = self.active_area_id
+        self.active_area_id = None
+        if prev_area is not None:
+            self.hass.bus.async_fire(
+                EVENT_LATTER,
+                {
+                    "type": "area_changed",
+                    "device_slug": self.device_slug,
+                    "previous_area_id": prev_area,
+                    "area_id": "",
+                    "assigned_person": self.assigned_person,
+                },
+            )
+            if not self.is_ble_tag:
+                bind_coordinator_area_listeners(self)
+            self._schedule_persist_runtime_state()
+            self.async_notify_listeners()
+            if not self.is_ble_tag and self.on_area_changed_push_slots is not None:
+                self.entry.async_create_background_task(
+                    self.hass,
+                    self.on_area_changed_push_slots(self),
+                    f"latter_area_change_slots_{self.device_slug}",
+                )
+        else:
+            self.async_notify_listeners()
+
+    @callback
+    def async_on_ha_device_area_updated(
+        self, updated_device_id: str, new_area_id: str
+    ) -> None:
+        """React live when an administrator reassigns the ESPHome or Latter Device Area in Home Assistant."""
+        if self.is_ble_tag:
+            return
+        clean_area = str(new_area_id or "").strip()
+        expected_prev = (
+            self._last_esp_area
+            if updated_device_id == self.esphome_device_id
+            else self._last_latter_area
+        )
+        if clean_area == expected_prev:
+            return
+        self._last_esp_area = clean_area
+        self._last_latter_area = clean_area
+        if self.esphome_device_id:
+            sync_esphome_device_area(
+                self.hass,
+                self.esphome_device_id,
+                clean_area,
+                require_ble_proxy_area=False,
+                allow_clear=True,
+            )
+        if not self.native_ble_tracking_enabled:
+            cur_conf = str(self.get_opt(CONF_DEFAULT_AREA) or "").strip()
+            if clean_area != cur_conf:
+                self.update_device_config(
+                    {**self.device_data, CONF_DEFAULT_AREA: clean_area},
+                    bump_prefs_seq=False,
+                )
+            self._configured_default_area = clean_area
+            if clean_area:
+                self.async_set_active_area(clean_area, sync_device_registry=False)
+            else:
+                self._clear_active_area()
+            return
+        has_ble_lock = bool(
+            self._ble_tracker and self._ble_tracker.current_area_id
+        )
+        explicit_default = str(self.get_opt(CONF_DEFAULT_AREA) or "").strip()
+        if not has_ble_lock and not explicit_default:
+            if clean_area:
+                self.async_set_active_area(clean_area, sync_device_registry=False)
+            else:
+                self._clear_active_area()
+        else:
+            self.async_notify_listeners()
+
     def get_current_area_and_distance(self) -> tuple[str, dict[str, Any]]:
         away = self.is_device_away()
         explicit_default = str(self.get_opt(CONF_DEFAULT_AREA) or "").strip()
+        esp_default = ""
+        if not self.is_ble_tag and self.esphome_device_id:
+            esp_dev = get_bound_esphome_device(self.hass, self.esphome_device_id)
+            esp_default = str(esp_dev.area_id or "").strip() if esp_dev else ""
         area_reg = ar.async_get(self.hass)
         if self.native_ble_tracking_enabled:
             ble_area_id = (
@@ -1979,6 +2184,7 @@ class LatterCoordinator:
                 )
                 or self.active_area_id
                 or explicit_default
+                or esp_default
                 if not away
                 else None
             )
@@ -1991,7 +2197,11 @@ class LatterCoordinator:
                 area_state = "Unassigned"
             eff_area_id = ble_area_id or ""
         else:
-            eff_area_id = "" if away else (self.active_area_id or explicit_default)
+            eff_area_id = (
+                ""
+                if away
+                else (self.active_area_id or explicit_default or esp_default)
+            )
             area_entry = area_reg.async_get_area(eff_area_id) if eff_area_id else None
             area_state = (
                 "Away" if away else (area_entry.name if area_entry else "Unassigned")

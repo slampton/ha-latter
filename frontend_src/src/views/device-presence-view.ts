@@ -1,5 +1,5 @@
 /**
- * Device BLE & Area Presence View (`presence`): Built-in BLE tracking, Fallback Area, and BLE Identity.
+ * Device BLE & Area Presence View (`presence`): Static Assigned Area vs. BLE Roaming, Fallback Area, and BLE Identity.
  */
 
 import {
@@ -15,6 +15,7 @@ export function renderDevicePresenceView(store: StudioStore): TemplateResult {
   const data = store.state;
   const cfg = data?.config || {};
   const isBleOnly = cfg.kind === "ble_tag";
+  const bleTracking = isBleOnly || Boolean(cfg.native_ble_tracking);
 
   const bleAreaItems = store
     .getSectionItems("area")
@@ -27,45 +28,67 @@ export function renderDevicePresenceView(store: StudioStore): TemplateResult {
           title: "Area Tracking",
           contentClass: "settings-list",
           body: html`${!isBleOnly
-              ? html`${renderSwitchRow({
-                    id: "cfg-native_ble_tracking",
-                    label: "Track the Area with BLE Proxies",
+              ? renderSwitchRow({
+                  id: "cfg-native_ble_tracking",
+                  label: "Track the Area with BLE Proxies",
+                  description:
+                    "Uses Home Assistant Area-assigned Bluetooth proxies to locate this Device automatically. Turn off to pin it to one assigned Area.",
+                  checked: Boolean(cfg.native_ble_tracking),
+                  onChange: (checked) =>
+                    store.stageDeviceSetting(
+                      "native_ble_tracking",
+                      checked,
+                      "cfg-native_ble_tracking",
+                    ),
+                })
+              : nothing}
+            ${bleTracking
+              ? html`${!isBleOnly
+                    ? renderSwitchRow({
+                        id: "cfg-ble_auto_switch",
+                        label: "Auto-Switch Active Area",
+                        description:
+                          "Switches the Device's active Area controls automatically when BLE detects a move.",
+                        checked: Boolean(cfg.ble_auto_switch),
+                        onChange: (checked) =>
+                          store.stageDeviceSetting(
+                            "ble_auto_switch",
+                            checked,
+                            "cfg-ble_auto_switch",
+                          ),
+                      })
+                    : nothing}
+                  ${renderSelectRow({
+                    id: "cfg-default_area",
+                    label: "Fallback Area",
                     description:
-                      "Uses Home Assistant Area-assigned Bluetooth proxies to locate this Device automatically.",
-                    checked: Boolean(cfg.native_ble_tracking),
-                    onChange: (checked) =>
+                      "Default Home Assistant Area when no Bluetooth proxy is in range.",
+                    value: cfg.default_area,
+                    choices: data?.catalog?.areas,
+                    emptyOptionLabel: "— Automatic (ESPHome Area) —",
+                    onChange: (val) =>
                       store.stageDeviceSetting(
-                        "native_ble_tracking",
-                        checked,
-                        "cfg-native_ble_tracking",
+                        "default_area",
+                        val,
+                        "cfg-default_area",
                       ),
                   })}
-                  ${renderSwitchRow({
-                    id: "cfg-ble_auto_switch",
-                    label: "Auto-Switch Active Area",
-                    description:
-                      "Switches the Device's active Area controls automatically when BLE detects a move.",
-                    checked: Boolean(cfg.ble_auto_switch),
-                    onChange: (checked) =>
-                      store.stageDeviceSetting(
-                        "ble_auto_switch",
-                        checked,
-                        "cfg-ble_auto_switch",
-                      ),
-                  })}`
-              : nothing}
-            ${renderSelectRow({
-              id: "cfg-default_area",
-              label: "Fallback Area",
-              description:
-                "Default Home Assistant Area when BLE tracking is off or no proxy is in range.",
-              value: cfg.default_area,
-              choices: data?.catalog?.areas,
-              emptyOptionLabel: "— Automatic (ESPHome Area) —",
-              onChange: (val) =>
-                store.stageDeviceSetting("default_area", val, "cfg-default_area"),
-            })}
-            ${bleAreaItems.map((it) => renderNativeControlRow(store, it))}`,
+                  ${bleAreaItems.map((it) => renderNativeControlRow(store, it))}`
+              : renderSelectRow({
+                  id: "cfg-default_area",
+                  label: "Assigned Area",
+                  description:
+                    "Pins this Device's Area controls and Home Assistant Device Area to one location.",
+                  value: cfg.default_area,
+                  choices: data?.catalog?.areas,
+                  emptyOptionLabel: "— Unassigned —",
+                  onChange: (val) =>
+                    store.stageDeviceSetting(
+                      "default_area",
+                      val,
+                      "cfg-default_area",
+                    ),
+                })}`,
         })}
       </div>
 

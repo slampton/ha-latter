@@ -797,29 +797,23 @@ def _build_system_section(
         else:
             c_model_label = raw_model
 
-        ha_assigned_area_id = (
-            str(c_dev_entry.area_id or "").strip()
-            if (c_dev_entry and not c.sync_device_area_enabled)
+        static_area_id = (
+            str(c.get_opt(CONF_DEFAULT_AREA) or "").strip()
+            or (str(c_dev_entry.area_id or "").strip() if c_dev_entry else "")
+            if (not c.is_ble_tag and not c.native_ble_tracking_enabled)
             else ""
-        ) or str(c.get_opt(CONF_DEFAULT_AREA) or "").strip()
-        if (
-            not ha_assigned_area_id
-            and not c.native_ble_tracking_enabled
-            and c_dev_entry
-            and c_dev_entry.area_id
-        ):
-            ha_assigned_area_id = str(c_dev_entry.area_id).strip()
+        )
 
         a_obj = (
-            area_reg.async_get_area(ha_assigned_area_id)
-            if ha_assigned_area_id
+            area_reg.async_get_area(static_area_id)
+            if static_area_id
             else None
         )
         c_has_assigned_area = a_obj is not None
         c_area_label = (
             a_obj.name
             if a_obj is not None
-            else ("Roaming" if (c.is_roaming_device or c.is_ble_tag) else "")
+            else ("Roaming" if (c.native_ble_tracking_enabled or c.is_ble_tag) else "")
         )
 
         c_upd_st = c.device_state("update", "_project_firmware")
@@ -1033,6 +1027,18 @@ def build_studio_state_payload(
         raw_def_spk = local_spk_id
 
     dev_pref_data = coordinator.device_data
+    effective_default_area = str(
+        coordinator.get_opt(CONF_DEFAULT_AREA, "") or ""
+    ).strip()
+    if (
+        not coordinator.is_ble_tag
+        and not coordinator.native_ble_tracking_enabled
+        and not effective_default_area
+        and coordinator.esphome_device_id
+    ):
+        esp_entry = dr.async_get(hass).async_get(coordinator.esphome_device_id)
+        if esp_entry and esp_entry.area_id:
+            effective_default_area = str(esp_entry.area_id).strip()
     config_data = {
         CONF_DEVICE_SLUG: coordinator.device_slug,
         "kind": "ble_tag" if coordinator.is_ble_tag else "device",
@@ -1043,7 +1049,7 @@ def build_studio_state_payload(
         CONF_DEFAULT_PAGE_SIZE: coordinator.default_page_size,
         CONF_DEFAULT_SPEAKER: raw_def_spk,
         CONF_MA_PLAYER_ENTITY: str(coordinator.get_opt(CONF_MA_PLAYER_ENTITY, "") or ""),
-        CONF_DEFAULT_AREA: coordinator.get_opt(CONF_DEFAULT_AREA, ""),
+        CONF_DEFAULT_AREA: effective_default_area,
         CONF_NATIVE_BLE_TRACKING: coordinator.native_ble_tracking_enabled,
         CONF_BLE_BEACON_UUID: coordinator.ble_beacon_uuid,
         CONF_BLE_TARGET_ADDRESS: coordinator.ble_target_address,

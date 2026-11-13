@@ -60,6 +60,7 @@ from .hub import (
     async_stop_area_state_index,
     get_area_state_index,
     get_latter_system,
+    iter_coordinators,
 )
 from .identity import (
     LATTER_CONTRACT_ACTION_SUFFIXES,
@@ -222,7 +223,8 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     if DATA_DISCOVERY_UNSUB not in domain_data:
         @callback
         def _on_device_registry_updated(event: Event) -> None:
-            if event.data.get("action") not in ("create", "update"):
+            action = event.data.get("action")
+            if action not in ("create", "update"):
                 return
             dev_id = event.data.get("device_id")
             if not dev_id:
@@ -232,16 +234,39 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             own_writes = domain_data.get("_own_area_writes")
             if isinstance(own_writes, dict) and dev_id in own_writes:
                 expected_area, write_ts = own_writes[dev_id]
+                cur_area = str(dev.area_id or "").strip() if dev is not None else ""
                 if (
                     (time.monotonic() - float(write_ts)) < 2.0
                     and dev is not None
-                    and dev.area_id == expected_area
+                    and cur_area == str(expected_area or "").strip()
                 ):
                     own_writes.pop(dev_id, None)
+                    for coord in iter_coordinators(hass):
+                        coord.async_record_own_area_write(dev_id, cur_area)
                     return
             if dev is not None:
                 _async_check_esphome_device_for_discovery(hass, dev)
                 _schedule_debounced_discovery_scan(5.0)
+                if action == "update":
+                    changes = event.data.get("changes")
+                    if isinstance(changes, dict) and "area_id" not in changes:
+                        return
+                    new_area = str(dev.area_id or "").strip()
+                    for coord in iter_coordinators(hass):
+                        if coord.is_ble_tag:
+                            continue
+                        if (
+                            dev.id == coord.esphome_device_id
+                            or bool(
+                                dev.identifiers
+                                & coord.get_device_info()["identifiers"]
+                            )
+                            or (
+                                coord.esphome_device_id
+                                and dev.via_device_id == coord.esphome_device_id
+                            )
+                        ):
+                            coord.async_on_ha_device_area_updated(dev.id, new_area)
 
         @callback
         def _on_service_registered(event: Event) -> None:
@@ -339,6 +364,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
 
     async_heal_coordinator_ma_links(hass)
     for coordinator in list(sys_obj.coordinators.values()):
+        coordinator.async_sync_ha_device_areas()
         coordinator.async_notify_listeners()
 
     entry.async_create_background_task(

@@ -625,6 +625,10 @@ def coordinator_supports_pref(coordinator: Any, spec: DevicePrefSpec) -> bool:
         return bool(getattr(coordinator, "has_speaker", True))
     if cap == "beacon":
         return bool(getattr(coordinator, "has_ble_beacon", True))
+    if cap == "beacon_battery":
+        return bool(getattr(coordinator, "has_ble_beacon", True)) and bool(
+            getattr(coordinator, "has_battery", True)
+        )
     return True
 
 

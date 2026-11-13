@@ -227,3 +227,100 @@ async def test_device_and_ble_tag_subentry_flows_and_hardware_replacement(
     # Pure option default helpers
     assert device_option_defaults(hass, dev2, {"w": 466, "h": 466, "wearable": 1})[CONF_DEVICE_GROUP] == "wearables"
     assert ble_tag_option_defaults("Wallet", "11:22:33:44:55:99")[CONF_BLE_TARGET_ADDRESS] == "11:22:33:44:55:99"
+
+
+async def test_onboarding_smart_area_and_roaming_defaults(
+    hass: Any, make_esphome_device: Any
+) -> None:
+    """Verify D-032 trait + Area onboarding smart defaults and explicit user overrides."""
+    from custom_components.latter.config_flow import (
+        _apply_onboarding_profile_and_defaults,
+        _detect_hardware_defaults,
+    )
+    from custom_components.latter.const import (
+        CONF_BLE_AUTO_SWITCH,
+        CONF_DEFAULT_AREA,
+        CONF_SYNC_DEVICE_AREA,
+    )
+
+    # 1) Stationary device WITH an assigned ESPHome Area -> defaults to Static pinned to that Area
+    desk_assigned, _ = make_esphome_device(
+        hass,
+        slug="desk_assigned",
+        mac="aa:bb:cc:11:00:01",
+        area_id="living_room",
+        stationary=1,
+    )
+    defs_assigned = _detect_hardware_defaults(hass, desk_assigned)
+    assert defs_assigned[CONF_DEVICE_GROUP] == "wall_panels"
+    assert defs_assigned[CONF_NATIVE_BLE_TRACKING] is False
+    assert defs_assigned[CONF_BLE_AUTO_SWITCH] is False
+    assert defs_assigned[CONF_SYNC_DEVICE_AREA] is False
+    assert defs_assigned[CONF_DEFAULT_AREA] == "living_room"
+
+    # 2) Stationary device WITHOUT an ESPHome Area -> defaults to BLE Roaming (while keeping stationary VFM guard)
+    desk_unassigned, _ = make_esphome_device(
+        hass,
+        slug="desk_unassigned",
+        mac="aa:bb:cc:11:00:02",
+        area_id=None,
+        stationary=1,
+    )
+    defs_unassigned = _detect_hardware_defaults(hass, desk_unassigned)
+    assert defs_unassigned[CONF_DEVICE_GROUP] == "wall_panels"
+    assert defs_unassigned[CONF_NATIVE_BLE_TRACKING] is True
+    assert defs_unassigned[CONF_BLE_AUTO_SWITCH] is True
+    assert defs_unassigned[CONF_SYNC_DEVICE_AREA] is False
+    assert defs_unassigned[CONF_DEFAULT_AREA] == ""
+
+    merged_auto = _apply_onboarding_profile_and_defaults(
+        hass,
+        desk_unassigned,
+        {CONF_ESPHOME_DEVICE_ID: desk_unassigned.id, CONF_DEVICE_GROUP: "auto"},
+    )
+    assert merged_auto[CONF_NATIVE_BLE_TRACKING] is True
+    assert merged_auto[CONF_BLE_AUTO_SWITCH] is True
+    assert merged_auto[CONF_SYNC_DEVICE_AREA] is False
+
+    # 3) Roaming handheld WITH an ESPHome Area -> defaults to BLE Roaming (empty CONF_DEFAULT_AREA)
+    pocket_dev, _ = make_esphome_device(
+        hass,
+        slug="pocket_roam",
+        mac="aa:bb:cc:11:00:03",
+        area_id="garage",
+        stationary=0,
+    )
+    defs_pocket = _detect_hardware_defaults(hass, pocket_dev)
+    assert defs_pocket[CONF_NATIVE_BLE_TRACKING] is True
+    assert defs_pocket[CONF_BLE_AUTO_SWITCH] is True
+    assert defs_pocket[CONF_SYNC_DEVICE_AREA] is True
+    assert defs_pocket[CONF_DEFAULT_AREA] == ""
+
+    # 4) Explicit onboarding toggle override: pinning handheld to Static adopts ESPHome Area; enabling roaming on desk clears it
+    pinned_pocket = _apply_onboarding_profile_and_defaults(
+        hass,
+        pocket_dev,
+        {
+            CONF_ESPHOME_DEVICE_ID: pocket_dev.id,
+            CONF_DEVICE_GROUP: "auto",
+            CONF_NATIVE_BLE_TRACKING: False,
+        },
+    )
+    assert pinned_pocket[CONF_NATIVE_BLE_TRACKING] is False
+    assert pinned_pocket[CONF_BLE_AUTO_SWITCH] is False
+    assert pinned_pocket[CONF_SYNC_DEVICE_AREA] is False
+    assert pinned_pocket[CONF_DEFAULT_AREA] == "garage"
+
+    roaming_desk = _apply_onboarding_profile_and_defaults(
+        hass,
+        desk_assigned,
+        {
+            CONF_ESPHOME_DEVICE_ID: desk_assigned.id,
+            CONF_DEVICE_GROUP: "auto",
+            CONF_NATIVE_BLE_TRACKING: True,
+        },
+    )
+    assert roaming_desk[CONF_NATIVE_BLE_TRACKING] is True
+    assert roaming_desk[CONF_BLE_AUTO_SWITCH] is True
+    assert roaming_desk[CONF_SYNC_DEVICE_AREA] is False
+    assert roaming_desk[CONF_DEFAULT_AREA] == ""

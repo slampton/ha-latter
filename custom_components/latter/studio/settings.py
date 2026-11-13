@@ -190,6 +190,7 @@ class DevicePrefSpec:
         "mic",
         "speaker",
         "beacon",
+        "beacon_battery",
     ]
     group_tier: Literal["behavior", "appearance"] | None
     options: tuple[str, ...] = ()
@@ -373,7 +374,7 @@ DEVICE_PREF_SPECS: tuple[DevicePrefSpec, ...] = (
     DevicePrefSpec("alert_volume", "Alert Volume", "number", 80, "sound", "speaker", "behavior", min_val=20, max_val=100, step=5, unit="%"),
     DevicePrefSpec("volume_step_size", "Volume Step Size", "number", 5, "sound", "speaker", "behavior", min_val=1, max_val=10, step=1, unit="%"),
     DevicePrefSpec("game_sound_effects", "Game Sound Effects", "switch", True, "sound", "display", "behavior"),
-    DevicePrefSpec("ble_beacon_mode", "BLE Beacon Mode", "select", "Handheld Only", "area", "beacon", "behavior", options=BLE_BEACON_MODE_OPTIONS),
+    DevicePrefSpec("ble_beacon_mode", "BLE Beacon Mode", "select", "Handheld Only", "area", "beacon_battery", "behavior", options=BLE_BEACON_MODE_OPTIONS),
     DevicePrefSpec("weather_sim_condition", "Weather Simulation", "select", "Live (Home Assistant)", "developer", "display", None, options=WEATHER_SIM_CONDITION_OPTIONS),
 )
 
@@ -738,6 +739,14 @@ def clean_device_settings(
             for sub_k in POWER_PROFILE_SUBKEYS
         ):
             out["power_profile"] = "Custom"
+
+    if (
+        out.get("native_ble_tracking") is True
+        and "ble_auto_switch" not in incoming
+        and current is not None
+        and not bool(current.get("native_ble_tracking", True))
+    ):
+        out["ble_auto_switch"] = True
 
     if "device_custom_color" in incoming:
         color = _text(incoming["device_custom_color"]).upper()

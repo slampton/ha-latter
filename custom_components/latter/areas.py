@@ -157,45 +157,75 @@ def latter_bound_esphome_device_ids(hass: HomeAssistant) -> set[str]:
 def sync_esphome_device_area(
     hass: HomeAssistant,
     esphome_device_id: str,
-    area_id: str,
+    area_id: str | None,
     require_ble_proxy_area: bool = True,
+    *,
+    allow_clear: bool = False,
 ) -> dict[str, Any] | None:
-    """Update the bound ESPHome device's area_id in HA Device Registry ONLY for valid areas."""
-    if not esphome_device_id or not area_id:
+    """Update the bound ESPHome device's (and child Latter device's) area_id in HA Device Registry."""
+    norm_area: str | None = str(area_id or "").strip() or None
+    if not esphome_device_id or (norm_area is None and not allow_clear):
         return None
 
-    if require_ble_proxy_area:
+    if require_ble_proxy_area and norm_area is not None:
         proxy_areas = get_ble_proxy_area_ids(hass)
-        if proxy_areas and area_id not in proxy_areas:
+        if proxy_areas and norm_area not in proxy_areas:
             _LOGGER.debug(
                 "Skipping Device Registry area sync to '%s' because that area has no BLE proxy.",
-                area_id,
+                norm_area,
             )
             return None
 
     dev_reg = dr.async_get(hass)
     dev = dev_reg.async_get(esphome_device_id)
-    if dev and dev.area_id != area_id:
-        prev_area = str(dev.area_id or "")
-        domain_data = hass.data.setdefault(DOMAIN, {})
-        own_writes: dict[str, tuple[str, float]] = domain_data.setdefault(
-            "_own_area_writes", {}
-        )
-        own_writes[esphome_device_id] = (area_id, time.monotonic())
-        dev_reg.async_update_device(esphome_device_id, area_id=area_id)
-        record: dict[str, Any] = {
-            "timestamp": dt_util.now().isoformat(timespec="seconds"),
-            "from_area": prev_area,
-            "to_area": area_id,
-            "device_id": esphome_device_id,
-        }
-        _LOGGER.debug(
-            "Synced bound ESPHome device id=%s to area_id='%s' for area-aware Voice Assistant",
-            esphome_device_id,
-            area_id,
-        )
-        return record
-    return None
+    domain_data = hass.data.setdefault(DOMAIN, {})
+    own_writes: dict[str, tuple[str, float]] = domain_data.setdefault(
+        "_own_area_writes", {}
+    )
+    now_mono = time.monotonic()
+    record: dict[str, Any] | None = None
+
+    esp_mac: str | None = None
+    if dev is not None:
+        for ctype, cval in dev.connections:
+            if ctype == dr.CONNECTION_NETWORK_MAC and cval:
+                esp_mac = dr.format_mac(str(cval))
+                break
+        if dev.area_id != norm_area:
+            prev_area = str(dev.area_id or "")
+            own_writes[esphome_device_id] = (norm_area or "", now_mono)
+            dev_reg.async_update_device(esphome_device_id, area_id=norm_area)
+            record = {
+                "timestamp": dt_util.now().isoformat(timespec="seconds"),
+                "from_area": prev_area,
+                "to_area": norm_area or "",
+                "device_id": esphome_device_id,
+            }
+            _LOGGER.debug(
+                "Synced bound ESPHome device id=%s to area_id='%s'",
+                esphome_device_id,
+                norm_area or "",
+            )
+
+    for entry in hass.config_entries.async_entries(DOMAIN):
+        for child in dr.async_entries_for_config_entry(dev_reg, entry.entry_id):
+            if (DOMAIN, "system") in child.identifiers:
+                continue
+            if (
+                child.via_device_id == esphome_device_id
+                or (esp_mac and (DOMAIN, esp_mac) in child.identifiers)
+            ) and child.area_id != norm_area:
+                prev_child = str(child.area_id or "")
+                own_writes[child.id] = (norm_area or "", now_mono)
+                dev_reg.async_update_device(child.id, area_id=norm_area)
+                if record is None:
+                    record = {
+                        "timestamp": dt_util.now().isoformat(timespec="seconds"),
+                        "from_area": prev_child,
+                        "to_area": norm_area or "",
+                        "device_id": esphome_device_id,
+                    }
+    return record
 
 
 def _is_curated_area_entity(
@@ -1119,11 +1149,17 @@ async def async_execute_area_action(
 
 
 def resolve_active_area_entry(coordinator: Any) -> ar.AreaEntry | None:
-    """Resolve the current AreaEntry for `coordinator` from BLE lock, sticky active_area_id, or explicit default."""
+    """Resolve the current AreaEntry for `coordinator` from BLE lock, sticky active_area_id, explicit default, or ESPHome Area."""
     if coordinator.is_device_away():
         return None
     area_reg = ar.async_get(coordinator.hass)
     explicit_default = str(coordinator.get_opt(CONF_DEFAULT_AREA) or "").strip()
+    esp_default = ""
+    if not coordinator.is_ble_tag and coordinator.esphome_device_id:
+        esp_dev = dr.async_get(coordinator.hass).async_get(
+            coordinator.esphome_device_id
+        )
+        esp_default = str(esp_dev.area_id or "").strip() if esp_dev else ""
     ble_area_id = (
         coordinator._ble_tracker.current_area_id
         if (
@@ -1132,7 +1168,12 @@ def resolve_active_area_entry(coordinator: Any) -> ar.AreaEntry | None:
         )
         else None
     )
-    eff_id = ble_area_id or coordinator.active_area_id or explicit_default
+    eff_id = (
+        ble_area_id
+        or coordinator.active_area_id
+        or explicit_default
+        or esp_default
+    )
     return area_reg.async_get_area(eff_id) if eff_id else None
 
 

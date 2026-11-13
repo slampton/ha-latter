@@ -1128,6 +1128,98 @@ return {
             self.assertIn(expected, ov_ble)
         self.assertNotIn("status-assignments", ov_ble)
 
+    def test_presence_view_static_assigned_area_vs_ble_roaming_modes(self) -> None:
+        """D-032: Presence renders Assigned Area when Static and Auto-Switch + Fallback Area when BLE Roaming."""
+        stub_lit = """
+const nothing = Symbol.for("latter.lit.nothing");
+function html(strings, ...values) { return { _$litType$: 1, strings, values }; }
+function flattenHtml(node) {
+  if (node === null || node === undefined || node === nothing || typeof node === "boolean") return "";
+  if (Array.isArray(node)) return node.map(flattenHtml).join("");
+  if (typeof node === "object" && node._$litType$ === 1) {
+    let out = "";
+    for (let i = 0; i < node.strings.length; i += 1) {
+      out += node.strings[i];
+      if (i < node.values.length) {
+        const v = node.values[i];
+        out += typeof v === "function" ? "[fn]" : flattenHtml(v);
+      }
+    }
+    return out;
+  }
+  return String(node);
+}
+"""
+        runner = (
+            stub_lit
+            + """
+function makePresenceStore(bleTracking) {
+  return {
+    hass: null,
+    host: null,
+    activeSubentryId: "sub_1",
+    state: {
+      config: {
+        kind: "device",
+        native_ble_tracking: bleTracking,
+        ble_auto_switch: bleTracking,
+        default_area: "living_room",
+        ble_target_address: "",
+        ble_beacon_uuid: "E2C56DB5-DFFB-48D2-B060-D0F5A71096E1",
+      },
+      catalog: {
+        areas: [
+          { value: "living_room", label: "Living Area" },
+          { value: "kitchen", label: "Kitchen" },
+        ],
+      },
+    },
+    getSectionItems() {
+      return [
+        {
+          entity_id: "pref:ble_beacon_mode",
+          pref_key: "ble_beacon_mode",
+          domain: "select",
+          name: "BLE Beacon Mode",
+          state: "Handheld Only",
+          options: ["Handheld Only", "Handheld + Screen Off", "Always"],
+        },
+      ];
+    },
+  };
+}
+return {
+  staticMarkup: flattenHtml(renderDevicePresenceView(makePresenceStore(false))),
+  roamingMarkup: flattenHtml(renderDevicePresenceView(makePresenceStore(true))),
+};
+"""
+        )
+        got = _run_node_ts(
+            [
+                FRONTEND_SRC / "constants.ts",
+                FRONTEND_SRC / "utils" / "format.ts",
+                FRONTEND_SRC / "components" / "controls.ts",
+                FRONTEND_SRC / "views" / "device-presence-view.ts",
+            ],
+            runner,
+        )
+        static_html = got["staticMarkup"]
+        roaming_html = got["roamingMarkup"]
+
+        self.assertIn("Track the Area with BLE Proxies", static_html)
+        self.assertIn("Assigned Area", static_html)
+        self.assertIn("— Unassigned —", static_html)
+        self.assertNotIn("Auto-Switch Active Area", static_html)
+        self.assertNotIn("Fallback Area", static_html)
+        self.assertNotIn("BLE Beacon Mode", static_html)
+
+        self.assertIn("Track the Area with BLE Proxies", roaming_html)
+        self.assertIn("Auto-Switch Active Area", roaming_html)
+        self.assertIn("Fallback Area", roaming_html)
+        self.assertIn("— Automatic (ESPHome Area) —", roaming_html)
+        self.assertIn("BLE Beacon Mode", roaming_html)
+        self.assertNotIn("Assigned Area", roaming_html)
+
 
 if __name__ == "__main__":
     unittest.main()
