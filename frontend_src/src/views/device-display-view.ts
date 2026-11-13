@@ -1,8 +1,8 @@
 /**
- * Device Display View (`display`, D-027 / D-029 / D-033):
+ * Device Display View (`display`, D-027 / D-029 / D-033 / D-034):
  * Visual & aesthetic preferences across screens.
- * Column 1: Brightness, Home Screen (Wake Greeting, Weather Background & Sun & Moon), Clock & Screensavers.
- * Column 2: Colors, Wallpapers, Media Player (Album Art & Overlay Style) & Voice Assistant (Visual Profile).
+ * Column 1: Home Screen (Wake Greeting, Weather Background & Sun & Moon), Screensavers, Voice Assistant (Visual Profile), Brightness & Clock.
+ * Column 2: Colors, Wallpapers & Media Player (Album Art & Overlay Style).
  */
 
 import {
@@ -240,14 +240,6 @@ export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
   return html`<section id="view-display">
     <div class="columns">
       <div class="column">
-        ${visibleBrightnessItems.length
-          ? renderCard({
-              heading: html`<h3 class="card-title">Brightness</h3>`,
-              contentClass: "settings-list",
-              body: visibleBrightnessItems.map((it) => renderNativeControlRow(store, it)),
-            })
-          : nothing}
-
         ${visibleHomeItems.length || (!weatherBgOff && celestialItems.length > 0)
           ? renderCard({
               heading: html`<h3 class="card-title">Home Screen</h3>`,
@@ -267,14 +259,6 @@ export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
                   ? renderCelestialRow()
                   : nothing}
               </div>`,
-            })
-          : nothing}
-
-        ${clockItems.length
-          ? renderCard({
-              heading: html`<h3 class="card-title">Clock</h3>`,
-              contentClass: "settings-list",
-              body: clockItems.map((it) => renderNativeControlRow(store, it)),
             })
           : nothing}
 
@@ -314,6 +298,30 @@ export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
                       </button>`,
                     })
                   : nothing}`,
+            })
+          : nothing}
+
+        ${voiceVisualItems.length
+          ? renderCard({
+              heading: html`<h3 class="card-title">Voice Assistant</h3>`,
+              contentClass: "settings-list",
+              body: voiceVisualItems.map((it) => renderNativeControlRow(store, it)),
+            })
+          : nothing}
+
+        ${visibleBrightnessItems.length
+          ? renderCard({
+              heading: html`<h3 class="card-title">Brightness</h3>`,
+              contentClass: "settings-list",
+              body: visibleBrightnessItems.map((it) => renderNativeControlRow(store, it)),
+            })
+          : nothing}
+
+        ${clockItems.length
+          ? renderCard({
+              heading: html`<h3 class="card-title">Clock</h3>`,
+              contentClass: "settings-list",
+              body: clockItems.map((it) => renderNativeControlRow(store, it)),
             })
           : nothing}
       </div>
@@ -477,14 +485,6 @@ export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
               heading: html`<h3 class="card-title">Media Player</h3>`,
               contentClass: "settings-list",
               body: mediaAppearanceItems.map((it) => renderNativeControlRow(store, it)),
-            })
-          : nothing}
-
-        ${voiceVisualItems.length
-          ? renderCard({
-              heading: html`<h3 class="card-title">Voice Assistant</h3>`,
-              contentClass: "settings-list",
-              body: voiceVisualItems.map((it) => renderNativeControlRow(store, it)),
             })
           : nothing}
       </div>

@@ -24,12 +24,12 @@ import voluptuous as vol
 
 from .const import (
     CONF_ALARM_ENTITY,
+    CONF_AREA_CATEGORIES,
     CONF_AREA_HANDOFF,
     CONF_ASSIGNED_PERSON,
     CONF_BLE_AUTO_SWITCH,
     CONF_BLE_TARGET_ADDRESS,
     CONF_DEFAULT_AREA,
-    CONF_DEFAULT_PAGE_SIZE,
     CONF_DEFAULT_SPEAKER,
     CONF_DEVICE_GROUP,
     CONF_DEVICE_SLUG,
@@ -39,10 +39,10 @@ from .const import (
     CONF_WEATHER_ENTITY,
     DATA_GLOBAL_CONFIG,
     DATA_GLOBAL_STORE,
+    DEFAULT_AREA_CATEGORIES,
     DEFAULT_AREA_HANDOFF,
     DEFAULT_DEVICE_GROUP,
     DEFAULT_DOCK_APPS,
-    DEFAULT_PAGE_SIZE,
     DOMAIN,
     SUBENTRY_BLE_TAG,
     SUBENTRY_DEVICE,
@@ -178,30 +178,29 @@ def _detect_hardware_defaults(
         default_roaming = (not bool(esp_area)) if is_stationary else True
         return {
             CONF_DEVICE_GROUP: default_grp,
-            CONF_DEFAULT_PAGE_SIZE: DEFAULT_PAGE_SIZE,
             CONF_NATIVE_BLE_TRACKING: default_roaming,
             CONF_BLE_AUTO_SWITCH: default_roaming,
             CONF_SYNC_DEVICE_AREA: default_roaming and not is_stationary,
             CONF_AREA_HANDOFF: DEFAULT_AREA_HANDOFF,
             CONF_DEFAULT_AREA: "" if default_roaming else esp_area,
             "dock_apps": DEFAULT_DOCK_APPS,
+            CONF_AREA_CATEGORIES: DEFAULT_AREA_CATEGORIES,
         }
 
     if has_native_slots:
         return {
             CONF_DEVICE_GROUP: "handhelds",
-            CONF_DEFAULT_PAGE_SIZE: DEFAULT_PAGE_SIZE,
             CONF_NATIVE_BLE_TRACKING: True,
             CONF_BLE_AUTO_SWITCH: True,
             CONF_SYNC_DEVICE_AREA: True,
             CONF_AREA_HANDOFF: DEFAULT_AREA_HANDOFF,
             CONF_DEFAULT_AREA: "",
             "dock_apps": DEFAULT_DOCK_APPS,
+            CONF_AREA_CATEGORIES: DEFAULT_AREA_CATEGORIES,
         }
 
     return {
         CONF_DEVICE_GROUP: DEFAULT_DEVICE_GROUP,
-        CONF_DEFAULT_PAGE_SIZE: DEFAULT_PAGE_SIZE,
         CONF_NATIVE_BLE_TRACKING: has_ble_beacon,
         CONF_BLE_AUTO_SWITCH: has_ble_beacon,
         CONF_SYNC_DEVICE_AREA: has_ble_beacon,

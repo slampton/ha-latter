@@ -14,8 +14,12 @@ from typing import Any
 import unicodedata
 
 from .studio.settings import (
+    AREA_CATEGORY_TOKENS,
+    DEFAULT_AREA_CATEGORIES,
     DEVICE_PREF_SPEC_MAP,
     DEVICE_PREF_SPECS,
+    normalize_area_categories,
+    parse_area_categories,
     resolve_device_pref_value,
 )
 
@@ -284,9 +288,9 @@ def pack_device_prefs_fields(
     custom_color_hex: str,
     is_round_display: bool = True,
 ) -> tuple[Any, ...]:
-    """Return the 48 ordered body fields (wire indices 3..50) for Protocol v3 `device_prefs`."""
+    """Return the 46 ordered body fields (wire indices 3..48) for Protocol v3 `device_prefs`."""
     core_values: list[Any] = []
-    for spec in DEVICE_PREF_SPECS[:43]:
+    for spec in DEVICE_PREF_SPECS[:41]:
         val = resolve_device_pref_value(cfg, spec.key)
         if spec.key == "clock_face" and not is_round_display and val == "Modern Roman (Analog)":
             val = "Minimal Digital"
@@ -361,6 +365,14 @@ ACTIVITY_SOURCE_KEYS: tuple[str, ...] = (
     "stopwatch",
     "alarms",
     "timers",
+)
+
+
+__all_area_categories__ = (
+    AREA_CATEGORY_TOKENS,
+    DEFAULT_AREA_CATEGORIES,
+    parse_area_categories,
+    normalize_area_categories,
 )
 
 

@@ -70,7 +70,7 @@ class TestProtocolV3Contract(unittest.TestCase):
             "remote_config": 3,
             "weather_forecast": 14,
             "calendar_agenda": 3,
-            "device_prefs": 48,
+            "device_prefs": 46,
         }
         domains = self.schema.get("domains", {})
         self.assertEqual(set(domains.keys()), set(expected_counts.keys()))
@@ -918,7 +918,7 @@ class TestResetPolicy(unittest.TestCase):
     }
     DEFAULTS: ClassVar[dict[str, Any]] = {
         "device_group": "wall_panels",
-        "default_page_size": 3,
+        "area_categories": "scene,light,cover,fan,switch,climate,media",
         "native_ble_tracking": False,
         "ble_auto_switch": False,
         "sync_device_area": False,
@@ -1044,6 +1044,24 @@ class TestDevicePrefsProtocol(unittest.TestCase):
         )
         self.assertEqual(flipped["tap_to_wake"], "Disabled")
         self.assertEqual(flipped["power_profile"], "Custom")
+
+    def test_area_categories_parse_and_normalize(self) -> None:
+        self.assertEqual(_PAYLOADS_MOD.parse_area_categories(None), [])
+        self.assertEqual(
+            _PAYLOADS_MOD.parse_area_categories(_PAYLOADS_MOD.DEFAULT_AREA_CATEGORIES),
+            ["scene", "light", "cover", "fan", "switch", "climate", "media"],
+        )
+        self.assertEqual(
+            _PAYLOADS_MOD.parse_area_categories("media, light, bogus, media, all"),
+            ["media", "light", "all"],
+        )
+        self.assertEqual(
+            _PAYLOADS_MOD.normalize_area_categories(" Media , light , media , ALL "),
+            "media,light,all",
+        )
+        for bad in ("", "   ", "bogus", "light,bogus"):
+            with self.assertRaises(ValueError):
+                _PAYLOADS_MOD.normalize_area_categories(bad)
 
 
 class TestBoundRpcReassembler(unittest.TestCase):

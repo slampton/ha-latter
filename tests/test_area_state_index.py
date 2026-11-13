@@ -259,8 +259,37 @@ async def test_context_builder_curated_entities_and_area_actions(
 
     all_lr = get_area_entities(hass, "living_room", "all", coord.local_speaker)
     avail = get_area_available_domains(hass, "living_room", coord.local_speaker, all_lr)
-    for dom_tag in ("scene", "light", "cover", "fan", "switch", "media", "climate"):
-        assert dom_tag in avail
+    assert avail == "scene,light,cover,fan,switch,climate,media"
+    assert (
+        get_area_available_domains(
+            hass,
+            "living_room",
+            coord.local_speaker,
+            all_lr,
+            area_categories="media,light,all",
+        )
+        == "media,light,all"
+    )
+    assert (
+        get_area_available_domains(
+            hass,
+            "living_room",
+            coord.local_speaker,
+            all_lr,
+            area_categories="fan,scene",
+        )
+        == "fan,scene"
+    )
+    assert (
+        get_area_available_domains(
+            hass,
+            "living_room",
+            coord.local_speaker,
+            [],
+            area_categories="all,light",
+        )
+        == ""
+    )
 
     assert len(get_area_entities(hass, "living_room", "lights", coord.local_speaker)) == 1
     assert len(get_area_entities(hass, "living_room", "covers", coord.local_speaker)) == 1

@@ -526,7 +526,7 @@ function makeStore({ weatherBgState = "Dynamic", cycleMins = 0, activeId = "", f
         activity_card: true,
         wallpaper_cycle_minutes: cycleMins,
         display_shape: "square",
-        default_page_size: 3,
+        area_categories: "scene,light",
         device_remote_group: remoteMode,
       },
       capabilities: { is_roaming_device: true },
@@ -556,6 +556,7 @@ function makeStore({ weatherBgState = "Dynamic", cycleMins = 0, activeId = "", f
     },
     getEnabledActivitySources() { return ["calendar"]; },
     getEnabledDockTokens() { return ["area", "music"]; },
+    getEnabledAreaCategories() { return ["scene", "light"]; },
   };
 }
 
@@ -585,16 +586,16 @@ return { offMarkup, dispWeatherOff, staticMarkup, rotatingMarkup, powerMarkup, a
             ],
             runner,
         )
-        # 1. Display view (D-033): Col 1 Brightness -> Home Screen -> Clock -> Screensavers; Col 2 Colors -> Wallpapers -> Media Player -> Voice Assistant
+        # 1. Display view (D-034): Col 1 Home Screen -> Screensavers -> Voice Assistant -> Brightness -> Clock; Col 2 Colors -> Wallpapers -> Media Player
         display_cards = (
-            "Brightness",
             "Home Screen",
-            "Clock",
             "Screensavers",
+            "Voice Assistant",
+            "Brightness",
+            "Clock",
             "Colors",
             "Wallpapers",
             "Media Player",
-            "Voice Assistant",
         )
         for card_title in display_cards:
             self.assertIn(f'<h3 class="card-title">{card_title}</h3>', got["offMarkup"])
@@ -611,16 +612,19 @@ return { offMarkup, dispWeatherOff, staticMarkup, rotatingMarkup, powerMarkup, a
         self.assertIn("+ Moon", got["offMarkup"])
         self.assertLess(got["offMarkup"].index("✓ Sun"), got["offMarkup"].index("+ Moon"))
         self.assertNotIn("id=weather-celestial-bodies", got["dispWeatherOff"])
+        self.assertLess(got["offMarkup"].index("id=weather-celestial-bodies"), got["offMarkup"].index('<h3 class="card-title">Screensavers</h3>'))
+        self.assertLess(got["offMarkup"].index('<h3 class="card-title">Screensavers</h3>'), got["offMarkup"].index('<h3 class="card-title">Voice Assistant</h3>'))
+        self.assertLess(got["offMarkup"].index('<h3 class="card-title">Voice Assistant</h3>'), got["offMarkup"].index("Visual Profile"))
+        self.assertLess(got["offMarkup"].index("Visual Profile"), got["offMarkup"].index('<h3 class="card-title">Brightness</h3>'))
+        self.assertLess(got["offMarkup"].index('<h3 class="card-title">Brightness</h3>'), got["offMarkup"].index('<h3 class="card-title">Clock</h3>'))
         self.assertLess(got["offMarkup"].index('<h3 class="card-title">Clock</h3>'), got["offMarkup"].index("Clock Face"))
         self.assertLess(got["offMarkup"].index("Clock Face"), got["offMarkup"].index("Time Format"))
-        self.assertLess(got["offMarkup"].index("Time Format"), got["offMarkup"].index('<h3 class="card-title">Screensavers</h3>'))
+        self.assertLess(got["offMarkup"].index("Time Format"), got["offMarkup"].index('<h3 class="card-title">Colors</h3>'))
         self.assertLess(got["offMarkup"].index('<h3 class="card-title">Colors</h3>'), got["offMarkup"].index("Color Profile"))
         self.assertLess(got["offMarkup"].index("Color Profile"), got["offMarkup"].index("Custom Color"))
         self.assertLess(got["offMarkup"].index("Custom Color"), got["offMarkup"].index('<h3 class="card-title">Wallpapers</h3>'))
         self.assertLess(got["offMarkup"].index('<h3 class="card-title">Media Player</h3>'), got["offMarkup"].index("Album Art Style"))
         self.assertLess(got["offMarkup"].index("Album Art Style"), got["offMarkup"].index("Overlay Style"))
-        self.assertLess(got["offMarkup"].index("Overlay Style"), got["offMarkup"].index('<h3 class="card-title">Voice Assistant</h3>'))
-        self.assertLess(got["offMarkup"].index('<h3 class="card-title">Voice Assistant</h3>'), got["offMarkup"].index("Visual Profile"))
         self.assertNotIn("Wake Screen on Assist", got["offMarkup"])
         self.assertIn("Wake Screen on Assist", got["audioMarkup"])
         self.assertNotIn("Visual Profile", got["audioMarkup"])
@@ -642,9 +646,18 @@ return { offMarkup, dispWeatherOff, staticMarkup, rotatingMarkup, powerMarkup, a
         for saver_label in ("Docked Screensaver", "Screensaver Style", "Docked Idle Timeout"):
             self.assertNotIn(saver_label, got["powerMarkup"])
 
-        # 2. Interface view (D-033): navigation & structure only (Start Screen, Dock Apps, uncollapsed Library Sorting, Remote Control Group)
+        # 2. Interface view (D-033/D-034): navigation & structure only (Start Screen, Dock Apps, Area Categories pills, uncollapsed Library Sorting, Remote Control Group)
         self.assertIn("Start Screen", got["ifaceMarkup"])
         self.assertIn('id="dock-pills-container"', got["ifaceMarkup"])
+        self.assertIn('id="area-categories-pills"', got["ifaceMarkup"])
+        self.assertIn("✓ Scenes", got["ifaceMarkup"])
+        self.assertIn("✓ Lights", got["ifaceMarkup"])
+        self.assertIn("+ All Devices", got["ifaceMarkup"])
+        self.assertIn("categories with no entities in the active Area are not displayed", got["ifaceMarkup"])
+        self.assertNotIn("Area Cards Per Page", got["ifaceMarkup"])
+        self.assertNotIn("cfg-default_page_size", got["ifaceMarkup"])
+        self.assertNotIn("Default Category", got["ifaceMarkup"])
+        self.assertNotIn("Show All Category", got["ifaceMarkup"])
         for display_only_label in (
             "Clock Face",
             "Time Format",

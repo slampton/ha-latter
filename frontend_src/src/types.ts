@@ -207,7 +207,6 @@ export interface DeviceConfig {
   display_shape?: "circle" | "square" | string;
   device_group?: string;
   device_remote_group?: string;
-  default_page_size?: number;
   default_speaker?: string;
   ma_player_entity?: string;
   default_area?: string;
@@ -221,6 +220,7 @@ export interface DeviceConfig {
   area_handoff?: boolean;
   device_custom_color?: string;
   dock_apps?: string;
+  area_categories?: string;
   activity_card?: boolean;
   activity_sources?: string;
   wallpaper_cycle_minutes?: number;

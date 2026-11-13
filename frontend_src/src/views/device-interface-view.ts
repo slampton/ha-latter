@@ -1,8 +1,8 @@
 /**
- * Device Interface View (`interface`, D-026 / D-028 / D-030 / D-033):
+ * Device Interface View (`interface`, D-026 / D-028 / D-030 / D-033 / D-034):
  * Navigation, screen structure & content routing preferences.
  * Column 1: Home Screen (Start Screen & Dock Apps) & Activity Card.
- * Column 2: Area Controls, Media Player (Shortcuts & Library Sorting) & Remote Controls.
+ * Column 2: Area Controls (Area Categories pills), Media Player (Shortcuts & Library Sorting) & Remote Controls.
  */
 
 import {
@@ -13,6 +13,7 @@ import {
 } from "../components/controls.js";
 import {
   ACTIVITY_SOURCES_CATALOG,
+  AREA_CATEGORIES_CATALOG,
   DOCK_APPS_CATALOG,
 } from "../constants.js";
 import { html, nothing, type TemplateResult } from "../lib/lit.js";
@@ -35,10 +36,12 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
     ["start screen"],
   );
 
-  const areaOrder = ["default category", "show all category"];
-  const areaEspItems = sortEntitiesByKeywords(
-    store.getSectionItems("area").filter((it) => !(it.name || "").toLowerCase().includes("ble")),
-    areaOrder,
+  const areaExtraItems = store
+    .getSectionItems("area")
+    .filter((it) => !(it.name || "").toLowerCase().includes("ble"));
+  const enabledAreaCats = store.getEnabledAreaCategories();
+  const disabledAreaCats = AREA_CATEGORIES_CATALOG.filter(
+    (c) => !enabledAreaCats.includes(c.token),
   );
   const musicItems = store.getSectionItems("music");
   const isMediaShortcutSwitch = (it: EspHomeEntityItem): boolean =>
@@ -209,22 +212,66 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
         ${renderCard({
           heading: html`<h3 class="card-title">Area Controls</h3>`,
           contentClass: "settings-list",
-          body: html`${renderSelectRow({
-              id: "cfg-default_page_size",
-              label: "Area Cards Per Page",
-              description: "Number of entity tiles shown per page in the Area screen.",
-              value: String(cfg.default_page_size ?? 3),
-              rawOptions: [2, 3, 4, 6, 8].map((n) => ({ value: String(n), label: `${n} cards` })),
-              onChange: (val) =>
-                store.stageDeviceSetting(
-                  "default_page_size",
-                  Number(val) || 3,
-                  "cfg-default_page_size",
-                ),
+          body: html`${renderSettingsRow({
+              label: "Area Categories",
+              description:
+                "Toggle and reorder categories shown in the Area screen. The first available category opens by default; categories with no entities in the active Area are not displayed.",
+              stacked: true,
+              control: html`<div
+                id="area-categories-pills"
+                class="pill-list"
+                role="group"
+                aria-label="Area categories"
+              >
+                ${enabledAreaCats.map((tok, idx) => {
+                  const meta = AREA_CATEGORIES_CATALOG.find((c) => c.token === tok);
+                  const lbl = meta ? meta.label : tok;
+                  return html`<span class="pill enabled">
+                    ${idx > 0
+                      ? html`<button
+                          type="button"
+                          aria-label=${`Move ${lbl} left`}
+                          @click=${() => store.moveAreaCategoryToken(tok, -1)}
+                          class="pill-move"
+                        >
+                          ‹
+                        </button>`
+                      : nothing}
+                    <button
+                      type="button"
+                      aria-pressed="true"
+                      @click=${() => store.toggleAreaCategoryToken(tok)}
+                      class="pill-toggle"
+                    >
+                      ✓ ${lbl}
+                    </button>
+                    ${idx < enabledAreaCats.length - 1
+                      ? html`<button
+                          type="button"
+                          aria-label=${`Move ${lbl} right`}
+                          @click=${() => store.moveAreaCategoryToken(tok, 1)}
+                          class="pill-move"
+                        >
+                          ›
+                        </button>`
+                      : nothing}
+                  </span>`;
+                })}
+                ${disabledAreaCats.map(
+                  (cat) => html`<span class="pill">
+                    <button
+                      type="button"
+                      aria-pressed="false"
+                      @click=${() => store.toggleAreaCategoryToken(cat.token)}
+                      class="pill-toggle"
+                    >
+                      + ${cat.label}
+                    </button>
+                  </span>`,
+                )}
+              </div>`,
             })}
-            <div id="embedded-area-ui" class="settings-list">
-              ${areaEspItems.map((it) => renderNativeControlRow(store, it))}
-            </div>`,
+            ${areaExtraItems.map((it) => renderNativeControlRow(store, it))}`,
         })}
 
         ${shortcutMusicItems.length || sortMusicItems.length || otherMusicNavItems.length

@@ -48,6 +48,7 @@ from .const import (
     CONF_ACTIVITY_CARD,
     CONF_ACTIVITY_SOURCES,
     CONF_ALARM_ENTITY,
+    CONF_AREA_CATEGORIES,
     CONF_AREA_FOLLOW_DWELL_S,
     CONF_AREA_HANDOFF,
     CONF_ASSIGNED_PERSON,
@@ -60,7 +61,6 @@ from .const import (
     CONF_CAMERA_ENTITY,
     CONF_CUSTOM_PALETTES,
     CONF_DEFAULT_AREA,
-    CONF_DEFAULT_PAGE_SIZE,
     CONF_DEFAULT_SPEAKER,
     CONF_DEVICE_CUSTOM_COLOR,
     CONF_DEVICE_GROUP,
@@ -89,18 +89,20 @@ from .const import (
     DATA_GLOBAL_CONFIG,
     DEFAULT_ACTIVITY_CARD,
     DEFAULT_ACTIVITY_SOURCES,
+    DEFAULT_AREA_CATEGORIES,
     DEFAULT_AREA_FOLLOW_DWELL_S,
     DEFAULT_AREA_HANDOFF,
     DEFAULT_ART_SIZE,
     DEFAULT_BLE_AUTO_SWITCH,
     DEFAULT_BLE_BEACON_UUID,
+    DEFAULT_CARD_SLOT_COUNT,
     DEFAULT_DEVICE_GROUP,
     DEFAULT_DEVICE_REMOTE_GROUP,
     DEFAULT_DISPLAY_SHAPE,
     DEFAULT_DOCK_APPS,
     DEFAULT_DOORBELL_NOISE_REDUCTION,
+    DEFAULT_LIST_SLOT_COUNT,
     DEFAULT_NATIVE_BLE_TRACKING,
-    DEFAULT_PAGE_SIZE,
     DEFAULT_SECURITY_PIN_POLICY,
     DEFAULT_SITE_ID,
     DEFAULT_SYNC_DEVICE_AREA,
@@ -164,6 +166,7 @@ from .protocol import (
     V3Records,
     effective_security_pin_policy,
     normalize_activity_sources,
+    normalize_area_categories,
     normalize_security_pin_policy,
     pack_device_prefs_fields,
     parse_dirty_prefs_records,
@@ -785,14 +788,35 @@ class LatterCoordinator:
         return hw_shape if hw_shape in ("circle", "square") else DEFAULT_DISPLAY_SHAPE
 
     @property
-    def default_page_size(self) -> int:
-        return max(
-            1, min(20, int(self.get_opt(CONF_DEFAULT_PAGE_SIZE, DEFAULT_PAGE_SIZE)))
-        )
+    def list_slot_capacity(self) -> int:
+        try:
+            raw = self.hardware_manifest.get("slot_count")
+            val = int(raw) if raw is not None else DEFAULT_LIST_SLOT_COUNT
+        except (TypeError, ValueError):
+            val = DEFAULT_LIST_SLOT_COUNT
+        return max(1, min(20, val))
+
+    @property
+    def card_slot_capacity(self) -> int:
+        try:
+            raw = self.hardware_manifest.get("card_slot_count")
+            val = int(raw) if raw is not None else DEFAULT_CARD_SLOT_COUNT
+        except (TypeError, ValueError):
+            val = DEFAULT_CARD_SLOT_COUNT
+        return max(1, min(20, val))
 
     @property
     def dock_apps_csv(self) -> str:
         return str(self.get_opt(CONF_DOCK_APPS, DEFAULT_DOCK_APPS)).strip()
+
+    @property
+    def area_categories_csv(self) -> str:
+        try:
+            return normalize_area_categories(
+                self.get_opt(CONF_AREA_CATEGORIES, DEFAULT_AREA_CATEGORIES)
+            )
+        except ValueError:
+            return DEFAULT_AREA_CATEGORIES
 
     @property
     def activity_card_enabled(self) -> bool:

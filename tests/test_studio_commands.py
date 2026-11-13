@@ -39,7 +39,7 @@ async def test_studio_rev_mismatch_on_all_read_and_mutation_endpoints(
     hass: Any, setup_latter_hub: Any
 ) -> None:
     """Verify studio_rev mismatch rejects BOTH read (get_state, subscribe) and mutation WS commands."""
-    assert STUDIO_REV == 6
+    assert STUDIO_REV == 7
     entry, _sys_obj, coord = await setup_latter_hub(hass)
     from homeassistant.helpers import area_registry as ar
 
@@ -396,7 +396,7 @@ async def test_studio_commands_security_pin_secrecy_groups_and_backup_restore(
     )
     await _sys_cmd(
         "set_group_device_setting",
-        {"group_id": "guest_suites", "config": {"default_page_size": 4}},
+        {"group_id": "guest_suites", "config": {"area_categories": "light,scene,all"}},
     )
     await _sys_cmd(
         "sync_device_group",

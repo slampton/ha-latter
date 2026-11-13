@@ -675,7 +675,7 @@ class LitElement extends HTMLElement {
 /**
  * Canonical constants, route maps, issue messages, and Title Case dictionaries for Latter Studio.
  */
-const STUDIO_REV = 6;
+const STUDIO_REV = 7;
 const MAX_WALLPAPER_UPLOAD_BYTES = 15 * 1024 * 1024;
 const DEVICE_VIEW_SLUGS = {
   dashboard: "overview",
@@ -732,6 +732,26 @@ const DOCK_APPS_CATALOG = [
   {token: "camera", label: "Cameras"},
   {token: "games", label: "Games"},
   {token: "tools", label: "Tools"},
+];
+// Canonical 8 Area Category tokens (`protocol.py` AREA_CATEGORY_TOKENS).
+const AREA_CATEGORIES_CATALOG = [
+  { token: "scene", label: "Scenes" },
+  { token: "light", label: "Lights" },
+  { token: "cover", label: "Blinds & Curtains" },
+  { token: "fan", label: "Fans" },
+  { token: "switch", label: "Switches" },
+  { token: "climate", label: "Climate" },
+  { token: "media", label: "Media" },
+  { token: "all", label: "All Devices" },
+];
+const DEFAULT_AREA_CATEGORIES_TOKENS = [
+  "scene",
+  "light",
+  "cover",
+  "fan",
+  "switch",
+  "climate",
+  "media",
 ];
 // Canonical 5 Activity Card source keys (`protocol.py` ACTIVITY_SOURCE_KEYS).
 const ACTIVITY_SOURCES_CATALOG = [
@@ -3126,6 +3146,41 @@ function moveDockAppTokenOp(store, appId, delta) {
   current.splice(nextIdx, 0, moved);
   store.stageDeviceSetting("dock_apps", current.join(","));
 }
+function getEnabledAreaCategoriesOp(store) {
+  const raw = String(store.state?.config?.area_categories ?? "");
+  if (!raw.trim()) {
+    return [...DEFAULT_AREA_CATEGORIES_TOKENS];
+  }
+  const known = new Set(AREA_CATEGORIES_CATALOG.map((c) => c.token));
+  const parsed = raw
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter((s, i, arr) => Boolean(s) && known.has(s) && arr.indexOf(s) === i);
+  return parsed.length > 0 ? parsed : [...DEFAULT_AREA_CATEGORIES_TOKENS];
+}
+function toggleAreaCategoryTokenOp(store, token) {
+  const current = getEnabledAreaCategoriesOp(store);
+  const idx = current.indexOf(token);
+  if (idx >= 0) {
+    if (current.length <= 1) {
+      store.showToast("Keep at least one Area category enabled", true);
+      return;
+    }
+    current.splice(idx, 1);
+  } else {
+    current.push(token);
+  }
+  store.stageDeviceSetting("area_categories", current.join(","));
+}
+function moveAreaCategoryTokenOp(store, token, delta) {
+  const current = getEnabledAreaCategoriesOp(store);
+  const idx = current.indexOf(token);
+  const nextIdx = idx + delta;
+  if (idx < 0 || nextIdx < 0 || nextIdx >= current.length) return;
+  const [moved] = current.splice(idx, 1);
+  current.splice(nextIdx, 0, moved);
+  store.stageDeviceSetting("area_categories", current.join(","));
+}
 function getEnabledActivitySourcesOp(store) {
   const rawCfg = store.state?.config?.activity_sources;
   if (rawCfg === undefined || rawCfg === null) {
@@ -4459,6 +4514,15 @@ class StudioStore {
   }
   moveDockAppToken(appId, delta) {
     moveDockAppTokenOp(this, appId, delta);
+  }
+  getEnabledAreaCategories() {
+    return getEnabledAreaCategoriesOp(this);
+  }
+  toggleAreaCategoryToken(token) {
+    toggleAreaCategoryTokenOp(this, token);
+  }
+  moveAreaCategoryToken(token, delta) {
+    moveAreaCategoryTokenOp(this, token, delta);
   }
   getEnabledActivitySources() {
     return getEnabledActivitySourcesOp(this);
@@ -6038,10 +6102,10 @@ function renderWallpaperUploadProgress(
 
 // --- src/views/device-display-view.ts ---
 /**
- * Device Display View (`display`, D-027 / D-029 / D-033):
+ * Device Display View (`display`, D-027 / D-029 / D-033 / D-034):
  * Visual & aesthetic preferences across screens.
- * Column 1: Brightness, Home Screen (Wake Greeting, Weather Background & Sun & Moon), Clock & Screensavers.
- * Column 2: Colors, Wallpapers, Media Player (Album Art & Overlay Style) & Voice Assistant (Visual Profile).
+ * Column 1: Home Screen (Wake Greeting, Weather Background & Sun & Moon), Screensavers, Voice Assistant (Visual Profile), Brightness & Clock.
+ * Column 2: Colors, Wallpapers & Media Player (Album Art & Overlay Style).
  */
 function sortEntitiesByKeywords(
   items,
@@ -6247,14 +6311,6 @@ function renderDeviceDisplayView(store) {
   return html`<section id="view-display">
     <div class="columns">
       <div class="column">
-        ${visibleBrightnessItems.length
-          ? renderCard({
-              heading: html`<h3 class="card-title">Brightness</h3>`,
-              contentClass: "settings-list",
-              body: visibleBrightnessItems.map((it) => renderNativeControlRow(store, it)),
-            })
-          : nothing}
-
         ${visibleHomeItems.length || (!weatherBgOff && celestialItems.length > 0)
           ? renderCard({
               heading: html`<h3 class="card-title">Home Screen</h3>`,
@@ -6274,14 +6330,6 @@ function renderDeviceDisplayView(store) {
                   ? renderCelestialRow()
                   : nothing}
               </div>`,
-            })
-          : nothing}
-
-        ${clockItems.length
-          ? renderCard({
-              heading: html`<h3 class="card-title">Clock</h3>`,
-              contentClass: "settings-list",
-              body: clockItems.map((it) => renderNativeControlRow(store, it)),
             })
           : nothing}
 
@@ -6321,6 +6369,30 @@ function renderDeviceDisplayView(store) {
                       </button>`,
                     })
                   : nothing}`,
+            })
+          : nothing}
+
+        ${voiceVisualItems.length
+          ? renderCard({
+              heading: html`<h3 class="card-title">Voice Assistant</h3>`,
+              contentClass: "settings-list",
+              body: voiceVisualItems.map((it) => renderNativeControlRow(store, it)),
+            })
+          : nothing}
+
+        ${visibleBrightnessItems.length
+          ? renderCard({
+              heading: html`<h3 class="card-title">Brightness</h3>`,
+              contentClass: "settings-list",
+              body: visibleBrightnessItems.map((it) => renderNativeControlRow(store, it)),
+            })
+          : nothing}
+
+        ${clockItems.length
+          ? renderCard({
+              heading: html`<h3 class="card-title">Clock</h3>`,
+              contentClass: "settings-list",
+              body: clockItems.map((it) => renderNativeControlRow(store, it)),
             })
           : nothing}
       </div>
@@ -6486,14 +6558,6 @@ function renderDeviceDisplayView(store) {
               body: mediaAppearanceItems.map((it) => renderNativeControlRow(store, it)),
             })
           : nothing}
-
-        ${voiceVisualItems.length
-          ? renderCard({
-              heading: html`<h3 class="card-title">Voice Assistant</h3>`,
-              contentClass: "settings-list",
-              body: voiceVisualItems.map((it) => renderNativeControlRow(store, it)),
-            })
-          : nothing}
       </div>
     </div>
   </section>`;
@@ -6644,10 +6708,10 @@ function renderDeviceAudioView(store) {
 
 // --- src/views/device-interface-view.ts ---
 /**
- * Device Interface View (`interface`, D-026 / D-028 / D-030 / D-033):
+ * Device Interface View (`interface`, D-026 / D-028 / D-030 / D-033 / D-034):
  * Navigation, screen structure & content routing preferences.
  * Column 1: Home Screen (Start Screen & Dock Apps) & Activity Card.
- * Column 2: Area Controls, Media Player (Shortcuts & Library Sorting) & Remote Controls.
+ * Column 2: Area Controls (Area Categories pills), Media Player (Shortcuts & Library Sorting) & Remote Controls.
  */
 function renderDeviceInterfaceView(store) {
   const data = store.state;
@@ -6657,10 +6721,12 @@ function renderDeviceInterfaceView(store) {
     store.getSectionItems("display").filter(isInterfaceDisplayEntity),
     ["start screen"],
   );
-  const areaOrder = ["default category", "show all category"];
-  const areaEspItems = sortEntitiesByKeywords(
-    store.getSectionItems("area").filter((it) => !(it.name || "").toLowerCase().includes("ble")),
-    areaOrder,
+  const areaExtraItems = store
+    .getSectionItems("area")
+    .filter((it) => !(it.name || "").toLowerCase().includes("ble"));
+  const enabledAreaCats = store.getEnabledAreaCategories();
+  const disabledAreaCats = AREA_CATEGORIES_CATALOG.filter(
+    (c) => !enabledAreaCats.includes(c.token),
   );
   const musicItems = store.getSectionItems("music");
   const isMediaShortcutSwitch = (it) =>
@@ -6828,22 +6894,66 @@ function renderDeviceInterfaceView(store) {
         ${renderCard({
           heading: html`<h3 class="card-title">Area Controls</h3>`,
           contentClass: "settings-list",
-          body: html`${renderSelectRow({
-              id: "cfg-default_page_size",
-              label: "Area Cards Per Page",
-              description: "Number of entity tiles shown per page in the Area screen.",
-              value: String(cfg.default_page_size ?? 3),
-              rawOptions: [2, 3, 4, 6, 8].map((n) => ({ value: String(n), label: `${n} cards` })),
-              onChange: (val) =>
-                store.stageDeviceSetting(
-                  "default_page_size",
-                  Number(val) || 3,
-                  "cfg-default_page_size",
-                ),
+          body: html`${renderSettingsRow({
+              label: "Area Categories",
+              description:
+                "Toggle and reorder categories shown in the Area screen. The first available category opens by default; categories with no entities in the active Area are not displayed.",
+              stacked: true,
+              control: html`<div
+                id="area-categories-pills"
+                class="pill-list"
+                role="group"
+                aria-label="Area categories"
+              >
+                ${enabledAreaCats.map((tok, idx) => {
+                  const meta = AREA_CATEGORIES_CATALOG.find((c) => c.token === tok);
+                  const lbl = meta ? meta.label : tok;
+                  return html`<span class="pill enabled">
+                    ${idx > 0
+                      ? html`<button
+                          type="button"
+                          aria-label=${`Move ${lbl} left`}
+                          @click=${() => store.moveAreaCategoryToken(tok, -1)}
+                          class="pill-move"
+                        >
+                          ‹
+                        </button>`
+                      : nothing}
+                    <button
+                      type="button"
+                      aria-pressed="true"
+                      @click=${() => store.toggleAreaCategoryToken(tok)}
+                      class="pill-toggle"
+                    >
+                      ✓ ${lbl}
+                    </button>
+                    ${idx < enabledAreaCats.length - 1
+                      ? html`<button
+                          type="button"
+                          aria-label=${`Move ${lbl} right`}
+                          @click=${() => store.moveAreaCategoryToken(tok, 1)}
+                          class="pill-move"
+                        >
+                          ›
+                        </button>`
+                      : nothing}
+                  </span>`;
+                })}
+                ${disabledAreaCats.map(
+                  (cat) => html`<span class="pill">
+                    <button
+                      type="button"
+                      aria-pressed="false"
+                      @click=${() => store.toggleAreaCategoryToken(cat.token)}
+                      class="pill-toggle"
+                    >
+                      + ${cat.label}
+                    </button>
+                  </span>`,
+                )}
+              </div>`,
             })}
-            <div id="embedded-area-ui" class="settings-list">
-              ${areaEspItems.map((it) => renderNativeControlRow(store, it))}
-            </div>`,
+            ${areaExtraItems.map((it) => renderNativeControlRow(store, it))}`,
         })}
 
         ${shortcutMusicItems.length || sortMusicItems.length || otherMusicNavItems.length

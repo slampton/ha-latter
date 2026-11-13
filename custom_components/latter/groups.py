@@ -16,11 +16,11 @@ from homeassistant.util import slugify
 from .const import (
     CONF_ACTIVITY_CARD,
     CONF_ACTIVITY_SOURCES,
+    CONF_AREA_CATEGORIES,
     CONF_AREA_FOLLOW_DWELL_S,
     CONF_AREA_HANDOFF,
     CONF_BLE_AUTO_SWITCH,
     CONF_BLE_TARGET_ADDRESS,
-    CONF_DEFAULT_PAGE_SIZE,
     CONF_DEVICE_CUSTOM_COLOR,
     CONF_DEVICE_GROUPS,
     CONF_DOCK_APPS,
@@ -645,8 +645,8 @@ GROUP_BEHAVIOR_DEVICE_KEYS: tuple[str, ...] = (
 
 # Tier 3: Personal & Area Appearance/Layout keys preserved per-device on group join/sync.
 GROUP_APPEARANCE_DEVICE_KEYS: tuple[str, ...] = (
-    CONF_DEFAULT_PAGE_SIZE,
     CONF_DOCK_APPS,
+    CONF_AREA_CATEGORIES,
     CONF_ACTIVITY_CARD,
     CONF_ACTIVITY_SOURCES,
     CONF_WALLPAPER_SOURCE,
@@ -665,9 +665,6 @@ APPEARANCE_ESPHOME_CONTROL_KEYS: frozenset[str] = frozenset(
         "select:start_screen",
         "select:screensaver_style",
         "select:visual_profile",
-        "select:default_category",
-        "switch:show_all_category",
-        "switch:show_all_in_category",
         "switch:weather_background",
         "switch:sun",
         "switch:moon",

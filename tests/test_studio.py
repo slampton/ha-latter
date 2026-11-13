@@ -157,14 +157,14 @@ class TestViewLayout(unittest.TestCase):
         for title in ("Whole-Home Entities", "Calendars", "Cameras &amp; Doorbell Audio", "Custom Colors", "Wallpapers"):
             self.assertIn(f'<h3 class="card-title">{title}</h3>', shared_entities)
         display_order = (
-            "Brightness",
             "Home Screen",
-            "Clock",
             "Screensavers",
+            "Voice Assistant",
+            "Brightness",
+            "Clock",
             "Colors",
             "Wallpapers",
             "Media Player",
-            "Voice Assistant",
         )
         for title in display_order:
             self.assertIn(f'<h3 class="card-title">{title}</h3>', display_view)
@@ -249,7 +249,8 @@ class TestViewLayout(unittest.TestCase):
         )
         js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
         self.assertIn('["wake greeting", "weather background", "sun", "moon"]', js)
-        self.assertIn('["default category", "show all category"]', js)
+        self.assertNotIn("Area Cards Per Page", js)
+        self.assertNotIn("cfg-default_page_size", js)
         disp_fn_start = js.index("function renderDeviceDisplayView(")
         disp_view = js[disp_fn_start:js.index("</section>", disp_fn_start)]
         self.assertIn('<h3 class="card-title">Home Screen</h3>', disp_view)
@@ -263,7 +264,8 @@ class TestViewLayout(unittest.TestCase):
         self.assertIn('<h3 class="card-title">Area Controls</h3>', view)
         self.assertIn('<h3 class="card-title">Remote Controls</h3>', view)
         self.assertIn('id="dock-pills-container"', view)
-        self.assertIn('id="embedded-area-ui"', view)
+        self.assertIn('id="area-categories-pills"', view)
+        self.assertNotIn('id="embedded-area-ui"', view)
         self.assertNotIn('id="embedded-home"', view)
 
     def test_sidebar_icon_module(self) -> None:
@@ -535,11 +537,21 @@ class TestSaveScopes(unittest.TestCase):
 
     def test_device_save_normalizes_and_validates(self) -> None:
         out = settings.clean_device_settings(
-            {"default_page_size": "50", "wallpaper_cycle_minutes": -5, "area_handoff": 1, "assigned_person": " person.a "}
+            {
+                "area_categories": " Media , light , media , ALL ",
+                "wallpaper_cycle_minutes": -5,
+                "area_handoff": 1,
+                "assigned_person": " person.a ",
+            }
         )
         self.assertEqual(
             out,
-            {"default_page_size": 20, "wallpaper_cycle_minutes": 0, "area_handoff": True, "assigned_person": "person.a"},
+            {
+                "area_categories": "media,light,all",
+                "wallpaper_cycle_minutes": 0,
+                "area_handoff": True,
+                "assigned_person": "person.a",
+            },
         )
         self.assertEqual(settings.clean_device_settings({"device_custom_color": "#3898ff"}), {"device_custom_color": "#3898FF"})
         self.assertEqual(
@@ -555,7 +567,9 @@ class TestSaveScopes(unittest.TestCase):
         with self.assertRaises(settings.SettingsScopeError):
             settings.clean_device_settings({"device_custom_color": "red"})
         with self.assertRaises(settings.SettingsScopeError):
-            settings.clean_device_settings({"default_page_size": "many"})
+            settings.clean_device_settings({"area_categories": ""})
+        with self.assertRaises(settings.SettingsScopeError):
+            settings.clean_device_settings({"area_categories": "bogus"})
 
     def test_voice_follows_me_dwell_is_a_device_setting(self) -> None:
         self.assertIn("area_follow_dwell_s", settings.DEVICE_SETTING_KEYS)

@@ -268,16 +268,41 @@ CLOCK_FACE_OPTIONS: tuple[str, ...] = (
     "Modern Digital (Bold)",
 )
 TIME_FORMAT_OPTIONS: tuple[str, ...] = ("12-Hour (AM/PM)", "24-Hour")
-AREA_CATEGORY_OPTIONS: tuple[str, ...] = (
-    "Scenes",
-    "Lights",
-    "Blinds & Curtains",
-    "Fans",
-    "Switches",
-    "Climate",
-    "Media",
-    "All Devices",
+AREA_CATEGORY_TOKENS: tuple[str, ...] = (
+    "scene",
+    "light",
+    "cover",
+    "fan",
+    "switch",
+    "climate",
+    "media",
+    "all",
 )
+DEFAULT_AREA_CATEGORIES = "scene,light,cover,fan,switch,climate,media"
+
+
+def parse_area_categories(csv: str | None) -> list[str]:
+    """Return the known Area category tokens named in `csv`, in order, without duplicates."""
+    out: list[str] = []
+    for raw in str(csv or "").split(","):
+        tok = raw.strip().lower()
+        if tok in AREA_CATEGORY_TOKENS and tok not in out:
+            out.append(tok)
+    return out
+
+
+def normalize_area_categories(csv: str | None) -> str:
+    """Return `csv` as canonical comma-separated Area categories; raise ValueError if empty or unknown."""
+    names = [t.strip().lower() for t in str(csv or "").split(",") if t.strip()]
+    unknown = sorted({t for t in names if t not in AREA_CATEGORY_TOKENS})
+    if unknown:
+        raise ValueError(f"Unknown Area category: {', '.join(unknown)}")
+    cats = parse_area_categories(csv)
+    if not cats:
+        raise ValueError("Keep at least one Area category enabled")
+    return ",".join(cats)
+
+
 ALBUM_ART_STYLE_OPTIONS: tuple[str, ...] = (
     "Full Screen",
     "Letterbox",
@@ -356,8 +381,6 @@ DEVICE_PREF_SPECS: tuple[DevicePrefSpec, ...] = (
     DevicePrefSpec("home_sun", "Sun", "switch", True, "home", "display", "appearance"),
     DevicePrefSpec("home_moon", "Moon", "switch", True, "home", "display", "appearance"),
     DevicePrefSpec("wake_greeting", "Wake Greeting", "switch", True, "home", "display", "appearance"),
-    DevicePrefSpec("area_default_category", "Default Category", "select", "Scenes", "area", "display", "appearance", options=AREA_CATEGORY_OPTIONS),
-    DevicePrefSpec("area_show_all_category", "Show All Category", "switch", False, "area", "display", "appearance"),
     DevicePrefSpec("album_art_style", "Album Art Style", "select", "Full Screen", "music", "display", "appearance", options=ALBUM_ART_STYLE_OPTIONS),
     DevicePrefSpec("music_overlay_style", "Overlay Style", "select", "Art + Metadata", "music", "display", "appearance", options=MUSIC_OVERLAY_STYLE_OPTIONS),
     DevicePrefSpec("show_speaker_shortcut", "Show Speaker Shortcut", "switch", True, "music", "display", "appearance"),
@@ -475,6 +498,7 @@ DEVICE_TEXT_KEYS: tuple[str, ...] = (
     "ble_target_address",
     "assigned_person",
     "dock_apps",
+    "area_categories",
     "activity_sources",
     "security_pin_policy",
 )
@@ -488,7 +512,6 @@ DEVICE_BOOL_KEYS: tuple[str, ...] = (
 DEVICE_SETTING_KEYS: tuple[str, ...] = (
     *DEVICE_TEXT_KEYS,
     *DEVICE_BOOL_KEYS,
-    "default_page_size",
     "wallpaper_cycle_minutes",
     "device_custom_color",
     "area_follow_dwell_s",
@@ -679,10 +702,6 @@ def clean_device_settings(
             else:
                 out[key] = bool(raw_b)
     try:
-        if "default_page_size" in incoming:
-            out["default_page_size"] = max(
-                1, min(20, int(incoming["default_page_size"]))
-            )
         if "wallpaper_cycle_minutes" in incoming:
             out["wallpaper_cycle_minutes"] = max(
                 0, int(incoming["wallpaper_cycle_minutes"])
@@ -693,6 +712,12 @@ def clean_device_settings(
             )
     except (TypeError, ValueError) as err:
         raise SettingsScopeError(f"Not a whole number: {err}") from None
+
+    if "area_categories" in out:
+        try:
+            out["area_categories"] = normalize_area_categories(out["area_categories"])
+        except ValueError as err:
+            raise SettingsScopeError(str(err)) from None
 
     for spec in DEVICE_PREF_SPECS:
         if spec.key not in incoming:

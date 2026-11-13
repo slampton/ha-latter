@@ -63,7 +63,9 @@ import {
   flushDeviceBucketOp,
   flushSystemSettingsOp,
   getEnabledActivitySourcesOp,
+  getEnabledAreaCategoriesOp,
   getEnabledDockTokensOp,
+  moveAreaCategoryTokenOp,
   moveDockAppTokenOp,
   overlayDevicePrefsOnSections,
   overlayPendingEntityStates,
@@ -81,6 +83,7 @@ import {
   stageSystemSettingOp,
   testDoorbellSpeakerOp,
   toggleActivitySourceOp,
+  toggleAreaCategoryTokenOp,
   toggleDockAppTokenOp,
   toggleRemoteInGroupOp,
   toggleWallpaperFavOp,
@@ -854,6 +857,18 @@ export class StudioStore implements ReactiveController {
 
   moveDockAppToken(appId: string, delta: -1 | 1): void {
     moveDockAppTokenOp(this, appId, delta);
+  }
+
+  getEnabledAreaCategories(): string[] {
+    return getEnabledAreaCategoriesOp(this);
+  }
+
+  toggleAreaCategoryToken(token: string): void {
+    toggleAreaCategoryTokenOp(this, token);
+  }
+
+  moveAreaCategoryToken(token: string, delta: -1 | 1): void {
+    moveAreaCategoryTokenOp(this, token, delta);
   }
 
   getEnabledActivitySources(): string[] {

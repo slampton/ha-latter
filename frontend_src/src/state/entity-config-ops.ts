@@ -4,7 +4,12 @@
  */
 
 import { formatWsError } from "../api/ws-client.js";
-import { ACTIVITY_SOURCES_CATALOG, DOCK_APPS_CATALOG } from "../constants.js";
+import {
+  ACTIVITY_SOURCES_CATALOG,
+  AREA_CATEGORIES_CATALOG,
+  DEFAULT_AREA_CATEGORIES_TOKENS,
+  DOCK_APPS_CATALOG,
+} from "../constants.js";
 import type {
   CustomPalette,
   DeviceConfig,
@@ -582,6 +587,44 @@ export function moveDockAppTokenOp(store: StudioStore, appId: string, delta: -1 
   const [moved] = current.splice(idx, 1);
   current.splice(nextIdx, 0, moved);
   store.stageDeviceSetting("dock_apps", current.join(","));
+}
+
+export function getEnabledAreaCategoriesOp(store: StudioStore): string[] {
+  const raw = String(store.state?.config?.area_categories ?? "");
+  if (!raw.trim()) {
+    return [...DEFAULT_AREA_CATEGORIES_TOKENS];
+  }
+  const known = new Set(AREA_CATEGORIES_CATALOG.map((c) => c.token));
+  const parsed = raw
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter((s, i, arr) => Boolean(s) && known.has(s) && arr.indexOf(s) === i);
+  return parsed.length > 0 ? parsed : [...DEFAULT_AREA_CATEGORIES_TOKENS];
+}
+
+export function toggleAreaCategoryTokenOp(store: StudioStore, token: string): void {
+  const current = getEnabledAreaCategoriesOp(store);
+  const idx = current.indexOf(token);
+  if (idx >= 0) {
+    if (current.length <= 1) {
+      store.showToast("Keep at least one Area category enabled", true);
+      return;
+    }
+    current.splice(idx, 1);
+  } else {
+    current.push(token);
+  }
+  store.stageDeviceSetting("area_categories", current.join(","));
+}
+
+export function moveAreaCategoryTokenOp(store: StudioStore, token: string, delta: -1 | 1): void {
+  const current = getEnabledAreaCategoriesOp(store);
+  const idx = current.indexOf(token);
+  const nextIdx = idx + delta;
+  if (idx < 0 || nextIdx < 0 || nextIdx >= current.length) return;
+  const [moved] = current.splice(idx, 1);
+  current.splice(nextIdx, 0, moved);
+  store.stageDeviceSetting("area_categories", current.join(","));
 }
 
 export function getEnabledActivitySourcesOp(store: StudioStore): string[] {

@@ -10,8 +10,8 @@ from homeassistant.const import Platform
 
 DOMAIN: Final = "latter"
 INTEGRATION_VERSION: Final = "3.0.0"
-STUDIO_REV: Final = 6
-MIN_FIRMWARE_SDK_REV: Final = 2026111203
+STUDIO_REV: Final = 7
+MIN_FIRMWARE_SDK_REV: Final = 2026111204
 PLATFORMS: Final[list[Platform]] = [
     Platform.SENSOR,
     Platform.BINARY_SENSOR,
@@ -32,7 +32,6 @@ DEVICE_SUBENTRY_TYPES: Final[tuple[str, ...]] = (SUBENTRY_DEVICE, SUBENTRY_BLE_T
 # Config & Options keys
 CONF_DEVICE_SLUG: Final = "device_slug"
 CONF_ESPHOME_DEVICE_ID: Final = "esphome_device_id"
-CONF_DEFAULT_PAGE_SIZE: Final = "default_page_size"
 CONF_WEATHER_ENTITY: Final = "weather_entity"
 CONF_ALARM_ENTITY: Final = "alarm_entity"
 CONF_CAMERA_ENTITY: Final = "camera_entity"
@@ -61,6 +60,7 @@ CONF_DEVICE_REMOTE_GROUP: Final = "device_remote_group"
 DEFAULT_DEVICE_REMOTE_GROUP: Final = "area_auto"
 CONF_CALENDAR_ENTITIES: Final = "calendar_entities"
 CONF_DOCK_APPS: Final = "dock_apps"
+CONF_AREA_CATEGORIES: Final = "area_categories"
 CONF_ACTIVITY_CARD: Final = "activity_card"
 CONF_ACTIVITY_SOURCES: Final = "activity_sources"
 CONF_WALLPAPER_SOURCE: Final = "wallpaper_source"
@@ -100,8 +100,6 @@ CONF_WEATHER_BACKGROUND: Final = "weather_background"
 CONF_HOME_SUN: Final = "home_sun"
 CONF_HOME_MOON: Final = "home_moon"
 CONF_WAKE_GREETING: Final = "wake_greeting"
-CONF_AREA_DEFAULT_CATEGORY: Final = "area_default_category"
-CONF_AREA_SHOW_ALL_CATEGORY: Final = "area_show_all_category"
 CONF_ALBUM_ART_STYLE: Final = "album_art_style"
 CONF_MUSIC_OVERLAY_STYLE: Final = "music_overlay_style"
 CONF_SHOW_SPEAKER_SHORTCUT: Final = "show_speaker_shortcut"
@@ -127,7 +125,8 @@ DEFAULT_DOORBELL_NOISE_REDUCTION: Final = "strong"
 DOORBELL_NOISE_REDUCTION_LEVELS: Final[tuple[str, ...]] = ("strong", "light", "off")
 # Used only until the Device reports its hardware manifest (screen shape and size live there)
 DEFAULT_DISPLAY_SHAPE: Final = "circle"
-DEFAULT_PAGE_SIZE: Final = 3
+DEFAULT_LIST_SLOT_COUNT: Final = 5
+DEFAULT_CARD_SLOT_COUNT: Final = 3
 DEFAULT_NATIVE_BLE_TRACKING: Final = True
 DEFAULT_BLE_BEACON_UUID: Final = "4C415454-4552-434F-5245-000000000220"
 DEFAULT_BLE_AUTO_SWITCH: Final = True
@@ -135,6 +134,7 @@ DEFAULT_SYNC_DEVICE_AREA: Final = True
 DEFAULT_AREA_FOLLOW_DWELL_S: Final = 10
 DEFAULT_AREA_HANDOFF: Final = False
 DEFAULT_DOCK_APPS: Final = "music,alarm,area,remote,games,tools"
+DEFAULT_AREA_CATEGORIES: Final = "scene,light,cover,fan,switch,climate,media"
 # Home Activity Card: protocol_v3.json defaults.activity_card / defaults.activity_sources (checked by the tests)
 DEFAULT_ACTIVITY_CARD: Final = True
 DEFAULT_ACTIVITY_SOURCES: Final = "calendar,music_queue,stopwatch,alarms,timers"

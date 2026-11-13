@@ -41,11 +41,13 @@ from .media_browse import is_music_assistant_player
 from .presence import get_ble_proxy_area_ids
 from .protocol import (
     CAMERAS_MAX_RECORDS,
+    DEFAULT_AREA_CATEGORIES,
     V3Records,
     activity_payload,
     camera_records,
     ha_value,
     intercom_target_records,
+    parse_area_categories,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -724,8 +726,9 @@ def get_area_available_domains(
     area_id: str | None,
     local_speaker: str = "",
     entities: list[dict[str, Any]] | None = None,
+    area_categories: str | None = None,
 ) -> str:
-    """Return comma-separated canonical area categories present in the active area."""
+    """Return comma-separated enabled Area categories present in the active Area, in configured order."""
     all_items = (
         entities
         if entities is not None
@@ -736,22 +739,26 @@ def get_area_available_domains(
             local_speaker=local_speaker,
         )
     )
+    if not all_items:
+        return ""
+    configured = parse_area_categories(area_categories) or list(
+        parse_area_categories(DEFAULT_AREA_CATEGORIES)
+    )
     present_types = {str(it.get("type") or "") for it in all_items}
     ordered: list[str] = []
-    if "scene" in present_types or "script" in present_types:
-        ordered.append("scene")
-    if "light" in present_types:
-        ordered.append("light")
-    if "cover" in present_types:
-        ordered.append("cover")
-    if "fan" in present_types:
-        ordered.append("fan")
-    if "switch" in present_types or "input_boolean" in present_types:
-        ordered.append("switch")
-    if "media_player" in present_types:
-        ordered.append("media")
-    if "climate" in present_types:
-        ordered.append("climate")
+    for tok in configured:
+        if tok == "scene" and ("scene" in present_types or "script" in present_types):
+            ordered.append("scene")
+        elif tok in ("light", "cover", "fan", "climate") and tok in present_types:
+            ordered.append(tok)
+        elif tok == "switch" and (
+            "switch" in present_types or "input_boolean" in present_types
+        ):
+            ordered.append("switch")
+        elif tok == "media" and "media_player" in present_types:
+            ordered.append("media")
+        elif tok == "all":
+            ordered.append("all")
     return ",".join(ordered)
 
 
@@ -1277,6 +1284,7 @@ def build_area_context_payload(coordinator: Any) -> tuple[str, dict[str, Any]]:
         area_id=eff_area_id or None,
         local_speaker=coordinator.local_speaker,
         entities=entities,
+        area_categories=coordinator.area_categories_csv,
     )
     lights_on = sum(1 for e in entities if e["type"] == "light" and e["active"])
     covers_open = sum(1 for e in entities if e["type"] == "cover" and e["active"])

@@ -31,6 +31,7 @@ import voluptuous as vol
 
 from .areas import (
     async_execute_area_action,
+    get_area_available_domains,
     get_area_entities,
     get_areas_summary,
     get_home_wide_entities,
@@ -218,7 +219,7 @@ async def async_push_browse_slots(
             hass, coord.esphome_device_id, "set_browse_slots"
         )
 
-    slot_capacity = 3 if include_levels else 5
+    slot_capacity = coord.card_slot_capacity if include_levels else coord.list_slot_capacity
     eff_page_size = max(1, min(slot_capacity, int(page_size)))
     total_items = len(items)
     total_pages = max(1, math.ceil(total_items / eff_page_size))
@@ -357,18 +358,33 @@ async def async_push_active_area_entities(
     """Push the active area's entity slots to esphome.<slug>_set_area_slots when the device is online."""
     if not _is_esphome_device_online(hass, coord):
         return
-    items = get_area_entities(
+    avail = get_area_available_domains(
         hass,
         area_id=coord.active_area_id,
-        domain_filter=coord.last_area_filter or "all",
         local_speaker=coord.local_speaker,
+        area_categories=coord.area_categories_csv,
+    )
+    avail_tokens = [t for t in avail.split(",") if t]
+    eff_filter = coord.last_area_filter
+    if not eff_filter or eff_filter not in avail_tokens:
+        eff_filter = avail_tokens[0] if avail_tokens else ""
+        coord.last_area_filter = eff_filter
+    items = (
+        get_area_entities(
+            hass,
+            area_id=coord.active_area_id,
+            domain_filter=eff_filter,
+            local_speaker=coord.local_speaker,
+        )
+        if eff_filter
+        else []
     )
     await async_push_browse_slots(
         hass=hass,
         coord=coord,
-        mode=f"area_{coord.last_area_filter or 'all'}",
+        mode=f"area_{eff_filter or 'empty'}",
         page=coord.last_area_page or 1,
-        page_size=coord.default_page_size,
+        page_size=coord.card_slot_capacity,
         items=items,
         preferred_suffix="set_area_slots",
     )
@@ -468,7 +484,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         req_id = int(data.get("req_id") or 0)
         mode = str(data.get("mode") or "speakers")
         page = int(data.get("page") or 1)
-        page_size = int(data.get("page_size") or 5)
+        page_size = int(data.get("page_size") or coord.list_slot_capacity)
         local_speaker = coord.local_speaker
         speaker = str(data.get("speaker") or coord.active_speaker or local_speaker)
         last_speaker = str(data.get("last_speaker") or coord.last_speaker or speaker)
@@ -517,20 +533,31 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         req_id = int(data.get("req_id") or 0)
         mode = str(data.get("mode") or "entities").strip().lower()
         page = int(data.get("page") or 1)
-        configured_ps = coord.default_page_size
-        default_ps = 5 if mode == "areas" else configured_ps
+        default_ps = coord.list_slot_capacity if mode == "areas" else coord.card_slot_capacity
         page_size = int(data.get("page_size") or default_ps)
         area_id = str(data.get("area_id") or coord.active_area_id or "")
-        domain_filter = str(data.get("domain_filter") or "all")
+        domain_filter = str(data.get("domain_filter") or "").strip()
         local_speaker = coord.local_speaker
 
-        if mode == "entities":
-            coord.last_area_filter = domain_filter
-            coord.last_area_page = page
         if area_id and area_id != coord.active_area_id:
             coord.async_set_active_area(
                 area_id, handoff_media=False, sync_device_registry=False
             )
+
+        eff_area_id = area_id or coord.active_area_id
+        if mode == "entities" and not domain_filter:
+            avail = get_area_available_domains(
+                hass,
+                area_id=eff_area_id,
+                local_speaker=local_speaker,
+                area_categories=coord.area_categories_csv,
+            )
+            avail_tokens = [t for t in avail.split(",") if t]
+            domain_filter = avail_tokens[0] if avail_tokens else ""
+
+        if mode == "entities":
+            coord.last_area_filter = domain_filter
+            coord.last_area_page = page
 
         if mode == "areas":
             items = get_areas_summary(
@@ -545,10 +572,13 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 configured_alarm_entity=coord.get_opt(CONF_ALARM_ENTITY),
             )
             slot_mode = "area_home"
+        elif not domain_filter:
+            items = []
+            slot_mode = "area_empty"
         else:
             items = get_area_entities(
                 hass,
-                area_id=area_id or coord.active_area_id,
+                area_id=eff_area_id,
                 domain_filter=domain_filter,
                 local_speaker=local_speaker,
             )
@@ -621,7 +651,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         req_id = int(data.get("req_id") or 0)
         days = int(data.get("days") or 30)
         page = int(data.get("page") or 1)
-        page_size = int(data.get("page_size") or 5)
+        page_size = int(data.get("page_size") or coord.list_slot_capacity)
 
         if days == 30:
             sys_obj = get_latter_system(hass)
@@ -901,7 +931,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 vol.Optional("req_id", default=0): vol.Coerce(int),
                 vol.Optional("mode", default="speakers"): cv.string,
                 vol.Optional("page", default=1): vol.Coerce(int),
-                vol.Optional("page_size", default=5): vol.Coerce(int),
+                vol.Optional("page_size"): vol.Coerce(int),
                 vol.Optional("search", default=""): cv.string,
                 vol.Optional("speaker"): cv.string,
                 vol.Optional("last_speaker"): cv.string,
@@ -921,7 +951,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 vol.Optional("req_id", default=0): vol.Coerce(int),
                 vol.Optional("mode", default="entities"): cv.string,
                 vol.Optional("area_id"): cv.string,
-                vol.Optional("domain_filter", default="all"): cv.string,
+                vol.Optional("domain_filter", default=""): cv.string,
                 vol.Optional("page", default=1): vol.Coerce(int),
                 vol.Optional("page_size"): vol.Coerce(int),
             }
@@ -952,7 +982,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 vol.Optional("req_id", default=0): vol.Coerce(int),
                 vol.Optional("days", default=30): vol.Coerce(int),
                 vol.Optional("page", default=1): vol.Coerce(int),
-                vol.Optional("page_size", default=5): vol.Coerce(int),
+                vol.Optional("page_size"): vol.Coerce(int),
             }
         ),
     )

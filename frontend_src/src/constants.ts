@@ -4,7 +4,7 @@
 
 import type { DeviceViewId, IssueItem, SecurityPinPolicy, StudioViewId, SystemViewId } from "./types.js";
 
-export const STUDIO_REV = 6;
+export const STUDIO_REV = 7;
 
 export const MAX_WALLPAPER_UPLOAD_BYTES = 15 * 1024 * 1024;
 
@@ -71,6 +71,28 @@ export const DOCK_APPS_CATALOG = [
   {token: "camera", label: "Cameras"},
   {token: "games", label: "Games"},
   {token: "tools", label: "Tools"},
+];
+
+// Canonical 8 Area Category tokens (`protocol.py` AREA_CATEGORY_TOKENS).
+export const AREA_CATEGORIES_CATALOG: ReadonlyArray<{ token: string; label: string }> = [
+  { token: "scene", label: "Scenes" },
+  { token: "light", label: "Lights" },
+  { token: "cover", label: "Blinds & Curtains" },
+  { token: "fan", label: "Fans" },
+  { token: "switch", label: "Switches" },
+  { token: "climate", label: "Climate" },
+  { token: "media", label: "Media" },
+  { token: "all", label: "All Devices" },
+];
+
+export const DEFAULT_AREA_CATEGORIES_TOKENS: ReadonlyArray<string> = [
+  "scene",
+  "light",
+  "cover",
+  "fan",
+  "switch",
+  "climate",
+  "media",
 ];
 
 // Canonical 5 Activity Card source keys (`protocol.py` ACTIVITY_SOURCE_KEYS).
