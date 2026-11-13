@@ -13,6 +13,12 @@ import secrets
 from typing import Any
 import unicodedata
 
+from .studio.settings import (
+    DEVICE_PREF_SPEC_MAP,
+    DEVICE_PREF_SPECS,
+    resolve_device_pref_value,
+)
+
 # ---------------------------------------------------------------------------
 # Protocol v3 Payload Packer & Record Formatters
 # ---------------------------------------------------------------------------
@@ -23,6 +29,7 @@ PROTOCOL_V3_DOMAINS: tuple[str, ...] = (
     "remote_config",
     "weather_forecast",
     "calendar_agenda",
+    "device_prefs",
 )
 
 FIELD_SEP = "\x1f"
@@ -262,11 +269,75 @@ class DomainPayloadPacker:
         return cur_rev, f"v3\x1f{self.epoch}\x1f{cur_rev}\x1f{body}"
 
     def force_republish_all_domains(self) -> None:
-        """Bump per-domain revisions across all 5 domains so a reconnected device receives a full snapshot."""
+        """Bump per-domain revisions across all 6 domains so a reconnected device receives a full snapshot."""
         for dom in PROTOCOL_V3_DOMAINS:
             self._domain_revs[dom] = max(1, self._domain_revs.get(dom, 1)) + 1
             self.rev = max(self.rev, self._domain_revs[dom])
         self._domain_hashes.clear()
+
+
+def pack_device_prefs_fields(
+    prefs_seq: int,
+    cfg: Mapping[str, Any],
+    *,
+    native_ble_tracking: bool,
+    custom_color_hex: str,
+    is_round_display: bool = True,
+) -> tuple[Any, ...]:
+    """Return the 48 ordered body fields (wire indices 3..50) for Protocol v3 `device_prefs`."""
+    core_values: list[Any] = []
+    for spec in DEVICE_PREF_SPECS[:43]:
+        val = resolve_device_pref_value(cfg, spec.key)
+        if spec.key == "clock_face" and not is_round_display and val == "Modern Roman (Analog)":
+            val = "Minimal Digital"
+        core_values.append(val)
+    ble_mode = resolve_device_pref_value(cfg, "ble_beacon_mode")
+    weather_sim = resolve_device_pref_value(cfg, "weather_sim_condition")
+    clean_hex = str(custom_color_hex or "").strip().upper()
+    return (
+        max(0, int(prefs_seq)),
+        *core_values,
+        bool(native_ble_tracking),
+        ble_mode,
+        weather_sim,
+        clean_hex,
+    )
+
+
+def parse_dirty_prefs_records(raw: str | None) -> dict[str, Any]:
+    """Parse 0x1E-delimited `key=val` preference records from `device_hello` or `set_device_prefs`."""
+    out: dict[str, Any] = {}
+    text = str(raw or "")
+    if not text:
+        return out
+    for rec in text.split(RECORD_SEP):
+        if "=" not in rec:
+            continue
+        raw_key, raw_val = rec.split("=", 1)
+        key = raw_key.strip()
+        val = raw_val.strip()
+        if key == "ble_beacon_enabled":
+            out["native_ble_tracking"] = val.lower() in ("1", "true", "on", "yes")
+            continue
+        spec = DEVICE_PREF_SPEC_MAP.get(key)
+        if spec is None:
+            continue
+        if spec.domain == "switch":
+            out[key] = val.lower() in ("1", "true", "on", "yes")
+        elif spec.domain == "select":
+            if val in spec.options:
+                out[key] = val
+        elif spec.domain == "number":
+            try:
+                ival = int(float(val))
+            except (TypeError, ValueError):
+                continue
+            if spec.min_val is not None:
+                ival = max(spec.min_val, ival)
+            if spec.max_val is not None:
+                ival = min(spec.max_val, ival)
+            out[key] = ival
+    return out
 
 
 # ---------------------------------------------------------------------------

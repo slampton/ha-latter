@@ -227,6 +227,7 @@ export interface DeviceConfig {
   security_pin_policy?: SecurityPinPolicy | string;
   security_pin?: string;
   has_security_pin?: boolean;
+  [key: string]: unknown;
 }
 
 export interface DeviceCapabilities {
@@ -244,6 +245,8 @@ export interface EspHomeEntityItem {
   name: string;
   state: string;
   key?: string;
+  pref_key?: string;
+  device_command?: string;
   unit?: string;
   device_class?: string;
   category?: string;
@@ -336,6 +339,7 @@ export interface SharedControlTarget {
 export interface SharedControlItem {
   key?: string;
   canonical_key: string;
+  pref_key?: string;
   tier?: "behavior" | "appearance" | string;
   section: string;
   section_title: string;

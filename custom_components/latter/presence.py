@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from enum import Enum
 import logging
 import time
-from typing import Any, Literal
+from typing import Any
 
 from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
 from homeassistant.helpers import (
@@ -138,10 +138,6 @@ NON_AREA_STATES: frozenset[str] = frozenset(
 )
 _CLOCK_TOLERANCE_S = 0.25
 
-Trigger = Literal["hello", "options"]
-BeaconAction = Literal["turn_on", "turn_off"]
-
-
 def is_area_id(value: str | None) -> bool:
     """Return True if `value` names an Area rather than an away/unknown placeholder."""
     return bool(value) and str(value).strip().lower() not in NON_AREA_STATES
@@ -196,19 +192,6 @@ class AreaFollowDwell:
             return False
         self.cancel()
         return True
-
-
-def decide_beacon_action(
-    tracking_enabled: bool, switch_state: str | None, trigger: Trigger
-) -> BeaconAction | None:
-    """Return the BLE presence beacon switch action to take (`turn_on` / `turn_off`), or None."""
-    if switch_state not in ("on", "off"):
-        return None
-    if tracking_enabled:
-        return "turn_on" if switch_state == "off" else None
-    if trigger == "options" and switch_state == "on":
-        return "turn_off"
-    return None
 
 
 # ---------------------------------------------------------------------------

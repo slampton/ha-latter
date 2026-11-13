@@ -30,6 +30,9 @@ def install_fake_ha_components(callback_dec: Callable[..., Any]) -> None:
     lock_mod = ensure_module("homeassistant.components.lock")
     repairs_comp_mod = ensure_module("homeassistant.components.repairs")
     sensor_comp_mod = ensure_module("homeassistant.components.sensor")
+    select_comp_mod = ensure_module("homeassistant.components.select")
+    number_comp_mod = ensure_module("homeassistant.components.number")
+    button_comp_mod = ensure_module("homeassistant.components.button")
 
     class _BaseEntity:
         hass: Any = None
@@ -92,7 +95,12 @@ def install_fake_ha_components(callback_dec: Callable[..., Any]) -> None:
         def async_write_ha_state(self) -> None:
             if self.hass is None or not self.entity_id:
                 return
-            if hasattr(self, "is_on"):
+            if hasattr(self, "available") and not self.available:
+                raw = "unavailable"
+            elif hasattr(self, "current_option"):
+                opt = self.current_option
+                raw = "unknown" if opt is None else str(opt)
+            elif hasattr(self, "is_on"):
                 raw = "on" if self.is_on else ("off" if self.is_on is False else "unknown")
             elif hasattr(self, "in_zones"):
                 zones = self.in_zones
@@ -108,6 +116,7 @@ def install_fake_ha_components(callback_dec: Callable[..., Any]) -> None:
 
     class SensorDeviceClass(StrEnum):
         DISTANCE = "distance"
+        DURATION = "duration"
         SIGNAL_STRENGTH = "signal_strength"
 
     class SensorStateClass(StrEnum):
@@ -131,6 +140,8 @@ def install_fake_ha_components(callback_dec: Callable[..., Any]) -> None:
         OCCUPANCY = "occupancy"
         MOTION = "motion"
         PRESENCE = "presence"
+        RUNNING = "running"
+        SOUND = "sound"
 
     class BinarySensorEntity(_BaseEntity):
         _attr_is_on: bool | None = None
@@ -142,6 +153,54 @@ def install_fake_ha_components(callback_dec: Callable[..., Any]) -> None:
 
     bs_mod.BinarySensorEntity = BinarySensorEntity  # type: ignore[attr-defined]
     bs_mod.BinarySensorDeviceClass = BinarySensorDeviceClass  # type: ignore[attr-defined]
+
+    class SelectEntity(_BaseEntity):
+        _attr_options: tuple[str, ...] | list[str] = ()
+        _attr_current_option: str | None = None
+
+        @property
+        def options(self) -> list[str]:
+            return list(self._attr_options)
+
+        @property
+        def current_option(self) -> str | None:
+            return self._attr_current_option
+
+    select_comp_mod.SelectEntity = SelectEntity  # type: ignore[attr-defined]
+
+    class NumberMode(StrEnum):
+        AUTO = "auto"
+        BOX = "box"
+        SLIDER = "slider"
+
+    class NumberEntity(_BaseEntity):
+        _attr_native_min_value: float = 0.0
+        _attr_native_max_value: float = 100.0
+        _attr_native_step: float = 1.0
+        _attr_native_unit_of_measurement: str | None = None
+        _attr_mode: NumberMode = NumberMode.AUTO
+        _attr_native_value: float | None = None
+
+        @property
+        def native_value(self) -> float | None:
+            return self._attr_native_value
+
+    number_comp_mod.NumberEntity = NumberEntity  # type: ignore[attr-defined]
+    number_comp_mod.NumberMode = NumberMode  # type: ignore[attr-defined]
+
+    class ButtonDeviceClass(StrEnum):
+        IDENTIFY = "identify"
+        RESTART = "restart"
+        UPDATE = "update"
+
+    class ButtonEntity(_BaseEntity):
+        _attr_device_class: ButtonDeviceClass | None = None
+
+        async def async_press(self) -> None:
+            return None
+
+    button_comp_mod.ButtonEntity = ButtonEntity  # type: ignore[attr-defined]
+    button_comp_mod.ButtonDeviceClass = ButtonDeviceClass  # type: ignore[attr-defined]
 
     class SourceType(StrEnum):
         BLUETOOTH_LE = "bluetooth_le"

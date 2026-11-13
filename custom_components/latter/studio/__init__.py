@@ -11,8 +11,6 @@ from homeassistant.components.http import StaticPathConfig
 from homeassistant.core import HomeAssistant
 
 from ..const import DOMAIN, INTEGRATION_VERSION
-from .commands import async_register_studio_ws_commands
-from .payload import log_studio_event
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -29,6 +27,9 @@ def content_digest(path: Path) -> str:
 
 async def async_register_studio_panel(hass: HomeAssistant) -> None:
     """Register Latter Studio static assets, admin WebSocket commands, and `panel_custom` sidebar panel."""
+    from .commands import async_register_studio_ws_commands
+    from .payload import log_studio_event
+
     domain_data = hass.data.setdefault(DOMAIN, {})
     # Always recompute asset digests on setup/reload so HACS upgrades never serve stale cached JS.
     domain_data.pop("_studio_js_digest", None)

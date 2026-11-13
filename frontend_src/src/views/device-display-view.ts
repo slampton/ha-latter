@@ -193,13 +193,22 @@ export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
                       control: html`<button
                         type="button"
                         ?disabled=${String(activateScreensaverBtn.state ?? "") === "unavailable"}
-                        @click=${() =>
-                          void store.espAction(
-                            activateScreensaverBtn.entity_id,
-                            "press",
-                            undefined,
-                            `Triggered "${entityLabel(activateScreensaverBtn.name || activateScreensaverBtn.entity_id)}"`,
-                          )}
+                        @click=${() => {
+                          const toastMsg = `Triggered "${entityLabel(activateScreensaverBtn.name || activateScreensaverBtn.entity_id)}"`;
+                          if (activateScreensaverBtn.device_command) {
+                            void store.runDeviceAction(
+                              activateScreensaverBtn.device_command,
+                              toastMsg,
+                            );
+                          } else {
+                            void store.espAction(
+                              activateScreensaverBtn.entity_id,
+                              "press",
+                              undefined,
+                              toastMsg,
+                            );
+                          }
+                        }}
                         class="btn btn-secondary btn-compact"
                       >
                         Preview

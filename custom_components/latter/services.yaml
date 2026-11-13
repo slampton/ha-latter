@@ -31,6 +31,22 @@ device_hello:
       required: false
       selector:
         text:
+    prefs_seq:
+      name: Device Preferences Sequence
+      description: Monotonic NVS preference sequence reported by the device on reconnect.
+      required: false
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 2147483647
+          mode: box
+    dirty_prefs:
+      name: Offline Dirty Preferences
+      description: 0x1E-delimited key=value preference edits captured on-device while offline.
+      required: false
+      selector:
+        text:
 
 music_browse:
   name: Music Browse
@@ -852,5 +868,76 @@ reset_device:
       description: Reset this device's Latter options (Studio settings) to their defaults.
       required: false
       default: true
+      selector:
+        boolean:
+
+set_device_prefs:
+  name: Set Device Preferences
+  description: Apply on-device preference updates from a bound Latter Device (or admin automation) into the Device's sleep-safe subentry configuration.
+  fields:
+    target_device:
+      name: Target Device
+      description: Optional Latter device (auto-resolved when running a single Latter device).
+      required: false
+      selector:
+        device:
+          integration: latter
+    base_seq:
+      name: Base Preference Sequence
+      description: Preference sequence revision on which the changes were based.
+      required: false
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 2147483647
+          mode: box
+    changes:
+      name: Preference Changes
+      description: 0x1E-delimited key=value preference pairs to apply.
+      required: true
+      selector:
+        text:
+
+timer_alarm_state:
+  name: Timer & Alarm State
+  description: Event-driven timer and alarm state update reported by a bound Latter Device.
+  fields:
+    target_device:
+      name: Target Device
+      description: Optional Latter device (auto-resolved when running a single Latter device).
+      required: false
+      selector:
+        device:
+          integration: latter
+    timer_running:
+      name: Timer Running
+      description: True while the device countdown timer is actively ticking.
+      required: false
+      default: false
+      selector:
+        boolean:
+    timer_paused:
+      name: Timer Paused
+      description: True while the device countdown timer is paused.
+      required: false
+      default: false
+      selector:
+        boolean:
+    remaining_sec:
+      name: Timer Remaining Seconds
+      description: Remaining timer seconds at the moment of the state transition.
+      required: false
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 86400
+          mode: box
+    ringing:
+      name: Alarm or Timer Ringing
+      description: True while an alarm or expired timer alert is actively ringing on the device.
+      required: false
+      default: false
       selector:
         boolean:

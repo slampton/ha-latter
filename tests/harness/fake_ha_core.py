@@ -47,13 +47,23 @@ def install_fake_ha_core() -> None:
         SENSOR = "sensor"
         BINARY_SENSOR = "binary_sensor"
         DEVICE_TRACKER = "device_tracker"
+        SELECT = "select"
+        NUMBER = "number"
+        BUTTON = "button"
 
     class EntityCategory(StrEnum):
         CONFIG = "config"
         DIAGNOSTIC = "diagnostic"
 
+    class UnitOfTime(StrEnum):
+        SECONDS = "s"
+        MINUTES = "min"
+        HOURS = "h"
+
     const_mod.Platform = Platform  # type: ignore[attr-defined]
     const_mod.EntityCategory = EntityCategory  # type: ignore[attr-defined]
+    const_mod.UnitOfTime = UnitOfTime  # type: ignore[attr-defined]
+    const_mod.PERCENTAGE = "%"  # type: ignore[attr-defined]
     const_mod.ATTR_ENTITY_ID = "entity_id"  # type: ignore[attr-defined]
     const_mod.EVENT_CORE_CONFIG_UPDATE = "core_config_updated"  # type: ignore[attr-defined]
     const_mod.EVENT_HOMEASSISTANT_STARTED = "homeassistant_started"  # type: ignore[attr-defined]

@@ -133,7 +133,7 @@ export async function saveColorWheelSelectionOp(store: StudioStore): Promise<voi
     await store.flushSystemSettings();
   }
   if (store.colorWheelModal.targetScope === "device" && store.activeSubentryId) {
-    store.stageDeviceSetting("device_custom_color", hex);
+    store.applyDeviceCustomColor(hex, true);
     await store.flushDeviceBucket(store.activeSubentryId);
   }
   store.closeColorWheelModal();

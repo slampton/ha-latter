@@ -10,12 +10,15 @@ from homeassistant.const import Platform
 
 DOMAIN: Final = "latter"
 INTEGRATION_VERSION: Final = "3.0.0"
-STUDIO_REV: Final = 5
-MIN_FIRMWARE_SDK_REV: Final = 2026111202
+STUDIO_REV: Final = 6
+MIN_FIRMWARE_SDK_REV: Final = 2026111203
 PLATFORMS: Final[list[Platform]] = [
     Platform.SENSOR,
     Platform.BINARY_SENSOR,
     Platform.DEVICE_TRACKER,
+    Platform.SELECT,
+    Platform.NUMBER,
+    Platform.BUTTON,
 ]
 
 STORAGE_VERSION: Final = 1
@@ -71,6 +74,53 @@ CONF_SECURITY_PIN_HASH: Final = "security_pin_hash"
 CONF_SECURITY_PIN: Final = "security_pin"
 CONF_SYSTEM_BLE_UUID: Final = "system_ble_uuid"
 
+# Device Preference Keys (Protocol v3 `device_prefs` domain)
+CONF_POWER_PROFILE: Final = "power_profile"
+CONF_WAKE_WORD_MODE: Final = "wake_word_mode"
+CONF_TAP_TO_WAKE: Final = "tap_to_wake"
+CONF_PICKUP_TO_WAKE: Final = "pickup_to_wake"
+CONF_BATTERY_SCREEN_TIMEOUT: Final = "battery_screen_timeout"
+CONF_DOCKED_IDLE_TIMEOUT: Final = "docked_idle_timeout"
+CONF_BATTERY_HIBERNATE_TIMEOUT: Final = "battery_hibernate_timeout"
+CONF_DOCKED_SCREENSAVER: Final = "docked_screensaver"
+CONF_SCREENSAVER_STYLE: Final = "screensaver_style"
+CONF_HOLD_CROWN_POWER_OFF: Final = "hold_crown_power_off"
+CONF_AUTO_BRIGHTNESS_MODE: Final = "auto_brightness_mode"
+CONF_MANUAL_BRIGHTNESS: Final = "manual_brightness"
+CONF_DAY_BRIGHTNESS: Final = "day_brightness"
+CONF_NIGHT_BRIGHTNESS: Final = "night_brightness"
+CONF_DAY_START_HOUR: Final = "day_start_hour"
+CONF_NIGHT_START_HOUR: Final = "night_start_hour"
+CONF_COLOR_PROFILE: Final = "color_profile"
+CONF_VA_VISUAL_PROFILE: Final = "va_visual_profile"
+CONF_START_SCREEN: Final = "start_screen"
+CONF_CLOCK_FACE: Final = "clock_face"
+CONF_TIME_FORMAT: Final = "time_format"
+CONF_WEATHER_BACKGROUND: Final = "weather_background"
+CONF_HOME_SUN: Final = "home_sun"
+CONF_HOME_MOON: Final = "home_moon"
+CONF_WAKE_GREETING: Final = "wake_greeting"
+CONF_AREA_DEFAULT_CATEGORY: Final = "area_default_category"
+CONF_AREA_SHOW_ALL_CATEGORY: Final = "area_show_all_category"
+CONF_ALBUM_ART_STYLE: Final = "album_art_style"
+CONF_MUSIC_OVERLAY_STYLE: Final = "music_overlay_style"
+CONF_SHOW_SPEAKER_SHORTCUT: Final = "show_speaker_shortcut"
+CONF_SHOW_LIBRARY_SHORTCUT: Final = "show_library_shortcut"
+CONF_ALBUM_SORT_ORDER: Final = "album_sort_order"
+CONF_ARTIST_ALBUM_SORT_ORDER: Final = "artist_album_sort_order"
+CONF_PODCAST_SORT_ORDER: Final = "podcast_sort_order"
+CONF_WW_SENS_OKAY_NABU: Final = "ww_sens_okay_nabu"
+CONF_WW_SENS_HEY_LUNA: Final = "ww_sens_hey_luna"
+CONF_WW_SENS_HEY_JARVIS: Final = "ww_sens_hey_jarvis"
+CONF_WW_SENS_HEY_MYCROFT: Final = "ww_sens_hey_mycroft"
+CONF_WW_SENS_ALEXA: Final = "ww_sens_alexa"
+CONF_WAKE_SCREEN_ON_ASSIST: Final = "wake_screen_on_assist"
+CONF_ALERT_VOLUME: Final = "alert_volume"
+CONF_VOLUME_STEP_SIZE: Final = "volume_step_size"
+CONF_GAME_SOUND_EFFECTS: Final = "game_sound_effects"
+CONF_BLE_BEACON_MODE: Final = "ble_beacon_mode"
+CONF_WEATHER_SIM_CONDITION: Final = "weather_sim_condition"
+
 # Defaults
 DEFAULT_SECURITY_PIN_POLICY: Final = "auto"
 DEFAULT_DOORBELL_NOISE_REDUCTION: Final = "strong"
@@ -93,6 +143,8 @@ DEFAULT_ART_SIZE: Final = 466  # artwork edge until the Device reports its hardw
 
 # Native Latter Services
 SERVICE_DEVICE_HELLO: Final = "device_hello"
+SERVICE_SET_DEVICE_PREFS: Final = "set_device_prefs"
+SERVICE_TIMER_ALARM_STATE: Final = "timer_alarm_state"
 SERVICE_MUSIC_BROWSE: Final = "music_browse"
 SERVICE_SET_ACTIVE_SPEAKER: Final = "set_active_speaker"
 SERVICE_MEDIA_COMMAND: Final = "media_command"
@@ -182,10 +234,12 @@ def normalize_noise_reduction(level: str | None) -> str:
     return val if val in DOORBELL_NOISE_REDUCTION_LEVELS else DEFAULT_DOORBELL_NOISE_REDUCTION
 
 
-def build_device_entity_id(device_slug: str, suffix: str) -> str:
-    """Build a device-scoped sensor entity_id (`sensor.<device_slug>_<suffix>`)."""
+def build_device_entity_id(
+    device_slug: str, suffix: str, domain: str = "sensor"
+) -> str:
+    """Build a device-scoped entity_id (`<domain>.<device_slug>_<suffix>`)."""
     norm = normalize_device_slug(device_slug)
-    return f"sensor.{norm}_{suffix}"
+    return f"{domain}.{norm}_{suffix}"
 
 
 def target_kind(value: Any) -> TargetKind:

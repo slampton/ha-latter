@@ -675,7 +675,7 @@ class LitElement extends HTMLElement {
 /**
  * Canonical constants, route maps, issue messages, and Title Case dictionaries for Latter Studio.
  */
-const STUDIO_REV = 5;
+const STUDIO_REV = 6;
 const MAX_WALLPAPER_UPLOAD_BYTES = 15 * 1024 * 1024;
 const DEVICE_VIEW_SLUGS = {
   dashboard: "overview",
@@ -1243,12 +1243,17 @@ function renderNativeControlRow(store, item) {
   const label = entityLabel(item.name || item.entity_id);
   const dom = item.domain;
   const st = String(item.state ?? "");
-  const unavailable = st === "unavailable" || st === "unknown";
+  const prefKey = item.pref_key || "";
+  const unavailable = !prefKey && (st === "unavailable" || st === "unknown");
   if (dom === "switch") {
     const isOn = st === "on";
     const onToggle = (ev) => {
       const checked = (ev.currentTarget).checked;
-      void store.espAction(item.entity_id, checked ? "turn_on" : "turn_off", checked ? "on" : "off");
+      if (prefKey) {
+        store.stageDeviceSetting(prefKey, checked);
+      } else {
+        void store.espAction(item.entity_id, checked ? "turn_on" : "turn_off", checked ? "on" : "off");
+      }
     };
     return renderSettingsRow({
       label,
@@ -1266,7 +1271,12 @@ function renderNativeControlRow(store, item) {
   if (dom === "select") {
     const opts = item.options || [];
     const onChange = (ev) => {
-      void store.espSelect(item.entity_id, (ev.currentTarget).value);
+      const nextVal = (ev.currentTarget).value;
+      if (prefKey) {
+        store.stageDeviceSetting(prefKey, nextVal);
+      } else {
+        void store.espSelect(item.entity_id, nextVal);
+      }
     };
     return renderSettingsRow({
       label,
@@ -1284,7 +1294,11 @@ function renderNativeControlRow(store, item) {
     const onCommit = (ev) => {
       const raw = Number((ev.currentTarget).value);
       if (Number.isFinite(raw)) {
-        void store.espNumber(item.entity_id, raw);
+        if (prefKey) {
+          store.stageDeviceSetting(prefKey, raw);
+        } else {
+          void store.espNumber(item.entity_id, raw);
+        }
       }
     };
     if (max - min <= 250 && item.mode !== "box") {
@@ -1323,12 +1337,19 @@ function renderNativeControlRow(store, item) {
     const toastMsg = label.toLowerCase().includes("restart")
       ? "Restarting Device…"
       : `Triggered "${label}"`;
+    const onRun = () => {
+      if (item.device_command) {
+        void store.runDeviceAction(item.device_command, toastMsg);
+      } else {
+        void store.espAction(item.entity_id, "press", undefined, toastMsg);
+      }
+    };
     return renderSettingsRow({
       label,
       control: html`<button
         type="button"
         ?disabled=${buttonUnavailable}
-        @click=${() => void store.espAction(item.entity_id, "press", undefined, toastMsg)}
+        @click=${onRun}
         class="btn btn-secondary btn-compact"
       >
         Run
@@ -1475,11 +1496,18 @@ function renderQuickActionGrid(
           : kind === "hibernate"
             ? "Hibernating Device…"
             : `Triggered "${label}"`;
+      const onTrigger = () => {
+        if (item.device_command) {
+          void store.runDeviceAction(item.device_command, toastMsg);
+        } else {
+          void store.espAction(item.entity_id, "press", undefined, toastMsg);
+        }
+      };
       return html`<button
         type="button"
         data-entity-id=${item.entity_id}
         ?disabled=${buttonUnavailable}
-        @click=${() => void store.espAction(item.entity_id, "press", undefined, toastMsg)}
+        @click=${onTrigger}
         class="btn btn-secondary quick-action-btn"
       >
         ${renderQuickActionIcon(kind)}
@@ -1899,6 +1927,7 @@ const SYSTEM_WS_COMMANDS = new Set([
 ]);
 const DEVICE_WS_COMMANDS = new Set([
   "esphome_entity_action",
+  "device_action",
   "select_wallpaper",
   "toggle_wallpaper_favorite",
   "delete_wallpaper",
@@ -2289,7 +2318,7 @@ async function saveColorWheelSelectionOp(store) {
     await store.flushSystemSettings();
   }
   if (store.colorWheelModal.targetScope === "device" && store.activeSubentryId) {
-    store.stageDeviceSetting("device_custom_color", hex);
+    store.applyDeviceCustomColor(hex, true);
     await store.flushDeviceBucket(store.activeSubentryId);
   }
   store.closeColorWheelModal();
@@ -2576,6 +2605,131 @@ async function clearInternalLogsOp(store) {
 const SAVE_DEBOUNCE_MS = 220;
 const ENTITY_OPTIMISTIC_TTL_MS = 8000;
 const PENDING_ENTITY_STATES = new Map();
+const POWER_PROFILE_PREFS = {
+  "Portable Carry": {
+    wake_word_mode: "Docked Only",
+    tap_to_wake: "Docked Only",
+    pickup_to_wake: "Docked Only",
+    battery_screen_timeout: "30s",
+    docked_idle_timeout: "1 min",
+    battery_hibernate_timeout: "15 min",
+    docked_screensaver: true,
+  },
+  "Handheld Roaming": {
+    wake_word_mode: "Docked Only",
+    tap_to_wake: "Always On",
+    pickup_to_wake: "Always On",
+    battery_screen_timeout: "30s",
+    docked_idle_timeout: "1 min",
+    battery_hibernate_timeout: "30 min",
+    docked_screensaver: true,
+  },
+  "Wearable Watch": {
+    wake_word_mode: "Docked Only",
+    tap_to_wake: "Always On",
+    pickup_to_wake: "Always On",
+    battery_screen_timeout: "15s",
+    docked_idle_timeout: "1 min",
+    battery_hibernate_timeout: "15 min",
+    docked_screensaver: true,
+  },
+  "Tabletop Dock": {
+    wake_word_mode: "Docked Only",
+    tap_to_wake: "Docked Only",
+    pickup_to_wake: "Disabled",
+    battery_screen_timeout: "30s",
+    docked_idle_timeout: "5 min",
+    battery_hibernate_timeout: "15 min",
+    docked_screensaver: true,
+  },
+  "Always-On Wall / Desk": {
+    wake_word_mode: "Always On",
+    tap_to_wake: "Always On",
+    pickup_to_wake: "Disabled",
+    battery_screen_timeout: "Never",
+    docked_idle_timeout: "5 min",
+    battery_hibernate_timeout: "Disabled",
+    docked_screensaver: true,
+  },
+};
+const POWER_PROFILE_SUBKEYS = new Set ([
+  "wake_word_mode",
+  "tap_to_wake",
+  "pickup_to_wake",
+  "battery_screen_timeout",
+  "docked_idle_timeout",
+  "battery_hibernate_timeout",
+  "docked_screensaver",
+]);
+function expandDevicePrefPatch(
+  currentCfg,
+  rawPatch,
+) {
+  const expanded = { ...rawPatch };
+  if (typeof rawPatch.power_profile === "string" && rawPatch.power_profile in POWER_PROFILE_PREFS) {
+    const preset = POWER_PROFILE_PREFS[rawPatch.power_profile];
+    for (const [k, v] of Object.entries(preset)) {
+      if (!(k in rawPatch)) {
+        expanded[k] = v;
+      }
+    }
+  } else if (
+    !("power_profile" in rawPatch) &&
+    Object.keys(rawPatch).some((k) => POWER_PROFILE_SUBKEYS.has(k))
+  ) {
+    const curProf = String(currentCfg.power_profile || "Portable Carry");
+    const preset = POWER_PROFILE_PREFS[curProf];
+    if (preset) {
+      const merged = { ...currentCfg, ...rawPatch };
+      for (const [k, want] of Object.entries(preset)) {
+        const have = merged[k] !== undefined ? merged[k] : want;
+        if (have !== want) {
+          expanded.power_profile = "Custom";
+          break;
+        }
+      }
+    }
+  }
+  return expanded;
+}
+function overlayDevicePrefsOnSections(
+  payload,
+  rawPatch,
+) {
+  if (!rawPatch || Object.keys(rawPatch).length === 0) return;
+  const curCfg = (payload.config || {});
+  const expanded = expandDevicePrefPatch(curCfg, rawPatch);
+  payload.config = {
+    ...payload.config,
+    ...expanded,
+  };
+  const sections = payload?.esphome?.sections;
+  if (!sections) return;
+  payload.esphome = {
+    ...payload.esphome,
+    sections: sections.map((sec) => ({
+      ...sec,
+      items: (sec.items || []).map((item) => {
+        if (item.pref_key && item.pref_key in expanded) {
+          const val = expanded[item.pref_key];
+          const nextState = item.domain === "switch" ? (val ? "on" : "off") : String(val ?? "");
+          return { ...item, state: nextState };
+        }
+        if (
+          "volume_step_size" in expanded &&
+          item.domain === "number" &&
+          item.entity_id.startsWith("media_player.")
+        ) {
+          const stepNum = Number(expanded.volume_step_size);
+          if (Number.isFinite(stepNum) && stepNum > 0) {
+            return { ...item, step: stepNum };
+          }
+        }
+        return item;
+      }),
+    })),
+  };
+}
 function overlayPendingEntityStates(
   payload,
   pendingMap = PENDING_ENTITY_STATES,
@@ -2638,12 +2792,21 @@ function stageDeviceSettingOp(
     };
     store.pendingDeviceBuckets.set(targetSubentryId, bucket);
   }
-  if (!(key in bucket.previousValues)) {
-    const prev =
-      store.state && store.state.subentry_id === targetSubentryId
-        ? (store.state.config)?.[key]
-        : undefined;
-    bucket.previousValues[key] = prev;
+  const curCfg =
+    store.state && store.state.subentry_id === targetSubentryId
+      ? ((store.state.config || {}))
+      : {};
+  const snapshotKey = (k) => {
+    if (!(k in bucket.previousValues)) {
+      bucket.previousValues[k] = curCfg[k];
+    }
+  };
+  snapshotKey(key);
+  if (key === "power_profile" || POWER_PROFILE_SUBKEYS.has(key)) {
+    snapshotKey("power_profile");
+    for (const sk of POWER_PROFILE_SUBKEYS) {
+      snapshotKey(sk);
+    }
   }
   if (controlDomId) {
     bucket.previousValues[`__dom:${controlDomId}`] = bucket.previousValues[key];
@@ -2658,17 +2821,20 @@ function stageDeviceSettingOp(
               : d,
           )
         : store.state.system_devices;
-    store.state = {
-      ...store.state,
-      system_devices: nextSystemDevices,
-      config:
-        store.state.subentry_id === targetSubentryId
-          ? {
-              ...store.state.config,
-              [key]: value,
-            }
-          : store.state.config,
-    };
+    if (store.state.subentry_id === targetSubentryId) {
+      const nextPayload = {
+        ...store.state,
+        system_devices: nextSystemDevices,
+        config: { ...store.state.config },
+      };
+      overlayDevicePrefsOnSections(nextPayload, { [key]: value });
+      store.state = nextPayload;
+    } else if (nextSystemDevices !== store.state.system_devices) {
+      store.state = {
+        ...store.state,
+        system_devices: nextSystemDevices,
+      };
+    }
   }
   if (bucket.timer) clearTimeout(bucket.timer);
   bucket.timer = setTimeout(() => {
@@ -2730,16 +2896,24 @@ async function flushDeviceBucketOp(store, targetSubentryId) {
         const restoredConfig = {
           ...(store.state.config),
         };
+        const restoredPrefs = {};
         for (const [k, v] of Object.entries(previousValues)) {
           if (!k.startsWith("__dom:")) {
             restoredConfig[k] = v;
+            if (v !== undefined) {
+              restoredPrefs[k] = v;
+            }
           }
         }
-        store.state = {
+        const nextPayload = {
           ...store.state,
           system_devices: nextSystemDevices,
           config: restoredConfig,
         };
+        if (Object.keys(restoredPrefs).length > 0) {
+          overlayDevicePrefsOnSections(nextPayload, restoredPrefs);
+        }
+        store.state = nextPayload;
       } else if (nextSystemDevices !== store.state.system_devices) {
         store.state = {
           ...store.state,
@@ -2896,6 +3070,29 @@ async function executeEntityActionOp(
     return false;
   }
 }
+async function runDeviceActionOp(
+  store,
+  action,
+  toastMessage,
+) {
+  const targetSubentryId = store.activeSubentryId;
+  if (!targetSubentryId || !action) return false;
+  try {
+    const res = await store.ws.runDeviceCommand(targetSubentryId, "device_action", {
+      action,
+    });
+    if (res && store.activeSubentryId === targetSubentryId) {
+      store.ingestPayload(res, false);
+    }
+    if (toastMessage) {
+      store.showToast(toastMessage);
+    }
+    return true;
+  } catch (err) {
+    store.showToast(formatWsError(err, "Device action failed"), true);
+    return false;
+  }
+}
 function getEnabledDockTokensOp(store) {
   const raw = String(store.state?.config?.dock_apps ?? "");
   if (!raw.trim()) {
@@ -2965,7 +3162,11 @@ function applyDeviceCustomColorOp(
           (it.options || []).includes("Custom") &&
           it.state !== "Custom"
         ) {
-          void store.espSelect(it.entity_id, "Custom");
+          if (it.pref_key) {
+            store.stageDeviceSetting(it.pref_key, "Custom");
+          } else {
+            void store.espSelect(it.entity_id, "Custom");
+          }
         }
       }
     }
@@ -3451,6 +3652,10 @@ async function bulkToggleOp(
   ctrl,
   turnOn,
 ) {
+  if (ctrl.pref_key) {
+    await setGroupDeviceSettingOp(store, { [ctrl.pref_key]: turnOn });
+    return;
+  }
   const entityIds = filteredControlTargetsOp(store, ctrl);
   if (!entityIds.length) return;
   try {
@@ -3474,6 +3679,10 @@ async function bulkSelectOp(
   ctrl,
   option,
 ) {
+  if (ctrl.pref_key) {
+    await setGroupDeviceSettingOp(store, { [ctrl.pref_key]: option });
+    return;
+  }
   const entityIds = filteredControlTargetsOp(store, ctrl);
   if (!entityIds.length) return;
   try {
@@ -3497,8 +3706,13 @@ async function bulkNumberOp(
   ctrl,
   level,
 ) {
+  if (!Number.isFinite(level)) return;
+  if (ctrl.pref_key) {
+    await setGroupDeviceSettingOp(store, { [ctrl.pref_key]: level });
+    return;
+  }
   const entityIds = filteredControlTargetsOp(store, ctrl);
-  if (!entityIds.length || !Number.isFinite(level)) return;
+  if (!entityIds.length) return;
   try {
     const res = await store.ws.runSystemCommand(
       "system_entity_action",
@@ -4125,10 +4339,7 @@ class StudioStore {
     }
     const devBucket = merged.subentry_id ? this.pendingDeviceBuckets.get(merged.subentry_id) : undefined;
     if (devBucket && merged.config) {
-      merged.config = {
-        ...merged.config,
-        ...(devBucket.patch),
-      };
+      overlayDevicePrefsOnSections(merged, devBucket.patch);
     }
     overlayPendingEntityStates(merged, this.pendingEntityStates);
     if (this.currentScope === "device" && this.deviceSelected && merged.subentry_id === this.activeSubentryId) {
@@ -4179,6 +4390,9 @@ class StudioStore {
   // ---------- Delegated Domain Operations ----------
   stageDeviceSetting(key, value, controlDomId) {
     stageDeviceSettingOp(this, key, value, controlDomId);
+  }
+  async runDeviceAction(action, toastMessage) {
+    return runDeviceActionOp(this, action, toastMessage);
   }
   async flushDeviceBucket(targetSubentryId) {
     await flushDeviceBucketOp(this, targetSubentryId);
@@ -5991,13 +6205,22 @@ function renderDeviceDisplayView(store) {
                       control: html`<button
                         type="button"
                         ?disabled=${String(activateScreensaverBtn.state ?? "") === "unavailable"}
-                        @click=${() =>
-                          void store.espAction(
-                            activateScreensaverBtn.entity_id,
-                            "press",
-                            undefined,
-                            `Triggered "${entityLabel(activateScreensaverBtn.name || activateScreensaverBtn.entity_id)}"`,
-                          )}
+                        @click=${() => {
+                          const toastMsg = `Triggered "${entityLabel(activateScreensaverBtn.name || activateScreensaverBtn.entity_id)}"`;
+                          if (activateScreensaverBtn.device_command) {
+                            void store.runDeviceAction(
+                              activateScreensaverBtn.device_command,
+                              toastMsg,
+                            );
+                          } else {
+                            void store.espAction(
+                              activateScreensaverBtn.entity_id,
+                              "press",
+                              undefined,
+                              toastMsg,
+                            );
+                          }
+                        }}
                         class="btn btn-secondary btn-compact"
                       >
                         Preview
@@ -6468,7 +6691,9 @@ function renderDeviceInterfaceView(store) {
                             ${celestialItems.map((cel) => {
                               const st = String(cel.state ?? "");
                               const isOn = st === "on";
-                              const unavailable = st === "unavailable" || st === "unknown";
+                              const prefKey = cel.pref_key || "";
+                              const unavailable =
+                                !prefKey && (st === "unavailable" || st === "unknown");
                               const lbl = entityLabel(
                                 (cel.name || cel.entity_id).replace(/^home:\s*/i, ""),
                               );
@@ -6477,12 +6702,17 @@ function renderDeviceInterfaceView(store) {
                                   type="button"
                                   aria-pressed=${String(isOn)}
                                   ?disabled=${unavailable}
-                                  @click=${() =>
-                                    void store.espAction(
-                                      cel.entity_id,
-                                      isOn ? "turn_off" : "turn_on",
-                                      isOn ? "off" : "on",
-                                    )}
+                                  @click=${() => {
+                                    if (prefKey) {
+                                      store.stageDeviceSetting(prefKey, !isOn);
+                                    } else {
+                                      void store.espAction(
+                                        cel.entity_id,
+                                        isOn ? "turn_off" : "turn_on",
+                                        isOn ? "off" : "on",
+                                      );
+                                    }
+                                  }}
                                   class="pill-toggle"
                                 >
                                   ${isOn ? `✓ ${lbl}` : `+ ${lbl}`}
@@ -6504,7 +6734,8 @@ function renderDeviceInterfaceView(store) {
                       ${celestialItems.map((cel) => {
                         const st = String(cel.state ?? "");
                         const isOn = st === "on";
-                        const unavailable = st === "unavailable" || st === "unknown";
+                        const prefKey = cel.pref_key || "";
+                        const unavailable = !prefKey && (st === "unavailable" || st === "unknown");
                         const lbl = entityLabel(
                           (cel.name || cel.entity_id).replace(/^home:\s*/i, ""),
                         );
@@ -6513,12 +6744,17 @@ function renderDeviceInterfaceView(store) {
                             type="button"
                             aria-pressed=${String(isOn)}
                             ?disabled=${unavailable}
-                            @click=${() =>
-                              void store.espAction(
-                                cel.entity_id,
-                                isOn ? "turn_off" : "turn_on",
-                                isOn ? "off" : "on",
-                              )}
+                            @click=${() => {
+                              if (prefKey) {
+                                store.stageDeviceSetting(prefKey, !isOn);
+                              } else {
+                                void store.espAction(
+                                  cel.entity_id,
+                                  isOn ? "turn_off" : "turn_on",
+                                  isOn ? "off" : "on",
+                                );
+                              }
+                            }}
                             class="pill-toggle"
                           >
                             ${isOn ? `✓ ${lbl}` : `+ ${lbl}`}
@@ -6623,7 +6859,9 @@ function renderDeviceInterfaceView(store) {
                         ${shortcutMusicItems.map((sc) => {
                           const st = String(sc.state ?? "");
                           const isOn = st === "on";
-                          const unavailable = st === "unavailable" || st === "unknown";
+                          const prefKey = sc.pref_key || "";
+                          const unavailable =
+                            !prefKey && (st === "unavailable" || st === "unknown");
                           const rawShort = (sc.name || sc.entity_id)
                             .replace(/^music:\s*/i, "")
                             .replace(/^show\s+/i, "")
@@ -6635,12 +6873,17 @@ function renderDeviceInterfaceView(store) {
                               type="button"
                               aria-pressed=${String(isOn)}
                               ?disabled=${unavailable}
-                              @click=${() =>
-                                void store.espAction(
-                                  sc.entity_id,
-                                  isOn ? "turn_off" : "turn_on",
-                                  isOn ? "off" : "on",
-                                )}
+                              @click=${() => {
+                                if (prefKey) {
+                                  store.stageDeviceSetting(prefKey, !isOn);
+                                } else {
+                                  void store.espAction(
+                                    sc.entity_id,
+                                    isOn ? "turn_off" : "turn_on",
+                                    isOn ? "off" : "on",
+                                  );
+                                }
+                              }}
                               class="pill-toggle"
                             >
                               ${isOn ? `✓ ${lbl}` : `+ ${lbl}`}
@@ -7944,10 +8187,17 @@ function renderSystemGroupsView(store) {
       if (activeGrpId === "stationary") return !t.is_roaming;
       return t.device_group === activeGrpId;
     });
-    const baselineVal =
-      selectedGrpObj?.esphome_controls && fc.canonical_key
+    const rawBaselineVal = fc.pref_key
+      ? selectedGrpObj?.device_config?.[fc.pref_key]
+      : selectedGrpObj?.esphome_controls && fc.canonical_key
         ? selectedGrpObj.esphome_controls[fc.canonical_key]
         : undefined;
+    const baselineVal =
+      rawBaselineVal !== undefined && fc.domain === "switch" && typeof rawBaselineVal === "boolean"
+        ? rawBaselineVal
+          ? "on"
+          : "off"
+        : rawBaselineVal;
     if (!targets.length && baselineVal === undefined) return nothing;
     const states = targets.length
       ? Array.from(new Set(targets.map((t) => String(t.state ?? ""))))

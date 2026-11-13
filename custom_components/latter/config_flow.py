@@ -156,10 +156,12 @@ def _detect_hardware_defaults(
         or esphome_service(hass, dev_id, "set_area_slots")
     )
 
-    has_ble_beacon = isinstance(manifest.get("beacon"), dict)
+    has_ble_beacon = (
+        isinstance(manifest.get("beacon"), dict) or manifest.get("minor") is not None
+    )
     if not has_ble_beacon and dev is not None:
         for e in er.async_entries_for_device(ent_reg, dev.id):
-            if e.entity_id.endswith("_ble_presence_beacon"):
+            if e.entity_id.endswith("_ble_radio_active"):
                 has_ble_beacon = True
                 break
 

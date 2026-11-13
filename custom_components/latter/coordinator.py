@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from datetime import datetime, timedelta
 import json
 import logging
@@ -19,6 +19,7 @@ from homeassistant.const import (
     STATE_UNKNOWN,
 )
 from homeassistant.core import Event, HomeAssistant, State, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import (
     area_registry as ar,
     device_registry as dr,
@@ -130,8 +131,14 @@ from .identity import (
     esphome_service,
     find_device_entity_by_suffix,
     get_bound_esphome_device,
+    manifest_has_audio,
+    manifest_has_battery,
     manifest_has_display,
+    manifest_has_imu,
+    manifest_has_mic,
+    manifest_has_speaker,
     manifest_is_roaming,
+    manifest_is_round,
     manifest_is_wearable,
     read_device_hardware_manifest,
     resolve_bound_esphome_device_id,
@@ -149,8 +156,6 @@ from .presence import (
     AreaFollowDwell,
     FollowAction,
     LatterNativeBleTracker,
-    Trigger,
-    decide_beacon_action,
     get_ble_fabric,
     get_ble_proxy_area_ids,
 )
@@ -160,6 +165,8 @@ from .protocol import (
     effective_security_pin_policy,
     normalize_activity_sources,
     normalize_security_pin_policy,
+    pack_device_prefs_fields,
+    parse_dirty_prefs_records,
 )
 from .remotes import (
     build_remote_config_payload,
@@ -172,6 +179,11 @@ from .repairs import (
     device_health_issue_id,
     evaluate_device_health,
     parse_device_health,
+)
+from .studio.settings import (
+    DEVICE_PREF_KEYS,
+    clean_device_settings,
+    resolve_device_pref_value,
 )
 from .wallpapers import ordered_wallpaper_ids
 
@@ -406,6 +418,15 @@ class LatterCoordinator:
         self._cached_media_anchor: tuple[tuple[Any, ...], float] | None = None
         self._cached_area_payload: tuple[float, tuple[str, dict[str, Any]]] | None = None
         self._cached_remote_payload: tuple[float, tuple[str | None, dict[str, Any]]] | None = None
+        self._cached_prefs_payload: tuple[int, dict[str, Any]] | None = None
+        self.prefs_seq: int = 0
+        self.prefs_key_seq: dict[str, int] = {}
+        self.timer_running: bool = False
+        self.timer_paused: bool = False
+        self.timer_remaining_sec: int = 0
+        self._timer_anchor_mono: float = 0.0
+        self.alarm_ringing: bool = False
+        self._unsub_timer_tick: Callable[[], None] | None = None
         self._unsub_core_config: Callable[[], None] | None = None
         self._unsub_speaker_state: Callable[[], None] | None = None
         self._tracked_ma_counterpart: str | None = None
@@ -523,11 +544,35 @@ class LatterCoordinator:
     def device_data(self) -> dict[str, Any]:
         return dict(self._live_subentry().data)
 
-    def update_device_config(self, merged_data: dict[str, Any]) -> None:
+    def update_device_config(
+        self, merged_data: dict[str, Any], *, bump_prefs_seq: bool = True
+    ) -> None:
+        prev = self._live_subentry().data
+        changed_pref_keys: list[str] = []
+        if bump_prefs_seq:
+            for k in DEVICE_PREF_KEYS:
+                if resolve_device_pref_value(merged_data, k) != resolve_device_pref_value(prev, k):
+                    changed_pref_keys.append(k)
+            if bool(
+                merged_data.get(CONF_NATIVE_BLE_TRACKING, DEFAULT_NATIVE_BLE_TRACKING)
+            ) != bool(prev.get(CONF_NATIVE_BLE_TRACKING, DEFAULT_NATIVE_BLE_TRACKING)):
+                changed_pref_keys.append(CONF_NATIVE_BLE_TRACKING)
+            if (
+                str(merged_data.get(CONF_DEVICE_CUSTOM_COLOR) or "").strip().upper()
+                != str(prev.get(CONF_DEVICE_CUSTOM_COLOR) or "").strip().upper()
+            ):
+                changed_pref_keys.append(CONF_DEVICE_CUSTOM_COLOR)
+            if changed_pref_keys:
+                self.prefs_seq = max(1, self.prefs_seq + 1)
+                for k in changed_pref_keys:
+                    self.prefs_key_seq[k] = self.prefs_seq
+                self._cached_prefs_payload = None
         self.hass.config_entries.async_update_subentry(
             self.entry, self._live_subentry(), data=merged_data
         )
         self._live_subentry()
+        if changed_pref_keys:
+            self._schedule_persist_runtime_state()
 
     def get_opt(self, key: str, default: Any = None) -> Any:
         domain_data = self.hass.data.get(DOMAIN, {})
@@ -663,6 +708,55 @@ class LatterCoordinator:
     @property
     def has_display(self) -> bool:
         return not self.is_ble_tag and manifest_has_display(self.hardware_manifest)
+
+    @property
+    def has_mic(self) -> bool:
+        return not self.is_ble_tag and manifest_has_mic(self.hardware_manifest)
+
+    @property
+    def has_speaker(self) -> bool:
+        return not self.is_ble_tag and manifest_has_speaker(self.hardware_manifest)
+
+    @property
+    def has_audio(self) -> bool:
+        return not self.is_ble_tag and manifest_has_audio(self.hardware_manifest)
+
+    @property
+    def has_imu(self) -> bool:
+        return not self.is_ble_tag and manifest_has_imu(self.hardware_manifest)
+
+    @property
+    def has_battery(self) -> bool:
+        return not self.is_ble_tag and manifest_has_battery(self.hardware_manifest)
+
+    @property
+    def has_ble_beacon(self) -> bool:
+        if self.is_ble_tag:
+            return False
+        hw = self.hardware_manifest
+        if not hw:
+            return True
+        return (
+            isinstance(hw.get("beacon"), dict)
+            or hw.get("minor") is not None
+            or bool(self.device_entity("binary_sensor", "_ble_radio_active"))
+        )
+
+    @property
+    def is_round_display(self) -> bool:
+        return self.has_display and manifest_is_round(self.hardware_manifest)
+
+    def get_device_pref(self, key: str) -> Any:
+        return resolve_device_pref_value(self._live_subentry().data, key)
+
+    @property
+    def current_timer_remaining_sec(self) -> int:
+        if not self.timer_running and not self.timer_paused:
+            return 0
+        if self.timer_paused or not self.timer_running:
+            return max(0, int(self.timer_remaining_sec))
+        elapsed = max(0.0, time.monotonic() - self._timer_anchor_mono)
+        return max(0, round(self.timer_remaining_sec - elapsed))
 
     @property
     def is_wearable(self) -> bool:
@@ -1074,6 +1168,8 @@ class LatterCoordinator:
             "hello_manifest": self._runtime.hello_manifest,
             "last_boot_id": self._runtime.last_boot_id,
             "entered_hibernate": self._entered_hibernate,
+            "prefs_seq": self.prefs_seq,
+            "prefs_key_seq": dict(self.prefs_key_seq),
         }
 
     def _apply_stored_runtime(self, stored: dict[str, Any]) -> None:
@@ -1109,6 +1205,14 @@ class LatterCoordinator:
         if saved_boot_id := str(stored.get("last_boot_id") or "").strip():
             self._runtime.last_boot_id = saved_boot_id
         self._entered_hibernate = bool(stored.get("entered_hibernate"))
+        self.prefs_seq = max(0, int(stored.get("prefs_seq") or 0))
+        raw_key_seq = stored.get("prefs_key_seq")
+        if isinstance(raw_key_seq, dict):
+            self.prefs_key_seq = {
+                str(k): max(0, int(v))
+                for k, v in raw_key_seq.items()
+                if isinstance(v, (int, float))
+            }
 
     @callback
     def _schedule_persist_runtime_state(self) -> None:
@@ -1465,6 +1569,7 @@ class LatterCoordinator:
             "_unsub_wallpaper_timer",
             "_unsub_doorbell_ring_state",
             "_unsub_link_report_state",
+            "_unsub_timer_tick",
         ):
             if (unsub := getattr(self, attr, None)) is not None:
                 unsub()
@@ -1474,40 +1579,11 @@ class LatterCoordinator:
     # BLE Presence, Handshake, Health Repairs & Area Handoff
     # -----------------------------------------------------------------------
 
-    async def async_sync_presence_beacon(self, trigger: Trigger) -> None:
+    async def async_sync_presence_beacon(self, trigger: str = "options") -> None:
+        _ = trigger
         if self.is_ble_tag:
             return
-        switch_ent = self.device_entity(
-            "switch", "_area_ble_presence_beacon", "_ble_presence_beacon"
-        )
-        if not switch_ent:
-            return
-        state = self.hass.states.get(switch_ent)
-        action = decide_beacon_action(
-            self.native_ble_tracking_enabled,
-            state.state if state is not None else None,
-            trigger,
-        )
-        if action is None:
-            return
-        try:
-            await self.hass.services.async_call(
-                "switch", action, {ATTR_ENTITY_ID: switch_ent}, blocking=True
-            )
-            _LOGGER.info(
-                "Presence beacon of '%s': %s (%s, native BLE tracking %s)",
-                self.device_slug,
-                action,
-                trigger,
-                "on" if self.native_ble_tracking_enabled else "off",
-            )
-        except Exception as err:  # noqa: BLE001
-            _LOGGER.warning(
-                "Couldn't %s the presence beacon of '%s': %s",
-                action.replace("_", " "),
-                self.device_slug,
-                err,
-            )
+        self._cached_prefs_payload = None
 
     @callback
     def _apply_device_health(
@@ -1590,7 +1666,12 @@ class LatterCoordinator:
             await self.on_area_changed_push_slots(self)
 
     async def async_handle_device_hello(
-        self, contract: int, boot_id: str, manifest_raw: str
+        self,
+        contract: int,
+        boot_id: str,
+        manifest_raw: str,
+        prefs_seq: int = 0,
+        dirty_prefs: str = "",
     ) -> None:
         _ = contract
         self._entered_hibernate = False
@@ -1601,12 +1682,205 @@ class LatterCoordinator:
             self._apply_device_health(parsed, str(boot_id or "").strip())
         if is_new_boot:
             self._local_needs_cold_resume = True
+            self.handle_timer_alarm_state(False, False, 0, False)
+
+        dev_seq = max(0, int(prefs_seq or 0))
+        incoming_prefs = parse_dirty_prefs_records(dirty_prefs)
+        ble_tracking_changed = False
+        if self.prefs_seq == 0:
+            raw_sub = self._live_subentry().data
+            seeded = {k: v for k, v in incoming_prefs.items() if k not in raw_sub}
+            if seeded:
+                cleaned = clean_device_settings(seeded, current=self.device_data)
+                if cleaned:
+                    merged = {**self.device_data, **cleaned}
+                    self.update_device_config(merged, bump_prefs_seq=False)
+                    ble_tracking_changed = CONF_NATIVE_BLE_TRACKING in cleaned
+            self.prefs_seq = max(
+                1, dev_seq + (1 if incoming_prefs and dev_seq > 0 else 0)
+            )
+            cur_sub = self._live_subentry().data
+            for k in (
+                *DEVICE_PREF_KEYS,
+                CONF_NATIVE_BLE_TRACKING,
+                CONF_DEVICE_CUSTOM_COLOR,
+            ):
+                if k in cur_sub:
+                    self.prefs_key_seq.setdefault(k, self.prefs_seq)
+        elif dev_seq > 0:
+            if incoming_prefs:
+                accepted = {
+                    k: v
+                    for k, v in incoming_prefs.items()
+                    if self.prefs_key_seq.get(k, 0) <= dev_seq
+                }
+                new_seq = max(self.prefs_seq, dev_seq) + 1
+                if accepted:
+                    cleaned = clean_device_settings(accepted, current=self.device_data)
+                    if cleaned:
+                        merged = {**self.device_data, **cleaned}
+                        self.update_device_config(merged, bump_prefs_seq=False)
+                        for k in cleaned:
+                            self.prefs_key_seq[k] = new_seq
+                        ble_tracking_changed = CONF_NATIVE_BLE_TRACKING in cleaned
+                self.prefs_seq = new_seq
+            elif dev_seq > self.prefs_seq:
+                self.prefs_seq = dev_seq
+
+        if ble_tracking_changed:
+            self._sync_ble_tracker()
+            get_ble_fabric(self.hass).notify_occupancy_listeners()
+
+        self._cached_prefs_payload = None
         self._schedule_persist_runtime_state()
         self._last_pushed_v3.clear()
         self.force_republish_all_domains()
         await self.async_push_beacon_uuid()
         await self._async_handle_reconnect()
         await self.async_sync_presence_beacon("hello")
+
+    async def async_update_device_prefs(
+        self,
+        updates: Mapping[str, Any],
+        *,
+        min_next_seq: int | None = None,
+        force_bump: bool = False,
+    ) -> dict[str, Any]:
+        """Validate, persist, and push subentry device preferences (sleep-safe when offline)."""
+        cleaned = clean_device_settings(dict(updates), current=self.device_data)
+        if not cleaned and not force_bump:
+            return {}
+        prev_seq = self.prefs_seq
+        if cleaned:
+            merged = {**self.device_data, **cleaned}
+            self.update_device_config(merged, bump_prefs_seq=True)
+        if (force_bump and self.prefs_seq == prev_seq) or (
+            min_next_seq is not None and self.prefs_seq < min_next_seq
+        ):
+            target_seq = max(
+                self.prefs_seq + (1 if self.prefs_seq == prev_seq else 0),
+                min_next_seq or 1,
+            )
+            self.prefs_seq = max(1, target_seq)
+            for k in cleaned:
+                self.prefs_key_seq[k] = self.prefs_seq
+            self._cached_prefs_payload = None
+            self._schedule_persist_runtime_state()
+        self._cached_prefs_payload = None
+        if CONF_NATIVE_BLE_TRACKING in cleaned:
+            await self.async_apply_options()
+            self.async_update_listeners()
+        else:
+            self.async_update_listeners()
+            self.async_notify_listeners()
+        return cleaned
+
+    async def async_handle_set_device_prefs(
+        self, base_seq: int, changes_raw: str
+    ) -> None:
+        """Apply live touchscreen preference edits and echo canonical `device_prefs` back to clear dirty_mask."""
+        incoming = parse_dirty_prefs_records(changes_raw)
+        if not incoming:
+            return
+        await self.async_update_device_prefs(
+            incoming,
+            min_next_seq=max(self.prefs_seq, max(0, int(base_seq or 0))) + 1,
+            force_bump=True,
+        )
+
+    @callback
+    def _stop_timer_tick(self) -> None:
+        if self._unsub_timer_tick is not None:
+            self._unsub_timer_tick()
+            self._unsub_timer_tick = None
+
+    @callback
+    def handle_timer_alarm_state(
+        self,
+        timer_running: bool,
+        timer_paused: bool,
+        remaining_sec: int,
+        ringing: bool,
+    ) -> None:
+        """Update event-driven timer and alarm state and manage the local 1 Hz countdown tick."""
+        self.timer_running = bool(timer_running)
+        self.timer_paused = bool(timer_paused) and not self.timer_running
+        self.timer_remaining_sec = max(0, int(remaining_sec or 0))
+        self._timer_anchor_mono = time.monotonic()
+        self.alarm_ringing = bool(ringing)
+
+        if self.timer_running and self.timer_remaining_sec > 0:
+            if self._unsub_timer_tick is None:
+
+                @callback
+                def _on_timer_tick(_now: datetime) -> None:
+                    if not self.timer_running or self.current_timer_remaining_sec <= 0:
+                        self._stop_timer_tick()
+                    self.async_update_listeners()
+
+                self._unsub_timer_tick = async_track_time_interval(
+                    self.hass, _on_timer_tick, timedelta(seconds=1)
+                )
+        else:
+            self._stop_timer_tick()
+
+        self.async_update_listeners()
+
+    async def async_send_device_command(
+        self, command: str, *, raise_if_offline: bool = False
+    ) -> bool:
+        """Send an immediate action (`restart`, `find_my`, `activate_screensaver`, `trigger_va`, `log_memory_report`) to the Device."""
+        cmd = str(command or "").strip().lower()
+        if self.is_ble_tag:
+            if raise_if_offline:
+                raise HomeAssistantError("BLE tags do not accept device commands")
+            return False
+
+        wifi_ent_id = find_device_entity_by_suffix(
+            self.hass,
+            self.esphome_device_id,
+            "sensor",
+            ("_wi_fi_signal", "_wifi_signal", "_ip_address"),
+        )
+        wifi_st = self.hass.states.get(wifi_ent_id) if wifi_ent_id else None
+        wifi_offline = wifi_st is not None and wifi_st.state == STATE_UNAVAILABLE
+        svc = esphome_service(
+            self.hass, self.esphome_device_id, "latter_device_command"
+        )
+
+        if not wifi_offline and not self._rpc_receiver.is_device_unavailable():
+            if svc:
+                try:
+                    await self.hass.services.async_call(
+                        "esphome", svc, {"command": cmd}, blocking=True
+                    )
+                    return True
+                except Exception as err:
+                    if raise_if_offline:
+                        raise HomeAssistantError(
+                            f"Failed to send '{cmd}' to {self.device_title}: {err}"
+                        ) from err
+                    return False
+            if cmd == "restart" and (
+                restart_ent := self.device_entity(
+                    "button", "_actions_restart_device", "_restart_device"
+                )
+            ):
+                rst_st = self.hass.states.get(restart_ent)
+                if rst_st is None or rst_st.state != STATE_UNAVAILABLE:
+                    await self.hass.services.async_call(
+                        "button",
+                        "press",
+                        {ATTR_ENTITY_ID: restart_ent},
+                        blocking=True,
+                    )
+                    return True
+
+        if raise_if_offline:
+            raise HomeAssistantError(
+                f"{self.device_title} is currently offline or sleeping"
+            )
+        return False
 
     async def async_execute_media_command(
         self,
@@ -1895,6 +2169,10 @@ class LatterCoordinator:
                 "remote_config",
                 str(self.get_remote_config_payload()[1].get("payload") or ""),
             ),
+            (
+                "device_prefs",
+                str(self.get_device_prefs_payload()[1].get("payload") or ""),
+            ),
         ):
             if not payload or self._last_pushed_v3.get(dom) == payload:
                 continue
@@ -1916,6 +2194,7 @@ class LatterCoordinator:
         self._cached_media_anchor = None
         self._cached_area_payload = None
         self._cached_remote_payload = None
+        self._cached_prefs_payload = None
         if self.weather_attributes and "condition" in self.weather_attributes:
             wa = self.weather_attributes
             wa["rev"], wa["payload"] = self._pack_domain_payload(
@@ -1952,8 +2231,37 @@ class LatterCoordinator:
         self._cached_media_payload = None
         self._cached_area_payload = None
         self._cached_remote_payload = None
+        self._cached_prefs_payload = None
         self._schedule_persist_runtime_state()
         self._notify_debouncer.async_schedule_call()
+
+    def get_device_prefs_payload(self) -> tuple[int, dict[str, Any]]:
+        if self._cached_prefs_payload is not None:
+            return self._cached_prefs_payload
+        sub_data = self._live_subentry().data
+        eff_seq = max(1, self.prefs_seq)
+        fields = pack_device_prefs_fields(
+            eff_seq,
+            sub_data,
+            native_ble_tracking=self.native_ble_tracking_enabled,
+            custom_color_hex=self.device_custom_color,
+            is_round_display=self.is_round_display,
+        )
+        cur_rev, packed = self._pack_domain_payload("device_prefs", *fields)
+        res = (
+            eff_seq,
+            {
+                "prefs_seq": eff_seq,
+                "power_profile": self.get_device_pref("power_profile"),
+                "wake_word_mode": self.get_device_pref("wake_word_mode"),
+                "alert_volume": self.get_device_pref("alert_volume"),
+                "ble_beacon_enabled": self.native_ble_tracking_enabled,
+                "rev": cur_rev,
+                "payload": packed,
+            },
+        )
+        self._cached_prefs_payload = res
+        return res
 
     def get_effective_remote_entities_for_device(self) -> list[str]:
         return resolve_effective_remote_entities(

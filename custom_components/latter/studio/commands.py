@@ -88,6 +88,7 @@ from .payload import (
     resolve_target_coordinator,
 )
 from .settings import (
+    ALLOWED_DEVICE_ACTIONS,
     DEVICE_ENTITY_VERBS,
     SYSTEM_ENTITY_VERBS,
     CatalogGate,
@@ -374,6 +375,32 @@ async def _cmd_esphome_entity_action(
     )
 
 
+async def _cmd_device_action(
+    hass: HomeAssistant,
+    coordinator: LatterCoordinator | None,
+    body: dict[str, Any],
+    _global_cfg: dict[str, Any],
+    _extra: dict[str, Any],
+) -> None:
+    assert coordinator is not None
+    action = str(body.get("action") or "").strip().lower()
+    if action not in ALLOWED_DEVICE_ACTIONS:
+        raise StudioCommandError(
+            "invalid_format",
+            f"Unsupported device action '{action}' (expected one of {', '.join(ALLOWED_DEVICE_ACTIONS)})",
+        )
+    try:
+        await coordinator.async_send_device_command(action, raise_if_offline=True)
+    except HomeAssistantError as err:
+        raise StudioCommandError("command_failed", str(err)) from err
+    log_studio_event(
+        hass,
+        "INFO",
+        coordinator.device_slug,
+        f"Sent device action '{action}' to '{coordinator.device_slug}'",
+    )
+
+
 async def _cmd_test_doorbell_speaker(
     hass: HomeAssistant,
     _coordinator: LatterCoordinator | None,
@@ -624,7 +651,8 @@ async def _cmd_save_device_config(
 ) -> None:
     assert coordinator is not None
     raw_cfg = dict(body.get("config") or {})
-    updates = clean_device_settings(raw_cfg)
+    current = coordinator.device_data
+    updates = clean_device_settings(raw_cfg, current=current)
 
     if CONF_DEVICE_REMOTE_GROUP in updates:
         valid_groups = {DEFAULT_DEVICE_REMOTE_GROUP, "all"} | {
@@ -645,7 +673,6 @@ async def _cmd_save_device_config(
     except ValueError as err:
         raise SettingsScopeError(str(err)) from None
 
-    current = coordinator.device_data
     if (
         CONF_WALLPAPER_CYCLE_MINUTES in updates
         and updates[CONF_WALLPAPER_CYCLE_MINUTES] > 0
@@ -885,7 +912,11 @@ async def _cmd_set_group_device_setting(
         raise StudioCommandError(
             "invalid_format", "No supported group device settings in payload"
         )
-    cleaned = clean_device_settings(filtered)
+    groups = get_device_groups(hass) if g_id not in ("all", "roaming", "stationary") else []
+    grp = next((g for g in groups if g.get("id") == g_id), None)
+    cleaned = clean_device_settings(
+        filtered, current=(grp.get("device_config") if grp is not None else None)
+    )
     all_coords = iter_coordinators(hass)
     if g_id == "all":
         targets = [c for c in all_coords if not c.is_ble_tag]
@@ -900,26 +931,24 @@ async def _cmd_set_group_device_setting(
             c for c in all_coords if not c.is_ble_tag and c.device_group == g_id
         ]
     for c in targets:
-        merged = {**c.device_data, **cleaned}
+        dev_cleaned = clean_device_settings(filtered, current=c.device_data)
+        merged = {**c.device_data, **dev_cleaned}
         if merged != c.device_data:
             c.update_device_config(merged)
             await c.async_apply_options()
             c._bind_wallpaper_cycle_timer()
             c.async_notify_listeners()
-    if g_id not in ("all", "roaming", "stationary"):
-        groups = get_device_groups(hass)
-        grp = next((g for g in groups if g.get("id") == g_id), None)
-        if grp is not None:
-            behavior_updates = {
-                k: v for k, v in cleaned.items() if k in GROUP_BEHAVIOR_DEVICE_KEYS
-            }
-            if behavior_updates:
-                dev_cfg = dict(grp.get("device_config") or {})
-                dev_cfg.update(behavior_updates)
-                grp["device_config"] = dev_cfg
-                await async_save_and_broadcast_global_config(
-                    hass, {CONF_DEVICE_GROUPS: groups}
-                )
+    if grp is not None:
+        behavior_updates = {
+            k: v for k, v in cleaned.items() if k in GROUP_BEHAVIOR_DEVICE_KEYS
+        }
+        if behavior_updates:
+            dev_cfg = dict(grp.get("device_config") or {})
+            dev_cfg.update(behavior_updates)
+            grp["device_config"] = dev_cfg
+            await async_save_and_broadcast_global_config(
+                hass, {CONF_DEVICE_GROUPS: groups}
+            )
 
 
 async def _cmd_rotate_signing_key(
@@ -1006,6 +1035,7 @@ _STUDIO_COMMAND_HANDLERS: dict[str, _CommandHandler] = {
     "delete_system_wallpaper": _cmd_delete_system_wallpaper,
     "save_system_config": _cmd_save_system_config,
     "save_device_config": _cmd_save_device_config,
+    "device_action": _cmd_device_action,
     "clear_internal_logs": _cmd_clear_internal_logs,
     "remove_device": _cmd_remove_device,
     "add_ble_device": _cmd_add_ble_device,

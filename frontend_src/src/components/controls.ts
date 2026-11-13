@@ -235,13 +235,18 @@ export function renderNativeControlRow(store: StudioStore, item: EspHomeEntityIt
   const label = entityLabel(item.name || item.entity_id);
   const dom = item.domain;
   const st = String(item.state ?? "");
-  const unavailable = st === "unavailable" || st === "unknown";
+  const prefKey = item.pref_key || "";
+  const unavailable = !prefKey && (st === "unavailable" || st === "unknown");
 
   if (dom === "switch") {
     const isOn = st === "on";
     const onToggle = (ev: Event): void => {
       const checked = (ev.currentTarget as HTMLInputElement).checked;
-      void store.espAction(item.entity_id, checked ? "turn_on" : "turn_off", checked ? "on" : "off");
+      if (prefKey) {
+        store.stageDeviceSetting(prefKey, checked);
+      } else {
+        void store.espAction(item.entity_id, checked ? "turn_on" : "turn_off", checked ? "on" : "off");
+      }
     };
     return renderSettingsRow({
       label,
@@ -260,7 +265,12 @@ export function renderNativeControlRow(store: StudioStore, item: EspHomeEntityIt
   if (dom === "select") {
     const opts = item.options || [];
     const onChange = (ev: Event): void => {
-      void store.espSelect(item.entity_id, (ev.currentTarget as HTMLSelectElement).value);
+      const nextVal = (ev.currentTarget as HTMLSelectElement).value;
+      if (prefKey) {
+        store.stageDeviceSetting(prefKey, nextVal);
+      } else {
+        void store.espSelect(item.entity_id, nextVal);
+      }
     };
     return renderSettingsRow({
       label,
@@ -279,7 +289,11 @@ export function renderNativeControlRow(store: StudioStore, item: EspHomeEntityIt
     const onCommit = (ev: Event): void => {
       const raw = Number((ev.currentTarget as HTMLInputElement).value);
       if (Number.isFinite(raw)) {
-        void store.espNumber(item.entity_id, raw);
+        if (prefKey) {
+          store.stageDeviceSetting(prefKey, raw);
+        } else {
+          void store.espNumber(item.entity_id, raw);
+        }
       }
     };
     if (max - min <= 250 && item.mode !== "box") {
@@ -319,12 +333,19 @@ export function renderNativeControlRow(store: StudioStore, item: EspHomeEntityIt
     const toastMsg = label.toLowerCase().includes("restart")
       ? "Restarting Device…"
       : `Triggered "${label}"`;
+    const onRun = (): void => {
+      if (item.device_command) {
+        void store.runDeviceAction(item.device_command, toastMsg);
+      } else {
+        void store.espAction(item.entity_id, "press", undefined, toastMsg);
+      }
+    };
     return renderSettingsRow({
       label,
       control: html`<button
         type="button"
         ?disabled=${buttonUnavailable}
-        @click=${() => void store.espAction(item.entity_id, "press", undefined, toastMsg)}
+        @click=${onRun}
         class="btn btn-secondary btn-compact"
       >
         Run
@@ -488,11 +509,18 @@ export function renderQuickActionGrid(
           : kind === "hibernate"
             ? "Hibernating Device…"
             : `Triggered "${label}"`;
+      const onTrigger = (): void => {
+        if (item.device_command) {
+          void store.runDeviceAction(item.device_command, toastMsg);
+        } else {
+          void store.espAction(item.entity_id, "press", undefined, toastMsg);
+        }
+      };
       return html`<button
         type="button"
         data-entity-id=${item.entity_id}
         ?disabled=${buttonUnavailable}
-        @click=${() => void store.espAction(item.entity_id, "press", undefined, toastMsg)}
+        @click=${onTrigger}
         class="btn btn-secondary quick-action-btn"
       >
         ${renderQuickActionIcon(kind)}

@@ -10,7 +10,7 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import EntityCategory
+from homeassistant.const import EntityCategory, UnitOfTime
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers import area_registry as ar, entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -64,8 +64,11 @@ async def async_setup_entry(
                     LatterAreaContextSensor(coordinator),
                     LatterCalendarAgendaSensor(coordinator),
                     LatterRemoteConfigSensor(coordinator),
+                    LatterDevicePrefsSensor(coordinator),
                 ]
             )
+            if coordinator.has_display:
+                dev_entities.append(LatterTimerRemainingSensor(coordinator))
         async_add_entities(dev_entities, config_subentry_id=coordinator.subentry_id)
 
     domain_data = hass.data.setdefault(DOMAIN, {})
@@ -316,6 +319,50 @@ class LatterRemoteConfigSensor(_BaseLatterSensor):
         """Return Protocol v3 remote_config revision."""
         _, attrs = self.coordinator.get_remote_config_payload()
         return {"rev": attrs.get("rev", 0)}
+
+
+class LatterDevicePrefsSensor(_BaseLatterSensor):
+    """Exposes hidden diagnostic sensor.<device_slug>_device_prefs for Protocol v3."""
+
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_entity_registry_visible_default = False
+
+    def __init__(self, coordinator: LatterCoordinator) -> None:
+        """Initialize device preferences diagnostic sensor."""
+        super().__init__(coordinator, "device_prefs")
+
+    @property
+    def native_value(self) -> str:
+        """Return active monotonic preference sequence."""
+        seq, _ = self.coordinator.get_device_prefs_payload()
+        return str(seq)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return Protocol v3 device_prefs revision and sequence."""
+        seq, attrs = self.coordinator.get_device_prefs_payload()
+        return {
+            "rev": attrs.get("rev", 0),
+            "prefs_seq": seq,
+        }
+
+
+class LatterTimerRemainingSensor(_BaseLatterSensor):
+    """Exposes sensor.<device_slug>_timer_remaining computed locally in HA at 1 Hz while running."""
+
+    _attr_device_class = SensorDeviceClass.DURATION
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfTime.SECONDS
+    _attr_icon = "mdi:timer-sand"
+
+    def __init__(self, coordinator: LatterCoordinator) -> None:
+        """Initialize timer remaining sensor."""
+        super().__init__(coordinator, "timer_remaining")
+
+    @property
+    def native_value(self) -> int:
+        """Return remaining timer seconds (0 when idle)."""
+        return self.coordinator.current_timer_remaining_sec
 
 
 class LatterCurrentAreaSensor(_BaseLatterSensor):

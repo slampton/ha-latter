@@ -145,6 +145,12 @@
       "remote_config": {
         "name": "Remote Config"
       },
+      "device_prefs": {
+        "name": "Device Preferences"
+      },
+      "timer_remaining": {
+        "name": "Timer Remaining"
+      },
       "person_current_area": {
         "name": "{person_name} Current Area"
       },
@@ -158,6 +164,33 @@
     "binary_sensor": {
       "area_ble_occupancy": {
         "name": "{area_name} BLE Occupancy"
+      },
+      "timer_active": {
+        "name": "Timer Active"
+      },
+      "alarm_ringing": {
+        "name": "Alarm Ringing"
+      }
+    },
+    "select": {
+      "power_profile": {
+        "name": "Power Profile"
+      },
+      "wake_word_mode": {
+        "name": "Wake Word Mode"
+      }
+    },
+    "number": {
+      "alert_volume": {
+        "name": "Alert Volume"
+      }
+    },
+    "button": {
+      "find_my_device": {
+        "name": "Find My Device"
+      },
+      "activate_screensaver": {
+        "name": "Activate Screensaver"
       }
     },
     "device_tracker": {

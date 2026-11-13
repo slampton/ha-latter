@@ -61,10 +61,17 @@ export function renderSystemGroupsView(store: StudioStore): TemplateResult {
       if (activeGrpId === "stationary") return !t.is_roaming;
       return t.device_group === activeGrpId;
     });
-    const baselineVal =
-      selectedGrpObj?.esphome_controls && fc.canonical_key
+    const rawBaselineVal = fc.pref_key
+      ? selectedGrpObj?.device_config?.[fc.pref_key]
+      : selectedGrpObj?.esphome_controls && fc.canonical_key
         ? selectedGrpObj.esphome_controls[fc.canonical_key]
         : undefined;
+    const baselineVal =
+      rawBaselineVal !== undefined && fc.domain === "switch" && typeof rawBaselineVal === "boolean"
+        ? rawBaselineVal
+          ? "on"
+          : "off"
+        : rawBaselineVal;
     if (!targets.length && baselineVal === undefined) return nothing;
 
     const states = targets.length

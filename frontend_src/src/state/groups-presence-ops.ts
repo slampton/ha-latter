@@ -129,6 +129,10 @@ export async function bulkToggleOp(
   ctrl: SharedControlItem,
   turnOn: boolean,
 ): Promise<void> {
+  if (ctrl.pref_key) {
+    await setGroupDeviceSettingOp(store, { [ctrl.pref_key]: turnOn });
+    return;
+  }
   const entityIds = filteredControlTargetsOp(store, ctrl);
   if (!entityIds.length) return;
   try {
@@ -153,6 +157,10 @@ export async function bulkSelectOp(
   ctrl: SharedControlItem,
   option: string,
 ): Promise<void> {
+  if (ctrl.pref_key) {
+    await setGroupDeviceSettingOp(store, { [ctrl.pref_key]: option });
+    return;
+  }
   const entityIds = filteredControlTargetsOp(store, ctrl);
   if (!entityIds.length) return;
   try {
@@ -177,8 +185,13 @@ export async function bulkNumberOp(
   ctrl: SharedControlItem,
   level: number,
 ): Promise<void> {
+  if (!Number.isFinite(level)) return;
+  if (ctrl.pref_key) {
+    await setGroupDeviceSettingOp(store, { [ctrl.pref_key]: level });
+    return;
+  }
   const entityIds = filteredControlTargetsOp(store, ctrl);
-  if (!entityIds.length || !Number.isFinite(level)) return;
+  if (!entityIds.length) return;
   try {
     const res = await store.ws.runSystemCommand(
       "system_entity_action",

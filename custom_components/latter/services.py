@@ -61,7 +61,9 @@ from .const import (
     SERVICE_SAVE_CUSTOM_COLOR,
     SERVICE_SET_ACTIVE_AREA,
     SERVICE_SET_ACTIVE_SPEAKER,
+    SERVICE_SET_DEVICE_PREFS,
     SERVICE_SET_DOCK_APPS,
+    SERVICE_TIMER_ALARM_STATE,
     target_kind,
 )
 from .coordinator import LatterCoordinator, resolve_coordinator
@@ -382,10 +384,14 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         contract = int(call.data.get("contract") or 3)
         boot_id = str(call.data.get("boot_id") or "").strip()
         manifest_raw = str(call.data.get("manifest") or "").strip()
+        prefs_seq = int(call.data.get("prefs_seq") or 0)
+        dirty_prefs = str(call.data.get("dirty_prefs") or "")
         await coord.async_handle_device_hello(
             contract=contract,
             boot_id=boot_id,
             manifest_raw=manifest_raw,
+            prefs_seq=prefs_seq,
+            dirty_prefs=dirty_prefs,
         )
 
     async def _handle_set_active_speaker(call: ServiceCall) -> None:
@@ -814,6 +820,8 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 vol.Optional("contract", default=3): vol.Coerce(int),
                 vol.Optional("boot_id", default=""): cv.string,
                 vol.Optional("manifest", default=""): cv.string,
+                vol.Optional("prefs_seq", default=0): vol.Coerce(int),
+                vol.Optional("dirty_prefs", default=""): cv.string,
             }
         ),
     )
@@ -1119,6 +1127,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             {
                 **coord.device_data,
                 CONF_DEVICE_CUSTOM_COLOR: raw_hex,
+                "color_profile": "Custom",
             }
         )
         await async_save_and_broadcast_global_config(
@@ -1241,6 +1250,52 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         supports_response=SupportsResponse.OPTIONAL,
     )
 
+    async def _handle_set_device_prefs(call: ServiceCall) -> None:
+        """Apply on-device preference changes reported by a Latter Device or automation."""
+        await _require_admin_if_user_call(hass, call)
+        coord = _resolve_coordinator_from_call(hass, call)
+        base_seq = int(call.data.get("base_seq") or 0)
+        changes = str(call.data.get("changes") or "")
+        await coord.async_handle_set_device_prefs(base_seq=base_seq, changes_raw=changes)
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SET_DEVICE_PREFS,
+        _handle_set_device_prefs,
+        schema=vol.Schema(
+            {
+                **BASE_TARGET_FIELDS,
+                vol.Optional("base_seq", default=0): vol.Coerce(int),
+                vol.Required("changes"): cv.string,
+            }
+        ),
+    )
+
+    async def _handle_timer_alarm_state(call: ServiceCall) -> None:
+        """Apply event-driven timer and alarm state reported by a Latter Device."""
+        coord = _resolve_coordinator_from_call(hass, call)
+        coord.handle_timer_alarm_state(
+            timer_running=_parse_bool(call.data.get("timer_running"), default=False),
+            timer_paused=_parse_bool(call.data.get("timer_paused"), default=False),
+            remaining_sec=int(call.data.get("remaining_sec") or 0),
+            ringing=_parse_bool(call.data.get("ringing"), default=False),
+        )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_TIMER_ALARM_STATE,
+        _handle_timer_alarm_state,
+        schema=vol.Schema(
+            {
+                **BASE_TARGET_FIELDS,
+                vol.Optional("timer_running", default=False): vol.Any(bool, int, cv.string),
+                vol.Optional("timer_paused", default=False): vol.Any(bool, int, cv.string),
+                vol.Optional("remaining_sec", default=0): vol.Coerce(int),
+                vol.Optional("ringing", default=False): vol.Any(bool, int, cv.string),
+            }
+        ),
+    )
+
 
 _BOUND_DEVICE_RPC_SERVICES: frozenset[str] = frozenset(
     {
@@ -1259,6 +1314,8 @@ _BOUND_DEVICE_RPC_SERVICES: frozenset[str] = frozenset(
         SERVICE_NOTIFY,
         SERVICE_SAVE_CUSTOM_COLOR,
         SERVICE_SET_DOCK_APPS,
+        SERVICE_SET_DEVICE_PREFS,
+        SERVICE_TIMER_ALARM_STATE,
         SERVICE_DOORBELL_INTERCOM,
     }
 )

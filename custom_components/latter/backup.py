@@ -42,6 +42,7 @@ from .const import (
 )
 from .groups import apply_esphome_controls_to_device, capture_live_esphome_controls
 from .hub import get_latter_system, iter_coordinators
+from .studio.settings import DEVICE_PREF_SPECS, resolve_device_pref_value
 
 DEVICE_CONFIG_EXPORT_KEYS: tuple[str, ...] = (
     CONF_DEVICE_SLUG,
@@ -68,6 +69,7 @@ DEVICE_CONFIG_EXPORT_KEYS: tuple[str, ...] = (
     CONF_SECURITY_PIN_POLICY,
     "device_remote_group",
     CONF_SITE_ID,
+    *tuple(s.key for s in DEVICE_PREF_SPECS if s.key != "weather_sim_condition"),
 )
 
 
@@ -104,11 +106,14 @@ async def async_post_backup(hass: HomeAssistant) -> None:
 
 def _serialize_device_snapshot(hass: HomeAssistant, coordinator: Any) -> dict[str, Any]:
     """Build a portable dictionary snapshot of a single device's Latter config & live ESPHome controls."""
+    pref_keys = {s.key for s in DEVICE_PREF_SPECS}
     dev_cfg: dict[str, Any] = {}
     for k in DEVICE_CONFIG_EXPORT_KEYS:
         val = coordinator.get_opt(k)
         if val is not None:
             dev_cfg[k] = val
+        elif k in pref_keys:
+            dev_cfg[k] = resolve_device_pref_value(coordinator.device_data, k)
     dev_cfg.setdefault(CONF_DEVICE_GROUP, DEFAULT_DEVICE_GROUP)
     return {
         "device_slug": coordinator.device_slug,

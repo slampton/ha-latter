@@ -914,6 +914,18 @@ async def async_execute_area_action(
         )
         return
 
+    if domain == "media_player" and level is not None and not action:
+        await hass.services.async_call(
+            "media_player",
+            "volume_set",
+            {
+                ATTR_ENTITY_ID: entity_id,
+                "volume_level": round(max(0.0, min(100.0, float(level))) / 100.0, 2),
+            },
+            blocking=False,
+        )
+        return
+
     if domain == "alarm_control_panel":
         svc_map = {
             "arm_home": "alarm_arm_home",

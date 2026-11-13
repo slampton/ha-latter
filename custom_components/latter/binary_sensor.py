@@ -1,4 +1,4 @@
-"""Per-Area BLE Occupancy Binary Sensors for the Latter integration."""
+"""Per-Area BLE Occupancy and per-Device Timer/Alarm Binary Sensors for Latter."""
 
 from __future__ import annotations
 
@@ -14,8 +14,9 @@ from homeassistant.helpers import area_registry as ar, entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .const import DOMAIN, normalize_device_slug
-from .hub import get_system_device_info
+from .const import DOMAIN, build_device_entity_id, normalize_device_slug
+from .coordinator import LatterCoordinator
+from .hub import LatterSystemHub, get_latter_system, get_system_device_info
 from .presence import get_ble_fabric, get_ble_proxy_area_ids
 
 PARALLEL_UPDATES = 0
@@ -27,7 +28,23 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Set up per-area BLE occupancy binary sensors once under the Latter System hub."""
+    """Set up per-Device timer/alarm binary sensors and per-Area BLE occupancy binary sensors."""
+    runtime = entry.runtime_data
+    if isinstance(runtime, LatterSystemHub):
+        coordinators = list(runtime.coordinators.values())
+    else:
+        sys_obj = get_latter_system(hass)
+        coordinators = list(sys_obj.coordinators.values()) if sys_obj else []
+
+    for coordinator in coordinators:
+        if not coordinator.is_ble_tag and coordinator.has_display:
+            async_add_entities(
+                [
+                    LatterTimerActiveBinarySensor(coordinator),
+                    LatterAlarmRingingBinarySensor(coordinator),
+                ],
+                config_subentry_id=coordinator.subentry_id,
+            )
     domain_data = hass.data.setdefault(DOMAIN, {})
     created_areas: set[str] = domain_data.setdefault(
         DATA_CREATED_AREA_OCCUPANCY_IDS, set()
@@ -191,3 +208,67 @@ class LatterAreaBleOccupancyBinarySensor(BinarySensorEntity):
             "closest_distance_m": occ.get("closest_distance_m"),
             "closest_distance_ft": occ.get("closest_distance_ft"),
         }
+
+
+class _BaseLatterDeviceBinarySensor(BinarySensorEntity):
+    """Base binary sensor subscribed to event-driven LatterCoordinator updates."""
+
+    _attr_has_entity_name = True
+    _attr_should_poll = False
+
+    def __init__(self, coordinator: LatterCoordinator, suffix: str) -> None:
+        """Initialize the device binary sensor."""
+        self.coordinator = coordinator
+        self._attr_translation_key = suffix
+        self._attr_unique_id = f"{coordinator.subentry_id}_{suffix}"
+        self.entity_id = build_device_entity_id(
+            coordinator.device_slug, suffix, "binary_sensor"
+        )
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return canonical Latter DeviceInfo."""
+        return self.coordinator.get_device_info()
+
+    async def async_added_to_hass(self) -> None:
+        """Subscribe to coordinator updates."""
+        self.async_on_remove(
+            self.coordinator.async_add_listener(self._handle_coordinator_update)
+        )
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Write updated binary state to Home Assistant."""
+        self.async_write_ha_state()
+
+
+class LatterTimerActiveBinarySensor(_BaseLatterDeviceBinarySensor):
+    """Exposes binary_sensor.<device_slug>_timer_active."""
+
+    _attr_device_class = BinarySensorDeviceClass.RUNNING
+    _attr_icon = "mdi:timer-outline"
+
+    def __init__(self, coordinator: LatterCoordinator) -> None:
+        """Initialize timer active binary sensor."""
+        super().__init__(coordinator, "timer_active")
+
+    @property
+    def is_on(self) -> bool:
+        """Return True while the countdown timer is actively ticking."""
+        return self.coordinator.timer_running
+
+
+class LatterAlarmRingingBinarySensor(_BaseLatterDeviceBinarySensor):
+    """Exposes binary_sensor.<device_slug>_alarm_ringing."""
+
+    _attr_device_class = BinarySensorDeviceClass.SOUND
+    _attr_icon = "mdi:alarm-bell"
+
+    def __init__(self, coordinator: LatterCoordinator) -> None:
+        """Initialize alarm ringing binary sensor."""
+        super().__init__(coordinator, "alarm_ringing")
+
+    @property
+    def is_on(self) -> bool:
+        """Return True while an alarm or expired timer alert is actively ringing."""
+        return self.coordinator.alarm_ringing

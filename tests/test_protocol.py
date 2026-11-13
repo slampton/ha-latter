@@ -70,6 +70,7 @@ class TestProtocolV3Contract(unittest.TestCase):
             "remote_config": 3,
             "weather_forecast": 14,
             "calendar_agenda": 3,
+            "device_prefs": 48,
         }
         domains = self.schema.get("domains", {})
         self.assertEqual(set(domains.keys()), set(expected_counts.keys()))
@@ -976,29 +977,73 @@ class TestResetPolicy(unittest.TestCase):
             self.assertIn(key, strings["exceptions"], key)
 
 
-class TestPresenceBeacon(unittest.TestCase):
-    """When Latter turns the device's BLE presence beacon on or off, exercised through `presence_beacon.py`."""
+class TestDevicePrefsProtocol(unittest.TestCase):
+    """Protocol v3 `device_prefs` packing, offline `dirty_prefs` parsing, and `PowerProfile` cascade."""
 
-    def test_hello_only_turns_on_for_tracked_devices(self) -> None:
-        d = presence_beacon.decide_beacon_action
-        self.assertEqual(d(True, "off", "hello"), "turn_on")
-        self.assertIsNone(d(True, "on", "hello"))
-        self.assertIsNone(d(False, "on", "hello"), "a hello never turns the beacon off")
-        self.assertIsNone(d(False, "off", "hello"))
+    def test_pack_device_prefs_matches_schema_field_count_and_ble_consolidation(self) -> None:
+        schema = json.loads(HA_PROTO_JSON.read_text(encoding="utf-8"))
+        spec_fields = schema["domains"]["device_prefs"]["fields"]
+        fields = _PAYLOADS_MOD.pack_device_prefs_fields(
+            9,
+            {
+                "power_profile": "Handheld Roaming",
+                "clock_face": "Modern Roman (Analog)",
+                "alert_volume": 75,
+            },
+            native_ble_tracking=True,
+            custom_color_hex="#112233",
+            is_round_display=False,
+        )
+        self.assertEqual(len(fields), len(spec_fields))
+        self.assertEqual(fields[0], 9)
+        idx_by_name = {f["name"]: i for i, f in enumerate(spec_fields)}
+        # Rectangular display clamps "Modern Roman (Analog)" to "Minimal Digital"
+        self.assertEqual(fields[idx_by_name["clock_face"]], "Minimal Digital")
+        self.assertIs(fields[idx_by_name["ble_beacon_enabled"]], True)
+        self.assertEqual(fields[idx_by_name["theme_color_hex"]], "#112233")
+        self.assertEqual(fields[idx_by_name["alert_volume"]], 75)
 
-    def test_options_mirror_the_tracking_option(self) -> None:
-        d = presence_beacon.decide_beacon_action
-        self.assertEqual(d(True, "off", "options"), "turn_on")
-        self.assertIsNone(d(True, "on", "options"))
-        self.assertEqual(d(False, "on", "options"), "turn_off")
-        self.assertIsNone(d(False, "off", "options"))
+        packer = _PAYLOADS_MOD.DomainPayloadPacker()
+        _rev, wire = packer.pack("device_prefs", *fields)
+        wire_parts = wire.split("\x1f")
+        self.assertEqual(len(wire_parts), 3 + len(spec_fields))
+        self.assertEqual(wire_parts[3 + idx_by_name["ble_beacon_enabled"]], "1")
+        self.assertEqual(wire_parts[3 + idx_by_name["clock_face"]], "Minimal Digital")
 
-    def test_missing_or_unavailable_switch_is_left_alone(self) -> None:
-        d = presence_beacon.decide_beacon_action
-        for state in (None, "unavailable", "unknown", ""):
-            for tracking in (True, False):
-                for trigger in ("hello", "options"):
-                    self.assertIsNone(d(tracking, state, trigger), (state, tracking, trigger))
+    def test_parse_dirty_prefs_records_validates_and_maps_ble_beacon(self) -> None:
+        raw = "\x1e".join(
+            [
+                "alert_volume=65",
+                "ble_beacon_enabled=0",
+                "docked_screensaver=1",
+                "color_profile=NotARealProfile",
+                "clock_face=Modern Digital (Bold)",
+            ]
+        )
+        parsed = _PAYLOADS_MOD.parse_dirty_prefs_records(raw)
+        self.assertEqual(
+            parsed,
+            {
+                "alert_volume": 65,
+                "native_ble_tracking": False,
+                "docked_screensaver": True,
+                "clock_face": "Modern Digital (Bold)",
+            },
+        )
+
+    def test_power_profile_cascade_and_custom_flip(self) -> None:
+        cascaded = studio_scope.clean_device_settings({"power_profile": "Always-On Wall / Desk"})
+        self.assertEqual(cascaded["power_profile"], "Always-On Wall / Desk")
+        self.assertEqual(cascaded["wake_word_mode"], "Always On")
+        self.assertEqual(cascaded["battery_screen_timeout"], "Never")
+        self.assertEqual(cascaded["battery_hibernate_timeout"], "Disabled")
+
+        flipped = studio_scope.clean_device_settings(
+            {"tap_to_wake": "Disabled"},
+            current=cascaded,
+        )
+        self.assertEqual(flipped["tap_to_wake"], "Disabled")
+        self.assertEqual(flipped["power_profile"], "Custom")
 
 
 class TestBoundRpcReassembler(unittest.TestCase):

@@ -34,6 +34,16 @@ from .const import (
     DOMAIN,
 )
 from .identity import device_entities, esphome_service, get_bound_esphome_device
+from .studio.settings import (
+    DEVICE_PREF_KEYS,
+    DEVICE_PREF_SPEC_MAP,
+    DEVICE_PREF_SPECS,
+    POWER_PROFILE_PREFS,
+    POWER_PROFILE_SUBKEYS,
+    DevicePrefSpec,
+    clean_device_settings,
+    resolve_device_pref_value,
+)
 
 if TYPE_CHECKING:
     from .coordinator import LatterCoordinator
@@ -594,6 +604,30 @@ def get_esphome_device_entities(
 # Device Groups & Power Profile Baselines
 # ---------------------------------------------------------------------------
 
+def coordinator_supports_pref(coordinator: Any, spec: DevicePrefSpec) -> bool:
+    """Return True when `coordinator`'s hardware supports preference `spec`."""
+    if getattr(coordinator, "is_ble_tag", False):
+        return False
+    cap = spec.capability
+    if cap == "display":
+        return bool(getattr(coordinator, "has_display", True))
+    if cap == "display_imu":
+        return bool(getattr(coordinator, "has_display", True)) and bool(
+            getattr(coordinator, "has_imu", True)
+        )
+    if cap == "display_battery":
+        return bool(getattr(coordinator, "has_display", True)) and bool(
+            getattr(coordinator, "has_battery", True)
+        )
+    if cap == "mic":
+        return bool(getattr(coordinator, "has_mic", True))
+    if cap == "speaker":
+        return bool(getattr(coordinator, "has_speaker", True))
+    if cap == "beacon":
+        return bool(getattr(coordinator, "has_ble_beacon", True))
+    return True
+
+
 # Tier 2: Operational Behavior keys synced automatically by a Device Group's baseline.
 GROUP_BEHAVIOR_DEVICE_KEYS: tuple[str, ...] = (
     CONF_NATIVE_BLE_TRACKING,
@@ -602,6 +636,7 @@ GROUP_BEHAVIOR_DEVICE_KEYS: tuple[str, ...] = (
     CONF_AREA_FOLLOW_DWELL_S,
     CONF_AREA_HANDOFF,
     CONF_SECURITY_PIN_POLICY,
+    *tuple(s.key for s in DEVICE_PREF_SPECS if s.group_tier == "behavior"),
 )
 
 # Tier 3: Personal & Area Appearance/Layout keys preserved per-device on group join/sync.
@@ -614,6 +649,7 @@ GROUP_APPEARANCE_DEVICE_KEYS: tuple[str, ...] = (
     CONF_WALLPAPER_CYCLE_MINUTES,
     CONF_DEVICE_CUSTOM_COLOR,
     "device_remote_group",
+    *tuple(s.key for s in DEVICE_PREF_SPECS if s.group_tier == "appearance"),
 )
 
 # Tier 3 ESPHome controls (personal/Area appearance & layout; not overwritten when syncing a Group's Tier 2 baseline).
@@ -719,14 +755,14 @@ DEFAULT_DEVICE_GROUPS: list[dict[str, Any]] = [
             CONF_SYNC_DEVICE_AREA: True,
             CONF_AREA_FOLLOW_DWELL_S: 10,
             CONF_AREA_HANDOFF: False,
+            "power_profile": "Handheld Roaming",
+            **POWER_PROFILE_PREFS["Handheld Roaming"],
+            "auto_brightness_mode": "Sun Synchronized",
+            "day_brightness": "90%",
+            "night_brightness": "70%",
+            "ble_beacon_mode": "Handheld Only",
         },
-        "esphome_controls": {
-            "select:power_profile": "Handheld Roaming",
-            **POWER_PROFILE_SPECS["Handheld Roaming"],
-            "select:auto_brightness_mode": "Sun Synchronized",
-            "select:day_brightness": "90%",
-            "select:night_brightness": "70%",
-        },
+        "esphome_controls": {},
     },
     {
         "id": "wearables",
@@ -739,14 +775,14 @@ DEFAULT_DEVICE_GROUPS: list[dict[str, Any]] = [
             CONF_SYNC_DEVICE_AREA: True,
             CONF_AREA_FOLLOW_DWELL_S: 10,
             CONF_AREA_HANDOFF: False,
+            "power_profile": "Wearable Watch",
+            **POWER_PROFILE_PREFS["Wearable Watch"],
+            "auto_brightness_mode": "Sun Synchronized",
+            "day_brightness": "80%",
+            "night_brightness": "60%",
+            "ble_beacon_mode": "Handheld + Screen Off",
         },
-        "esphome_controls": {
-            "select:power_profile": "Wearable Watch",
-            **POWER_PROFILE_SPECS["Wearable Watch"],
-            "select:auto_brightness_mode": "Sun Synchronized",
-            "select:day_brightness": "80%",
-            "select:night_brightness": "60%",
-        },
+        "esphome_controls": {},
     },
     {
         "id": "bedrooms",
@@ -759,15 +795,14 @@ DEFAULT_DEVICE_GROUPS: list[dict[str, Any]] = [
             CONF_SYNC_DEVICE_AREA: False,
             CONF_AREA_FOLLOW_DWELL_S: 10,
             CONF_AREA_HANDOFF: False,
+            "power_profile": "Tabletop Dock",
+            **POWER_PROFILE_PREFS["Tabletop Dock"],
+            "auto_brightness_mode": "Sun Synchronized",
+            "day_brightness": "80%",
+            "night_brightness": "60%",
+            "alert_volume": 50,
         },
-        "esphome_controls": {
-            "select:power_profile": "Tabletop Dock",
-            **POWER_PROFILE_SPECS["Tabletop Dock"],
-            "select:auto_brightness_mode": "Sun Synchronized",
-            "select:day_brightness": "80%",
-            "select:night_brightness": "60%",
-            "number:alert_volume": 50,
-        },
+        "esphome_controls": {},
     },
     {
         "id": "common_areas",
@@ -780,20 +815,19 @@ DEFAULT_DEVICE_GROUPS: list[dict[str, Any]] = [
             CONF_SYNC_DEVICE_AREA: False,
             CONF_AREA_FOLLOW_DWELL_S: 10,
             CONF_AREA_HANDOFF: False,
+            "power_profile": "Custom",
+            "wake_word_mode": "Always On",
+            "tap_to_wake": "Always On",
+            "pickup_to_wake": "Disabled",
+            "battery_screen_timeout": "30s",
+            "docked_idle_timeout": "5 min",
+            "battery_hibernate_timeout": "15 min",
+            "docked_screensaver": True,
+            "auto_brightness_mode": "Sun Synchronized",
+            "day_brightness": "90%",
+            "night_brightness": "70%",
         },
-        "esphome_controls": {
-            "select:power_profile": "Custom",
-            "select:wake_word_mode": "Always On",
-            "select:tap_to_wake": "Always On",
-            "select:pickup_to_wake": "Disabled",
-            "select:battery_screen_timeout": "30s",
-            "select:docked_idle_timeout": "5 min",
-            "select:battery_hibernate_timeout": "15 min",
-            "switch:docked_screensaver": "on",
-            "select:auto_brightness_mode": "Sun Synchronized",
-            "select:day_brightness": "90%",
-            "select:night_brightness": "70%",
-        },
+        "esphome_controls": {},
     },
     {
         "id": "wall_panels",
@@ -806,14 +840,13 @@ DEFAULT_DEVICE_GROUPS: list[dict[str, Any]] = [
             CONF_SYNC_DEVICE_AREA: False,
             CONF_AREA_FOLLOW_DWELL_S: 10,
             CONF_AREA_HANDOFF: False,
+            "power_profile": "Always-On Wall / Desk",
+            **POWER_PROFILE_PREFS["Always-On Wall / Desk"],
+            "auto_brightness_mode": "Sun Synchronized",
+            "day_brightness": "90%",
+            "night_brightness": "70%",
         },
-        "esphome_controls": {
-            "select:power_profile": "Always-On Wall / Desk",
-            **POWER_PROFILE_SPECS["Always-On Wall / Desk"],
-            "select:auto_brightness_mode": "Sun Synchronized",
-            "select:day_brightness": "90%",
-            "select:night_brightness": "70%",
-        },
+        "esphome_controls": {},
     },
 ]
 
@@ -1034,12 +1067,29 @@ def compute_device_group_sync_status(
         return "unmanaged"
 
     is_roaming = bool(getattr(coordinator, "is_roaming_device", True))
+    dev_data = getattr(coordinator, "device_data", {}) or {}
+    base_prof = str(base_dev.get("power_profile") or "").strip()
+    cur_prof = resolve_device_pref_value(dev_data, "power_profile")
+    prof_preset = POWER_PROFILE_PREFS.get(base_prof)
     for k, want_v in base_dev.items():
         if k not in GROUP_BEHAVIOR_DEVICE_KEYS:
             continue
         if k in (CONF_SYNC_DEVICE_AREA, CONF_AREA_FOLLOW_DWELL_S) and not is_roaming:
             continue
-        cur_v = coordinator.get_opt(k)
+        spec = DEVICE_PREF_SPEC_MAP.get(k)
+        if spec is not None:
+            if not coordinator_supports_pref(coordinator, spec):
+                continue
+            if (
+                prof_preset is not None
+                and k in POWER_PROFILE_SUBKEYS
+                and cur_prof == base_prof
+                and _same_control_val(want_v, prof_preset.get(k))
+            ):
+                continue
+            cur_v = resolve_device_pref_value(dev_data, k)
+        else:
+            cur_v = coordinator.get_opt(k)
         if isinstance(want_v, bool):
             if bool(cur_v) != want_v:
                 return "customized"
@@ -1049,14 +1099,14 @@ def compute_device_group_sync_status(
     live_esp = capture_live_esphome_controls(
         hass, coordinator.esphome_device_id, behavior_only=True
     )
-    if live_esp:
-        base_prof = str(base_esp.get("select:power_profile") or "").strip()
+    if live_esp and base_esp:
+        base_esp_prof = str(base_esp.get("select:power_profile") or "").strip()
         live_prof = str(live_esp.get("select:power_profile") or "").strip()
-        prof_spec = POWER_PROFILE_SPECS.get(base_prof)
+        prof_spec = POWER_PROFILE_SPECS.get(base_esp_prof)
         for ckey, want_val in base_esp.items():
             if ckey not in live_esp:
                 continue
-            if prof_spec is not None and ckey in prof_spec and live_prof == base_prof:
+            if prof_spec is not None and ckey in prof_spec and live_prof == base_esp_prof:
                 continue
             if not _same_control_val(live_esp[ckey], want_val):
                 return "customized"
@@ -1069,12 +1119,18 @@ def seed_group_baseline_from_coordinator(
     group: dict[str, Any],
     coordinator: Any,
 ) -> dict[str, Any]:
-    """Capture a Device's Tier 2 Operational Behavior settings into `group` as its new baseline."""
+    """Capture a Device's Operational Behavior settings into `group` as its new baseline."""
     dev_cfg: dict[str, Any] = {}
+    dev_data = getattr(coordinator, "device_data", {}) or {}
     for k in GROUP_BEHAVIOR_DEVICE_KEYS:
-        val = coordinator.get_opt(k)
-        if val is not None:
-            dev_cfg[k] = val
+        spec = DEVICE_PREF_SPEC_MAP.get(k)
+        if spec is not None:
+            if coordinator_supports_pref(coordinator, spec):
+                dev_cfg[k] = resolve_device_pref_value(dev_data, k)
+        else:
+            val = coordinator.get_opt(k)
+            if val is not None:
+                dev_cfg[k] = val
     esp_ctrls = capture_live_esphome_controls(
         hass, coordinator.esphome_device_id, behavior_only=True
     )
@@ -1124,20 +1180,28 @@ async def async_apply_group_baseline_to_coordinators(
     for coord in targets:
         if getattr(coord, "is_ble_tag", False):
             continue
-        merged: dict[str, Any] = dict(coord.device_data)
+        cur_data: dict[str, Any] = dict(coord.device_data)
         is_roaming = bool(getattr(coord, "is_roaming_device", True))
-        changed_cfg = False
+        updates: dict[str, Any] = {}
         for k in GROUP_BEHAVIOR_DEVICE_KEYS:
             if k not in dev_cfg or dev_cfg[k] is None:
                 continue
             if k in (CONF_SYNC_DEVICE_AREA, CONF_AREA_FOLLOW_DWELL_S) and not is_roaming:
                 continue
-            if merged.get(k) != dev_cfg[k]:
-                merged[k] = dev_cfg[k]
-                changed_cfg = True
-        if changed_cfg:
-            coord.update_device_config(merged)
-            await coord.async_apply_options()
+            spec = DEVICE_PREF_SPEC_MAP.get(k)
+            if spec is not None:
+                if not coordinator_supports_pref(coord, spec):
+                    continue
+                if resolve_device_pref_value(cur_data, k) != dev_cfg[k] or k not in cur_data:
+                    updates[k] = dev_cfg[k]
+            elif cur_data.get(k) != dev_cfg[k]:
+                updates[k] = dev_cfg[k]
+        if updates:
+            cleaned = clean_device_settings(updates, current=cur_data)
+            merged = {**cur_data, **(cleaned or updates)}
+            if merged != cur_data:
+                coord.update_device_config(merged)
+                await coord.async_apply_options()
         coord.async_notify_listeners()
         updated_devices += 1
         if isinstance(esp_ctrls, dict) and esp_ctrls:
@@ -1262,6 +1326,14 @@ async def async_reset_device(
         coordinator._bind_wallpaper_cycle_timer()
         coordinator.async_notify_listeners()
         _LOGGER.info("Reset the Latter options of '%s' to defaults", coordinator.device_slug)
+
+    elif device_settings and not coordinator.is_ble_tag:
+        stripped = {
+            k: v for k, v in coordinator.device_data.items() if k not in DEVICE_PREF_KEYS
+        }
+        if stripped != coordinator.device_data:
+            coordinator.update_device_config(stripped)
+            coordinator.async_notify_listeners()
 
     if reset_action is not None:
         try:

@@ -17,7 +17,6 @@ import type {
   AreaPresenceRow,
   BleSurveyDeltaEvent,
   BleSurveyRow,
-  DeviceConfig,
   DeviceViewId,
   EspHomeEntityItem,
   HassRoute,
@@ -66,6 +65,7 @@ import {
   getEnabledActivitySourcesOp,
   getEnabledDockTokensOp,
   moveDockAppTokenOp,
+  overlayDevicePrefsOnSections,
   overlayPendingEntityStates,
   PENDING_ENTITY_STATES,
   type PendingEntityEntry,
@@ -73,6 +73,7 @@ import {
   removeRemoteGroupRowOp,
   removeStringListRowOp,
   removeVolumeOverrideRowOp,
+  runDeviceActionOp,
   selectWallpaperSourceOp,
   setAllWallpaperFavoritesOp,
   setWallpaperRotationOp,
@@ -711,10 +712,7 @@ export class StudioStore implements ReactiveController {
 
     const devBucket = merged.subentry_id ? this.pendingDeviceBuckets.get(merged.subentry_id) : undefined;
     if (devBucket && merged.config) {
-      merged.config = {
-        ...merged.config,
-        ...(devBucket.patch as Partial<DeviceConfig>),
-      };
+      overlayDevicePrefsOnSections(merged, devBucket.patch);
     }
 
     overlayPendingEntityStates(merged, this.pendingEntityStates);
@@ -771,8 +769,12 @@ export class StudioStore implements ReactiveController {
 
   // ---------- Delegated Domain Operations ----------
 
-  stageDeviceSetting(key: keyof DeviceConfig, value: unknown, controlDomId?: string): void {
+  stageDeviceSetting(key: string, value: unknown, controlDomId?: string): void {
     stageDeviceSettingOp(this, key, value, controlDomId);
+  }
+
+  async runDeviceAction(action: string, toastMessage?: string): Promise<boolean> {
+    return runDeviceActionOp(this, action, toastMessage);
   }
 
   async flushDeviceBucket(targetSubentryId: string): Promise<void> {

@@ -30,6 +30,7 @@ export const SYSTEM_WS_COMMANDS = new Set([
 
 export const DEVICE_WS_COMMANDS = new Set([
   "esphome_entity_action",
+  "device_action",
   "select_wallpaper",
   "toggle_wallpaper_favorite",
   "delete_wallpaper",

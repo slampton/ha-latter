@@ -60,12 +60,49 @@ def manifest_has_display(manifest: Mapping[str, Any]) -> bool:
     return manifest_flag(manifest, "display") != 0
 
 
+def manifest_has_mic(manifest: Mapping[str, Any]) -> bool:
+    """Return False only when the manifest reports `mic == 0`."""
+    return manifest_flag(manifest, "mic") != 0
+
+
+def manifest_has_speaker(manifest: Mapping[str, Any]) -> bool:
+    """Return False only when the manifest reports `spk == 0`."""
+    return manifest_flag(manifest, "spk") != 0
+
+
+def manifest_has_audio(manifest: Mapping[str, Any]) -> bool:
+    """Return True when the hardware exposes a microphone or speaker."""
+    return manifest_has_mic(manifest) or manifest_has_speaker(manifest)
+
+
+def manifest_has_imu(manifest: Mapping[str, Any]) -> bool:
+    """Return True when the hardware exposes an active motion IMU (non-stationary `imu == 1`)."""
+    if not manifest:
+        return True
+    return manifest_flag(manifest, "imu") == 1 and manifest_flag(manifest, "stationary") != 1
+
+
+def manifest_has_battery(manifest: Mapping[str, Any]) -> bool:
+    """Return True when the hardware has a rechargeable battery (`battery == 1` or non-stationary pre-hello)."""
+    if not manifest:
+        return True
+    return manifest_flag(manifest, "battery") == 1
+
+
+def manifest_is_round(manifest: Mapping[str, Any]) -> bool:
+    """Return True when the hardware display shape is circular."""
+    if not manifest_has_display(manifest):
+        return False
+    return str(manifest.get("shape") or "circle").strip().lower() != "square"
+
+
 # ---------------------------------------------------------------------------
 # Bound ESPHome Device Identity & Service Resolution
 # ---------------------------------------------------------------------------
 
 LATTER_CONTRACT_ACTION_SUFFIXES: tuple[str, ...] = (
     "_latter_push_v3",
+    "_latter_device_command",
     "_set_browse_slots",
     "_set_area_slots",
     "_show_notification",

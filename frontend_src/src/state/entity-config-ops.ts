@@ -35,6 +35,135 @@ const ENTITY_OPTIMISTIC_TTL_MS = 8000;
 
 export const PENDING_ENTITY_STATES = new Map<string, PendingEntityEntry>();
 
+const POWER_PROFILE_PREFS: Record<string, Record<string, string | boolean>> = {
+  "Portable Carry": {
+    wake_word_mode: "Docked Only",
+    tap_to_wake: "Docked Only",
+    pickup_to_wake: "Docked Only",
+    battery_screen_timeout: "30s",
+    docked_idle_timeout: "1 min",
+    battery_hibernate_timeout: "15 min",
+    docked_screensaver: true,
+  },
+  "Handheld Roaming": {
+    wake_word_mode: "Docked Only",
+    tap_to_wake: "Always On",
+    pickup_to_wake: "Always On",
+    battery_screen_timeout: "30s",
+    docked_idle_timeout: "1 min",
+    battery_hibernate_timeout: "30 min",
+    docked_screensaver: true,
+  },
+  "Wearable Watch": {
+    wake_word_mode: "Docked Only",
+    tap_to_wake: "Always On",
+    pickup_to_wake: "Always On",
+    battery_screen_timeout: "15s",
+    docked_idle_timeout: "1 min",
+    battery_hibernate_timeout: "15 min",
+    docked_screensaver: true,
+  },
+  "Tabletop Dock": {
+    wake_word_mode: "Docked Only",
+    tap_to_wake: "Docked Only",
+    pickup_to_wake: "Disabled",
+    battery_screen_timeout: "30s",
+    docked_idle_timeout: "5 min",
+    battery_hibernate_timeout: "15 min",
+    docked_screensaver: true,
+  },
+  "Always-On Wall / Desk": {
+    wake_word_mode: "Always On",
+    tap_to_wake: "Always On",
+    pickup_to_wake: "Disabled",
+    battery_screen_timeout: "Never",
+    docked_idle_timeout: "5 min",
+    battery_hibernate_timeout: "Disabled",
+    docked_screensaver: true,
+  },
+};
+
+const POWER_PROFILE_SUBKEYS = new Set<string>([
+  "wake_word_mode",
+  "tap_to_wake",
+  "pickup_to_wake",
+  "battery_screen_timeout",
+  "docked_idle_timeout",
+  "battery_hibernate_timeout",
+  "docked_screensaver",
+]);
+
+function expandDevicePrefPatch(
+  currentCfg: Record<string, unknown>,
+  rawPatch: Record<string, unknown>,
+): Record<string, unknown> {
+  const expanded: Record<string, unknown> = { ...rawPatch };
+  if (typeof rawPatch.power_profile === "string" && rawPatch.power_profile in POWER_PROFILE_PREFS) {
+    const preset = POWER_PROFILE_PREFS[rawPatch.power_profile];
+    for (const [k, v] of Object.entries(preset)) {
+      if (!(k in rawPatch)) {
+        expanded[k] = v;
+      }
+    }
+  } else if (
+    !("power_profile" in rawPatch) &&
+    Object.keys(rawPatch).some((k) => POWER_PROFILE_SUBKEYS.has(k))
+  ) {
+    const curProf = String(currentCfg.power_profile || "Portable Carry");
+    const preset = POWER_PROFILE_PREFS[curProf];
+    if (preset) {
+      const merged = { ...currentCfg, ...rawPatch };
+      for (const [k, want] of Object.entries(preset)) {
+        const have = merged[k] !== undefined ? merged[k] : want;
+        if (have !== want) {
+          expanded.power_profile = "Custom";
+          break;
+        }
+      }
+    }
+  }
+  return expanded;
+}
+
+export function overlayDevicePrefsOnSections(
+  payload: StudioStatePayload,
+  rawPatch: Record<string, unknown>,
+): void {
+  if (!rawPatch || Object.keys(rawPatch).length === 0) return;
+  const curCfg = (payload.config || {}) as Record<string, unknown>;
+  const expanded = expandDevicePrefPatch(curCfg, rawPatch);
+  payload.config = {
+    ...payload.config,
+    ...expanded,
+  };
+  const sections = payload?.esphome?.sections;
+  if (!sections) return;
+  payload.esphome = {
+    ...payload.esphome,
+    sections: sections.map((sec) => ({
+      ...sec,
+      items: (sec.items || []).map((item) => {
+        if (item.pref_key && item.pref_key in expanded) {
+          const val = expanded[item.pref_key];
+          const nextState = item.domain === "switch" ? (val ? "on" : "off") : String(val ?? "");
+          return { ...item, state: nextState };
+        }
+        if (
+          "volume_step_size" in expanded &&
+          item.domain === "number" &&
+          item.entity_id.startsWith("media_player.")
+        ) {
+          const stepNum = Number(expanded.volume_step_size);
+          if (Number.isFinite(stepNum) && stepNum > 0) {
+            return { ...item, step: stepNum };
+          }
+        }
+        return item;
+      }),
+    })),
+  };
+}
+
 export function overlayPendingEntityStates(
   payload: StudioStatePayload,
   pendingMap: Map<string, PendingEntityEntry> = PENDING_ENTITY_STATES,
@@ -83,7 +212,7 @@ export async function commitEntityChange(
 
 export function stageDeviceSettingOp(
   store: StudioStore,
-  key: keyof DeviceConfig,
+  key: string,
   value: unknown,
   controlDomId?: string,
 ): void {
@@ -101,12 +230,21 @@ export function stageDeviceSettingOp(
     store.pendingDeviceBuckets.set(targetSubentryId, bucket);
   }
 
-  if (!(key in bucket.previousValues)) {
-    const prev =
-      store.state && store.state.subentry_id === targetSubentryId
-        ? (store.state.config as Record<string, unknown>)?.[key]
-        : undefined;
-    bucket.previousValues[key] = prev;
+  const curCfg =
+    store.state && store.state.subentry_id === targetSubentryId
+      ? ((store.state.config || {}) as Record<string, unknown>)
+      : {};
+  const snapshotKey = (k: string): void => {
+    if (!(k in bucket.previousValues)) {
+      bucket.previousValues[k] = curCfg[k];
+    }
+  };
+  snapshotKey(key);
+  if (key === "power_profile" || POWER_PROFILE_SUBKEYS.has(key)) {
+    snapshotKey("power_profile");
+    for (const sk of POWER_PROFILE_SUBKEYS) {
+      snapshotKey(sk);
+    }
   }
   if (controlDomId) {
     bucket.previousValues[`__dom:${controlDomId}`] = bucket.previousValues[key];
@@ -122,17 +260,20 @@ export function stageDeviceSettingOp(
               : d,
           )
         : store.state.system_devices;
-    store.state = {
-      ...store.state,
-      system_devices: nextSystemDevices,
-      config:
-        store.state.subentry_id === targetSubentryId
-          ? {
-              ...store.state.config,
-              [key]: value,
-            }
-          : store.state.config,
-    };
+    if (store.state.subentry_id === targetSubentryId) {
+      const nextPayload: StudioStatePayload = {
+        ...store.state,
+        system_devices: nextSystemDevices,
+        config: { ...store.state.config },
+      };
+      overlayDevicePrefsOnSections(nextPayload, { [key]: value });
+      store.state = nextPayload;
+    } else if (nextSystemDevices !== store.state.system_devices) {
+      store.state = {
+        ...store.state,
+        system_devices: nextSystemDevices,
+      };
+    }
   }
 
   if (bucket.timer) clearTimeout(bucket.timer);
@@ -198,16 +339,24 @@ export async function flushDeviceBucketOp(store: StudioStore, targetSubentryId: 
         const restoredConfig: Record<string, unknown> = {
           ...(store.state.config as Record<string, unknown>),
         };
+        const restoredPrefs: Record<string, unknown> = {};
         for (const [k, v] of Object.entries(previousValues)) {
           if (!k.startsWith("__dom:")) {
             restoredConfig[k] = v;
+            if (v !== undefined) {
+              restoredPrefs[k] = v;
+            }
           }
         }
-        store.state = {
+        const nextPayload: StudioStatePayload = {
           ...store.state,
           system_devices: nextSystemDevices,
           config: restoredConfig as DeviceConfig,
         };
+        if (Object.keys(restoredPrefs).length > 0) {
+          overlayDevicePrefsOnSections(nextPayload, restoredPrefs);
+        }
+        store.state = nextPayload;
       } else if (nextSystemDevices !== store.state.system_devices) {
         store.state = {
           ...store.state,
@@ -375,6 +524,30 @@ export async function executeEntityActionOp(
   }
 }
 
+export async function runDeviceActionOp(
+  store: StudioStore,
+  action: string,
+  toastMessage?: string,
+): Promise<boolean> {
+  const targetSubentryId = store.activeSubentryId;
+  if (!targetSubentryId || !action) return false;
+  try {
+    const res = await store.ws.runDeviceCommand(targetSubentryId, "device_action", {
+      action,
+    });
+    if (res && store.activeSubentryId === targetSubentryId) {
+      store.ingestPayload(res, false);
+    }
+    if (toastMessage) {
+      store.showToast(toastMessage);
+    }
+    return true;
+  } catch (err) {
+    store.showToast(formatWsError(err, "Device action failed"), true);
+    return false;
+  }
+}
+
 export function getEnabledDockTokensOp(store: StudioStore): string[] {
   const raw = String(store.state?.config?.dock_apps ?? "");
   if (!raw.trim()) {
@@ -449,7 +622,11 @@ export function applyDeviceCustomColorOp(
           (it.options || []).includes("Custom") &&
           it.state !== "Custom"
         ) {
-          void store.espSelect(it.entity_id, "Custom");
+          if (it.pref_key) {
+            store.stageDeviceSetting(it.pref_key, "Custom");
+          } else {
+            void store.espSelect(it.entity_id, "Custom");
+          }
         }
       }
     }

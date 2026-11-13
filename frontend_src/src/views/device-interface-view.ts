@@ -182,7 +182,9 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
                             ${celestialItems.map((cel) => {
                               const st = String(cel.state ?? "");
                               const isOn = st === "on";
-                              const unavailable = st === "unavailable" || st === "unknown";
+                              const prefKey = cel.pref_key || "";
+                              const unavailable =
+                                !prefKey && (st === "unavailable" || st === "unknown");
                               const lbl = entityLabel(
                                 (cel.name || cel.entity_id).replace(/^home:\s*/i, ""),
                               );
@@ -191,12 +193,17 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
                                   type="button"
                                   aria-pressed=${String(isOn)}
                                   ?disabled=${unavailable}
-                                  @click=${() =>
-                                    void store.espAction(
-                                      cel.entity_id,
-                                      isOn ? "turn_off" : "turn_on",
-                                      isOn ? "off" : "on",
-                                    )}
+                                  @click=${() => {
+                                    if (prefKey) {
+                                      store.stageDeviceSetting(prefKey, !isOn);
+                                    } else {
+                                      void store.espAction(
+                                        cel.entity_id,
+                                        isOn ? "turn_off" : "turn_on",
+                                        isOn ? "off" : "on",
+                                      );
+                                    }
+                                  }}
                                   class="pill-toggle"
                                 >
                                   ${isOn ? `✓ ${lbl}` : `+ ${lbl}`}
@@ -218,7 +225,8 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
                       ${celestialItems.map((cel) => {
                         const st = String(cel.state ?? "");
                         const isOn = st === "on";
-                        const unavailable = st === "unavailable" || st === "unknown";
+                        const prefKey = cel.pref_key || "";
+                        const unavailable = !prefKey && (st === "unavailable" || st === "unknown");
                         const lbl = entityLabel(
                           (cel.name || cel.entity_id).replace(/^home:\s*/i, ""),
                         );
@@ -227,12 +235,17 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
                             type="button"
                             aria-pressed=${String(isOn)}
                             ?disabled=${unavailable}
-                            @click=${() =>
-                              void store.espAction(
-                                cel.entity_id,
-                                isOn ? "turn_off" : "turn_on",
-                                isOn ? "off" : "on",
-                              )}
+                            @click=${() => {
+                              if (prefKey) {
+                                store.stageDeviceSetting(prefKey, !isOn);
+                              } else {
+                                void store.espAction(
+                                  cel.entity_id,
+                                  isOn ? "turn_off" : "turn_on",
+                                  isOn ? "off" : "on",
+                                );
+                              }
+                            }}
                             class="pill-toggle"
                           >
                             ${isOn ? `✓ ${lbl}` : `+ ${lbl}`}
@@ -337,7 +350,9 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
                         ${shortcutMusicItems.map((sc) => {
                           const st = String(sc.state ?? "");
                           const isOn = st === "on";
-                          const unavailable = st === "unavailable" || st === "unknown";
+                          const prefKey = sc.pref_key || "";
+                          const unavailable =
+                            !prefKey && (st === "unavailable" || st === "unknown");
                           const rawShort = (sc.name || sc.entity_id)
                             .replace(/^music:\s*/i, "")
                             .replace(/^show\s+/i, "")
@@ -349,12 +364,17 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
                               type="button"
                               aria-pressed=${String(isOn)}
                               ?disabled=${unavailable}
-                              @click=${() =>
-                                void store.espAction(
-                                  sc.entity_id,
-                                  isOn ? "turn_off" : "turn_on",
-                                  isOn ? "off" : "on",
-                                )}
+                              @click=${() => {
+                                if (prefKey) {
+                                  store.stageDeviceSetting(prefKey, !isOn);
+                                } else {
+                                  void store.espAction(
+                                    sc.entity_id,
+                                    isOn ? "turn_off" : "turn_on",
+                                    isOn ? "off" : "on",
+                                  );
+                                }
+                              }}
                               class="pill-toggle"
                             >
                               ${isOn ? `✓ ${lbl}` : `+ ${lbl}`}

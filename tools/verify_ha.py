@@ -45,6 +45,7 @@ EXPECTED_ROOT_MODULES: frozenset[str] = frozenset(
         "areas.py",
         "backup.py",
         "binary_sensor.py",
+        "button.py",
         "config_flow.py",
         "const.py",
         "coordinator.py",
@@ -58,10 +59,12 @@ EXPECTED_ROOT_MODULES: frozenset[str] = frozenset(
         "identity.py",
         "media.py",
         "media_browse.py",
+        "number.py",
         "presence.py",
         "protocol.py",
         "remotes.py",
         "repairs.py",
+        "select.py",
         "sensor.py",
         "services.py",
         "wallpapers.py",
@@ -343,7 +346,7 @@ def main() -> int:
             if m:
                 failures.append(f"[TERMINOLOGY] {rel} contains banned term {m.group(0)!r}")
 
-    # 2. [28-MODULE TOPOLOGY] & pure-stdlib leaf enforcement
+    # 2. [31-MODULE TOPOLOGY] & pure-stdlib leaf enforcement
     actual_root_py = {p.name for p in LATTER_DIR.glob("*.py")}
     actual_studio_py = {p.name for p in STUDIO_DIR.glob("*.py")} if STUDIO_DIR.is_dir() else set()
     all_latter_py = [p for p in iter_repo_files(LATTER_DIR) if p.suffix == ".py"]
@@ -354,13 +357,13 @@ def main() -> int:
     extra_studio = actual_studio_py - EXPECTED_STUDIO_MODULES
 
     if missing_root:
-        failures.append(f"[28-MODULE TOPOLOGY] Missing root module(s): {sorted(missing_root)}")
+        failures.append(f"[31-MODULE TOPOLOGY] Missing root module(s): {sorted(missing_root)}")
     if extra_root:
-        failures.append(f"[28-MODULE TOPOLOGY] Unexpected root module(s): {sorted(extra_root)}")
+        failures.append(f"[31-MODULE TOPOLOGY] Unexpected root module(s): {sorted(extra_root)}")
     if missing_studio:
-        failures.append(f"[28-MODULE TOPOLOGY] Missing studio/ module(s): {sorted(missing_studio)}")
+        failures.append(f"[31-MODULE TOPOLOGY] Missing studio/ module(s): {sorted(missing_studio)}")
     if extra_studio:
-        failures.append(f"[28-MODULE TOPOLOGY] Unexpected studio/ module(s): {sorted(extra_studio)}")
+        failures.append(f"[31-MODULE TOPOLOGY] Unexpected studio/ module(s): {sorted(extra_studio)}")
 
     unexpected_nested = [
         p.relative_to(LATTER_DIR).as_posix()
@@ -369,11 +372,11 @@ def main() -> int:
     ]
     if unexpected_nested:
         failures.append(
-            f"[28-MODULE TOPOLOGY] Legacy nested subpackage file(s) present: {sorted(unexpected_nested)}"
+            f"[31-MODULE TOPOLOGY] Legacy nested subpackage file(s) present: {sorted(unexpected_nested)}"
         )
-    if len(all_latter_py) != 28:
+    if len(all_latter_py) != 31:
         failures.append(
-            f"[28-MODULE TOPOLOGY] Expected exact 28 .py modules in custom_components/latter, found {len(all_latter_py)}"
+            f"[31-MODULE TOPOLOGY] Expected exact 31 .py modules in custom_components/latter, found {len(all_latter_py)}"
         )
 
     for std_rel in STDLIB_ONLY_MODULES:

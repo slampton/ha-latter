@@ -91,6 +91,7 @@ def make_esphome_device() -> Callable[..., tuple[Any, str]]:
                 "stationary": stationary,
                 "wearable": wearable,
                 "ips": 1,
+                "minor": 1,
                 "sdk": sdk,
             },
             separators=(",", ":"),
@@ -121,14 +122,14 @@ def make_esphome_device() -> Callable[..., tuple[Any, str]]:
         )
         hass.states.async_set(rpc_eid, "")
 
-        beacon_eid = f"switch.{slug}_ble_presence_beacon"
+        beacon_eid = f"binary_sensor.{slug}_ble_radio_active"
         ent_reg.async_register(
             er.RegistryEntry(
                 entity_id=beacon_eid,
                 platform="esphome",
                 device_id=dev.id,
                 config_entry_id=esp_entry.entry_id,
-                original_name="BLE Presence Beacon",
+                original_name="BLE Radio Active",
             )
         )
         hass.states.async_set(beacon_eid, "off")
@@ -150,6 +151,7 @@ def make_esphome_device() -> Callable[..., tuple[Any, str]]:
             "latter_ping",
             "latter_push_v3",
             "latter_set_beacon_uuid",
+            "latter_device_command",
             "set_browse_slots",
             "show_notification",
             "wake_display_page",
