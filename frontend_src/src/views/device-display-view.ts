@@ -38,7 +38,14 @@ export function sortEntitiesByKeywords(
 
 export function isInterfaceDisplayEntity(it: EspHomeEntityItem): boolean {
   const low = `${it.name || ""} ${it.entity_id || ""}`.toLowerCase();
-  return low.includes("start screen") || low.includes("start_screen");
+  return (
+    low.includes("enable home screen") ||
+    low.includes("home_screen_enabled") ||
+    low.includes("start screen") ||
+    low.includes("start_screen") ||
+    low.includes("return to home timeout") ||
+    low.includes("return_to_home_timeout")
+  );
 }
 
 function isClockDisplayEntity(it: EspHomeEntityItem): boolean {

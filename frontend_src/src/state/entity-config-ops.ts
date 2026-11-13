@@ -8,7 +8,10 @@ import {
   ACTIVITY_SOURCES_CATALOG,
   AREA_CATEGORIES_CATALOG,
   DEFAULT_AREA_CATEGORIES_TOKENS,
+  DEFAULT_DOCK_APPS_TOKENS,
+  DEFAULT_HOME_CATEGORIES_TOKENS,
   DOCK_APPS_CATALOG,
+  HOME_CATEGORIES_CATALOG,
 } from "../constants.js";
 import type {
   CustomPalette,
@@ -125,6 +128,12 @@ function expandDevicePrefPatch(
           break;
         }
       }
+    }
+  }
+  if (rawPatch.home_screen_enabled === false) {
+    const effStart = String(rawPatch.start_screen ?? currentCfg.start_screen ?? "Home");
+    if (effStart === "Home") {
+      expanded.start_screen = "Clock";
     }
   }
   return expanded;
@@ -245,6 +254,9 @@ export function stageDeviceSettingOp(
     }
   };
   snapshotKey(key);
+  if (key === "home_screen_enabled") {
+    snapshotKey("start_screen");
+  }
   if (key === "power_profile" || POWER_PROFILE_SUBKEYS.has(key)) {
     snapshotKey("power_profile");
     for (const sk of POWER_PROFILE_SUBKEYS) {
@@ -556,12 +568,14 @@ export async function runDeviceActionOp(
 export function getEnabledDockTokensOp(store: StudioStore): string[] {
   const raw = String(store.state?.config?.dock_apps ?? "");
   if (!raw.trim()) {
-    return DOCK_APPS_CATALOG.map((a) => a.token);
+    return [...DEFAULT_DOCK_APPS_TOKENS];
   }
-  return raw
+  const known = new Set(DOCK_APPS_CATALOG.map((a) => a.token));
+  const parsed = raw
     .split(",")
     .map((s) => s.trim())
-    .filter(Boolean);
+    .filter((s, i, arr) => Boolean(s) && known.has(s) && arr.indexOf(s) === i);
+  return parsed.length > 0 ? parsed : [...DEFAULT_DOCK_APPS_TOKENS];
 }
 
 export function toggleDockAppTokenOp(store: StudioStore, appId: string): void {
@@ -625,6 +639,44 @@ export function moveAreaCategoryTokenOp(store: StudioStore, token: string, delta
   const [moved] = current.splice(idx, 1);
   current.splice(nextIdx, 0, moved);
   store.stageDeviceSetting("area_categories", current.join(","));
+}
+
+export function getEnabledHomeCategoriesOp(store: StudioStore): string[] {
+  const raw = String(store.state?.config?.home_categories ?? "");
+  if (!raw.trim()) {
+    return [...DEFAULT_HOME_CATEGORIES_TOKENS];
+  }
+  const known = new Set(HOME_CATEGORIES_CATALOG.map((c) => c.token));
+  const parsed = raw
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter((s, i, arr) => Boolean(s) && known.has(s) && arr.indexOf(s) === i);
+  return parsed.length > 0 ? parsed : [...DEFAULT_HOME_CATEGORIES_TOKENS];
+}
+
+export function toggleHomeCategoryTokenOp(store: StudioStore, token: string): void {
+  const current = getEnabledHomeCategoriesOp(store);
+  const idx = current.indexOf(token);
+  if (idx >= 0) {
+    if (current.length <= 1) {
+      store.showToast("Keep at least one Home category enabled", true);
+      return;
+    }
+    current.splice(idx, 1);
+  } else {
+    current.push(token);
+  }
+  store.stageDeviceSetting("home_categories", current.join(","));
+}
+
+export function moveHomeCategoryTokenOp(store: StudioStore, token: string, delta: -1 | 1): void {
+  const current = getEnabledHomeCategoriesOp(store);
+  const idx = current.indexOf(token);
+  const nextIdx = idx + delta;
+  if (idx < 0 || nextIdx < 0 || nextIdx >= current.length) return;
+  const [moved] = current.splice(idx, 1);
+  current.splice(nextIdx, 0, moved);
+  store.stageDeviceSetting("home_categories", current.join(","));
 }
 
 export function getEnabledActivitySourcesOp(store: StudioStore): string[] {

@@ -4,7 +4,7 @@
 
 import type { DeviceViewId, IssueItem, SecurityPinPolicy, StudioViewId, SystemViewId } from "./types.js";
 
-export const STUDIO_REV = 7;
+export const STUDIO_REV = 8;
 
 export const MAX_WALLPAPER_UPLOAD_BYTES = 15 * 1024 * 1024;
 
@@ -62,15 +62,63 @@ export const ISSUE_TEXT: Record<string, (issue: IssueItem) => string> = {
     "A firmware update failed to start; the previous firmware is running.",
 };
 
-// Canonical 7 Dock App tokens (`protocol.py` DOCK_APP_TOKENS).
+// Canonical 8 Dock App tokens (`protocol.py` DOCK_APP_TOKENS).
 export const DOCK_APPS_CATALOG = [
   {token: "music", label: "Music"},
   {token: "alarm", label: "Home Hub"},
   {token: "area", label: "Area"},
   {token: "remote", label: "Remote"},
+  {token: "weather", label: "Weather"},
   {token: "camera", label: "Cameras"},
   {token: "games", label: "Games"},
   {token: "tools", label: "Tools"},
+];
+
+export const DEFAULT_DOCK_APPS_TOKENS: ReadonlyArray<string> = [
+  "music",
+  "alarm",
+  "area",
+  "remote",
+  "games",
+  "tools",
+];
+
+export const START_SCREEN_OPTIONS: ReadonlyArray<string> = [
+  "Home",
+  "Clock",
+  "Media",
+  "Home Hub",
+  "Area Controls",
+  "Remote",
+  "Weather",
+  "Cameras",
+  "Games",
+  "Tools",
+];
+
+export const RETURN_TO_HOME_TIMEOUT_OPTIONS: ReadonlyArray<string> = [
+  "15s",
+  "30s",
+  "1 min",
+  "2 min",
+  "5 min",
+  "10 min",
+  "Never",
+];
+
+// Canonical 4 Home Category tokens (`protocol.py` HOME_CATEGORY_TOKENS).
+export const HOME_CATEGORIES_CATALOG: ReadonlyArray<{ token: string; label: string }> = [
+  { token: "alarm", label: "Security Alarm" },
+  { token: "thermostat", label: "Thermostat" },
+  { token: "entry", label: "Entry & Garage" },
+  { token: "vacuum", label: "Robot Vacuum" },
+];
+
+export const DEFAULT_HOME_CATEGORIES_TOKENS: ReadonlyArray<string> = [
+  "alarm",
+  "thermostat",
+  "entry",
+  "vacuum",
 ];
 
 // Canonical 8 Area Category tokens (`protocol.py` AREA_CATEGORY_TOKENS).

@@ -221,6 +221,7 @@ export interface DeviceConfig {
   device_custom_color?: string;
   dock_apps?: string;
   area_categories?: string;
+  home_categories?: string;
   activity_card?: boolean;
   activity_sources?: string;
   wallpaper_cycle_minutes?: number;

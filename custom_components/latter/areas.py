@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import datetime
 import logging
 import time
@@ -42,12 +43,14 @@ from .presence import get_ble_proxy_area_ids
 from .protocol import (
     CAMERAS_MAX_RECORDS,
     DEFAULT_AREA_CATEGORIES,
+    DEFAULT_HOME_CATEGORIES,
     V3Records,
     activity_payload,
     camera_records,
     ha_value,
     intercom_target_records,
     parse_area_categories,
+    parse_home_categories,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -762,6 +765,30 @@ def get_area_available_domains(
     return ",".join(ordered)
 
 
+def get_available_home_categories(
+    alarm_info: Mapping[str, Any],
+    wh_info: Mapping[str, Any],
+    home_categories: str | None = None,
+) -> str:
+    """Return comma-separated enabled Home Hub categories that have at least one configured/discovered entity."""
+    configured = parse_home_categories(home_categories) or list(
+        parse_home_categories(DEFAULT_HOME_CATEGORIES)
+    )
+    ordered: list[str] = []
+    for tok in configured:
+        if tok == "alarm" and alarm_info.get("entity_id"):
+            ordered.append("alarm")
+        elif tok == "thermostat" and wh_info.get("thermostat_entity"):
+            ordered.append("thermostat")
+        elif tok == "entry" and (
+            wh_info.get("lock_entity") or wh_info.get("garage_entity")
+        ):
+            ordered.append("entry")
+        elif tok == "vacuum" and wh_info.get("vacuum_entity"):
+            ordered.append("vacuum")
+    return ",".join(ordered)
+
+
 def get_area_entities(
     hass: HomeAssistant,
     area_id: str | None,
@@ -1307,6 +1334,11 @@ def build_area_context_payload(coordinator: Any) -> tuple[str, dict[str, Any]]:
     )
 
     eff_pin_policy = coordinator.security_pin_policy
+    avail_home_cats = get_available_home_categories(
+        alarm_info,
+        wh_info,
+        home_categories=coordinator.home_categories_csv,
+    )
     area_attrs: dict[str, Any] = {
         "site_id": coordinator.site_id,
         "area_id": eff_area_id,
@@ -1318,6 +1350,7 @@ def build_area_context_payload(coordinator: Any) -> tuple[str, dict[str, Any]]:
         "activity_card": coordinator.activity_card_enabled,
         "activity_sources": coordinator.activity_sources_csv,
         "security_pin_policy": eff_pin_policy,
+        "home_categories": avail_home_cats,
         "wallpaper_url": coordinator.build_wallpaper_url(),
         "theme_color_hex": coordinator.device_custom_color,
         "available_domains": avail_domains,
@@ -1396,6 +1429,7 @@ def build_area_context_payload(coordinator: Any) -> tuple[str, dict[str, Any]]:
             coordinator.activity_card_enabled, coordinator.activity_sources_csv
         ),
         eff_pin_policy,
+        area_attrs["home_categories"],
     )
     area_attrs["rev"] = area_rev
     area_attrs["payload"] = area_payload

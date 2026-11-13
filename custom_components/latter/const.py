@@ -10,8 +10,8 @@ from homeassistant.const import Platform
 
 DOMAIN: Final = "latter"
 INTEGRATION_VERSION: Final = "3.0.0"
-STUDIO_REV: Final = 7
-MIN_FIRMWARE_SDK_REV: Final = 2026111204
+STUDIO_REV: Final = 8
+MIN_FIRMWARE_SDK_REV: Final = 2026111301
 PLATFORMS: Final[list[Platform]] = [
     Platform.SENSOR,
     Platform.BINARY_SENSOR,
@@ -61,6 +61,7 @@ DEFAULT_DEVICE_REMOTE_GROUP: Final = "area_auto"
 CONF_CALENDAR_ENTITIES: Final = "calendar_entities"
 CONF_DOCK_APPS: Final = "dock_apps"
 CONF_AREA_CATEGORIES: Final = "area_categories"
+CONF_HOME_CATEGORIES: Final = "home_categories"
 CONF_ACTIVITY_CARD: Final = "activity_card"
 CONF_ACTIVITY_SOURCES: Final = "activity_sources"
 CONF_WALLPAPER_SOURCE: Final = "wallpaper_source"
@@ -93,7 +94,9 @@ CONF_DAY_START_HOUR: Final = "day_start_hour"
 CONF_NIGHT_START_HOUR: Final = "night_start_hour"
 CONF_COLOR_PROFILE: Final = "color_profile"
 CONF_VA_VISUAL_PROFILE: Final = "va_visual_profile"
+CONF_HOME_SCREEN_ENABLED: Final = "home_screen_enabled"
 CONF_START_SCREEN: Final = "start_screen"
+CONF_RETURN_TO_HOME_TIMEOUT: Final = "return_to_home_timeout"
 CONF_CLOCK_FACE: Final = "clock_face"
 CONF_TIME_FORMAT: Final = "time_format"
 CONF_WEATHER_BACKGROUND: Final = "weather_background"
@@ -135,6 +138,7 @@ DEFAULT_AREA_FOLLOW_DWELL_S: Final = 10
 DEFAULT_AREA_HANDOFF: Final = False
 DEFAULT_DOCK_APPS: Final = "music,alarm,area,remote,games,tools"
 DEFAULT_AREA_CATEGORIES: Final = "scene,light,cover,fan,switch,climate,media"
+DEFAULT_HOME_CATEGORIES: Final = "alarm,thermostat,entry,vacuum"
 # Home Activity Card: protocol_v3.json defaults.activity_card / defaults.activity_sources (checked by the tests)
 DEFAULT_ACTIVITY_CARD: Final = True
 DEFAULT_ACTIVITY_SOURCES: Final = "calendar,music_queue,stopwatch,alarms,timers"

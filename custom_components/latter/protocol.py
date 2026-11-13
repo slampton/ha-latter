@@ -16,10 +16,14 @@ import unicodedata
 from .studio.settings import (
     AREA_CATEGORY_TOKENS,
     DEFAULT_AREA_CATEGORIES,
+    DEFAULT_HOME_CATEGORIES,
     DEVICE_PREF_SPEC_MAP,
     DEVICE_PREF_SPECS,
+    HOME_CATEGORY_TOKENS,
     normalize_area_categories,
+    normalize_home_categories,
     parse_area_categories,
+    parse_home_categories,
     resolve_device_pref_value,
 )
 
@@ -288,11 +292,14 @@ def pack_device_prefs_fields(
     custom_color_hex: str,
     is_round_display: bool = True,
 ) -> tuple[Any, ...]:
-    """Return the 46 ordered body fields (wire indices 3..48) for Protocol v3 `device_prefs`."""
+    """Return the 48 ordered body fields (wire indices 3..50) for Protocol v3 `device_prefs`."""
+    home_enabled = bool(resolve_device_pref_value(cfg, "home_screen_enabled"))
     core_values: list[Any] = []
-    for spec in DEVICE_PREF_SPECS[:41]:
+    for spec in DEVICE_PREF_SPECS[:43]:
         val = resolve_device_pref_value(cfg, spec.key)
-        if spec.key == "clock_face" and not is_round_display and val == "Modern Roman (Analog)":
+        if spec.key == "start_screen" and not home_enabled and val == "Home":
+            val = "Clock"
+        elif spec.key == "clock_face" and not is_round_display and val == "Modern Roman (Analog)":
             val = "Minimal Digital"
         core_values.append(val)
     ble_mode = resolve_device_pref_value(cfg, "ble_beacon_mode")
@@ -353,6 +360,7 @@ DOCK_APP_TOKENS: tuple[str, ...] = (
     "alarm",
     "area",
     "remote",
+    "weather",
     "camera",
     "games",
     "tools",
@@ -373,6 +381,10 @@ __all_area_categories__ = (
     DEFAULT_AREA_CATEGORIES,
     parse_area_categories,
     normalize_area_categories,
+    HOME_CATEGORY_TOKENS,
+    DEFAULT_HOME_CATEGORIES,
+    parse_home_categories,
+    normalize_home_categories,
 )
 
 

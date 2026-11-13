@@ -33,6 +33,7 @@ from ..const import (
     CONF_DEVICE_REMOTE_GROUP,
     CONF_DEVICE_SLUG,
     CONF_DOCK_APPS,
+    CONF_HOME_CATEGORIES,
     CONF_MA_PLAYER_ENTITY,
     CONF_NATIVE_BLE_TRACKING,
     CONF_SECURITY_PIN_HASH,
@@ -229,7 +230,13 @@ def _augment_esphome_inspector(
         val = resolve_device_pref_value(dev_data, spec.key)
         state_str = ("on" if val else "off") if spec.domain == "switch" else str(val)
         opts = list(spec.options)
-        if spec.key == "clock_face" and not coord.is_round_display:
+        if (
+            spec.key == "start_screen"
+            and not resolve_device_pref_value(dev_data, "home_screen_enabled")
+            and state_str == "Home"
+        ):
+            state_str = "Clock"
+        elif spec.key == "clock_face" and not coord.is_round_display:
             opts = [o for o in opts if o != "Modern Roman (Analog)"]
             if state_str == "Modern Roman (Analog)":
                 state_str = "Minimal Digital"
@@ -1060,6 +1067,7 @@ def build_studio_state_payload(
         CONF_DEVICE_CUSTOM_COLOR: coordinator.device_custom_color,
         CONF_DOCK_APPS: coordinator.dock_apps_csv,
         CONF_AREA_CATEGORIES: coordinator.area_categories_csv,
+        CONF_HOME_CATEGORIES: coordinator.home_categories_csv,
         CONF_ACTIVITY_CARD: coordinator.activity_card_enabled,
         CONF_ACTIVITY_SOURCES: coordinator.activity_sources_csv,
         CONF_WALLPAPER_CYCLE_MINUTES: coordinator.wallpaper_cycle_minutes,
@@ -1070,6 +1078,11 @@ def build_studio_state_payload(
             for spec in DEVICE_PREF_SPECS
         },
     }
+    if (
+        not config_data.get("home_screen_enabled", True)
+        and config_data.get("start_screen") == "Home"
+    ):
+        config_data["start_screen"] = "Clock"
 
     fw_st = coordinator.device_state("sensor", "_firmware_version")
     fw_version = (

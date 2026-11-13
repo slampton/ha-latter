@@ -65,8 +65,10 @@ import {
   getEnabledActivitySourcesOp,
   getEnabledAreaCategoriesOp,
   getEnabledDockTokensOp,
+  getEnabledHomeCategoriesOp,
   moveAreaCategoryTokenOp,
   moveDockAppTokenOp,
+  moveHomeCategoryTokenOp,
   overlayDevicePrefsOnSections,
   overlayPendingEntityStates,
   PENDING_ENTITY_STATES,
@@ -85,6 +87,7 @@ import {
   toggleActivitySourceOp,
   toggleAreaCategoryTokenOp,
   toggleDockAppTokenOp,
+  toggleHomeCategoryTokenOp,
   toggleRemoteInGroupOp,
   toggleWallpaperFavOp,
   updateRemoteGroupFieldOp,
@@ -869,6 +872,18 @@ export class StudioStore implements ReactiveController {
 
   moveAreaCategoryToken(token: string, delta: -1 | 1): void {
     moveAreaCategoryTokenOp(this, token, delta);
+  }
+
+  getEnabledHomeCategories(): string[] {
+    return getEnabledHomeCategoriesOp(this);
+  }
+
+  toggleHomeCategoryToken(token: string): void {
+    toggleHomeCategoryTokenOp(this, token);
+  }
+
+  moveHomeCategoryToken(token: string, delta: -1 | 1): void {
+    moveHomeCategoryTokenOp(this, token, delta);
   }
 
   getEnabledActivitySources(): string[] {

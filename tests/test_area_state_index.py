@@ -24,6 +24,8 @@ from custom_components.latter.areas import (
     get_area_available_domains,
     get_area_entities,
     get_areas_summary,
+    get_available_home_categories,
+    get_home_alarm_summary,
     get_home_wide_entities,
     get_whole_home_summary,
     match_area_by_name_or_id,
@@ -309,6 +311,30 @@ async def test_context_builder_curated_entities_and_area_actions(
     assert wh["lock_entity"] in ("lock.front_door", "lock.side_latch")
     assert wh["garage_entity"] == "cover.main_garage"
     assert wh["vacuum_entity"] == "vacuum.roborock"
+    alarm_sum = get_home_alarm_summary(hass)
+    assert (
+        get_available_home_categories(alarm_sum, wh)
+        == "alarm,thermostat,entry,vacuum"
+    )
+    assert (
+        get_available_home_categories(
+            alarm_sum, wh, home_categories="vacuum,entry"
+        )
+        == "vacuum,entry"
+    )
+    assert (
+        get_available_home_categories(
+            {"entity_id": ""},
+            {
+                "thermostat_entity": "",
+                "lock_entity": "lock.front_door",
+                "garage_entity": "",
+                "vacuum_entity": "",
+            },
+            home_categories="alarm,thermostat,entry,vacuum",
+        )
+        == "entry"
+    )
 
     esp_grouped = get_esphome_device_entities(
         hass, coord.esphome_device_id, coord.device_slug

@@ -70,6 +70,7 @@ from .const import (
     CONF_DOORBELL_NOISE_REDUCTION,
     CONF_ESPHOME_DEVICE_ID,
     CONF_GARAGE_ENTITY,
+    CONF_HOME_CATEGORIES,
     CONF_LOCK_ENTITY,
     CONF_NATIVE_BLE_TRACKING,
     CONF_REMOTE_GROUPS,
@@ -101,6 +102,7 @@ from .const import (
     DEFAULT_DISPLAY_SHAPE,
     DEFAULT_DOCK_APPS,
     DEFAULT_DOORBELL_NOISE_REDUCTION,
+    DEFAULT_HOME_CATEGORIES,
     DEFAULT_LIST_SLOT_COUNT,
     DEFAULT_NATIVE_BLE_TRACKING,
     DEFAULT_SECURITY_PIN_POLICY,
@@ -167,6 +169,7 @@ from .protocol import (
     effective_security_pin_policy,
     normalize_activity_sources,
     normalize_area_categories,
+    normalize_home_categories,
     normalize_security_pin_policy,
     pack_device_prefs_fields,
     parse_dirty_prefs_records,
@@ -817,6 +820,15 @@ class LatterCoordinator:
             )
         except ValueError:
             return DEFAULT_AREA_CATEGORIES
+
+    @property
+    def home_categories_csv(self) -> str:
+        try:
+            return normalize_home_categories(
+                self.get_opt(CONF_HOME_CATEGORIES, DEFAULT_HOME_CATEGORIES)
+            )
+        except ValueError:
+            return DEFAULT_HOME_CATEGORIES
 
     @property
     def activity_card_enabled(self) -> bool:

@@ -35,6 +35,7 @@ from .areas import (
     get_area_entities,
     get_areas_summary,
     get_home_wide_entities,
+    get_whole_home_summary,
     resolve_person_area_and_distance,
 )
 from .const import (
@@ -159,9 +160,13 @@ def _enforce_perimeter_security_policy(
     """Enforce the Device's Perimeter Security Policy on sensitive opening actions."""
     resolved_ent = entity_id.strip()
     if resolved_ent == "whole_home.lock":
-        resolved_ent = coord.lock_entity or ""
+        resolved_ent = coord.lock_entity or get_whole_home_summary(
+            hass, lock_entity=coord.lock_entity
+        )["lock_entity"]
     elif resolved_ent == "whole_home.garage":
-        resolved_ent = coord.garage_entity or ""
+        resolved_ent = coord.garage_entity or get_whole_home_summary(
+            hass, garage_entity=coord.garage_entity
+        )["garage_entity"]
     elif resolved_ent == "whole_home.alarm":
         resolved_ent = coord.alarm_entity or ""
     if not resolved_ent or "." not in resolved_ent:

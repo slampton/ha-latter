@@ -34,6 +34,7 @@ from .const import (
     CONF_DEVICE_GROUP,
     CONF_DEVICE_SLUG,
     CONF_ESPHOME_DEVICE_ID,
+    CONF_HOME_CATEGORIES,
     CONF_NATIVE_BLE_TRACKING,
     CONF_SYNC_DEVICE_AREA,
     CONF_WEATHER_ENTITY,
@@ -43,6 +44,7 @@ from .const import (
     DEFAULT_AREA_HANDOFF,
     DEFAULT_DEVICE_GROUP,
     DEFAULT_DOCK_APPS,
+    DEFAULT_HOME_CATEGORIES,
     DOMAIN,
     SUBENTRY_BLE_TAG,
     SUBENTRY_DEVICE,
@@ -185,6 +187,7 @@ def _detect_hardware_defaults(
             CONF_DEFAULT_AREA: "" if default_roaming else esp_area,
             "dock_apps": DEFAULT_DOCK_APPS,
             CONF_AREA_CATEGORIES: DEFAULT_AREA_CATEGORIES,
+            CONF_HOME_CATEGORIES: DEFAULT_HOME_CATEGORIES,
         }
 
     if has_native_slots:
@@ -197,6 +200,7 @@ def _detect_hardware_defaults(
             CONF_DEFAULT_AREA: "",
             "dock_apps": DEFAULT_DOCK_APPS,
             CONF_AREA_CATEGORIES: DEFAULT_AREA_CATEGORIES,
+            CONF_HOME_CATEGORIES: DEFAULT_HOME_CATEGORIES,
         }
 
     return {

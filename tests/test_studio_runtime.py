@@ -557,6 +557,7 @@ function makeStore({ weatherBgState = "Dynamic", cycleMins = 0, activeId = "", f
     getEnabledActivitySources() { return ["calendar"]; },
     getEnabledDockTokens() { return ["area", "music"]; },
     getEnabledAreaCategories() { return ["scene", "light"]; },
+    getEnabledHomeCategories() { return ["alarm", "thermostat", "entry", "vacuum"]; },
   };
 }
 
@@ -1260,6 +1261,145 @@ return {
         self.assertIn("— Automatic (ESPHome Area) —", roaming_html)
         self.assertIn("BLE Beacon Mode", roaming_html)
         self.assertNotIn("Assigned Area", roaming_html)
+
+    def test_interface_view_home_screen_toggle_single_app_and_home_controls(self) -> None:
+        """D-035: Disabling Home Screen hides Dock Apps, Return Timeout, and Activity Card, and excludes Home from Start Screen."""
+        stub_lit = """
+const nothing = Symbol.for("latter.lit.nothing");
+function html(strings, ...values) { return { _$litType$: 1, strings, values }; }
+function flattenHtml(node) {
+  if (node === null || node === undefined || node === nothing || typeof node === "boolean") return "";
+  if (Array.isArray(node)) return node.map(flattenHtml).join("");
+  if (typeof node === "object" && node._$litType$ === 1) {
+    let out = "";
+    for (let i = 0; i < node.strings.length; i += 1) {
+      out += node.strings[i];
+      if (i < node.values.length) {
+        const v = node.values[i];
+        out += typeof v === "function" ? "[fn]" : flattenHtml(v);
+      }
+    }
+    return out;
+  }
+  return String(node);
+}
+"""
+        runner = (
+            stub_lit
+            + """
+function makeInterfaceStore(homeEnabled) {
+  return {
+    hass: null,
+    host: null,
+    activeSubentryId: "sub_1",
+    state: {
+      config: {
+        kind: "device",
+        home_screen_enabled: homeEnabled,
+        start_screen: homeEnabled ? "Home" : "Home",
+        return_to_home_timeout: "2 min",
+        activity_card: true,
+        dock_apps: "music,alarm,area,remote,games,tools",
+        home_categories: "alarm,thermostat,entry",
+        area_categories: "scene,light",
+        device_remote_group: "area_auto",
+      },
+      system_config: { remote_groups: [] },
+      system_devices: [{ subentry_id: "sub_1", device_remote_group: "area_auto" }],
+    },
+    getSectionItems(sec) {
+      if (sec === "display") {
+        return [
+          {
+            entity_id: "pref:home_screen_enabled",
+            pref_key: "home_screen_enabled",
+            domain: "switch",
+            name: "Enable Home Screen",
+            state: homeEnabled ? "on" : "off",
+          },
+          {
+            entity_id: "pref:start_screen",
+            pref_key: "start_screen",
+            domain: "select",
+            name: "Start Screen",
+            state: homeEnabled ? "Home" : "Clock",
+            options: START_SCREEN_OPTIONS,
+          },
+          {
+            entity_id: "pref:return_to_home_timeout",
+            pref_key: "return_to_home_timeout",
+            domain: "select",
+            name: "Return to Home Timeout",
+            state: "2 min",
+            options: RETURN_TO_HOME_TIMEOUT_OPTIONS,
+          },
+        ];
+      }
+      return [];
+    },
+    getEnabledDockTokens() {
+      return ["music", "alarm", "area", "remote", "games", "tools"];
+    },
+    getEnabledHomeCategories() {
+      return ["alarm", "thermostat", "entry"];
+    },
+    getEnabledAreaCategories() {
+      return ["scene", "light"];
+    },
+    getEnabledActivitySources() {
+      return ["calendar", "timers"];
+    },
+  };
+}
+return {
+  enabledMarkup: flattenHtml(renderDeviceInterfaceView(makeInterfaceStore(true))),
+  singleAppMarkup: flattenHtml(renderDeviceInterfaceView(makeInterfaceStore(false))),
+};
+"""
+        )
+        got = _run_node_ts(
+            [
+                FRONTEND_SRC / "constants.ts",
+                FRONTEND_SRC / "utils" / "format.ts",
+                FRONTEND_SRC / "components" / "controls.ts",
+                FRONTEND_SRC / "components" / "wallpaper-gallery.ts",
+                FRONTEND_SRC / "views" / "device-display-view.ts",
+                FRONTEND_SRC / "views" / "device-interface-view.ts",
+            ],
+            runner,
+        )
+        enabled_html = got["enabledMarkup"]
+        single_html = got["singleAppMarkup"]
+
+        for expected in (
+            "Enable Home Screen",
+            "Start Screen",
+            ".value=Home",
+            "<option value=Home ?selected=>Home</option>",
+            "Return to Home Timeout",
+            "Dock Apps",
+            "+ Weather",
+            "Show the Activity Card",
+            "Activity Card Sources",
+            "Home Controls",
+            "✓ Security Alarm",
+            "✓ Thermostat",
+            "✓ Entry & Garage",
+            "+ Robot Vacuum",
+        ):
+            self.assertIn(expected, enabled_html)
+
+        self.assertIn("Enable Home Screen", single_html)
+        self.assertIn("Start Screen", single_html)
+        self.assertIn(".value=Clock", single_html)
+        self.assertIn("<option value=Clock ?selected=>Clock</option>", single_html)
+        self.assertIn("<option value=Home Hub ?selected=>Home Hub</option>", single_html)
+        self.assertNotIn("<option value=Home ?selected=>Home</option>", single_html)
+        self.assertNotIn("Return to Home Timeout", single_html)
+        self.assertNotIn("Dock Apps", single_html)
+        self.assertNotIn("Show the Activity Card", single_html)
+        self.assertNotIn("Activity Card Sources", single_html)
+        self.assertIn("Home Controls", single_html)
 
 
 if __name__ == "__main__":

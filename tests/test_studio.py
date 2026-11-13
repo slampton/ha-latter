@@ -175,8 +175,10 @@ class TestViewLayout(unittest.TestCase):
             )
         self.assertNotIn("Brightness &amp; Theme", js)
         self.assertNotIn("Brightness & Theme", js)
-        for title in ("Home Screen", "Activity Card", "Area Controls", "Media Player", "Remote Controls"):
+        for title in ("Home Screen", "Home Controls", "Area Controls", "Media Player", "Remote Controls"):
             self.assertIn(f'<h3 class="card-title">{title}</h3>', interface_view)
+        self.assertNotIn('<h3 class="card-title">Activity Card</h3>', interface_view)
+        self.assertIn('id="home-categories-pills"', interface_view)
         self.assertNotIn("<summary>Library Sorting</summary>", js)
         self.assertIn('id: "media-player-shortcuts"', interface_view)
         self.assertIn('id: "cfg-device_remote_group"', interface_view)
@@ -383,8 +385,15 @@ class TestActivityCard(unittest.TestCase):
         js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
         start = js.index('<section id="view-interface"')
         view = js[start:js.index("</section>", start)]
-        self.assertIn('<h3 class="card-title">Activity Card</h3>', view)
-        self.assertIn('id="cfg-activity_card"', view)
+        self.assertNotIn('<h3 class="card-title">Activity Card</h3>', view)
+        self.assertLess(
+            view.index('<h3 class="card-title">Home Screen</h3>'),
+            view.index('id="cfg-activity_card"'),
+        )
+        self.assertLess(
+            view.index('id="cfg-activity_card"'),
+            view.index('<h3 class="card-title">Home Controls</h3>'),
+        )
         self.assertIn(">Show the Activity Card</label>", view)
         self.assertIn("ACTIVITY_SOURCES_CATALOG.map(", view)
         self.assertIn("store.toggleActivitySource(", view)
@@ -396,11 +405,17 @@ class TestDockPolicy(unittest.TestCase):
     """dock_apps is the one source for the Home dock: the firmware shows exactly the listed apps."""
 
     def test_normalize_and_parse(self) -> None:
-        self.assertEqual(dock_policy.normalize_dock_apps(" Music,area,music ,camera"), "music,area,camera")
+        self.assertEqual(
+            dock_policy.normalize_dock_apps(" Music,weather,area,music ,camera"),
+            "music,weather,area,camera",
+        )
         for bad in ("", " , ", "music,spotify", "settings"):
             with self.assertRaises(ValueError):
                 dock_policy.normalize_dock_apps(bad)
-        self.assertEqual(dock_policy.parse_dock_apps("tools, games,alarm,junk"), ["tools", "games", "alarm"])
+        self.assertEqual(
+            dock_policy.parse_dock_apps("tools, weather,games,alarm,junk"),
+            ["tools", "weather", "games", "alarm"],
+        )
 
     def test_one_default_and_one_token_set_in_both_repos(self) -> None:
         protocol = json.loads((LATTER_DIR / "protocol_v3.json").read_text(encoding="utf-8"))

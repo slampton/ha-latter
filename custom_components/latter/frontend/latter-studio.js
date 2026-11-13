@@ -675,7 +675,7 @@ class LitElement extends HTMLElement {
 /**
  * Canonical constants, route maps, issue messages, and Title Case dictionaries for Latter Studio.
  */
-const STUDIO_REV = 7;
+const STUDIO_REV = 8;
 const MAX_WALLPAPER_UPLOAD_BYTES = 15 * 1024 * 1024;
 const DEVICE_VIEW_SLUGS = {
   dashboard: "overview",
@@ -723,15 +723,58 @@ const ISSUE_TEXT = {
   firmware_rolled_back: () =>
     "A firmware update failed to start; the previous firmware is running.",
 };
-// Canonical 7 Dock App tokens (`protocol.py` DOCK_APP_TOKENS).
+// Canonical 8 Dock App tokens (`protocol.py` DOCK_APP_TOKENS).
 const DOCK_APPS_CATALOG = [
   {token: "music", label: "Music"},
   {token: "alarm", label: "Home Hub"},
   {token: "area", label: "Area"},
   {token: "remote", label: "Remote"},
+  {token: "weather", label: "Weather"},
   {token: "camera", label: "Cameras"},
   {token: "games", label: "Games"},
   {token: "tools", label: "Tools"},
+];
+const DEFAULT_DOCK_APPS_TOKENS = [
+  "music",
+  "alarm",
+  "area",
+  "remote",
+  "games",
+  "tools",
+];
+const START_SCREEN_OPTIONS = [
+  "Home",
+  "Clock",
+  "Media",
+  "Home Hub",
+  "Area Controls",
+  "Remote",
+  "Weather",
+  "Cameras",
+  "Games",
+  "Tools",
+];
+const RETURN_TO_HOME_TIMEOUT_OPTIONS = [
+  "15s",
+  "30s",
+  "1 min",
+  "2 min",
+  "5 min",
+  "10 min",
+  "Never",
+];
+// Canonical 4 Home Category tokens (`protocol.py` HOME_CATEGORY_TOKENS).
+const HOME_CATEGORIES_CATALOG = [
+  { token: "alarm", label: "Security Alarm" },
+  { token: "thermostat", label: "Thermostat" },
+  { token: "entry", label: "Entry & Garage" },
+  { token: "vacuum", label: "Robot Vacuum" },
+];
+const DEFAULT_HOME_CATEGORIES_TOKENS = [
+  "alarm",
+  "thermostat",
+  "entry",
+  "vacuum",
 ];
 // Canonical 8 Area Category tokens (`protocol.py` AREA_CATEGORY_TOKENS).
 const AREA_CATEGORIES_CATALOG = [
@@ -2710,6 +2753,12 @@ function expandDevicePrefPatch(
       }
     }
   }
+  if (rawPatch.home_screen_enabled === false) {
+    const effStart = String(rawPatch.start_screen ?? currentCfg.start_screen ?? "Home");
+    if (effStart === "Home") {
+      expanded.start_screen = "Clock";
+    }
+  }
   return expanded;
 }
 function overlayDevicePrefsOnSections(
@@ -2822,6 +2871,9 @@ function stageDeviceSettingOp(
     }
   };
   snapshotKey(key);
+  if (key === "home_screen_enabled") {
+    snapshotKey("start_screen");
+  }
   if (key === "power_profile" || POWER_PROFILE_SUBKEYS.has(key)) {
     snapshotKey("power_profile");
     for (const sk of POWER_PROFILE_SUBKEYS) {
@@ -3116,12 +3168,14 @@ async function runDeviceActionOp(
 function getEnabledDockTokensOp(store) {
   const raw = String(store.state?.config?.dock_apps ?? "");
   if (!raw.trim()) {
-    return DOCK_APPS_CATALOG.map((a) => a.token);
+    return [...DEFAULT_DOCK_APPS_TOKENS];
   }
-  return raw
+  const known = new Set(DOCK_APPS_CATALOG.map((a) => a.token));
+  const parsed = raw
     .split(",")
     .map((s) => s.trim())
-    .filter(Boolean);
+    .filter((s, i, arr) => Boolean(s) && known.has(s) && arr.indexOf(s) === i);
+  return parsed.length > 0 ? parsed : [...DEFAULT_DOCK_APPS_TOKENS];
 }
 function toggleDockAppTokenOp(store, appId) {
   const current = getEnabledDockTokensOp(store);
@@ -3180,6 +3234,41 @@ function moveAreaCategoryTokenOp(store, token, delta) {
   const [moved] = current.splice(idx, 1);
   current.splice(nextIdx, 0, moved);
   store.stageDeviceSetting("area_categories", current.join(","));
+}
+function getEnabledHomeCategoriesOp(store) {
+  const raw = String(store.state?.config?.home_categories ?? "");
+  if (!raw.trim()) {
+    return [...DEFAULT_HOME_CATEGORIES_TOKENS];
+  }
+  const known = new Set(HOME_CATEGORIES_CATALOG.map((c) => c.token));
+  const parsed = raw
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter((s, i, arr) => Boolean(s) && known.has(s) && arr.indexOf(s) === i);
+  return parsed.length > 0 ? parsed : [...DEFAULT_HOME_CATEGORIES_TOKENS];
+}
+function toggleHomeCategoryTokenOp(store, token) {
+  const current = getEnabledHomeCategoriesOp(store);
+  const idx = current.indexOf(token);
+  if (idx >= 0) {
+    if (current.length <= 1) {
+      store.showToast("Keep at least one Home category enabled", true);
+      return;
+    }
+    current.splice(idx, 1);
+  } else {
+    current.push(token);
+  }
+  store.stageDeviceSetting("home_categories", current.join(","));
+}
+function moveHomeCategoryTokenOp(store, token, delta) {
+  const current = getEnabledHomeCategoriesOp(store);
+  const idx = current.indexOf(token);
+  const nextIdx = idx + delta;
+  if (idx < 0 || nextIdx < 0 || nextIdx >= current.length) return;
+  const [moved] = current.splice(idx, 1);
+  current.splice(nextIdx, 0, moved);
+  store.stageDeviceSetting("home_categories", current.join(","));
 }
 function getEnabledActivitySourcesOp(store) {
   const rawCfg = store.state?.config?.activity_sources;
@@ -4523,6 +4612,15 @@ class StudioStore {
   }
   moveAreaCategoryToken(token, delta) {
     moveAreaCategoryTokenOp(this, token, delta);
+  }
+  getEnabledHomeCategories() {
+    return getEnabledHomeCategoriesOp(this);
+  }
+  toggleHomeCategoryToken(token) {
+    toggleHomeCategoryTokenOp(this, token);
+  }
+  moveHomeCategoryToken(token, delta) {
+    moveHomeCategoryTokenOp(this, token, delta);
   }
   getEnabledActivitySources() {
     return getEnabledActivitySourcesOp(this);
@@ -6123,7 +6221,14 @@ function sortEntitiesByKeywords(
 }
 function isInterfaceDisplayEntity(it) {
   const low = `${it.name || ""} ${it.entity_id || ""}`.toLowerCase();
-  return low.includes("start screen") || low.includes("start_screen");
+  return (
+    low.includes("enable home screen") ||
+    low.includes("home_screen_enabled") ||
+    low.includes("start screen") ||
+    low.includes("start_screen") ||
+    low.includes("return to home timeout") ||
+    low.includes("return_to_home_timeout")
+  );
 }
 function isClockDisplayEntity(it) {
   const low = `${it.name || ""} ${it.entity_id || ""}`.toLowerCase();
@@ -6708,18 +6813,55 @@ function renderDeviceAudioView(store) {
 
 // --- src/views/device-interface-view.ts ---
 /**
- * Device Interface View (`interface`, D-026 / D-028 / D-030 / D-033 / D-034):
+ * Device Interface View (`interface`, D-026 / D-028 / D-030 / D-033 / D-034 / D-035):
  * Navigation, screen structure & content routing preferences.
- * Column 1: Home Screen (Start Screen & Dock Apps) & Activity Card.
+ * Column 1: Home Screen (Enable Home Screen, Start Screen, Return to Home Timeout, Dock Apps & Activity Card) & Home Controls.
  * Column 2: Area Controls (Area Categories pills), Media Player (Shortcuts & Library Sorting) & Remote Controls.
  */
 function renderDeviceInterfaceView(store) {
   const data = store.state;
   const cfg = data?.config || {};
   const remoteGroups = data?.system_config?.remote_groups || [];
-  const homeDisplayItems = sortEntitiesByKeywords(
-    store.getSectionItems("display").filter(isInterfaceDisplayEntity),
-    ["start screen"],
+  const homeDisplayItems = store
+    .getSectionItems("display")
+    .filter(isInterfaceDisplayEntity);
+  const matchInterfaceItem = (needleA, needleB) =>
+    homeDisplayItems.find((it) => {
+      const low = `${it.name || ""} ${it.entity_id || ""}`.toLowerCase();
+      return low.includes(needleA) || low.includes(needleB);
+    });
+  const homeEnabledItem = matchInterfaceItem("enable home screen", "home_screen_enabled");
+  const startScreenItem = matchInterfaceItem("start screen", "start_screen");
+  const returnTimeoutItem = matchInterfaceItem("return to home timeout", "return_to_home_timeout");
+  const extraHomeDisplayItems = homeDisplayItems.filter(
+    (it) => it !== homeEnabledItem && it !== startScreenItem && it !== returnTimeoutItem,
+  );
+  const homeScreenEnabled = homeEnabledItem
+    ? homeEnabledItem.state !== "off"
+    : cfg.home_screen_enabled !== false;
+  const rawStartOptions =
+    startScreenItem?.options && startScreenItem.options.length > 0
+      ? startScreenItem.options
+      : START_SCREEN_OPTIONS;
+  const visibleStartOptions = (
+    homeScreenEnabled ? rawStartOptions : rawStartOptions.filter((opt) => opt !== "Home")
+  ).map((opt) => ({ value: opt, label: opt }));
+  const rawStartValue = String(
+    startScreenItem?.state || cfg.start_screen || (homeScreenEnabled ? "Home" : "Clock"),
+  );
+  const startScreenValue =
+    !homeScreenEnabled && rawStartValue === "Home" ? "Clock" : rawStartValue;
+  const rawReturnTimeoutOptions = (
+    returnTimeoutItem?.options && returnTimeoutItem.options.length > 0
+      ? returnTimeoutItem.options
+      : RETURN_TO_HOME_TIMEOUT_OPTIONS
+  ).map((opt) => ({ value: opt, label: opt }));
+  const returnTimeoutValue = String(
+    returnTimeoutItem?.state || cfg.return_to_home_timeout || "2 min",
+  );
+  const enabledHomeCats = store.getEnabledHomeCategories();
+  const disabledHomeCats = HOME_CATEGORIES_CATALOG.filter(
+    (c) => !enabledHomeCats.includes(c.token),
   );
   const areaExtraItems = store
     .getSectionItems("area")
@@ -6783,110 +6925,241 @@ function renderDeviceInterfaceView(store) {
         ${renderCard({
           heading: html`<h3 class="card-title">Home Screen</h3>`,
           contentClass: "settings-list",
-          body: html`${homeDisplayItems.map((it) => renderNativeControlRow(store, it))}
-            ${renderSettingsRow({
-              label: "Dock Apps",
-              description: "Toggle and reorder apps shown in the Home Dock.",
-              stacked: true,
-              control: html`<div id="dock-pills-container" class="pill-list" role="group" aria-label="Dock apps">
-                ${enabledDock.map((tok, idx) => {
-                  const meta = DOCK_APPS_CATALOG.find((a) => a.token === tok);
-                  const lbl = meta ? meta.label : tok;
-                  return html`<span class="pill enabled">
-                    ${idx > 0
-                      ? html`<button
-                          type="button"
-                          aria-label=${`Move ${lbl} left`}
-                          @click=${() => store.moveDockAppToken(tok, -1)}
-                          class="pill-move"
-                        >
-                          ‹
-                        </button>`
-                      : nothing}
-                    <button
-                      type="button"
-                      aria-pressed="true"
-                      @click=${() => store.toggleDockAppToken(tok)}
-                      class="pill-toggle"
+          body: html`${renderSwitchRow({
+              id: "cfg-home_screen_enabled",
+              label: "Enable Home Screen",
+              description:
+                "Provides the Home screen and App Dock. Turn off to lock this Device to a single Start Screen app.",
+              checked: homeScreenEnabled,
+              onChange: (checked) => {
+                if (homeEnabledItem && !homeEnabledItem.pref_key) {
+                  void store.espAction(
+                    homeEnabledItem.entity_id,
+                    checked ? "turn_on" : "turn_off",
+                    checked ? "on" : "off",
+                  );
+                } else {
+                  store.stageDeviceSetting(
+                    homeEnabledItem?.pref_key || "home_screen_enabled",
+                    checked,
+                    "cfg-home_screen_enabled",
+                  );
+                }
+              },
+            })}
+            ${renderSelectRow({
+              id: "cfg-start_screen",
+              label: "Start Screen",
+              description: homeScreenEnabled
+                ? "Choose the screen shown on startup. Swipe up from the bottom to return to Home."
+                : "Single-app screen shown at all times while the Home screen is disabled.",
+              value: startScreenValue,
+              rawOptions: visibleStartOptions,
+              onChange: (val) => {
+                if (startScreenItem && !startScreenItem.pref_key) {
+                  void store.espSelect(startScreenItem.entity_id, val);
+                } else {
+                  store.stageDeviceSetting(
+                    startScreenItem?.pref_key || "start_screen",
+                    val,
+                    "cfg-start_screen",
+                  );
+                }
+              },
+            })}
+            ${homeScreenEnabled
+              ? html`${renderSelectRow({
+                    id: "cfg-return_to_home_timeout",
+                    label: "Return to Home Timeout",
+                    description:
+                      "Resets idle screens back to Home unless media is playing or a live activity is active.",
+                    value: returnTimeoutValue,
+                    rawOptions: rawReturnTimeoutOptions,
+                    onChange: (val) => {
+                      if (returnTimeoutItem && !returnTimeoutItem.pref_key) {
+                        void store.espSelect(returnTimeoutItem.entity_id, val);
+                      } else {
+                        store.stageDeviceSetting(
+                          returnTimeoutItem?.pref_key || "return_to_home_timeout",
+                          val,
+                          "cfg-return_to_home_timeout",
+                        );
+                      }
+                    },
+                  })}
+                  ${extraHomeDisplayItems.map((it) => renderNativeControlRow(store, it))}
+                  ${renderSettingsRow({
+                    label: "Dock Apps",
+                    description: "Toggle and reorder apps shown in the Home Dock.",
+                    stacked: true,
+                    control: html`<div
+                      id="dock-pills-container"
+                      class="pill-list"
+                      role="group"
+                      aria-label="Dock apps"
                     >
-                      ✓ ${lbl}
-                    </button>
-                    ${idx < enabledDock.length - 1
-                      ? html`<button
-                          type="button"
-                          aria-label=${`Move ${lbl} right`}
-                          @click=${() => store.moveDockAppToken(tok, 1)}
-                          class="pill-move"
+                      ${enabledDock.map((tok, idx) => {
+                        const meta = DOCK_APPS_CATALOG.find((a) => a.token === tok);
+                        const lbl = meta ? meta.label : tok;
+                        return html`<span class="pill enabled">
+                          ${idx > 0
+                            ? html`<button
+                                type="button"
+                                aria-label=${`Move ${lbl} left`}
+                                @click=${() => store.moveDockAppToken(tok, -1)}
+                                class="pill-move"
+                              >
+                                ‹
+                              </button>`
+                            : nothing}
+                          <button
+                            type="button"
+                            aria-pressed="true"
+                            @click=${() => store.toggleDockAppToken(tok)}
+                            class="pill-toggle"
+                          >
+                            ✓ ${lbl}
+                          </button>
+                          ${idx < enabledDock.length - 1
+                            ? html`<button
+                                type="button"
+                                aria-label=${`Move ${lbl} right`}
+                                @click=${() => store.moveDockAppToken(tok, 1)}
+                                class="pill-move"
+                              >
+                                ›
+                              </button>`
+                            : nothing}
+                        </span>`;
+                      })}
+                      ${disabledDock.map(
+                        (app) => html`<span class="pill">
+                          <button
+                            type="button"
+                            aria-pressed="false"
+                            @click=${() => store.toggleDockAppToken(app.token)}
+                            class="pill-toggle"
+                          >
+                            + ${app.label}
+                          </button>
+                        </span>`,
+                      )}
+                    </div>`,
+                  })}
+                  ${renderSettingsRow({
+                    labelHtml: html`<label for="cfg-activity_card" class="row-label">Show the Activity Card</label>`,
+                    description:
+                      "Shows live timers, alarms, media queue, stopwatch, and next calendar event on Home.",
+                    control: html`<input
+                      type="checkbox"
+                      id="cfg-activity_card"
+                      role="switch"
+                      .checked=${activityCardOn}
+                      @change=${(ev) =>
+                        store.stageDeviceSetting(
+                          "activity_card",
+                          (ev.currentTarget).checked,
+                          "cfg-activity_card",
+                        )}
+                      class="switch"
+                    />`,
+                  })}
+                  ${activityCardOn
+                    ? renderSettingsRow({
+                        id: "activity-sources",
+                        label: "Activity Card Sources",
+                        description: "Choose which live items appear in the Activity Card.",
+                        stacked: true,
+                        control: html`<div
+                          class="pill-list"
+                          role="group"
+                          aria-label="Activity Card sources"
                         >
-                          ›
-                        </button>`
-                      : nothing}
-                  </span>`;
-                })}
-                ${disabledDock.map(
-                  (app) => html`<span class="pill">
-                    <button
-                      type="button"
-                      aria-pressed="false"
-                      @click=${() => store.toggleDockAppToken(app.token)}
-                      class="pill-toggle"
-                    >
-                      + ${app.label}
-                    </button>
-                  </span>`,
-                )}
-              </div>`,
-            })}`,
+                          ${ACTIVITY_SOURCES_CATALOG.map((src) => {
+                            const on = enabledSources.has(src.id);
+                            return html`<span
+                              data-src=${src.id}
+                              data-label=${src.label}
+                              class="pill ${on ? "enabled" : ""}"
+                            >
+                              <button
+                                type="button"
+                                aria-pressed=${String(on)}
+                                @click=${() => store.toggleActivitySource(src.id)}
+                                class="pill-toggle"
+                              >
+                                ${on ? `✓ ${src.label}` : `+ ${src.label}`}
+                              </button>
+                            </span>`;
+                          })}
+                        </div>`,
+                      })
+                    : nothing}`
+              : nothing}`,
         })}
 
         ${renderCard({
-          heading: html`<h3 class="card-title">Activity Card</h3>`,
+          heading: html`<h3 class="card-title">Home Controls</h3>`,
           contentClass: "settings-list",
           body: html`${renderSettingsRow({
-              labelHtml: html`<label for="cfg-activity_card" class="row-label">Show the Activity Card</label>`,
-              description:
-                "Shows live timers, alarms, media queue, stopwatch, and next calendar event on Home.",
-              control: html`<input
-                type="checkbox"
-                id="cfg-activity_card"
-                role="switch"
-                .checked=${activityCardOn}
-                @change=${(ev) =>
-                  store.stageDeviceSetting(
-                    "activity_card",
-                    (ev.currentTarget).checked,
-                    "cfg-activity_card",
-                  )}
-                class="switch"
-              />`,
-            })}
-            ${activityCardOn
-              ? renderSettingsRow({
-                  id: "activity-sources",
-                  label: "Activity Card Sources",
-                  description: "Choose which live items appear in the Activity Card.",
-                  stacked: true,
-                  control: html`<div class="pill-list" role="group" aria-label="Activity Card sources">
-                    ${ACTIVITY_SOURCES_CATALOG.map((src) => {
-                      const on = enabledSources.has(src.id);
-                      return html`<span
-                        data-src=${src.id}
-                        data-label=${src.label}
-                        class="pill ${on ? "enabled" : ""}"
+            label: "Home Categories",
+            description:
+              "Toggle and reorder categories shown in the Home Hub. The first available category opens by default; categories with no configured entity are not displayed.",
+            stacked: true,
+            control: html`<div
+              id="home-categories-pills"
+              class="pill-list"
+              role="group"
+              aria-label="Home categories"
+            >
+              ${enabledHomeCats.map((tok, idx) => {
+                const meta = HOME_CATEGORIES_CATALOG.find((c) => c.token === tok);
+                const lbl = meta ? meta.label : tok;
+                return html`<span class="pill enabled">
+                  ${idx > 0
+                    ? html`<button
+                        type="button"
+                        aria-label=${`Move ${lbl} left`}
+                        @click=${() => store.moveHomeCategoryToken(tok, -1)}
+                        class="pill-move"
                       >
-                        <button
-                          type="button"
-                          aria-pressed=${String(on)}
-                          @click=${() => store.toggleActivitySource(src.id)}
-                          class="pill-toggle"
-                        >
-                          ${on ? `✓ ${src.label}` : `+ ${src.label}`}
-                        </button>
-                      </span>`;
-                    })}
-                  </div>`,
-                })
-              : nothing}`,
+                        ‹
+                      </button>`
+                    : nothing}
+                  <button
+                    type="button"
+                    aria-pressed="true"
+                    @click=${() => store.toggleHomeCategoryToken(tok)}
+                    class="pill-toggle"
+                  >
+                    ✓ ${lbl}
+                  </button>
+                  ${idx < enabledHomeCats.length - 1
+                    ? html`<button
+                        type="button"
+                        aria-label=${`Move ${lbl} right`}
+                        @click=${() => store.moveHomeCategoryToken(tok, 1)}
+                        class="pill-move"
+                      >
+                        ›
+                      </button>`
+                    : nothing}
+                </span>`;
+              })}
+              ${disabledHomeCats.map(
+                (cat) => html`<span class="pill">
+                  <button
+                    type="button"
+                    aria-pressed="false"
+                    @click=${() => store.toggleHomeCategoryToken(cat.token)}
+                    class="pill-toggle"
+                  >
+                    + ${cat.label}
+                  </button>
+                </span>`,
+              )}
+            </div>`,
+          })}`,
         })}
       </div>
 

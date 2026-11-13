@@ -65,12 +65,12 @@ class TestProtocolV3Contract(unittest.TestCase):
     def test_domain_field_counts_and_contiguous_indices(self) -> None:
         """Every v3 domain must have contiguous 3..COUNT-1 indices matching expected counts."""
         expected_counts = {
-            "area_context": 38,
+            "area_context": 39,
             "active_media": 17,
             "remote_config": 3,
             "weather_forecast": 14,
             "calendar_agenda": 3,
-            "device_prefs": 46,
+            "device_prefs": 48,
         }
         domains = self.schema.get("domains", {})
         self.assertEqual(set(domains.keys()), set(expected_counts.keys()))
@@ -1062,6 +1062,47 @@ class TestDevicePrefsProtocol(unittest.TestCase):
         for bad in ("", "   ", "bogus", "light,bogus"):
             with self.assertRaises(ValueError):
                 _PAYLOADS_MOD.normalize_area_categories(bad)
+
+    def test_home_categories_and_single_app_start_screen_coercion(self) -> None:
+        self.assertEqual(_PAYLOADS_MOD.parse_home_categories(None), [])
+        self.assertEqual(
+            _PAYLOADS_MOD.parse_home_categories(_PAYLOADS_MOD.DEFAULT_HOME_CATEGORIES),
+            ["alarm", "thermostat", "entry", "vacuum"],
+        )
+        self.assertEqual(
+            _PAYLOADS_MOD.parse_home_categories("entry, alarm, bogus, entry"),
+            ["entry", "alarm"],
+        )
+        self.assertEqual(
+            _PAYLOADS_MOD.normalize_home_categories(" Entry , alarm , entry "),
+            "entry,alarm",
+        )
+        for bad in ("", "   ", "bogus", "entry,bogus"):
+            with self.assertRaises(ValueError):
+                _PAYLOADS_MOD.normalize_home_categories(bad)
+
+        coerced = studio_scope.clean_device_settings({"home_screen_enabled": False})
+        self.assertFalse(coerced["home_screen_enabled"])
+        self.assertEqual(coerced["start_screen"], "Clock")
+
+        kept = studio_scope.clean_device_settings(
+            {"home_screen_enabled": False, "start_screen": "Area Controls", "return_to_home_timeout": "5 min"}
+        )
+        self.assertEqual(kept["start_screen"], "Area Controls")
+        self.assertEqual(kept["return_to_home_timeout"], "5 min")
+
+        schema = json.loads(HA_PROTO_JSON.read_text(encoding="utf-8"))
+        spec_fields = schema["domains"]["device_prefs"]["fields"]
+        idx_by_name = {f["name"]: i for i, f in enumerate(spec_fields)}
+        packed = _PAYLOADS_MOD.pack_device_prefs_fields(
+            1,
+            {"home_screen_enabled": False, "start_screen": "Home", "return_to_home_timeout": "1 min"},
+            native_ble_tracking=False,
+            custom_color_hex="",
+        )
+        self.assertIs(packed[idx_by_name["home_screen_enabled"]], False)
+        self.assertEqual(packed[idx_by_name["start_screen"]], "Clock")
+        self.assertEqual(packed[idx_by_name["return_to_home_timeout"]], "1 min")
 
 
 class TestBoundRpcReassembler(unittest.TestCase):

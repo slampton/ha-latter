@@ -261,7 +261,27 @@ VA_VISUAL_PROFILE_OPTIONS: tuple[str, ...] = (
     "Light Bar",
     "Dot Wave",
 )
-START_SCREEN_OPTIONS: tuple[str, ...] = ("Home", "Clock")
+START_SCREEN_OPTIONS: tuple[str, ...] = (
+    "Home",
+    "Clock",
+    "Media",
+    "Home Hub",
+    "Area Controls",
+    "Remote",
+    "Weather",
+    "Cameras",
+    "Games",
+    "Tools",
+)
+RETURN_TO_HOME_TIMEOUT_OPTIONS: tuple[str, ...] = (
+    "15s",
+    "30s",
+    "1 min",
+    "2 min",
+    "5 min",
+    "10 min",
+    "Never",
+)
 CLOCK_FACE_OPTIONS: tuple[str, ...] = (
     "Minimal Digital",
     "Modern Roman (Analog)",
@@ -300,6 +320,37 @@ def normalize_area_categories(csv: str | None) -> str:
     cats = parse_area_categories(csv)
     if not cats:
         raise ValueError("Keep at least one Area category enabled")
+    return ",".join(cats)
+
+
+HOME_CATEGORY_TOKENS: tuple[str, ...] = (
+    "alarm",
+    "thermostat",
+    "entry",
+    "vacuum",
+)
+DEFAULT_HOME_CATEGORIES = "alarm,thermostat,entry,vacuum"
+
+
+def parse_home_categories(csv: str | None) -> list[str]:
+    """Return the known Home Hub category tokens named in `csv`, in order, without duplicates."""
+    out: list[str] = []
+    for raw in str(csv or "").split(","):
+        tok = raw.strip().lower()
+        if tok in HOME_CATEGORY_TOKENS and tok not in out:
+            out.append(tok)
+    return out
+
+
+def normalize_home_categories(csv: str | None) -> str:
+    """Return `csv` as canonical comma-separated Home Hub categories; raise ValueError if empty or unknown."""
+    names = [t.strip().lower() for t in str(csv or "").split(",") if t.strip()]
+    unknown = sorted({t for t in names if t not in HOME_CATEGORY_TOKENS})
+    if unknown:
+        raise ValueError(f"Unknown Home category: {', '.join(unknown)}")
+    cats = parse_home_categories(csv)
+    if not cats:
+        raise ValueError("Keep at least one Home category enabled")
     return ",".join(cats)
 
 
@@ -374,7 +425,9 @@ DEVICE_PREF_SPECS: tuple[DevicePrefSpec, ...] = (
     DevicePrefSpec("night_start_hour", "Night Start Hour", "number", 20, "display", "display", "behavior", min_val=0, max_val=23, step=1, unit="h"),
     DevicePrefSpec("color_profile", "Color Profile", "select", "Steel Blue", "display", "display", "appearance", options=COLOR_PROFILE_OPTIONS),
     DevicePrefSpec("va_visual_profile", "Visual Profile", "select", "Nebula", "voice", "display", "appearance", options=VA_VISUAL_PROFILE_OPTIONS),
+    DevicePrefSpec("home_screen_enabled", "Enable Home Screen", "switch", True, "display", "display", "appearance"),
     DevicePrefSpec("start_screen", "Start Screen", "select", "Home", "display", "display", "appearance", options=START_SCREEN_OPTIONS),
+    DevicePrefSpec("return_to_home_timeout", "Return to Home Timeout", "select", "2 min", "display", "display", "appearance", options=RETURN_TO_HOME_TIMEOUT_OPTIONS),
     DevicePrefSpec("clock_face", "Clock Face", "select", "Minimal Digital", "display", "display", "appearance", options=CLOCK_FACE_OPTIONS),
     DevicePrefSpec("time_format", "Time Format", "select", "12-Hour (AM/PM)", "display", "display", "appearance", options=TIME_FORMAT_OPTIONS),
     DevicePrefSpec("weather_background", "Weather Background", "switch", True, "home", "display", "appearance"),
@@ -499,6 +552,7 @@ DEVICE_TEXT_KEYS: tuple[str, ...] = (
     "assigned_person",
     "dock_apps",
     "area_categories",
+    "home_categories",
     "activity_sources",
     "security_pin_policy",
 )
@@ -719,6 +773,12 @@ def clean_device_settings(
         except ValueError as err:
             raise SettingsScopeError(str(err)) from None
 
+    if "home_categories" in out:
+        try:
+            out["home_categories"] = normalize_home_categories(out["home_categories"])
+        except ValueError as err:
+            raise SettingsScopeError(str(err)) from None
+
     for spec in DEVICE_PREF_SPECS:
         if spec.key not in incoming:
             continue
@@ -745,6 +805,19 @@ def clean_device_settings(
             if spec.max_val is not None:
                 num_v = min(spec.max_val, num_v)
             out[spec.key] = num_v
+
+    eff_home_enabled = (
+        out["home_screen_enabled"]
+        if "home_screen_enabled" in out
+        else resolve_device_pref_value(current or {}, "home_screen_enabled")
+    )
+    eff_start = (
+        out["start_screen"]
+        if "start_screen" in out
+        else resolve_device_pref_value(current or {}, "start_screen")
+    )
+    if not eff_home_enabled and eff_start == "Home":
+        out["start_screen"] = "Clock"
 
     if "power_profile" in out:
         preset = POWER_PROFILE_PREFS.get(str(out["power_profile"]))
