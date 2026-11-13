@@ -135,12 +135,18 @@ class TestViewLayout(unittest.TestCase):
         )
         for title in ("Diagnostics", "Replace Hardware", "Danger Zone"):
             self.assertIn(f'<h3 class="card-title">{title}</h3>', tools)
+        self.assertIn("<summary>Developer &amp; Telemetry</summary>", tools)
+        self.assertIn("Open in ESPHome", tools)
+        self.assertNotIn("All Entities", js)
+        self.assertNotIn("entitySearchQuery", js)
         for title in ("Notifications &amp; Announcements", "Backup &amp; Restore", "System &amp; Device Logs"):
             self.assertIn(f'<h3 class="card-title">{title}</h3>', sys_tools)
         for title in ("Whole-Home Entities", "Calendars", "Cameras &amp; Doorbell Audio", "Custom Colors", "Wallpapers"):
             self.assertIn(f'<h3 class="card-title">{title}</h3>', shared_entities)
-        for title in ("Brightness &amp; Theme", "Wallpapers"):
-            self.assertIn(f'title: "{title.replace("&amp;", "&")}"', display_view)
+        for title in ("Brightness", "Colors", "Screensavers", "Wallpapers"):
+            self.assertIn(f'<h3 class="card-title">{title}</h3>', display_view)
+        self.assertNotIn("Brightness &amp; Theme", js)
+        self.assertNotIn("Brightness & Theme", js)
         for title in ("Home Screen", "Activity Card", "Area Controls", "Remote Controls"):
             self.assertIn(f'<h3 class="card-title">{title}</h3>', interface_view)
         self.assertIn('id: "cfg-device_remote_group"', interface_view)

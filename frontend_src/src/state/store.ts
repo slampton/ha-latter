@@ -152,8 +152,7 @@ export class StudioStore implements ReactiveController {
   deviceSortAsc = true;
   deviceCategoryFilter = "all";
 
-  // Device Tools & Security state
-  entitySearchQuery = "";
+  // Device Security state
   devicePinDraft = "";
   systemPinDraft = "";
   pinBusy = false;
@@ -494,7 +493,6 @@ export class StudioStore implements ReactiveController {
     this.deviceSelected = true;
     this.currentScope = "device";
     this.currentViewId = targetView === "select_device_prompt" ? "dashboard" : targetView;
-    this.entitySearchQuery = "";
     this.devicePinDraft = "";
     this.syncUrl();
     this.host.requestUpdate();

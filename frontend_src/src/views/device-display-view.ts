@@ -1,5 +1,5 @@
 /**
- * Device Display View (`display`, D-026): Panel Brightness, Theme / Custom Color & Wallpapers.
+ * Device Display View (`display`, D-027): Brightness, Colors, Screensavers & Wallpapers.
  */
 
 import {
@@ -16,7 +16,7 @@ import { WALLPAPER_ROTATION_OPTIONS } from "../constants.js";
 import { html, nothing, type TemplateResult } from "../lib/lit.js";
 import type { StudioStore } from "../state/store.js";
 import type { EspHomeEntityItem } from "../types.js";
-import { defaultThemeHex, isValidHexColor } from "../utils/format.js";
+import { defaultThemeHex, entityLabel, isValidHexColor } from "../utils/format.js";
 
 export function sortEntitiesByKeywords(
   items: readonly EspHomeEntityItem[],
@@ -42,13 +42,26 @@ export function isInterfaceDisplayEntity(it: EspHomeEntityItem): boolean {
   );
 }
 
+export function isScreensaverSleepEntity(it: EspHomeEntityItem): boolean {
+  const low = `${it.name || ""} ${it.entity_id || ""}`.toLowerCase();
+  return (
+    low.includes("screensaver") ||
+    low.includes("docked idle timeout") ||
+    low.includes("docked_idle_timeout")
+  );
+}
+
+function isColorDisplayEntity(it: EspHomeEntityItem): boolean {
+  const low = `${it.name || ""} ${it.entity_id || ""}`.toLowerCase();
+  return low.includes("color profile") || low.includes("color_profile");
+}
+
 export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
   const data = store.state;
   const cfg = data?.config || {};
   const palettes = data?.system_config?.custom_palettes || [];
 
-  const displayOrder = [
-    "color profile",
+  const brightnessOrder = [
     "auto brightness mode",
     "manual brightness",
     "day brightness",
@@ -56,11 +69,15 @@ export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
     "day start hour",
     "night start hour",
   ];
-  const displayItems = sortEntitiesByKeywords(
-    store.getSectionItems("display").filter((it) => !isInterfaceDisplayEntity(it)),
-    displayOrder,
+  const allDisplayItems = store
+    .getSectionItems("display")
+    .filter((it) => !isInterfaceDisplayEntity(it));
+  const colorItems = allDisplayItems.filter(isColorDisplayEntity);
+  const brightnessItems = sortEntitiesByKeywords(
+    allDisplayItems.filter((it) => !isColorDisplayEntity(it)),
+    brightnessOrder,
   );
-  const autoBrtItem = displayItems.find((it) =>
+  const autoBrtItem = brightnessItems.find((it) =>
     (it.name || "").toLowerCase().includes("auto brightness"),
   );
   const autoBrtState = String(autoBrtItem?.state ?? "").trim();
@@ -71,7 +88,7 @@ export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
     autoBrtState !== "unknown";
   const autoBrtOff = autoBrtKnown && (autoBrtState === "Disabled" || autoBrtState === "off");
   const autoBrtTimeSchedule = autoBrtKnown && autoBrtState === "Time Schedule";
-  const visibleDisplayItems = displayItems.filter((it) => {
+  const visibleBrightnessItems = brightnessItems.filter((it) => {
     if (it.domain === "light") return false;
     const low = (it.name || "").toLowerCase();
     if (autoBrtKnown) {
@@ -88,13 +105,27 @@ export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
     return true;
   });
 
-  const colorProfileItem = displayItems.find((it) =>
-    (it.name || "").toLowerCase().includes("color profile"),
-  );
   const curHex = isValidHexColor(cfg.device_custom_color)
     ? String(cfg.device_custom_color).toUpperCase()
     : defaultThemeHex(store.host);
   const swatchStyle = `--swatch-color:${curHex}`;
+
+  const screensaverOrder = [
+    "docked screensaver",
+    "screensaver style",
+    "docked idle timeout",
+  ];
+  const screensaverSleepItems = sortEntitiesByKeywords(
+    store.getSectionItems("sleep").filter(isScreensaverSleepEntity),
+    screensaverOrder,
+  );
+  const activateScreensaverBtn = store
+    .getSectionItems("actions")
+    .find(
+      (it) =>
+        it.domain === "button" &&
+        `${it.name || ""} ${it.entity_id || ""}`.toLowerCase().includes("screensaver"),
+    );
 
   const curCycle = Number(cfg.wallpaper_cycle_minutes || 0);
   const wallpapers = data?.wallpapers || [];
@@ -122,53 +153,89 @@ export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
   return html`<section id="view-display">
     <div class="columns">
       <div class="column">
+        ${visibleBrightnessItems.length
+          ? renderCard({
+              heading: html`<h3 class="card-title">Brightness</h3>`,
+              contentClass: "settings-list",
+              body: visibleBrightnessItems.map((it) => renderNativeControlRow(store, it)),
+            })
+          : nothing}
+
         ${renderCard({
-          title: "Brightness & Theme",
+          heading: html`<h3 class="card-title">Colors</h3>`,
           contentClass: "settings-list",
-          body: html`${visibleDisplayItems.map((it) => renderNativeControlRow(store, it))}
-            ${colorProfileItem || palettes.length || cfg.device_custom_color
-              ? renderSettingsRow({
-                  label: "Custom Color",
-                  forId: "dev-custom-palette-select",
-                  description: "Used when Color Profile is set to Custom.",
-                  control: html`<span class="swatch" style=${swatchStyle} aria-hidden="true"></span>
-                    <select
-                      id="dev-custom-palette-select"
-                      .value=${curHex}
-                      @change=${(ev: Event) => {
-                        const val = (ev.currentTarget as HTMLSelectElement).value;
-                        if (val) store.applyDeviceCustomColor(val, true);
-                      }}
-                    >
-                      ${!palettes.length
-                        ? html`<option value=${curHex} selected>Current (${curHex})</option>`
-                        : html`
-                            ${!palettes.some((p) => p.hex.toUpperCase() === curHex)
-                              ? html`<option value=${curHex} selected>Current (${curHex})</option>`
-                              : nothing}
-                            ${palettes.map((p) => {
-                              const h = p.hex.toUpperCase();
-                              return html`<option value=${h} ?selected=${h === curHex}>
-                                ${p.name || h} (${h})
-                              </option>`;
-                            })}
-                          `}
-                    </select>
-                    <button
-                      type="button"
-                      @click=${() => store.openColorWheelModal("device")}
-                      class="btn btn-secondary btn-compact"
-                    >
-                      Add Color
-                    </button>`,
-                })
-              : nothing}`,
+          body: html`${colorItems.map((it) => renderNativeControlRow(store, it))}
+            ${renderSettingsRow({
+              label: "Custom Color",
+              forId: "dev-custom-palette-select",
+              description: "Used when Color Profile is set to Custom.",
+              control: html`<span class="swatch" style=${swatchStyle} aria-hidden="true"></span>
+                <select
+                  id="dev-custom-palette-select"
+                  .value=${curHex}
+                  @change=${(ev: Event) => {
+                    const val = (ev.currentTarget as HTMLSelectElement).value;
+                    if (val) store.applyDeviceCustomColor(val, true);
+                  }}
+                >
+                  ${!palettes.length
+                    ? html`<option value=${curHex} selected>Current (${curHex})</option>`
+                    : html`
+                        ${!palettes.some((p) => p.hex.toUpperCase() === curHex)
+                          ? html`<option value=${curHex} selected>Current (${curHex})</option>`
+                          : nothing}
+                        ${palettes.map((p) => {
+                          const h = p.hex.toUpperCase();
+                          return html`<option value=${h} ?selected=${h === curHex}>
+                            ${p.name || h} (${h})
+                          </option>`;
+                        })}
+                      `}
+                </select>
+                <button
+                  type="button"
+                  @click=${() => store.openColorWheelModal("device")}
+                  class="btn btn-secondary btn-compact"
+                >
+                  Add Color
+                </button>`,
+            })}`,
         })}
+
+        ${screensaverSleepItems.length || activateScreensaverBtn
+          ? renderCard({
+              heading: html`<h3 class="card-title">Screensavers</h3>`,
+              contentClass: "settings-list",
+              body: html`${screensaverSleepItems.map((it) => renderNativeControlRow(store, it))}
+                ${activateScreensaverBtn
+                  ? renderSettingsRow({
+                      label: entityLabel(
+                        activateScreensaverBtn.name || activateScreensaverBtn.entity_id,
+                      ),
+                      description: "Starts the screensaver on this Device immediately.",
+                      control: html`<button
+                        type="button"
+                        ?disabled=${String(activateScreensaverBtn.state ?? "") === "unavailable"}
+                        @click=${() =>
+                          void store.espAction(
+                            activateScreensaverBtn.entity_id,
+                            "press",
+                            undefined,
+                            `Triggered "${entityLabel(activateScreensaverBtn.name || activateScreensaverBtn.entity_id)}"`,
+                          )}
+                        class="btn btn-secondary btn-compact"
+                      >
+                        Preview
+                      </button>`,
+                    })
+                  : nothing}`,
+            })
+          : nothing}
       </div>
 
       <div class="column">
         ${renderCard({
-          title: "Wallpapers",
+          heading: html`<h3 class="card-title">Wallpapers</h3>`,
           subtitle: "Shared presets and uploaded photos cropped for this display.",
           headerActions: renderWallpaperUploadTrigger(store, "device"),
           contentClass: "stack",

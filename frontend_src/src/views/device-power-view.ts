@@ -1,13 +1,16 @@
 /**
- * Device Power & Battery View (`power`): Sleep & Wake controls and Power & Battery telemetry (D-014).
+ * Device Power View (`power`, D-014 / D-027): Sleep & Wake controls and Power & Battery telemetry.
  */
 
 import { renderCard, renderNativeControlRow } from "../components/controls.js";
 import { html, nothing, type TemplateResult } from "../lib/lit.js";
 import type { StudioStore } from "../state/store.js";
+import { isScreensaverSleepEntity } from "./device-display-view.js";
 
 export function renderDevicePowerView(store: StudioStore): TemplateResult {
-  const sleepItems = store.getSectionItems("sleep");
+  const sleepItems = store
+    .getSectionItems("sleep")
+    .filter((it) => !isScreensaverSleepEntity(it));
   const batteryItems = store.getSectionItems("battery");
   const bothEmpty = !sleepItems.length && !batteryItems.length;
 

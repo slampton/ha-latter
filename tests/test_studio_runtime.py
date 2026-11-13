@@ -472,6 +472,7 @@ function makeStore({ weatherBgState = "Dynamic", cycleMins = 0, activeId = "", f
   ];
   const displaySection = [
     { entity_id: "light.pocket_display_screen_backlight", domain: "light", name: "Display: Screen Backlight", state: "on" },
+    { entity_id: "select.pocket_display_color_profile", domain: "select", name: "Display: Color Profile", state: "Default", options: ["Default", "Custom"] },
     { entity_id: "select.pocket_display_clock_face", domain: "select", name: "Display: Clock Face", state: "Modern", options: ["Modern", "Analog"] },
     { entity_id: "select.pocket_display_start_screen", domain: "select", name: "Display: Start Screen", state: "Home", options: ["Home", "Area"] },
     { entity_id: "select.pocket_display_auto_brightness_mode", domain: "select", name: "Display: Auto Brightness Mode", state: autoBrtState, options: ["Disabled", "Sun Synchronized", "Time Schedule"] },
@@ -480,6 +481,19 @@ function makeStore({ weatherBgState = "Dynamic", cycleMins = 0, activeId = "", f
     { entity_id: "number.pocket_display_night_brightness", domain: "number", name: "Display: Night Brightness", state: "25", min: 5, max: 100, step: 1, unit: "%" },
     { entity_id: "number.pocket_display_day_start_hour", domain: "number", name: "Display: Day Start Hour", state: "7", min: 0, max: 23, step: 1, unit: "h" },
     { entity_id: "number.pocket_display_night_start_hour", domain: "number", name: "Display: Night Start Hour", state: "22", min: 0, max: 23, step: 1, unit: "h" },
+  ];
+  const sleepSection = [
+    { entity_id: "select.pocket_sleep_power_profile", domain: "select", name: "Power Profile", state: "Balanced", options: ["Balanced", "Low Power"] },
+    { entity_id: "select.pocket_sleep_battery_screen_timeout", domain: "select", name: "Battery Screen Timeout", state: "30 s", options: ["15 s", "30 s"] },
+    { entity_id: "switch.pocket_sleep_docked_screensaver", domain: "switch", name: "Docked Screensaver", state: "on" },
+    { entity_id: "select.pocket_sleep_screensaver_style", domain: "select", name: "Screensaver Style", state: "Starfield", options: ["Clock", "Starfield"] },
+    { entity_id: "select.pocket_sleep_docked_idle_timeout", domain: "select", name: "Docked Idle Timeout", state: "5 min", options: ["1 min", "5 min"] },
+  ];
+  const actionsSection = [
+    { entity_id: "button.pocket_actions_activate_screensaver", domain: "button", name: "Activate Screensaver", state: "unknown" },
+  ];
+  const batterySection = [
+    { entity_id: "sensor.pocket_battery_level", domain: "sensor", name: "Battery Level", state: "88", unit: "%" },
   ];
   return {
     host: null,
@@ -510,6 +524,9 @@ function makeStore({ weatherBgState = "Dynamic", cycleMins = 0, activeId = "", f
     getSectionItems(sec) {
       if (sec === "home") return homeSection;
       if (sec === "display") return displaySection;
+      if (sec === "sleep") return sleepSection;
+      if (sec === "actions") return actionsSection;
+      if (sec === "battery") return batterySection;
       return [];
     },
     getEnabledActivitySources() { return ["calendar"]; },
@@ -520,11 +537,12 @@ function makeStore({ weatherBgState = "Dynamic", cycleMins = 0, activeId = "", f
 const offMarkup = flattenHtml(renderDeviceDisplayView(makeStore({ cycleMins: 0, activeId: "", autoBrtState: "Disabled" })));
 const staticMarkup = flattenHtml(renderDeviceDisplayView(makeStore({ cycleMins: 0, activeId: "preset:ocean_waves", autoBrtState: "Sun Synchronized" })));
 const rotatingMarkup = flattenHtml(renderDeviceDisplayView(makeStore({ cycleMins: 5, activeId: "preset:ocean_waves", favIds: ["preset:forest_mountains", "preset:ocean_waves"], autoBrtState: "Time Schedule" })));
+const powerMarkup = flattenHtml(renderDevicePowerView(makeStore({})));
 const ifaceWeatherOn = flattenHtml(renderDeviceInterfaceView(makeStore({ weatherBgState: "Dynamic" })));
 const ifaceWeatherOff = flattenHtml(renderDeviceInterfaceView(makeStore({ weatherBgState: "off" })));
 const sysRemotesMarkup = flattenHtml(renderSystemRemotesView(makeStore({ remoteMode: "group:living_tv" })));
 
-return { offMarkup, staticMarkup, rotatingMarkup, ifaceWeatherOn, ifaceWeatherOff, sysRemotesMarkup };
+return { offMarkup, staticMarkup, rotatingMarkup, powerMarkup, ifaceWeatherOn, ifaceWeatherOff, sysRemotesMarkup };
 """
         )
         got = _run_node_ts(
@@ -534,12 +552,22 @@ return { offMarkup, staticMarkup, rotatingMarkup, ifaceWeatherOn, ifaceWeatherOf
                 FRONTEND_SRC / "components" / "controls.ts",
                 FRONTEND_SRC / "components" / "wallpaper-gallery.ts",
                 FRONTEND_SRC / "views" / "device-display-view.ts",
+                FRONTEND_SRC / "views" / "device-power-view.ts",
                 FRONTEND_SRC / "views" / "device-interface-view.ts",
                 FRONTEND_SRC / "views" / "system-remotes-view.ts",
             ],
             runner,
         )
-        # 1. Display view: Auto Brightness Disabled + Clock Face / Start Screen moved to Interface view
+        # 1. Display view (D-027): Brightness, Colors, Screensavers & Wallpapers cards
+        for card_title in ("Brightness", "Colors", "Screensavers", "Wallpapers"):
+            self.assertIn(f'<h3 class="card-title">{card_title}</h3>', got["offMarkup"])
+        self.assertNotIn("Brightness & Theme", got["offMarkup"])
+        self.assertLess(got["offMarkup"].index('<h3 class="card-title">Brightness</h3>'), got["offMarkup"].index('<h3 class="card-title">Colors</h3>'))
+        self.assertLess(got["offMarkup"].index('<h3 class="card-title">Colors</h3>'), got["offMarkup"].index("Color Profile"))
+        self.assertLess(got["offMarkup"].index("Color Profile"), got["offMarkup"].index("Custom Color"))
+        self.assertLess(got["offMarkup"].index('<h3 class="card-title">Colors</h3>'), got["offMarkup"].index('<h3 class="card-title">Screensavers</h3>'))
+        for saver_label in ("Docked Screensaver", "Screensaver Style", "Docked Idle Timeout", "Activate Screensaver", "Preview"):
+            self.assertIn(saver_label, got["offMarkup"])
         self.assertIn('id="btn-enable-wp-rotation"', got["offMarkup"])
         self.assertNotIn('id="btn-turn-off-wp"', got["offMarkup"])
         self.assertNotIn('id="btn-stop-wp-rotation"', got["offMarkup"])
@@ -549,6 +577,13 @@ return { offMarkup, staticMarkup, rotatingMarkup, ifaceWeatherOn, ifaceWeatherOf
         self.assertIn("Manual Brightness", got["offMarkup"])
         self.assertNotIn("Day Brightness", got["offMarkup"])
         self.assertNotIn("Day Start Hour", got["offMarkup"])
+
+        # 1b. Power view (D-027): Sleep & Wake keeps power/battery timeouts and excludes screensavers
+        self.assertIn("Power Profile", got["powerMarkup"])
+        self.assertIn("Battery Screen Timeout", got["powerMarkup"])
+        self.assertIn("Battery Level", got["powerMarkup"])
+        for saver_label in ("Docked Screensaver", "Screensaver Style", "Docked Idle Timeout"):
+            self.assertNotIn(saver_label, got["powerMarkup"])
 
         # 2. Interface view: Start Screen, Clock Face, Sun & Moon pills, and Remote Control Group selector
         self.assertIn("Start Screen", got["ifaceWeatherOn"])
@@ -747,6 +782,164 @@ return (async () => {
                 },
             ],
         )
+
+
+@unittest.skipUnless(NODE, "node is not installed")
+class TestToolsDiagnosticsView(unittest.TestCase):
+    """D-027: Device Tools renders curated Diagnostics + collapsed Developer & Telemetry drawer without raw outbox blobs or All Entities."""
+
+    def test_standard_diagnostics_parsed_telemetry_and_ble_tag_mode(self) -> None:
+        stub_lit = """
+const nothing = Symbol.for("latter.lit.nothing");
+function html(strings, ...values) { return { _$litType$: 1, strings, values }; }
+function flattenHtml(node) {
+  if (node === null || node === undefined || node === nothing || typeof node === "boolean") return "";
+  if (Array.isArray(node)) return node.map(flattenHtml).join("");
+  if (typeof node === "object" && node._$litType$ === 1) {
+    let out = "";
+    for (let i = 0; i < node.strings.length; i += 1) {
+      out += node.strings[i];
+      if (i < node.values.length) {
+        const v = node.values[i];
+        out += typeof v === "function" ? "[fn]" : flattenHtml(v);
+      }
+    }
+    return out;
+  }
+  return String(node);
+}
+"""
+        runner = (
+            stub_lit
+            + """
+function makeToolsStore(isBle = false) {
+  const networkSection = isBle ? [] : [
+    { entity_id: "update.desk_panel_firmware", domain: "update", name: "Firmware", state: "off" },
+    { entity_id: "sensor.desk_panel_wifi_signal", domain: "sensor", name: "Wi-Fi Signal", state: "-54", unit: "dBm" },
+    { entity_id: "sensor.desk_panel_ip_address", domain: "sensor", name: "IP Address", state: "192.168.1.44" },
+    { entity_id: "sensor.desk_panel_connected_ssid", domain: "sensor", name: "Connected SSID", state: "HomeLAN" },
+    { entity_id: "sensor.desk_panel_system_rpc_outbox", domain: "sensor", name: "System: RPC Outbox", state: '{"v":3,"cmd":"media_play","seq":99}' },
+    {
+      entity_id: "sensor.desk_panel_system_link_report",
+      domain: "sensor",
+      name: "System: Link Report",
+      state: "up=7320 rst=POWERON bto=1 disc=2 rsn=0 rssi=-55/-62 n=120 wlk=0.0 ls=45 slp=78.5 awk=21.5 api=3 ha=2 gap=14 down=0 nvs=5/0/3",
+    },
+    {
+      entity_id: "sensor.desk_panel_system_hardware_manifest",
+      domain: "sensor",
+      name: "System: Hardware Manifest",
+      state: '{"v":2,"contract":3,"board":"waveshare_s3_square_4_0","w":480,"h":480,"shape":"square","display":1,"touch":1,"audio":1,"mic":1,"spk":1,"imu":1,"battery":0,"stationary":1,"wearable":0,"ips":1,"chip":"ESP32-S3","psram_mb":8,"minor":4}',
+    },
+  ];
+  const developerSection = isBle ? [] : [
+    { entity_id: "switch.desk_panel_system_telemetry_profiler", domain: "switch", name: "Telemetry Profiler", state: "off" },
+    { entity_id: "button.desk_panel_system_log_memory_report", domain: "button", name: "Log Memory Report", state: "unknown" },
+    { entity_id: "sensor.desk_panel_system_internal_ram_low_water", domain: "sensor", name: "Internal RAM Low Water", state: "64", unit: "kB" },
+  ];
+  return {
+    hass: null,
+    host: null,
+    activeSubentryId: "sub_1",
+    devicePinDraft: "",
+    pinBusy: false,
+    hasConfiguredSecurityPin: true,
+    state: {
+      title: isBle ? "Keychain Tag" : "Desk Panel",
+      config: isBle
+        ? { kind: "ble_tag", ble_target_address: "AA:BB:CC:11:22:33" }
+        : { kind: "device", device_slug: "desk_panel", security_pin_policy: "auto" },
+      live: isBle
+        ? {}
+        : { device_sw_version: "3.0.0", sdk_rev: "2026111202", effective_security_pin_policy: "require_pin" },
+      links: isBle
+        ? { entry_id: "ent_1" }
+        : { entry_id: "ent_1", esphome_device_id: "esp_dev_1", latter_device_id: "lat_dev_1" },
+      esphome: isBle ? {} : { device: { mac: "10:20:30:40:50:60" } },
+      system_devices: [
+        isBle
+          ? { subentry_id: "sub_1", kind: "ble_tag", ble_survey_rows: [{ is_winner: true, effective_rssi: -68 }] }
+          : { subentry_id: "sub_1", kind: "device", wifi_rssi: -54, ip_address: "192.168.1.44" },
+      ],
+    },
+    getSectionItems(sec) {
+      if (sec === "network") return networkSection;
+      if (sec === "developer") return developerSection;
+      return [];
+    },
+  };
+}
+
+return {
+  espMarkup: flattenHtml(renderDeviceToolsView(makeToolsStore(false))),
+  bleMarkup: flattenHtml(renderDeviceToolsView(makeToolsStore(true))),
+};
+"""
+        )
+        got = _run_node_ts(
+            [
+                FRONTEND_SRC / "constants.ts",
+                FRONTEND_SRC / "utils" / "format.ts",
+                FRONTEND_SRC / "components" / "controls.ts",
+                FRONTEND_SRC / "views" / "device-tools-view.ts",
+            ],
+            runner,
+        )
+        esp = got["espMarkup"]
+        ble = got["bleMarkup"]
+
+        # Standard Diagnostics summary + Open in ESPHome footer + zero raw RPC Outbox / All Entities
+        self.assertIn("Firmware Version", esp)
+        self.assertIn("v3.0.0", esp)
+        self.assertIn("2026111202", esp)
+        self.assertIn("192.168.1.44", esp)
+        self.assertIn("10:20:30:40:50:60", esp)
+        self.assertIn("Connected SSID", esp)
+        self.assertIn("HomeLAN", esp)
+        self.assertIn("Download Diagnostics", esp)
+        self.assertIn("Open in ESPHome", esp)
+        self.assertNotIn("All Entities", esp)
+        self.assertNotIn("media_play", esp)
+        self.assertNotIn("RPC Outbox", esp)
+
+        # Collapsed Developer & Telemetry drawer with parsed Link Report & Hardware Manifest
+        self.assertIn('<details class="sub-collapsible">', esp)
+        self.assertIn("<summary>Developer &amp; Telemetry</summary>", esp)
+        for label in (
+            "Telemetry Profiler",
+            "Log Memory Report",
+            "Internal RAM Low Water",
+            "Session Uptime",
+            "2h 2m",
+            "Last Reset",
+            "POWERON",
+            "Wi-Fi Disconnects",
+            "2 (1 beacon timeouts)",
+            "Wi-Fi Avg / Min",
+            "-55 / -62 dBm",
+            "HA Sessions",
+            "2 (max gap 14s)",
+            "Light Sleep Duty",
+            "78.5% (45 cycles)",
+            "NVS Flash Writes",
+            "5 writes (0 erases, 3 ms max)",
+            "Hardware Board",
+            "waveshare_s3_square_4_0",
+            "Processor & PSRAM",
+            "ESP32-S3 • 8 MB PSRAM",
+            "Display Panel",
+            "480\u00d7480 square IPS",
+            "Hardware Traits",
+            "Touch, Mic, Speaker, IMU, Stationary",
+        ):
+            self.assertIn(label, esp)
+
+        # BLE Tag mode: shows BLE Signal & BLE Target, hides Developer & Telemetry and Open in ESPHome
+        self.assertIn("BLE Signal", ble)
+        self.assertIn("-68 dBm", ble)
+        self.assertIn("AA:BB:CC:11:22:33", ble)
+        self.assertNotIn("Developer &amp; Telemetry", ble)
+        self.assertNotIn("Open in ESPHome", ble)
 
 
 if __name__ == "__main__":
