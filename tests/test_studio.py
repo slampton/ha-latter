@@ -85,7 +85,7 @@ class TestPayloadDiet(unittest.TestCase):
             'class="stat-grid"',
             'id="dash-sdk-rev"',
             'id="dash-node-name"',
-            "Now Playing",
+            "<span>Now Playing</span>",
             '<h3 class="card-title">Now</h3>',
             '<h3 class="card-title">Device Status</h3>',
         ):

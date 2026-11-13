@@ -49,17 +49,21 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
     areaOrder,
   );
   const musicItems = store.getSectionItems("music");
-  const mediaPlayerOrder = [
-    "album art style",
-    "overlay style",
-    "show speaker shortcut",
-    "show library shortcut",
-  ];
+  const isMediaShortcutSwitch = (it: EspHomeEntityItem): boolean =>
+    it.domain === "switch" && /\b(speaker|library)\s+shortcut\b/i.test(it.name || it.entity_id);
+  const mediaPlayerOrder = ["album art style", "overlay style"];
   const primaryMusicItems = sortEntitiesByKeywords(
     musicItems.filter(
-      (it) => it.domain !== "media_player" && !(it.name || "").toLowerCase().includes("sort"),
+      (it) =>
+        it.domain !== "media_player" &&
+        !isMediaShortcutSwitch(it) &&
+        !(it.name || "").toLowerCase().includes("sort"),
     ),
     mediaPlayerOrder,
+  );
+  const shortcutMusicItems = sortEntitiesByKeywords(
+    musicItems.filter(isMediaShortcutSwitch),
+    ["speaker shortcut", "library shortcut"],
   );
   const mediaSortOrder = [
     "album sort order",
@@ -314,11 +318,52 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
             </div>`,
         })}
 
-        ${primaryMusicItems.length || sortMusicItems.length
+        ${primaryMusicItems.length || shortcutMusicItems.length || sortMusicItems.length
           ? renderCard({
               heading: html`<h3 class="card-title">Media Player</h3>`,
               contentClass: "settings-list",
               body: html`${primaryMusicItems.map((it) => renderNativeControlRow(store, it))}
+                ${shortcutMusicItems.length
+                  ? renderSettingsRow({
+                      id: "media-player-shortcuts",
+                      label: "Shortcuts",
+                      description:
+                        "Choose which quick-access buttons appear on the Music player screen.",
+                      control: html`<div
+                        class="pill-list"
+                        role="group"
+                        aria-label="Media Player shortcuts"
+                      >
+                        ${shortcutMusicItems.map((sc) => {
+                          const st = String(sc.state ?? "");
+                          const isOn = st === "on";
+                          const unavailable = st === "unavailable" || st === "unknown";
+                          const rawShort = (sc.name || sc.entity_id)
+                            .replace(/^music:\s*/i, "")
+                            .replace(/^show\s+/i, "")
+                            .replace(/\s+shortcut$/i, "")
+                            .trim();
+                          const lbl = entityLabel(rawShort || sc.name || sc.entity_id);
+                          return html`<span class="pill ${isOn ? "enabled" : ""}">
+                            <button
+                              type="button"
+                              aria-pressed=${String(isOn)}
+                              ?disabled=${unavailable}
+                              @click=${() =>
+                                void store.espAction(
+                                  sc.entity_id,
+                                  isOn ? "turn_off" : "turn_on",
+                                  isOn ? "off" : "on",
+                                )}
+                              class="pill-toggle"
+                            >
+                              ${isOn ? `✓ ${lbl}` : `+ ${lbl}`}
+                            </button>
+                          </span>`;
+                        })}
+                      </div>`,
+                    })
+                  : nothing}
                 ${sortMusicItems.length
                   ? html`<details class="sub-collapsible">
                       <summary>Library Sorting</summary>

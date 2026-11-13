@@ -178,7 +178,7 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
           ${renderTileIcon(ICON_PLUG)}
           <span>Power</span>
         </div>
-        <strong class="status-tile-value">Mains</strong>
+        <strong class="status-tile-value">Plugged in</strong>
         <span class="status-tile-meta">${caps.has_power ? "Sleep & wake active" : "Always on"}</span>`;
 
   return html`<section id="view-dashboard" class="stack">

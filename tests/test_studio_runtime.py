@@ -497,7 +497,7 @@ function makeStore({ weatherBgState = "Dynamic", cycleMins = 0, activeId = "", f
   ];
   const musicSection = [
     { entity_id: "media_player.pocket", domain: "media_player", name: "Player", state: "idle" },
-    { entity_id: "switch.pocket_music_show_library_shortcut", domain: "switch", name: "Show Library Shortcut", state: "on" },
+    { entity_id: "switch.pocket_music_show_library_shortcut", domain: "switch", name: "Show Library Shortcut", state: "off" },
     { entity_id: "select.pocket_music_overlay_style", domain: "select", name: "Overlay Style", state: "Art + Metadata", options: ["Art Only", "Art + Metadata"] },
     { entity_id: "select.pocket_music_album_art_style", domain: "select", name: "Album Art Style", state: "Full Screen", options: ["Full Screen", "Standard"] },
     { entity_id: "switch.pocket_music_show_speaker_shortcut", domain: "switch", name: "Show Speaker Shortcut", state: "on" },
@@ -625,20 +625,27 @@ return { offMarkup, staticMarkup, rotatingMarkup, powerMarkup, audioMarkup, ifac
         self.assertIn("+ Moon", got["ifaceWeatherOn"])
         self.assertLess(got["ifaceWeatherOn"].index("✓ Sun"), got["ifaceWeatherOn"].index("+ Moon"))
         self.assertIn('<h3 class="card-title">Media Player</h3>', got["ifaceWeatherOn"])
+        self.assertIn("id=media-player-shortcuts", got["ifaceWeatherOn"])
+        self.assertIn("✓ Speaker", got["ifaceWeatherOn"])
+        self.assertIn("+ Library", got["ifaceWeatherOn"])
+        self.assertLess(got["ifaceWeatherOn"].index("✓ Speaker"), got["ifaceWeatherOn"].index("+ Library"))
+        self.assertNotIn("Show Speaker Shortcut", got["ifaceWeatherOn"])
+        self.assertNotIn("Show Library Shortcut", got["ifaceWeatherOn"])
+        self.assertNotIn("Show Speaker Shortcut", got["audioMarkup"])
+        self.assertNotIn("Show Library Shortcut", got["audioMarkup"])
         self.assertIn("<summary>Library Sorting</summary>", got["ifaceWeatherOn"])
         for media_ui_label in (
             "Album Art Style",
             "Overlay Style",
-            "Show Speaker Shortcut",
-            "Show Library Shortcut",
+            "Shortcuts",
             "Album Sort Order",
             "Podcast Sort Order",
         ):
             self.assertIn(media_ui_label, got["ifaceWeatherOn"])
             self.assertNotIn(media_ui_label, got["audioMarkup"])
         self.assertLess(got["ifaceWeatherOn"].index("Album Art Style"), got["ifaceWeatherOn"].index("Overlay Style"))
-        self.assertLess(got["ifaceWeatherOn"].index("Overlay Style"), got["ifaceWeatherOn"].index("Show Speaker Shortcut"))
-        self.assertLess(got["ifaceWeatherOn"].index("Show Speaker Shortcut"), got["ifaceWeatherOn"].index("Show Library Shortcut"))
+        self.assertLess(got["ifaceWeatherOn"].index("Overlay Style"), got["ifaceWeatherOn"].index("id=media-player-shortcuts"))
+        self.assertLess(got["ifaceWeatherOn"].index("id=media-player-shortcuts"), got["ifaceWeatherOn"].index("Album Sort Order"))
         self.assertLess(got["ifaceWeatherOn"].index("Album Sort Order"), got["ifaceWeatherOn"].index("Podcast Sort Order"))
         self.assertIn('<h3 class="card-title">Sound &amp; Playback</h3>', got["audioMarkup"])
         self.assertIn("Speaker Volume", got["audioMarkup"])
@@ -1111,9 +1118,10 @@ return {
         for retired in ("Now Playing", "IP Address", "192.168.1.44", "Latter SDK", "ESPHome Node", "roaming_pocket"):
             self.assertNotIn(retired, ov_bat)
 
-        # Mains stationary Device with available firmware update + weak Wi-Fi
-        for expected in ("Update available", "Office", "Stationary", "Power", "Mains", "Weak", "signal-fill low", "Follow Area"):
+        # Plugged-in stationary Device with available firmware update + weak Wi-Fi
+        for expected in ("Update available", "Office", "Stationary", "Power", "Plugged in", "Weak", "signal-fill low", "Follow Area"):
             self.assertIn(expected, ov_mains)
+        self.assertNotIn("Mains", ov_mains)
 
         # BLE Tag Overview Status tiles
         for expected in ("Detected", "Entryway", "Closest Proxy", "Entry Proxy", "BLE Signal", "-64 dBm", "BLE Target", "AA:BB:CC:11:22:33"):
