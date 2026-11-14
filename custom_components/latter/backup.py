@@ -232,7 +232,6 @@ async def async_restore_backup_bundle(
 
     scope = str(bundle.get("scope") or "device")
     restored_devices = 0
-    restored_controls = 0
 
     if scope == "system":
         global_cfg_in = bundle.get("global_config")

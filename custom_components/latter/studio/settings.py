@@ -209,7 +209,8 @@ class DevicePrefSpec:
 
 
 POWER_PROFILE_OPTIONS: tuple[str, ...] = (
-    tuple(_PROTOCOL_V3_DATA["power_profiles"].keys()) + ("Custom",)
+    *_PROTOCOL_V3_DATA["power_profiles"].keys(),
+    "Custom",
 )
 WAKE_WORD_MODE_OPTIONS: tuple[str, ...] = ("Docked Only", "Always On", "Disabled")
 WAKE_GESTURE_OPTIONS: tuple[str, ...] = ("Always On", "Docked Only", "Disabled")

@@ -66,7 +66,6 @@ from ..presence import (
 from ..repairs import parse_device_issue_id
 from ..wallpapers import list_wallpaper_catalog
 from .settings import (
-    DEVICE_PREF_SPEC_MAP,
     DEVICE_PREF_SPECS,
     find_by_subentry_id,
     resolve_device_pref_value,

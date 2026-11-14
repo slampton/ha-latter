@@ -20,7 +20,7 @@ from homeassistant.core import Event, EventStateChangedData, HomeAssistant, call
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.event import async_track_state_change_event
 
-from .const import DEFAULT_BLE_BEACON_UUID, DOMAIN, normalize_device_slug
+from .const import DOMAIN, normalize_device_slug
 
 if TYPE_CHECKING:
     from .coordinator import LatterCoordinator

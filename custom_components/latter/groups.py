@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 import logging
-import re
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.core import HomeAssistant
