@@ -774,9 +774,11 @@ class LatterWallpaperProxyView(HomeAssistantView):
                 return web.Response(
                     status=HTTPStatus.NOT_FOUND, text="No wallpaper configured"
                 )
-            width, height, is_circle, shape_str = _parse_render_params(
+            def_w, def_h = coordinator.wallpaper_dimensions
+            width, height, is_circle, shape_str = _parse_dimensions_and_shape(
                 request,
-                coordinator,
+                def_w,
+                def_h,
                 default_circle=(coordinator.display_shape == "circle"),
             )
             verified = coordinator.verify_resource(

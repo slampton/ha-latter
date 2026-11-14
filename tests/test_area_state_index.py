@@ -28,9 +28,16 @@ from custom_components.latter.areas import (
     get_home_alarm_summary,
     get_home_wide_entities,
     get_whole_home_summary,
+    infer_area_icon_from_name,
     match_area_by_name_or_id,
+    resolve_area_icon,
 )
-from custom_components.latter.const import CONF_CAMERA_ENTITIES, DATA_GLOBAL_CONFIG, DOMAIN
+from custom_components.latter.const import (
+    CONF_CAMERA_ENTITIES,
+    CONF_DEFAULT_AREA,
+    DATA_GLOBAL_CONFIG,
+    DOMAIN,
+)
 from custom_components.latter.doorbell import (
     bind_coordinator_doorbell_listener,
     resolve_doorbell_ring_entities,
@@ -629,4 +636,93 @@ async def test_calendar_feeds_and_doorbell_ring_reflex(
     assert r_no_rtsp.body[:4] == b"RIFF"
 
     await async_shutdown_doorbell_streams(hass)
+    assert await async_unload_entry(hass, entry) is True
+
+
+@pytest.mark.asyncio
+async def test_area_icon_resolution_wire_packing_and_live_registry_update(
+    hass: Any, setup_latter_hub: Any
+) -> None:
+    """Verify explicit AreaEntry.icon, 24-archetype name inference, unassigned empty string, and Protocol v3 field 42."""
+    assert resolve_area_icon(None) == ""
+    assert (
+        resolve_area_icon(SimpleNamespace(id="custom", name="Kitchen", icon="  mdi:lamp  "))
+        == "mdi:lamp"
+    )
+    assert (
+        resolve_area_icon(SimpleNamespace(id="custom", name="Kitchen", icon="   "))
+        == "mdi:countertop"
+    )
+
+    expected_archetypes = {
+        "Kitchen": "mdi:countertop",
+        "Butler Pantry": "mdi:countertop",
+        "Formal Dining": "mdi:silverware-fork-knife",
+        "Living Area": "mdi:sofa",
+        "Family Lounge": "mdi:sofa",
+        "Cozy Den": "mdi:sofa",
+        "Baby Nursery": "mdi:baby-carriage",
+        "Kids Play": "mdi:teddy-bear",
+        "Primary Suite": "mdi:bed-king-outline",
+        "Primary Bath": "mdi:shower",
+        "Powder Lavatory": "mdi:shower",
+        "Home Office": "mdi:desk",
+        "HomeTheater": "mdi:television",
+        "Arcade Game": "mdi:gamepad-variant-outline",
+        "Yoga Gym": "mdi:dumbbell",
+        "Laundry Utility": "mdi:washing-machine",
+        "Two-Car Garage": "mdi:garage",
+        "Craft Workshop": "mdi:tools",
+        "Walk-In Closet": "mdi:wardrobe-outline",
+        "Front Foyer": "mdi:door-open",
+        "Upper Hallway": "mdi:transit-connection-horizontal",
+        "Main Stairwell": "mdi:stairs",
+        "Upper Attic": "mdi:home-roof",
+        "Wine Cellar": "mdi:stairs-down",
+        "Basement": "mdi:stairs-down",
+        "Backyard Pool": "mdi:pool",
+        "Front Porch": "mdi:balcony",
+        "Sun Terrace": "mdi:balcony",
+        "Herb Garden": "mdi:tree-outline",
+        "Music Studio": "mdi:speaker",
+        "Zone Alpha": "mdi:map-marker-outline",
+        "": "mdi:map-marker-outline",
+    }
+    for label, expected_icon in expected_archetypes.items():
+        assert infer_area_icon_from_name(label) == expected_icon, label
+
+    entry, _sys_obj, coord = await setup_latter_hub(hass)
+    area_reg = ar.async_get(hass)
+    dev_reg = dr.async_get(hass)
+    living = area_reg.async_create("Living Area", area_id="living")
+    assert living.icon is None
+
+    coord.async_set_active_area("living")
+    coord._cached_area_payload = None
+    area_state, area_attrs = coord.get_area_context_payload()
+    assert area_state == "Living Area"
+    assert area_attrs["area_icon"] == "mdi:sofa"
+    wire_tokens = area_attrs["payload"].split("\x1f")
+    assert len(wire_tokens) == 43
+    assert wire_tokens[42] == "mdi:sofa"
+
+    # Live Area registry icon edit invalidates cached payload and updates wire index 42
+    area_reg.async_update("living", icon="mdi:television-classic")
+    area_state_updated, area_attrs_updated = coord.get_area_context_payload()
+    assert area_state_updated == "Living Area"
+    assert area_attrs_updated["area_icon"] == "mdi:television-classic"
+    assert area_attrs_updated["payload"].split("\x1f")[42] == "mdi:television-classic"
+
+    # Unassigned Device sends empty area_icon ("")
+    esp_dev = dev_reg.async_get(coord.esphome_device_id)
+    if esp_dev is not None:
+        esp_dev.area_id = None
+    coord._live_subentry().data[CONF_DEFAULT_AREA] = ""
+    coord._clear_active_area()
+    coord._cached_area_payload = None
+    unassigned_state, unassigned_attrs = coord.get_area_context_payload()
+    assert unassigned_state == "Unassigned"
+    assert unassigned_attrs["area_icon"] == ""
+    assert unassigned_attrs["payload"].split("\x1f")[42] == ""
+
     assert await async_unload_entry(hass, entry) is True

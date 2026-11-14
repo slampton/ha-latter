@@ -11,7 +11,7 @@ from homeassistant.const import Platform
 DOMAIN: Final = "latter"
 INTEGRATION_VERSION: Final = "3.0.0"
 STUDIO_REV: Final = 8
-MIN_FIRMWARE_SDK_REV: Final = 2026111303
+MIN_FIRMWARE_SDK_REV: Final = 2026111304
 PLATFORMS: Final[list[Platform]] = [
     Platform.SENSOR,
     Platform.BINARY_SENSOR,
@@ -144,6 +144,7 @@ DEFAULT_ACTIVITY_CARD: Final = True
 DEFAULT_ACTIVITY_SOURCES: Final = "calendar,music_queue,stopwatch,alarms,timers"
 DEFAULT_WALLPAPER_CYCLE_MINUTES: Final = 0
 DEFAULT_ART_SIZE: Final = 466  # artwork edge until the Device reports its hardware manifest
+WALLPAPER_MAX_DIM: Final = 720  # native wallpaper ceiling for 720x720 high-resolution displays
 
 # Native Latter Services
 SERVICE_DEVICE_HELLO: Final = "device_hello"

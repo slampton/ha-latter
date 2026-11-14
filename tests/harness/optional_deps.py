@@ -147,6 +147,28 @@ def install_optional_dep_stubs() -> None:
                 raw = bytes(fp)
             if not raw or raw.startswith(b"NOT_AN_IMAGE"):
                 raise OSError("Unidentified or corrupt image bytes")
+            if raw.startswith(b"\xff\xd8"):
+                idx = 2
+                while idx + 8 < len(raw) and raw[idx] == 0xFF:
+                    while idx < len(raw) and raw[idx] == 0xFF:
+                        idx += 1
+                    if idx >= len(raw):
+                        break
+                    marker = raw[idx]
+                    idx += 1
+                    if marker in (0xD8, 0xD9) or 0xD0 <= marker <= 0xD7:
+                        continue
+                    if idx + 2 > len(raw):
+                        break
+                    seg_len = int.from_bytes(raw[idx : idx + 2], "big")
+                    if marker in (0xC0, 0xC2) and idx + 7 <= len(raw):
+                        h_px = int.from_bytes(raw[idx + 3 : idx + 5], "big")
+                        w_px = int.from_bytes(raw[idx + 5 : idx + 7], "big")
+                        if w_px > 0 and h_px > 0:
+                            return _StubImage("RGB", (w_px, h_px))
+                    if seg_len < 2:
+                        break
+                    idx += seg_len
             return _StubImage("RGB", (480, 480))
 
         def _pil_alpha_composite(im1: _StubImage, im2: _StubImage) -> _StubImage:

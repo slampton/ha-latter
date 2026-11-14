@@ -116,6 +116,7 @@ from .const import (
     STORAGE_KEY_PREFIX,
     STORAGE_VERSION,
     SUBENTRY_BLE_TAG,
+    WALLPAPER_MAX_DIM,
     normalize_device_slug,
     normalize_noise_reduction,
 )
@@ -1089,6 +1090,26 @@ class LatterCoordinator:
         )
 
     @property
+    def wallpaper_dimensions(self) -> tuple[int, int]:
+        hw = self.hardware_manifest
+        try:
+            w, h = int(hw.get("w") or 0), int(hw.get("h") or 0)
+        except (ValueError, TypeError):
+            return DEFAULT_ART_SIZE, DEFAULT_ART_SIZE
+        if w < 64 or h < 64:
+            return DEFAULT_ART_SIZE, DEFAULT_ART_SIZE
+        w, h = max(64, min(1920, w)), max(64, min(1920, h))
+        peak = max(w, h)
+        return (
+            (w, h)
+            if peak <= WALLPAPER_MAX_DIM
+            else (
+                max(64, round(w * float(WALLPAPER_MAX_DIM) / peak)),
+                max(64, round(h * float(WALLPAPER_MAX_DIM) / peak)),
+            )
+        )
+
+    @property
     def remote_groups(self) -> list[dict[str, Any]]:
         raw = self.get_opt(CONF_REMOTE_GROUPS, [])
         if not isinstance(raw, list):
@@ -1175,7 +1196,7 @@ class LatterCoordinator:
         )
 
     def build_wallpaper_url(self) -> str:
-        w, h = self.art_dimensions
+        w, h = self.wallpaper_dimensions
         return self._url_signer.build_wallpaper_url(
             self.device_slug, self.wallpaper_source, w, h, self.display_shape
         )

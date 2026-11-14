@@ -57,19 +57,35 @@ def install_fake_ha_registries(slugify_fn: Callable[..., str], entity_category_c
                     return a
             return None
 
-        def async_create(self, name: str, *, area_id: str | None = None, floor_id: str | None = None) -> AreaEntry:
+        def async_create(
+            self,
+            name: str,
+            *,
+            area_id: str | None = None,
+            floor_id: str | None = None,
+            icon: str | None = None,
+        ) -> AreaEntry:
             aid = area_id or slugify_fn(name)
-            entry = AreaEntry(id=aid, name=name, floor_id=floor_id)
+            entry = AreaEntry(id=aid, name=name, floor_id=floor_id, icon=icon)
             self.areas[aid] = entry
             self._hass.bus.async_fire(EVENT_AREA_REGISTRY_UPDATED, {"action": "create", "area_id": aid})
             return entry
 
-        def async_update(self, area_id: str, *, name: str | None = None, floor_id: str | None = None) -> AreaEntry:
+        def async_update(
+            self,
+            area_id: str,
+            *,
+            name: str | None = None,
+            floor_id: str | None = None,
+            icon: Any = ...,
+        ) -> AreaEntry:
             entry = self.areas[area_id]
             if name is not None:
                 entry.name = name
             if floor_id is not None:
                 entry.floor_id = floor_id
+            if icon is not ...:
+                entry.icon = icon
             self._hass.bus.async_fire(EVENT_AREA_REGISTRY_UPDATED, {"action": "update", "area_id": area_id})
             return entry
 

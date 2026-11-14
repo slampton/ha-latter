@@ -280,6 +280,32 @@ async def test_hmac_rotation_and_wallpaper_upload_and_proxy_views(
     assert r_wp_hit.status == 200
     assert r_wp_hit.headers["X-Latter-Cache"] == "HIT"
 
+    # 720x720 square display manifest keeps album art capped at 480 while serving crisp 720x720 wallpapers
+    hass2.states.async_set(
+        f"sensor.{coord.device_slug}_system_hardware_manifest",
+        json.dumps({"v": 2, "contract": 3, "w": 720, "h": 720, "shape": "square", "display": 1}),
+    )
+    assert coord.art_dimensions == (480, 480)
+    assert coord.wallpaper_dimensions == (720, 720)
+    wp_720_url = coord.build_wallpaper_url()
+    assert "w=720&h=720&shape=square" in wp_720_url
+    r_wp_720 = await wp_view2.get(_make_get_request(wp_720_url), coord.device_slug)
+    assert r_wp_720.status == 200
+    with Image.open(io.BytesIO(r_wp_720.body)) as img_720:
+        assert img_720.size == (720, 720)
+
+    # Omitting w/h query params on wallpaper proxy also defaults to coordinator.wallpaper_dimensions (720x720)
+    sig_720 = parse_qs(urlsplit(wp_720_url).query)["sig"][0]
+    r_wp_720_default = await wp_view2.get(
+        _make_get_request(
+            f"/api/latter/wallpaper/{coord.device_slug}?src={uploaded_src}&shape=square&sig={sig_720}"
+        ),
+        coord.device_slug,
+    )
+    assert r_wp_720_default.status == 200
+    with Image.open(io.BytesIO(r_wp_720_default.body)) as img_720_def:
+        assert img_720_def.size == (720, 720)
+
     # Delete uploaded wallpaper
     assert delete_uploaded_wallpaper(hass2, coord.device_slug, uploaded_src) is True
     await async_refresh_wallpaper_cache(hass2, coord.device_slug)

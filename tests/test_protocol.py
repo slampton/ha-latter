@@ -65,7 +65,7 @@ class TestProtocolV3Contract(unittest.TestCase):
     def test_domain_field_counts_and_contiguous_indices(self) -> None:
         """Every v3 domain must have contiguous 3..COUNT-1 indices matching expected counts."""
         expected_counts = {
-            "area_context": 39,
+            "area_context": 40,
             "active_media": 17,
             "remote_config": 3,
             "weather_forecast": 14,

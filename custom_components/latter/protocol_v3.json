@@ -77,7 +77,8 @@
         {"index": 38, "name": "activity_card", "cpp_enum": "ACTIVITY_CARD", "type": "bool", "description": "1 = show the Home Activity Card, 0 = hide it (also sent when every source is off); empty until set: the device uses defaults.activity_card"},
         {"index": 39, "name": "activity_sources", "cpp_enum": "ACTIVITY_SOURCES", "type": "csv", "description": "Activity Card sources that are on, in this order: calendar, music_queue, stopwatch, alarms, timers (unknown keys are ignored); empty until set: the device uses defaults.activity_sources"},
         {"index": 40, "name": "security_pin_policy", "cpp_enum": "SECURITY_PIN_POLICY", "type": "string", "description": "Perimeter action policy for unlock, disarm, and open_cover (allow|require_pin|block)"},
-        {"index": 41, "name": "home_categories", "cpp_enum": "HOME_CATEGORIES", "type": "csv", "description": "Comma-separated enabled Home Hub categories with >= 1 configured entity, in configured order (alarm, thermostat, entry, vacuum); empty when no categories have entities"}
+        {"index": 41, "name": "home_categories", "cpp_enum": "HOME_CATEGORIES", "type": "csv", "description": "Comma-separated enabled Home Hub categories with >= 1 configured entity, in configured order (alarm, thermostat, entry, vacuum); empty when no categories have entities"},
+        {"index": 42, "name": "area_icon", "cpp_enum": "AREA_ICON", "type": "string", "description": "Home Assistant AreaEntry icon string (e.g. mdi:sofa) or inferred Area archetype icon; empty when unassigned"}
       ]
     },
     "active_media": {

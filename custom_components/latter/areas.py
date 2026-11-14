@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from datetime import datetime
 import logging
+import re
 import time
 from typing import Any
 
@@ -1288,6 +1289,62 @@ def _build_cameras_summary(coordinator: Any) -> V3Records:
     return camera_records(rows)
 
 
+DEFAULT_UNMATCHED_AREA_ICON = "mdi:map-marker-outline"
+
+_CAMEL_SPLIT_RE = re.compile(r"([a-z0-9])([A-Z])")
+_AREA_ARCHETYPE_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = tuple(
+    (re.compile(pat, re.IGNORECASE), icon)
+    for pat, icon in (
+        (r"\b(?:kitchen\w*|pantry|kitchenette)\b", "mdi:countertop"),
+        (r"\b(?:dining|breakfast)\b", "mdi:silverware-fork-knife"),
+        (r"\b(?:nursery|baby|crib)\b", "mdi:baby-carriage"),
+        (r"\b(?:kids?|child\w*|play\w*)\b", "mdi:teddy-bear"),
+        (r"\b(?:bath\w*|shower\w*|powder|rest\w*|lavatory|toilet|ensuite)\b", "mdi:shower"),
+        (r"\b(?:laundry|utility|mud\w*)\b", "mdi:washing-machine"),
+        (r"\b(?:office|study|library|desk\w*)\b", "mdi:desk"),
+        (r"\b(?:media|theat(?:er|re)|cinema|tv)\b", "mdi:television"),
+        (r"\b(?:gam(?:e|es|ing)|arcade)\b", "mdi:gamepad-variant-outline"),
+        (r"\b(?:gym\w*|fitness|workout|yoga|exercise)\b", "mdi:dumbbell"),
+        (r"\b(?:garage|carport)\b", "mdi:garage"),
+        (r"\b(?:workshop|tools?|craft\w*)\b", "mdi:tools"),
+        (r"\b(?:closet|wardrobe|dressing)\b", "mdi:wardrobe-outline"),
+        (r"\b(?:pool\w*|spa|hot\s*tub|jacuzzi)\b", "mdi:pool"),
+        (r"\b(?:patio|deck|porch|balcony|terrace|lanai|veranda)\b", "mdi:balcony"),
+        (r"\b(?:garden\w*|yard|lawn|outdoor\w*|backyard|courtyard)\b", "mdi:tree-outline"),
+        (r"\b(?:attic|loft)\b", "mdi:home-roof"),
+        (r"\b(?:basement|cellar)\b", "mdi:stairs-down"),
+        (r"\b(?:stairs?|stairwell|staircase)\b", "mdi:stairs"),
+        (r"\b(?:hall\w*|corridor|landing|passage\w*)\b", "mdi:transit-connection-horizontal"),
+        (r"\b(?:entry\w*|entrance|foyer|vestibule|front)\b", "mdi:door-open"),
+        (r"\b(?:studio|music)\b", "mdi:speaker"),
+        (r"\b(?:living|family|great|den|lounge|parlor|sitting)\b", "mdi:sofa"),
+        (r"\b(?:primary|master|guest|bed\w*|bunk|dorm\w*)\b", "mdi:bed-king-outline"),
+    )
+)
+
+
+def infer_area_icon_from_name(area_name: str) -> str:
+    """Infer a canonical Material Design icon key from an Area display name."""
+    cleaned = _CAMEL_SPLIT_RE.sub(r"\1 \2", str(area_name or ""))
+    cleaned = cleaned.replace("_", " ").replace("-", " ").strip()
+    if not cleaned:
+        return DEFAULT_UNMATCHED_AREA_ICON
+    for pat, icon in _AREA_ARCHETYPE_PATTERNS:
+        if pat.search(cleaned):
+            return icon
+    return DEFAULT_UNMATCHED_AREA_ICON
+
+
+def resolve_area_icon(area_entry: ar.AreaEntry | None) -> str:
+    """Return explicit Home Assistant AreaEntry icon or inferred Area archetype icon; empty when unassigned."""
+    if area_entry is None:
+        return ""
+    explicit_icon = getattr(area_entry, "icon", None)
+    if isinstance(explicit_icon, str) and explicit_icon.strip():
+        return explicit_icon.strip()
+    return infer_area_icon_from_name(getattr(area_entry, "name", "") or "")
+
+
 def build_area_context_payload(coordinator: Any) -> tuple[str, dict[str, Any]]:
     """Compute state and attributes for `sensor.<device_slug>_area_context`."""
     now_m = time.monotonic()
@@ -1298,6 +1355,7 @@ def build_area_context_payload(coordinator: Any) -> tuple[str, dict[str, Any]]:
         return coordinator._cached_area_payload[1]
     area_entry = resolve_active_area_entry(coordinator)
     area_name = area_entry.name if area_entry else "Unassigned"
+    area_icon = resolve_area_icon(area_entry)
     eff_area_id = area_entry.id if area_entry else ("" if coordinator.is_device_away() else (coordinator.active_area_id or ""))
 
     entities = get_area_entities(
@@ -1343,6 +1401,7 @@ def build_area_context_payload(coordinator: Any) -> tuple[str, dict[str, Any]]:
         "site_id": coordinator.site_id,
         "area_id": eff_area_id,
         "area_name": area_name,
+        "area_icon": area_icon,
         "ble_closest_proxy": (
             coordinator._ble_tracker.closest_scanner if coordinator._ble_tracker else ""
         ),
@@ -1430,6 +1489,7 @@ def build_area_context_payload(coordinator: Any) -> tuple[str, dict[str, Any]]:
         ),
         eff_pin_policy,
         area_attrs["home_categories"],
+        area_icon,
     )
     area_attrs["rev"] = area_rev
     area_attrs["payload"] = area_payload
@@ -1482,17 +1542,23 @@ def bind_coordinator_area_listeners(coordinator: Any) -> None:
 
     idx = get_area_state_index(coordinator.hass)
     unsubs_area: list[Any] = []
-    if coordinator.active_area_id:
+    eff_area_entry = resolve_active_area_entry(coordinator)
+    listen_area_id = (
+        eff_area_entry.id
+        if eff_area_entry is not None
+        else (coordinator.active_area_id or "")
+    )
+    if listen_area_id:
         if idx.started:
             unsubs_area.append(
                 idx.register_area_listener(
-                    coordinator.active_area_id, lambda _eid: _schedule_area_push()
+                    listen_area_id, lambda _eid: _schedule_area_push()
                 )
             )
         else:
             area_items = get_area_entities(
                 coordinator.hass,
-                area_id=coordinator.active_area_id,
+                area_id=listen_area_id,
                 domain_filter="all",
                 local_speaker=coordinator.local_speaker,
             )
