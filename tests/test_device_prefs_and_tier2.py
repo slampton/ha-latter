@@ -22,7 +22,7 @@ from custom_components.latter.studio.commands import STUDIO_REV
 
 def _register_wifi_sensor(hass: Any, coord: Any, state: str = "-52") -> str:
     ent_reg = er.async_get(hass)
-    eid = f"sensor.{coord.device_slug}_wifi_signal"
+    eid = f"sensor.{coord.device_slug}_wi_fi_signal"
     if ent_reg.async_get(eid) is None:
         ent_reg.async_register(
             er.RegistryEntry(
@@ -69,7 +69,6 @@ async def test_device_hello_cases_a_b_and_c(
     # Case A: Initial adoption (`coord.prefs_seq == 0`) seeds untouched keys while preserving onboarding `native_ble_tracking=True`
     assert coord.prefs_seq == 0
     await coord.async_handle_device_hello(
-        contract=3,
         boot_id="boot_a",
         manifest_raw=manifest_raw,
         prefs_seq=0,
@@ -92,7 +91,6 @@ async def test_device_hello_cases_a_b_and_c(
     # - `color_profile` was NOT edited in HA after `seq_after_adopt` (`prefs_key_seq <= dev_seq`) -> touchscreen wins!
     # - `wake_word_mode` WAS edited in HA after `seq_after_adopt` (`prefs_key_seq > dev_seq`) -> HA sleep-safe edit wins!
     await coord.async_handle_device_hello(
-        contract=3,
         boot_id="boot_a",
         manifest_raw=manifest_raw,
         prefs_seq=seq_after_adopt,
@@ -106,7 +104,6 @@ async def test_device_hello_cases_a_b_and_c(
     seq_before_replace = coord.prefs_seq
     hass.services.calls.clear()
     await coord.async_handle_device_hello(
-        contract=3,
         boot_id="boot_replacement",
         manifest_raw=manifest_raw,
         prefs_seq=0,
@@ -218,7 +215,7 @@ async def test_timer_alarm_state_event_driven_and_boot_reset(
 
     # Reboot (`is_new_boot`) clears stale timer and ringing state
     manifest_raw = hass.states.get(f"sensor.{slug}_system_hardware_manifest").state
-    await coord.async_handle_device_hello(3, "fresh_boot_99", manifest_raw)
+    await coord.async_handle_device_hello("fresh_boot_99", manifest_raw)
     assert hass.states.get(f"binary_sensor.{slug}_timer_active").state == "off"
     assert hass.states.get(f"binary_sensor.{slug}_alarm_ringing").state == "off"
     assert int(hass.states.get(f"sensor.{slug}_timer_remaining").state) == 0

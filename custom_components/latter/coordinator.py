@@ -601,8 +601,6 @@ class LatterCoordinator:
         sub_data = self._live_subentry().data
         if key in sub_data:
             return sub_data[key]
-        if isinstance(global_cfg, dict) and key in global_cfg:
-            return global_cfg[key]
         return default
 
     # -----------------------------------------------------------------------
@@ -1339,7 +1337,7 @@ class LatterCoordinator:
         local_spk = self.local_speaker
         if not (
             local_spk
-            or esphome_service(self.hass, self.esphome_device_id, "set_browse_slots")
+            or esphome_service(self.hass, self.esphome_device_id, "latter_set_slots")
         ):
             self.active_speaker = self.last_speaker = ""
         else:
@@ -1797,13 +1795,11 @@ class LatterCoordinator:
 
     async def async_handle_device_hello(
         self,
-        contract: int,
         boot_id: str,
         manifest_raw: str,
         prefs_seq: int = 0,
         dirty_prefs: str = "",
     ) -> None:
-        _ = contract
         self._entered_hibernate = False
         is_new_boot, parsed = self._runtime.apply_device_hello(boot_id, manifest_raw)
         if parsed is not None:
@@ -1970,7 +1966,7 @@ class LatterCoordinator:
             self.hass,
             self.esphome_device_id,
             "sensor",
-            ("_wi_fi_signal", "_wifi_signal", "_ip_address"),
+            ("_wi_fi_signal", "_ip_address"),
         )
         wifi_st = self.hass.states.get(wifi_ent_id) if wifi_ent_id else None
         wifi_offline = wifi_st is not None and wifi_st.state == STATE_UNAVAILABLE
@@ -2049,7 +2045,7 @@ class LatterCoordinator:
             self.hass,
             self.esphome_device_id,
             "sensor",
-            ("_wi_fi_signal", "_wifi_signal", "_ip_address"),
+            ("_wi_fi_signal", "_ip_address"),
         )
         wifi_st = self.hass.states.get(wifi_ent_id) if wifi_ent_id else None
         return bool(

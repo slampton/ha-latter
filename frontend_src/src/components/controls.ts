@@ -5,7 +5,7 @@
 
 import { html, nothing, type TemplateResult } from "../lib/lit.js";
 import type { StudioStore } from "../state/store.js";
-import type { CatalogChoice, EspHomeEntityItem } from "../types.js";
+import type { CatalogChoice, DevicePrefItem, EspHomeEntityItem } from "../types.js";
 import { entityLabel, fmtNumber } from "../utils/format.js";
 
 export interface CardRenderOptions {
@@ -380,6 +380,94 @@ export function renderNativeControlRow(store: StudioStore, item: EspHomeEntityIt
     <span>${label}</span>
     <strong>${displayVal}</strong>
   </div>`;
+}
+
+export function renderPrefControlRow(
+  store: StudioStore,
+  pref: DevicePrefItem,
+  labelOverride?: string,
+): TemplateResult | typeof nothing {
+  const label = labelOverride || pref.label || entityLabel(pref.key);
+  const dom = pref.domain;
+  const val = pref.value;
+
+  if (dom === "switch") {
+    const isOn = Boolean(val);
+    const onToggle = (ev: Event): void => {
+      const checked = (ev.currentTarget as HTMLInputElement).checked;
+      store.stageDeviceSetting(pref.key, checked);
+    };
+    return renderSettingsRow({
+      label,
+      control: html`<input
+        type="checkbox"
+        role="switch"
+        aria-label=${label}
+        .checked=${isOn}
+        @change=${onToggle}
+        class="switch"
+      />`,
+    });
+  }
+
+  if (dom === "select") {
+    const opts = pref.options || [];
+    const st = String(val ?? "");
+    const onChange = (ev: Event): void => {
+      const nextVal = (ev.currentTarget as HTMLSelectElement).value;
+      store.stageDeviceSetting(pref.key, nextVal);
+    };
+    return renderSettingsRow({
+      label,
+      control: html`<select aria-label=${label} .value=${st} @change=${onChange}>
+        ${opts.map((opt) => html`<option value=${opt} ?selected=${opt === st}>${opt}</option>`)}
+      </select>`,
+    });
+  }
+
+  if (dom === "number") {
+    const min = pref.min ?? 0;
+    const max = pref.max ?? 100;
+    const step = pref.step ?? 1;
+    const numVal = Number.isFinite(Number(val)) ? Number(val) : min;
+    const unitSuffix = pref.unit ? ` ${pref.unit}` : "";
+    const onCommit = (ev: Event): void => {
+      const raw = Number((ev.currentTarget as HTMLInputElement).value);
+      if (Number.isFinite(raw)) {
+        store.stageDeviceSetting(pref.key, raw);
+      }
+    };
+    if (max - min <= 250) {
+      return renderSettingsRow({
+        label,
+        control: html`<span class="kv-value">${fmtNumber(numVal, store.hass)}${unitSuffix}</span>
+          <input
+            type="range"
+            aria-label=${label}
+            min=${String(min)}
+            max=${String(max)}
+            step=${String(step)}
+            .value=${String(numVal)}
+            @change=${onCommit}
+          />`,
+      });
+    }
+    return renderSettingsRow({
+      label,
+      control: html`<input
+          type="number"
+          aria-label=${label}
+          min=${String(min)}
+          max=${String(max)}
+          step=${String(step)}
+          .value=${String(numVal)}
+          @change=${onCommit}
+        />
+        ${pref.unit ? html`<span class="help-text">${pref.unit}</span>` : nothing}`,
+    });
+  }
+
+  return nothing;
 }
 
 type QuickActionKind =

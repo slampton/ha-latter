@@ -369,7 +369,6 @@ export async function restoreFromUploadedFileOp(store: StudioStore): Promise<voi
       bundle,
       targetSubentryId: targetId || null,
       selectedSubentryId: store.activeSubentryId || null,
-      restoreEspHomeEntities: store.backupRestoreEsp,
     });
     store.selectedBackupFile = null;
     if (res) store.ingestPayload(res, false);

@@ -237,7 +237,7 @@ def resolve_esphome_local_speaker(
     if dev is None:
         return ""
     by_suffix = find_device_entity_by_suffix(
-        hass, dev.id, "media_player", ("_music", "_speaker", "_media_player")
+        hass, dev.id, "media_player", ("_music",)
     )
     if by_suffix:
         return by_suffix
@@ -1984,13 +1984,11 @@ def build_active_media_payload(
             None,
             idle_vol_pct,
             idle_type,
-            0,
             "",
             coordinator.active_speaker,
             fallback_spk_name,
             coordinator.last_speaker,
             coordinator.local_speaker,
-            vol_target,
             is_local_flag,
         )
         res: tuple[str | None, dict[str, Any]] = (
@@ -2004,13 +2002,11 @@ def build_active_media_payload(
                 "position_updated_at": None,
                 "volume": idle_vol_r,
                 "media_type": idle_type,
-                "supported_features": 0,
                 "art_url": "",
                 "active_speaker": coordinator.active_speaker,
                 "speaker_name": fallback_spk_name,
                 "last_speaker": coordinator.last_speaker,
                 "local_speaker": coordinator.local_speaker,
-                "volume_entity": vol_target,
                 "is_local": bool(is_local_flag),
                 "rev": med_rev,
                 "payload": med_payload,
@@ -2053,15 +2049,6 @@ def build_active_media_payload(
     volume = read_volume_from_target(coordinator.hass, vol_target, attrs)
     if volume is None and m_attrs:
         volume = read_volume_from_target(coordinator.hass, vol_target, m_attrs)
-    supported_features = int(attrs.get("supported_features") or 0)
-    if vol_target != coordinator.active_speaker:
-        vol_state = coordinator.hass.states.get(vol_target)
-        if vol_state is not None:
-            if vol_state.domain in ("number", "input_number"):
-                supported_features |= VOLUME_FEATURE_FLAGS
-            else:
-                vol_feat = int(vol_state.attributes.get("supported_features") or 0)
-                supported_features |= vol_feat & VOLUME_FEATURE_FLAGS
 
     raw_pic = str(
         attrs.get("entity_picture_local")
@@ -2125,13 +2112,11 @@ def build_active_media_payload(
         pos_updated_at,
         vol_pct,
         media_type,
-        supported_features,
         art_url,
         coordinator.active_speaker,
         speaker_name,
         coordinator.last_speaker,
         coordinator.local_speaker,
-        vol_target,
         is_local_flag,
     )
     if (
@@ -2154,13 +2139,11 @@ def build_active_media_payload(
         pos_updated_at or None,
         vol_pct,
         media_type,
-        supported_features,
         art_url,
         coordinator.active_speaker,
         speaker_name,
         coordinator.last_speaker,
         coordinator.local_speaker,
-        vol_target,
         is_local_flag,
     )
     res = (
@@ -2174,13 +2157,11 @@ def build_active_media_payload(
             "position_updated_at": pos_updated_at,
             "volume": vol_r,
             "media_type": media_type,
-            "supported_features": supported_features,
             "art_url": art_url,
             "active_speaker": coordinator.active_speaker,
             "speaker_name": speaker_name,
             "last_speaker": coordinator.last_speaker,
             "local_speaker": coordinator.local_speaker,
-            "volume_entity": vol_target,
             "is_local": bool(is_local_flag),
             "rev": med_rev,
             "payload": med_payload,

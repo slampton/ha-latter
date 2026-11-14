@@ -3,8 +3,33 @@
  */
 
 import type { DeviceViewId, IssueItem, SecurityPinPolicy, StudioViewId, SystemViewId } from "./types.js";
+import {
+  POWER_PROFILE_PREFS,
+  POWER_PROFILE_SUBKEYS,
+  DOCK_APPS_CATALOG,
+  DEFAULT_DOCK_APPS_TOKENS,
+  DEFAULT_DOCK_APPS,
+  AREA_CATEGORIES_CATALOG,
+  DEFAULT_AREA_CATEGORIES_TOKENS,
+  HOME_CATEGORIES_CATALOG,
+  DEFAULT_HOME_CATEGORIES_TOKENS,
+  ACTIVITY_SOURCES_CATALOG,
+} from "./protocol-schema.js";
 
-export const STUDIO_REV = 8;
+export {
+  POWER_PROFILE_PREFS,
+  POWER_PROFILE_SUBKEYS,
+  DOCK_APPS_CATALOG,
+  DEFAULT_DOCK_APPS_TOKENS,
+  DEFAULT_DOCK_APPS,
+  AREA_CATEGORIES_CATALOG,
+  DEFAULT_AREA_CATEGORIES_TOKENS,
+  HOME_CATEGORIES_CATALOG,
+  DEFAULT_HOME_CATEGORIES_TOKENS,
+  ACTIVITY_SOURCES_CATALOG,
+};
+
+export const STUDIO_REV = 9;
 
 export const MAX_WALLPAPER_UPLOAD_BYTES = 15 * 1024 * 1024;
 
@@ -62,27 +87,6 @@ export const ISSUE_TEXT: Record<string, (issue: IssueItem) => string> = {
     "A firmware update failed to start; the previous firmware is running.",
 };
 
-// Canonical 8 Dock App tokens (`protocol.py` DOCK_APP_TOKENS).
-export const DOCK_APPS_CATALOG = [
-  {token: "music", label: "Music"},
-  {token: "alarm", label: "Home Hub"},
-  {token: "area", label: "Area"},
-  {token: "remote", label: "Remote"},
-  {token: "weather", label: "Weather"},
-  {token: "camera", label: "Cameras"},
-  {token: "games", label: "Games"},
-  {token: "tools", label: "Tools"},
-];
-
-export const DEFAULT_DOCK_APPS_TOKENS: ReadonlyArray<string> = [
-  "music",
-  "alarm",
-  "area",
-  "remote",
-  "games",
-  "tools",
-];
-
 export const START_SCREEN_OPTIONS: ReadonlyArray<string> = [
   "Home",
   "Clock",
@@ -104,52 +108,6 @@ export const RETURN_TO_HOME_TIMEOUT_OPTIONS: ReadonlyArray<string> = [
   "5 min",
   "10 min",
   "Never",
-];
-
-// Canonical 4 Home Category tokens (`protocol.py` HOME_CATEGORY_TOKENS).
-export const HOME_CATEGORIES_CATALOG: ReadonlyArray<{ token: string; label: string }> = [
-  { token: "alarm", label: "Security Alarm" },
-  { token: "thermostat", label: "Thermostat" },
-  { token: "entry", label: "Entry & Garage" },
-  { token: "vacuum", label: "Robot Vacuum" },
-];
-
-export const DEFAULT_HOME_CATEGORIES_TOKENS: ReadonlyArray<string> = [
-  "alarm",
-  "thermostat",
-  "entry",
-  "vacuum",
-];
-
-// Canonical 8 Area Category tokens (`protocol.py` AREA_CATEGORY_TOKENS).
-export const AREA_CATEGORIES_CATALOG: ReadonlyArray<{ token: string; label: string }> = [
-  { token: "scene", label: "Scenes" },
-  { token: "light", label: "Lights" },
-  { token: "cover", label: "Blinds & Curtains" },
-  { token: "fan", label: "Fans" },
-  { token: "switch", label: "Switches" },
-  { token: "climate", label: "Climate" },
-  { token: "media", label: "Media" },
-  { token: "all", label: "All Devices" },
-];
-
-export const DEFAULT_AREA_CATEGORIES_TOKENS: ReadonlyArray<string> = [
-  "scene",
-  "light",
-  "cover",
-  "fan",
-  "switch",
-  "climate",
-  "media",
-];
-
-// Canonical 5 Activity Card source keys (`protocol.py` ACTIVITY_SOURCE_KEYS).
-export const ACTIVITY_SOURCES_CATALOG: ReadonlyArray<{ id: string; label: string }> = [
-  { id: "calendar", label: "Calendar" },
-  { id: "music_queue", label: "Music Queue" },
-  { id: "stopwatch", label: "Stopwatch" },
-  { id: "alarms", label: "Alarms" },
-  { id: "timers", label: "Timers" },
 ];
 
 export const SECURITY_PIN_POLICY_OPTIONS: ReadonlyArray<{ value: SecurityPinPolicy; label: string }> = [

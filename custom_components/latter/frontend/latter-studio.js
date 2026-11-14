@@ -671,11 +671,142 @@ class LitElement extends HTMLElement {
             updated() {}
 }
 
+// --- src/protocol-schema.ts ---
+// AUTO-GENERATED FROM protocol/latter_v3.json BY tools/gen_protocol.py — DO NOT EDIT MANUALLY.
+const PROTOCOL_CONTRACT_VERSION = 3;
+const POWER_PROFILE_SUBKEYS = [
+  "wake_word_mode",
+  "tap_to_wake",
+  "pickup_to_wake",
+  "battery_screen_timeout",
+  "docked_idle_timeout",
+  "battery_hibernate_timeout",
+  "docked_screensaver",
+];
+const POWER_PROFILE_PREFS = {
+  "Portable Carry": {
+    wake_word_mode: "Docked Only",
+    tap_to_wake: "Docked Only",
+    pickup_to_wake: "Docked Only",
+    battery_screen_timeout: "30s",
+    docked_idle_timeout: "1 min",
+    battery_hibernate_timeout: "15 min",
+    docked_screensaver: true,
+  },
+  "Handheld Roaming": {
+    wake_word_mode: "Docked Only",
+    tap_to_wake: "Always On",
+    pickup_to_wake: "Always On",
+    battery_screen_timeout: "30s",
+    docked_idle_timeout: "1 min",
+    battery_hibernate_timeout: "30 min",
+    docked_screensaver: true,
+  },
+  "Wearable Watch": {
+    wake_word_mode: "Docked Only",
+    tap_to_wake: "Always On",
+    pickup_to_wake: "Always On",
+    battery_screen_timeout: "15s",
+    docked_idle_timeout: "1 min",
+    battery_hibernate_timeout: "15 min",
+    docked_screensaver: true,
+  },
+  "Tabletop Dock": {
+    wake_word_mode: "Docked Only",
+    tap_to_wake: "Docked Only",
+    pickup_to_wake: "Disabled",
+    battery_screen_timeout: "30s",
+    docked_idle_timeout: "5 min",
+    battery_hibernate_timeout: "15 min",
+    docked_screensaver: true,
+  },
+  "Always-On Wall / Desk": {
+    wake_word_mode: "Always On",
+    tap_to_wake: "Always On",
+    pickup_to_wake: "Disabled",
+    battery_screen_timeout: "Never",
+    docked_idle_timeout: "5 min",
+    battery_hibernate_timeout: "Disabled",
+    docked_screensaver: true,
+  },
+};
+const DOCK_APPS_CATALOG = [
+  {token: "music", label: "Music"},
+  {token: "home_hub", label: "Home Hub"},
+  {token: "area", label: "Area"},
+  {token: "remote", label: "Remote"},
+  {token: "weather", label: "Weather"},
+  {token: "camera", label: "Cameras"},
+  {token: "games", label: "Games"},
+  {token: "tools", label: "Tools"},
+];
+const ACTIVITY_SOURCES_CATALOG = [
+  {token: "calendar", label: "Calendar"},
+  {token: "music_queue", label: "Music Queue"},
+  {token: "stopwatch", label: "Stopwatch"},
+  {token: "alarms", label: "Alarms"},
+  {token: "timers", label: "Timers"},
+];
+const AREA_CATEGORIES_CATALOG = [
+  {token: "scene", label: "Scenes"},
+  {token: "light", label: "Lights"},
+  {token: "cover", label: "Blinds & Curtains"},
+  {token: "fan", label: "Fans"},
+  {token: "switch", label: "Switches"},
+  {token: "climate", label: "Climate"},
+  {token: "media", label: "Media"},
+  {token: "all", label: "All Devices"},
+];
+const HOME_CATEGORIES_CATALOG = [
+  {token: "alarm", label: "Security Alarm"},
+  {token: "thermostat", label: "Thermostat"},
+  {token: "entry", label: "Entry & Garage"},
+  {token: "vacuum", label: "Robot Vacuum"},
+];
+const DEFAULT_DOCK_APPS = "music,home_hub,area,remote,games,tools";
+const DEFAULT_DOCK_APPS_TOKENS = [
+  "music",
+  "home_hub",
+  "area",
+  "remote",
+  "games",
+  "tools",
+];
+const DEFAULT_ACTIVITY_CARD = "1";
+const DEFAULT_ACTIVITY_CARD_TOKENS = [
+  "1",
+];
+const DEFAULT_ACTIVITY_SOURCES = "calendar,music_queue,stopwatch,alarms,timers";
+const DEFAULT_ACTIVITY_SOURCES_TOKENS = [
+  "calendar",
+  "music_queue",
+  "stopwatch",
+  "alarms",
+  "timers",
+];
+const DEFAULT_AREA_CATEGORIES = "scene,light,cover,fan,switch,climate,media";
+const DEFAULT_AREA_CATEGORIES_TOKENS = [
+  "scene",
+  "light",
+  "cover",
+  "fan",
+  "switch",
+  "climate",
+  "media",
+];
+const DEFAULT_HOME_CATEGORIES = "alarm,thermostat,entry,vacuum";
+const DEFAULT_HOME_CATEGORIES_TOKENS = [
+  "alarm",
+  "thermostat",
+  "entry",
+  "vacuum",
+];
+
 // --- src/constants.ts ---
 /**
  * Canonical constants, route maps, issue messages, and Title Case dictionaries for Latter Studio.
  */
-const STUDIO_REV = 8;
+const STUDIO_REV = 9;
 const MAX_WALLPAPER_UPLOAD_BYTES = 15 * 1024 * 1024;
 const DEVICE_VIEW_SLUGS = {
   dashboard: "overview",
@@ -723,25 +854,6 @@ const ISSUE_TEXT = {
   firmware_rolled_back: () =>
     "A firmware update failed to start; the previous firmware is running.",
 };
-// Canonical 8 Dock App tokens (`protocol.py` DOCK_APP_TOKENS).
-const DOCK_APPS_CATALOG = [
-  {token: "music", label: "Music"},
-  {token: "alarm", label: "Home Hub"},
-  {token: "area", label: "Area"},
-  {token: "remote", label: "Remote"},
-  {token: "weather", label: "Weather"},
-  {token: "camera", label: "Cameras"},
-  {token: "games", label: "Games"},
-  {token: "tools", label: "Tools"},
-];
-const DEFAULT_DOCK_APPS_TOKENS = [
-  "music",
-  "alarm",
-  "area",
-  "remote",
-  "games",
-  "tools",
-];
 const START_SCREEN_OPTIONS = [
   "Home",
   "Clock",
@@ -762,47 +874,6 @@ const RETURN_TO_HOME_TIMEOUT_OPTIONS = [
   "5 min",
   "10 min",
   "Never",
-];
-// Canonical 4 Home Category tokens (`protocol.py` HOME_CATEGORY_TOKENS).
-const HOME_CATEGORIES_CATALOG = [
-  { token: "alarm", label: "Security Alarm" },
-  { token: "thermostat", label: "Thermostat" },
-  { token: "entry", label: "Entry & Garage" },
-  { token: "vacuum", label: "Robot Vacuum" },
-];
-const DEFAULT_HOME_CATEGORIES_TOKENS = [
-  "alarm",
-  "thermostat",
-  "entry",
-  "vacuum",
-];
-// Canonical 8 Area Category tokens (`protocol.py` AREA_CATEGORY_TOKENS).
-const AREA_CATEGORIES_CATALOG = [
-  { token: "scene", label: "Scenes" },
-  { token: "light", label: "Lights" },
-  { token: "cover", label: "Blinds & Curtains" },
-  { token: "fan", label: "Fans" },
-  { token: "switch", label: "Switches" },
-  { token: "climate", label: "Climate" },
-  { token: "media", label: "Media" },
-  { token: "all", label: "All Devices" },
-];
-const DEFAULT_AREA_CATEGORIES_TOKENS = [
-  "scene",
-  "light",
-  "cover",
-  "fan",
-  "switch",
-  "climate",
-  "media",
-];
-// Canonical 5 Activity Card source keys (`protocol.py` ACTIVITY_SOURCE_KEYS).
-const ACTIVITY_SOURCES_CATALOG = [
-  { id: "calendar", label: "Calendar" },
-  { id: "music_queue", label: "Music Queue" },
-  { id: "stopwatch", label: "Stopwatch" },
-  { id: "alarms", label: "Alarms" },
-  { id: "timers", label: "Timers" },
 ];
 const SECURITY_PIN_POLICY_OPTIONS = [
   { value: "auto", label: "Auto (Recommended)" },
@@ -1444,6 +1515,89 @@ function renderNativeControlRow(store, item) {
     <span>${label}</span>
     <strong>${displayVal}</strong>
   </div>`;
+}
+function renderPrefControlRow(
+  store,
+  pref,
+  labelOverride,
+) {
+  const label = labelOverride || pref.label || entityLabel(pref.key);
+  const dom = pref.domain;
+  const val = pref.value;
+  if (dom === "switch") {
+    const isOn = Boolean(val);
+    const onToggle = (ev) => {
+      const checked = (ev.currentTarget).checked;
+      store.stageDeviceSetting(pref.key, checked);
+    };
+    return renderSettingsRow({
+      label,
+      control: html`<input
+        type="checkbox"
+        role="switch"
+        aria-label=${label}
+        .checked=${isOn}
+        @change=${onToggle}
+        class="switch"
+      />`,
+    });
+  }
+  if (dom === "select") {
+    const opts = pref.options || [];
+    const st = String(val ?? "");
+    const onChange = (ev) => {
+      const nextVal = (ev.currentTarget).value;
+      store.stageDeviceSetting(pref.key, nextVal);
+    };
+    return renderSettingsRow({
+      label,
+      control: html`<select aria-label=${label} .value=${st} @change=${onChange}>
+        ${opts.map((opt) => html`<option value=${opt} ?selected=${opt === st}>${opt}</option>`)}
+      </select>`,
+    });
+  }
+  if (dom === "number") {
+    const min = pref.min ?? 0;
+    const max = pref.max ?? 100;
+    const step = pref.step ?? 1;
+    const numVal = Number.isFinite(Number(val)) ? Number(val) : min;
+    const unitSuffix = pref.unit ? ` ${pref.unit}` : "";
+    const onCommit = (ev) => {
+      const raw = Number((ev.currentTarget).value);
+      if (Number.isFinite(raw)) {
+        store.stageDeviceSetting(pref.key, raw);
+      }
+    };
+    if (max - min <= 250) {
+      return renderSettingsRow({
+        label,
+        control: html`<span class="kv-value">${fmtNumber(numVal, store.hass)}${unitSuffix}</span>
+          <input
+            type="range"
+            aria-label=${label}
+            min=${String(min)}
+            max=${String(max)}
+            step=${String(step)}
+            .value=${String(numVal)}
+            @change=${onCommit}
+          />`,
+      });
+    }
+    return renderSettingsRow({
+      label,
+      control: html`<input
+          type="number"
+          aria-label=${label}
+          min=${String(min)}
+          max=${String(max)}
+          step=${String(step)}
+          .value=${String(numVal)}
+          @change=${onCommit}
+        />
+        ${pref.unit ? html`<span class="help-text">${pref.unit}</span>` : nothing}`,
+    });
+  }
+  return nothing;
 }
 const QUICK_ACTION_RANK = {
   find_my: 0,
@@ -2137,7 +2291,6 @@ class StudioWsClient {
         type: "latter/device/import",
         subentry_id: options.targetSubentryId,
         bundle: options.bundle,
-        restore_esphome_entities: options.restoreEspHomeEntities,
         studio_rev: STUDIO_REV,
       });
     }
@@ -2145,7 +2298,6 @@ class StudioWsClient {
       type: "latter/system/import",
       subentry_id: options.selectedSubentryId || null,
       bundle: options.bundle,
-      restore_esphome_entities: options.restoreEspHomeEntities,
       studio_rev: STUDIO_REV,
     });
   }
@@ -2608,7 +2760,6 @@ async function restoreFromUploadedFileOp(store) {
       bundle,
       targetSubentryId: targetId || null,
       selectedSubentryId: store.activeSubentryId || null,
-      restoreEspHomeEntities: store.backupRestoreEsp,
     });
     store.selectedBackupFile = null;
     if (res) store.ingestPayload(res, false);
@@ -2668,62 +2819,7 @@ async function clearInternalLogsOp(store) {
 const SAVE_DEBOUNCE_MS = 220;
 const ENTITY_OPTIMISTIC_TTL_MS = 8000;
 const PENDING_ENTITY_STATES = new Map();
-const POWER_PROFILE_PREFS = {
-  "Portable Carry": {
-    wake_word_mode: "Docked Only",
-    tap_to_wake: "Docked Only",
-    pickup_to_wake: "Docked Only",
-    battery_screen_timeout: "30s",
-    docked_idle_timeout: "1 min",
-    battery_hibernate_timeout: "15 min",
-    docked_screensaver: true,
-  },
-  "Handheld Roaming": {
-    wake_word_mode: "Docked Only",
-    tap_to_wake: "Always On",
-    pickup_to_wake: "Always On",
-    battery_screen_timeout: "30s",
-    docked_idle_timeout: "1 min",
-    battery_hibernate_timeout: "30 min",
-    docked_screensaver: true,
-  },
-  "Wearable Watch": {
-    wake_word_mode: "Docked Only",
-    tap_to_wake: "Always On",
-    pickup_to_wake: "Always On",
-    battery_screen_timeout: "15s",
-    docked_idle_timeout: "1 min",
-    battery_hibernate_timeout: "15 min",
-    docked_screensaver: true,
-  },
-  "Tabletop Dock": {
-    wake_word_mode: "Docked Only",
-    tap_to_wake: "Docked Only",
-    pickup_to_wake: "Disabled",
-    battery_screen_timeout: "30s",
-    docked_idle_timeout: "5 min",
-    battery_hibernate_timeout: "15 min",
-    docked_screensaver: true,
-  },
-  "Always-On Wall / Desk": {
-    wake_word_mode: "Always On",
-    tap_to_wake: "Always On",
-    pickup_to_wake: "Disabled",
-    battery_screen_timeout: "Never",
-    docked_idle_timeout: "5 min",
-    battery_hibernate_timeout: "Disabled",
-    docked_screensaver: true,
-  },
-};
-const POWER_PROFILE_SUBKEYS = new Set ([
-  "wake_word_mode",
-  "tap_to_wake",
-  "pickup_to_wake",
-  "battery_screen_timeout",
-  "docked_idle_timeout",
-  "battery_hibernate_timeout",
-  "docked_screensaver",
-]);
+const POWER_PROFILE_SUBKEY_SET = new Set (POWER_PROFILE_SUBKEYS);
 function expandDevicePrefPatch(
   currentCfg,
   rawPatch,
@@ -2738,7 +2834,7 @@ function expandDevicePrefPatch(
     }
   } else if (
     !("power_profile" in rawPatch) &&
-    Object.keys(rawPatch).some((k) => POWER_PROFILE_SUBKEYS.has(k))
+    Object.keys(rawPatch).some((k) => POWER_PROFILE_SUBKEY_SET.has(k))
   ) {
     const curProf = String(currentCfg.power_profile || "Portable Carry");
     const preset = POWER_PROFILE_PREFS[curProf];
@@ -2772,6 +2868,14 @@ function overlayDevicePrefsOnSections(
     ...payload.config,
     ...expanded,
   };
+  if (payload.device_prefs) {
+    payload.device_prefs = payload.device_prefs.map((p) => {
+      if (p.key in expanded) {
+        return { ...p, value: expanded[p.key] };
+      }
+      return p;
+    });
+  }
   const sections = payload?.esphome?.sections;
   if (!sections) return;
   payload.esphome = {
@@ -2874,7 +2978,7 @@ function stageDeviceSettingOp(
   if (key === "home_screen_enabled") {
     snapshotKey("start_screen");
   }
-  if (key === "power_profile" || POWER_PROFILE_SUBKEYS.has(key)) {
+  if (key === "power_profile" || POWER_PROFILE_SUBKEY_SET.has(key)) {
     snapshotKey("power_profile");
     for (const sk of POWER_PROFILE_SUBKEYS) {
       snapshotKey(sk);
@@ -3273,7 +3377,7 @@ function moveHomeCategoryTokenOp(store, token, delta) {
 function getEnabledActivitySourcesOp(store) {
   const rawCfg = store.state?.config?.activity_sources;
   if (rawCfg === undefined || rawCfg === null) {
-    return ACTIVITY_SOURCES_CATALOG.map((s) => s.id);
+    return ACTIVITY_SOURCES_CATALOG.map((s) => s.token);
   }
   return String(rawCfg)
     .split(",")
@@ -3298,22 +3402,7 @@ function applyDeviceCustomColorOp(
   if (!isValidHexColor(hex)) return;
   store.stageDeviceSetting("device_custom_color", hex.toUpperCase());
   if (switchColorProfile) {
-    for (const sec of store.state?.esphome?.sections || []) {
-      for (const it of sec.items || []) {
-        if (
-          it.domain === "select" &&
-          (it.name || "").toLowerCase().includes("color profile") &&
-          (it.options || []).includes("Custom") &&
-          it.state !== "Custom"
-        ) {
-          if (it.pref_key) {
-            store.stageDeviceSetting(it.pref_key, "Custom");
-          } else {
-            void store.espSelect(it.entity_id, "Custom");
-          }
-        }
-      }
-    }
+    store.stageDeviceSetting("color_profile", "Custom");
   }
 }
 function deleteCustomPaletteOp(store, hex) {
@@ -4001,7 +4090,6 @@ class StudioStore {
   announceIncludeCamera = false;
   backupExportScope = "system";
   backupRestoreSubentryId = "";
-  backupRestoreEsp = true;
   logsOpen = false;
   logFilter = "all";
   // Modal states
@@ -4556,6 +4644,15 @@ class StudioStore {
       tasks.push(this.flushDeviceBucket(subId));
     }
     await Promise.allSettled(tasks);
+  }
+  getPref(key) {
+    return (this.state?.device_prefs || []).find((p) => p.key === key);
+  }
+  getPrefs(keys) {
+    const all = this.state?.device_prefs || [];
+    if (!keys || keys.length === 0) return all;
+    const keySet = new Set(keys);
+    return all.filter((p) => keySet.has(p.key));
   }
   getSectionItems(sectionId) {
     const sec = (this.state?.esphome?.sections || []).find((s) => s.id === sectionId);
@@ -6038,6 +6135,163 @@ const STUDIO_STYLES = css`
   }
 `;
 
+// --- src/views/device-audio-view.ts ---
+/**
+ * Device Audio & Voice View (`audio_voice`, D-031 / D-036):
+ * Voice Assistant, Wake Word, Voice Follows Me, Sound & Music Assistant.
+ */
+function renderDeviceAudioView(store) {
+  const data = store.state;
+  const cfg = data?.config || {};
+  const caps = data?.capabilities || {};
+  const live = data?.live || {};
+  const wwModePref = store.getPref("wake_word_mode");
+  const wwDisabled = wwModePref ? String(wwModePref.value) === "Disabled" : false;
+  const wakeScreenPref = store.getPref("wake_screen_on_assist");
+  const voiceItems = store.getSectionItems("voice");
+  const voicePrimary = voiceItems.filter((it) => {
+    if (it.domain === "assist_satellite") return false;
+    const k = it.key || it.pref_key || (it.entity_id ? it.entity_id.split(".").pop() || "" : "");
+    if (k === "va_visual_profile" || k.endsWith("_visual_profile")) return false;
+    if (k === "wake_word_mode" || k.endsWith("_wake_word_mode")) return false;
+    if (k === "wake_screen_on_assist" || k.endsWith("_wake_screen_on_assist")) return false;
+    if (k.startsWith("ww_sens_") || k.includes("_ww_sens_")) return false;
+    if (
+      wwDisabled &&
+      (it.key === "wake_word" || it.key === "wake_word_n" || k.endsWith("_wake_word") || k.endsWith("_wake_word_n"))
+    )
+      return false;
+    return true;
+  });
+  const sensitivityPrefs = wwDisabled
+    ? []
+    : store.getPrefs([
+        "ww_sens_okay_nabu",
+        "ww_sens_hey_luna",
+        "ww_sens_hey_jarvis",
+        "ww_sens_hey_mycroft",
+        "ww_sens_alexa",
+      ]);
+  const soundPrefs = store.getPrefs([
+    "alert_volume",
+    "volume_step_size",
+    "game_sound_effects",
+  ]);
+  const soundItems = store.getSectionItems("sound").filter((it) => !it.pref_key);
+  const isRoaming = caps.is_roaming_device !== false;
+  const dwellSeconds = Number(cfg.area_follow_dwell_s ?? 10);
+  const autoMaEntity = cfg.device_slug ? `media_player.${cfg.device_slug}` : "";
+  const savedMa = String(cfg.ma_player_entity || "").trim();
+  const maUnmatched = live.ma_link_matched === false;
+  const hasCustomMaOverride = Boolean(savedMa && savedMa !== autoMaEntity);
+  const showMaOverrideRow = maUnmatched || hasCustomMaOverride;
+  const maDescription = maUnmatched
+    ? `Automatic match did not find ${autoMaEntity || "this Device's player"} in Music Assistant. Choose this Device's player for library playback, queues and lyrics.`
+    : `Linked manually (${autoMaEntity || "default slug"} was not used). Clear to return to automatic matching.`;
+  const speakerChoices = data?.catalog?.ma_speakers;
+  return html`<section id="view-audio_voice">
+    <div class="columns">
+      <div class="column">
+        ${renderCard({
+          heading: html`<h3 class="card-title">Voice Assistant &amp; Wake Word</h3>`,
+          contentClass: "settings-list",
+          body: html`${wwModePref ? renderPrefControlRow(store, wwModePref) : nothing}
+            ${voicePrimary.map((it) => renderNativeControlRow(store, it))}
+            ${wakeScreenPref ? renderPrefControlRow(store, wakeScreenPref) : nothing}
+            ${isRoaming
+              ? html`${renderSwitchRow({
+                    rowId: "row-sync-device-area",
+                    id: "cfg-sync_device_area",
+                    label: "Voice Follows Me",
+                    description:
+                      "Updates this roaming Device's Home Assistant Area when BLE presence settles in a new Area, so Area-less voice commands target where you are.",
+                    checked: Boolean(cfg.sync_device_area),
+                    onChange: (checked) =>
+                      store.stageDeviceSetting(
+                        "sync_device_area",
+                        checked,
+                        "cfg-sync_device_area",
+                      ),
+                  })}
+                  ${renderSettingsRow({
+                    id: "row-area-follow-dwell",
+                    label: "Voice Follows Me Delay",
+                    forId: "cfg-area_follow_dwell_s",
+                    description:
+                      "How long a BLE-detected Area stays stable before moving the Device (3 to 60 seconds).",
+                    control: html`<input
+                        type="range"
+                        id="cfg-area_follow_dwell_s"
+                        min="3"
+                        max="60"
+                        step="1"
+                        .value=${String(dwellSeconds)}
+                        @change=${(ev) =>
+                          store.stageDeviceSetting(
+                            "area_follow_dwell_s",
+                            Number((ev.currentTarget).value) || 10,
+                            "cfg-area_follow_dwell_s",
+                          )}
+                      />
+                      <span id="dwell-value" class="chip">${fmtNumber(dwellSeconds, store.hass, 0)} s</span>`,
+                  })}`
+              : nothing}
+            ${sensitivityPrefs.length
+              ? html`<details class="sub-collapsible">
+                  <summary>Wake Word Sensitivity (Per Model)</summary>
+                  <div class="card-content settings-list">
+                    ${sensitivityPrefs.map((p) => renderPrefControlRow(store, p))}
+                  </div>
+                </details>`
+              : nothing}`,
+        })}
+      </div>
+
+      <div class="column">
+        ${renderCard({
+          heading: html`<h3 class="card-title">Sound &amp; Playback</h3>`,
+          contentClass: "settings-list",
+          body: html`${renderSelectRow({
+              id: "cfg-default_speaker",
+              label: "Default Speaker",
+              description: "Primary speaker controlled from Music and Home when this Device starts up.",
+              value: cfg.default_speaker,
+              choices: speakerChoices,
+              emptyOptionLabel: "— Automatic (Built-in or Area) —",
+              onChange: (val) =>
+                store.stageDeviceSetting("default_speaker", val, "cfg-default_speaker"),
+            })}
+            ${showMaOverrideRow
+              ? renderSelectRow({
+                  rowId: "row-ma-player-entity",
+                  id: "cfg-ma_player_entity",
+                  label: "Music Assistant Player",
+                  description: maDescription,
+                  descId: "desc-ma-player-entity",
+                  value: savedMa,
+                  choices: data?.catalog?.ma_players,
+                  emptyOptionLabel: "— Automatic Match —",
+                  onChange: (val) =>
+                    store.stageDeviceSetting("ma_player_entity", val, "cfg-ma_player_entity"),
+                })
+              : nothing}
+            ${renderSwitchRow({
+              id: "cfg-area_handoff",
+              label: "Media Follows This Device to Its New Area",
+              description:
+                "Transfers active Music Assistant playback when this Device moves to another Area.",
+              checked: Boolean(cfg.area_handoff),
+              onChange: (checked) =>
+                store.stageDeviceSetting("area_handoff", checked, "cfg-area_handoff"),
+            })}
+            ${soundPrefs.map((p) => renderPrefControlRow(store, p))}
+            ${soundItems.map((it) => renderNativeControlRow(store, it))}`,
+        })}
+      </div>
+    </div>
+  </section>`;
+}
+
 // --- src/components/wallpaper-gallery.ts ---
 /**
  * Wallpaper Gallery & Multipart XHR Upload Component (Device & System scopes).
@@ -6200,197 +6454,102 @@ function renderWallpaperUploadProgress(
 
 // --- src/views/device-display-view.ts ---
 /**
- * Device Display View (`display`, D-027 / D-029 / D-033 / D-034):
+ * Device Display View (`display`, D-027 / D-029 / D-033 / D-034 / D-036):
  * Visual & aesthetic preferences across screens.
  * Column 1: Home Screen (Wake Greeting, Weather Background & Sun & Moon), Screensavers, Voice Assistant (Visual Profile), Brightness & Clock.
  * Column 2: Colors, Wallpapers & Media Player (Album Art & Overlay Style).
  */
-function sortEntitiesByKeywords(
-  items,
-  order,
-) {
-  return [...items].sort((a, b) => {
-    const la = (a.name || "").toLowerCase();
-    const lb = (b.name || "").toLowerCase();
-    const ia = order.findIndex((k) => la.includes(k));
-    const ib = order.findIndex((k) => lb.includes(k));
-    const ra = ia >= 0 ? ia : order.length;
-    const rb = ib >= 0 ? ib : order.length;
-    return ra - rb;
-  });
-}
-function isInterfaceDisplayEntity(it) {
-  const low = `${it.name || ""} ${it.entity_id || ""}`.toLowerCase();
-  return (
-    low.includes("enable home screen") ||
-    low.includes("home_screen_enabled") ||
-    low.includes("start screen") ||
-    low.includes("start_screen") ||
-    low.includes("return to home timeout") ||
-    low.includes("return_to_home_timeout")
-  );
-}
-function isClockDisplayEntity(it) {
-  const low = `${it.name || ""} ${it.entity_id || ""}`.toLowerCase();
-  return (
-    low.includes("clock face") ||
-    low.includes("clock_face") ||
-    low.includes("time format") ||
-    low.includes("time_format")
-  );
-}
-function isMediaAppearanceEntity(it) {
-  const low = `${it.name || ""} ${it.entity_id || ""}`.toLowerCase();
-  return (
-    low.includes("album art style") ||
-    low.includes("album_art_style") ||
-    low.includes("overlay style") ||
-    low.includes("music_overlay_style")
-  );
-}
-function isScreensaverSleepEntity(it) {
-  const low = `${it.name || ""} ${it.entity_id || ""}`.toLowerCase();
-  return (
-    low.includes("screensaver") ||
-    low.includes("docked idle timeout") ||
-    low.includes("docked_idle_timeout")
-  );
-}
-function isVoiceVisualProfileEntity(it) {
-  const low = `${it.name || ""} ${it.entity_id || ""}`.toLowerCase();
-  return low.includes("visual profile") || low.includes("visual_profile");
-}
-function isColorDisplayEntity(it) {
-  const low = `${it.name || ""} ${it.entity_id || ""}`.toLowerCase();
-  return low.includes("color profile") || low.includes("color_profile");
-}
 function renderDeviceDisplayView(store) {
   const data = store.state;
   const cfg = data?.config || {};
   const palettes = data?.system_config?.custom_palettes || [];
-  const brightnessOrder = [
-    "auto brightness mode",
-    "manual brightness",
-    "day brightness",
-    "night brightness",
-    "day start hour",
-    "night start hour",
-  ];
-  const allDisplayItems = store
-    .getSectionItems("display")
-    .filter((it) => !isInterfaceDisplayEntity(it));
-  const colorItems = allDisplayItems.filter(isColorDisplayEntity);
-  const clockItems = sortEntitiesByKeywords(
-    allDisplayItems.filter(isClockDisplayEntity),
-    ["clock face", "time format"],
-  );
-  const brightnessItems = sortEntitiesByKeywords(
-    allDisplayItems.filter((it) => !isColorDisplayEntity(it) && !isClockDisplayEntity(it)),
-    brightnessOrder,
-  );
-  const autoBrtItem = brightnessItems.find((it) =>
-    (it.name || "").toLowerCase().includes("auto brightness"),
-  );
-  const autoBrtState = String(autoBrtItem?.state ?? "").trim();
-  const autoBrtKnown =
-    Boolean(autoBrtItem) &&
-    autoBrtState !== "" &&
-    autoBrtState !== "unavailable" &&
-    autoBrtState !== "unknown";
-  const autoBrtOff = autoBrtKnown && (autoBrtState === "Disabled" || autoBrtState === "off");
-  const autoBrtTimeSchedule = autoBrtKnown && autoBrtState === "Time Schedule";
-  const visibleBrightnessItems = brightnessItems.filter((it) => {
-    if (it.domain === "light") return false;
-    const low = (it.name || "").toLowerCase();
-    if (autoBrtKnown) {
-      if (autoBrtOff && (low.includes("day brightness") || low.includes("night brightness"))) {
-        return false;
-      }
-      if (!autoBrtOff && low.includes("manual brightness")) {
-        return false;
-      }
-      if (
-        !autoBrtTimeSchedule &&
-        (low.includes("day start hour") || low.includes("night start hour"))
-      ) {
-        return false;
-      }
-    }
-    return true;
-  });
-  const homeOrder = ["wake greeting", "weather background", "sun", "moon"];
-  const homeItems = sortEntitiesByKeywords(store.getSectionItems("home"), homeOrder);
-  const weatherBgSwitch = homeItems.find((it) =>
-    (it.name || "").toLowerCase().includes("weather background"),
-  );
-  const weatherBgOff = weatherBgSwitch ? weatherBgSwitch.state === "off" : false;
-  const isCelestialSwitch = (it) =>
-    it.domain === "switch" && /^(?:home:\s*)?(?:sun|moon)$/i.test((it.name || "").trim());
-  const celestialItems = homeItems.filter(isCelestialSwitch);
-  const visibleHomeItems = homeItems.filter((it) => !isCelestialSwitch(it));
+  // Home Screen card
+  const wakeGreetingPref = store.getPref("wake_greeting");
+  const weatherBgPref = store.getPref("weather_background");
+  const weatherBgVal = String(weatherBgPref?.value ?? "").toLowerCase();
+  const weatherBgOff =
+    !weatherBgPref || !weatherBgPref.value || weatherBgVal === "off" || weatherBgVal === "disabled";
+  const sunPref = store.getPref("home_sun");
+  const moonPref = store.getPref("home_moon");
+  const celestialItems = [
+    { pref: sunPref, label: "Sun" },
+    { pref: moonPref, label: "Moon" },
+  ].filter((c) => Boolean(c.pref));
   const renderCelestialRow = () =>
     renderSettingsRow({
       id: "weather-celestial-bodies",
       label: "Sun & Moon",
       description: "Choose which sky bodies appear on the live Weather Background.",
       control: html`<div class="pill-list" role="group" aria-label="Sun and Moon">
-        ${celestialItems.map((cel) => {
-          const st = String(cel.state ?? "");
-          const isOn = st === "on";
-          const prefKey = cel.pref_key || "";
-          const unavailable = !prefKey && (st === "unavailable" || st === "unknown");
-          const lbl = entityLabel((cel.name || cel.entity_id).replace(/^home:\s*/i, ""));
+        ${celestialItems.map(({ pref, label }) => {
+          const isOn = Boolean(pref.value);
           return html`<span class="pill ${isOn ? "enabled" : ""}">
             <button
               type="button"
               aria-pressed=${String(isOn)}
-              ?disabled=${unavailable}
-              @click=${() => {
-                if (prefKey) {
-                  store.stageDeviceSetting(prefKey, !isOn);
-                } else {
-                  void store.espAction(
-                    cel.entity_id,
-                    isOn ? "turn_off" : "turn_on",
-                    isOn ? "off" : "on",
-                  );
-                }
-              }}
+              @click=${() => store.stageDeviceSetting(pref.key, !isOn)}
               class="pill-toggle"
             >
-              ${isOn ? `✓ ${lbl}` : `+ ${lbl}`}
+              ${isOn ? `✓ ${label}` : `+ ${label}`}
             </button>
           </span>`;
         })}
       </div>`,
     });
-  const mediaAppearanceItems = sortEntitiesByKeywords(
-    store.getSectionItems("music").filter(isMediaAppearanceEntity),
-    ["album art style", "overlay style"],
-  );
-  const voiceVisualItems = store
-    .getSectionItems("voice")
-    .filter(isVoiceVisualProfileEntity);
-  const curHex = isValidHexColor(cfg.device_custom_color)
-    ? String(cfg.device_custom_color).toUpperCase()
-    : defaultThemeHex(store.host);
-  const swatchStyle = `--swatch-color:${curHex}`;
-  const screensaverOrder = [
-    "docked screensaver",
-    "screensaver style",
-    "docked idle timeout",
-  ];
-  const screensaverSleepItems = sortEntitiesByKeywords(
-    store.getSectionItems("sleep").filter(isScreensaverSleepEntity),
-    screensaverOrder,
-  );
+  const hasHomeCard = Boolean(wakeGreetingPref || weatherBgPref || celestialItems.length > 0);
+  // Screensavers card
+  const screensaverPrefs = store.getPrefs([
+    "docked_screensaver",
+    "screensaver_style",
+    "docked_idle_timeout",
+  ]);
   const activateScreensaverBtn = store
     .getSectionItems("actions")
     .find(
       (it) =>
         it.domain === "button" &&
-        `${it.name || ""} ${it.entity_id || ""}`.toLowerCase().includes("screensaver"),
+        (it.device_command === "activate_screensaver" ||
+          it.key === "activate_screensaver" ||
+          it.entity_id?.endsWith("_activate_screensaver")),
     );
+  // Voice Assistant card
+  const voiceVisualPref = store.getPref("va_visual_profile");
+  // Brightness card
+  const autoBrtPref = store.getPref("auto_brightness_mode");
+  const autoBrtState = String(autoBrtPref?.value ?? "").trim();
+  const autoBrtOff = autoBrtState === "Disabled" || autoBrtState === "off";
+  const autoBrtTimeSchedule = autoBrtState === "Time Schedule";
+  const brightnessPrefs = store.getPrefs([
+    "auto_brightness_mode",
+    "manual_brightness",
+    "day_brightness",
+    "night_brightness",
+    "day_start_hour",
+    "night_start_hour",
+  ]);
+  const visibleBrightnessPrefs = brightnessPrefs.filter((p) => {
+    if (autoBrtPref) {
+      if (autoBrtOff && (p.key === "day_brightness" || p.key === "night_brightness")) {
+        return false;
+      }
+      if (!autoBrtOff && p.key === "manual_brightness") {
+        return false;
+      }
+      if (!autoBrtTimeSchedule && (p.key === "day_start_hour" || p.key === "night_start_hour")) {
+        return false;
+      }
+    }
+    return true;
+  });
+  // Clock card
+  const clockPrefs = store.getPrefs(["clock_face", "time_format"]);
+  // Column 2: Colors card
+  const colorProfilePref = store.getPref("color_profile");
+  const curHex = isValidHexColor(cfg.device_custom_color)
+    ? String(cfg.device_custom_color).toUpperCase()
+    : defaultThemeHex(store.host);
+  const swatchStyle = `--swatch-color:${curHex}`;
+  // Column 2: Wallpapers
   const curCycle = Number(cfg.wallpaper_cycle_minutes || 0);
   const wallpapers = data?.wallpapers || [];
   const activeWp = wallpapers.find((wp) => Boolean(wp.active)) || null;
@@ -6413,36 +6572,28 @@ function renderDeviceDisplayView(store) {
       : starredCount === 1
         ? "1 wallpaper starred — star at least 2 to cycle between favorites."
         : `${starredCount} of ${wallpapers.length} wallpapers starred for rotation.`;
+  // Column 2: Media Player card
+  const mediaAppearancePrefs = store.getPrefs(["album_art_style", "music_overlay_style"]);
   return html`<section id="view-display">
     <div class="columns">
       <div class="column">
-        ${visibleHomeItems.length || (!weatherBgOff && celestialItems.length > 0)
+        ${hasHomeCard
           ? renderCard({
               heading: html`<h3 class="card-title">Home Screen</h3>`,
               contentClass: "settings-list",
               body: html`<div id="embedded-home" class="settings-list">
-                ${visibleHomeItems.map((it) => {
-                  const row = renderNativeControlRow(store, it);
-                  if (weatherBgSwitch && it.entity_id === weatherBgSwitch.entity_id) {
-                    return html`${row}
-                      ${!weatherBgOff && celestialItems.length > 0
-                        ? renderCelestialRow()
-                        : nothing}`;
-                  }
-                  return row;
-                })}
-                ${!weatherBgSwitch && !weatherBgOff && celestialItems.length > 0
-                  ? renderCelestialRow()
-                  : nothing}
+                ${wakeGreetingPref ? renderPrefControlRow(store, wakeGreetingPref) : nothing}
+                ${weatherBgPref ? renderPrefControlRow(store, weatherBgPref) : nothing}
+                ${!weatherBgOff && celestialItems.length > 0 ? renderCelestialRow() : nothing}
               </div>`,
             })
           : nothing}
 
-        ${screensaverSleepItems.length || activateScreensaverBtn
+        ${screensaverPrefs.length || activateScreensaverBtn
           ? renderCard({
               heading: html`<h3 class="card-title">Screensavers</h3>`,
               contentClass: "settings-list",
-              body: html`${screensaverSleepItems.map((it) => renderNativeControlRow(store, it))}
+              body: html`${screensaverPrefs.map((p) => renderPrefControlRow(store, p))}
                 ${activateScreensaverBtn
                   ? renderSettingsRow({
                       label: entityLabel(
@@ -6477,27 +6628,27 @@ function renderDeviceDisplayView(store) {
             })
           : nothing}
 
-        ${voiceVisualItems.length
+        ${voiceVisualPref
           ? renderCard({
               heading: html`<h3 class="card-title">Voice Assistant</h3>`,
               contentClass: "settings-list",
-              body: voiceVisualItems.map((it) => renderNativeControlRow(store, it)),
+              body: renderPrefControlRow(store, voiceVisualPref),
             })
           : nothing}
 
-        ${visibleBrightnessItems.length
+        ${visibleBrightnessPrefs.length
           ? renderCard({
               heading: html`<h3 class="card-title">Brightness</h3>`,
               contentClass: "settings-list",
-              body: visibleBrightnessItems.map((it) => renderNativeControlRow(store, it)),
+              body: visibleBrightnessPrefs.map((p) => renderPrefControlRow(store, p)),
             })
           : nothing}
 
-        ${clockItems.length
+        ${clockPrefs.length
           ? renderCard({
               heading: html`<h3 class="card-title">Clock</h3>`,
               contentClass: "settings-list",
-              body: clockItems.map((it) => renderNativeControlRow(store, it)),
+              body: clockPrefs.map((p) => renderPrefControlRow(store, p)),
             })
           : nothing}
       </div>
@@ -6506,7 +6657,7 @@ function renderDeviceDisplayView(store) {
         ${renderCard({
           heading: html`<h3 class="card-title">Colors</h3>`,
           contentClass: "settings-list",
-          body: html`${colorItems.map((it) => renderNativeControlRow(store, it))}
+          body: html`${colorProfilePref ? renderPrefControlRow(store, colorProfilePref) : nothing}
             ${renderSettingsRow({
               label: "Custom Color",
               forId: "dev-custom-palette-select",
@@ -6656,11 +6807,11 @@ function renderDeviceDisplayView(store) {
             </div>`,
         })}
 
-        ${mediaAppearanceItems.length
+        ${mediaAppearancePrefs.length
           ? renderCard({
               heading: html`<h3 class="card-title">Media Player</h3>`,
               contentClass: "settings-list",
-              body: mediaAppearanceItems.map((it) => renderNativeControlRow(store, it)),
+              body: mediaAppearancePrefs.map((p) => renderPrefControlRow(store, p)),
             })
           : nothing}
       </div>
@@ -6668,152 +6819,9 @@ function renderDeviceDisplayView(store) {
   </section>`;
 }
 
-// --- src/views/device-audio-view.ts ---
-/**
- * Device Audio & Voice View (`audio_voice`): Voice Assistant, Wake Word, Voice Follows Me, Sound & Music Assistant.
- */
-function renderDeviceAudioView(store) {
-  const data = store.state;
-  const cfg = data?.config || {};
-  const caps = data?.capabilities || {};
-  const live = data?.live || {};
-  const voiceItems = store.getSectionItems("voice");
-  const wwModeItem = voiceItems.find((it) =>
-    (it.name || "").toLowerCase().includes("wake word mode"),
-  );
-  const wwDisabled = wwModeItem ? wwModeItem.state === "Disabled" : false;
-  const isWakeWordChoice = (it) =>
-    it.key === "wake_word" || it.key === "wake_word_n";
-  const voicePrimary = voiceItems.filter((it) => {
-    if (it.domain === "assist_satellite") return false;
-    if (isVoiceVisualProfileEntity(it)) return false;
-    const low = (it.name || "").toLowerCase();
-    if (low.includes("cutoff") || low.includes("sensitivity")) return false;
-    if (wwDisabled && isWakeWordChoice(it)) return false;
-    return true;
-  });
-  const sensitivityVoiceItems = wwDisabled
-    ? []
-    : voiceItems.filter(
-        (it) =>
-          (it.name || "").toLowerCase().includes("cutoff") ||
-          (it.name || "").toLowerCase().includes("sensitivity"),
-      );
-  const soundItems = store.getSectionItems("sound");
-  const isRoaming = caps.is_roaming_device !== false;
-  const dwellSeconds = Number(cfg.area_follow_dwell_s ?? 10);
-  const autoMaEntity = cfg.device_slug ? `media_player.${cfg.device_slug}` : "";
-  const savedMa = String(cfg.ma_player_entity || "").trim();
-  const maUnmatched = live.ma_link_matched === false;
-  const hasCustomMaOverride = Boolean(savedMa && savedMa !== autoMaEntity);
-  const showMaOverrideRow = maUnmatched || hasCustomMaOverride;
-  const maDescription = maUnmatched
-    ? `Automatic match did not find ${autoMaEntity || "this Device's player"} in Music Assistant. Choose this Device's player for library playback, queues and lyrics.`
-    : `Linked manually (${autoMaEntity || "default slug"} was not used). Clear to return to automatic matching.`;
-  const speakerChoices = data?.catalog?.ma_speakers;
-  return html`<section id="view-audio_voice">
-    <div class="columns">
-      <div class="column">
-        ${renderCard({
-          heading: html`<h3 class="card-title">Voice Assistant &amp; Wake Word</h3>`,
-          contentClass: "settings-list",
-          body: html`${voicePrimary.map((it) => renderNativeControlRow(store, it))}
-            ${isRoaming
-              ? html`${renderSwitchRow({
-                    rowId: "row-sync-device-area",
-                    id: "cfg-sync_device_area",
-                    label: "Voice Follows Me",
-                    description:
-                      "Updates this roaming Device's Home Assistant Area when BLE presence settles in a new Area, so Area-less voice commands target where you are.",
-                    checked: Boolean(cfg.sync_device_area),
-                    onChange: (checked) =>
-                      store.stageDeviceSetting(
-                        "sync_device_area",
-                        checked,
-                        "cfg-sync_device_area",
-                      ),
-                  })}
-                  ${renderSettingsRow({
-                    id: "row-area-follow-dwell",
-                    label: "Voice Follows Me Delay",
-                    forId: "cfg-area_follow_dwell_s",
-                    description:
-                      "How long a BLE-detected Area stays stable before moving the Device (3 to 60 seconds).",
-                    control: html`<input
-                        type="range"
-                        id="cfg-area_follow_dwell_s"
-                        min="3"
-                        max="60"
-                        step="1"
-                        .value=${String(dwellSeconds)}
-                        @change=${(ev) =>
-                          store.stageDeviceSetting(
-                            "area_follow_dwell_s",
-                            Number((ev.currentTarget).value) || 10,
-                            "cfg-area_follow_dwell_s",
-                          )}
-                      />
-                      <span id="dwell-value" class="chip">${fmtNumber(dwellSeconds, store.hass, 0)} s</span>`,
-                  })}`
-              : nothing}
-            ${sensitivityVoiceItems.length
-              ? html`<details class="sub-collapsible">
-                  <summary>Wake Word Sensitivity (Per Model)</summary>
-                  <div class="card-content settings-list">
-                    ${sensitivityVoiceItems.map((it) => renderNativeControlRow(store, it))}
-                  </div>
-                </details>`
-              : nothing}`,
-        })}
-      </div>
-
-      <div class="column">
-        ${renderCard({
-          heading: html`<h3 class="card-title">Sound &amp; Playback</h3>`,
-          contentClass: "settings-list",
-          body: html`${renderSelectRow({
-              id: "cfg-default_speaker",
-              label: "Default Speaker",
-              description: "Primary speaker controlled from Music and Home when this Device starts up.",
-              value: cfg.default_speaker,
-              choices: speakerChoices,
-              emptyOptionLabel: "— Automatic (Built-in or Area) —",
-              onChange: (val) =>
-                store.stageDeviceSetting("default_speaker", val, "cfg-default_speaker"),
-            })}
-            ${showMaOverrideRow
-              ? renderSelectRow({
-                  rowId: "row-ma-player-entity",
-                  id: "cfg-ma_player_entity",
-                  label: "Music Assistant Player",
-                  description: maDescription,
-                  descId: "desc-ma-player-entity",
-                  value: savedMa,
-                  choices: data?.catalog?.ma_players,
-                  emptyOptionLabel: "— Automatic Match —",
-                  onChange: (val) =>
-                    store.stageDeviceSetting("ma_player_entity", val, "cfg-ma_player_entity"),
-                })
-              : nothing}
-            ${renderSwitchRow({
-              id: "cfg-area_handoff",
-              label: "Media Follows This Device to Its New Area",
-              description:
-                "Transfers active Music Assistant playback when this Device moves to another Area.",
-              checked: Boolean(cfg.area_handoff),
-              onChange: (checked) =>
-                store.stageDeviceSetting("area_handoff", checked, "cfg-area_handoff"),
-            })}
-            ${soundItems.map((it) => renderNativeControlRow(store, it))}`,
-        })}
-      </div>
-    </div>
-  </section>`;
-}
-
 // --- src/views/device-interface-view.ts ---
 /**
- * Device Interface View (`interface`, D-026 / D-028 / D-030 / D-033 / D-034 / D-035):
+ * Device Interface View (`interface`, D-026 / D-028 / D-030 / D-033 / D-034 / D-035 / D-036):
  * Navigation, screen structure & content routing preferences.
  * Column 1: Home Screen (Enable Home Screen, Start Screen, Return to Home Timeout, Dock Apps & Activity Card) & Home Controls.
  * Column 2: Area Controls (Area Categories pills), Media Player (Shortcuts & Library Sorting) & Remote Controls.
@@ -6822,77 +6830,53 @@ function renderDeviceInterfaceView(store) {
   const data = store.state;
   const cfg = data?.config || {};
   const remoteGroups = data?.system_config?.remote_groups || [];
-  const homeDisplayItems = store
-    .getSectionItems("display")
-    .filter(isInterfaceDisplayEntity);
-  const matchInterfaceItem = (needleA, needleB) =>
-    homeDisplayItems.find((it) => {
-      const low = `${it.name || ""} ${it.entity_id || ""}`.toLowerCase();
-      return low.includes(needleA) || low.includes(needleB);
-    });
-  const homeEnabledItem = matchInterfaceItem("enable home screen", "home_screen_enabled");
-  const startScreenItem = matchInterfaceItem("start screen", "start_screen");
-  const returnTimeoutItem = matchInterfaceItem("return to home timeout", "return_to_home_timeout");
-  const extraHomeDisplayItems = homeDisplayItems.filter(
-    (it) => it !== homeEnabledItem && it !== startScreenItem && it !== returnTimeoutItem,
-  );
-  const homeScreenEnabled = homeEnabledItem
-    ? homeEnabledItem.state !== "off"
+  const homeScreenEnabledPref = store.getPref("home_screen_enabled");
+  const homeScreenEnabled = homeScreenEnabledPref
+    ? Boolean(homeScreenEnabledPref.value)
     : cfg.home_screen_enabled !== false;
+  const startScreenPref = store.getPref("start_screen");
   const rawStartOptions =
-    startScreenItem?.options && startScreenItem.options.length > 0
-      ? startScreenItem.options
+    startScreenPref?.options && startScreenPref.options.length > 0
+      ? startScreenPref.options
       : START_SCREEN_OPTIONS;
   const visibleStartOptions = (
     homeScreenEnabled ? rawStartOptions : rawStartOptions.filter((opt) => opt !== "Home")
   ).map((opt) => ({ value: opt, label: opt }));
   const rawStartValue = String(
-    startScreenItem?.state || cfg.start_screen || (homeScreenEnabled ? "Home" : "Clock"),
+    startScreenPref?.value ?? cfg.start_screen ?? (homeScreenEnabled ? "Home" : "Clock"),
   );
   const startScreenValue =
     !homeScreenEnabled && rawStartValue === "Home" ? "Clock" : rawStartValue;
+  const returnTimeoutPref = store.getPref("return_to_home_timeout");
   const rawReturnTimeoutOptions = (
-    returnTimeoutItem?.options && returnTimeoutItem.options.length > 0
-      ? returnTimeoutItem.options
+    returnTimeoutPref?.options && returnTimeoutPref.options.length > 0
+      ? returnTimeoutPref.options
       : RETURN_TO_HOME_TIMEOUT_OPTIONS
   ).map((opt) => ({ value: opt, label: opt }));
   const returnTimeoutValue = String(
-    returnTimeoutItem?.state || cfg.return_to_home_timeout || "2 min",
+    returnTimeoutPref?.value ?? cfg.return_to_home_timeout ?? "2 min",
   );
   const enabledHomeCats = store.getEnabledHomeCategories();
   const disabledHomeCats = HOME_CATEGORIES_CATALOG.filter(
     (c) => !enabledHomeCats.includes(c.token),
   );
-  const areaExtraItems = store
-    .getSectionItems("area")
-    .filter((it) => !(it.name || "").toLowerCase().includes("ble"));
+  const areaExtraItems = store.getSectionItems("area").filter((it) => it.key !== "ble_beacon_mode");
   const enabledAreaCats = store.getEnabledAreaCategories();
   const disabledAreaCats = AREA_CATEGORIES_CATALOG.filter(
     (c) => !enabledAreaCats.includes(c.token),
   );
-  const musicItems = store.getSectionItems("music");
-  const isMediaShortcutSwitch = (it) =>
-    it.domain === "switch" && /\b(speaker|library)\s+shortcut\b/i.test(it.name || it.entity_id);
-  const shortcutMusicItems = sortEntitiesByKeywords(
-    musicItems.filter(isMediaShortcutSwitch),
-    ["speaker shortcut", "library shortcut"],
-  );
-  const mediaSortOrder = [
-    "album sort order",
-    "artist album sort order",
-    "podcast sort order",
-  ];
-  const sortMusicItems = sortEntitiesByKeywords(
-    musicItems.filter((it) => (it.name || "").toLowerCase().includes("sort")),
-    mediaSortOrder,
-  );
-  const otherMusicNavItems = musicItems.filter(
-    (it) =>
-      it.domain !== "media_player" &&
-      !isMediaAppearanceEntity(it) &&
-      !isMediaShortcutSwitch(it) &&
-      !(it.name || "").toLowerCase().includes("sort"),
-  );
+  // Media Player shortcuts and sorting prefs
+  const showSpeakerPref = store.getPref("show_speaker_shortcut");
+  const showLibraryPref = store.getPref("show_library_shortcut");
+  const shortcutPrefs = [
+    { pref: showSpeakerPref, label: "Speaker" },
+    { pref: showLibraryPref, label: "Library" },
+  ].filter((c) => Boolean(c.pref));
+  const sortMusicPrefs = store.getPrefs([
+    "album_sort_order",
+    "artist_album_sort_order",
+    "podcast_sort_order",
+  ]);
   const remoteEspItems = store.getSectionItems("remote");
   const activityCardOn = cfg.activity_card !== false;
   const enabledSources = new Set(store.getEnabledActivitySources());
@@ -6932,19 +6916,11 @@ function renderDeviceInterfaceView(store) {
                 "Provides the Home screen and App Dock. Turn off to lock this Device to a single Start Screen app.",
               checked: homeScreenEnabled,
               onChange: (checked) => {
-                if (homeEnabledItem && !homeEnabledItem.pref_key) {
-                  void store.espAction(
-                    homeEnabledItem.entity_id,
-                    checked ? "turn_on" : "turn_off",
-                    checked ? "on" : "off",
-                  );
-                } else {
-                  store.stageDeviceSetting(
-                    homeEnabledItem?.pref_key || "home_screen_enabled",
-                    checked,
-                    "cfg-home_screen_enabled",
-                  );
-                }
+                store.stageDeviceSetting(
+                  "home_screen_enabled",
+                  checked,
+                  "cfg-home_screen_enabled",
+                );
               },
             })}
             ${renderSelectRow({
@@ -6956,15 +6932,11 @@ function renderDeviceInterfaceView(store) {
               value: startScreenValue,
               rawOptions: visibleStartOptions,
               onChange: (val) => {
-                if (startScreenItem && !startScreenItem.pref_key) {
-                  void store.espSelect(startScreenItem.entity_id, val);
-                } else {
-                  store.stageDeviceSetting(
-                    startScreenItem?.pref_key || "start_screen",
-                    val,
-                    "cfg-start_screen",
-                  );
-                }
+                store.stageDeviceSetting(
+                  "start_screen",
+                  val,
+                  "cfg-start_screen",
+                );
               },
             })}
             ${homeScreenEnabled
@@ -6976,18 +6948,13 @@ function renderDeviceInterfaceView(store) {
                     value: returnTimeoutValue,
                     rawOptions: rawReturnTimeoutOptions,
                     onChange: (val) => {
-                      if (returnTimeoutItem && !returnTimeoutItem.pref_key) {
-                        void store.espSelect(returnTimeoutItem.entity_id, val);
-                      } else {
-                        store.stageDeviceSetting(
-                          returnTimeoutItem?.pref_key || "return_to_home_timeout",
-                          val,
-                          "cfg-return_to_home_timeout",
-                        );
-                      }
+                      store.stageDeviceSetting(
+                        "return_to_home_timeout",
+                        val,
+                        "cfg-return_to_home_timeout",
+                      );
                     },
                   })}
-                  ${extraHomeDisplayItems.map((it) => renderNativeControlRow(store, it))}
                   ${renderSettingsRow({
                     label: "Dock Apps",
                     description: "Toggle and reorder apps shown in the Home Dock.",
@@ -7076,16 +7043,16 @@ function renderDeviceInterfaceView(store) {
                           aria-label="Activity Card sources"
                         >
                           ${ACTIVITY_SOURCES_CATALOG.map((src) => {
-                            const on = enabledSources.has(src.id);
+                            const on = enabledSources.has(src.token);
                             return html`<span
-                              data-src=${src.id}
+                              data-src=${src.token}
                               data-label=${src.label}
                               class="pill ${on ? "enabled" : ""}"
                             >
                               <button
                                 type="button"
                                 aria-pressed=${String(on)}
-                                @click=${() => store.toggleActivitySource(src.id)}
+                                @click=${() => store.toggleActivitySource(src.token)}
                                 class="pill-toggle"
                               >
                                 ${on ? `✓ ${src.label}` : `+ ${src.label}`}
@@ -7229,11 +7196,11 @@ function renderDeviceInterfaceView(store) {
             ${areaExtraItems.map((it) => renderNativeControlRow(store, it))}`,
         })}
 
-        ${shortcutMusicItems.length || sortMusicItems.length || otherMusicNavItems.length
+        ${shortcutPrefs.length || sortMusicPrefs.length
           ? renderCard({
               heading: html`<h3 class="card-title">Media Player</h3>`,
               contentClass: "settings-list",
-              body: html`${shortcutMusicItems.length
+              body: html`${shortcutPrefs.length
                   ? renderSettingsRow({
                       id: "media-player-shortcuts",
                       label: "Shortcuts",
@@ -7244,45 +7211,23 @@ function renderDeviceInterfaceView(store) {
                         role="group"
                         aria-label="Media Player shortcuts"
                       >
-                        ${shortcutMusicItems.map((sc) => {
-                          const st = String(sc.state ?? "");
-                          const isOn = st === "on";
-                          const prefKey = sc.pref_key || "";
-                          const unavailable =
-                            !prefKey && (st === "unavailable" || st === "unknown");
-                          const rawShort = (sc.name || sc.entity_id)
-                            .replace(/^music:\s*/i, "")
-                            .replace(/^show\s+/i, "")
-                            .replace(/\s+shortcut$/i, "")
-                            .trim();
-                          const lbl = entityLabel(rawShort || sc.name || sc.entity_id);
+                        ${shortcutPrefs.map(({ pref, label }) => {
+                          const isOn = Boolean(pref.value);
                           return html`<span class="pill ${isOn ? "enabled" : ""}">
                             <button
                               type="button"
                               aria-pressed=${String(isOn)}
-                              ?disabled=${unavailable}
-                              @click=${() => {
-                                if (prefKey) {
-                                  store.stageDeviceSetting(prefKey, !isOn);
-                                } else {
-                                  void store.espAction(
-                                    sc.entity_id,
-                                    isOn ? "turn_off" : "turn_on",
-                                    isOn ? "off" : "on",
-                                  );
-                                }
-                              }}
+                              @click=${() => store.stageDeviceSetting(pref.key, !isOn)}
                               class="pill-toggle"
                             >
-                              ${isOn ? `✓ ${lbl}` : `+ ${lbl}`}
+                              ${isOn ? `✓ ${label}` : `+ ${label}`}
                             </button>
                           </span>`;
                         })}
                       </div>`,
                     })
                   : nothing}
-                ${sortMusicItems.map((it) => renderNativeControlRow(store, it))}
-                ${otherMusicNavItems.map((it) => renderNativeControlRow(store, it))}`,
+                ${sortMusicPrefs.map((p) => renderPrefControlRow(store, p))}`,
             })
           : nothing}
 
@@ -7708,13 +7653,38 @@ function renderDeviceOverviewView(store) {
 
 // --- src/views/device-power-view.ts ---
 /**
- * Device Power View (`power`, D-014 / D-027): Sleep & Wake controls and Power & Battery telemetry.
+ * Device Power View (`power`, D-014 / D-027 / D-036): Sleep & Wake controls and Power & Battery telemetry.
  */
+const SCREENSAVER_KEYS = new Set([
+  "docked_screensaver",
+  "screensaver_style",
+  "docked_idle_timeout",
+]);
 function renderDevicePowerView(store) {
-  const sleepItems = store
-    .getSectionItems("sleep")
-    .filter((it) => !isScreensaverSleepEntity(it));
+  const sleepPrefs = store
+    .getPrefs([
+      "power_profile",
+      "tap_to_wake",
+      "pickup_to_wake",
+      "battery_screen_timeout",
+      "battery_hibernate_timeout",
+      "hold_crown_power_off",
+    ])
+    .filter((p) => !SCREENSAVER_KEYS.has(p.key));
+  const sleepPrefKeys = new Set(sleepPrefs.map((p) => p.key));
+  const sleepEntities = store.getSectionItems("sleep").filter((it) => {
+    if (it.pref_key) return false;
+    const k = it.key || (it.entity_id ? it.entity_id.split(".").pop() || "" : "");
+    if (SCREENSAVER_KEYS.has(k) || Array.from(SCREENSAVER_KEYS).some((sk) => k.endsWith(sk))) {
+      return false;
+    }
+    if (sleepPrefKeys.has(k) || Array.from(sleepPrefKeys).some((pk) => k.endsWith(pk))) {
+      return false;
+    }
+    return true;
+  });
   const batteryItems = store.getSectionItems("battery");
+  const sleepItems = [...sleepPrefs, ...sleepEntities];
   const bothEmpty = !sleepItems.length && !batteryItems.length;
   return html`<section id="view-power">
     <div class="columns">
@@ -7725,7 +7695,8 @@ function renderDevicePowerView(store) {
                 <h3 class="card-title">Sleep &amp; Wake</h3>
               </div>
               <div class="card-content settings-list">
-                ${sleepItems.map((it) => renderNativeControlRow(store, it))}
+                ${sleepPrefs.map((p) => renderPrefControlRow(store, p))}
+                ${sleepEntities.map((it) => renderNativeControlRow(store, it))}
               </div>
             </div>`
           : bothEmpty
@@ -7755,16 +7726,18 @@ function renderDevicePowerView(store) {
 
 // --- src/views/device-presence-view.ts ---
 /**
- * Device BLE & Area Presence View (`presence`): Static Assigned Area vs. BLE Roaming, Fallback Area, and BLE Identity.
+ * Device BLE & Area Presence View (`presence`, D-032 / D-036):
+ * Static Assigned Area vs. BLE Roaming, Fallback Area, and BLE Identity.
  */
 function renderDevicePresenceView(store) {
   const data = store.state;
   const cfg = data?.config || {};
   const isBleOnly = cfg.kind === "ble_tag";
   const bleTracking = isBleOnly || Boolean(cfg.native_ble_tracking);
+  const bleBeaconPref = store.getPref("ble_beacon_mode");
   const bleAreaItems = store
     .getSectionItems("area")
-    .filter((it) => (it.name || "").toLowerCase().includes("ble"));
+    .filter((it) => !it.pref_key && it.key !== "ble_beacon_mode");
   return html`<section id="view-presence">
     <div class="columns">
       <div class="column">
@@ -7817,6 +7790,7 @@ function renderDevicePresenceView(store) {
                         "cfg-default_area",
                       ),
                   })}
+                  ${bleBeaconPref ? renderPrefControlRow(store, bleBeaconPref) : nothing}
                   ${bleAreaItems.map((it) => renderNativeControlRow(store, it))}`
               : renderSelectRow({
                   id: "cfg-default_area",
@@ -7897,31 +7871,26 @@ function isValidTelemetryState(val) {
   const s = String(val ?? "").trim();
   return s !== "" && s !== "unknown" && s !== "unavailable";
 }
+const INTERNAL_NETWORK_BLOB_KEYS = new Set([
+  "rpc_outbox",
+  "hardware_manifest",
+  "link_report",
+]);
 function isInternalNetworkBlobEntity(it) {
-  const low = `${it.name || ""} ${it.entity_id || ""}`.toLowerCase();
-  return (
-    low.includes("rpc outbox") ||
-    low.includes("rpc_outbox") ||
-    low.includes("hardware manifest") ||
-    low.includes("hardware_manifest") ||
-    low.includes("link report") ||
-    low.includes("link_report")
-  );
+  if (it.key && INTERNAL_NETWORK_BLOB_KEYS.has(it.key)) return true;
+  return Array.from(INTERNAL_NETWORK_BLOB_KEYS).some((k) => it.entity_id.endsWith(`_${k}`));
 }
+const SUMMARY_DUPLICATE_KEYS = new Set([
+  "wifi_signal",
+  "ip_address",
+  "mac_address",
+  "firmware_version",
+  "latter_sdk",
+  "sdk_rev",
+]);
 function isSummaryDuplicateNetworkEntity(it) {
-  const low = `${it.name || ""} ${it.entity_id || ""}`.toLowerCase();
-  return (
-    low.includes("wifi signal") ||
-    low.includes("wi-fi signal") ||
-    low.includes("wifi_signal") ||
-    low.includes("ip address") ||
-    low.includes("ip_address") ||
-    low.includes("mac address") ||
-    low.includes("mac_address") ||
-    low.includes("firmware version") ||
-    low.includes("firmware_version") ||
-    low.includes("latter sdk")
-  );
+  if (it.key && SUMMARY_DUPLICATE_KEYS.has(it.key)) return true;
+  return Array.from(SUMMARY_DUPLICATE_KEYS).some((k) => it.entity_id.endsWith(`_${k}`));
 }
 function formatTelemetryDuration(totalSec) {
   if (!Number.isFinite(totalSec) || totalSec < 0) return "—";
@@ -8106,9 +8075,9 @@ function renderDeviceToolsView(store) {
       !isInternalNetworkBlobEntity(it) &&
       !isSummaryDuplicateNetworkEntity(it),
   );
-  const findNetworkState = (keyword) => {
-    const match = networkItems.find((it) =>
-      `${it.name || ""} ${it.entity_id || ""}`.toLowerCase().includes(keyword),
+  const findNetworkState = (key) => {
+    const match = networkItems.find(
+      (it) => it.key === key || it.entity_id.endsWith(`_${key}`),
     );
     return isValidTelemetryState(match?.state) ? String(match?.state).trim() : "";
   };
@@ -8118,7 +8087,7 @@ function renderDeviceToolsView(store) {
     if (curDevEntry?.wifi_rssi !== null && curDevEntry?.wifi_rssi !== undefined) {
       signalText = `${fmtNumber(curDevEntry.wifi_rssi, store.hass, 0)} dBm`;
     } else {
-      const rawWifi = findNetworkState("wifi signal") || findNetworkState("wi-fi signal");
+      const rawWifi = findNetworkState("wifi_signal");
       if (rawWifi) {
         signalText = Number.isFinite(Number(rawWifi))
           ? `${fmtNumber(Number(rawWifi), store.hass, 0)} dBm`
@@ -8129,32 +8098,35 @@ function renderDeviceToolsView(store) {
     signalText = `${fmtNumber(winRow.effective_rssi, store.hass, 0)} dBm`;
   }
   const rawSw = String(
-    live.device_sw_version || esp?.device?.sw_version || findNetworkState("firmware version") || "",
+    live.device_sw_version || esp?.device?.sw_version || findNetworkState("firmware_version") || "",
   ).replace(/^v/i, "");
   const fwVersionText = rawSw ? `v${rawSw}` : "—";
   const modelText = curDevEntry?.model_label || esp?.device?.model || "—";
-  const ipStr = curDevEntry?.ip_address || findNetworkState("ip address") || "";
-  const macStr = esp?.device?.mac || findNetworkState("mac address") || "";
-  const devControlItems = developerItems.filter((it) =>
-    INTERACTIVE_ENTITY_DOMAINS.has(it.domain),
+  const ipStr = curDevEntry?.ip_address || findNetworkState("ip_address") || "";
+  const macStr = esp?.device?.mac || findNetworkState("mac_address") || "";
+  const weatherSimPref = store.getPref("weather_sim_condition");
+  const devControlItems = developerItems.filter(
+    (it) =>
+      INTERACTIVE_ENTITY_DOMAINS.has(it.domain) &&
+      !it.pref_key &&
+      it.key !== "weather_sim_condition",
   );
   const devSensorItems = developerItems.filter(
     (it) => !INTERACTIVE_ENTITY_DOMAINS.has(it.domain),
   );
-  const linkReportEntity = networkItems.find((it) => {
-    const low = `${it.name || ""} ${it.entity_id || ""}`.toLowerCase();
-    return low.includes("link report") || low.includes("link_report");
-  });
-  const manifestEntity = networkItems.find((it) => {
-    const low = `${it.name || ""} ${it.entity_id || ""}`.toLowerCase();
-    return low.includes("hardware manifest") || low.includes("hardware_manifest");
-  });
+  const linkReportEntity = networkItems.find(
+    (it) => it.key === "link_report" || it.entity_id.endsWith("_link_report"),
+  );
+  const manifestEntity = networkItems.find(
+    (it) => it.key === "hardware_manifest" || it.entity_id.endsWith("_hardware_manifest"),
+  );
   const linkRows = parseDeviceLinkReportRows(linkReportEntity?.state, store.hass);
   const manifestRows = parseDeviceHardwareManifestRows(manifestEntity?.state, store.hass);
   const hasDeveloperDrawer =
     !isBleOnly &&
     Boolean(
-      devControlItems.length ||
+      weatherSimPref ||
+        devControlItems.length ||
         devSensorItems.length ||
         linkRows.length ||
         manifestRows.length,
@@ -8234,8 +8206,9 @@ function renderDeviceToolsView(store) {
               ? html`<details class="sub-collapsible">
                   <summary>Developer &amp; Telemetry</summary>
                   <div class="card-content">
-                    ${devControlItems.length
+                    ${weatherSimPref || devControlItems.length
                       ? html`<div class="settings-list">
+                          ${weatherSimPref ? renderPrefControlRow(store, weatherSimPref) : nothing}
                           ${devControlItems.map((it) => renderNativeControlRow(store, it))}
                         </div>`
                       : nothing}
@@ -8594,9 +8567,7 @@ function renderSystemGroupsView(store) {
     });
     const rawBaselineVal = fc.pref_key
       ? selectedGrpObj?.device_config?.[fc.pref_key]
-      : selectedGrpObj?.esphome_controls && fc.canonical_key
-        ? selectedGrpObj.esphome_controls[fc.canonical_key]
-        : undefined;
+      : undefined;
     const baselineVal =
       rawBaselineVal !== undefined && fc.domain === "switch" && typeof rawBaselineVal === "boolean"
         ? rawBaselineVal
@@ -10202,20 +10173,6 @@ function renderSystemToolsView(store) {
                 )}
               </select>
             </div>
-
-            <label class="inline-switch">
-              <input
-                type="checkbox"
-                id="bkp-restore-esp"
-                role="switch"
-                .checked=${store.backupRestoreEsp}
-                @change=${(ev) => {
-                  store.backupRestoreEsp = (ev.currentTarget).checked;
-                }}
-                class="switch"
-              />
-              <span>Restore On-Device ESPHome Controls</span>
-            </label>
 
             <div class="input-action-row">
               <button

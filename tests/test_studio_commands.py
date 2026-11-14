@@ -39,7 +39,7 @@ async def test_studio_rev_mismatch_on_all_read_and_mutation_endpoints(
     hass: Any, setup_latter_hub: Any
 ) -> None:
     """Verify studio_rev mismatch rejects BOTH read (get_state, subscribe) and mutation WS commands."""
-    assert STUDIO_REV == 8
+    assert STUDIO_REV == 9
     entry, _sys_obj, coord = await setup_latter_hub(hass)
     from homeassistant.helpers import area_registry as ar
 
@@ -174,7 +174,7 @@ async def test_studio_commands_security_pin_secrecy_groups_and_backup_restore(
         {
             "config": {
                 "security_pin_policy": "require_pin",
-                "dock_apps": "music,alarm,area,remote",
+                "dock_apps": "music,home_hub,area,remote",
             }
         },
     )

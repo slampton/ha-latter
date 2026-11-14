@@ -27,7 +27,7 @@ from custom_components.latter.areas import (
     get_available_home_categories,
     get_home_alarm_summary,
     get_home_wide_entities,
-    get_whole_home_summary,
+    get_home_hub_summary,
     infer_area_icon_from_name,
     match_area_by_name_or_id,
     resolve_area_icon,
@@ -313,7 +313,7 @@ async def test_context_builder_curated_entities_and_area_actions(
     home_wide = get_home_wide_entities(hass)
     assert home_wide and home_wide[0]["id"] == "alarm_control_panel.home_alarm"
 
-    wh = get_whole_home_summary(hass)
+    wh = get_home_hub_summary(hass)
     assert wh["thermostat_entity"] == "climate.lr_hvac"
     assert wh["lock_entity"] in ("lock.front_door", "lock.side_latch")
     assert wh["garage_entity"] == "cover.main_garage"
@@ -397,7 +397,7 @@ async def test_context_builder_curated_entities_and_area_actions(
     await async_execute_area_action(hass, "climate.lr_hvac", "step_up")
     await async_execute_area_action(hass, "scene.movie_time", "turn_on")
     await async_execute_area_action(hass, "script.goodnight", "turn_on")
-    await async_execute_area_action(hass, "whole_home.vacuum", "dock")
+    await async_execute_area_action(hass, "home_hub.vacuum", "dock")
     await async_execute_area_action(hass, "button.reboot_router", "toggle")
     await async_execute_area_action(hass, "select.theme_mode", "select", option="light")
     await async_execute_area_action(hass, "number.amp_gain", "set_level", level=65)
@@ -703,15 +703,15 @@ async def test_area_icon_resolution_wire_packing_and_live_registry_update(
     assert area_state == "Living Area"
     assert area_attrs["area_icon"] == "mdi:sofa"
     wire_tokens = area_attrs["payload"].split("\x1f")
-    assert len(wire_tokens) == 43
-    assert wire_tokens[42] == "mdi:sofa"
+    assert len(wire_tokens) == 42
+    assert wire_tokens[41] == "mdi:sofa"
 
-    # Live Area registry icon edit invalidates cached payload and updates wire index 42
+    # Live Area registry icon edit invalidates cached payload and updates wire index 41
     area_reg.async_update("living", icon="mdi:television-classic")
     area_state_updated, area_attrs_updated = coord.get_area_context_payload()
     assert area_state_updated == "Living Area"
     assert area_attrs_updated["area_icon"] == "mdi:television-classic"
-    assert area_attrs_updated["payload"].split("\x1f")[42] == "mdi:television-classic"
+    assert area_attrs_updated["payload"].split("\x1f")[41] == "mdi:television-classic"
 
     # Unassigned Device sends empty area_icon ("")
     esp_dev = dev_reg.async_get(coord.esphome_device_id)
@@ -723,6 +723,6 @@ async def test_area_icon_resolution_wire_packing_and_live_registry_update(
     unassigned_state, unassigned_attrs = coord.get_area_context_payload()
     assert unassigned_state == "Unassigned"
     assert unassigned_attrs["area_icon"] == ""
-    assert unassigned_attrs["payload"].split("\x1f")[42] == ""
+    assert unassigned_attrs["payload"].split("\x1f")[41] == ""
 
     assert await async_unload_entry(hass, entry) is True

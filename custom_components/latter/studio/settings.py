@@ -10,8 +10,16 @@ from __future__ import annotations
 
 from collections.abc import Collection, Iterable, Mapping
 from dataclasses import dataclass
+import json
+from pathlib import Path
 import re
 from typing import Any, Literal, Protocol, TypeVar
+
+_PROTOCOL_V3_DATA: dict[str, Any] = json.loads(
+    (Path(__file__).resolve().parent.parent / "protocol_v3.json").read_text(
+        encoding="utf-8"
+    )
+)
 
 # ---------------------------------------------------------------------------
 # Catalog Push Gate
@@ -201,12 +209,7 @@ class DevicePrefSpec:
 
 
 POWER_PROFILE_OPTIONS: tuple[str, ...] = (
-    "Portable Carry",
-    "Handheld Roaming",
-    "Wearable Watch",
-    "Tabletop Dock",
-    "Always-On Wall / Desk",
-    "Custom",
+    tuple(_PROTOCOL_V3_DATA["power_profiles"].keys()) + ("Custom",)
 )
 WAKE_WORD_MODE_OPTIONS: tuple[str, ...] = ("Docked Only", "Always On", "Disabled")
 WAKE_GESTURE_OPTIONS: tuple[str, ...] = ("Always On", "Docked Only", "Disabled")
@@ -288,17 +291,10 @@ CLOCK_FACE_OPTIONS: tuple[str, ...] = (
     "Modern Digital (Bold)",
 )
 TIME_FORMAT_OPTIONS: tuple[str, ...] = ("12-Hour (AM/PM)", "24-Hour")
-AREA_CATEGORY_TOKENS: tuple[str, ...] = (
-    "scene",
-    "light",
-    "cover",
-    "fan",
-    "switch",
-    "climate",
-    "media",
-    "all",
+AREA_CATEGORY_TOKENS: tuple[str, ...] = tuple(
+    c["token"] for c in _PROTOCOL_V3_DATA["catalogs"]["area_categories"]
 )
-DEFAULT_AREA_CATEGORIES = "scene,light,cover,fan,switch,climate,media"
+DEFAULT_AREA_CATEGORIES: str = _PROTOCOL_V3_DATA["defaults"]["area_categories"]
 
 
 def parse_area_categories(csv: str | None) -> list[str]:
@@ -323,13 +319,10 @@ def normalize_area_categories(csv: str | None) -> str:
     return ",".join(cats)
 
 
-HOME_CATEGORY_TOKENS: tuple[str, ...] = (
-    "alarm",
-    "thermostat",
-    "entry",
-    "vacuum",
+HOME_CATEGORY_TOKENS: tuple[str, ...] = tuple(
+    c["token"] for c in _PROTOCOL_V3_DATA["catalogs"]["home_categories"]
 )
-DEFAULT_HOME_CATEGORIES = "alarm,thermostat,entry,vacuum"
+DEFAULT_HOME_CATEGORIES: str = _PROTOCOL_V3_DATA["defaults"]["home_categories"]
 
 
 def parse_home_categories(csv: str | None) -> list[str]:
@@ -457,63 +450,11 @@ DEVICE_PREF_SPECS: tuple[DevicePrefSpec, ...] = (
 DEVICE_PREF_SPEC_MAP: dict[str, DevicePrefSpec] = {s.key: s for s in DEVICE_PREF_SPECS}
 DEVICE_PREF_KEYS: tuple[str, ...] = tuple(s.key for s in DEVICE_PREF_SPECS)
 
-POWER_PROFILE_PREFS: dict[str, dict[str, Any]] = {
-    "Portable Carry": {
-        "wake_word_mode": "Docked Only",
-        "tap_to_wake": "Docked Only",
-        "pickup_to_wake": "Docked Only",
-        "battery_screen_timeout": "30s",
-        "docked_idle_timeout": "1 min",
-        "battery_hibernate_timeout": "15 min",
-        "docked_screensaver": True,
-    },
-    "Handheld Roaming": {
-        "wake_word_mode": "Docked Only",
-        "tap_to_wake": "Always On",
-        "pickup_to_wake": "Always On",
-        "battery_screen_timeout": "30s",
-        "docked_idle_timeout": "1 min",
-        "battery_hibernate_timeout": "30 min",
-        "docked_screensaver": True,
-    },
-    "Wearable Watch": {
-        "wake_word_mode": "Docked Only",
-        "tap_to_wake": "Always On",
-        "pickup_to_wake": "Always On",
-        "battery_screen_timeout": "15s",
-        "docked_idle_timeout": "1 min",
-        "battery_hibernate_timeout": "15 min",
-        "docked_screensaver": True,
-    },
-    "Tabletop Dock": {
-        "wake_word_mode": "Docked Only",
-        "tap_to_wake": "Docked Only",
-        "pickup_to_wake": "Disabled",
-        "battery_screen_timeout": "30s",
-        "docked_idle_timeout": "5 min",
-        "battery_hibernate_timeout": "15 min",
-        "docked_screensaver": True,
-    },
-    "Always-On Wall / Desk": {
-        "wake_word_mode": "Always On",
-        "tap_to_wake": "Always On",
-        "pickup_to_wake": "Disabled",
-        "battery_screen_timeout": "Never",
-        "docked_idle_timeout": "5 min",
-        "battery_hibernate_timeout": "Disabled",
-        "docked_screensaver": True,
-    },
-}
+POWER_PROFILE_PREFS: dict[str, dict[str, Any]] = dict(
+    _PROTOCOL_V3_DATA["power_profiles"]
+)
 POWER_PROFILE_SUBKEYS: frozenset[str] = frozenset(
-    {
-        "wake_word_mode",
-        "tap_to_wake",
-        "pickup_to_wake",
-        "battery_screen_timeout",
-        "docked_idle_timeout",
-        "battery_hibernate_timeout",
-        "docked_screensaver",
-    }
+    next(iter(_PROTOCOL_V3_DATA["power_profiles"].values())).keys()
 )
 
 

@@ -9,6 +9,8 @@ from collections.abc import Iterable, Mapping, Sequence
 from datetime import date, datetime
 import hashlib
 import hmac
+import json
+from pathlib import Path
 import secrets
 from typing import Any
 import unicodedata
@@ -31,14 +33,11 @@ from .studio.settings import (
 # Protocol v3 Payload Packer & Record Formatters
 # ---------------------------------------------------------------------------
 
-PROTOCOL_V3_DOMAINS: tuple[str, ...] = (
-    "area_context",
-    "active_media",
-    "remote_config",
-    "weather_forecast",
-    "calendar_agenda",
-    "device_prefs",
+_PROTOCOL_V3_DATA: dict[str, Any] = json.loads(
+    (Path(__file__).resolve().parent / "protocol_v3.json").read_text(encoding="utf-8")
 )
+
+PROTOCOL_V3_DOMAINS: tuple[str, ...] = tuple(_PROTOCOL_V3_DATA["domains"].keys())
 
 FIELD_SEP = "\x1f"
 RECORD_SEP = "\x1e"
@@ -355,24 +354,13 @@ def parse_dirty_prefs_records(raw: str | None) -> dict[str, Any]:
 # Home Dock & Activity Card Policies
 # ---------------------------------------------------------------------------
 
-DOCK_APP_TOKENS: tuple[str, ...] = (
-    "music",
-    "alarm",
-    "area",
-    "remote",
-    "weather",
-    "camera",
-    "games",
-    "tools",
+DOCK_APP_TOKENS: tuple[str, ...] = tuple(
+    c["token"] for c in _PROTOCOL_V3_DATA["catalogs"]["dock_apps"]
 )
 
 # Canonical order; Studio shows one switch per source in this order.
-ACTIVITY_SOURCE_KEYS: tuple[str, ...] = (
-    "calendar",
-    "music_queue",
-    "stopwatch",
-    "alarms",
-    "timers",
+ACTIVITY_SOURCE_KEYS: tuple[str, ...] = tuple(
+    c["token"] for c in _PROTOCOL_V3_DATA["catalogs"]["activity_sources"]
 )
 
 

@@ -79,7 +79,7 @@ class LatterBleDeviceTracker(TrackerEntity):
                 self.coordinator.hass,
                 self.coordinator.esphome_device_id,
                 "sensor",
-                ("_wi_fi_signal", "_wifi_signal", "_ip_address"),
+                ("_wi_fi_signal", "_ip_address"),
             )
             wifi_st = (
                 self.coordinator.hass.states.get(wifi_ent_id) if wifi_ent_id else None

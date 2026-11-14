@@ -1,17 +1,48 @@
 /**
- * Device Power View (`power`, D-014 / D-027): Sleep & Wake controls and Power & Battery telemetry.
+ * Device Power View (`power`, D-014 / D-027 / D-036): Sleep & Wake controls and Power & Battery telemetry.
  */
 
-import { renderCard, renderNativeControlRow } from "../components/controls.js";
+import {
+  renderCard,
+  renderNativeControlRow,
+  renderPrefControlRow,
+} from "../components/controls.js";
 import { html, nothing, type TemplateResult } from "../lib/lit.js";
 import type { StudioStore } from "../state/store.js";
-import { isScreensaverSleepEntity } from "./device-display-view.js";
+
+const SCREENSAVER_KEYS = new Set([
+  "docked_screensaver",
+  "screensaver_style",
+  "docked_idle_timeout",
+]);
 
 export function renderDevicePowerView(store: StudioStore): TemplateResult {
-  const sleepItems = store
-    .getSectionItems("sleep")
-    .filter((it) => !isScreensaverSleepEntity(it));
+  const sleepPrefs = store
+    .getPrefs([
+      "power_profile",
+      "tap_to_wake",
+      "pickup_to_wake",
+      "battery_screen_timeout",
+      "battery_hibernate_timeout",
+      "hold_crown_power_off",
+    ])
+    .filter((p) => !SCREENSAVER_KEYS.has(p.key));
+
+  const sleepPrefKeys = new Set(sleepPrefs.map((p) => p.key));
+  const sleepEntities = store.getSectionItems("sleep").filter((it) => {
+    if (it.pref_key) return false;
+    const k = it.key || (it.entity_id ? it.entity_id.split(".").pop() || "" : "");
+    if (SCREENSAVER_KEYS.has(k) || Array.from(SCREENSAVER_KEYS).some((sk) => k.endsWith(sk))) {
+      return false;
+    }
+    if (sleepPrefKeys.has(k) || Array.from(sleepPrefKeys).some((pk) => k.endsWith(pk))) {
+      return false;
+    }
+    return true;
+  });
+
   const batteryItems = store.getSectionItems("battery");
+  const sleepItems = [...sleepPrefs, ...sleepEntities];
   const bothEmpty = !sleepItems.length && !batteryItems.length;
 
   return html`<section id="view-power">
@@ -23,7 +54,8 @@ export function renderDevicePowerView(store: StudioStore): TemplateResult {
                 <h3 class="card-title">Sleep &amp; Wake</h3>
               </div>
               <div class="card-content settings-list">
-                ${sleepItems.map((it) => renderNativeControlRow(store, it))}
+                ${sleepPrefs.map((p) => renderPrefControlRow(store, p))}
+                ${sleepEntities.map((it) => renderNativeControlRow(store, it))}
               </div>
             </div>`
           : bothEmpty

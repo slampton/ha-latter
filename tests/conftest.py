@@ -152,9 +152,9 @@ def make_esphome_device() -> Callable[..., tuple[Any, str]]:
             "latter_push_v3",
             "latter_set_beacon_uuid",
             "latter_device_command",
-            "set_browse_slots",
-            "show_notification",
-            "wake_display_page",
+            "latter_set_slots",
+            "latter_show_notification",
+            "latter_ui_input",
             "latter_factory_reset",
         ):
             hass.services.async_register("esphome", f"{slug}_{svc_suffix}", lambda _call: None)

@@ -12,6 +12,8 @@ import {
   DEFAULT_HOME_CATEGORIES_TOKENS,
   DOCK_APPS_CATALOG,
   HOME_CATEGORIES_CATALOG,
+  POWER_PROFILE_PREFS,
+  POWER_PROFILE_SUBKEYS,
 } from "../constants.js";
 import type {
   CustomPalette,
@@ -43,63 +45,7 @@ const ENTITY_OPTIMISTIC_TTL_MS = 8000;
 
 export const PENDING_ENTITY_STATES = new Map<string, PendingEntityEntry>();
 
-const POWER_PROFILE_PREFS: Record<string, Record<string, string | boolean>> = {
-  "Portable Carry": {
-    wake_word_mode: "Docked Only",
-    tap_to_wake: "Docked Only",
-    pickup_to_wake: "Docked Only",
-    battery_screen_timeout: "30s",
-    docked_idle_timeout: "1 min",
-    battery_hibernate_timeout: "15 min",
-    docked_screensaver: true,
-  },
-  "Handheld Roaming": {
-    wake_word_mode: "Docked Only",
-    tap_to_wake: "Always On",
-    pickup_to_wake: "Always On",
-    battery_screen_timeout: "30s",
-    docked_idle_timeout: "1 min",
-    battery_hibernate_timeout: "30 min",
-    docked_screensaver: true,
-  },
-  "Wearable Watch": {
-    wake_word_mode: "Docked Only",
-    tap_to_wake: "Always On",
-    pickup_to_wake: "Always On",
-    battery_screen_timeout: "15s",
-    docked_idle_timeout: "1 min",
-    battery_hibernate_timeout: "15 min",
-    docked_screensaver: true,
-  },
-  "Tabletop Dock": {
-    wake_word_mode: "Docked Only",
-    tap_to_wake: "Docked Only",
-    pickup_to_wake: "Disabled",
-    battery_screen_timeout: "30s",
-    docked_idle_timeout: "5 min",
-    battery_hibernate_timeout: "15 min",
-    docked_screensaver: true,
-  },
-  "Always-On Wall / Desk": {
-    wake_word_mode: "Always On",
-    tap_to_wake: "Always On",
-    pickup_to_wake: "Disabled",
-    battery_screen_timeout: "Never",
-    docked_idle_timeout: "5 min",
-    battery_hibernate_timeout: "Disabled",
-    docked_screensaver: true,
-  },
-};
-
-const POWER_PROFILE_SUBKEYS = new Set<string>([
-  "wake_word_mode",
-  "tap_to_wake",
-  "pickup_to_wake",
-  "battery_screen_timeout",
-  "docked_idle_timeout",
-  "battery_hibernate_timeout",
-  "docked_screensaver",
-]);
+const POWER_PROFILE_SUBKEY_SET = new Set<string>(POWER_PROFILE_SUBKEYS);
 
 function expandDevicePrefPatch(
   currentCfg: Record<string, unknown>,
@@ -115,7 +61,7 @@ function expandDevicePrefPatch(
     }
   } else if (
     !("power_profile" in rawPatch) &&
-    Object.keys(rawPatch).some((k) => POWER_PROFILE_SUBKEYS.has(k))
+    Object.keys(rawPatch).some((k) => POWER_PROFILE_SUBKEY_SET.has(k))
   ) {
     const curProf = String(currentCfg.power_profile || "Portable Carry");
     const preset = POWER_PROFILE_PREFS[curProf];
@@ -150,6 +96,14 @@ export function overlayDevicePrefsOnSections(
     ...payload.config,
     ...expanded,
   };
+  if (payload.device_prefs) {
+    payload.device_prefs = payload.device_prefs.map((p) => {
+      if (p.key in expanded) {
+        return { ...p, value: expanded[p.key] };
+      }
+      return p;
+    });
+  }
   const sections = payload?.esphome?.sections;
   if (!sections) return;
   payload.esphome = {
@@ -257,7 +211,7 @@ export function stageDeviceSettingOp(
   if (key === "home_screen_enabled") {
     snapshotKey("start_screen");
   }
-  if (key === "power_profile" || POWER_PROFILE_SUBKEYS.has(key)) {
+  if (key === "power_profile" || POWER_PROFILE_SUBKEY_SET.has(key)) {
     snapshotKey("power_profile");
     for (const sk of POWER_PROFILE_SUBKEYS) {
       snapshotKey(sk);
@@ -682,7 +636,7 @@ export function moveHomeCategoryTokenOp(store: StudioStore, token: string, delta
 export function getEnabledActivitySourcesOp(store: StudioStore): string[] {
   const rawCfg = store.state?.config?.activity_sources;
   if (rawCfg === undefined || rawCfg === null) {
-    return ACTIVITY_SOURCES_CATALOG.map((s) => s.id);
+    return ACTIVITY_SOURCES_CATALOG.map((s) => s.token);
   }
   return String(rawCfg)
     .split(",")
@@ -709,22 +663,7 @@ export function applyDeviceCustomColorOp(
   if (!isValidHexColor(hex)) return;
   store.stageDeviceSetting("device_custom_color", hex.toUpperCase());
   if (switchColorProfile) {
-    for (const sec of store.state?.esphome?.sections || []) {
-      for (const it of sec.items || []) {
-        if (
-          it.domain === "select" &&
-          (it.name || "").toLowerCase().includes("color profile") &&
-          (it.options || []).includes("Custom") &&
-          it.state !== "Custom"
-        ) {
-          if (it.pref_key) {
-            store.stageDeviceSetting(it.pref_key, "Custom");
-          } else {
-            void store.espSelect(it.entity_id, "Custom");
-          }
-        }
-      }
-    }
+    store.stageDeviceSetting("color_profile", "Custom");
   }
 }
 

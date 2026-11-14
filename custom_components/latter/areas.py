@@ -487,14 +487,14 @@ def get_home_alarm_summary(
     }
 
 
-def get_whole_home_summary(
+def get_home_hub_summary(
     hass: HomeAssistant,
     thermostat_entity: str | None = None,
     lock_entity: str | None = None,
     garage_entity: str | None = None,
     vacuum_entity: str | None = None,
 ) -> dict[str, Any]:
-    """Resolve configured (or primary auto-discovered) Whole-Home Thermostat, Lock, Garage, and Vacuum states."""
+    """Resolve configured (or primary auto-discovered) Home Hub Thermostat, Lock, Garage, and Vacuum states."""
     out: dict[str, Any] = {
         "thermostat_entity": "",
         "thermostat_state": "",
@@ -768,7 +768,7 @@ def get_area_available_domains(
 
 def get_available_home_categories(
     alarm_info: Mapping[str, Any],
-    wh_info: Mapping[str, Any],
+    hub_info: Mapping[str, Any],
     home_categories: str | None = None,
 ) -> str:
     """Return comma-separated enabled Home Hub categories that have at least one configured/discovered entity."""
@@ -779,13 +779,13 @@ def get_available_home_categories(
     for tok in configured:
         if tok == "alarm" and alarm_info.get("entity_id"):
             ordered.append("alarm")
-        elif tok == "thermostat" and wh_info.get("thermostat_entity"):
+        elif tok == "thermostat" and hub_info.get("thermostat_entity"):
             ordered.append("thermostat")
         elif tok == "entry" and (
-            wh_info.get("lock_entity") or wh_info.get("garage_entity")
+            hub_info.get("lock_entity") or hub_info.get("garage_entity")
         ):
             ordered.append("entry")
-        elif tok == "vacuum" and wh_info.get("vacuum_entity"):
+        elif tok == "vacuum" and hub_info.get("vacuum_entity"):
             ordered.append("vacuum")
     return ",".join(ordered)
 
@@ -906,10 +906,10 @@ async def async_execute_area_action(
 ) -> None:
     """Execute a normalized area, whole-home (alarm/thermostat/garage/lock/vacuum), or light color/kelvin action."""
     state_obj = hass.states.get(entity_id)
-    if state_obj is None and entity_id.startswith("whole_home."):
-        wh_kind = entity_id.split(".", 1)[1].lower()
+    if state_obj is None and entity_id.startswith("home_hub."):
+        hub_kind = entity_id.split(".", 1)[1].lower()
         global_cfg = hass.data.get(DOMAIN, {}).get("global_config") or {}
-        wh_summary = get_whole_home_summary(
+        hub_summary = get_home_hub_summary(
             hass,
             thermostat_entity=global_cfg.get("thermostat_entity"),
             lock_entity=global_cfg.get("lock_entity"),
@@ -917,12 +917,12 @@ async def async_execute_area_action(
             vacuum_entity=global_cfg.get("vacuum_entity"),
         )
         mapped_id = {
-            "thermostat": wh_summary["thermostat_entity"],
-            "climate": wh_summary["thermostat_entity"],
-            "lock": wh_summary["lock_entity"],
-            "garage": wh_summary["garage_entity"],
-            "vacuum": wh_summary["vacuum_entity"],
-        }.get(wh_kind, "")
+            "thermostat": hub_summary["thermostat_entity"],
+            "climate": hub_summary["thermostat_entity"],
+            "lock": hub_summary["lock_entity"],
+            "garage": hub_summary["garage_entity"],
+            "vacuum": hub_summary["vacuum_entity"],
+        }.get(hub_kind, "")
         if mapped_id:
             entity_id = mapped_id
             state_obj = hass.states.get(entity_id)
@@ -1379,7 +1379,7 @@ def build_area_context_payload(coordinator: Any) -> tuple[str, dict[str, Any]]:
     alarm_info = get_home_alarm_summary(
         coordinator.hass, coordinator.get_opt(CONF_ALARM_ENTITY)
     )
-    wh_info = get_whole_home_summary(
+    hub_info = get_home_hub_summary(
         coordinator.hass,
         thermostat_entity=coordinator.thermostat_entity,
         lock_entity=coordinator.lock_entity,
@@ -1394,7 +1394,7 @@ def build_area_context_payload(coordinator: Any) -> tuple[str, dict[str, Any]]:
     eff_pin_policy = coordinator.security_pin_policy
     avail_home_cats = get_available_home_categories(
         alarm_info,
-        wh_info,
+        hub_info,
         home_categories=coordinator.home_categories_csv,
     )
     area_attrs: dict[str, Any] = {
@@ -1411,7 +1411,6 @@ def build_area_context_payload(coordinator: Any) -> tuple[str, dict[str, Any]]:
         "security_pin_policy": eff_pin_policy,
         "home_categories": avail_home_cats,
         "wallpaper_url": coordinator.build_wallpaper_url(),
-        "theme_color_hex": coordinator.device_custom_color,
         "available_domains": avail_domains,
         "area_temp": climate_telemetry["temperature"],
         "area_humidity": climate_telemetry["humidity"],
@@ -1419,16 +1418,16 @@ def build_area_context_payload(coordinator: Any) -> tuple[str, dict[str, Any]]:
         "covers_open": covers_open,
         "alarm_entity": alarm_info["entity_id"],
         "alarm_state": alarm_info["state"],
-        "thermostat_entity": wh_info["thermostat_entity"],
-        "thermostat_state": wh_info["thermostat_state"],
-        "thermostat_temp": wh_info["thermostat_temp"],
-        "thermostat_current_temp": wh_info["thermostat_current_temp"],
-        "lock_entity": wh_info["lock_entity"],
-        "lock_state": wh_info["lock_state"],
-        "garage_entity": wh_info["garage_entity"],
-        "garage_state": wh_info["garage_state"],
-        "vacuum_entity": wh_info["vacuum_entity"],
-        "vacuum_state": wh_info["vacuum_state"],
+        "thermostat_entity": hub_info["thermostat_entity"],
+        "thermostat_state": hub_info["thermostat_state"],
+        "thermostat_temp": hub_info["thermostat_temp"],
+        "thermostat_current_temp": hub_info["thermostat_current_temp"],
+        "lock_entity": hub_info["lock_entity"],
+        "lock_state": hub_info["lock_state"],
+        "garage_entity": hub_info["garage_entity"],
+        "garage_state": hub_info["garage_state"],
+        "vacuum_entity": hub_info["vacuum_entity"],
+        "vacuum_state": hub_info["vacuum_state"],
         "camera_snapshot_url": camera_snapshot_url,
         "cameras_summary": _build_cameras_summary(coordinator),
         "doorbell_talk_state": coordinator.doorbell_talk_state,
@@ -1449,7 +1448,6 @@ def build_area_context_payload(coordinator: Any) -> tuple[str, dict[str, Any]]:
         area_attrs["ble_closest_proxy"],
         area_attrs["dock_apps"],
         area_attrs["wallpaper_url"],
-        area_attrs["theme_color_hex"],
         area_attrs["available_domains"],
         area_attrs["area_temp"],
         area_attrs["area_humidity"],
@@ -1578,27 +1576,27 @@ def bind_coordinator_area_listeners(coordinator: Any) -> None:
 
         coordinator._unsub_area_entities_state = _unsub_area_all
 
-    wh_info = get_whole_home_summary(
+    hub_info = get_home_hub_summary(
         coordinator.hass,
         thermostat_entity=coordinator.thermostat_entity,
         lock_entity=coordinator.lock_entity,
         garage_entity=coordinator.garage_entity,
         vacuum_entity=coordinator.vacuum_entity,
     )
-    tracked_wh: list[str] = []
+    tracked_hub: list[str] = []
     for cand in (
         coordinator.alarm_entity,
-        wh_info["thermostat_entity"],
-        wh_info["lock_entity"],
-        wh_info["garage_entity"],
-        wh_info["vacuum_entity"],
+        hub_info["thermostat_entity"],
+        hub_info["lock_entity"],
+        hub_info["garage_entity"],
+        hub_info["vacuum_entity"],
     ):
-        if cand and cand not in tracked_wh:
-            tracked_wh.append(cand)
-    if tracked_wh:
+        if cand and cand not in tracked_hub:
+            tracked_hub.append(cand)
+    if tracked_hub:
         coordinator._unsub_alarm_state = async_track_state_change_event(
             coordinator.hass,
-            tracked_wh,
+            tracked_hub,
             lambda _ev: coordinator.async_notify_listeners(),
         )
 

@@ -1,19 +1,19 @@
 /**
- * Device Audio & Voice View (`audio_voice`): Voice Assistant, Wake Word, Voice Follows Me, Sound & Music Assistant.
+ * Device Audio & Voice View (`audio_voice`, D-031 / D-036):
+ * Voice Assistant, Wake Word, Voice Follows Me, Sound & Music Assistant.
  */
 
 import {
   renderCard,
   renderNativeControlRow,
+  renderPrefControlRow,
   renderSelectRow,
   renderSettingsRow,
   renderSwitchRow,
 } from "../components/controls.js";
 import { html, nothing, type TemplateResult } from "../lib/lit.js";
 import type { StudioStore } from "../state/store.js";
-import type { EspHomeEntityItem } from "../types.js";
 import { fmtNumber } from "../utils/format.js";
-import { isVoiceVisualProfileEntity } from "./device-display-view.js";
 
 export function renderDeviceAudioView(store: StudioStore): TemplateResult {
   const data = store.state;
@@ -21,30 +21,43 @@ export function renderDeviceAudioView(store: StudioStore): TemplateResult {
   const caps = data?.capabilities || {};
   const live = data?.live || {};
 
+  const wwModePref = store.getPref("wake_word_mode");
+  const wwDisabled = wwModePref ? String(wwModePref.value) === "Disabled" : false;
+
+  const wakeScreenPref = store.getPref("wake_screen_on_assist");
+
   const voiceItems = store.getSectionItems("voice");
-  const wwModeItem = voiceItems.find((it) =>
-    (it.name || "").toLowerCase().includes("wake word mode"),
-  );
-  const wwDisabled = wwModeItem ? wwModeItem.state === "Disabled" : false;
-  const isWakeWordChoice = (it: EspHomeEntityItem): boolean =>
-    it.key === "wake_word" || it.key === "wake_word_n";
   const voicePrimary = voiceItems.filter((it) => {
     if (it.domain === "assist_satellite") return false;
-    if (isVoiceVisualProfileEntity(it)) return false;
-    const low = (it.name || "").toLowerCase();
-    if (low.includes("cutoff") || low.includes("sensitivity")) return false;
-    if (wwDisabled && isWakeWordChoice(it)) return false;
+    const k = it.key || it.pref_key || (it.entity_id ? it.entity_id.split(".").pop() || "" : "");
+    if (k === "va_visual_profile" || k.endsWith("_visual_profile")) return false;
+    if (k === "wake_word_mode" || k.endsWith("_wake_word_mode")) return false;
+    if (k === "wake_screen_on_assist" || k.endsWith("_wake_screen_on_assist")) return false;
+    if (k.startsWith("ww_sens_") || k.includes("_ww_sens_")) return false;
+    if (
+      wwDisabled &&
+      (it.key === "wake_word" || it.key === "wake_word_n" || k.endsWith("_wake_word") || k.endsWith("_wake_word_n"))
+    )
+      return false;
     return true;
   });
-  const sensitivityVoiceItems = wwDisabled
-    ? []
-    : voiceItems.filter(
-        (it) =>
-          (it.name || "").toLowerCase().includes("cutoff") ||
-          (it.name || "").toLowerCase().includes("sensitivity"),
-      );
 
-  const soundItems = store.getSectionItems("sound");
+  const sensitivityPrefs = wwDisabled
+    ? []
+    : store.getPrefs([
+        "ww_sens_okay_nabu",
+        "ww_sens_hey_luna",
+        "ww_sens_hey_jarvis",
+        "ww_sens_hey_mycroft",
+        "ww_sens_alexa",
+      ]);
+
+  const soundPrefs = store.getPrefs([
+    "alert_volume",
+    "volume_step_size",
+    "game_sound_effects",
+  ]);
+  const soundItems = store.getSectionItems("sound").filter((it) => !it.pref_key);
 
   const isRoaming = caps.is_roaming_device !== false;
   const dwellSeconds = Number(cfg.area_follow_dwell_s ?? 10);
@@ -66,7 +79,9 @@ export function renderDeviceAudioView(store: StudioStore): TemplateResult {
         ${renderCard({
           heading: html`<h3 class="card-title">Voice Assistant &amp; Wake Word</h3>`,
           contentClass: "settings-list",
-          body: html`${voicePrimary.map((it) => renderNativeControlRow(store, it))}
+          body: html`${wwModePref ? renderPrefControlRow(store, wwModePref) : nothing}
+            ${voicePrimary.map((it) => renderNativeControlRow(store, it))}
+            ${wakeScreenPref ? renderPrefControlRow(store, wakeScreenPref) : nothing}
             ${isRoaming
               ? html`${renderSwitchRow({
                     rowId: "row-sync-device-area",
@@ -105,11 +120,11 @@ export function renderDeviceAudioView(store: StudioStore): TemplateResult {
                       <span id="dwell-value" class="chip">${fmtNumber(dwellSeconds, store.hass, 0)} s</span>`,
                   })}`
               : nothing}
-            ${sensitivityVoiceItems.length
+            ${sensitivityPrefs.length
               ? html`<details class="sub-collapsible">
                   <summary>Wake Word Sensitivity (Per Model)</summary>
                   <div class="card-content settings-list">
-                    ${sensitivityVoiceItems.map((it) => renderNativeControlRow(store, it))}
+                    ${sensitivityPrefs.map((p) => renderPrefControlRow(store, p))}
                   </div>
                 </details>`
               : nothing}`,
@@ -153,6 +168,7 @@ export function renderDeviceAudioView(store: StudioStore): TemplateResult {
               onChange: (checked) =>
                 store.stageDeviceSetting("area_handoff", checked, "cfg-area_handoff"),
             })}
+            ${soundPrefs.map((p) => renderPrefControlRow(store, p))}
             ${soundItems.map((it) => renderNativeControlRow(store, it))}`,
         })}
       </div>

@@ -492,7 +492,7 @@ def bind_coordinator_doorbell_listener(coordinator: Any) -> None:
         esp_notify_svc = esphome_service(
             coordinator.hass,
             coordinator.esphome_device_id,
-            "show_notification",
+            "latter_show_notification",
         )
         if esp_notify_svc:
             coordinator.entry.async_create_background_task(

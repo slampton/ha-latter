@@ -41,7 +41,6 @@ from .const import (
     GLOBAL_CONFIG_KEYS,
     INTEGRATION_VERSION,
 )
-from .groups import apply_esphome_controls_to_device, capture_live_esphome_controls
 from .hub import get_latter_system, iter_coordinators
 from .studio.settings import DEVICE_PREF_SPECS, resolve_device_pref_value
 
@@ -126,9 +125,6 @@ def _serialize_device_snapshot(hass: HomeAssistant, coordinator: Any) -> dict[st
         "active_speaker": coordinator.active_speaker,
         "active_remote_slot": coordinator.active_remote_slot,
         "device_config": dev_cfg,
-        "esphome_controls": capture_live_esphome_controls(
-            hass, coordinator.esphome_device_id
-        ),
     }
 
 
@@ -163,7 +159,7 @@ def build_backup_bundle(
         )
         return {
             "id": backup_id,
-            "schema": "latter.backup.v2",
+            "schema": "latter.backup.v3",
             "version": INTEGRATION_VERSION,
             "scope": "system",
             "name": label,
@@ -184,7 +180,7 @@ def build_backup_bundle(
     )
     return {
         "id": backup_id,
-        "schema": "latter.backup.v2",
+        "schema": "latter.backup.v3",
         "version": INTEGRATION_VERSION,
         "scope": "device",
         "name": label,
@@ -200,7 +196,6 @@ async def _async_apply_device_snapshot_to_coordinator(
     coord: Any,
     dev_snap: dict[str, Any],
     preserve_slug: bool = True,
-    restore_esphome_entities: bool = True,
 ) -> int:
     """Restore a single device snapshot onto a target LatterCoordinator."""
     incoming_cfg = dict(dev_snap.get("device_config") or {})
@@ -222,13 +217,7 @@ async def _async_apply_device_snapshot_to_coordinator(
     coord._bind_wallpaper_cycle_timer()
     coord._schedule_persist_runtime_state()
     coord.async_notify_listeners()
-
-    applied_controls = 0
-    if restore_esphome_entities and isinstance(dev_snap.get("esphome_controls"), dict):
-        applied_controls = await apply_esphome_controls_to_device(
-            hass, coord.esphome_device_id, dev_snap["esphome_controls"]
-        )
-    return applied_controls
+    return 0
 
 
 async def async_restore_backup_bundle(
@@ -236,10 +225,9 @@ async def async_restore_backup_bundle(
     bundle: dict[str, Any],
     coordinators: list[Any],
     target_coordinator: Any | None = None,
-    restore_esphome_entities: bool = True,
 ) -> dict[str, Any]:
     """Restore a System or Device backup bundle (from uploaded Computer JSON file)."""
-    if not isinstance(bundle, dict) or bundle.get("schema") != "latter.backup.v2":
+    if not isinstance(bundle, dict) or bundle.get("schema") != "latter.backup.v3":
         raise ValueError("Invalid Latter backup bundle schema")
 
     scope = str(bundle.get("scope") or "device")
@@ -268,12 +256,11 @@ async def async_restore_backup_bundle(
             for coord in coordinators:
                 snap = devices_map.get(coord.device_slug)
                 if isinstance(snap, dict):
-                    restored_controls += await _async_apply_device_snapshot_to_coordinator(
+                    await _async_apply_device_snapshot_to_coordinator(
                         hass,
                         coord,
                         snap,
                         preserve_slug=True,
-                        restore_esphome_entities=restore_esphome_entities,
                     )
                     restored_devices += 1
                 await coord.async_on_global_config_updated()
@@ -281,7 +268,7 @@ async def async_restore_backup_bundle(
         return {
             "scope": "system",
             "restored_devices": restored_devices,
-            "restored_controls": restored_controls,
+            "restored_controls": 0,
         }
 
     dev_snap = bundle.get("device")
@@ -292,16 +279,15 @@ async def async_restore_backup_bundle(
     if coord is None:
         raise ValueError("A Device backup must be restored onto a selected Device")
 
-    restored_controls = await _async_apply_device_snapshot_to_coordinator(
+    await _async_apply_device_snapshot_to_coordinator(
         hass,
         coord,
         dev_snap,
         preserve_slug=True,
-        restore_esphome_entities=restore_esphome_entities,
     )
     return {
         "scope": "device",
         "target_device": coord.device_slug,
         "restored_devices": 1,
-        "restored_controls": restored_controls,
+        "restored_controls": 0,
     }

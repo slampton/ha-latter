@@ -317,20 +317,6 @@ export function renderSystemToolsView(store: StudioStore): TemplateResult {
               </select>
             </div>
 
-            <label class="inline-switch">
-              <input
-                type="checkbox"
-                id="bkp-restore-esp"
-                role="switch"
-                .checked=${store.backupRestoreEsp}
-                @change=${(ev: Event) => {
-                  store.backupRestoreEsp = (ev.currentTarget as HTMLInputElement).checked;
-                }}
-                class="switch"
-              />
-              <span>Restore On-Device ESPHome Controls</span>
-            </label>
-
             <div class="input-action-row">
               <button
                 type="button"

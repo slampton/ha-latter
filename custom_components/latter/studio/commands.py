@@ -60,7 +60,6 @@ from ..groups import (
     async_reset_device,
     get_device_groups,
     seed_group_baseline_from_coordinator,
-    update_group_baseline_esphome_control,
 )
 from ..hub import (
     async_save_and_broadcast_global_config,
@@ -323,34 +322,6 @@ async def _cmd_system_entity_action(
             level=level_val,
             option=opt_val,
         )
-    target_grp_id = str(body.get("group_id") or "").strip()
-    ckey = str(body.get("canonical_key") or "").strip()
-    if not ckey and entity_ids:
-        matched_ctrl = next(
-            (
-                c
-                for c in shared_controls
-                if any(t.get("entity_id") == entity_ids[0] for t in c.get("targets", []))
-            ),
-            None,
-        )
-        if matched_ctrl:
-            ckey = str(matched_ctrl.get("canonical_key") or "")
-    if target_grp_id and target_grp_id not in ("all", "roaming", "stationary") and ckey:
-        groups = get_device_groups(hass)
-        grp = next((g for g in groups if g.get("id") == target_grp_id), None)
-        if grp is not None:
-            saved_val: Any = opt_val
-            if saved_val is None and level_val is not None:
-                saved_val = level_val
-            elif saved_val is None and action in ("turn_on", "turn_off"):
-                saved_val = "on" if action == "turn_on" else "off"
-            if saved_val is not None and update_group_baseline_esphome_control(
-                grp, ckey, saved_val
-            ):
-                await async_save_and_broadcast_global_config(
-                    hass, {CONF_DEVICE_GROUPS: groups}
-                )
 
 
 async def _cmd_esphome_entity_action(
@@ -814,7 +785,6 @@ async def _cmd_create_device_group(
             "name": g_name,
             "description": g_desc or f"Custom group ({g_name})",
             "device_config": {},
-            "esphome_controls": {},
         }
     )
     await async_save_and_broadcast_global_config(
@@ -1435,7 +1405,6 @@ async def _async_restore_bundle(
             bundle=msg["bundle"],
             coordinators=iter_coordinators(hass),
             target_coordinator=target,
-            restore_esphome_entities=bool(msg.get("restore_esphome_entities", True)),
         )
     except ValueError as err:
         connection.send_error(msg["id"], "invalid_format", str(err))
@@ -1456,7 +1425,6 @@ async def _async_restore_bundle(
         vol.Required("type"): "latter/system/import",
         vol.Optional("subentry_id"): vol.Any(str, None),
         vol.Required("bundle"): dict,
-        vol.Optional("restore_esphome_entities", default=True): bool,
         vol.Optional("studio_rev"): vol.Any(int, None),
     }
 )
@@ -1485,7 +1453,6 @@ async def ws_handle_system_import(
         vol.Required("type"): "latter/device/import",
         vol.Required("subentry_id"): str,
         vol.Required("bundle"): dict,
-        vol.Optional("restore_esphome_entities", default=True): bool,
         vol.Optional("studio_rev"): vol.Any(int, None),
     }
 )

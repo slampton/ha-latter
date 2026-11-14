@@ -1,10 +1,12 @@
 /**
- * Device BLE & Area Presence View (`presence`): Static Assigned Area vs. BLE Roaming, Fallback Area, and BLE Identity.
+ * Device BLE & Area Presence View (`presence`, D-032 / D-036):
+ * Static Assigned Area vs. BLE Roaming, Fallback Area, and BLE Identity.
  */
 
 import {
   renderCard,
   renderNativeControlRow,
+  renderPrefControlRow,
   renderSelectRow,
   renderSwitchRow,
 } from "../components/controls.js";
@@ -17,9 +19,10 @@ export function renderDevicePresenceView(store: StudioStore): TemplateResult {
   const isBleOnly = cfg.kind === "ble_tag";
   const bleTracking = isBleOnly || Boolean(cfg.native_ble_tracking);
 
+  const bleBeaconPref = store.getPref("ble_beacon_mode");
   const bleAreaItems = store
     .getSectionItems("area")
-    .filter((it) => (it.name || "").toLowerCase().includes("ble"));
+    .filter((it) => !it.pref_key && it.key !== "ble_beacon_mode");
 
   return html`<section id="view-presence">
     <div class="columns">
@@ -73,6 +76,7 @@ export function renderDevicePresenceView(store: StudioStore): TemplateResult {
                         "cfg-default_area",
                       ),
                   })}
+                  ${bleBeaconPref ? renderPrefControlRow(store, bleBeaconPref) : nothing}
                   ${bleAreaItems.map((it) => renderNativeControlRow(store, it))}`
               : renderSelectRow({
                   id: "cfg-default_area",

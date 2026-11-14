@@ -99,7 +99,17 @@ def _registered_schema_keys() -> dict[str, set[str]]:
                 if isinstance(t, ast.Name) and t.id.startswith("SERVICE_"):
                     consts[t.id] = node.value.value
     keys: dict[str, set[str]] = {}
-    for call in ast.walk(ast.parse((COMP / "services.py").read_text(encoding="utf-8"))):
+    tree = ast.parse((COMP / "services.py").read_text(encoding="utf-8"))
+    assigned_schemas: dict[str, ast.Call] = {}
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Assign)
+            and len(node.targets) == 1
+            and isinstance(node.targets[0], ast.Name)
+            and isinstance(node.value, ast.Call)
+        ):
+            assigned_schemas[node.targets[0].id] = node.value
+    for call in ast.walk(tree):
         if not (isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute) and call.func.attr == "async_register"):
             continue
         if len(call.args) < 2:
@@ -109,6 +119,8 @@ def _registered_schema_keys() -> dict[str, set[str]]:
             name_node.value if isinstance(name_node, ast.Constant) else ""
         )
         schema = next((kw.value for kw in call.keywords if kw.arg == "schema"), None)
+        if isinstance(schema, ast.Name) and schema.id in assigned_schemas:
+            schema = assigned_schemas[schema.id]
         if not name or not isinstance(schema, ast.Call) or not schema.args or not isinstance(schema.args[0], ast.Dict):
             continue
         accepted: set[str] = set()
@@ -124,7 +136,7 @@ def _registered_schema_keys() -> dict[str, set[str]]:
 class TestProtocolUsage(unittest.TestCase):
     def test_service_schemas_accept_every_protocol_field(self) -> None:
         registered = _registered_schema_keys()
-        for svc, spec in SCHEMA["services"].items():
+        for svc, spec in SCHEMA["ha_services"].items():
             with self.subTest(service=svc):
                 self.assertIn(svc, registered, f"latter.{svc}: no vol.Schema registration found in services.py")
                 missing = set(spec.get("fields", [])) - registered[svc]
@@ -132,7 +144,7 @@ class TestProtocolUsage(unittest.TestCase):
 
     def test_services_yaml_documents_every_protocol_field(self) -> None:
         documented = _services_yaml_fields()
-        for svc, spec in SCHEMA["services"].items():
+        for svc, spec in SCHEMA["ha_services"].items():
             with self.subTest(service=svc):
                 self.assertIn(svc, documented, f"latter.{svc} missing from services.yaml")
                 missing = set(spec.get("fields", [])) - documented[svc]

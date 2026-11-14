@@ -63,9 +63,7 @@ export function renderSystemGroupsView(store: StudioStore): TemplateResult {
     });
     const rawBaselineVal = fc.pref_key
       ? selectedGrpObj?.device_config?.[fc.pref_key]
-      : selectedGrpObj?.esphome_controls && fc.canonical_key
-        ? selectedGrpObj.esphome_controls[fc.canonical_key]
-        : undefined;
+      : undefined;
     const baselineVal =
       rawBaselineVal !== undefined && fc.domain === "switch" && typeof rawBaselineVal === "boolean"
         ? rawBaselineVal

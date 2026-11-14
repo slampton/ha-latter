@@ -48,12 +48,10 @@ from ..const import (
 from ..coordinator import LatterCoordinator
 from ..groups import (
     UNIVERSAL_SECTION_META,
-    canonical_control_key,
     compute_device_group_sync_status,
     coordinator_supports_pref,
     get_device_groups,
     get_esphome_device_entities,
-    is_behavior_esphome_control,
     present_section_ids,
 )
 from ..hub import get_area_state_index, get_latter_system, iter_coordinators
@@ -190,254 +188,180 @@ def resolve_target_coordinator(
     return find_by_subentry_id(iter_coordinators(hass), subentry_id)
 
 
-def _augment_esphome_inspector(
-    hass: HomeAssistant,
-    coord: LatterCoordinator,
-    raw_info: dict[str, Any],
-) -> dict[str, Any]:
-    """Synthesize sleep-safe subentry preferences, live speaker volume, and Quick Action buttons into `raw_info`."""
-    if coord.is_ble_tag:
-        return raw_info
+def build_device_prefs_payload(
+    coordinator: LatterCoordinator,
+) -> list[dict[str, Any]]:
+    """Build the clean native typed device_prefs list for a LatterCoordinator."""
+    if coordinator.is_ble_tag:
+        return []
 
-    sec_meta_map = {sid: (title, desc) for sid, title, desc in UNIVERSAL_SECTION_META}
-    sec_order = [sid for sid, _, _ in UNIVERSAL_SECTION_META]
-    by_sec: dict[str, dict[str, Any]] = {}
-    for sec in raw_info.get("sections") or ():
-        sid = str(sec.get("id") or "")
-        if sid:
-            by_sec[sid] = {
-                **sec,
-                "items": [dict(it) for it in (sec.get("items") or ())],
-            }
-
-    def _ensure_sec(sid: str) -> list[dict[str, Any]]:
-        if sid not in by_sec:
-            title, desc = sec_meta_map.get(sid, (sid.title(), ""))
-            by_sec[sid] = {"id": sid, "title": title, "description": desc, "items": []}
-        return by_sec[sid]["items"]
-
-    dev_data = coord.device_data
+    dev_data = coordinator.device_data
+    prefs: list[dict[str, Any]] = []
     for spec in DEVICE_PREF_SPECS:
-        if not coordinator_supports_pref(coord, spec):
-            continue
-        sec_items = _ensure_sec(spec.section)
-        if any(
-            str(it.get("domain") or "") == spec.domain
-            and str(it.get("name") or "").strip().lower() == spec.label.lower()
-            for it in sec_items
-        ):
+        if not coordinator_supports_pref(coordinator, spec):
             continue
         val = resolve_device_pref_value(dev_data, spec.key)
-        state_str = ("on" if val else "off") if spec.domain == "switch" else str(val)
         opts = list(spec.options)
         if (
             spec.key == "start_screen"
             and not resolve_device_pref_value(dev_data, "home_screen_enabled")
-            and state_str == "Home"
+            and val == "Home"
         ):
-            state_str = "Clock"
-        elif spec.key == "clock_face" and not coord.is_round_display:
+            val = "Clock"
+        elif spec.key == "clock_face" and not coordinator.is_round_display:
             opts = [o for o in opts if o != "Modern Roman (Analog)"]
-            if state_str == "Modern Roman (Analog)":
-                state_str = "Minimal Digital"
-        sec_items.append(
+            if val == "Modern Roman (Analog)":
+                val = "Minimal Digital"
+        prefs.append(
             {
-                "entity_id": f"pref:{spec.key}",
-                "pref_key": spec.key,
-                "name": spec.label,
+                "key": spec.key,
+                "label": spec.label,
+                "section": spec.section,
+                "group_tier": spec.group_tier,
                 "domain": spec.domain,
-                "state": state_str,
+                "value": val,
                 "options": opts,
                 "min": spec.min_val,
                 "max": spec.max_val,
                 "step": spec.step,
                 "unit": spec.unit,
-                "device_class": "",
-                "entity_category": "config",
             }
         )
+    return prefs
 
-    local_spk = coord.local_speaker
-    if coord.has_speaker and local_spk:
-        sound_items = _ensure_sec("sound")
-        if not any(
-            str(it.get("name") or "").strip().lower() == "speaker volume"
-            for it in sound_items
-        ):
-            spk_st = hass.states.get(local_spk)
-            vol_raw = (
-                spk_st.attributes.get("volume_level")
-                if spk_st is not None and spk_st.state not in ("unavailable", "unknown")
-                else None
-            )
-            vol_str = (
-                str(round(float(vol_raw) * 100))
-                if isinstance(vol_raw, (int, float))
-                else "unavailable"
-            )
-            sound_items.insert(
-                0,
-                {
-                    "entity_id": local_spk,
-                    "name": "Speaker Volume",
-                    "domain": "number",
-                    "state": vol_str,
-                    "options": [],
-                    "min": 0,
-                    "max": 100,
-                    "step": int(resolve_device_pref_value(dev_data, "volume_step_size")),
-                    "unit": "%",
-                    "device_class": "",
-                    "entity_category": None,
-                },
-            )
 
-    wifi_ent = coord.device_entity(
-        "sensor", "_wi_fi_signal", "_wifi_signal", "_ip_address"
+def build_speaker_volume_payload(
+    hass: HomeAssistant,
+    coordinator: LatterCoordinator,
+) -> dict[str, Any] | None:
+    """Return local speaker volume metadata outside esphome.sections."""
+    if coordinator.is_ble_tag or not coordinator.has_speaker:
+        return None
+    local_spk = coordinator.local_speaker
+    if not local_spk:
+        return None
+    spk_st = hass.states.get(local_spk)
+    vol_raw = (
+        spk_st.attributes.get("volume_level")
+        if spk_st is not None and spk_st.state not in ("unavailable", "unknown")
+        else None
+    )
+    vol_pct = (
+        round(float(vol_raw) * 100)
+        if isinstance(vol_raw, (int, float))
+        else None
+    )
+    dev_data = coordinator.device_data
+    return {
+        "entity_id": local_spk,
+        "name": "Speaker Volume",
+        "domain": "number",
+        "volume_pct": vol_pct,
+        "state": str(vol_pct) if vol_pct is not None else "unavailable",
+        "min": 0,
+        "max": 100,
+        "step": int(resolve_device_pref_value(dev_data, "volume_step_size")),
+        "unit": "%",
+    }
+
+
+def build_quick_actions_payload(
+    hass: HomeAssistant,
+    coordinator: LatterCoordinator,
+) -> list[dict[str, Any]]:
+    """Return quick action buttons outside esphome.sections."""
+    if coordinator.is_ble_tag:
+        return []
+    wifi_ent = coordinator.device_entity(
+        "sensor", "_wi_fi_signal", "_ip_address"
     )
     wifi_st = hass.states.get(wifi_ent) if wifi_ent else None
     wifi_offline = wifi_st is not None and wifi_st.state == "unavailable"
     can_run_cmd = (
         not wifi_offline
-        and not coord._rpc_receiver.is_device_unavailable()
+        and not coordinator._rpc_receiver.is_device_unavailable()
         and bool(
-            coord.is_device_online()
-            or esphome_service(hass, coord.esphome_device_id, "latter_device_command")
+            coordinator.is_device_online()
+            or esphome_service(hass, coordinator.esphome_device_id, "latter_device_command")
         )
     )
     cmd_state = "unknown" if can_run_cmd else "unavailable"
-    action_items = _ensure_sec("actions")
-    action_specs: list[tuple[str, str, str, tuple[str, ...]]] = []
-    if coord.has_speaker:
-        action_specs.append(("find_my", "Find My Device", "identify", ("find my", "find_my")))
-    if coord.has_mic:
-        action_specs.append(
-            ("trigger_va", "Trigger Voice Assistant", "", ("voice assistant", "trigger_va"))
-        )
-    if coord.has_display:
-        action_specs.append(
-            ("activate_screensaver", "Activate Screensaver", "", ("screensaver",))
-        )
-    action_specs.append(("restart", "Restart Device", "restart", ("restart",)))
+    action_specs: list[tuple[str, str, str]] = []
+    if coordinator.has_speaker:
+        action_specs.append(("find_my", "Find My Device", "identify"))
+    if coordinator.has_mic:
+        action_specs.append(("trigger_va", "Trigger Voice Assistant", ""))
+    if coordinator.has_display:
+        action_specs.append(("activate_screensaver", "Activate Screensaver", ""))
+    action_specs.append(("restart", "Restart Device", "restart"))
 
-    for cmd_key, label, dclass, match_tokens in action_specs:
-        if any(
-            any(
-                tok in str(it.get("name") or "").lower()
-                or tok in str(it.get("entity_id") or "").lower()
-                for tok in match_tokens
-            )
-            for it in action_items
-        ):
-            continue
-        action_items.append(
+    actions: list[dict[str, Any]] = []
+    for cmd_key, label, dclass in action_specs:
+        actions.append(
             {
-                "entity_id": f"cmd:{cmd_key}",
+                "key": cmd_key,
                 "device_command": cmd_key,
-                "name": label,
+                "label": label,
                 "domain": "button",
                 "state": cmd_state,
-                "options": [],
-                "min": None,
-                "max": None,
-                "step": None,
-                "unit": "",
                 "device_class": dclass,
-                "entity_category": "diagnostic" if cmd_key == "restart" else None,
             }
         )
-
-    ordered_secs: list[dict[str, Any]] = []
-    for sid in sec_order:
-        if sid in by_sec and by_sec[sid]["items"]:
-            ordered_secs.append(by_sec[sid])
-    for sid, sec in by_sec.items():
-        if sid not in sec_meta_map and sec["items"]:
-            ordered_secs.append(sec)
-
-    return {
-        "device": dict(raw_info.get("device") or {}),
-        "sections": ordered_secs,
-    }
+    return actions
 
 
 def _build_system_shared_controls(
     hass: HomeAssistant,
     coords: list[LatterCoordinator] | None = None,
-    inspector_by_subentry: dict[str, dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
-    """Discover shared subentry and ESPHome select/switch/number controls across all onboarded devices."""
-    all_coords = coords if coords is not None else iter_coordinators(hass)
-    by_label: dict[str, dict[str, Any]] = {}
-    for coord in all_coords:
-        if coord.is_ble_tag:
+    """Build shared system controls directly from DEVICE_PREF_SPECS across all onboarded devices."""
+    all_coords = [c for c in (coords if coords is not None else iter_coordinators(hass)) if not c.is_ble_tag]
+    controls: list[dict[str, Any]] = []
+    sec_meta_map = {sid: (title, desc) for sid, title, desc in UNIVERSAL_SECTION_META}
+
+    for spec in DEVICE_PREF_SPECS:
+        if spec.group_tier is None or spec.domain not in STUDIO_BULK_CONTROL_DOMAINS:
             continue
-        if inspector_by_subentry is not None and coord.subentry_id in inspector_by_subentry:
-            esp_info = inspector_by_subentry[coord.subentry_id]
-        else:
-            raw_esp = get_esphome_device_entities(
-                hass, coord.esphome_device_id, coord.device_slug
-            )
-            esp_info = _augment_esphome_inspector(hass, coord, raw_esp)
-            if inspector_by_subentry is not None:
-                inspector_by_subentry[coord.subentry_id] = esp_info
-        for sec in esp_info.get("sections", []):
-            sec_id = sec.get("id", "")
-            if sec_id not in ("voice", "sleep", "display", "sound", "music", "area", "home"):
+        targets: list[dict[str, Any]] = []
+        for coord in all_coords:
+            if not coordinator_supports_pref(coord, spec):
                 continue
-            for item in sec.get("items", []):
-                dom = item.get("domain")
-                if dom not in STUDIO_BULK_CONTROL_DOMAINS:
-                    continue
-                ent_id_str = str(item.get("entity_id") or "")
-                if ent_id_str.startswith("media_player."):
-                    continue
-                lbl = str(item.get("name") or "").strip()
-                if not lbl:
-                    continue
-                pref_key = str(item.get("pref_key") or "").strip()
-                pref_spec = DEVICE_PREF_SPEC_MAP.get(pref_key) if pref_key else None
-                if pref_key and (pref_spec is None or pref_spec.group_tier is None):
-                    continue
-                ckey = canonical_control_key(dom, lbl)
-                tier = (
-                    pref_spec.group_tier
-                    if pref_spec is not None and pref_spec.group_tier is not None
-                    else ("behavior" if is_behavior_esphome_control(ckey) else "appearance")
-                )
-                key = f"{sec_id}:{dom}:{lbl.lower()}"
-                bucket = by_label.setdefault(
-                    key,
-                    {
-                        "key": key,
-                        "canonical_key": ckey,
-                        **({"pref_key": pref_key} if pref_key else {}),
-                        "tier": tier,
-                        "section": sec_id,
-                        "section_title": sec.get("title", sec_id.title()),
-                        "name": lbl,
-                        "domain": dom,
-                        "state": item.get("state"),
-                        "options": item.get("options", []),
-                        "min": item.get("min"),
-                        "max": item.get("max"),
-                        "step": item.get("step"),
-                        "unit": item.get("unit", ""),
-                        "targets": [],
-                    },
-                )
-                bucket["targets"].append(
-                    {
-                        "device_slug": coord.device_slug,
-                        "device_group": coord.device_group,
-                        "is_roaming": coord.is_roaming_device,
-                        "entity_id": item.get("entity_id"),
-                        **({"pref_key": pref_key} if pref_key else {}),
-                        "state": item.get("state"),
-                    }
-                )
+            cur_val = resolve_device_pref_value(coord.device_data, spec.key)
+            state_val = ("on" if cur_val else "off") if spec.domain == "switch" else str(cur_val)
+            targets.append(
+                {
+                    "device_slug": coord.device_slug,
+                    "device_group": coord.device_group,
+                    "is_roaming": coord.is_roaming_device,
+                    "pref_key": spec.key,
+                    "state": state_val,
+                }
+            )
+        if not targets:
+            continue
+        sec_title = sec_meta_map.get(spec.section, (spec.section.title(), ""))[0]
+        def_state = ("on" if spec.default else "off") if spec.domain == "switch" else str(spec.default)
+        key = f"{spec.section}:{spec.domain}:{spec.label.lower()}"
+        controls.append(
+            {
+                "key": key,
+                "pref_key": spec.key,
+                "tier": spec.group_tier,
+                "section": spec.section,
+                "section_title": sec_title,
+                "name": spec.label,
+                "domain": spec.domain,
+                "state": def_state,
+                "options": list(spec.options),
+                "min": spec.min_val,
+                "max": spec.max_val,
+                "step": spec.step,
+                "unit": spec.unit,
+                "targets": targets,
+            }
+        )
     return sorted(
-        by_label.values(),
+        controls,
         key=lambda x: (x["section"], x["name"].lower()),
     )
 
@@ -693,7 +617,6 @@ def _build_system_section(
     current_subentry_id: str,
     *,
     all_coords: list[LatterCoordinator] | None = None,
-    inspector_by_subentry: dict[str, dict[str, Any]] | None = None,
     include_logs: bool = False,
 ) -> dict[str, Any]:
     """Build the System-scoped part of the Studio payload (no Device needed)."""
@@ -718,17 +641,12 @@ def _build_system_section(
             esphome_service(
                 hass,
                 c.esphome_device_id,
-                "set_browse_slots",
+                "latter_set_slots",
             )
             or esphome_service(
                 hass,
                 c.esphome_device_id,
-                "set_area_slots",
-            )
-            or esphome_service(
-                hass,
-                c.esphome_device_id,
-                "show_notification",
+                "latter_show_notification",
             )
             or c_manifest
         )
@@ -751,7 +669,7 @@ def _build_system_section(
         c_chg_st = c.device_state("binary_sensor", "_battery_charging")
         c_usb_st = c.device_state("binary_sensor", "_usb_power_connected")
         c_wifi_st = c.device_state(
-            "sensor", "_system_wi_fi_signal", "_wi_fi_signal", "_wifi_signal"
+            "sensor", "_system_wi_fi_signal", "_wi_fi_signal"
         )
         c_ip_st = c.device_state("sensor", "_ip_address")
         c_ip_val = (
@@ -936,9 +854,7 @@ def _build_system_section(
                 if c.ble_target_address
             },
         ),
-        "system_controls": _build_system_shared_controls(
-            hass, coords, inspector_by_subentry
-        ),
+        "system_controls": _build_system_shared_controls(hass, coords),
         "device_groups": device_groups,
         "system_config": system_view,
         "has_security_pin": bool(raw_global_cfg.get(CONF_SECURITY_PIN_HASH)),
@@ -956,7 +872,6 @@ def build_studio_state_payload(
 ) -> dict[str, Any]:
     """Build the Studio payload: the System part always, plus the Device part when a Device is targeted."""
     all_coords = iter_coordinators(hass)
-    inspector_by_subentry: dict[str, dict[str, Any]] = {}
     base: dict[str, Any] = {
         "subentry_id": coordinator.subentry_id if coordinator is not None else "",
         "title": coordinator.device_title if coordinator is not None else "",
@@ -966,7 +881,6 @@ def build_studio_state_payload(
             hass,
             coordinator.subentry_id if coordinator is not None else "",
             all_coords=all_coords,
-            inspector_by_subentry=inspector_by_subentry,
             include_logs=include_logs,
         ),
     }
@@ -980,6 +894,9 @@ def build_studio_state_payload(
             **base,
             "capabilities": {},
             "config": {},
+            "device_prefs": [],
+            "quick_actions": [],
+            "speaker_volume": None,
             "esphome": {"device": {}, "sections": []},
             "wallpapers": [],
             "live": {"area_presence_grid": presence_grid},
@@ -987,12 +904,12 @@ def build_studio_state_payload(
 
     local_spk_id = coordinator.local_speaker
     local_ma_id = coordinator.local_ma_speaker
-    esphome_inspector = inspector_by_subentry.get(coordinator.subentry_id)
-    if esphome_inspector is None:
-        raw_esp = get_esphome_device_entities(
-            hass, coordinator.esphome_device_id, coordinator.device_slug
-        )
-        esphome_inspector = _augment_esphome_inspector(hass, coordinator, raw_esp)
+    esphome_inspector = get_esphome_device_entities(
+        hass, coordinator.esphome_device_id, coordinator.device_slug
+    )
+    device_prefs = build_device_prefs_payload(coordinator)
+    quick_actions = build_quick_actions_payload(hass, coordinator)
+    speaker_volume = build_speaker_volume_payload(hass, coordinator)
     wallpapers_catalog = list_wallpaper_catalog(
         hass,
         coordinator.device_slug,
@@ -1111,6 +1028,9 @@ def build_studio_state_payload(
         **base,
         "capabilities": device_capabilities,
         "config": config_data,
+        "device_prefs": device_prefs,
+        "quick_actions": quick_actions,
+        "speaker_volume": speaker_volume,
         "esphome": esphome_inspector,
         "wallpapers": wallpapers_catalog,
         "links": {

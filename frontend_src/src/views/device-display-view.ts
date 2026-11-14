@@ -1,5 +1,5 @@
 /**
- * Device Display View (`display`, D-027 / D-029 / D-033 / D-034):
+ * Device Display View (`display`, D-027 / D-029 / D-033 / D-034 / D-036):
  * Visual & aesthetic preferences across screens.
  * Column 1: Home Screen (Wake Greeting, Weather Background & Sun & Moon), Screensavers, Voice Assistant (Visual Profile), Brightness & Clock.
  * Column 2: Colors, Wallpapers & Media Player (Album Art & Overlay Style).
@@ -7,7 +7,7 @@
 
 import {
   renderCard,
-  renderNativeControlRow,
+  renderPrefControlRow,
   renderSettingsRow,
 } from "../components/controls.js";
 import {
@@ -18,141 +18,26 @@ import {
 import { WALLPAPER_ROTATION_OPTIONS } from "../constants.js";
 import { html, nothing, type TemplateResult } from "../lib/lit.js";
 import type { StudioStore } from "../state/store.js";
-import type { EspHomeEntityItem } from "../types.js";
+import type { DevicePrefItem } from "../types.js";
 import { defaultThemeHex, entityLabel, isValidHexColor } from "../utils/format.js";
-
-export function sortEntitiesByKeywords(
-  items: readonly EspHomeEntityItem[],
-  order: readonly string[],
-): EspHomeEntityItem[] {
-  return [...items].sort((a, b) => {
-    const la = (a.name || "").toLowerCase();
-    const lb = (b.name || "").toLowerCase();
-    const ia = order.findIndex((k) => la.includes(k));
-    const ib = order.findIndex((k) => lb.includes(k));
-    const ra = ia >= 0 ? ia : order.length;
-    const rb = ib >= 0 ? ib : order.length;
-    return ra - rb;
-  });
-}
-
-export function isInterfaceDisplayEntity(it: EspHomeEntityItem): boolean {
-  const low = `${it.name || ""} ${it.entity_id || ""}`.toLowerCase();
-  return (
-    low.includes("enable home screen") ||
-    low.includes("home_screen_enabled") ||
-    low.includes("start screen") ||
-    low.includes("start_screen") ||
-    low.includes("return to home timeout") ||
-    low.includes("return_to_home_timeout")
-  );
-}
-
-function isClockDisplayEntity(it: EspHomeEntityItem): boolean {
-  const low = `${it.name || ""} ${it.entity_id || ""}`.toLowerCase();
-  return (
-    low.includes("clock face") ||
-    low.includes("clock_face") ||
-    low.includes("time format") ||
-    low.includes("time_format")
-  );
-}
-
-export function isMediaAppearanceEntity(it: EspHomeEntityItem): boolean {
-  const low = `${it.name || ""} ${it.entity_id || ""}`.toLowerCase();
-  return (
-    low.includes("album art style") ||
-    low.includes("album_art_style") ||
-    low.includes("overlay style") ||
-    low.includes("music_overlay_style")
-  );
-}
-
-export function isScreensaverSleepEntity(it: EspHomeEntityItem): boolean {
-  const low = `${it.name || ""} ${it.entity_id || ""}`.toLowerCase();
-  return (
-    low.includes("screensaver") ||
-    low.includes("docked idle timeout") ||
-    low.includes("docked_idle_timeout")
-  );
-}
-
-export function isVoiceVisualProfileEntity(it: EspHomeEntityItem): boolean {
-  const low = `${it.name || ""} ${it.entity_id || ""}`.toLowerCase();
-  return low.includes("visual profile") || low.includes("visual_profile");
-}
-
-function isColorDisplayEntity(it: EspHomeEntityItem): boolean {
-  const low = `${it.name || ""} ${it.entity_id || ""}`.toLowerCase();
-  return low.includes("color profile") || low.includes("color_profile");
-}
 
 export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
   const data = store.state;
   const cfg = data?.config || {};
   const palettes = data?.system_config?.custom_palettes || [];
 
-  const brightnessOrder = [
-    "auto brightness mode",
-    "manual brightness",
-    "day brightness",
-    "night brightness",
-    "day start hour",
-    "night start hour",
-  ];
-  const allDisplayItems = store
-    .getSectionItems("display")
-    .filter((it) => !isInterfaceDisplayEntity(it));
-  const colorItems = allDisplayItems.filter(isColorDisplayEntity);
-  const clockItems = sortEntitiesByKeywords(
-    allDisplayItems.filter(isClockDisplayEntity),
-    ["clock face", "time format"],
-  );
-  const brightnessItems = sortEntitiesByKeywords(
-    allDisplayItems.filter((it) => !isColorDisplayEntity(it) && !isClockDisplayEntity(it)),
-    brightnessOrder,
-  );
-  const autoBrtItem = brightnessItems.find((it) =>
-    (it.name || "").toLowerCase().includes("auto brightness"),
-  );
-  const autoBrtState = String(autoBrtItem?.state ?? "").trim();
-  const autoBrtKnown =
-    Boolean(autoBrtItem) &&
-    autoBrtState !== "" &&
-    autoBrtState !== "unavailable" &&
-    autoBrtState !== "unknown";
-  const autoBrtOff = autoBrtKnown && (autoBrtState === "Disabled" || autoBrtState === "off");
-  const autoBrtTimeSchedule = autoBrtKnown && autoBrtState === "Time Schedule";
-  const visibleBrightnessItems = brightnessItems.filter((it) => {
-    if (it.domain === "light") return false;
-    const low = (it.name || "").toLowerCase();
-    if (autoBrtKnown) {
-      if (autoBrtOff && (low.includes("day brightness") || low.includes("night brightness"))) {
-        return false;
-      }
-      if (!autoBrtOff && low.includes("manual brightness")) {
-        return false;
-      }
-      if (
-        !autoBrtTimeSchedule &&
-        (low.includes("day start hour") || low.includes("night start hour"))
-      ) {
-        return false;
-      }
-    }
-    return true;
-  });
-
-  const homeOrder = ["wake greeting", "weather background", "sun", "moon"];
-  const homeItems = sortEntitiesByKeywords(store.getSectionItems("home"), homeOrder);
-  const weatherBgSwitch = homeItems.find((it) =>
-    (it.name || "").toLowerCase().includes("weather background"),
-  );
-  const weatherBgOff = weatherBgSwitch ? weatherBgSwitch.state === "off" : false;
-  const isCelestialSwitch = (it: EspHomeEntityItem): boolean =>
-    it.domain === "switch" && /^(?:home:\s*)?(?:sun|moon)$/i.test((it.name || "").trim());
-  const celestialItems = homeItems.filter(isCelestialSwitch);
-  const visibleHomeItems = homeItems.filter((it) => !isCelestialSwitch(it));
+  // Home Screen card
+  const wakeGreetingPref = store.getPref("wake_greeting");
+  const weatherBgPref = store.getPref("weather_background");
+  const weatherBgVal = String(weatherBgPref?.value ?? "").toLowerCase();
+  const weatherBgOff =
+    !weatherBgPref || !weatherBgPref.value || weatherBgVal === "off" || weatherBgVal === "disabled";
+  const sunPref = store.getPref("home_sun");
+  const moonPref = store.getPref("home_moon");
+  const celestialItems = [
+    { pref: sunPref, label: "Sun" },
+    { pref: moonPref, label: "Moon" },
+  ].filter((c): c is { pref: DevicePrefItem; label: string } => Boolean(c.pref));
 
   const renderCelestialRow = (): TemplateResult =>
     renderSettingsRow({
@@ -160,67 +45,83 @@ export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
       label: "Sun & Moon",
       description: "Choose which sky bodies appear on the live Weather Background.",
       control: html`<div class="pill-list" role="group" aria-label="Sun and Moon">
-        ${celestialItems.map((cel) => {
-          const st = String(cel.state ?? "");
-          const isOn = st === "on";
-          const prefKey = cel.pref_key || "";
-          const unavailable = !prefKey && (st === "unavailable" || st === "unknown");
-          const lbl = entityLabel((cel.name || cel.entity_id).replace(/^home:\s*/i, ""));
+        ${celestialItems.map(({ pref, label }) => {
+          const isOn = Boolean(pref.value);
           return html`<span class="pill ${isOn ? "enabled" : ""}">
             <button
               type="button"
               aria-pressed=${String(isOn)}
-              ?disabled=${unavailable}
-              @click=${() => {
-                if (prefKey) {
-                  store.stageDeviceSetting(prefKey, !isOn);
-                } else {
-                  void store.espAction(
-                    cel.entity_id,
-                    isOn ? "turn_off" : "turn_on",
-                    isOn ? "off" : "on",
-                  );
-                }
-              }}
+              @click=${() => store.stageDeviceSetting(pref.key, !isOn)}
               class="pill-toggle"
             >
-              ${isOn ? `✓ ${lbl}` : `+ ${lbl}`}
+              ${isOn ? `✓ ${label}` : `+ ${label}`}
             </button>
           </span>`;
         })}
       </div>`,
     });
 
-  const mediaAppearanceItems = sortEntitiesByKeywords(
-    store.getSectionItems("music").filter(isMediaAppearanceEntity),
-    ["album art style", "overlay style"],
-  );
-  const voiceVisualItems = store
-    .getSectionItems("voice")
-    .filter(isVoiceVisualProfileEntity);
+  const hasHomeCard = Boolean(wakeGreetingPref || weatherBgPref || celestialItems.length > 0);
 
-  const curHex = isValidHexColor(cfg.device_custom_color)
-    ? String(cfg.device_custom_color).toUpperCase()
-    : defaultThemeHex(store.host);
-  const swatchStyle = `--swatch-color:${curHex}`;
-
-  const screensaverOrder = [
-    "docked screensaver",
-    "screensaver style",
-    "docked idle timeout",
-  ];
-  const screensaverSleepItems = sortEntitiesByKeywords(
-    store.getSectionItems("sleep").filter(isScreensaverSleepEntity),
-    screensaverOrder,
-  );
+  // Screensavers card
+  const screensaverPrefs = store.getPrefs([
+    "docked_screensaver",
+    "screensaver_style",
+    "docked_idle_timeout",
+  ]);
   const activateScreensaverBtn = store
     .getSectionItems("actions")
     .find(
       (it) =>
         it.domain === "button" &&
-        `${it.name || ""} ${it.entity_id || ""}`.toLowerCase().includes("screensaver"),
+        (it.device_command === "activate_screensaver" ||
+          it.key === "activate_screensaver" ||
+          it.entity_id?.endsWith("_activate_screensaver")),
     );
 
+  // Voice Assistant card
+  const voiceVisualPref = store.getPref("va_visual_profile");
+
+  // Brightness card
+  const autoBrtPref = store.getPref("auto_brightness_mode");
+  const autoBrtState = String(autoBrtPref?.value ?? "").trim();
+  const autoBrtOff = autoBrtState === "Disabled" || autoBrtState === "off";
+  const autoBrtTimeSchedule = autoBrtState === "Time Schedule";
+
+  const brightnessPrefs = store.getPrefs([
+    "auto_brightness_mode",
+    "manual_brightness",
+    "day_brightness",
+    "night_brightness",
+    "day_start_hour",
+    "night_start_hour",
+  ]);
+  const visibleBrightnessPrefs = brightnessPrefs.filter((p) => {
+    if (autoBrtPref) {
+      if (autoBrtOff && (p.key === "day_brightness" || p.key === "night_brightness")) {
+        return false;
+      }
+      if (!autoBrtOff && p.key === "manual_brightness") {
+        return false;
+      }
+      if (!autoBrtTimeSchedule && (p.key === "day_start_hour" || p.key === "night_start_hour")) {
+        return false;
+      }
+    }
+    return true;
+  });
+
+  // Clock card
+  const clockPrefs = store.getPrefs(["clock_face", "time_format"]);
+
+  // Column 2: Colors card
+  const colorProfilePref = store.getPref("color_profile");
+  const curHex = isValidHexColor(cfg.device_custom_color)
+    ? String(cfg.device_custom_color).toUpperCase()
+    : defaultThemeHex(store.host);
+  const swatchStyle = `--swatch-color:${curHex}`;
+
+  // Column 2: Wallpapers
   const curCycle = Number(cfg.wallpaper_cycle_minutes || 0);
   const wallpapers = data?.wallpapers || [];
   const activeWp = wallpapers.find((wp) => Boolean(wp.active)) || null;
@@ -244,36 +145,29 @@ export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
         ? "1 wallpaper starred — star at least 2 to cycle between favorites."
         : `${starredCount} of ${wallpapers.length} wallpapers starred for rotation.`;
 
+  // Column 2: Media Player card
+  const mediaAppearancePrefs = store.getPrefs(["album_art_style", "music_overlay_style"]);
+
   return html`<section id="view-display">
     <div class="columns">
       <div class="column">
-        ${visibleHomeItems.length || (!weatherBgOff && celestialItems.length > 0)
+        ${hasHomeCard
           ? renderCard({
               heading: html`<h3 class="card-title">Home Screen</h3>`,
               contentClass: "settings-list",
               body: html`<div id="embedded-home" class="settings-list">
-                ${visibleHomeItems.map((it) => {
-                  const row = renderNativeControlRow(store, it);
-                  if (weatherBgSwitch && it.entity_id === weatherBgSwitch.entity_id) {
-                    return html`${row}
-                      ${!weatherBgOff && celestialItems.length > 0
-                        ? renderCelestialRow()
-                        : nothing}`;
-                  }
-                  return row;
-                })}
-                ${!weatherBgSwitch && !weatherBgOff && celestialItems.length > 0
-                  ? renderCelestialRow()
-                  : nothing}
+                ${wakeGreetingPref ? renderPrefControlRow(store, wakeGreetingPref) : nothing}
+                ${weatherBgPref ? renderPrefControlRow(store, weatherBgPref) : nothing}
+                ${!weatherBgOff && celestialItems.length > 0 ? renderCelestialRow() : nothing}
               </div>`,
             })
           : nothing}
 
-        ${screensaverSleepItems.length || activateScreensaverBtn
+        ${screensaverPrefs.length || activateScreensaverBtn
           ? renderCard({
               heading: html`<h3 class="card-title">Screensavers</h3>`,
               contentClass: "settings-list",
-              body: html`${screensaverSleepItems.map((it) => renderNativeControlRow(store, it))}
+              body: html`${screensaverPrefs.map((p) => renderPrefControlRow(store, p))}
                 ${activateScreensaverBtn
                   ? renderSettingsRow({
                       label: entityLabel(
@@ -308,27 +202,27 @@ export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
             })
           : nothing}
 
-        ${voiceVisualItems.length
+        ${voiceVisualPref
           ? renderCard({
               heading: html`<h3 class="card-title">Voice Assistant</h3>`,
               contentClass: "settings-list",
-              body: voiceVisualItems.map((it) => renderNativeControlRow(store, it)),
+              body: renderPrefControlRow(store, voiceVisualPref),
             })
           : nothing}
 
-        ${visibleBrightnessItems.length
+        ${visibleBrightnessPrefs.length
           ? renderCard({
               heading: html`<h3 class="card-title">Brightness</h3>`,
               contentClass: "settings-list",
-              body: visibleBrightnessItems.map((it) => renderNativeControlRow(store, it)),
+              body: visibleBrightnessPrefs.map((p) => renderPrefControlRow(store, p)),
             })
           : nothing}
 
-        ${clockItems.length
+        ${clockPrefs.length
           ? renderCard({
               heading: html`<h3 class="card-title">Clock</h3>`,
               contentClass: "settings-list",
-              body: clockItems.map((it) => renderNativeControlRow(store, it)),
+              body: clockPrefs.map((p) => renderPrefControlRow(store, p)),
             })
           : nothing}
       </div>
@@ -337,7 +231,7 @@ export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
         ${renderCard({
           heading: html`<h3 class="card-title">Colors</h3>`,
           contentClass: "settings-list",
-          body: html`${colorItems.map((it) => renderNativeControlRow(store, it))}
+          body: html`${colorProfilePref ? renderPrefControlRow(store, colorProfilePref) : nothing}
             ${renderSettingsRow({
               label: "Custom Color",
               forId: "dev-custom-palette-select",
@@ -487,11 +381,11 @@ export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
             </div>`,
         })}
 
-        ${mediaAppearanceItems.length
+        ${mediaAppearancePrefs.length
           ? renderCard({
               heading: html`<h3 class="card-title">Media Player</h3>`,
               contentClass: "settings-list",
-              body: mediaAppearanceItems.map((it) => renderNativeControlRow(store, it)),
+              body: mediaAppearancePrefs.map((p) => renderPrefControlRow(store, p)),
             })
           : nothing}
       </div>

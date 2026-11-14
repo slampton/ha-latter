@@ -65,7 +65,7 @@ async def test_services_rbac_and_validation_errors(
 
     for svc_name, payload in (
         (SERVICE_SAVE_CUSTOM_COLOR, {"target_device": coord.device_slug, "hex_color": "#112233"}),
-        (SERVICE_SET_DOCK_APPS, {"target_device": coord.device_slug, "dock_apps": "music,alarm,area,remote"}),
+        (SERVICE_SET_DOCK_APPS, {"target_device": coord.device_slug, "dock_apps": "music,home_hub,area,remote"}),
         (SERVICE_RESET_DEVICE, {"target_device": coord.device_slug, "device_settings": False, "latter_options": True}),
     ):
         with pytest.raises(Unauthorized):
@@ -97,7 +97,7 @@ async def test_services_rbac_and_validation_errors(
     await hass.services.async_call(
         DOMAIN,
         SERVICE_SET_DOCK_APPS,
-        {"target_device": coord.device_slug, "dock_apps": "music,alarm,area,remote,games"},
+        {"target_device": coord.device_slug, "dock_apps": "music,home_hub,area,remote,games"},
         blocking=True,
         context=admin_ctx,
     )

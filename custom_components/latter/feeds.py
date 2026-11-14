@@ -408,20 +408,13 @@ async def async_refresh_coordinator_calendar(
 def build_calendar_agenda_payload(coordinator: Any) -> tuple[int, dict[str, Any]]:
     """Return upcoming event count and Protocol v3 `calendar_agenda` payload."""
     count = len(coordinator.calendar_events)
-    next_event = (
-        str(coordinator.calendar_events[0].get("name") or "")
-        if coordinator.calendar_events
-        else ""
-    )
     cal_rev, cal_payload = coordinator._pack_domain_payload(
         "calendar_agenda",
         coordinator.calendar_records,
         count,
-        next_event,
     )
     return count, {
         "event_count": count,
-        "next_event": next_event,
         "events": coordinator.calendar_events,
         "calendars": coordinator.calendar_entities,
         "rev": cal_rev,

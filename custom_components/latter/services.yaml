@@ -61,7 +61,7 @@ music_browse:
           integration: latter
     req_id:
       name: Request ID
-      description: Optional monotonically increasing request correlation ID echoed back in set_browse_slots.
+      description: Optional monotonically increasing request correlation ID echoed back in latter_set_slots.
       required: false
       default: 0
       selector:
@@ -306,7 +306,7 @@ area_browse:
           integration: latter
     req_id:
       name: Request ID
-      description: Optional monotonically increasing request correlation ID echoed back in set_area_slots.
+      description: Optional monotonically increasing request correlation ID echoed back in latter_set_slots.
       required: false
       default: 0
       selector:
@@ -382,7 +382,7 @@ area_action:
           integration: latter
     entity_id:
       name: Target Entity
-      description: Target entity_id (or whole_home.thermostat / whole_home.garage / whole_home.lock / whole_home.vacuum).
+      description: Target entity_id (or home_hub.thermostat / home_hub.garage / home_hub.lock / home_hub.vacuum).
       required: false
       selector:
         text:
@@ -451,7 +451,7 @@ calendar_fetch:
           integration: latter
     req_id:
       name: Request ID
-      description: Optional monotonically increasing request correlation ID echoed back in set_browse_slots.
+      description: Optional monotonically increasing request correlation ID echoed back in latter_set_slots.
       required: false
       default: 0
       selector:

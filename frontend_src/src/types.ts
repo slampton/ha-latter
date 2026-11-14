@@ -355,13 +355,26 @@ export interface SharedControlItem {
   targets: SharedControlTarget[];
 }
 
+export interface DevicePrefItem {
+  key: string;
+  label: string;
+  section: string;
+  group_tier?: string;
+  domain: string;
+  value: unknown;
+  options?: string[];
+  min?: number;
+  max?: number;
+  step?: number;
+  unit?: string;
+}
+
 export interface DeviceGroup {
   id: string;
   name: string;
   description: string;
   builtin?: boolean;
   device_config?: Record<string, unknown>;
-  esphome_controls?: Record<string, unknown>;
 }
 
 export interface LogEntry {
@@ -410,6 +423,7 @@ export interface StudioStatePayload {
   catalog?: EntityCatalog;
   capabilities: DeviceCapabilities;
   config: DeviceConfig;
+  device_prefs?: DevicePrefItem[];
   esphome: EspHomeInspector;
   wallpapers: WallpaperItem[];
   links?: DeviceLinks;

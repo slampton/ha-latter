@@ -65,11 +65,11 @@ class TestProtocolV3Contract(unittest.TestCase):
     def test_domain_field_counts_and_contiguous_indices(self) -> None:
         """Every v3 domain must have contiguous 3..COUNT-1 indices matching expected counts."""
         expected_counts = {
-            "area_context": 40,
-            "active_media": 17,
+            "area_context": 39,
+            "active_media": 15,
             "remote_config": 3,
             "weather_forecast": 14,
-            "calendar_agenda": 3,
+            "calendar_agenda": 2,
             "device_prefs": 48,
         }
         domains = self.schema.get("domains", {})
@@ -145,10 +145,10 @@ class TestProtocolV3Contract(unittest.TestCase):
         self.assertEqual(parsed["minor"], 5)
 
     def test_show_notification_includes_alert_id(self) -> None:
-        """show_notification device action must include alert_id for deduplication."""
+        """latter_show_notification device action must include alert_id for deduplication."""
         notif_vars = (
             self.schema.get("device_actions", {})
-            .get("show_notification", {})
+            .get("latter_show_notification", {})
             .get("variables", {})
         )
         self.assertEqual(notif_vars.get("alert_id"), "int")

@@ -103,10 +103,12 @@ def manifest_is_round(manifest: Mapping[str, Any]) -> bool:
 LATTER_CONTRACT_ACTION_SUFFIXES: tuple[str, ...] = (
     "_latter_push_v3",
     "_latter_device_command",
-    "_set_browse_slots",
-    "_set_area_slots",
-    "_show_notification",
+    "_latter_set_slots",
+    "_latter_show_notification",
+    "_latter_ui_input",
     "_latter_ping",
+    "_latter_set_beacon_uuid",
+    "_latter_factory_reset",
 )
 
 
@@ -278,8 +280,8 @@ def read_device_hardware_manifest(
         hass,
         device_or_id,
         "sensor",
-        ("_system_hardware_manifest", "_hardware_manifest"),
-        original_names=("System: Hardware Manifest", "Hardware Manifest"),
+        ("_system_hardware_manifest",),
+        original_names=("System: Hardware Manifest",),
         unique_id_suffixes=("/text_sensor/System: Hardware Manifest",),
     )
     if manifest_ent_id:
@@ -295,12 +297,6 @@ def read_device_hardware_manifest(
     if isinstance(cached_manifest, dict) and "w" in cached_manifest and "h" in cached_manifest:
         merged.update(cached_manifest)
 
-    if merged and "beacon" not in merged and int(merged.get("minor") or 0) > 0:
-        merged["beacon"] = {
-            "uuid": DEFAULT_BLE_BEACON_UUID,
-            "major": 1,
-            "minor": int(merged["minor"]),
-        }
     return merged
 
 

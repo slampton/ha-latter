@@ -204,7 +204,6 @@ export class StudioWsClient {
     bundle: Record<string, unknown>;
     targetSubentryId?: string | null;
     selectedSubentryId?: string | null;
-    restoreEspHomeEntities: boolean;
   }): Promise<StudioStatePayload> {
     if (options.scope === "device") {
       if (!options.targetSubentryId) {
@@ -214,7 +213,6 @@ export class StudioWsClient {
         type: "latter/device/import",
         subentry_id: options.targetSubentryId,
         bundle: options.bundle,
-        restore_esphome_entities: options.restoreEspHomeEntities,
         studio_rev: STUDIO_REV,
       });
     }
@@ -222,7 +220,6 @@ export class StudioWsClient {
       type: "latter/system/import",
       subentry_id: options.selectedSubentryId || null,
       bundle: options.bundle,
-      restore_esphome_entities: options.restoreEspHomeEntities,
       studio_rev: STUDIO_REV,
     });
   }

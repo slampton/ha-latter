@@ -6,6 +6,7 @@
 import {
   renderCard,
   renderNativeControlRow,
+  renderPrefControlRow,
   renderSelectRow,
   renderSettingsRow,
 } from "../components/controls.js";
@@ -34,32 +35,29 @@ function isValidTelemetryState(val: unknown): val is string {
   return s !== "" && s !== "unknown" && s !== "unavailable";
 }
 
+const INTERNAL_NETWORK_BLOB_KEYS = new Set([
+  "rpc_outbox",
+  "hardware_manifest",
+  "link_report",
+]);
+
 function isInternalNetworkBlobEntity(it: EspHomeEntityItem): boolean {
-  const low = `${it.name || ""} ${it.entity_id || ""}`.toLowerCase();
-  return (
-    low.includes("rpc outbox") ||
-    low.includes("rpc_outbox") ||
-    low.includes("hardware manifest") ||
-    low.includes("hardware_manifest") ||
-    low.includes("link report") ||
-    low.includes("link_report")
-  );
+  if (it.key && INTERNAL_NETWORK_BLOB_KEYS.has(it.key)) return true;
+  return Array.from(INTERNAL_NETWORK_BLOB_KEYS).some((k) => it.entity_id.endsWith(`_${k}`));
 }
 
+const SUMMARY_DUPLICATE_KEYS = new Set([
+  "wifi_signal",
+  "ip_address",
+  "mac_address",
+  "firmware_version",
+  "latter_sdk",
+  "sdk_rev",
+]);
+
 function isSummaryDuplicateNetworkEntity(it: EspHomeEntityItem): boolean {
-  const low = `${it.name || ""} ${it.entity_id || ""}`.toLowerCase();
-  return (
-    low.includes("wifi signal") ||
-    low.includes("wi-fi signal") ||
-    low.includes("wifi_signal") ||
-    low.includes("ip address") ||
-    low.includes("ip_address") ||
-    low.includes("mac address") ||
-    low.includes("mac_address") ||
-    low.includes("firmware version") ||
-    low.includes("firmware_version") ||
-    low.includes("latter sdk")
-  );
+  if (it.key && SUMMARY_DUPLICATE_KEYS.has(it.key)) return true;
+  return Array.from(SUMMARY_DUPLICATE_KEYS).some((k) => it.entity_id.endsWith(`_${k}`));
 }
 
 function formatTelemetryDuration(totalSec: number): string {
@@ -266,9 +264,9 @@ export function renderDeviceToolsView(store: StudioStore): TemplateResult {
       !isSummaryDuplicateNetworkEntity(it),
   );
 
-  const findNetworkState = (keyword: string): string => {
-    const match = networkItems.find((it) =>
-      `${it.name || ""} ${it.entity_id || ""}`.toLowerCase().includes(keyword),
+  const findNetworkState = (key: string): string => {
+    const match = networkItems.find(
+      (it) => it.key === key || it.entity_id.endsWith(`_${key}`),
     );
     return isValidTelemetryState(match?.state) ? String(match?.state).trim() : "";
   };
@@ -279,7 +277,7 @@ export function renderDeviceToolsView(store: StudioStore): TemplateResult {
     if (curDevEntry?.wifi_rssi !== null && curDevEntry?.wifi_rssi !== undefined) {
       signalText = `${fmtNumber(curDevEntry.wifi_rssi, store.hass, 0)} dBm`;
     } else {
-      const rawWifi = findNetworkState("wifi signal") || findNetworkState("wi-fi signal");
+      const rawWifi = findNetworkState("wifi_signal");
       if (rawWifi) {
         signalText = Number.isFinite(Number(rawWifi))
           ? `${fmtNumber(Number(rawWifi), store.hass, 0)} dBm`
@@ -291,33 +289,36 @@ export function renderDeviceToolsView(store: StudioStore): TemplateResult {
   }
 
   const rawSw = String(
-    live.device_sw_version || esp?.device?.sw_version || findNetworkState("firmware version") || "",
+    live.device_sw_version || esp?.device?.sw_version || findNetworkState("firmware_version") || "",
   ).replace(/^v/i, "");
   const fwVersionText = rawSw ? `v${rawSw}` : "—";
   const modelText = curDevEntry?.model_label || esp?.device?.model || "—";
-  const ipStr = curDevEntry?.ip_address || findNetworkState("ip address") || "";
-  const macStr = esp?.device?.mac || findNetworkState("mac address") || "";
+  const ipStr = curDevEntry?.ip_address || findNetworkState("ip_address") || "";
+  const macStr = esp?.device?.mac || findNetworkState("mac_address") || "";
 
-  const devControlItems = developerItems.filter((it) =>
-    INTERACTIVE_ENTITY_DOMAINS.has(it.domain),
+  const weatherSimPref = store.getPref("weather_sim_condition");
+  const devControlItems = developerItems.filter(
+    (it) =>
+      INTERACTIVE_ENTITY_DOMAINS.has(it.domain) &&
+      !it.pref_key &&
+      it.key !== "weather_sim_condition",
   );
   const devSensorItems = developerItems.filter(
     (it) => !INTERACTIVE_ENTITY_DOMAINS.has(it.domain),
   );
-  const linkReportEntity = networkItems.find((it) => {
-    const low = `${it.name || ""} ${it.entity_id || ""}`.toLowerCase();
-    return low.includes("link report") || low.includes("link_report");
-  });
-  const manifestEntity = networkItems.find((it) => {
-    const low = `${it.name || ""} ${it.entity_id || ""}`.toLowerCase();
-    return low.includes("hardware manifest") || low.includes("hardware_manifest");
-  });
+  const linkReportEntity = networkItems.find(
+    (it) => it.key === "link_report" || it.entity_id.endsWith("_link_report"),
+  );
+  const manifestEntity = networkItems.find(
+    (it) => it.key === "hardware_manifest" || it.entity_id.endsWith("_hardware_manifest"),
+  );
   const linkRows = parseDeviceLinkReportRows(linkReportEntity?.state, store.hass);
   const manifestRows = parseDeviceHardwareManifestRows(manifestEntity?.state, store.hass);
   const hasDeveloperDrawer =
     !isBleOnly &&
     Boolean(
-      devControlItems.length ||
+      weatherSimPref ||
+        devControlItems.length ||
         devSensorItems.length ||
         linkRows.length ||
         manifestRows.length,
@@ -399,8 +400,9 @@ export function renderDeviceToolsView(store: StudioStore): TemplateResult {
               ? html`<details class="sub-collapsible">
                   <summary>Developer &amp; Telemetry</summary>
                   <div class="card-content">
-                    ${devControlItems.length
+                    ${weatherSimPref || devControlItems.length
                       ? html`<div class="settings-list">
+                          ${weatherSimPref ? renderPrefControlRow(store, weatherSimPref) : nothing}
                           ${devControlItems.map((it) => renderNativeControlRow(store, it))}
                         </div>`
                       : nothing}

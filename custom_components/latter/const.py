@@ -10,8 +10,8 @@ from homeassistant.const import Platform
 
 DOMAIN: Final = "latter"
 INTEGRATION_VERSION: Final = "3.0.0"
-STUDIO_REV: Final = 8
-MIN_FIRMWARE_SDK_REV: Final = 2026111306
+STUDIO_REV: Final = 9
+MIN_FIRMWARE_SDK_REV: Final = 2026111401
 PLATFORMS: Final[list[Platform]] = [
     Platform.SENSOR,
     Platform.BINARY_SENSOR,
@@ -136,7 +136,7 @@ DEFAULT_BLE_AUTO_SWITCH: Final = True
 DEFAULT_SYNC_DEVICE_AREA: Final = True
 DEFAULT_AREA_FOLLOW_DWELL_S: Final = 10
 DEFAULT_AREA_HANDOFF: Final = False
-DEFAULT_DOCK_APPS: Final = "music,alarm,area,remote,games,tools"
+DEFAULT_DOCK_APPS: Final = "music,home_hub,area,remote,games,tools"
 DEFAULT_AREA_CATEGORIES: Final = "scene,light,cover,fan,switch,climate,media"
 DEFAULT_HOME_CATEGORIES: Final = "alarm,thermostat,entry,vacuum"
 # Home Activity Card: protocol_v3.json defaults.activity_card / defaults.activity_sources (checked by the tests)

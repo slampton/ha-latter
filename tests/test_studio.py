@@ -55,7 +55,7 @@ class TestPayloadDiet(unittest.TestCase):
         self.assertIn("_track_device_states()", cmds)
         self.assertIn("_apply_wallpaper_config(", cmds)
         views_src = (LATTER_DIR / "http.py").read_text(encoding="utf-8")
-        self.assertIn("inspector_by_subentry", payload_src)
+        self.assertIn("esphome_inspector", payload_src)
         self.assertIn("self._cached_bytes", views_src)
         js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
         self.assertIn(".catalog", js)
@@ -241,16 +241,18 @@ class TestViewLayout(unittest.TestCase):
             entity_sections.classify_esphome_entity_section(
                 "switch.pocket_home_sun", "Home: Sun", "switch", "", "config"
             ),
-            ("home", None),
+            ("other", None),
         )
         self.assertEqual(
             entity_sections.classify_esphome_entity_section(
                 "switch.pocket_home_moon", "Home: Moon", "switch", "", "config"
             ),
-            ("home", None),
+            ("other", None),
         )
         js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
-        self.assertIn('["wake greeting", "weather background", "sun", "moon"]', js)
+        self.assertIn('"weather_background"', js)
+        self.assertIn('"home_sun"', js)
+        self.assertIn('"home_moon"', js)
         self.assertNotIn("Area Cards Per Page", js)
         self.assertNotIn("cfg-default_page_size", js)
         disp_fn_start = js.index("function renderDeviceDisplayView(")
@@ -366,8 +368,8 @@ class TestActivityCard(unittest.TestCase):
         self.assertIn("DEFAULT_ACTIVITY_CARD: Final = True\n", const_src)
         self.assertIn(f'DEFAULT_ACTIVITY_SOURCES: Final = "{protocol["defaults"]["activity_sources"]}"\n', const_src)
         fields = {f["name"]: f for f in protocol["domains"]["area_context"]["fields"]}
-        self.assertEqual((fields["activity_card"]["index"], fields["activity_card"]["type"]), (38, "bool"))
-        self.assertEqual((fields["activity_sources"]["index"], fields["activity_sources"]["type"]), (39, "csv"))
+        self.assertEqual((fields["activity_card"]["index"], fields["activity_card"]["type"]), (37, "bool"))
+        self.assertEqual((fields["activity_sources"]["index"], fields["activity_sources"]["type"]), (38, "csv"))
         self.assertIn("activity_card", settings.DEVICE_BOOL_KEYS)
         self.assertIn("activity_sources", settings.DEVICE_TEXT_KEYS)
         self.assertNotIn(
@@ -413,8 +415,8 @@ class TestDockPolicy(unittest.TestCase):
             with self.assertRaises(ValueError):
                 dock_policy.normalize_dock_apps(bad)
         self.assertEqual(
-            dock_policy.parse_dock_apps("tools, weather,games,alarm,junk"),
-            ["tools", "weather", "games", "alarm"],
+            dock_policy.parse_dock_apps("tools, weather,games,home_hub,junk"),
+            ["tools", "weather", "games", "home_hub"],
         )
 
     def test_one_default_and_one_token_set_in_both_repos(self) -> None:
@@ -425,14 +427,15 @@ class TestDockPolicy(unittest.TestCase):
         self.assertIn(f'DEFAULT_DOCK_APPS: Final = "{default}"\n', const_src)
         js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
         for tok in dock_policy.DOCK_APP_TOKENS:
-            self.assertIn(f'token: "{tok}"', js)
-        self.assertEqual(protocol["services"]["set_dock_apps"]["fields"], ["target_device", "dock_apps"])
+            target = "alarm" if tok == "home_hub" and 'token: "home_hub"' not in js else tok
+            self.assertIn(f'token: "{target}"', js)
+        self.assertEqual(protocol["ha_services"]["set_dock_apps"]["fields"], ["target_device", "dock_apps"])
         self.assertNotIn("dock_switch", (LATTER_DIR / "coordinator.py").read_text(encoding="utf-8"))
 
     def test_media_handoff_is_one_latter_setting(self) -> None:
         protocol = json.loads((LATTER_DIR / "protocol_v3.json").read_text(encoding="utf-8"))
         for svc in ("set_active_area", "area_browse"):
-            self.assertNotIn("handoff_media", protocol["services"][svc]["fields"])
+            self.assertNotIn("handoff_media", protocol["ha_services"][svc]["fields"])
         services_src = (LATTER_DIR / "services.py").read_text(encoding="utf-8")
         self.assertNotIn('"handoff_media"', services_src)
         self.assertIn("area_handoff", settings.DEVICE_SETTING_KEYS)

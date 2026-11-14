@@ -17,6 +17,7 @@ import type {
   AreaPresenceRow,
   BleSurveyDeltaEvent,
   BleSurveyRow,
+  DevicePrefItem,
   DeviceViewId,
   EspHomeEntityItem,
   HassRoute,
@@ -191,7 +192,6 @@ export class StudioStore implements ReactiveController {
   announceIncludeCamera = false;
   backupExportScope = "system";
   backupRestoreSubentryId = "";
-  backupRestoreEsp = true;
   logsOpen = false;
   logFilter = "all";
 
@@ -804,6 +804,17 @@ export class StudioStore implements ReactiveController {
       tasks.push(this.flushDeviceBucket(subId));
     }
     await Promise.allSettled(tasks);
+  }
+
+  getPref(key: string): DevicePrefItem | undefined {
+    return (this.state?.device_prefs || []).find((p) => p.key === key);
+  }
+
+  getPrefs(keys?: readonly string[]): DevicePrefItem[] {
+    const all = this.state?.device_prefs || [];
+    if (!keys || keys.length === 0) return all;
+    const keySet = new Set(keys);
+    return all.filter((p) => keySet.has(p.key));
   }
 
   getSectionItems(sectionId: string): EspHomeEntityItem[] {

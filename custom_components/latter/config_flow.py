@@ -154,13 +154,10 @@ def _detect_hardware_defaults(
         manifest = read_device_hardware_manifest(hass, dev_id)
 
     has_native_slots = bool(
-        esphome_service(hass, dev_id, "set_browse_slots")
-        or esphome_service(hass, dev_id, "set_area_slots")
+        esphome_service(hass, dev_id, "latter_set_slots")
     )
 
-    has_ble_beacon = (
-        isinstance(manifest.get("beacon"), dict) or manifest.get("minor") is not None
-    )
+    has_ble_beacon = isinstance(manifest.get("beacon"), dict)
     if not has_ble_beacon and dev is not None:
         for e in er.async_entries_for_device(ent_reg, dev.id):
             if e.entity_id.endswith("_ble_radio_active"):

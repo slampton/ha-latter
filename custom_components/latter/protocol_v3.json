@@ -4,7 +4,7 @@
   "record_separator": "\u001e",
   "absent_value": "A field with no value is the empty string, never a placeholder (none, NONE, None, unknown, unavailable, Idle, Unassigned) or a made-up number. A state field carries only the values its description lists.",
   "defaults": {
-    "dock_apps": "music,alarm,area,remote,games,tools",
+    "dock_apps": "music,home_hub,area,remote,games,tools",
     "activity_card": "1",
     "activity_sources": "calendar,music_queue,stopwatch,alarms,timers",
     "area_categories": "scene,light,cover,fan,switch,climate,media",
@@ -39,46 +39,279 @@
       "cpp_enum_name": "AreaCtxField",
       "description": "Active Area state, climate/security/cover summaries, camera/intercom directories, and alert banner",
       "fields": [
-        {"index": 3, "name": "area_id", "cpp_enum": "AREA_ID", "type": "string", "description": "Active Home Assistant Area ID"},
-        {"index": 4, "name": "area_name", "cpp_enum": "AREA_NAME", "type": "string", "description": "Friendly display name of the active Area"},
-        {"index": 5, "name": "site_id", "cpp_enum": "SITE_ID", "type": "string", "description": "Active Site ID"},
-        {"index": 6, "name": "ble_closest_proxy", "cpp_enum": "BLE_CLOSEST_PROXY", "type": "string", "description": "Friendly name of closest Bluetooth proxy"},
-        {"index": 7, "name": "dock_apps", "cpp_enum": "DOCK_APPS", "type": "csv", "description": "Home dock apps in order, and the only ones shown (music, alarm, area, remote, weather, camera, games, tools; Settings is always last). Empty until set: the device shows defaults.dock_apps"},
-        {"index": 8, "name": "wallpaper_url", "cpp_enum": "WALLPAPER_URL", "type": "url", "description": "Signed HTTP URL for active wallpaper"},
-        {"index": 9, "name": "theme_color_hex", "cpp_enum": "THEME_COLOR_HEX", "type": "string", "description": "Active theme accent color (#RRGGBB)"},
-        {"index": 10, "name": "available_domains", "cpp_enum": "AVAILABLE_DOMAINS", "type": "csv", "description": "Comma-separated enabled Area categories with >= 1 entity in the active Area, in configured order (scene, light, cover, fan, switch, climate, media, all); empty when no categories have entities"},
-        {"index": 11, "name": "area_temp", "cpp_enum": "AREA_TEMP", "type": "string", "description": "Formatted Area temperature"},
-        {"index": 12, "name": "area_humidity", "cpp_enum": "AREA_HUMIDITY", "type": "string", "description": "Formatted Area relative humidity"},
-        {"index": 13, "name": "lights_on", "cpp_enum": "LIGHTS_ON", "type": "u16", "description": "Count of active lights in Area"},
-        {"index": 14, "name": "covers_open", "cpp_enum": "COVERS_OPEN", "type": "u16", "description": "Count of open covers in Area"},
-        {"index": 15, "name": "alarm_entity", "cpp_enum": "ALARM_ENTITY", "type": "entity_id", "description": "Primary alarm control panel entity ID"},
-        {"index": 16, "name": "alarm_state", "cpp_enum": "ALARM_STATE", "type": "string", "description": "Primary alarm state"},
-        {"index": 17, "name": "thermostat_entity", "cpp_enum": "THERMOSTAT_ENTITY", "type": "entity_id", "description": "Primary climate entity ID"},
-        {"index": 18, "name": "thermostat_state", "cpp_enum": "THERMOSTAT_STATE", "type": "string", "description": "Primary climate state/HVAC mode"},
-        {"index": 19, "name": "thermostat_temp", "cpp_enum": "THERMOSTAT_TEMP", "type": "f32", "description": "Target thermostat setpoint temperature"},
-        {"index": 20, "name": "thermostat_current_temp", "cpp_enum": "THERMOSTAT_CURRENT_TEMP", "type": "f32", "description": "Current measured thermostat temperature"},
-        {"index": 21, "name": "lock_entity", "cpp_enum": "LOCK_ENTITY", "type": "entity_id", "description": "Primary lock entity ID"},
-        {"index": 22, "name": "lock_state", "cpp_enum": "LOCK_STATE", "type": "string", "description": "Primary lock state"},
-        {"index": 23, "name": "garage_entity", "cpp_enum": "GARAGE_ENTITY", "type": "entity_id", "description": "Primary garage cover entity ID"},
-        {"index": 24, "name": "garage_state", "cpp_enum": "GARAGE_STATE", "type": "string", "description": "Primary garage cover state"},
-        {"index": 25, "name": "vacuum_entity", "cpp_enum": "VACUUM_ENTITY", "type": "entity_id", "description": "Primary vacuum entity ID"},
-        {"index": 26, "name": "vacuum_state", "cpp_enum": "VACUUM_STATE", "type": "string", "description": "Primary vacuum state"},
-        {"index": 27, "name": "camera_snapshot_url", "cpp_enum": "CAMERA_SNAPSHOT_URL", "type": "url", "description": "Signed HTTP URL for primary camera snapshot"},
-        {"index": 28, "name": "cameras_summary", "cpp_enum": "CAMERAS_SUMMARY", "type": "records", "description": "0x1E-joined entity_id|name|area_id|snapshot_url camera records (up to 10, in configured order; area_id empty when the camera has no Area)"},
-        {"index": 29, "name": "doorbell_talk_state", "cpp_enum": "DOORBELL_TALK_STATE", "type": "string", "description": "Doorbell talkback state"},
-        {"index": 30, "name": "intercom_targets_summary", "cpp_enum": "INTERCOM_TARGETS_SUMMARY", "type": "records", "description": "0x1E-joined target_id|label|kind call_target records (up to 10; kind all = every other Latter Device, listed first; kind device = one Latter Device, labelled by its title); empty when there is no other Device"},
-        {"index": 31, "name": "alert_id", "cpp_enum": "ALERT_ID", "type": "u32", "description": "Monotonic alert/notification identifier"},
-        {"index": 32, "name": "alert_title", "cpp_enum": "ALERT_TITLE", "type": "string", "description": "Alert banner title"},
-        {"index": 33, "name": "alert_message", "cpp_enum": "ALERT_MESSAGE", "type": "string", "description": "Alert banner message body"},
-        {"index": 34, "name": "alert_priority", "cpp_enum": "ALERT_PRIORITY", "type": "string", "description": "Alert priority level (normal|warning|critical)"},
-        {"index": 35, "name": "alert_duration", "cpp_enum": "ALERT_DURATION", "type": "u16", "description": "Alert display duration in seconds"},
-        {"index": 36, "name": "alert_chime", "cpp_enum": "ALERT_CHIME", "type": "bool", "description": "1 = play the alert chime (embedded WAV: sfx 9 for warning/critical, otherwise sfx 6), else 0"},
-        {"index": 37, "name": "alert_camera_url", "cpp_enum": "ALERT_CAMERA_URL", "type": "url", "description": "Signed HTTP URL for alert camera snapshot"},
-        {"index": 38, "name": "activity_card", "cpp_enum": "ACTIVITY_CARD", "type": "bool", "description": "1 = show the Home Activity Card, 0 = hide it (also sent when every source is off); empty until set: the device uses defaults.activity_card"},
-        {"index": 39, "name": "activity_sources", "cpp_enum": "ACTIVITY_SOURCES", "type": "csv", "description": "Activity Card sources that are on, in this order: calendar, music_queue, stopwatch, alarms, timers (unknown keys are ignored); empty until set: the device uses defaults.activity_sources"},
-        {"index": 40, "name": "security_pin_policy", "cpp_enum": "SECURITY_PIN_POLICY", "type": "string", "description": "Perimeter action policy for unlock, disarm, and open_cover (allow|require_pin|block)"},
-        {"index": 41, "name": "home_categories", "cpp_enum": "HOME_CATEGORIES", "type": "csv", "description": "Comma-separated enabled Home Hub categories with >= 1 configured entity, in configured order (alarm, thermostat, entry, vacuum); empty when no categories have entities"},
-        {"index": 42, "name": "area_icon", "cpp_enum": "AREA_ICON", "type": "string", "description": "Home Assistant AreaEntry icon string (e.g. mdi:sofa) or inferred Area archetype icon; empty when unassigned"}
+        {
+          "index": 3,
+          "name": "area_id",
+          "cpp_enum": "AREA_ID",
+          "type": "string",
+          "description": "Active Home Assistant Area ID"
+        },
+        {
+          "index": 4,
+          "name": "area_name",
+          "cpp_enum": "AREA_NAME",
+          "type": "string",
+          "description": "Friendly display name of the active Area"
+        },
+        {
+          "index": 5,
+          "name": "site_id",
+          "cpp_enum": "SITE_ID",
+          "type": "string",
+          "description": "Active Site ID"
+        },
+        {
+          "index": 6,
+          "name": "ble_closest_proxy",
+          "cpp_enum": "BLE_CLOSEST_PROXY",
+          "type": "string",
+          "description": "Friendly name of closest Bluetooth proxy"
+        },
+        {
+          "index": 7,
+          "name": "dock_apps",
+          "cpp_enum": "DOCK_APPS",
+          "type": "csv",
+          "description": "Home dock apps in order, and the only ones shown (music, home_hub, area, remote, weather, camera, games, tools; Settings is always last). Empty until set: the device shows defaults.dock_apps"
+        },
+        {
+          "index": 8,
+          "name": "wallpaper_url",
+          "cpp_enum": "WALLPAPER_URL",
+          "type": "url",
+          "description": "Signed HTTP URL for active wallpaper"
+        },
+        {
+          "index": 9,
+          "name": "available_domains",
+          "cpp_enum": "AVAILABLE_DOMAINS",
+          "type": "csv",
+          "description": "Comma-separated enabled Area categories with >= 1 entity in the active Area, in configured order (scene, light, cover, fan, switch, climate, media, all); empty when no categories have entities"
+        },
+        {
+          "index": 10,
+          "name": "area_temp",
+          "cpp_enum": "AREA_TEMP",
+          "type": "string",
+          "description": "Formatted Area temperature"
+        },
+        {
+          "index": 11,
+          "name": "area_humidity",
+          "cpp_enum": "AREA_HUMIDITY",
+          "type": "string",
+          "description": "Formatted Area relative humidity"
+        },
+        {
+          "index": 12,
+          "name": "lights_on",
+          "cpp_enum": "LIGHTS_ON",
+          "type": "u16",
+          "description": "Count of active lights in Area"
+        },
+        {
+          "index": 13,
+          "name": "covers_open",
+          "cpp_enum": "COVERS_OPEN",
+          "type": "u16",
+          "description": "Count of open covers in Area"
+        },
+        {
+          "index": 14,
+          "name": "alarm_entity",
+          "cpp_enum": "ALARM_ENTITY",
+          "type": "entity_id",
+          "description": "Primary alarm control panel entity ID"
+        },
+        {
+          "index": 15,
+          "name": "alarm_state",
+          "cpp_enum": "ALARM_STATE",
+          "type": "string",
+          "description": "Primary alarm state"
+        },
+        {
+          "index": 16,
+          "name": "thermostat_entity",
+          "cpp_enum": "THERMOSTAT_ENTITY",
+          "type": "entity_id",
+          "description": "Primary climate entity ID"
+        },
+        {
+          "index": 17,
+          "name": "thermostat_state",
+          "cpp_enum": "THERMOSTAT_STATE",
+          "type": "string",
+          "description": "Primary climate state/HVAC mode"
+        },
+        {
+          "index": 18,
+          "name": "thermostat_temp",
+          "cpp_enum": "THERMOSTAT_TEMP",
+          "type": "f32",
+          "description": "Target thermostat setpoint temperature"
+        },
+        {
+          "index": 19,
+          "name": "thermostat_current_temp",
+          "cpp_enum": "THERMOSTAT_CURRENT_TEMP",
+          "type": "f32",
+          "description": "Current measured thermostat temperature"
+        },
+        {
+          "index": 20,
+          "name": "lock_entity",
+          "cpp_enum": "LOCK_ENTITY",
+          "type": "entity_id",
+          "description": "Primary lock entity ID"
+        },
+        {
+          "index": 21,
+          "name": "lock_state",
+          "cpp_enum": "LOCK_STATE",
+          "type": "string",
+          "description": "Primary lock state"
+        },
+        {
+          "index": 22,
+          "name": "garage_entity",
+          "cpp_enum": "GARAGE_ENTITY",
+          "type": "entity_id",
+          "description": "Primary garage cover entity ID"
+        },
+        {
+          "index": 23,
+          "name": "garage_state",
+          "cpp_enum": "GARAGE_STATE",
+          "type": "string",
+          "description": "Primary garage cover state"
+        },
+        {
+          "index": 24,
+          "name": "vacuum_entity",
+          "cpp_enum": "VACUUM_ENTITY",
+          "type": "entity_id",
+          "description": "Primary vacuum entity ID"
+        },
+        {
+          "index": 25,
+          "name": "vacuum_state",
+          "cpp_enum": "VACUUM_STATE",
+          "type": "string",
+          "description": "Primary vacuum state"
+        },
+        {
+          "index": 26,
+          "name": "camera_snapshot_url",
+          "cpp_enum": "CAMERA_SNAPSHOT_URL",
+          "type": "url",
+          "description": "Signed HTTP URL for primary camera snapshot"
+        },
+        {
+          "index": 27,
+          "name": "cameras_summary",
+          "cpp_enum": "CAMERAS_SUMMARY",
+          "type": "records",
+          "description": "0x1E-joined entity_id|name|area_id|snapshot_url camera records (up to 10, in configured order; area_id empty when the camera has no Area)"
+        },
+        {
+          "index": 28,
+          "name": "doorbell_talk_state",
+          "cpp_enum": "DOORBELL_TALK_STATE",
+          "type": "string",
+          "description": "Doorbell talkback state"
+        },
+        {
+          "index": 29,
+          "name": "intercom_targets_summary",
+          "cpp_enum": "INTERCOM_TARGETS_SUMMARY",
+          "type": "records",
+          "description": "0x1E-joined target_id|label|kind call_target records (up to 10; kind all = every other Latter Device, listed first; kind device = one Latter Device, labelled by its title); empty when there is no other Device"
+        },
+        {
+          "index": 30,
+          "name": "alert_id",
+          "cpp_enum": "ALERT_ID",
+          "type": "u32",
+          "description": "Monotonic alert/notification identifier"
+        },
+        {
+          "index": 31,
+          "name": "alert_title",
+          "cpp_enum": "ALERT_TITLE",
+          "type": "string",
+          "description": "Alert banner title"
+        },
+        {
+          "index": 32,
+          "name": "alert_message",
+          "cpp_enum": "ALERT_MESSAGE",
+          "type": "string",
+          "description": "Alert banner message body"
+        },
+        {
+          "index": 33,
+          "name": "alert_priority",
+          "cpp_enum": "ALERT_PRIORITY",
+          "type": "string",
+          "description": "Alert priority level (normal|warning|critical)"
+        },
+        {
+          "index": 34,
+          "name": "alert_duration",
+          "cpp_enum": "ALERT_DURATION",
+          "type": "u16",
+          "description": "Alert display duration in seconds"
+        },
+        {
+          "index": 35,
+          "name": "alert_chime",
+          "cpp_enum": "ALERT_CHIME",
+          "type": "bool",
+          "description": "1 = play the alert chime (embedded WAV: sfx 9 for warning/critical, otherwise sfx 6), else 0"
+        },
+        {
+          "index": 36,
+          "name": "alert_camera_url",
+          "cpp_enum": "ALERT_CAMERA_URL",
+          "type": "url",
+          "description": "Signed HTTP URL for alert camera snapshot"
+        },
+        {
+          "index": 37,
+          "name": "activity_card",
+          "cpp_enum": "ACTIVITY_CARD",
+          "type": "bool",
+          "description": "1 = show the Home Activity Card, 0 = hide it (also sent when every source is off); empty until set: the device uses defaults.activity_card"
+        },
+        {
+          "index": 38,
+          "name": "activity_sources",
+          "cpp_enum": "ACTIVITY_SOURCES",
+          "type": "csv",
+          "description": "Activity Card sources that are on, in this order: calendar, music_queue, stopwatch, alarms, timers (unknown keys are ignored); empty until set: the device uses defaults.activity_sources"
+        },
+        {
+          "index": 39,
+          "name": "security_pin_policy",
+          "cpp_enum": "SECURITY_PIN_POLICY",
+          "type": "string",
+          "description": "Perimeter action policy for unlock, disarm, and open_cover (allow|require_pin|block)"
+        },
+        {
+          "index": 40,
+          "name": "home_categories",
+          "cpp_enum": "HOME_CATEGORIES",
+          "type": "csv",
+          "description": "Comma-separated enabled Home Hub categories with >= 1 configured entity, in configured order (alarm, thermostat, entry, vacuum); empty when no categories have entities"
+        },
+        {
+          "index": 41,
+          "name": "area_icon",
+          "cpp_enum": "AREA_ICON",
+          "type": "string",
+          "description": "Home Assistant AreaEntry icon string (e.g. mdi:sofa) or inferred Area archetype icon; empty when unassigned"
+        }
       ]
     },
     "active_media": {
@@ -86,23 +319,111 @@
       "cpp_enum_name": "MediaField",
       "description": "Active media player state, metadata, timestamped playback progress, artwork URL, and speaker routing",
       "fields": [
-        {"index": 3, "name": "state", "cpp_enum": "STATE", "type": "string", "description": "Playback state (playing|paused|buffering|idle|off); empty while the speaker is missing or unavailable"},
-        {"index": 4, "name": "title", "cpp_enum": "TITLE", "type": "string", "description": "Track title"},
-        {"index": 5, "name": "artist", "cpp_enum": "ARTIST", "type": "string", "description": "Track artist"},
-        {"index": 6, "name": "album", "cpp_enum": "ALBUM", "type": "string", "description": "Album title"},
-        {"index": 7, "name": "duration", "cpp_enum": "DURATION", "type": "f32", "description": "Track duration in seconds"},
-        {"index": 8, "name": "position", "cpp_enum": "POSITION", "type": "f32", "description": "Track position in seconds at position_updated_at"},
-        {"index": 9, "name": "position_updated_at", "cpp_enum": "POSITION_UPDATED_AT", "type": "u32", "description": "Unix epoch seconds when position was sampled"},
-        {"index": 10, "name": "volume", "cpp_enum": "VOLUME", "type": "u16", "description": "Volume percentage (0..100)"},
-        {"index": 11, "name": "media_type", "cpp_enum": "MEDIA_TYPE", "type": "string", "description": "Media content type"},
-        {"index": 12, "name": "supported_features", "cpp_enum": "SUPPORTED_FEATURES", "type": "u32", "description": "Home Assistant MediaPlayerEntityFeature bitmask"},
-        {"index": 13, "name": "art_url", "cpp_enum": "ART_URL", "type": "url", "description": "Signed HTTP URL for album art proxy"},
-        {"index": 14, "name": "active_speaker", "cpp_enum": "ACTIVE_SPEAKER", "type": "entity_id", "description": "Active media_player entity ID"},
-        {"index": 15, "name": "speaker_name", "cpp_enum": "SPEAKER_NAME", "type": "string", "description": "Friendly name of active speaker"},
-        {"index": 16, "name": "last_speaker", "cpp_enum": "LAST_SPEAKER", "type": "entity_id", "description": "Previously active media_player entity ID"},
-        {"index": 17, "name": "local_speaker", "cpp_enum": "LOCAL_SPEAKER", "type": "entity_id", "description": "Device's own local media_player entity ID"},
-        {"index": 18, "name": "volume_entity", "cpp_enum": "VOLUME_ENTITY", "type": "entity_id", "description": "Entity ID used for volume control"},
-        {"index": 19, "name": "is_local", "cpp_enum": "IS_LOCAL", "type": "bool", "description": "1 if active_speaker is this device's own speaker, else 0"}
+        {
+          "index": 3,
+          "name": "state",
+          "cpp_enum": "STATE",
+          "type": "string",
+          "description": "Playback state (playing|paused|buffering|idle|off); empty while the speaker is missing or unavailable"
+        },
+        {
+          "index": 4,
+          "name": "title",
+          "cpp_enum": "TITLE",
+          "type": "string",
+          "description": "Track title"
+        },
+        {
+          "index": 5,
+          "name": "artist",
+          "cpp_enum": "ARTIST",
+          "type": "string",
+          "description": "Track artist"
+        },
+        {
+          "index": 6,
+          "name": "album",
+          "cpp_enum": "ALBUM",
+          "type": "string",
+          "description": "Album title"
+        },
+        {
+          "index": 7,
+          "name": "duration",
+          "cpp_enum": "DURATION",
+          "type": "f32",
+          "description": "Track duration in seconds"
+        },
+        {
+          "index": 8,
+          "name": "position",
+          "cpp_enum": "POSITION",
+          "type": "f32",
+          "description": "Track position in seconds at position_updated_at"
+        },
+        {
+          "index": 9,
+          "name": "position_updated_at",
+          "cpp_enum": "POSITION_UPDATED_AT",
+          "type": "u32",
+          "description": "Unix epoch seconds when position was sampled"
+        },
+        {
+          "index": 10,
+          "name": "volume",
+          "cpp_enum": "VOLUME",
+          "type": "u16",
+          "description": "Volume percentage (0..100)"
+        },
+        {
+          "index": 11,
+          "name": "media_type",
+          "cpp_enum": "MEDIA_TYPE",
+          "type": "string",
+          "description": "Media content type"
+        },
+        {
+          "index": 12,
+          "name": "art_url",
+          "cpp_enum": "ART_URL",
+          "type": "url",
+          "description": "Signed HTTP URL for album art proxy"
+        },
+        {
+          "index": 13,
+          "name": "active_speaker",
+          "cpp_enum": "ACTIVE_SPEAKER",
+          "type": "entity_id",
+          "description": "Active media_player entity ID"
+        },
+        {
+          "index": 14,
+          "name": "speaker_name",
+          "cpp_enum": "SPEAKER_NAME",
+          "type": "string",
+          "description": "Friendly name of active speaker"
+        },
+        {
+          "index": 15,
+          "name": "last_speaker",
+          "cpp_enum": "LAST_SPEAKER",
+          "type": "entity_id",
+          "description": "Previously active media_player entity ID"
+        },
+        {
+          "index": 16,
+          "name": "local_speaker",
+          "cpp_enum": "LOCAL_SPEAKER",
+          "type": "entity_id",
+          "description": "Device's own local media_player entity ID"
+        },
+        {
+          "index": 17,
+          "name": "is_local",
+          "cpp_enum": "IS_LOCAL",
+          "type": "bool",
+          "description": "1 if active_speaker is this device's own speaker, else 0"
+        }
       ]
     },
     "remote_config": {
@@ -110,9 +431,27 @@
       "cpp_enum_name": "RemoteField",
       "description": "Universal TV/AV remote slot directory and active remote selection",
       "fields": [
-        {"index": 3, "name": "active_slot", "cpp_enum": "ACTIVE_SLOT", "type": "u16", "description": "Currently selected 1-based remote slot index"},
-        {"index": 4, "name": "configured_count", "cpp_enum": "CONFIGURED_COUNT", "type": "u16", "description": "Number of configured remotes in active group"},
-        {"index": 5, "name": "slots_summary", "cpp_enum": "SLOTS_SUMMARY", "type": "records", "description": "0x1E-joined index|label|entity_id|kind|area_id|state remote records (configured slots only, up to 10; index is the 1-based slot; kind is remote or media_player, the domain of entity_id)"}
+        {
+          "index": 3,
+          "name": "active_slot",
+          "cpp_enum": "ACTIVE_SLOT",
+          "type": "u16",
+          "description": "Currently selected 1-based remote slot index"
+        },
+        {
+          "index": 4,
+          "name": "configured_count",
+          "cpp_enum": "CONFIGURED_COUNT",
+          "type": "u16",
+          "description": "Number of configured remotes in active group"
+        },
+        {
+          "index": 5,
+          "name": "slots_summary",
+          "cpp_enum": "SLOTS_SUMMARY",
+          "type": "records",
+          "description": "0x1E-joined index|label|entity_id|kind|area_id|state remote records (configured slots only, up to 10; index is the 1-based slot; kind is remote or media_player, the domain of entity_id)"
+        }
       ]
     },
     "weather_forecast": {
@@ -120,20 +459,104 @@
       "cpp_enum_name": "WeatherField",
       "description": "Current outdoor weather telemetry and 5-day daily forecast",
       "fields": [
-        {"index": 3, "name": "condition", "cpp_enum": "CONDITION", "type": "string", "description": "Current weather condition slug"},
-        {"index": 4, "name": "temperature", "cpp_enum": "TEMPERATURE", "type": "f32", "description": "Current outdoor temperature"},
-        {"index": 5, "name": "humidity", "cpp_enum": "HUMIDITY", "type": "f32", "description": "Current outdoor relative humidity percentage"},
-        {"index": 6, "name": "wind_speed", "cpp_enum": "WIND_SPEED", "type": "f32", "description": "Current wind speed"},
-        {"index": 7, "name": "wind_bearing", "cpp_enum": "WIND_BEARING", "type": "string", "description": "Wind cardinal direction or bearing"},
-        {"index": 8, "name": "high", "cpp_enum": "HIGH", "type": "f32", "description": "Today's forecast high temperature"},
-        {"index": 9, "name": "low", "cpp_enum": "LOW", "type": "f32", "description": "Today's forecast low temperature"},
-        {"index": 10, "name": "forecast_5d", "cpp_enum": "FORECAST_5D", "type": "records", "description": "0x1E-joined day|cond|high|low daily forecast records (up to 5; day MON..SUN in local time; cond is the Home Assistant condition; high and low are whole degrees in the weather entity's unit, empty when unknown)"},
-        {"index": 11, "name": "sun_state", "cpp_enum": "SUN_STATE", "type": "string", "description": "Sun horizon state from Home Assistant (above_horizon|below_horizon)"},
-        {"index": 12, "name": "sun_elevation", "cpp_enum": "SUN_ELEVATION", "type": "f32", "description": "Solar elevation angle in degrees"},
-        {"index": 13, "name": "sun_azimuth", "cpp_enum": "SUN_AZIMUTH", "type": "f32", "description": "Solar azimuth angle in degrees (0..360)"},
-        {"index": 14, "name": "sun_next_rising", "cpp_enum": "SUN_NEXT_RISING", "type": "string", "description": "Next sunrise ISO-8601 UTC timestamp"},
-        {"index": 15, "name": "sun_next_setting", "cpp_enum": "SUN_NEXT_SETTING", "type": "string", "description": "Next sunset ISO-8601 UTC timestamp"},
-        {"index": 16, "name": "moon_phase", "cpp_enum": "MOON_PHASE", "type": "string", "description": "Lunar phase slug (new_moon|waxing_crescent|first_quarter|waxing_gibbous|full_moon|waning_gibbous|last_quarter|waning_crescent)"}
+        {
+          "index": 3,
+          "name": "condition",
+          "cpp_enum": "CONDITION",
+          "type": "string",
+          "description": "Current weather condition slug"
+        },
+        {
+          "index": 4,
+          "name": "temperature",
+          "cpp_enum": "TEMPERATURE",
+          "type": "f32",
+          "description": "Current outdoor temperature"
+        },
+        {
+          "index": 5,
+          "name": "humidity",
+          "cpp_enum": "HUMIDITY",
+          "type": "f32",
+          "description": "Current outdoor relative humidity percentage"
+        },
+        {
+          "index": 6,
+          "name": "wind_speed",
+          "cpp_enum": "WIND_SPEED",
+          "type": "f32",
+          "description": "Current wind speed"
+        },
+        {
+          "index": 7,
+          "name": "wind_bearing",
+          "cpp_enum": "WIND_BEARING",
+          "type": "string",
+          "description": "Wind cardinal direction or bearing"
+        },
+        {
+          "index": 8,
+          "name": "high",
+          "cpp_enum": "HIGH",
+          "type": "f32",
+          "description": "Today's forecast high temperature"
+        },
+        {
+          "index": 9,
+          "name": "low",
+          "cpp_enum": "LOW",
+          "type": "f32",
+          "description": "Today's forecast low temperature"
+        },
+        {
+          "index": 10,
+          "name": "forecast_5d",
+          "cpp_enum": "FORECAST_5D",
+          "type": "records",
+          "description": "0x1E-joined day|cond|high|low daily forecast records (up to 5; day MON..SUN in local time; cond is the Home Assistant condition; high and low are whole degrees in the weather entity's unit, empty when unknown)"
+        },
+        {
+          "index": 11,
+          "name": "sun_state",
+          "cpp_enum": "SUN_STATE",
+          "type": "string",
+          "description": "Sun horizon state from Home Assistant (above_horizon|below_horizon)"
+        },
+        {
+          "index": 12,
+          "name": "sun_elevation",
+          "cpp_enum": "SUN_ELEVATION",
+          "type": "f32",
+          "description": "Solar elevation angle in degrees"
+        },
+        {
+          "index": 13,
+          "name": "sun_azimuth",
+          "cpp_enum": "SUN_AZIMUTH",
+          "type": "f32",
+          "description": "Solar azimuth angle in degrees (0..360)"
+        },
+        {
+          "index": 14,
+          "name": "sun_next_rising",
+          "cpp_enum": "SUN_NEXT_RISING",
+          "type": "string",
+          "description": "Next sunrise ISO-8601 UTC timestamp"
+        },
+        {
+          "index": 15,
+          "name": "sun_next_setting",
+          "cpp_enum": "SUN_NEXT_SETTING",
+          "type": "string",
+          "description": "Next sunset ISO-8601 UTC timestamp"
+        },
+        {
+          "index": 16,
+          "name": "moon_phase",
+          "cpp_enum": "MOON_PHASE",
+          "type": "string",
+          "description": "Lunar phase slug (new_moon|waxing_crescent|first_quarter|waxing_gibbous|full_moon|waning_gibbous|last_quarter|waning_crescent)"
+        }
       ]
     },
     "calendar_agenda": {
@@ -141,9 +564,20 @@
       "cpp_enum_name": "CalendarField",
       "description": "Upcoming calendar agenda events and next-event headline",
       "fields": [
-        {"index": 3, "name": "summary", "cpp_enum": "SUMMARY", "type": "records", "description": "0x1E-joined time|title|location|all_day agenda records (up to 5; time is a local label such as TODAY 14:30, TOM ALL DAY or NOV 20 08:05; all_day 1 or 0)"},
-        {"index": 4, "name": "count", "cpp_enum": "EVENT_COUNT", "type": "u16", "description": "Number of upcoming agenda events"},
-        {"index": 5, "name": "next_event", "cpp_enum": "NEXT_EVENT", "type": "string", "description": "Headline summary of the next upcoming event"}
+        {
+          "index": 3,
+          "name": "summary",
+          "cpp_enum": "SUMMARY",
+          "type": "records",
+          "description": "0x1E-joined time|title|location|all_day agenda records (up to 5; time is a local label such as TODAY 14:30, TOM ALL DAY or NOV 20 08:05; all_day 1 or 0)"
+        },
+        {
+          "index": 4,
+          "name": "count",
+          "cpp_enum": "EVENT_COUNT",
+          "type": "u16",
+          "description": "Number of upcoming agenda events"
+        }
       ]
     },
     "device_prefs": {
@@ -151,54 +585,342 @@
       "cpp_enum_name": "DevicePrefsField",
       "description": "Authoritative Device preferences, power/sleep policies, audio/wake-word tunables, and UI personalization synced between Latter and NVS",
       "fields": [
-        {"index": 3, "name": "prefs_seq", "cpp_enum": "PREFS_SEQ", "type": "u32", "description": "Monotonic preference sequence counter incremented by Home Assistant on every preference update"},
-        {"index": 4, "name": "power_profile", "cpp_enum": "POWER_PROFILE", "type": "string", "description": "Active power/sleep profile (Portable Carry|Handheld Roaming|Wearable Watch|Tabletop Dock|Always-On Wall / Desk|Custom)"},
-        {"index": 5, "name": "wake_word_mode", "cpp_enum": "WAKE_WORD_MODE", "type": "string", "description": "Wake word policy (Docked Only|Always On|Disabled)"},
-        {"index": 6, "name": "tap_to_wake", "cpp_enum": "TAP_TO_WAKE", "type": "string", "description": "Touch wake policy (Always On|Docked Only|Disabled)"},
-        {"index": 7, "name": "pickup_to_wake", "cpp_enum": "PICKUP_TO_WAKE", "type": "string", "description": "IMU pickup wake policy (Always On|Docked Only|Disabled)"},
-        {"index": 8, "name": "battery_screen_timeout", "cpp_enum": "BATTERY_SCREEN_TIMEOUT", "type": "string", "description": "Battery screen timeout (10s|15s|30s|1 min|2 min|Never)"},
-        {"index": 9, "name": "docked_idle_timeout", "cpp_enum": "DOCKED_IDLE_TIMEOUT", "type": "string", "description": "Docked idle timeout before screensaver/sleep (10s|15s|30s|1 min|2 min|5 min|Never)"},
-        {"index": 10, "name": "battery_hibernate_timeout", "cpp_enum": "BATTERY_HIBERNATE_TIMEOUT", "type": "string", "description": "Battery deep sleep / hibernate timeout (5 min|10 min|15 min|30 min|Disabled)"},
-        {"index": 11, "name": "docked_screensaver", "cpp_enum": "DOCKED_SCREENSAVER", "type": "bool", "description": "1 = launch screensaver instead of sleeping when docked idle timeout expires, else 0"},
-        {"index": 12, "name": "screensaver_style", "cpp_enum": "SCREENSAVER_STYLE", "type": "string", "description": "Ambient screensaver style (Ambient Clock|Aurora|Starfield|Digital Rain|Fireworks)"},
-        {"index": 13, "name": "hold_crown_power_off", "cpp_enum": "HOLD_CROWN_POWER_OFF", "type": "bool", "description": "1 = long-holding rotary crown enters deep sleep / power off, else 0"},
-        {"index": 14, "name": "auto_brightness_mode", "cpp_enum": "AUTO_BRIGHTNESS_MODE", "type": "string", "description": "Automatic brightness mode (Disabled|Sun Synchronized|Time Schedule)"},
-        {"index": 15, "name": "manual_brightness", "cpp_enum": "MANUAL_BRIGHTNESS", "type": "string", "description": "Manual brightness target when auto brightness is Disabled (60%|70%|80%|90%|100%)"},
-        {"index": 16, "name": "day_brightness", "cpp_enum": "DAY_BRIGHTNESS", "type": "string", "description": "Daytime brightness target (60%|70%|80%|90%|100%)"},
-        {"index": 17, "name": "night_brightness", "cpp_enum": "NIGHT_BRIGHTNESS", "type": "string", "description": "Nighttime brightness target (60%|70%|80%|90%|100%)"},
-        {"index": 18, "name": "day_start_hour", "cpp_enum": "DAY_START_HOUR", "type": "u16", "description": "Time schedule daytime start hour (0..23)"},
-        {"index": 19, "name": "night_start_hour", "cpp_enum": "NIGHT_START_HOUR", "type": "u16", "description": "Time schedule nighttime start hour (0..23)"},
-        {"index": 20, "name": "color_profile", "cpp_enum": "COLOR_PROFILE", "type": "string", "description": "Theme accent preset (Steel Blue|Pink|Blue|Green|Custom)"},
-        {"index": 21, "name": "va_visual_profile", "cpp_enum": "VA_VISUAL_PROFILE", "type": "string", "description": "Voice assistant visual overlay style (Nebula|Solaris|Rings|Light Bar|Dot Wave)"},
-        {"index": 22, "name": "home_screen_enabled", "cpp_enum": "HOME_SCREEN_ENABLED", "type": "bool", "description": "1 = enable the Home Screen and App Dock, 0 = single-app mode locked to start_screen"},
-        {"index": 23, "name": "start_screen", "cpp_enum": "START_SCREEN", "type": "string", "description": "Boot / single-app start screen (Home|Clock|Media|Home Hub|Area Controls|Remote|Weather|Cameras|Games|Tools)"},
-        {"index": 24, "name": "return_to_home_timeout", "cpp_enum": "RETURN_TO_HOME_TIMEOUT", "type": "string", "description": "Idle timeout before resetting navigation back to the Home Screen (15s|30s|1 min|2 min|5 min|10 min|Never)"},
-        {"index": 25, "name": "clock_face", "cpp_enum": "CLOCK_FACE", "type": "string", "description": "Clock face style (Minimal Digital|Modern Roman (Analog)|Modern Digital (Bold))"},
-        {"index": 26, "name": "time_format", "cpp_enum": "TIME_FORMAT", "type": "string", "description": "Clock time format (12-Hour (AM/PM)|24-Hour)"},
-        {"index": 27, "name": "weather_background", "cpp_enum": "WEATHER_BACKGROUND", "type": "bool", "description": "1 = animate ambient weather particles on Home screen, else 0"},
-        {"index": 28, "name": "home_sun", "cpp_enum": "HOME_SUN", "type": "bool", "description": "1 = show daytime solar disc on Home screen, else 0"},
-        {"index": 29, "name": "home_moon", "cpp_enum": "HOME_MOON", "type": "bool", "description": "1 = show nighttime lunar phase disc on Home screen, else 0"},
-        {"index": 30, "name": "wake_greeting", "cpp_enum": "WAKE_GREETING", "type": "bool", "description": "1 = show time-of-day wake greeting toast, else 0"},
-        {"index": 31, "name": "album_art_style", "cpp_enum": "ALBUM_ART_STYLE", "type": "string", "description": "Now Playing album art layout (Full Screen|Letterbox|Standard|None)"},
-        {"index": 32, "name": "music_overlay_style", "cpp_enum": "MUSIC_OVERLAY_STYLE", "type": "string", "description": "Now Playing controls overlay visibility (Art Only|Art + Metadata|Always Visible)"},
-        {"index": 33, "name": "show_speaker_shortcut", "cpp_enum": "SHOW_SPEAKER_SHORTCUT", "type": "bool", "description": "1 = show speaker selector shortcut on Now Playing, else 0"},
-        {"index": 34, "name": "show_library_shortcut", "cpp_enum": "SHOW_LIBRARY_SHORTCUT", "type": "bool", "description": "1 = show library browse shortcut on Now Playing, else 0"},
-        {"index": 35, "name": "album_sort_order", "cpp_enum": "ALBUM_SORT_ORDER", "type": "string", "description": "Album browser sort order (Alphabetical|Newest on Top|Oldest on Top)"},
-        {"index": 36, "name": "artist_album_sort_order", "cpp_enum": "ARTIST_ALBUM_SORT_ORDER", "type": "string", "description": "Artist discography sort order (Oldest on Top|Newest on Top|Alphabetical)"},
-        {"index": 37, "name": "podcast_sort_order", "cpp_enum": "PODCAST_SORT_ORDER", "type": "string", "description": "Podcast episode sort order (Newest on Top|Oldest on Top)"},
-        {"index": 38, "name": "ww_sens_okay_nabu", "cpp_enum": "WW_SENS_OKAY_NABU", "type": "string", "description": "Okay Nabu wake word sensitivity (Slightly sensitive|Moderately sensitive|Very sensitive)"},
-        {"index": 39, "name": "ww_sens_hey_luna", "cpp_enum": "WW_SENS_HEY_LUNA", "type": "string", "description": "Hey Luna wake word sensitivity (Slightly sensitive|Moderately sensitive|Very sensitive)"},
-        {"index": 40, "name": "ww_sens_hey_jarvis", "cpp_enum": "WW_SENS_HEY_JARVIS", "type": "string", "description": "Hey Jarvis wake word sensitivity (Slightly sensitive|Moderately sensitive|Very sensitive)"},
-        {"index": 41, "name": "ww_sens_hey_mycroft", "cpp_enum": "WW_SENS_HEY_MYCROFT", "type": "string", "description": "Hey Mycroft wake word sensitivity (Slightly sensitive|Moderately sensitive|Very sensitive)"},
-        {"index": 42, "name": "ww_sens_alexa", "cpp_enum": "WW_SENS_ALEXA", "type": "string", "description": "Alexa wake word sensitivity (Slightly sensitive|Moderately sensitive|Very sensitive)"},
-        {"index": 43, "name": "wake_screen_on_assist", "cpp_enum": "WAKE_SCREEN_ON_ASSIST", "type": "bool", "description": "1 = wake display automatically when voice assistant triggers, else 0"},
-        {"index": 44, "name": "alert_volume", "cpp_enum": "ALERT_VOLUME", "type": "u16", "description": "Timer, alarm, and notification chime volume percentage (20..100)"},
-        {"index": 45, "name": "volume_step_size", "cpp_enum": "VOLUME_STEP_SIZE", "type": "u16", "description": "Rotary/button volume increment step percentage (1..10)"},
-        {"index": 46, "name": "game_sound_effects", "cpp_enum": "GAME_SOUND_EFFECTS", "type": "bool", "description": "1 = play arcade game sound effects, else 0"},
-        {"index": 47, "name": "ble_beacon_enabled", "cpp_enum": "BLE_BEACON_ENABLED", "type": "bool", "description": "1 = enable BLE iBeacon presence advertising (derived from native_ble_tracking), else 0"},
-        {"index": 48, "name": "ble_beacon_mode", "cpp_enum": "BLE_BEACON_MODE", "type": "string", "description": "BLE beacon advertising duty policy (Handheld Only|Handheld + Screen Off|Always)"},
-        {"index": 49, "name": "weather_sim_condition", "cpp_enum": "WEATHER_SIM_CONDITION", "type": "string", "description": "Developer weather animation override (Live (Home Assistant) or simulated condition label)"},
-        {"index": 50, "name": "theme_color_hex", "cpp_enum": "THEME_COLOR_HEX", "type": "string", "description": "Custom theme accent color (#RRGGBB) synchronized with device_custom_color"}
+        {
+          "index": 3,
+          "name": "prefs_seq",
+          "cpp_enum": "PREFS_SEQ",
+          "type": "u32",
+          "description": "Monotonic preference sequence counter incremented by Home Assistant on every preference update"
+        },
+        {
+          "index": 4,
+          "name": "power_profile",
+          "cpp_enum": "POWER_PROFILE",
+          "type": "string",
+          "description": "Active power/sleep profile (Portable Carry|Handheld Roaming|Wearable Watch|Tabletop Dock|Always-On Wall / Desk|Custom)"
+        },
+        {
+          "index": 5,
+          "name": "wake_word_mode",
+          "cpp_enum": "WAKE_WORD_MODE",
+          "type": "string",
+          "description": "Wake word policy (Docked Only|Always On|Disabled)"
+        },
+        {
+          "index": 6,
+          "name": "tap_to_wake",
+          "cpp_enum": "TAP_TO_WAKE",
+          "type": "string",
+          "description": "Touch wake policy (Always On|Docked Only|Disabled)"
+        },
+        {
+          "index": 7,
+          "name": "pickup_to_wake",
+          "cpp_enum": "PICKUP_TO_WAKE",
+          "type": "string",
+          "description": "IMU pickup wake policy (Always On|Docked Only|Disabled)"
+        },
+        {
+          "index": 8,
+          "name": "battery_screen_timeout",
+          "cpp_enum": "BATTERY_SCREEN_TIMEOUT",
+          "type": "string",
+          "description": "Battery screen timeout (10s|15s|30s|1 min|2 min|Never)"
+        },
+        {
+          "index": 9,
+          "name": "docked_idle_timeout",
+          "cpp_enum": "DOCKED_IDLE_TIMEOUT",
+          "type": "string",
+          "description": "Docked idle timeout before screensaver/sleep (10s|15s|30s|1 min|2 min|5 min|Never)"
+        },
+        {
+          "index": 10,
+          "name": "battery_hibernate_timeout",
+          "cpp_enum": "BATTERY_HIBERNATE_TIMEOUT",
+          "type": "string",
+          "description": "Battery deep sleep / hibernate timeout (5 min|10 min|15 min|30 min|Disabled)"
+        },
+        {
+          "index": 11,
+          "name": "docked_screensaver",
+          "cpp_enum": "DOCKED_SCREENSAVER",
+          "type": "bool",
+          "description": "1 = launch screensaver instead of sleeping when docked idle timeout expires, else 0"
+        },
+        {
+          "index": 12,
+          "name": "screensaver_style",
+          "cpp_enum": "SCREENSAVER_STYLE",
+          "type": "string",
+          "description": "Ambient screensaver style (Ambient Clock|Aurora|Starfield|Digital Rain|Fireworks)"
+        },
+        {
+          "index": 13,
+          "name": "hold_crown_power_off",
+          "cpp_enum": "HOLD_CROWN_POWER_OFF",
+          "type": "bool",
+          "description": "1 = long-holding rotary crown enters deep sleep / power off, else 0"
+        },
+        {
+          "index": 14,
+          "name": "auto_brightness_mode",
+          "cpp_enum": "AUTO_BRIGHTNESS_MODE",
+          "type": "string",
+          "description": "Automatic brightness mode (Disabled|Sun Synchronized|Time Schedule)"
+        },
+        {
+          "index": 15,
+          "name": "manual_brightness",
+          "cpp_enum": "MANUAL_BRIGHTNESS",
+          "type": "string",
+          "description": "Manual brightness target when auto brightness is Disabled (60%|70%|80%|90%|100%)"
+        },
+        {
+          "index": 16,
+          "name": "day_brightness",
+          "cpp_enum": "DAY_BRIGHTNESS",
+          "type": "string",
+          "description": "Daytime brightness target (60%|70%|80%|90%|100%)"
+        },
+        {
+          "index": 17,
+          "name": "night_brightness",
+          "cpp_enum": "NIGHT_BRIGHTNESS",
+          "type": "string",
+          "description": "Nighttime brightness target (60%|70%|80%|90%|100%)"
+        },
+        {
+          "index": 18,
+          "name": "day_start_hour",
+          "cpp_enum": "DAY_START_HOUR",
+          "type": "u16",
+          "description": "Time schedule daytime start hour (0..23)"
+        },
+        {
+          "index": 19,
+          "name": "night_start_hour",
+          "cpp_enum": "NIGHT_START_HOUR",
+          "type": "u16",
+          "description": "Time schedule nighttime start hour (0..23)"
+        },
+        {
+          "index": 20,
+          "name": "color_profile",
+          "cpp_enum": "COLOR_PROFILE",
+          "type": "string",
+          "description": "Theme accent preset (Steel Blue|Pink|Blue|Green|Custom)"
+        },
+        {
+          "index": 21,
+          "name": "va_visual_profile",
+          "cpp_enum": "VA_VISUAL_PROFILE",
+          "type": "string",
+          "description": "Voice assistant visual overlay style (Nebula|Solaris|Rings|Light Bar|Dot Wave)"
+        },
+        {
+          "index": 22,
+          "name": "home_screen_enabled",
+          "cpp_enum": "HOME_SCREEN_ENABLED",
+          "type": "bool",
+          "description": "1 = enable the Home Screen and App Dock, 0 = single-app mode locked to start_screen"
+        },
+        {
+          "index": 23,
+          "name": "start_screen",
+          "cpp_enum": "START_SCREEN",
+          "type": "string",
+          "description": "Boot / single-app start screen (Home|Clock|Media|Home Hub|Area Controls|Remote|Weather|Cameras|Games|Tools)"
+        },
+        {
+          "index": 24,
+          "name": "return_to_home_timeout",
+          "cpp_enum": "RETURN_TO_HOME_TIMEOUT",
+          "type": "string",
+          "description": "Idle timeout before resetting navigation back to the Home Screen (15s|30s|1 min|2 min|5 min|10 min|Never)"
+        },
+        {
+          "index": 25,
+          "name": "clock_face",
+          "cpp_enum": "CLOCK_FACE",
+          "type": "string",
+          "description": "Clock face style (Minimal Digital|Modern Roman (Analog)|Modern Digital (Bold))"
+        },
+        {
+          "index": 26,
+          "name": "time_format",
+          "cpp_enum": "TIME_FORMAT",
+          "type": "string",
+          "description": "Clock time format (12-Hour (AM/PM)|24-Hour)"
+        },
+        {
+          "index": 27,
+          "name": "weather_background",
+          "cpp_enum": "WEATHER_BACKGROUND",
+          "type": "bool",
+          "description": "1 = animate ambient weather particles on Home screen, else 0"
+        },
+        {
+          "index": 28,
+          "name": "home_sun",
+          "cpp_enum": "HOME_SUN",
+          "type": "bool",
+          "description": "1 = show daytime solar disc on Home screen, else 0"
+        },
+        {
+          "index": 29,
+          "name": "home_moon",
+          "cpp_enum": "HOME_MOON",
+          "type": "bool",
+          "description": "1 = show nighttime lunar phase disc on Home screen, else 0"
+        },
+        {
+          "index": 30,
+          "name": "wake_greeting",
+          "cpp_enum": "WAKE_GREETING",
+          "type": "bool",
+          "description": "1 = show time-of-day wake greeting toast, else 0"
+        },
+        {
+          "index": 31,
+          "name": "album_art_style",
+          "cpp_enum": "ALBUM_ART_STYLE",
+          "type": "string",
+          "description": "Now Playing album art layout (Full Screen|Letterbox|Standard|None)"
+        },
+        {
+          "index": 32,
+          "name": "music_overlay_style",
+          "cpp_enum": "MUSIC_OVERLAY_STYLE",
+          "type": "string",
+          "description": "Now Playing controls overlay visibility (Art Only|Art + Metadata|Always Visible)"
+        },
+        {
+          "index": 33,
+          "name": "show_speaker_shortcut",
+          "cpp_enum": "SHOW_SPEAKER_SHORTCUT",
+          "type": "bool",
+          "description": "1 = show speaker selector shortcut on Now Playing, else 0"
+        },
+        {
+          "index": 34,
+          "name": "show_library_shortcut",
+          "cpp_enum": "SHOW_LIBRARY_SHORTCUT",
+          "type": "bool",
+          "description": "1 = show library browse shortcut on Now Playing, else 0"
+        },
+        {
+          "index": 35,
+          "name": "album_sort_order",
+          "cpp_enum": "ALBUM_SORT_ORDER",
+          "type": "string",
+          "description": "Album browser sort order (Alphabetical|Newest on Top|Oldest on Top)"
+        },
+        {
+          "index": 36,
+          "name": "artist_album_sort_order",
+          "cpp_enum": "ARTIST_ALBUM_SORT_ORDER",
+          "type": "string",
+          "description": "Artist discography sort order (Oldest on Top|Newest on Top|Alphabetical)"
+        },
+        {
+          "index": 37,
+          "name": "podcast_sort_order",
+          "cpp_enum": "PODCAST_SORT_ORDER",
+          "type": "string",
+          "description": "Podcast episode sort order (Newest on Top|Oldest on Top)"
+        },
+        {
+          "index": 38,
+          "name": "ww_sens_okay_nabu",
+          "cpp_enum": "WW_SENS_OKAY_NABU",
+          "type": "string",
+          "description": "Okay Nabu wake word sensitivity (Slightly sensitive|Moderately sensitive|Very sensitive)"
+        },
+        {
+          "index": 39,
+          "name": "ww_sens_hey_luna",
+          "cpp_enum": "WW_SENS_HEY_LUNA",
+          "type": "string",
+          "description": "Hey Luna wake word sensitivity (Slightly sensitive|Moderately sensitive|Very sensitive)"
+        },
+        {
+          "index": 40,
+          "name": "ww_sens_hey_jarvis",
+          "cpp_enum": "WW_SENS_HEY_JARVIS",
+          "type": "string",
+          "description": "Hey Jarvis wake word sensitivity (Slightly sensitive|Moderately sensitive|Very sensitive)"
+        },
+        {
+          "index": 41,
+          "name": "ww_sens_hey_mycroft",
+          "cpp_enum": "WW_SENS_HEY_MYCROFT",
+          "type": "string",
+          "description": "Hey Mycroft wake word sensitivity (Slightly sensitive|Moderately sensitive|Very sensitive)"
+        },
+        {
+          "index": 42,
+          "name": "ww_sens_alexa",
+          "cpp_enum": "WW_SENS_ALEXA",
+          "type": "string",
+          "description": "Alexa wake word sensitivity (Slightly sensitive|Moderately sensitive|Very sensitive)"
+        },
+        {
+          "index": 43,
+          "name": "wake_screen_on_assist",
+          "cpp_enum": "WAKE_SCREEN_ON_ASSIST",
+          "type": "bool",
+          "description": "1 = wake display automatically when voice assistant triggers, else 0"
+        },
+        {
+          "index": 44,
+          "name": "alert_volume",
+          "cpp_enum": "ALERT_VOLUME",
+          "type": "u16",
+          "description": "Timer, alarm, and notification chime volume percentage (20..100)"
+        },
+        {
+          "index": 45,
+          "name": "volume_step_size",
+          "cpp_enum": "VOLUME_STEP_SIZE",
+          "type": "u16",
+          "description": "Rotary/button volume increment step percentage (1..10)"
+        },
+        {
+          "index": 46,
+          "name": "game_sound_effects",
+          "cpp_enum": "GAME_SOUND_EFFECTS",
+          "type": "bool",
+          "description": "1 = play arcade game sound effects, else 0"
+        },
+        {
+          "index": 47,
+          "name": "ble_beacon_enabled",
+          "cpp_enum": "BLE_BEACON_ENABLED",
+          "type": "bool",
+          "description": "1 = enable BLE iBeacon presence advertising (derived from native_ble_tracking), else 0"
+        },
+        {
+          "index": 48,
+          "name": "ble_beacon_mode",
+          "cpp_enum": "BLE_BEACON_MODE",
+          "type": "string",
+          "description": "BLE beacon advertising duty policy (Handheld Only|Handheld + Screen Off|Always)"
+        },
+        {
+          "index": 49,
+          "name": "weather_sim_condition",
+          "cpp_enum": "WEATHER_SIM_CONDITION",
+          "type": "string",
+          "description": "Developer weather animation override (Live (Home Assistant) or simulated condition label)"
+        },
+        {
+          "index": 50,
+          "name": "theme_color_hex",
+          "cpp_enum": "THEME_COLOR_HEX",
+          "type": "string",
+          "description": "Custom theme accent color (#RRGGBB) synchronized with device_custom_color"
+        }
       ]
     }
   },
@@ -224,17 +946,16 @@
       "description": "Reset to defaults: erases every saved setting (the whole NVS partition, including the Wi-Fi driver's cached network data and RF calibration) and reboots. Compiled-in Wi-Fi credentials and the API key are kept, so the device rejoins Home Assistant unchanged",
       "variables": {}
     },
-    "ui_input": {
-      "description": "Remote navigation input: action home|back|select|next|prev|left|right|up|down|cw|ccw (ok/click alias select); delta overrides the step for next/prev-style actions (0 = derive from action)",
+    "latter_device_command": {
+      "description": "Execute a typed Device lifecycle, diagnostic, or UI command (restart|find_my|activate_screensaver|trigger_va|log_memory_report)",
       "variables": {
-        "action": "string",
-        "delta": "int"
+        "command": "string"
       }
     },
-    "set_browse_slots": {
-      "description": "Push paginated media/speaker/search browse slots to the device",
+    "latter_set_slots": {
+      "description": "Push paginated media/speaker/search browse slots or Area/Site entity control slots to the device",
       "variables": {
-        "contract": "int",
+        "is_area_slots": "bool",
         "req_id": "int",
         "mode": "string",
         "page": "int",
@@ -242,18 +963,7 @@
         "slots": "string"
       }
     },
-    "set_area_slots": {
-      "description": "Push paginated Area/Site entity control slots to the device",
-      "variables": {
-        "contract": "int",
-        "req_id": "int",
-        "mode": "string",
-        "page": "int",
-        "total_pages": "int",
-        "slots": "string"
-      }
-    },
-    "show_notification": {
+    "latter_show_notification": {
       "description": "Wake display, show an on-screen alert banner (priority normal|warning|critical, duration 3-60 s, default 10), optionally play the embedded WAV chime and show a camera snapshot; alert_id > 0 deduplicates repeats",
       "variables": {
         "title": "string",
@@ -265,81 +975,517 @@
         "alert_id": "int"
       }
     },
-    "latter_device_command": {
-      "description": "Execute a typed Device lifecycle, diagnostic, or UI command (restart|find_my|activate_screensaver|trigger_va|log_memory_report)",
+    "latter_ui_input": {
+      "description": "Remote navigation input: action up|down|left|right|select|back|home (canonical navigation actions); delta overrides the step for directional actions (0 = derive from action)",
       "variables": {
-        "command": "string"
+        "action": "string",
+        "delta": "int"
       }
     }
   },
-  "services": {
+  "catalogs": {
+    "dock_apps": [
+      {
+        "token": "music",
+        "label": "Music"
+      },
+      {
+        "token": "home_hub",
+        "label": "Home Hub"
+      },
+      {
+        "token": "area",
+        "label": "Area"
+      },
+      {
+        "token": "remote",
+        "label": "Remote"
+      },
+      {
+        "token": "weather",
+        "label": "Weather"
+      },
+      {
+        "token": "camera",
+        "label": "Cameras"
+      },
+      {
+        "token": "games",
+        "label": "Games"
+      },
+      {
+        "token": "tools",
+        "label": "Tools"
+      }
+    ],
+    "activity_sources": [
+      {
+        "token": "calendar",
+        "label": "Calendar"
+      },
+      {
+        "token": "music_queue",
+        "label": "Music Queue"
+      },
+      {
+        "token": "stopwatch",
+        "label": "Stopwatch"
+      },
+      {
+        "token": "alarms",
+        "label": "Alarms"
+      },
+      {
+        "token": "timers",
+        "label": "Timers"
+      }
+    ],
+    "area_categories": [
+      {
+        "token": "scene",
+        "label": "Scenes"
+      },
+      {
+        "token": "light",
+        "label": "Lights"
+      },
+      {
+        "token": "cover",
+        "label": "Blinds & Curtains"
+      },
+      {
+        "token": "fan",
+        "label": "Fans"
+      },
+      {
+        "token": "switch",
+        "label": "Switches"
+      },
+      {
+        "token": "climate",
+        "label": "Climate"
+      },
+      {
+        "token": "media",
+        "label": "Media"
+      },
+      {
+        "token": "all",
+        "label": "All Devices"
+      }
+    ],
+    "home_categories": [
+      {
+        "token": "alarm",
+        "label": "Security Alarm"
+      },
+      {
+        "token": "thermostat",
+        "label": "Thermostat"
+      },
+      {
+        "token": "entry",
+        "label": "Entry & Garage"
+      },
+      {
+        "token": "vacuum",
+        "label": "Robot Vacuum"
+      }
+    ]
+  },
+  "power_profiles": {
+    "Portable Carry": {
+      "wake_word_mode": "Docked Only",
+      "tap_to_wake": "Docked Only",
+      "pickup_to_wake": "Docked Only",
+      "battery_screen_timeout": "30s",
+      "docked_idle_timeout": "1 min",
+      "battery_hibernate_timeout": "15 min",
+      "docked_screensaver": true
+    },
+    "Handheld Roaming": {
+      "wake_word_mode": "Docked Only",
+      "tap_to_wake": "Always On",
+      "pickup_to_wake": "Always On",
+      "battery_screen_timeout": "30s",
+      "docked_idle_timeout": "1 min",
+      "battery_hibernate_timeout": "30 min",
+      "docked_screensaver": true
+    },
+    "Wearable Watch": {
+      "wake_word_mode": "Docked Only",
+      "tap_to_wake": "Always On",
+      "pickup_to_wake": "Always On",
+      "battery_screen_timeout": "15s",
+      "docked_idle_timeout": "1 min",
+      "battery_hibernate_timeout": "15 min",
+      "docked_screensaver": true
+    },
+    "Tabletop Dock": {
+      "wake_word_mode": "Docked Only",
+      "tap_to_wake": "Docked Only",
+      "pickup_to_wake": "Disabled",
+      "battery_screen_timeout": "30s",
+      "docked_idle_timeout": "5 min",
+      "battery_hibernate_timeout": "15 min",
+      "docked_screensaver": true
+    },
+    "Always-On Wall / Desk": {
+      "wake_word_mode": "Always On",
+      "tap_to_wake": "Always On",
+      "pickup_to_wake": "Disabled",
+      "battery_screen_timeout": "Never",
+      "docked_idle_timeout": "5 min",
+      "battery_hibernate_timeout": "Disabled",
+      "docked_screensaver": true
+    }
+  },
+  "rpc_methods": {
     "device_hello": {
       "description": "Device-initiated handshake sent when Home Assistant connects to the ESPHome API, carrying optional NVS preference sync state",
-      "fields": ["target_device", "contract", "boot_id", "manifest", "prefs_seq", "dirty_prefs"]
-    },
-    "set_device_prefs": {
-      "description": "Persist on-device settings edits back to the Device's Latter subentry and increment prefs_seq",
-      "fields": ["target_device", "base_seq", "changes"]
-    },
-    "timer_alarm_state": {
-      "description": "Report on-device countdown timer and alarm ringing state transitions to Home Assistant",
-      "fields": ["target_device", "timer_running", "timer_paused", "remaining_sec", "ringing"]
+      "fields": [
+        "contract",
+        "boot_id",
+        "manifest",
+        "prefs_seq",
+        "dirty_prefs"
+      ]
     },
     "music_browse": {
       "description": "Browse speakers, favorites, playlists, artists, albums, tracks, radio, or search",
-      "fields": ["target_device", "req_id", "mode", "page", "page_size", "speaker", "last_speaker", "search", "album_sort", "artist_album_sort", "podcast_sort"]
+      "fields": [
+        "req_id",
+        "mode",
+        "page",
+        "page_size",
+        "search",
+        "speaker",
+        "last_speaker",
+        "album_sort",
+        "artist_album_sort",
+        "podcast_sort"
+      ]
     },
     "set_active_speaker": {
       "description": "Select the active media_player target for a Latter device",
-      "fields": ["target_device", "entity_id", "transfer_queue"]
+      "fields": [
+        "entity_id",
+        "transfer_queue"
+      ]
     },
     "media_command": {
       "description": "Execute transport, seek, queue, speaker grouping, or play_media command on the active speaker",
-      "fields": ["target_device", "command", "entity_id", "seek_position", "media_id", "media_type", "enqueue", "group_members"]
+      "fields": [
+        "command",
+        "seek_position",
+        "entity_id",
+        "media_id",
+        "media_type",
+        "enqueue",
+        "group_members"
+      ]
     },
     "media_volume": {
       "description": "Adjust or set volume on the active speaker or volume override target",
-      "fields": ["target_device", "entity_id", "action", "volume_level"]
+      "fields": [
+        "entity_id",
+        "action",
+        "volume_level"
+      ]
     },
     "area_browse": {
       "description": "Browse Areas, Area domains, or paginated controllable entities",
-      "fields": ["target_device", "req_id", "mode", "area_id", "domain_filter", "page", "page_size"]
+      "fields": [
+        "req_id",
+        "mode",
+        "area_id",
+        "domain_filter",
+        "page",
+        "page_size"
+      ]
     },
     "area_action": {
       "description": "Execute an explicit domain action on an Area or specific entity",
-      "fields": ["target_device", "entity_id", "area_id", "action", "level", "code"]
+      "fields": [
+        "entity_id",
+        "action",
+        "level",
+        "area_id",
+        "code"
+      ]
     },
     "set_active_area": {
       "description": "Set the active Area context for a Latter device (an on-device Area pick). Whether media follows is the Device's Latter setting",
-      "fields": ["target_device", "area_id"]
+      "fields": [
+        "area_id"
+      ]
     },
     "remote_action": {
       "description": "Send a TV/AV remote command or select active remote slot",
-      "fields": ["target_device", "slot", "action", "command"]
+      "fields": [
+        "slot",
+        "action",
+        "command"
+      ]
     },
     "calendar_fetch": {
       "description": "Refresh upcoming calendar agenda events for a Latter device",
-      "fields": ["target_device", "req_id", "days", "page", "page_size"]
+      "fields": [
+        "req_id",
+        "days",
+        "page",
+        "page_size"
+      ]
     },
     "calendar_create_event": {
       "description": "Create a new event on the primary configured calendar",
-      "fields": ["target_device", "calendar_entity", "summary", "start_date_time", "end_date_time", "in_minutes", "duration_minutes", "description"]
+      "fields": [
+        "summary",
+        "in_minutes",
+        "duration_minutes"
+      ]
     },
     "intercom_broadcast": {
-      "description": "Broadcast a voice announcement to chosen speakers, the speakers in occupied Areas (target_device: occupied_areas), or every speaker",
-      "fields": ["target_device", "message", "media_url", "target_speakers", "tts_entity"]
+      "description": "Broadcast a voice announcement to chosen speakers, the speakers in occupied Areas, or every speaker",
+      "fields": [
+        "message"
+      ]
     },
     "doorbell_intercom": {
-      "description": "Doorbell talkback and requests. action: talk_message (push-to-talk speech transcribed on the device, spoken at the door by Home Assistant), quick_reply, listen_start|listen_stop (door audio played on the device), call_target (rings other displays with a notification; no display-to-display audio), unlock_door (unlock request to Home Assistant), set_noise_reduction. noise_reduction: strong|light|off, the noise filter preset Home Assistant applies to door audio (FFmpeg). No echo cancellation; camera is auto-refreshing snapshots",
-      "fields": ["target_device", "action", "camera_entity", "camera_index", "message", "noise_reduction", "code"]
+      "description": "Doorbell talkback and requests (talk_message, quick_reply, listen_start, listen_stop, call_target, unlock_door, set_noise_reduction)",
+      "fields": [
+        "action",
+        "camera_entity",
+        "camera_index",
+        "message",
+        "noise_reduction",
+        "code"
+      ]
     },
     "save_custom_color": {
       "description": "Save a custom RGB accent color from the on-device color wheel",
-      "fields": ["target_device", "hex_color", "name"]
+      "fields": [
+        "hex_color"
+      ]
     },
     "set_dock_apps": {
       "description": "Save the Home dock apps chosen on the device (Home settings) as the Device's Latter dock setting",
-      "fields": ["target_device", "dock_apps"]
+      "fields": [
+        "dock_apps"
+      ]
+    },
+    "set_device_prefs": {
+      "description": "Persist on-device settings edits back to the Device subentry and increment prefs_seq",
+      "fields": [
+        "base_seq",
+        "changes"
+      ]
+    },
+    "timer_alarm_state": {
+      "description": "Report on-device countdown timer and alarm ringing state transitions to Home Assistant",
+      "fields": [
+        "timer_running",
+        "timer_paused",
+        "remaining_sec",
+        "ringing"
+      ]
+    }
+  },
+  "ha_services": {
+    "device_hello": {
+      "description": "Device-initiated handshake sent by an ESPHome Latter node on API connection to report its contract version, boot ID, and hardware manifest.",
+      "fields": [
+        "target_device",
+        "contract",
+        "boot_id",
+        "manifest",
+        "prefs_seq",
+        "dirty_prefs"
+      ]
+    },
+    "music_browse": {
+      "description": "Browse Music Assistant speakers, library, podcasts, queues, lyrics, and artist/album bios and push paginated slots to the ESPHome device.",
+      "fields": [
+        "target_device",
+        "req_id",
+        "mode",
+        "page",
+        "page_size",
+        "search",
+        "speaker",
+        "last_speaker",
+        "album_sort",
+        "artist_album_sort",
+        "podcast_sort"
+      ]
+    },
+    "set_active_speaker": {
+      "description": "Change the active target media_player for the ESPHome device and optionally transfer the active playback queue.",
+      "fields": [
+        "entity_id",
+        "transfer_queue",
+        "target_device"
+      ]
+    },
+    "media_volume": {
+      "description": "Set or step the volume, or toggle mute, on the active speaker. If a volume override is mapped for that speaker (for example an AV receiver), the change goes to the override entity.",
+      "fields": [
+        "target_device",
+        "entity_id",
+        "action",
+        "volume_level"
+      ]
+    },
+    "set_active_area": {
+      "description": "Switch the active area context by area_id or area name. The device's speaker follows to the new area when the device's \"Media follows this Device\" setting is on. On roaming devices with Voice Follows Me enabled, this also moves the device's Home Assistant Area so area-aware Assist commands target it.",
+      "fields": [
+        "area_id",
+        "target_device"
+      ]
+    },
+    "remote_action": {
+      "description": "Select one of the up to 10 configured TV remote slots or send a remote command.",
+      "fields": [
+        "slot",
+        "action",
+        "command",
+        "target_device"
+      ]
+    },
+    "area_browse": {
+      "description": "Browse Home Assistant areas, curated area entities, or home-wide alarm entities and push paginated slots to the ESPHome device.",
+      "fields": [
+        "target_device",
+        "req_id",
+        "mode",
+        "area_id",
+        "domain_filter",
+        "page",
+        "page_size"
+      ]
+    },
+    "area_action": {
+      "description": "Execute a normalized area control, light color/Kelvin, thermostat, lock, vacuum, or home security alarm action.",
+      "fields": [
+        "target_device",
+        "entity_id",
+        "area_id",
+        "action",
+        "level",
+        "code"
+      ]
+    },
+    "calendar_fetch": {
+      "description": "Refresh upcoming system calendar events and push a 5-slot agenda page to the ESPHome device.",
+      "fields": [
+        "target_device",
+        "req_id",
+        "days",
+        "page",
+        "page_size"
+      ]
+    },
+    "calendar_create_event": {
+      "description": "Create a new event or quick reminder on the primary system calendar and refresh the agenda sensor.",
+      "fields": [
+        "target_device",
+        "calendar_entity",
+        "summary",
+        "start_date_time",
+        "end_date_time",
+        "in_minutes",
+        "duration_minutes",
+        "description"
+      ]
+    },
+    "intercom_broadcast": {
+      "description": "Broadcast a TTS announcement or recorded audio clip to chosen speakers, the speakers in occupied Areas ('occupied_areas'), the speakers in a person's current Area ('person.<slug>'), or all online Music Assistant speakers.",
+      "fields": [
+        "target_device",
+        "message",
+        "media_url",
+        "target_speakers",
+        "tts_entity"
+      ]
+    },
+    "media_command": {
+      "description": "Run a playback command (play, pause, toggle, next, previous, stop, seek, play_media, clear_queue) on the active speaker. If the device restarted or slept and its Sendspin buffer is empty, play re-streams the Music Assistant queue.",
+      "fields": [
+        "target_device",
+        "command",
+        "entity_id",
+        "seek_position",
+        "media_id",
+        "media_type",
+        "enqueue",
+        "group_members"
+      ]
+    },
+    "notify": {
+      "description": "Show an on-screen notification, with an optional chime and an optional camera snapshot, on a specific device, the devices in occupied Areas ('occupied_areas'), the devices assigned to a person ('person.<slug>'), or all displays ('all').",
+      "fields": [
+        "target_device",
+        "title",
+        "message",
+        "priority",
+        "duration",
+        "chime",
+        "announce",
+        "camera_entity"
+      ]
+    },
+    "save_custom_color": {
+      "description": "Save a custom hex color from the on-device or Studio Color Wheel into the System-Wide Color Library and apply it to the target device.",
+      "fields": [
+        "target_device",
+        "hex_color",
+        "name"
+      ]
+    },
+    "set_dock_apps": {
+      "description": "Save a device's Home dock apps (the apps shown, in order; Settings is always last). The device sends this from its Home settings; Studio edits the same setting.",
+      "fields": [
+        "target_device",
+        "dock_apps"
+      ]
+    },
+    "doorbell_intercom": {
+      "description": "Listen to a doorbell camera's noise-reduced audio on a Latter device, reply by push-to-talk or quick reply (spoken with TTS on the camera's media_player), select a carousel camera, unlock the door's lock, or ring other Latter displays with a notification (call_target). There is no live device-to-door audio.",
+      "fields": [
+        "target_device",
+        "action",
+        "camera_entity",
+        "camera_index",
+        "message",
+        "noise_reduction",
+        "code"
+      ]
+    },
+    "reset_device": {
+      "description": "Reset a Latter device. Device settings erases everything saved on the device (its settings and the Wi-Fi driver's cached data) and restarts it; Wi-Fi credentials and the API key are compiled into the firmware, so it rejoins Home Assistant unchanged. Latter options puts this device's Latter options back to the defaults it got when it was added, keeping its ESPHome binding and its Music Assistant player link.",
+      "fields": [
+        "target_device",
+        "device_settings",
+        "latter_options"
+      ]
+    },
+    "set_device_prefs": {
+      "description": "Apply on-device preference updates from a bound Latter Device (or admin automation) into the Device's sleep-safe subentry configuration.",
+      "fields": [
+        "target_device",
+        "base_seq",
+        "changes"
+      ]
+    },
+    "timer_alarm_state": {
+      "description": "Event-driven timer and alarm state update reported by a bound Latter Device.",
+      "fields": [
+        "target_device",
+        "timer_running",
+        "timer_paused",
+        "remaining_sec",
+        "ringing"
+      ]
     }
   }
 }

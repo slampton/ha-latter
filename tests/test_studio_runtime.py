@@ -22,12 +22,17 @@ NODE = shutil.which("node")
 def _strip_module_syntax(ts_text: str) -> str:
     """Strip ESM `import` lines and `export ` prefixes so concatenated TS modules execute in Node."""
     cleaned = re.sub(r"^\s*import\s+[\s\S]*?from\s+['\"][^'\"]+['\"];?\s*$", "", ts_text, flags=re.MULTILINE)
+    cleaned = re.sub(r"^\s*export\s*\{[\s\S]*?\};?\s*$", "", cleaned, flags=re.MULTILINE)
     return re.sub(r"^\s*export\s+(?=(?:async\s+)?(?:function|const|let|class|interface|type)\b)", "", cleaned, flags=re.MULTILINE)
 
 
 def _run_node_ts(ts_sources: list[Path], runner_js: str) -> object:
     """Strip TypeScript types via Node's built-in `module.stripTypeScriptTypes` and evaluate `runner_js`."""
-    combined_ts = "\n\n".join(_strip_module_syntax(p.read_text(encoding="utf-8")) for p in ts_sources)
+    sources = list(ts_sources)
+    proto_schema = FRONTEND_SRC / "protocol-schema.ts"
+    if proto_schema.exists() and proto_schema not in sources:
+        sources.insert(0, proto_schema)
+    combined_ts = "\n\n".join(_strip_module_syntax(p.read_text(encoding="utf-8")) for p in sources)
     bootstrap = (
         "const { stripTypeScriptTypes } = require('node:module');\n"
         f"const tsSrc = {json.dumps(combined_ts)};\n"
@@ -40,9 +45,11 @@ def _run_node_ts(ts_sources: list[Path], runner_js: str) -> object:
         input=bootstrap,
         capture_output=True,
         text=True,
-        check=True,
+        check=False,
         timeout=30,
     )
+    if out.returncode != 0:
+        raise RuntimeError(f"Node execution failed ({out.returncode}):\n{out.stderr}\n{out.stdout}")
     return json.loads(out.stdout)
 
 
@@ -179,8 +186,8 @@ class TestEntitySections(unittest.TestCase):
 
     def test_device_prefix_never_decides(self) -> None:
         self.assertEqual(self.classify("switch.desk_display_mute", "Mute", domain="switch"), "other")
-        self.assertEqual(self.classify("select.desk_display_voice_visual_profile", "Voice: Visual Profile"), "voice")
-        self.assertEqual(self.classify("select.desk_display_display_clock_face", "Display: Clock Face"), "display")
+        self.assertEqual(self.classify("select.desk_display_voice_visual_profile", "Voice: Visual Profile"), "other")
+        self.assertEqual(self.classify("select.desk_display_display_clock_face", "Display: Clock Face"), "other")
 
     def test_desk_power_and_battery_page_regression(self) -> None:
         desk = [
@@ -198,9 +205,9 @@ class TestEntitySections(unittest.TestCase):
             )[0]
             sections.setdefault(sec, []).append({"entity_id": ent})
         payload_sections = [{"id": sid, "title": sid, "items": items} for sid, items in sections.items()]
-        self.assertEqual(set(sections), {"sleep"})
-        self.assertEqual(entity_sections.present_section_ids(payload_sections), {"sleep"})
-        self.assertEqual(entity_sections.present_section_ids([{"id": "sleep", "items": []}, "junk"]), set())
+        self.assertEqual(set(sections), {"other", "battery"})
+        self.assertEqual(entity_sections.present_section_ids(payload_sections), {"other", "battery"})
+        self.assertEqual(entity_sections.present_section_ids([{"id": "battery", "items": []}, "junk"]), set())
         payload_src = (LATTER_DIR / "studio" / "payload.py").read_text(encoding="utf-8")
         self.assertIn('sec_ids = present_section_ids(esphome_inspector.get("sections"))', payload_src)
         self.assertIn('"has_power": ("sleep" in sec_ids) or ("battery" in sec_ids),', payload_src)
@@ -275,7 +282,7 @@ class TestEntitySections(unittest.TestCase):
         )
         self.assertEqual(
             self.classify("select.desk_display_area_ble_presence_beacon_mode", "Area: BLE Presence Beacon Mode"),
-            "area",
+            "other",
         )
 
 
@@ -553,6 +560,51 @@ function makeStore({ weatherBgState = "Dynamic", cycleMins = 0, activeId = "", f
       if (sec === "sound") return soundSection;
       if (sec === "voice") return voiceSection;
       return [];
+    },
+    getPref(key) {
+      if (this.state && Array.isArray(this.state.device_prefs)) {
+        const found = this.state.device_prefs.find((p) => p.key === key);
+        if (found) return found;
+      }
+      const all = [
+        ...homeSection,
+        ...displaySection,
+        ...sleepSection,
+        ...actionsSection,
+        ...batterySection,
+        ...musicSection,
+        ...soundSection,
+        ...voiceSection,
+      ];
+      const altKey = key.replace(/^va_/, "voice_").replace(/^music_/, "");
+      for (const it of all) {
+        if (
+          it.pref_key === key ||
+          it.key === key ||
+          (it.entity_id && (
+            it.entity_id.endsWith("_" + key) ||
+            it.entity_id.endsWith("_" + altKey) ||
+            it.entity_id.endsWith("_" + key.replace(/^va_/, ""))
+          ))
+        ) {
+          return {
+            key,
+            label: it.name ? it.name.replace(/^Voice:\\s*/, "").replace(/^Display:\\s*/, "").replace(/^Home:\\s*/, "") : key,
+            section: "",
+            domain: it.domain,
+            value: it.domain === "switch" ? it.state === "on" : it.state,
+            options: it.options,
+            min: it.min,
+            max: it.max,
+            step: it.step,
+            unit: it.unit,
+          };
+        }
+      }
+      return undefined;
+    },
+    getPrefs(keys) {
+      return (keys || []).map((k) => this.getPref(k)).filter(Boolean);
     },
     getEnabledActivitySources() { return ["calendar"]; },
     getEnabledDockTokens() { return ["area", "music"]; },
@@ -965,6 +1017,12 @@ function makeToolsStore(isBle = false) {
       if (sec === "developer") return developerSection;
       return [];
     },
+    getPref(key) {
+      return undefined;
+    },
+    getPrefs(keys) {
+      return [];
+    },
   };
 }
 
@@ -1228,6 +1286,22 @@ function makePresenceStore(bleTracking) {
         },
       ];
     },
+    getPref(key) {
+      if (key === "ble_beacon_mode") {
+        return {
+          key: "ble_beacon_mode",
+          label: "BLE Beacon Mode",
+          section: "presence",
+          domain: "select",
+          value: "Handheld Only",
+          options: ["Handheld Only", "Handheld + Screen Off", "Always"],
+        };
+      }
+      return undefined;
+    },
+    getPrefs(keys) {
+      return (keys || []).map((k) => this.getPref(k)).filter(Boolean);
+    },
   };
 }
 return {
@@ -1336,6 +1410,24 @@ function makeInterfaceStore(homeEnabled) {
         ];
       }
       return [];
+    },
+    getPref(key) {
+      const items = this.getSectionItems("display");
+      const it = items.find((p) => p.pref_key === key || p.key === key);
+      if (it) {
+        return {
+          key,
+          label: it.name || key,
+          section: "interface",
+          domain: it.domain,
+          value: it.domain === "switch" ? it.state === "on" : it.state,
+          options: it.options,
+        };
+      }
+      return undefined;
+    },
+    getPrefs(keys) {
+      return (keys || []).map((k) => this.getPref(k)).filter(Boolean);
     },
     getEnabledDockTokens() {
       return ["music", "alarm", "area", "remote", "games", "tools"];
