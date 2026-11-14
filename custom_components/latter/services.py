@@ -498,7 +498,19 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             album_sort=album_sort,
             artist_album_sort=artist_album_sort,
             podcast_sort=podcast_sort,
+            fallback_title=coord.last_media_title,
+            fallback_artist=coord.last_media_artist,
+            fallback_album=coord.last_media_album,
         )
+        mode_norm = mode.strip().lower()
+        if mode_norm in ("album_tracks", "current_album_tracks"):
+            coord._browsed_album_track_uris = [
+                str(it["id"])
+                for it in items
+                if isinstance(it, dict) and it.get("type") == "track" and it.get("id")
+            ]
+        elif mode_norm not in ("speakers", "lyrics", "bio"):
+            coord._browsed_album_track_uris = []
         if not items and mode != "speakers":
             items = [
                 {

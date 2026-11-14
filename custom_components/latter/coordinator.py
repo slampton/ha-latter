@@ -467,6 +467,7 @@ class LatterCoordinator:
         self.last_media_position: float = 0.0
         self._resuming_guard_until: float = 0.0
         self._local_needs_cold_resume: bool = True
+        self._browsed_album_track_uris: list[str] = []
         self.last_valid_raw_pic: str = ""
         self._last_art_track_key: str = ""
         self._last_art_proxy_url: str = ""

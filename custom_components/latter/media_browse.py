@@ -1124,6 +1124,9 @@ async def async_browse_media_items(
     album_sort: str = "name",
     artist_album_sort: str = "year",
     podcast_sort: str = "newest",
+    fallback_title: str = "",
+    fallback_artist: str = "",
+    fallback_album: str = "",
 ) -> list[dict[str, Any]]:
     """Execute the requested browse mode and return a flat list of slot dicts."""
     mode = mode.strip().lower()
@@ -1134,6 +1137,12 @@ async def async_browse_media_items(
     current_title, current_artist, current_album = _resolve_speaker_playing_metadata(
         hass, speaker
     )
+    if not current_title and fallback_title:
+        current_title = fallback_title
+    if not current_artist and fallback_artist:
+        current_artist = fallback_artist
+    if not current_album and fallback_album:
+        current_album = fallback_album
 
     if mode == "active_queue":
         return await _browse_active_queue(hass, speaker, current_title)
@@ -1176,7 +1185,12 @@ async def async_browse_media_items(
 
     if mode == "album_tracks":
         return await _browse_album_tracks(
-            hass, config_entry_id, browse_entity, search, current_title
+            hass,
+            config_entry_id,
+            browse_entity,
+            search,
+            current_title,
+            current_artist,
         )
 
     if mode == "current_album_tracks":

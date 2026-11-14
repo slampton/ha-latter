@@ -591,3 +591,198 @@ async def test_idle_play_resumes_displayed_track_via_ma_library_when_uri_missing
     assert ma_play_calls[0]["entity_id"] == "media_player.pocket_assistant_2"
     assert ma_play_calls[0]["media_id"] == "library://track/99"
 
+
+async def test_cold_boot_resume_and_album_drilldown_preserve_remaining_tracks_and_ignore_tts(
+    hass: Any, setup_latter_hub: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Verify cold-boot Play preserves remaining album tracks, album track drilldown queues the album tail, and TTS never pollutes last_media_uri."""
+    from homeassistant.config_entries import ConfigEntryState
+
+    import custom_components.latter.media as media_mod
+
+    _entry, _sys_obj, coord = await setup_latter_hub(hass)
+    ma_entry = hass.config_entries.add_entry(
+        ConfigEntry(
+            entry_id="ma_entry_album_tail",
+            domain="music_assistant",
+            title="Music Assistant",
+            data={},
+        )
+    )
+    ma_entry._state = ConfigEntryState.LOADED
+    ent_reg = er.async_get(hass)
+    ent_reg.async_register(
+        er.RegistryEntry(
+            entity_id="media_player.pocket_assistant_ma",
+            platform="music_assistant",
+            unique_id="live_ma_tail",
+            config_entry_id=ma_entry.entry_id,
+        )
+    )
+    hass.states.async_set(
+        coord.local_speaker, "idle", {"friendly_name": "Pocket Assistant Music"}
+    )
+    hass.states.async_set(
+        "media_player.pocket_assistant_ma",
+        "paused",
+        {
+            "friendly_name": "Pocket Assistant",
+            "media_title": "Up From The Sea",
+            "media_artist": "Swervedriver",
+            "media_album_name": "99th Dream",
+            "media_content_id": "library://track/42",
+            "media_duration": 215.0,
+        },
+    )
+    async_set_ma_player_link(hass, coord, "media_player.pocket_assistant_ma")
+    await hass.async_block_till_done()
+
+    # 1. Voice Assistant TTS stream on local ESPHome media_player must NEVER overwrite last_media_uri
+    assert coord.last_media_uri == "library://track/42"
+    hass.states.async_set(
+        coord.local_speaker,
+        "playing",
+        {
+            "friendly_name": "Pocket Assistant Music",
+            "media_content_id": "http://10.0.20.10/api/tts_proxy/6v3JLHVdy6kXxeopWCRxaQ.flac",
+            "media_duration": 1.4,
+        },
+    )
+    await hass.async_block_till_done()
+    assert coord.last_media_uri == "library://track/42"
+    assert coord.last_media_duration == 215.0
+
+    hass.states.async_set(
+        coord.local_speaker, "idle", {"friendly_name": "Pocket Assistant Music"}
+    )
+    hass.states.async_set(
+        "media_player.pocket_assistant_ma",
+        "idle",
+        {"friendly_name": "Pocket Assistant"},
+    )
+    await hass.async_block_till_done()
+
+    album_children = [
+        {"title": "99th Dream", "media_content_id": "library://track/41", "media_content_type": "track"},
+        {"title": "Up From The Sea", "media_content_id": "library://track/42", "media_content_type": "track"},
+        {"title": "She Weaves A Tender Trap", "media_content_id": "library://track/43", "media_content_type": "track"},
+        {"title": "These Times", "media_content_id": "library://track/44", "media_content_type": "track"},
+    ]
+    ma_play_calls: list[dict[str, Any]] = []
+    hass.services.async_register(
+        "music_assistant",
+        "get_queue",
+        lambda _call: {
+            "media_player.pocket_assistant_ma": {
+                "current_item": {
+                    "media_item": {
+                        "uri": "library://track/42",
+                        "album": {"uri": "library://album/4", "name": "99th Dream"},
+                    }
+                },
+                "next_item": {"media_item": {"uri": "library://track/43"}},
+                "elapsed_time": 0.0,
+            }
+        },
+        supports_response=True,
+    )
+    hass.services.async_register(
+        "music_assistant",
+        "get_library",
+        lambda _call: {"items": [{"name": "99th Dream", "uri": "library://album/4"}]},
+        supports_response=True,
+    )
+    hass.services.async_register(
+        "media_player",
+        "browse_media",
+        lambda _call: {
+            "media_player.pocket_assistant_ma": {
+                "title": "99th Dream",
+                "children": album_children,
+            }
+        },
+        supports_response=True,
+    )
+    hass.services.async_register(
+        "music_assistant",
+        "play_media",
+        lambda call: ma_play_calls.append(dict(call.data)),
+    )
+
+    # 2. Cold-boot Play where Sendspin Noise handshake takes ~1.0s (4 * 0.25s) to flip to playing:
+    # must NOT invoke play_media or clobber the existing Music Assistant queue.
+    sleep_ticks = 0
+
+    async def _fast_sleep(_sec: float) -> None:
+        nonlocal sleep_ticks
+        sleep_ticks += 1
+        if sleep_ticks == 4:
+            hass.states.async_set(coord.local_speaker, "playing", {})
+
+    monkeypatch.setattr(media_mod.asyncio, "sleep", _fast_sleep)
+    coord._local_needs_cold_resume = True
+    coord._resuming_guard_until = 0.0
+    await execute_coordinator_media_command(coord, "play")
+    assert ma_play_calls == []
+    assert coord._local_needs_cold_resume is False
+
+    # 3. Cold-boot Play when media_play raises empty-queue error: expands remaining album tracks [42, 43, 44]
+    hass.states.async_set(coord.local_speaker, "idle", {})
+    coord._local_needs_cold_resume = True
+    coord._resuming_guard_until = 0.0
+    orig_async_call = hass.services.async_call
+
+    async def _fail_media_play(
+        domain: str, service: str, service_data: dict[str, Any] | None = None, **kwargs: Any
+    ) -> Any:
+        if domain == "media_player" and service == "media_play":
+            raise HomeAssistantError("Queue is empty")
+        return await orig_async_call(domain, service, service_data, **kwargs)
+
+    hass.services.async_call = _fail_media_play
+    try:
+        await execute_coordinator_media_command(coord, "play")
+    finally:
+        hass.services.async_call = orig_async_call
+
+    assert len(ma_play_calls) == 1
+    assert ma_play_calls[0]["media_id"] == [
+        "library://track/42",
+        "library://track/43",
+        "library://track/44",
+    ]
+    assert ma_play_calls[0]["media_type"] == "track"
+    assert ma_play_calls[0]["enqueue"] == "replace"
+
+    # 4. Drilling into album_tracks via music_browse and tapping track 2 queues [42, 43, 44]
+    ma_play_calls.clear()
+    await hass.services.async_call(
+        DOMAIN,
+        "music_browse",
+        {
+            "target_device": coord.device_slug,
+            "req_id": 1,
+            "mode": "album_tracks",
+            "page": 1,
+            "page_size": 5,
+            "search": "library://album/4",
+            "speaker": coord.local_speaker,
+        },
+        blocking=True,
+    )
+    await execute_coordinator_media_command(
+        coord,
+        "play_media",
+        speaker=coord.local_speaker,
+        media_id="library://track/42",
+        media_type="track",
+        enqueue="replace",
+    )
+    assert len(ma_play_calls) == 1
+    assert ma_play_calls[0]["media_id"] == [
+        "library://track/42",
+        "library://track/43",
+        "library://track/44",
+    ]
+
+

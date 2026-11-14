@@ -79,6 +79,7 @@ __all__ = [
     "async_execute_ma_queue_transfer",
     "async_execute_volume_action",
     "async_find_queue_resume_item",
+    "async_find_queue_resume_items",
     "async_heal_coordinator_ma_links",
     "async_play_media_with_ma_fallback",
     "async_refresh_ma_link",
@@ -767,7 +768,47 @@ async def async_execute_volume_action(
     return False
 
 
-async def async_find_queue_resume_item(
+def _is_ephemeral_announcement_uri(uri: str) -> bool:
+    """Return True for one-shot TTS, chime, or signed Latter stream URLs that must not overwrite media history."""
+    low = str(uri or "").strip().lower()
+    if not low:
+        return False
+    return (
+        "/api/tts_proxy/" in low
+        or low.startswith("media-source://tts")
+        or "/api/latter/" in low
+        or "/local/sounds/" in low
+    )
+
+
+def _extract_queue_entry_uri(entry: Any) -> str:
+    """Extract canonical media URI from a Music Assistant queue entry dict."""
+    if not isinstance(entry, dict):
+        return ""
+    media_item = entry.get("media_item")
+    if isinstance(media_item, dict) and media_item.get("uri"):
+        cand = str(media_item["uri"]).strip()
+        if not _is_ephemeral_announcement_uri(cand):
+            return cand
+    cand = str(entry.get("uri") or entry.get("media_content_id") or "").strip()
+    return "" if _is_ephemeral_announcement_uri(cand) else cand
+
+
+def _extract_queue_entry_album_ref(entry: Any) -> str:
+    """Extract album URI or album name from a Music Assistant queue entry dict."""
+    if not isinstance(entry, dict):
+        return ""
+    media_item = entry.get("media_item")
+    if isinstance(media_item, dict):
+        album = media_item.get("album")
+        if isinstance(album, dict):
+            return str(album.get("uri") or album.get("name") or "").strip()
+        if isinstance(album, str) and album.strip():
+            return album.strip()
+    return str(entry.get("media_album_name") or "").strip()
+
+
+async def async_find_queue_resume_items(
     hass: HomeAssistant,
     speaker_entity_id: str,
     last_media_uri: str,
@@ -775,14 +816,20 @@ async def async_find_queue_resume_item(
     *,
     last_media_title: str = "",
     last_media_artist: str = "",
-) -> tuple[str, float]:
-    """Query Music Assistant get_queue for the current queue item URI and position, falling back to persisted store or library lookup."""
+    last_media_album: str = "",
+) -> tuple[list[str], float]:
+    """Query Music Assistant queue or album context to preserve upcoming tracks on cold resume."""
     ma_entity = resolve_ma_counterpart_entity(hass, speaker_entity_id)
     ma_st = hass.states.get(ma_entity) if ma_entity else None
     ma_usable = bool(
         ma_entity
         and (ma_st is None or ma_st.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN))
     )
+    cur_uri = ""
+    next_uri = ""
+    album_ref = ""
+    pos = last_media_position
+
     if ma_usable and hass.services.has_service("music_assistant", "get_queue"):
         try:
             resp = await hass.services.async_call(
@@ -798,55 +845,143 @@ async def async_find_queue_resume_item(
                     cur_item = (
                         q_data.get("current_item") or q_data.get("next_item") or {}
                     )
-                    if isinstance(cur_item, dict):
-                        media_item = cur_item.get("media_item") or {}
-                        uri = str(
-                            (
-                                media_item.get("uri")
-                                if isinstance(media_item, dict)
-                                else ""
-                            )
-                            or cur_item.get("uri")
-                            or cur_item.get("media_content_id")
-                            or ""
-                        )
-                        pos = float(
-                            q_data.get("elapsed_time") or last_media_position or 0.0
-                        )
-                        if uri:
-                            return uri, pos
+                    cur_uri = _extract_queue_entry_uri(cur_item)
+                    if q_data.get("current_item") and isinstance(
+                        q_data.get("next_item"), dict
+                    ):
+                        next_uri = _extract_queue_entry_uri(q_data.get("next_item"))
+                    album_ref = _extract_queue_entry_album_ref(cur_item)
+                    pos = float(
+                        q_data.get("elapsed_time") or last_media_position or 0.0
+                    )
+                    items_cand = q_data.get("items") or q_data.get("queue_items")
+                    if isinstance(items_cand, list):
+                        list_uris = [
+                            u
+                            for u in (_extract_queue_entry_uri(x) for x in items_cand)
+                            if u
+                        ]
+                        if len(list_uris) > 1:
+                            cur_idx = q_data.get("current_index")
+                            if isinstance(cur_idx, int) and 0 <= cur_idx < len(
+                                list_uris
+                            ):
+                                start_idx = cur_idx
+                            elif cur_uri and cur_uri in list_uris:
+                                start_idx = list_uris.index(cur_uri)
+                            else:
+                                start_idx = 0
+                            return list_uris[start_idx:], pos
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("music_assistant.get_queue resume lookup failed: %s", err)
 
-    if last_media_uri:
-        return last_media_uri, last_media_position
+    if not cur_uri and last_media_uri and not _is_ephemeral_announcement_uri(last_media_uri):
+        cur_uri = last_media_uri
+        pos = last_media_position
 
-    if last_media_title:
+    if not cur_uri and last_media_title:
         looked_up_uri = await async_lookup_ma_track_uri(
             hass, last_media_title, last_media_artist
         )
         if looked_up_uri:
-            return looked_up_uri, last_media_position
+            cur_uri = looked_up_uri
+            pos = last_media_position
 
-    return "", last_media_position
+    if not cur_uri:
+        return [], last_media_position
+
+    eff_album_ref = album_ref or last_media_album.strip()
+    if eff_album_ref and _parse_media_uri_type(cur_uri) in ("", "track"):
+        try:
+            raw_tracks = await async_browse_media_items(
+                hass,
+                "album_tracks",
+                speaker_entity_id,
+                speaker_entity_id,
+                speaker_entity_id,
+                search=eff_album_ref,
+                fallback_title=last_media_title,
+                fallback_artist=last_media_artist,
+                fallback_album=last_media_album,
+            )
+            track_slots = [
+                s
+                for s in (raw_tracks or [])
+                if isinstance(s, dict) and s.get("type") == "track" and s.get("id")
+            ]
+            if len(track_slots) > 1:
+                track_uris = [str(s["id"]) for s in track_slots]
+                start_idx = -1
+                if cur_uri in track_uris:
+                    start_idx = track_uris.index(cur_uri)
+                else:
+                    active_indices = [
+                        i for i, s in enumerate(track_slots) if s.get("active")
+                    ]
+                    if active_indices:
+                        start_idx = active_indices[0]
+                if start_idx >= 0:
+                    return track_uris[start_idx:], pos
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug(
+                "Album tail expansion on resume for '%s' failed: %s",
+                eff_album_ref,
+                err,
+            )
+
+    if next_uri and next_uri != cur_uri:
+        return [cur_uri, next_uri], pos
+    return [cur_uri], pos
+
+
+async def async_find_queue_resume_item(
+    hass: HomeAssistant,
+    speaker_entity_id: str,
+    last_media_uri: str,
+    last_media_position: float,
+    *,
+    last_media_title: str = "",
+    last_media_artist: str = "",
+    last_media_album: str = "",
+) -> tuple[str, float]:
+    """Query Music Assistant get_queue for the primary resume URI and position."""
+    uris, pos = await async_find_queue_resume_items(
+        hass,
+        speaker_entity_id,
+        last_media_uri,
+        last_media_position,
+        last_media_title=last_media_title,
+        last_media_artist=last_media_artist,
+        last_media_album=last_media_album,
+    )
+    return (uris[0] if uris else ""), pos
 
 
 async def async_play_media_with_ma_fallback(
     hass: HomeAssistant,
     target_spk: str,
-    media_id: str,
+    media_id: str | list[str],
     media_type: str | None = None,
     enqueue: str | None = None,
 ) -> None:
     """Play media via Music Assistant (expanding artist/album containers into tracks when needed)."""
+    if isinstance(media_id, list):
+        cleaned_ids = [str(x).strip() for x in media_id if str(x or "").strip()]
+        if not cleaned_ids:
+            return
+        media_id = cleaned_ids[0] if len(cleaned_ids) == 1 else cleaned_ids
+
+    first_uri = media_id[0] if isinstance(media_id, list) else media_id
     ma_target = resolve_ma_counterpart_entity(hass, target_spk)
     ent_reg = er.async_get(hass)
     spk_entry = ent_reg.async_get(target_spk) if target_spk else None
     is_esphome_sendspin = bool(spk_entry and spk_entry.platform == "esphome")
 
     eff_type = (media_type or "").strip().lower()
-    if not eff_type or eff_type == "music":
-        parsed_uri_type = _parse_media_uri_type(media_id)
+    if isinstance(media_id, list):
+        eff_type = "track"
+    elif not eff_type or eff_type == "music":
+        parsed_uri_type = _parse_media_uri_type(first_uri)
         if parsed_uri_type:
             eff_type = parsed_uri_type
 
@@ -877,7 +1012,7 @@ async def async_play_media_with_ma_fallback(
                 ma_target,
                 err,
             )
-            if eff_type in ("artist", "album"):
+            if isinstance(media_id, str) and eff_type in ("artist", "album"):
                 try:
                     resolved_id = ""
                     resolved_type = "track"
@@ -940,7 +1075,7 @@ async def async_play_media_with_ma_fallback(
         "play_media",
         {
             ATTR_ENTITY_ID: target_spk,
-            "media_content_id": media_id,
+            "media_content_id": first_uri,
             "media_content_type": eff_type or "music",
         },
         blocking=False,
@@ -1256,6 +1391,7 @@ async def async_resume_idle_speaker_queue(
     *,
     last_media_title: str = "",
     last_media_artist: str = "",
+    last_media_album: str = "",
     immediate: bool = False,
     already_tried_ma: bool = False,
 ) -> bool:
@@ -1271,9 +1407,10 @@ async def async_resume_idle_speaker_queue(
         )
 
     if not immediate:
-        await asyncio.sleep(0.8)
-        if _is_playing_or_buffering():
-            return True
+        for _ in range(10):
+            await asyncio.sleep(0.25)
+            if _is_playing_or_buffering():
+                return True
         if ma_entity and ma_entity != speaker_entity_id and not already_tried_ma:
             try:
                 await hass.services.async_call(
@@ -1282,27 +1419,33 @@ async def async_resume_idle_speaker_queue(
                     {ATTR_ENTITY_ID: ma_entity},
                     blocking=True,
                 )
-                await asyncio.sleep(0.8)
-                if _is_playing_or_buffering():
-                    return True
+                for _ in range(6):
+                    await asyncio.sleep(0.25)
+                    if _is_playing_or_buffering():
+                        return True
             except Exception:  # noqa: BLE001
                 pass
 
     cur_state = hass.states.get(speaker_entity_id)
-    resume_uri, resume_pos = await async_find_queue_resume_item(
+    resume_uris, resume_pos = await async_find_queue_resume_items(
         hass,
         speaker_entity_id,
         last_media_uri,
         last_media_position,
         last_media_title=last_media_title,
         last_media_artist=last_media_artist,
+        last_media_album=last_media_album,
     )
-    if not resume_uri:
+    if not resume_uris:
         _LOGGER.debug(
             "No resumable queue URI found for idle speaker '%s'", speaker_entity_id
         )
         return False
 
+    play_payload: str | list[str] = (
+        resume_uris[0] if len(resume_uris) == 1 else resume_uris
+    )
+    eff_media_type = "track" if len(resume_uris) > 1 else (last_media_type or "music")
     play_target = ma_entity or speaker_entity_id
     try:
         if hass.services.has_service("music_assistant", "play_media") and (
@@ -1312,8 +1455,9 @@ async def async_resume_idle_speaker_queue(
             await async_play_media_with_ma_fallback(
                 hass,
                 play_target,
-                resume_uri,
-                media_type=last_media_type or "music",
+                play_payload,
+                media_type=eff_media_type,
+                enqueue="replace" if len(resume_uris) > 1 else None,
             )
         else:
             await hass.services.async_call(
@@ -1321,7 +1465,7 @@ async def async_resume_idle_speaker_queue(
                 "play_media",
                 {
                     ATTR_ENTITY_ID: play_target,
-                    "media_content_id": resume_uri,
+                    "media_content_id": resume_uris[0],
                     "media_content_type": last_media_type or "music",
                 },
                 blocking=True,
@@ -1489,7 +1633,15 @@ def _sync_active_speaker_media_snapshot(coordinator: LatterCoordinator) -> None:
         STATE_BUFFERING,
     ):
         return
-    cid = str(attrs.get("media_content_id") or m_attrs.get("media_content_id") or "")
+    local_cid = str(attrs.get("media_content_id") or "")
+    ma_cid = str(m_attrs.get("media_content_id") or "")
+    if _is_ephemeral_announcement_uri(local_cid):
+        return
+    cid = ""
+    for cand in (ma_cid, local_cid):
+        if cand and not _is_ephemeral_announcement_uri(cand):
+            cid = cand
+            break
     if cid:
         coordinator.last_media_uri = cid
     coordinator.last_media_type = media_type
@@ -1667,8 +1819,15 @@ def set_coordinator_active_speaker(
             )
 
             if transfer_queue:
+                raw_prev_cid = str(p_attrs.get("media_content_id") or "")
                 media_cid = str(
-                    p_attrs.get("media_content_id") or coordinator.last_media_uri or ""
+                    (
+                        ""
+                        if _is_ephemeral_announcement_uri(raw_prev_cid)
+                        else raw_prev_cid
+                    )
+                    or coordinator.last_media_uri
+                    or ""
                 )
                 media_ctype = str(
                     p_attrs.get("media_content_type")
@@ -1744,10 +1903,20 @@ async def execute_coordinator_media_command(
     if cmd == "play_media" and media_id:
         coordinator._local_needs_cold_resume = False
         coordinator._resuming_guard_until = 0.0
+        play_payload_id: str | list[str] = media_id
+        if (
+            (media_type or "").strip().lower() == "track"
+            and (enqueue or "replace").strip().lower() == "replace"
+            and media_id in coordinator._browsed_album_track_uris
+        ):
+            idx = coordinator._browsed_album_track_uris.index(media_id)
+            remaining = coordinator._browsed_album_track_uris[idx:]
+            if len(remaining) > 1:
+                play_payload_id = remaining
         await async_play_media_with_ma_fallback(
             hass,
             target_spk,
-            media_id,
+            play_payload_id,
             media_type=media_type,
             enqueue=enqueue,
         )
@@ -1821,6 +1990,7 @@ async def execute_coordinator_media_command(
                 coordinator.last_media_type,
                 last_media_title=coordinator.last_media_title,
                 last_media_artist=coordinator.last_media_artist,
+                last_media_album=coordinator.last_media_album,
                 immediate=play_failed_empty,
                 already_tried_ma=bool(ma_target and cmd_target == ma_target),
             )
