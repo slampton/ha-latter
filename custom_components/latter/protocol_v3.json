@@ -324,7 +324,7 @@
           "name": "world_clocks_summary",
           "cpp_enum": "WORLD_CLOCKS_SUMMARY",
           "type": "string",
-          "description": "Semicolon-delimited configured World Clocks ('<iana>|<city>|<abbr>|<utc_offset_min>|<is_dst>;...')"
+          "description": "Semicolon-delimited configured World Clocks ('<iana>|<label>|<abbr>|<utc_offset_min>|<is_dst>;...')"
         }
       ]
     },
@@ -953,8 +953,8 @@
           "index": 53,
           "name": "world_clocks",
           "cpp_enum": "WORLD_CLOCKS",
-          "type": "csv",
-          "description": "Comma-separated IANA time zone IDs (up to 4) shown on the Time App Clock tab"
+          "type": "string",
+          "description": "Semicolon-delimited custom-labeled World Clock entries (up to 4, '<label>|<iana>;...') shown on the Time App Clock tab"
         },
         {
           "index": 54,
@@ -962,6 +962,13 @@
           "cpp_enum": "ALARMS_SUMMARY",
           "type": "string",
           "description": "Semicolon-delimited 3-slot device alarm schedule ('HH:MM|enabled|recurrence;...')"
+        },
+        {
+          "index": 55,
+          "name": "local_clock_label",
+          "cpp_enum": "LOCAL_CLOCK_LABEL",
+          "type": "string",
+          "description": "Optional user-defined label shown above local time on the Time App Clock tab (up to 32 chars)"
         }
       ]
     }

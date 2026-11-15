@@ -726,7 +726,10 @@ return { offMarkup, dispWeatherOff, staticMarkup, rotatingMarkup, powerMarkup, a
         self.assertIn("id=cfg-home_clock_tap_action", got["ifaceMarkup"])
         self.assertIn("+ Time", got["ifaceMarkup"])
         self.assertIn('<h3 class="card-title">Time</h3>', got["ifaceMarkup"])
+        self.assertIn("Local Clock Label", got["ifaceMarkup"])
+        self.assertIn('id="cfg-local_clock_label"', got["ifaceMarkup"])
         self.assertIn("Show UTC Clock", got["ifaceMarkup"])
+        self.assertIn('id="cfg-world_clock_new_label"', got["ifaceMarkup"])
         self.assertIn('id="cfg-world_clocks_add"', got["ifaceMarkup"])
         self.assertIn("id=cfg-alarm_1_time", got["ifaceMarkup"])
         self.assertIn('step="60"', got["ifaceMarkup"])
@@ -1383,7 +1386,8 @@ function makeInterfaceStore(homeEnabled) {
         return_to_home_timeout: "2 min",
         activity_card: true,
         dock_apps: "music,home_hub,area,remote,games,tools",
-        world_clocks: "Europe/London,Asia/Tokyo",
+        local_clock_label: "Oakland",
+        world_clocks: "Westminster|Europe/London;Kyoto|Asia/Tokyo",
         alarms_summary: "06:45|1|1;08:30|0|2;09:00|0|3",
         home_categories: "alarm,thermostat,entry",
         area_categories: "scene,light",
@@ -1491,9 +1495,11 @@ return {
             "✓ Thermostat",
             "✓ Entry & Garage",
             "+ Robot Vacuum",
-            'id="world-clocks-pills"',
-            "London",
-            "Tokyo",
+            'id="cfg-local_clock_label"',
+            ".value=Oakland",
+            'id="world-clocks-list"',
+            ".value=Westminster",
+            ".value=Kyoto",
             ".value=06:45",
         ):
             self.assertIn(expected, enabled_html)

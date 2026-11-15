@@ -26,10 +26,12 @@ from .studio.settings import (
     normalize_alarms_summary,
     normalize_area_categories,
     normalize_home_categories,
-    normalize_world_clocks_csv,
+    normalize_world_clocks_spec,
     parse_area_categories,
     parse_home_categories,
+    parse_world_clocks_spec,
     resolve_device_pref_value,
+    sanitize_clock_label,
 )
 
 # ---------------------------------------------------------------------------
@@ -299,7 +301,7 @@ def pack_device_prefs_fields(
     custom_color_hex: str,
     is_round_display: bool = True,
 ) -> tuple[Any, ...]:
-    """Return the 52 ordered body fields (wire indices 3..54) for Protocol v3 `device_prefs`."""
+    """Return the 53 ordered body fields (wire indices 3..55) for Protocol v3 `device_prefs`."""
     home_enabled = bool(resolve_device_pref_value(cfg, "home_screen_enabled"))
     clean_hex = str(custom_color_hex or "").strip().upper()
     out: list[Any] = []
@@ -345,7 +347,9 @@ def parse_dirty_prefs_records(raw: str | None) -> dict[str, Any]:
                 out[key] = val
         elif spec.domain == "text":
             if key == "world_clocks":
-                out[key] = normalize_world_clocks_csv(val, strict=False)
+                out[key] = normalize_world_clocks_spec(val, strict=False)
+            elif key == "local_clock_label":
+                out[key] = sanitize_clock_label(val)
             elif key == "alarms_summary":
                 try:
                     out[key] = normalize_alarms_summary(val, strict=True)
@@ -413,8 +417,12 @@ def _format_utc_offset_abbr(offset_min: int) -> str:
     return f"UTC{sign}{hh}" if mm == 0 else f"UTC{sign}{hh}:{mm:02d}"
 
 
-def format_tz_record(iana: str, now_utc: datetime | None = None) -> str:
-    """Format `<iana>|<city>|<abbr>|<utc_offset_min>|<is_dst>` for `area_context`."""
+def format_tz_record(
+    iana: str,
+    now_utc: datetime | None = None,
+    custom_label: str | None = None,
+) -> str:
+    """Format `<iana>|<label>|<abbr>|<utc_offset_min>|<is_dst>` for `area_context`."""
     clean_iana = str(iana or "").strip()
     if not clean_iana:
         return ""
@@ -423,12 +431,16 @@ def format_tz_record(iana: str, now_utc: datetime | None = None) -> str:
 
     now = (now_utc or datetime.now(UTC)).astimezone(UTC)
     cat_entry = WORLD_CLOCK_CATALOG_MAP.get(clean_iana)
-    city = (
-        str(cat_entry["city"])
-        if cat_entry is not None
-        else clean_iana.rsplit("/", 1)[-1].replace("_", " ")
-    )
-    city = city.replace("|", "").replace(";", "").strip() or clean_iana
+    override_lbl = sanitize_clock_label(custom_label) if custom_label else ""
+    if override_lbl:
+        city = override_lbl
+    else:
+        city = (
+            str(cat_entry["city"])
+            if cat_entry is not None
+            else clean_iana.rsplit("/", 1)[-1].replace("_", " ")
+        )
+        city = sanitize_clock_label(city) or clean_iana
 
     try:
         tz = ZoneInfo(clean_iana)
@@ -453,19 +465,17 @@ def format_tz_record(iana: str, now_utc: datetime | None = None) -> str:
 
 def build_time_zone_payloads(
     hass_time_zone: str | None,
-    world_clocks_csv: str | None,
+    world_clocks_spec: str | None,
     now_utc: datetime | None = None,
 ) -> tuple[str, str]:
     """Build `(local_tz_info, world_clocks_summary)` for Protocol v3 `area_context`."""
     now = (now_utc or datetime.now(UTC)).astimezone(UTC)
     local_tz_info = format_tz_record(str(hass_time_zone or "").strip(), now)
-    norm_csv = normalize_world_clocks_csv(world_clocks_csv, strict=False)
     world_records: list[str] = []
-    if norm_csv:
-        for zone_id in norm_csv.split(","):
-            rec = format_tz_record(zone_id, now)
-            if rec:
-                world_records.append(rec)
+    for lbl, zone_id in parse_world_clocks_spec(world_clocks_spec, strict=False):
+        rec = format_tz_record(zone_id, now, custom_label=lbl)
+        if rec:
+            world_records.append(rec)
     return local_tz_info, ";".join(world_records)
 
 

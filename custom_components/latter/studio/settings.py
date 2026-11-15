@@ -356,36 +356,106 @@ def is_valid_iana_zone(iana: str) -> bool:
     return False
 
 
-def normalize_world_clocks_csv(val: Any, *, strict: bool = False) -> str:
-    """Validate and canonicalize up to 4 comma-separated non-UTC IANA zones."""
-    raw_items: Iterable[Any]
+def sanitize_clock_label(val: Any, max_bytes: int = 32) -> str:
+    """Return a single-line delimiter-safe clock label truncated cleanly to `max_bytes` UTF-8 bytes."""
+    raw = str(val or "")
+    chars: list[str] = []
+    prev_space = True
+    for ch in raw:
+        code = ord(ch)
+        if (
+            code < 0x20
+            or code == 0x7F
+            or ch in ("|", ";", "\x1e", "\x1f", " ", "\t", "\r", "\n")
+        ):
+            if not prev_space:
+                chars.append(" ")
+                prev_space = True
+            continue
+        chars.append(ch)
+        prev_space = False
+    cleaned = "".join(chars).strip()
+    encoded = cleaned.encode("utf-8")
+    if len(encoded) > max_bytes:
+        cleaned = encoded[:max_bytes].decode("utf-8", errors="ignore").rstrip()
+    return cleaned
+
+
+def default_city_for_iana(iana: str) -> str:
+    """Return the catalog city or humanized IANA tail for `iana`."""
+    clean = str(iana or "").strip()
+    cat = WORLD_CLOCK_CATALOG_MAP.get(clean)
+    if cat is not None:
+        return str(cat["city"])
+    tail = clean.rsplit("/", 1)[-1].replace("_", " ")
+    return sanitize_clock_label(tail) or clean
+
+
+def parse_world_clocks_spec(
+    val: Any, *, strict: bool = False
+) -> list[tuple[str, str]]:
+    """Parse and validate up to 4 `'<label>|<iana>'` World Clock entries."""
     if val is None:
-        return ""
+        return []
+    raw_items: Iterable[Any]
     if isinstance(val, (list, tuple)):
         raw_items = val
     else:
-        raw_items = str(val).split(",")
-    out: list[str] = []
+        raw_items = str(val).split(";")
+
+    out: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
     for raw in raw_items:
-        tok = str(raw or "").strip()
-        if not tok:
-            continue
-        if tok in _PINNED_UTC_ALIASES:
+        if isinstance(raw, Mapping):
+            raw_lbl = str(raw.get("label") or "")
+            iana = str(raw.get("iana") or "").strip()
+            if not iana and not raw_lbl.strip():
+                continue
+        else:
+            rec = str(raw or "").strip()
+            if not rec:
+                continue
+            if "|" not in rec:
+                if strict:
+                    raise ValueError(
+                        f"Invalid World Clock record (expected '<label>|<iana>'): {rec}"
+                    )
+                continue
+            raw_lbl, raw_iana = rec.split("|", 1)
+            iana = raw_iana.strip()
+
+        if iana in _PINNED_UTC_ALIASES:
             if strict:
-                raise ValueError("Use Show UTC Clock instead of adding UTC to World Clocks")
+                raise ValueError(
+                    "Use Show UTC Clock instead of adding UTC to World Clocks"
+                )
             continue
-        if not is_valid_iana_zone(tok):
+        if not is_valid_iana_zone(iana):
             if strict:
-                raise ValueError(f"Unknown IANA time zone: {tok}")
+                raise ValueError(f"Unknown IANA time zone: {iana or '(empty)'}")
             continue
-        if tok in out:
+
+        lbl = sanitize_clock_label(raw_lbl) or default_city_for_iana(iana)
+        dedup_key = (lbl.lower(), iana)
+        if dedup_key in seen:
             continue
         if len(out) >= MAX_WORLD_CLOCKS:
             if strict:
-                raise ValueError(f"A Device supports at most {MAX_WORLD_CLOCKS} World Clocks")
+                raise ValueError(
+                    f"A Device supports at most {MAX_WORLD_CLOCKS} World Clocks"
+                )
             break
-        out.append(tok)
-    return ",".join(out)
+        seen.add(dedup_key)
+        out.append((lbl, iana))
+    return out
+
+
+def normalize_world_clocks_spec(val: Any, *, strict: bool = False) -> str:
+    """Validate and canonicalize up to 4 semicolon-delimited `'<label>|<iana>'` World Clocks."""
+    return ";".join(
+        f"{lbl}|{iana}"
+        for lbl, iana in parse_world_clocks_spec(val, strict=strict)
+    )
 
 
 def normalize_alarms_summary(val: Any, *, strict: bool = False) -> str:
@@ -569,6 +639,7 @@ DEVICE_PREF_SPECS: tuple[DevicePrefSpec, ...] = (
     DevicePrefSpec("ble_beacon_mode", "BLE Beacon Mode", "select", "Handheld Only", "area", "beacon_battery", "behavior", options=BLE_BEACON_MODE_OPTIONS),
     DevicePrefSpec("weather_sim_condition", "Weather Simulation", "select", "Live (Home Assistant)", "developer", "display", None, options=WEATHER_SIM_CONDITION_OPTIONS),
     DevicePrefSpec("home_clock_tap_action", "Home Time Tap", "select", "Time App", "home", "display", "appearance", options=HOME_CLOCK_TAP_OPTIONS),
+    DevicePrefSpec("local_clock_label", "Local Clock Label", "text", "", "time", "display", None),
     DevicePrefSpec("show_utc_clock", "Show UTC Clock", "switch", False, "time", "display", "appearance"),
     DevicePrefSpec("world_clocks", "World Clocks", "text", "", "time", "display", None),
     DevicePrefSpec("alarms_summary", "Alarms", "text", DEFAULT_ALARMS_SUMMARY, "time", "display", None),
@@ -600,7 +671,9 @@ def resolve_device_pref_value(cfg: Mapping[str, Any], key: str) -> Any:
         return val if val in spec.options else spec.default
     if spec.domain == "text":
         if key == "world_clocks":
-            return normalize_world_clocks_csv(raw, strict=False)
+            return normalize_world_clocks_spec(raw, strict=False)
+        if key == "local_clock_label":
+            return sanitize_clock_label(raw)
         if key == "alarms_summary":
             return normalize_alarms_summary(raw, strict=False)
         return str(raw).strip()
@@ -872,7 +945,9 @@ def clean_device_settings(
         elif spec.domain == "text":
             try:
                 if spec.key == "world_clocks":
-                    out[spec.key] = normalize_world_clocks_csv(raw_v, strict=True)
+                    out[spec.key] = normalize_world_clocks_spec(raw_v, strict=True)
+                elif spec.key == "local_clock_label":
+                    out[spec.key] = sanitize_clock_label(raw_v)
                 elif spec.key == "alarms_summary":
                     out[spec.key] = normalize_alarms_summary(raw_v, strict=True)
                 else:

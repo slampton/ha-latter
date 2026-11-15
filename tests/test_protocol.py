@@ -70,7 +70,7 @@ class TestProtocolV3Contract(unittest.TestCase):
             "remote_config": 3,
             "weather_forecast": 14,
             "calendar_agenda": 2,
-            "device_prefs": 52,
+            "device_prefs": 53,
         }
         domains = self.schema.get("domains", {})
         self.assertEqual(set(domains.keys()), set(expected_counts.keys()))
@@ -1028,8 +1028,9 @@ class TestDevicePrefsProtocol(unittest.TestCase):
                 "color_profile=NotARealProfile",
                 "clock_face=Hybrid Digital",
                 "home_clock_tap_action=Clock Face",
+                "local_clock_label=  Oakland Studio  ",
                 "show_utc_clock=1",
-                "world_clocks=Europe/London,Asia/Tokyo",
+                "world_clocks=London|Europe/London;Kyoto|Asia/Tokyo",
                 "alarms_summary=06:47|1|1;08:30|0|2;09:15|1|3",
             ]
         )
@@ -1042,8 +1043,9 @@ class TestDevicePrefsProtocol(unittest.TestCase):
                 "docked_screensaver": True,
                 "clock_face": "Hybrid Digital",
                 "home_clock_tap_action": "Clock Face",
+                "local_clock_label": "Oakland Studio",
                 "show_utc_clock": True,
-                "world_clocks": "Europe/London,Asia/Tokyo",
+                "world_clocks": "London|Europe/London;Kyoto|Asia/Tokyo",
                 "alarms_summary": "06:47|1|1;08:30|0|2;09:15|1|3",
             },
         )
@@ -1125,21 +1127,34 @@ class TestDevicePrefsProtocol(unittest.TestCase):
         from datetime import UTC, datetime
 
         self.assertEqual(
-            studio_scope.normalize_world_clocks_csv(
-                " Europe/London , Asia/Tokyo , Europe/London , Asia/Kolkata , Australia/Sydney ",
+            studio_scope.sanitize_clock_label("  San  Francisco | Bay ; Home  "),
+            "San Francisco Bay Home",
+        )
+        self.assertEqual(
+            studio_scope.sanitize_clock_label("1234567890123456789012345678901é"),
+            "1234567890123456789012345678901",
+        )
+        cleaned_lbl = studio_scope.clean_device_settings({"local_clock_label": "  Oakland | Studio  "})
+        self.assertEqual(cleaned_lbl["local_clock_label"], "Oakland Studio")
+
+        self.assertEqual(
+            studio_scope.normalize_world_clocks_spec(
+                " |Europe/London ; Kyoto|Asia/Tokyo ; london|Europe/London ; "
+                "Hanoi|Asia/Bangkok ; Bangkok|Asia/Bangkok ",
                 strict=True,
             ),
-            "Europe/London,Asia/Tokyo,Asia/Kolkata,Australia/Sydney",
+            "London|Europe/London;Kyoto|Asia/Tokyo;Hanoi|Asia/Bangkok;Bangkok|Asia/Bangkok",
         )
-        self.assertEqual(studio_scope.normalize_world_clocks_csv("", strict=True), "")
+        self.assertEqual(studio_scope.normalize_world_clocks_spec("", strict=True), "")
         for bad_wc in (
-            "UTC",
-            "Etc/UTC",
-            "Not/AZone",
-            "Europe/London,Asia/Tokyo,Asia/Kolkata,Australia/Sydney,America/New_York",
+            "UTC|UTC",
+            "London|Etc/UTC",
+            "Europe/London",
+            "City|Not/AZone",
+            "London|Europe/London;Tokyo|Asia/Tokyo;Kolkata|Asia/Kolkata;Sydney|Australia/Sydney;NYC|America/New_York",
         ):
             with self.assertRaises(ValueError):
-                studio_scope.normalize_world_clocks_csv(bad_wc, strict=True)
+                studio_scope.normalize_world_clocks_spec(bad_wc, strict=True)
             with self.assertRaises(studio_scope.SettingsScopeError):
                 studio_scope.clean_device_settings({"world_clocks": bad_wc})
 
@@ -1156,7 +1171,7 @@ class TestDevicePrefsProtocol(unittest.TestCase):
         summer_utc = datetime(2026, 7, 15, 18, 0, 0, tzinfo=UTC)
         local_summer, wc_summer = _PAYLOADS_MOD.build_time_zone_payloads(
             "America/Los_Angeles",
-            "Europe/London,Asia/Kolkata,Australia/Sydney,UTC",
+            "Westminster|Europe/London;Bengaluru|Asia/Kolkata;Hanoi|Asia/Bangkok;Bangkok|Asia/Bangkok;UTC|UTC",
             now_utc=summer_utc,
         )
         self.assertEqual(local_summer, "America/Los_Angeles|Los Angeles|PDT|-420|1")
@@ -1164,9 +1179,10 @@ class TestDevicePrefsProtocol(unittest.TestCase):
             wc_summer,
             ";".join(
                 [
-                    "Europe/London|London|BST|60|1",
-                    "Asia/Kolkata|Kolkata|IST|330|0",
-                    "Australia/Sydney|Sydney|AEST|600|0",
+                    "Europe/London|Westminster|BST|60|1",
+                    "Asia/Kolkata|Bengaluru|IST|330|0",
+                    "Asia/Bangkok|Hanoi|ICT|420|0",
+                    "Asia/Bangkok|Bangkok|ICT|420|0",
                 ]
             ),
         )
@@ -1174,7 +1190,7 @@ class TestDevicePrefsProtocol(unittest.TestCase):
         winter_utc = datetime(2026, 1, 15, 18, 0, 0, tzinfo=UTC)
         local_winter, wc_winter = _PAYLOADS_MOD.build_time_zone_payloads(
             "America/Los_Angeles",
-            "Australia/Sydney",
+            "|Australia/Sydney",
             now_utc=winter_utc,
         )
         self.assertEqual(local_winter, "America/Los_Angeles|Los Angeles|PST|-480|0")
