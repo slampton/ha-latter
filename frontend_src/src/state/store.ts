@@ -71,6 +71,7 @@ import {
   moveDockAppTokenOp,
   moveHomeCategoryTokenOp,
   overlayDevicePrefsOnSections,
+  overlayPendingBlankListSlots,
   overlayPendingEntityStates,
   PENDING_ENTITY_STATES,
   type PendingEntityEntry,
@@ -84,6 +85,7 @@ import {
   setWallpaperRotationOp,
   stageDeviceSettingOp,
   stageSystemSettingOp,
+  type StringListKey,
   testDoorbellSpeakerOp,
   toggleActivitySourceOp,
   toggleAreaCategoryTokenOp,
@@ -168,7 +170,6 @@ export class StudioStore implements ReactiveController {
   worldClockNewZone = "";
 
   // System Shared Entities UI state
-  doorbellTestSubentryId = "";
   activeCameraPreviewEntity = "";
   cameraPreviewUrl = "";
 
@@ -192,6 +193,8 @@ export class StudioStore implements ReactiveController {
   announceMessage = "";
   announcePriority: "normal" | "warning" | "critical" = "normal";
   announceIncludeCamera = false;
+  doorbellTestSubentryId = "";
+  doorbellTestReply = "";
   backupExportScope = "system";
   backupRestoreSubentryId = "";
   logsOpen = false;
@@ -223,6 +226,11 @@ export class StudioStore implements ReactiveController {
   pendingSystemPatch: Record<string, unknown> = {};
   pendingSystemPrevious: Record<string, unknown> = {};
   systemSaveTimer: ReturnType<typeof setTimeout> | null = null;
+  readonly pendingBlankListSlots: Record<StringListKey, number> = {
+    calendar_entities: 0,
+    camera_entities: 0,
+    remotes_list: 0,
+  };
   readonly pendingDeviceBuckets = new Map<string, DevicePendingBucket>();
   readonly pendingEntityStates = new Map<string, PendingEntityEntry>();
 
@@ -688,6 +696,7 @@ export class StudioStore implements ReactiveController {
   ingestPayload(incoming: StudioStatePayload, logsWereRequested: boolean): void {
     const prevCatalog = this.state?.catalog;
     const prevLogs = this.state?.internal_logs;
+    const prevSysConfig = this.state?.system_config;
 
     if (
       this.deviceSelected &&
@@ -695,11 +704,13 @@ export class StudioStore implements ReactiveController {
       Array.isArray(incoming.system_devices) &&
       !incoming.system_devices.some((d) => d.subentry_id === this.activeSubentryId)
     ) {
-      this.state = {
+      const redirected: StudioStatePayload = {
         ...incoming,
         catalog: incoming.catalog ?? prevCatalog,
         internal_logs: logsWereRequested || incoming.internal_logs?.length ? incoming.internal_logs : prevLogs || [],
       };
+      overlayPendingBlankListSlots(this, redirected, prevSysConfig);
+      this.state = redirected;
       this.redirectInvalidDeviceRoute();
       return;
     }
@@ -719,6 +730,8 @@ export class StudioStore implements ReactiveController {
         ...(this.pendingSystemPatch as Partial<SystemConfig>),
       };
     }
+
+    overlayPendingBlankListSlots(this, merged, prevSysConfig);
 
     const devBucket = merged.subentry_id ? this.pendingDeviceBuckets.get(merged.subentry_id) : undefined;
     if (devBucket && merged.config) {

@@ -788,6 +788,8 @@ const AREA_CATEGORIES_CATALOG = [
 ];
 const HOME_CATEGORIES_CATALOG = [
   {token: "alarm", label: "Security Alarm"},
+  {token: "cameras", label: "Cameras"},
+  {token: "intercom", label: "Intercom"},
   {token: "thermostat", label: "Thermostat"},
   {token: "entry", label: "Entry & Garage"},
   {token: "vacuum", label: "Robot Vacuum"},
@@ -823,9 +825,11 @@ const DEFAULT_AREA_CATEGORIES_TOKENS = [
   "climate",
   "media",
 ];
-const DEFAULT_HOME_CATEGORIES = "alarm,thermostat,entry,vacuum";
+const DEFAULT_HOME_CATEGORIES = "alarm,cameras,intercom,thermostat,entry,vacuum";
 const DEFAULT_HOME_CATEGORIES_TOKENS = [
   "alarm",
+  "cameras",
+  "intercom",
   "thermostat",
   "entry",
   "vacuum",
@@ -835,7 +839,7 @@ const DEFAULT_HOME_CATEGORIES_TOKENS = [
 /**
  * Canonical constants, route maps, issue messages, and Title Case dictionaries for Latter Studio.
  */
-const STUDIO_REV = 12;
+const STUDIO_REV = 13;
 const MAX_WALLPAPER_UPLOAD_BYTES = 15 * 1024 * 1024;
 const DEVICE_VIEW_SLUGS = {
   dashboard: "overview",
@@ -2910,6 +2914,103 @@ async function clearInternalLogsOp(store) {
  * Device & System configuration staging, optimistic ESPHome entity actions,
  * dock/activity/wallpaper/color mutations, and shared-entity list editors.
  */
+const STRING_LIST_KEYS = [
+  "calendar_entities",
+  "camera_entities",
+  "remotes_list",
+];
+const STRING_LIST_MAX_ITEMS = {
+  camera_entities: 10,
+  remotes_list: 10,
+  calendar_entities: 50,
+};
+function isStringListKey(key) {
+  return (
+    key === "calendar_entities" ||
+    key === "camera_entities" ||
+    key === "remotes_list"
+  );
+}
+function cleanPersistedStringList(items, maxItems) {
+  const out = [];
+  for (const raw of items) {
+    const ent = String(raw || "").trim();
+    if (ent && !out.includes(ent)) {
+      out.push(ent);
+      if (out.length >= maxItems) break;
+    }
+  }
+  return out;
+}
+function mergePersistedWithBlankSlots(
+  persisted,
+  blankCount,
+  maxItems,
+  prevUiList,
+) {
+  const cleaned = cleanPersistedStringList(persisted, maxItems);
+  const clampedBlankCount = Math.max(0, Math.min(blankCount, maxItems - cleaned.length));
+  if (clampedBlankCount === 0) {
+    return { uiList: cleaned, clampedBlankCount: 0 };
+  }
+  if (prevUiList && prevUiList.some((v) => !String(v || "").trim())) {
+    const uiList = [];
+    let cleanIdx = 0;
+    let blanksPlaced = 0;
+    for (const slot of prevUiList) {
+      if (uiList.length >= maxItems) break;
+      if (!String(slot || "").trim()) {
+        if (blanksPlaced < clampedBlankCount) {
+          uiList.push("");
+          blanksPlaced += 1;
+        }
+      } else if (cleanIdx < cleaned.length) {
+        uiList.push(cleaned[cleanIdx]);
+        cleanIdx += 1;
+      }
+    }
+    while (cleanIdx < cleaned.length && uiList.length < maxItems) {
+      uiList.push(cleaned[cleanIdx]);
+      cleanIdx += 1;
+    }
+    while (blanksPlaced < clampedBlankCount && uiList.length < maxItems) {
+      uiList.push("");
+      blanksPlaced += 1;
+    }
+    return { uiList, clampedBlankCount: blanksPlaced };
+  }
+  return {
+    uiList: [...cleaned, ...Array (clampedBlankCount).fill("")],
+    clampedBlankCount,
+  };
+}
+function overlayPendingBlankListSlots(
+  store,
+  payload,
+  prevSysConfig,
+) {
+  if (!payload.system_config) return;
+  let mutated = false;
+  const nextSys = { ...payload.system_config };
+  for (const key of STRING_LIST_KEYS) {
+    const wantBlanks = store.pendingBlankListSlots[key] || 0;
+    if (wantBlanks <= 0) continue;
+    const maxItems = STRING_LIST_MAX_ITEMS[key];
+    const base = Array.isArray(nextSys[key]) ? nextSys[key] : [];
+    const { uiList, clampedBlankCount } = mergePersistedWithBlankSlots(
+      base,
+      wantBlanks,
+      maxItems,
+      prevSysConfig?.[key],
+    );
+    store.pendingBlankListSlots[key] = clampedBlankCount;
+    nextSys[key] = uiList;
+    mutated = true;
+  }
+  if (mutated) {
+    payload.system_config = nextSys;
+  }
+}
 const SAVE_DEBOUNCE_MS = 220;
 const ENTITY_OPTIMISTIC_TTL_MS = 8000;
 const PENDING_ENTITY_STATES = new Map();
@@ -3207,7 +3308,11 @@ function stageSystemSettingOp(
 ) {
   if (!(key in store.pendingSystemPrevious)) {
     const prev = (store.state?.system_config)?.[key];
-    store.pendingSystemPrevious[key] = prev !== undefined ? structuredClone(prev) : undefined;
+    if (isStringListKey(key) && Array.isArray(prev)) {
+      store.pendingSystemPrevious[key] = cleanPersistedStringList(prev, STRING_LIST_MAX_ITEMS[key]);
+    } else {
+      store.pendingSystemPrevious[key] = prev !== undefined ? structuredClone(prev) : undefined;
+    }
   }
   if (controlDomId && !(`__dom:${controlDomId}` in store.pendingSystemPrevious)) {
     const prevScalar = store.pendingSystemPrevious[key];
@@ -3254,8 +3359,9 @@ async function flushSystemSettingsOp(store) {
   } catch (err) {
     const controlRevert = {};
     if (store.state?.system_config) {
+      const prevUiSys = store.state.system_config;
       const restored = {
-        ...(store.state.system_config),
+        ...(prevUiSys),
       };
       for (const [k, v] of Object.entries(previousValues)) {
         if (k.startsWith("__dom:")) {
@@ -3265,10 +3371,12 @@ async function flushSystemSettingsOp(store) {
           restored[k] = v;
         }
       }
-      store.state = {
+      const nextPayload = {
         ...store.state,
         system_config: restored,
       };
+      overlayPendingBlankListSlots(store, nextPayload, prevUiSys);
+      store.state = nextPayload;
     }
     if (Object.keys(controlRevert).length > 0) {
       store.pendingDomRevert = { controlIds: controlRevert };
@@ -3702,32 +3810,141 @@ function updateStringListRowOp(
   index,
   value,
 ) {
-  const list = [...(store.state?.system_config?.[key] || [])];
-  list[index] = value;
-  store.stageSystemSetting(key, list);
+  const maxItems = STRING_LIST_MAX_ITEMS[key];
+  const prevUiList = [...(store.state?.system_config?.[key] || [])];
+  if (index < 0 || index >= prevUiList.length) return;
+  const prevPersisted = cleanPersistedStringList(prevUiList, maxItems);
+  const nextRaw = [...prevUiList];
+  nextRaw[index] = String(value || "").trim();
+  const seen = new Set();
+  const nextUiList = [];
+  for (const item of nextRaw) {
+    const ent = String(item || "").trim();
+    if (!ent) {
+      nextUiList.push("");
+    } else if (!seen.has(ent)) {
+      seen.add(ent);
+      nextUiList.push(ent);
+    }
+    if (nextUiList.length >= maxItems) break;
+  }
+  const nextPersisted = nextUiList.filter(Boolean);
+  store.pendingBlankListSlots[key] = nextUiList.length - nextPersisted.length;
+  const persistedChanged =
+    prevPersisted.length !== nextPersisted.length ||
+    prevPersisted.some((v, i) => v !== nextPersisted[i]);
+  if (persistedChanged) {
+    store.stageSystemSetting(key, nextPersisted);
+    if (store.state?.system_config && store.pendingBlankListSlots[key] > 0) {
+      store.state = {
+        ...store.state,
+        system_config: {
+          ...store.state.system_config,
+          [key]: nextUiList,
+        },
+      };
+      store.host.requestUpdate();
+    }
+  } else if (store.state?.system_config) {
+    store.state = {
+      ...store.state,
+      system_config: {
+        ...store.state.system_config,
+        [key]: nextUiList,
+      },
+    };
+    store.host.requestUpdate();
+  }
 }
 function addStringListRowOp(
   store,
   key,
   defaultEntity = "",
-  maxLen = 10,
+  maxLen = STRING_LIST_MAX_ITEMS[key],
 ) {
+  const cap = Math.min(maxLen, STRING_LIST_MAX_ITEMS[key]);
   const list = [...(store.state?.system_config?.[key] || [])];
-  if (list.length >= maxLen) {
-    store.showToast(`Maximum of ${maxLen} entries reached`, true);
+  if (list.length >= cap) {
+    store.showToast(`Maximum of ${cap} entries reached`, true);
     return;
   }
-  list.push(defaultEntity);
-  store.stageSystemSetting(key, list);
+  const cleanDefault = String(defaultEntity || "").trim();
+  if (!cleanDefault) {
+    list.push("");
+    store.pendingBlankListSlots[key] = list.filter((s) => !String(s || "").trim()).length;
+    if (store.state?.system_config) {
+      store.state = {
+        ...store.state,
+        system_config: {
+          ...store.state.system_config,
+          [key]: list,
+        },
+      };
+    }
+    store.host.requestUpdate();
+    return;
+  }
+  const nextPersisted = cleanPersistedStringList([...list, cleanDefault], cap);
+  const wantBlanks = Math.max(
+    0,
+    Math.min(store.pendingBlankListSlots[key] || 0, cap - nextPersisted.length),
+  );
+  store.pendingBlankListSlots[key] = wantBlanks;
+  store.stageSystemSetting(key, nextPersisted);
+  if (store.state?.system_config && wantBlanks > 0) {
+    store.state = {
+      ...store.state,
+      system_config: {
+        ...store.state.system_config,
+        [key]: [...nextPersisted, ...Array (wantBlanks).fill("")],
+      },
+    };
+    store.host.requestUpdate();
+  }
 }
 function removeStringListRowOp(
   store,
   key,
   index,
 ) {
+  const maxItems = STRING_LIST_MAX_ITEMS[key];
   const list = [...(store.state?.system_config?.[key] || [])];
-  list.splice(index, 1);
-  store.stageSystemSetting(key, list);
+  if (index < 0 || index >= list.length) return;
+  const [removed] = list.splice(index, 1);
+  const wasBlank = !String(removed || "").trim();
+  store.pendingBlankListSlots[key] = list.filter((s) => !String(s || "").trim()).length;
+  if (wasBlank) {
+    if (store.state?.system_config) {
+      store.state = {
+        ...store.state,
+        system_config: {
+          ...store.state.system_config,
+          [key]: list,
+        },
+      };
+    }
+    store.host.requestUpdate();
+    return;
+  }
+  const nextPersisted = cleanPersistedStringList(list, maxItems);
+  store.stageSystemSetting(key, nextPersisted);
+  if (store.state?.system_config && store.pendingBlankListSlots[key] > 0) {
+    const { uiList, clampedBlankCount } = mergePersistedWithBlankSlots(
+      nextPersisted,
+      store.pendingBlankListSlots[key],
+      maxItems,
+      list,
+    );
+    store.pendingBlankListSlots[key] = clampedBlankCount;
+    store.state = {
+      ...store.state,
+      system_config: {
+        ...store.state.system_config,
+        [key]: uiList,
+      },
+    };
+    store.host.requestUpdate();
+  }
 }
 function addVolumeOverrideRowOp(store) {
   const list = [...(store.state?.system_config?.volume_overrides || [])];
@@ -3833,7 +4050,9 @@ async function previewCameraOp(
   }
 }
 async function testDoorbellSpeakerOp(store) {
-  const cams = store.state?.system_config?.camera_entities || [];
+  const cams = (store.state?.system_config?.camera_entities || [])
+    .map((c) => String(c || "").trim())
+    .filter(Boolean);
   if (!cams[0]) {
     store.showToast("Add a camera in Shared Entities first", true);
     return;
@@ -3842,6 +4061,7 @@ async function testDoorbellSpeakerOp(store) {
     store.showToast("Choose a Device to test from", true);
     return;
   }
+  const message = store.doorbellTestReply.trim() || "Testing Latter doorbell audio.";
   await store.flushSystemSettings();
   try {
     const res = await store.ws.runSystemCommand(
@@ -3849,7 +4069,7 @@ async function testDoorbellSpeakerOp(store) {
       {
         subentry_id: store.doorbellTestSubentryId,
         camera_entity: cams[0],
-        message: "Testing Latter doorbell audio.",
+        message,
       },
       store.activeSubentryId || null,
     );
@@ -4164,7 +4384,6 @@ class StudioStore {
   worldClockNewLabel = "";
   worldClockNewZone = "";
   // System Shared Entities UI state
-  doorbellTestSubentryId = "";
   activeCameraPreviewEntity = "";
   cameraPreviewUrl = "";
   // System Device Groups UI state
@@ -4185,6 +4404,8 @@ class StudioStore {
   announceMessage = "";
   announcePriority = "normal";
   announceIncludeCamera = false;
+  doorbellTestSubentryId = "";
+  doorbellTestReply = "";
   backupExportScope = "system";
   backupRestoreSubentryId = "";
   logsOpen = false;
@@ -4213,6 +4434,11 @@ class StudioStore {
   pendingSystemPatch = {};
   pendingSystemPrevious = {};
   systemSaveTimer = null;
+           pendingBlankListSlots = {
+    calendar_entities: 0,
+    camera_entities: 0,
+    remotes_list: 0,
+  };
            pendingDeviceBuckets = new Map();
            pendingEntityStates = new Map();
   // Subscription management
@@ -4640,17 +4866,20 @@ class StudioStore {
   ingestPayload(incoming, logsWereRequested) {
     const prevCatalog = this.state?.catalog;
     const prevLogs = this.state?.internal_logs;
+    const prevSysConfig = this.state?.system_config;
     if (
       this.deviceSelected &&
       this.activeSubentryId &&
       Array.isArray(incoming.system_devices) &&
       !incoming.system_devices.some((d) => d.subentry_id === this.activeSubentryId)
     ) {
-      this.state = {
+      const redirected = {
         ...incoming,
         catalog: incoming.catalog ?? prevCatalog,
         internal_logs: logsWereRequested || incoming.internal_logs?.length ? incoming.internal_logs : prevLogs || [],
       };
+      overlayPendingBlankListSlots(this, redirected, prevSysConfig);
+      this.state = redirected;
       this.redirectInvalidDeviceRoute();
       return;
     }
@@ -4668,6 +4897,7 @@ class StudioStore {
         ...(this.pendingSystemPatch),
       };
     }
+    overlayPendingBlankListSlots(this, merged, prevSysConfig);
     const devBucket = merged.subentry_id ? this.pendingDeviceBuckets.get(merged.subentry_id) : undefined;
     if (devBucket && merged.config) {
       overlayDevicePrefsOnSections(merged, devBucket.patch);
@@ -9563,10 +9793,10 @@ function renderSystemOverviewView(store) {
   const bleTrackedCount = allDevices.filter((d) => d.ble_tracked).length;
   const assignedPeopleCount = allDevices.filter((d) => d.assigned_person).length;
   const verText = data?.version ? `v${String(data.version).replace(/^v/i, "")}` : "—";
-  const remotesCount = (sysCfg?.remotes_list || []).length;
+  const remotesCount = (sysCfg?.remotes_list || []).filter(Boolean).length;
   const volCount = (sysCfg?.volume_overrides || []).length;
-  const camerasCount = (sysCfg?.camera_entities || []).length;
-  const calendarsCount = (sysCfg?.calendar_entities || []).length;
+  const camerasCount = (sysCfg?.camera_entities || []).filter(Boolean).length;
+  const calendarsCount = (sysCfg?.calendar_entities || []).filter(Boolean).length;
   const colorsCount = (sysCfg?.custom_palettes || []).length;
   const wallpapersCount = (data?.system_wallpapers || []).length;
   const groupsLabel = `${groups.length} group${groups.length === 1 ? "" : "s"}`;
@@ -10269,7 +10499,6 @@ function renderSystemSharedView(store) {
   const palettes = sc?.custom_palettes || [];
   const doorbells = data?.doorbells || [];
   const wallpapers = data?.system_wallpapers || [];
-  const displayDevs = (data?.system_devices || []).filter((d) => d.kind !== "ble_tag");
   const noiseRed = sc?.doorbell_noise_reduction || "strong";
   const wholeHomeFields
      = [
@@ -10365,39 +10594,6 @@ function renderSystemSharedView(store) {
                     "cfg-doorbell_noise_reduction",
                   ),
               })}
-              ${displayDevs.length && cameras.length
-                ? renderSettingsRow({
-                    label: "Test Door Speaker Reply",
-                    description: "Plays a short TTS phrase on Camera 1's bound media player.",
-                    control: html`<select
-                        aria-label="Source Device for door speaker test"
-                        .value=${store.doorbellTestSubentryId}
-                        @change=${(ev) => {
-                          store.doorbellTestSubentryId = (
-                            ev.currentTarget
-                          ).value;
-                          store.host.requestUpdate();
-                        }}
-                      >
-                        ${displayDevs.map(
-                          (d) =>
-                            html`<option
-                              value=${d.subentry_id}
-                              ?selected=${d.subentry_id === store.doorbellTestSubentryId}
-                            >
-                              ${d.title}
-                            </option>`,
-                        )}
-                      </select>
-                      <button
-                        type="button"
-                        @click=${() => void store.testDoorbellSpeaker()}
-                        class="btn btn-secondary btn-compact"
-                      >
-                        Test Speaker
-                      </button>`,
-                  })
-                : nothing}
             </div>
 
             ${renderEntitySlotList({
@@ -10521,12 +10717,23 @@ function renderSystemSharedView(store) {
 
 // --- src/views/system-tools-view.ts ---
 /**
- * System Tools View (`system_tools`): Notifications & Announcements, Backup & Restore, Perimeter Security & Signing, and Logs-only `system_log`.
+ * System Tools View (`system_tools`): Notifications & Announcements, Doorbell & Intercom Audio,
+ * Backup & Restore, Perimeter Security & Signing, and Logs-only `system_log`.
  */
 function renderSystemToolsView(store) {
   const data = store.state;
   const allDevices = data?.system_devices || [];
   const latterDevices = allDevices.filter((d) => d.kind !== "ble_tag");
+  const configuredCameras = (data?.system_config?.camera_entities || [])
+    .map((c) => String(c || "").trim())
+    .filter(Boolean);
+  const primaryCamera = configuredCameras[0] || "";
+  const canTestDoorbell = Boolean(primaryCamera && latterDevices.length > 0);
+  const doorbellTestDescription = !primaryCamera
+    ? "Map a camera with a bound door speaker in Shared Entities first to test TTS reply playback."
+    : !latterDevices.length
+      ? "Onboard at least one Latter Device first to route push-to-talk test replies."
+      : `Plays a short TTS phrase on Camera 1's bound media player (${primaryCamera}).`;
   const hasSystemPin = Boolean(data?.has_security_pin);
   const isBroadcast = store.announceMode === "broadcast";
   const onAnnounceRadioKey = (ev) => {
@@ -10680,6 +10887,79 @@ function renderSystemToolsView(store) {
                 Send Now
               </button>
             </div>`,
+        })}
+
+        ${renderCard({
+          id: "card-doorbell-intercom-audio",
+          heading: html`<h3 class="card-title">Doorbell &amp; Intercom Audio</h3>`,
+          subtitle:
+            "Verify push-to-talk TTS reply playback through Camera 1's bound door speaker.",
+          contentClass: "settings-list",
+          body: html`${renderSettingsRow({
+              label: "Source Device",
+              forId: "doorbell-test-device",
+              description: "Latter Device context used when routing the door speaker reply.",
+              control: html`<select
+                id="doorbell-test-device"
+                ?disabled=${!canTestDoorbell}
+                .value=${store.doorbellTestSubentryId}
+                @change=${(ev) => {
+                  store.doorbellTestSubentryId = (ev.currentTarget).value;
+                  store.host.requestUpdate();
+                }}
+              >
+                ${latterDevices.length
+                  ? latterDevices.map(
+                      (d) =>
+                        html`<option
+                          value=${d.subentry_id}
+                          ?selected=${d.subentry_id === store.doorbellTestSubentryId}
+                        >
+                          ${d.title}
+                        </option>`,
+                    )
+                  : html`<option value="">— No Latter Devices —</option>`}
+              </select>`,
+            })}
+            ${renderSettingsRow({
+              id: "row-doorbell-test-reply",
+              label: "Test Door Speaker Reply",
+              forId: "doorbell-test-reply",
+              description: doorbellTestDescription,
+              stacked: true,
+              control: html`<div class="input-action-row">
+                <input
+                  type="text"
+                  id="doorbell-test-reply"
+                  maxlength="160"
+                  placeholder="Testing Latter doorbell audio."
+                  ?disabled=${!canTestDoorbell}
+                  .value=${store.doorbellTestReply}
+                  @input=${(ev) => {
+                    store.doorbellTestReply = (ev.currentTarget).value;
+                  }}
+                />
+                <button
+                  type="button"
+                  id="btn-play-door-speaker"
+                  ?disabled=${!canTestDoorbell}
+                  @click=${() => void store.testDoorbellSpeaker()}
+                  class="btn btn-primary btn-compact"
+                >
+                  Play on Door Speaker
+                </button>
+                ${!primaryCamera
+                  ? html`<button
+                      type="button"
+                      @click=${() =>
+                        store.openSystemSection("shared_entities", "card-cameras-doorbell")}
+                      class="btn btn-text btn-compact"
+                    >
+                      Open Shared Entities
+                    </button>`
+                  : nothing}
+              </div>`,
+            })}`,
         })}
 
         <details

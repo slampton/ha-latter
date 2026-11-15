@@ -110,6 +110,8 @@ export const AREA_CATEGORIES_CATALOG: ReadonlyArray<CatalogItem> = [
 
 export const HOME_CATEGORIES_CATALOG: ReadonlyArray<CatalogItem> = [
   {token: "alarm", label: "Security Alarm"},
+  {token: "cameras", label: "Cameras"},
+  {token: "intercom", label: "Intercom"},
   {token: "thermostat", label: "Thermostat"},
   {token: "entry", label: "Entry & Garage"},
   {token: "vacuum", label: "Robot Vacuum"},
@@ -150,9 +152,11 @@ export const DEFAULT_AREA_CATEGORIES_TOKENS: ReadonlyArray<string> = [
   "media",
 ];
 
-export const DEFAULT_HOME_CATEGORIES = "alarm,thermostat,entry,vacuum";
+export const DEFAULT_HOME_CATEGORIES = "alarm,cameras,intercom,thermostat,entry,vacuum";
 export const DEFAULT_HOME_CATEGORIES_TOKENS: ReadonlyArray<string> = [
   "alarm",
+  "cameras",
+  "intercom",
   "thermostat",
   "entry",
   "vacuum",

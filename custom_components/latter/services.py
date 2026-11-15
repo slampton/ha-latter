@@ -34,6 +34,7 @@ from .areas import (
     get_area_available_domains,
     get_area_entities,
     get_areas_summary,
+    get_home_alarm_summary,
     get_home_hub_summary,
     get_home_wide_entities,
     resolve_person_area_and_distance,
@@ -148,16 +149,30 @@ async def _require_admin_if_user_call(
         raise Unauthorized(context=call.context, user_id=user_id, permission="admin")
 
 
+_ALARM_ACTION_ALIASES: dict[str, str] = {
+    "disarm": "disarm",
+    "alarm_disarm": "disarm",
+    "arm_home": "arm_home",
+    "alarm_arm_home": "arm_home",
+    "arm_away": "arm_away",
+    "alarm_arm_away": "arm_away",
+    "arm_night": "arm_night",
+    "alarm_arm_night": "arm_night",
+}
+
+
 def _enforce_perimeter_security_policy(
     hass: HomeAssistant,
     coord: LatterCoordinator,
     entity_id: str,
     action: str,
     *,
-    level: int | None = None,
+    level: int | float | None = None,
     provided_code: str | None = None,
 ) -> None:
     """Enforce the Device's Perimeter Security Policy on sensitive opening actions."""
+    raw_act = action.strip().lower()
+    act = _ALARM_ACTION_ALIASES.get(raw_act, raw_act)
     resolved_ent = entity_id.strip()
     if resolved_ent == "home_hub.lock":
         resolved_ent = coord.lock_entity or get_home_hub_summary(
@@ -167,34 +182,113 @@ def _enforce_perimeter_security_policy(
         resolved_ent = coord.garage_entity or get_home_hub_summary(
             hass, garage_entity=coord.garage_entity
         )["garage_entity"]
-    elif resolved_ent == "home_hub.alarm":
-        resolved_ent = coord.alarm_entity or ""
+    elif resolved_ent == "home_hub.alarm" or (
+        not resolved_ent and act in ("arm_home", "arm_away", "arm_night", "disarm")
+    ):
+        resolved_ent = (
+            coord.alarm_entity
+            or get_home_alarm_summary(hass, coord.get_opt(CONF_ALARM_ENTITY))[
+                "entity_id"
+            ]
+        )
     if not resolved_ent or "." not in resolved_ent:
         return
 
     dom = resolved_ent.split(".", 1)[0].lower()
     st = hass.states.get(resolved_ent)
+
+    if dom == "alarm_control_panel":
+        eff_policy = coord.security_pin_policy
+        code_fmt = (
+            str(st.attributes.get("code_format") or "").strip().lower()
+            if st is not None
+            else ""
+        )
+        code_arm_req = (
+            bool(st.attributes.get("code_arm_required", False))
+            if st is not None
+            else False
+        )
+        clean_code = str(provided_code or "").strip()
+
+        if act == "disarm":
+            if eff_policy == "block":
+                raise ServiceValidationError(
+                    f"Perimeter action '{act}' on '{resolved_ent}' denied (security_action_blocked).",
+                    translation_domain=DOMAIN,
+                    translation_key="security_action_blocked",
+                )
+            if code_fmt:
+                if not clean_code:
+                    raise ServiceValidationError(
+                        f"Alarm PIN required for '{act}' on '{resolved_ent}'.",
+                        translation_domain=DOMAIN,
+                        translation_key="security_pin_required",
+                    )
+                if code_fmt == "number" and not (
+                    4 <= len(clean_code) <= 8
+                    and clean_code.isascii()
+                    and clean_code.isdigit()
+                ):
+                    raise ServiceValidationError(
+                        f"Invalid alarm PIN format for '{act}' on '{resolved_ent}'.",
+                        translation_domain=DOMAIN,
+                        translation_key="security_pin_invalid",
+                    )
+                return
+            allowed, err_key = check_perimeter_action_allowed(
+                eff_policy,
+                provided_code=provided_code,
+                stored_pin_hash=coord.security_pin_hash or None,
+            )
+            if not allowed:
+                raise ServiceValidationError(
+                    f"Perimeter action '{act}' on '{resolved_ent}' denied ({err_key}).",
+                    translation_domain=DOMAIN,
+                    translation_key=err_key,
+                )
+            return
+
+        if act in ("arm_home", "arm_away", "arm_night"):
+            if code_fmt and code_arm_req:
+                if not clean_code:
+                    raise ServiceValidationError(
+                        f"Alarm PIN required for '{act}' on '{resolved_ent}'.",
+                        translation_domain=DOMAIN,
+                        translation_key="security_pin_required",
+                    )
+                if code_fmt == "number" and not (
+                    4 <= len(clean_code) <= 8
+                    and clean_code.isascii()
+                    and clean_code.isdigit()
+                ):
+                    raise ServiceValidationError(
+                        f"Invalid alarm PIN format for '{act}' on '{resolved_ent}'.",
+                        translation_domain=DOMAIN,
+                        translation_key="security_pin_invalid",
+                    )
+            return
+        return
+
     dclass = str(st.attributes.get("device_class") or "") if st is not None else ""
     if not is_sensitive_perimeter_action(
         dom,
-        action,
+        act,
         device_class=dclass,
         entity_id=resolved_ent,
-        level=level,
+        level=int(level) if level is not None else None,
     ):
         return
 
     stored_hash = coord.security_pin_hash or None
-    alarm_passthrough = dom == "alarm_control_panel" and not stored_hash
     allowed, err_key = check_perimeter_action_allowed(
         coord.security_pin_policy,
         provided_code=provided_code,
         stored_pin_hash=stored_hash,
-        alarm_accepts_passthrough_code=alarm_passthrough,
     )
     if not allowed:
         raise ServiceValidationError(
-            f"Perimeter action '{action}' on '{resolved_ent}' denied ({err_key}).",
+            f"Perimeter action '{act}' on '{resolved_ent}' denied ({err_key}).",
             translation_domain=DOMAIN,
             translation_key=err_key,
         )
@@ -615,19 +709,39 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             )
 
         entity_id = str(data.get("entity_id") or "").strip()
-        action = str(data.get("action") or "").strip().lower()
-        if not entity_id and action in (
-            "arm_home",
-            "arm_away",
-            "arm_night",
-            "disarm",
+        raw_action = str(data.get("action") or "").strip().lower()
+        action = _ALARM_ACTION_ALIASES.get(raw_action, raw_action)
+        if entity_id == "home_hub.alarm" or (
+            not entity_id
+            and action in (
+                "arm_home",
+                "arm_away",
+                "arm_night",
+                "disarm",
+            )
         ):
-            entity_id = coord.alarm_entity or ""
+            entity_id = (
+                coord.alarm_entity
+                or get_home_alarm_summary(hass, coord.get_opt(CONF_ALARM_ENTITY))[
+                    "entity_id"
+                ]
+            )
 
         if entity_id:
             raw_level = data.get("level")
-            level = int(float(raw_level)) if raw_level is not None and str(raw_level).strip() != "" else None
-            code = str(data.get("code")) if data.get("code") is not None else None
+            level: int | float | None = None
+            if raw_level is not None and str(raw_level).strip() != "":
+                f_lvl = float(raw_level)
+                if (
+                    action == "set_temperature"
+                    or entity_id in ("home_hub.thermostat", "home_hub.climate")
+                    or entity_id.startswith("climate.")
+                ):
+                    level = f_lvl
+                else:
+                    level = int(f_lvl)
+            raw_code = data.get("code")
+            code = str(raw_code).strip() or None if raw_code is not None else None
             _enforce_perimeter_security_policy(
                 hass,
                 coord,

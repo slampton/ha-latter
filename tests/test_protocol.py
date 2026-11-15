@@ -65,7 +65,7 @@ class TestProtocolV3Contract(unittest.TestCase):
     def test_domain_field_counts_and_contiguous_indices(self) -> None:
         """Every v3 domain must have contiguous 3..COUNT-1 indices matching expected counts."""
         expected_counts = {
-            "area_context": 41,
+            "area_context": 42,
             "active_media": 15,
             "remote_config": 3,
             "weather_forecast": 14,
@@ -1086,7 +1086,7 @@ class TestDevicePrefsProtocol(unittest.TestCase):
         self.assertEqual(_PAYLOADS_MOD.parse_home_categories(None), [])
         self.assertEqual(
             _PAYLOADS_MOD.parse_home_categories(_PAYLOADS_MOD.DEFAULT_HOME_CATEGORIES),
-            ["alarm", "thermostat", "entry", "vacuum"],
+            ["alarm", "cameras", "intercom", "thermostat", "entry", "vacuum"],
         )
         self.assertEqual(
             _PAYLOADS_MOD.parse_home_categories("entry, alarm, bogus, entry"),

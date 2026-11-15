@@ -20,10 +20,10 @@ export function renderSystemOverviewView(store: StudioStore): TemplateResult {
   const assignedPeopleCount = allDevices.filter((d) => d.assigned_person).length;
   const verText = data?.version ? `v${String(data.version).replace(/^v/i, "")}` : "—";
 
-  const remotesCount = (sysCfg?.remotes_list || []).length;
+  const remotesCount = (sysCfg?.remotes_list || []).filter(Boolean).length;
   const volCount = (sysCfg?.volume_overrides || []).length;
-  const camerasCount = (sysCfg?.camera_entities || []).length;
-  const calendarsCount = (sysCfg?.calendar_entities || []).length;
+  const camerasCount = (sysCfg?.camera_entities || []).filter(Boolean).length;
+  const calendarsCount = (sysCfg?.calendar_entities || []).filter(Boolean).length;
   const colorsCount = (sysCfg?.custom_palettes || []).length;
   const wallpapersCount = (data?.system_wallpapers || []).length;
   const groupsLabel = `${groups.length} group${groups.length === 1 ? "" : "s"}`;

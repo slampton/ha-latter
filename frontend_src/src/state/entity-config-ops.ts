@@ -40,6 +40,111 @@ export interface PendingEntityEntry {
   expires: number;
 }
 
+export type StringListKey = "calendar_entities" | "camera_entities" | "remotes_list";
+
+export const STRING_LIST_KEYS: readonly StringListKey[] = [
+  "calendar_entities",
+  "camera_entities",
+  "remotes_list",
+];
+
+export const STRING_LIST_MAX_ITEMS: Record<StringListKey, number> = {
+  camera_entities: 10,
+  remotes_list: 10,
+  calendar_entities: 50,
+};
+
+function isStringListKey(key: string): key is StringListKey {
+  return (
+    key === "calendar_entities" ||
+    key === "camera_entities" ||
+    key === "remotes_list"
+  );
+}
+
+function cleanPersistedStringList(items: readonly unknown[], maxItems: number): string[] {
+  const out: string[] = [];
+  for (const raw of items) {
+    const ent = String(raw || "").trim();
+    if (ent && !out.includes(ent)) {
+      out.push(ent);
+      if (out.length >= maxItems) break;
+    }
+  }
+  return out;
+}
+
+function mergePersistedWithBlankSlots(
+  persisted: readonly string[],
+  blankCount: number,
+  maxItems: number,
+  prevUiList?: readonly string[],
+): { uiList: string[]; clampedBlankCount: number } {
+  const cleaned = cleanPersistedStringList(persisted, maxItems);
+  const clampedBlankCount = Math.max(0, Math.min(blankCount, maxItems - cleaned.length));
+  if (clampedBlankCount === 0) {
+    return { uiList: cleaned, clampedBlankCount: 0 };
+  }
+  if (prevUiList && prevUiList.some((v) => !String(v || "").trim())) {
+    const uiList: string[] = [];
+    let cleanIdx = 0;
+    let blanksPlaced = 0;
+    for (const slot of prevUiList) {
+      if (uiList.length >= maxItems) break;
+      if (!String(slot || "").trim()) {
+        if (blanksPlaced < clampedBlankCount) {
+          uiList.push("");
+          blanksPlaced += 1;
+        }
+      } else if (cleanIdx < cleaned.length) {
+        uiList.push(cleaned[cleanIdx]);
+        cleanIdx += 1;
+      }
+    }
+    while (cleanIdx < cleaned.length && uiList.length < maxItems) {
+      uiList.push(cleaned[cleanIdx]);
+      cleanIdx += 1;
+    }
+    while (blanksPlaced < clampedBlankCount && uiList.length < maxItems) {
+      uiList.push("");
+      blanksPlaced += 1;
+    }
+    return { uiList, clampedBlankCount: blanksPlaced };
+  }
+  return {
+    uiList: [...cleaned, ...Array<string>(clampedBlankCount).fill("")],
+    clampedBlankCount,
+  };
+}
+
+export function overlayPendingBlankListSlots(
+  store: StudioStore,
+  payload: StudioStatePayload,
+  prevSysConfig?: SystemConfig,
+): void {
+  if (!payload.system_config) return;
+  let mutated = false;
+  const nextSys: SystemConfig = { ...payload.system_config };
+  for (const key of STRING_LIST_KEYS) {
+    const wantBlanks = store.pendingBlankListSlots[key] || 0;
+    if (wantBlanks <= 0) continue;
+    const maxItems = STRING_LIST_MAX_ITEMS[key];
+    const base = Array.isArray(nextSys[key]) ? nextSys[key] : [];
+    const { uiList, clampedBlankCount } = mergePersistedWithBlankSlots(
+      base,
+      wantBlanks,
+      maxItems,
+      prevSysConfig?.[key],
+    );
+    store.pendingBlankListSlots[key] = clampedBlankCount;
+    nextSys[key] = uiList;
+    mutated = true;
+  }
+  if (mutated) {
+    payload.system_config = nextSys;
+  }
+}
+
 const SAVE_DEBOUNCE_MS = 220;
 const ENTITY_OPTIMISTIC_TTL_MS = 8000;
 
@@ -352,7 +457,11 @@ export function stageSystemSettingOp(
 ): void {
   if (!(key in store.pendingSystemPrevious)) {
     const prev = (store.state?.system_config as unknown as Record<string, unknown>)?.[key];
-    store.pendingSystemPrevious[key] = prev !== undefined ? structuredClone(prev) : undefined;
+    if (isStringListKey(key) && Array.isArray(prev)) {
+      store.pendingSystemPrevious[key] = cleanPersistedStringList(prev, STRING_LIST_MAX_ITEMS[key]);
+    } else {
+      store.pendingSystemPrevious[key] = prev !== undefined ? structuredClone(prev) : undefined;
+    }
   }
   if (controlDomId && !(`__dom:${controlDomId}` in store.pendingSystemPrevious)) {
     const prevScalar = store.pendingSystemPrevious[key];
@@ -404,8 +513,9 @@ export async function flushSystemSettingsOp(store: StudioStore): Promise<void> {
   } catch (err) {
     const controlRevert: Record<string, string | boolean> = {};
     if (store.state?.system_config) {
+      const prevUiSys = store.state.system_config;
       const restored: Record<string, unknown> = {
-        ...(store.state.system_config as unknown as Record<string, unknown>),
+        ...(prevUiSys as unknown as Record<string, unknown>),
       };
       for (const [k, v] of Object.entries(previousValues)) {
         if (k.startsWith("__dom:")) {
@@ -415,10 +525,12 @@ export async function flushSystemSettingsOp(store: StudioStore): Promise<void> {
           restored[k] = v;
         }
       }
-      store.state = {
+      const nextPayload: StudioStatePayload = {
         ...store.state,
         system_config: restored as unknown as SystemConfig,
       };
+      overlayPendingBlankListSlots(store, nextPayload, prevUiSys);
+      store.state = nextPayload;
     }
     if (Object.keys(controlRevert).length > 0) {
       store.pendingDomRevert = { controlIds: controlRevert };
@@ -878,38 +990,154 @@ export async function deleteWallpaperOp(
 
 export function updateStringListRowOp(
   store: StudioStore,
-  key: "calendar_entities" | "camera_entities" | "remotes_list",
+  key: StringListKey,
   index: number,
   value: string,
 ): void {
-  const list = [...(store.state?.system_config?.[key] || [])];
-  list[index] = value;
-  store.stageSystemSetting(key, list);
+  const maxItems = STRING_LIST_MAX_ITEMS[key];
+  const prevUiList = [...(store.state?.system_config?.[key] || [])];
+  if (index < 0 || index >= prevUiList.length) return;
+
+  const prevPersisted = cleanPersistedStringList(prevUiList, maxItems);
+  const nextRaw = [...prevUiList];
+  nextRaw[index] = String(value || "").trim();
+
+  const seen = new Set<string>();
+  const nextUiList: string[] = [];
+  for (const item of nextRaw) {
+    const ent = String(item || "").trim();
+    if (!ent) {
+      nextUiList.push("");
+    } else if (!seen.has(ent)) {
+      seen.add(ent);
+      nextUiList.push(ent);
+    }
+    if (nextUiList.length >= maxItems) break;
+  }
+
+  const nextPersisted = nextUiList.filter(Boolean);
+  store.pendingBlankListSlots[key] = nextUiList.length - nextPersisted.length;
+
+  const persistedChanged =
+    prevPersisted.length !== nextPersisted.length ||
+    prevPersisted.some((v, i) => v !== nextPersisted[i]);
+
+  if (persistedChanged) {
+    store.stageSystemSetting(key, nextPersisted);
+    if (store.state?.system_config && store.pendingBlankListSlots[key] > 0) {
+      store.state = {
+        ...store.state,
+        system_config: {
+          ...store.state.system_config,
+          [key]: nextUiList,
+        },
+      };
+      store.host.requestUpdate();
+    }
+  } else if (store.state?.system_config) {
+    store.state = {
+      ...store.state,
+      system_config: {
+        ...store.state.system_config,
+        [key]: nextUiList,
+      },
+    };
+    store.host.requestUpdate();
+  }
 }
 
 export function addStringListRowOp(
   store: StudioStore,
-  key: "calendar_entities" | "camera_entities" | "remotes_list",
+  key: StringListKey,
   defaultEntity = "",
-  maxLen = 10,
+  maxLen = STRING_LIST_MAX_ITEMS[key],
 ): void {
+  const cap = Math.min(maxLen, STRING_LIST_MAX_ITEMS[key]);
   const list = [...(store.state?.system_config?.[key] || [])];
-  if (list.length >= maxLen) {
-    store.showToast(`Maximum of ${maxLen} entries reached`, true);
+  if (list.length >= cap) {
+    store.showToast(`Maximum of ${cap} entries reached`, true);
     return;
   }
-  list.push(defaultEntity);
-  store.stageSystemSetting(key, list);
+  const cleanDefault = String(defaultEntity || "").trim();
+  if (!cleanDefault) {
+    list.push("");
+    store.pendingBlankListSlots[key] = list.filter((s) => !String(s || "").trim()).length;
+    if (store.state?.system_config) {
+      store.state = {
+        ...store.state,
+        system_config: {
+          ...store.state.system_config,
+          [key]: list,
+        },
+      };
+    }
+    store.host.requestUpdate();
+    return;
+  }
+  const nextPersisted = cleanPersistedStringList([...list, cleanDefault], cap);
+  const wantBlanks = Math.max(
+    0,
+    Math.min(store.pendingBlankListSlots[key] || 0, cap - nextPersisted.length),
+  );
+  store.pendingBlankListSlots[key] = wantBlanks;
+  store.stageSystemSetting(key, nextPersisted);
+  if (store.state?.system_config && wantBlanks > 0) {
+    store.state = {
+      ...store.state,
+      system_config: {
+        ...store.state.system_config,
+        [key]: [...nextPersisted, ...Array<string>(wantBlanks).fill("")],
+      },
+    };
+    store.host.requestUpdate();
+  }
 }
 
 export function removeStringListRowOp(
   store: StudioStore,
-  key: "calendar_entities" | "camera_entities" | "remotes_list",
+  key: StringListKey,
   index: number,
 ): void {
+  const maxItems = STRING_LIST_MAX_ITEMS[key];
   const list = [...(store.state?.system_config?.[key] || [])];
-  list.splice(index, 1);
-  store.stageSystemSetting(key, list);
+  if (index < 0 || index >= list.length) return;
+  const [removed] = list.splice(index, 1);
+  const wasBlank = !String(removed || "").trim();
+  store.pendingBlankListSlots[key] = list.filter((s) => !String(s || "").trim()).length;
+
+  if (wasBlank) {
+    if (store.state?.system_config) {
+      store.state = {
+        ...store.state,
+        system_config: {
+          ...store.state.system_config,
+          [key]: list,
+        },
+      };
+    }
+    store.host.requestUpdate();
+    return;
+  }
+
+  const nextPersisted = cleanPersistedStringList(list, maxItems);
+  store.stageSystemSetting(key, nextPersisted);
+  if (store.state?.system_config && store.pendingBlankListSlots[key] > 0) {
+    const { uiList, clampedBlankCount } = mergePersistedWithBlankSlots(
+      nextPersisted,
+      store.pendingBlankListSlots[key],
+      maxItems,
+      list,
+    );
+    store.pendingBlankListSlots[key] = clampedBlankCount;
+    store.state = {
+      ...store.state,
+      system_config: {
+        ...store.state.system_config,
+        [key]: uiList,
+      },
+    };
+    store.host.requestUpdate();
+  }
 }
 
 export function addVolumeOverrideRowOp(store: StudioStore): void {
@@ -1024,7 +1252,9 @@ export async function previewCameraOp(
 }
 
 export async function testDoorbellSpeakerOp(store: StudioStore): Promise<void> {
-  const cams = store.state?.system_config?.camera_entities || [];
+  const cams = (store.state?.system_config?.camera_entities || [])
+    .map((c) => String(c || "").trim())
+    .filter(Boolean);
   if (!cams[0]) {
     store.showToast("Add a camera in Shared Entities first", true);
     return;
@@ -1033,6 +1263,7 @@ export async function testDoorbellSpeakerOp(store: StudioStore): Promise<void> {
     store.showToast("Choose a Device to test from", true);
     return;
   }
+  const message = store.doorbellTestReply.trim() || "Testing Latter doorbell audio.";
   await store.flushSystemSettings();
   try {
     const res = await store.ws.runSystemCommand(
@@ -1040,7 +1271,7 @@ export async function testDoorbellSpeakerOp(store: StudioStore): Promise<void> {
       {
         subentry_id: store.doorbellTestSubentryId,
         camera_entity: cams[0],
-        message: "Testing Latter doorbell audio.",
+        message,
       },
       store.activeSubentryId || null,
     );

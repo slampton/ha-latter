@@ -8,7 +8,7 @@
     "activity_card": "1",
     "activity_sources": "calendar,music_queue,stopwatch,alarms,timers",
     "area_categories": "scene,light,cover,fan,switch,climate,media",
-    "home_categories": "alarm,thermostat,entry,vacuum"
+    "home_categories": "alarm,cameras,intercom,thermostat,entry,vacuum"
   },
   "header": [
     {
@@ -303,7 +303,7 @@
           "name": "home_categories",
           "cpp_enum": "HOME_CATEGORIES",
           "type": "csv",
-          "description": "Comma-separated enabled Home Hub categories with >= 1 configured entity, in configured order (alarm, thermostat, entry, vacuum); empty when no categories have entities"
+          "description": "Comma-separated enabled Home Hub categories with >= 1 configured entity, in configured order (alarm, cameras, intercom, thermostat, entry, vacuum); empty when no categories have entities"
         },
         {
           "index": 41,
@@ -325,6 +325,13 @@
           "cpp_enum": "WORLD_CLOCKS_SUMMARY",
           "type": "string",
           "description": "Semicolon-delimited configured World Clocks ('<iana>|<label>|<abbr>|<utc_offset_min>|<is_dst>;...')"
+        },
+        {
+          "index": 44,
+          "name": "alarm_caps",
+          "cpp_enum": "ALARM_CAPS",
+          "type": "u16",
+          "description": "Alarm capability & code bitmask (1=code_disarm_required, 2=code_arm_required, 4=supports_arm_home, 8=supports_arm_away, 16=supports_arm_night)"
         }
       ]
     },
@@ -1131,6 +1138,14 @@
       {
         "token": "alarm",
         "label": "Security Alarm"
+      },
+      {
+        "token": "cameras",
+        "label": "Cameras"
+      },
+      {
+        "token": "intercom",
+        "label": "Intercom"
       },
       {
         "token": "thermostat",

@@ -39,7 +39,6 @@ export function renderSystemSharedView(store: StudioStore): TemplateResult {
   const palettes = sc?.custom_palettes || [];
   const doorbells = data?.doorbells || [];
   const wallpapers = data?.system_wallpapers || [];
-  const displayDevs = (data?.system_devices || []).filter((d) => d.kind !== "ble_tag");
   const noiseRed = sc?.doorbell_noise_reduction || "strong";
 
   const wholeHomeFields: ReadonlyArray<{
@@ -148,39 +147,6 @@ export function renderSystemSharedView(store: StudioStore): TemplateResult {
                     "cfg-doorbell_noise_reduction",
                   ),
               })}
-              ${displayDevs.length && cameras.length
-                ? renderSettingsRow({
-                    label: "Test Door Speaker Reply",
-                    description: "Plays a short TTS phrase on Camera 1's bound media player.",
-                    control: html`<select
-                        aria-label="Source Device for door speaker test"
-                        .value=${store.doorbellTestSubentryId}
-                        @change=${(ev: Event) => {
-                          store.doorbellTestSubentryId = (
-                            ev.currentTarget as HTMLSelectElement
-                          ).value;
-                          store.host.requestUpdate();
-                        }}
-                      >
-                        ${displayDevs.map(
-                          (d) =>
-                            html`<option
-                              value=${d.subentry_id}
-                              ?selected=${d.subentry_id === store.doorbellTestSubentryId}
-                            >
-                              ${d.title}
-                            </option>`,
-                        )}
-                      </select>
-                      <button
-                        type="button"
-                        @click=${() => void store.testDoorbellSpeaker()}
-                        class="btn btn-secondary btn-compact"
-                      >
-                        Test Speaker
-                      </button>`,
-                  })
-                : nothing}
             </div>
 
             ${renderEntitySlotList({

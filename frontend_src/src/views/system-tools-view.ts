@@ -1,5 +1,6 @@
 /**
- * System Tools View (`system_tools`): Notifications & Announcements, Backup & Restore, Perimeter Security & Signing, and Logs-only `system_log`.
+ * System Tools View (`system_tools`): Notifications & Announcements, Doorbell & Intercom Audio,
+ * Backup & Restore, Perimeter Security & Signing, and Logs-only `system_log`.
  */
 
 import { renderCard, renderSettingsRow } from "../components/controls.js";
@@ -10,6 +11,16 @@ export function renderSystemToolsView(store: StudioStore): TemplateResult {
   const data = store.state;
   const allDevices = data?.system_devices || [];
   const latterDevices = allDevices.filter((d) => d.kind !== "ble_tag");
+  const configuredCameras = (data?.system_config?.camera_entities || [])
+    .map((c) => String(c || "").trim())
+    .filter(Boolean);
+  const primaryCamera = configuredCameras[0] || "";
+  const canTestDoorbell = Boolean(primaryCamera && latterDevices.length > 0);
+  const doorbellTestDescription = !primaryCamera
+    ? "Map a camera with a bound door speaker in Shared Entities first to test TTS reply playback."
+    : !latterDevices.length
+      ? "Onboard at least one Latter Device first to route push-to-talk test replies."
+      : `Plays a short TTS phrase on Camera 1's bound media player (${primaryCamera}).`;
   const hasSystemPin = Boolean(data?.has_security_pin);
   const isBroadcast = store.announceMode === "broadcast";
 
@@ -167,6 +178,79 @@ export function renderSystemToolsView(store: StudioStore): TemplateResult {
                 Send Now
               </button>
             </div>`,
+        })}
+
+        ${renderCard({
+          id: "card-doorbell-intercom-audio",
+          heading: html`<h3 class="card-title">Doorbell &amp; Intercom Audio</h3>`,
+          subtitle:
+            "Verify push-to-talk TTS reply playback through Camera 1's bound door speaker.",
+          contentClass: "settings-list",
+          body: html`${renderSettingsRow({
+              label: "Source Device",
+              forId: "doorbell-test-device",
+              description: "Latter Device context used when routing the door speaker reply.",
+              control: html`<select
+                id="doorbell-test-device"
+                ?disabled=${!canTestDoorbell}
+                .value=${store.doorbellTestSubentryId}
+                @change=${(ev: Event) => {
+                  store.doorbellTestSubentryId = (ev.currentTarget as HTMLSelectElement).value;
+                  store.host.requestUpdate();
+                }}
+              >
+                ${latterDevices.length
+                  ? latterDevices.map(
+                      (d) =>
+                        html`<option
+                          value=${d.subentry_id}
+                          ?selected=${d.subentry_id === store.doorbellTestSubentryId}
+                        >
+                          ${d.title}
+                        </option>`,
+                    )
+                  : html`<option value="">— No Latter Devices —</option>`}
+              </select>`,
+            })}
+            ${renderSettingsRow({
+              id: "row-doorbell-test-reply",
+              label: "Test Door Speaker Reply",
+              forId: "doorbell-test-reply",
+              description: doorbellTestDescription,
+              stacked: true,
+              control: html`<div class="input-action-row">
+                <input
+                  type="text"
+                  id="doorbell-test-reply"
+                  maxlength="160"
+                  placeholder="Testing Latter doorbell audio."
+                  ?disabled=${!canTestDoorbell}
+                  .value=${store.doorbellTestReply}
+                  @input=${(ev: Event) => {
+                    store.doorbellTestReply = (ev.currentTarget as HTMLInputElement).value;
+                  }}
+                />
+                <button
+                  type="button"
+                  id="btn-play-door-speaker"
+                  ?disabled=${!canTestDoorbell}
+                  @click=${() => void store.testDoorbellSpeaker()}
+                  class="btn btn-primary btn-compact"
+                >
+                  Play on Door Speaker
+                </button>
+                ${!primaryCamera
+                  ? html`<button
+                      type="button"
+                      @click=${() =>
+                        store.openSystemSection("shared_entities", "card-cameras-doorbell")}
+                      class="btn btn-text btn-compact"
+                    >
+                      Open Shared Entities
+                    </button>`
+                  : nothing}
+              </div>`,
+            })}`,
         })}
 
         <details

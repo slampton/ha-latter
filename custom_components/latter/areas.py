@@ -31,6 +31,7 @@ from homeassistant.util import dt as dt_util
 from .const import (
     CONF_ALARM_ENTITY,
     CONF_DEFAULT_AREA,
+    CONF_DEFAULT_SPEAKER,
     CONF_ESPHOME_DEVICE_ID,
     DOMAIN,
     SUBENTRY_DEVICE,
@@ -440,6 +441,27 @@ def get_area_climate_telemetry(
     return result
 
 
+def compute_alarm_caps(state_obj: State | None) -> int:
+    """Compute Protocol v3 `alarm_caps` u16 bitmask from an `alarm_control_panel` state."""
+    if state_obj is None:
+        return 0
+    attrs = state_obj.attributes
+    has_code_format = bool(attrs.get("code_format"))
+    caps = 0
+    if has_code_format:
+        caps |= 0x01
+        if bool(attrs.get("code_arm_required", False)):
+            caps |= 0x02
+    sf = int(attrs.get("supported_features", 0) or 0)
+    if bool(sf & 1) or sf == 0:
+        caps |= 0x04
+    if bool(sf & 2) or sf == 0:
+        caps |= 0x08
+    if bool(sf & 4):
+        caps |= 0x10
+    return caps
+
+
 def get_home_alarm_summary(
     hass: HomeAssistant, configured_alarm_entity: str | None = None
 ) -> dict[str, Any]:
@@ -459,6 +481,7 @@ def get_home_alarm_summary(
                 "code_arm_required": bool(
                     state_obj.attributes.get("code_arm_required", False)
                 ),
+                "alarm_caps": compute_alarm_caps(state_obj),
             }
 
     for state_obj in get_area_state_index(hass).states_for_domain(
@@ -478,6 +501,7 @@ def get_home_alarm_summary(
             "code_arm_required": bool(
                 state_obj.attributes.get("code_arm_required", False)
             ),
+            "alarm_caps": compute_alarm_caps(state_obj),
         }
     return {
         "entity_id": "",
@@ -485,6 +509,7 @@ def get_home_alarm_summary(
         "name": "",
         "supported_features": 0,
         "code_arm_required": False,
+        "alarm_caps": 0,
     }
 
 
@@ -767,19 +792,93 @@ def get_area_available_domains(
     return ",".join(ordered)
 
 
+def _is_intercom_available(
+    hass: HomeAssistant | None,
+    coordinator: Any,
+    hub_info: Mapping[str, Any],
+) -> bool:
+    """Return True when Intercom/Broadcast has at least one target device or output entity."""
+    if hub_info.get("intercom_available"):
+        return True
+    hass_obj = hass or (getattr(coordinator, "hass", None) if coordinator is not None else None)
+    if coordinator is not None:
+        dev_subs = getattr(coordinator, "device_subentries", None)
+        if dev_subs is not None and len(dev_subs) > 1:
+            return True
+        entry = getattr(coordinator, "entry", None)
+        if (
+            entry is not None
+            and hasattr(entry, "subentries")
+            and sum(
+                1
+                for sub in entry.subentries.values()
+                if getattr(sub, "subentry_type", None) == SUBENTRY_DEVICE
+            )
+            > 1
+        ):
+            return True
+        if hass_obj is not None and other_latter_devices(
+            iter_coordinators(hass_obj), str(getattr(coordinator, "device_slug", "") or "")
+        ):
+            return True
+        get_opt = getattr(coordinator, "get_opt", None)
+        if (
+            bool(getattr(coordinator, "default_speaker", None))
+            or bool(callable(get_opt) and get_opt(CONF_DEFAULT_SPEAKER))
+            or bool(getattr(coordinator, "doorbell_media_player", None))
+            or bool(callable(get_opt) and get_opt("doorbell_media_player"))
+            or bool(getattr(coordinator, "lock_entity", None) or hub_info.get("lock_entity"))
+            or bool(getattr(coordinator, "garage_entity", None) or hub_info.get("garage_entity"))
+        ):
+            return True
+    if hass_obj is not None:
+        idx = get_area_state_index(hass_obj)
+        if idx.states_for_domain("tts") or idx.states_for_domain("media_player"):
+            return True
+    return False
+
+
 def get_available_home_categories(
     alarm_info: Mapping[str, Any],
     hub_info: Mapping[str, Any],
     home_categories: str | None = None,
+    *,
+    coordinator: Any = None,
+    hass: HomeAssistant | None = None,
+    has_cameras: bool | None = None,
+    has_intercom: bool | None = None,
 ) -> str:
     """Return comma-separated enabled Home Hub categories that have at least one configured/discovered entity."""
     configured = parse_home_categories(home_categories) or list(
         parse_home_categories(DEFAULT_HOME_CATEGORIES)
     )
+    cams_ok = (
+        has_cameras
+        if has_cameras is not None
+        else (
+            bool(hub_info.get("camera_entities") or hub_info.get("camera_entity"))
+            or (
+                coordinator is not None
+                and (
+                    len(getattr(coordinator, "camera_entities", ()) or ()) > 0
+                    or bool(getattr(coordinator, "camera_entity", None))
+                )
+            )
+        )
+    )
+    intercom_ok = (
+        has_intercom
+        if has_intercom is not None
+        else _is_intercom_available(hass, coordinator, hub_info)
+    )
     ordered: list[str] = []
     for tok in configured:
         if tok == "alarm" and alarm_info.get("entity_id"):
             ordered.append("alarm")
+        elif tok == "cameras" and cams_ok:
+            ordered.append("cameras")
+        elif tok == "intercom" and intercom_ok:
+            ordered.append("intercom")
         elif tok == "thermostat" and hub_info.get("thermostat_entity"):
             ordered.append("thermostat")
         elif tok == "entry" and (
@@ -897,33 +996,69 @@ def find_area_media_entities(
     return result
 
 
+_ALARM_ACTION_ALIASES: dict[str, str] = {
+    "disarm": "disarm",
+    "alarm_disarm": "disarm",
+    "arm_home": "arm_home",
+    "alarm_arm_home": "arm_home",
+    "arm_away": "arm_away",
+    "alarm_arm_away": "arm_away",
+    "arm_night": "arm_night",
+    "alarm_arm_night": "arm_night",
+}
+
+_CLIMATE_HVAC_MAP: dict[str, str] = {
+    "heat": "heat",
+    "hvac_heat": "heat",
+    "cool": "cool",
+    "hvac_cool": "cool",
+    "heat_cool": "heat_cool",
+    "hvac_heat_cool": "heat_cool",
+    "auto": "auto",
+    "hvac_auto": "auto",
+    "off": "off",
+    "hvac_off": "off",
+}
+
+
 async def async_execute_area_action(
     hass: HomeAssistant,
     entity_id: str,
     action: str = "toggle",
-    level: int | None = None,
+    level: int | float | None = None,
     code: str | None = None,
     option: str | None = None,
 ) -> None:
     """Execute a normalized area, whole-home (alarm/thermostat/garage/lock/vacuum), or light color/kelvin action."""
+    raw_action = action.strip().lower()
+    action = _ALARM_ACTION_ALIASES.get(raw_action, raw_action)
+    entity_id = entity_id.strip()
+    if not entity_id and action in ("arm_home", "arm_away", "arm_night", "disarm"):
+        entity_id = "home_hub.alarm"
+
     state_obj = hass.states.get(entity_id)
     if state_obj is None and entity_id.startswith("home_hub."):
         hub_kind = entity_id.split(".", 1)[1].lower()
         global_cfg = hass.data.get(DOMAIN, {}).get("global_config") or {}
-        hub_summary = get_home_hub_summary(
-            hass,
-            thermostat_entity=global_cfg.get("thermostat_entity"),
-            lock_entity=global_cfg.get("lock_entity"),
-            garage_entity=global_cfg.get("garage_entity"),
-            vacuum_entity=global_cfg.get("vacuum_entity"),
-        )
-        mapped_id = {
-            "thermostat": hub_summary["thermostat_entity"],
-            "climate": hub_summary["thermostat_entity"],
-            "lock": hub_summary["lock_entity"],
-            "garage": hub_summary["garage_entity"],
-            "vacuum": hub_summary["vacuum_entity"],
-        }.get(hub_kind, "")
+        if hub_kind == "alarm":
+            mapped_id = get_home_alarm_summary(
+                hass, global_cfg.get("alarm_entity")
+            )["entity_id"]
+        else:
+            hub_summary = get_home_hub_summary(
+                hass,
+                thermostat_entity=global_cfg.get("thermostat_entity"),
+                lock_entity=global_cfg.get("lock_entity"),
+                garage_entity=global_cfg.get("garage_entity"),
+                vacuum_entity=global_cfg.get("vacuum_entity"),
+            )
+            mapped_id = {
+                "thermostat": hub_summary["thermostat_entity"],
+                "climate": hub_summary["thermostat_entity"],
+                "lock": hub_summary["lock_entity"],
+                "garage": hub_summary["garage_entity"],
+                "vacuum": hub_summary["vacuum_entity"],
+            }.get(hub_kind, "")
         if mapped_id:
             entity_id = mapped_id
             state_obj = hass.states.get(entity_id)
@@ -937,7 +1072,6 @@ async def async_execute_area_action(
         return
 
     domain = state_obj.domain
-    action = action.strip().lower()
     if not action and domain not in ("alarm_control_panel", "lock"):
         action = "toggle"
     cur_level = max(0, get_entity_level(state_obj))
@@ -1005,9 +1139,27 @@ async def async_execute_area_action(
                 translation_domain=DOMAIN,
                 translation_key="explicit_action_required",
             )
+        code_fmt = str(state_obj.attributes.get("code_format") or "").strip().lower()
+        code_arm_req = bool(state_obj.attributes.get("code_arm_required", False))
+        clean_code = str(code or "").strip()
+        if code_fmt and (action == "disarm" or code_arm_req):
+            if not clean_code:
+                raise ServiceValidationError(
+                    translation_domain=DOMAIN,
+                    translation_key="security_pin_required",
+                )
+            if code_fmt == "number" and not (
+                4 <= len(clean_code) <= 8
+                and clean_code.isascii()
+                and clean_code.isdigit()
+            ):
+                raise ServiceValidationError(
+                    translation_domain=DOMAIN,
+                    translation_key="security_pin_invalid",
+                )
         payload: dict[str, Any] = {ATTR_ENTITY_ID: entity_id}
-        if code:
-            payload["code"] = str(code)
+        if clean_code:
+            payload["code"] = clean_code
         await hass.services.async_call(
             "alarm_control_panel", svc, payload, blocking=True
         )
@@ -1070,12 +1222,53 @@ async def async_execute_area_action(
         )
         return
 
-    if domain == "climate" and action in ("heat", "cool", "heat_cool", "auto", "off"):
+    if domain == "climate" and action in _CLIMATE_HVAC_MAP:
+        target_mode = _CLIMATE_HVAC_MAP[action]
+        hvac_modes = [str(m) for m in (state_obj.attributes.get("hvac_modes") or [])]
+        if (
+            target_mode == "heat_cool"
+            and "heat_cool" not in hvac_modes
+            and "auto" in hvac_modes
+        ):
+            target_mode = "auto"
+        elif (
+            target_mode == "auto"
+            and "auto" not in hvac_modes
+            and "heat_cool" in hvac_modes
+        ):
+            target_mode = "heat_cool"
         await hass.services.async_call(
             "climate",
             "set_hvac_mode",
-            {ATTR_ENTITY_ID: entity_id, "hvac_mode": action},
+            {ATTR_ENTITY_ID: entity_id, "hvac_mode": target_mode},
             blocking=False,
+        )
+        return
+
+    if domain == "climate" and action in ("set_level", "set_temperature") and level is not None:
+        await hass.services.async_call(
+            "climate",
+            "set_temperature",
+            {ATTR_ENTITY_ID: entity_id, "temperature": float(level)},
+            blocking=False,
+        )
+        return
+
+    if domain == "cover" and action in (
+        "open_cover",
+        "open",
+        "close_cover",
+        "close",
+        "stop_cover",
+        "stop",
+    ):
+        svc_cover = (
+            "open_cover"
+            if action in ("open_cover", "open")
+            else ("close_cover" if action in ("close_cover", "close") else "stop_cover")
+        )
+        await hass.services.async_call(
+            "cover", svc_cover, {ATTR_ENTITY_ID: entity_id}, blocking=False
         )
         return
 
@@ -1393,10 +1586,13 @@ def build_area_context_payload(coordinator: Any) -> tuple[str, dict[str, Any]]:
     )
 
     eff_pin_policy = coordinator.security_pin_policy
+    alarm_caps = int(alarm_info.get("alarm_caps") or 0)
     avail_home_cats = get_available_home_categories(
         alarm_info,
         hub_info,
         home_categories=coordinator.home_categories_csv,
+        coordinator=coordinator,
+        hass=coordinator.hass,
     )
     local_tz_info, world_clocks_summary = build_time_zone_payloads(
         getattr(coordinator.hass.config, "time_zone", None),
@@ -1423,6 +1619,7 @@ def build_area_context_payload(coordinator: Any) -> tuple[str, dict[str, Any]]:
         "covers_open": covers_open,
         "alarm_entity": alarm_info["entity_id"],
         "alarm_state": alarm_info["state"],
+        "alarm_caps": alarm_caps,
         "thermostat_entity": hub_info["thermostat_entity"],
         "thermostat_state": hub_info["thermostat_state"],
         "thermostat_temp": hub_info["thermostat_temp"],
@@ -1497,6 +1694,7 @@ def build_area_context_payload(coordinator: Any) -> tuple[str, dict[str, Any]]:
         area_icon,
         local_tz_info,
         world_clocks_summary,
+        alarm_caps,
     )
     area_attrs["rev"] = area_rev
     area_attrs["payload"] = area_payload
