@@ -6,7 +6,7 @@ Standard library only (no Home Assistant imports), so standalone unit tests exer
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
-from datetime import date, datetime
+from datetime import UTC, date, datetime, timedelta
 import hashlib
 import hmac
 import json
@@ -14,16 +14,19 @@ from pathlib import Path
 import secrets
 from typing import Any
 import unicodedata
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .studio.settings import (
     AREA_CATEGORY_TOKENS,
     DEFAULT_AREA_CATEGORIES,
     DEFAULT_HOME_CATEGORIES,
     DEVICE_PREF_SPEC_MAP,
-    DEVICE_PREF_SPECS,
     HOME_CATEGORY_TOKENS,
+    WORLD_CLOCK_CATALOG_MAP,
+    normalize_alarms_summary,
     normalize_area_categories,
     normalize_home_categories,
+    normalize_world_clocks_csv,
     parse_area_categories,
     parse_home_categories,
     resolve_device_pref_value,
@@ -283,6 +286,11 @@ class DomainPayloadPacker:
         self._domain_hashes.clear()
 
 
+_DEVICE_PREFS_BODY_NAMES: tuple[str, ...] = tuple(
+    f["name"] for f in _PROTOCOL_V3_DATA["domains"]["device_prefs"]["fields"]
+)
+
+
 def pack_device_prefs_fields(
     prefs_seq: int,
     cfg: Mapping[str, Any],
@@ -291,27 +299,25 @@ def pack_device_prefs_fields(
     custom_color_hex: str,
     is_round_display: bool = True,
 ) -> tuple[Any, ...]:
-    """Return the 48 ordered body fields (wire indices 3..50) for Protocol v3 `device_prefs`."""
+    """Return the 52 ordered body fields (wire indices 3..54) for Protocol v3 `device_prefs`."""
     home_enabled = bool(resolve_device_pref_value(cfg, "home_screen_enabled"))
-    core_values: list[Any] = []
-    for spec in DEVICE_PREF_SPECS[:43]:
-        val = resolve_device_pref_value(cfg, spec.key)
-        if spec.key == "start_screen" and not home_enabled and val == "Home":
-            val = "Clock"
-        elif spec.key == "clock_face" and not is_round_display and val == "Modern Roman (Analog)":
-            val = "Minimal Digital"
-        core_values.append(val)
-    ble_mode = resolve_device_pref_value(cfg, "ble_beacon_mode")
-    weather_sim = resolve_device_pref_value(cfg, "weather_sim_condition")
     clean_hex = str(custom_color_hex or "").strip().upper()
-    return (
-        max(0, int(prefs_seq)),
-        *core_values,
-        bool(native_ble_tracking),
-        ble_mode,
-        weather_sim,
-        clean_hex,
-    )
+    out: list[Any] = []
+    for name in _DEVICE_PREFS_BODY_NAMES:
+        if name == "prefs_seq":
+            out.append(max(0, int(prefs_seq)))
+        elif name == "ble_beacon_enabled":
+            out.append(bool(native_ble_tracking))
+        elif name == "theme_color_hex":
+            out.append(clean_hex)
+        else:
+            val = resolve_device_pref_value(cfg, name)
+            if name == "start_screen" and not home_enabled and val == "Home":
+                val = "Time App"
+            elif name == "clock_face" and not is_round_display and val == "Modern Analog":
+                val = "Minimal Digital"
+            out.append(val)
+    return tuple(out)
 
 
 def parse_dirty_prefs_records(raw: str | None) -> dict[str, Any]:
@@ -337,6 +343,14 @@ def parse_dirty_prefs_records(raw: str | None) -> dict[str, Any]:
         elif spec.domain == "select":
             if val in spec.options:
                 out[key] = val
+        elif spec.domain == "text":
+            if key == "world_clocks":
+                out[key] = normalize_world_clocks_csv(val, strict=False)
+            elif key == "alarms_summary":
+                try:
+                    out[key] = normalize_alarms_summary(val, strict=True)
+                except ValueError:
+                    continue
         elif spec.domain == "number":
             try:
                 ival = int(float(val))
@@ -348,6 +362,111 @@ def parse_dirty_prefs_records(raw: str | None) -> dict[str, Any]:
                 ival = min(spec.max_val, ival)
             out[key] = ival
     return out
+
+
+def _nth_weekday_of_month(year: int, month: int, weekday: int, nth: int) -> date:
+    """Return the `nth` (1..4) or last (`-1`) occurrence of `weekday` (0=Mon..6=Sun) in `year`-`month`."""
+    if nth > 0:
+        first = date(year, month, 1)
+        delta = (weekday - first.weekday()) % 7
+        return first + timedelta(days=delta + (nth - 1) * 7)
+    next_m = date(year + 1, 1, 1) if month == 12 else date(year, month + 1, 1)
+    last = next_m - timedelta(days=1)
+    delta = (last.weekday() - weekday) % 7
+    return last - timedelta(days=delta)
+
+
+def _catalog_dst_active(rule: str, std_off_min: int, now_utc: datetime) -> bool:
+    """Evaluate DST rule in UTC when host OS lacks `/usr/share/zoneinfo` (e.g. bare Windows Python)."""
+    yr = now_utc.year
+    if rule == "us":
+        start_local = datetime(yr, 3, _nth_weekday_of_month(yr, 3, 6, 2).day, 2, 0, tzinfo=UTC)
+        end_local = datetime(yr, 11, _nth_weekday_of_month(yr, 11, 6, 1).day, 2, 0, tzinfo=UTC)
+        start_utc = start_local - timedelta(minutes=std_off_min)
+        end_utc = end_local - timedelta(minutes=std_off_min + 60)
+        return start_utc <= now_utc < end_utc
+    if rule == "eu":
+        start_utc = datetime(yr, 3, _nth_weekday_of_month(yr, 3, 6, -1).day, 1, 0, tzinfo=UTC)
+        end_utc = datetime(yr, 10, _nth_weekday_of_month(yr, 10, 6, -1).day, 1, 0, tzinfo=UTC)
+        return start_utc <= now_utc < end_utc
+    if rule == "eg":
+        start_local = datetime(yr, 4, _nth_weekday_of_month(yr, 4, 4, -1).day, 0, 0, tzinfo=UTC)
+        end_local = datetime(yr, 10, _nth_weekday_of_month(yr, 10, 3, -1).day, 23, 59, tzinfo=UTC)
+        start_utc = start_local - timedelta(minutes=std_off_min)
+        end_utc = end_local - timedelta(minutes=std_off_min + 60)
+        return start_utc <= now_utc <= end_utc
+    if rule == "au":
+        end_local = datetime(yr, 4, _nth_weekday_of_month(yr, 4, 6, 1).day, 3, 0, tzinfo=UTC)
+        start_local = datetime(yr, 10, _nth_weekday_of_month(yr, 10, 6, 1).day, 2, 0, tzinfo=UTC)
+        end_utc = end_local - timedelta(minutes=std_off_min + 60)
+        start_utc = start_local - timedelta(minutes=std_off_min)
+        return now_utc < end_utc or now_utc >= start_utc
+    return False
+
+
+def _format_utc_offset_abbr(offset_min: int) -> str:
+    if offset_min == 0:
+        return "UTC"
+    sign = "+" if offset_min >= 0 else "-"
+    abs_m = abs(offset_min)
+    hh, mm = divmod(abs_m, 60)
+    return f"UTC{sign}{hh}" if mm == 0 else f"UTC{sign}{hh}:{mm:02d}"
+
+
+def format_tz_record(iana: str, now_utc: datetime | None = None) -> str:
+    """Format `<iana>|<city>|<abbr>|<utc_offset_min>|<is_dst>` for `area_context`."""
+    clean_iana = str(iana or "").strip()
+    if not clean_iana:
+        return ""
+    if clean_iana in ("UTC", "Etc/UTC", "GMT", "Etc/GMT"):
+        return f"{clean_iana}|UTC|UTC|0|0"
+
+    now = (now_utc or datetime.now(UTC)).astimezone(UTC)
+    cat_entry = WORLD_CLOCK_CATALOG_MAP.get(clean_iana)
+    city = (
+        str(cat_entry["city"])
+        if cat_entry is not None
+        else clean_iana.rsplit("/", 1)[-1].replace("_", " ")
+    )
+    city = city.replace("|", "").replace(";", "").strip() or clean_iana
+
+    try:
+        tz = ZoneInfo(clean_iana)
+        local_dt = now.astimezone(tz)
+        off_td = local_dt.utcoffset() or timedelta(0)
+        dst_td = local_dt.dst() or timedelta(0)
+        off_min = round(off_td.total_seconds() / 60)
+        is_dst = dst_td.total_seconds() != 0
+        raw_abbr = (local_dt.tzname() or "").replace("|", "").replace(";", "").strip()
+        if (not raw_abbr or raw_abbr[0] in "+-") and cat_entry is not None:
+            raw_abbr = str(cat_entry["dst_abbr" if is_dst else "std_abbr"])
+        abbr = raw_abbr or _format_utc_offset_abbr(off_min)
+        return f"{clean_iana}|{city}|{abbr}|{off_min}|{'1' if is_dst else '0'}"
+    except (ZoneInfoNotFoundError, ValueError):
+        if cat_entry is None:
+            return ""
+        is_dst = _catalog_dst_active(str(cat_entry["rule"]), int(cat_entry["std_off"]), now)
+        off_min = int(cat_entry["dst_off" if is_dst else "std_off"])
+        abbr = str(cat_entry["dst_abbr" if is_dst else "std_abbr"])
+        return f"{clean_iana}|{city}|{abbr}|{off_min}|{'1' if is_dst else '0'}"
+
+
+def build_time_zone_payloads(
+    hass_time_zone: str | None,
+    world_clocks_csv: str | None,
+    now_utc: datetime | None = None,
+) -> tuple[str, str]:
+    """Build `(local_tz_info, world_clocks_summary)` for Protocol v3 `area_context`."""
+    now = (now_utc or datetime.now(UTC)).astimezone(UTC)
+    local_tz_info = format_tz_record(str(hass_time_zone or "").strip(), now)
+    norm_csv = normalize_world_clocks_csv(world_clocks_csv, strict=False)
+    world_records: list[str] = []
+    if norm_csv:
+        for zone_id in norm_csv.split(","):
+            rec = format_tz_record(zone_id, now)
+            if rec:
+                world_records.append(rec)
+    return local_tz_info, ";".join(world_records)
 
 
 # ---------------------------------------------------------------------------

@@ -712,7 +712,8 @@ return { offMarkup, dispWeatherOff, staticMarkup, rotatingMarkup, powerMarkup, a
         self.assertNotIn("Default Category", got["ifaceMarkup"])
         self.assertNotIn("Show All Category", got["ifaceMarkup"])
         for display_only_label in (
-            "Clock Face",
+            "for=cfg-clock_face",
+            ">Clock Face</label>",
             "Time Format",
             "Wake Greeting",
             "Weather Background",
@@ -721,6 +722,14 @@ return { offMarkup, dispWeatherOff, staticMarkup, rotatingMarkup, powerMarkup, a
             "Overlay Style",
         ):
             self.assertNotIn(display_only_label, got["ifaceMarkup"])
+        self.assertIn("Home Time Tap", got["ifaceMarkup"])
+        self.assertIn("id=cfg-home_clock_tap_action", got["ifaceMarkup"])
+        self.assertIn("+ Time", got["ifaceMarkup"])
+        self.assertIn('<h3 class="card-title">Time</h3>', got["ifaceMarkup"])
+        self.assertIn("Show UTC Clock", got["ifaceMarkup"])
+        self.assertIn('id="cfg-world_clocks_add"', got["ifaceMarkup"])
+        self.assertIn("id=cfg-alarm_1_time", got["ifaceMarkup"])
+        self.assertIn('step="60"', got["ifaceMarkup"])
         self.assertIn('<h3 class="card-title">Media Player</h3>', got["ifaceMarkup"])
         self.assertIn("id=media-player-shortcuts", got["ifaceMarkup"])
         self.assertIn("✓ Speaker", got["ifaceMarkup"])
@@ -1373,7 +1382,9 @@ function makeInterfaceStore(homeEnabled) {
         start_screen: homeEnabled ? "Home" : "Home",
         return_to_home_timeout: "2 min",
         activity_card: true,
-        dock_apps: "music,alarm,area,remote,games,tools",
+        dock_apps: "music,home_hub,area,remote,games,tools",
+        world_clocks: "Europe/London,Asia/Tokyo",
+        alarms_summary: "06:45|1|1;08:30|0|2;09:00|0|3",
         home_categories: "alarm,thermostat,entry",
         area_categories: "scene,light",
         device_remote_group: "area_auto",
@@ -1396,7 +1407,7 @@ function makeInterfaceStore(homeEnabled) {
             pref_key: "start_screen",
             domain: "select",
             name: "Start Screen",
-            state: homeEnabled ? "Home" : "Clock",
+            state: homeEnabled ? "Home" : "Time App",
             options: START_SCREEN_OPTIONS,
           },
           {
@@ -1430,7 +1441,7 @@ function makeInterfaceStore(homeEnabled) {
       return (keys || []).map((k) => this.getPref(k)).filter(Boolean);
     },
     getEnabledDockTokens() {
-      return ["music", "alarm", "area", "remote", "games", "tools"];
+      return ["music", "home_hub", "area", "remote", "games", "tools"];
     },
     getEnabledHomeCategories() {
       return ["alarm", "thermostat", "entry"];
@@ -1468,9 +1479,11 @@ return {
             "Start Screen",
             ".value=Home",
             "<option value=Home ?selected=>Home</option>",
+            "Home Time Tap",
             "Return to Home Timeout",
             "Dock Apps",
             "+ Weather",
+            "+ Time",
             "Show the Activity Card",
             "Activity Card Sources",
             "Home Controls",
@@ -1478,20 +1491,27 @@ return {
             "✓ Thermostat",
             "✓ Entry & Garage",
             "+ Robot Vacuum",
+            'id="world-clocks-pills"',
+            "London",
+            "Tokyo",
+            ".value=06:45",
         ):
             self.assertIn(expected, enabled_html)
 
         self.assertIn("Enable Home Screen", single_html)
         self.assertIn("Start Screen", single_html)
-        self.assertIn(".value=Clock", single_html)
-        self.assertIn("<option value=Clock ?selected=>Clock</option>", single_html)
+        self.assertIn(".value=Time App", single_html)
+        self.assertIn("<option value=Time App ?selected=>Time App</option>", single_html)
+        self.assertIn("<option value=Clock Face ?selected=>Clock Face</option>", single_html)
         self.assertIn("<option value=Home Hub ?selected=>Home Hub</option>", single_html)
         self.assertNotIn("<option value=Home ?selected=>Home</option>", single_html)
+        self.assertNotIn("Home Time Tap", single_html)
         self.assertNotIn("Return to Home Timeout", single_html)
         self.assertNotIn("Dock Apps", single_html)
         self.assertNotIn("Show the Activity Card", single_html)
         self.assertNotIn("Activity Card Sources", single_html)
         self.assertIn("Home Controls", single_html)
+        self.assertIn('<h3 class="card-title">Time</h3>', single_html)
 
 
 if __name__ == "__main__":

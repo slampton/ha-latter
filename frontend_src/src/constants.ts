@@ -29,7 +29,7 @@ export {
   ACTIVITY_SOURCES_CATALOG,
 };
 
-export const STUDIO_REV = 9;
+export const STUDIO_REV = 10;
 
 export const MAX_WALLPAPER_UPLOAD_BYTES = 15 * 1024 * 1024;
 
@@ -89,7 +89,8 @@ export const ISSUE_TEXT: Record<string, (issue: IssueItem) => string> = {
 
 export const START_SCREEN_OPTIONS: ReadonlyArray<string> = [
   "Home",
-  "Clock",
+  "Time App",
+  "Clock Face",
   "Media",
   "Home Hub",
   "Area Controls",
@@ -98,6 +99,48 @@ export const START_SCREEN_OPTIONS: ReadonlyArray<string> = [
   "Cameras",
   "Games",
   "Tools",
+];
+
+export const HOME_CLOCK_TAP_OPTIONS: ReadonlyArray<string> = [
+  "Time App",
+  "Clock Face",
+];
+
+export const MAX_WORLD_CLOCKS = 4;
+export const DEFAULT_ALARMS_SUMMARY = "07:00|0|1;08:30|0|2;09:00|0|2";
+
+export const ALARM_RECURRENCE_OPTIONS: ReadonlyArray<{ value: number; label: string }> = [
+  { value: 0, label: "Daily" },
+  { value: 1, label: "Weekdays" },
+  { value: 2, label: "Weekends" },
+  { value: 3, label: "Once" },
+];
+
+export const WORLD_CLOCK_ZONES_CATALOG: ReadonlyArray<{ iana: string; city: string; label: string }> = [
+  { iana: "America/Los_Angeles", city: "Los Angeles", label: "Los Angeles (America/Los_Angeles)" },
+  { iana: "America/Denver", city: "Denver", label: "Denver (America/Denver)" },
+  { iana: "America/Chicago", city: "Chicago", label: "Chicago (America/Chicago)" },
+  { iana: "America/New_York", city: "New York", label: "New York (America/New_York)" },
+  { iana: "America/Toronto", city: "Toronto", label: "Toronto (America/Toronto)" },
+  { iana: "America/Sao_Paulo", city: "Sao Paulo", label: "Sao Paulo (America/Sao_Paulo)" },
+  { iana: "America/Argentina/Buenos_Aires", city: "Buenos Aires", label: "Buenos Aires (America/Argentina/Buenos_Aires)" },
+  { iana: "Pacific/Honolulu", city: "Honolulu", label: "Honolulu (Pacific/Honolulu)" },
+  { iana: "America/Anchorage", city: "Anchorage", label: "Anchorage (America/Anchorage)" },
+  { iana: "Europe/London", city: "London", label: "London (Europe/London)" },
+  { iana: "Europe/Paris", city: "Paris", label: "Paris (Europe/Paris)" },
+  { iana: "Europe/Berlin", city: "Berlin", label: "Berlin (Europe/Berlin)" },
+  { iana: "Europe/Zurich", city: "Zurich", label: "Zurich (Europe/Zurich)" },
+  { iana: "Africa/Cairo", city: "Cairo", label: "Cairo (Africa/Cairo)" },
+  { iana: "Africa/Johannesburg", city: "Johannesburg", label: "Johannesburg (Africa/Johannesburg)" },
+  { iana: "Asia/Dubai", city: "Dubai", label: "Dubai (Asia/Dubai)" },
+  { iana: "Asia/Kolkata", city: "Kolkata", label: "Kolkata (Asia/Kolkata)" },
+  { iana: "Asia/Bangkok", city: "Bangkok", label: "Bangkok (Asia/Bangkok)" },
+  { iana: "Asia/Singapore", city: "Singapore", label: "Singapore (Asia/Singapore)" },
+  { iana: "Asia/Hong_Kong", city: "Hong Kong", label: "Hong Kong (Asia/Hong_Kong)" },
+  { iana: "Asia/Shanghai", city: "Shanghai", label: "Shanghai (Asia/Shanghai)" },
+  { iana: "Asia/Tokyo", city: "Tokyo", label: "Tokyo (Asia/Tokyo)" },
+  { iana: "Asia/Seoul", city: "Seoul", label: "Seoul (Asia/Seoul)" },
+  { iana: "Australia/Sydney", city: "Sydney", label: "Sydney (Australia/Sydney)" },
 ];
 
 export const RETURN_TO_HOME_TIMEOUT_OPTIONS: ReadonlyArray<string> = [

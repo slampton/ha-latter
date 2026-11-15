@@ -47,6 +47,7 @@ from .protocol import (
     DEFAULT_HOME_CATEGORIES,
     V3Records,
     activity_payload,
+    build_time_zone_payloads,
     camera_records,
     ha_value,
     intercom_target_records,
@@ -1397,6 +1398,10 @@ def build_area_context_payload(coordinator: Any) -> tuple[str, dict[str, Any]]:
         hub_info,
         home_categories=coordinator.home_categories_csv,
     )
+    local_tz_info, world_clocks_summary = build_time_zone_payloads(
+        getattr(coordinator.hass.config, "time_zone", None),
+        str(coordinator.get_opt("world_clocks", "") or ""),
+    )
     area_attrs: dict[str, Any] = {
         "site_id": coordinator.site_id,
         "area_id": eff_area_id,
@@ -1439,6 +1444,8 @@ def build_area_context_payload(coordinator: Any) -> tuple[str, dict[str, Any]]:
         "alert_duration": coordinator.alert_duration,
         "alert_chime": coordinator.alert_chime,
         "alert_camera_url": coordinator.alert_camera_url,
+        "local_tz_info": local_tz_info,
+        "world_clocks_summary": world_clocks_summary,
     }
     area_rev, area_payload = coordinator._pack_domain_payload(
         "area_context",
@@ -1488,6 +1495,8 @@ def build_area_context_payload(coordinator: Any) -> tuple[str, dict[str, Any]]:
         eff_pin_policy,
         area_attrs["home_categories"],
         area_icon,
+        local_tz_info,
+        world_clocks_summary,
     )
     area_attrs["rev"] = area_rev
     area_attrs["payload"] = area_payload

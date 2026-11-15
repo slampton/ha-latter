@@ -429,16 +429,18 @@ export const STUDIO_STYLES = css`
   .settings-row-control input[type="text"],
   .settings-row-control input[type="search"],
   .settings-row-control input[type="number"],
+  .settings-row-control input[type="time"],
   .settings-row-control input[type="password"] {
     width: 260px;
     max-width: 100%;
   }
   .settings-row-control input[type="number"],
+  .settings-row-control input[type="time"],
   .settings-row-control input[type="password"] { width: 140px; }
   .settings-row.stacked { grid-template-columns: minmax(0, 1fr); }
   .settings-row.stacked .settings-row-control { justify-content: stretch; }
   .settings-row.stacked .settings-row-control > * { flex: 1 1 200px; width: auto; }
-  select, input[type="text"], input[type="search"], input[type="number"], input[type="password"], textarea {
+  select, input[type="text"], input[type="search"], input[type="number"], input[type="time"], input[type="password"], textarea {
     min-height: var(--studio-control-height);
     padding: 0 var(--studio-space-3);
     border: none;
@@ -446,6 +448,7 @@ export const STUDIO_STYLES = css`
     border-radius: var(--studio-radius-field) var(--studio-radius-field) 0 0;
     background: var(--studio-field-bg);
     color: var(--studio-text);
+    color-scheme: inherit;
     font: inherit;
     transition: background-color 0.15s ease-out;
   }
@@ -453,7 +456,7 @@ export const STUDIO_STYLES = css`
     padding: var(--studio-space-2) var(--studio-space-3);
     resize: vertical;
   }
-  select:hover, input[type="text"]:hover, input[type="search"]:hover, input[type="number"]:hover, input[type="password"]:hover, textarea:hover { background: var(--studio-field-bg-hover); }
+  select:hover, input[type="text"]:hover, input[type="search"]:hover, input[type="number"]:hover, input[type="time"]:hover, input[type="password"]:hover, textarea:hover { background: var(--studio-field-bg-hover); }
   select option, select optgroup { background-color: var(--studio-popup-bg); color: var(--studio-text); }
   input::placeholder, textarea::placeholder { color: var(--studio-text-secondary); opacity: 1; }
   input[readonly] { color: var(--studio-text-secondary); }
@@ -463,7 +466,7 @@ export const STUDIO_STYLES = css`
     outline: 2px solid var(--studio-primary);
     outline-offset: 2px;
   }
-  select:focus-visible, input[type="text"]:focus-visible, input[type="search"]:focus-visible, input[type="number"]:focus-visible, input[type="password"]:focus-visible, textarea:focus-visible {
+  select:focus-visible, input[type="text"]:focus-visible, input[type="search"]:focus-visible, input[type="number"]:focus-visible, input[type="time"]:focus-visible, input[type="password"]:focus-visible, textarea:focus-visible {
     outline: none;
     border-bottom-color: var(--studio-primary);
     box-shadow: inset 0 -1px 0 var(--studio-primary);

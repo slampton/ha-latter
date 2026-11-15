@@ -72,7 +72,7 @@
           "name": "dock_apps",
           "cpp_enum": "DOCK_APPS",
           "type": "csv",
-          "description": "Home dock apps in order, and the only ones shown (music, home_hub, area, remote, weather, camera, games, tools; Settings is always last). Empty until set: the device shows defaults.dock_apps"
+          "description": "Home dock apps in order, and the only ones shown (music, home_hub, area, remote, weather, time, camera, games, tools; Settings is always last). Empty until set: the device shows defaults.dock_apps"
         },
         {
           "index": 8,
@@ -311,6 +311,20 @@
           "cpp_enum": "AREA_ICON",
           "type": "string",
           "description": "Home Assistant AreaEntry icon string (e.g. mdi:sofa) or inferred Area archetype icon; empty when unassigned"
+        },
+        {
+          "index": 42,
+          "name": "local_tz_info",
+          "cpp_enum": "LOCAL_TZ_INFO",
+          "type": "string",
+          "description": "Pipe-delimited local time zone status ('<iana>|<city>|<abbr>|<utc_offset_min>|<is_dst>')"
+        },
+        {
+          "index": 43,
+          "name": "world_clocks_summary",
+          "cpp_enum": "WORLD_CLOCKS_SUMMARY",
+          "type": "string",
+          "description": "Semicolon-delimited configured World Clocks ('<iana>|<city>|<abbr>|<utc_offset_min>|<is_dst>;...')"
         }
       ]
     },
@@ -730,7 +744,7 @@
           "name": "start_screen",
           "cpp_enum": "START_SCREEN",
           "type": "string",
-          "description": "Boot / single-app start screen (Home|Clock|Media|Home Hub|Area Controls|Remote|Weather|Cameras|Games|Tools)"
+          "description": "Boot / single-app start screen (Home|Time App|Clock Face|Media|Home Hub|Area Controls|Remote|Weather|Cameras|Games|Tools)"
         },
         {
           "index": 24,
@@ -744,7 +758,7 @@
           "name": "clock_face",
           "cpp_enum": "CLOCK_FACE",
           "type": "string",
-          "description": "Clock face style (Minimal Digital|Modern Roman (Analog)|Modern Digital (Bold))"
+          "description": "Clock face style (Minimal Digital|Modern Analog|Hybrid Digital)"
         },
         {
           "index": 26,
@@ -920,6 +934,34 @@
           "cpp_enum": "THEME_COLOR_HEX",
           "type": "string",
           "description": "Custom theme accent color (#RRGGBB) synchronized with device_custom_color"
+        },
+        {
+          "index": 51,
+          "name": "home_clock_tap_action",
+          "cpp_enum": "HOME_CLOCK_TAP_ACTION",
+          "type": "string",
+          "description": "Action when tapping the time readout on the Home Screen (Time App|Clock Face)"
+        },
+        {
+          "index": 52,
+          "name": "show_utc_clock",
+          "cpp_enum": "SHOW_UTC_CLOCK",
+          "type": "bool",
+          "description": "1 = show a dedicated UTC World Clock card on the Time App Clock tab, else 0"
+        },
+        {
+          "index": 53,
+          "name": "world_clocks",
+          "cpp_enum": "WORLD_CLOCKS",
+          "type": "csv",
+          "description": "Comma-separated IANA time zone IDs (up to 4) shown on the Time App Clock tab"
+        },
+        {
+          "index": 54,
+          "name": "alarms_summary",
+          "cpp_enum": "ALARMS_SUMMARY",
+          "type": "string",
+          "description": "Semicolon-delimited 3-slot device alarm schedule ('HH:MM|enabled|recurrence;...')"
         }
       ]
     }
@@ -1004,6 +1046,10 @@
       {
         "token": "weather",
         "label": "Weather"
+      },
+      {
+        "token": "time",
+        "label": "Time"
       },
       {
         "token": "camera",

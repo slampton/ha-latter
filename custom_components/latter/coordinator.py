@@ -581,6 +581,8 @@ class LatterCoordinator:
                 for k in changed_pref_keys:
                     self.prefs_key_seq[k] = self.prefs_seq
                 self._cached_prefs_payload = None
+                if "world_clocks" in changed_pref_keys:
+                    self._cached_area_payload = None
         self.hass.config_entries.async_update_subentry(
             self.entry, self._live_subentry(), data=merged_data
         )

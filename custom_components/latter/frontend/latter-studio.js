@@ -736,6 +736,7 @@ const DOCK_APPS_CATALOG = [
   {token: "area", label: "Area"},
   {token: "remote", label: "Remote"},
   {token: "weather", label: "Weather"},
+  {token: "time", label: "Time"},
   {token: "camera", label: "Cameras"},
   {token: "games", label: "Games"},
   {token: "tools", label: "Tools"},
@@ -806,7 +807,7 @@ const DEFAULT_HOME_CATEGORIES_TOKENS = [
 /**
  * Canonical constants, route maps, issue messages, and Title Case dictionaries for Latter Studio.
  */
-const STUDIO_REV = 9;
+const STUDIO_REV = 10;
 const MAX_WALLPAPER_UPLOAD_BYTES = 15 * 1024 * 1024;
 const DEVICE_VIEW_SLUGS = {
   dashboard: "overview",
@@ -856,7 +857,8 @@ const ISSUE_TEXT = {
 };
 const START_SCREEN_OPTIONS = [
   "Home",
-  "Clock",
+  "Time App",
+  "Clock Face",
   "Media",
   "Home Hub",
   "Area Controls",
@@ -865,6 +867,44 @@ const START_SCREEN_OPTIONS = [
   "Cameras",
   "Games",
   "Tools",
+];
+const HOME_CLOCK_TAP_OPTIONS = [
+  "Time App",
+  "Clock Face",
+];
+const MAX_WORLD_CLOCKS = 4;
+const DEFAULT_ALARMS_SUMMARY = "07:00|0|1;08:30|0|2;09:00|0|2";
+const ALARM_RECURRENCE_OPTIONS = [
+  { value: 0, label: "Daily" },
+  { value: 1, label: "Weekdays" },
+  { value: 2, label: "Weekends" },
+  { value: 3, label: "Once" },
+];
+const WORLD_CLOCK_ZONES_CATALOG = [
+  { iana: "America/Los_Angeles", city: "Los Angeles", label: "Los Angeles (America/Los_Angeles)" },
+  { iana: "America/Denver", city: "Denver", label: "Denver (America/Denver)" },
+  { iana: "America/Chicago", city: "Chicago", label: "Chicago (America/Chicago)" },
+  { iana: "America/New_York", city: "New York", label: "New York (America/New_York)" },
+  { iana: "America/Toronto", city: "Toronto", label: "Toronto (America/Toronto)" },
+  { iana: "America/Sao_Paulo", city: "Sao Paulo", label: "Sao Paulo (America/Sao_Paulo)" },
+  { iana: "America/Argentina/Buenos_Aires", city: "Buenos Aires", label: "Buenos Aires (America/Argentina/Buenos_Aires)" },
+  { iana: "Pacific/Honolulu", city: "Honolulu", label: "Honolulu (Pacific/Honolulu)" },
+  { iana: "America/Anchorage", city: "Anchorage", label: "Anchorage (America/Anchorage)" },
+  { iana: "Europe/London", city: "London", label: "London (Europe/London)" },
+  { iana: "Europe/Paris", city: "Paris", label: "Paris (Europe/Paris)" },
+  { iana: "Europe/Berlin", city: "Berlin", label: "Berlin (Europe/Berlin)" },
+  { iana: "Europe/Zurich", city: "Zurich", label: "Zurich (Europe/Zurich)" },
+  { iana: "Africa/Cairo", city: "Cairo", label: "Cairo (Africa/Cairo)" },
+  { iana: "Africa/Johannesburg", city: "Johannesburg", label: "Johannesburg (Africa/Johannesburg)" },
+  { iana: "Asia/Dubai", city: "Dubai", label: "Dubai (Asia/Dubai)" },
+  { iana: "Asia/Kolkata", city: "Kolkata", label: "Kolkata (Asia/Kolkata)" },
+  { iana: "Asia/Bangkok", city: "Bangkok", label: "Bangkok (Asia/Bangkok)" },
+  { iana: "Asia/Singapore", city: "Singapore", label: "Singapore (Asia/Singapore)" },
+  { iana: "Asia/Hong_Kong", city: "Hong Kong", label: "Hong Kong (Asia/Hong_Kong)" },
+  { iana: "Asia/Shanghai", city: "Shanghai", label: "Shanghai (Asia/Shanghai)" },
+  { iana: "Asia/Tokyo", city: "Tokyo", label: "Tokyo (Asia/Tokyo)" },
+  { iana: "Asia/Seoul", city: "Seoul", label: "Seoul (Asia/Seoul)" },
+  { iana: "Australia/Sydney", city: "Sydney", label: "Sydney (Australia/Sydney)" },
 ];
 const RETURN_TO_HOME_TIMEOUT_OPTIONS = [
   "15s",
@@ -2852,7 +2892,7 @@ function expandDevicePrefPatch(
   if (rawPatch.home_screen_enabled === false) {
     const effStart = String(rawPatch.start_screen ?? currentCfg.start_screen ?? "Home");
     if (effStart === "Home") {
-      expanded.start_screen = "Clock";
+      expanded.start_screen = "Time App";
     }
   }
   return expanded;
@@ -5395,16 +5435,18 @@ const STUDIO_STYLES = css`
   .settings-row-control input[type="text"],
   .settings-row-control input[type="search"],
   .settings-row-control input[type="number"],
+  .settings-row-control input[type="time"],
   .settings-row-control input[type="password"] {
     width: 260px;
     max-width: 100%;
   }
   .settings-row-control input[type="number"],
+  .settings-row-control input[type="time"],
   .settings-row-control input[type="password"] { width: 140px; }
   .settings-row.stacked { grid-template-columns: minmax(0, 1fr); }
   .settings-row.stacked .settings-row-control { justify-content: stretch; }
   .settings-row.stacked .settings-row-control > * { flex: 1 1 200px; width: auto; }
-  select, input[type="text"], input[type="search"], input[type="number"], input[type="password"], textarea {
+  select, input[type="text"], input[type="search"], input[type="number"], input[type="time"], input[type="password"], textarea {
     min-height: var(--studio-control-height);
     padding: 0 var(--studio-space-3);
     border: none;
@@ -5412,6 +5454,7 @@ const STUDIO_STYLES = css`
     border-radius: var(--studio-radius-field) var(--studio-radius-field) 0 0;
     background: var(--studio-field-bg);
     color: var(--studio-text);
+    color-scheme: inherit;
     font: inherit;
     transition: background-color 0.15s ease-out;
   }
@@ -5419,7 +5462,7 @@ const STUDIO_STYLES = css`
     padding: var(--studio-space-2) var(--studio-space-3);
     resize: vertical;
   }
-  select:hover, input[type="text"]:hover, input[type="search"]:hover, input[type="number"]:hover, input[type="password"]:hover, textarea:hover { background: var(--studio-field-bg-hover); }
+  select:hover, input[type="text"]:hover, input[type="search"]:hover, input[type="number"]:hover, input[type="time"]:hover, input[type="password"]:hover, textarea:hover { background: var(--studio-field-bg-hover); }
   select option, select optgroup { background-color: var(--studio-popup-bg); color: var(--studio-text); }
   input::placeholder, textarea::placeholder { color: var(--studio-text-secondary); opacity: 1; }
   input[readonly] { color: var(--studio-text-secondary); }
@@ -5429,7 +5472,7 @@ const STUDIO_STYLES = css`
     outline: 2px solid var(--studio-primary);
     outline-offset: 2px;
   }
-  select:focus-visible, input[type="text"]:focus-visible, input[type="search"]:focus-visible, input[type="number"]:focus-visible, input[type="password"]:focus-visible, textarea:focus-visible {
+  select:focus-visible, input[type="text"]:focus-visible, input[type="search"]:focus-visible, input[type="number"]:focus-visible, input[type="time"]:focus-visible, input[type="password"]:focus-visible, textarea:focus-visible {
     outline: none;
     border-bottom-color: var(--studio-primary);
     box-shadow: inset 0 -1px 0 var(--studio-primary);
@@ -6821,11 +6864,69 @@ function renderDeviceDisplayView(store) {
 
 // --- src/views/device-interface-view.ts ---
 /**
- * Device Interface View (`interface`, D-026 / D-028 / D-030 / D-033 / D-034 / D-035 / D-036):
+ * Device Interface View (`interface`, D-026 / D-028 / D-030 / D-033 / D-034 / D-035 / D-036 / D-037):
  * Navigation, screen structure & content routing preferences.
- * Column 1: Home Screen (Enable Home Screen, Start Screen, Return to Home Timeout, Dock Apps & Activity Card) & Home Controls.
+ * Column 1: Home Screen (Enable Home Screen, Start Screen, Home Time Tap, Return to Home Timeout, Dock Apps & Activity Card),
+ *           Home Controls & Time (Show UTC Clock, World Clocks & 2-way Alarms).
  * Column 2: Area Controls (Area Categories pills), Media Player (Shortcuts & Library Sorting) & Remote Controls.
  */
+const DEFAULT_ALARM_SLOTS = [
+  { time: "07:00", enabled: false, recurrence: 1 },
+  { time: "08:30", enabled: false, recurrence: 2 },
+  { time: "09:00", enabled: false, recurrence: 2 },
+];
+function parseWorldClocksList(raw) {
+  const out = [];
+  for (const part of String(raw ?? "").split(",")) {
+    const tok = part.trim();
+    if (!tok || tok === "UTC" || tok === "Etc/UTC" || tok === "GMT" || tok === "Etc/GMT") {
+      continue;
+    }
+    if (!out.includes(tok)) {
+      out.push(tok);
+      if (out.length >= MAX_WORLD_CLOCKS) break;
+    }
+  }
+  return out;
+}
+function worldClockCityLabel(iana) {
+  const found = WORLD_CLOCK_ZONES_CATALOG.find((z) => z.iana === iana);
+  if (found) return found.city;
+  const tail = iana.split("/").pop() || iana;
+  return tail.replace(/_/g, " ");
+}
+function parseAlarmsSummary(raw) {
+  const text = String(raw || DEFAULT_ALARMS_SUMMARY).trim();
+  const parts = text.split(";");
+  const slots = [];
+  for (let i = 0; i < 3; i++) {
+    const fallback = DEFAULT_ALARM_SLOTS[i];
+    const seg = (parts[i] || "").trim();
+    const m = /^(\d{1,2}):(\d{2})\|([01])\|([0-3])$/.exec(seg);
+    if (!m) {
+      slots.push({ ...fallback });
+      continue;
+    }
+    const hh = Number(m[1]);
+    const mm = Number(m[2]);
+    if (hh < 0 || hh > 23 || mm < 0 || mm > 59) {
+      slots.push({ ...fallback });
+      continue;
+    }
+    slots.push({
+      time: `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`,
+      enabled: m[3] === "1",
+      recurrence: Number(m[4]),
+    });
+  }
+  return [slots[0], slots[1], slots[2]];
+}
+function serializeAlarmsSummary(slots) {
+  return slots
+    .slice(0, 3)
+    .map((s) => `${s.time}|${s.enabled ? 1 : 0}|${s.recurrence}`)
+    .join(";");
+}
 function renderDeviceInterfaceView(store) {
   const data = store.state;
   const cfg = data?.config || {};
@@ -6843,10 +6944,68 @@ function renderDeviceInterfaceView(store) {
     homeScreenEnabled ? rawStartOptions : rawStartOptions.filter((opt) => opt !== "Home")
   ).map((opt) => ({ value: opt, label: opt }));
   const rawStartValue = String(
-    startScreenPref?.value ?? cfg.start_screen ?? (homeScreenEnabled ? "Home" : "Clock"),
+    startScreenPref?.value ?? cfg.start_screen ?? (homeScreenEnabled ? "Home" : "Time App"),
   );
   const startScreenValue =
-    !homeScreenEnabled && rawStartValue === "Home" ? "Clock" : rawStartValue;
+    !homeScreenEnabled && rawStartValue === "Home" ? "Time App" : rawStartValue;
+  const homeClockTapPref = store.getPref("home_clock_tap_action");
+  const homeClockTapOptions = (
+    homeClockTapPref?.options && homeClockTapPref.options.length > 0
+      ? homeClockTapPref.options
+      : HOME_CLOCK_TAP_OPTIONS
+  ).map((opt) => ({ value: opt, label: opt }));
+  const homeClockTapValue = String(
+    homeClockTapPref?.value ?? cfg.home_clock_tap_action ?? "Time App",
+  );
+  const showUtcClockPref = store.getPref("show_utc_clock");
+  const showUtcClock = showUtcClockPref
+    ? Boolean(showUtcClockPref.value)
+    : Boolean(cfg.show_utc_clock);
+  const worldClocksPref = store.getPref("world_clocks");
+  const enabledWorldClocks = parseWorldClocksList(worldClocksPref?.value ?? cfg.world_clocks ?? "");
+  const atWorldClockLimit = enabledWorldClocks.length >= MAX_WORLD_CLOCKS;
+  const availableWorldClockOptions = WORLD_CLOCK_ZONES_CATALOG.filter(
+    (z) => !enabledWorldClocks.includes(z.iana),
+  );
+  const alarmsSummaryPref = store.getPref("alarms_summary");
+  const alarmSlots = parseAlarmsSummary(
+    alarmsSummaryPref?.value ?? cfg.alarms_summary ?? DEFAULT_ALARMS_SUMMARY,
+  );
+  const updateWorldClocks = (nextZones) => {
+    store.stageDeviceSetting("world_clocks", nextZones.slice(0, MAX_WORLD_CLOCKS).join(","));
+  };
+  const moveWorldClock = (iana, delta) => {
+    const idx = enabledWorldClocks.indexOf(iana);
+    const target = idx + delta;
+    if (idx < 0 || target < 0 || target >= enabledWorldClocks.length) return;
+    const next = [...enabledWorldClocks];
+    const [picked] = next.splice(idx, 1);
+    next.splice(target, 0, picked);
+    updateWorldClocks(next);
+  };
+  const removeWorldClock = (iana) => {
+    updateWorldClocks(enabledWorldClocks.filter((z) => z !== iana));
+  };
+  const onAddWorldClock = (ev) => {
+    const sel = ev.currentTarget;
+    const picked = sel.value.trim();
+    sel.value = "";
+    if (!picked || atWorldClockLimit || enabledWorldClocks.includes(picked)) return;
+    updateWorldClocks([...enabledWorldClocks, picked]);
+  };
+  const updateAlarmSlot = (idx, patch, focusId) => {
+    const next = [
+      { ...alarmSlots[0] },
+      { ...alarmSlots[1] },
+      { ...alarmSlots[2] },
+    ];
+    const merged = { ...next[idx], ...patch };
+    if (!/^\d{2}:\d{2}$/.test(merged.time)) {
+      return;
+    }
+    next[idx] = merged;
+    store.stageDeviceSetting("alarms_summary", serializeAlarmsSummary(next), focusId);
+  };
   const returnTimeoutPref = store.getPref("return_to_home_timeout");
   const rawReturnTimeoutOptions = (
     returnTimeoutPref?.options && returnTimeoutPref.options.length > 0
@@ -6941,6 +7100,21 @@ function renderDeviceInterfaceView(store) {
             })}
             ${homeScreenEnabled
               ? html`${renderSelectRow({
+                    id: "cfg-home_clock_tap_action",
+                    label: "Home Time Tap",
+                    description:
+                      "Choose whether tapping the clock readout on Home opens the Time app or the standalone Clock Face.",
+                    value: homeClockTapValue,
+                    rawOptions: homeClockTapOptions,
+                    onChange: (val) => {
+                      store.stageDeviceSetting(
+                        "home_clock_tap_action",
+                        val,
+                        "cfg-home_clock_tap_action",
+                      );
+                    },
+                  })}
+                  ${renderSelectRow({
                     id: "cfg-return_to_home_timeout",
                     label: "Return to Home Timeout",
                     description:
@@ -7127,6 +7301,161 @@ function renderDeviceInterfaceView(store) {
               )}
             </div>`,
           })}`,
+        })}
+
+        ${renderCard({
+          id: "card-time",
+          heading: html`<h3 class="card-title">Time</h3>`,
+          contentClass: "settings-list",
+          body: html`${renderSwitchRow({
+              id: "cfg-show_utc_clock",
+              label: "Show UTC Clock",
+              description: "Pin a live 24-hour UTC reference card to this Device's Clock tab.",
+              checked: showUtcClock,
+              onChange: (checked) => {
+                store.stageDeviceSetting("show_utc_clock", checked, "cfg-show_utc_clock");
+              },
+            })}
+            ${renderSettingsRow({
+              id: "time-world-clocks",
+              label: "World Clocks",
+              forId: "cfg-world_clocks_add",
+              description:
+                "Track up to 4 remote IANA time zones on the Clock tab alongside local time.",
+              stacked: true,
+              control: html`<div class="stack">
+                ${enabledWorldClocks.length
+                  ? html`<div
+                      id="world-clocks-pills"
+                      class="pill-list"
+                      role="group"
+                      aria-label="Configured World Clocks"
+                    >
+                      ${enabledWorldClocks.map((iana, idx) => {
+                        const lbl = worldClockCityLabel(iana);
+                        return html`<span class="pill enabled">
+                          ${idx > 0
+                            ? html`<button
+                                type="button"
+                                aria-label=${`Move ${lbl} left`}
+                                @click=${() => moveWorldClock(iana, -1)}
+                                class="pill-move"
+                              >
+                                ‹
+                              </button>`
+                            : nothing}
+                          <button
+                            type="button"
+                            aria-pressed="true"
+                            aria-label=${`Remove ${lbl} (${iana})`}
+                            @click=${() => removeWorldClock(iana)}
+                            class="pill-toggle"
+                          >
+                            ✓ ${lbl}
+                          </button>
+                          ${idx < enabledWorldClocks.length - 1
+                            ? html`<button
+                                type="button"
+                                aria-label=${`Move ${lbl} right`}
+                                @click=${() => moveWorldClock(iana, 1)}
+                                class="pill-move"
+                              >
+                                ›
+                              </button>`
+                            : nothing}
+                        </span>`;
+                      })}
+                    </div>`
+                  : nothing}
+                <div class="input-action-row">
+                  <select
+                    id="cfg-world_clocks_add"
+                    ?disabled=${atWorldClockLimit || availableWorldClockOptions.length === 0}
+                    .value=${""}
+                    @change=${onAddWorldClock}
+                  >
+                    <option value="" selected>
+                      ${atWorldClockLimit
+                        ? "Maximum 4 World Clocks added"
+                        : "Add a city time zone…"}
+                    </option>
+                    ${availableWorldClockOptions.map(
+                      (z) => html`<option value=${z.iana}>${z.label}</option>`,
+                    )}
+                  </select>
+                </div>
+              </div>`,
+            })}
+            ${renderSettingsRow({
+              id: "time-alarms",
+              label: "Alarms",
+              description: "Syncs 2-way with on-device alarm edits (1-minute precision).",
+              stacked: true,
+              control: html`<div class="stack" role="group" aria-label="Device alarms">
+                ${([0, 1, 2]).map((idx) => {
+                  const slot = alarmSlots[idx];
+                  const timeId = `cfg-alarm_${idx + 1}_time`;
+                  const recId = `cfg-alarm_${idx + 1}_recurrence`;
+                  const enId = `cfg-alarm_${idx + 1}_enabled`;
+                  return html`<div class="list-row">
+                    <div class="list-row-main">
+                      <div class="stacked-field">
+                        <label for=${timeId}>Alarm ${idx + 1} time</label>
+                        <input
+                          type="time"
+                          id=${timeId}
+                          step="60"
+                          .value=${slot.time}
+                          @change=${(ev) => {
+                            const val = (ev.currentTarget).value;
+                            if (val) updateAlarmSlot(idx, { time: val.slice(0, 5) }, timeId);
+                          }}
+                        />
+                      </div>
+                      <div class="stacked-field">
+                        <label for=${recId}>Alarm ${idx + 1} schedule</label>
+                        <select
+                          id=${recId}
+                          .value=${String(slot.recurrence)}
+                          @change=${(ev) =>
+                            updateAlarmSlot(
+                              idx,
+                              { recurrence: Number((ev.currentTarget).value) },
+                              recId,
+                            )}
+                        >
+                          ${ALARM_RECURRENCE_OPTIONS.map(
+                            (opt) =>
+                              html`<option
+                                value=${String(opt.value)}
+                                ?selected=${opt.value === slot.recurrence}
+                              >
+                                ${opt.label}
+                              </option>`,
+                          )}
+                        </select>
+                      </div>
+                    </div>
+                    <label for=${enId} class="inline-switch">
+                      <span>Enabled</span>
+                      <input
+                        type="checkbox"
+                        id=${enId}
+                        .checked=${slot.enabled}
+                        @change=${(ev) =>
+                          updateAlarmSlot(
+                            idx,
+                            { enabled: (ev.currentTarget).checked },
+                            enId,
+                          )}
+                        role="switch"
+                        class="switch"
+                      />
+                    </label>
+                  </div>`;
+                })}
+              </div>`,
+            })}`,
         })}
       </div>
 

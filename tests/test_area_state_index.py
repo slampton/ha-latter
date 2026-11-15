@@ -697,14 +697,17 @@ async def test_area_icon_resolution_wire_packing_and_live_registry_update(
     living = area_reg.async_create("Living Area", area_id="living")
     assert living.icon is None
 
+    hass.config.time_zone = "America/Los_Angeles"
     coord.async_set_active_area("living")
     coord._cached_area_payload = None
     area_state, area_attrs = coord.get_area_context_payload()
     assert area_state == "Living Area"
     assert area_attrs["area_icon"] == "mdi:sofa"
     wire_tokens = area_attrs["payload"].split("\x1f")
-    assert len(wire_tokens) == 42
+    assert len(wire_tokens) == 44
     assert wire_tokens[41] == "mdi:sofa"
+    assert wire_tokens[42].startswith("America/Los_Angeles|Los Angeles|")
+    assert wire_tokens[43] == ""
 
     # Live Area registry icon edit invalidates cached payload and updates wire index 41
     area_reg.async_update("living", icon="mdi:television-classic")

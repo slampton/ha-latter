@@ -206,10 +206,10 @@ def build_device_prefs_payload(
             and not resolve_device_pref_value(dev_data, "home_screen_enabled")
             and val == "Home"
         ):
-            val = "Clock"
+            val = "Time App"
         elif spec.key == "clock_face" and not coordinator.is_round_display:
-            opts = [o for o in opts if o != "Modern Roman (Analog)"]
-            if val == "Modern Roman (Analog)":
+            opts = [o for o in opts if o != "Modern Analog"]
+            if val == "Modern Analog":
                 val = "Minimal Digital"
         prefs.append(
             {
@@ -998,7 +998,7 @@ def build_studio_state_payload(
         not config_data.get("home_screen_enabled", True)
         and config_data.get("start_screen") == "Home"
     ):
-        config_data["start_screen"] = "Clock"
+        config_data["start_screen"] = "Time App"
 
     fw_st = coordinator.device_state("sensor", "_firmware_version")
     fw_version = (

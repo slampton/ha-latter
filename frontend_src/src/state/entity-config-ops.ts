@@ -79,7 +79,7 @@ function expandDevicePrefPatch(
   if (rawPatch.home_screen_enabled === false) {
     const effStart = String(rawPatch.start_screen ?? currentCfg.start_screen ?? "Home");
     if (effStart === "Home") {
-      expanded.start_screen = "Clock";
+      expanded.start_screen = "Time App";
     }
   }
   return expanded;

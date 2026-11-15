@@ -83,6 +83,7 @@ export const DOCK_APPS_CATALOG: ReadonlyArray<CatalogItem> = [
   {token: "area", label: "Area"},
   {token: "remote", label: "Remote"},
   {token: "weather", label: "Weather"},
+  {token: "time", label: "Time"},
   {token: "camera", label: "Cameras"},
   {token: "games", label: "Games"},
   {token: "tools", label: "Tools"},

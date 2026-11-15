@@ -65,12 +65,12 @@ class TestProtocolV3Contract(unittest.TestCase):
     def test_domain_field_counts_and_contiguous_indices(self) -> None:
         """Every v3 domain must have contiguous 3..COUNT-1 indices matching expected counts."""
         expected_counts = {
-            "area_context": 39,
+            "area_context": 41,
             "active_media": 15,
             "remote_config": 3,
             "weather_forecast": 14,
             "calendar_agenda": 2,
-            "device_prefs": 48,
+            "device_prefs": 52,
         }
         domains = self.schema.get("domains", {})
         self.assertEqual(set(domains.keys()), set(expected_counts.keys()))
@@ -987,7 +987,7 @@ class TestDevicePrefsProtocol(unittest.TestCase):
             9,
             {
                 "power_profile": "Handheld Roaming",
-                "clock_face": "Modern Roman (Analog)",
+                "clock_face": "Modern Analog",
                 "alert_volume": 75,
             },
             native_ble_tracking=True,
@@ -997,11 +997,20 @@ class TestDevicePrefsProtocol(unittest.TestCase):
         self.assertEqual(len(fields), len(spec_fields))
         self.assertEqual(fields[0], 9)
         idx_by_name = {f["name"]: i for i, f in enumerate(spec_fields)}
-        # Rectangular display clamps "Modern Roman (Analog)" to "Minimal Digital"
+        # Rectangular display clamps "Modern Analog" to "Minimal Digital"
         self.assertEqual(fields[idx_by_name["clock_face"]], "Minimal Digital")
         self.assertIs(fields[idx_by_name["ble_beacon_enabled"]], True)
         self.assertEqual(fields[idx_by_name["theme_color_hex"]], "#112233")
         self.assertEqual(fields[idx_by_name["alert_volume"]], 75)
+
+        round_fields = _PAYLOADS_MOD.pack_device_prefs_fields(
+            9,
+            {"clock_face": "Modern Analog"},
+            native_ble_tracking=True,
+            custom_color_hex="#112233",
+            is_round_display=True,
+        )
+        self.assertEqual(round_fields[idx_by_name["clock_face"]], "Modern Analog")
 
         packer = _PAYLOADS_MOD.DomainPayloadPacker()
         _rev, wire = packer.pack("device_prefs", *fields)
@@ -1017,7 +1026,11 @@ class TestDevicePrefsProtocol(unittest.TestCase):
                 "ble_beacon_enabled=0",
                 "docked_screensaver=1",
                 "color_profile=NotARealProfile",
-                "clock_face=Modern Digital (Bold)",
+                "clock_face=Hybrid Digital",
+                "home_clock_tap_action=Clock Face",
+                "show_utc_clock=1",
+                "world_clocks=Europe/London,Asia/Tokyo",
+                "alarms_summary=06:47|1|1;08:30|0|2;09:15|1|3",
             ]
         )
         parsed = _PAYLOADS_MOD.parse_dirty_prefs_records(raw)
@@ -1027,7 +1040,11 @@ class TestDevicePrefsProtocol(unittest.TestCase):
                 "alert_volume": 65,
                 "native_ble_tracking": False,
                 "docked_screensaver": True,
-                "clock_face": "Modern Digital (Bold)",
+                "clock_face": "Hybrid Digital",
+                "home_clock_tap_action": "Clock Face",
+                "show_utc_clock": True,
+                "world_clocks": "Europe/London,Asia/Tokyo",
+                "alarms_summary": "06:47|1|1;08:30|0|2;09:15|1|3",
             },
         )
 
@@ -1083,7 +1100,7 @@ class TestDevicePrefsProtocol(unittest.TestCase):
 
         coerced = studio_scope.clean_device_settings({"home_screen_enabled": False})
         self.assertFalse(coerced["home_screen_enabled"])
-        self.assertEqual(coerced["start_screen"], "Clock")
+        self.assertEqual(coerced["start_screen"], "Time App")
 
         kept = studio_scope.clean_device_settings(
             {"home_screen_enabled": False, "start_screen": "Area Controls", "return_to_home_timeout": "5 min"}
@@ -1101,8 +1118,67 @@ class TestDevicePrefsProtocol(unittest.TestCase):
             custom_color_hex="",
         )
         self.assertIs(packed[idx_by_name["home_screen_enabled"]], False)
-        self.assertEqual(packed[idx_by_name["start_screen"]], "Clock")
+        self.assertEqual(packed[idx_by_name["start_screen"]], "Time App")
         self.assertEqual(packed[idx_by_name["return_to_home_timeout"]], "1 min")
+
+    def test_time_app_world_clocks_alarms_and_tz_payloads(self) -> None:
+        from datetime import UTC, datetime
+
+        self.assertEqual(
+            studio_scope.normalize_world_clocks_csv(
+                " Europe/London , Asia/Tokyo , Europe/London , Asia/Kolkata , Australia/Sydney ",
+                strict=True,
+            ),
+            "Europe/London,Asia/Tokyo,Asia/Kolkata,Australia/Sydney",
+        )
+        self.assertEqual(studio_scope.normalize_world_clocks_csv("", strict=True), "")
+        for bad_wc in (
+            "UTC",
+            "Etc/UTC",
+            "Not/AZone",
+            "Europe/London,Asia/Tokyo,Asia/Kolkata,Australia/Sydney,America/New_York",
+        ):
+            with self.assertRaises(ValueError):
+                studio_scope.normalize_world_clocks_csv(bad_wc, strict=True)
+            with self.assertRaises(studio_scope.SettingsScopeError):
+                studio_scope.clean_device_settings({"world_clocks": bad_wc})
+
+        self.assertEqual(
+            studio_scope.normalize_alarms_summary("6:07|1|0;08:30|0|2;23:59|1|3", strict=True),
+            "06:07|1|0;08:30|0|2;23:59|1|3",
+        )
+        for bad_alarms in ("", "07:00|1|0", "25:00|1|0;08:30|0|2;09:00|0|2", "07:60|1|0;08:30|0|2;09:00|0|2", "07:00|1|9;08:30|0|2;09:00|0|2"):
+            with self.assertRaises(ValueError):
+                studio_scope.normalize_alarms_summary(bad_alarms, strict=True)
+            with self.assertRaises(studio_scope.SettingsScopeError):
+                studio_scope.clean_device_settings({"alarms_summary": bad_alarms})
+
+        summer_utc = datetime(2026, 7, 15, 18, 0, 0, tzinfo=UTC)
+        local_summer, wc_summer = _PAYLOADS_MOD.build_time_zone_payloads(
+            "America/Los_Angeles",
+            "Europe/London,Asia/Kolkata,Australia/Sydney,UTC",
+            now_utc=summer_utc,
+        )
+        self.assertEqual(local_summer, "America/Los_Angeles|Los Angeles|PDT|-420|1")
+        self.assertEqual(
+            wc_summer,
+            ";".join(
+                [
+                    "Europe/London|London|BST|60|1",
+                    "Asia/Kolkata|Kolkata|IST|330|0",
+                    "Australia/Sydney|Sydney|AEST|600|0",
+                ]
+            ),
+        )
+
+        winter_utc = datetime(2026, 1, 15, 18, 0, 0, tzinfo=UTC)
+        local_winter, wc_winter = _PAYLOADS_MOD.build_time_zone_payloads(
+            "America/Los_Angeles",
+            "Australia/Sydney",
+            now_utc=winter_utc,
+        )
+        self.assertEqual(local_winter, "America/Los_Angeles|Los Angeles|PST|-480|0")
+        self.assertEqual(wc_winter, "Australia/Sydney|Sydney|AEDT|660|1")
 
 
 class TestBoundRpcReassembler(unittest.TestCase):

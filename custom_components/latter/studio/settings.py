@@ -14,6 +14,13 @@ import json
 from pathlib import Path
 import re
 from typing import Any, Literal, Protocol, TypeVar
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+try:
+    ZoneInfo("UTC")
+    _SYSTEM_HAS_TZDATA = True
+except ZoneInfoNotFoundError:
+    _SYSTEM_HAS_TZDATA = False
 
 _PROTOCOL_V3_DATA: dict[str, Any] = json.loads(
     (Path(__file__).resolve().parent.parent / "protocol_v3.json").read_text(
@@ -188,7 +195,7 @@ class DevicePrefSpec:
 
     key: str
     label: str
-    domain: Literal["select", "switch", "number"]
+    domain: Literal["select", "switch", "number", "text"]
     default: Any
     section: str
     capability: Literal[
@@ -267,7 +274,8 @@ VA_VISUAL_PROFILE_OPTIONS: tuple[str, ...] = (
 )
 START_SCREEN_OPTIONS: tuple[str, ...] = (
     "Home",
-    "Clock",
+    "Time App",
+    "Clock Face",
     "Media",
     "Home Hub",
     "Area Controls",
@@ -288,10 +296,124 @@ RETURN_TO_HOME_TIMEOUT_OPTIONS: tuple[str, ...] = (
 )
 CLOCK_FACE_OPTIONS: tuple[str, ...] = (
     "Minimal Digital",
-    "Modern Roman (Analog)",
-    "Modern Digital (Bold)",
+    "Modern Analog",
+    "Hybrid Digital",
 )
+HOME_CLOCK_TAP_OPTIONS: tuple[str, ...] = ("Time App", "Clock Face")
 TIME_FORMAT_OPTIONS: tuple[str, ...] = ("12-Hour (AM/PM)", "24-Hour")
+MAX_WORLD_CLOCKS = 4
+DEFAULT_ALARMS_SUMMARY = "07:00|0|1;08:30|0|2;09:00|0|2"
+
+WORLD_CLOCK_CATALOG: tuple[dict[str, Any], ...] = (
+    {"iana": "America/Los_Angeles", "city": "Los Angeles", "std_off": -480, "dst_off": -420, "std_abbr": "PST", "dst_abbr": "PDT", "rule": "us"},
+    {"iana": "America/Denver", "city": "Denver", "std_off": -420, "dst_off": -360, "std_abbr": "MST", "dst_abbr": "MDT", "rule": "us"},
+    {"iana": "America/Chicago", "city": "Chicago", "std_off": -360, "dst_off": -300, "std_abbr": "CST", "dst_abbr": "CDT", "rule": "us"},
+    {"iana": "America/New_York", "city": "New York", "std_off": -300, "dst_off": -240, "std_abbr": "EST", "dst_abbr": "EDT", "rule": "us"},
+    {"iana": "America/Toronto", "city": "Toronto", "std_off": -300, "dst_off": -240, "std_abbr": "EST", "dst_abbr": "EDT", "rule": "us"},
+    {"iana": "America/Sao_Paulo", "city": "Sao Paulo", "std_off": -180, "dst_off": -180, "std_abbr": "BRT", "dst_abbr": "BRT", "rule": "none"},
+    {"iana": "America/Argentina/Buenos_Aires", "city": "Buenos Aires", "std_off": -180, "dst_off": -180, "std_abbr": "ART", "dst_abbr": "ART", "rule": "none"},
+    {"iana": "Pacific/Honolulu", "city": "Honolulu", "std_off": -600, "dst_off": -600, "std_abbr": "HST", "dst_abbr": "HST", "rule": "none"},
+    {"iana": "America/Anchorage", "city": "Anchorage", "std_off": -540, "dst_off": -480, "std_abbr": "AKST", "dst_abbr": "AKDT", "rule": "us"},
+    {"iana": "Europe/London", "city": "London", "std_off": 0, "dst_off": 60, "std_abbr": "GMT", "dst_abbr": "BST", "rule": "eu"},
+    {"iana": "Europe/Paris", "city": "Paris", "std_off": 60, "dst_off": 120, "std_abbr": "CET", "dst_abbr": "CEST", "rule": "eu"},
+    {"iana": "Europe/Berlin", "city": "Berlin", "std_off": 60, "dst_off": 120, "std_abbr": "CET", "dst_abbr": "CEST", "rule": "eu"},
+    {"iana": "Europe/Zurich", "city": "Zurich", "std_off": 60, "dst_off": 120, "std_abbr": "CET", "dst_abbr": "CEST", "rule": "eu"},
+    {"iana": "Africa/Cairo", "city": "Cairo", "std_off": 120, "dst_off": 180, "std_abbr": "EET", "dst_abbr": "EEST", "rule": "eg"},
+    {"iana": "Africa/Johannesburg", "city": "Johannesburg", "std_off": 120, "dst_off": 120, "std_abbr": "SAST", "dst_abbr": "SAST", "rule": "none"},
+    {"iana": "Asia/Dubai", "city": "Dubai", "std_off": 240, "dst_off": 240, "std_abbr": "GST", "dst_abbr": "GST", "rule": "none"},
+    {"iana": "Asia/Kolkata", "city": "Kolkata", "std_off": 330, "dst_off": 330, "std_abbr": "IST", "dst_abbr": "IST", "rule": "none"},
+    {"iana": "Asia/Bangkok", "city": "Bangkok", "std_off": 420, "dst_off": 420, "std_abbr": "ICT", "dst_abbr": "ICT", "rule": "none"},
+    {"iana": "Asia/Singapore", "city": "Singapore", "std_off": 480, "dst_off": 480, "std_abbr": "SGT", "dst_abbr": "SGT", "rule": "none"},
+    {"iana": "Asia/Hong_Kong", "city": "Hong Kong", "std_off": 480, "dst_off": 480, "std_abbr": "HKT", "dst_abbr": "HKT", "rule": "none"},
+    {"iana": "Asia/Shanghai", "city": "Shanghai", "std_off": 480, "dst_off": 480, "std_abbr": "CST", "dst_abbr": "CST", "rule": "none"},
+    {"iana": "Asia/Tokyo", "city": "Tokyo", "std_off": 540, "dst_off": 540, "std_abbr": "JST", "dst_abbr": "JST", "rule": "none"},
+    {"iana": "Asia/Seoul", "city": "Seoul", "std_off": 540, "dst_off": 540, "std_abbr": "KST", "dst_abbr": "KST", "rule": "none"},
+    {"iana": "Australia/Sydney", "city": "Sydney", "std_off": 600, "dst_off": 660, "std_abbr": "AEST", "dst_abbr": "AEDT", "rule": "au"},
+)
+WORLD_CLOCK_CATALOG_MAP: dict[str, dict[str, Any]] = {
+    str(item["iana"]): item for item in WORLD_CLOCK_CATALOG
+}
+_IANA_ZONE_RE = re.compile(r"^[A-Za-z0-9_+-]+(?:/[A-Za-z0-9_+-]+)+$")
+_PINNED_UTC_ALIASES: frozenset[str] = frozenset({"UTC", "Etc/UTC", "GMT", "Etc/GMT"})
+_ALARM_RECORD_RE = re.compile(r"^(\d{1,2}):(\d{2})\|([01])\|([0-3])$")
+
+
+def is_valid_iana_zone(iana: str) -> bool:
+    """Return True when `iana` is a valid non-UTC IANA zone ID."""
+    tok = str(iana or "").strip()
+    if not tok or len(tok) > 48 or tok in _PINNED_UTC_ALIASES:
+        return False
+    if not _IANA_ZONE_RE.match(tok):
+        return False
+    if tok in WORLD_CLOCK_CATALOG_MAP:
+        return True
+    if _SYSTEM_HAS_TZDATA:
+        try:
+            ZoneInfo(tok)
+            return True
+        except (ZoneInfoNotFoundError, ValueError):
+            return False
+    return False
+
+
+def normalize_world_clocks_csv(val: Any, *, strict: bool = False) -> str:
+    """Validate and canonicalize up to 4 comma-separated non-UTC IANA zones."""
+    raw_items: Iterable[Any]
+    if val is None:
+        return ""
+    if isinstance(val, (list, tuple)):
+        raw_items = val
+    else:
+        raw_items = str(val).split(",")
+    out: list[str] = []
+    for raw in raw_items:
+        tok = str(raw or "").strip()
+        if not tok:
+            continue
+        if tok in _PINNED_UTC_ALIASES:
+            if strict:
+                raise ValueError("Use Show UTC Clock instead of adding UTC to World Clocks")
+            continue
+        if not is_valid_iana_zone(tok):
+            if strict:
+                raise ValueError(f"Unknown IANA time zone: {tok}")
+            continue
+        if tok in out:
+            continue
+        if len(out) >= MAX_WORLD_CLOCKS:
+            if strict:
+                raise ValueError(f"A Device supports at most {MAX_WORLD_CLOCKS} World Clocks")
+            break
+        out.append(tok)
+    return ",".join(out)
+
+
+def normalize_alarms_summary(val: Any, *, strict: bool = False) -> str:
+    """Validate and canonicalize 3 semicolon-separated `HH:MM|0..1|0..3` alarm records."""
+    text = str(val or "").strip()
+    if not text:
+        if strict:
+            raise ValueError("Alarms summary requires 3 alarm slots")
+        return DEFAULT_ALARMS_SUMMARY
+    parts = [p.strip() for p in text.split(";")]
+    if len(parts) != 3:
+        if strict:
+            raise ValueError("Alarms summary requires exactly 3 semicolon-separated slots")
+        return DEFAULT_ALARMS_SUMMARY
+    normalized: list[str] = []
+    for part in parts:
+        m = _ALARM_RECORD_RE.match(part)
+        if not m:
+            if strict:
+                raise ValueError(f"Invalid alarm record: {part or '(empty)'}")
+            return DEFAULT_ALARMS_SUMMARY
+        hh, mm, en, rec = int(m.group(1)), int(m.group(2)), int(m.group(3)), int(m.group(4))
+        if not (0 <= hh <= 23 and 0 <= mm <= 59):
+            if strict:
+                raise ValueError(f"Alarm time out of range: {part}")
+            return DEFAULT_ALARMS_SUMMARY
+        normalized.append(f"{hh:02d}:{mm:02d}|{en}|{rec}")
+    return ";".join(normalized)
 AREA_CATEGORY_TOKENS: tuple[str, ...] = tuple(
     c["token"] for c in _PROTOCOL_V3_DATA["catalogs"]["area_categories"]
 )
@@ -446,6 +568,10 @@ DEVICE_PREF_SPECS: tuple[DevicePrefSpec, ...] = (
     DevicePrefSpec("game_sound_effects", "Game Sound Effects", "switch", True, "sound", "display", "behavior"),
     DevicePrefSpec("ble_beacon_mode", "BLE Beacon Mode", "select", "Handheld Only", "area", "beacon_battery", "behavior", options=BLE_BEACON_MODE_OPTIONS),
     DevicePrefSpec("weather_sim_condition", "Weather Simulation", "select", "Live (Home Assistant)", "developer", "display", None, options=WEATHER_SIM_CONDITION_OPTIONS),
+    DevicePrefSpec("home_clock_tap_action", "Home Time Tap", "select", "Time App", "home", "display", "appearance", options=HOME_CLOCK_TAP_OPTIONS),
+    DevicePrefSpec("show_utc_clock", "Show UTC Clock", "switch", False, "time", "display", "appearance"),
+    DevicePrefSpec("world_clocks", "World Clocks", "text", "", "time", "display", None),
+    DevicePrefSpec("alarms_summary", "Alarms", "text", DEFAULT_ALARMS_SUMMARY, "time", "display", None),
 )
 
 DEVICE_PREF_SPEC_MAP: dict[str, DevicePrefSpec] = {s.key: s for s in DEVICE_PREF_SPECS}
@@ -472,6 +598,12 @@ def resolve_device_pref_value(cfg: Mapping[str, Any], key: str) -> Any:
     if spec.domain == "select":
         val = str(raw).strip()
         return val if val in spec.options else spec.default
+    if spec.domain == "text":
+        if key == "world_clocks":
+            return normalize_world_clocks_csv(raw, strict=False)
+        if key == "alarms_summary":
+            return normalize_alarms_summary(raw, strict=False)
+        return str(raw).strip()
     try:
         ival = int(raw)
     except (TypeError, ValueError):
@@ -737,6 +869,16 @@ def clean_device_settings(
                     f"Unknown option for {spec.key}: {opt_v or '(empty)'}"
                 )
             out[spec.key] = opt_v
+        elif spec.domain == "text":
+            try:
+                if spec.key == "world_clocks":
+                    out[spec.key] = normalize_world_clocks_csv(raw_v, strict=True)
+                elif spec.key == "alarms_summary":
+                    out[spec.key] = normalize_alarms_summary(raw_v, strict=True)
+                else:
+                    out[spec.key] = _text(raw_v)
+            except ValueError as err:
+                raise SettingsScopeError(str(err)) from None
         else:
             try:
                 num_v = int(raw_v)
@@ -759,7 +901,7 @@ def clean_device_settings(
         else resolve_device_pref_value(current or {}, "start_screen")
     )
     if not eff_home_enabled and eff_start == "Home":
-        out["start_screen"] = "Clock"
+        out["start_screen"] = "Time App"
 
     if "power_profile" in out:
         preset = POWER_PROFILE_PREFS.get(str(out["power_profile"]))

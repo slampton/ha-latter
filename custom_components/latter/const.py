@@ -10,8 +10,8 @@ from homeassistant.const import Platform
 
 DOMAIN: Final = "latter"
 INTEGRATION_VERSION: Final = "3.0.0"
-STUDIO_REV: Final = 9
-MIN_FIRMWARE_SDK_REV: Final = 2026111401
+STUDIO_REV: Final = 10
+MIN_FIRMWARE_SDK_REV: Final = 2026111402
 PLATFORMS: Final[list[Platform]] = [
     Platform.SENSOR,
     Platform.BINARY_SENSOR,
@@ -96,9 +96,13 @@ CONF_COLOR_PROFILE: Final = "color_profile"
 CONF_VA_VISUAL_PROFILE: Final = "va_visual_profile"
 CONF_HOME_SCREEN_ENABLED: Final = "home_screen_enabled"
 CONF_START_SCREEN: Final = "start_screen"
+CONF_HOME_CLOCK_TAP_ACTION: Final = "home_clock_tap_action"
 CONF_RETURN_TO_HOME_TIMEOUT: Final = "return_to_home_timeout"
 CONF_CLOCK_FACE: Final = "clock_face"
 CONF_TIME_FORMAT: Final = "time_format"
+CONF_SHOW_UTC_CLOCK: Final = "show_utc_clock"
+CONF_WORLD_CLOCKS: Final = "world_clocks"
+CONF_ALARMS_SUMMARY: Final = "alarms_summary"
 CONF_WEATHER_BACKGROUND: Final = "weather_background"
 CONF_HOME_SUN: Final = "home_sun"
 CONF_HOME_MOON: Final = "home_moon"
