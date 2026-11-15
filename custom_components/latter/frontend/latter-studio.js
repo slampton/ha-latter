@@ -287,6 +287,31 @@ class AttrPart {
     }
   }
 }
+const NON_TEXT_INPUT_TYPES = new Set([
+  "button",
+  "checkbox",
+  "color",
+  "file",
+  "hidden",
+  "image",
+  "radio",
+  "range",
+  "reset",
+  "submit",
+]);
+function isActivelyFocusedTextControl(el) {
+  const tag = el.tagName;
+  if (tag !== "INPUT" && tag !== "TEXTAREA") return false;
+  if (tag === "INPUT") {
+    const inpType = ((el).type || "text").toLowerCase();
+    if (NON_TEXT_INPUT_TYPES.has(inpType)) return false;
+  }
+  const root = typeof el.getRootNode === "function" ? el.getRootNode() : null;
+  if (root && typeof root === "object" && "activeElement" in root) {
+    return (root).activeElement === el;
+  }
+  return typeof document !== "undefined" && document.activeElement === el;
+}
 class PropertyPart {
   // Priority 2 runs AFTER ChildPart (priority 0) so <select> options exist before `.value` is assigned.
            priority = 2;
@@ -303,6 +328,9 @@ class PropertyPart {
     const next = raw === nothing || raw === null || raw === undefined ? "" : raw;
     const target = this.el;
     if (target[this.propName] !== next) {
+      if (this.propName === "value" && isActivelyFocusedTextControl(this.el)) {
+        return;
+      }
       target[this.propName] = next;
     }
   }
@@ -807,7 +835,7 @@ const DEFAULT_HOME_CATEGORIES_TOKENS = [
 /**
  * Canonical constants, route maps, issue messages, and Title Case dictionaries for Latter Studio.
  */
-const STUDIO_REV = 11;
+const STUDIO_REV = 12;
 const MAX_WALLPAPER_UPLOAD_BYTES = 15 * 1024 * 1024;
 const DEVICE_VIEW_SLUGS = {
   dashboard: "overview",
@@ -881,30 +909,56 @@ const ALARM_RECURRENCE_OPTIONS = [
   { value: 3, label: "Once" },
 ];
 const WORLD_CLOCK_ZONES_CATALOG = [
-  { iana: "America/Los_Angeles", city: "Los Angeles", label: "Los Angeles (America/Los_Angeles)" },
-  { iana: "America/Denver", city: "Denver", label: "Denver (America/Denver)" },
-  { iana: "America/Chicago", city: "Chicago", label: "Chicago (America/Chicago)" },
-  { iana: "America/New_York", city: "New York", label: "New York (America/New_York)" },
-  { iana: "America/Toronto", city: "Toronto", label: "Toronto (America/Toronto)" },
-  { iana: "America/Sao_Paulo", city: "Sao Paulo", label: "Sao Paulo (America/Sao_Paulo)" },
-  { iana: "America/Argentina/Buenos_Aires", city: "Buenos Aires", label: "Buenos Aires (America/Argentina/Buenos_Aires)" },
-  { iana: "Pacific/Honolulu", city: "Honolulu", label: "Honolulu (Pacific/Honolulu)" },
-  { iana: "America/Anchorage", city: "Anchorage", label: "Anchorage (America/Anchorage)" },
-  { iana: "Europe/London", city: "London", label: "London (Europe/London)" },
-  { iana: "Europe/Paris", city: "Paris", label: "Paris (Europe/Paris)" },
-  { iana: "Europe/Berlin", city: "Berlin", label: "Berlin (Europe/Berlin)" },
-  { iana: "Europe/Zurich", city: "Zurich", label: "Zurich (Europe/Zurich)" },
-  { iana: "Africa/Cairo", city: "Cairo", label: "Cairo (Africa/Cairo)" },
-  { iana: "Africa/Johannesburg", city: "Johannesburg", label: "Johannesburg (Africa/Johannesburg)" },
-  { iana: "Asia/Dubai", city: "Dubai", label: "Dubai (Asia/Dubai)" },
-  { iana: "Asia/Kolkata", city: "Kolkata", label: "Kolkata (Asia/Kolkata)" },
-  { iana: "Asia/Bangkok", city: "Bangkok", label: "Bangkok (Asia/Bangkok)" },
-  { iana: "Asia/Singapore", city: "Singapore", label: "Singapore (Asia/Singapore)" },
-  { iana: "Asia/Hong_Kong", city: "Hong Kong", label: "Hong Kong (Asia/Hong_Kong)" },
-  { iana: "Asia/Shanghai", city: "Shanghai", label: "Shanghai (Asia/Shanghai)" },
-  { iana: "Asia/Tokyo", city: "Tokyo", label: "Tokyo (Asia/Tokyo)" },
-  { iana: "Asia/Seoul", city: "Seoul", label: "Seoul (Asia/Seoul)" },
-  { iana: "Australia/Sydney", city: "Sydney", label: "Sydney (Australia/Sydney)" },
+  { iana: "Etc/GMT+12", label: "UTC-12:00 — International Date Line West" },
+  { iana: "Pacific/Pago_Pago", label: "UTC-11:00 — Samoa Standard Time (SST)" },
+  { iana: "Pacific/Honolulu", label: "UTC-10:00 — Hawaii-Aleutian Standard Time (HST)" },
+  { iana: "Pacific/Marquesas", label: "UTC-09:30 — Marquesas Time (MART)" },
+  { iana: "America/Anchorage", label: "UTC-09:00 — Alaska Time (AKST/AKDT)" },
+  { iana: "America/Los_Angeles", label: "UTC-08:00 — Pacific Time (PST/PDT)" },
+  { iana: "Etc/GMT+8", label: "UTC-08:00 — Coordinated Universal Time-08 (No DST)" },
+  { iana: "America/Denver", label: "UTC-07:00 — Mountain Time (MST/MDT)" },
+  { iana: "America/Phoenix", label: "UTC-07:00 — Mountain Standard Time (MST, No DST)" },
+  { iana: "America/Chicago", label: "UTC-06:00 — Central Time (CST/CDT)" },
+  { iana: "America/Regina", label: "UTC-06:00 — Central Standard Time (CST, No DST)" },
+  { iana: "America/New_York", label: "UTC-05:00 — Eastern Time (EST/EDT)" },
+  { iana: "America/Lima", label: "UTC-05:00 — Eastern Standard Time (EST, No DST)" },
+  { iana: "America/Halifax", label: "UTC-04:00 — Atlantic Time (AST/ADT)" },
+  { iana: "America/Puerto_Rico", label: "UTC-04:00 — Atlantic Standard Time (AST, No DST)" },
+  { iana: "America/St_Johns", label: "UTC-03:30 — Newfoundland Time (NST/NDT)" },
+  { iana: "America/Sao_Paulo", label: "UTC-03:00 — South America Eastern Time (BRT/ART)" },
+  { iana: "Etc/GMT+2", label: "UTC-02:00 — Coordinated Universal Time-02" },
+  { iana: "Atlantic/Azores", label: "UTC-01:00 — Azores Time (AZOT/AZOST)" },
+  { iana: "Atlantic/Cape_Verde", label: "UTC-01:00 — Cape Verde Time (CVT, No DST)" },
+  { iana: "Atlantic/Reykjavik", label: "UTC+00:00 — Greenwich Mean Time (GMT, No DST)" },
+  { iana: "Europe/London", label: "UTC+00:00 — Western European Time (GMT/BST)" },
+  { iana: "Europe/Berlin", label: "UTC+01:00 — Central European Time (CET/CEST)" },
+  { iana: "Africa/Lagos", label: "UTC+01:00 — West Africa Time (WAT, No DST)" },
+  { iana: "Europe/Athens", label: "UTC+02:00 — Eastern European Time (EET/EEST)" },
+  { iana: "Africa/Johannesburg", label: "UTC+02:00 — Central / South Africa Time (CAT/SAST)" },
+  { iana: "Asia/Riyadh", label: "UTC+03:00 — Arabia / East Africa Time (AST/EAT)" },
+  { iana: "Asia/Tehran", label: "UTC+03:30 — Iran Standard Time (IRST)" },
+  { iana: "Asia/Dubai", label: "UTC+04:00 — Gulf Standard Time (GST)" },
+  { iana: "Asia/Kabul", label: "UTC+04:30 — Afghanistan Time (AFT)" },
+  { iana: "Asia/Karachi", label: "UTC+05:00 — Pakistan / West Asia Time (PKT)" },
+  { iana: "Asia/Kolkata", label: "UTC+05:30 — India / Sri Lanka Standard Time (IST)" },
+  { iana: "Asia/Kathmandu", label: "UTC+05:45 — Nepal Time (NPT)" },
+  { iana: "Asia/Dhaka", label: "UTC+06:00 — Bangladesh / Central Asia Time (BST)" },
+  { iana: "Asia/Yangon", label: "UTC+06:30 — Myanmar Time (MMT)" },
+  { iana: "Asia/Bangkok", label: "UTC+07:00 — Indochina Time (ICT)" },
+  { iana: "Asia/Singapore", label: "UTC+08:00 — China / Singapore / AWST (CST/SGT/AWST)" },
+  { iana: "Australia/Eucla", label: "UTC+08:45 — Australian Central Western Time (ACWST)" },
+  { iana: "Asia/Tokyo", label: "UTC+09:00 — Japan / Korea Standard Time (JST/KST)" },
+  { iana: "Australia/Adelaide", label: "UTC+09:30 — Australian Central Time (ACST/ACDT)" },
+  { iana: "Australia/Darwin", label: "UTC+09:30 — Australian Central Standard Time (ACST, No DST)" },
+  { iana: "Australia/Sydney", label: "UTC+10:00 — Australian Eastern Time (AEST/AEDT)" },
+  { iana: "Australia/Brisbane", label: "UTC+10:00 — Australian Eastern Standard Time (AEST, No DST)" },
+  { iana: "Australia/Lord_Howe", label: "UTC+10:30 — Lord Howe Time (LHST/LHDT)" },
+  { iana: "Pacific/Guadalcanal", label: "UTC+11:00 — Solomon Islands / New Caledonia Time (SBT)" },
+  { iana: "Pacific/Auckland", label: "UTC+12:00 — New Zealand Time (NZST/NZDT)" },
+  { iana: "Etc/GMT-12", label: "UTC+12:00 — Coordinated Universal Time+12 (No DST)" },
+  { iana: "Pacific/Chatham", label: "UTC+12:45 — Chatham Islands Time (CHAST/CHADT)" },
+  { iana: "Pacific/Tongatapu", label: "UTC+13:00 — Tonga / Phoenix Islands Time (TOT)" },
+  { iana: "Pacific/Kiritimati", label: "UTC+14:00 — Line Islands Time (LINT)" },
 ];
 const RETURN_TO_HOME_TIMEOUT_OPTIONS = [
   "15s",
@@ -2992,6 +3046,7 @@ function stageDeviceSettingOp(
   key,
   value,
   controlDomId,
+  debounceMs = SAVE_DEBOUNCE_MS,
 ) {
   const targetSubentryId = store.activeSubentryId;
   if (!targetSubentryId) return;
@@ -3055,7 +3110,7 @@ function stageDeviceSettingOp(
   if (bucket.timer) clearTimeout(bucket.timer);
   bucket.timer = setTimeout(() => {
     void store.flushDeviceBucket(targetSubentryId);
-  }, SAVE_DEBOUNCE_MS);
+  }, Math.max(0, debounceMs));
   store.host.requestUpdate();
 }
 async function flushDeviceBucketOp(store, targetSubentryId) {
@@ -4102,10 +4157,12 @@ class StudioStore {
   deviceSortField = "title";
   deviceSortAsc = true;
   deviceCategoryFilter = "all";
-  // Device Security state
+  // Device Security & Time UI draft state
   devicePinDraft = "";
   systemPinDraft = "";
   pinBusy = false;
+  worldClockNewLabel = "";
+  worldClockNewZone = "";
   // System Shared Entities UI state
   doorbellTestSubentryId = "";
   activeCameraPreviewEntity = "";
@@ -4413,6 +4470,8 @@ class StudioStore {
     this.currentScope = "device";
     this.currentViewId = targetView === "select_device_prompt" ? "dashboard" : targetView;
     this.devicePinDraft = "";
+    this.worldClockNewLabel = "";
+    this.worldClockNewZone = "";
     this.syncUrl();
     this.host.requestUpdate();
     await this.ensureSubscription(true);
@@ -4660,8 +4719,13 @@ class StudioStore {
     }
   }
   // ---------- Delegated Domain Operations ----------
-  stageDeviceSetting(key, value, controlDomId) {
-    stageDeviceSettingOp(this, key, value, controlDomId);
+  stageDeviceSetting(
+    key,
+    value,
+    controlDomId,
+    debounceMs,
+  ) {
+    stageDeviceSettingOp(this, key, value, controlDomId, debounceMs);
   }
   async runDeviceAction(action, toastMessage) {
     return runDeviceActionOp(this, action, toastMessage);
@@ -6877,6 +6941,10 @@ const DEFAULT_ALARM_SLOTS = [
 ];
 const PINNED_UTC_ZONES = new Set(["UTC", "Etc/UTC", "GMT", "Etc/GMT", "Etc/GMT+0", "Etc/GMT-0", "Etc/GMT0"]);
 const IANA_ZONE_PATTERN = /^[A-Za-z0-9_+-]+(?:\/[A-Za-z0-9_+-]+)+$/;
+const TEXT_INPUT_DEBOUNCE_MS = 600;
+function isImeSafeEnter(ev) {
+  return ev.key === "Enter" && !ev.isComposing && ev.keyCode !== 229;
+}
 function sanitizeClockLabel(raw, maxBytes = 32) {
   const str = String(raw ?? "");
   let collapsed = "";
@@ -6919,9 +6987,7 @@ function sanitizeClockLabel(raw, maxBytes = 32) {
   }
   return out.trimEnd();
 }
-function defaultCityForIana(iana) {
-  const found = WORLD_CLOCK_ZONES_CATALOG.find((z) => z.iana === iana);
-  if (found) return found.city;
+function fallbackLabelForIana(iana) {
   const tail = iana.split("/").pop() || iana;
   return sanitizeClockLabel(tail.replace(/_/g, " ")) || iana;
 }
@@ -6938,7 +7004,7 @@ function parseWorldClocksSpec(raw) {
     if (!iana || PINNED_UTC_ZONES.has(iana) || !IANA_ZONE_PATTERN.test(iana)) {
       continue;
     }
-    const label = sanitizeClockLabel(rawLbl) || defaultCityForIana(iana);
+    const label = sanitizeClockLabel(rawLbl) || fallbackLabelForIana(iana);
     const dedupKey = `${label.toLowerCase()}|${iana}`;
     if (seen.has(dedupKey)) continue;
     seen.add(dedupKey);
@@ -6950,36 +7016,14 @@ function parseWorldClocksSpec(raw) {
 function serializeWorldClocksSpec(items) {
   return items
     .slice(0, MAX_WORLD_CLOCKS)
-    .map((item) => `${sanitizeClockLabel(item.label) || defaultCityForIana(item.iana)}|${item.iana}`)
+    .map((item) => {
+      const cleaned = sanitizeClockLabel(item.label);
+      return cleaned ? `${cleaned}|${item.iana}` : "";
+    })
+    .filter(Boolean)
     .join(";");
 }
-let cachedExtraIanaZones = null;
-function getExtraSupportedIanaZones() {
-  if (cachedExtraIanaZones !== null) return cachedExtraIanaZones;
-  const catalogSet = new Set(WORLD_CLOCK_ZONES_CATALOG.map((z) => z.iana));
-  const intlObj = Intl;
-  const extra = [];
-  if (typeof intlObj.supportedValuesOf === "function") {
-    try {
-      for (const tz of intlObj.supportedValuesOf("timeZone")) {
-        if (
-          !tz ||
-          catalogSet.has(tz) ||
-          PINNED_UTC_ZONES.has(tz) ||
-          tz.startsWith("Etc/") ||
-          !IANA_ZONE_PATTERN.test(tz)
-        ) {
-          continue;
-        }
-        extra.push({ iana: tz, label: `${defaultCityForIana(tz)} (${tz})` });
-      }
-    } catch {
-      // Fallback to curated catalog if host runtime lacks timeZone enumeration.
-    }
-  }
-  cachedExtraIanaZones = extra;
-  return extra;
-}
+const KNOWN_WORLD_CLOCK_ZONES = new Set(WORLD_CLOCK_ZONES_CATALOG.map((z) => z.iana));
 function parseAlarmsSummary(raw) {
   const text = String(raw || DEFAULT_ALARMS_SUMMARY).trim();
   const parts = text.split(";");
@@ -7053,61 +7097,39 @@ function renderDeviceInterfaceView(store) {
   const worldClocksPref = store.getPref("world_clocks");
   const enabledWorldClocks = parseWorldClocksSpec(worldClocksPref?.value ?? cfg.world_clocks ?? "");
   const atWorldClockLimit = enabledWorldClocks.length >= MAX_WORLD_CLOCKS;
-  const extraIanaZones = getExtraSupportedIanaZones();
-  const knownZoneSet = new Set([
-    ...WORLD_CLOCK_ZONES_CATALOG.map((z) => z.iana),
-    ...extraIanaZones.map((z) => z.iana),
-  ]);
   const renderWorldClockZoneOptions = (selectedIana) => {
     const missingSelected =
-      selectedIana && !knownZoneSet.has(selectedIana)
-        ? html`<option value=${selectedIana} selected>
-            ${defaultCityForIana(selectedIana)} (${selectedIana})
-          </option>`
+      selectedIana && !KNOWN_WORLD_CLOCK_ZONES.has(selectedIana)
+        ? html`<option value=${selectedIana} selected>${selectedIana}</option>`
         : nothing;
-    if (extraIanaZones.length === 0) {
-      return html`${missingSelected}${WORLD_CLOCK_ZONES_CATALOG.map(
-        (z) => html`<option value=${z.iana} ?selected=${z.iana === selectedIana}>${z.label}</option>`,
-      )}`;
-    }
-    return html`${missingSelected}
-      <optgroup label="Featured Cities">
-        ${WORLD_CLOCK_ZONES_CATALOG.map(
-          (z) =>
-            html`<option value=${z.iana} ?selected=${z.iana === selectedIana}>${z.label}</option>`,
-        )}
-      </optgroup>
-      <optgroup label="All Time Zones">
-        ${extraIanaZones.map(
-          (z) =>
-            html`<option value=${z.iana} ?selected=${z.iana === selectedIana}>${z.label}</option>`,
-        )}
-      </optgroup>`;
+    return html`${missingSelected}${WORLD_CLOCK_ZONES_CATALOG.map(
+      (z) => html`<option value=${z.iana} ?selected=${z.iana === selectedIana}>${z.label}</option>`,
+    )}`;
   };
   const alarmsSummaryPref = store.getPref("alarms_summary");
   const alarmSlots = parseAlarmsSummary(
     alarmsSummaryPref?.value ?? cfg.alarms_summary ?? DEFAULT_ALARMS_SUMMARY,
   );
-  const updateWorldClocks = (nextItems, focusId) => {
-    store.stageDeviceSetting("world_clocks", serializeWorldClocksSpec(nextItems), focusId);
+  const updateWorldClocks = (
+    nextItems,
+    focusId,
+    debounceMs,
+  ) => {
+    store.stageDeviceSetting("world_clocks", serializeWorldClocksSpec(nextItems), focusId, debounceMs);
   };
   const updateWorldClockItem = (
     idx,
     patch,
     focusId,
+    debounceMs,
   ) => {
     if (idx < 0 || idx >= enabledWorldClocks.length) return;
     const prev = enabledWorldClocks[idx];
     const nextIana = (patch.iana ?? prev.iana).trim();
     if (!nextIana || PINNED_UTC_ZONES.has(nextIana) || !IANA_ZONE_PATTERN.test(nextIana)) return;
-    let nextLabel;
-    if (patch.label !== undefined) {
-      nextLabel = sanitizeClockLabel(patch.label) || defaultCityForIana(nextIana);
-    } else if (nextIana !== prev.iana && prev.label === defaultCityForIana(prev.iana)) {
-      nextLabel = defaultCityForIana(nextIana);
-    } else {
-      nextLabel = prev.label;
-    }
+    const nextLabel =
+      patch.label !== undefined ? sanitizeClockLabel(patch.label) : prev.label;
+    if (!nextLabel) return;
     const dup = enabledWorldClocks.some(
       (item, i) =>
         i !== idx && item.iana === nextIana && item.label.toLowerCase() === nextLabel.toLowerCase(),
@@ -7116,7 +7138,7 @@ function renderDeviceInterfaceView(store) {
     const next = enabledWorldClocks.map((item, i) =>
       i === idx ? { label: nextLabel, iana: nextIana } : { ...item },
     );
-    updateWorldClocks(next, focusId);
+    updateWorldClocks(next, focusId, debounceMs);
   };
   const moveWorldClock = (idx, delta) => {
     const target = idx + delta;
@@ -7129,25 +7151,37 @@ function renderDeviceInterfaceView(store) {
   const removeWorldClock = (idx) => {
     updateWorldClocks(enabledWorldClocks.filter((_, i) => i !== idx));
   };
-  const onAddWorldClock = (ev) => {
-    const sel = ev.currentTarget;
-    const picked = sel.value.trim();
-    sel.value = "";
-    if (!picked || atWorldClockLimit || PINNED_UTC_ZONES.has(picked) || !IANA_ZONE_PATTERN.test(picked)) {
+  const getRenderRoot = () =>
+    (store.host).renderRoot ?? null;
+  const onAddWorldClock = () => {
+    if (atWorldClockLimit) return;
+    const root = getRenderRoot();
+    const newLabelEl = root?.getElementById("cfg-world_clock_new_label");
+    const zoneSelEl = root?.getElementById("cfg-world_clocks_add");
+    const typedLabel = sanitizeClockLabel(newLabelEl?.value ?? store.worldClockNewLabel);
+    const picked = (zoneSelEl?.value ?? store.worldClockNewZone).trim();
+    if (!typedLabel) {
+      store.showToast("Enter a city or label for this World Clock", true);
+      newLabelEl?.focus();
       return;
     }
-    const rowEl = sel.closest(".list-row");
-    const newLabelEl = rowEl?.querySelector ("#cfg-world_clock_new_label") ?? null;
-    const typedLabel = sanitizeClockLabel(newLabelEl?.value ?? "");
-    const resolvedLabel = typedLabel || defaultCityForIana(picked);
-    const dup = enabledWorldClocks.some(
-      (item) => item.iana === picked && item.label.toLowerCase() === resolvedLabel.toLowerCase(),
-    );
-    if (dup) return;
-    if (newLabelEl) {
-      newLabelEl.value = "";
+    if (!picked || PINNED_UTC_ZONES.has(picked) || !IANA_ZONE_PATTERN.test(picked)) {
+      store.showToast("Select a time zone for this World Clock", true);
+      zoneSelEl?.focus();
+      return;
     }
-    updateWorldClocks([...enabledWorldClocks, { label: resolvedLabel, iana: picked }], "cfg-world_clocks_add");
+    const dup = enabledWorldClocks.some(
+      (item) => item.iana === picked && item.label.toLowerCase() === typedLabel.toLowerCase(),
+    );
+    if (dup) {
+      store.showToast("That World Clock is already added", true);
+      return;
+    }
+    store.worldClockNewLabel = "";
+    store.worldClockNewZone = "";
+    if (newLabelEl) newLabelEl.value = "";
+    if (zoneSelEl) zoneSelEl.value = "";
+    updateWorldClocks([...enabledWorldClocks, { label: typedLabel, iana: picked }], "btn-world_clock_add");
   };
   const updateAlarmSlot = (idx, patch, focusId) => {
     const next = [
@@ -7472,12 +7506,32 @@ function renderDeviceInterfaceView(store) {
                 type="text"
                 id="cfg-local_clock_label"
                 maxlength="32"
+                enterkeyhint="done"
                 placeholder="Optional label…"
                 .value=${localClockLabelValue}
-                @change=${(ev) => {
+                @input=${(ev) => {
                   const cleaned = sanitizeClockLabel((ev.currentTarget).value);
-                  (ev.currentTarget).value = cleaned;
+                  store.stageDeviceSetting(
+                    "local_clock_label",
+                    cleaned,
+                    "cfg-local_clock_label",
+                    TEXT_INPUT_DEBOUNCE_MS,
+                  );
+                }}
+                @change=${(ev) => {
+                  const el = ev.currentTarget;
+                  const cleaned = sanitizeClockLabel(el.value);
+                  el.value = cleaned;
                   store.stageDeviceSetting("local_clock_label", cleaned, "cfg-local_clock_label");
+                }}
+                @keydown=${(ev) => {
+                  if (!isImeSafeEnter(ev)) return;
+                  ev.preventDefault();
+                  const el = ev.currentTarget;
+                  const cleaned = sanitizeClockLabel(el.value);
+                  el.value = cleaned;
+                  store.stageDeviceSetting("local_clock_label", cleaned, "cfg-local_clock_label");
+                  void store.flushAllPendingSettings();
                 }}
               />`,
             })}
@@ -7494,7 +7548,7 @@ function renderDeviceInterfaceView(store) {
               id: "time-world-clocks",
               label: "World Clocks",
               description:
-                "Configure up to 4 custom-labeled IANA time zones shown on this Device's Clock tab.",
+                "Configure up to 4 custom-labeled time zones (UTC-12:00 to UTC+14:00) shown on this Device's Clock tab.",
               stacked: true,
               control: html`<div class="stack">
                 ${enabledWorldClocks.length
@@ -7515,15 +7569,46 @@ function renderDeviceInterfaceView(store) {
                                 type="text"
                                 id=${lblId}
                                 maxlength="32"
-                                placeholder=${defaultCityForIana(entry.iana)}
+                                enterkeyhint="done"
+                                placeholder="Enter city or label…"
                                 .value=${entry.label}
+                                @input=${(ev) => {
+                                  const cleaned = sanitizeClockLabel(
+                                    (ev.currentTarget).value,
+                                  );
+                                  if (cleaned) {
+                                    updateWorldClockItem(
+                                      idx,
+                                      { label: cleaned },
+                                      lblId,
+                                      TEXT_INPUT_DEBOUNCE_MS,
+                                    );
+                                  }
+                                }}
                                 @change=${(ev) => {
-                                  const cleaned =
-                                    sanitizeClockLabel(
-                                      (ev.currentTarget).value,
-                                    ) || defaultCityForIana(entry.iana);
-                                  (ev.currentTarget).value = cleaned;
+                                  const el = ev.currentTarget;
+                                  const cleaned = sanitizeClockLabel(el.value);
+                                  if (!cleaned) {
+                                    el.value = entry.label;
+                                    store.showToast("City label cannot be empty", true);
+                                    return;
+                                  }
+                                  el.value = cleaned;
                                   updateWorldClockItem(idx, { label: cleaned }, lblId);
+                                }}
+                                @keydown=${(ev) => {
+                                  if (!isImeSafeEnter(ev)) return;
+                                  ev.preventDefault();
+                                  const el = ev.currentTarget;
+                                  const cleaned = sanitizeClockLabel(el.value);
+                                  if (!cleaned) {
+                                    el.value = entry.label;
+                                    store.showToast("City label cannot be empty", true);
+                                    return;
+                                  }
+                                  el.value = cleaned;
+                                  updateWorldClockItem(idx, { label: cleaned }, lblId);
+                                  void store.flushAllPendingSettings();
                                 }}
                               />
                             </div>
@@ -7579,8 +7664,19 @@ function renderDeviceInterfaceView(store) {
                         type="text"
                         id="cfg-world_clock_new_label"
                         maxlength="32"
-                        placeholder="Defaults to selected zone city"
+                        enterkeyhint="done"
+                        placeholder="Enter city or label…"
                         ?disabled=${atWorldClockLimit}
+                        .value=${store.worldClockNewLabel}
+                        @input=${(ev) => {
+                          store.worldClockNewLabel = (ev.currentTarget).value;
+                          store.host.requestUpdate();
+                        }}
+                        @keydown=${(ev) => {
+                          if (!isImeSafeEnter(ev)) return;
+                          ev.preventDefault();
+                          onAddWorldClock();
+                        }}
                       />
                     </div>
                     <div class="stacked-field">
@@ -7588,18 +7684,32 @@ function renderDeviceInterfaceView(store) {
                       <select
                         id="cfg-world_clocks_add"
                         ?disabled=${atWorldClockLimit}
-                        .value=${""}
-                        @change=${onAddWorldClock}
+                        .value=${store.worldClockNewZone}
+                        @change=${(ev) => {
+                          store.worldClockNewZone = (ev.currentTarget).value;
+                          store.host.requestUpdate();
+                        }}
                       >
-                        <option value="" selected>
+                        <option value="" ?selected=${!store.worldClockNewZone}>
                           ${atWorldClockLimit
                             ? "Maximum 4 World Clocks added"
-                            : "Select a time zone to add…"}
+                            : "Select a time zone (UTC-12 to UTC+14)…"}
                         </option>
-                        ${atWorldClockLimit ? nothing : renderWorldClockZoneOptions("")}
+                        ${atWorldClockLimit
+                          ? nothing
+                          : renderWorldClockZoneOptions(store.worldClockNewZone)}
                       </select>
                     </div>
                   </div>
+                  <button
+                    type="button"
+                    id="btn-world_clock_add"
+                    ?disabled=${atWorldClockLimit}
+                    @click=${() => onAddWorldClock()}
+                    class="btn btn-primary"
+                  >
+                    Add
+                  </button>
                 </div>
               </div>`,
             })}
@@ -10913,6 +11023,18 @@ class LatterStudio extends LitElement {
           _applyRoute() {
     this.store.applyRoute(this._route);
   }
+          _onRootKeyDown(ev) {
+    if (ev.ctrlKey || ev.metaKey || ev.altKey || ev.key === "Escape" || ev.key === "Tab") {
+      return;
+    }
+    const path = typeof ev.composedPath === "function" ? ev.composedPath() : [];
+    const inner = (path[0] ?? ev.target);
+    if (!inner || typeof inner.tagName !== "string") return;
+    const tag = inner.tagName.toUpperCase();
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") {
+      ev.stopPropagation();
+    }
+  }
           _onScopeTabKeyDown(ev) {
     if (
       ev.key !== "ArrowLeft" &&
@@ -11063,6 +11185,7 @@ class LatterStudio extends LitElement {
     const subtitle = this.store.pageSubtitle;
     return html`<div
       id="studio-root"
+      @keydown=${(ev) => this._onRootKeyDown(ev)}
       class="studio-root ${isInitialLoading ? "is-loading" : ""}"
     >
       ${this.store.studioRevMismatch

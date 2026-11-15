@@ -405,6 +405,16 @@ def _catalog_dst_active(rule: str, std_off_min: int, now_utc: datetime) -> bool:
         end_utc = end_local - timedelta(minutes=std_off_min + 60)
         start_utc = start_local - timedelta(minutes=std_off_min)
         return now_utc < end_utc or now_utc >= start_utc
+    if rule == "au30":
+        end_local = datetime(yr, 4, _nth_weekday_of_month(yr, 4, 6, 1).day, 2, 0, tzinfo=UTC)
+        start_local = datetime(yr, 10, _nth_weekday_of_month(yr, 10, 6, 1).day, 2, 0, tzinfo=UTC)
+        end_utc = end_local - timedelta(minutes=std_off_min + 30)
+        start_utc = start_local - timedelta(minutes=std_off_min)
+        return now_utc < end_utc or now_utc >= start_utc
+    if rule == "nz":
+        end_utc = datetime(yr, 4, _nth_weekday_of_month(yr, 4, 6, 1).day, 3, 0, tzinfo=UTC) - timedelta(hours=13)
+        start_utc = datetime(yr, 9, _nth_weekday_of_month(yr, 9, 6, -1).day, 2, 0, tzinfo=UTC) - timedelta(hours=12)
+        return now_utc < end_utc or now_utc >= start_utc
     return False
 
 
@@ -426,7 +436,7 @@ def format_tz_record(
     clean_iana = str(iana or "").strip()
     if not clean_iana:
         return ""
-    if clean_iana in ("UTC", "Etc/UTC", "GMT", "Etc/GMT"):
+    if clean_iana in ("UTC", "Etc/UTC", "GMT", "Etc/GMT", "Etc/GMT+0", "Etc/GMT-0", "Etc/GMT0"):
         return f"{clean_iana}|UTC|UTC|0|0"
 
     now = (now_utc or datetime.now(UTC)).astimezone(UTC)

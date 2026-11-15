@@ -1139,16 +1139,26 @@ class TestDevicePrefsProtocol(unittest.TestCase):
 
         self.assertEqual(
             studio_scope.normalize_world_clocks_spec(
-                " |Europe/London ; Kyoto|Asia/Tokyo ; london|Europe/London ; "
+                " Akron |America/New_York ; Kyoto|Asia/Tokyo ; akron|America/New_York ; "
                 "Hanoi|Asia/Bangkok ; Bangkok|Asia/Bangkok ",
                 strict=True,
             ),
-            "London|Europe/London;Kyoto|Asia/Tokyo;Hanoi|Asia/Bangkok;Bangkok|Asia/Bangkok",
+            "Akron|America/New_York;Kyoto|Asia/Tokyo;Hanoi|Asia/Bangkok;Bangkok|Asia/Bangkok",
+        )
+        self.assertEqual(
+            studio_scope.normalize_world_clocks_spec(
+                "Baker Island|Etc/GMT+12;Kiritimati|Pacific/Kiritimati",
+                strict=True,
+            ),
+            "Baker Island|Etc/GMT+12;Kiritimati|Pacific/Kiritimati",
         )
         self.assertEqual(studio_scope.normalize_world_clocks_spec("", strict=True), "")
         for bad_wc in (
+            " |America/New_York",
+            "|Europe/London",
             "UTC|UTC",
             "London|Etc/UTC",
+            "London|Etc/GMT+0",
             "Europe/London",
             "City|Not/AZone",
             "London|Europe/London;Tokyo|Asia/Tokyo;Kolkata|Asia/Kolkata;Sydney|Australia/Sydney;NYC|America/New_York",

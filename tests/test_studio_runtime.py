@@ -26,7 +26,7 @@ def _strip_module_syntax(ts_text: str) -> str:
     return re.sub(r"^\s*export\s+(?=(?:async\s+)?(?:function|const|let|class|interface|type)\b)", "", cleaned, flags=re.MULTILINE)
 
 
-def _run_node_ts(ts_sources: list[Path], runner_js: str) -> object:
+def _run_node_ts(ts_sources: list[Path], runner_js: str, preamble_js: str = "") -> object:
     """Strip TypeScript types via Node's built-in `module.stripTypeScriptTypes` and evaluate `runner_js`."""
     sources = list(ts_sources)
     proto_schema = FRONTEND_SRC / "protocol-schema.ts"
@@ -37,7 +37,7 @@ def _run_node_ts(ts_sources: list[Path], runner_js: str) -> object:
         "const { stripTypeScriptTypes } = require('node:module');\n"
         f"const tsSrc = {json.dumps(combined_ts)};\n"
         "const jsSrc = stripTypeScriptTypes(tsSrc);\n"
-        f"const fn = new Function(jsSrc + '\\n' + {json.dumps(runner_js)});\n"
+        f"const fn = new Function({json.dumps(preamble_js)} + '\\n' + jsSrc + '\\n' + {json.dumps(runner_js)});\n"
         "Promise.resolve(fn()).then((res) => process.stdout.write(JSON.stringify(res)));\n"
     )
     out = subprocess.run(
@@ -731,6 +731,20 @@ return { offMarkup, dispWeatherOff, staticMarkup, rotatingMarkup, powerMarkup, a
         self.assertIn("Show UTC Clock", got["ifaceMarkup"])
         self.assertIn('id="cfg-world_clock_new_label"', got["ifaceMarkup"])
         self.assertIn('id="cfg-world_clocks_add"', got["ifaceMarkup"])
+        self.assertIn('id="btn-world_clock_add"', got["ifaceMarkup"])
+        self.assertIn("UTC-12:00 — International Date Line West", got["ifaceMarkup"])
+        self.assertIn("UTC-05:00 — Eastern Time (EST/EDT)", got["ifaceMarkup"])
+        self.assertIn("UTC+14:00 — Line Islands Time (LINT)", got["ifaceMarkup"])
+        self.assertLess(
+            got["ifaceMarkup"].index("UTC-12:00 — International Date Line West"),
+            got["ifaceMarkup"].index("UTC-05:00 — Eastern Time (EST/EDT)"),
+        )
+        self.assertLess(
+            got["ifaceMarkup"].index("UTC-05:00 — Eastern Time (EST/EDT)"),
+            got["ifaceMarkup"].index("UTC+14:00 — Line Islands Time (LINT)"),
+        )
+        self.assertNotIn("Defaults to selected zone city", got["ifaceMarkup"])
+        self.assertNotIn('label="All Time Zones"', got["ifaceMarkup"])
         self.assertIn("id=cfg-alarm_1_time", got["ifaceMarkup"])
         self.assertIn('step="60"', got["ifaceMarkup"])
         self.assertIn('<h3 class="card-title">Media Player</h3>', got["ifaceMarkup"])
@@ -1518,6 +1532,233 @@ return {
         self.assertNotIn("Activity Card Sources", single_html)
         self.assertIn("Home Controls", single_html)
         self.assertIn('<h3 class="card-title">Time</h3>', single_html)
+
+    def test_time_card_focus_safe_typing_and_manual_world_clock_add(self) -> None:
+        """D-039: Focused text inputs survive live WS re-renders, stop HA shortcut bubbling, and require manual World Clock labels."""
+        runner = """
+// 1. Verify PropertyPart in lib/lit.ts skips overwriting focused text inputs
+const shadow = { activeElement: null };
+const textInput = {
+  tagName: "INPUT",
+  type: "text",
+  value: "M",
+  getRootNode() { return shadow; },
+};
+const rangeInput = {
+  tagName: "INPUT",
+  type: "range",
+  value: "40",
+  getRootNode() { return shadow; },
+};
+const textPropPart = new PropertyPart(textInput, "value", 0);
+shadow.activeElement = textInput;
+// Simulate live ble_survey_delta re-render trying to reset .value back to ""
+textPropPart.update([""]);
+const preservedWhileFocused = textInput.value;
+// Once blurred, external updates sync normally
+shadow.activeElement = null;
+textPropPart.update(["Synced"]);
+const updatedAfterBlur = textInput.value;
+// Non-text inputs (e.g. range) still update even when focused
+const rangePropPart = new PropertyPart(rangeInput, "value", 0);
+shadow.activeElement = rangeInput;
+rangePropPart.update(["75"]);
+const rangeUpdatedWhileFocused = rangeInput.value;
+
+// 2. Verify ShadowRoot keydown isolation stops HA single-key shortcuts ('a', 'c', 'd', 'e', 'm') on INPUT
+function runKeyDown(key, opts = {}) {
+  let stopped = false;
+  const fakeInner = { tagName: opts.tagName || "INPUT" };
+  const ev = {
+    key,
+    ctrlKey: Boolean(opts.ctrlKey),
+    metaKey: Boolean(opts.metaKey),
+    altKey: Boolean(opts.altKey),
+    composedPath: () => [fakeInner],
+    stopPropagation() { stopped = true; },
+  };
+  LatterStudio.prototype._onRootKeyDown.call({}, ev);
+  return stopped;
+}
+
+// 3. Verify UTC-12..UTC+14 catalog & manual city label flow in renderDeviceInterfaceView
+const stagedCalls = [];
+const toasts = [];
+const domEls = {
+  "cfg-world_clock_new_label": { value: "", focused: false, focus() { this.focused = true; } },
+  "cfg-world_clocks_add": { value: "", focused: false, focus() { this.focused = true; } },
+};
+const store = {
+  activeSubentryId: "sub_1",
+  worldClockNewLabel: "",
+  worldClockNewZone: "",
+  requestCount: 0,
+  host: {
+    renderRoot: {
+      getElementById(id) { return domEls[id] || null; },
+    },
+    requestUpdate() { store.requestCount += 1; },
+  },
+  state: {
+    config: {
+      kind: "device",
+      home_screen_enabled: true,
+      start_screen: "Home",
+      return_to_home_timeout: "2 min",
+      activity_card: true,
+      dock_apps: "music,tools",
+      local_clock_label: "",
+      world_clocks: "Westminster|Europe/London",
+      alarms_summary: "07:00|0|1;08:30|0|2;09:00|0|2",
+    },
+    system_config: { remote_groups: [] },
+    system_devices: [{ subentry_id: "sub_1", device_remote_group: "area_auto" }],
+  },
+  getSectionItems() { return []; },
+  getPref() { return undefined; },
+  getPrefs() { return []; },
+  getEnabledDockTokens() { return ["music", "tools"]; },
+  getEnabledHomeCategories() { return []; },
+  getEnabledAreaCategories() { return []; },
+  getEnabledActivitySources() { return []; },
+  stageDeviceSetting(key, val, domId, debounceMs) {
+    stagedCalls.push({ key, val, domId, debounceMs });
+    store.state.config[key] = val;
+  },
+  flushAllPendingSettings() { return Promise.resolve(); },
+  showToast(msg, isErr) { toasts.push({ msg, isErr: Boolean(isErr) }); },
+};
+
+// Walk TemplateResult tree to extract event handlers by element id
+function collectHandlers(node, out = {}) {
+  if (!node || typeof node !== "object") return out;
+  if (Array.isArray(node)) {
+    for (const item of node) collectHandlers(item, out);
+    return out;
+  }
+  if (node._$litType$ === 1 && Array.isArray(node.strings)) {
+    let raw = "";
+    for (let i = 0; i < node.strings.length; i++) {
+      raw += node.strings[i];
+      if (i < node.values.length) {
+        const v = node.values[i];
+        if (typeof v === "function") {
+          const idMatch = /id=(?:"([^"]+)"|([A-Za-z0-9_-]+))(?![\\s\\S]*<)/.exec(raw);
+          const attrMatch = /@([a-z]+)=\\s*$/.exec(raw);
+          const curId = idMatch ? (idMatch[1] || idMatch[2]) : null;
+          if (curId && attrMatch) {
+            out[curId] = out[curId] || {};
+            out[curId][attrMatch[1]] = v;
+          }
+          raw += "__FN__";
+        } else if (v && typeof v === "object") {
+          collectHandlers(v, out);
+          raw += "__TPL__";
+        } else {
+          raw += String(v ?? "");
+        }
+      }
+    }
+  }
+  return out;
+}
+
+const tpl = renderDeviceInterfaceView(store);
+const handlers = collectHandlers(tpl);
+
+// Type "Main " (with trailing space!) into Local Clock Label — DOM .value must NOT be trimmed mid-typing
+const localEl = { value: "Main " };
+handlers["cfg-local_clock_label"].input({ currentTarget: localEl });
+const localDomDuringTyping = localEl.value;
+
+// Pick UTC-05:00 Eastern Time in #cfg-world_clocks_add — must NOT auto-populate label or stage world_clocks
+domEls["cfg-world_clocks_add"].value = "America/New_York";
+handlers["cfg-world_clocks_add"].change({ currentTarget: domEls["cfg-world_clocks_add"] });
+const labelAfterZonePick = store.worldClockNewLabel;
+const stagedWorldClocksAfterPick = stagedCalls.filter((c) => c.key === "world_clocks").length;
+
+// Clicking Add without a city label shows toast & focuses New City Label
+handlers["btn-world_clock_add"].click({});
+const toastOnMissingCity = toasts[toasts.length - 1]?.msg || "";
+const focusedLabelOnMissing = domEls["cfg-world_clock_new_label"].focused;
+
+// Enter manual city "Akron, OH" and click Add
+domEls["cfg-world_clock_new_label"].value = "Akron, OH";
+handlers["cfg-world_clock_new_label"].input({ currentTarget: domEls["cfg-world_clock_new_label"] });
+handlers["btn-world_clock_add"].click({});
+
+return {
+  preservedWhileFocused,
+  updatedAfterBlur,
+  rangeUpdatedWhileFocused,
+  stopLetterA: runKeyDown("a"),
+  stopLetterC: runKeyDown("c"),
+  allowEscape: !runKeyDown("Escape"),
+  allowTab: !runKeyDown("Tab"),
+  allowCtrlC: !runKeyDown("c", { ctrlKey: true }),
+  allowButtonKey: !runKeyDown("c", { tagName: "BUTTON" }),
+  firstCatalogZone: WORLD_CLOCK_ZONES_CATALOG[0],
+  lastCatalogZone: WORLD_CLOCK_ZONES_CATALOG[WORLD_CLOCK_ZONES_CATALOG.length - 1],
+  localDomDuringTyping,
+  localStagedCall: stagedCalls[0],
+  labelAfterZonePick,
+  stagedWorldClocksAfterPick,
+  toastOnMissingCity,
+  focusedLabelOnMissing,
+  finalWorldClocks: store.state.config.world_clocks,
+  clearedDraftLabel: store.worldClockNewLabel,
+  clearedDraftZone: store.worldClockNewZone,
+};
+"""
+        stub_lit_dom = (
+            "globalThis.HTMLElement = class { attachShadow() { return {}; } toggleAttribute() {} };\n"
+            "globalThis.customElements = { get: () => true, define: () => {} };\n"
+            "function renderStudioDialogs() { return nothing; }\n"
+            "function syncStudioDialogs() {}\n"
+            "function renderActiveView() { return nothing; }\n"
+            "const STUDIO_STYLES = { styleSheetText: '' };\n"
+            "class StudioStore { constructor() {} addController() {} }\n"
+        )
+        got = _run_node_ts(
+            [
+                FRONTEND_SRC / "lib" / "lit.ts",
+                FRONTEND_SRC / "constants.ts",
+                FRONTEND_SRC / "utils" / "format.ts",
+                FRONTEND_SRC / "components" / "controls.ts",
+                FRONTEND_SRC / "views" / "device-interface-view.ts",
+                FRONTEND_SRC / "latter-studio.ts",
+            ],
+            runner,
+            preamble_js=stub_lit_dom,
+        )
+        self.assertEqual(got["preservedWhileFocused"], "M")
+        self.assertEqual(got["updatedAfterBlur"], "Synced")
+        self.assertEqual(got["rangeUpdatedWhileFocused"], "75")
+        self.assertTrue(got["stopLetterA"])
+        self.assertTrue(got["stopLetterC"])
+        self.assertTrue(got["allowEscape"])
+        self.assertTrue(got["allowTab"])
+        self.assertTrue(got["allowCtrlC"])
+        self.assertTrue(got["allowButtonKey"])
+        self.assertEqual(got["firstCatalogZone"]["iana"], "Etc/GMT+12")
+        self.assertTrue(got["firstCatalogZone"]["label"].startswith("UTC-12:00"))
+        self.assertEqual(got["lastCatalogZone"]["iana"], "Pacific/Kiritimati")
+        self.assertTrue(got["lastCatalogZone"]["label"].startswith("UTC+14:00"))
+        self.assertEqual(got["localDomDuringTyping"], "Main ")
+        self.assertEqual(
+            got["localStagedCall"],
+            {"key": "local_clock_label", "val": "Main", "domId": "cfg-local_clock_label", "debounceMs": 600},
+        )
+        self.assertEqual(got["labelAfterZonePick"], "")
+        self.assertEqual(got["stagedWorldClocksAfterPick"], 0)
+        self.assertIn("Enter a city or label", got["toastOnMissingCity"])
+        self.assertTrue(got["focusedLabelOnMissing"])
+        self.assertEqual(
+            got["finalWorldClocks"],
+            "Westminster|Europe/London;Akron, OH|America/New_York",
+        )
+        self.assertEqual(got["clearedDraftLabel"], "")
+        self.assertEqual(got["clearedDraftZone"], "")
 
 
 if __name__ == "__main__":

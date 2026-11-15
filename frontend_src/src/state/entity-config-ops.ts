@@ -183,6 +183,7 @@ export function stageDeviceSettingOp(
   key: string,
   value: unknown,
   controlDomId?: string,
+  debounceMs = SAVE_DEBOUNCE_MS,
 ): void {
   const targetSubentryId = store.activeSubentryId;
   if (!targetSubentryId) return;
@@ -250,7 +251,7 @@ export function stageDeviceSettingOp(
   if (bucket.timer) clearTimeout(bucket.timer);
   bucket.timer = setTimeout(() => {
     void store.flushDeviceBucket(targetSubentryId);
-  }, SAVE_DEBOUNCE_MS);
+  }, Math.max(0, debounceMs));
   store.host.requestUpdate();
 }
 

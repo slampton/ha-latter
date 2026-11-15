@@ -92,6 +92,19 @@ export class LatterStudio extends LitElement {
     this.store.applyRoute(this._route);
   }
 
+  private _onRootKeyDown(ev: KeyboardEvent): void {
+    if (ev.ctrlKey || ev.metaKey || ev.altKey || ev.key === "Escape" || ev.key === "Tab") {
+      return;
+    }
+    const path = typeof ev.composedPath === "function" ? ev.composedPath() : [];
+    const inner = (path[0] ?? ev.target) as Element | null;
+    if (!inner || typeof inner.tagName !== "string") return;
+    const tag = inner.tagName.toUpperCase();
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") {
+      ev.stopPropagation();
+    }
+  }
+
   private _onScopeTabKeyDown(ev: KeyboardEvent): void {
     if (
       ev.key !== "ArrowLeft" &&
@@ -252,6 +265,7 @@ export class LatterStudio extends LitElement {
 
     return html`<div
       id="studio-root"
+      @keydown=${(ev: KeyboardEvent) => this._onRootKeyDown(ev)}
       class="studio-root ${isInitialLoading ? "is-loading" : ""}"
     >
       ${this.store.studioRevMismatch

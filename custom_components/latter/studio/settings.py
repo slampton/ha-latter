@@ -305,36 +305,74 @@ MAX_WORLD_CLOCKS = 4
 DEFAULT_ALARMS_SUMMARY = "07:00|0|1;08:30|0|2;09:00|0|2"
 
 WORLD_CLOCK_CATALOG: tuple[dict[str, Any], ...] = (
-    {"iana": "America/Los_Angeles", "city": "Los Angeles", "std_off": -480, "dst_off": -420, "std_abbr": "PST", "dst_abbr": "PDT", "rule": "us"},
-    {"iana": "America/Denver", "city": "Denver", "std_off": -420, "dst_off": -360, "std_abbr": "MST", "dst_abbr": "MDT", "rule": "us"},
-    {"iana": "America/Chicago", "city": "Chicago", "std_off": -360, "dst_off": -300, "std_abbr": "CST", "dst_abbr": "CDT", "rule": "us"},
-    {"iana": "America/New_York", "city": "New York", "std_off": -300, "dst_off": -240, "std_abbr": "EST", "dst_abbr": "EDT", "rule": "us"},
-    {"iana": "America/Toronto", "city": "Toronto", "std_off": -300, "dst_off": -240, "std_abbr": "EST", "dst_abbr": "EDT", "rule": "us"},
-    {"iana": "America/Sao_Paulo", "city": "Sao Paulo", "std_off": -180, "dst_off": -180, "std_abbr": "BRT", "dst_abbr": "BRT", "rule": "none"},
-    {"iana": "America/Argentina/Buenos_Aires", "city": "Buenos Aires", "std_off": -180, "dst_off": -180, "std_abbr": "ART", "dst_abbr": "ART", "rule": "none"},
+    # Canonical standard time zones ordered from UTC-12:00 through UTC+14:00
+    {"iana": "Etc/GMT+12", "city": "UTC-12", "std_off": -720, "dst_off": -720, "std_abbr": "UTC-12", "dst_abbr": "UTC-12", "rule": "none"},
+    {"iana": "Pacific/Pago_Pago", "city": "Pago Pago", "std_off": -660, "dst_off": -660, "std_abbr": "SST", "dst_abbr": "SST", "rule": "none"},
     {"iana": "Pacific/Honolulu", "city": "Honolulu", "std_off": -600, "dst_off": -600, "std_abbr": "HST", "dst_abbr": "HST", "rule": "none"},
+    {"iana": "Pacific/Marquesas", "city": "Marquesas", "std_off": -570, "dst_off": -570, "std_abbr": "MART", "dst_abbr": "MART", "rule": "none"},
     {"iana": "America/Anchorage", "city": "Anchorage", "std_off": -540, "dst_off": -480, "std_abbr": "AKST", "dst_abbr": "AKDT", "rule": "us"},
+    {"iana": "America/Los_Angeles", "city": "Los Angeles", "std_off": -480, "dst_off": -420, "std_abbr": "PST", "dst_abbr": "PDT", "rule": "us"},
+    {"iana": "Etc/GMT+8", "city": "UTC-8", "std_off": -480, "dst_off": -480, "std_abbr": "UTC-8", "dst_abbr": "UTC-8", "rule": "none"},
+    {"iana": "America/Denver", "city": "Denver", "std_off": -420, "dst_off": -360, "std_abbr": "MST", "dst_abbr": "MDT", "rule": "us"},
+    {"iana": "America/Phoenix", "city": "Phoenix", "std_off": -420, "dst_off": -420, "std_abbr": "MST", "dst_abbr": "MST", "rule": "none"},
+    {"iana": "America/Chicago", "city": "Chicago", "std_off": -360, "dst_off": -300, "std_abbr": "CST", "dst_abbr": "CDT", "rule": "us"},
+    {"iana": "America/Regina", "city": "Regina", "std_off": -360, "dst_off": -360, "std_abbr": "CST", "dst_abbr": "CST", "rule": "none"},
+    {"iana": "America/New_York", "city": "New York", "std_off": -300, "dst_off": -240, "std_abbr": "EST", "dst_abbr": "EDT", "rule": "us"},
+    {"iana": "America/Lima", "city": "Lima", "std_off": -300, "dst_off": -300, "std_abbr": "EST", "dst_abbr": "EST", "rule": "none"},
+    {"iana": "America/Halifax", "city": "Halifax", "std_off": -240, "dst_off": -180, "std_abbr": "AST", "dst_abbr": "ADT", "rule": "us"},
+    {"iana": "America/Puerto_Rico", "city": "Puerto Rico", "std_off": -240, "dst_off": -240, "std_abbr": "AST", "dst_abbr": "AST", "rule": "none"},
+    {"iana": "America/St_Johns", "city": "St. John's", "std_off": -210, "dst_off": -150, "std_abbr": "NST", "dst_abbr": "NDT", "rule": "us"},
+    {"iana": "America/Sao_Paulo", "city": "Sao Paulo", "std_off": -180, "dst_off": -180, "std_abbr": "BRT", "dst_abbr": "BRT", "rule": "none"},
+    {"iana": "Etc/GMT+2", "city": "UTC-2", "std_off": -120, "dst_off": -120, "std_abbr": "UTC-2", "dst_abbr": "UTC-2", "rule": "none"},
+    {"iana": "Atlantic/Azores", "city": "Azores", "std_off": -60, "dst_off": 0, "std_abbr": "AZOT", "dst_abbr": "AZOST", "rule": "eu"},
+    {"iana": "Atlantic/Cape_Verde", "city": "Cape Verde", "std_off": -60, "dst_off": -60, "std_abbr": "CVT", "dst_abbr": "CVT", "rule": "none"},
+    {"iana": "Atlantic/Reykjavik", "city": "Reykjavik", "std_off": 0, "dst_off": 0, "std_abbr": "GMT", "dst_abbr": "GMT", "rule": "none"},
     {"iana": "Europe/London", "city": "London", "std_off": 0, "dst_off": 60, "std_abbr": "GMT", "dst_abbr": "BST", "rule": "eu"},
-    {"iana": "Europe/Paris", "city": "Paris", "std_off": 60, "dst_off": 120, "std_abbr": "CET", "dst_abbr": "CEST", "rule": "eu"},
     {"iana": "Europe/Berlin", "city": "Berlin", "std_off": 60, "dst_off": 120, "std_abbr": "CET", "dst_abbr": "CEST", "rule": "eu"},
-    {"iana": "Europe/Zurich", "city": "Zurich", "std_off": 60, "dst_off": 120, "std_abbr": "CET", "dst_abbr": "CEST", "rule": "eu"},
-    {"iana": "Africa/Cairo", "city": "Cairo", "std_off": 120, "dst_off": 180, "std_abbr": "EET", "dst_abbr": "EEST", "rule": "eg"},
+    {"iana": "Africa/Lagos", "city": "Lagos", "std_off": 60, "dst_off": 60, "std_abbr": "WAT", "dst_abbr": "WAT", "rule": "none"},
+    {"iana": "Europe/Athens", "city": "Athens", "std_off": 120, "dst_off": 180, "std_abbr": "EET", "dst_abbr": "EEST", "rule": "eu"},
     {"iana": "Africa/Johannesburg", "city": "Johannesburg", "std_off": 120, "dst_off": 120, "std_abbr": "SAST", "dst_abbr": "SAST", "rule": "none"},
+    {"iana": "Asia/Riyadh", "city": "Riyadh", "std_off": 180, "dst_off": 180, "std_abbr": "AST", "dst_abbr": "AST", "rule": "none"},
+    {"iana": "Asia/Tehran", "city": "Tehran", "std_off": 210, "dst_off": 210, "std_abbr": "IRST", "dst_abbr": "IRST", "rule": "none"},
     {"iana": "Asia/Dubai", "city": "Dubai", "std_off": 240, "dst_off": 240, "std_abbr": "GST", "dst_abbr": "GST", "rule": "none"},
+    {"iana": "Asia/Kabul", "city": "Kabul", "std_off": 270, "dst_off": 270, "std_abbr": "AFT", "dst_abbr": "AFT", "rule": "none"},
+    {"iana": "Asia/Karachi", "city": "Karachi", "std_off": 300, "dst_off": 300, "std_abbr": "PKT", "dst_abbr": "PKT", "rule": "none"},
     {"iana": "Asia/Kolkata", "city": "Kolkata", "std_off": 330, "dst_off": 330, "std_abbr": "IST", "dst_abbr": "IST", "rule": "none"},
+    {"iana": "Asia/Kathmandu", "city": "Kathmandu", "std_off": 345, "dst_off": 345, "std_abbr": "NPT", "dst_abbr": "NPT", "rule": "none"},
+    {"iana": "Asia/Dhaka", "city": "Dhaka", "std_off": 360, "dst_off": 360, "std_abbr": "BST", "dst_abbr": "BST", "rule": "none"},
+    {"iana": "Asia/Yangon", "city": "Yangon", "std_off": 390, "dst_off": 390, "std_abbr": "MMT", "dst_abbr": "MMT", "rule": "none"},
     {"iana": "Asia/Bangkok", "city": "Bangkok", "std_off": 420, "dst_off": 420, "std_abbr": "ICT", "dst_abbr": "ICT", "rule": "none"},
     {"iana": "Asia/Singapore", "city": "Singapore", "std_off": 480, "dst_off": 480, "std_abbr": "SGT", "dst_abbr": "SGT", "rule": "none"},
+    {"iana": "Australia/Eucla", "city": "Eucla", "std_off": 525, "dst_off": 525, "std_abbr": "ACWST", "dst_abbr": "ACWST", "rule": "none"},
+    {"iana": "Asia/Tokyo", "city": "Tokyo", "std_off": 540, "dst_off": 540, "std_abbr": "JST", "dst_abbr": "JST", "rule": "none"},
+    {"iana": "Australia/Adelaide", "city": "Adelaide", "std_off": 570, "dst_off": 630, "std_abbr": "ACST", "dst_abbr": "ACDT", "rule": "au"},
+    {"iana": "Australia/Darwin", "city": "Darwin", "std_off": 570, "dst_off": 570, "std_abbr": "ACST", "dst_abbr": "ACST", "rule": "none"},
+    {"iana": "Australia/Sydney", "city": "Sydney", "std_off": 600, "dst_off": 660, "std_abbr": "AEST", "dst_abbr": "AEDT", "rule": "au"},
+    {"iana": "Australia/Brisbane", "city": "Brisbane", "std_off": 600, "dst_off": 600, "std_abbr": "AEST", "dst_abbr": "AEST", "rule": "none"},
+    {"iana": "Australia/Lord_Howe", "city": "Lord Howe", "std_off": 630, "dst_off": 660, "std_abbr": "LHST", "dst_abbr": "LHDT", "rule": "au30"},
+    {"iana": "Pacific/Guadalcanal", "city": "Guadalcanal", "std_off": 660, "dst_off": 660, "std_abbr": "SBT", "dst_abbr": "SBT", "rule": "none"},
+    {"iana": "Pacific/Auckland", "city": "Auckland", "std_off": 720, "dst_off": 780, "std_abbr": "NZST", "dst_abbr": "NZDT", "rule": "nz"},
+    {"iana": "Etc/GMT-12", "city": "UTC+12", "std_off": 720, "dst_off": 720, "std_abbr": "UTC+12", "dst_abbr": "UTC+12", "rule": "none"},
+    {"iana": "Pacific/Chatham", "city": "Chatham", "std_off": 765, "dst_off": 825, "std_abbr": "CHAST", "dst_abbr": "CHADT", "rule": "nz"},
+    {"iana": "Pacific/Tongatapu", "city": "Tongatapu", "std_off": 780, "dst_off": 780, "std_abbr": "TOT", "dst_abbr": "TOT", "rule": "none"},
+    {"iana": "Pacific/Kiritimati", "city": "Kiritimati", "std_off": 840, "dst_off": 840, "std_abbr": "LINT", "dst_abbr": "LINT", "rule": "none"},
+    # Additional regional aliases supported when host lacks system tzdata
+    {"iana": "America/Toronto", "city": "Toronto", "std_off": -300, "dst_off": -240, "std_abbr": "EST", "dst_abbr": "EDT", "rule": "us"},
+    {"iana": "America/Argentina/Buenos_Aires", "city": "Buenos Aires", "std_off": -180, "dst_off": -180, "std_abbr": "ART", "dst_abbr": "ART", "rule": "none"},
+    {"iana": "Europe/Paris", "city": "Paris", "std_off": 60, "dst_off": 120, "std_abbr": "CET", "dst_abbr": "CEST", "rule": "eu"},
+    {"iana": "Europe/Zurich", "city": "Zurich", "std_off": 60, "dst_off": 120, "std_abbr": "CET", "dst_abbr": "CEST", "rule": "eu"},
+    {"iana": "Africa/Cairo", "city": "Cairo", "std_off": 120, "dst_off": 180, "std_abbr": "EET", "dst_abbr": "EEST", "rule": "eg"},
     {"iana": "Asia/Hong_Kong", "city": "Hong Kong", "std_off": 480, "dst_off": 480, "std_abbr": "HKT", "dst_abbr": "HKT", "rule": "none"},
     {"iana": "Asia/Shanghai", "city": "Shanghai", "std_off": 480, "dst_off": 480, "std_abbr": "CST", "dst_abbr": "CST", "rule": "none"},
-    {"iana": "Asia/Tokyo", "city": "Tokyo", "std_off": 540, "dst_off": 540, "std_abbr": "JST", "dst_abbr": "JST", "rule": "none"},
     {"iana": "Asia/Seoul", "city": "Seoul", "std_off": 540, "dst_off": 540, "std_abbr": "KST", "dst_abbr": "KST", "rule": "none"},
-    {"iana": "Australia/Sydney", "city": "Sydney", "std_off": 600, "dst_off": 660, "std_abbr": "AEST", "dst_abbr": "AEDT", "rule": "au"},
 )
 WORLD_CLOCK_CATALOG_MAP: dict[str, dict[str, Any]] = {
     str(item["iana"]): item for item in WORLD_CLOCK_CATALOG
 }
 _IANA_ZONE_RE = re.compile(r"^[A-Za-z0-9_+-]+(?:/[A-Za-z0-9_+-]+)+$")
-_PINNED_UTC_ALIASES: frozenset[str] = frozenset({"UTC", "Etc/UTC", "GMT", "Etc/GMT"})
+_PINNED_UTC_ALIASES: frozenset[str] = frozenset(
+    {"UTC", "Etc/UTC", "GMT", "Etc/GMT", "Etc/GMT+0", "Etc/GMT-0", "Etc/GMT0"}
+)
 _ALARM_RECORD_RE = re.compile(r"^(\d{1,2}):(\d{2})\|([01])\|([0-3])$")
 
 
@@ -435,7 +473,10 @@ def parse_world_clocks_spec(
                 raise ValueError(f"Unknown IANA time zone: {iana or '(empty)'}")
             continue
 
-        lbl = sanitize_clock_label(raw_lbl) or default_city_for_iana(iana)
+        cleaned_lbl = sanitize_clock_label(raw_lbl)
+        if not cleaned_lbl and strict:
+            raise ValueError("World Clock city label is required")
+        lbl = cleaned_lbl or default_city_for_iana(iana)
         dedup_key = (lbl.lower(), iana)
         if dedup_key in seen:
             continue

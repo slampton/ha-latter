@@ -352,6 +352,33 @@ class AttrPart implements LivePart {
   }
 }
 
+const NON_TEXT_INPUT_TYPES = new Set([
+  "button",
+  "checkbox",
+  "color",
+  "file",
+  "hidden",
+  "image",
+  "radio",
+  "range",
+  "reset",
+  "submit",
+]);
+
+function isActivelyFocusedTextControl(el: Element): boolean {
+  const tag = el.tagName;
+  if (tag !== "INPUT" && tag !== "TEXTAREA") return false;
+  if (tag === "INPUT") {
+    const inpType = ((el as HTMLInputElement).type || "text").toLowerCase();
+    if (NON_TEXT_INPUT_TYPES.has(inpType)) return false;
+  }
+  const root = typeof el.getRootNode === "function" ? el.getRootNode() : null;
+  if (root && typeof root === "object" && "activeElement" in root) {
+    return (root as Document | ShadowRoot).activeElement === el;
+  }
+  return typeof document !== "undefined" && document.activeElement === el;
+}
+
 class PropertyPart implements LivePart {
   // Priority 2 runs AFTER ChildPart (priority 0) so <select> options exist before `.value` is assigned.
   readonly priority = 2;
@@ -370,6 +397,9 @@ class PropertyPart implements LivePart {
     const next = raw === nothing || raw === null || raw === undefined ? "" : raw;
     const target = this.el as unknown as Record<string, unknown>;
     if (target[this.propName] !== next) {
+      if (this.propName === "value" && isActivelyFocusedTextControl(this.el)) {
+        return;
+      }
       target[this.propName] = next;
     }
   }

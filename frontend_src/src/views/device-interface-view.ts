@@ -51,6 +51,11 @@ const DEFAULT_ALARM_SLOTS: ReadonlyArray<AlarmSlotView> = [
 
 const PINNED_UTC_ZONES = new Set(["UTC", "Etc/UTC", "GMT", "Etc/GMT", "Etc/GMT+0", "Etc/GMT-0", "Etc/GMT0"]);
 const IANA_ZONE_PATTERN = /^[A-Za-z0-9_+-]+(?:\/[A-Za-z0-9_+-]+)+$/;
+const TEXT_INPUT_DEBOUNCE_MS = 600;
+
+function isImeSafeEnter(ev: KeyboardEvent): boolean {
+  return ev.key === "Enter" && !ev.isComposing && ev.keyCode !== 229;
+}
 
 function sanitizeClockLabel(raw: unknown, maxBytes = 32): string {
   const str = String(raw ?? "");
@@ -95,9 +100,7 @@ function sanitizeClockLabel(raw: unknown, maxBytes = 32): string {
   return out.trimEnd();
 }
 
-function defaultCityForIana(iana: string): string {
-  const found = WORLD_CLOCK_ZONES_CATALOG.find((z) => z.iana === iana);
-  if (found) return found.city;
+function fallbackLabelForIana(iana: string): string {
   const tail = iana.split("/").pop() || iana;
   return sanitizeClockLabel(tail.replace(/_/g, " ")) || iana;
 }
@@ -115,7 +118,7 @@ function parseWorldClocksSpec(raw: unknown): WorldClockItemView[] {
     if (!iana || PINNED_UTC_ZONES.has(iana) || !IANA_ZONE_PATTERN.test(iana)) {
       continue;
     }
-    const label = sanitizeClockLabel(rawLbl) || defaultCityForIana(iana);
+    const label = sanitizeClockLabel(rawLbl) || fallbackLabelForIana(iana);
     const dedupKey = `${label.toLowerCase()}|${iana}`;
     if (seen.has(dedupKey)) continue;
     seen.add(dedupKey);
@@ -128,38 +131,15 @@ function parseWorldClocksSpec(raw: unknown): WorldClockItemView[] {
 function serializeWorldClocksSpec(items: ReadonlyArray<WorldClockItemView>): string {
   return items
     .slice(0, MAX_WORLD_CLOCKS)
-    .map((item) => `${sanitizeClockLabel(item.label) || defaultCityForIana(item.iana)}|${item.iana}`)
+    .map((item) => {
+      const cleaned = sanitizeClockLabel(item.label);
+      return cleaned ? `${cleaned}|${item.iana}` : "";
+    })
+    .filter(Boolean)
     .join(";");
 }
 
-let cachedExtraIanaZones: ReadonlyArray<{ iana: string; label: string }> | null = null;
-
-function getExtraSupportedIanaZones(): ReadonlyArray<{ iana: string; label: string }> {
-  if (cachedExtraIanaZones !== null) return cachedExtraIanaZones;
-  const catalogSet = new Set(WORLD_CLOCK_ZONES_CATALOG.map((z) => z.iana));
-  const intlObj = Intl as unknown as { supportedValuesOf?: (key: string) => string[] };
-  const extra: Array<{ iana: string; label: string }> = [];
-  if (typeof intlObj.supportedValuesOf === "function") {
-    try {
-      for (const tz of intlObj.supportedValuesOf("timeZone")) {
-        if (
-          !tz ||
-          catalogSet.has(tz) ||
-          PINNED_UTC_ZONES.has(tz) ||
-          tz.startsWith("Etc/") ||
-          !IANA_ZONE_PATTERN.test(tz)
-        ) {
-          continue;
-        }
-        extra.push({ iana: tz, label: `${defaultCityForIana(tz)} (${tz})` });
-      }
-    } catch {
-      // Fallback to curated catalog if host runtime lacks timeZone enumeration.
-    }
-  }
-  cachedExtraIanaZones = extra;
-  return extra;
-}
+const KNOWN_WORLD_CLOCK_ZONES = new Set(WORLD_CLOCK_ZONES_CATALOG.map((z) => z.iana));
 
 function parseAlarmsSummary(raw: unknown): [AlarmSlotView, AlarmSlotView, AlarmSlotView] {
   const text = String(raw || DEFAULT_ALARMS_SUMMARY).trim();
@@ -242,37 +222,15 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
   const worldClocksPref = store.getPref("world_clocks");
   const enabledWorldClocks = parseWorldClocksSpec(worldClocksPref?.value ?? cfg.world_clocks ?? "");
   const atWorldClockLimit = enabledWorldClocks.length >= MAX_WORLD_CLOCKS;
-  const extraIanaZones = getExtraSupportedIanaZones();
-  const knownZoneSet = new Set([
-    ...WORLD_CLOCK_ZONES_CATALOG.map((z) => z.iana),
-    ...extraIanaZones.map((z) => z.iana),
-  ]);
 
   const renderWorldClockZoneOptions = (selectedIana: string): TemplateResult => {
     const missingSelected =
-      selectedIana && !knownZoneSet.has(selectedIana)
-        ? html`<option value=${selectedIana} selected>
-            ${defaultCityForIana(selectedIana)} (${selectedIana})
-          </option>`
+      selectedIana && !KNOWN_WORLD_CLOCK_ZONES.has(selectedIana)
+        ? html`<option value=${selectedIana} selected>${selectedIana}</option>`
         : nothing;
-    if (extraIanaZones.length === 0) {
-      return html`${missingSelected}${WORLD_CLOCK_ZONES_CATALOG.map(
-        (z) => html`<option value=${z.iana} ?selected=${z.iana === selectedIana}>${z.label}</option>`,
-      )}`;
-    }
-    return html`${missingSelected}
-      <optgroup label="Featured Cities">
-        ${WORLD_CLOCK_ZONES_CATALOG.map(
-          (z) =>
-            html`<option value=${z.iana} ?selected=${z.iana === selectedIana}>${z.label}</option>`,
-        )}
-      </optgroup>
-      <optgroup label="All Time Zones">
-        ${extraIanaZones.map(
-          (z) =>
-            html`<option value=${z.iana} ?selected=${z.iana === selectedIana}>${z.label}</option>`,
-        )}
-      </optgroup>`;
+    return html`${missingSelected}${WORLD_CLOCK_ZONES_CATALOG.map(
+      (z) => html`<option value=${z.iana} ?selected=${z.iana === selectedIana}>${z.label}</option>`,
+    )}`;
   };
 
   const alarmsSummaryPref = store.getPref("alarms_summary");
@@ -280,27 +238,27 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
     alarmsSummaryPref?.value ?? cfg.alarms_summary ?? DEFAULT_ALARMS_SUMMARY,
   );
 
-  const updateWorldClocks = (nextItems: WorldClockItemView[], focusId?: string): void => {
-    store.stageDeviceSetting("world_clocks", serializeWorldClocksSpec(nextItems), focusId);
+  const updateWorldClocks = (
+    nextItems: WorldClockItemView[],
+    focusId?: string,
+    debounceMs?: number,
+  ): void => {
+    store.stageDeviceSetting("world_clocks", serializeWorldClocksSpec(nextItems), focusId, debounceMs);
   };
 
   const updateWorldClockItem = (
     idx: number,
     patch: Partial<WorldClockItemView>,
     focusId?: string,
+    debounceMs?: number,
   ): void => {
     if (idx < 0 || idx >= enabledWorldClocks.length) return;
     const prev = enabledWorldClocks[idx];
     const nextIana = (patch.iana ?? prev.iana).trim();
     if (!nextIana || PINNED_UTC_ZONES.has(nextIana) || !IANA_ZONE_PATTERN.test(nextIana)) return;
-    let nextLabel: string;
-    if (patch.label !== undefined) {
-      nextLabel = sanitizeClockLabel(patch.label) || defaultCityForIana(nextIana);
-    } else if (nextIana !== prev.iana && prev.label === defaultCityForIana(prev.iana)) {
-      nextLabel = defaultCityForIana(nextIana);
-    } else {
-      nextLabel = prev.label;
-    }
+    const nextLabel =
+      patch.label !== undefined ? sanitizeClockLabel(patch.label) : prev.label;
+    if (!nextLabel) return;
     const dup = enabledWorldClocks.some(
       (item, i) =>
         i !== idx && item.iana === nextIana && item.label.toLowerCase() === nextLabel.toLowerCase(),
@@ -309,7 +267,7 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
     const next = enabledWorldClocks.map((item, i) =>
       i === idx ? { label: nextLabel, iana: nextIana } : { ...item },
     );
-    updateWorldClocks(next, focusId);
+    updateWorldClocks(next, focusId, debounceMs);
   };
 
   const moveWorldClock = (idx: number, delta: -1 | 1): void => {
@@ -325,25 +283,38 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
     updateWorldClocks(enabledWorldClocks.filter((_, i) => i !== idx));
   };
 
-  const onAddWorldClock = (ev: Event): void => {
-    const sel = ev.currentTarget as HTMLSelectElement;
-    const picked = sel.value.trim();
-    sel.value = "";
-    if (!picked || atWorldClockLimit || PINNED_UTC_ZONES.has(picked) || !IANA_ZONE_PATTERN.test(picked)) {
+  const getRenderRoot = (): ShadowRoot | null =>
+    (store.host as unknown as { renderRoot?: ShadowRoot }).renderRoot ?? null;
+
+  const onAddWorldClock = (): void => {
+    if (atWorldClockLimit) return;
+    const root = getRenderRoot();
+    const newLabelEl = root?.getElementById("cfg-world_clock_new_label") as HTMLInputElement | null;
+    const zoneSelEl = root?.getElementById("cfg-world_clocks_add") as HTMLSelectElement | null;
+    const typedLabel = sanitizeClockLabel(newLabelEl?.value ?? store.worldClockNewLabel);
+    const picked = (zoneSelEl?.value ?? store.worldClockNewZone).trim();
+    if (!typedLabel) {
+      store.showToast("Enter a city or label for this World Clock", true);
+      newLabelEl?.focus();
       return;
     }
-    const rowEl = sel.closest(".list-row");
-    const newLabelEl = rowEl?.querySelector<HTMLInputElement>("#cfg-world_clock_new_label") ?? null;
-    const typedLabel = sanitizeClockLabel(newLabelEl?.value ?? "");
-    const resolvedLabel = typedLabel || defaultCityForIana(picked);
-    const dup = enabledWorldClocks.some(
-      (item) => item.iana === picked && item.label.toLowerCase() === resolvedLabel.toLowerCase(),
-    );
-    if (dup) return;
-    if (newLabelEl) {
-      newLabelEl.value = "";
+    if (!picked || PINNED_UTC_ZONES.has(picked) || !IANA_ZONE_PATTERN.test(picked)) {
+      store.showToast("Select a time zone for this World Clock", true);
+      zoneSelEl?.focus();
+      return;
     }
-    updateWorldClocks([...enabledWorldClocks, { label: resolvedLabel, iana: picked }], "cfg-world_clocks_add");
+    const dup = enabledWorldClocks.some(
+      (item) => item.iana === picked && item.label.toLowerCase() === typedLabel.toLowerCase(),
+    );
+    if (dup) {
+      store.showToast("That World Clock is already added", true);
+      return;
+    }
+    store.worldClockNewLabel = "";
+    store.worldClockNewZone = "";
+    if (newLabelEl) newLabelEl.value = "";
+    if (zoneSelEl) zoneSelEl.value = "";
+    updateWorldClocks([...enabledWorldClocks, { label: typedLabel, iana: picked }], "btn-world_clock_add");
   };
 
   const updateAlarmSlot = (idx: 0 | 1 | 2, patch: Partial<AlarmSlotView>, focusId?: string): void => {
@@ -678,12 +649,32 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
                 type="text"
                 id="cfg-local_clock_label"
                 maxlength="32"
+                enterkeyhint="done"
                 placeholder="Optional label…"
                 .value=${localClockLabelValue}
-                @change=${(ev: Event) => {
+                @input=${(ev: Event) => {
                   const cleaned = sanitizeClockLabel((ev.currentTarget as HTMLInputElement).value);
-                  (ev.currentTarget as HTMLInputElement).value = cleaned;
+                  store.stageDeviceSetting(
+                    "local_clock_label",
+                    cleaned,
+                    "cfg-local_clock_label",
+                    TEXT_INPUT_DEBOUNCE_MS,
+                  );
+                }}
+                @change=${(ev: Event) => {
+                  const el = ev.currentTarget as HTMLInputElement;
+                  const cleaned = sanitizeClockLabel(el.value);
+                  el.value = cleaned;
                   store.stageDeviceSetting("local_clock_label", cleaned, "cfg-local_clock_label");
+                }}
+                @keydown=${(ev: KeyboardEvent) => {
+                  if (!isImeSafeEnter(ev)) return;
+                  ev.preventDefault();
+                  const el = ev.currentTarget as HTMLInputElement;
+                  const cleaned = sanitizeClockLabel(el.value);
+                  el.value = cleaned;
+                  store.stageDeviceSetting("local_clock_label", cleaned, "cfg-local_clock_label");
+                  void store.flushAllPendingSettings();
                 }}
               />`,
             })}
@@ -700,7 +691,7 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
               id: "time-world-clocks",
               label: "World Clocks",
               description:
-                "Configure up to 4 custom-labeled IANA time zones shown on this Device's Clock tab.",
+                "Configure up to 4 custom-labeled time zones (UTC-12:00 to UTC+14:00) shown on this Device's Clock tab.",
               stacked: true,
               control: html`<div class="stack">
                 ${enabledWorldClocks.length
@@ -721,15 +712,46 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
                                 type="text"
                                 id=${lblId}
                                 maxlength="32"
-                                placeholder=${defaultCityForIana(entry.iana)}
+                                enterkeyhint="done"
+                                placeholder="Enter city or label…"
                                 .value=${entry.label}
+                                @input=${(ev: Event) => {
+                                  const cleaned = sanitizeClockLabel(
+                                    (ev.currentTarget as HTMLInputElement).value,
+                                  );
+                                  if (cleaned) {
+                                    updateWorldClockItem(
+                                      idx,
+                                      { label: cleaned },
+                                      lblId,
+                                      TEXT_INPUT_DEBOUNCE_MS,
+                                    );
+                                  }
+                                }}
                                 @change=${(ev: Event) => {
-                                  const cleaned =
-                                    sanitizeClockLabel(
-                                      (ev.currentTarget as HTMLInputElement).value,
-                                    ) || defaultCityForIana(entry.iana);
-                                  (ev.currentTarget as HTMLInputElement).value = cleaned;
+                                  const el = ev.currentTarget as HTMLInputElement;
+                                  const cleaned = sanitizeClockLabel(el.value);
+                                  if (!cleaned) {
+                                    el.value = entry.label;
+                                    store.showToast("City label cannot be empty", true);
+                                    return;
+                                  }
+                                  el.value = cleaned;
                                   updateWorldClockItem(idx, { label: cleaned }, lblId);
+                                }}
+                                @keydown=${(ev: KeyboardEvent) => {
+                                  if (!isImeSafeEnter(ev)) return;
+                                  ev.preventDefault();
+                                  const el = ev.currentTarget as HTMLInputElement;
+                                  const cleaned = sanitizeClockLabel(el.value);
+                                  if (!cleaned) {
+                                    el.value = entry.label;
+                                    store.showToast("City label cannot be empty", true);
+                                    return;
+                                  }
+                                  el.value = cleaned;
+                                  updateWorldClockItem(idx, { label: cleaned }, lblId);
+                                  void store.flushAllPendingSettings();
                                 }}
                               />
                             </div>
@@ -785,8 +807,19 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
                         type="text"
                         id="cfg-world_clock_new_label"
                         maxlength="32"
-                        placeholder="Defaults to selected zone city"
+                        enterkeyhint="done"
+                        placeholder="Enter city or label…"
                         ?disabled=${atWorldClockLimit}
+                        .value=${store.worldClockNewLabel}
+                        @input=${(ev: Event) => {
+                          store.worldClockNewLabel = (ev.currentTarget as HTMLInputElement).value;
+                          store.host.requestUpdate();
+                        }}
+                        @keydown=${(ev: KeyboardEvent) => {
+                          if (!isImeSafeEnter(ev)) return;
+                          ev.preventDefault();
+                          onAddWorldClock();
+                        }}
                       />
                     </div>
                     <div class="stacked-field">
@@ -794,18 +827,32 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
                       <select
                         id="cfg-world_clocks_add"
                         ?disabled=${atWorldClockLimit}
-                        .value=${""}
-                        @change=${onAddWorldClock}
+                        .value=${store.worldClockNewZone}
+                        @change=${(ev: Event) => {
+                          store.worldClockNewZone = (ev.currentTarget as HTMLSelectElement).value;
+                          store.host.requestUpdate();
+                        }}
                       >
-                        <option value="" selected>
+                        <option value="" ?selected=${!store.worldClockNewZone}>
                           ${atWorldClockLimit
                             ? "Maximum 4 World Clocks added"
-                            : "Select a time zone to add…"}
+                            : "Select a time zone (UTC-12 to UTC+14)…"}
                         </option>
-                        ${atWorldClockLimit ? nothing : renderWorldClockZoneOptions("")}
+                        ${atWorldClockLimit
+                          ? nothing
+                          : renderWorldClockZoneOptions(store.worldClockNewZone)}
                       </select>
                     </div>
                   </div>
+                  <button
+                    type="button"
+                    id="btn-world_clock_add"
+                    ?disabled=${atWorldClockLimit}
+                    @click=${() => onAddWorldClock()}
+                    class="btn btn-primary"
+                  >
+                    Add
+                  </button>
                 </div>
               </div>`,
             })}

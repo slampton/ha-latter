@@ -160,10 +160,12 @@ export class StudioStore implements ReactiveController {
   deviceSortAsc = true;
   deviceCategoryFilter = "all";
 
-  // Device Security state
+  // Device Security & Time UI draft state
   devicePinDraft = "";
   systemPinDraft = "";
   pinBusy = false;
+  worldClockNewLabel = "";
+  worldClockNewZone = "";
 
   // System Shared Entities UI state
   doorbellTestSubentryId = "";
@@ -501,6 +503,8 @@ export class StudioStore implements ReactiveController {
     this.currentScope = "device";
     this.currentViewId = targetView === "select_device_prompt" ? "dashboard" : targetView;
     this.devicePinDraft = "";
+    this.worldClockNewLabel = "";
+    this.worldClockNewZone = "";
     this.syncUrl();
     this.host.requestUpdate();
     await this.ensureSubscription(true);
@@ -775,8 +779,13 @@ export class StudioStore implements ReactiveController {
 
   // ---------- Delegated Domain Operations ----------
 
-  stageDeviceSetting(key: string, value: unknown, controlDomId?: string): void {
-    stageDeviceSettingOp(this, key, value, controlDomId);
+  stageDeviceSetting(
+    key: string,
+    value: unknown,
+    controlDomId?: string,
+    debounceMs?: number,
+  ): void {
+    stageDeviceSettingOp(this, key, value, controlDomId, debounceMs);
   }
 
   async runDeviceAction(action: string, toastMessage?: string): Promise<boolean> {
