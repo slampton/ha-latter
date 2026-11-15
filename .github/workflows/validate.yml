@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
       - name: Run Marketplace validation
         uses: hacs/action@main
         with:
@@ -28,7 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
       - name: Run Hassfest
         uses: home-assistant/actions/hassfest@master
 
@@ -37,15 +37,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: "3.13"
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
-          node-version: "22"
+          node-version: "24"
           package-manager-cache: false
       - name: Install lint and test dependencies
         run: pip install --upgrade pip ruff pytest pytest-asyncio pytest-cov voluptuous Pillow aiohttp
@@ -69,7 +69,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: Fast-forward main (refuses anything that is not a fast-forward)
