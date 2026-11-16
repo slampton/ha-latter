@@ -444,7 +444,9 @@ class LatterCoordinator:
         self._unsub_wallpaper_timer: Callable[[], None] | None = None
         self._unsub_doorbell_ring_state: Callable[[], None] | None = None
         self._unsub_link_report_state: Callable[[], None] | None = None
+        self._unsub_ble_radio_state: Callable[[], None] | None = None
         self._entered_hibernate: bool = False
+        self._matched_ble_addresses: list[str] = []
         self._doorbell_ring_map: dict[str, str] = {}
         self._doorbell_ring_cooldown_until: dict[str, float] = {}
         self._ble_tracker: LatterNativeBleTracker | None = None
@@ -1232,6 +1234,7 @@ class LatterCoordinator:
             "hello_manifest": self._runtime.hello_manifest,
             "last_boot_id": self._runtime.last_boot_id,
             "entered_hibernate": self._entered_hibernate,
+            "matched_ble_addresses": list(self._matched_ble_addresses[:8]),
             "prefs_seq": self.prefs_seq,
             "prefs_key_seq": dict(self.prefs_key_seq),
         }
@@ -1269,6 +1272,13 @@ class LatterCoordinator:
         if saved_boot_id := str(stored.get("last_boot_id") or "").strip():
             self._runtime.last_boot_id = saved_boot_id
         self._entered_hibernate = bool(stored.get("entered_hibernate"))
+        raw_matched = stored.get("matched_ble_addresses")
+        if isinstance(raw_matched, list):
+            self._matched_ble_addresses = [
+                norm
+                for item in raw_matched[:8]
+                if (norm := str(item or "").strip().upper())
+            ]
         self.prefs_seq = max(0, int(stored.get("prefs_seq") or 0))
         raw_key_seq = stored.get("prefs_key_seq")
         if isinstance(raw_key_seq, dict):
@@ -1568,6 +1578,47 @@ class LatterCoordinator:
         )
 
     @callback
+    def _bind_ble_radio_listener(self) -> None:
+        if self._unsub_ble_radio_state is not None:
+            self._unsub_ble_radio_state()
+            self._unsub_ble_radio_state = None
+        ble_ent = find_device_entity_by_suffix(
+            self.hass,
+            self.esphome_device_id,
+            "binary_sensor",
+            ("_ble_radio_active",),
+        )
+        if not ble_ent:
+            return
+
+        @callback
+        def _on_ble_radio_change(event: Event) -> None:
+            old_st: State | None = event.data.get("old_state")
+            new_st: State | None = event.data.get("new_state")
+            if new_st is None or (old_st is not None and new_st.state == old_st.state):
+                return
+            if new_st.state == "on" and self._ble_tracker is not None:
+                self._ble_tracker.note_ble_radio_active(time.monotonic())
+            self.async_notify_listeners()
+
+        self._unsub_ble_radio_state = async_track_state_change_event(
+            self.hass, [ble_ent], _on_ble_radio_change
+        )
+
+    @callback
+    def _on_ble_address_matched(self, addr: str) -> None:
+        norm = str(addr or "").strip().upper()
+        if not norm:
+            return
+        if self._matched_ble_addresses and self._matched_ble_addresses[0] == norm:
+            return
+        self._matched_ble_addresses = [
+            norm,
+            *(a for a in self._matched_ble_addresses if a != norm),
+        ][:8]
+        self._schedule_persist_runtime_state()
+
+    @callback
     def _bind_all_listeners(self) -> None:
         if self.is_ble_tag:
             return
@@ -1575,6 +1626,7 @@ class LatterCoordinator:
         bind_coordinator_area_listeners(self)
         bind_coordinator_doorbell_listener(self)
         self._bind_link_report_listener()
+        self._bind_ble_radio_listener()
         self._bind_wallpaper_cycle_timer()
 
     def resolve_wallpaper_rotation_pool(self) -> list[str]:
@@ -1663,6 +1715,13 @@ class LatterCoordinator:
                 else:
                     self._ble_tracker.set_area_offsets(self.ble_area_offsets)
             if self._ble_tracker is None:
+                hw_manifest = self.hardware_manifest
+                manifest_beacon = hw_manifest.get("beacon")
+                if not isinstance(manifest_beacon, dict) and hw_manifest.get("minor") is not None:
+                    manifest_beacon = {
+                        "major": hw_manifest.get("major", 1),
+                        "minor": hw_manifest["minor"],
+                    }
                 self._ble_tracker = LatterNativeBleTracker(
                     hass=self.hass,
                     beacon_uuid=self.ble_beacon_uuid,
@@ -1671,8 +1730,10 @@ class LatterCoordinator:
                     area_offsets=self.ble_area_offsets,
                     target_address=self.ble_target_address,
                     esphome_device_id=self.esphome_device_id,
-                    manifest_beacon=self.hardware_manifest.get("beacon"),
+                    manifest_beacon=manifest_beacon,
                     should_hold_during_ble_sleep=self.is_ble_sleep_expected,
+                    initial_matched_addresses=self._matched_ble_addresses,
+                    on_address_matched=self._on_ble_address_matched,
                 )
                 self._ble_tracker.async_start()
         elif self._ble_tracker is not None:
@@ -1700,6 +1761,7 @@ class LatterCoordinator:
             "_unsub_wallpaper_timer",
             "_unsub_doorbell_ring_state",
             "_unsub_link_report_state",
+            "_unsub_ble_radio_state",
             "_unsub_timer_tick",
         ):
             if (unsub := getattr(self, attr, None)) is not None:

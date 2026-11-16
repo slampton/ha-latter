@@ -625,3 +625,183 @@ async def test_static_assigned_area_startup_healing_live_reassignment_and_two_wa
     assert child_latter_dev.area_id == "kitchen"
 
     assert await async_unload_entry(hass, entry) is True
+
+
+@pytest.mark.asyncio
+async def test_coprocessor_ble_mac_persists_across_sleep_and_ble_radio_wake_grace(
+    hass: Any, make_esphome_device: Any
+) -> None:
+    """Verify ESP32-P4+C6 co-processor BLE MAC seeding (>180s stale scanner cache), sleep retention, and BLE wake grace."""
+    from homeassistant.config_entries import ConfigEntry, ConfigSubentry
+
+    from custom_components.latter import async_setup, async_setup_entry
+    from custom_components.latter.areas import build_area_context_payload
+    from custom_components.latter.const import (
+        CONF_DEVICE_SLUG,
+        CONF_ESPHOME_DEVICE_ID,
+        CONF_NATIVE_BLE_TRACKING,
+        CONF_SYSTEM_BLE_UUID,
+        MIN_FIRMWARE_SDK_REV,
+        SUBENTRY_DEVICE,
+    )
+    from custom_components.latter.presence import SURVEY_RETENTION_SECONDS
+
+    area_reg = ar.async_get(hass)
+    area_reg.async_create("Garage", area_id="garage")
+    dev_reg = dr.async_get(hass)
+    dev_reg.async_get_or_create(
+        config_entry_id="esp_garage_proxy",
+        connections={(dr.CONNECTION_NETWORK_MAC, "a8:42:e3:21:af:e2")},
+        identifiers={("esphome", "a8:42:e3:21:af:e2")},
+        name="garage-ep1",
+        area_id="garage",
+    )
+
+    custom_uuid = "49BDD15E-2D6F-417C-B0C2-4E39EB0AF1DF"
+    c6_ble_mac = "E8:3D:C1:D2:46:AA"
+    p4_host_mac = "e8:f6:0a:e8:a4:a9"
+    t0 = time.monotonic()
+    stale_ts = t0 - SURVEY_RETENTION_SECONDS - 120.0
+    stale_adv = _make_ibeacon_adv(
+        custom_uuid,
+        rssi=-53,
+        source="A8:42:E3:21:AF:E2",
+        obs_time=stale_ts,
+        address=c6_ble_mac,
+        major=1,
+        minor=4,
+    )
+    hass.data["_bt_scanners"] = [
+        SimpleNamespace(
+            source="A8:42:E3:21:AF:E2",
+            name="garage-ep1",
+            details={"source": "a8:42:e3:21:af:e2"},
+            discovered_device_timestamps={c6_ble_mac: stale_ts},
+            discovered_devices_and_advertisement_data={
+                c6_ble_mac: (SimpleNamespace(rssi=-53, name=None), stale_adv)
+            },
+        )
+    ]
+
+    esp_dev, mac = make_esphome_device(
+        hass,
+        slug="remote_assistant",
+        mac=p4_host_mac,
+        name="Remote Assistant",
+        area_id="garage",
+        stationary=0,
+    )
+    # Compact 255-char System: Hardware Manifest has top-level `minor` (no nested `beacon` dict)
+    hass.states.async_set(
+        "sensor.remote_assistant_system_hardware_manifest",
+        '{"v":2,"contract":3,"board":"waveshare_p4_35","w":320,"h":480,"shape":"square",'
+        '"display":1,"touch":1,"audio":1,"mic":1,"spk":1,"imu":0,"battery":1,'
+        '"stationary":0,"wearable":0,"ips":1,"chip":"ESP32-P4","psram_mb":32,"minor":4}',
+    )
+    ent_reg = er.async_get(hass)
+    if ent_reg.async_get("sensor.remote_assistant_wi_fi_signal") is None:
+        ent_reg.async_register(
+            er.RegistryEntry(
+                entity_id="sensor.remote_assistant_wi_fi_signal",
+                platform="esphome",
+                device_id=esp_dev.id,
+                original_name="Wi-Fi Signal",
+            )
+        )
+    hass.states.async_set("sensor.remote_assistant_wi_fi_signal", "-62")
+    hass.states.async_set("binary_sensor.remote_assistant_ble_radio_active", "off")
+
+    await async_setup(hass, {})
+    entry = hass.config_entries.add_entry(
+        ConfigEntry(
+            entry_id="latter_hub_p4",
+            domain=DOMAIN,
+            title="Latter",
+            data={},
+            subentries_data=[
+                ConfigSubentry(
+                    subentry_id="sub_remote_p4",
+                    subentry_type=SUBENTRY_DEVICE,
+                    title="Remote Assistant",
+                    unique_id=mac,
+                    data={
+                        CONF_DEVICE_SLUG: "remote_assistant",
+                        CONF_ESPHOME_DEVICE_ID: esp_dev.id,
+                        "mac": mac,
+                        CONF_NATIVE_BLE_TRACKING: True,
+                        "ble_auto_switch": True,
+                        "sync_device_area": True,
+                    },
+                )
+            ],
+            unique_id=DOMAIN,
+        )
+    )
+    assert await async_setup_entry(hass, entry) is True
+    await hass.async_block_till_done()
+    coord = entry.runtime_data.coordinators["sub_remote_p4"]
+    hass.data[DOMAIN][DATA_GLOBAL_CONFIG][CONF_SYSTEM_BLE_UUID] = custom_uuid
+    await coord.async_on_global_config_updated({CONF_SYSTEM_BLE_UUID})
+    coord._ble_tracker.async_stop()
+    coord._ble_tracker = None
+    coord._sync_ble_tracker()
+
+    tracker = coord._ble_tracker
+    assert tracker is not None
+
+    # 1) Stale (>180s) scanner cache still seeds C6 BLE MAC for raw callback without scoring stale RSSI
+    assert c6_ble_mac in tracker.matched_ble_addresses
+    assert tracker.packets_seen == 0
+    raw_cb = next(
+        (cb for cb, addr in hass.data.get("_bt_adv_callbacks", []) if addr == c6_ble_mac),
+        None,
+    )
+    assert raw_cb is not None
+    snap = coord._build_persisted_snapshot()
+    assert snap["matched_ble_addresses"] == [c6_ble_mac]
+
+    # 2) Screen-off BLE sleep > 180s MUST NOT evict C6 BLE MAC or unsubscribe raw_cb
+    tracker.check_away_timeout(t0 + AWAY_TIMEOUT_SECONDS + 90.0)
+    assert tracker.is_away is False
+    assert any(addr == c6_ble_mac for _cb, addr in hass.data.get("_bt_adv_callbacks", []))
+
+    # 3) Even if tracker was previously Away, reboot (`device_hello`) + `BLE Radio Active -> on` 4s later
+    #    holds sticky Garage instead of flipping to Away / Unassigned before BLE packets arrive
+    tracker.is_away = True
+    await coord.async_handle_device_hello(
+        "2053920193",
+        '{"v":2,"contract":3,"board":"waveshare_p4_35","w":320,"h":480,"shape":"square",'
+        '"display":1,"touch":1,"audio":1,"mic":1,"spk":1,"imu":0,"battery":1,"stationary":0,"wearable":0,'
+        f'"beacon":{{"uuid":"4C415454-4552-434F-5245-000000000220","major":1,"minor":4}},"sdk":{MIN_FIRMWARE_SDK_REV}}}',
+    )
+    hass.states.async_set("binary_sensor.remote_assistant_ble_radio_active", "on")
+    await hass.async_block_till_done()
+    assert tracker.is_away is False
+    assert coord.is_device_away() is False
+    area_name, area_attrs = build_area_context_payload(coord)
+    assert area_name == "Garage"
+    assert area_attrs["area_id"] == "garage"
+
+    # Immediate away-check tick 5s after BLE Radio Active -> on still grants full 180s window
+    tracker.check_away_timeout(time.monotonic() + 5.0)
+    assert tracker.is_away is False
+    assert coord.is_device_away() is False
+
+    # 4) Static iBeacon packet on C6 BLE MAC arrives via raw_cb (habluetooth suppresses shared_cb)
+    raw_cb(
+        _make_ibeacon_adv(
+            custom_uuid,
+            rssi=-53,
+            source="A8:42:E3:21:AF:E2",
+            obs_time=time.monotonic() + 1.0,
+            address=c6_ble_mac,
+            major=1,
+            minor=4,
+        )
+    )
+    assert tracker.packets_seen == 1
+    assert tracker.current_area_id == "garage"
+    assert tracker.winning_rssi == -53
+    assert coord.get_current_area_and_distance()[0] == "Garage"
+
+    assert await async_unload_entry(hass, entry) is True
