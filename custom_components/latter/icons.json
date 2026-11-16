@@ -22,18 +22,10 @@
         "default": "mdi:map-marker-radius"
       },
       "current_floor": {
-        "default": "mdi:layers-outline",
-        "state": {
-          "Away": "mdi:layers-off-outline",
-          "Unassigned": "mdi:layers-off-outline"
-        }
+        "default": "mdi:layers-outline"
       },
       "person_current_floor": {
-        "default": "mdi:layers-outline",
-        "state": {
-          "Away": "mdi:layers-off-outline",
-          "Unassigned": "mdi:layers-off-outline"
-        }
+        "default": "mdi:layers-outline"
       },
       "remote_config": {
         "default": "mdi:remote-tv"

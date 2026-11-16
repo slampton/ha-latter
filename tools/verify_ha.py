@@ -38,6 +38,7 @@ TEXT_EXTS = {".py", ".json", ".yaml", ".yml", ".js", ".ts", ".md", ".toml"}
 
 BANNED_TERMS_RE = re.compile(r"\b(household|households)\b", re.IGNORECASE)
 SINGLE_QUOTED_PLACEHOLDER_RE = re.compile(r"'\{[a-zA-Z0-9_]+\}'")
+HASSFEST_TRANSLATION_KEY_RE = re.compile(r"^(?!-|_)[a-z0-9-_]+(?<!-|_)$")
 
 EXPECTED_ROOT_MODULES: frozenset[str] = frozenset(
     {
@@ -163,6 +164,27 @@ def _call_attr_chain(node: ast.AST) -> str:
     if isinstance(cur, ast.Name):
         parts.append(cur.id)
     return ".".join(reversed(parts))
+
+
+def _check_hassfest_keys(
+    obj: object,
+    rel: str,
+    path_prefix: str,
+    failures: list[str],
+) -> None:
+    """Recursively validate every dict key against hassfest's translation-key regex."""
+    if isinstance(obj, dict):
+        for key, val in obj.items():
+            dotted = f"{path_prefix}.{key}" if path_prefix else str(key)
+            if not isinstance(key, str) or not HASSFEST_TRANSLATION_KEY_RE.match(key):
+                failures.append(
+                    f"[HASSFEST ICONS] {rel} has invalid translation key {key!r} at {dotted!r} "
+                    "(must match ^(?!-|_)[a-z0-9-_]+(?<!-|_)$)"
+                )
+            _check_hassfest_keys(val, rel, dotted, failures)
+    elif isinstance(obj, list):
+        for idx, item in enumerate(obj):
+            _check_hassfest_keys(item, rel, f"{path_prefix}[{idx}]", failures)
 
 
 def _check_ast_security_and_identity(
@@ -413,6 +435,32 @@ def main() -> int:
         m_sq = SINGLE_QUOTED_PLACEHOLDER_RE.search(s_txt)
         if m_sq:
             failures.append(f"[HA QUALITY] strings.json contains single-quoted placeholder {m_sq.group(0)}")
+        try:
+            strings_data = json.loads(s_txt)
+        except ValueError:
+            pass
+        else:
+            _check_hassfest_keys(strings_data, "custom_components/latter/strings.json", "", failures)
+        try:
+            en_data = json.loads(e_bytes.decode("utf-8", errors="replace"))
+        except ValueError:
+            pass
+        else:
+            _check_hassfest_keys(en_data, "custom_components/latter/translations/en.json", "", failures)
+
+    icons_path = LATTER_DIR / "icons.json"
+    if not icons_path.is_file():
+        failures.append("[HASSFEST ICONS] custom_components/latter/icons.json is missing")
+    else:
+        try:
+            icons_data = json.loads(icons_path.read_text(encoding="utf-8"))
+        except ValueError as exc:
+            failures.append(f"[HASSFEST ICONS] custom_components/latter/icons.json failed JSON parse: {exc}")
+        else:
+            if not isinstance(icons_data, dict):
+                failures.append("[HASSFEST ICONS] custom_components/latter/icons.json root must be a JSON object")
+            else:
+                _check_hassfest_keys(icons_data, "custom_components/latter/icons.json", "", failures)
 
     manifest = json.loads((LATTER_DIR / "manifest.json").read_text(encoding="utf-8"))
     if (
