@@ -156,10 +156,15 @@ class TestViewLayout(unittest.TestCase):
         self.assertIn("Add BLE Tag", discovered_view)
         self.assertIn('id="latter-adopt-table-box"', discovered_view)
         self.assertIn('id="ble-adopt-table-box"', discovered_view)
-        self.assertEqual(latter_const.STUDIO_REV, 16)
-        self.assertIn("const STUDIO_REV = 16;", js)
+        self.assertEqual(latter_const.STUDIO_REV, 17)
+        self.assertIn("const STUDIO_REV = 17;", js)
         self.assertNotIn("fusion-area", js)
         self.assertNotIn("d.has_ble ||", js)
+        self.assertNotIn(".area-presence-box.occupied", js)
+        self.assertNotIn('? " occupied"', area_tracking_view)
+        self.assertNotIn('id="ble-proxy-trim-drawer"', js)
+        self.assertNotIn("<summary>Proxy Antenna Trim</summary>", js)
+        self.assertNotIn("proxyTrimOpen", js)
         self.assertGreaterEqual(js.count('d.ble_tracked || d.kind === "ble_tag"'), 4)
         self.assertNotIn("Discovered Bluetooth Devices", area_tracking_view)
         self.assertNotIn('id="ble-adopt-table-box"', area_tracking_view)
@@ -183,6 +188,10 @@ class TestViewLayout(unittest.TestCase):
             "<summary>Sensor &amp; Threshold Settings</summary>",
             'id: "card-ble-calibration"',
             'title: "Walk-Around BLE Calibration"',
+            'id="ble-calibrate-target-box"',
+            "calibrate-target-box",
+            "handoff-active",
+            'id="ble-calibrate-handoff-banner"',
             'label: "Carried Device"',
             'id="ble-survey-device-picker"',
             'label: "Standing In Area"',
@@ -190,12 +199,14 @@ class TestViewLayout(unittest.TestCase):
             'id="btn-capture-area-signature"',
             "Calibrate Area",
             '<div class="subsection-title">Nearby Bluetooth Proxies</div>',
-            'id="ble-proxy-trim-drawer"',
-            "<summary>Proxy Antenna Trim</summary>",
+            "proxy-trim-details",
+            "<summary>Antenna Trim</summary>",
             'id="card-advanced-ble-settings"',
             '<h3 class="card-title">Advanced BLE Settings</h3>',
         ):
             self.assertIn(expected_snippet, area_tracking_view)
+        signal_row_idx = area_tracking_view.index('class="signal-row')
+        self.assertIn("<summary>Antenna Trim</summary>", area_tracking_view[signal_row_idx:])
         self.assertEqual(area_tracking_view.count("btn-primary"), 1)
         adv_ble_order = (
             "sys-ble_away_timeout_s",

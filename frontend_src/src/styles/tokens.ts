@@ -395,7 +395,6 @@ export const STUDIO_STYLES = css`
     border-radius: var(--studio-radius-control);
     background: var(--studio-input-bg);
   }
-  .area-presence-box.occupied { border-color: var(--studio-primary); }
   .area-box-head {
     display: flex;
     align-items: center;
@@ -930,6 +929,30 @@ export const STUDIO_STYLES = css`
   }
 
   /* ---------- BLE rows & upload progress ---------- */
+  #card-ble-calibration {
+    scroll-margin-top: calc(var(--studio-header-height) + var(--studio-space-4));
+  }
+  .calibrate-target-box {
+    display: flex;
+    flex-direction: column;
+    gap: var(--studio-space-3);
+    padding: var(--studio-space-3);
+    border: 1px solid var(--studio-divider);
+    border-radius: var(--studio-radius-control);
+    background: var(--studio-input-bg);
+    transition: border-color 0.2s ease, background-color 0.2s ease;
+  }
+  .calibrate-target-box.handoff-active {
+    border: 2px solid var(--studio-warning);
+    background: var(--studio-warning-tint);
+  }
+  .calibrate-handoff-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--studio-space-2);
+    font-weight: var(--studio-weight-medium);
+  }
   .signal-row {
     display: flex;
     flex-direction: column;
@@ -940,6 +963,23 @@ export const STUDIO_STYLES = css`
     background: var(--studio-input-bg);
   }
   .signal-row.winner { border-color: var(--studio-primary); }
+  .proxy-trim-details {
+    padding-top: var(--studio-space-2);
+  }
+  .proxy-trim-details > summary {
+    color: var(--studio-text-secondary);
+    font-size:var(--studio-font-secondary);
+  }
+  .proxy-trim-details[open] > summary,
+  .proxy-trim-details > summary:hover {
+    color: var(--studio-text);
+  }
+  .proxy-trim-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--studio-space-2);
+    padding-top: var(--studio-space-2);
+  }
   .signal-row-head {
     display: flex;
     align-items: center;

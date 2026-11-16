@@ -231,7 +231,31 @@ export async function setBleScannerOffsetOp(
       { scanner_source: source, offset_db: offsetDb },
       store.activeSubentryId || null,
     );
-    if (res) store.ingestPayload(res, false);
+    if (res) {
+      if (!store.bleLiveStreamActive && Array.isArray(res.system_devices) && store.bleSurveyFrozen) {
+        const sourceNorm = source.toLowerCase();
+        for (const incomingDev of res.system_devices) {
+          if (!incomingDev.subentry_id) continue;
+          const frozen = store.bleSurveyFrozen.get(incomingDev.subentry_id);
+          if (!frozen) continue;
+          const incomingRow = (incomingDev.ble_survey_rows || []).find(
+            (r) => String(r.scanner_source || "").trim().toLowerCase() === sourceNorm,
+          );
+          if (!incomingRow) continue;
+          frozen.rows = frozen.rows.map((r) => {
+            if (String(r.scanner_source || "").trim().toLowerCase() !== sourceNorm) {
+              return r;
+            }
+            return {
+              ...r,
+              offset_db: incomingRow.offset_db,
+              effective_rssi: incomingRow.effective_rssi,
+            };
+          });
+        }
+      }
+      store.ingestPayload(res, false);
+    }
   } catch (err) {
     store.showToast(formatWsError(err, "Could not update BLE scanner offset"), true);
   }
@@ -258,7 +282,9 @@ export async function captureBleAreaSignatureOp(
       { area_id: areaId, survey_subentry_id: surveySubentryId },
       store.activeSubentryId || null,
     );
+    store.bleCalibrateHandoffActive = false;
     if (res) store.ingestPayload(res, false);
+    else store.host?.requestUpdate?.();
     store.showToast("Captured Area signature");
   } catch (err) {
     store.showToast(formatWsError(err, "Signature capture failed"), true);

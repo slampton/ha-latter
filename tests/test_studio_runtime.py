@@ -2030,8 +2030,9 @@ return {
         self.assertIn("Living TV BLE", got["discSearch"])
 
     def test_system_presence_walk_around_ux_and_ble_tracked_filter(self) -> None:
-        """D-044: System -> BLE & Area Presence renders enclosed Area boxes, filters strictly by ble_tracked, and bridges Calibrate."""
+        """D-044 / D-045: System -> BLE & Area Presence Area boxes, smooth-scroll handoff, stream freeze, and inline Antenna Trim."""
         runner = """
+return (async () => {
 function flattenHtml(val) {
   if (val == null || val === false || val === true || typeof val === "symbol") return "";
   if (Array.isArray(val)) return val.map(flattenHtml).join("");
@@ -2040,7 +2041,15 @@ function flattenHtml(val) {
       let out = "";
       for (let i = 0; i < val.strings.length; i += 1) {
         out += val.strings[i];
-        if (i < val.values.length) out += flattenHtml(val.values[i]);
+        if (i < val.values.length) {
+          const prev = val.strings[i];
+          const v = val.values[i];
+          if (typeof v === "boolean" && /\\?[a-zA-Z0-9_-]+=$/.test(prev)) {
+            out += String(v);
+          } else {
+            out += flattenHtml(v);
+          }
+        }
       }
       return out;
     }
@@ -2051,18 +2060,51 @@ function flattenHtml(val) {
   return String(val);
 }
 
-let focusedId = "";
-let scrolledId = "";
+function findButtonClickByText(node, buttonText) {
+  if (!node || typeof node !== "object") return null;
+  if (Array.isArray(node)) {
+    for (const item of node) {
+      const found = findButtonClickByText(item, buttonText);
+      if (found) return found;
+    }
+    return null;
+  }
+  if (node._$litKeyed$ === 1 && Array.isArray(node.templates)) {
+    return findButtonClickByText(node.templates, buttonText);
+  }
+  if (Array.isArray(node.strings) && Array.isArray(node.values)) {
+    for (let i = 0; i < node.values.length; i += 1) {
+      const v = node.values[i];
+      if (
+        typeof v === "function" &&
+        node.strings[i].includes("@click=") &&
+        (node.strings[i + 1] || "").includes(buttonText)
+      ) {
+        return v;
+      }
+      const nested = findButtonClickByText(v, buttonText);
+      if (nested) return nested;
+    }
+  }
+  return null;
+}
+
+const scrolledCalls = [];
+const focusedCalls = [];
 globalThis.requestAnimationFrame = (cb) => cb();
 
 const fakeHost = {
+  isConnected: true,
   requestUpdate() {},
+  addController() {},
+  removeController() {},
+  updateComplete: Promise.resolve(true),
   renderRoot: {
     getElementById(id) {
       return {
         id,
-        scrollIntoView() { scrolledId = id; },
-        focus() { focusedId = id; },
+        scrollIntoView(opts) { scrolledCalls.push({ id, opts: opts || null }); },
+        focus(opts) { focusedCalls.push({ id, opts: opts || null }); },
       };
     },
   },
@@ -2133,7 +2175,11 @@ const baseState = {
     ble_max_velocity_mps: 3.5,
     ble_attenuation: 2.2,
   },
-  system_devices: [deskUntracked, pocketTracked, keyringTag],
+  system_devices: [
+    structuredClone(deskUntracked),
+    structuredClone(pocketTracked),
+    structuredClone(keyringTag),
+  ],
   ble_area_signatures: [
     {
       area_id: "bedroom",
@@ -2144,6 +2190,16 @@ const baseState = {
       scanner_count: 2,
       sample_count: 18,
       captured_at: "2026-11-16T20:00:00Z",
+    },
+    {
+      area_id: "office",
+      area_name: "Office",
+      floor_id: "downstairs",
+      has_ble_proxy: false,
+      has_signature: false,
+      scanner_count: 0,
+      sample_count: 0,
+      captured_at: "",
     },
     {
       area_id: "guest_bath",
@@ -2177,48 +2233,226 @@ const baseState = {
   },
 };
 
-const store = {
-  host: fakeHost,
-  hass: { locale: { language: "en" }, config: { unit_system: { length: "km" } } },
-  state: baseState,
-  activeSubentryId: "sub_desk",
-  bleSurveySubentryId: "sub_desk",
-  bleCalibrateAreaId: "",
-  bleLiveStreamActive: true,
-  proxyTrimOpen: false,
-  advancedBleOpen: false,
-  openFusionAreas: new Set(),
-  ensureSubscription() {},
-  getActiveSurveyDevice() { return getActiveSurveyDeviceOp(this); },
-  selectBleCalibrateArea: StudioStore.prototype.selectBleCalibrateArea,
-  ensureDefaultSurveyDevice: StudioStore.prototype.ensureDefaultSurveyDevice,
+const wsCalls = [];
+const subCalls = [];
+const store = new StudioStore(fakeHost);
+store.ws.hass = { locale: { language: "en" }, config: { unit_system: { length: "km" } } };
+store.ws.runSystemCommand = async (command, payload) => {
+  wsCalls.push({ command, payload });
+  if (command === "capture_ble_area_signature") {
+    return {
+      ...structuredClone(store.state),
+      ble_area_signatures: store.state.ble_area_signatures.map((s) =>
+        s.area_id === payload.area_id
+          ? { ...s, has_signature: true, scanner_count: 2, sample_count: 10, captured_at: "2026-11-16T22:00:00Z" }
+          : s,
+      ),
+    };
+  }
+  if (command === "set_ble_scanner_offset") {
+    return {
+      ...structuredClone(store.state),
+      system_devices: [
+        structuredClone(deskUntracked),
+        {
+          ...structuredClone(pocketTracked),
+          ble_packets_seen: 300,
+          active_area_name: "Garage",
+          ble_survey_rows: [
+            {
+              ...structuredClone(pocketTracked.ble_survey_rows[0]),
+              raw_rssi: -40,
+              offset_db: payload.offset_db,
+              effective_rssi: -58 + payload.offset_db,
+            },
+            structuredClone(pocketTracked.ble_survey_rows[1]),
+          ],
+        },
+        structuredClone(keyringTag),
+      ],
+    };
+  }
+  return structuredClone(store.state);
 };
+store.ensureSubscription = async (force = false) => {
+  subCalls.push(Boolean(force));
+};
+store.showToast = () => {};
+store.activeSubentryId = "sub_desk";
+store.bleSurveySubentryId = "sub_desk";
+store.ingestPayload(structuredClone(baseState), false);
 
-store.ensureDefaultSurveyDevice();
 const defaultSurveyAfterFilter = store.bleSurveySubentryId;
 const activeRendered = flattenHtml(renderSystemPresenceView(store));
 
-store.selectBleCalibrateArea("guest_bath", true);
-const afterBridgeRendered = flattenHtml(renderSystemPresenceView(store));
+// 1. Calibrate handoff: smooth scroll #card-ble-calibration + preventScroll focus + warning highlight + Dismiss & Capture clear
+store.selectBleCalibrateArea("office", true);
+const handoffActiveAfterSelect = store.bleCalibrateHandoffActive;
+const handoffTpl = renderSystemPresenceView(store);
+const afterBridgeRendered = flattenHtml(handoffTpl);
+const dismissHandler = findButtonClickByText(handoffTpl, "Dismiss");
+if (dismissHandler) dismissHandler();
+const handoffAfterDismiss = store.bleCalibrateHandoffActive;
+const afterDismissRendered = flattenHtml(renderSystemPresenceView(store));
 
-const storeZeroBle = Object.assign({}, store, {
-  state: Object.assign({}, baseState, { system_devices: [deskUntracked] }),
-  bleSurveySubentryId: "",
+store.selectBleCalibrateArea("office", true);
+const handoffBeforeCapture = store.bleCalibrateHandoffActive;
+await store.captureBleAreaSignature("office");
+const handoffAfterCapture = store.bleCalibrateHandoffActive;
+
+// 2. Inline per-proxy Antenna Trim scoped to a single proxy via openProxyTrims
+store.openProxyTrims.add("AA:BB:CC:DD:EE:01");
+const oneProxyTrimOpenRendered = flattenHtml(renderSystemPresenceView(store));
+store.openProxyTrims.clear();
+
+// 3. Stream pause freeze across applyBleSurveyDelta & ingestPayload + manual trim update + resume
+subCalls.length = 0;
+store.toggleBleLiveStream(false);
+const pausedRendered = flattenHtml(renderSystemPresenceView(store));
+const frozenSizeWhilePaused = store.bleSurveyFrozen.size;
+
+store.applyBleSurveyDelta({
+  type: "ble_survey_delta",
+  subentry_id: "sub_pocket",
+  ble_packets_seen: 99,
+  ble_survey_rows: [
+    {
+      area_id: "kitchen",
+      area_name: "Kitchen",
+      scanner_source: "AA:BB:CC:DD:EE:99",
+      scanner_name: "Kitchen Proxy",
+      raw_rssi: -42,
+      effective_rssi: -42,
+      offset_db: 0,
+      distance_m: 0.5,
+      age_seconds: 0,
+      is_fresh: true,
+      is_winner: true,
+    },
+  ],
 });
-storeZeroBle.ensureDefaultSurveyDevice();
+const afterPausedDeltaDev = structuredClone(store.getActiveSurveyDevice());
+
+store.ingestPayload(
+  {
+    ...structuredClone(store.state),
+    system_devices: [
+      structuredClone(deskUntracked),
+      {
+        ...structuredClone(pocketTracked),
+        ble_packets_seen: 250,
+        active_area_name: "Garage",
+        ble_survey_rows: [
+          {
+            area_id: "garage",
+            area_name: "Garage",
+            scanner_source: "AA:BB:CC:DD:EE:88",
+            scanner_name: "Garage Proxy",
+            raw_rssi: -49,
+            effective_rssi: -49,
+            offset_db: 0,
+            distance_m: 0.8,
+            age_seconds: 1,
+            is_fresh: true,
+            is_winner: true,
+          },
+        ],
+      },
+      structuredClone(keyringTag),
+    ],
+  },
+  false,
+);
+const afterPausedIngestDev = structuredClone(store.getActiveSurveyDevice());
+
+await store.setBleScannerOffset("AA:BB:CC:DD:EE:01", 3.0);
+const afterPausedManualTrimDev = structuredClone(store.getActiveSurveyDevice());
+
+subCalls.length = 0;
+store.toggleBleLiveStream(true);
+const frozenSizeAfterResume = store.bleSurveyFrozen.size;
+const subCallsOnResume = [...subCalls];
+
+store.applyBleSurveyDelta({
+  type: "ble_survey_delta",
+  subentry_id: "sub_pocket",
+  ble_packets_seen: 42,
+  ble_survey_rows: [
+    {
+      area_id: "kitchen",
+      area_name: "Kitchen",
+      scanner_source: "AA:BB:CC:DD:EE:99",
+      scanner_name: "Kitchen Proxy",
+      raw_rssi: -44,
+      effective_rssi: -44,
+      offset_db: 0,
+      distance_m: 0.6,
+      age_seconds: 0,
+      is_fresh: true,
+      is_winner: true,
+    },
+  ],
+});
+const afterResumedDeltaDev = structuredClone(store.getActiveSurveyDevice());
+
+store.ingestPayload(
+  {
+    ...structuredClone(store.state),
+    system_devices: [
+      structuredClone(deskUntracked),
+      {
+        ...structuredClone(pocketTracked),
+        ble_packets_seen: 55,
+        active_area_name: "Office",
+      },
+      structuredClone(keyringTag),
+    ],
+  },
+  false,
+);
+const afterResumedIngestDev = structuredClone(store.getActiveSurveyDevice());
+
+// 4. Zero BLE-tracked devices -> empty state + Open Discovered Devices
+const storeZeroBle = new StudioStore(fakeHost);
+storeZeroBle.ws.hass = store.ws.hass;
+storeZeroBle.ensureSubscription = async () => {};
+storeZeroBle.ingestPayload(
+  {
+    ...structuredClone(baseState),
+    system_devices: [structuredClone(deskUntracked)],
+  },
+  false,
+);
 const emptyBleRendered = flattenHtml(renderSystemPresenceView(storeZeroBle));
 
 return {
   defaultSurveyAfterFilter,
   activeSurveyId: store.getActiveSurveyDevice()?.subentry_id || "",
-  focusedId,
-  scrolledId,
+  scrolledCalls,
+  focusedCalls,
+  wsCalls,
   bleCalibrateAreaId: store.bleCalibrateAreaId,
+  handoffActiveAfterSelect,
+  handoffAfterDismiss,
+  handoffBeforeCapture,
+  handoffAfterCapture,
   activeRendered,
   afterBridgeRendered,
+  afterDismissRendered,
+  oneProxyTrimOpenRendered,
+  pausedRendered,
+  frozenSizeWhilePaused,
+  afterPausedDeltaDev,
+  afterPausedIngestDev,
+  afterPausedManualTrimDev,
+  frozenSizeAfterResume,
+  subCallsOnResume,
+  afterResumedDeltaDev,
+  afterResumedIngestDev,
   emptyBleSurveyId: storeZeroBle.bleSurveySubentryId,
   emptyBleRendered,
 };
+})();
 """
         stub_deps = (
             "globalThis.HTMLElement = class { attachShadow() { return {}; } toggleAttribute() {} };\n"
@@ -2313,8 +2547,9 @@ return {
         self.assertIn("Pocket Assistant (Bedroom)", got["activeRendered"])
         self.assertIn("Keyring Tag (Kitchen)", got["activeRendered"])
 
-        # Enclosed Area boxes + Floor + BLE coverage chips + proxy-less guidance
-        self.assertIn('class="area-presence-box occupied"', got["activeRendered"])
+        # D-045 (1): Enclosed Area boxes use neutral border (no .area-presence-box.occupied blue outline)
+        self.assertIn('class="area-presence-box"', got["activeRendered"])
+        self.assertNotIn("area-presence-box occupied", got["activeRendered"])
         self.assertIn('<span class="area-box-title">Bedroom</span>', got["activeRendered"])
         self.assertIn("Occupied • 84%", got["activeRendered"])
         self.assertIn('<span class="chip">Upstairs</span>', got["activeRendered"])
@@ -2332,14 +2567,83 @@ return {
         self.assertIn('<span class="row-label">Unassigned Proxy</span>', got["activeRendered"])
         self.assertIn('<span class="chip chip-warning">Assign Area in HA</span>', got["activeRendered"])
 
-        # Calibrate bridge selects Guest Bath & focuses #ble-calibrate-area-select
-        self.assertEqual(got["bleCalibrateAreaId"], "guest_bath")
-        self.assertEqual(got["focusedId"], "ble-calibrate-area-select")
-        self.assertEqual(got["scrolledId"], "ble-calibrate-area-select")
+        # D-045 (2): Calibrate handoff sets bleCalibrateHandoffActive, smooth-scrolls #card-ble-calibration,
+        # calls focus({ preventScroll: true }) on #ble-calibrate-area-select, renders warning banner, and clears on Dismiss / Capture
+        self.assertEqual(got["bleCalibrateAreaId"], "office")
+        self.assertTrue(got["handoffActiveAfterSelect"])
+        self.assertEqual(
+            got["scrolledCalls"][0],
+            {"id": "card-ble-calibration", "opts": {"behavior": "smooth", "block": "start"}},
+        )
+        self.assertEqual(
+            got["focusedCalls"][0],
+            {"id": "ble-calibrate-area-select", "opts": {"preventScroll": True}},
+        )
+        self.assertNotIn("handoff-active", got["activeRendered"])
+        self.assertNotIn("ble-calibrate-handoff-banner", got["activeRendered"])
+        self.assertIn('class="calibrate-target-box handoff-active"', got["afterBridgeRendered"])
+        self.assertIn('id="ble-calibrate-handoff-banner"', got["afterBridgeRendered"])
         self.assertIn(
-            "Captures readings from surrounding Bluetooth proxies so Guest Bath detects presence without a local proxy.",
+            "Ready to calibrate Office — carry Pocket Assistant into Office and click Calibrate Area.",
             got["afterBridgeRendered"],
         )
+        self.assertIn(
+            "Captures readings from surrounding Bluetooth proxies so Office detects presence without a local proxy.",
+            got["afterBridgeRendered"],
+        )
+        self.assertFalse(got["handoffAfterDismiss"])
+        self.assertNotIn("handoff-active", got["afterDismissRendered"])
+        self.assertNotIn("ble-calibrate-handoff-banner", got["afterDismissRendered"])
+        self.assertTrue(got["handoffBeforeCapture"])
+        self.assertFalse(got["handoffAfterCapture"])
+        self.assertEqual(
+            got["wsCalls"][0],
+            {
+                "command": "capture_ble_area_signature",
+                "payload": {"area_id": "office", "survey_subentry_id": "sub_pocket"},
+            },
+        )
+
+        # D-045 (3): toggleBleLiveStream(false) snapshots bleSurveyFrozen across delta & ingestPayload,
+        # allows manual scanner trim feedback, and toggleBleLiveStream(true) clears freeze & resumes live updates
+        self.assertIn("Stream Paused", got["pausedRendered"])
+        self.assertGreaterEqual(got["frozenSizeWhilePaused"], 1)
+        for frozen_dev in (got["afterPausedDeltaDev"], got["afterPausedIngestDev"]):
+            self.assertEqual(frozen_dev["ble_packets_seen"], 14)
+            self.assertEqual(frozen_dev["active_area_name"], "Bedroom")
+            self.assertEqual(
+                [r["scanner_name"] for r in frozen_dev["ble_survey_rows"]],
+                ["Bedroom Proxy", "Hallway Plug"],
+            )
+            self.assertEqual(frozen_dev["ble_survey_rows"][0]["effective_rssi"], -57)
+        # Manual trim while paused updates ONLY that scanner's offset_db & effective_rssi without unfreezing raw_rssi or packets_seen
+        self.assertEqual(got["afterPausedManualTrimDev"]["ble_packets_seen"], 14)
+        self.assertEqual(got["afterPausedManualTrimDev"]["active_area_name"], "Bedroom")
+        self.assertEqual(got["afterPausedManualTrimDev"]["ble_survey_rows"][0]["offset_db"], 3.0)
+        self.assertEqual(got["afterPausedManualTrimDev"]["ble_survey_rows"][0]["effective_rssi"], -55)
+        self.assertEqual(got["afterPausedManualTrimDev"]["ble_survey_rows"][0]["raw_rssi"], -58)
+        # Resuming live stream clears bleSurveyFrozen and accepts subsequent delta + ingestPayload updates
+        self.assertEqual(got["frozenSizeAfterResume"], 0)
+        self.assertEqual(got["subCallsOnResume"], [True])
+        self.assertEqual(got["afterResumedDeltaDev"]["ble_packets_seen"], 42)
+        self.assertEqual(got["afterResumedDeltaDev"]["active_area_name"], "Kitchen")
+        self.assertEqual(
+            [r["scanner_name"] for r in got["afterResumedDeltaDev"]["ble_survey_rows"]],
+            ["Kitchen Proxy"],
+        )
+        self.assertEqual(got["afterResumedIngestDev"]["ble_packets_seen"], 55)
+        self.assertEqual(got["afterResumedIngestDev"]["active_area_name"], "Office")
+
+        # D-045 (4): Inline per-proxy Antenna Trim inside .signal-row with zero duplicate proxy list
+        trim_markup = got["oneProxyTrimOpenRendered"]
+        self.assertNotIn("ble-proxy-trim-drawer", trim_markup)
+        self.assertNotIn("Proxy Antenna Trim", trim_markup)
+        self.assertEqual(trim_markup.count("<summary>Antenna Trim</summary>"), 2)
+        self.assertEqual(trim_markup.count('<span class="chip">Bedroom Proxy</span>'), 1)
+        self.assertEqual(trim_markup.count('<span class="chip">Hallway Plug</span>'), 1)
+        proxies_section = trim_markup[trim_markup.index("Nearby Bluetooth Proxies") :]
+        open_flags = re.findall(r"<details\s+\?open=(true|false)", proxies_section)
+        self.assertEqual(open_flags, ["true", "false"])
 
         # Zero BLE-tracked devices -> empty state + Open Discovered Devices
         self.assertEqual(got["emptyBleSurveyId"], "")

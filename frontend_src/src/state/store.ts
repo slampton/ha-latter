@@ -200,8 +200,13 @@ export class StudioStore implements ReactiveController {
   // System BLE & Area Presence UI state
   bleSurveySubentryId = "";
   bleCalibrateAreaId = "";
+  bleCalibrateHandoffActive = false;
   bleLiveStreamActive = true;
-  proxyTrimOpen = false;
+  readonly bleSurveyFrozen = new Map<
+    string,
+    { rows: BleSurveyRow[]; packetsSeen: number; activeAreaName: string }
+  >();
+  readonly openProxyTrims = new Set<string>();
   advancedBleOpen = false;
   readonly openFusionAreas = new Set<string>();
 
@@ -384,6 +389,7 @@ export class StudioStore implements ReactiveController {
         if (this.activeSubentryId) {
           void this.flushDeviceBucket(this.activeSubentryId);
         }
+        this.bleCalibrateHandoffActive = false;
         this.deviceSelected = false;
         this.currentScope = "device";
         this.currentViewId = "discovered_devices";
@@ -404,6 +410,7 @@ export class StudioStore implements ReactiveController {
         if (prevSubId && subChanged) {
           void this.flushDeviceBucket(prevSubId);
         }
+        this.bleCalibrateHandoffActive = false;
         this.activeSubentryId = nextSubId;
         this.deviceSelected = true;
         this.currentScope = "device";
@@ -417,6 +424,9 @@ export class StudioStore implements ReactiveController {
           void this.flushDeviceBucket(this.activeSubentryId);
         }
         const viewId = slugToView(SYSTEM_VIEW_SLUGS, parts[1] || "overview") || "system_overview";
+        if (viewId !== "area_tracking") {
+          this.bleCalibrateHandoffActive = false;
+        }
         this.currentScope = "system";
         this.currentViewId = viewId;
         this.host.requestUpdate();
@@ -427,6 +437,7 @@ export class StudioStore implements ReactiveController {
         if (this.activeSubentryId) {
           void this.flushDeviceBucket(this.activeSubentryId);
         }
+        this.bleCalibrateHandoffActive = false;
         this.deviceSelected = false;
         this.currentScope = "device";
         this.currentViewId = "select_device_prompt";
@@ -483,6 +494,7 @@ export class StudioStore implements ReactiveController {
     if (this.activeSubentryId) {
       void this.flushDeviceBucket(this.activeSubentryId);
     }
+    this.bleCalibrateHandoffActive = false;
     this.deviceSelected = false;
     this.currentScope = "device";
     this.currentViewId = "select_device_prompt";
@@ -494,6 +506,7 @@ export class StudioStore implements ReactiveController {
     if (this.activeSubentryId) {
       void this.flushDeviceBucket(this.activeSubentryId);
     }
+    this.bleCalibrateHandoffActive = false;
     this.deviceSelected = false;
     this.currentScope = "device";
     this.currentViewId = "discovered_devices";
@@ -512,6 +525,7 @@ export class StudioStore implements ReactiveController {
     } else if (scope === "system" && this.activeSubentryId) {
       void this.flushDeviceBucket(this.activeSubentryId);
     }
+    this.bleCalibrateHandoffActive = false;
     this.currentScope = scope;
     if (explicitViewId) {
       this.currentViewId = explicitViewId;
@@ -536,6 +550,7 @@ export class StudioStore implements ReactiveController {
       this.openDiscoveredDevices();
       return;
     }
+    this.bleCalibrateHandoffActive = false;
     const isSys = Object.prototype.hasOwnProperty.call(SYSTEM_VIEW_SLUGS, viewId);
     this.currentScope = isSys ? "system" : "device";
     this.currentViewId = viewId;
@@ -561,6 +576,7 @@ export class StudioStore implements ReactiveController {
     if (prevSubId && prevSubId !== cleanNext) {
       await this.flushDeviceBucket(prevSubId);
     }
+    this.bleCalibrateHandoffActive = false;
     this.activeSubentryId = cleanNext;
     this.deviceSelected = true;
     this.currentScope = "device";
@@ -720,8 +736,29 @@ export class StudioStore implements ReactiveController {
     this.ingestPayload(payload, false);
   }
 
-  private applyBleSurveyDelta(delta: BleSurveyDeltaEvent): void {
+  applyBleSurveyDelta(delta: BleSurveyDeltaEvent): void {
     if (!this.state) return;
+    if (!this.bleLiveStreamActive) {
+      let updated = false;
+      if (Array.isArray(delta.ble_area_signatures)) {
+        this.state = {
+          ...this.state,
+          ble_area_signatures: delta.ble_area_signatures as BleAreaSignatureSummary[],
+        };
+        updated = true;
+      }
+      if (Array.isArray(delta.area_presence_grid) && this.state.live) {
+        this.state.live = {
+          ...this.state.live,
+          area_presence_grid: delta.area_presence_grid as AreaPresenceRow[],
+        };
+        updated = true;
+      }
+      if (updated) {
+        this.host.requestUpdate();
+      }
+      return;
+    }
     const targetId = String(delta.subentry_id || this.bleSurveySubentryId || this.state.subentry_id || "");
     if (Array.isArray(delta.ble_survey_rows)) {
       const nextRows: BleSurveyRow[] = delta.ble_survey_rows;
@@ -791,6 +828,28 @@ export class StudioStore implements ReactiveController {
           ? incoming.internal_logs || []
           : prevLogs || [],
     };
+
+    if (!this.bleLiveStreamActive && Array.isArray(merged.system_devices)) {
+      const frozenMap = this.ensureBleSurveyFrozenMap();
+      merged.system_devices = merged.system_devices.map((dev) => {
+        if (!dev.subentry_id) return dev;
+        const frozen = frozenMap.get(dev.subentry_id);
+        if (frozen) {
+          return {
+            ...dev,
+            ble_survey_rows: frozen.rows.map((r) => ({ ...r })),
+            ble_packets_seen: frozen.packetsSeen,
+            active_area_name: frozen.activeAreaName,
+          };
+        }
+        frozenMap.set(dev.subentry_id, {
+          rows: (dev.ble_survey_rows || []).map((r) => ({ ...r })),
+          packetsSeen: dev.ble_packets_seen ?? 0,
+          activeAreaName: dev.active_area_name || "",
+        });
+        return dev;
+      });
+    }
 
     if (Object.keys(this.pendingSystemPatch).length > 0 && merged.system_config) {
       merged.system_config = {
@@ -1300,27 +1359,52 @@ export class StudioStore implements ReactiveController {
     await bulkNumberOp(this, ctrl, level);
   }
 
+  private ensureBleSurveyFrozenMap(): Map<
+    string,
+    { rows: BleSurveyRow[]; packetsSeen: number; activeAreaName: string }
+  > {
+    if (!this.bleSurveyFrozen) {
+      (
+        this as {
+          bleSurveyFrozen: Map<
+            string,
+            { rows: BleSurveyRow[]; packetsSeen: number; activeAreaName: string }
+          >;
+        }
+      ).bleSurveyFrozen = new Map();
+    }
+    return this.bleSurveyFrozen;
+  }
+
   selectBleSurveyDevice(subentryId: string): void {
     this.bleSurveySubentryId = subentryId;
     this.host.requestUpdate();
     void this.ensureSubscription(false);
   }
 
-  selectBleCalibrateArea(areaId: string, focusPicker = false): void {
+  selectBleCalibrateArea(areaId: string, fromAreaCard = false): void {
     this.bleCalibrateAreaId = String(areaId || "");
+    if (fromAreaCard) {
+      this.bleCalibrateHandoffActive = true;
+    }
     this.host.requestUpdate();
-    if (focusPicker && typeof globalThis.requestAnimationFrame === "function") {
+    if (fromAreaCard && typeof globalThis.requestAnimationFrame === "function") {
       globalThis.requestAnimationFrame(() => {
         const root =
           (this.host as unknown as { renderRoot?: ShadowRoot }).renderRoot ||
           this.host.shadowRoot;
-        const el = root?.getElementById("ble-calibrate-area-select") as HTMLSelectElement | null;
-        if (el) {
-          if (typeof el.scrollIntoView === "function") {
-            el.scrollIntoView({ behavior: "smooth", block: "nearest" });
-          }
-          if (typeof el.focus === "function") {
-            el.focus();
+        const cardEl =
+          root?.getElementById("card-ble-calibration") ||
+          root?.getElementById("ble-calibrate-target-box");
+        if (cardEl && typeof cardEl.scrollIntoView === "function") {
+          cardEl.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+        const selectEl = root?.getElementById("ble-calibrate-area-select") as HTMLSelectElement | null;
+        if (selectEl && typeof selectEl.focus === "function") {
+          try {
+            selectEl.focus({ preventScroll: true });
+          } catch {
+            selectEl.focus();
           }
         }
       });
@@ -1328,9 +1412,26 @@ export class StudioStore implements ReactiveController {
   }
 
   toggleBleLiveStream(enabled: boolean): void {
-    this.bleLiveStreamActive = enabled;
+    const frozenMap = this.ensureBleSurveyFrozenMap();
+    if (!enabled) {
+      frozenMap.clear();
+      for (const dev of this.state?.system_devices || []) {
+        if (!dev.subentry_id) continue;
+        frozenMap.set(dev.subentry_id, {
+          rows: (dev.ble_survey_rows || []).map((r) => ({ ...r })),
+          packetsSeen: dev.ble_packets_seen ?? 0,
+          activeAreaName: dev.active_area_name || "",
+        });
+      }
+      this.bleLiveStreamActive = false;
+      this.host.requestUpdate();
+      void this.ensureSubscription(false);
+      return;
+    }
+    frozenMap.clear();
+    this.bleLiveStreamActive = true;
     this.host.requestUpdate();
-    void this.ensureSubscription(false);
+    void this.ensureSubscription(true);
   }
 
   getActiveSurveyDevice(): SystemDeviceEntry | undefined {
