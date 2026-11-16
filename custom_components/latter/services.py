@@ -158,6 +158,8 @@ _ALARM_ACTION_ALIASES: dict[str, str] = {
     "alarm_arm_away": "arm_away",
     "arm_night": "arm_night",
     "alarm_arm_night": "arm_night",
+    "arm_vacation": "arm_vacation",
+    "alarm_arm_vacation": "arm_vacation",
 }
 
 
@@ -183,7 +185,8 @@ def _enforce_perimeter_security_policy(
             hass, garage_entity=coord.garage_entity
         )["garage_entity"]
     elif resolved_ent == "home_hub.alarm" or (
-        not resolved_ent and act in ("arm_home", "arm_away", "arm_night", "disarm")
+        not resolved_ent
+        and act in ("arm_home", "arm_away", "arm_night", "arm_vacation", "disarm")
     ):
         resolved_ent = (
             coord.alarm_entity
@@ -249,7 +252,7 @@ def _enforce_perimeter_security_policy(
                 )
             return
 
-        if act in ("arm_home", "arm_away", "arm_night"):
+        if act in ("arm_home", "arm_away", "arm_night", "arm_vacation"):
             if code_fmt and code_arm_req:
                 if not clean_code:
                     raise ServiceValidationError(
@@ -717,6 +720,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 "arm_home",
                 "arm_away",
                 "arm_night",
+                "arm_vacation",
                 "disarm",
             )
         ):

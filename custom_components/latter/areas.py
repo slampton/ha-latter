@@ -459,6 +459,63 @@ def compute_alarm_caps(state_obj: State | None) -> int:
         caps |= 0x08
     if bool(sf & 4):
         caps |= 0x10
+    if bool(sf & 32):
+        caps |= 0x20
+    return caps
+
+
+def compute_climate_caps(state_obj: State | None) -> int:
+    """Compute Protocol v3 `climate_caps` u16 bitmask from a `climate` state."""
+    if state_obj is None:
+        return 0
+    attrs = state_obj.attributes
+    hvac_modes = [str(m).lower() for m in (attrs.get("hvac_modes") or [])]
+    sf = int(attrs.get("supported_features", 0) or 0)
+    caps = 0
+    if "off" in hvac_modes:
+        caps |= 0x01
+    if "heat" in hvac_modes:
+        caps |= 0x02
+    if "cool" in hvac_modes:
+        caps |= 0x04
+    if "heat_cool" in hvac_modes or "auto" in hvac_modes:
+        caps |= 0x08
+    if "fan_only" in hvac_modes:
+        caps |= 0x10
+    if "dry" in hvac_modes:
+        caps |= 0x20
+    if (
+        bool(sf & 1)
+        or bool(sf & 2)
+        or attrs.get("temperature") is not None
+        or attrs.get("target_temp_low") is not None
+    ):
+        caps |= 0x40
+    if str(attrs.get("temperature_unit") or "").upper().endswith("C"):
+        caps |= 0x80
+    return caps
+
+
+def compute_vacuum_caps(state_obj: State | None) -> int:
+    """Compute Protocol v3 `vacuum_caps` u16 bitmask from a `vacuum` state."""
+    if state_obj is None:
+        return 0
+    sf = int(state_obj.attributes.get("supported_features", 0) or 0)
+    if sf == 0:
+        return 0x0B
+    caps = 0
+    if bool(sf & 8192) or bool(sf & 1):
+        caps |= 0x01
+    if bool(sf & 4):
+        caps |= 0x02
+    if bool(sf & 8) or bool(sf & 2):
+        caps |= 0x04
+    if bool(sf & 16):
+        caps |= 0x08
+    if bool(sf & 1024):
+        caps |= 0x10
+    if bool(sf & 512):
+        caps |= 0x20
     return caps
 
 
@@ -526,12 +583,14 @@ def get_home_hub_summary(
         "thermostat_state": "",
         "thermostat_temp": None,
         "thermostat_current_temp": None,
+        "climate_caps": 0,
         "lock_entity": "",
         "lock_state": "",
         "garage_entity": "",
         "garage_state": "",
         "vacuum_entity": "",
         "vacuum_state": "",
+        "vacuum_caps": 0,
     }
     idx = get_area_state_index(hass)
 
@@ -544,14 +603,29 @@ def get_home_hub_summary(
     if t_st is not None:
         out["thermostat_entity"] = t_st.entity_id
         out["thermostat_state"] = ha_value(t_st.state)
+        out["climate_caps"] = compute_climate_caps(t_st)
         tgt_t = t_st.attributes.get("temperature")
-        if tgt_t is None:
-            tgt_t = t_st.attributes.get("target_temp_low")
         if tgt_t is not None:
             try:
-                out["thermostat_temp"] = round(float(tgt_t))
+                val_f = round(float(tgt_t), 1)
+                out["thermostat_temp"] = int(val_f) if val_f.is_integer() else val_f
             except (ValueError, TypeError):
                 pass
+        else:
+            low_t = t_st.attributes.get("target_temp_low")
+            high_t = t_st.attributes.get("target_temp_high")
+            if low_t is not None and high_t is not None:
+                try:
+                    mid_f = round((float(low_t) + float(high_t)) / 2.0, 1)
+                    out["thermostat_temp"] = int(mid_f) if mid_f.is_integer() else mid_f
+                except (ValueError, TypeError):
+                    pass
+            elif low_t is not None:
+                try:
+                    val_f = round(float(low_t), 1)
+                    out["thermostat_temp"] = int(val_f) if val_f.is_integer() else val_f
+                except (ValueError, TypeError):
+                    pass
         cur_t = t_st.attributes.get("current_temperature")
         if cur_t is not None:
             try:
@@ -591,6 +665,7 @@ def get_home_hub_summary(
     if v_st is not None:
         out["vacuum_entity"] = v_st.entity_id
         out["vacuum_state"] = ha_value(v_st.state)
+        out["vacuum_caps"] = compute_vacuum_caps(v_st)
 
     return out
 
@@ -1005,6 +1080,8 @@ _ALARM_ACTION_ALIASES: dict[str, str] = {
     "alarm_arm_away": "arm_away",
     "arm_night": "arm_night",
     "alarm_arm_night": "arm_night",
+    "arm_vacation": "arm_vacation",
+    "alarm_arm_vacation": "arm_vacation",
 }
 
 _CLIMATE_HVAC_MAP: dict[str, str] = {
@@ -1016,6 +1093,10 @@ _CLIMATE_HVAC_MAP: dict[str, str] = {
     "hvac_heat_cool": "heat_cool",
     "auto": "auto",
     "hvac_auto": "auto",
+    "fan_only": "fan_only",
+    "hvac_fan_only": "fan_only",
+    "dry": "dry",
+    "hvac_dry": "dry",
     "off": "off",
     "hvac_off": "off",
 }
@@ -1033,7 +1114,13 @@ async def async_execute_area_action(
     raw_action = action.strip().lower()
     action = _ALARM_ACTION_ALIASES.get(raw_action, raw_action)
     entity_id = entity_id.strip()
-    if not entity_id and action in ("arm_home", "arm_away", "arm_night", "disarm"):
+    if not entity_id and action in (
+        "arm_home",
+        "arm_away",
+        "arm_night",
+        "arm_vacation",
+        "disarm",
+    ):
         entity_id = "home_hub.alarm"
 
     state_obj = hass.states.get(entity_id)
@@ -1131,6 +1218,7 @@ async def async_execute_area_action(
             "arm_home": "alarm_arm_home",
             "arm_away": "alarm_arm_away",
             "arm_night": "alarm_arm_night",
+            "arm_vacation": "alarm_arm_vacation",
             "disarm": "alarm_disarm",
         }
         svc = svc_map.get(action)
@@ -1167,11 +1255,25 @@ async def async_execute_area_action(
 
     if action in ("step_up", "step_down") and level is None:
         if domain == "climate":
-            raw_t = (
-                state_obj.attributes.get("temperature")
-                or state_obj.attributes.get("target_temp_low")
-                or state_obj.attributes.get("current_temperature")
-            )
+            c_attrs = state_obj.attributes
+            raw_t = c_attrs.get("temperature")
+            if (
+                raw_t is None
+                and c_attrs.get("target_temp_low") is not None
+                and c_attrs.get("target_temp_high") is not None
+            ):
+                try:
+                    raw_t = (
+                        float(c_attrs["target_temp_low"])
+                        + float(c_attrs["target_temp_high"])
+                    ) / 2.0
+                except (ValueError, TypeError):
+                    raw_t = None
+            if raw_t is None:
+                raw_t = (
+                    c_attrs.get("target_temp_low")
+                    or c_attrs.get("current_temperature")
+                )
             try:
                 base_t = round(float(raw_t)) if raw_t is not None else 20
             except (ValueError, TypeError):
@@ -1246,6 +1348,30 @@ async def async_execute_area_action(
         return
 
     if domain == "climate" and action in ("set_level", "set_temperature") and level is not None:
+        c_attrs = state_obj.attributes
+        if (
+            c_attrs.get("temperature") is None
+            and c_attrs.get("target_temp_low") is not None
+            and c_attrs.get("target_temp_high") is not None
+        ):
+            try:
+                low = float(c_attrs["target_temp_low"])
+                high = float(c_attrs["target_temp_high"])
+                half = max(1.0, (high - low) / 2.0)
+                tgt = float(level)
+                await hass.services.async_call(
+                    "climate",
+                    "set_temperature",
+                    {
+                        ATTR_ENTITY_ID: entity_id,
+                        "target_temp_low": round(tgt - half, 1),
+                        "target_temp_high": round(tgt + half, 1),
+                    },
+                    blocking=False,
+                )
+                return
+            except (ValueError, TypeError):
+                pass
         await hass.services.async_call(
             "climate",
             "set_temperature",
@@ -1291,11 +1417,28 @@ async def async_execute_area_action(
         return
 
     if domain == "vacuum":
-        svc_v = (
-            "return_to_base"
-            if action in ("dock", "return_to_base")
-            else ("pause" if action == "pause" else "start")
-        )
+        sf = int(state_obj.attributes.get("supported_features", 0) or 0)
+        if action in ("dock", "return_to_base"):
+            svc_v = "return_to_base"
+        elif action == "pause":
+            svc_v = "pause"
+        elif action in ("stop", "turn_off"):
+            svc_v = "turn_off" if (not (sf & 8) and bool(sf & 2)) else "stop"
+        elif action in ("clean_spot", "spot"):
+            svc_v = "clean_spot"
+        elif action == "locate":
+            svc_v = "locate"
+        elif action == "toggle":
+            if state_obj.state == "cleaning":
+                svc_v = (
+                    "pause"
+                    if (sf == 0 or bool(sf & 4))
+                    else ("turn_off" if (not (sf & 8) and bool(sf & 2)) else "stop")
+                )
+            else:
+                svc_v = "turn_on" if (not (sf & 8192) and bool(sf & 1)) else "start"
+        else:
+            svc_v = "turn_on" if (not (sf & 8192) and bool(sf & 1)) else "start"
         await hass.services.async_call(
             "vacuum", svc_v, {ATTR_ENTITY_ID: entity_id}, blocking=False
         )
@@ -1587,6 +1730,8 @@ def build_area_context_payload(coordinator: Any) -> tuple[str, dict[str, Any]]:
 
     eff_pin_policy = coordinator.security_pin_policy
     alarm_caps = int(alarm_info.get("alarm_caps") or 0)
+    climate_caps = int(hub_info.get("climate_caps") or 0)
+    vacuum_caps = int(hub_info.get("vacuum_caps") or 0)
     avail_home_cats = get_available_home_categories(
         alarm_info,
         hub_info,
@@ -1624,12 +1769,14 @@ def build_area_context_payload(coordinator: Any) -> tuple[str, dict[str, Any]]:
         "thermostat_state": hub_info["thermostat_state"],
         "thermostat_temp": hub_info["thermostat_temp"],
         "thermostat_current_temp": hub_info["thermostat_current_temp"],
+        "climate_caps": climate_caps,
         "lock_entity": hub_info["lock_entity"],
         "lock_state": hub_info["lock_state"],
         "garage_entity": hub_info["garage_entity"],
         "garage_state": hub_info["garage_state"],
         "vacuum_entity": hub_info["vacuum_entity"],
         "vacuum_state": hub_info["vacuum_state"],
+        "vacuum_caps": vacuum_caps,
         "camera_snapshot_url": camera_snapshot_url,
         "cameras_summary": _build_cameras_summary(coordinator),
         "doorbell_talk_state": coordinator.doorbell_talk_state,
@@ -1695,6 +1842,8 @@ def build_area_context_payload(coordinator: Any) -> tuple[str, dict[str, Any]]:
         local_tz_info,
         world_clocks_summary,
         alarm_caps,
+        climate_caps,
+        vacuum_caps,
     )
     area_attrs["rev"] = area_rev
     area_attrs["payload"] = area_payload

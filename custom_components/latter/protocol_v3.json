@@ -331,7 +331,21 @@
           "name": "alarm_caps",
           "cpp_enum": "ALARM_CAPS",
           "type": "u16",
-          "description": "Alarm capability & code bitmask (1=code_disarm_required, 2=code_arm_required, 4=supports_arm_home, 8=supports_arm_away, 16=supports_arm_night)"
+          "description": "Alarm capability & code bitmask (1=code_disarm_required, 2=code_arm_required, 4=supports_arm_home, 8=supports_arm_away, 16=supports_arm_night, 32=supports_arm_vacation)"
+        },
+        {
+          "index": 45,
+          "name": "climate_caps",
+          "cpp_enum": "CLIMATE_CAPS",
+          "type": "u16",
+          "description": "Thermostat capability & HVAC mode bitmask (1=off, 2=heat, 4=cool, 8=heat_cool_or_auto, 16=fan_only, 32=dry, 64=target_temp, 128=celsius)"
+        },
+        {
+          "index": 46,
+          "name": "vacuum_caps",
+          "cpp_enum": "VACUUM_CAPS",
+          "type": "u16",
+          "description": "Robot vacuum capability bitmask from VacuumEntityFeature (1=start, 2=pause, 4=stop, 8=return_home, 16=clean_spot, 32=locate)"
         }
       ]
     },

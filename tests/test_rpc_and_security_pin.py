@@ -793,6 +793,8 @@ async def test_home_hub_rebuild_alarm_caps_separate_pins_climate_cover_and_categ
     """Verify alarm_caps bitmask, separate HA alarm vs Latter PINs, climate/cover/lock/vacuum dispatch, and 6-tab categories."""
     from custom_components.latter.areas import (
         compute_alarm_caps,
+        compute_climate_caps,
+        compute_vacuum_caps,
         get_available_home_categories,
         get_home_alarm_summary,
         get_home_hub_summary,
@@ -875,7 +877,7 @@ async def test_home_hub_rebuild_alarm_caps_separate_pins_climate_cover_and_categ
     assert alarm_sum["alarm_caps"] == 13
     assert compute_alarm_caps(None) == 0
 
-    # Verify code_arm_required=True + arm_night (sf=7) -> 1 | 2 | 4 | 8 | 16 = 31
+    # Verify code_arm_required=True + arm_night (sf=7) -> 1 | 2 | 4 | 8 | 16 = 31, and +arm_vacation (sf=39) -> 63
     hass.states.async_set(
         "alarm_control_panel.full_caps",
         "disarmed",
@@ -883,20 +885,32 @@ async def test_home_hub_rebuild_alarm_caps_separate_pins_climate_cover_and_categ
     )
     assert compute_alarm_caps(hass.states.get("alarm_control_panel.full_caps")) == 31
     hass.states.async_set(
+        "alarm_control_panel.vacation_caps",
+        "disarmed",
+        {"code_format": "text", "code_arm_required": True, "supported_features": 39},
+    )
+    assert compute_alarm_caps(hass.states.get("alarm_control_panel.vacation_caps")) == 63
+    hass.states.async_set(
         "alarm_control_panel.zero_sf",
         "disarmed",
         {"code_format": None, "supported_features": 0},
     )
     assert compute_alarm_caps(hass.states.get("alarm_control_panel.zero_sf")) == 12
+    assert compute_climate_caps(None) == 0
+    assert compute_vacuum_caps(None) == 0
 
-    # Verify area_context wire index 44 carries alarm_caps="13" and all 6 home_categories in order
+    # Verify area_context wire indices 44..46 carry alarm_caps="13", climate_caps="79", vacuum_caps="11"
     coord._cached_area_payload = None
     _area_st, area_attrs = coord.get_area_context_payload()
     assert area_attrs["alarm_caps"] == 13
+    assert area_attrs["climate_caps"] == 79
+    assert area_attrs["vacuum_caps"] == 11
     assert area_attrs["home_categories"] == "alarm,cameras,intercom,thermostat,entry,vacuum"
     wire_fields = area_attrs["payload"].split("\x1f")
-    assert len(wire_fields) == 45  # 3 header fields + 42 body fields (indices 3..44)
+    assert len(wire_fields) == 47  # 3 header fields + 44 body fields (indices 3..46)
     assert wire_fields[44] == "13"
+    assert wire_fields[45] == "79"
+    assert wire_fields[46] == "11"
     assert wire_fields[40] == "alarm,cameras,intercom,thermostat,entry,vacuum"
 
     # Custom category ordering is preserved
@@ -927,12 +941,22 @@ async def test_home_hub_rebuild_alarm_caps_separate_pins_climate_cover_and_categ
             "alarm_arm_home",
             "alarm_arm_away",
             "alarm_arm_night",
+            "alarm_arm_vacation",
             "alarm_disarm",
         ),
         "climate": ("set_temperature", "set_hvac_mode"),
         "lock": ("lock", "unlock"),
         "cover": ("open_cover", "close_cover", "stop_cover"),
-        "vacuum": ("start", "pause", "return_to_base"),
+        "vacuum": (
+            "start",
+            "turn_on",
+            "pause",
+            "stop",
+            "turn_off",
+            "return_to_base",
+            "clean_spot",
+            "locate",
+        ),
     }.items():
         for svc_name in svcs:
             hass.services.async_register(
@@ -964,8 +988,18 @@ async def test_home_hub_rebuild_alarm_caps_separate_pins_climate_cover_and_categ
         },
         blocking=True,
     )
+    await hass.services.async_call(
+        DOMAIN,
+        "area_action",
+        {
+            "target_device": coord.device_slug,
+            "action": "arm_vacation",
+        },
+        blocking=True,
+    )
     assert ("alarm_control_panel", "alarm_arm_home", {"entity_id": "alarm_control_panel.home_alarm"}) in svc_calls
     assert ("alarm_control_panel", "alarm_arm_away", {"entity_id": "alarm_control_panel.home_alarm"}) in svc_calls
+    assert ("alarm_control_panel", "alarm_arm_vacation", {"entity_id": "alarm_control_panel.home_alarm"}) in svc_calls
 
     # Disarm with empty PIN when code_format="number" -> security_pin_required
     with pytest.raises(ServiceValidationError) as exc_empty_pin:
@@ -1292,6 +1326,152 @@ async def test_home_hub_rebuild_alarm_caps_separate_pins_climate_cover_and_categ
     assert ("vacuum", "start", {"entity_id": "vacuum.robo_vac"}) in svc_calls
     assert ("vacuum", "pause", {"entity_id": "vacuum.robo_vac"}) in svc_calls
     assert ("vacuum", "return_to_base", {"entity_id": "vacuum.robo_vac"}) in svc_calls
+
+    # 5. Dual-setpoint range + fan_only + dry + Celsius climate_caps & range setpoint shifting
+    hass.states.async_set(
+        "climate.main_thermostat",
+        "heat_cool",
+        {
+            "friendly_name": "Main Thermostat",
+            "hvac_modes": ["off", "heat", "cool", "heat_cool", "fan_only", "dry"],
+            "supported_features": 2,
+            "temperature": None,
+            "target_temp_low": 20.0,
+            "target_temp_high": 24.0,
+            "current_temperature": 21.5,
+            "temperature_unit": "°C",
+        },
+    )
+    assert compute_climate_caps(hass.states.get("climate.main_thermostat")) == 0xFF
+    range_sum = get_home_hub_summary(
+        hass, thermostat_entity="climate.main_thermostat"
+    )
+    assert range_sum["thermostat_temp"] == 22
+    assert range_sum["climate_caps"] == 0xFF
+
+    # Odd spread midpoint (20.0 .. 23.0 -> 21.5)
+    hass.states.async_set(
+        "climate.main_thermostat",
+        "heat_cool",
+        {
+            "friendly_name": "Main Thermostat",
+            "hvac_modes": ["off", "heat", "cool", "heat_cool", "fan_only", "dry"],
+            "supported_features": 2,
+            "temperature": None,
+            "target_temp_low": 20.0,
+            "target_temp_high": 23.0,
+            "current_temperature": 21.5,
+            "temperature_unit": "°C",
+        },
+    )
+    assert (
+        get_home_hub_summary(hass, thermostat_entity="climate.main_thermostat")[
+            "thermostat_temp"
+        ]
+        == 21.5
+    )
+
+    svc_calls.clear()
+    hass.states.async_set(
+        "climate.main_thermostat",
+        "heat_cool",
+        {
+            "friendly_name": "Main Thermostat",
+            "hvac_modes": ["off", "heat", "cool", "heat_cool", "fan_only", "dry"],
+            "supported_features": 2,
+            "temperature": None,
+            "target_temp_low": 20.0,
+            "target_temp_high": 24.0,
+            "current_temperature": 21.5,
+            "temperature_unit": "°C",
+        },
+    )
+    for act_c, extra_c in (
+        ("set_temperature", {"level": 23.0}),
+        ("hvac_fan_only", {}),
+        ("dry", {}),
+    ):
+        await hass.services.async_call(
+            DOMAIN,
+            "area_action",
+            {
+                "target_device": coord.device_slug,
+                "entity_id": "home_hub.thermostat",
+                "action": act_c,
+                **extra_c,
+            },
+            blocking=True,
+        )
+    assert (
+        "climate",
+        "set_temperature",
+        {
+            "entity_id": "climate.main_thermostat",
+            "target_temp_low": 21.0,
+            "target_temp_high": 25.0,
+        },
+    ) in svc_calls
+    assert (
+        "climate",
+        "set_hvac_mode",
+        {"entity_id": "climate.main_thermostat", "hvac_mode": "fan_only"},
+    ) in svc_calls
+    assert (
+        "climate",
+        "set_hvac_mode",
+        {"entity_id": "climate.main_thermostat", "hvac_mode": "dry"},
+    ) in svc_calls
+
+    # 6. Full VacuumEntityFeature bitmask (`vacuum_caps` = 0x3F) + all vacuum verbs + TURN_ON/TURN_OFF fallback
+    hass.states.async_set(
+        "vacuum.robo_vac",
+        "docked",
+        {
+            "friendly_name": "Robo Vac",
+            "supported_features": 8192 | 4 | 8 | 16 | 1024 | 512,
+        },
+    )
+    assert compute_vacuum_caps(hass.states.get("vacuum.robo_vac")) == 0x3F
+    svc_calls.clear()
+    for vac_act in ("clean", "pause", "stop", "dock", "clean_spot", "spot", "locate"):
+        await hass.services.async_call(
+            DOMAIN,
+            "area_action",
+            {
+                "target_device": coord.device_slug,
+                "entity_id": "home_hub.vacuum",
+                "action": vac_act,
+            },
+            blocking=True,
+        )
+    assert ("vacuum", "start", {"entity_id": "vacuum.robo_vac"}) in svc_calls
+    assert ("vacuum", "pause", {"entity_id": "vacuum.robo_vac"}) in svc_calls
+    assert ("vacuum", "stop", {"entity_id": "vacuum.robo_vac"}) in svc_calls
+    assert ("vacuum", "return_to_base", {"entity_id": "vacuum.robo_vac"}) in svc_calls
+    assert ("vacuum", "clean_spot", {"entity_id": "vacuum.robo_vac"}) in svc_calls
+    assert ("vacuum", "locate", {"entity_id": "vacuum.robo_vac"}) in svc_calls
+
+    # Legacy TURN_ON (1) | TURN_OFF (2) vacuum without START (8192) or STOP (8)
+    hass.states.async_set(
+        "vacuum.robo_vac",
+        "docked",
+        {"friendly_name": "Legacy Vac", "supported_features": 1 | 2},
+    )
+    assert compute_vacuum_caps(hass.states.get("vacuum.robo_vac")) == 0x05
+    svc_calls.clear()
+    for vac_act in ("start", "stop"):
+        await hass.services.async_call(
+            DOMAIN,
+            "area_action",
+            {
+                "target_device": coord.device_slug,
+                "entity_id": "home_hub.vacuum",
+                "action": vac_act,
+            },
+            blocking=True,
+        )
+    assert ("vacuum", "turn_on", {"entity_id": "vacuum.robo_vac"}) in svc_calls
+    assert ("vacuum", "turn_off", {"entity_id": "vacuum.robo_vac"}) in svc_calls
 
 
 
