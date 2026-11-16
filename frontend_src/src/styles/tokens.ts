@@ -386,9 +386,60 @@ export const STUDIO_STYLES = css`
     font-weight: var(--studio-weight-medium);
   }
   details.sub-collapsible > .card-content { padding: var(--studio-space-3) 0 0; }
-  .fusion-area { border-bottom: 1px solid var(--studio-divider); padding-bottom: var(--studio-space-3); }
-  .fusion-area:last-child { border-bottom: none; }
-  .fusion-area > .settings-row { border-bottom: none; }
+  .area-presence-box {
+    display: flex;
+    flex-direction: column;
+    gap: var(--studio-space-2);
+    padding: var(--studio-space-3) var(--studio-space-4);
+    border: 1px solid var(--studio-divider);
+    border-radius: var(--studio-radius-control);
+    background: var(--studio-input-bg);
+  }
+  .area-presence-box.occupied { border-color: var(--studio-primary); }
+  .area-box-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--studio-space-2);
+  }
+  .area-box-heading {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--studio-space-2);
+  }
+  .area-box-title {
+    font-size:var(--studio-font-section);
+    font-weight: var(--studio-weight-medium);
+    line-height: var(--studio-line-height-condensed);
+  }
+  .area-box-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--studio-space-2);
+  }
+  .area-box-meta {
+    color: var(--studio-text-secondary);
+    font-size:var(--studio-font-secondary);
+  }
+  .area-presence-box > .settings-row {
+    min-height: var(--studio-control-height);
+    padding: var(--studio-space-2) 0 0;
+    border-top: 1px solid var(--studio-divider);
+  }
+  .area-presence-box > details.sub-collapsible {
+    padding-top: var(--studio-space-2);
+  }
+  .area-presence-box > details.sub-collapsible > summary {
+    color: var(--studio-text-secondary);
+    font-size:var(--studio-font-secondary);
+  }
+  .area-presence-box > details.sub-collapsible[open] > summary,
+  .area-presence-box > details.sub-collapsible > summary:hover {
+    color: var(--studio-text);
+  }
   .subsection-title {
     padding-top: var(--studio-space-3);
     border-top: 1px solid var(--studio-divider);

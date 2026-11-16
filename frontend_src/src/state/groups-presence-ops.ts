@@ -211,7 +211,8 @@ export async function bulkNumberOp(
 
 export function getActiveSurveyDeviceOp(store: StudioStore): SystemDeviceEntry | undefined {
   const devs = store.state?.system_devices || [];
-  return devs.find((d) => d.subentry_id === store.bleSurveySubentryId);
+  const bleDevs = devs.filter((d) => d.ble_tracked || d.kind === "ble_tag");
+  return bleDevs.find((d) => d.subentry_id === store.bleSurveySubentryId);
 }
 
 export async function setBleScannerOffsetOp(
@@ -240,14 +241,21 @@ export async function captureBleAreaSignatureOp(
   store: StudioStore,
   areaId: string,
 ): Promise<void> {
-  if (!store.bleSurveySubentryId) {
+  const sysDevs = store.state?.system_devices;
+  const activeDev = Array.isArray(sysDevs)
+    ? getActiveSurveyDeviceOp(store) || sysDevs.find((d) => d.ble_tracked || d.kind === "ble_tag")
+    : undefined;
+  const surveySubentryId = Array.isArray(sysDevs)
+    ? activeDev?.subentry_id || ""
+    : store.bleSurveySubentryId;
+  if (!surveySubentryId) {
     store.showToast("Select a calibration Device first", true);
     return;
   }
   try {
     const res = await store.ws.runSystemCommand(
       "capture_ble_area_signature",
-      { area_id: areaId, survey_subentry_id: store.bleSurveySubentryId },
+      { area_id: areaId, survey_subentry_id: surveySubentryId },
       store.activeSubentryId || null,
     );
     if (res) store.ingestPayload(res, false);

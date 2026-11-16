@@ -199,7 +199,10 @@ export class StudioStore implements ReactiveController {
 
   // System BLE & Area Presence UI state
   bleSurveySubentryId = "";
+  bleCalibrateAreaId = "";
   bleLiveStreamActive = true;
+  proxyTrimOpen = false;
+  advancedBleOpen = false;
   readonly openFusionAreas = new Set<string>();
 
   // System Tools UI state
@@ -884,7 +887,7 @@ export class StudioStore implements ReactiveController {
 
   private ensureDefaultSurveyDevice(): void {
     const devs = this.state?.system_devices || [];
-    const bleDevs = devs.filter((d) => d.has_ble || d.ble_tracked || d.kind === "ble_tag");
+    const bleDevs = devs.filter((d) => d.ble_tracked || d.kind === "ble_tag");
     if (this.bleSurveySubentryId && bleDevs.some((d) => d.subentry_id === this.bleSurveySubentryId)) {
       return;
     }
@@ -1301,6 +1304,27 @@ export class StudioStore implements ReactiveController {
     this.bleSurveySubentryId = subentryId;
     this.host.requestUpdate();
     void this.ensureSubscription(false);
+  }
+
+  selectBleCalibrateArea(areaId: string, focusPicker = false): void {
+    this.bleCalibrateAreaId = String(areaId || "");
+    this.host.requestUpdate();
+    if (focusPicker && typeof globalThis.requestAnimationFrame === "function") {
+      globalThis.requestAnimationFrame(() => {
+        const root =
+          (this.host as unknown as { renderRoot?: ShadowRoot }).renderRoot ||
+          this.host.shadowRoot;
+        const el = root?.getElementById("ble-calibrate-area-select") as HTMLSelectElement | null;
+        if (el) {
+          if (typeof el.scrollIntoView === "function") {
+            el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+          }
+          if (typeof el.focus === "function") {
+            el.focus();
+          }
+        }
+      });
+    }
   }
 
   toggleBleLiveStream(enabled: boolean): void {

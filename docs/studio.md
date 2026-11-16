@@ -40,12 +40,9 @@ Shared entities, remotes, colors, and overrides live in the Latter hub entry's o
 - **Group Controls & Baseline:** live-edit operational settings across a group (showing **Mixed** when members differ), plus a collapsible **Appearance & Personalization** bulk-override drawer.
 
 ### BLE & Area Presence
-- **Column 1:**
-  - **Live Area Presence & Sensor Fusion:** per-Area occupancy status, occupants, `6.0 dB` cross-floor attenuation, and per-Area **Fusion Settings** (mode `weighted` / `any_or` / `ble_only` / `ble_and_sensor`, 20–95% threshold, and participating mmWave/PIR/door sensors).
-  - **Spatial Engine Settings:** System-wide **Path-Loss Attenuation** (`1.5–4.5`, default `2.2`), **Maximum Area Radius** (`2–50 m`, default `12 m`), **Maximum Movement Speed** (`0.5–15 m/s`, default `3.5 m/s` velocity gate), and **Away Timeout** (`30–900 s`, default `180 s`).
-- **Column 2:**
-  - **Per-Scanner BLE Calibration:** live per-scanner raw, Kalman-filtered, offset, and effective RSSI plus distance with **Live Stream On / Stream Paused** (`ble_survey_delta` WebSocket stream) and `-1 dB` / `+1 dB` / **Reset** hardware offset controls (`±25 dB`).
-  - **Multi-Scanner Area Signatures:** per-Area **Capture Signature** / **Clear** recording normalized multi-proxy signal vectors for tight boundary accuracy and proxy-less Areas with no local scanner. → [Presence guide](presence.md)
+- **Column 1 — Area Presence & Sensors:** unified enclosed Area cards showing live occupancy confidence, Floor, and BLE coverage chips (`Signature`, `BLE Proxy`, or `No BLE Proxy`), occupant and distance telemetry, an inline **Calibrate** shortcut (and **Clear Signature** when calibrated), **Presence Mode** (`weighted` / `any_or` / `ble_only` / `ble_and_sensor`), and an enclosed **Sensor & Threshold Settings** drawer (**Occupied At** `20–95%` threshold and **Sensors That Count** mmWave/PIR/door pills).
+- **Column 2 — Walk-Around BLE Calibration:** guided live calibration with **Live Stream On / Stream Paused** (`ble_survey_delta` WebSocket stream), **Carried Device** (filtered strictly to actively BLE-tracked Devices and BLE Tags), a live signal / 12 s sleep-wake status banner, **Standing In Area** + **Calibrate Area** (capturing normalized multi-scanner Area signatures for boundary accuracy and proxy-less Areas), Area-first **Nearby Bluetooth Proxies** signal bars, and a collapsible **Proxy Antenna Trim** drawer (`-1 dB` / `+1 dB` / **Reset** hardware gain trim within `±25 dB`). → [Presence guide](presence.md)
+- **Bottom Drawer — Advanced BLE Settings:** collapsed-by-default System-wide RF tuning card with **Away Timeout** (`30–900 s`, default `180 s`), **Maximum Area Radius** (`2–50 m`, default `12 m`), **Maximum Movement Speed** (`0.5–15 m/s`, default `3.5 m/s` velocity gate), and **Path-Loss Attenuation** (`1.5–4.5`, default `2.2`).
 
 ### Tools
 | Card | What It Controls |

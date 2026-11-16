@@ -2029,6 +2029,326 @@ return {
         self.assertNotIn("Sean's Watch", got["discSearch"])
         self.assertIn("Living TV BLE", got["discSearch"])
 
+    def test_system_presence_walk_around_ux_and_ble_tracked_filter(self) -> None:
+        """D-044: System -> BLE & Area Presence renders enclosed Area boxes, filters strictly by ble_tracked, and bridges Calibrate."""
+        runner = """
+function flattenHtml(val) {
+  if (val == null || val === false || val === true || typeof val === "symbol") return "";
+  if (Array.isArray(val)) return val.map(flattenHtml).join("");
+  if (typeof val === "object") {
+    if (Array.isArray(val.strings) && Array.isArray(val.values)) {
+      let out = "";
+      for (let i = 0; i < val.strings.length; i += 1) {
+        out += val.strings[i];
+        if (i < val.values.length) out += flattenHtml(val.values[i]);
+      }
+      return out;
+    }
+    if (val._$litKeyed$ === 1 && Array.isArray(val.templates)) {
+      return val.templates.map(flattenHtml).join("");
+    }
+  }
+  return String(val);
+}
+
+let focusedId = "";
+let scrolledId = "";
+globalThis.requestAnimationFrame = (cb) => cb();
+
+const fakeHost = {
+  requestUpdate() {},
+  renderRoot: {
+    getElementById(id) {
+      return {
+        id,
+        scrollIntoView() { scrolledId = id; },
+        focus() { focusedId = id; },
+      };
+    },
+  },
+};
+
+const deskUntracked = {
+  subentry_id: "sub_desk",
+  title: "Desk Assistant",
+  has_ble: true,
+  ble_tracked: false,
+  kind: "device",
+  active_area_name: "Office",
+  ble_packets_seen: 0,
+  ble_survey_rows: [],
+};
+const pocketTracked = {
+  subentry_id: "sub_pocket",
+  title: "Pocket Assistant",
+  has_ble: true,
+  ble_tracked: true,
+  kind: "device",
+  active_area_name: "Bedroom",
+  ble_packets_seen: 14,
+  ble_survey_rows: [
+    {
+      area_id: "bedroom",
+      area_name: "Bedroom",
+      scanner_source: "AA:BB:CC:DD:EE:01",
+      scanner_name: "Bedroom Proxy",
+      raw_rssi: -58,
+      effective_rssi: -57,
+      offset_db: 1.0,
+      distance_m: 1.2,
+      age_seconds: 1,
+      is_fresh: true,
+      is_winner: true,
+    },
+    {
+      area_id: "",
+      area_name: "",
+      scanner_source: "AA:BB:CC:DD:EE:02",
+      scanner_name: "Hallway Plug",
+      raw_rssi: -76,
+      effective_rssi: -76,
+      offset_db: 0,
+      distance_m: 4.8,
+      age_seconds: 2,
+      is_fresh: true,
+      is_winner: false,
+    },
+  ],
+};
+const keyringTag = {
+  subentry_id: "sub_tag",
+  title: "Keyring Tag",
+  has_ble: false,
+  ble_tracked: false,
+  kind: "ble_tag",
+  active_area_name: "Kitchen",
+  ble_packets_seen: 5,
+  ble_survey_rows: [],
+};
+
+const baseState = {
+  system_config: {
+    ble_away_timeout_s: 180,
+    ble_max_radius_m: 12,
+    ble_max_velocity_mps: 3.5,
+    ble_attenuation: 2.2,
+  },
+  system_devices: [deskUntracked, pocketTracked, keyringTag],
+  ble_area_signatures: [
+    {
+      area_id: "bedroom",
+      area_name: "Bedroom",
+      floor_id: "upstairs",
+      has_ble_proxy: true,
+      has_signature: true,
+      scanner_count: 2,
+      sample_count: 18,
+      captured_at: "2026-11-16T20:00:00Z",
+    },
+    {
+      area_id: "guest_bath",
+      area_name: "Guest Bath",
+      floor_id: "downstairs",
+      has_ble_proxy: false,
+      has_signature: false,
+      scanner_count: 0,
+      sample_count: 0,
+      captured_at: "",
+    },
+  ],
+  live: {
+    area_presence_grid: [
+      {
+        area_id: "bedroom",
+        area_name: "Bedroom",
+        floor_name: "Upstairs",
+        is_occupied: true,
+        confidence_pct: 84,
+        occupant_names: ["Sean"],
+        winning_rssi: -57,
+        closest_distance_m: 1.2,
+        match_method: "signature",
+        fusion_mode: "weighted",
+        fusion_threshold_pct: 50,
+        fusion_sensors: [],
+        fusion_sensor_choices: [],
+      },
+    ],
+  },
+};
+
+const store = {
+  host: fakeHost,
+  hass: { locale: { language: "en" }, config: { unit_system: { length: "km" } } },
+  state: baseState,
+  activeSubentryId: "sub_desk",
+  bleSurveySubentryId: "sub_desk",
+  bleCalibrateAreaId: "",
+  bleLiveStreamActive: true,
+  proxyTrimOpen: false,
+  advancedBleOpen: false,
+  openFusionAreas: new Set(),
+  ensureSubscription() {},
+  getActiveSurveyDevice() { return getActiveSurveyDeviceOp(this); },
+  selectBleCalibrateArea: StudioStore.prototype.selectBleCalibrateArea,
+  ensureDefaultSurveyDevice: StudioStore.prototype.ensureDefaultSurveyDevice,
+};
+
+store.ensureDefaultSurveyDevice();
+const defaultSurveyAfterFilter = store.bleSurveySubentryId;
+const activeRendered = flattenHtml(renderSystemPresenceView(store));
+
+store.selectBleCalibrateArea("guest_bath", true);
+const afterBridgeRendered = flattenHtml(renderSystemPresenceView(store));
+
+const storeZeroBle = Object.assign({}, store, {
+  state: Object.assign({}, baseState, { system_devices: [deskUntracked] }),
+  bleSurveySubentryId: "",
+});
+storeZeroBle.ensureDefaultSurveyDevice();
+const emptyBleRendered = flattenHtml(renderSystemPresenceView(storeZeroBle));
+
+return {
+  defaultSurveyAfterFilter,
+  activeSurveyId: store.getActiveSurveyDevice()?.subentry_id || "",
+  focusedId,
+  scrolledId,
+  bleCalibrateAreaId: store.bleCalibrateAreaId,
+  activeRendered,
+  afterBridgeRendered,
+  emptyBleSurveyId: storeZeroBle.bleSurveySubentryId,
+  emptyBleRendered,
+};
+"""
+        stub_deps = (
+            "globalThis.HTMLElement = class { attachShadow() { return {}; } toggleAttribute() {} };\n"
+            "function navigateHaPath() {}\n"
+            "class StudioWsClient {}\n"
+            "function formatWsError(_e, f) { return f; }\n"
+            + "".join(
+                f"function {fn}() {{}}\n"
+                for fn in (
+                    "adoptLatterDeviceOp",
+                    "checkSystemUpdatesOp",
+                    "clearInternalLogsOp",
+                    "clearSecurityPinOp",
+                    "confirmAddBleModalOp",
+                    "confirmRemoveDeviceOp",
+                    "confirmResetDeviceOp",
+                    "copyLogsToClipboardOp",
+                    "downloadDeviceDiagnosticsOp",
+                    "exportBackupOp",
+                    "formatVisibleLogsOp",
+                    "openColorWheelModalOp",
+                    "quickAdoptBleCandidateOp",
+                    "restoreFromUploadedFileOp",
+                    "rotateSigningKeyOp",
+                    "saveColorWheelSelectionOp",
+                    "saveSecurityPinOp",
+                    "selectBleCandidateInModalOp",
+                    "sendAnnouncementOp",
+                    "addRemoteGroupRowOp",
+                    "addStringListRowOp",
+                    "addVolumeOverrideRowOp",
+                    "applyDeviceCustomColorOp",
+                    "commitEntityChange",
+                    "deleteCustomPaletteOp",
+                    "deleteWallpaperOp",
+                    "executeEntityActionOp",
+                    "flushDeviceBucketOp",
+                    "flushSystemSettingsOp",
+                    "getEnabledActivitySourcesOp",
+                    "getEnabledAreaCategoriesOp",
+                    "getEnabledDockTokensOp",
+                    "getEnabledHomeCategoriesOp",
+                    "moveAreaCategoryTokenOp",
+                    "moveDockAppTokenOp",
+                    "moveHomeCategoryTokenOp",
+                    "overlayDevicePrefsOnSections",
+                    "overlayPendingBlankListSlots",
+                    "overlayPendingEntityStates",
+                    "previewCameraOp",
+                    "removeRemoteGroupRowOp",
+                    "removeStringListRowOp",
+                    "removeVolumeOverrideRowOp",
+                    "runDeviceActionOp",
+                    "selectWallpaperSourceOp",
+                    "setAllWallpaperFavoritesOp",
+                    "setWallpaperRotationOp",
+                    "stageDeviceSettingOp",
+                    "stageSystemSettingOp",
+                    "testDoorbellSpeakerOp",
+                    "toggleActivitySourceOp",
+                    "toggleAreaCategoryTokenOp",
+                    "toggleDockAppTokenOp",
+                    "toggleHomeCategoryTokenOp",
+                    "toggleRemoteInGroupOp",
+                    "toggleWallpaperFavOp",
+                    "updateRemoteGroupFieldOp",
+                    "updateStringListRowOp",
+                    "updateVolumeOverrideRowOp",
+                    "uploadWallpaperOp",
+                )
+            )
+            + "const PENDING_ENTITY_STATES = new Map();\n"
+        )
+        got = _run_node_ts(
+            [
+                FRONTEND_SRC / "lib" / "lit.ts",
+                FRONTEND_SRC / "constants.ts",
+                FRONTEND_SRC / "utils" / "format.ts",
+                FRONTEND_SRC / "components" / "controls.ts",
+                FRONTEND_SRC / "state" / "groups-presence-ops.ts",
+                FRONTEND_SRC / "state" / "store.ts",
+                FRONTEND_SRC / "views" / "system-presence-view.ts",
+            ],
+            runner,
+            preamble_js=stub_deps,
+        )
+
+        # Untracked stationary display (has_ble=true, ble_tracked=false) is excluded cleanly
+        self.assertEqual(got["defaultSurveyAfterFilter"], "sub_pocket")
+        self.assertEqual(got["activeSurveyId"], "sub_pocket")
+        self.assertNotIn("Desk Assistant", got["activeRendered"])
+        self.assertIn("Pocket Assistant (Bedroom)", got["activeRendered"])
+        self.assertIn("Keyring Tag (Kitchen)", got["activeRendered"])
+
+        # Enclosed Area boxes + Floor + BLE coverage chips + proxy-less guidance
+        self.assertIn('class="area-presence-box occupied"', got["activeRendered"])
+        self.assertIn('<span class="area-box-title">Bedroom</span>', got["activeRendered"])
+        self.assertIn("Occupied • 84%", got["activeRendered"])
+        self.assertIn('<span class="chip">Upstairs</span>', got["activeRendered"])
+        self.assertIn("Signature (2 Proxies)", got["activeRendered"])
+        self.assertIn("Clear Signature", got["activeRendered"])
+        self.assertIn('<span class="area-box-title">Guest Bath</span>', got["activeRendered"])
+        self.assertIn('<span class="chip chip-warning">No BLE Proxy</span>', got["activeRendered"])
+        self.assertIn("calibrate with a carried Device to detect BLE presence here", got["activeRendered"])
+
+        # Area-first Nearby Bluetooth Proxies + Unassigned warning chip + Live signal banner
+        self.assertIn("Live BLE signal active", got["activeRendered"])
+        self.assertIn('<span class="row-label">Bedroom</span>', got["activeRendered"])
+        self.assertIn('<span class="chip">Bedroom Proxy</span>', got["activeRendered"])
+        self.assertIn('<span class="chip chip-primary">Active Winner</span>', got["activeRendered"])
+        self.assertIn('<span class="row-label">Unassigned Proxy</span>', got["activeRendered"])
+        self.assertIn('<span class="chip chip-warning">Assign Area in HA</span>', got["activeRendered"])
+
+        # Calibrate bridge selects Guest Bath & focuses #ble-calibrate-area-select
+        self.assertEqual(got["bleCalibrateAreaId"], "guest_bath")
+        self.assertEqual(got["focusedId"], "ble-calibrate-area-select")
+        self.assertEqual(got["scrolledId"], "ble-calibrate-area-select")
+        self.assertIn(
+            "Captures readings from surrounding Bluetooth proxies so Guest Bath detects presence without a local proxy.",
+            got["afterBridgeRendered"],
+        )
+
+        # Zero BLE-tracked devices -> empty state + Open Discovered Devices
+        self.assertEqual(got["emptyBleSurveyId"], "")
+        self.assertIn(
+            "No Devices currently have Bluetooth Area tracking enabled.",
+            got["emptyBleRendered"],
+        )
+        self.assertIn("Open Discovered Devices", got["emptyBleRendered"])
+
 
 if __name__ == "__main__":
     unittest.main()

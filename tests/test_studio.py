@@ -12,6 +12,7 @@ import unittest
 
 from custom_components.latter import (
     backup,
+    const as latter_const,
     groups,
     protocol,
     repairs,
@@ -155,23 +156,64 @@ class TestViewLayout(unittest.TestCase):
         self.assertIn("Add BLE Tag", discovered_view)
         self.assertIn('id="latter-adopt-table-box"', discovered_view)
         self.assertIn('id="ble-adopt-table-box"', discovered_view)
+        self.assertEqual(latter_const.STUDIO_REV, 16)
+        self.assertIn("const STUDIO_REV = 16;", js)
+        self.assertNotIn("fusion-area", js)
+        self.assertNotIn("d.has_ble ||", js)
+        self.assertGreaterEqual(js.count('d.ble_tracked || d.kind === "ble_tag"'), 4)
         self.assertNotIn("Discovered Bluetooth Devices", area_tracking_view)
         self.assertNotIn('id="ble-adopt-table-box"', area_tracking_view)
         self.assertNotIn("Per-Area BLE Signal Calibration", area_tracking_view)
         self.assertNotIn("Calibrate Current Area", area_tracking_view)
-        for card_title in (
+        for retired_card_title in (
+            "Live Area Presence & Sensor Fusion",
+            "Live Area Presence &amp; Sensor Fusion",
+            "Fusion Settings",
             "Spatial Engine Settings",
             "Per-Scanner BLE Calibration",
             "Multi-Scanner Area Signatures",
         ):
-            self.assertIn(card_title, area_tracking_view)
-        for sys_ble_id in (
-            "sys-ble_attenuation",
+            self.assertNotIn(retired_card_title, area_tracking_view)
+        self.assertNotIn("d.has_ble", area_tracking_view)
+        for expected_snippet in (
+            'id: "card-area-presence"',
+            'title: "Area Presence & Sensors"',
+            "area-presence-box",
+            'class="area-box-title"',
+            "<summary>Sensor &amp; Threshold Settings</summary>",
+            'id: "card-ble-calibration"',
+            'title: "Walk-Around BLE Calibration"',
+            'label: "Carried Device"',
+            'id="ble-survey-device-picker"',
+            'label: "Standing In Area"',
+            'id="ble-calibrate-area-select"',
+            'id="btn-capture-area-signature"',
+            "Calibrate Area",
+            '<div class="subsection-title">Nearby Bluetooth Proxies</div>',
+            'id="ble-proxy-trim-drawer"',
+            "<summary>Proxy Antenna Trim</summary>",
+            'id="card-advanced-ble-settings"',
+            '<h3 class="card-title">Advanced BLE Settings</h3>',
+        ):
+            self.assertIn(expected_snippet, area_tracking_view)
+        self.assertEqual(area_tracking_view.count("btn-primary"), 1)
+        adv_ble_order = (
+            "sys-ble_away_timeout_s",
             "sys-ble_max_radius_m",
             "sys-ble_max_velocity_mps",
-            "sys-ble_away_timeout_s",
-        ):
+            "sys-ble_attenuation",
+        )
+        for sys_ble_id in adv_ble_order:
             self.assertIn(sys_ble_id, area_tracking_view)
+        self.assertLess(
+            area_tracking_view.index('id: "card-ble-calibration"'),
+            area_tracking_view.index('id="card-advanced-ble-settings"'),
+        )
+        for earlier_id, later_id in itertools.pairwise(adv_ble_order):
+            self.assertLess(
+                area_tracking_view.index(f'id="{earlier_id}"'),
+                area_tracking_view.index(f'id="{later_id}"'),
+            )
 
         tools, sys_tools, groups, overview, display_view, interface_view, remotes_view, shared_entities = (
             section("tools"),

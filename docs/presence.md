@@ -2,14 +2,14 @@
 
 Latter tracks which Area each Device is in using the Bluetooth proxies across your System. It then puts that Area to work: moving a roaming Device's Home Assistant Area so Assist targets where you stand, scoping Area Controls, handing off active media, and routing occupied-Area notifications and intercom broadcasts.
 
-<!-- MEDIA: docs/media/presence-survey.png — Studio → BLE & Area Presence with live per-scanner calibration and multi-scanner Area signatures. -->
+<!-- MEDIA: docs/media/presence-survey.png — Studio → BLE & Area Presence with Area Presence & Sensors and Walk-Around BLE Calibration. -->
 
 ---
 
 ## What you need
 
 - **Bluetooth scanners assigned to your Areas** in Home Assistant. ESPHome Bluetooth proxies (`bluetooth_proxy: active: true`) are tested; local USB adapters, Shelly proxies, and other scanners exposed by Home Assistant's `bluetooth` integration work through the same passive callback pipeline.
-  - **Proxy-less Areas work too:** interior Areas without their own proxy (for example a guest bath, hallway, or pantry surrounded by 2–3 proxies in neighboring Areas) can be resolved by capturing a **Multi-Scanner Area Signature** in Studio.
+  - **Proxy-less Areas work too:** interior Areas without their own proxy (for example a guest bath, hallway, or pantry surrounded by 2–3 proxies in neighboring Areas) can be resolved by calibrating an Area signature in **Studio → System → BLE & Area Presence → Walk-Around BLE Calibration**.
 - **Optional:** Home Assistant **Floors** assigned to your Areas. Configuring Floors enables the `6.0 dB` cross-floor vertical attenuation penalty and automatically creates `sensor.<slug>_current_floor` and `sensor.<person>_current_floor` entities.
 
 ## What can be tracked
@@ -29,7 +29,7 @@ To link a tracked Device to a person, set **Assigned Person** on the Device's **
 
 ## How the spatial engine decides
 
-All filtering, trilateration, hysteresis, and sensor-fusion parameters live in [`presence.py`](../custom_components/latter/presence.py), with environmental constants tunable live in **Studio → System → BLE & Area Presence → Spatial Engine Settings**.
+All filtering, trilateration, hysteresis, and sensor-fusion parameters live in [`presence.py`](../custom_components/latter/presence.py), with environmental constants tunable live in **Studio → System → BLE & Area Presence → Advanced BLE Settings**.
 
 1. **Collect.** Latter registers passive Home Assistant Bluetooth callbacks (`BluetoothCallbackMatcher()` in `PASSIVE` mode, accepting both `connectable=True` and `connectable=False` frames) plus per-address advertisement listeners for static-payload beacons and instant `state_changed` RPA handoff for `private_ble_device` trackers. Readings at or below `−100 dBm` are dropped, and a **3.0 dBm RSSI hysteresis deadband** suppresses minor fluctuations while the winning Area is unchanged.
 2. **Filter per scanner (never blended).** Every scanner (`source` MAC) maintains its own `ScannerObservationState`—two proxies in the same Area never contaminate each other's filter:
@@ -55,15 +55,16 @@ All filtering, trilateration, hysteresis, and sensor-fusion parameters live in [
 
 Walls, foil-backed insulation, and receiver antenna designs mean raw RSSI varies across proxy hardware and tricky boundaries.
 
-1. **Per-Scanner BLE Calibration (`Studio → System → BLE & Area Presence`):**
-   - Select a tracked Device and click **Live Stream On** to stream real-time per-scanner raw, Kalman-filtered, offset, and effective RSSI plus distance over WebSocket.
-   - Use **`-1 dB`**, **`+1 dB`**, or **`Reset`** (`±25 dB`) on individual scanners to normalize hot or recessed proxy hardware across all tracked Devices.
-2. **Multi-Scanner Area Signatures (`Studio → System → BLE & Area Presence`):**
-   - Stand in an Area—such as a boundary zone or a **proxy-less Area** surrounded by neighboring scanners—for 5–10 seconds with **Live Stream On**.
-   - Click **Capture Signature** on that Area's row. Latter records the normalized multi-scanner fingerprint (`mean`, `std`, and sample count in 1 m-equivalent `norm_dbm` space), so signatures captured with one handheld or phone generalize automatically to other Devices with different TX powers.
-   - Click **Clear** at any time to return that Area to standard path-loss scoring.
+1. **Walk-Around BLE Calibration (`Studio → System → BLE & Area Presence → Walk-Around BLE Calibration`):**
+   - Choose your **Carried Device** (the picker lists strictly actively BLE-tracked Devices and BLE Tags, excluding stationary displays with BLE tracking off) and keep **Live Stream On** active (`ble_survey_delta` WebSocket stream). If the banner warns that no packets arrived in the last 12 seconds, wake or hold the Device so its Bluetooth beacon broadcasts.
+   - Stand in the target Area for 5–10 seconds while checking **Nearby Bluetooth Proxies** (each signal bar leads with its Home Assistant Area name, proxy chip, `Active Winner` badge, and effective RSSI / distance). You can also click **Calibrate** on any Area box in **Area Presence & Sensors** to jump straight to that Area in **Standing In Area**.
+   - Select the Area in **Standing In Area** and click **Calibrate Area**. Latter records the normalized multi-scanner fingerprint (`mean`, `std`, and sample count in 1 m-equivalent `norm_dbm` space) for tight boundary zones or **proxy-less Areas** surrounded by neighboring scanners, generalizing automatically across Devices with different TX powers. Click **Clear Signature** in that Area's box under **Area Presence & Sensors** at any time to return it to standard path-loss scoring.
+2. **Proxy Antenna Trim (`Walk-Around BLE Calibration → Proxy Antenna Trim`):**
+   - Expand **Proxy Antenna Trim** only when a specific Bluetooth proxy consistently reads louder or weaker than other proxies across every Area. Use **`-1 dB`**, **`+1 dB`**, or **`Reset`** (`±25 dB`) to normalize that receiver's gain across all tracked Devices.
 3. **Per-Device Reference Power (`Studio → Devices → <Device> → Presence → BLE Identity`):**
    - Leave **Reference Power (1 Meter)** blank to use the auto-detected advertised 1 m power shown in the placeholder, or enter a calibrated value (`−90` to `−30 dBm`) for cases, pockets, or custom tags.
+4. **Advanced BLE Settings (`Studio → System → BLE & Area Presence → Advanced BLE Settings`):**
+   - Expand the bottom **Advanced BLE Settings** card only if your Site needs custom System-wide **Away Timeout** (`30–900 s`), **Maximum Area Radius** (`2–50 m`), **Maximum Movement Speed** (`0.5–15 m/s`), or **Path-Loss Attenuation** (`1.5–4.5`).
 
 ---
 
@@ -79,7 +80,7 @@ Latter creates one occupancy binary sensor and one occupants sensor per mapped A
 | Door or opening closed | `+0.08` |
 | Occupancy sensor explicitly off, no motion, weak BLE | `−0.18` |
 
-Fusion modes, set per Area in Studio (**System → BLE & Area Presence**, with threshold and participating sensors under **Fusion Settings**):
+Presence modes, set per Area in Studio (**System → BLE & Area Presence → Area Presence & Sensors** via **Presence Mode**, with **Occupied At** threshold and **Sensors That Count** inside **Sensor & Threshold Settings**):
 
 | Mode | Behavior |
 | :--- | :--- |
@@ -127,7 +128,7 @@ Sensors are discovered automatically by device class (`occupancy`, `presence`, `
 1. Ensure each Bluetooth proxy is assigned to its Home Assistant Area (and assign Floors to your Areas if your Site has multiple levels).
 2. Open **Studio → Devices → Discovered**, adopt your Latter Devices, phones (`Private BLE Device`), watches, and BLE tags, and set **Assigned Person** on personal Devices.
 3. Attach `device_tracker.<slug>` to each person in **Settings → People** if you want BLE Home/Away zone tracking.
-4. Walk your Site with **Studio → System → BLE & Area Presence → Live Stream On**: trim any hot/quiet proxy hardware in **Per-Scanner BLE Calibration**, and click **Capture Signature** in any proxy-less Area or tight doorway boundary.
+4. Walk your Site with **Studio → System → BLE & Area Presence → Walk-Around BLE Calibration** (**Live Stream On**): select your **Carried Device**, click **Calibrate Area** in any proxy-less Area or tight doorway boundary, and expand **Proxy Antenna Trim** if any proxy hardware needs gain normalization.
 5. Point your automations at `sensor.<person>_current_area`, `sensor.<person>_current_floor`, or `binary_sensor.<area>_ble_occupancy`.
 
 ---
@@ -136,4 +137,4 @@ Sensors are discovered automatically by device class (`occupancy`, `presence`, `
 
 - **Discrete Areas and Floors, not `(x, y, z)` coordinates.** Latter determines which Home Assistant Area and Floor a Device occupies (including proxy-less Areas via captured signatures), rather than estimating meter coordinates on a floorplan.
 - **No `devices × scanners` entity explosion.** Per-scanner raw/filtered RSSI and distance stream live over WebSocket when calibrating in Studio instead of registering dozens of high-churn recorder entities per Device.
-- **Captured signatures depend on proxy placement.** If you physically move or replace a Bluetooth proxy, recapture **Multi-Scanner Area Signatures** for nearby Areas that depend on that scanner.
+- **Captured signatures depend on proxy placement.** If you physically move or replace a Bluetooth proxy, recalibrate signatures via **Calibrate Area** in **Walk-Around BLE Calibration** for nearby Areas that depend on that scanner.
