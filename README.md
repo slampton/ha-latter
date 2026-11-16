@@ -18,15 +18,6 @@ Most ESPHome display projects hardcode entity IDs into YAML—a renamed light, a
 
 You need both repos for the touch displays. If you only want BLE Area presence and occupancy fusion from the Bluetooth proxies, phones, watches, and beacons you already own, `ha-latter` works standalone.
 
-```mermaid
-flowchart LR
-    DEV["ESP32-S3 / P4 Display<br/>(esphome-latter-core)"] -- "System: RPC Outbox<br/>(zero-privilege taps & sync)" --> HA["Latter Integration<br/>(ha-latter)"]
-    HA -- "latter_push_v3 & latter_set_slots<br/>(6 domains + signed LAN media)" --> DEV
-    BLE["ESPHome BLE Proxies"] -- "RSSI" --> HA
-    HA <--> STUDIO["Latter Studio<br/>(live admin panel)"]
-    HA <--> ECOSYS["HA Areas · Assist · Music Assistant"]
-```
-
 ---
 
 ## Get Started in Minutes
@@ -89,6 +80,15 @@ An admin-only sidebar control plane where every change pushes live without refla
 ---
 
 ## Under the Hood
+
+```mermaid
+flowchart LR
+    DEV["ESP32-S3 / P4 Display<br/>(esphome-latter-core)"] -- "System: RPC Outbox<br/>(zero-privilege taps & sync)" --> HA["Latter Integration<br/>(ha-latter)"]
+    HA -- "latter_push_v3 & latter_set_slots<br/>(6 domains + signed LAN media)" --> DEV
+    BLE["ESPHome BLE Proxies"] -- "RSSI" --> HA
+    HA <--> STUDIO["Latter Studio<br/>(live admin panel)"]
+    HA <--> ECOSYS["HA Areas · Assist · Music Assistant"]
+```
 
 - **Zero-Privilege Bound RPC & 6-Domain Protocol v3 Push.** Devices bind strictly by `esphome_device_id` and hardware MAC (`via_device_id`). Outbound device taps emit compact chunked frames on `System: RPC Outbox` (`identity.py`) and inbound state pushes directly over `esphome.<node>_latter_push_v3` across 6 content-hashed domains (`area_context`, `active_media`, `remote_config`, `weather_forecast`, `calendar_agenda`, `device_prefs`) plus `latter_set_slots`—requiring neither `allow_service_calls` nor `device_slug` YAML substitutions, and keeping `~8 KB` of signed URLs off Home Assistant's `state_changed` bus and SQLite recorder.
 - **3-Tier Sleep-Safe Entity Architecture & `O(1)` `AreaStateIndex`.** All 50 device preferences persist in subentries (`studio/settings.py`) and reconcile offline NVS edits on `device_hello`, so Studio and Device Groups work even while battery handhelds hibernate. Home Assistant gets a clean Tier 2 automation surface (`Power Profile`, `Wake Word Mode`, `Alert Volume`, `Find My Device`, `Activate Screensaver`, `Timer Active`, `Timer Remaining`, `Alarm Ringing`) backed by 1 Hz local timer ticks and an incremental `O(1)` `AreaStateIndex` (`hub.py`—never calling `hass.states.async_all()`).
