@@ -33,10 +33,19 @@ from custom_components.latter.areas import (
     resolve_area_icon,
 )
 from custom_components.latter.const import (
+    CONF_ALARM_ENTITY,
     CONF_CAMERA_ENTITIES,
     CONF_DEFAULT_AREA,
+    CONF_DEFAULT_SPEAKER,
+    CONF_DEVICE_SLUG,
+    CONF_ESPHOME_DEVICE_ID,
+    CONF_GARAGE_ENTITY,
+    CONF_LOCK_ENTITY,
+    CONF_THERMOSTAT_ENTITY,
+    CONF_VACUUM_ENTITY,
     DATA_GLOBAL_CONFIG,
     DOMAIN,
+    SUBENTRY_DEVICE,
 )
 from custom_components.latter.doorbell import (
     bind_coordinator_doorbell_listener,
@@ -310,15 +319,34 @@ async def test_context_builder_curated_entities_and_area_actions(
     media_pair = find_area_media_entities(hass, "living_room", coord.local_speaker)
     assert media_pair == {"speaker": "media_player.lr_ma", "remote": "remote.lr_tv"}
 
-    home_wide = get_home_wide_entities(hass)
+    assert get_home_wide_entities(hass) == []
+    assert get_home_alarm_summary(hass)["entity_id"] == ""
+    assert get_home_hub_summary(hass)["thermostat_entity"] == ""
+
+    global_cfg = hass.data[DOMAIN][DATA_GLOBAL_CONFIG]
+    global_cfg[CONF_ALARM_ENTITY] = "alarm_control_panel.home_alarm"
+    global_cfg[CONF_THERMOSTAT_ENTITY] = "climate.lr_hvac"
+    global_cfg[CONF_LOCK_ENTITY] = "lock.front_door"
+    global_cfg[CONF_GARAGE_ENTITY] = "cover.main_garage"
+    global_cfg[CONF_VACUUM_ENTITY] = "vacuum.roborock"
+
+    home_wide = get_home_wide_entities(
+        hass, configured_alarm_entity="alarm_control_panel.home_alarm"
+    )
     assert home_wide and home_wide[0]["id"] == "alarm_control_panel.home_alarm"
 
-    wh = get_home_hub_summary(hass)
+    wh = get_home_hub_summary(
+        hass,
+        thermostat_entity="climate.lr_hvac",
+        lock_entity="lock.front_door",
+        garage_entity="cover.main_garage",
+        vacuum_entity="vacuum.roborock",
+    )
     assert wh["thermostat_entity"] == "climate.lr_hvac"
-    assert wh["lock_entity"] in ("lock.front_door", "lock.side_latch")
+    assert wh["lock_entity"] == "lock.front_door"
     assert wh["garage_entity"] == "cover.main_garage"
     assert wh["vacuum_entity"] == "vacuum.roborock"
-    alarm_sum = get_home_alarm_summary(hass)
+    alarm_sum = get_home_alarm_summary(hass, "alarm_control_panel.home_alarm")
     assert (
         get_available_home_categories(alarm_sum, wh)
         == "alarm,thermostat,entry,vacuum"
@@ -730,5 +758,205 @@ async def test_area_icon_resolution_wire_packing_and_live_registry_update(
     assert unassigned_state == "Unassigned"
     assert unassigned_attrs["area_icon"] == ""
     assert unassigned_attrs["payload"].split("\x1f")[41] == ""
+
+    assert await async_unload_entry(hass, entry) is True
+
+
+@pytest.mark.asyncio
+async def test_home_hub_strict_shared_entities_no_auto_discovery(
+    hass: Any, setup_latter_hub: Any, make_esphome_device: Any
+) -> None:
+    """Verify unassigned Shared Entities never auto-discover HA entities or show Home Hub tabs."""
+    from homeassistant.config_entries import ConfigSubentry
+
+    entry, _sys_obj, coord = await setup_latter_hub(
+        hass, extra_device_data={CONF_DEFAULT_SPEAKER: ""}
+    )
+
+    # Seed every Home Hub domain + TTS + unrelated TV/speaker in Home Assistant states
+    hass.states.async_set(
+        "alarm_control_panel.unassigned_alarm",
+        "armed_home",
+        {"friendly_name": "Unassigned Alarm", "code_format": "number", "supported_features": 3},
+    )
+    hass.states.async_set(
+        "climate.unassigned_hvac",
+        "heat",
+        {"friendly_name": "Unassigned HVAC", "temperature": 71, "hvac_modes": ["off", "heat"]},
+    )
+    hass.states.async_set(
+        "lock.unassigned_lock",
+        "locked",
+        {"friendly_name": "Unassigned Lock"},
+    )
+    hass.states.async_set(
+        "cover.unassigned_garage",
+        "closed",
+        {"device_class": "garage", "friendly_name": "Unassigned Garage"},
+    )
+    hass.states.async_set(
+        "vacuum.unassigned_vac",
+        "docked",
+        {"friendly_name": "Unassigned Vacuum"},
+    )
+    hass.states.async_set(
+        "camera.unassigned_cam",
+        "idle",
+        {"friendly_name": "Unassigned Camera"},
+    )
+    hass.states.async_set(
+        "tts.piper",
+        "unknown",
+        {"friendly_name": "Piper TTS"},
+    )
+    hass.states.async_set(
+        "media_player.living_room_tv",
+        "idle",
+        {"device_class": "tv", "friendly_name": "Living Room TV"},
+    )
+    await hass.async_block_till_done()
+
+    # 1. With Shared Entities unassigned on a 1-device install (no default_speaker/doorbell_media_player):
+    #    summaries and home_categories MUST all be empty ("") so ZERO Home Hub tabs appear!
+    alarm_empty = get_home_alarm_summary(hass, None)
+    assert alarm_empty == {
+        "entity_id": "",
+        "state": "",
+        "name": "",
+        "supported_features": 0,
+        "code_arm_required": False,
+        "alarm_caps": 0,
+    }
+    assert get_home_alarm_summary(hass) == alarm_empty
+    assert get_home_wide_entities(hass) == []
+
+    hub_empty = get_home_hub_summary(hass)
+    assert hub_empty == {
+        "thermostat_entity": "",
+        "thermostat_state": "",
+        "thermostat_temp": None,
+        "thermostat_current_temp": None,
+        "climate_caps": 0,
+        "lock_entity": "",
+        "lock_state": "",
+        "garage_entity": "",
+        "garage_state": "",
+        "vacuum_entity": "",
+        "vacuum_state": "",
+        "vacuum_caps": 0,
+    }
+    assert (
+        get_available_home_categories(
+            alarm_empty, hub_empty, coordinator=coord, hass=hass
+        )
+        == ""
+    )
+
+    coord._cached_area_payload = None
+    _st, empty_attrs = coord.get_area_context_payload()
+    assert empty_attrs["home_categories"] == ""
+    assert empty_attrs["alarm_entity"] == ""
+    assert empty_attrs["alarm_caps"] == 0
+    assert empty_attrs["thermostat_entity"] == ""
+    assert empty_attrs["climate_caps"] == 0
+    assert empty_attrs["lock_entity"] == ""
+    assert empty_attrs["garage_entity"] == ""
+    assert empty_attrs["vacuum_entity"] == ""
+    assert empty_attrs["vacuum_caps"] == 0
+    assert empty_attrs["payload"].split("\x1f")[40] == ""
+
+    # Unassigned home_hub.* action aliases must NOT command unconfigured HA entities
+    dispatched: list[tuple[str, str, dict[str, Any]]] = []
+    hass.services.async_register(
+        "vacuum",
+        "return_to_base",
+        lambda call: dispatched.append(("vacuum", "return_to_base", dict(call.data))),
+    )
+    await async_execute_area_action(hass, "home_hub.vacuum", "dock")
+    assert dispatched == []
+
+    # 2. Explicitly assigning each Shared Entity immediately enables only its corresponding category
+    global_cfg = hass.data[DOMAIN][DATA_GLOBAL_CONFIG]
+
+    global_cfg[CONF_ALARM_ENTITY] = "alarm_control_panel.unassigned_alarm"
+    coord._cached_area_payload = None
+    assert coord.get_area_context_payload()[1]["home_categories"] == "alarm"
+
+    global_cfg[CONF_CAMERA_ENTITIES] = ["camera.unassigned_cam"]
+    coord._cached_area_payload = None
+    assert coord.get_area_context_payload()[1]["home_categories"] == "alarm,cameras"
+
+    global_cfg[CONF_THERMOSTAT_ENTITY] = "climate.unassigned_hvac"
+    coord._cached_area_payload = None
+    assert (
+        coord.get_area_context_payload()[1]["home_categories"]
+        == "alarm,cameras,thermostat"
+    )
+
+    # Assigning lock/garage enables 'entry' ONLY (never 'intercom' by itself)
+    global_cfg[CONF_LOCK_ENTITY] = "lock.unassigned_lock"
+    coord._cached_area_payload = None
+    assert (
+        coord.get_area_context_payload()[1]["home_categories"]
+        == "alarm,cameras,thermostat,entry"
+    )
+    global_cfg.pop(CONF_LOCK_ENTITY)
+    global_cfg[CONF_GARAGE_ENTITY] = "cover.unassigned_garage"
+    coord._cached_area_payload = None
+    assert (
+        coord.get_area_context_payload()[1]["home_categories"]
+        == "alarm,cameras,thermostat,entry"
+    )
+
+    global_cfg[CONF_VACUUM_ENTITY] = "vacuum.unassigned_vac"
+    coord._cached_area_payload = None
+    assert (
+        coord.get_area_context_payload()[1]["home_categories"]
+        == "alarm,cameras,thermostat,entry,vacuum"
+    )
+    await async_execute_area_action(hass, "home_hub.vacuum", "dock")
+    assert dispatched == [
+        ("vacuum", "return_to_base", {"entity_id": "vacuum.unassigned_vac"})
+    ]
+
+    # Assigning doorbell_media_player (or default_speaker / a 2nd Latter display) enables 'intercom'
+    global_cfg["doorbell_media_player"] = "media_player.living_room_tv"
+    coord._cached_area_payload = None
+    assert (
+        coord.get_area_context_payload()[1]["home_categories"]
+        == "alarm,cameras,intercom,thermostat,entry,vacuum"
+    )
+
+    global_cfg.pop("doorbell_media_player")
+    coord._cached_area_payload = None
+    assert (
+        coord.get_area_context_payload()[1]["home_categories"]
+        == "alarm,cameras,thermostat,entry,vacuum"
+    )
+
+    esp_dev_2, mac_2 = make_esphome_device(
+        hass,
+        slug="kitchen_panel",
+        mac="aa:bb:cc:dd:ee:09",
+        name="Kitchen Panel",
+        area_id="kitchen",
+        stationary=1,
+    )
+    entry.subentries["sub_kitchen"] = ConfigSubentry(
+        data={
+            CONF_ESPHOME_DEVICE_ID: esp_dev_2.id,
+            "mac": mac_2,
+            CONF_DEVICE_SLUG: "kitchen_panel",
+        },
+        subentry_type=SUBENTRY_DEVICE,
+        title="Kitchen Panel",
+        unique_id=mac_2,
+        subentry_id="sub_kitchen",
+    )
+    coord._cached_area_payload = None
+    assert (
+        coord.get_area_context_payload()[1]["home_categories"]
+        == "alarm,cameras,intercom,thermostat,entry,vacuum"
+    )
 
     assert await async_unload_entry(hass, entry) is True

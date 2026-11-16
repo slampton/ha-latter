@@ -34,8 +34,6 @@ from .areas import (
     get_area_available_domains,
     get_area_entities,
     get_areas_summary,
-    get_home_alarm_summary,
-    get_home_hub_summary,
     get_home_wide_entities,
     resolve_person_area_and_distance,
 )
@@ -177,23 +175,14 @@ def _enforce_perimeter_security_policy(
     act = _ALARM_ACTION_ALIASES.get(raw_act, raw_act)
     resolved_ent = entity_id.strip()
     if resolved_ent == "home_hub.lock":
-        resolved_ent = coord.lock_entity or get_home_hub_summary(
-            hass, lock_entity=coord.lock_entity
-        )["lock_entity"]
+        resolved_ent = coord.lock_entity or ""
     elif resolved_ent == "home_hub.garage":
-        resolved_ent = coord.garage_entity or get_home_hub_summary(
-            hass, garage_entity=coord.garage_entity
-        )["garage_entity"]
+        resolved_ent = coord.garage_entity or ""
     elif resolved_ent == "home_hub.alarm" or (
         not resolved_ent
         and act in ("arm_home", "arm_away", "arm_night", "arm_vacation", "disarm")
     ):
-        resolved_ent = (
-            coord.alarm_entity
-            or get_home_alarm_summary(hass, coord.get_opt(CONF_ALARM_ENTITY))[
-                "entity_id"
-            ]
-        )
+        resolved_ent = coord.alarm_entity or ""
     if not resolved_ent or "." not in resolved_ent:
         return
 
@@ -727,12 +716,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 "disarm",
             )
         ):
-            entity_id = (
-                coord.alarm_entity
-                or get_home_alarm_summary(hass, coord.get_opt(CONF_ALARM_ENTITY))[
-                    "entity_id"
-                ]
-            )
+            entity_id = coord.alarm_entity or ""
 
         if entity_id:
             raw_level = data.get("level")

@@ -39,7 +39,6 @@ from .areas import (
     bind_coordinator_area_listeners,
     build_area_context_payload,
     find_area_media_entities,
-    get_home_alarm_summary,
     match_area_by_name_or_id,
     resolve_active_area_entry,
     sync_esphome_device_area,
@@ -901,10 +900,7 @@ class LatterCoordinator:
 
     @property
     def alarm_entity(self) -> str | None:
-        val = self.get_opt(CONF_ALARM_ENTITY)
-        if val:
-            return str(val)
-        return get_home_alarm_summary(self.hass)["entity_id"] or None
+        return str(self.get_opt(CONF_ALARM_ENTITY) or "").strip() or None
 
     @property
     def camera_entities(self) -> list[str]:

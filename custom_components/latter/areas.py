@@ -522,9 +522,10 @@ def compute_vacuum_caps(state_obj: State | None) -> int:
 def get_home_alarm_summary(
     hass: HomeAssistant, configured_alarm_entity: str | None = None
 ) -> dict[str, Any]:
-    """Return the configured (or auto-discovered) home security alarm_control_panel summary."""
-    if configured_alarm_entity:
-        state_obj = hass.states.get(configured_alarm_entity)
+    """Return the explicitly configured home security alarm_control_panel summary."""
+    clean_alarm = str(configured_alarm_entity or "").strip()
+    if clean_alarm:
+        state_obj = hass.states.get(clean_alarm)
         if state_obj is not None:
             return {
                 "entity_id": state_obj.entity_id,
@@ -540,26 +541,6 @@ def get_home_alarm_summary(
                 ),
                 "alarm_caps": compute_alarm_caps(state_obj),
             }
-
-    for state_obj in get_area_state_index(hass).states_for_domain(
-        "alarm_control_panel"
-    ):
-        if state_obj.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
-            continue
-        return {
-            "entity_id": state_obj.entity_id,
-            "state": ha_value(state_obj.state),
-            "name": str(
-                state_obj.attributes.get("friendly_name") or "Home Alarm"
-            ),
-            "supported_features": int(
-                state_obj.attributes.get("supported_features") or 0
-            ),
-            "code_arm_required": bool(
-                state_obj.attributes.get("code_arm_required", False)
-            ),
-            "alarm_caps": compute_alarm_caps(state_obj),
-        }
     return {
         "entity_id": "",
         "state": "",
@@ -577,7 +558,7 @@ def get_home_hub_summary(
     garage_entity: str | None = None,
     vacuum_entity: str | None = None,
 ) -> dict[str, Any]:
-    """Resolve configured (or primary auto-discovered) Home Hub Thermostat, Lock, Garage, and Vacuum states."""
+    """Resolve explicitly configured Home Hub Thermostat, Lock, Garage, and Vacuum states."""
     out: dict[str, Any] = {
         "thermostat_entity": "",
         "thermostat_state": "",
@@ -592,14 +573,9 @@ def get_home_hub_summary(
         "vacuum_state": "",
         "vacuum_caps": 0,
     }
-    idx = get_area_state_index(hass)
 
-    t_st = hass.states.get(thermostat_entity) if thermostat_entity else None
-    if t_st is None:
-        for cand in idx.states_for_domain("climate"):
-            if cand.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN):
-                t_st = cand
-                break
+    clean_thermostat = str(thermostat_entity or "").strip()
+    t_st = hass.states.get(clean_thermostat) if clean_thermostat else None
     if t_st is not None:
         out["thermostat_entity"] = t_st.entity_id
         out["thermostat_state"] = ha_value(t_st.state)
@@ -633,35 +609,20 @@ def get_home_hub_summary(
             except (ValueError, TypeError):
                 pass
 
-    l_st = hass.states.get(lock_entity) if lock_entity else None
-    if l_st is None:
-        for cand in idx.states_for_domain("lock"):
-            if cand.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN):
-                l_st = cand
-                break
+    clean_lock = str(lock_entity or "").strip()
+    l_st = hass.states.get(clean_lock) if clean_lock else None
     if l_st is not None:
         out["lock_entity"] = l_st.entity_id
         out["lock_state"] = ha_value(l_st.state)
 
-    g_st = hass.states.get(garage_entity) if garage_entity else None
-    if g_st is None:
-        for cand in idx.states_for_domain("cover"):
-            if cand.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
-                continue
-            d_cls = str(cand.attributes.get("device_class") or "").lower()
-            if d_cls in ("garage", "gate", "door") or "garage" in cand.entity_id.lower():
-                g_st = cand
-                break
+    clean_garage = str(garage_entity or "").strip()
+    g_st = hass.states.get(clean_garage) if clean_garage else None
     if g_st is not None:
         out["garage_entity"] = g_st.entity_id
         out["garage_state"] = ha_value(g_st.state)
 
-    v_st = hass.states.get(vacuum_entity) if vacuum_entity else None
-    if v_st is None:
-        for cand in idx.states_for_domain("vacuum"):
-            if cand.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN):
-                v_st = cand
-                break
+    clean_vacuum = str(vacuum_entity or "").strip()
+    v_st = hass.states.get(clean_vacuum) if clean_vacuum else None
     if v_st is not None:
         out["vacuum_entity"] = v_st.entity_id
         out["vacuum_state"] = ha_value(v_st.state)
@@ -872,10 +833,12 @@ def _is_intercom_available(
     coordinator: Any,
     hub_info: Mapping[str, Any],
 ) -> bool:
-    """Return True when Intercom/Broadcast has at least one target device or output entity."""
+    """Return True when Intercom has peer Latter displays or an explicitly configured speaker."""
     if hub_info.get("intercom_available"):
         return True
-    hass_obj = hass or (getattr(coordinator, "hass", None) if coordinator is not None else None)
+    hass_obj = hass or (
+        getattr(coordinator, "hass", None) if coordinator is not None else None
+    )
     if coordinator is not None:
         dev_subs = getattr(coordinator, "device_subentries", None)
         if dev_subs is not None and len(dev_subs) > 1:
@@ -893,7 +856,8 @@ def _is_intercom_available(
         ):
             return True
         if hass_obj is not None and other_latter_devices(
-            iter_coordinators(hass_obj), str(getattr(coordinator, "device_slug", "") or "")
+            iter_coordinators(hass_obj),
+            str(getattr(coordinator, "device_slug", "") or ""),
         ):
             return True
         get_opt = getattr(coordinator, "get_opt", None)
@@ -902,14 +866,17 @@ def _is_intercom_available(
             or bool(callable(get_opt) and get_opt(CONF_DEFAULT_SPEAKER))
             or bool(getattr(coordinator, "doorbell_media_player", None))
             or bool(callable(get_opt) and get_opt("doorbell_media_player"))
-            or bool(getattr(coordinator, "lock_entity", None) or hub_info.get("lock_entity"))
-            or bool(getattr(coordinator, "garage_entity", None) or hub_info.get("garage_entity"))
         ):
             return True
     if hass_obj is not None:
-        idx = get_area_state_index(hass_obj)
-        if idx.states_for_domain("tts") or idx.states_for_domain("media_player"):
-            return True
+        domain_data = getattr(hass_obj, "data", {}).get(DOMAIN)
+        if isinstance(domain_data, Mapping):
+            global_cfg = domain_data.get("global_config")
+            if isinstance(global_cfg, Mapping) and (
+                bool(global_cfg.get(CONF_DEFAULT_SPEAKER))
+                or bool(global_cfg.get("doorbell_media_player"))
+            ):
+                return True
     return False
 
 
@@ -1932,20 +1899,13 @@ def bind_coordinator_area_listeners(coordinator: Any) -> None:
 
         coordinator._unsub_area_entities_state = _unsub_area_all
 
-    hub_info = get_home_hub_summary(
-        coordinator.hass,
-        thermostat_entity=coordinator.thermostat_entity,
-        lock_entity=coordinator.lock_entity,
-        garage_entity=coordinator.garage_entity,
-        vacuum_entity=coordinator.vacuum_entity,
-    )
     tracked_hub: list[str] = []
     for cand in (
         coordinator.alarm_entity,
-        hub_info["thermostat_entity"],
-        hub_info["lock_entity"],
-        hub_info["garage_entity"],
-        hub_info["vacuum_entity"],
+        coordinator.thermostat_entity,
+        coordinator.lock_entity,
+        coordinator.garage_entity,
+        coordinator.vacuum_entity,
     ):
         if cand and cand not in tracked_hub:
             tracked_hub.append(cand)
