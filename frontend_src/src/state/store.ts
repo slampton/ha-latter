@@ -19,6 +19,7 @@ import type {
   BleSurveyRow,
   DevicePrefItem,
   DeviceViewId,
+  DiscoveredBleCandidate,
   EspHomeEntityItem,
   HassRoute,
   HomeAssistant,
@@ -164,6 +165,16 @@ export class StudioStore implements ReactiveController {
   deviceCategoryFilter = "all";
   discoveredBleSearch = "";
   discoveredBleKindFilter: "all" | "tracker" | "named" = "all";
+  discoveredBleSort: "name" | "rssi" | "area" = "name";
+  discoveredBlePaused = false;
+  discoveredBleFrozenSnapshot: DiscoveredBleCandidate[] | null = null;
+  readonly discoveredBlePersonDrafts = new Map<string, string>();
+  readonly discoveredLatterGroupDrafts = new Map<string, string>();
+  readonly discoveredLatterPersonDrafts = new Map<string, string>();
+  private readonly discoveredBleSeenCache = new Map<
+    string,
+    { candidate: DiscoveredBleCandidate; lastSeenMs: number }
+  >();
 
   // Device Security & Time UI draft state
   devicePinDraft = "";
@@ -759,6 +770,7 @@ export class StudioStore implements ReactiveController {
 
     const merged: StudioStatePayload = {
       ...incoming,
+      discovered_ble_devices: this.stabilizeDiscoveredBle(incoming),
       catalog: incoming.catalog ?? prevCatalog,
       internal_logs:
         logsWereRequested || (Array.isArray(incoming.internal_logs) && incoming.internal_logs.length > 0)
@@ -801,6 +813,62 @@ export class StudioStore implements ReactiveController {
     this.ensureDefaultDoorbellTester();
     this.ensureDefaultSeedSelections();
     this.host.requestUpdate();
+  }
+
+  private stabilizeDiscoveredBle(incoming: StudioStatePayload): DiscoveredBleCandidate[] {
+    const RETENTION_MS = 90_000;
+    const now = Date.now();
+    const onboardedSlugs = new Set(
+      (incoming.system_devices || [])
+        .map((d) => String(d.device_slug || "").trim().toLowerCase())
+        .filter(Boolean),
+    );
+    for (const [addrKey, entry] of this.discoveredBleSeenCache.entries()) {
+      const candSlug = String(
+        (entry.candidate as unknown as { slug?: string }).slug || "",
+      )
+        .trim()
+        .toLowerCase();
+      if (now - entry.lastSeenMs > RETENTION_MS || (candSlug && onboardedSlugs.has(candSlug))) {
+        this.discoveredBleSeenCache.delete(addrKey);
+      }
+    }
+    const extraNoKey: DiscoveredBleCandidate[] = [];
+    for (const c of incoming.discovered_ble_devices || []) {
+      const addrKey = String(c.target_address || c.address || "").trim().toLowerCase();
+      if (addrKey) {
+        this.discoveredBleSeenCache.set(addrKey, { candidate: c, lastSeenMs: now });
+      } else {
+        extraNoKey.push(c);
+      }
+    }
+    return [
+      ...Array.from(this.discoveredBleSeenCache.values(), (entry) => entry.candidate),
+      ...extraNoKey,
+    ];
+  }
+
+  toggleDiscoveredBlePause(paused?: boolean): void {
+    const next = paused ?? !this.discoveredBlePaused;
+    this.discoveredBlePaused = next;
+    if (next) {
+      this.discoveredBleFrozenSnapshot = [...(this.state?.discovered_ble_devices || [])];
+    } else {
+      this.discoveredBleFrozenSnapshot = null;
+    }
+    this.host.requestUpdate();
+  }
+
+  evictAdoptedBleCandidate(targetAddress: string): void {
+    const addrKey = String(targetAddress || "").trim().toLowerCase();
+    if (!addrKey) return;
+    this.discoveredBleSeenCache.delete(addrKey);
+    this.discoveredBlePersonDrafts.delete(addrKey);
+    if (this.discoveredBleFrozenSnapshot) {
+      this.discoveredBleFrozenSnapshot = this.discoveredBleFrozenSnapshot.filter(
+        (c) => String(c.target_address || c.address || "").trim().toLowerCase() !== addrKey,
+      );
+    }
   }
 
   private ensureDefaultSurveyDevice(): void {

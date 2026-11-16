@@ -224,6 +224,8 @@ export async function adoptLatterDeviceOp(
       },
       store.activeSubentryId || null,
     );
+    store.discoveredLatterGroupDrafts.delete(esphomeDeviceId);
+    store.discoveredLatterPersonDrafts.delete(esphomeDeviceId);
     if (res) store.ingestPayload(res, false);
     store.showToast(`Added "${title || "Device"}" to Latter`);
   } catch (err) {
@@ -248,6 +250,7 @@ export async function quickAdoptBleCandidateOp(
       },
       store.activeSubentryId || null,
     );
+    store.evictAdoptedBleCandidate(targetAddress);
     if (res) store.ingestPayload(res, false);
     store.showToast(`Added BLE tag "${title}"`);
   } catch (err) {
@@ -274,6 +277,7 @@ export async function confirmAddBleModalOp(store: StudioStore): Promise<void> {
       },
       store.activeSubentryId || null,
     );
+    store.evictAdoptedBleCandidate(targetAddress);
     store.closeAddBleModal();
     if (res) store.ingestPayload(res, false);
     store.showToast(`Added BLE tag "${name}"`);

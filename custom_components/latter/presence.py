@@ -1990,4 +1990,4 @@ def get_discovered_ble_candidates(
             str(x.get("title") or "").lower(),
         )
     )
-    return candidates[:40]
+    return candidates[:60]

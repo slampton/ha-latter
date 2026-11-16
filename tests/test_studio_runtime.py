@@ -1763,10 +1763,10 @@ return {
     def test_managed_and_discovered_lifecycle_views_and_badge(self) -> None:
         """D-041: Managed vs. Discovered sidebar, Option C badge, dynamic Managed card header, and stacked Discovered cards."""
         stub_lit = """
-function repeat(items, keyFn, tplFn) { return items.map((it, idx) => tplFn(it, idx)); }
 function flattenHtml(node) {
   if (node === null || node === undefined || node === nothing || typeof node === "boolean") return "";
   if (Array.isArray(node)) return node.map(flattenHtml).join("");
+  if (typeof node === "object" && node._$litKeyed$ === 1) return flattenHtml(node.templates);
   if (typeof node === "object" && node._$litType$ === 1) {
     let out = "";
     for (let i = 0; i < node.strings.length; i += 1) {
@@ -1796,6 +1796,12 @@ function makeFakeHost(storeOverrides) {
       deviceCategoryFilter: "all",
       discoveredBleSearch: "",
       discoveredBleKindFilter: "all",
+      discoveredBleSort: "name",
+      discoveredBlePaused: false,
+      discoveredBleFrozenSnapshot: null,
+      discoveredBlePersonDrafts: new Map(),
+      discoveredLatterGroupDrafts: new Map(),
+      discoveredLatterPersonDrafts: new Map(),
       hass: null,
       host: { requestUpdate() {} },
       state: {
@@ -1904,8 +1910,26 @@ const managedRoaming = flattenHtml(renderDevicesListView(makeFakeHost({ deviceCa
 const managedDisplays = flattenHtml(renderDevicesListView(makeFakeHost({ deviceCategoryFilter: "native" }).store));
 const managedGroup = flattenHtml(renderDevicesListView(makeFakeHost({ deviceCategoryFilter: "group:wall_panels" }).store));
 
-// 5. Discovered Devices stacked cards + BLE search & tracker filter
+// 5. Discovered Devices stacked cards + stable Name sort vs Signal strength sort + Pause List freeze + BLE search & tracker filter
 const discAll = flattenHtml(renderDevicesDiscoveredView(hostOneLatter.store));
+hostOneLatter.store.discoveredBleSort = "rssi";
+const discSortRssi = flattenHtml(renderDevicesDiscoveredView(hostOneLatter.store));
+hostOneLatter.store.discoveredBleSort = "name";
+hostOneLatter.store.discoveredBlePaused = true;
+hostOneLatter.store.discoveredBleFrozenSnapshot = [hostOneLatter.store.state.discovered_ble_devices[0]];
+// Mutate live state while paused — frozen snapshot must keep only Sean's Watch and ignore Stray Beacon!
+hostOneLatter.store.state.discovered_ble_devices.push({
+  title: "Stray Neighbor Beacon",
+  target_address: "99:88:77:66:55:44",
+  kind: "Named BLE device",
+  rssi: -40,
+  area_name: "Kitchen",
+});
+const discPaused = flattenHtml(renderDevicesDiscoveredView(hostOneLatter.store));
+hostOneLatter.store.discoveredBlePaused = false;
+hostOneLatter.store.discoveredBleFrozenSnapshot = null;
+hostOneLatter.store.state.discovered_ble_devices.pop();
+
 hostOneLatter.store.discoveredBleKindFilter = "tracker";
 const discTrackersOnly = flattenHtml(renderDevicesDiscoveredView(hostOneLatter.store));
 hostOneLatter.store.discoveredBleKindFilter = "all";
@@ -1921,6 +1945,8 @@ return {
   managedDisplays,
   managedGroup,
   discAll,
+  discSortRssi,
+  discPaused,
   discTrackersOnly,
   discSearch,
 };
@@ -1967,7 +1993,7 @@ return {
         self.assertIn('<h3 class="card-title">Latter Displays</h3>', got["managedDisplays"])
         self.assertIn('<h3 class="card-title">Group: Wall & Desk Panels</h3>', got["managedGroup"])
 
-        # Discovered Devices two stacked cards + filtering
+        # Discovered Devices two stacked cards + stable Name default sort vs Signal strength + Pause List + filtering
         self.assertIn('<h3 class="card-title">Latter Devices</h3>', got["discAll"])
         self.assertIn('<h3 class="card-title">Bluetooth Devices</h3>', got["discAll"])
         self.assertLess(
@@ -1976,8 +2002,23 @@ return {
         )
         self.assertIn("Kitchen Panel", got["discAll"])
         self.assertIn("Auto (Wall & Desk Panels)", got["discAll"])
-        self.assertIn("Sean's Watch", got["discAll"])
-        self.assertIn("Living TV BLE", got["discAll"])
+        self.assertIn("Pause List", got["discAll"])
+        # Default Sort = Name (A-Z): "Living TV BLE" (-79 dBm) renders BEFORE "Sean's Watch" (-58 dBm)
+        self.assertLess(
+            got["discAll"].index("Living TV BLE"),
+            got["discAll"].index("Sean's Watch"),
+        )
+        # Sort = Signal strength: "Sean's Watch" (-58 dBm) renders BEFORE "Living TV BLE" (-79 dBm)
+        self.assertLess(
+            got["discSortRssi"].index("Sean's Watch"),
+            got["discSortRssi"].index("Living TV BLE"),
+        )
+        # Paused snapshot ignores newly pushed live BLE items and shows Resume List
+        self.assertIn("Resume List", got["discPaused"])
+        self.assertIn("List updates paused", got["discPaused"])
+        self.assertIn("Sean's Watch", got["discPaused"])
+        self.assertNotIn("Stray Neighbor Beacon", got["discPaused"])
+        self.assertNotIn("Living TV BLE", got["discPaused"])
 
         self.assertIn("Sean's Watch", got["discTrackersOnly"])
         self.assertNotIn("Living TV BLE", got["discTrackersOnly"])

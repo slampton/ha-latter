@@ -2720,6 +2720,8 @@ async function adoptLatterDeviceOp(
       },
       store.activeSubentryId || null,
     );
+    store.discoveredLatterGroupDrafts.delete(esphomeDeviceId);
+    store.discoveredLatterPersonDrafts.delete(esphomeDeviceId);
     if (res) store.ingestPayload(res, false);
     store.showToast(`Added "${title || "Device"}" to Latter`);
   } catch (err) {
@@ -2743,6 +2745,7 @@ async function quickAdoptBleCandidateOp(
       },
       store.activeSubentryId || null,
     );
+    store.evictAdoptedBleCandidate(targetAddress);
     if (res) store.ingestPayload(res, false);
     store.showToast(`Added BLE tag "${title}"`);
   } catch (err) {
@@ -2768,6 +2771,7 @@ async function confirmAddBleModalOp(store) {
       },
       store.activeSubentryId || null,
     );
+    store.evictAdoptedBleCandidate(targetAddress);
     store.closeAddBleModal();
     if (res) store.ingestPayload(res, false);
     store.showToast(`Added BLE tag "${name}"`);
@@ -4405,6 +4409,14 @@ class StudioStore {
   deviceCategoryFilter = "all";
   discoveredBleSearch = "";
   discoveredBleKindFilter = "all";
+  discoveredBleSort = "name";
+  discoveredBlePaused = false;
+  discoveredBleFrozenSnapshot = null;
+           discoveredBlePersonDrafts = new Map();
+           discoveredLatterGroupDrafts = new Map();
+           discoveredLatterPersonDrafts = new Map();
+                   discoveredBleSeenCache = new Map
+   ();
   // Device Security & Time UI draft state
   devicePinDraft = "";
   systemPinDraft = "";
@@ -4951,6 +4963,7 @@ class StudioStore {
     }
     const merged = {
       ...incoming,
+      discovered_ble_devices: this.stabilizeDiscoveredBle(incoming),
       catalog: incoming.catalog ?? prevCatalog,
       internal_logs:
         logsWereRequested || (Array.isArray(incoming.internal_logs) && incoming.internal_logs.length > 0)
@@ -4987,6 +5000,59 @@ class StudioStore {
     this.ensureDefaultDoorbellTester();
     this.ensureDefaultSeedSelections();
     this.host.requestUpdate();
+  }
+          stabilizeDiscoveredBle(incoming) {
+    const RETENTION_MS = 90_000;
+    const now = Date.now();
+    const onboardedSlugs = new Set(
+      (incoming.system_devices || [])
+        .map((d) => String(d.device_slug || "").trim().toLowerCase())
+        .filter(Boolean),
+    );
+    for (const [addrKey, entry] of this.discoveredBleSeenCache.entries()) {
+      const candSlug = String(
+        (entry.candidate).slug || "",
+      )
+        .trim()
+        .toLowerCase();
+      if (now - entry.lastSeenMs > RETENTION_MS || (candSlug && onboardedSlugs.has(candSlug))) {
+        this.discoveredBleSeenCache.delete(addrKey);
+      }
+    }
+    const extraNoKey = [];
+    for (const c of incoming.discovered_ble_devices || []) {
+      const addrKey = String(c.target_address || c.address || "").trim().toLowerCase();
+      if (addrKey) {
+        this.discoveredBleSeenCache.set(addrKey, { candidate: c, lastSeenMs: now });
+      } else {
+        extraNoKey.push(c);
+      }
+    }
+    return [
+      ...Array.from(this.discoveredBleSeenCache.values(), (entry) => entry.candidate),
+      ...extraNoKey,
+    ];
+  }
+  toggleDiscoveredBlePause(paused) {
+    const next = paused ?? !this.discoveredBlePaused;
+    this.discoveredBlePaused = next;
+    if (next) {
+      this.discoveredBleFrozenSnapshot = [...(this.state?.discovered_ble_devices || [])];
+    } else {
+      this.discoveredBleFrozenSnapshot = null;
+    }
+    this.host.requestUpdate();
+  }
+  evictAdoptedBleCandidate(targetAddress) {
+    const addrKey = String(targetAddress || "").trim().toLowerCase();
+    if (!addrKey) return;
+    this.discoveredBleSeenCache.delete(addrKey);
+    this.discoveredBlePersonDrafts.delete(addrKey);
+    if (this.discoveredBleFrozenSnapshot) {
+      this.discoveredBleFrozenSnapshot = this.discoveredBleFrozenSnapshot.filter(
+        (c) => String(c.target_address || c.address || "").trim().toLowerCase() !== addrKey,
+      );
+    }
   }
           ensureDefaultSurveyDevice() {
     const devs = this.state?.system_devices || [];
@@ -9333,17 +9399,55 @@ function renderDeviceToolsView(store) {
 /**
  * Discovered Devices View (`discovered_devices`): Two stacked full-width onboarding cards (`D-041`):
  * 1. `Latter Devices` — Unbound ESPHome Devices running Latter firmware ready for one-click adoption.
- * 2. `Bluetooth Devices` — Filterable/searchable BLE trackers, phones, and named advertisements.
+ * 2. `Bluetooth Devices` — Filterable, sortable (Name default so RSSI changes never reorder rows),
+ *    and pausable BLE trackers, phones, and named advertisements with keyed DOM identity.
  */
 function isTrackerCandidate(c) {
   const kind = String(c.kind || "").toLowerCase();
   const addr = String(c.target_address || c.address || "");
   return kind.includes("private ble") || kind.includes("ibeacon") || addr.includes(".");
 }
+function candidateTitle(c) {
+  return c.title || c.name || c.target_address || c.address || "BLE Tag";
+}
+function candidateAddr(c) {
+  return c.target_address || c.address || "";
+}
+function compareBleCandidates(
+  a,
+  b,
+  sortMode,
+) {
+  const aTitle = candidateTitle(a);
+  const bTitle = candidateTitle(b);
+  const aAddr = candidateAddr(a);
+  const bAddr = candidateAddr(b);
+  if (sortMode === "rssi") {
+    const aHas = a.rssi !== null && a.rssi !== undefined;
+    const bHas = b.rssi !== null && b.rssi !== undefined;
+    if (aHas !== bHas) return aHas ? -1 : 1;
+    if (aHas && bHas && a.rssi !== b.rssi) return Number(b.rssi) - Number(a.rssi);
+  } else if (sortMode === "area") {
+    const aArea = String(a.area_name || "").trim();
+    const bArea = String(b.area_name || "").trim();
+    if (Boolean(aArea) !== Boolean(bArea)) return aArea ? -1 : 1;
+    if (aArea && bArea) {
+      const areaCmp = aArea.localeCompare(bArea, undefined, { sensitivity: "base" });
+      if (areaCmp !== 0) return areaCmp;
+    }
+  }
+  const nameCmp = aTitle.localeCompare(bTitle, undefined, { sensitivity: "base" });
+  if (nameCmp !== 0) return nameCmp;
+  return aAddr.localeCompare(bAddr);
+}
 function renderDevicesDiscoveredView(store) {
   const data = store.state;
   const latterCandidates = data?.discovered_latter_devices || [];
-  const bleCandidates = data?.discovered_ble_devices || [];
+  const isPaused = Boolean(store.discoveredBlePaused);
+  const bleCandidates =
+    isPaused && Array.isArray(store.discoveredBleFrozenSnapshot)
+      ? store.discoveredBleFrozenSnapshot
+      : data?.discovered_ble_devices || [];
   const groups = data?.device_groups || [];
   const persons = data?.catalog?.persons || [];
   const groupNameMap = new Map();
@@ -9353,24 +9457,31 @@ function renderDevicesDiscoveredView(store) {
     }
   }
   const kindFilter = store.discoveredBleKindFilter || "all";
+  const sortMode = store.discoveredBleSort || "name";
   const query = (store.discoveredBleSearch || "").trim().toLowerCase();
-  const filteredBle = bleCandidates.filter((c) => {
-    if (kindFilter === "tracker" && !isTrackerCandidate(c)) return false;
-    if (kindFilter === "named" && isTrackerCandidate(c)) return false;
-    if (!query) return true;
-    const haystack = [
-      c.title,
-      c.name,
-      c.target_address,
-      c.address,
-      c.kind,
-      c.area_name,
-    ]
-      .filter(Boolean)
-      .join(" ")
-      .toLowerCase();
-    return haystack.includes(query);
-  });
+  const filteredBle = bleCandidates
+    .filter((c) => {
+      if (kindFilter === "tracker" && !isTrackerCandidate(c)) return false;
+      if (kindFilter === "named" && isTrackerCandidate(c)) return false;
+      if (!query) return true;
+      const haystack = [
+        c.title,
+        c.name,
+        c.target_address,
+        c.address,
+        c.kind,
+        c.area_name,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(query);
+    })
+    .slice()
+    .sort((a, b) => compareBleCandidates(a, b, sortMode));
+  const latterDraftGroups = store.discoveredLatterGroupDrafts;
+  const latterDraftPersons = store.discoveredLatterPersonDrafts;
+  const bleDraftPersons = store.discoveredBlePersonDrafts;
   return html`<section id="view-discovered_devices">
     ${renderCard({
       title: "Latter Devices",
@@ -9384,59 +9495,87 @@ function renderDevicesDiscoveredView(store) {
       contentClass: "settings-list",
       body: html`<div id="latter-adopt-table-box" class="settings-list">
         ${latterCandidates.length
-          ? latterCandidates.map((d, idx) => {
-              const title = d.title || d.node_name || "Latter Device";
-              const defGrpName =
-                groupNameMap.get(d.default_group) ||
-                entityLabel((d.default_group || "unassigned").replace(/_/g, " "));
-              const meta = [d.model_label || "Latter ESPHome Device"];
-              if (d.node_name) meta.push(`Node: ${d.node_name}`);
-              if (d.area_name) meta.push(`Area: ${d.area_name}`);
-              const grpSelId = `latter-adopt-group-${idx}`;
-              const personSelId = `latter-adopt-person-${idx}`;
-              return renderSettingsRow({
-                label: title,
-                description: meta.join(" • "),
-                control: html`<select
-                    id=${grpSelId}
-                    data-role="group"
-                    aria-label=${`Device Group for ${title}`}
-                  >
-                    <option value="auto">Auto (${defGrpName})</option>
-                    ${groups.map((g) => html`<option value=${g.id}>${g.name}</option>`)}
-                  </select>
-                  <select
-                    id=${personSelId}
-                    data-role="person"
-                    aria-label=${`Assigned person for ${title}`}
-                  >
-                    <option value="">No person</option>
-                    ${persons.map((p) => html`<option value=${p.id}>${p.name}</option>`)}
-                  </select>
-                  <button
-                    type="button"
-                    @click=${(ev) => {
-                      const btn = ev.currentTarget;
-                      const parent = btn.parentElement;
-                      const grpSel = parent?.querySelector(
-                        'select[data-role="group"]',
-                      );
-                      const personSel = parent?.querySelector(
-                        'select[data-role="person"]',
-                      );
-                      void store.adoptLatterDevice(
-                        d.esphome_device_id,
-                        title,
-                        grpSel?.value || "auto",
-                        personSel?.value || "",
-                      );
-                    }}
-                    class="btn btn-secondary btn-compact"
-                  >
-                    Adopt
-                  </button>`,
-              });
-            })
+          ? repeat(
+              latterCandidates,
+              (d) => d.esphome_device_id,
+              (d) => {
+                const title = d.title || d.node_name || "Latter Device";
+                const defGrpName =
+                  groupNameMap.get(d.default_group) ||
+                  entityLabel((d.default_group || "unassigned").replace(/_/g, " "));
+                const meta = [d.model_label || "Latter ESPHome Device"];
+                if (d.node_name) meta.push(`Node: ${d.node_name}`);
+                if (d.area_name) meta.push(`Area: ${d.area_name}`);
+                const curGrp = latterDraftGroups?.get(d.esphome_device_id) || "auto";
+                const curPerson = latterDraftPersons?.get(d.esphome_device_id) || "";
+                return renderSettingsRow({
+                  label: title,
+                  description: meta.join(" • "),
+                  control: html`<select
+                      data-role="group"
+                      aria-label=${`Device Group for ${title}`}
+                      .value=${curGrp}
+                      @change=${(ev) => {
+                        latterDraftGroups?.set(
+                          d.esphome_device_id,
+                          (ev.currentTarget).value || "auto",
+                        );
+                      }}
+                    >
+                      <option value="auto" ?selected=${curGrp === "auto"}>
+                        Auto (${defGrpName})
+                      </option>
+                      ${groups.map(
+                        (g) =>
+                          html`<option value=${g.id} ?selected=${curGrp === g.id}>
+                            ${g.name}
+                          </option>`,
+                      )}
+                    </select>
+                    <select
+                      data-role="person"
+                      aria-label=${`Assigned person for ${title}`}
+                      .value=${curPerson}
+                      @change=${(ev) => {
+                        latterDraftPersons?.set(
+                          d.esphome_device_id,
+                          (ev.currentTarget).value || "",
+                        );
+                      }}
+                    >
+                      <option value="" ?selected=${!curPerson}>No person</option>
+                      ${persons.map(
+                        (p) =>
+                          html`<option value=${p.id} ?selected=${curPerson === p.id}>
+                            ${p.name}
+                          </option>`,
+                      )}
+                    </select>
+                    <button
+                      type="button"
+                      @click=${(ev) => {
+                        const btn = ev.currentTarget;
+                        const parent = btn.parentElement;
+                        const grpSel = parent?.querySelector(
+                          'select[data-role="group"]',
+                        );
+                        const personSel = parent?.querySelector(
+                          'select[data-role="person"]',
+                        );
+                        void store.adoptLatterDevice(
+                          d.esphome_device_id,
+                          title,
+                          grpSel?.value || latterDraftGroups?.get(d.esphome_device_id) || "auto",
+                          personSel?.value || latterDraftPersons?.get(d.esphome_device_id) || "",
+                        );
+                      }}
+                      class="btn btn-secondary btn-compact"
+                    >
+                      Adopt
+                    </button>`,
+                });
+              },
+            )
           : html`<p class="empty-state">
               No unconfigured Latter Devices found in Home Assistant. Newly added ESPHome Devices running Latter firmware appear here automatically.
             </p>`}
@@ -9475,6 +9614,30 @@ function renderDevicesDiscoveredView(store) {
             Named advertisements
           </option>
         </select>
+        <select
+          id="discovered-ble-sort"
+          aria-label="Sort discovered Bluetooth devices"
+          .value=${sortMode}
+          @change=${(ev) => {
+            const val = (ev.currentTarget).value;
+            store.discoveredBleSort =
+              val === "rssi" || val === "area" ? val : "name";
+            store.host.requestUpdate();
+          }}
+        >
+          <option value="name" ?selected=${sortMode === "name"}>Sort: Name (A–Z)</option>
+          <option value="rssi" ?selected=${sortMode === "rssi"}>Sort: Signal strength</option>
+          <option value="area" ?selected=${sortMode === "area"}>Sort: Nearest Area</option>
+        </select>
+        <button
+          type="button"
+          id="btn-pause-discovered-ble"
+          aria-pressed=${String(isPaused)}
+          @click=${() => store.toggleDiscoveredBlePause()}
+          class="btn btn-secondary"
+        >
+          ${isPaused ? "Resume List" : "Pause List"}
+        </button>
         <button
           type="button"
           @click=${() => store.openAddBleModal()}
@@ -9484,40 +9647,68 @@ function renderDevicesDiscoveredView(store) {
         </button>`,
       contentClass: "settings-list",
       body: html`<div id="ble-adopt-table-box" class="settings-list">
+        ${isPaused
+          ? html`<p class="help-text">
+              List updates paused (${fmtNumber(filteredBle.length, store.hass, 0)} shown). Click Resume List to refresh.
+            </p>`
+          : nothing}
         ${filteredBle.length
-          ? filteredBle.map((c, idx) => {
-              const title = c.title || c.name || c.target_address || c.address || "BLE Tag";
-              const addr = c.target_address || c.address || "";
-              const meta = [c.kind || "BLE device", addr];
-              if (c.rssi !== null && c.rssi !== undefined) {
-                meta.push(`${fmtNumber(c.rssi, store.hass, 0)} dBm`);
-              }
-              if (c.area_name) {
-                meta.push(`Nearest Area: ${c.area_name}`);
-              }
-              const selId = `ble-adopt-person-${idx}`;
-              return renderSettingsRow({
-                label: title,
-                description: meta.join(" • "),
-                control: html`<select id=${selId} aria-label=${`Assigned person for ${title}`}>
-                    <option value="">No person</option>
-                    ${persons.map((p) => html`<option value=${p.id}>${p.name}</option>`)}
-                  </select>
-                  <button
-                    type="button"
-                    @click=${(ev) => {
-                      const btn = ev.currentTarget;
-                      const sel = btn.parentElement?.querySelector(
-                        "select",
-                      );
-                      void store.quickAdoptBleCandidate(title, addr, sel?.value || "");
-                    }}
-                    class="btn btn-secondary btn-compact"
-                  >
-                    Adopt
-                  </button>`,
-              });
-            })
+          ? repeat(
+              filteredBle,
+              (c) => (candidateAddr(c) || candidateTitle(c)).toLowerCase(),
+              (c) => {
+                const title = candidateTitle(c);
+                const addr = candidateAddr(c);
+                const addrKey = (addr || title).toLowerCase();
+                const curPerson = bleDraftPersons?.get(addrKey) || "";
+                const meta = [c.kind || "BLE device", addr];
+                if (c.rssi !== null && c.rssi !== undefined) {
+                  meta.push(`${fmtNumber(c.rssi, store.hass, 0)} dBm`);
+                }
+                if (c.area_name) {
+                  meta.push(`Nearest Area: ${c.area_name}`);
+                }
+                return renderSettingsRow({
+                  label: title,
+                  description: meta.join(" • "),
+                  control: html`<select
+                      aria-label=${`Assigned person for ${title}`}
+                      .value=${curPerson}
+                      @change=${(ev) => {
+                        bleDraftPersons?.set(
+                          addrKey,
+                          (ev.currentTarget).value || "",
+                        );
+                      }}
+                    >
+                      <option value="" ?selected=${!curPerson}>No person</option>
+                      ${persons.map(
+                        (p) =>
+                          html`<option value=${p.id} ?selected=${curPerson === p.id}>
+                            ${p.name}
+                          </option>`,
+                      )}
+                    </select>
+                    <button
+                      type="button"
+                      @click=${(ev) => {
+                        const btn = ev.currentTarget;
+                        const sel = btn.parentElement?.querySelector(
+                          "select",
+                        );
+                        void store.quickAdoptBleCandidate(
+                          title,
+                          addr,
+                          sel?.value || bleDraftPersons?.get(addrKey) || "",
+                        );
+                      }}
+                      class="btn btn-secondary btn-compact"
+                    >
+                      Adopt
+                    </button>`,
+                });
+              },
+            )
           : html`<p class="empty-state">
               ${bleCandidates.length
                 ? "No Bluetooth devices match this filter."
