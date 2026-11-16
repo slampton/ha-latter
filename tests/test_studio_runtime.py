@@ -773,9 +773,12 @@ return { offMarkup, dispWeatherOff, staticMarkup, rotatingMarkup, powerMarkup, a
         self.assertIn("id=cfg-device_remote_group", got["ifaceMarkup"])
         self.assertIn("Group: Living Area TV", got["ifaceMarkup"])
 
-        # 3. System -> Media & Remotes: read-only assignment chip + Configure shortcut
-        self.assertIn('<span class="chip">Group: Living Area TV</span>', got["sysRemotesMarkup"])
-        self.assertIn("Configure remotes for Desk Panel", got["sysRemotesMarkup"])
+        # 3. System -> Media & Remotes (D-042): Remote Controls, Speaker Volume Overrides & Remote Control Groups only (no Device Assignments card)
+        for rem_card in ("Remote Controls", "Speaker Volume Overrides", "Remote Control Groups"):
+            self.assertIn(f'<h3 class="card-title">{rem_card}</h3>', got["sysRemotesMarkup"])
+        self.assertNotIn("Device Assignments", got["sysRemotesMarkup"])
+        self.assertNotIn("device-remote-assignments-list", got["sysRemotesMarkup"])
+        self.assertNotIn("Configure remotes for Desk Panel", got["sysRemotesMarkup"])
 
         # 4. Static wallpaper + Sun Synchronized: Day/Night Brightness shown, Manual Brightness & Start Hours hidden
         self.assertIn('id="btn-enable-wp-rotation"', got["staticMarkup"])

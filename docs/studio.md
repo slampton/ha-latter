@@ -32,7 +32,7 @@ Shared entities, remotes, colors, and overrides live in the Latter hub entry's o
 
 ### Media & Remotes
 - **Remote Controls:** up to 10 TVs, streaming boxes, and AV receivers (auto-pairing sibling `remote.*` and `media_player.*` entities, with native key maps for Android TV, Fire TV, Bravia, Apple TV, LG webOS, and Denon/Marantz).
-- **Remote Control Groups & Device Assignments:** named remote sets bound to Home Assistant Areas or assigned per device, plus a glanceable **Device Assignments** summary linking to each device's **Interface** page.
+- **Remote Control Groups:** named remote sets bound to Home Assistant Areas or assigned per device on each device's **Interface** page.
 - **Speaker Volume Overrides:** routes volume changes for any speaker to an AV receiver `media_player` or amplifier `number` / `input_number` entity.
 
 ### Device Groups

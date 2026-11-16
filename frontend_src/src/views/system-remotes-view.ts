@@ -1,12 +1,11 @@
 /**
- * System Media & Remotes View (`remotes`): Remote Controls, Volume Overrides, Remote Groups & Device Assignment Status.
+ * System Media & Remotes View (`remotes`): Remote Controls, Volume Overrides & Remote Control Groups.
  */
 
 import {
   renderCard,
   renderEntitySlotList,
   renderSelectOptions,
-  renderSettingsRow,
   renderTrashIconButton,
 } from "../components/controls.js";
 import { html, type TemplateResult } from "../lib/lit.js";
@@ -20,9 +19,6 @@ export function renderSystemRemotesView(store: StudioStore): TemplateResult {
   const volOverrides = sc?.volume_overrides || [];
   const remoteGroups = sc?.remote_groups || [];
   const areas = cat.areas || [];
-  const screenDevs = (data?.system_devices || []).filter(
-    (d) => d.kind !== "ble_tag" && d.has_display,
-  );
 
   const speakerChoices = cat.ma_speakers || [];
   const targetChoices = cat.volume_targets || cat.remotes || [];
@@ -31,17 +27,6 @@ export function renderSystemRemotesView(store: StudioStore): TemplateResult {
   const friendlyRemoteLabel = (entId: string): string => {
     const found = (cat.remotes || []).find((r) => r.id === entId);
     return found ? found.name.split(" (")[0] : entId;
-  };
-
-  const remoteAssignmentChipLabel = (rawMode: string): string => {
-    const mode = String(rawMode || "area_auto").trim() || "area_auto";
-    if (mode === "all") return "All System remotes";
-    if (mode.startsWith("group:")) {
-      const grpId = mode.slice(6);
-      const matched = remoteGroups.find((g) => g.id === grpId);
-      return matched ? `Group: ${matched.name}` : `Missing group (${grpId})`;
-    }
-    return "Follows active Area";
   };
 
   return html`<section id="view-remotes">
@@ -222,31 +207,6 @@ export function renderSystemRemotesView(store: StudioStore): TemplateResult {
                   </div>`;
                 })
               : html`<p class="empty-state">No remote groups yet.</p>`}
-          </div>`,
-        })}
-
-        ${renderCard({
-          title: "Device Assignments",
-          subtitle: "Assigned on each Device's Interface page.",
-          contentClass: "settings-list",
-          body: html`<div id="device-remote-assignments-list" class="settings-list">
-            ${screenDevs.length
-              ? screenDevs.map((d) =>
-                  renderSettingsRow({
-                    label: d.title,
-                    description: `Active Area: ${d.active_area_name || "—"}`,
-                    control: html`<span class="chip">${remoteAssignmentChipLabel(d.device_remote_group)}</span>
-                      <button
-                        type="button"
-                        aria-label=${`Configure remotes for ${d.title}`}
-                        @click=${() => void store.switchSystemDevice(d.subentry_id, "interface")}
-                        class="btn btn-secondary btn-compact"
-                      >
-                        Configure
-                      </button>`,
-                  }),
-                )
-              : html`<p class="empty-state">No Devices with a screen yet.</p>`}
           </div>`,
         })}
       </div>

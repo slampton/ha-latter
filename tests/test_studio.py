@@ -212,7 +212,10 @@ class TestViewLayout(unittest.TestCase):
         for title in ("Voice Assistant &amp; Wake Word", "Sound &amp; Playback"):
             self.assertIn(f'<h3 class="card-title">{title}</h3>', audio_view)
         self.assertNotIn("Library Sorting", audio_view)
-        self.assertIn('switchSystemDevice(d.subentry_id, "interface")', remotes_view)
+        for title in ("Remote Controls", "Speaker Volume Overrides", "Remote Control Groups"):
+            self.assertIn(f'title: "{title}"', remotes_view)
+        self.assertNotIn("Device Assignments", remotes_view)
+        self.assertNotIn('id="device-remote-assignments-list"', remotes_view)
         self.assertNotIn("Export Settings", js)
         self.assertNotIn("Restore From File", js)
         self.assertIn('<h3 class="card-title">Device Groups</h3>', groups)
