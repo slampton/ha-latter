@@ -102,6 +102,25 @@ WEBOSTV_BUTTON_MAP: dict[str, str] = {
     "pause": "PAUSE",
 }
 
+ADB_KEYCODE_MAP: dict[str, int] = {
+    "up": 19,
+    "down": 20,
+    "left": 21,
+    "right": 22,
+    "select": 23,
+    "back": 4,
+    "home": 3,
+    "menu": 82,
+    "info": 165,
+    "play": 126,
+    "pause": 127,
+}
+
+# Android ViewConfiguration.getLongPressTimeout() is 500 ms (0.6 s gives reliable margin);
+# Home Assistant's apple_tv integration requires hold_secs >= 1.0 to send pyatv InputAction.Hold.
+DEFAULT_ANDROIDTV_HOLD_SECS: float = 0.6
+MIN_APPLETV_HOLD_SECS: float = 1.0
+
 
 def resolve_remote_slot_pair(
     hass: HomeAssistant, configured_entity_id: str | None
@@ -274,8 +293,9 @@ async def async_execute_remote_action(
     slot: int | None = None,
     action: str = "",
     command: str | None = None,
+    hold_secs: float | None = None,
 ) -> None:
-    """Execute a unified TV/AV remote slot switch, power, volume, or navigation command."""
+    """Execute a unified TV/AV remote slot switch, power, volume, navigation, or long-press command."""
     slots = coord.get_remote_slots()
     slot_num = int(slot or coord.active_remote_slot or 1)
     slot_num = max(1, min(max(1, len(slots)), slot_num))
@@ -285,10 +305,13 @@ async def async_execute_remote_action(
         coord.async_notify_listeners()
 
     norm_action = str(action or "").strip().lower()
-    raw_cmd = str(command or norm_action).strip()
+    raw_cmd = str(command or ("" if norm_action == "long_press" else norm_action)).strip()
     cmd_low = raw_cmd.lower()
     if norm_action in ("select_slot", "") or not slots:
         return
+
+    parsed_hold = float(hold_secs) if hold_secs is not None else 0.0
+    is_long_press = norm_action == "long_press" or parsed_hold > 0.0
 
     slot_info = slots[slot_num - 1]
     remote_ent = slot_info["remote_entity"]
@@ -380,6 +403,9 @@ async def async_execute_remote_action(
         )
         return
 
+    is_apple_tv = platform == "apple_tv" or any(
+        k in combined_ident for k in ("apple_tv", "appletv", "apple tv")
+    )
     is_android_tv = platform in (
         "androidtv_remote",
         "androidtv",
@@ -401,16 +427,47 @@ async def async_execute_remote_action(
         if is_android_tv:
             out_cmd = ANDROIDTV_COMMAND_MAP.get(intent or cmd_low, raw_cmd.upper())
         elif intent is not None:
-            if platform == "apple_tv" and intent == "back":
+            if is_apple_tv and intent == "back":
                 out_cmd = "menu"
             else:
                 out_cmd = STANDARD_REMOTE_COMMAND_MAP.get(intent, raw_cmd)
         else:
             out_cmd = raw_cmd
 
+        svc_data: dict[str, Any] = {ATTR_ENTITY_ID: remote_ent, "command": out_cmd}
+        if is_long_press:
+            if is_apple_tv:
+                svc_data["hold_secs"] = max(
+                    MIN_APPLETV_HOLD_SECS,
+                    parsed_hold if parsed_hold > 0.0 else MIN_APPLETV_HOLD_SECS,
+                )
+            else:
+                svc_data["hold_secs"] = (
+                    parsed_hold if parsed_hold > 0.0 else DEFAULT_ANDROIDTV_HOLD_SECS
+                )
+
         await hass.services.async_call(
             "remote",
             "send_command",
-            {ATTR_ENTITY_ID: remote_ent, "command": out_cmd},
+            svc_data,
             blocking=False,
         )
+        return
+
+    if (
+        is_long_press
+        and is_android_tv
+        and mp_ent
+        and hass.services.has_service("androidtv", "adb_command")
+    ):
+        keycode = ADB_KEYCODE_MAP.get(intent or cmd_low)
+        if keycode is not None:
+            await hass.services.async_call(
+                "androidtv",
+                "adb_command",
+                {
+                    ATTR_ENTITY_ID: mp_ent,
+                    "command": f"input keyevent --longpress {keycode}",
+                },
+                blocking=False,
+            )

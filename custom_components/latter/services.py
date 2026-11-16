@@ -560,12 +560,15 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         coord = _resolve_coordinator_from_call(hass, call)
         raw_slot = call.data.get("slot")
         slot_val = int(raw_slot) if raw_slot is not None else None
+        raw_hold = call.data.get("hold_secs")
+        hold_val = float(raw_hold) if raw_hold not in (None, "") else None
         await async_execute_remote_action(
             hass,
             coord,
             slot=slot_val,
             action=str(call.data.get("action") or ""),
             command=call.data.get("command"),
+            hold_secs=hold_val,
         )
 
     async def _handle_music_browse(call: ServiceCall) -> None:
@@ -1042,6 +1045,11 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 vol.Optional("slot", default=1): vol.Coerce(int),
                 vol.Optional("action", default="select_slot"): cv.string,
                 vol.Optional("command"): cv.string,
+                vol.Optional("hold_secs"): vol.Any(
+                    None,
+                    "",
+                    vol.All(vol.Coerce(float), vol.Range(min=0.0, max=5.0)),
+                ),
             }
         ),
     )

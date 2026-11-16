@@ -275,6 +275,7 @@ remote_action:
             - "select_slot"
             - "toggle"
             - "command"
+            - "long_press"
             - "volume_up"
             - "volume_down"
             - "volume_mute"
@@ -285,6 +286,17 @@ remote_action:
       required: false
       selector:
         text:
+    hold_secs:
+      name: Hold Duration (Seconds)
+      description: Optional hold duration in seconds for long-press actions (defaults to 0.6 s on Android TV and 1.0 s on Apple TV when action is long_press).
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 5
+          step: 0.1
+          unit_of_measurement: "s"
+          mode: box
     target_device:
       name: Target Device
       description: Optional Latter device.

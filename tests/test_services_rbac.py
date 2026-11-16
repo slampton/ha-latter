@@ -375,19 +375,70 @@ async def test_all_domain_services_ma_link_and_browse_lru(
         blocking=True,
     )
 
-    # 5) remote_action (Android TV nav + power toggle)
+    # 5) remote_action (Android TV short + long_press, Apple TV InputAction.Hold >= 1.0s, and ADB fallback)
+    hass.services.async_register(
+        "androidtv",
+        "adb_command",
+        lambda call: calls_log.append(("androidtv", "adb_command", dict(call.data))),
+    )
     ent_reg.async_register(
         er.RegistryEntry(entity_id="remote.shield_tv", platform="androidtv_remote", area_id="kitchen")
     )
+    ent_reg.async_register(
+        er.RegistryEntry(entity_id="remote.lounge_atv", platform="apple_tv", area_id="kitchen")
+    )
+    ent_reg.async_register(
+        er.RegistryEntry(entity_id="media_player.bedroom_fire_tv", platform="firetv", area_id="kitchen")
+    )
     hass.states.async_set("remote.shield_tv", "on", {"friendly_name": "Shield TV"})
-    hass.data[DOMAIN][DATA_GLOBAL_CONFIG][CONF_REMOTES_LIST] = ["remote.shield_tv"]
-    for rem_act, rem_cmd in (("command", "up"), ("command", "select"), ("toggle", "power")):
+    hass.states.async_set("remote.lounge_atv", "on", {"friendly_name": "Apple TV"})
+    hass.states.async_set("media_player.bedroom_fire_tv", "on", {"friendly_name": "Fire TV"})
+    hass.data[DOMAIN][DATA_GLOBAL_CONFIG][CONF_REMOTES_LIST] = [
+        "remote.shield_tv",
+        "remote.lounge_atv",
+        "media_player.bedroom_fire_tv",
+    ]
+    for rem_act, rem_cmd in (
+        ("command", "up"),
+        ("command", "select"),
+        ("long_press", "select"),
+        ("toggle", "power"),
+    ):
         await hass.services.async_call(
             DOMAIN,
             SERVICE_REMOTE_ACTION,
             {"target_device": coord.device_slug, "slot": 1, "action": rem_act, "command": rem_cmd},
             blocking=True,
         )
+    await hass.services.async_call(
+        DOMAIN,
+        SERVICE_REMOTE_ACTION,
+        {"target_device": coord.device_slug, "slot": 2, "action": "long_press", "command": "select"},
+        blocking=True,
+    )
+    await hass.services.async_call(
+        DOMAIN,
+        SERVICE_REMOTE_ACTION,
+        {"target_device": coord.device_slug, "slot": 2, "action": "long_press", "command": "back"},
+        blocking=True,
+    )
+    await hass.services.async_call(
+        DOMAIN,
+        SERVICE_REMOTE_ACTION,
+        {"target_device": coord.device_slug, "slot": 3, "action": "long_press", "command": "select"},
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+    remote_send_calls = [d for dom, svc, d in calls_log if (dom, svc) == ("remote", "send_command")]
+    assert {"entity_id": "remote.shield_tv", "command": "DPAD_CENTER"} in remote_send_calls
+    assert {"entity_id": "remote.shield_tv", "command": "DPAD_CENTER", "hold_secs": 0.6} in remote_send_calls
+    assert {"entity_id": "remote.lounge_atv", "command": "select", "hold_secs": 1.0} in remote_send_calls
+    assert {"entity_id": "remote.lounge_atv", "command": "menu", "hold_secs": 1.0} in remote_send_calls
+    adb_calls = [d for dom, svc, d in calls_log if (dom, svc) == ("androidtv", "adb_command")]
+    assert {
+        "entity_id": "media_player.bedroom_fire_tv",
+        "command": "input keyevent --longpress 23",
+    } in adb_calls
 
     # 6) calendar_fetch & calendar_create_event
     hass.states.async_set("calendar.work", "off", {"friendly_name": "Work"})

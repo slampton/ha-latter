@@ -1307,7 +1307,8 @@
       "fields": [
         "slot",
         "action",
-        "command"
+        "command",
+        "hold_secs"
       ]
     },
     "calendar_fetch": {
@@ -1431,6 +1432,7 @@
         "slot",
         "action",
         "command",
+        "hold_secs",
         "target_device"
       ]
     },
