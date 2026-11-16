@@ -12,12 +12,19 @@ import {
 } from "../components/controls.js";
 import { html, nothing, type TemplateResult } from "../lib/lit.js";
 import type { StudioStore } from "../state/store.js";
+import { fmtNumber } from "../utils/format.js";
 
 export function renderDevicePresenceView(store: StudioStore): TemplateResult {
   const data = store.state;
   const cfg = data?.config || {};
   const isBleOnly = cfg.kind === "ble_tag";
   const bleTracking = isBleOnly || Boolean(cfg.native_ble_tracking);
+  const detectedRefPower = data?.live?.ble_detected_ref_power ?? -59;
+  const refPowerPlaceholder = `Auto (${fmtNumber(detectedRefPower, store.hass, 0)} dBm)`;
+  const refPowerValue =
+    cfg.ble_ref_power !== null && cfg.ble_ref_power !== undefined
+      ? String(cfg.ble_ref_power)
+      : "";
 
   const bleBeaconPref = store.getPref("ble_beacon_mode");
   const bleAreaItems = store
@@ -116,6 +123,32 @@ export function renderDevicePresenceView(store: StudioStore): TemplateResult {
               />
               <span class="help-text">
                 Leave blank on Latter displays to track their built-in BLE beacon MAC automatically.
+              </span>
+            </div>
+            <div class="stacked-field">
+              <label for="cfg-ble_ref_power">Reference Power (1 Meter)</label>
+              <input
+                type="number"
+                id="cfg-ble_ref_power"
+                min="-90"
+                max="-30"
+                step="1"
+                placeholder=${refPowerPlaceholder}
+                .value=${refPowerValue}
+                @change=${(ev: Event) => {
+                  const raw = (ev.currentTarget as HTMLInputElement).value.trim();
+                  if (raw === "") {
+                    store.stageDeviceSetting("ble_ref_power", null, "cfg-ble_ref_power");
+                    return;
+                  }
+                  const num = Number(raw);
+                  if (Number.isFinite(num)) {
+                    store.stageDeviceSetting("ble_ref_power", Math.round(num), "cfg-ble_ref_power");
+                  }
+                }}
+              />
+              <span class="help-text">
+                Leave blank to use auto-detected beacon power in dBm, or enter -90 to -30 dBm to calibrate this Device.
               </span>
             </div>
             ${!isBleOnly

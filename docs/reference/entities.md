@@ -14,14 +14,15 @@ Latter spans **6 Home Assistant platforms** ([`sensor.py`](../../custom_componen
 
 ## Per-Device Entities (`Latter` Device)
 
-`<slug>` is the normalized device slug (for example `pocket_assistant`). **BLE Tag** entries (phones, watches, and iBeacons) create only the three entities marked ★; hardware traits in the device's manifest (`display`, `mic`, `spk`, `beacon`) gate the others.
+`<slug>` is the normalized device slug (for example `pocket_assistant`). **BLE Tag** entries (phones, watches, and beacons) create only the presence entities marked ★; hardware traits in the device's manifest (`display`, `mic`, `spk`, `beacon`) gate the others.
 
 ### Visible Automation & Control Entities
 
 | Entity | Platform / Category | State / Range | Key Attributes & Update Trigger |
 | :--- | :--- | :--- | :--- |
-| ★ `device_tracker.<slug>_ble_tracker` *(or `device_tracker.<slug>`)* | `device_tracker` | `home`, `not_home`, `unknown` | `area_id`, `area_name`, `closest_proxy`, `distance_ft`, `distance_m`, `rssi`, `assigned_person` — updates on BLE readings and away timeout |
-| ★ `sensor.<slug>_current_area` | `sensor` | Area name, `Away`, `Unassigned` | `area_id`, `is_home`, `closest_proxy`, `distance_ft`, `distance_m`, `rssi`, `assigned_person` — updates on Area change or away |
+| ★ `device_tracker.<slug>_ble_tracker` *(or `device_tracker.<slug>`)* | `device_tracker` | `home`, `not_home`, `unknown` | `area_id`, `area_name`, `floor_id`, `floor_name`, `closest_proxy`, `distance_ft`, `distance_m`, `rssi`, `match_method`, `assigned_person` — updates on BLE readings and away timeout |
+| ★ `sensor.<slug>_current_area` | `sensor` | Area name, `Away`, `Unassigned` | `area_id`, `floor_id`, `floor_name`, `is_home`, `closest_proxy`, `distance_ft`, `distance_m`, `rssi`, `raw_rssi`, `ref_power_dbm`, `match_method`, `assigned_person` — updates on Area change or away |
+| ★ `sensor.<slug>_current_floor` | `sensor` | Floor name, `Away`, `Unassigned` *(auto-created when Home Assistant Floors exist)* | `floor_id`, `area_id`, `area_name`, `is_home`, `assigned_person` — updates on Floor/Area change or away; omitted when zero Floors exist |
 | ★ `sensor.<slug>_ble_distance` | `sensor` (`distance`) | Feet / meters | Same attributes as `current_area` — updates on BLE readings |
 | `binary_sensor.<slug>_timer_active` | `binary_sensor` (`running`) | `on` / `off` *(display devices)* | `paused`, `remaining_seconds` — event-driven via `latter.timer_alarm_state` |
 | `sensor.<slug>_timer_remaining` | `sensor` (`duration`, `s`) | Remaining seconds *(display devices)* | `running`, `paused` — ticked locally at 1 Hz in Home Assistant while running (zero Wi-Fi polling) |
@@ -51,8 +52,9 @@ Enabled by default (`entity_registry_visible_default = False`, `EntityCategory.D
 
 | Scope | Entity | State | Key Attributes |
 | :--- | :--- | :--- | :--- |
-| **Per Person** *(when a device has `Assigned Person`)* | `sensor.<person>_current_area` | Area of that person's most recently heard device | `area_id`, `device_slug`, `distance_ft`, `distance_m` |
-| **Per Person** | `sensor.<person>_ble_distance` | Distance (`ft` / `m`) | Same as above *(avoid giving a device the exact same slug as a `person` ID)* |
+| **Per Person** *(when a device has `Assigned Person`)* | `sensor.<person>_current_area` | Area of that person's most recently heard device | `area_id`, `floor_id`, `floor_name`, `device_slug`, `distance_ft`, `distance_m`, `match_method` |
+| **Per Person** *(when Home Assistant Floors exist)* | `sensor.<person>_current_floor` | Floor of that person's most recently heard device, `Away`, or `Unassigned` | `floor_id`, `floor_name`, `area_id`, `device_slug`, `distance_ft`, `distance_m`, `match_method` |
+| **Per Person** | `sensor.<person>_ble_distance` | Distance (`ft` / `m`) | Same as `sensor.<person>_current_area` *(avoid giving a device the exact same slug as a `person` ID)* |
 | **Per Area** *(mapped BLE Areas)* | `binary_sensor.<area>_ble_occupancy` | `on` / `off` (`occupancy`) | `area_id`, `area_name`, `floor_id`, `fusion_mode`, `confidence_pct`, `ble_occupied`, `sensor_occupied`, `active_sensors`, `occupant_names`, `occupied_by`, `persons`, `closest_device`, `winning_rssi`, `closest_distance_m`, `closest_distance_ft`, `tracker_count` |
 | **Per Area** | `sensor.<area>_occupants` | Occupant summary, `Occupied (Sensor)`, or `Empty` | `area_id`, `area_name`, `is_occupied`, `occupant_count`, `occupant_names`, `occupied_by`, `persons` |
 

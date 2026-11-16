@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections.abc import Collection, Iterable, Mapping
 from dataclasses import dataclass
 import json
+import math
 from pathlib import Path
 import re
 from typing import Any, Literal, Protocol, TypeVar
@@ -56,9 +57,10 @@ class CatalogGate:
 
 SYSTEM_COMMANDS: frozenset[str] = frozenset(
     {
-        "set_ble_area_offset",
+        "set_ble_scanner_offset",
         "set_area_fusion",
-        "auto_calibrate_here",
+        "capture_ble_area_signature",
+        "clear_ble_area_signature",
         "system_entity_action",
         "send_announcement",
         "check_system_updates",
@@ -188,6 +190,10 @@ SYSTEM_SETTING_KEYS: tuple[str, ...] = (
     "calendar_entities",
     "custom_palettes",
     "doorbell_noise_reduction",
+    "ble_attenuation",
+    "ble_max_radius_m",
+    "ble_max_velocity_mps",
+    "ble_away_timeout_s",
 )
 
 @dataclass(frozen=True, slots=True)
@@ -764,6 +770,7 @@ DEVICE_SETTING_KEYS: tuple[str, ...] = (
     "wallpaper_cycle_minutes",
     "device_custom_color",
     "area_follow_dwell_s",
+    "ble_ref_power",
     *DEVICE_PREF_KEYS,
 )
 
@@ -772,6 +779,20 @@ MAX_CALENDARS = 50
 MAX_CUSTOM_PALETTES = 24
 DWELL_MIN_S = 3
 DWELL_MAX_S = 60
+DEFAULT_BLE_ATTENUATION = 2.2
+BLE_ATTENUATION_MIN = 1.5
+BLE_ATTENUATION_MAX = 4.5
+DEFAULT_BLE_MAX_RADIUS_M = 12.0
+BLE_MAX_RADIUS_MIN_M = 2.0
+BLE_MAX_RADIUS_MAX_M = 50.0
+DEFAULT_BLE_MAX_VELOCITY_MPS = 3.5
+BLE_MAX_VELOCITY_MIN_MPS = 0.5
+BLE_MAX_VELOCITY_MAX_MPS = 15.0
+DEFAULT_BLE_AWAY_TIMEOUT_S = 180
+BLE_AWAY_TIMEOUT_MIN_S = 30
+BLE_AWAY_TIMEOUT_MAX_S = 900
+BLE_REF_POWER_MIN_DBM = -90
+BLE_REF_POWER_MAX_DBM = -30
 NOISE_REDUCTION_LEVELS: tuple[str, ...] = ("strong", "light", "off")
 DEFAULT_NOISE_REDUCTION = "strong"
 SECURITY_PIN_POLICIES: tuple[str, ...] = ("auto", "allow", "require_pin", "block")
@@ -859,6 +880,50 @@ def _noise_reduction(val: Any) -> str:
     return level if level in NOISE_REDUCTION_LEVELS else DEFAULT_NOISE_REDUCTION
 
 
+def _ble_float(
+    val: Any, default: float, lo: float, hi: float, ndigits: int, *, strict: bool = False
+) -> float:
+    if val is None or (isinstance(val, str) and not val.strip()):
+        return default
+    if isinstance(val, bool):
+        if strict:
+            raise SettingsScopeError("Expected a number, not a boolean")
+        return default
+    try:
+        fval = float(val)
+    except (TypeError, ValueError) as err:
+        if strict:
+            raise SettingsScopeError(f"Not a number: {err}") from None
+        return default
+    if not math.isfinite(fval):
+        if strict:
+            raise SettingsScopeError("Expected a finite number")
+        return default
+    return round(max(lo, min(hi, fval)), ndigits)
+
+
+def _ble_int(
+    val: Any, default: int, lo: int, hi: int, *, strict: bool = False
+) -> int:
+    if val is None or (isinstance(val, str) and not val.strip()):
+        return default
+    if isinstance(val, bool):
+        if strict:
+            raise SettingsScopeError("Expected a whole number, not a boolean")
+        return default
+    try:
+        fval = float(val)
+    except (TypeError, ValueError) as err:
+        if strict:
+            raise SettingsScopeError(f"Not a whole number: {err}") from None
+        return default
+    if not math.isfinite(fval):
+        if strict:
+            raise SettingsScopeError("Expected a finite whole number")
+        return default
+    return max(lo, min(hi, round(fval)))
+
+
 FUSION_MODES: tuple[str, ...] = ("weighted", "any_or", "ble_only", "ble_and_sensor")
 FUSION_THRESHOLD_MIN = 20
 FUSION_THRESHOLD_MAX = 95
@@ -931,6 +996,41 @@ def clean_system_settings(incoming: Mapping[str, Any]) -> dict[str, Any]:
         out["doorbell_noise_reduction"] = _noise_reduction(
             incoming["doorbell_noise_reduction"]
         )
+    if "ble_attenuation" in incoming:
+        out["ble_attenuation"] = _ble_float(
+            incoming["ble_attenuation"],
+            DEFAULT_BLE_ATTENUATION,
+            BLE_ATTENUATION_MIN,
+            BLE_ATTENUATION_MAX,
+            2,
+            strict=True,
+        )
+    if "ble_max_radius_m" in incoming:
+        out["ble_max_radius_m"] = _ble_float(
+            incoming["ble_max_radius_m"],
+            DEFAULT_BLE_MAX_RADIUS_M,
+            BLE_MAX_RADIUS_MIN_M,
+            BLE_MAX_RADIUS_MAX_M,
+            1,
+            strict=True,
+        )
+    if "ble_max_velocity_mps" in incoming:
+        out["ble_max_velocity_mps"] = _ble_float(
+            incoming["ble_max_velocity_mps"],
+            DEFAULT_BLE_MAX_VELOCITY_MPS,
+            BLE_MAX_VELOCITY_MIN_MPS,
+            BLE_MAX_VELOCITY_MAX_MPS,
+            1,
+            strict=True,
+        )
+    if "ble_away_timeout_s" in incoming:
+        out["ble_away_timeout_s"] = _ble_int(
+            incoming["ble_away_timeout_s"],
+            DEFAULT_BLE_AWAY_TIMEOUT_S,
+            BLE_AWAY_TIMEOUT_MIN_S,
+            BLE_AWAY_TIMEOUT_MAX_S,
+            strict=True,
+        )
     return out
 
 
@@ -961,6 +1061,24 @@ def clean_device_settings(
             )
     except (TypeError, ValueError) as err:
         raise SettingsScopeError(f"Not a whole number: {err}") from None
+
+    if "ble_ref_power" in incoming:
+        raw_ref = incoming["ble_ref_power"]
+        if raw_ref is None or (isinstance(raw_ref, str) and not raw_ref.strip()):
+            out["ble_ref_power"] = None
+        elif isinstance(raw_ref, bool):
+            raise SettingsScopeError("ble_ref_power must be an integer in -90..-30 dBm")
+        else:
+            try:
+                ref_f = float(raw_ref)
+            except (TypeError, ValueError) as err:
+                raise SettingsScopeError(f"Invalid ble_ref_power: {err}") from None
+            if not math.isfinite(ref_f):
+                raise SettingsScopeError("ble_ref_power must be a finite number")
+            out["ble_ref_power"] = max(
+                BLE_REF_POWER_MIN_DBM,
+                min(BLE_REF_POWER_MAX_DBM, round(ref_f)),
+            )
 
     if "area_categories" in out:
         try:
@@ -1095,6 +1213,33 @@ def system_settings_view(global_cfg: Mapping[str, Any]) -> dict[str, Any]:
             "custom_palettes": _custom_palettes(global_cfg.get("custom_palettes")),
             "doorbell_noise_reduction": _noise_reduction(
                 global_cfg.get("doorbell_noise_reduction")
+            ),
+            "ble_attenuation": _ble_float(
+                global_cfg.get("ble_attenuation"),
+                DEFAULT_BLE_ATTENUATION,
+                BLE_ATTENUATION_MIN,
+                BLE_ATTENUATION_MAX,
+                2,
+            ),
+            "ble_max_radius_m": _ble_float(
+                global_cfg.get("ble_max_radius_m"),
+                DEFAULT_BLE_MAX_RADIUS_M,
+                BLE_MAX_RADIUS_MIN_M,
+                BLE_MAX_RADIUS_MAX_M,
+                1,
+            ),
+            "ble_max_velocity_mps": _ble_float(
+                global_cfg.get("ble_max_velocity_mps"),
+                DEFAULT_BLE_MAX_VELOCITY_MPS,
+                BLE_MAX_VELOCITY_MIN_MPS,
+                BLE_MAX_VELOCITY_MAX_MPS,
+                1,
+            ),
+            "ble_away_timeout_s": _ble_int(
+                global_cfg.get("ble_away_timeout_s"),
+                DEFAULT_BLE_AWAY_TIMEOUT_S,
+                BLE_AWAY_TIMEOUT_MIN_S,
+                BLE_AWAY_TIMEOUT_MAX_S,
             ),
         }
     )

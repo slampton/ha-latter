@@ -51,9 +51,15 @@ from .const import (
     CONF_AREA_FOLLOW_DWELL_S,
     CONF_AREA_HANDOFF,
     CONF_ASSIGNED_PERSON,
-    CONF_BLE_AREA_OFFSETS,
+    CONF_BLE_AREA_SIGNATURES,
+    CONF_BLE_ATTENUATION,
     CONF_BLE_AUTO_SWITCH,
+    CONF_BLE_AWAY_TIMEOUT_S,
     CONF_BLE_BEACON_UUID,
+    CONF_BLE_MAX_RADIUS_M,
+    CONF_BLE_MAX_VELOCITY_MPS,
+    CONF_BLE_REF_POWER,
+    CONF_BLE_SCANNER_OFFSETS,
     CONF_BLE_TARGET_ADDRESS,
     CONF_CALENDAR_ENTITIES,
     CONF_CAMERA_ENTITIES,
@@ -93,8 +99,12 @@ from .const import (
     DEFAULT_AREA_FOLLOW_DWELL_S,
     DEFAULT_AREA_HANDOFF,
     DEFAULT_ART_SIZE,
+    DEFAULT_BLE_ATTENUATION,
     DEFAULT_BLE_AUTO_SWITCH,
+    DEFAULT_BLE_AWAY_TIMEOUT_S,
     DEFAULT_BLE_BEACON_UUID,
+    DEFAULT_BLE_MAX_RADIUS_M,
+    DEFAULT_BLE_MAX_VELOCITY_MPS,
     DEFAULT_CARD_SLOT_COUNT,
     DEFAULT_DEVICE_GROUP,
     DEFAULT_DEVICE_REMOTE_GROUP,
@@ -157,11 +167,14 @@ from .media import (
     set_coordinator_active_speaker,
 )
 from .presence import (
+    TX_POWER_1M_DBM,
     AreaFollowDwell,
     FollowAction,
     LatterNativeBleTracker,
     get_ble_fabric,
     get_ble_proxy_area_ids,
+    get_ble_signature_area_ids,
+    resolve_floor_info,
 )
 from .protocol import (
     DomainPayloadPacker,
@@ -1001,18 +1014,99 @@ class LatterCoordinator:
         return str(self.get_opt(CONF_BLE_TARGET_ADDRESS, "") or "").strip()
 
     @property
-    def ble_area_offsets(self) -> dict[str, float]:
-        raw = self.get_opt(CONF_BLE_AREA_OFFSETS, {})
+    def ble_scanner_offsets(self) -> dict[str, float]:
+        raw = self.get_opt(CONF_BLE_SCANNER_OFFSETS, {})
         if not isinstance(raw, dict):
             return {}
         out: dict[str, float] = {}
         for k, v in raw.items():
+            src_k = str(k or "").strip().upper()
+            if not src_k:
+                continue
             try:
                 if (val := round(max(-25.0, min(25.0, float(v))), 1)) != 0.0:
-                    out[str(k)] = val
+                    out[src_k] = val
             except (ValueError, TypeError):
                 pass
         return out
+
+    @property
+    def ble_area_signatures(self) -> dict[str, dict[str, Any]]:
+        raw = self.get_opt(CONF_BLE_AREA_SIGNATURES, {})
+        if not isinstance(raw, dict):
+            return {}
+        out: dict[str, dict[str, Any]] = {}
+        for area_id, sig in raw.items():
+            if (
+                area_id
+                and isinstance(sig, dict)
+                and isinstance(sig.get("scanners"), dict)
+                and sig["scanners"]
+            ):
+                out[str(area_id)] = sig
+        return out
+
+    @property
+    def ble_ref_power(self) -> int | None:
+        raw = self._live_subentry().data.get(CONF_BLE_REF_POWER)
+        if raw is None or raw == "":
+            return None
+        try:
+            return max(-90, min(-30, round(float(raw))))
+        except (ValueError, TypeError):
+            return None
+
+    @property
+    def ble_attenuation(self) -> float:
+        try:
+            return round(
+                max(
+                    1.5,
+                    min(4.5, float(self.get_opt(CONF_BLE_ATTENUATION, DEFAULT_BLE_ATTENUATION))),
+                ),
+                2,
+            )
+        except (ValueError, TypeError):
+            return DEFAULT_BLE_ATTENUATION
+
+    @property
+    def ble_max_radius_m(self) -> float:
+        try:
+            return round(
+                max(
+                    2.0,
+                    min(50.0, float(self.get_opt(CONF_BLE_MAX_RADIUS_M, DEFAULT_BLE_MAX_RADIUS_M))),
+                ),
+                1,
+            )
+        except (ValueError, TypeError):
+            return DEFAULT_BLE_MAX_RADIUS_M
+
+    @property
+    def ble_max_velocity_mps(self) -> float:
+        try:
+            return round(
+                max(
+                    0.5,
+                    min(
+                        15.0,
+                        float(self.get_opt(CONF_BLE_MAX_VELOCITY_MPS, DEFAULT_BLE_MAX_VELOCITY_MPS)),
+                    ),
+                ),
+                1,
+            )
+        except (ValueError, TypeError):
+            return DEFAULT_BLE_MAX_VELOCITY_MPS
+
+    @property
+    def ble_away_timeout_s(self) -> int:
+        try:
+            return max(
+                30,
+                min(900, int(self.get_opt(CONF_BLE_AWAY_TIMEOUT_S, DEFAULT_BLE_AWAY_TIMEOUT_S))),
+            )
+        except (ValueError, TypeError):
+            return DEFAULT_BLE_AWAY_TIMEOUT_S
 
     @property
     def assigned_person(self) -> str:
@@ -1377,7 +1471,9 @@ class LatterCoordinator:
                     require_ble_proxy_area=False,
                 )
         else:
-            proxy_areas = get_ble_proxy_area_ids(self.hass)
+            proxy_areas = get_ble_proxy_area_ids(self.hass) | get_ble_signature_area_ids(
+                self.hass
+            )
             if (
                 not conf_area
                 and self.active_area_id
@@ -1509,7 +1605,15 @@ class LatterCoordinator:
         self, changed_keys: set[str] | None = None
     ) -> None:
         if self._ble_tracker is not None:
-            self._ble_tracker.set_area_offsets(self.ble_area_offsets)
+            self._ble_tracker.configure_spatial_engine(
+                scanner_offsets=self.ble_scanner_offsets,
+                area_signatures=self.ble_area_signatures,
+                ref_power_dbm=self.ble_ref_power,
+                attenuation=self.ble_attenuation,
+                max_radius_m=self.ble_max_radius_m,
+                max_velocity_mps=self.ble_max_velocity_mps,
+                away_timeout_s=float(self.ble_away_timeout_s),
+            )
         self._bind_all_listeners()
         if not self.is_ble_tag:
             if changed_keys is None or CONF_SYSTEM_BLE_UUID in changed_keys:
@@ -1709,7 +1813,15 @@ class LatterCoordinator:
                     self._ble_tracker.async_stop()
                     self._ble_tracker = None
                 else:
-                    self._ble_tracker.set_area_offsets(self.ble_area_offsets)
+                    self._ble_tracker.configure_spatial_engine(
+                        scanner_offsets=self.ble_scanner_offsets,
+                        area_signatures=self.ble_area_signatures,
+                        ref_power_dbm=self.ble_ref_power,
+                        attenuation=self.ble_attenuation,
+                        max_radius_m=self.ble_max_radius_m,
+                        max_velocity_mps=self.ble_max_velocity_mps,
+                        away_timeout_s=float(self.ble_away_timeout_s),
+                    )
             if self._ble_tracker is None:
                 hw_manifest = self.hardware_manifest
                 manifest_beacon = hw_manifest.get("beacon")
@@ -1723,7 +1835,13 @@ class LatterCoordinator:
                     beacon_uuid=self.ble_beacon_uuid,
                     device_slug=self.device_slug,
                     on_area_detected=self._async_on_native_ble_area_detected,
-                    area_offsets=self.ble_area_offsets,
+                    scanner_offsets=self.ble_scanner_offsets,
+                    area_signatures=self.ble_area_signatures,
+                    ref_power_dbm=self.ble_ref_power,
+                    attenuation=self.ble_attenuation,
+                    max_radius_m=self.ble_max_radius_m,
+                    max_velocity_mps=self.ble_max_velocity_mps,
+                    away_timeout_s=float(self.ble_away_timeout_s),
                     target_address=self.ble_target_address,
                     esphome_device_id=self.esphome_device_id,
                     manifest_beacon=manifest_beacon,
@@ -2321,16 +2439,54 @@ class LatterCoordinator:
                 "Away" if away else (area_entry.name if area_entry else "Unassigned")
             )
 
+        floor_raw = (
+            getattr(area_entry, "floor_id", None)
+            if (area_entry is not None and not away)
+            else None
+        )
+        floor_id, resolved_floor_name = resolve_floor_info(self.hass, floor_raw)
+        if away:
+            floor_id = ""
+            floor_name = "Away"
+        elif floor_id:
+            floor_name = resolved_floor_name
+        else:
+            floor_name = "Unassigned"
+
         bt = self._ble_tracker
         valid_bt = bt is not None and not away and bool(eff_area_id)
+        eff_ref_dbm: int | float = (
+            round(bt.effective_ref_power_dbm, 1)
+            if bt is not None
+            else (
+                self.ble_ref_power
+                if self.ble_ref_power is not None
+                else int(TX_POWER_1M_DBM)
+            )
+        )
+        if isinstance(eff_ref_dbm, float) and eff_ref_dbm.is_integer():
+            eff_ref_dbm = int(eff_ref_dbm)
+
+        if away or not eff_area_id:
+            match_method = ""
+        elif bt is not None and self.native_ble_tracking_enabled and bt.current_area_id:
+            match_method = bt.match_method or "distance"
+        else:
+            match_method = "static"
+
         return area_state, {
             "area_id": eff_area_id,
             "area_name": area_state,
+            "floor_id": floor_id,
+            "floor_name": floor_name,
             "is_home": not away,
             "closest_proxy": bt.closest_scanner if (valid_bt and bt) else "",
             "distance_ft": bt.winning_distance_ft if (valid_bt and bt) else None,
             "distance_m": bt.winning_distance_m if (valid_bt and bt) else None,
             "rssi": bt.winning_rssi if (valid_bt and bt) else None,
+            "raw_rssi": bt.winning_raw_rssi if (valid_bt and bt) else None,
+            "ref_power_dbm": eff_ref_dbm,
+            "match_method": match_method,
             "assigned_person": self.assigned_person,
         }
 

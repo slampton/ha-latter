@@ -1,4 +1,4 @@
-"""In-memory Area, Device, Entity, and Issue Registry stubs for `homeassistant.helpers.*`."""
+"""In-memory Area, Floor, Device, Entity, and Issue Registry stubs for `homeassistant.helpers.*`."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ from typing import Any
 from .optional_deps import ensure_module
 
 EVENT_AREA_REGISTRY_UPDATED = "area_registry_updated"
+EVENT_FLOOR_REGISTRY_UPDATED = "floor_registry_updated"
 CONNECTION_NETWORK_MAC = "mac"
 EVENT_DEVICE_REGISTRY_UPDATED = "device_registry_updated"
 EVENT_ENTITY_REGISTRY_UPDATED = "entity_registry_updated"
@@ -25,11 +26,63 @@ def format_mac(mac: str) -> str:
 
 
 def install_fake_ha_registries(slugify_fn: Callable[..., str], entity_category_cls: Any) -> dict[str, Any]:
-    """Register `area_registry`, `device_registry`, `entity_registry`, and `issue_registry` stubs."""
+    """Register `area_registry`, `floor_registry`, `device_registry`, `entity_registry`, and `issue_registry` stubs."""
     ar_mod = ensure_module("homeassistant.helpers.area_registry")
+    fr_mod = ensure_module("homeassistant.helpers.floor_registry")
     dr_mod = ensure_module("homeassistant.helpers.device_registry")
     er_mod = ensure_module("homeassistant.helpers.entity_registry")
     ir_mod = ensure_module("homeassistant.helpers.issue_registry")
+
+    @dataclass
+    class FloorEntry:
+        floor_id: str
+        name: str
+        level: int | None = None
+        icon: str | None = None
+
+    class FloorRegistry:
+        def __init__(self, hass: Any) -> None:
+            self._hass = hass
+            self.floors: dict[str, FloorEntry] = {}
+
+        def async_list_floors(self) -> list[FloorEntry]:
+            return list(self.floors.values())
+
+        def async_get_floor(self, floor_id: str) -> FloorEntry | None:
+            return self.floors.get(floor_id)
+
+        def async_get_floor_by_name(self, name: str) -> FloorEntry | None:
+            low = name.strip().lower()
+            for fl in self.floors.values():
+                if fl.name.lower() == low:
+                    return fl
+            return None
+
+        def async_create(
+            self,
+            name: str,
+            *,
+            floor_id: str | None = None,
+            level: int | None = None,
+            icon: str | None = None,
+        ) -> FloorEntry:
+            fid = floor_id or slugify_fn(name)
+            entry = FloorEntry(floor_id=fid, name=name, level=level, icon=icon)
+            self.floors[fid] = entry
+            self._hass.bus.async_fire(EVENT_FLOOR_REGISTRY_UPDATED, {"action": "create", "floor_id": fid})
+            return entry
+
+        def async_delete(self, floor_id: str) -> None:
+            if floor_id in self.floors:
+                self.floors.pop(floor_id)
+                self._hass.bus.async_fire(
+                    EVENT_FLOOR_REGISTRY_UPDATED, {"action": "remove", "floor_id": floor_id}
+                )
+
+    fr_mod.FloorEntry = FloorEntry  # type: ignore[attr-defined]
+    fr_mod.FloorRegistry = FloorRegistry  # type: ignore[attr-defined]
+    fr_mod.EVENT_FLOOR_REGISTRY_UPDATED = EVENT_FLOOR_REGISTRY_UPDATED  # type: ignore[attr-defined]
+    fr_mod.async_get = lambda hass: hass._floor_registry  # type: ignore[attr-defined]
 
     @dataclass
     class AreaEntry:
@@ -373,6 +426,7 @@ def install_fake_ha_registries(slugify_fn: Callable[..., str], entity_category_c
 
     return {
         "AreaRegistry": AreaRegistry,
+        "FloorRegistry": FloorRegistry,
         "DeviceRegistry": DeviceRegistry,
         "EntityRegistry": EntityRegistry,
         "IssueRegistry": IssueRegistry,

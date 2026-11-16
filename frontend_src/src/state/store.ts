@@ -15,6 +15,7 @@ import { DEVICE_VIEW_SLUGS, SYSTEM_VIEW_SLUGS, VIEW_TITLES } from "../constants.
 import type { ReactiveController, ReactiveControllerHost } from "../lib/lit.js";
 import type {
   AreaPresenceRow,
+  BleAreaSignatureSummary,
   BleSurveyDeltaEvent,
   BleSurveyRow,
   DevicePrefItem,
@@ -101,10 +102,11 @@ import {
   uploadWallpaperOp,
 } from "./entity-config-ops.js";
 import {
-  autoCalibrateHereOp,
   bulkNumberOp,
   bulkSelectOp,
   bulkToggleOp,
+  captureBleAreaSignatureOp,
+  clearBleAreaSignatureOp,
   createDeviceGroupOp,
   deleteDeviceGroupOp,
   filteredControlTargetsOp,
@@ -112,7 +114,7 @@ import {
   resolvedGroupCtrlIdOp,
   seedGroupBaselineFromDeviceOp,
   setAreaFusionOp,
-  setBleOffsetOp,
+  setBleScannerOffsetOp,
   setGroupDeviceSettingOp,
   syncDeviceGroupOp,
 } from "./groups-presence-ops.js";
@@ -692,7 +694,10 @@ export class StudioStore implements ReactiveController {
       rec.type === "ble_survey_delta" ||
       rec.event === "ble_survey_delta" ||
       (!("system_devices" in rec) &&
-        ("ble_survey_rows" in rec || "ble_packets_seen" in rec || "area_presence_grid" in rec));
+        ("ble_survey_rows" in rec ||
+          "ble_area_signatures" in rec ||
+          "ble_packets_seen" in rec ||
+          "area_presence_grid" in rec));
 
     if (isBleDelta) {
       this.applyBleSurveyDelta(rec as unknown as BleSurveyDeltaEvent);
@@ -736,6 +741,12 @@ export class StudioStore implements ReactiveController {
           ble_closest_proxy: delta.ble_closest_proxy,
         };
       }
+    }
+    if (Array.isArray(delta.ble_area_signatures)) {
+      this.state = {
+        ...this.state,
+        ble_area_signatures: delta.ble_area_signatures as BleAreaSignatureSummary[],
+      };
     }
     if (Array.isArray(delta.area_presence_grid) && this.state.live) {
       this.state.live = {
@@ -1302,12 +1313,16 @@ export class StudioStore implements ReactiveController {
     return getActiveSurveyDeviceOp(this);
   }
 
-  async setBleOffset(areaId: string, offsetDb: number): Promise<void> {
-    await setBleOffsetOp(this, areaId, offsetDb);
+  async setBleScannerOffset(scannerSource: string, offsetDb: number): Promise<void> {
+    await setBleScannerOffsetOp(this, scannerSource, offsetDb);
   }
 
-  async autoCalibrateHere(areaId: string): Promise<void> {
-    await autoCalibrateHereOp(this, areaId);
+  async captureBleAreaSignature(areaId: string): Promise<void> {
+    await captureBleAreaSignatureOp(this, areaId);
+  }
+
+  async clearBleAreaSignature(areaId: string): Promise<void> {
+    await clearBleAreaSignatureOp(this, areaId);
   }
 
   async setAreaFusion(

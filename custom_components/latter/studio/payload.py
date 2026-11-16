@@ -26,6 +26,7 @@ from ..const import (
     CONF_ASSIGNED_PERSON,
     CONF_BLE_AUTO_SWITCH,
     CONF_BLE_BEACON_UUID,
+    CONF_BLE_REF_POWER,
     CONF_BLE_TARGET_ADDRESS,
     CONF_DEFAULT_AREA,
     CONF_DEFAULT_SPEAKER,
@@ -62,6 +63,7 @@ from ..media_browse import is_music_assistant_player
 from ..presence import (
     count_area_ble_proxies,
     get_all_areas_presence_summary,
+    get_area_signatures_summary,
     get_discovered_ble_candidates,
 )
 from ..repairs import parse_device_issue_id
@@ -657,9 +659,9 @@ def _build_system_section(
             or c.has_ble_beacon
         )
         c_survey_rows = (
-            c._ble_tracker.get_area_calibration_telemetry()
+            c._ble_tracker.get_scanner_calibration_telemetry()
             if c._ble_tracker is not None
-            and hasattr(c._ble_tracker, "get_area_calibration_telemetry")
+            and hasattr(c._ble_tracker, "get_scanner_calibration_telemetry")
             else []
         )
         c_packets_seen = (
@@ -845,6 +847,7 @@ def _build_system_section(
         "system_devices": system_devices,
         "issues": _build_issues(hass, coords),
         "ble_proxy_count": count_area_ble_proxies(hass),
+        "ble_area_signatures": get_area_signatures_summary(hass),
         "discovered_latter_devices": get_discovered_latter_devices(hass),
         "discovered_ble_devices": get_discovered_ble_candidates(
             hass,
@@ -977,6 +980,11 @@ def build_studio_state_payload(
         CONF_NATIVE_BLE_TRACKING: coordinator.native_ble_tracking_enabled,
         CONF_BLE_BEACON_UUID: coordinator.ble_beacon_uuid,
         CONF_BLE_TARGET_ADDRESS: coordinator.ble_target_address,
+        CONF_BLE_REF_POWER: (
+            round(coordinator.ble_ref_power)
+            if coordinator.ble_ref_power is not None
+            else None
+        ),
         CONF_ASSIGNED_PERSON: coordinator.assigned_person,
         CONF_BLE_AUTO_SWITCH: coordinator.ble_auto_switch_enabled,
         CONF_SYNC_DEVICE_AREA: coordinator.sync_device_area_enabled,
@@ -1050,6 +1058,11 @@ def build_studio_state_payload(
                 hass, coordinator, base.get("device_groups")
             ),
             "ble_closest_proxy": coordinator._ble_tracker.closest_scanner if coordinator._ble_tracker else "",
+            "ble_detected_ref_power": (
+                round(float(getattr(coordinator._ble_tracker, "effective_ref_power_dbm", -59)))
+                if coordinator._ble_tracker is not None
+                else -59
+            ),
             "area_presence_grid": presence_grid,
             "device_sw_version": fw_version,
             "sdk_rev": str(coordinator.hardware_manifest.get("sdk") or ""),

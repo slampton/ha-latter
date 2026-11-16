@@ -41,7 +41,7 @@ from .groups import _apply_ha_display_precision
 from .hub import get_area_state_index, is_media_position_only_tick, iter_coordinators
 from .identity import resolve_bound_esphome_device_id
 from .media_browse import is_music_assistant_player
-from .presence import get_ble_proxy_area_ids
+from .presence import get_ble_proxy_area_ids, get_ble_signature_area_ids
 from .protocol import (
     CAMERAS_MAX_RECORDS,
     DEFAULT_AREA_CATEGORIES,
@@ -176,10 +176,10 @@ def sync_esphome_device_area(
         return None
 
     if require_ble_proxy_area and norm_area is not None:
-        proxy_areas = get_ble_proxy_area_ids(hass)
-        if proxy_areas and norm_area not in proxy_areas:
+        ble_areas = get_ble_proxy_area_ids(hass) | get_ble_signature_area_ids(hass)
+        if ble_areas and norm_area not in ble_areas:
             _LOGGER.debug(
-                "Skipping Device Registry area sync to '%s' because that area has no BLE proxy.",
+                "Skipping Device Registry area sync to '%s' because that area has no BLE proxy or signature.",
                 norm_area,
             )
             return None
@@ -1531,10 +1531,13 @@ def resolve_person_area_and_distance(
             "person_entity": person_entity,
             "area_id": "",
             "area_name": "Unassigned",
+            "floor_id": "",
+            "floor_name": "Unassigned",
             "is_home": False,
             "distance_ft": None,
             "distance_m": None,
             "closest_proxy": "",
+            "match_method": "",
             "source_device": "",
         }
     home_coords = [c for c in p_coords if not c.is_device_away()]
@@ -1552,10 +1555,13 @@ def resolve_person_area_and_distance(
         "person_entity": person_entity,
         "area_id": r_attrs["area_id"],
         "area_name": area_name,
+        "floor_id": r_attrs["floor_id"],
+        "floor_name": r_attrs["floor_name"],
         "is_home": r_attrs["is_home"],
         "distance_ft": r_attrs["distance_ft"],
         "distance_m": r_attrs["distance_m"],
         "closest_proxy": r_attrs["closest_proxy"],
+        "match_method": r_attrs["match_method"],
         "source_device": best_c.device_slug,
     }
 

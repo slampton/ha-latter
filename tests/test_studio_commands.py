@@ -39,7 +39,7 @@ async def test_studio_rev_mismatch_on_all_read_and_mutation_endpoints(
     hass: Any, setup_latter_hub: Any
 ) -> None:
     """Verify studio_rev mismatch rejects BOTH read (get_state, subscribe) and mutation WS commands."""
-    assert STUDIO_REV == 14
+    assert STUDIO_REV == 15
     entry, _sys_obj, coord = await setup_latter_hub(hass)
     from homeassistant.helpers import area_registry as ar
 
@@ -112,7 +112,10 @@ async def test_studio_logs_gating_zero_device_state_and_ble_survey_delta_stream(
     assert coord._ble_tracker is not None
     conn.messages.clear()
     fabric.emit_survey_delta(coord._ble_tracker)
-    assert any(m["event"].get("type") == "ble_survey_delta" for m in conn.messages)
+    delta_events = [m["event"] for m in conn.messages if m["event"].get("type") == "ble_survey_delta"]
+    assert len(delta_events) >= 1
+    assert "ble_survey_rows" in delta_events[-1]
+    assert "ble_area_signatures" in delta_events[-1]
 
     # Unsubscribe cleans up listeners
     conn.subscriptions.pop(12)()
@@ -249,13 +252,71 @@ async def test_studio_commands_security_pin_secrecy_groups_and_backup_restore(
         "button.pocket_actions_restart_device",
     }
 
-    await _sys_cmd("set_ble_area_offset", {"area_id": "living_room", "offset_db": 4.5})
-    await _sys_cmd("set_area_fusion", {"area_id": "living_room", "mode": "weighted", "threshold_pct": 60})
+    import time
+
+    assert coord._ble_tracker is not None
+    coord._ble_tracker._ingest_proxy_observation(
+        "AA:BB:CC:00:00:11", -56, time.monotonic(), "Living Room Proxy"
+    )
+    st_offset = await _sys_cmd(
+        "set_ble_scanner_offset",
+        {"scanner_source": "aa:bb:cc:00:00:11", "offset_db": 4.5},
+    )
+    assert any(
+        r["scanner_source"] == "AA:BB:CC:00:00:11" and r["offset_db"] == 4.5
+        for d in st_offset["system_devices"]
+        if d["subentry_id"] == coord.subentry_id
+        for r in d["ble_survey_rows"]
+    )
     await _sys_cmd(
-        "auto_calibrate_here",
+        "set_ble_scanner_offset",
+        {"scanner_source": "AA:BB:CC:00:00:11", "offset_db": 0.0},
+    )
+    await _sys_cmd("set_area_fusion", {"area_id": "living_room", "mode": "weighted", "threshold_pct": 60})
+    st_sig = await _sys_cmd(
+        "capture_ble_area_signature",
         {"area_id": "living_room", "survey_subentry_id": coord.subentry_id},
     )
-    await _sys_cmd("save_system_config", {"config": {"weather_entity": "weather.home"}})
+    lr_sig = next(
+        s for s in st_sig["ble_area_signatures"] if s["area_id"] == "living_room"
+    )
+    assert lr_sig["has_signature"] is True
+    assert lr_sig["scanner_count"] >= 1
+    st_sig_cleared = await _sys_cmd(
+        "clear_ble_area_signature",
+        {"area_id": "living_room"},
+    )
+    lr_sig_after = next(
+        s for s in st_sig_cleared["ble_area_signatures"] if s["area_id"] == "living_room"
+    )
+    assert lr_sig_after["has_signature"] is False
+    st_spatial = await _sys_cmd(
+        "save_system_config",
+        {
+            "config": {
+                "weather_entity": "weather.home",
+                "ble_attenuation": 2.6,
+                "ble_max_radius_m": 14.5,
+                "ble_max_velocity_mps": 4.0,
+                "ble_away_timeout_s": 240,
+            }
+        },
+    )
+    assert st_spatial["system_config"]["ble_attenuation"] == 2.6
+    assert st_spatial["system_config"]["ble_max_radius_m"] == 14.5
+    assert st_spatial["system_config"]["ble_max_velocity_mps"] == 4.0
+    assert st_spatial["system_config"]["ble_away_timeout_s"] == 240
+    st_ref = await _dev_cmd(
+        "save_device_config",
+        {"config": {"ble_ref_power": -52}},
+    )
+    assert st_ref["config"]["ble_ref_power"] == -52
+    assert st_ref["live"]["ble_detected_ref_power"] == -52
+    st_ref_auto = await _dev_cmd(
+        "save_device_config",
+        {"config": {"ble_ref_power": None}},
+    )
+    assert st_ref_auto["config"]["ble_ref_power"] is None
     await _sys_cmd(
         "save_system_config",
         {

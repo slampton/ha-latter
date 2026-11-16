@@ -127,6 +127,9 @@
       "current_area": {
         "name": "Current Area"
       },
+      "current_floor": {
+        "name": "Current Floor"
+      },
       "ble_distance": {
         "name": "BLE Distance"
       },
@@ -153,6 +156,9 @@
       },
       "person_current_area": {
         "name": "{person_name} Current Area"
+      },
+      "person_current_floor": {
+        "name": "{person_name} Current Floor"
       },
       "person_ble_distance": {
         "name": "{person_name} BLE Distance"

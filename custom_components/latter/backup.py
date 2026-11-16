@@ -17,6 +17,7 @@ from .const import (
     CONF_ASSIGNED_PERSON,
     CONF_BLE_AUTO_SWITCH,
     CONF_BLE_BEACON_UUID,
+    CONF_BLE_REF_POWER,
     CONF_BLE_TARGET_ADDRESS,
     CONF_DEFAULT_AREA,
     CONF_DEFAULT_SPEAKER,
@@ -53,6 +54,7 @@ DEVICE_CONFIG_EXPORT_KEYS: tuple[str, ...] = (
     CONF_NATIVE_BLE_TRACKING,
     CONF_BLE_BEACON_UUID,
     CONF_BLE_TARGET_ADDRESS,
+    CONF_BLE_REF_POWER,
     CONF_ASSIGNED_PERSON,
     CONF_BLE_AUTO_SWITCH,
     CONF_SYNC_DEVICE_AREA,
@@ -206,8 +208,13 @@ async def _async_apply_device_snapshot_to_coordinator(
     for k in DEVICE_CONFIG_EXPORT_KEYS:
         if k in incoming_cfg and incoming_cfg[k] is not None:
             merged[k] = incoming_cfg[k]
+        elif k == CONF_BLE_REF_POWER and k in incoming_cfg and incoming_cfg[k] is None:
+            merged.pop(CONF_BLE_REF_POWER, None)
 
     coord.update_device_config(merged)
+    sync_ble = getattr(coord, "_sync_ble_tracker", None)
+    if callable(sync_ble):
+        sync_ble()
 
     if dev_snap.get("active_area_id"):
         coord.active_area_id = str(dev_snap["active_area_id"])

@@ -10,7 +10,7 @@ from homeassistant.const import Platform
 
 DOMAIN: Final = "latter"
 INTEGRATION_VERSION: Final = "3.0.0"
-STUDIO_REV: Final = 14
+STUDIO_REV: Final = 15
 MIN_FIRMWARE_SDK_REV: Final = 2026111601
 PLATFORMS: Final[list[Platform]] = [
     Platform.SENSOR,
@@ -48,7 +48,13 @@ CONF_DEFAULT_AREA: Final = "default_area"
 CONF_NATIVE_BLE_TRACKING: Final = "native_ble_tracking"
 CONF_BLE_BEACON_UUID: Final = "ble_beacon_uuid"
 CONF_BLE_TARGET_ADDRESS: Final = "ble_target_address"
-CONF_BLE_AREA_OFFSETS: Final = "ble_area_offsets"
+CONF_BLE_SCANNER_OFFSETS: Final = "ble_scanner_offsets"
+CONF_BLE_AREA_SIGNATURES: Final = "ble_area_signatures"
+CONF_BLE_REF_POWER: Final = "ble_ref_power"
+CONF_BLE_ATTENUATION: Final = "ble_attenuation"
+CONF_BLE_MAX_RADIUS_M: Final = "ble_max_radius_m"
+CONF_BLE_MAX_VELOCITY_MPS: Final = "ble_max_velocity_mps"
+CONF_BLE_AWAY_TIMEOUT_S: Final = "ble_away_timeout_s"
 CONF_ASSIGNED_PERSON: Final = "assigned_person"
 CONF_BLE_AUTO_SWITCH: Final = "ble_auto_switch"
 CONF_SYNC_DEVICE_AREA: Final = "sync_device_area"
@@ -137,6 +143,10 @@ DEFAULT_LIST_SLOT_COUNT: Final = 5
 DEFAULT_CARD_SLOT_COUNT: Final = 3
 DEFAULT_NATIVE_BLE_TRACKING: Final = True
 DEFAULT_BLE_BEACON_UUID: Final = "4C415454-4552-434F-5245-000000000220"
+DEFAULT_BLE_ATTENUATION: Final = 2.2
+DEFAULT_BLE_MAX_RADIUS_M: Final = 12.0
+DEFAULT_BLE_MAX_VELOCITY_MPS: Final = 3.5
+DEFAULT_BLE_AWAY_TIMEOUT_S: Final = 180
 DEFAULT_BLE_AUTO_SWITCH: Final = True
 DEFAULT_SYNC_DEVICE_AREA: Final = True
 DEFAULT_AREA_FOLLOW_DWELL_S: Final = 10
@@ -213,7 +223,12 @@ GLOBAL_CONFIG_KEYS: Final[tuple[str, ...]] = (
     CONF_GARAGE_ENTITY,
     CONF_VACUUM_ENTITY,
     CONF_VOLUME_OVERRIDES,
-    CONF_BLE_AREA_OFFSETS,
+    CONF_BLE_SCANNER_OFFSETS,
+    CONF_BLE_AREA_SIGNATURES,
+    CONF_BLE_ATTENUATION,
+    CONF_BLE_MAX_RADIUS_M,
+    CONF_BLE_MAX_VELOCITY_MPS,
+    CONF_BLE_AWAY_TIMEOUT_S,
     CONF_REMOTES_LIST,
     CONF_REMOTE_GROUPS,
     CONF_CALENDAR_ENTITIES,

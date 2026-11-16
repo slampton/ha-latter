@@ -157,6 +157,21 @@ class TestViewLayout(unittest.TestCase):
         self.assertIn('id="ble-adopt-table-box"', discovered_view)
         self.assertNotIn("Discovered Bluetooth Devices", area_tracking_view)
         self.assertNotIn('id="ble-adopt-table-box"', area_tracking_view)
+        self.assertNotIn("Per-Area BLE Signal Calibration", area_tracking_view)
+        self.assertNotIn("Calibrate Current Area", area_tracking_view)
+        for card_title in (
+            "Spatial Engine Settings",
+            "Per-Scanner BLE Calibration",
+            "Multi-Scanner Area Signatures",
+        ):
+            self.assertIn(card_title, area_tracking_view)
+        for sys_ble_id in (
+            "sys-ble_attenuation",
+            "sys-ble_max_radius_m",
+            "sys-ble_max_velocity_mps",
+            "sys-ble_away_timeout_s",
+        ):
+            self.assertIn(sys_ble_id, area_tracking_view)
 
         tools, sys_tools, groups, overview, display_view, interface_view, remotes_view, shared_entities = (
             section("tools"),
@@ -251,7 +266,10 @@ class TestViewLayout(unittest.TestCase):
         self.assertIn("Open in ESPHome", overview)
         self.assertNotIn("Open in Home Assistant", overview)
         self.assertIn("Download Backup", overview)
-        self.assertIn('id="cfg-ble_target_address"', section("presence"))
+        presence_view = section("presence")
+        self.assertIn('id="cfg-ble_target_address"', presence_view)
+        self.assertIn('id="cfg-ble_ref_power"', presence_view)
+        self.assertIn("Reference Power (1 Meter)", presence_view)
         for gone in ("In Home Assistant</h3>", "Location &amp; BLE</h3>", 'id="cfg-device_slug"', 'id="st-group"'):
             self.assertNotIn(gone, js)
         self.assertNotIn('"count": len(', (LATTER_DIR / "areas.py").read_text(encoding="utf-8"))
@@ -580,6 +598,31 @@ class TestSaveScopes(unittest.TestCase):
         self.assertEqual(
             settings.clean_system_settings({"camera_entities": []}), {"camera_entities": [], "camera_entity": ""}
         )
+        ble_sys = settings.clean_system_settings(
+            {
+                "ble_attenuation": 0.8,
+                "ble_max_radius_m": 80.0,
+                "ble_max_velocity_mps": 3.46,
+                "ble_away_timeout_s": 10,
+            }
+        )
+        self.assertEqual(
+            ble_sys,
+            {
+                "ble_attenuation": 1.5,
+                "ble_max_radius_m": 50.0,
+                "ble_max_velocity_mps": 3.5,
+                "ble_away_timeout_s": 30,
+            },
+        )
+        for bad_sys in (
+            {"ble_attenuation": "fast"},
+            {"ble_max_radius_m": "far"},
+            {"ble_max_velocity_mps": "sprint"},
+            {"ble_away_timeout_s": "never"},
+        ):
+            with self.assertRaises(settings.SettingsScopeError):
+                settings.clean_system_settings(bad_sys)
 
     def test_device_save_normalizes_and_validates(self) -> None:
         out = settings.clean_device_settings(
@@ -616,6 +659,13 @@ class TestSaveScopes(unittest.TestCase):
             settings.clean_device_settings({"area_categories": ""})
         with self.assertRaises(settings.SettingsScopeError):
             settings.clean_device_settings({"area_categories": "bogus"})
+        self.assertEqual(settings.clean_device_settings({"ble_ref_power": ""}), {"ble_ref_power": None})
+        self.assertEqual(settings.clean_device_settings({"ble_ref_power": None}), {"ble_ref_power": None})
+        self.assertEqual(settings.clean_device_settings({"ble_ref_power": -95}), {"ble_ref_power": -90})
+        self.assertEqual(settings.clean_device_settings({"ble_ref_power": -20}), {"ble_ref_power": -30})
+        self.assertEqual(settings.clean_device_settings({"ble_ref_power": "-51"}), {"ble_ref_power": -51})
+        with self.assertRaises(settings.SettingsScopeError):
+            settings.clean_device_settings({"ble_ref_power": "loud"})
 
     def test_voice_follows_me_dwell_is_a_device_setting(self) -> None:
         self.assertIn("area_follow_dwell_s", settings.DEVICE_SETTING_KEYS)
@@ -676,6 +726,10 @@ class TestSaveScopes(unittest.TestCase):
         self.assertEqual(view["weather_entity"], "weather.home")
         self.assertEqual(view["alarm_entity"], "")
         self.assertEqual(view["doorbell_noise_reduction"], "strong")
+        self.assertEqual(view["ble_attenuation"], 2.2)
+        self.assertEqual(view["ble_max_radius_m"], 12.0)
+        self.assertEqual(view["ble_max_velocity_mps"], 3.5)
+        self.assertEqual(view["ble_away_timeout_s"], 180)
         self.assertEqual(set(view), set(settings.SYSTEM_SETTING_KEYS))
 
 

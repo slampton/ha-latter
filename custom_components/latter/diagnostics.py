@@ -38,22 +38,35 @@ REDACTED_FIELD_KEYS: frozenset[str] = frozenset(
 TO_REDACT: set[str] = set(REDACTED_FIELD_KEYS)
 
 _MAC_KEY_RE = re.compile(r"^(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$")
+_MAC_HEX12_RE = re.compile(r"^[0-9A-Fa-f]{12}$")
+_MAC_INLINE_RE = re.compile(r"(?<![0-9A-Fa-f])(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}(?![0-9A-Fa-f])")
 _SIG_QUERY_RE = re.compile(r"([?&])sig=[^&#\s\"']+")
 
 
+def _mac_digest_token(raw_mac: str) -> str:
+    """Return deterministic non-reversible `mac_<8hex>` digest for a MAC string."""
+    clean = raw_mac.replace("-", "").replace(":", "").upper()
+    norm = ":".join(clean[i : i + 2] for i in range(0, 12, 2))
+    digest = hashlib.sha256(norm.encode("utf-8")).hexdigest()[:8]
+    return f"mac_{digest}"
+
+
 def _redact_string(val: str) -> str:
-    """Strip resource HMAC signatures from URL strings while keeping path/shape structure."""
-    if "sig=" in val:
-        return _SIG_QUERY_RE.sub(rf"\1sig={REDACTED}", val)
-    return val
+    """Strip resource HMAC signatures and inline MAC addresses from diagnostic strings."""
+    out = _SIG_QUERY_RE.sub(rf"\1sig={REDACTED}", val) if "sig=" in val else val
+    if ":" in out or "-" in out:
+        out = _MAC_INLINE_RE.sub(lambda m: _mac_digest_token(m.group(0)), out)
+    return out
 
 
-def _redact_mac_dict_key(key: str) -> str:
+def _redact_mac_dict_key(key: str, *, parent_key: str = "") -> str:
     """Replace raw MAC address dictionary keys with a deterministic non-reversible short digest."""
     if _MAC_KEY_RE.match(key):
-        norm = key.replace("-", ":").upper()
-        digest = hashlib.sha256(norm.encode("utf-8")).hexdigest()[:8]
-        return f"mac_{digest}"
+        return _mac_digest_token(key)
+    if parent_key in ("ble_scanner_offsets", "scanners") and _MAC_HEX12_RE.match(key):
+        return _mac_digest_token(key)
+    if ":" in key or "-" in key:
+        return _MAC_INLINE_RE.sub(lambda m: _mac_digest_token(m.group(0)), key)
     return key
 
 
@@ -66,7 +79,7 @@ def sanitize_diagnostics_payload(obj: Any, *, parent_key: str = "") -> Any:
             if k_str in REDACTED_FIELD_KEYS:
                 out[k_str] = REDACTED
                 continue
-            safe_k = _redact_mac_dict_key(k_str)
+            safe_k = _redact_mac_dict_key(k_str, parent_key=parent_key)
             if (
                 parent_key == "calendar_agenda"
                 and k_str == "records"

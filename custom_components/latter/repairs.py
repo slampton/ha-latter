@@ -238,7 +238,8 @@ def async_audit_coordinator_health(
     tracker = coordinator._ble_tracker
     has_seen_ble = bool(
         (tracker is not None and tracker.packets_seen > 0)
-        or coordinator.ble_area_offsets
+        or coordinator.ble_scanner_offsets
+        or coordinator.ble_area_signatures
     )
     if (
         hass.is_running
@@ -246,9 +247,9 @@ def async_audit_coordinator_health(
         and coordinator.is_roaming_device
         and not has_seen_ble
     ):
-        from .presence import get_ble_proxy_area_ids
+        from .presence import get_ble_proxy_area_ids, get_ble_signature_area_ids
 
-        proxy_areas = get_ble_proxy_area_ids(hass)
+        proxy_areas = get_ble_proxy_area_ids(hass) | get_ble_signature_area_ids(hass)
         if not proxy_areas:
             warnings.append(
                 {

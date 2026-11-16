@@ -94,15 +94,18 @@ class LatterBleDeviceTracker(TrackerEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return current Area, closest BLE proxy, distance, RSSI, and assigned person."""
+        """Return current Area, Floor, closest BLE proxy, distance, RSSI, match method, and assigned person."""
         _, attrs = self.coordinator.get_current_area_and_distance()
         return {
             "area_id": attrs["area_id"],
             "area_name": attrs["area_name"],
+            "floor_id": attrs["floor_id"],
+            "floor_name": attrs["floor_name"],
             "closest_proxy": attrs["closest_proxy"],
             "distance_ft": attrs["distance_ft"],
             "distance_m": attrs["distance_m"],
             "rssi": attrs["rssi"],
+            "match_method": attrs["match_method"],
             "assigned_person": attrs["assigned_person"],
         }
 

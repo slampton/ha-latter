@@ -214,38 +214,63 @@ export function getActiveSurveyDeviceOp(store: StudioStore): SystemDeviceEntry |
   return devs.find((d) => d.subentry_id === store.bleSurveySubentryId);
 }
 
-export async function setBleOffsetOp(
+export async function setBleScannerOffsetOp(
   store: StudioStore,
-  areaId: string,
+  scannerSource: string,
   offsetDb: number,
 ): Promise<void> {
+  const source = String(scannerSource || "").trim();
+  if (!source) {
+    store.showToast("Missing BLE scanner source", true);
+    return;
+  }
   try {
     const res = await store.ws.runSystemCommand(
-      "set_ble_area_offset",
-      { area_id: areaId, offset_db: offsetDb },
+      "set_ble_scanner_offset",
+      { scanner_source: source, offset_db: offsetDb },
       store.activeSubentryId || null,
     );
     if (res) store.ingestPayload(res, false);
   } catch (err) {
-    store.showToast(formatWsError(err, "Could not update BLE offset"), true);
+    store.showToast(formatWsError(err, "Could not update BLE scanner offset"), true);
   }
 }
 
-export async function autoCalibrateHereOp(store: StudioStore, areaId: string): Promise<void> {
+export async function captureBleAreaSignatureOp(
+  store: StudioStore,
+  areaId: string,
+): Promise<void> {
   if (!store.bleSurveySubentryId) {
     store.showToast("Select a calibration Device first", true);
     return;
   }
   try {
     const res = await store.ws.runSystemCommand(
-      "auto_calibrate_here",
+      "capture_ble_area_signature",
       { area_id: areaId, survey_subentry_id: store.bleSurveySubentryId },
       store.activeSubentryId || null,
     );
     if (res) store.ingestPayload(res, false);
-    store.showToast("Calibrated Area offset");
+    store.showToast("Captured Area signature");
   } catch (err) {
-    store.showToast(formatWsError(err, "Calibration failed"), true);
+    store.showToast(formatWsError(err, "Signature capture failed"), true);
+  }
+}
+
+export async function clearBleAreaSignatureOp(
+  store: StudioStore,
+  areaId: string,
+): Promise<void> {
+  try {
+    const res = await store.ws.runSystemCommand(
+      "clear_ble_area_signature",
+      { area_id: areaId },
+      store.activeSubentryId || null,
+    );
+    if (res) store.ingestPayload(res, false);
+    store.showToast("Cleared Area signature");
+  } catch (err) {
+    store.showToast(formatWsError(err, "Could not clear Area signature"), true);
   }
 }
 

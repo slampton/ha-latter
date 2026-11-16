@@ -95,16 +95,30 @@ export interface EntityCatalog {
 }
 
 export interface BleSurveyRow {
+  scanner_source?: string;
+  scanner_name?: string;
   area_id: string;
   area_name: string;
   raw_rssi: number | null;
+  filtered_rssi?: number | null;
   offset_db: number;
   effective_rssi: number | null;
-  is_winner: boolean;
-  scanner?: string;
-  age_seconds?: number | null;
   distance_m?: number | null;
   distance_ft?: number | null;
+  age_seconds?: number | null;
+  is_fresh?: boolean;
+  is_winner: boolean;
+}
+
+export interface BleAreaSignatureSummary {
+  area_id: string;
+  area_name: string;
+  floor_id?: string | null;
+  has_ble_proxy: boolean;
+  has_signature: boolean;
+  scanner_count: number;
+  sample_count: number;
+  captured_at: string;
 }
 
 export type GroupSyncStatus =
@@ -208,6 +222,10 @@ export interface SystemConfig {
   calendar_entities: string[];
   custom_palettes: CustomPalette[];
   doorbell_noise_reduction: "strong" | "light" | "off" | string;
+  ble_attenuation?: number;
+  ble_max_radius_m?: number;
+  ble_max_velocity_mps?: number;
+  ble_away_timeout_s?: number;
 }
 
 export interface DeviceConfig {
@@ -223,6 +241,7 @@ export interface DeviceConfig {
   native_ble_tracking?: boolean;
   ble_beacon_uuid?: string;
   ble_target_address?: string;
+  ble_ref_power?: number | null;
   assigned_person?: string;
   ble_auto_switch?: boolean;
   sync_device_area?: boolean;
@@ -332,6 +351,8 @@ export interface AreaPresenceRow {
   active_sensors?: string[];
   available_sensors?: string[];
   floor_id?: string | null;
+  floor_name?: string | null;
+  match_method?: string | null;
   fusion_mode?: string;
   fusion_threshold_pct?: number;
   fusion_sensors?: string[];
@@ -400,6 +421,7 @@ export interface LiveDeviceSection {
   ma_link_matched?: boolean;
   group_sync_status?: GroupSyncStatus | null;
   ble_closest_proxy?: string;
+  ble_detected_ref_power?: number | null;
   area_presence_grid?: AreaPresenceRow[];
   device_sw_version?: string;
   sdk_rev?: string;
@@ -423,6 +445,7 @@ export interface StudioStatePayload {
   system_devices: SystemDeviceEntry[];
   issues: IssueItem[];
   ble_proxy_count: number;
+  ble_area_signatures?: BleAreaSignatureSummary[];
   discovered_latter_devices?: DiscoveredLatterDevice[];
   discovered_ble_devices: DiscoveredBleCandidate[];
   system_controls: SharedControlItem[];
@@ -451,5 +474,6 @@ export interface BleSurveyDeltaEvent {
   ble_packets_seen?: number;
   ble_closest_proxy?: string;
   ble_survey_rows?: BleSurveyRow[];
+  ble_area_signatures?: BleAreaSignatureSummary[];
   area_presence_grid?: AreaPresenceRow[];
 }

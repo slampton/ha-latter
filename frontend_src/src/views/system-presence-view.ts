@@ -1,11 +1,12 @@
 /**
- * System BLE & Area Presence View (`area_tracking`): Live Area Presence & Sensor Fusion and Streaming BLE Calibration.
+ * System BLE & Area Presence View (`area_tracking`):
+ * Live Area Presence & Sensor Fusion, Spatial Engine Settings, Per-Scanner BLE Calibration, and Multi-Scanner Area Signatures.
  */
 
 import { renderCard, renderSettingsRow } from "../components/controls.js";
-import { html, repeat, type TemplateResult } from "../lib/lit.js";
+import { html, nothing, repeat, type TemplateResult } from "../lib/lit.js";
 import type { StudioStore } from "../state/store.js";
-import { fmtDistance, fmtNumber, fmtPercent, rssiToPercent } from "../utils/format.js";
+import { fmtAgo, fmtDateTime, fmtDistance, fmtNumber, fmtPercent, rssiToPercent } from "../utils/format.js";
 
 const FUSION_MODE_OPTIONS: ReadonlyArray<{ val: string; label: string }> = [
   { val: "weighted", label: "Weighted (BLE and sensors)" },
@@ -16,7 +17,9 @@ const FUSION_MODE_OPTIONS: ReadonlyArray<{ val: string; label: string }> = [
 
 export function renderSystemPresenceView(store: StudioStore): TemplateResult {
   const data = store.state;
+  const sysCfg = data?.system_config;
   const presenceRows = data?.live?.area_presence_grid || [];
+  const signatures = data?.ble_area_signatures || [];
   const allDevs = data?.system_devices || [];
   const bleDevs = allDevs.filter((d) => d.has_ble || d.ble_tracked || d.kind === "ble_tag");
   const activeSurveyDev = store.getActiveSurveyDevice() || bleDevs[0];
@@ -51,6 +54,9 @@ export function renderSystemPresenceView(store: StudioStore): TemplateResult {
                           : "";
                       parts.push(`BLE ${fmtNumber(r.winning_rssi, store.hass, 0)} dBm${distPart}`);
                     }
+                    if (r.match_method === "signature") {
+                      parts.push("signature match");
+                    }
                     if (r.active_sensors && r.active_sensors.length) {
                       parts.push(
                         `${r.active_sensors.length} active sensor${r.active_sensors.length > 1 ? "s" : ""}`,
@@ -60,7 +66,7 @@ export function renderSystemPresenceView(store: StudioStore): TemplateResult {
                         `${r.available_sensors.length} sensor${r.available_sensors.length > 1 ? "s" : ""} clear`,
                       );
                     }
-                    if (r.floor_id) parts.push(`Floor: ${r.floor_id}`);
+                    if (r.floor_id) parts.push(`Floor: ${r.floor_name || r.floor_id}`);
 
                     const curMode = r.fusion_mode || "weighted";
                     const confPct = r.confidence_pct ?? 100;
@@ -179,12 +185,101 @@ export function renderSystemPresenceView(store: StudioStore): TemplateResult {
                 </p>`}
           </div>`,
         })}
+
+        ${renderCard({
+          id: "card-spatial-engine",
+          title: "Spatial Engine Settings",
+          subtitle: "Applies across all BLE-tracked Devices and Areas in this System.",
+          contentClass: "settings-list",
+          body: html`${renderSettingsRow({
+              forId: "sys-ble_attenuation",
+              label: "Path-Loss Attenuation",
+              description:
+                "Controls how quickly Bluetooth signal strength drops with distance through walls (default 2.2).",
+              control: html`<input
+                type="number"
+                id="sys-ble_attenuation"
+                min="1.5"
+                max="4.5"
+                step="0.1"
+                .value=${String(sysCfg?.ble_attenuation ?? 2.2)}
+                @change=${(ev: Event) => {
+                  const val = Number((ev.currentTarget as HTMLInputElement).value);
+                  if (Number.isFinite(val)) {
+                    store.stageSystemSetting("ble_attenuation", val, "sys-ble_attenuation");
+                  }
+                }}
+              />`,
+            })}
+            ${renderSettingsRow({
+              forId: "sys-ble_max_radius_m",
+              label: "Maximum Area Radius",
+              description:
+                "Ignores Bluetooth proxies farther than this distance in meters so outdoor signals do not claim indoor Areas.",
+              control: html`<input
+                type="number"
+                id="sys-ble_max_radius_m"
+                min="2"
+                max="50"
+                step="0.5"
+                .value=${String(sysCfg?.ble_max_radius_m ?? 12)}
+                @change=${(ev: Event) => {
+                  const val = Number((ev.currentTarget as HTMLInputElement).value);
+                  if (Number.isFinite(val)) {
+                    store.stageSystemSetting("ble_max_radius_m", val, "sys-ble_max_radius_m");
+                  }
+                }}
+              />`,
+            })}
+            ${renderSettingsRow({
+              forId: "sys-ble_max_velocity_mps",
+              label: "Maximum Movement Speed",
+              description:
+                "Damps sudden signal drops that imply movement faster than this speed in meters per second.",
+              control: html`<input
+                type="number"
+                id="sys-ble_max_velocity_mps"
+                min="0.5"
+                max="15"
+                step="0.5"
+                .value=${String(sysCfg?.ble_max_velocity_mps ?? 3.5)}
+                @change=${(ev: Event) => {
+                  const val = Number((ev.currentTarget as HTMLInputElement).value);
+                  if (Number.isFinite(val)) {
+                    store.stageSystemSetting("ble_max_velocity_mps", val, "sys-ble_max_velocity_mps");
+                  }
+                }}
+              />`,
+            })}
+            ${renderSettingsRow({
+              forId: "sys-ble_away_timeout_s",
+              label: "Away Timeout",
+              description:
+                "Seconds without any Bluetooth packet before a tracked Tag or offline Device is marked Away.",
+              control: html`<input
+                type="number"
+                id="sys-ble_away_timeout_s"
+                min="30"
+                max="900"
+                step="15"
+                .value=${String(sysCfg?.ble_away_timeout_s ?? 180)}
+                @change=${(ev: Event) => {
+                  const val = Number((ev.currentTarget as HTMLInputElement).value);
+                  if (Number.isFinite(val)) {
+                    store.stageSystemSetting("ble_away_timeout_s", Math.round(val), "sys-ble_away_timeout_s");
+                  }
+                }}
+              />`,
+            })}`,
+        })}
       </div>
 
       <div class="column">
         ${renderCard({
-          title: "Per-Area BLE Signal Calibration",
-          subtitle: "Streams live RSSI deltas over WebSocket to tune per-Area offsets.",
+          id: "card-ble-scanner-calibration",
+          title: "Per-Scanner BLE Calibration",
+          subtitle:
+            "Streams live per-scanner RSSI deltas over WebSocket to normalize receiver hardware offsets.",
           headerActions: html`<select
               id="ble-survey-device-picker"
               aria-label="Select Device for BLE calibration"
@@ -219,30 +314,50 @@ export function renderSystemPresenceView(store: StudioStore): TemplateResult {
             ${surveyRows.length
               ? repeat(
                   surveyRows,
-                  (row) => row.area_id,
+                  (row) => row.scanner_source || row.area_id,
                   (row) => {
+                    const scannerSrc = row.scanner_source || "";
+                    const scannerLabel = row.scanner_name || scannerSrc || row.area_name || "Scanner";
+                    const areaLabel = row.area_name || "Unmapped";
                     const pct = rssiToPercent(row.effective_rssi);
                     const sigStyle = `--signal-pct:${pct}%`;
-                    const effTxt =
-                      row.effective_rssi !== null && row.effective_rssi !== undefined
-                        ? `${fmtNumber(row.effective_rssi, store.hass, 1)} dBm`
-                        : "—";
-                    const rawTxt =
-                      row.raw_rssi !== null && row.raw_rssi !== undefined
-                        ? `raw ${fmtNumber(row.raw_rssi, store.hass, 1)} dBm`
-                        : "no signal";
                     const offVal = Number(row.offset_db || 0);
                     const offTxt = `${offVal >= 0 ? "+" : ""}${fmtNumber(offVal, store.hass, 1)} dB`;
+
+                    const metaParts: string[] = [];
+                    if (row.raw_rssi !== null && row.raw_rssi !== undefined) {
+                      metaParts.push(`raw ${fmtNumber(row.raw_rssi, store.hass, 0)} dBm`);
+                    } else {
+                      metaParts.push("no signal");
+                    }
+                    if (row.filtered_rssi !== null && row.filtered_rssi !== undefined) {
+                      metaParts.push(`filtered ${fmtNumber(row.filtered_rssi, store.hass, 1)} dBm`);
+                    }
+                    metaParts.push(`offset ${offTxt}`);
+                    const effTxt =
+                      row.effective_rssi !== null && row.effective_rssi !== undefined
+                        ? `${fmtNumber(row.effective_rssi, store.hass, 0)} dBm`
+                        : "—";
+                    metaParts.push(`eff ${effTxt}`);
+                    if (row.distance_m !== null && row.distance_m !== undefined) {
+                      metaParts.push(`~${fmtDistance(row.distance_m, store.hass, row.distance_ft)}`);
+                    }
+                    if (row.age_seconds !== null && row.age_seconds !== undefined) {
+                      metaParts.push(
+                        `${fmtAgo(row.age_seconds, store.hass)}${row.is_fresh === false ? " (stale)" : ""}`,
+                      );
+                    }
 
                     return html`<div class="signal-row ${row.is_winner ? "winner" : ""}">
                       <div class="signal-row-head">
                         <span class="signal-row-title">
-                          <span class="row-label">${row.area_name}</span>
+                          <span class="row-label">${scannerLabel}</span>
+                          <span class="chip">${areaLabel}</span>
                           ${row.is_winner
                             ? html`<span class="chip chip-primary">Active Winner</span>`
-                            : ""}
+                            : nothing}
                         </span>
-                        <span class="signal-meta">${rawTxt} • offset ${offTxt} • eff ${effTxt}</span>
+                        <span class="signal-meta">${metaParts.join(" • ")}</span>
                       </div>
                       <div class="signal-track">
                         <div class="signal-fill" style=${sigStyle}></div>
@@ -250,39 +365,103 @@ export function renderSystemPresenceView(store: StudioStore): TemplateResult {
                       <div class="input-action-row">
                         <button
                           type="button"
-                          @click=${() => void store.setBleOffset(row.area_id, offVal - 1)}
+                          ?disabled=${!scannerSrc}
+                          @click=${() => void store.setBleScannerOffset(scannerSrc, offVal - 1)}
                           class="btn btn-secondary btn-compact"
                         >
                           -1 dB
                         </button>
                         <button
                           type="button"
-                          @click=${() => void store.setBleOffset(row.area_id, offVal + 1)}
+                          ?disabled=${!scannerSrc}
+                          @click=${() => void store.setBleScannerOffset(scannerSrc, offVal + 1)}
                           class="btn btn-secondary btn-compact"
                         >
                           +1 dB
                         </button>
                         <button
                           type="button"
-                          @click=${() => void store.setBleOffset(row.area_id, 0)}
+                          ?disabled=${!scannerSrc}
+                          @click=${() => void store.setBleScannerOffset(scannerSrc, 0)}
                           class="btn btn-text btn-compact"
                         >
                           Reset
-                        </button>
-                        <button
-                          type="button"
-                          @click=${() => void store.autoCalibrateHere(row.area_id)}
-                          class="btn btn-primary btn-compact"
-                        >
-                          Calibrate Current Area
                         </button>
                       </div>
                     </div>`;
                   },
                 )
               : html`<p class="empty-state">
-                  No Area BLE proxy readings yet for this Device.
+                  No Bluetooth scanner readings yet for this Device.
                 </p>`}`,
+        })}
+
+        ${renderCard({
+          id: "card-ble-area-signatures",
+          title: "Multi-Scanner Area Signatures",
+          subtitle:
+            "Captures full multi-proxy signal vectors for surgical boundary accuracy and proxy-less Areas.",
+          contentClass: "settings-list",
+          body: html`${signatures.length
+            ? repeat(
+                signatures,
+                (sig) => sig.area_id,
+                (sig) => {
+                  const descParts: string[] = [];
+                  if (sig.has_signature) {
+                    descParts.push(`${fmtNumber(sig.sample_count, store.hass, 0)} samples`);
+                    if (sig.captured_at) {
+                      descParts.push(`captured ${fmtDateTime(sig.captured_at, store.hass)}`);
+                    }
+                  } else if (!sig.has_ble_proxy) {
+                    descParts.push(
+                      "Capture a multi-scanner signature to detect presence in this Area without a local Bluetooth proxy.",
+                    );
+                  } else {
+                    descParts.push(
+                      "Uses path-loss distance from the local Bluetooth proxy until a signature is captured.",
+                    );
+                  }
+                  if (sig.floor_id) {
+                    descParts.push(`Floor: ${sig.floor_id}`);
+                  }
+
+                  return renderSettingsRow({
+                    labelHtml: html`<span class="row-label">
+                      ${sig.area_name}
+                      ${sig.has_signature
+                        ? html`<span class="chip chip-success">
+                            Signature (${fmtNumber(sig.scanner_count, store.hass, 0)} Scanners)
+                          </span>`
+                        : html`<span class="chip">Distance Model</span>`}
+                      ${!sig.has_ble_proxy
+                        ? html`<span class="chip">No Local Proxy</span>`
+                        : nothing}
+                    </span>`,
+                    description: descParts.join(" • "),
+                    control: html`<button
+                        type="button"
+                        ?disabled=${!activeSurveyDev}
+                        @click=${() => void store.captureBleAreaSignature(sig.area_id)}
+                        class="btn btn-secondary btn-compact"
+                      >
+                        Capture Signature
+                      </button>
+                      ${sig.has_signature
+                        ? html`<button
+                            type="button"
+                            @click=${() => void store.clearBleAreaSignature(sig.area_id)}
+                            class="btn btn-text btn-compact"
+                          >
+                            Clear
+                          </button>`
+                        : nothing}`,
+                  });
+                },
+              )
+            : html`<p class="empty-state">
+                No Home Assistant Areas configured yet.
+              </p>`}`,
         })}
       </div>
     </div>

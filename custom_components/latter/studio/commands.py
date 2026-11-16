@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable, Callable
 import logging
+import math
 import re
 from typing import Any
 
@@ -22,6 +23,7 @@ from homeassistant.helpers import (
     entity_registry as er,
 )
 from homeassistant.helpers.event import async_call_later, async_track_state_change_event
+from homeassistant.util import dt as dt_util
 import voluptuous as vol
 
 from ..areas import async_execute_area_action
@@ -31,7 +33,8 @@ from ..const import (
     CONF_ACTIVITY_SOURCES,
     CONF_AREA_FUSION_CONFIG,
     CONF_ASSIGNED_PERSON,
-    CONF_BLE_AREA_OFFSETS,
+    CONF_BLE_AREA_SIGNATURES,
+    CONF_BLE_SCANNER_OFFSETS,
     CONF_BLE_TARGET_ADDRESS,
     CONF_DEVICE_GROUP,
     CONF_DEVICE_GROUPS,
@@ -79,6 +82,7 @@ from ..media import async_refresh_ma_link
 from ..presence import (
     area_fusion_sensor_choices,
     get_all_areas_presence_summary,
+    get_area_signatures_summary,
     get_ble_fabric,
 )
 from ..protocol import hash_security_pin, normalize_activity_sources, normalize_dock_apps
@@ -194,23 +198,42 @@ def _apply_wallpaper_config(
 # ---------------------------------------------------------------------------
 
 
-async def _cmd_set_ble_area_offset(
+async def _cmd_set_ble_scanner_offset(
     hass: HomeAssistant,
     _coordinator: LatterCoordinator | None,
     body: dict[str, Any],
     global_cfg: dict[str, Any],
     _extra: dict[str, Any],
 ) -> None:
-    area_id = str(body.get("area_id") or "").strip()
-    offset_val = float(body.get("offset_db") or 0.0)
-    raw_offsets = global_cfg.get(CONF_BLE_AREA_OFFSETS)
-    offsets = dict(raw_offsets) if isinstance(raw_offsets, dict) else {}
+    scanner_source = str(body.get("scanner_source") or "").strip().upper()
+    if not scanner_source:
+        raise StudioCommandError("invalid_format", "scanner_source is required")
+    raw_offset = body.get("offset_db", 0.0)
+    if isinstance(raw_offset, bool):
+        raise StudioCommandError("invalid_format", "offset_db must be a number")
+    try:
+        offset_val = float(raw_offset if raw_offset is not None else 0.0)
+    except (TypeError, ValueError) as err:
+        raise StudioCommandError("invalid_format", f"Invalid offset_db: {err}") from None
+    if not math.isfinite(offset_val):
+        raise StudioCommandError("invalid_format", "offset_db must be a finite number")
+
+    raw_offsets = global_cfg.get(CONF_BLE_SCANNER_OFFSETS)
+    offsets: dict[str, float] = {}
+    if isinstance(raw_offsets, dict):
+        for k, v in raw_offsets.items():
+            norm_k = str(k or "").strip().upper()
+            if norm_k:
+                try:
+                    offsets[norm_k] = round(max(-25.0, min(25.0, float(v))), 1)
+                except (TypeError, ValueError):
+                    pass
     if abs(offset_val) < 0.1:
-        offsets.pop(area_id, None)
-    elif area_id:
-        offsets[area_id] = round(max(-25.0, min(25.0, offset_val)), 1)
+        offsets.pop(scanner_source, None)
+    else:
+        offsets[scanner_source] = round(max(-25.0, min(25.0, offset_val)), 1)
     await async_save_and_broadcast_global_config(
-        hass, {CONF_BLE_AREA_OFFSETS: offsets}
+        hass, {CONF_BLE_SCANNER_OFFSETS: offsets}
     )
 
 
@@ -243,62 +266,72 @@ async def _cmd_set_area_fusion(
     fabric.notify_occupancy_listeners()
 
 
-async def _cmd_auto_calibrate_here(
+async def _cmd_capture_ble_area_signature(
     hass: HomeAssistant,
     _coordinator: LatterCoordinator | None,
     body: dict[str, Any],
-    _global_cfg: dict[str, Any],
+    global_cfg: dict[str, Any],
     _extra: dict[str, Any],
 ) -> None:
     target_area_id = str(body.get("area_id") or "").strip()
     survey_id = str(body.get("survey_subentry_id") or "").strip()
     if not target_area_id:
         raise StudioCommandError("invalid_format", "area_id is required")
+    if ar.async_get(hass).async_get_area(target_area_id) is None:
+        raise StudioCommandError("not_found", f"Unknown Area '{target_area_id}'")
     if not survey_id:
         raise StudioCommandError(
             "invalid_format",
-            "survey_subentry_id is required: select the BLE survey device",
+            "survey_subentry_id is required: select the BLE survey Device",
         )
     survey_coord = find_by_subentry_id(iter_coordinators(hass), survey_id)
     if survey_coord is None:
         raise StudioCommandError(
-            "not_found", f"No Latter device with subentry_id '{survey_id}'"
+            "not_found", f"No Latter Device with subentry_id '{survey_id}'"
         )
     if survey_coord._ble_tracker is None:
         raise StudioCommandError(
             "not_supported",
-            f"{survey_coord.device_title} has no BLE tracker: enable Built-in BLE Area Tracking for it first",
+            f"{survey_coord.device_title} has no BLE tracker: enable Track the Area with BLE Proxies for it first",
         )
 
-    rows = survey_coord._ble_tracker.get_area_calibration_telemetry()
-    target_row = next(
-        (r for r in rows if r["area_id"] == target_area_id), None
-    )
-    competing = [
-        r["effective_rssi"]
-        for r in rows
-        if r["area_id"] != target_area_id and r["effective_rssi"] is not None
-    ]
-    offsets = dict(survey_coord.ble_area_offsets)
-    if target_row and target_row["raw_rssi"] is not None and competing:
-        best_competing_eff = max(competing)
-        needed_offset = (best_competing_eff - target_row["raw_rssi"]) + 6.0
-        offsets[target_area_id] = round(
-            max(-25.0, min(25.0, needed_offset)), 1
+    scanners_sig = survey_coord._ble_tracker.capture_area_signature()
+    if not scanners_sig:
+        raise StudioCommandError(
+            "not_ready",
+            "No fresh Bluetooth proxy readings yet for this Device — wait a few seconds and try again",
         )
-    elif target_row:
-        offsets[target_area_id] = round(
-            max(
-                -25.0,
-                min(25.0, float(offsets.get(target_area_id, 0.0)) + 5.0),
-            ),
-            1,
-        )
+
+    raw_sigs = global_cfg.get(CONF_BLE_AREA_SIGNATURES)
+    signatures = dict(raw_sigs) if isinstance(raw_sigs, dict) else {}
+    signatures[target_area_id] = {
+        "scanners": scanners_sig,
+        "captured_at": dt_util.utcnow().isoformat(timespec="seconds"),
+        "sample_count": sum(int(v.get("n", 1)) for v in scanners_sig.values()),
+    }
     await async_save_and_broadcast_global_config(
-        hass, {CONF_BLE_AREA_OFFSETS: offsets}
+        hass, {CONF_BLE_AREA_SIGNATURES: signatures}
     )
     survey_coord.async_set_active_area(
         target_area_id, handoff_media=False, sync_device_registry=True
+    )
+
+
+async def _cmd_clear_ble_area_signature(
+    hass: HomeAssistant,
+    _coordinator: LatterCoordinator | None,
+    body: dict[str, Any],
+    global_cfg: dict[str, Any],
+    _extra: dict[str, Any],
+) -> None:
+    target_area_id = str(body.get("area_id") or "").strip()
+    if not target_area_id:
+        raise StudioCommandError("invalid_format", "area_id is required")
+    raw_sigs = global_cfg.get(CONF_BLE_AREA_SIGNATURES)
+    signatures = dict(raw_sigs) if isinstance(raw_sigs, dict) else {}
+    signatures.pop(target_area_id, None)
+    await async_save_and_broadcast_global_config(
+        hass, {CONF_BLE_AREA_SIGNATURES: signatures}
     )
 
 
@@ -1065,9 +1098,10 @@ _CommandHandler = Callable[
 ]
 
 _STUDIO_COMMAND_HANDLERS: dict[str, _CommandHandler] = {
-    "set_ble_area_offset": _cmd_set_ble_area_offset,
+    "set_ble_scanner_offset": _cmd_set_ble_scanner_offset,
     "set_area_fusion": _cmd_set_area_fusion,
-    "auto_calibrate_here": _cmd_auto_calibrate_here,
+    "capture_ble_area_signature": _cmd_capture_ble_area_signature,
+    "clear_ble_area_signature": _cmd_clear_ble_area_signature,
     "system_entity_action": _cmd_system_entity_action,
     "esphome_entity_action": _cmd_esphome_entity_action,
     "test_doorbell_speaker": _cmd_test_doorbell_speaker,
@@ -1231,7 +1265,8 @@ async def ws_handle_subscribe(
                     "subentry_id": target_coord.subentry_id,
                     "ble_packets_seen": target_coord._ble_tracker.packets_seen,
                     "ble_closest_proxy": target_coord._ble_tracker.closest_scanner,
-                    "ble_survey_rows": target_coord._ble_tracker.get_area_calibration_telemetry(),
+                    "ble_survey_rows": target_coord._ble_tracker.get_scanner_calibration_telemetry(),
+                    "ble_area_signatures": get_area_signatures_summary(hass),
                     "area_presence_grid": get_all_areas_presence_summary(hass),
                 },
             )

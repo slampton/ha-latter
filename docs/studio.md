@@ -40,8 +40,12 @@ Shared entities, remotes, colors, and overrides live in the Latter hub entry's o
 - **Group Controls & Baseline:** live-edit operational settings across a group (showing **Mixed** when members differ), plus a collapsible **Appearance & Personalization** bulk-override drawer.
 
 ### BLE & Area Presence
-- **Live Area Presence & Sensor Fusion:** per-Area occupancy status, occupants, 6.0 dB cross-floor attenuation, and per-Area **Fusion Settings** (mode `weighted` / `any_or` / `ble_only` / `ble_and_sensor`, 20–95% threshold, and participating mmWave/PIR/door sensors).
-- **Per-Area BLE Signal Calibration:** live raw and effective RSSI per Area with **Live Stream On / Stream Paused** (`ble_survey_delta` WebSocket stream), **Calibrate Current Area**, and ±1 dB fine-tuning. → [Presence guide](presence.md)
+- **Column 1:**
+  - **Live Area Presence & Sensor Fusion:** per-Area occupancy status, occupants, `6.0 dB` cross-floor attenuation, and per-Area **Fusion Settings** (mode `weighted` / `any_or` / `ble_only` / `ble_and_sensor`, 20–95% threshold, and participating mmWave/PIR/door sensors).
+  - **Spatial Engine Settings:** System-wide **Path-Loss Attenuation** (`1.5–4.5`, default `2.2`), **Maximum Area Radius** (`2–50 m`, default `12 m`), **Maximum Movement Speed** (`0.5–15 m/s`, default `3.5 m/s` velocity gate), and **Away Timeout** (`30–900 s`, default `180 s`).
+- **Column 2:**
+  - **Per-Scanner BLE Calibration:** live per-scanner raw, Kalman-filtered, offset, and effective RSSI plus distance with **Live Stream On / Stream Paused** (`ble_survey_delta` WebSocket stream) and `-1 dB` / `+1 dB` / **Reset** hardware offset controls (`±25 dB`).
+  - **Multi-Scanner Area Signatures:** per-Area **Capture Signature** / **Clear** recording normalized multi-proxy signal vectors for tight boundary accuracy and proxy-less Areas with no local scanner. → [Presence guide](presence.md)
 
 ### Tools
 | Card | What It Controls |
@@ -90,7 +94,7 @@ The **Devices** sidebar splits inventory lifecycle into two top-level views:
 - **Area Tracking:** **Track the Area with BLE Proxies**.
   - When **on**: **Auto-Switch Active Area**, **Fallback Area**, and battery **BLE Beacon Mode** (*Handheld Only*, *Handheld + Screen Off*, *Always*).
   - When **off**: **Assigned Area**, pinning the device to a static Area and syncing two-way with Home Assistant's Device Area across both the ESPHome and Latter device entries.
-- **BLE Identity:** **BLE Target Address or Entity** and **iBeacon UUID**.
+- **BLE Identity:** **BLE Target Address or Entity**, **iBeacon UUID**, and **Reference Power (1 Meter)** (optional `-90` to `-30 dBm` override; leave blank to use auto-detected advertised beacon power).
 
 ### Tools
 - **Diagnostics:** firmware update controls, model/node/SDK/IP/MAC summary, **Download Diagnostics** (redacted JSON), **Open in ESPHome**, and a collapsed **Developer & Telemetry** drawer (Telemetry Profiler, Log Memory Report, Weather Simulation, parsed Link Report including **Session Uptime**, RAM/PSRAM watermarks, and Hardware Manifest traits).

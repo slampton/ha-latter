@@ -7,9 +7,10 @@ import { MAX_WALLPAPER_UPLOAD_BYTES, STUDIO_REV } from "../constants.js";
 import type { HomeAssistant, StudioScope, StudioStatePayload, WallpaperItem } from "../types.js";
 
 export const SYSTEM_WS_COMMANDS = new Set([
-  "set_ble_area_offset",
+  "set_ble_scanner_offset",
+  "capture_ble_area_signature",
+  "clear_ble_area_signature",
   "set_area_fusion",
-  "auto_calibrate_here",
   "system_entity_action",
   "send_announcement",
   "check_system_updates",

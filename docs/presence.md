@@ -1,129 +1,139 @@
 # Presence
 
-Latter tracks which area each device is in using the Bluetooth proxies you already have. It then uses that area: it moves the device's Home Assistant Area so Assist targets the right area, scopes Area Control, and routes "follow me" notifications.
+Latter tracks which Area each Device is in using the Bluetooth proxies across your System. It then puts that Area to work: moving a roaming Device's Home Assistant Area so Assist targets where you stand, scoping Area Controls, handing off active media, and routing occupied-Area notifications and intercom broadcasts.
 
-<!-- MEDIA: docs/media/presence-survey.png — Studio → BLE & Area Presence with the live survey and per-area calibration. -->
+<!-- MEDIA: docs/media/presence-survey.png — Studio → BLE & Area Presence with live per-scanner calibration and multi-scanner Area signatures. -->
 
 ---
 
 ## What you need
 
-- **At least one Bluetooth scanner in each area** you want to detect, assigned to that Area in Home Assistant. ESPHome proxies are tested. Any scanner Home Assistant's Bluetooth integration can use (a USB adapter, Shelly, and others) should work too, but is not verified yet.
-  - To make an ESPHome node a proxy, set `bluetooth_proxy: active: true` in its YAML.
-- **Optional:** Home Assistant **Floors** assigned to your Areas. This turns on the cross-floor penalty described below.
+- **Bluetooth scanners assigned to your Areas** in Home Assistant. ESPHome Bluetooth proxies (`bluetooth_proxy: active: true`) are tested; local USB adapters, Shelly proxies, and other scanners exposed by Home Assistant's `bluetooth` integration work through the same passive callback pipeline.
+  - **Proxy-less Areas work too:** interior Areas without their own proxy (for example a guest bath, hallway, or pantry surrounded by 2–3 proxies in neighboring Areas) can be resolved by capturing a **Multi-Scanner Area Signature** in Studio.
+- **Optional:** Home Assistant **Floors** assigned to your Areas. Configuring Floors enables the `6.0 dB` cross-floor vertical attenuation penalty and automatically creates `sensor.<slug>_current_floor` and `sensor.<person>_current_floor` entities.
 
 ## What can be tracked
 
 | Target | How it's identified | How to add it |
 | :--- | :--- | :--- |
-| Latter firmware devices | The device's MAC address from Home Assistant's device registry (±2, to cover the ESP32 BLE MAC offset), paired with the unique 128-bit CSPRNG System BLE UUID (`latter_set_beacon_uuid`, saved in NVS) and verified `major` + `minor` + MAC identity (covering ESP32-P4 boards where BLE runs on a separate C6 chip while rejecting spoofed public UUIDs). | Adopt from **Studio → Devices → Discovered → Latter Devices** (or check **Track the Area with BLE Proxies** when adding the device) |
-| Phones and watches | Home Assistant's [Private BLE Device](https://www.home-assistant.io/integrations/private_ble_device/) integration resolves the rotating address from the device's IRK. Latter re-reads the current address every 2 seconds. | Set up Private BLE Device, then **Studio → Devices → Discovered → Bluetooth Devices → Adopt** |
-| iBeacons, including any ESPHome node running `esp32_ble_beacon` | UUID, or an `ibeacon` device tracker entity | Adopt from the same list, or enter the UUID |
-| Other BLE devices with a static address | MAC address | Adopt from the same list, or enter the MAC |
+| Latter firmware Devices | Bound Device MAC (`±2` for ESP32 BLE offset) + unique 128-bit CSPRNG System BLE UUID (`latter_set_beacon_uuid`, saved in NVS) + verified `major` / `minor` identity (including ESP32-P4 Devices whose BLE radio runs on a companion C6 chip, while rejecting spoofed UUIDs) | Adopt from **Studio → Devices → Discovered → Latter Devices** (or enable **Track the Area with BLE Proxies** on the Device's **Presence** page) |
+| Phones and watches | Home Assistant's [Private BLE Device](https://www.home-assistant.io/integrations/private_ble_device/) integration resolves rotating IRK addresses; Latter listens to `state_changed` events on `current_address` for **0 ms RPA rotation** and immediately evicts stale addresses | Set up Private BLE Device, then **Studio → Devices → Discovered → Bluetooth Devices → Adopt** |
+| Beacons and BLE sensors | **Apple iBeacon**, **Eddystone-UID** (`0xFEAA`), **BTHome v2** (`0xFCD2`), or an `ibeacon` tracker entity (both connectable and non-connectable advertisements) | Adopt from **Discovered → Bluetooth Devices**, or click **Add BLE Tag** |
+| Static-MAC BLE Devices | Static Bluetooth MAC address (connectable or non-connectable) | Adopt from **Discovered → Bluetooth Devices**, or click **Add BLE Tag** |
 
-Latter parses Apple-format iBeacons only. Eddystone and AltBeacon frames are not supported.
+Latter firmware ships with its BLE presence beacon inactive out of the box so a new or reset Device does not advertise until presence is configured. When **Track the Area with BLE Proxies** is enabled, Latter provisions the System's random 128-bit BLE UUID (`latter_set_beacon_uuid`) and enables advertising via Protocol v3 (`device_prefs.ble_beacon_enabled`), with battery duty tuned in **Studio → Devices → Presence → BLE Beacon Mode** (*Handheld Only*, *Handheld + Screen Off*, or *Always*). Roaming Latter Devices also pause `latter_beacon` automatically whenever Wi-Fi is disconnected (`!wifi_connected`), preventing off-site public BLE tracking and saving battery.
 
-Latter firmware ships with its BLE presence beacon inactive out of the box so a new or reset device doesn't advertise until presence is configured. When **Track the Area with BLE Proxies** is enabled, Latter provisions the System's random 128-bit BLE UUID (`latter_set_beacon_uuid`) and enables advertising via Protocol v3 (`device_prefs.ble_beacon_enabled`), with battery duty tuned in **Studio → Devices → Presence → BLE Beacon Mode** (*Handheld Only*, *Handheld + Screen Off*, or *Always*). Roaming Latter devices also pause `latter_beacon` automatically whenever Wi-Fi is disconnected (`!wifi_connected`), preventing off-site public BLE tracking and saving battery.
-
-To link a tracked device to a person, set **Assigned person** on the device's Overview page. You'll get `sensor.<person>_current_area` and `sensor.<person>_ble_distance`, which follow whichever of that person's devices was heard most recently, plus `device_tracker.<slug>` (`home` / `not_home`) on each tracked device so you can attach it to a `person` entity in Home Assistant (**Settings → People**) for Home/Away zone tracking.
+To link a tracked Device to a person, set **Assigned Person** on the Device's **Overview** page. Latter creates `sensor.<person>_current_area`, `sensor.<person>_ble_distance`, and (whenever Floors exist in Home Assistant) `sensor.<person>_current_floor`, following whichever of that person's Devices was heard most recently, alongside `device_tracker.<slug>` (`home` / `not_home`) for Home Assistant `person` zone tracking (**Settings → People**).
 
 ---
 
-## How it decides
+## How the spatial engine decides
 
-All of these values — BLE RSSI smoothing, hysteresis, calibration, and Area sensor fusion — are constants in [`presence.py`](../custom_components/latter/presence.py), so you can check them.
+All filtering, trilateration, hysteresis, and sensor-fusion parameters live in [`presence.py`](../custom_components/latter/presence.py), with environmental constants tunable live in **Studio → System → BLE & Area Presence → Spatial Engine Settings**.
 
-1. **Collect.** Latter registers targeted Home Assistant Bluetooth callbacks (`BluetoothCallbackMatcher(connectable=False)`) matching Latter's System UUID, adopted iBeacons, and tracked MACs directly, and refreshes rotating `private_ble_device` addresses when needed—without an unconditional 2-second full scanner-table poll. Readings at or below −100 dBm are dropped, and a **3.0 dBm RSSI hysteresis deadband** suppresses 1 dBm noise fluctuations while the confirmed Area is unchanged.
-2. **Smooth.** Each area keeps one exponential moving average of RSSI with α = 0.5; readings from every scanner in that area feed the same average. After **2 s** without a reading, an area loses **1.5 dB per second**. After **12 s** without a reading, its average resets and it drops out of the decision.
-3. **Adjust.** The per-area calibration offset is added. Offsets are limited to ±25 dB. If the device's current area has a floor and a candidate area is on a different floor, the candidate gets **−6 dB**.
-4. **Decide.**
-   - A challenger area takes over immediately if it leads by **8 dB** or more.
-   - Otherwise it needs a lead of at least **5 dB**, and at least **4 s** must have passed since the last switch.
-   - No area wins while its effective RSSI is below **−88 dBm**.
+1. **Collect.** Latter registers passive Home Assistant Bluetooth callbacks (`BluetoothCallbackMatcher()` in `PASSIVE` mode, accepting both `connectable=True` and `connectable=False` frames) plus per-address advertisement listeners for static-payload beacons and instant `state_changed` RPA handoff for `private_ble_device` trackers. Readings at or below `−100 dBm` are dropped, and a **3.0 dBm RSSI hysteresis deadband** suppresses minor fluctuations while the winning Area is unchanged.
+2. **Filter per scanner (never blended).** Every scanner (`source` MAC) maintains its own `ScannerObservationState`—two proxies in the same Area never contaminate each other's filter:
+   - **3-sample rolling median** strips single-channel BLE 37/38/39 Rayleigh multipath spikes and deep fades before smoothing.
+   - **Adaptive 1D Kalman filter + velocity gate** (`Maximum Movement Speed`, default `3.5 m/s`, `0.5–15.0 m/s`) damps sudden human-body shadowing drops that imply receding faster than `max_velocity_mps × Δt`, while genuine approaches toward a scanner converge immediately.
+   - After **2 s** without a packet, a scanner's score decays by **1.5 dB/s**; after **12 s**, it ages out of Area competition.
+3. **Normalize & score Areas.**
+   - **Reference Power Normalization:** Latter auto-detects advertised 1 m reference power from Apple iBeacon byte 22, Eddystone-UID 0 m TX power (`− 41 dB`), or `tx_power` metadata (falling back to `−59 dBm`), or uses the per-Device **Reference Power (1 Meter)** override (`−90` to `−30 dBm` on **Devices → Presence → BLE Identity**). Each scanner's filtered RSSI is shifted by its **per-scanner offset** (`±25 dB`) and normalized to a `−59 dBm @ 1 m` equivalent (`norm_dbm`).
+   - **Path-loss distance & radius gate:** Distance is estimated via `d = 10^((−59 − norm_dbm) / (10 × attenuation))` meters (**Path-Loss Attenuation**, default `2.2`, `1.5–4.5`). Scanners beyond **Maximum Area Radius** (default `12.0 m`, `2.0–50.0 m`) are disqualified from claiming an Area via path-loss so outdoor leakage cannot pull a Device out of an indoor Area.
+   - **Same-Area multi-scanner aggregation:** An Area with multiple scanners takes the **maximum** decayed score among its fresh scanners—never averaging a nearby scanner down with a far corner scanner—plus a **`+1.5 dB` corroboration bonus** when a second fresh scanner in that Area is also at `−82 dBm` or stronger.
+   - **Multi-Scanner Area Signatures (`match_method: signature`):** Any Area with a saved vector signature—including **proxy-less Areas**—is scored by joint multi-scanner Gaussian + pairwise-differential matching across visible scanners (penalizing missing strong signature scanners) on the same dBm-equivalent scale.
+   - **Cross-floor vertical attenuation:** When Floors are configured and a candidate Area sits on a different Floor from the current Area, the candidate receives **`−6.0 dB`**.
+4. **Decide & prevent Area-jumping.**
+   - **Wake multi-proxy coalescing (`~0.35 s`):** When a sleeping Device wakes while holding a sticky Area that has a registered scanner, an early Packet #1 arriving over TCP from a distant Area waits `0.35 s` (or for Packet #2) before switching—eliminating 20–150 ms Wi-Fi/TCP proxy race jumps while still committing genuine moves cleanly.
+   - **Fast override (`≥ 8.0 dB` lead with `≥ 2` challenger packets):** Bypasses the **4.0 s** hold only once the challenger Area has delivered at least two packets, blocking single-packet multipath spikes.
+   - **Standard switch (`≥ 5.0 dB` lead after `4.0 s` hold):** Switches once a challenger leads by at least `5.0 dB` and `4.0 s` have elapsed since the last Area switch.
+   - No Area wins while its effective score is below **`−88 dBm`**.
 5. **Away.**
-   - With no matched packets for **180 s**, the device is marked `Away`.
-   - Display devices with a live Wi-Fi connection are never marked away; they just keep their last area.
-   - A gap of 8 s or more clears the area history, so a device waking from sleep starts fresh.
+   - With no matched packets for **Away Timeout** (default **180 s**, configurable `30–900 s`), BLE tags and offline Devices are marked `Away` (and `current_floor` transitions to `Away`).
+   - Display Devices with a live Wi-Fi connection, intentional screen-off BLE sleep (`ble_radio_active == off`), or latched battery hibernation retain their last Area instead of flipping `Away`.
 
-**Distance** uses a log-distance model: d = 10<sup>(−59 − RSSI) / 22</sup> meters, clamped to 0.2–50 m. It's computed after calibration offsets are applied, so treat it as a rough indicator, not a measurement.
+## Calibrating & capturing signatures
 
-## Calibrating
+Walls, foil-backed insulation, and receiver antenna designs mean raw RSSI varies across proxy hardware and tricky boundaries.
 
-Walls, furniture, and antenna orientation mean the nearest proxy isn't always the loudest one.
-
-1. Open **Studio → System → BLE & Area Presence** and select a device in **Per-Area BLE Signal Calibration**.
-2. Click **Live Stream On**.
-3. Carry the device into an Area and watch the effective RSSI for each Area.
-4. If the wrong Area wins, click **Calibrate Current Area**. Latter sets this Area's offset so it beats the strongest competitor by 6 dB. Use ±1 dB to fine-tune.
-
-Offsets are **per area and shared by every tracked device**. This is the main simplification compared with per-scanner calibration. See [known limitations](#known-limitations).
+1. **Per-Scanner BLE Calibration (`Studio → System → BLE & Area Presence`):**
+   - Select a tracked Device and click **Live Stream On** to stream real-time per-scanner raw, Kalman-filtered, offset, and effective RSSI plus distance over WebSocket.
+   - Use **`-1 dB`**, **`+1 dB`**, or **`Reset`** (`±25 dB`) on individual scanners to normalize hot or recessed proxy hardware across all tracked Devices.
+2. **Multi-Scanner Area Signatures (`Studio → System → BLE & Area Presence`):**
+   - Stand in an Area—such as a boundary zone or a **proxy-less Area** surrounded by neighboring scanners—for 5–10 seconds with **Live Stream On**.
+   - Click **Capture Signature** on that Area's row. Latter records the normalized multi-scanner fingerprint (`mean`, `std`, and sample count in 1 m-equivalent `norm_dbm` space), so signatures captured with one handheld or phone generalize automatically to other Devices with different TX powers.
+   - Click **Clear** at any time to return that Area to standard path-loss scoring.
+3. **Per-Device Reference Power (`Studio → Devices → <Device> → Presence → BLE Identity`):**
+   - Leave **Reference Power (1 Meter)** blank to use the auto-detected advertised 1 m power shown in the placeholder, or enter a calibrated value (`−90` to `−30 dBm`) for cases, pockets, or custom tags.
 
 ---
 
 ## Area occupancy and sensor fusion
 
-Latter creates one occupancy binary sensor and one occupants sensor per area. These are `binary_sensor.<area>_ble_occupancy` and `sensor.<area>_occupants`. Each area can combine BLE with the other sensors already assigned to it:
+Latter creates one occupancy binary sensor and one occupants sensor per mapped Area: `binary_sensor.<area>_ble_occupancy` and `sensor.<area>_occupants`. Each Area can fuse BLE presence with existing sensors assigned to that Area:
 
-| Input | Effect on the area's confidence score |
+| Input | Effect on the Area's confidence score |
 | :--- | :--- |
-| A tracked device present | +0.85 at −68 dBm or stronger, +0.70 at −80 dBm or stronger, otherwise +0.54 |
-| Occupancy or presence sensor on (for example mmWave) | Raises the score to at least 0.78, plus a bonus if BLE agrees |
-| Motion sensor on | Raises the score to at least 0.68, plus a bonus if BLE agrees |
-| Door or opening closed | +0.08 |
-| Occupancy sensor explicitly off, no motion, weak BLE | −0.18 |
+| A tracked Device present | `+0.85` at `−68 dBm` or stronger, `+0.70` at `−80 dBm` or stronger, otherwise `+0.54` |
+| Occupancy or presence sensor on (for example mmWave) | Raises the score to at least `0.78`, plus a bonus if BLE agrees |
+| Motion sensor on | Raises the score to at least `0.68`, plus a bonus if BLE agrees |
+| Door or opening closed | `+0.08` |
+| Occupancy sensor explicitly off, no motion, weak BLE | `−0.18` |
 
-Fusion modes, set per area in Studio (**System → BLE & Area Presence**, with the threshold and the sensors under each area's **Fusion Settings**):
+Fusion modes, set per Area in Studio (**System → BLE & Area Presence**, with threshold and participating sensors under **Fusion Settings**):
 
 | Mode | Behavior |
 | :--- | :--- |
-| `weighted` (default) | Occupied when the hand-tuned weighted score above passes the area's threshold (default 50%, adjustable from 20% to 95%) |
-| `any_or` | Occupied if BLE **or** any sensor says so |
-| `ble_only` | BLE only |
-| `ble_and_sensor` | BLE **and** a sensor, where the area has one |
+| `weighted` (default) | Occupied when the weighted confidence score passes the Area's threshold (default `50%`, adjustable `20–95%`) |
+| `any_or` | Occupied if BLE **or** any selected sensor is active |
+| `ble_only` | BLE presence only |
+| `ble_and_sensor` | Requires BLE **and** an active sensor (where the Area has sensors) |
 
-> The weighted score is not a Bayesian update. It's simple and predictable, and the weights above are the whole model.
+> The weighted score is a transparent additive rule—not an opaque Bayesian network—so every transition can be inspected directly from entity attributes.
 
-Sensors are discovered automatically by device class (occupancy, presence, motion, moving, door, opening), from both entity areas and device areas. By default every discovered sensor in the area counts; in **Fusion Settings** you can pick the ones that count instead (only the area's own sensors can be picked).
+Sensors are discovered automatically by device class (`occupancy`, `presence`, `motion`, `moving`, `door`, `opening`) across both entity Areas and device Areas.
 
-## What Latter does with the area
+## What Latter does with the Area
 
-- **Moves the device's Home Assistant Area (and syncs static Assigned Areas).** When a roaming device (`stationary == 0`) with **Voice Follows Me** on changes Areas, Latter updates both the bound ESPHome device's and child Latter device's Area in the registry after the device's **Voice Follows Me Delay** (10 s default, 3–60 s in Studio under **Audio**), so Assist's area-aware commands target where you stand. When **Track the Area with BLE Proxies** is turned off, Studio's **Assigned Area** stays synced two-way with Home Assistant's Device Area instead.
-- **Scopes Area Control** on the device to the current area.
-- **Moves media with the device**, when its **Media Follows This Device to Its New Area** setting is on (Studio, **Audio**): the device's speaker switches to the new area's speaker and music that's playing moves along. The same setting applies when you pick an area on the device. After the device reconnects, Latter re-syncs its area without moving media.
-- **Routes notifications and intercom.** `target_device: occupied_areas` delivers to devices in occupied areas; if no area is occupied, nothing is delivered. See [services](reference/services.md#special-target-values).
-- **Fires `latter_event`** with `type: area_changed` for your own automations.
+- **Moves roaming Devices' Home Assistant Area (and syncs static Assigned Areas).** When a roaming Device (`stationary == 0`) with **Voice Follows Me** enabled settles into a new Area for its **Voice Follows Me Delay** (`10 s` default, `3–60 s` in **Studio → Audio**), Latter updates `area_id` on both the bound ESPHome Device and child Latter Device so area-less Assist commands target where you stand. When **Track the Area with BLE Proxies** is off, Studio's **Assigned Area** syncs two-way with Home Assistant's Device Area instead.
+- **Scopes Area Controls** on the Device to its active Area.
+- **Moves media with the Device**, when **Media Follows This Device to Its New Area** is on (**Studio → Audio**): switching speaker targets and transferring active playback cleanly.
+- **Routes notifications and intercom.** `target_device: occupied_areas` delivers strictly to Devices in occupied Areas; if no Area is occupied, nothing plays into empty spaces. See [services](reference/services.md#special-target-values).
+- **Fires `latter_event`** with `type: area_changed` for custom automations.
 
 ---
 
 ## Coming from Bermuda
 
-[Bermuda](https://github.com/agittins/bermuda) is a mature, widely used BLE trilateration integration, and it does several things Latter doesn't. Here is the honest comparison:
+[Bermuda](https://github.com/agittins/bermuda) is a mature, widely used Home Assistant BLE trilateration integration. Here is the direct technical comparison:
 
-| | Bermuda | Latter |
+| Capability | Bermuda | Latter |
 | :--- | :--- | :--- |
-| Area sensor per tracked device | ✓ | ✓ (`sensor.<slug>_current_area`) |
-| Area sensor per person | Through `person` | ✓ (`sensor.<person>_current_area`) |
-| Phones and watches via Private BLE Device | ✓ | ✓ |
-| iBeacons and static MACs | ✓ | ✓ (Apple iBeacon only) |
-| `device_tracker` entities for `person` home/away | ✓ | ✓ (`device_tracker.<slug>`) |
-| Distance sensor per scanner | ✓ | **No.** One closest-distance sensor per device. |
-| Calibration | Per scanner, plus global reference power and attenuation | **Per area only**, with fixed path-loss constants |
-| Same entity IDs, so automations carry over | — | **No.** You'll need to update automations. |
+| Area sensor per tracked Device | ✓ | ✓ (`sensor.<slug>_current_area`) |
+| Floor sensor per tracked Device | ✓ | ✓ (`sensor.<slug>_current_floor`, auto-created when Floors exist) |
+| Area & Floor sensors per Person | Through `person` | ✓ (`sensor.<person>_current_area`, `sensor.<person>_current_floor`) |
+| Phones & watches via Private BLE Device | ✓ | ✓ (**0 ms** event-driven IRK RPA rotation) |
+| Beacons, BTHome & connectable BLE | ✓ (iBeacon, Eddystone, BTHome, MACs) | ✓ (Apple iBeacon, Eddystone-UID `0xFEAA`, BTHome v2 `0xFCD2`, connectable & non-connectable MACs) |
+| `device_tracker` for `person` Home/Away | ✓ | ✓ (`device_tracker.<slug>`) |
+| Filtering & anti-jump protection | Kalman / adaptive smoothing + velocity spike rejection | **3-sample median** (channel-hop null rejection) + **velocity-gated 1D Kalman** + **0.35 s wake multi-proxy coalescing** + **2-packet fast-override gate** |
+| Calibration & RF physics tuning | Per-scanner offsets, per-device ref power, global attenuation, max radius, max velocity | ✓ Per-scanner offsets (`±25 dB`), auto/manual per-Device 1 m reference power, configurable attenuation, max radius, max velocity, and away timeout |
+| Proxy-less Areas & boundary zones | Requires local scanner or manual radius tricks | ✓ **Multi-Scanner Area Signatures** resolve proxy-less Areas via multi-scanner vector matching |
+| Per-scanner distance entities (`N × M`) | ✓ (`sensor.<dev>_distance_to_<scanner>`) | **No.** Exposes one closest-distance sensor per Device/Person (`ble_distance`) and streams per-scanner distances live in Studio to keep the state machine lean |
+| Same entity IDs for drop-in automations | — | **No.** Automations should point to Latter's `current_area`, `current_floor`, or `ble_occupancy` entities |
 
-**Things Latter adds on top of area detection:** the cross-floor penalty, per-area occupancy fused with your existing sensors, automatic Home Assistant Area moves for Assist, occupied-Area and person-Area routing for notifications and intercom, and a walk-around calibration view.
+**What Latter adds natively on top of BLE positioning:** `6.0 dB` cross-floor vertical attenuation, per-Area occupancy fused with mmWave/PIR/door sensors, automatic Home Assistant Device Area sync for Assist (*Voice Follows Me*), media handoff, occupied-Area notification/intercom routing, and zero-reflash sleep-safe Studio calibration.
 
 ### Switching over
 
-1. Make sure each proxy is assigned to its Area. Bermuda needs this too, so it's probably done already.
-2. Adopt your phones and watches in **Studio → BLE & Area Presence**, and set **Assigned person** on each.
+1. Ensure each Bluetooth proxy is assigned to its Home Assistant Area (and assign Floors to your Areas if your Site has multiple levels).
+2. Open **Studio → Devices → Discovered**, adopt your Latter Devices, phones (`Private BLE Device`), watches, and BLE tags, and set **Assigned Person** on personal Devices.
 3. Attach `device_tracker.<slug>` to each person in **Settings → People** if you want BLE Home/Away zone tracking.
-4. Walk the house and calibrate the areas that pick wrong.
-5. Point your automations at `sensor.<person>_current_area` or `binary_sensor.<area>_ble_occupancy`.
+4. Walk your Site with **Studio → System → BLE & Area Presence → Live Stream On**: trim any hot/quiet proxy hardware in **Per-Scanner BLE Calibration**, and click **Capture Signature** in any proxy-less Area or tight doorway boundary.
+5. Point your automations at `sensor.<person>_current_area`, `sensor.<person>_current_floor`, or `binary_sensor.<area>_ble_occupancy`.
 
 ---
 
-## Known limitations
+## Known trade-offs
 
-- **Calibration is per area, not per scanner.** Offsets are shared by all tracked devices, and the path-loss constants (−59 dBm at 1 m, exponent 2.2) can't be configured.
-- **Areas share an average.** If two scanners are in the same area, their readings are blended into one per-area average.
-- **Timing constants are fixed.** These are the 4 s hold, 3.0 dBm RSSI deadband, 5 and 8 dB thresholds, and 180 s away timeout.
+- **Discrete Areas and Floors, not `(x, y, z)` coordinates.** Latter determines which Home Assistant Area and Floor a Device occupies (including proxy-less Areas via captured signatures), rather than estimating meter coordinates on a floorplan.
+- **No `devices × scanners` entity explosion.** Per-scanner raw/filtered RSSI and distance stream live over WebSocket when calibrating in Studio instead of registering dozens of high-churn recorder entities per Device.
+- **Captured signatures depend on proxy placement.** If you physically move or replace a Bluetooth proxy, recapture **Multi-Scanner Area Signatures** for nearby Areas that depend on that scanner.

@@ -168,6 +168,7 @@ def install_fake_ha_core() -> None:
 
     reg_classes = install_fake_ha_registries(_slugify, EntityCategory)
     AreaRegistry = reg_classes["AreaRegistry"]
+    FloorRegistry = reg_classes["FloorRegistry"]
     DeviceRegistry = reg_classes["DeviceRegistry"]
     EntityRegistry = reg_classes["EntityRegistry"]
     IssueRegistry = reg_classes["IssueRegistry"]
@@ -649,6 +650,7 @@ def install_fake_ha_core() -> None:
                 async_register_static_paths=self._async_register_static_paths,
             )
             self._area_registry = AreaRegistry(self)
+            self._floor_registry = FloorRegistry(self)
             self._device_registry = DeviceRegistry(self)
             self._entity_registry = EntityRegistry(self)
             self._issue_registry = IssueRegistry(self)
