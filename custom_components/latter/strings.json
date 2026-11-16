@@ -239,7 +239,7 @@
         "step": {
           "pick": {
             "title": "Link {device_slug} to its Music Assistant player",
-            "description": "Music Assistant doesn't report this device's MAC address or device, so Latter can't find the Music Assistant player behind **{speaker_entity}** on its own. Pick **{device_slug}**'s player once. Library playback, queues and lyrics on the device use it. You can change it later in Latter Studio (device → Sound & Media Player).",
+            "description": "Music Assistant doesn't report this device's MAC address or device, so Latter can't find the Music Assistant player behind **{speaker_entity}** on its own. Pick **{device_slug}**'s player once. Library playback, queues and lyrics on the device use it. You can change it later in Latter Studio (device → Audio).",
             "data": {
               "ma_player_entity": "Music Assistant player"
             }

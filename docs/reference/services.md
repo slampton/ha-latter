@@ -1,237 +1,122 @@
 # Services Reference
 
-Latter registers 16 user-facing services (plus the internal `latter.device_hello` handshake service) under the `latter` domain. Latter firmware invokes these operations over its bound Zero-Privilege **System: RPC Outbox** (`identity.py`, authenticated by `esphome_device_id` so `allow_service_calls` is never required), while Home Assistant automations, scripts, and custom integrations call the `latter.*` services directly.
+Latter registers **19 services** under the `latter` domain ([`services.py`](../../custom_components/latter/services.py), [`services.yaml`](../../custom_components/latter/services.yaml)): **17 user/automation-callable services** plus **2 device-reported state/handshake services** (`latter.device_hello` and `latter.timer_alarm_state`).
 
-- **Source:** [`services.py`](../../custom_components/latter/services.py) and [`protocol.py`](../../custom_components/latter/protocol.py), with UI schemas in [`services.yaml`](../../custom_components/latter/services.yaml).
-- **Schema validation & RBAC.** Every service rejects unknown keys and forwards `context=call.context` to downstream Home Assistant actions. Administrative mutations (`reset_device`, `save_custom_color`, `set_dock_apps`) require an admin user when invoked from a Home Assistant user context. Most values (for example `priority`, `mode`, `action`, `command`) are validated by the handler; `doorbell_intercom`'s `noise_reduction` is validated by the schema.
-
-## Targeting
-
-Services that target a device accept `target_device`:
-
-| Field | Type | Notes |
-| :--- | :--- | :--- |
-| `target_device` | string | A device slug (`pocket_assistant`), a subentry ID, a Home Assistant device ID, or a [special target](#special-target-values) |
-
-If only a single Latter device is configured, `target_device` is optional. When multiple devices are configured, `target_device` is required.
-
-### Special target values
-
-| Value | `notify` | `intercom_broadcast` |
-| :--- | :--- | :--- |
-| `all` | Every display device | Every online Music Assistant speaker (the same as no target) |
-| `occupied_areas` | Devices whose current area is occupied | Music Assistant speakers in occupied areas, plus each matching device's active and local speaker |
-| `person.<id>` | Devices assigned to that person, plus devices in that person's current area | Music Assistant speakers in that person's current area, plus any matching device's active and local speaker |
-| No match | Nothing is delivered (`occupied_areas` / `person.*`) | No-op (returns a status response without broadcasting to unoccupied areas) |
-
-An unknown device slug in `target_device` is an error (`ServiceValidationError`), not a fallback. For `intercom_broadcast`, a Device slug names the calling Device and must also resolve.
-
-Headless and BLE-beacon-only devices never receive notifications.
+Bound ESPHome displays invoke the 15 device-permitted operations over their Zero-Privilege **System: RPC Outbox** (`LatterRpcReceiver` in `identity.py`, authenticated by `esphome_device_id` so `allow_service_calls` is never required), while Home Assistant automations and scripts call `latter.*` directly. Administrative mutations (`reset_device`, `save_custom_color`, `set_dock_apps`, `set_device_prefs`) require an admin user context when invoked from Home Assistant.
 
 ---
 
-## Notifications
+## Targeting (`target_device`)
+
+Services that act on a device accept `target_device` (a device slug such as `pocket_assistant`, a subentry ID, a Home Assistant device ID, or a special target below). When only one Latter device is configured, `target_device` is optional (except on `latter.reset_device`, which always requires an explicit target).
+
+| Special Target | `latter.notify` | `latter.intercom_broadcast` |
+| :--- | :--- | :--- |
+| `all` | Every display device | Every online Music Assistant speaker *(same as omitting target)* |
+| `occupied_areas` | Display devices whose current Area is occupied | Music Assistant speakers in occupied Areas, plus matching devices' active/local speakers |
+| `person.<id>` | Display devices assigned to that person or in their current Area | Music Assistant speakers in that person's current Area, plus matching devices' active/local speakers |
+| *(No match)* | Delivers nothing | No-op (never broadcasts to unoccupied Areas) |
+
+---
+
+## Notifications & Intercom
 
 ### `latter.notify`
-Shows a banner on the device, with an optional chime and an optional camera snapshot.
+Wakes target displays via `esphome.<node>_latter_show_notification`, shows an alert banner, optionally plays an embedded chime or speaks TTS, optionally attaches a signed camera snapshot, and fires `latter_event` (`type: notification_dispatched`).
 
 | Field | Type | Default | Notes |
 | :--- | :--- | :--- | :--- |
 | `message` | string | **required** | Truncated to 160 characters on the device |
-| `title` | string | `Alert` | Truncated to 48 characters |
+| `title` | string | `Notification` | Truncated to 48 characters |
 | `priority` | `normal` \| `warning` \| `critical` | `normal` | |
 | `duration` | int (seconds) | `8` | Clamped to 2–60 |
-| `chime` | bool | `true` | |
-| `camera_entity` | `camera.*` | — | Adds a signed baseline-JPEG snapshot URL |
-| `announce` | bool | `false` | Also speaks `message` with TTS on the device (through its Assist satellite, or its local speaker). The banner chime is skipped when this is on. |
-
-Latter calls the bound ESPHome device's `esphome.<node>_show_notification` action with a monotonic `alert_id` and fires `latter_event` with `type: notification_dispatched`.
+| `chime` | bool | `true` | Skipped when `announce: true` |
+| `camera_entity` | `camera.*` | — | Mints a signed baseline-JPEG snapshot URL |
+| `announce` | bool | `false` | Speaks `message` via TTS on the device's Assist satellite or local speaker |
 
 ### `latter.intercom_broadcast`
-Speaks a TTS message or plays an audio clip on speakers.
-
-| Field | Type | Notes |
-| :--- | :--- | :--- |
-| `message` | string | Spoken with `tts.speak` |
-| `media_url` | string | Audio clip URL (`media-source://` URI or a signed local `/api/latter/` URL; arbitrary external URLs are rejected). Played through `music_assistant.play_announcement` on Music Assistant players, and through `media_player.play_media` with `announce: true` elsewhere. |
-| `target_speakers` | `media_player` entity list | When empty, all online Music Assistant players. Ignored when `target_device` is `occupied_areas` or `person.<id>`. |
-| `tts_entity` | `tts.*` | When empty, the first TTS entity |
+Broadcasts a TTS announcement (`message`) or local/media-source clip (`media_url`) across `target_speakers` (or `target_device` special targets) using `tts_entity` (defaults to the first `tts.*` entity). Uses `music_assistant.play_announcement` on Music Assistant players and `media_player.play_media` (`announce: true`) elsewhere.
 
 ---
 
-## Media
+## Media & Remotes
 
 ### `latter.set_active_speaker`
-| Field | Type | Default | Notes |
-| :--- | :--- | :--- | :--- |
-| `entity_id` | `media_player.*` | **required** | |
-| `transfer_queue` | bool | `true` | Moves the current queue to the new speaker (see below) |
-
-How the queue moves:
-- **Between two Music Assistant players:** Latter maps both ends to their Music Assistant counterparts and calls `music_assistant.transfer_queue`. A Latter device's own speaker maps to the Music Assistant player linked to that device (its **Music Assistant Player** setting); other speakers map by device or MAC address.
-- **Otherwise:** Latter pauses the source and replays its `media_content_id` on the target.
+Selects `entity_id` (`media_player.*`, required) as the device's active speaker. With `transfer_queue: true` (default), transfers Music Assistant queues via `music_assistant.transfer_queue` (holding Now Playing metadata/art steady across spin-up) or pauses and replays `media_content_id` on standard players.
 
 ### `latter.media_command`
 | Field | Type | Default | Notes |
 | :--- | :--- | :--- | :--- |
-| `command` | string | `toggle` | `play`, `pause`, `toggle`, `next`, `previous`, `stop`, `seek`, `clear_queue`, `play_media` |
-| `entity_id` | `media_player.*` | the device's active speaker | |
+| `command` | string | `toggle` | `play`, `pause`, `toggle`, `next`, `previous`, `stop`, `seek`, `clear_queue`, `play_media`, `join`, `unjoin` |
+| `entity_id` | `media_player.*` | active speaker | If idle/cold with an empty Sendspin buffer, `play` automatically heals and re-streams the Music Assistant queue |
 | `seek_position` | float (seconds) | — | For `seek` |
-| `media_id`, `media_type`, `enqueue` | string | — | For `play_media`. If Music Assistant can't play an artist or album URI directly, Latter expands it to tracks (up to 25). |
+| `media_id`, `media_type`, `enqueue` | string | — | For `play_media` (expands unplayable artist/album URIs up to 25 tracks) |
+| `group_members` | `media_player.*` list/CSV | — | Target speaker entities for `join` / `unjoin` speaker grouping |
 
 ### `latter.media_volume`
-| Field | Type | Default | Notes |
-| :--- | :--- | :--- | :--- |
-| `action` | `set` \| `up` \| `down` \| `mute` | `set` | |
-| `volume_level` | number | — | 0–1, or 0–100 (values above 1 are treated as a percentage) |
-| `entity_id` | `media_player.*` | the active speaker | |
-
-If the speaker has a **volume override** configured in Studio, the command goes to that entity instead. For `number` and `input_number` overrides, steps use the entity's own step size, or 5% of its range if it has none.
+Adjusts volume (`action`: `set` \| `up` \| `down` \| `mute`, `volume_level`: `0–1` or `0–100`, optional `entity_id`), automatically routing through any Studio **Speaker Volume Override** (`media_player`, `number`, or `input_number`).
 
 ### `latter.music_browse`
-Fetches one page of items and sends them to the device with `set_browse_slots`. All modes except `speakers` require Music Assistant.
-
-| Field | Type | Default | Notes |
-| :--- | :--- | :--- | :--- |
-| `mode` | string | `speakers` | `speakers`, `favorites`, `playlist`, `artist`, `album`, `radio`, `podcast`, `audiobook`, `track`, `artist_albums`, `album_tracks`, `current_album_tracks`, `active_queue`, `podcast_episodes`, `lyrics`, `bio` |
-| `page` | int | `1` | |
-| `page_size` | int | `5` | Capped at the device's slot capacity |
-| `search` | string | — | A drill-down ID. For `lyrics` and `bio`, pass `Title\|Artist\|Album`. |
-| `speaker`, `last_speaker` | `media_player.*` | — | |
-| `album_sort` | `name` \| `year` \| `year_desc` | `name` | |
-| `artist_album_sort` | `year` \| `year_desc` \| `name` | `year` | |
-| `podcast_sort` | `newest` \| `oldest` | `newest` | |
-| `req_id` | int | `0` | Monotonic correlation ID echoed in `set_browse_slots` so out-of-order responses from rapid taps are discarded |
-
-Where lyrics and bios come from, in order (cached in a bounded 64-entry LRU cache in `media_browse.py`):
-1. **Music Assistant metadata.**
-2. **[LRCLIB](https://lrclib.net)** for lyrics. Plain lyrics are preferred; synced lyrics are passed through as text.
-3. **Wikipedia's REST summary API** for bios.
-
-Text is wrapped to 32 characters per line.
-
----
-
-## Areas
-
-### `latter.set_active_area`
-| Field | Type | Notes |
-| :--- | :--- | :--- |
-| `area_id` | string | **Required.** An Area ID or Area name. |
-
-Whether the device's speaker follows to the new Area is the device's own setting, **Media Follows This Device to Its New Area** in Studio (**Audio**). The same setting applies when Bluetooth moves the device.
-
-On roaming devices (the hardware reports it isn't stationary) with **Voice Follows Me** on, this also moves the device's Home Assistant Area. Stationary devices are never moved.
-
-### `latter.area_browse`
-Sends a page of areas or entities to the device. `entities` and `home` pages use `set_area_slots`, which includes slider levels. `areas` uses `set_browse_slots`.
-
-| Field | Type | Default | Notes |
-| :--- | :--- | :--- | :--- |
-| `mode` | `areas` \| `entities` \| `home` | `entities` | `home` covers entities across the whole home |
-| `area_id` | area | the device's current area | |
-| `domain_filter` | string | `all` | `scene`, `light`, `cover`, `fan`, `switch`, `media` / `media_player`, `climate`, or a comma-separated list |
-| `page` | int | `1` | |
-| `page_size` | int | `3` (`5` for `areas`) | |
-| `req_id` | int | `0` | Monotonic correlation ID echoed in `set_area_slots` / `set_browse_slots` |
-
-### `latter.area_action`
-| Field | Type | Default | Notes |
-| :--- | :--- | :--- | :--- |
-| `entity_id` | string | — | Any entity, or one of `whole_home.thermostat`, `whole_home.lock`, `whole_home.garage`, `whole_home.vacuum`, which resolve to the entities configured in Studio |
-| `action` | string | — | `toggle`, `turn_on`, `turn_off`, `set_level`, `set_color`, `set_kelvin`, `step_up`, `step_down`, `arm_home`, `arm_away`, `arm_night`, `disarm`, `heat`, `cool`, `auto`, `off`, `lock`, `unlock`, `open`, `start`, `pause`, `dock` (`lock` and `alarm_control_panel` require an explicit verb; `toggle` is rejected) |
-| `level` | number | — | 0–100 for brightness, position, and fan speed; Kelvin for `set_kelvin` |
-| `code` | string | — | Security PIN / Alarm PIN (for opening actions under `require_pin`), or `#RRGGBB` for `set_color` |
-| `area_id` | area | — | |
-
-Alarm actions with no `entity_id` use the alarm panel configured in Studio. `lock` (`lock`, `unlock`, `open`) and `alarm_control_panel` (`arm_home`, `arm_away`, `arm_night`, `disarm`) require an explicit action verb and never accept `toggle`.
-
-**3-Tier Perimeter Security Policy (`protocol.py`).** Opening actions (`lock`: `unlock`/`open`; `alarm_control_panel`: `disarm`; `cover` garage/gate/door: opening actions) are checked against the calling Device's `security_pin_policy` (`allow`, `require_pin`, or `block`; `auto` resolves to `require_pin` on stationary panels or when a Home Assistant alarm code exists). Under `require_pin`, `code` is verified in constant time against the Device's PBKDF2-HMAC-SHA256 Security PIN (or delegated to Home Assistant's `alarm_control_panel` code). Closing and arming actions (`lock`, `arm_*`, closing covers) are always permitted.
-
----
-
-## Remotes
+Fetches a page of library items, speakers, queues, lyrics (Music Assistant → [LRCLIB](https://lrclib.net)), or bios (Music Assistant → Wikipedia) and pushes it to the device via `esphome.<node>_latter_set_slots` (`is_area_slots: false`), echoing `req_id` to discard stale rapid-tap responses.
+- **Fields:** `mode` (`speakers`, `favorites`, `playlist`, `artist`, `album`, `radio`, `podcast`, `audiobook`, `track`, `artist_albums`, `album_tracks`, `current_album_tracks`, `active_queue`, `podcast_episodes`, `lyrics`, `bio`), `page` (`1`), `page_size` (`5`, capped to manifest `slot_count`), `search` (`Title|Artist|Album` for lyrics/bio), `speaker`, `last_speaker`, `album_sort` (`name` \| `year` \| `year_desc`), `artist_album_sort` (`year` \| `year_desc` \| `name`), `podcast_sort` (`newest` \| `oldest`), `req_id` (`0`).
 
 ### `latter.remote_action`
-| Field | Type | Default | Notes |
-| :--- | :--- | :--- | :--- |
-| `slot` | int 1–10 | `1` | |
-| `action` | string | `select_slot` | `select_slot`, `toggle`, `command`, `volume_up`, `volume_down`, `volume_mute`, `media_play_pause` |
-| `command` | string | — | A key name such as `up`, `down`, `left`, `right`, `select`, `back`, `home` |
-
-Key names are translated per platform:
-- **Android TV, Fire TV, Bravia:** native key codes.
-- **Denon AVR:** the integration's command URLs.
-- **LG webOS:** `webostv.button`.
-- **Apple TV:** `back` is sent as `menu`.
-- **Anything else:** generic `remote.send_command`.
+Sends a TV/AV remote action (`slot`: `1–10`, `action`: `select_slot` \| `toggle` \| `command` \| `volume_up` \| `volume_down` \| `volume_mute` \| `media_play_pause`, `command`: `up`, `down`, `left`, `right`, `select`, `back`, `home`, etc.), translating key codes automatically for Android TV, Fire TV, Bravia, Denon AVR, LG webOS, Apple TV, or generic `remote.send_command`.
 
 ---
 
-## Calendar
+## Areas & Home Hub
 
-### `latter.calendar_fetch`
-| Field | Type | Default |
+### `latter.set_active_area`
+Switches the device's active Area (`area_id`, ID or name). Moves media along when **Media Follows This Device to Its New Area** is on, and updates the Home Assistant Device Area on roaming hardware (`stationary == 0`) when **Voice Follows Me** is enabled.
+
+### `latter.area_browse`
+Pushes paginated Areas (`mode: areas`) or controllable entities (`mode: entities` \| `home`) via `esphome.<node>_latter_set_slots` (`is_area_slots: true` for entity/home slider cards; `false` for Area lists).
+- **Fields:** `mode` (`entities`), `area_id`, `domain_filter` (`all`, `scene`, `light`, `cover`, `fan`, `switch`, `climate`, `media`, or CSV), `page` (`1`), `page_size` (`3`–`6` cards or `5`–`7` list rows per manifest), `req_id` (`0`).
+
+### `latter.area_action`
+Executes an explicit Area or Home Hub control action.
+
+| Field | Type | Notes |
 | :--- | :--- | :--- |
-| `days` | int 1–60 | `30` |
-| `page`, `page_size` | int | `1`, `5` |
-| `req_id` | int | `0` |
+| `entity_id` | string | Any entity ID, or a Home Hub virtual target: **`home_hub.alarm`**, **`home_hub.thermostat`** *(or `home_hub.climate`)*, **`home_hub.lock`**, **`home_hub.garage`**, **`home_hub.vacuum`** |
+| `action` | string | `toggle`, `turn_on`, `turn_off`, `set_level`, `set_color`, `set_kelvin`, `set_temperature`, `step_up`, `step_down`, `arm_home` / `alarm_arm_home`, `arm_away` / `alarm_arm_away`, `arm_night` / `alarm_arm_night`, `disarm` / `alarm_disarm`, `heat`, `cool`, `auto`, `off`, `lock`, `unlock`, `open`, `open_cover`, `close_cover`, `stop_cover`, `start`, `pause`, `dock` / `return_to_base` *(`lock` and `alarm_control_panel` reject `toggle`)* |
+| `level` | number | `0–100` (brightness/position/fan speed), Kelvin (`set_kelvin`), or target temperature (`set_temperature`) |
+| `code` | string | `#RRGGBB` (`set_color`), Home Assistant Alarm PIN, or Latter Security PIN |
+| `area_id` | area | Optional Area scope |
 
-Returns at most 25 events, with duplicates (same summary and start) removed and `req_id` echoed in `set_browse_slots`. Events with a location get a signed map URL.
-
-### `latter.calendar_create_event`
-| Field | Type | Default | Notes |
-| :--- | :--- | :--- | :--- |
-| `summary` | string | **required** | |
-| `calendar_entity` | `calendar.*` | the first configured calendar | |
-| `start_date_time`, `end_date_time` | ISO datetime | — | |
-| `in_minutes`, `duration_minutes` | int | `15`, `30` | Used when no start time is given. The minimum duration is 5 minutes. |
-| `description` | string | — | |
+**Separate Alarm PINs vs. Perimeter Security (`protocol.py`, `services.py`):**
+- **Home Assistant Alarm Panels with a Code (`alarm_caps`):** when the target `alarm_control_panel` defines `code_format`, `disarm` (and `arm_*` when `code_arm_required` is true) validates `code` and passes it straight through to Home Assistant's alarm service. Arming is never blocked by `security_pin_policy: block`.
+- **Locks, Garage/Gate Covers & Code-Less Alarms:** opening actions (`unlock`/`open`, opening garage/gate/door covers, and `disarm` on code-less alarms) enforce the calling Device's Studio **Perimeter Security Policy** (`allow`, `require_pin`, or `block`; `auto` resolves to `require_pin` on stationary panels or when an HA alarm code exists), verifying `code` in constant time against the PBKDF2-HMAC-SHA256 Device Security PIN (falling back to the System Security PIN).
 
 ---
 
-## Doorbell and appearance
+## Calendar & Doorbell
 
-### `latter.doorbell_intercom` *(experimental)*
-Doorbell listen, push-to-talk reply, and unlock actions, plus `call_target`, which rings other displays with a notification. Can return a response.
+- **`latter.calendar_fetch`** (`days: 1–60` default `30`, `page: 1`, `page_size: 5`, `req_id: 0`): deduplicates up to 25 upcoming events across configured calendars, signs OpenStreetMap `map_url`s for events with locations, and pushes slots via `latter_set_slots`.
+- **`latter.calendar_create_event`** (`summary` required, optional `calendar_entity`, `start_date_time`, `end_date_time`, `in_minutes: 15`, `duration_minutes: 30`, `description`): creates an event and refreshes `calendar_agenda`.
+- **`latter.doorbell_intercom`** *(experimental)* (`action`: `listen_start` \| `listen_stop` \| `listen_toggle` \| `talk_message` \| `quick_reply` \| `unlock_door` \| `call_target` \| `set_noise_reduction` \| `select_camera`, plus `camera_entity` / `camera_index`, `message`, `noise_reduction`: `strong` \| `light` \| `off`, `code`): streams noise-reduced camera audio as FLAC, speaks push-to-talk/quick replies via TTS on the camera's speaker, unlocks the door (`code` verified under `require_pin`), or rings other displays (`call_target`).
 
-- **Listen** (`listen_start` / `listen_stop` / `listen_toggle`): the camera's RTSP audio runs through an FFmpeg noise-reduction filter and plays on the device as FLAC.
-- **Reply** (`talk_message` / `quick_reply`): Home Assistant speaks `message` with TTS on the camera's `media_player` (a sibling entity on the camera's device, or a Studio volume override). Latter firmware sends the text its push-to-talk speech recognition produced. Listening pauses during the reply and resumes after it, unless the call ended in the meantime. A new reply replaces a pending one, so listening resumes only after the last reply.
-- **Unlock** (`unlock_door`): calls `lock.unlock` on the camera's lock, or the lock configured in Studio, after enforcing the calling Device's 3-tier Perimeter Security Policy (`code` verified when `require_pin` is active).
-- **`call_target`**: sends a critical `latter.notify` ("Tap to answer") to the display named in `message`, or to every other display. No audio path is opened between displays, and it does not start listening on the calling device (the device sends its own listen_start).
+---
 
-There is no live audio from the device to the door and no echo cancellation.
+## Preferences, Appearance & Device Lifecycle
 
-| Field | Type | Notes |
-| :--- | :--- | :--- |
-| `action` | string | `listen_start`, `listen_stop`, `listen_toggle` (the default), `talk_message`, `quick_reply`, `unlock_door`, `call_target`, `set_noise_reduction`, `select_camera` |
-| `camera_entity` / `camera_index` | `camera.*` / int 0–9 | |
-| `message` | string | Text to speak or target device slug (`all` or `<slug>`), depending on `action` |
-| `noise_reduction` | `strong` \| `light` \| `off` | FFmpeg noise-reduction level for the listen stream. Applies to this device until the integration reloads or Studio settings are saved; the default comes from Studio (`strong`). `set_noise_reduction` applies it and restarts listening if active. |
-| `code` | string | Security PIN for `unlock_door` when the Device's `security_pin_policy` is `require_pin` |
+### `latter.save_custom_color` *(admin)*
+Saves `hex_color` (`#RRGGBB`, optional `name`) into the 24-swatch System color library and applies it to the target device.
 
-### `latter.save_custom_color`
-| Field | Type | Notes |
-| :--- | :--- | :--- |
-| `hex_color` | `#RRGGBB` | Added to the system color library (24 colors maximum) and applied to the device |
-| `name` | string | |
+### `latter.set_dock_apps` *(admin)*
+Updates the device's ordered Home dock (`dock_apps` CSV, required; Settings is always last).
+- **Default:** `music,home_hub,area,remote,games,tools`
+- **Valid tokens:** `music`, `home_hub`, `area`, `remote`, `weather`, `time`, `camera`, `games`, `tools`
 
-### `latter.set_dock_apps`
-Saves a device's Home dock: the apps shown, in order (Settings is always last). Latter firmware sends it when you show or hide an app in **Settings → Home** on the device; Studio's **Home dock apps** edits the same setting. Until a device has one, it shows the default dock (`music,alarm,area,remote,games,tools`).
+### `latter.set_device_prefs` *(admin / bound-device RPC)*
+Applies typed preference updates (`changes` dict, optional `base_seq`) to the Device's sleep-safe subentry (`studio/settings.py`), cascading `power_profile` presets when selected, incrementing `prefs_seq`, and pushing the updated `device_prefs` Protocol v3 frame.
 
-| Field | Type | Notes |
-| :--- | :--- | :--- |
-| `dock_apps` | string | **Required.** Comma-separated, from `music`, `alarm`, `area`, `remote`, `camera`, `games`, `tools`; at least one |
+### `latter.reset_device` *(admin)*
+Resets `target_device` (**required**; never falls back to a default device):
+- `device_settings` (`true` default): calls `esphome.<node>_latter_factory_reset` (wipes NVS settings and restarts while keeping Wi-Fi and API pairing).
+- `latter_options` (`true` default): resets Studio per-device settings back to onboarding defaults while preserving the bound ESPHome device, MAC, slug, and Music Assistant player link.
 
-## Maintenance
-
-### `latter.reset_device`
-Resets a Latter device to defaults. Choose what to reset with the two fields; at least one must be on.
-
-| Field | Type | Notes |
-| :--- | :--- | :--- |
-| `target_device` | device, **required** | The Latter device to reset. Unlike the other per-device services, it doesn't fall back to the only device when left out. |
-| `device_settings` | boolean, default `true` | Calls the device's `latter_factory_reset` action. The device erases everything it has saved (all its settings, plus the Wi-Fi driver's cached network data and RF calibration) and restarts. Wi-Fi credentials and the API key are compiled into the firmware, so the device rejoins Home Assistant by itself. Needs Latter firmware SDK rev 2026110261 or later; older firmware returns an error asking you to update. Not available for BLE tags. |
-| `latter_options` | boolean, default `true` | Puts this device's Latter options (everything set in Studio for it, such as group, dock apps, default speaker, default area, BLE tracking, wallpaper and color) back to the defaults it got when it was added. Kept: the bound ESPHome device and its MAC address, the device slug, and the Music Assistant player link. For a BLE tag, its name and tracked address are kept. System-wide settings aren't touched. |
-
-The request is checked before anything changes. Latter options are reset first, then the device action is sent.
+### `latter.device_hello` & `latter.timer_alarm_state` *(device-reported RPCs)*
+- **`latter.device_hello`** (`contract`, `boot_id`, `manifest`, `prefs_seq`, `dirty_prefs`): handshake emitted by firmware on API connect and `latter_ping` to register Hardware Manifest v2, check boot health, reconcile offline NVS preference edits, and push fresh Protocol v3 domains.
+- **`latter.timer_alarm_state`** (`timer_running`, `timer_paused`, `remaining_sec`, `ringing`): event-driven update emitted by firmware on timer/alarm transitions to drive `timer_active`, `timer_remaining` (1 Hz local tick), and `alarm_ringing` without background polling.

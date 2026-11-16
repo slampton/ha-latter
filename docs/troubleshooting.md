@@ -6,7 +6,7 @@
 
 Latter discovers devices from Home Assistant's device and service registries, not from the network. Check these in order:
 1. **The device is in the ESPHome integration and online.** Latter needs the ESPHome device first.
-2. **The device registers at least one Latter action.** Look in **Developer Tools → Actions** for `esphome.<name>_latter_ping`, `esphome.<name>_latter_push_v3`, or `esphome.<name>_set_browse_slots`. If none of them are there, the device isn't running Latter firmware.
+2. **The device registers at least one Latter action.** Look in **Developer Tools → Actions** for `esphome.<name>_latter_ping`, `esphome.<name>_latter_push_v3`, or `esphome.<name>_latter_set_slots`. If none of them are there, the device isn't running Latter firmware.
 3. **A rescan has run.** Latter rescans 5 seconds after any device-registry change, and when ESPHome registers a new action. Reloading the ESPHome integration triggers a rescan.
 
 You can also add the device by hand: **Settings → Devices & Services → Add Integration → Latter**.
@@ -38,9 +38,9 @@ Latter serves images from Home Assistant's numeric LAN IP, because ESP32 firmwar
 
 **A roaming device never changes areas**
 - **Proxies lack an Area.** Every Bluetooth proxy must be assigned to an Area in Home Assistant. Home Assistant raises a repair issue, **"No Area-assigned Bluetooth proxies found"**, when Latter can't map any scanner to an area.
-- **Bluetooth area tracking is off.** Check that **Track the Area with BLE Proxies** was enabled when the device was added. To change it, use **Studio → Devices → your device → BLE & Area Presence → Track the Area with BLE Proxies**, or the device's **Reconfigure or Replace Hardware** entry under **Settings → Devices & Services → Latter**.
-- **The device's beacon is off.** Latter firmware ships with **Area: BLE Presence Beacon** off and Latter turns it on when the device connects with tracking enabled. If you turned the switch off by hand, reconnecting the device (or saving its options) turns it back on.
-- **Look at the live readings.** Open **Studio → BLE & Area Presence**. If an area never shows a reading, its proxy isn't hearing the device.
+- **Bluetooth area tracking is off.** Check that **Track the Area with BLE Proxies** is enabled in **Studio → Devices → your device → Presence → Track the Area with BLE Proxies** (or via **Reconfigure or Replace Hardware** under **Settings → Devices & Services → Latter**).
+- **The device's beacon is paused on battery.** On battery boards, check **BLE Beacon Mode** under **Studio → Devices → your device → Presence** (*Handheld Only* pauses advertising when the screen turns off on battery; choose *Handheld + Screen Off* or *Always* to advertise while the screen is off, and check the diagnostic **BLE Radio Active** binary sensor on the ESPHome device).
+- **Look at the live readings.** Open **Studio → System → BLE & Area Presence** and click **Live Stream On**. If an Area never shows a reading, its proxy isn't hearing the device.
 
 **The device keeps choosing the neighboring area**
 

@@ -1,96 +1,64 @@
 # HTTP API Reference
 
-Latter registers its HTTP endpoints under `/api/latter/`. Source: [`http.py`](../../custom_components/latter/http.py) (URL signing + all 7 `HomeAssistantView` classes), [`doorbell.py`](../../custom_components/latter/doorbell.py) (doorbell audio URL minting), and [`wallpapers.py`](../../custom_components/latter/wallpapers.py) (preset & uploaded wallpaper storage).
+Latter registers **7 `HomeAssistantView` endpoints** under `/api/latter/` ([`http.py`](../../custom_components/latter/http.py), [`doorbell.py`](../../custom_components/latter/doorbell.py), [`wallpapers.py`](../../custom_components/latter/wallpapers.py)).
 
-These endpoints exist so an ESP32 can fetch images and audio streams without Home Assistant's bearer token, and so Studio can stream multipart wallpaper uploads. Device media/image/audio requests are authorized by a scoped, expiring HMAC signature; Studio multipart uploads require an authenticated Home Assistant administrator session.
+Device media/audio endpoints exist so an ESP32 can fetch baseline JPEGs and FLAC streams over LAN HTTP without carrying a Home Assistant bearer token; Studio multipart wallpaper uploads use Home Assistant's authenticated administrator session.
 
-## URL signing
+---
 
-Latter keeps a 256-bit secret in `.storage/latter.site` (rotatable at any time via **Rotate Signing Key** in Studio). URLs carry a `sig` parameter of the form `<expiry>.<HMAC-SHA256, truncated to 128 bits>`. The signature covers the Device (its config subentry, or `system` for Studio system previews), the resource including the server-chosen render/filter parameters (for example `camera:camera.front_door|480|480|circle` or `camera_audio:camera.front_door|strong|flac`), and the expiry time. Signatures are compared in constant time (`http.py`).
+## URL Signing & LAN Resolution
 
-There are two expiry modes:
+Latter stores a 256-bit HMAC secret in `.storage/latter.site` (rotatable anytime via **Rotate Signing Key** in Studio). Unauthenticated resource URLs carry `sig=<expiry>.<128-bit HMAC-SHA256>`, binding the target scope (`<subentry_id>` or `system`), resource type, server-chosen dimensions/filters, and expiry timestamp, verified in constant time:
 
-- **Day-bucketed**, for URLs embedded in Protocol v3 payloads and Studio previews. The expiry is the first UTC midnight after the lifetime has passed, so every URL signed during one UTC day is identical. Payload content hashes stay stable and devices (and the Studio page) can cache images. Lifetimes are whole days.
-- **Exact**, for URLs minted on demand and never embedded in a payload. The URL expires exactly when its lifetime ends.
-
-| Resource | Mode | Lifetime | Actually valid for |
+| Endpoint / Resource | Auth / Expiry Mode | Lifetime | Signed Canonical Resource / Check |
 | :--- | :--- | :--- | :--- |
-| Artwork, wallpaper, camera snapshot, map | Day-bucketed | 48 hours (2 days) | 2 to 3 days |
-| Studio camera preview, wallpaper thumbnail | Day-bucketed | 48 hours (2 days) | 2 to 3 days |
-| Camera audio (doorbell listen stream) | Exact | 10 minutes | 10 minutes (a new URL is signed each time listening starts; the signature is checked when the stream opens) |
-| Studio multipart wallpaper upload | HA Admin Auth | Current session | Verified via Home Assistant `requires_auth = True` + `hass_user.is_admin` when `POST /api/latter/wallpaper/upload` receives the upload |
+| **Artwork** | Day-bucketed HMAC | 48 h (2–3 days to UTC midnight) | `artwork\|<w>\|<h>\|<shape>` |
+| **Wallpaper** (device & Studio preview) | Day-bucketed HMAC | 48 h (2–3 days to UTC midnight) | `wallpaper:<src>\|<w>\|<h>\|<shape>` |
+| **Camera snapshot** (device & Studio preview) | Day-bucketed HMAC | 48 h (2–3 days to UTC midnight) | `camera:<entity_id>\|<w>\|<h>\|<shape>` |
+| **Calendar event map** | Day-bucketed HMAC | 48 h (2–3 days to UTC midnight) | `map:<q>\|<w>\|<h>\|<shape>` |
+| **Doorbell camera audio** | Exact-expiry HMAC | 10 minutes | `camera_audio:<entity_id>\|<nr>\|<fmt>` |
+| **Studio wallpaper upload** | HA Admin `Bearer` | Current admin session | `requires_auth = True` + `hass_user.is_admin` |
+| **Brand icon** | Static public asset | — | Integration icon PNG (`GET /api/latter/brand/icon.png`) |
 
-You shouldn't build these URLs yourself. Latter publishes the image URLs, already signed, in its Protocol v3 payloads (`art_url` in `active_media`; `wallpaper_url`, `camera_snapshot_url`, `cameras_summary`, `alert_camera_url`, and `doorbell_audio_url` in `area_context`) and in the `latter.calendar_fetch` response (`map_url`).
+Day-bucketed signatures stay identical throughout a UTC day so Protocol v3 content hashes remain stable and devices avoid redundant image downloads. LAN IPv4 addresses are resolved asynchronously via `homeassistant.components.network.async_get_source_ip` (zero blocking sockets on the event loop) so ESP32 clients never hit `.local` mDNS names.
 
-URLs use Home Assistant's numeric LAN IPv4 address, not a `.local` name. Latter resolves the LAN IPv4 address asynchronously on an executor thread (zero event-loop socket calls) and caches it until Home Assistant's core config changes.
+---
 
-## Image output
+## Baseline JPEG Transcoding
 
-Every image endpoint returns a **baseline (non-progressive) JPEG with 4:2:0 chroma subsampling**, center-cropped to the device's panel resolution (from its hardware manifest). On round displays (`shape=circle` in the signed resource), a circular mask is applied over black. Decoding and encoding run in an executor thread, so they never block Home Assistant's event loop.
+Every image endpoint decodes and re-encodes on an executor thread as a **baseline (non-progressive) 4:2:0 JPEG** cropped to the panel's dimensions (`<= 480×480` for artwork, `<= 720×720` via `WALLPAPER_MAX_DIM` for wallpapers), applying a circular mask over black when `shape=circle`:
 
-| Source | Resampling | JPEG quality |
-| :--- | :--- | :--- |
-| Artwork, wallpaper | Lanczos | 85, optimized |
-| Live camera | Bilinear | 72 above 300k pixels, otherwise 80 |
-| Map | — | 86 |
-
-The device converts the JPEG to RGB565 itself, using ESPHome's `online_image`.
+| Source | Resampling | JPEG Quality | Notes |
+| :--- | :--- | :--- | :--- |
+| **Artwork & Wallpapers** | Lanczos | `85`, optimized | External art fetches cap at 8 MB and reject private/loopback/link-local IPs; wallpapers dim to 78% brightness for text contrast |
+| **Live Camera** | Bilinear | `72` (`> 300k` px) / `80` | Backed by `_LiveCameraFeeds` predictive prefetcher (`0.2 s` min gap, `2.0 s` max age, up to 8 active feeds, `Cache-Control: private, no-store`) |
+| **Calendar Map** | Direct tile stitch | `86` | 3×3 OpenStreetMap tile grid + Nominatim geocoding pin (home coordinates are never plotted) |
 
 ---
 
 ## Endpoints
 
-### `GET /api/latter/artwork/{slug}`
-Album art for the device's active speaker. Latter tries `entity_picture_local`, then `entity_picture`, then `media_image_url`, and keeps the last good image when none of them work. External upstream fetches stream-cap downloads at **8 MB** and reject URLs resolving to private, loopback, or link-local IP addresses.
+### 1. `GET /api/latter/artwork/{target_device}`
+Serves active speaker album art (`entity_picture_local` → `entity_picture` → `media_image_url`, retaining the last valid frame across transient gaps).
+- **Query params:** `sig` (**required**), optional `m` / `v` cache buster, `w`, `h`, `shape`.
 
-| Param | Notes |
-| :--- | :--- |
-| `sig` | **Required.** Signed resource `artwork:<media_key>\|<w>\|<h>\|<shape>` |
-| `v` | Optional cache buster |
+### 2. `GET /api/latter/wallpaper/{target_device}`
+Serves a wallpaper for a Device subentry or `"system"` preview.
+- **Query params:** `sig` (**required**), `src` (`preset:<name>` across the **6 bundled photographic presets**—`forest_mountains`, `wheat_field`, `ocean_waves`, `sahara_dunes`, `andromeda_galaxy`, `mars_crater`—or `upload:<file>` from `.storage/latter/wallpapers/`), optional `w`, `h`, `shape`.
 
-### `GET /api/latter/wallpaper/{slug}`
+### 3. `POST /api/latter/wallpaper/upload`
+Accepts a `multipart/form-data` photo upload up to **15 MB** from Latter Studio (`XMLHttpRequest` with `Authorization: Bearer <token>`), center-crops and stores a `960×960` master JPEG in `.storage/latter/wallpapers/` without hitting Home Assistant's 4 MB WebSocket frame limit, and returns the updated wallpaper catalog.
 
-| Param | Notes |
-| :--- | :--- |
-| `sig` | **Required.** Signed resource `wallpaper:<src>\|<w>\|<h>\|<shape>` |
-| `src` | `preset:<name>` for one of the 5 generated presets, or `upload:<slug>/<file>` for an uploaded photo in Latter's private storage (`.storage/latter/wallpapers/`). Anything else is rejected. Without `src`, the device's current wallpaper is served. |
+### 4. `GET /api/latter/camera/{target_device}`
+Serves a baseline-JPEG snapshot from a configured camera.
+- **Query params:** `sig` (**required**, binding `entity_id`, `w`, `h`, `shape`), `entity_id`, `w`, `h`, `shape`, optional `rot` (`0` \| `90` \| `180` \| `270`).
 
-Photos are darkened to 78% brightness so text stays readable on top of them.
+### 5. `GET /api/latter/camera_audio/{target_device}` *(experimental)*
+Streams a camera's RTSP audio through `ffmpeg` (`-t 120`, `-rw_timeout 5000000`) at the device manifest's sample rate and channel count (48 kHz mono FLAC on current boards), minted on demand by `doorbell.py` and dispatched to `media_player.play_media` (at most 2 concurrent streams system-wide; `429` when full).
+- **Query params:** `sig` (**required**, binding `entity_id`, `nr`, `fmt`), `entity_id`, `nr` (`strong` \| `light` \| `off`), `fmt` (`flac` \| `wav`).
 
-### `GET /api/latter/camera/{slug}`
-A snapshot from a camera configured for this device. The camera `entity_id` and target dimensions are bound inside the signed resource (`camera:<entity_id>|<w>|<h>|<shape>`); a missing or invalid signature returns `403`, and an unconfigured camera returns `404`.
+### 6. `GET /api/latter/map/{target_device}`
+Renders a 3×3 OpenStreetMap event map (`sig` **required**, `q` address/`lat,lon`/zone, `z` `10–18` default `15`, `pan_x` & `pan_y` clamped to `±4` tiles).
 
-| Param | Notes |
-| :--- | :--- |
-| `sig` | **Required.** Signed resource `camera:<entity_id>\|<w>\|<h>\|<shape>` |
-
-Responses are cached for 200 ms and sent with `Cache-Control: no-store`.
-
-### `GET /api/latter/map/{slug}`
-A map of a calendar event's location, stitched from a 3×3 grid of OpenStreetMap tiles, with a pin for the event location (Home Assistant's home coordinates are never plotted).
-
-| Param | Notes |
-| :--- | :--- |
-| `sig` | **Required.** Signed resource `map:<q>\|<w>\|<h>\|<shape>` |
-| `q` | An address, `lat,lon`, or a zone name. Addresses are geocoded with Nominatim. |
-| `z` | Zoom level, 10–18. Default 15. |
-| `pan_x`, `pan_y` | Clamped to `±4` tiles |
-
-### `GET /api/latter/camera_audio/{slug}` *(experimental)*
-Streams a camera's RTSP audio through `ffmpeg` with a noise-reduction filter chain (`-t 120` 120-second maximum stream duration and `-rw_timeout 5000000` 5-second RTSP I/O timeout). The sample rate and channel count come from the device's hardware manifest (`audio.out_rate`, `audio.out_ch`), so current Latter boards get 48 kHz mono. Latter firmware requests FLAC. If the camera has no stream source or `ffmpeg` isn't available, a short silent WAV is returned.
-
-| Param | Notes |
-| :--- | :--- |
-| `sig` | **Required.** Short-lived (10 min) signed resource `camera_audio:<entity_id>\|<nr>\|<fmt>` |
-| `nr` | `strong` (default), `light`, or `off` (bound into `sig`; tampering returns `403`) |
-| `fmt` | `flac` (default) or `wav` (bound into `sig`; tampering returns `403`) |
-
-The noise-reduction filter level (`strong`, `light`, or `off`) and output format (`flac` or `wav`) are both bound inside the signed resource minted by `doorbell.py` (`coordinator.build_camera_audio_url(cam_ent, nr_norm, "flac")`). Opening a new stream on a Device terminates any prior stream on that same Device; at most 2 streams can run concurrently across the System (`429` when full).
-
-### `POST /api/latter/wallpaper/upload`
-Accepts a `multipart/form-data` photo upload (up to **15 MB**) from Latter Studio (`XMLHttpRequest`), authorized by Home Assistant's bearer-token session (`requires_auth = True` + `hass_user.is_admin`), validates and stores the image under `.storage/latter/wallpapers/`, and returns the refreshed wallpaper catalogs without touching Home Assistant's 4 MB WebSocket frame limit.
-
-### Studio
-Studio is a `panel_custom` web component at `/latter` (admin only), loaded from the single versioned static path `/latter_ui_<version>` (for example `/latter_ui_3_0_0`). Aside from `POST /api/latter/wallpaper/upload`, it talks to Home Assistant exclusively through admin-gated WebSocket commands: `latter/system/*` (`get_state`, `subscribe`, `command`, `export`, `import`) and `latter/device/*` (`command`, `export`, `import`, `reset`). These are internal, not a stable API.
-
-One unauthenticated branding asset is also served: `GET /api/latter/brand/icon.png`. Studio's sidebar icon is a static frontend module (`/latter_ui_<version>/latter-icons.js?v=<content hash>`), served like the panel JavaScript and loaded by Home Assistant on every page; it only defines the `latter:logo` icon.
+### 7. `GET /api/latter/brand/icon.png` & Studio Static Mount
+Serves the integration brand icon, alongside the content-hashed admin `panel_custom` bundle mounted at `/latter_ui_<version>` (`latter-studio.js` and `latter-icons.js`). Aside from `POST /api/latter/wallpaper/upload`, Studio communicates exclusively over admin-gated WebSocket commands (`latter/system/*` and `latter/device/*`, version-locked via `STUDIO_REV`).

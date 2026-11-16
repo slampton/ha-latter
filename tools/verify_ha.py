@@ -2,7 +2,7 @@
 """Cross-platform static architecture, security, Studio, and HA compliance verifier for ha-latter.
 
 Runs in <1 second with Python 3.11+ standard library only (zero third-party dependencies),
-enforcing the 28-module topology, AST security/identity invariants, pyproject/manifest parity,
+enforcing the 31-module topology, AST security/identity invariants, pyproject/manifest parity,
 and Latter Studio guardrails identically in local development and GitHub Actions CI.
 """
 

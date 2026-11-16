@@ -121,3 +121,39 @@ actions:
       target_device: pocket_assistant
       area_id: kitchen       # the speaker follows if the device's "Media Follows This Device" setting is on
 ```
+
+## Wake bedroom lights when an on-device alarm rings
+
+Every display exposes sleep-safe **Alarm Ringing**, **Timer Active**, and **Timer Remaining** entities on its Latter device:
+
+```yaml
+alias: Sunrise lamp on Wrist Assist alarm
+triggers:
+  - trigger: state
+    entity_id: binary_sensor.wrist_assist_alarm_ringing
+    to: "on"
+actions:
+  - action: light.turn_on
+    target:
+      area_id: bedroom
+    data:
+      brightness_pct: 40
+      transition: 30
+```
+
+## Change power profile or wake-word mode on a schedule (even while sleeping)
+
+Because `select.<slug>_power_profile`, `select.<slug>_wake_word_mode`, and `number.<slug>_alert_volume` write to the Device's sleep-safe subentry (`device_prefs`), automations succeed even if a battery handheld is currently hibernating:
+
+```yaml
+alias: Quiet bedside alert volume at night
+triggers:
+  - trigger: time
+    at: "22:30:00"
+actions:
+  - action: number.set_value
+    target:
+      entity_id: number.pocket_assistant_alert_volume
+    data:
+      value: 35
+```

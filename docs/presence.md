@@ -23,7 +23,7 @@ Latter tracks which area each device is in using the Bluetooth proxies you alrea
 
 Latter parses Apple-format iBeacons only. Eddystone and AltBeacon frames are not supported.
 
-Latter firmware ships with the device's **Area: BLE Presence Beacon** switch off, so a new or reset device doesn't advertise until presence is set up. For a device with **Track the Area with BLE Proxies** on, Latter provisions the System's random 128-bit BLE UUID and turns the beacon on whenever the device connects, and turns it off when you switch tracking off in Studio or the device's options. Roaming Latter devices also pause `latter_beacon` automatically whenever Wi-Fi is disconnected (`!wifi_connected`), preventing off-site public BLE tracking and saving battery.
+Latter firmware ships with its BLE presence beacon inactive out of the box so a new or reset device doesn't advertise until presence is configured. When **Track the Area with BLE Proxies** is enabled, Latter provisions the System's random 128-bit BLE UUID (`latter_set_beacon_uuid`) and enables advertising via Protocol v3 (`device_prefs.ble_beacon_enabled`), with battery duty tuned in **Studio → Devices → Presence → BLE Beacon Mode** (*Handheld Only*, *Handheld + Screen Off*, or *Always*). Roaming Latter devices also pause `latter_beacon` automatically whenever Wi-Fi is disconnected (`!wifi_connected`), preventing off-site public BLE tracking and saving battery.
 
 To link a tracked device to a person, set **Assigned person** on the device's Overview page. You'll get `sensor.<person>_current_area` and `sensor.<person>_ble_distance`, which follow whichever of that person's devices was heard most recently, plus `device_tracker.<slug>` (`home` / `not_home`) on each tracked device so you can attach it to a `person` entity in Home Assistant (**Settings → People**) for Home/Away zone tracking.
 
@@ -52,9 +52,9 @@ All of these values — BLE RSSI smoothing, hysteresis, calibration, and Area se
 Walls, furniture, and antenna orientation mean the nearest proxy isn't always the loudest one.
 
 1. Open **Studio → System → BLE & Area Presence** and select a device in **Per-Area BLE Signal Calibration**.
-2. Turn on **Fast Refresh**.
-3. Carry the device into an area and watch the effective RSSI for each area.
-4. If the wrong area wins, click **Calibrate Current Area**. Latter sets this area's offset so it beats the strongest competitor by 6 dB. Use ±1 dB to fine-tune.
+2. Click **Live Stream On**.
+3. Carry the device into an Area and watch the effective RSSI for each Area.
+4. If the wrong Area wins, click **Calibrate Current Area**. Latter sets this Area's offset so it beats the strongest competitor by 6 dB. Use ±1 dB to fine-tune.
 
 Offsets are **per area and shared by every tracked device**. This is the main simplification compared with per-scanner calibration. See [known limitations](#known-limitations).
 
@@ -87,7 +87,7 @@ Sensors are discovered automatically by device class (occupancy, presence, motio
 
 ## What Latter does with the area
 
-- **Moves the device's Home Assistant Area.** When a roaming device (one whose hardware reports it isn't stationary) with **Voice Follows Me** on changes areas, Latter updates that device's Area in the registry after it has stayed in the new area for the device's **Voice Follows Me Delay** (10 s by default, 3 to 60 s, set in Studio under **Audio**), so Assist's area-aware commands target where you are. Picking an area on the device applies immediately. Latter never clears the Area when the device goes away, and never moves stationary devices. You can turn this off per device.
+- **Moves the device's Home Assistant Area (and syncs static Assigned Areas).** When a roaming device (`stationary == 0`) with **Voice Follows Me** on changes Areas, Latter updates both the bound ESPHome device's and child Latter device's Area in the registry after the device's **Voice Follows Me Delay** (10 s default, 3–60 s in Studio under **Audio**), so Assist's area-aware commands target where you stand. When **Track the Area with BLE Proxies** is turned off, Studio's **Assigned Area** stays synced two-way with Home Assistant's Device Area instead.
 - **Scopes Area Control** on the device to the current area.
 - **Moves media with the device**, when its **Media Follows This Device to Its New Area** setting is on (Studio, **Audio**): the device's speaker switches to the new area's speaker and music that's playing moves along. The same setting applies when you pick an area on the device. After the device reconnects, Latter re-syncs its area without moving media.
 - **Routes notifications and intercom.** `target_device: occupied_areas` delivers to devices in occupied areas; if no area is occupied, nothing is delivered. See [services](reference/services.md#special-target-values).

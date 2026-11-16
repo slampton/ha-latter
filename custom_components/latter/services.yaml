@@ -772,9 +772,9 @@ set_dock_apps:
           integration: latter
     dock_apps:
       name: Dock Apps
-      description: Comma-separated apps in order, from music, alarm, area, remote, camera, games, tools.
+      description: Comma-separated apps in order, from music, home_hub, area, remote, weather, time, camera, games, tools.
       required: true
-      example: "music,alarm,area,remote,games,tools"
+      example: "music,home_hub,area,remote,games,tools"
       selector:
         text:
 

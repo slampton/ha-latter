@@ -1,6 +1,6 @@
 # `ha-latter` Agent & Contributor Guide (`v3.0.0`)
 
-`ha-latter` (`Apache-2.0`, Home Assistant 2026.11+) is the local-push Home Assistant middleware and **Latter Studio** control plane for Latter ESPHome Devices and the Bluetooth Area presence fabric.
+`ha-latter` (`Apache-2.0`, Home Assistant 2026.10+) is the local-push Home Assistant middleware and **Latter Studio** control plane for Latter ESPHome Devices and the Bluetooth Area presence fabric.
 
 ---
 
@@ -48,7 +48,7 @@ Do **not** create backward-compatibility shims, `try/except ImportError` wrapper
 ## 2. Non-Negotiable Engineering Invariants
 
 1. **Strict Bound Identity**: Every Latter display subentry stores `esphome_device_id` and MAC, declaring `identifiers={(DOMAIN, format_mac(mac))}` and `via_device_id`. Resolve ESPHome entities, `esphome.<node>_*` services, Music Assistant players, Areas, and camera sibling speakers strictly by exact ID/MAC—never by substring or first-device fallback. Never assign `self.device_entry` directly.
-2. **Foreign Registry & Security Boundaries**: Never mutate devices or entities owned by other integrations. *Sole exception*: `areas.py:sync_esphome_device_area` updates `area_id` on the Device's own bound `esphome_device_id` (and child `via_device` Latter Device) either for roaming Devices (`stationary == 0`) with **Voice Follows Me** enabled or when an administrator explicitly sets a Static **Assigned Area** in Studio (`not native_ble_tracking`). Lock and alarm commands require explicit verbs (`lock`/`unlock`, `arm_*`/`disarm`—never `toggle`).
+2. **Foreign Registry & Security Boundaries**: Never mutate devices or entities owned by other integrations. *Sole exception*: `areas.py:sync_esphome_device_area` updates `area_id` on the Device's own bound `esphome_device_id` (and child `via_device` Latter Device) either for roaming Devices (`stationary == 0`) with **Voice Follows Me** enabled or when an administrator sets a Static **Assigned Area** (`not native_ble_tracking`, synced two-way with Home Assistant's Device Registry). Lock and alarm commands require explicit verbs (`lock`/`unlock`, `arm_*`/`disarm`—never `toggle`); `alarm_control_panel` codes pass straight through per `alarm_caps`, while opening locks, garage covers, and code-less alarms enforce `security_pin_policy` (`auto` / `allow` / `require_pin` / `block`, Device PIN with System PIN fallback).
 3. **Signed HTTP Views**: Every unauthenticated `/api/latter/*` view verifies a scoped HMAC `sig` binding all server-chosen parameters (`camera_audio:<entity_id>|<nr>|<fmt>`, `camera:<entity_id>|<w>|<h>|<shape>`, etc.). `POST /api/latter/wallpaper/upload` requires an authenticated Home Assistant admin user. Resolve LAN IPv4 asynchronously without blocking sockets on the event loop.
 4. **Latter Studio (`frontend_src/` -> `custom_components/latter/frontend/latter-studio.js`)**: Follow [`docs/studio-design.md`](docs/studio-design.md). Use HA CSS theme variables in `:host`, `websocket_api` (`hass.callWS`) for all state/commands (except multipart XHR to `/api/latter/wallpaper/upload`), and never touch `localStorage.hassTokens`, `hass-subpage`, or shadow-root internals.
 5. **Terminology & Translations**: Use Home Assistant terminology (`System`, `Sites`, `Areas`, `Devices`, `Roles`, `Policies`, `Bridges`). Keep `strings.json` and `translations/en.json` byte-identical.

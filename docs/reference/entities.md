@@ -1,83 +1,75 @@
 # Entities Reference
 
-All Latter entities are push-updated: none of them poll. Per-device entities sit on a **Latter** device card (`_attr_has_entity_name = True`) that is linked to the ESPHome device through `via_device`.
+All Latter entities are pure local-push—none of them poll. Per-device entities sit on a **Latter** device card (`_attr_has_entity_name = True`) linked to the bound ESPHome device through `via_device`.
 
-Protocol v3 domain payloads (`active_media`, `area_context`, `weather_forecast`, `calendar_agenda`, `remote_config`) push directly to the bound ESPHome device over the Native API via `esphome.<node>_latter_push_v3` (`domain`, `payload`)—keeping `~8 KB` of signed URLs off Home Assistant's `state_changed` bus and SQLite recorder. The corresponding diagnostic sensors in Home Assistant expose `<255`-character human-readable states and only `rev` (`_unrecorded_attributes = {"rev"}`). Source: [`sensor.py`](../../custom_components/latter/sensor.py), [`binary_sensor.py`](../../custom_components/latter/binary_sensor.py), [`device_tracker.py`](../../custom_components/latter/device_tracker.py).
+## 3-Tier Entity Architecture
 
-Latter creates **sensor**, **binary_sensor**, and **device_tracker** entities only. There are no `switch` or `select` platforms. A device's own settings (such as wake word or clock face) and its outbound Zero-Privilege RPC channel (**System: RPC Outbox**, `sensor.<node>_system_rpc_outbox`) are ESPHome entities on the bound ESPHome device. They are listed in [esphome-latter-core: Using your device](https://github.com/slampton/esphome-latter-core/blob/main/docs/using-your-device.md).
+Latter spans **6 Home Assistant platforms** ([`sensor.py`](../../custom_components/latter/sensor.py), [`binary_sensor.py`](../../custom_components/latter/binary_sensor.py), [`device_tracker.py`](../../custom_components/latter/device_tracker.py), [`select.py`](../../custom_components/latter/select.py), [`number.py`](../../custom_components/latter/number.py), [`button.py`](../../custom_components/latter/button.py)) organized into three clean tiers:
+
+1. **Tier 1 — Hardware & OS Entities on the Bound `ESPHome` Device:** `Music` (Sendspin `media_player`), Assist satellite + `Wake word` / `Wake word 2` selects, `Display: Screen Backlight`, `Project Firmware`, battery/USB telemetry, `System: RPC Outbox`, `System: Hardware Manifest`, `System: Link Report`, and hardware diagnostics. → [Using your device](https://github.com/slampton/esphome-latter-core/blob/main/docs/using-your-device.md)
+2. **Tier 2 — Sleep-Safe Automation Surface on the `Latter` Device:** curated presence, timer/alarm, config, and quick-action entities backed by the Device's subentry—staying available for automations even while a battery device is asleep or hibernating.
+3. **Tier 3 — Studio Preferences (`device_prefs` Protocol v3 Domain):** all **50 typed device preferences** (`studio/settings.py`) push directly over `esphome.<node>_latter_push_v3` across **6 Protocol v3 domains**, keeping `~8 KB` of signed URLs and preference blobs off Home Assistant's `state_changed` bus and SQLite recorder.
 
 ---
 
-## Per device
+## Per-Device Entities (`Latter` Device)
 
-`<slug>` is the device slug, for example `pocket_assistant`. BLE tags (phones, watches and tags added as **BLE Tag** entries) get only the three entities marked ★.
+`<slug>` is the normalized device slug (for example `pocket_assistant`). **BLE Tag** entries (phones, watches, and iBeacons) create only the three entities marked ★; hardware traits in the device's manifest (`display`, `mic`, `spk`, `beacon`) gate the others.
 
-| Entity | State | Key attributes | Updates when |
+### Visible Automation & Control Entities
+
+| Entity | Platform / Category | State / Range | Key Attributes & Update Trigger |
 | :--- | :--- | :--- | :--- |
-| ★ `device_tracker.<slug>` | `home`, `not_home`, or `unknown` | `area_id`, `area_name`, `closest_proxy`, `distance_ft`, `distance_m`, `rssi`, `assigned_person` | A BLE reading arrives, or the device goes away |
-| ★ `sensor.<slug>_current_area` | Area name, `Away`, or `Unassigned` | `area_id`, `is_home`, `closest_proxy`, `distance_ft`, `distance_m`, `rssi`, `assigned_person` | The area changes, or the device goes away |
-| ★ `sensor.<slug>_ble_distance` | Feet (device class `distance`) | `area_id`, `is_home`, `closest_proxy`, `distance_ft`, `distance_m`, `rssi`, `assigned_person` | A BLE reading arrives |
-| `sensor.<slug>_active_media` | `off`, `idle`, `playing`, `paused`, `buffering` | `rev` (Protocol v3 `active_media` pushes directly via `latter_push_v3`: active/local speaker, volume entity, playback state, title, artist, album, duration, position, volume, media type, and signed `art_url`) | The speaker's state changes. While playing, there is also a position update every 15 s; the device interpolates between updates. |
-| `sensor.<slug>_area_context` | Current area name | `rev` (Protocol v3 `area_context` pushes directly via `latter_push_v3`; see [below](#protocol-v3-domain-payloads-latter_push_v3)) | Any mapped entity changes (indexed in `O(1)` by `AreaStateIndex`, debounced to 250 ms) |
-| `sensor.<slug>_weather_forecast` | The weather entity's current condition | `rev` (Protocol v3 `weather_forecast` pushes directly via `latter_push_v3`: current weather, up to 5 `day\|cond\|high\|low` daily records, `sun_state`, `sun_elevation`, `sun_azimuth`, `sun_next_rising`, `sun_next_setting`, and `moon_phase`) | The weather or sun state changes, and every 30 min |
-| `sensor.<slug>_calendar_agenda` | Number of upcoming events (up to 25) | `rev` (Protocol v3 `calendar_agenda` pushes directly via `latter_push_v3`: up to 5 `time\|title\|location\|all_day` records, event count, and next event) | Every 15 min |
-| `sensor.<slug>_remote_config` | Active remote slot name | `rev` (Protocol v3 `remote_config` pushes directly via `latter_push_v3`: active slot, configured count, and up to 10 `index\|label\|entity_id\|kind\|area_id\|state` slot records) | Remote entities change |
+| ★ `device_tracker.<slug>_ble_tracker` *(or `device_tracker.<slug>`)* | `device_tracker` | `home`, `not_home`, `unknown` | `area_id`, `area_name`, `closest_proxy`, `distance_ft`, `distance_m`, `rssi`, `assigned_person` — updates on BLE readings and away timeout |
+| ★ `sensor.<slug>_current_area` | `sensor` | Area name, `Away`, `Unassigned` | `area_id`, `is_home`, `closest_proxy`, `distance_ft`, `distance_m`, `rssi`, `assigned_person` — updates on Area change or away |
+| ★ `sensor.<slug>_ble_distance` | `sensor` (`distance`) | Feet / meters | Same attributes as `current_area` — updates on BLE readings |
+| `binary_sensor.<slug>_timer_active` | `binary_sensor` (`running`) | `on` / `off` *(display devices)* | `paused`, `remaining_seconds` — event-driven via `latter.timer_alarm_state` |
+| `sensor.<slug>_timer_remaining` | `sensor` (`duration`, `s`) | Remaining seconds *(display devices)* | `running`, `paused` — ticked locally at 1 Hz in Home Assistant while running (zero Wi-Fi polling) |
+| `binary_sensor.<slug>_alarm_ringing` | `binary_sensor` (`sound`) | `on` / `off` *(display devices)* | Asserts while an on-device alarm or timer chime is ringing (`latter.timer_alarm_state`) |
+| `select.<slug>_power_profile` | `select` (`config`) | *Portable Carry* · *Handheld Roaming* · *Wearable Watch* · *Tabletop Dock* · *Always-On Wall / Desk* · *Custom* | Sleep-safe subentry control *(display devices)*; syncs via `device_prefs` |
+| `select.<slug>_wake_word_mode` | `select` (`config`) | *Docked Only* · *Always On* · *Disabled* | Sleep-safe subentry control *(mic-equipped devices)*; syncs via `device_prefs` |
+| `number.<slug>_alert_volume` | `number` (`config`) | `20–100%` (step `5%`) | Sleep-safe chime/alarm volume *(speaker-equipped devices)*; syncs via `device_prefs` |
+| `button.<slug>_find_my_device` | `button` (`identify`) | Press | Dispatches `latter_device_command(command="find_my")` *(speaker-equipped devices)* |
+| `button.<slug>_activate_screensaver` | `button` | Press | Dispatches `latter_device_command(command="activate_screensaver")` *(display devices)* |
 
-### Protocol v3 domain payloads (`latter_push_v3`)
+### Hidden-by-Default Diagnostic Protocol v3 Sensors
 
-Latter pushes all five Protocol v3 domains directly to the bound ESPHome device through `esphome.<node>_latter_push_v3` (`domain`, `payload`). The largest domain, `area_context`, packs 41 positional Protocol v3 fields (`v3\x1f<epoch>\x1f<rev>\x1f...`), grouped like this:
+Enabled by default (`entity_registry_visible_default = False`, `EntityCategory.DIAGNOSTIC`, `_unrecorded_attributes`) on display devices so human-readable summaries remain inspectable without recording wire payloads in SQLite. Full wire schemas live in [`DEVICE_CONTRACT.md`](https://github.com/slampton/esphome-latter-core/blob/main/DEVICE_CONTRACT.md).
 
-| Group | Fields in `area_context` |
-| :--- | :--- |
-| Area | `area_id`, `area_name`, `area_temp`, `area_humidity`, `available_domains` |
-| Whole-home | `alarm_entity`, `alarm_state`, `thermostat_entity`, `thermostat_state`, `thermostat_temp`, `lock_entity`, `lock_state`, `garage_entity`, `garage_state`, `vacuum_entity`, `vacuum_state` |
-| Notification | `alert_id` (increments with each notification), `alert_title`, `alert_message`, `alert_priority`, `alert_duration`, `alert_chime`, `alert_camera_url` |
-| Appearance & Home | `wallpaper_url`, `theme_color_hex`, `dock_apps`, `activity_card`, `activity_sources` |
-| Cameras and doorbell | `camera_entity`, `camera_name`, `camera_snapshot_url`, `cameras_count`, `cameras_summary`, `doorbell_ring_state`, `doorbell_audio_url`, `doorbell_talk_state`, `doorbell_noise_reduction`, `intercom_targets_summary` |
-| Presence | `ble_closest_proxy`, `ble_rssi_by_area` |
-| Security | `security_pin_policy` (`allow` \| `require_pin` \| `block`, resolved from the Device's Studio Perimeter Security Policy) |
-
-The exact field indices and record formats (`cameras_summary`, `intercom_targets_summary`, `slots_summary`, `forecast_5d`, `summary`) are defined in [`protocol_v3.json`](../../custom_components/latter/protocol_v3.json) and specified in the [device protocol](https://github.com/slampton/esphome-latter-core/blob/main/docs/device-protocol.md).
-
----
-
-## Per person
-
-These are created when a device has an **Assigned person**.
-
-| Entity | State |
-| :--- | :--- |
-| `sensor.<person>_current_area` | The area of whichever of that person's devices was heard most recently |
-| `sensor.<person>_ble_distance` | That device's distance, in feet |
-
-> Don't give a device the same slug as a person's ID. The two `current_area` entity IDs would collide.
+| Entity | State (`< 255` chars) | Attributes | Pushed Domain (`latter_push_v3`) |
+| :--- | :--- | :--- | :--- |
+| `sensor.<slug>_area_context` | Active Area name | `rev` | **`area_context`:** `area_id`, `area_name`, `site_id`, `ble_closest_proxy`, `dock_apps`, `wallpaper_url`, `available_domains`, `area_temp`, `area_humidity`, `lights_on`, `covers_open`, whole-home states & capability bitmasks (`alarm_*` + `alarm_caps`, `thermostat_*` + `climate_caps`, `lock_*`, `garage_*`, `vacuum_*` + `vacuum_caps`), `alert_*`, `camera_snapshot_url`, `cameras_summary`, `doorbell_talk_state`, `intercom_targets_summary`, `activity_card`, `activity_sources`, `security_pin_policy`, `home_categories`, `area_icon`, `local_tz_info`, `world_clocks_summary` |
+| `sensor.<slug>_active_media` | `off`, `idle`, `playing`, `paused`, `buffering` | `rev` | **`active_media`:** active/local/last speaker, volume target, playback state, title, artist, album, duration, position, volume, media type, signed `art_url` |
+| `sensor.<slug>_weather_forecast` | Current weather condition | `rev` | **`weather_forecast`:** temperature, condition, high/low, humidity, wind, 5-day `forecast_5d` records, solar arc (`sun_*`), `moon_phase` |
+| `sensor.<slug>_calendar_agenda` | Upcoming event count (up to 25) | `rev` | **`calendar_agenda`:** `summary` (up to 5 `time\|title\|location\|all_day` records) and `count` |
+| `sensor.<slug>_remote_config` | Active remote slot label | `rev` | **`remote_config`:** active slot, configured count, and up to 10 `slots_summary` records |
+| `sensor.<slug>_device_prefs` | Current `prefs_seq` | `rev`, `prefs_seq` | **`device_prefs`:** `prefs_seq` plus all 50 typed device preferences (`power_profile` through `local_clock_label`, including `theme_color_hex`, `world_clocks`, and `alarms_summary`) |
 
 ---
 
-## Per area
+## Per-Person & Per-Area Entities
 
-Latter creates one of each for every area that has a Bluetooth scanner Latter can map. If none can be mapped, it creates them for every area.
+| Scope | Entity | State | Key Attributes |
+| :--- | :--- | :--- | :--- |
+| **Per Person** *(when a device has `Assigned Person`)* | `sensor.<person>_current_area` | Area of that person's most recently heard device | `area_id`, `device_slug`, `distance_ft`, `distance_m` |
+| **Per Person** | `sensor.<person>_ble_distance` | Distance (`ft` / `m`) | Same as above *(avoid giving a device the exact same slug as a `person` ID)* |
+| **Per Area** *(mapped BLE Areas)* | `binary_sensor.<area>_ble_occupancy` | `on` / `off` (`occupancy`) | `area_id`, `area_name`, `floor_id`, `fusion_mode`, `confidence_pct`, `ble_occupied`, `sensor_occupied`, `active_sensors`, `occupant_names`, `occupied_by`, `persons`, `closest_device`, `winning_rssi`, `closest_distance_m`, `closest_distance_ft`, `tracker_count` |
+| **Per Area** | `sensor.<area>_occupants` | Occupant summary, `Occupied (Sensor)`, or `Empty` | `area_id`, `area_name`, `is_occupied`, `occupant_count`, `occupant_names`, `occupied_by`, `persons` |
 
-| Entity | State | Attributes |
-| :--- | :--- | :--- |
-| `binary_sensor.<area>_ble_occupancy` | `on` / `off` (device class `occupancy`) | `floor_id`, `fusion_mode`, `confidence_pct`, `ble_occupied`, `sensor_occupied`, `active_sensors`, `occupant_names`, `persons`, `closest_device`, `winning_rssi`, `closest_distance_m`, `closest_distance_ft`, `tracker_count` |
-| `sensor.<area>_occupants` | `<255`-char occupant summary, `Occupied (Sensor)`, or `Empty` | Same as above (`occupant_count` and full `occupant_names` list) |
-
-These update on area transitions, on away events, when Area registry entries are created, renamed or removed, and when any tracked occupancy, presence, motion, door, or opening sensor changes. They don't update on sub-deadband RSSI changes alone. → [How fusion works](../presence.md#area-occupancy-and-sensor-fusion)
+→ [How sensor fusion works](../presence.md#area-occupancy-and-sensor-fusion)
 
 ---
 
-## `latter_event`
+## `latter_event` Bus Events & Area Registry Sync
 
-Latter fires this on the Home Assistant event bus.
+Latter fires **`latter_event`** on the Home Assistant event bus:
 
-| `type` | Fields |
+| `type` | Event Data Fields |
 | :--- | :--- |
 | `area_changed` | `device_slug`, `previous_area_id`, `area_id`, `assigned_person` |
 | `notification_dispatched` | `device_slug`, `title`, `message`, `priority`, `camera_url` |
+| `doorbell_ring` | `camera_entity`, `ring_entity` |
 
----
-
-## Voice Follows Me (Device Area Sync)
-
-Latter never modifies entities owned by other integrations. On roaming displays (`stationary == 0` in the hardware manifest) with **Voice Follows Me** enabled, Latter updates only the bound ESPHome device's Home Assistant Area after the device has remained in the new Area for the Device's dwell period (`area_follow_dwell_s` in the Device's subentry, 3 to 60 s, default 10 s; Studio's **Voice Follows Me Delay**), so area-less Assist voice commands target the Area you're in.
+**Device Registry Area Boundary (`areas.py:sync_esphome_device_area`):** Latter never mutates entities or devices owned by other integrations, with one documented exception—updating `area_id` on the Device's own bound ESPHome device (and mirroring it onto the child `via_device` Latter device):
+1. **BLE Roaming (`Track the Area with BLE Proxies` on):** on roaming hardware (`stationary == 0`) with **Voice Follows Me** enabled, after the device remains in the new Area for its dwell delay (3–60 s, default 10 s), so area-less Assist commands target where you stand.
+2. **Static Placement (`Track the Area with BLE Proxies` off):** synced two-way between Studio's **Assigned Area** and Home Assistant's Device Area.
