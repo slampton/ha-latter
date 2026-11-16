@@ -156,8 +156,8 @@ class TestViewLayout(unittest.TestCase):
         self.assertIn("Add BLE Tag", discovered_view)
         self.assertIn('id="latter-adopt-table-box"', discovered_view)
         self.assertIn('id="ble-adopt-table-box"', discovered_view)
-        self.assertEqual(latter_const.STUDIO_REV, 17)
-        self.assertIn("const STUDIO_REV = 17;", js)
+        self.assertEqual(latter_const.STUDIO_REV, 18)
+        self.assertIn("const STUDIO_REV = 18;", js)
         self.assertNotIn("fusion-area", js)
         self.assertNotIn("d.has_ble ||", js)
         self.assertNotIn(".area-presence-box.occupied", js)
@@ -220,6 +220,17 @@ class TestViewLayout(unittest.TestCase):
             area_tracking_view.index('id: "card-ble-calibration"'),
             area_tracking_view.index('id="card-advanced-ble-settings"'),
         )
+        area_cols = area_tracking_view.split('<div class="column">')
+        self.assertEqual(len(area_cols), 3)
+        area_col_1, area_col_2 = area_cols[1], area_cols[2]
+        self.assertIn('id: "card-area-presence"', area_col_1)
+        self.assertNotIn('id="card-advanced-ble-settings"', area_col_1)
+        self.assertIn('id: "card-ble-calibration"', area_col_2)
+        self.assertIn('id="card-advanced-ble-settings"', area_col_2)
+        adv_close_idx = area_col_2.index(
+            "</details>", area_col_2.index('id="card-advanced-ble-settings"')
+        ) + len("</details>")
+        self.assertRegex(area_col_2[adv_close_idx:], r"^\s*</div>\s*</div>\s*$")
         for earlier_id, later_id in itertools.pairwise(adv_ble_order):
             self.assertLess(
                 area_tracking_view.index(f'id="{earlier_id}"'),

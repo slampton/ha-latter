@@ -1,5 +1,5 @@
 /**
- * System BLE & Area Presence View (`area_tracking`, `D-044` / `D-045`):
+ * System BLE & Area Presence View (`area_tracking`, `D-044` / `D-045` / `D-046`):
  * Area Presence & Sensors, Walk-Around BLE Calibration, and Advanced BLE Settings.
  */
 
@@ -523,107 +523,107 @@ export function renderSystemPresenceView(store: StudioStore): TemplateResult {
                         No Bluetooth proxy readings yet for this Device.
                       </p>`}`,
         })}
+
+        <details
+          id="card-advanced-ble-settings"
+          ?open=${store.advancedBleOpen}
+          @toggle=${(ev: Event) => {
+            store.advancedBleOpen = (ev.currentTarget as HTMLDetailsElement).open;
+          }}
+          class="card"
+        >
+          <summary class="card-header">
+            <div class="card-heading">
+              <h3 class="card-title">Advanced BLE Settings</h3>
+              <p class="card-subtitle">
+                System-wide away timeout, maximum proxy radius, movement speed damping, and path-loss attenuation.
+              </p>
+            </div>
+          </summary>
+          <div class="card-content settings-list">
+            ${renderSettingsRow({
+              forId: "sys-ble_away_timeout_s",
+              label: "Away Timeout",
+              description:
+                "Seconds without any Bluetooth packet before a tracked Tag or offline Device is marked Away.",
+              control: html`<input
+                type="number"
+                id="sys-ble_away_timeout_s"
+                min="30"
+                max="900"
+                step="15"
+                .value=${String(sysCfg?.ble_away_timeout_s ?? 180)}
+                @change=${(ev: Event) => {
+                  const val = Number((ev.currentTarget as HTMLInputElement).value);
+                  if (Number.isFinite(val)) {
+                    store.stageSystemSetting("ble_away_timeout_s", Math.round(val), "sys-ble_away_timeout_s");
+                  }
+                }}
+              />`,
+            })}
+            ${renderSettingsRow({
+              forId: "sys-ble_max_radius_m",
+              label: "Maximum Area Radius",
+              description:
+                "Ignores Bluetooth proxies farther than this distance in meters so outdoor signals do not claim indoor Areas.",
+              control: html`<input
+                type="number"
+                id="sys-ble_max_radius_m"
+                min="2"
+                max="50"
+                step="0.5"
+                .value=${String(sysCfg?.ble_max_radius_m ?? 12)}
+                @change=${(ev: Event) => {
+                  const val = Number((ev.currentTarget as HTMLInputElement).value);
+                  if (Number.isFinite(val)) {
+                    store.stageSystemSetting("ble_max_radius_m", val, "sys-ble_max_radius_m");
+                  }
+                }}
+              />`,
+            })}
+            ${renderSettingsRow({
+              forId: "sys-ble_max_velocity_mps",
+              label: "Maximum Movement Speed",
+              description:
+                "Damps sudden signal drops that imply movement faster than this speed in meters per second.",
+              control: html`<input
+                type="number"
+                id="sys-ble_max_velocity_mps"
+                min="0.5"
+                max="15"
+                step="0.5"
+                .value=${String(sysCfg?.ble_max_velocity_mps ?? 3.5)}
+                @change=${(ev: Event) => {
+                  const val = Number((ev.currentTarget as HTMLInputElement).value);
+                  if (Number.isFinite(val)) {
+                    store.stageSystemSetting("ble_max_velocity_mps", val, "sys-ble_max_velocity_mps");
+                  }
+                }}
+              />`,
+            })}
+            ${renderSettingsRow({
+              forId: "sys-ble_attenuation",
+              label: "Path-Loss Attenuation",
+              description:
+                "Controls how quickly Bluetooth signal strength drops with distance through walls (default 2.2).",
+              control: html`<input
+                type="number"
+                id="sys-ble_attenuation"
+                min="1.5"
+                max="4.5"
+                step="0.1"
+                .value=${String(sysCfg?.ble_attenuation ?? 2.2)}
+                @change=${(ev: Event) => {
+                  const val = Number((ev.currentTarget as HTMLInputElement).value);
+                  if (Number.isFinite(val)) {
+                    store.stageSystemSetting("ble_attenuation", val, "sys-ble_attenuation");
+                  }
+                }}
+              />`,
+            })}
+          </div>
+        </details>
       </div>
     </div>
-
-    <details
-      id="card-advanced-ble-settings"
-      ?open=${store.advancedBleOpen}
-      @toggle=${(ev: Event) => {
-        store.advancedBleOpen = (ev.currentTarget as HTMLDetailsElement).open;
-      }}
-      class="card"
-    >
-      <summary class="card-header">
-        <div class="card-heading">
-          <h3 class="card-title">Advanced BLE Settings</h3>
-          <p class="card-subtitle">
-            System-wide away timeout, maximum proxy radius, movement speed damping, and path-loss attenuation.
-          </p>
-        </div>
-      </summary>
-      <div class="card-content settings-list">
-        ${renderSettingsRow({
-          forId: "sys-ble_away_timeout_s",
-          label: "Away Timeout",
-          description:
-            "Seconds without any Bluetooth packet before a tracked Tag or offline Device is marked Away.",
-          control: html`<input
-            type="number"
-            id="sys-ble_away_timeout_s"
-            min="30"
-            max="900"
-            step="15"
-            .value=${String(sysCfg?.ble_away_timeout_s ?? 180)}
-            @change=${(ev: Event) => {
-              const val = Number((ev.currentTarget as HTMLInputElement).value);
-              if (Number.isFinite(val)) {
-                store.stageSystemSetting("ble_away_timeout_s", Math.round(val), "sys-ble_away_timeout_s");
-              }
-            }}
-          />`,
-        })}
-        ${renderSettingsRow({
-          forId: "sys-ble_max_radius_m",
-          label: "Maximum Area Radius",
-          description:
-            "Ignores Bluetooth proxies farther than this distance in meters so outdoor signals do not claim indoor Areas.",
-          control: html`<input
-            type="number"
-            id="sys-ble_max_radius_m"
-            min="2"
-            max="50"
-            step="0.5"
-            .value=${String(sysCfg?.ble_max_radius_m ?? 12)}
-            @change=${(ev: Event) => {
-              const val = Number((ev.currentTarget as HTMLInputElement).value);
-              if (Number.isFinite(val)) {
-                store.stageSystemSetting("ble_max_radius_m", val, "sys-ble_max_radius_m");
-              }
-            }}
-          />`,
-        })}
-        ${renderSettingsRow({
-          forId: "sys-ble_max_velocity_mps",
-          label: "Maximum Movement Speed",
-          description:
-            "Damps sudden signal drops that imply movement faster than this speed in meters per second.",
-          control: html`<input
-            type="number"
-            id="sys-ble_max_velocity_mps"
-            min="0.5"
-            max="15"
-            step="0.5"
-            .value=${String(sysCfg?.ble_max_velocity_mps ?? 3.5)}
-            @change=${(ev: Event) => {
-              const val = Number((ev.currentTarget as HTMLInputElement).value);
-              if (Number.isFinite(val)) {
-                store.stageSystemSetting("ble_max_velocity_mps", val, "sys-ble_max_velocity_mps");
-              }
-            }}
-          />`,
-        })}
-        ${renderSettingsRow({
-          forId: "sys-ble_attenuation",
-          label: "Path-Loss Attenuation",
-          description:
-            "Controls how quickly Bluetooth signal strength drops with distance through walls (default 2.2).",
-          control: html`<input
-            type="number"
-            id="sys-ble_attenuation"
-            min="1.5"
-            max="4.5"
-            step="0.1"
-            .value=${String(sysCfg?.ble_attenuation ?? 2.2)}
-            @change=${(ev: Event) => {
-              const val = Number((ev.currentTarget as HTMLInputElement).value);
-              if (Number.isFinite(val)) {
-                store.stageSystemSetting("ble_attenuation", val, "sys-ble_attenuation");
-              }
-            }}
-          />`,
-        })}
-      </div>
-    </details>
   </section>`;
 }
