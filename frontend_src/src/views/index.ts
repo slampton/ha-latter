@@ -11,6 +11,7 @@ import { renderDeviceOverviewView } from "./device-overview-view.js";
 import { renderDevicePowerView } from "./device-power-view.js";
 import { renderDevicePresenceView } from "./device-presence-view.js";
 import { renderDeviceToolsView } from "./device-tools-view.js";
+import { renderDevicesDiscoveredView } from "./devices-discovered-view.js";
 import { renderDevicesListView } from "./devices-list-view.js";
 import { renderSystemGroupsView } from "./system-groups-view.js";
 import { renderSystemOverviewView } from "./system-overview-view.js";
@@ -36,6 +37,10 @@ export function renderActiveView(store: StudioStore): TemplateResult {
       default:
         return renderSystemOverviewView(store);
     }
+  }
+
+  if (store.currentViewId === "discovered_devices") {
+    return renderDevicesDiscoveredView(store);
   }
 
   if (!store.deviceSelected || store.currentViewId === "select_device_prompt") {

@@ -110,6 +110,9 @@ class TestViewLayout(unittest.TestCase):
         self.assertNotIn("Power & Battery", names)
         self.assertNotIn("Settings", names)
         self.assertIn("Device Groups", names)
+        self.assertIn("Managed Devices", names)
+        self.assertIn("Discovered Devices", names)
+        self.assertNotIn("All Devices", names)
         for name in names:
             self.assertFalse(name.startswith("System "), name)
             if name != "Device Groups":
@@ -127,11 +130,33 @@ class TestViewLayout(unittest.TestCase):
         self.assertNotIn("nav-esp-badge", js)
         self.assertNotIn("set_device_remote_group", js)
         self.assertNotIn("assignDeviceRemoteGroup", js)
-        self.assertEqual(js.count('class="nav-badge"'), 1)
+        self.assertEqual(js.count('class="nav-badge"'), 2)
+        self.assertIn("<span>Managed</span>", js)
+        self.assertIn("<span>Discovered</span>", js)
+        self.assertIn("<span>&larr; Managed</span>", js)
+        self.assertNotIn("<span>&larr; All Devices</span>", js)
 
         def section(view: str) -> str:
             start = js.index(f'<section id="view-{view}"')
             return js[start:js.index("</section>", start)]
+
+        managed_list = section("select_device_prompt")
+        discovered_view = section("discovered_devices")
+        area_tracking_view = section("area_tracking")
+        self.assertNotIn("Add Device", managed_list)
+        self.assertNotIn("Add BLE Tag", managed_list)
+        self.assertIn('title: "Latter Devices"', discovered_view)
+        self.assertIn('title: "Bluetooth Devices"', discovered_view)
+        self.assertLess(
+            discovered_view.index('title: "Latter Devices"'),
+            discovered_view.index('title: "Bluetooth Devices"'),
+        )
+        self.assertIn("Open Integration", discovered_view)
+        self.assertIn("Add BLE Tag", discovered_view)
+        self.assertIn('id="latter-adopt-table-box"', discovered_view)
+        self.assertIn('id="ble-adopt-table-box"', discovered_view)
+        self.assertNotIn("Discovered Bluetooth Devices", area_tracking_view)
+        self.assertNotIn('id="ble-adopt-table-box"', area_tracking_view)
 
         tools, sys_tools, groups, overview, display_view, interface_view, remotes_view, shared_entities = (
             section("tools"),

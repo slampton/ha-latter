@@ -39,7 +39,7 @@ async def test_studio_rev_mismatch_on_all_read_and_mutation_endpoints(
     hass: Any, setup_latter_hub: Any
 ) -> None:
     """Verify studio_rev mismatch rejects BOTH read (get_state, subscribe) and mutation WS commands."""
-    assert STUDIO_REV == 13
+    assert STUDIO_REV == 14
     entry, _sys_obj, coord = await setup_latter_hub(hass)
     from homeassistant.helpers import area_registry as ar
 
@@ -467,5 +467,123 @@ async def test_studio_commands_security_pin_secrecy_groups_and_backup_restore(
         studio_rev=STUDIO_REV,
     )
     assert not conn.errors
+
+    assert await async_unload_entry(hass, entry) is True
+
+
+@pytest.mark.asyncio
+async def test_discovered_latter_devices_and_add_latter_device_command(
+    hass: Any, setup_latter_hub: Any, make_esphome_device: Any
+) -> None:
+    """Verify unbound ESPHome Latter discovery in Studio payload and one-click `add_latter_device` validation."""
+    import sys
+
+    from homeassistant.helpers import device_registry as dr
+
+    entry, _sys_obj, coord = await setup_latter_hub(hass)
+    # 1) Seed an unbound Latter ESPHome display + a non-Latter ESPHome plug
+    unbound_dev, _mac = make_esphome_device(
+        hass,
+        slug="kitchen_panel",
+        mac="aa:bb:cc:dd:ee:09",
+        name="Kitchen Panel",
+        area_id="kitchen",
+        stationary=1,
+        w=480,
+        h=480,
+        shape="square",
+    )
+    plain_esp_entry = hass.config_entries.add_entry(
+        sys.modules["homeassistant.config_entries"].ConfigEntry(
+            entry_id="esp_entry_plain_plug",
+            domain="esphome",
+            title="Plain Plug",
+            data={"device_name": "plain_plug"},
+        )
+    )
+    plain_dev = dr.async_get(hass).async_get_or_create(
+        config_entry_id=plain_esp_entry.entry_id,
+        connections={(dr.CONNECTION_NETWORK_MAC, "aa:bb:cc:dd:ee:99")},
+        identifiers={("esphome", "aa:bb:cc:dd:ee:99")},
+        name="Plain Plug",
+        manufacturer="espressif",
+        model="smart-plug",
+    )
+
+    conn = websocket_api.ActiveConnection()
+    await _call_ws(hass, conn, 1, "latter/system/get_state", studio_rev=STUDIO_REV)
+    st = conn.results[-1][1]
+    discovered = st["discovered_latter_devices"]
+    assert len(discovered) == 1
+    assert discovered[0] == {
+        "esphome_device_id": unbound_dev.id,
+        "node_name": "kitchen_panel",
+        "title": "Kitchen Panel",
+        "model_label": "kitchen_panel-board (480x480)",
+        "area_name": "Kitchen",
+        "default_group": "wall_panels",
+    }
+
+    # 2) Validation checks: missing id, non-Latter ESPHome device, already-managed device, unknown group, unknown person
+    bad_cases = [
+        ({}, "invalid_format"),
+        ({"esphome_device_id": plain_dev.id}, "not_latter_device"),
+        ({"esphome_device_id": coord.esphome_device_id}, "already_configured"),
+        ({"esphome_device_id": unbound_dev.id, "device_group": "bogus_grp"}, "not_found"),
+        ({"esphome_device_id": unbound_dev.id, "assigned_person": "person.nobody"}, "not_found"),
+    ]
+    for idx, (bad_payload, expected_code) in enumerate(bad_cases, start=10):
+        await _call_ws(
+            hass,
+            conn,
+            idx,
+            "latter/system/command",
+            command="add_latter_device",
+            payload=bad_payload,
+            studio_rev=STUDIO_REV,
+        )
+        assert conn.errors[-1][1] == expected_code
+        conn.errors.clear()
+
+    # 3) Valid one-click Studio adoption dispatches subentries.async_init for SUBENTRY_DEVICE
+    from types import SimpleNamespace
+
+    recorded_inits: list[tuple[Any, Any, Any]] = []
+    orig_subentries = getattr(hass.config_entries, "subentries", None)
+    orig_init = getattr(orig_subentries, "async_init", None)
+
+    async def _spy_subentry_init(
+        handler: Any, *, context: Any = None, data: Any = None
+    ) -> Any:
+        recorded_inits.append((handler, context, data))
+        if callable(orig_init):
+            return await orig_init(handler, context=context, data=data)
+        return {"type": "create_entry"}
+
+    if orig_subentries is not None:
+        orig_subentries.async_init = _spy_subentry_init
+    else:
+        hass.config_entries.subentries = SimpleNamespace(async_init=_spy_subentry_init)
+    await _call_ws(
+        hass,
+        conn,
+        30,
+        "latter/system/command",
+        command="add_latter_device",
+        payload={
+            "esphome_device_id": unbound_dev.id,
+            "device_group": "auto",
+            "assigned_person": "person.sean",
+        },
+        studio_rev=STUDIO_REV,
+    )
+    assert not conn.errors
+    assert len(recorded_inits) == 1
+    assert recorded_inits[0][0] == (entry.entry_id, "device")
+    assert recorded_inits[0][2] == {
+        "esphome_device_id": unbound_dev.id,
+        "device_group": "auto",
+        "assigned_person": "person.sean",
+    }
 
     assert await async_unload_entry(hass, entry) is True

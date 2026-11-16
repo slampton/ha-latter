@@ -29,7 +29,7 @@ export {
   ACTIVITY_SOURCES_CATALOG,
 };
 
-export const STUDIO_REV = 13;
+export const STUDIO_REV = 14;
 
 export const MAX_WALLPAPER_UPLOAD_BYTES = 15 * 1024 * 1024;
 
@@ -52,7 +52,8 @@ export const VIEW_TITLES = {
   system_sync: "Device Groups",
   area_tracking: "BLE & Area Presence",
   system_tools: "Tools",
-  select_device_prompt: "All Devices",
+  select_device_prompt: "Managed Devices",
+  discovered_devices: "Discovered Devices",
   dashboard: "Overview",
   display: "Display",
   interface: "Interface",
@@ -63,7 +64,7 @@ export const VIEW_TITLES = {
 };
 
 const _typecheckViewMaps: [
-  Record<Exclude<DeviceViewId, "select_device_prompt">, string>,
+  Record<Exclude<DeviceViewId, "select_device_prompt" | "discovered_devices">, string>,
   Record<SystemViewId, string>,
   Record<StudioViewId, string>,
 ] = [DEVICE_VIEW_SLUGS, SYSTEM_VIEW_SLUGS, VIEW_TITLES];

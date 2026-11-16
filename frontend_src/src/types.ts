@@ -6,6 +6,7 @@ export type StudioScope = "device" | "system";
 
 export type DeviceViewId =
   | "select_device_prompt"
+  | "discovered_devices"
   | "dashboard"
   | "display"
   | "interface"
@@ -154,6 +155,15 @@ export interface IssueItem {
   subentry_id?: string;
   device_title?: string;
   detail?: string;
+}
+
+export interface DiscoveredLatterDevice {
+  esphome_device_id: string;
+  node_name: string;
+  title: string;
+  model_label: string;
+  area_name: string;
+  default_group: string;
 }
 
 export interface DiscoveredBleCandidate {
@@ -413,6 +423,7 @@ export interface StudioStatePayload {
   system_devices: SystemDeviceEntry[];
   issues: IssueItem[];
   ble_proxy_count: number;
+  discovered_latter_devices?: DiscoveredLatterDevice[];
   discovered_ble_devices: DiscoveredBleCandidate[];
   system_controls: SharedControlItem[];
   device_groups: DeviceGroup[];

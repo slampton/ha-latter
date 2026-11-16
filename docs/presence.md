@@ -16,8 +16,8 @@ Latter tracks which area each device is in using the Bluetooth proxies you alrea
 
 | Target | How it's identified | How to add it |
 | :--- | :--- | :--- |
-| Latter firmware devices | The device's MAC address from Home Assistant's device registry (±2, to cover the ESP32 BLE MAC offset), paired with the unique 128-bit CSPRNG System BLE UUID (`latter_set_beacon_uuid`, saved in NVS) and verified `major` + `minor` + MAC identity (covering ESP32-P4 boards where BLE runs on a separate C6 chip while rejecting spoofed public UUIDs). | Check **Track the Area with BLE Proxies** when adding the device |
-| Phones and watches | Home Assistant's [Private BLE Device](https://www.home-assistant.io/integrations/private_ble_device/) integration resolves the rotating address from the device's IRK. Latter re-reads the current address every 2 seconds. | Set up Private BLE Device, then **Studio → BLE & Area Presence → Discovered Bluetooth Devices → Adopt** |
+| Latter firmware devices | The device's MAC address from Home Assistant's device registry (±2, to cover the ESP32 BLE MAC offset), paired with the unique 128-bit CSPRNG System BLE UUID (`latter_set_beacon_uuid`, saved in NVS) and verified `major` + `minor` + MAC identity (covering ESP32-P4 boards where BLE runs on a separate C6 chip while rejecting spoofed public UUIDs). | Adopt from **Studio → Devices → Discovered → Latter Devices** (or check **Track the Area with BLE Proxies** when adding the device) |
+| Phones and watches | Home Assistant's [Private BLE Device](https://www.home-assistant.io/integrations/private_ble_device/) integration resolves the rotating address from the device's IRK. Latter re-reads the current address every 2 seconds. | Set up Private BLE Device, then **Studio → Devices → Discovered → Bluetooth Devices → Adopt** |
 | iBeacons, including any ESPHome node running `esp32_ble_beacon` | UUID, or an `ibeacon` device tracker entity | Adopt from the same list, or enter the UUID |
 | Other BLE devices with a static address | MAC address | Adopt from the same list, or enter the MAC |
 

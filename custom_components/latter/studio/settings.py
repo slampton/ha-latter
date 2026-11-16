@@ -64,6 +64,7 @@ SYSTEM_COMMANDS: frozenset[str] = frozenset(
         "check_system_updates",
         "clear_internal_logs",
         "remove_device",
+        "add_latter_device",
         "add_ble_device",
         "create_device_group",
         "delete_device_group",

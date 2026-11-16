@@ -145,9 +145,11 @@ export class LatterStudio extends LitElement {
     const caps = data?.capabilities || {};
     const isBleOnly = data?.config?.kind === "ble_tag";
 
-    const items: Array<{ viewId: Exclude<DeviceViewId, "select_device_prompt">; label: string; id?: string }> = [
-      { viewId: "dashboard", label: "Overview" },
-    ];
+    const items: Array<{
+      viewId: Exclude<DeviceViewId, "select_device_prompt" | "discovered_devices">;
+      label: string;
+      id?: string;
+    }> = [{ viewId: "dashboard", label: "Overview" }];
     if (!isBleOnly && caps.has_display !== false) {
       items.push({ viewId: "display", label: "Display", id: "nav-btn-display" });
       items.push({ viewId: "interface", label: "Interface", id: "nav-btn-interface" });
@@ -167,7 +169,7 @@ export class LatterStudio extends LitElement {
         @click=${() => this.store.openDevicesLanding()}
         class="nav-btn nav-back-btn"
       >
-        <span>&larr; All Devices</span>
+        <span>&larr; Managed</span>
       </button>
       <div id="nav-selected-device-label" class="nav-device-title">
         ${data?.title || "—"}
@@ -191,7 +193,14 @@ export class LatterStudio extends LitElement {
   private _renderSidebar(): TemplateResult {
     const isDeviceScope = this.store.currentScope === "device";
     const deviceCount = (this.store.state?.system_devices || []).length;
-    const allDevicesActive = isDeviceScope && (!this.store.deviceSelected || this.store.currentViewId === "select_device_prompt");
+    const discoveredLatterCount = (this.store.state?.discovered_latter_devices || []).length;
+    const isDeviceListScope =
+      !this.store.deviceSelected ||
+      this.store.currentViewId === "select_device_prompt" ||
+      this.store.currentViewId === "discovered_devices";
+    const managedActive =
+      isDeviceScope && isDeviceListScope && this.store.currentViewId !== "discovered_devices";
+    const discoveredActive = isDeviceScope && this.store.currentViewId === "discovered_devices";
 
     return html`<aside class="sidebar">
       <div role="tablist" aria-label="Scope" class="scope-tabs">
@@ -236,18 +245,30 @@ export class LatterStudio extends LitElement {
               </button>`;
             })}
           </nav>`
-        : this.store.deviceSelected && this.store.currentViewId !== "select_device_prompt"
+        : !isDeviceListScope
           ? this._renderDeviceNav()
           : html`<nav id="nav-scope-devices-list" aria-label="Devices" class="nav-list">
               <button
                 type="button"
                 data-view="select_device_prompt"
-                aria-current=${allDevicesActive ? "page" : nothing}
+                aria-current=${managedActive ? "page" : nothing}
                 @click=${() => this.store.openDevicesLanding()}
-                class="nav-btn ${allDevicesActive ? "active" : ""}"
+                class="nav-btn ${managedActive ? "active" : ""}"
               >
-                <span>All Devices</span>
+                <span>Managed</span>
                 <span id="nav-system-count" class="nav-badge">${this.store.state ? String(deviceCount) : "—"}</span>
+              </button>
+              <button
+                type="button"
+                data-view="discovered_devices"
+                aria-current=${discoveredActive ? "page" : nothing}
+                @click=${() => this.store.openDiscoveredDevices()}
+                class="nav-btn ${discoveredActive ? "active" : ""}"
+              >
+                <span>Discovered</span>
+                ${discoveredLatterCount > 0
+                  ? html`<span id="nav-discovered-count" class="nav-badge">${String(discoveredLatterCount)}</span>`
+                  : nothing}
               </button>
             </nav>`}
     </aside>`;
@@ -259,6 +280,8 @@ export class LatterStudio extends LitElement {
     const showHeaderUpdate =
       this.store.currentScope === "device" &&
       this.store.deviceSelected &&
+      this.store.currentViewId !== "select_device_prompt" &&
+      this.store.currentViewId !== "discovered_devices" &&
       Boolean(data?.live?.fw_update_available && data?.live?.fw_update_entity);
 
     const subtitle = this.store.pageSubtitle;

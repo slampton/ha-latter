@@ -206,6 +206,31 @@ export function selectBleCandidateInModalOp(store: StudioStore, addr: string): v
   store.host.requestUpdate();
 }
 
+export async function adoptLatterDeviceOp(
+  store: StudioStore,
+  esphomeDeviceId: string,
+  title: string,
+  deviceGroup = "auto",
+  assignedPerson = "",
+): Promise<void> {
+  if (!esphomeDeviceId) return;
+  try {
+    const res = await store.ws.runSystemCommand(
+      "add_latter_device",
+      {
+        esphome_device_id: esphomeDeviceId,
+        device_group: deviceGroup || "auto",
+        assigned_person: assignedPerson,
+      },
+      store.activeSubentryId || null,
+    );
+    if (res) store.ingestPayload(res, false);
+    store.showToast(`Added "${title || "Device"}" to Latter`);
+  } catch (err) {
+    store.showToast(formatWsError(err, "Could not adopt Latter Device"), true);
+  }
+}
+
 export async function quickAdoptBleCandidateOp(
   store: StudioStore,
   title: string,

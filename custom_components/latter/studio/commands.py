@@ -26,6 +26,7 @@ import voluptuous as vol
 
 from ..areas import async_execute_area_action
 from ..backup import async_restore_backup_bundle, build_backup_bundle
+from ..config_flow import _bound_elsewhere, _device_title, _device_unique_id
 from ..const import (
     CONF_ACTIVITY_SOURCES,
     CONF_AREA_FUSION_CONFIG,
@@ -36,6 +37,7 @@ from ..const import (
     CONF_DEVICE_GROUPS,
     CONF_DEVICE_REMOTE_GROUP,
     CONF_DOCK_APPS,
+    CONF_ESPHOME_DEVICE_ID,
     CONF_MA_PLAYER_ENTITY,
     CONF_SECURITY_PIN,
     CONF_SECURITY_PIN_HASH,
@@ -49,6 +51,7 @@ from ..const import (
     INTEGRATION_VERSION,
     STUDIO_REV,
     SUBENTRY_BLE_TAG,
+    SUBENTRY_DEVICE,
     normalize_device_slug,
 )
 from ..coordinator import LatterCoordinator
@@ -66,7 +69,12 @@ from ..hub import (
     get_latter_system,
     iter_coordinators,
 )
-from ..identity import device_entities
+from ..identity import (
+    device_entities,
+    get_bound_esphome_device,
+    is_esphome_device,
+    is_latter_compatible_esphome_device,
+)
 from ..media import async_refresh_ma_link
 from ..presence import (
     area_fusion_sensor_choices,
@@ -729,6 +737,72 @@ async def _cmd_remove_device(
     extra["removed_subentry_id"] = target_coord.subentry_id
 
 
+async def _cmd_add_latter_device(
+    hass: HomeAssistant,
+    _coordinator: LatterCoordinator | None,
+    body: dict[str, Any],
+    _global_cfg: dict[str, Any],
+    _extra: dict[str, Any],
+) -> None:
+    system_entries = hass.config_entries.async_entries(DOMAIN)
+    if not system_entries:
+        raise StudioCommandError("not_found", "Latter System entry is not set up")
+    esp_dev_id = str(body.get("esphome_device_id") or "").strip()
+    if not esp_dev_id:
+        raise StudioCommandError(
+            "invalid_format", "Choose a discovered Latter ESPHome Device"
+        )
+    dev = get_bound_esphome_device(hass, esp_dev_id)
+    if (
+        dev is None
+        or not is_esphome_device(hass, dev)
+        or not is_latter_compatible_esphome_device(hass, dev)
+    ):
+        raise StudioCommandError(
+            "not_latter_device",
+            "Selected ESPHome device is not running Latter firmware",
+        )
+    target_uid = _device_unique_id(dev)
+    if _bound_elsewhere(system_entries[0], dev, target_uid):
+        raise StudioCommandError(
+            "already_configured",
+            f"'{_device_title(dev)}' is already managed in Latter",
+        )
+    raw_group = str(body.get("device_group") or "auto").strip() or "auto"
+    if raw_group != "auto" and not any(
+        g.get("id") == raw_group for g in get_device_groups(hass)
+    ):
+        raise StudioCommandError("not_found", f"Unknown Device Group '{raw_group}'")
+    assigned_person = str(body.get("assigned_person") or "").strip()
+    if assigned_person and (
+        not assigned_person.startswith("person.")
+        or (
+            hass.states.get(assigned_person) is None
+            and er.async_get(hass).async_get(assigned_person) is None
+        )
+    ):
+        raise StudioCommandError(
+            "not_found", f"Unknown person entity '{assigned_person}'"
+        )
+    init_data: dict[str, Any] = {
+        CONF_ESPHOME_DEVICE_ID: dev.id,
+        CONF_DEVICE_GROUP: raw_group,
+    }
+    if assigned_person:
+        init_data[CONF_ASSIGNED_PERSON] = assigned_person
+    await hass.config_entries.subentries.async_init(
+        (system_entries[0].entry_id, SUBENTRY_DEVICE),
+        context={"source": "user"},
+        data=init_data,
+    )
+    log_studio_event(
+        hass,
+        "INFO",
+        "studio",
+        f"Adopted Latter device '{_device_title(dev)}'",
+    )
+
+
 async def _cmd_add_ble_device(
     hass: HomeAssistant,
     _coordinator: LatterCoordinator | None,
@@ -1008,6 +1082,7 @@ _STUDIO_COMMAND_HANDLERS: dict[str, _CommandHandler] = {
     "device_action": _cmd_device_action,
     "clear_internal_logs": _cmd_clear_internal_logs,
     "remove_device": _cmd_remove_device,
+    "add_latter_device": _cmd_add_latter_device,
     "add_ble_device": _cmd_add_ble_device,
     "create_device_group": _cmd_create_device_group,
     "delete_device_group": _cmd_delete_device_group,

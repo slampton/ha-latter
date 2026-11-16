@@ -19,7 +19,12 @@ from homeassistant.config_entries import (
     SubentryFlowResult,
 )
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers import device_registry as dr, entity_registry as er, selector
+from homeassistant.helpers import (
+    area_registry as ar,
+    device_registry as dr,
+    entity_registry as er,
+    selector,
+)
 import voluptuous as vol
 
 from .const import (
@@ -93,21 +98,63 @@ def _ble_unique_id(slug: str) -> str:
     return f"{DOMAIN}_ble_{slug}"
 
 
-def _discover_unconfigured_latter_device_id(hass: HomeAssistant) -> str:
-    """Return the ID of an ESPHome device running Latter that isn't bound yet (form default only), or ''."""
-    configured = {
+def get_discovered_latter_devices(hass: HomeAssistant) -> list[dict[str, Any]]:
+    """Return unbound ESPHome devices running Latter firmware ready for Studio adoption."""
+    records = _iter_configured_device_records(hass)
+    configured_ids = {
         str(data.get(CONF_ESPHOME_DEVICE_ID) or "")
-        for data, _uid in _iter_configured_device_records(hass)
+        for data, _uid in records
+        if data.get(CONF_ESPHOME_DEVICE_ID)
     }
+    configured_uids = {str(uid) for _data, uid in records if uid}
+    area_reg = ar.async_get(hass)
     candidates = [
         dev
         for dev in _iter_devices(dr.async_get(hass))
-        if dev.id not in configured
+        if dev.id not in configured_ids
+        and _device_unique_id(dev) not in configured_uids
         and is_esphome_device(hass, dev)
         and is_latter_compatible_esphome_device(hass, dev)
     ]
     candidates.sort(key=lambda d: str(d.name_by_user or d.name or d.id).lower())
-    return candidates[0].id if candidates else ""
+
+    out: list[dict[str, Any]] = []
+    for dev in candidates:
+        manifest = read_device_hardware_manifest(hass, dev.id)
+        hw_defs = _detect_hardware_defaults(hass, dev, manifest)
+        raw_model = str(dev.model or "").strip()
+        w = int(manifest.get("w") or 0)
+        h = int(manifest.get("h") or 0)
+        board = str(manifest.get("board") or "").strip()
+        if w > 0 and h > 0:
+            model_label = (
+                f"{raw_model} ({w}x{h})"
+                if raw_model
+                else f"Latter display ({w}x{h}{f' {board}' if board else ''})"
+            )
+        else:
+            model_label = raw_model or "Latter ESPHome Device"
+        esp_area_id = str(dev.area_id or "").strip()
+        area_obj = area_reg.async_get_area(esp_area_id) if esp_area_id else None
+        out.append(
+            {
+                "esphome_device_id": dev.id,
+                "node_name": esphome_node_name(hass, dev),
+                "title": _device_title(dev),
+                "model_label": model_label,
+                "area_name": area_obj.name if area_obj else "",
+                "default_group": str(
+                    hw_defs.get(CONF_DEVICE_GROUP) or DEFAULT_DEVICE_GROUP
+                ),
+            }
+        )
+    return out
+
+
+def _discover_unconfigured_latter_device_id(hass: HomeAssistant) -> str:
+    """Return the ID of an ESPHome device running Latter that isn't bound yet (form default only), or ''."""
+    candidates = get_discovered_latter_devices(hass)
+    return str(candidates[0]["esphome_device_id"]) if candidates else ""
 
 
 def _discover_default_weather(hass: HomeAssistant) -> str | None:
@@ -299,6 +346,11 @@ def _apply_onboarding_profile_and_defaults(
             merged[CONF_DEFAULT_AREA] = (
                 "" if is_roaming else str(dev.area_id or "").strip()
             )
+
+    if CONF_ASSIGNED_PERSON in user_input:
+        merged[CONF_ASSIGNED_PERSON] = str(
+            user_input.get(CONF_ASSIGNED_PERSON) or ""
+        ).strip()
 
     _seed_global_defaults(hass)
     return merged

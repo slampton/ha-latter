@@ -10,7 +10,7 @@ from homeassistant.const import Platform
 
 DOMAIN: Final = "latter"
 INTEGRATION_VERSION: Final = "3.0.0"
-STUDIO_REV: Final = 13
+STUDIO_REV: Final = 14
 MIN_FIRMWARE_SDK_REV: Final = 2026111601
 PLATFORMS: Final[list[Platform]] = [
     Platform.SENSOR,

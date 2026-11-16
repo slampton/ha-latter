@@ -16,6 +16,7 @@ from homeassistant.helpers import (
 )
 from homeassistant.util import dt as dt_util
 
+from ..config_flow import get_discovered_latter_devices
 from ..const import (
     CONF_ACTIVITY_CARD,
     CONF_ACTIVITY_SOURCES,
@@ -844,6 +845,7 @@ def _build_system_section(
         "system_devices": system_devices,
         "issues": _build_issues(hass, coords),
         "ble_proxy_count": count_area_ble_proxies(hass),
+        "discovered_latter_devices": get_discovered_latter_devices(hass),
         "discovered_ble_devices": get_discovered_ble_candidates(
             hass,
             onboarded_slugs,

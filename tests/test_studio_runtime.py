@@ -1760,6 +1760,231 @@ return {
         self.assertEqual(got["clearedDraftLabel"], "")
         self.assertEqual(got["clearedDraftZone"], "")
 
+    def test_managed_and_discovered_lifecycle_views_and_badge(self) -> None:
+        """D-041: Managed vs. Discovered sidebar, Option C badge, dynamic Managed card header, and stacked Discovered cards."""
+        stub_lit = """
+function repeat(items, keyFn, tplFn) { return items.map((it, idx) => tplFn(it, idx)); }
+function flattenHtml(node) {
+  if (node === null || node === undefined || node === nothing || typeof node === "boolean") return "";
+  if (Array.isArray(node)) return node.map(flattenHtml).join("");
+  if (typeof node === "object" && node._$litType$ === 1) {
+    let out = "";
+    for (let i = 0; i < node.strings.length; i += 1) {
+      out += node.strings[i];
+      if (i < node.values.length) {
+        const v = node.values[i];
+        out += typeof v === "function" ? "[fn]" : flattenHtml(v);
+      }
+    }
+    return out;
+  }
+  return String(node);
+}
+"""
+        runner = (
+            stub_lit
+            + """
+function makeFakeHost(storeOverrides) {
+  const store = Object.assign(
+    {
+      currentScope: "device",
+      currentViewId: "select_device_prompt",
+      deviceSelected: false,
+      activeSubentryId: "",
+      deviceSortField: "title",
+      deviceSortAsc: true,
+      deviceCategoryFilter: "all",
+      discoveredBleSearch: "",
+      discoveredBleKindFilter: "all",
+      hass: null,
+      host: { requestUpdate() {} },
+      state: {
+        title: "Desk Panel",
+        capabilities: { has_display: true, has_audio: true, has_power: true },
+        config: { kind: "device" },
+        device_groups: [
+          { id: "wall_panels", name: "Wall & Desk Panels" },
+          { id: "handhelds", name: "Handhelds" },
+        ],
+        catalog: { persons: [{ id: "person.sean", name: "Sean" }] },
+        system_devices: [
+          {
+            subentry_id: "sub_1",
+            title: "Desk Panel",
+            model_label: "Square 4.0 (480x480)",
+            area_label: "Office",
+            device_group: "wall_panels",
+            device_group_name: "Wall & Desk Panels",
+            status_label: "Online",
+            is_online: true,
+            is_latter_native: true,
+            has_display: true,
+            is_roaming: false,
+            ble_tracked: false,
+            assigned_person: "",
+            kind: "device",
+          },
+          {
+            subentry_id: "sub_2",
+            title: "Pocket Assistant",
+            model_label: "Pocket 2.06 (410x502)",
+            area_label: "Roaming",
+            device_group: "handhelds",
+            device_group_name: "Handhelds",
+            status_label: "Online",
+            is_online: true,
+            is_latter_native: true,
+            has_display: true,
+            is_roaming: true,
+            ble_tracked: true,
+            assigned_person: "person.sean",
+            kind: "device",
+          },
+        ],
+        discovered_latter_devices: [],
+        discovered_ble_devices: [
+          {
+            title: "Sean's Watch",
+            target_address: "device_tracker.watch_ble",
+            kind: "Private BLE (phone or watch)",
+            rssi: -58,
+            area_name: "Office",
+          },
+          {
+            title: "Living TV BLE",
+            target_address: "11:22:33:44:55:66",
+            kind: "Named BLE device",
+            rssi: -79,
+            area_name: "Living Area",
+          },
+        ],
+      },
+      openDevicesLanding() {},
+      openDiscoveredDevices() {},
+      setScope() {},
+      switchView() {},
+      switchSystemDevice() {},
+      openHaPage() {},
+      openAddBleModal() {},
+      adoptLatterDevice() {},
+      quickAdoptBleCandidate() {},
+    },
+    storeOverrides || {},
+  );
+  return Object.assign(Object.create(LatterStudio.prototype), { store });
+}
+
+// 1. Option C badge: 0 Latter devices + 2 BLE devices -> NO #nav-discovered-count badge!
+const hostZeroLatter = makeFakeHost();
+const sidebarZeroLatter = flattenHtml(LatterStudio.prototype._renderSidebar.call(hostZeroLatter));
+
+// 2. 1 unbound Latter device waiting -> #nav-discovered-count badge shows "1"!
+const hostOneLatter = makeFakeHost();
+hostOneLatter.store.state = Object.assign({}, hostOneLatter.store.state, {
+  discovered_latter_devices: [
+    {
+      esphome_device_id: "esp_new_1",
+      node_name: "kitchen_panel",
+      title: "Kitchen Panel",
+      model_label: "Square 4.0 (480x480)",
+      area_name: "Kitchen",
+      default_group: "wall_panels",
+    },
+  ],
+});
+const sidebarOneLatter = flattenHtml(LatterStudio.prototype._renderSidebar.call(hostOneLatter));
+
+// 3. Single Device drill-down back button says "← Managed"
+const hostDrilldown = makeFakeHost({ deviceSelected: true, currentViewId: "dashboard" });
+const sidebarDrilldown = flattenHtml(LatterStudio.prototype._renderSidebar.call(hostDrilldown));
+
+// 4. Managed Devices dynamic card <h3> reflects dropdown filter
+const managedDefault = flattenHtml(renderDevicesListView(makeFakeHost({ deviceCategoryFilter: "all" }).store));
+const managedRoaming = flattenHtml(renderDevicesListView(makeFakeHost({ deviceCategoryFilter: "roaming" }).store));
+const managedDisplays = flattenHtml(renderDevicesListView(makeFakeHost({ deviceCategoryFilter: "native" }).store));
+const managedGroup = flattenHtml(renderDevicesListView(makeFakeHost({ deviceCategoryFilter: "group:wall_panels" }).store));
+
+// 5. Discovered Devices stacked cards + BLE search & tracker filter
+const discAll = flattenHtml(renderDevicesDiscoveredView(hostOneLatter.store));
+hostOneLatter.store.discoveredBleKindFilter = "tracker";
+const discTrackersOnly = flattenHtml(renderDevicesDiscoveredView(hostOneLatter.store));
+hostOneLatter.store.discoveredBleKindFilter = "all";
+hostOneLatter.store.discoveredBleSearch = "living tv";
+const discSearch = flattenHtml(renderDevicesDiscoveredView(hostOneLatter.store));
+
+return {
+  sidebarZeroLatter,
+  sidebarOneLatter,
+  sidebarDrilldown,
+  managedDefault,
+  managedRoaming,
+  managedDisplays,
+  managedGroup,
+  discAll,
+  discTrackersOnly,
+  discSearch,
+};
+"""
+        )
+        stub_lit_dom = (
+            "globalThis.HTMLElement = class { attachShadow() { return {}; } toggleAttribute() {} };\n"
+            "globalThis.customElements = { get: () => true, define: () => {} };\n"
+            "function renderStudioDialogs() { return nothing; }\n"
+            "function syncStudioDialogs() {}\n"
+            "function renderActiveView() { return nothing; }\n"
+            "const STUDIO_STYLES = { styleSheetText: '' };\n"
+            "class StudioStore { constructor() {} addController() {} }\n"
+        )
+        got = _run_node_ts(
+            [
+                FRONTEND_SRC / "lib" / "lit.ts",
+                FRONTEND_SRC / "constants.ts",
+                FRONTEND_SRC / "utils" / "format.ts",
+                FRONTEND_SRC / "components" / "controls.ts",
+                FRONTEND_SRC / "views" / "devices-list-view.ts",
+                FRONTEND_SRC / "views" / "devices-discovered-view.ts",
+                FRONTEND_SRC / "latter-studio.ts",
+            ],
+            runner,
+            preamble_js=stub_lit_dom,
+        )
+
+        # Sidebar Option C badge & labels
+        self.assertIn("<span>Managed</span>", got["sidebarZeroLatter"])
+        self.assertIn('id="nav-system-count" class="nav-badge">2</span>', got["sidebarZeroLatter"])
+        self.assertIn("<span>Discovered</span>", got["sidebarZeroLatter"])
+        self.assertNotIn("nav-discovered-count", got["sidebarZeroLatter"])
+
+        self.assertIn('id="nav-discovered-count" class="nav-badge">1</span>', got["sidebarOneLatter"])
+        self.assertIn("<span>&larr; Managed</span>", got["sidebarDrilldown"])
+        self.assertNotIn("All Devices", got["sidebarDrilldown"])
+
+        # Dynamic Managed Devices card header
+        self.assertIn('<h3 class="card-title">All Devices</h3>', got["managedDefault"])
+        self.assertIn('<h3 class="card-title">Roaming Devices</h3>', got["managedRoaming"])
+        self.assertNotIn('<td class="col-name">Desk Panel</td>', got["managedRoaming"])
+        self.assertIn('<td class="col-name">Pocket Assistant</td>', got["managedRoaming"])
+        self.assertIn('<h3 class="card-title">Latter Displays</h3>', got["managedDisplays"])
+        self.assertIn('<h3 class="card-title">Group: Wall & Desk Panels</h3>', got["managedGroup"])
+
+        # Discovered Devices two stacked cards + filtering
+        self.assertIn('<h3 class="card-title">Latter Devices</h3>', got["discAll"])
+        self.assertIn('<h3 class="card-title">Bluetooth Devices</h3>', got["discAll"])
+        self.assertLess(
+            got["discAll"].index('<h3 class="card-title">Latter Devices</h3>'),
+            got["discAll"].index('<h3 class="card-title">Bluetooth Devices</h3>'),
+        )
+        self.assertIn("Kitchen Panel", got["discAll"])
+        self.assertIn("Auto (Wall & Desk Panels)", got["discAll"])
+        self.assertIn("Sean's Watch", got["discAll"])
+        self.assertIn("Living TV BLE", got["discAll"])
+
+        self.assertIn("Sean's Watch", got["discTrackersOnly"])
+        self.assertNotIn("Living TV BLE", got["discTrackersOnly"])
+
+        self.assertNotIn("Sean's Watch", got["discSearch"])
+        self.assertIn("Living TV BLE", got["discSearch"])
+
 
 if __name__ == "__main__":
     unittest.main()

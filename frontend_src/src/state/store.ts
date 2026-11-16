@@ -32,6 +32,7 @@ import type {
 } from "../types.js";
 import { navigateHaPath } from "../utils/format.js";
 import {
+  adoptLatterDeviceOp,
   checkSystemUpdatesOp,
   clearInternalLogsOp,
   clearSecurityPinOp,
@@ -157,10 +158,12 @@ export class StudioStore implements ReactiveController {
   selectedSystemWallpaperFile: File | null = null;
   selectedBackupFile: File | null = null;
 
-  // Devices table UI state
+  // Devices table & Discovered UI state
   deviceSortField: "title" | "model" | "area" | "group" | "status" = "title";
   deviceSortAsc = true;
   deviceCategoryFilter = "all";
+  discoveredBleSearch = "";
+  discoveredBleKindFilter: "all" | "tracker" | "named" = "all";
 
   // Device Security & Time UI draft state
   devicePinDraft = "";
@@ -328,11 +331,17 @@ export class StudioStore implements ReactiveController {
   }
 
   get pageTitle(): string {
-    return VIEW_TITLES[this.currentViewId] || "All Devices";
+    return VIEW_TITLES[this.currentViewId] || "Managed Devices";
   }
 
   get pageSubtitle(): string {
-    if (this.currentScope === "device" && this.deviceSelected && this.state?.title) {
+    if (
+      this.currentScope === "device" &&
+      this.deviceSelected &&
+      this.currentViewId !== "select_device_prompt" &&
+      this.currentViewId !== "discovered_devices" &&
+      this.state?.title
+    ) {
       return this.state.title;
     }
     return "";
@@ -355,7 +364,15 @@ export class StudioStore implements ReactiveController {
 
     this.routeApplying = true;
     try {
-      if (parts[0] === "devices" && parts[1]) {
+      if (parts[0] === "devices" && parts[1]?.toLowerCase() === "discovered") {
+        if (this.activeSubentryId) {
+          void this.flushDeviceBucket(this.activeSubentryId);
+        }
+        this.deviceSelected = false;
+        this.currentScope = "device";
+        this.currentViewId = "discovered_devices";
+        this.host.requestUpdate();
+      } else if (parts[0] === "devices" && parts[1]) {
         const nextSubId = parts[1];
         if (
           this.state &&
@@ -426,10 +443,17 @@ export class StudioStore implements ReactiveController {
     if (this.currentScope === "system") {
       const slug = SYSTEM_VIEW_SLUGS[this.currentViewId as SystemViewId] || "overview";
       targetPath = `/latter/system/${slug}`;
-    } else if (this.deviceSelected && this.activeSubentryId && this.currentViewId !== "select_device_prompt") {
+    } else if (this.currentViewId === "discovered_devices") {
+      targetPath = "/latter/devices/discovered";
+    } else if (
+      this.deviceSelected &&
+      this.activeSubentryId &&
+      this.currentViewId !== "select_device_prompt"
+    ) {
       const slug =
-        DEVICE_VIEW_SLUGS[this.currentViewId as Exclude<DeviceViewId, "select_device_prompt">] ||
-        "overview";
+        DEVICE_VIEW_SLUGS[
+          this.currentViewId as Exclude<DeviceViewId, "select_device_prompt" | "discovered_devices">
+        ] || "overview";
       targetPath = `/latter/devices/${encodeURIComponent(this.activeSubentryId)}/${slug}`;
     } else {
       targetPath = "/latter/devices";
@@ -446,6 +470,17 @@ export class StudioStore implements ReactiveController {
     this.deviceSelected = false;
     this.currentScope = "device";
     this.currentViewId = "select_device_prompt";
+    this.syncUrl();
+    this.host.requestUpdate();
+  }
+
+  openDiscoveredDevices(): void {
+    if (this.activeSubentryId) {
+      void this.flushDeviceBucket(this.activeSubentryId);
+    }
+    this.deviceSelected = false;
+    this.currentScope = "device";
+    this.currentViewId = "discovered_devices";
     this.syncUrl();
     this.host.requestUpdate();
   }
@@ -481,6 +516,10 @@ export class StudioStore implements ReactiveController {
       this.openDevicesLanding();
       return;
     }
+    if (viewId === "discovered_devices") {
+      this.openDiscoveredDevices();
+      return;
+    }
     const isSys = Object.prototype.hasOwnProperty.call(SYSTEM_VIEW_SLUGS, viewId);
     this.currentScope = isSys ? "system" : "device";
     this.currentViewId = viewId;
@@ -509,7 +548,10 @@ export class StudioStore implements ReactiveController {
     this.activeSubentryId = cleanNext;
     this.deviceSelected = true;
     this.currentScope = "device";
-    this.currentViewId = targetView === "select_device_prompt" ? "dashboard" : targetView;
+    this.currentViewId =
+      targetView === "select_device_prompt" || targetView === "discovered_devices"
+        ? "dashboard"
+        : targetView;
     this.devicePinDraft = "";
     this.worldClockNewLabel = "";
     this.worldClockNewZone = "";
@@ -1051,6 +1093,15 @@ export class StudioStore implements ReactiveController {
 
   selectBleCandidateInModal(addr: string): void {
     selectBleCandidateInModalOp(this, addr);
+  }
+
+  async adoptLatterDevice(
+    esphomeDeviceId: string,
+    title: string,
+    deviceGroup = "auto",
+    assignedPerson = "",
+  ): Promise<void> {
+    await adoptLatterDeviceOp(this, esphomeDeviceId, title, deviceGroup, assignedPerson);
   }
 
   async quickAdoptBleCandidate(title: string, targetAddress: string, assignedPerson = ""): Promise<void> {

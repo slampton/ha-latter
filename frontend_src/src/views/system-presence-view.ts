@@ -1,5 +1,5 @@
 /**
- * System BLE & Area Presence View (`area_tracking`): Live Area Presence & Sensor Fusion, Streaming BLE Calibration & Discovered BLE Devices.
+ * System BLE & Area Presence View (`area_tracking`): Live Area Presence & Sensor Fusion and Streaming BLE Calibration.
  */
 
 import { renderCard, renderSettingsRow } from "../components/controls.js";
@@ -22,8 +22,6 @@ export function renderSystemPresenceView(store: StudioStore): TemplateResult {
   const activeSurveyDev = store.getActiveSurveyDevice() || bleDevs[0];
   const surveyRows = activeSurveyDev?.ble_survey_rows || [];
   const packetsSeen = activeSurveyDev?.ble_packets_seen ?? 0;
-  const candidates = data?.discovered_ble_devices || [];
-  const persons = data?.catalog?.persons || [];
 
   return html`<section id="view-area_tracking">
     <div class="columns">
@@ -285,49 +283,6 @@ export function renderSystemPresenceView(store: StudioStore): TemplateResult {
               : html`<p class="empty-state">
                   No Area BLE proxy readings yet for this Device.
                 </p>`}`,
-        })}
-
-        ${renderCard({
-          title: "Discovered Bluetooth Devices",
-          contentClass: "settings-list",
-          body: html`<div id="ble-adopt-table-box" class="settings-list">
-            ${candidates.length
-              ? candidates.map((c, idx) => {
-                  const title = c.title || c.name || c.target_address || c.address || "BLE Tag";
-                  const addr = c.target_address || c.address || "";
-                  const meta = [c.kind || "BLE device", addr];
-                  if (c.rssi !== null && c.rssi !== undefined) {
-                    meta.push(`${fmtNumber(c.rssi, store.hass, 0)} dBm`);
-                  }
-                  if (c.area_name) {
-                    meta.push(`Nearest Area: ${c.area_name}`);
-                  }
-                  const selId = `ble-adopt-person-${idx}`;
-
-                  return renderSettingsRow({
-                    label: title,
-                    description: meta.join(" • "),
-                    control: html`<select id=${selId} aria-label=${`Assigned person for ${title}`}>
-                        <option value="">No person</option>
-                        ${persons.map((p) => html`<option value=${p.id}>${p.name}</option>`)}
-                      </select>
-                      <button
-                        type="button"
-                        @click=${(ev: Event) => {
-                          const btn = ev.currentTarget as HTMLButtonElement;
-                          const sel = btn.parentElement?.querySelector(
-                            "select",
-                          ) as HTMLSelectElement | null;
-                          void store.quickAdoptBleCandidate(title, addr, sel?.value || "");
-                        }}
-                        class="btn btn-secondary btn-compact"
-                      >
-                        Adopt
-                      </button>`,
-                  });
-                })
-              : html`<p class="empty-state">No unadopted Bluetooth devices nearby.</p>`}
-          </div>`,
         })}
       </div>
     </div>

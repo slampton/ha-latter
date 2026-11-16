@@ -1,11 +1,13 @@
 /**
- * Devices Scope Landing View (`select_device_prompt`): Filterable, keyboard-accessible sortable Devices table.
+ * Managed Devices View (`select_device_prompt`): Filterable, keyboard-accessible sortable Devices table.
+ * Card header dynamically reflects the active category selection (`D-041`).
  */
 
 import { renderCard, renderSortHeader } from "../components/controls.js";
 import { html, repeat, type TemplateResult } from "../lib/lit.js";
 import type { StudioStore } from "../state/store.js";
 import type { SystemDeviceEntry } from "../types.js";
+import { entityLabel } from "../utils/format.js";
 
 function statusRank(st: string): number {
   if (st === "Update available") return 1;
@@ -16,25 +18,28 @@ function statusRank(st: string): number {
 export function renderDevicesListView(store: StudioStore): TemplateResult {
   const allDevices: SystemDeviceEntry[] = store.state?.system_devices || [];
   const groups = store.state?.device_groups || [];
-  const cat = store.deviceCategoryFilter || "all";
+  const rawCat = store.deviceCategoryFilter || "all";
 
   const baseCategories: Array<{ id: string; label: string }> = [
     { id: "all", label: "All Devices" },
-    { id: "online", label: "Online" },
+    { id: "online", label: "Online Devices" },
     { id: "native", label: "Latter Displays" },
-    { id: "ble_tracked", label: "BLE Tracked" },
-    { id: "assigned_person", label: "Assigned to a Person" },
+    { id: "headless", label: "Screenless Devices" },
     { id: "roaming", label: "Roaming Devices" },
     { id: "stationary", label: "Stationary Devices" },
-    { id: "headless", label: "Screenless Devices" },
-    { id: "ble_tag", label: "BLE tags" },
-    { id: "updates", label: "Firmware update available" },
+    { id: "ble_tracked", label: "BLE-Tracked Devices" },
+    { id: "ble_tag", label: "BLE Tags" },
+    { id: "assigned_person", label: "Assigned to a Person" },
+    { id: "updates", label: "Updates Available" },
   ];
   for (const g of groups) {
     if (g && g.id && g.id !== "unassigned") {
-      baseCategories.push({ id: `group:${g.id}`, label: `Group: ${g.name}` });
+      baseCategories.push({ id: `group:${g.id}`, label: `Group: ${entityLabel(g.name)}` });
     }
   }
+
+  const activeCategory = baseCategories.find((o) => o.id === rawCat) || baseCategories[0];
+  const cat = activeCategory.id;
 
   const filtered = allDevices.filter((d) => {
     const isBleTag = d.kind === "ble_tag";
@@ -71,34 +76,20 @@ export function renderDevicesListView(store: StudioStore): TemplateResult {
 
   return html`<section id="view-select_device_prompt">
     ${renderCard({
-      title: "Devices",
+      title: activeCategory.label,
       headerActions: html`<select
-          id="device-category-filter"
-          aria-label="Filter Devices by category"
-          .value=${cat}
-          @change=${(ev: Event) => {
-            store.deviceCategoryFilter = (ev.currentTarget as HTMLSelectElement).value || "all";
-            store.host.requestUpdate();
-          }}
-        >
-          ${baseCategories.map(
-            (o) => html`<option value=${o.id} ?selected=${o.id === cat}>${o.label}</option>`,
-          )}
-        </select>
-        <button
-          type="button"
-          @click=${() => store.openHaPage("/config/integrations/integration/latter")}
-          class="btn btn-primary"
-        >
-          Add Device
-        </button>
-        <button
-          type="button"
-          @click=${() => store.openAddBleModal()}
-          class="btn btn-secondary"
-        >
-          Add BLE Tag
-        </button>`,
+        id="device-category-filter"
+        aria-label="Filter Managed Devices by category"
+        .value=${cat}
+        @change=${(ev: Event) => {
+          store.deviceCategoryFilter = (ev.currentTarget as HTMLSelectElement).value || "all";
+          store.host.requestUpdate();
+        }}
+      >
+        ${baseCategories.map(
+          (o) => html`<option value=${o.id} ?selected=${o.id === cat}>${o.label}</option>`,
+        )}
+      </select>`,
       body: filtered.length
         ? html`<div class="table-wrap">
             <table class="data-table">
@@ -151,7 +142,7 @@ export function renderDevicesListView(store: StudioStore): TemplateResult {
         : html`<p class="empty-state">
             ${allDevices.length
               ? "No Devices match this category."
-              : "No Devices yet. Latter Devices appear here after you add them in Home Assistant."}
+              : "No Managed Devices yet. Adopt discovered Latter Devices or add BLE Tags in Discovered."}
           </p>`,
     })}
   </section>`;

@@ -839,7 +839,7 @@ const DEFAULT_HOME_CATEGORIES_TOKENS = [
 /**
  * Canonical constants, route maps, issue messages, and Title Case dictionaries for Latter Studio.
  */
-const STUDIO_REV = 13;
+const STUDIO_REV = 14;
 const MAX_WALLPAPER_UPLOAD_BYTES = 15 * 1024 * 1024;
 const DEVICE_VIEW_SLUGS = {
   dashboard: "overview",
@@ -858,7 +858,8 @@ const VIEW_TITLES = {
   system_sync: "Device Groups",
   area_tracking: "BLE & Area Presence",
   system_tools: "Tools",
-  select_device_prompt: "All Devices",
+  select_device_prompt: "Managed Devices",
+  discovered_devices: "Discovered Devices",
   dashboard: "Overview",
   display: "Display",
   interface: "Interface",
@@ -2228,6 +2229,7 @@ const SYSTEM_WS_COMMANDS = new Set([
   "check_system_updates",
   "clear_internal_logs",
   "remove_device",
+  "add_latter_device",
   "add_ble_device",
   "create_device_group",
   "delete_device_group",
@@ -2699,6 +2701,30 @@ function selectBleCandidateInModalOp(store, addr) {
     name: candTitle || store.addBleModal.name,
   };
   store.host.requestUpdate();
+}
+async function adoptLatterDeviceOp(
+  store,
+  esphomeDeviceId,
+  title,
+  deviceGroup = "auto",
+  assignedPerson = "",
+) {
+  if (!esphomeDeviceId) return;
+  try {
+    const res = await store.ws.runSystemCommand(
+      "add_latter_device",
+      {
+        esphome_device_id: esphomeDeviceId,
+        device_group: deviceGroup || "auto",
+        assigned_person: assignedPerson,
+      },
+      store.activeSubentryId || null,
+    );
+    if (res) store.ingestPayload(res, false);
+    store.showToast(`Added "${title || "Device"}" to Latter`);
+  } catch (err) {
+    store.showToast(formatWsError(err, "Could not adopt Latter Device"), true);
+  }
 }
 async function quickAdoptBleCandidateOp(
   store,
@@ -4373,10 +4399,12 @@ class StudioStore {
   selectedDeviceWallpaperFile = null;
   selectedSystemWallpaperFile = null;
   selectedBackupFile = null;
-  // Devices table UI state
+  // Devices table & Discovered UI state
   deviceSortField = "title";
   deviceSortAsc = true;
   deviceCategoryFilter = "all";
+  discoveredBleSearch = "";
+  discoveredBleKindFilter = "all";
   // Device Security & Time UI draft state
   devicePinDraft = "";
   systemPinDraft = "";
@@ -4525,10 +4553,16 @@ class StudioStore {
     return this.currentScope === "system" && this.currentViewId === "system_tools" && this.logsOpen;
   }
   get pageTitle() {
-    return VIEW_TITLES[this.currentViewId] || "All Devices";
+    return VIEW_TITLES[this.currentViewId] || "Managed Devices";
   }
   get pageSubtitle() {
-    if (this.currentScope === "device" && this.deviceSelected && this.state?.title) {
+    if (
+      this.currentScope === "device" &&
+      this.deviceSelected &&
+      this.currentViewId !== "select_device_prompt" &&
+      this.currentViewId !== "discovered_devices" &&
+      this.state?.title
+    ) {
       return this.state.title;
     }
     return "";
@@ -4548,7 +4582,15 @@ class StudioStore {
       });
     this.routeApplying = true;
     try {
-      if (parts[0] === "devices" && parts[1]) {
+      if (parts[0] === "devices" && parts[1]?.toLowerCase() === "discovered") {
+        if (this.activeSubentryId) {
+          void this.flushDeviceBucket(this.activeSubentryId);
+        }
+        this.deviceSelected = false;
+        this.currentScope = "device";
+        this.currentViewId = "discovered_devices";
+        this.host.requestUpdate();
+      } else if (parts[0] === "devices" && parts[1]) {
         const nextSubId = parts[1];
         if (
           this.state &&
@@ -4617,10 +4659,17 @@ class StudioStore {
     if (this.currentScope === "system") {
       const slug = SYSTEM_VIEW_SLUGS[this.currentViewId ] || "overview";
       targetPath = `/latter/system/${slug}`;
-    } else if (this.deviceSelected && this.activeSubentryId && this.currentViewId !== "select_device_prompt") {
+    } else if (this.currentViewId === "discovered_devices") {
+      targetPath = "/latter/devices/discovered";
+    } else if (
+      this.deviceSelected &&
+      this.activeSubentryId &&
+      this.currentViewId !== "select_device_prompt"
+    ) {
       const slug =
-        DEVICE_VIEW_SLUGS[this.currentViewId ] ||
-        "overview";
+        DEVICE_VIEW_SLUGS[
+          this.currentViewId
+        ] || "overview";
       targetPath = `/latter/devices/${encodeURIComponent(this.activeSubentryId)}/${slug}`;
     } else {
       targetPath = "/latter/devices";
@@ -4636,6 +4685,16 @@ class StudioStore {
     this.deviceSelected = false;
     this.currentScope = "device";
     this.currentViewId = "select_device_prompt";
+    this.syncUrl();
+    this.host.requestUpdate();
+  }
+  openDiscoveredDevices() {
+    if (this.activeSubentryId) {
+      void this.flushDeviceBucket(this.activeSubentryId);
+    }
+    this.deviceSelected = false;
+    this.currentScope = "device";
+    this.currentViewId = "discovered_devices";
     this.syncUrl();
     this.host.requestUpdate();
   }
@@ -4668,6 +4727,10 @@ class StudioStore {
       this.openDevicesLanding();
       return;
     }
+    if (viewId === "discovered_devices") {
+      this.openDiscoveredDevices();
+      return;
+    }
     const isSys = Object.prototype.hasOwnProperty.call(SYSTEM_VIEW_SLUGS, viewId);
     this.currentScope = isSys ? "system" : "device";
     this.currentViewId = viewId;
@@ -4694,7 +4757,10 @@ class StudioStore {
     this.activeSubentryId = cleanNext;
     this.deviceSelected = true;
     this.currentScope = "device";
-    this.currentViewId = targetView === "select_device_prompt" ? "dashboard" : targetView;
+    this.currentViewId =
+      targetView === "select_device_prompt" || targetView === "discovered_devices"
+        ? "dashboard"
+        : targetView;
     this.devicePinDraft = "";
     this.worldClockNewLabel = "";
     this.worldClockNewZone = "";
@@ -5159,6 +5225,14 @@ class StudioStore {
   }
   selectBleCandidateInModal(addr) {
     selectBleCandidateInModalOp(this, addr);
+  }
+  async adoptLatterDevice(
+    esphomeDeviceId,
+    title,
+    deviceGroup = "auto",
+    assignedPerson = "",
+  ) {
+    await adoptLatterDeviceOp(this, esphomeDeviceId, title, deviceGroup, assignedPerson);
   }
   async quickAdoptBleCandidate(title, targetAddress, assignedPerson = "") {
     await quickAdoptBleCandidateOp(this, title, targetAddress, assignedPerson);
@@ -9255,9 +9329,209 @@ function renderDeviceToolsView(store) {
   </section>`;
 }
 
+// --- src/views/devices-discovered-view.ts ---
+/**
+ * Discovered Devices View (`discovered_devices`): Two stacked full-width onboarding cards (`D-041`):
+ * 1. `Latter Devices` — Unbound ESPHome Devices running Latter firmware ready for one-click adoption.
+ * 2. `Bluetooth Devices` — Filterable/searchable BLE trackers, phones, and named advertisements.
+ */
+function isTrackerCandidate(c) {
+  const kind = String(c.kind || "").toLowerCase();
+  const addr = String(c.target_address || c.address || "");
+  return kind.includes("private ble") || kind.includes("ibeacon") || addr.includes(".");
+}
+function renderDevicesDiscoveredView(store) {
+  const data = store.state;
+  const latterCandidates = data?.discovered_latter_devices || [];
+  const bleCandidates = data?.discovered_ble_devices || [];
+  const groups = data?.device_groups || [];
+  const persons = data?.catalog?.persons || [];
+  const groupNameMap = new Map();
+  for (const g of groups) {
+    if (g && g.id) {
+      groupNameMap.set(g.id, g.name || entityLabel(g.id.replace(/_/g, " ")));
+    }
+  }
+  const kindFilter = store.discoveredBleKindFilter || "all";
+  const query = (store.discoveredBleSearch || "").trim().toLowerCase();
+  const filteredBle = bleCandidates.filter((c) => {
+    if (kindFilter === "tracker" && !isTrackerCandidate(c)) return false;
+    if (kindFilter === "named" && isTrackerCandidate(c)) return false;
+    if (!query) return true;
+    const haystack = [
+      c.title,
+      c.name,
+      c.target_address,
+      c.address,
+      c.kind,
+      c.area_name,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    return haystack.includes(query);
+  });
+  return html`<section id="view-discovered_devices">
+    ${renderCard({
+      title: "Latter Devices",
+      headerActions: html`<button
+        type="button"
+        @click=${() => store.openHaPage("/config/integrations/integration/latter")}
+        class="btn btn-secondary"
+      >
+        Open Integration
+      </button>`,
+      contentClass: "settings-list",
+      body: html`<div id="latter-adopt-table-box" class="settings-list">
+        ${latterCandidates.length
+          ? latterCandidates.map((d, idx) => {
+              const title = d.title || d.node_name || "Latter Device";
+              const defGrpName =
+                groupNameMap.get(d.default_group) ||
+                entityLabel((d.default_group || "unassigned").replace(/_/g, " "));
+              const meta = [d.model_label || "Latter ESPHome Device"];
+              if (d.node_name) meta.push(`Node: ${d.node_name}`);
+              if (d.area_name) meta.push(`Area: ${d.area_name}`);
+              const grpSelId = `latter-adopt-group-${idx}`;
+              const personSelId = `latter-adopt-person-${idx}`;
+              return renderSettingsRow({
+                label: title,
+                description: meta.join(" • "),
+                control: html`<select
+                    id=${grpSelId}
+                    data-role="group"
+                    aria-label=${`Device Group for ${title}`}
+                  >
+                    <option value="auto">Auto (${defGrpName})</option>
+                    ${groups.map((g) => html`<option value=${g.id}>${g.name}</option>`)}
+                  </select>
+                  <select
+                    id=${personSelId}
+                    data-role="person"
+                    aria-label=${`Assigned person for ${title}`}
+                  >
+                    <option value="">No person</option>
+                    ${persons.map((p) => html`<option value=${p.id}>${p.name}</option>`)}
+                  </select>
+                  <button
+                    type="button"
+                    @click=${(ev) => {
+                      const btn = ev.currentTarget;
+                      const parent = btn.parentElement;
+                      const grpSel = parent?.querySelector(
+                        'select[data-role="group"]',
+                      );
+                      const personSel = parent?.querySelector(
+                        'select[data-role="person"]',
+                      );
+                      void store.adoptLatterDevice(
+                        d.esphome_device_id,
+                        title,
+                        grpSel?.value || "auto",
+                        personSel?.value || "",
+                      );
+                    }}
+                    class="btn btn-secondary btn-compact"
+                  >
+                    Adopt
+                  </button>`,
+              });
+            })
+          : html`<p class="empty-state">
+              No unconfigured Latter Devices found in Home Assistant. Newly added ESPHome Devices running Latter firmware appear here automatically.
+            </p>`}
+      </div>`,
+    })}
+
+    ${renderCard({
+      title: "Bluetooth Devices",
+      headerActions: html`<input
+          type="search"
+          id="discovered-ble-search"
+          aria-label="Search discovered Bluetooth devices"
+          placeholder="Search name, address, or Area…"
+          .value=${store.discoveredBleSearch}
+          @input=${(ev) => {
+            store.discoveredBleSearch = (ev.currentTarget).value;
+            store.host.requestUpdate();
+          }}
+        />
+        <select
+          id="discovered-ble-filter"
+          aria-label="Filter discovered Bluetooth devices"
+          .value=${kindFilter}
+          @change=${(ev) => {
+            const val = (ev.currentTarget).value;
+            store.discoveredBleKindFilter =
+              val === "tracker" || val === "named" ? val : "all";
+            store.host.requestUpdate();
+          }}
+        >
+          <option value="all" ?selected=${kindFilter === "all"}>All Bluetooth devices</option>
+          <option value="tracker" ?selected=${kindFilter === "tracker"}>
+            Phones and trackers
+          </option>
+          <option value="named" ?selected=${kindFilter === "named"}>
+            Named advertisements
+          </option>
+        </select>
+        <button
+          type="button"
+          @click=${() => store.openAddBleModal()}
+          class="btn btn-primary"
+        >
+          Add BLE Tag
+        </button>`,
+      contentClass: "settings-list",
+      body: html`<div id="ble-adopt-table-box" class="settings-list">
+        ${filteredBle.length
+          ? filteredBle.map((c, idx) => {
+              const title = c.title || c.name || c.target_address || c.address || "BLE Tag";
+              const addr = c.target_address || c.address || "";
+              const meta = [c.kind || "BLE device", addr];
+              if (c.rssi !== null && c.rssi !== undefined) {
+                meta.push(`${fmtNumber(c.rssi, store.hass, 0)} dBm`);
+              }
+              if (c.area_name) {
+                meta.push(`Nearest Area: ${c.area_name}`);
+              }
+              const selId = `ble-adopt-person-${idx}`;
+              return renderSettingsRow({
+                label: title,
+                description: meta.join(" • "),
+                control: html`<select id=${selId} aria-label=${`Assigned person for ${title}`}>
+                    <option value="">No person</option>
+                    ${persons.map((p) => html`<option value=${p.id}>${p.name}</option>`)}
+                  </select>
+                  <button
+                    type="button"
+                    @click=${(ev) => {
+                      const btn = ev.currentTarget;
+                      const sel = btn.parentElement?.querySelector(
+                        "select",
+                      );
+                      void store.quickAdoptBleCandidate(title, addr, sel?.value || "");
+                    }}
+                    class="btn btn-secondary btn-compact"
+                  >
+                    Adopt
+                  </button>`,
+              });
+            })
+          : html`<p class="empty-state">
+              ${bleCandidates.length
+                ? "No Bluetooth devices match this filter."
+                : "No unadopted Bluetooth devices nearby."}
+            </p>`}
+      </div>`,
+    })}
+  </section>`;
+}
+
 // --- src/views/devices-list-view.ts ---
 /**
- * Devices Scope Landing View (`select_device_prompt`): Filterable, keyboard-accessible sortable Devices table.
+ * Managed Devices View (`select_device_prompt`): Filterable, keyboard-accessible sortable Devices table.
+ * Card header dynamically reflects the active category selection (`D-041`).
  */
 function statusRank(st) {
   if (st === "Update available") return 1;
@@ -9267,24 +9541,26 @@ function statusRank(st) {
 function renderDevicesListView(store) {
   const allDevices = store.state?.system_devices || [];
   const groups = store.state?.device_groups || [];
-  const cat = store.deviceCategoryFilter || "all";
+  const rawCat = store.deviceCategoryFilter || "all";
   const baseCategories = [
     { id: "all", label: "All Devices" },
-    { id: "online", label: "Online" },
+    { id: "online", label: "Online Devices" },
     { id: "native", label: "Latter Displays" },
-    { id: "ble_tracked", label: "BLE Tracked" },
-    { id: "assigned_person", label: "Assigned to a Person" },
+    { id: "headless", label: "Screenless Devices" },
     { id: "roaming", label: "Roaming Devices" },
     { id: "stationary", label: "Stationary Devices" },
-    { id: "headless", label: "Screenless Devices" },
-    { id: "ble_tag", label: "BLE tags" },
-    { id: "updates", label: "Firmware update available" },
+    { id: "ble_tracked", label: "BLE-Tracked Devices" },
+    { id: "ble_tag", label: "BLE Tags" },
+    { id: "assigned_person", label: "Assigned to a Person" },
+    { id: "updates", label: "Updates Available" },
   ];
   for (const g of groups) {
     if (g && g.id && g.id !== "unassigned") {
-      baseCategories.push({ id: `group:${g.id}`, label: `Group: ${g.name}` });
+      baseCategories.push({ id: `group:${g.id}`, label: `Group: ${entityLabel(g.name)}` });
     }
   }
+  const activeCategory = baseCategories.find((o) => o.id === rawCat) || baseCategories[0];
+  const cat = activeCategory.id;
   const filtered = allDevices.filter((d) => {
     const isBleTag = d.kind === "ble_tag";
     const isRoaming = isBleTag || Boolean(d.is_roaming);
@@ -9318,34 +9594,20 @@ function renderDevicesListView(store) {
   });
   return html`<section id="view-select_device_prompt">
     ${renderCard({
-      title: "Devices",
+      title: activeCategory.label,
       headerActions: html`<select
-          id="device-category-filter"
-          aria-label="Filter Devices by category"
-          .value=${cat}
-          @change=${(ev) => {
-            store.deviceCategoryFilter = (ev.currentTarget).value || "all";
-            store.host.requestUpdate();
-          }}
-        >
-          ${baseCategories.map(
-            (o) => html`<option value=${o.id} ?selected=${o.id === cat}>${o.label}</option>`,
-          )}
-        </select>
-        <button
-          type="button"
-          @click=${() => store.openHaPage("/config/integrations/integration/latter")}
-          class="btn btn-primary"
-        >
-          Add Device
-        </button>
-        <button
-          type="button"
-          @click=${() => store.openAddBleModal()}
-          class="btn btn-secondary"
-        >
-          Add BLE Tag
-        </button>`,
+        id="device-category-filter"
+        aria-label="Filter Managed Devices by category"
+        .value=${cat}
+        @change=${(ev) => {
+          store.deviceCategoryFilter = (ev.currentTarget).value || "all";
+          store.host.requestUpdate();
+        }}
+      >
+        ${baseCategories.map(
+          (o) => html`<option value=${o.id} ?selected=${o.id === cat}>${o.label}</option>`,
+        )}
+      </select>`,
       body: filtered.length
         ? html`<div class="table-wrap">
             <table class="data-table">
@@ -9398,7 +9660,7 @@ function renderDevicesListView(store) {
         : html`<p class="empty-state">
             ${allDevices.length
               ? "No Devices match this category."
-              : "No Devices yet. Latter Devices appear here after you add them in Home Assistant."}
+              : "No Managed Devices yet. Adopt discovered Latter Devices or add BLE Tags in Discovered."}
           </p>`,
     })}
   </section>`;
@@ -9913,7 +10175,7 @@ function renderSystemOverviewView(store) {
 
 // --- src/views/system-presence-view.ts ---
 /**
- * System BLE & Area Presence View (`area_tracking`): Live Area Presence & Sensor Fusion, Streaming BLE Calibration & Discovered BLE Devices.
+ * System BLE & Area Presence View (`area_tracking`): Live Area Presence & Sensor Fusion and Streaming BLE Calibration.
  */
 const FUSION_MODE_OPTIONS = [
   { val: "weighted", label: "Weighted (BLE and sensors)" },
@@ -9929,8 +10191,6 @@ function renderSystemPresenceView(store) {
   const activeSurveyDev = store.getActiveSurveyDevice() || bleDevs[0];
   const surveyRows = activeSurveyDev?.ble_survey_rows || [];
   const packetsSeen = activeSurveyDev?.ble_packets_seen ?? 0;
-  const candidates = data?.discovered_ble_devices || [];
-  const persons = data?.catalog?.persons || [];
   return html`<section id="view-area_tracking">
     <div class="columns">
       <div class="column">
@@ -10188,48 +10448,6 @@ function renderSystemPresenceView(store) {
               : html`<p class="empty-state">
                   No Area BLE proxy readings yet for this Device.
                 </p>`}`,
-        })}
-
-        ${renderCard({
-          title: "Discovered Bluetooth Devices",
-          contentClass: "settings-list",
-          body: html`<div id="ble-adopt-table-box" class="settings-list">
-            ${candidates.length
-              ? candidates.map((c, idx) => {
-                  const title = c.title || c.name || c.target_address || c.address || "BLE Tag";
-                  const addr = c.target_address || c.address || "";
-                  const meta = [c.kind || "BLE device", addr];
-                  if (c.rssi !== null && c.rssi !== undefined) {
-                    meta.push(`${fmtNumber(c.rssi, store.hass, 0)} dBm`);
-                  }
-                  if (c.area_name) {
-                    meta.push(`Nearest Area: ${c.area_name}`);
-                  }
-                  const selId = `ble-adopt-person-${idx}`;
-                  return renderSettingsRow({
-                    label: title,
-                    description: meta.join(" • "),
-                    control: html`<select id=${selId} aria-label=${`Assigned person for ${title}`}>
-                        <option value="">No person</option>
-                        ${persons.map((p) => html`<option value=${p.id}>${p.name}</option>`)}
-                      </select>
-                      <button
-                        type="button"
-                        @click=${(ev) => {
-                          const btn = ev.currentTarget;
-                          const sel = btn.parentElement?.querySelector(
-                            "select",
-                          );
-                          void store.quickAdoptBleCandidate(title, addr, sel?.value || "");
-                        }}
-                        class="btn btn-secondary btn-compact"
-                      >
-                        Adopt
-                      </button>`,
-                  });
-                })
-              : html`<p class="empty-state">No unadopted Bluetooth devices nearby.</p>`}
-          </div>`,
         })}
       </div>
     </div>
@@ -11209,6 +11427,9 @@ function renderActiveView(store) {
         return renderSystemOverviewView(store);
     }
   }
+  if (store.currentViewId === "discovered_devices") {
+    return renderDevicesDiscoveredView(store);
+  }
   if (!store.deviceSelected || store.currentViewId === "select_device_prompt") {
     return renderDevicesListView(store);
   }
@@ -11351,9 +11572,8 @@ class LatterStudio extends LitElement {
     const data = this.store.state;
     const caps = data?.capabilities || {};
     const isBleOnly = data?.config?.kind === "ble_tag";
-    const items = [
-      { viewId: "dashboard", label: "Overview" },
-    ];
+    const items
+       = [{ viewId: "dashboard", label: "Overview" }];
     if (!isBleOnly && caps.has_display !== false) {
       items.push({ viewId: "display", label: "Display", id: "nav-btn-display" });
       items.push({ viewId: "interface", label: "Interface", id: "nav-btn-interface" });
@@ -11372,7 +11592,7 @@ class LatterStudio extends LitElement {
         @click=${() => this.store.openDevicesLanding()}
         class="nav-btn nav-back-btn"
       >
-        <span>&larr; All Devices</span>
+        <span>&larr; Managed</span>
       </button>
       <div id="nav-selected-device-label" class="nav-device-title">
         ${data?.title || "—"}
@@ -11395,7 +11615,14 @@ class LatterStudio extends LitElement {
           _renderSidebar() {
     const isDeviceScope = this.store.currentScope === "device";
     const deviceCount = (this.store.state?.system_devices || []).length;
-    const allDevicesActive = isDeviceScope && (!this.store.deviceSelected || this.store.currentViewId === "select_device_prompt");
+    const discoveredLatterCount = (this.store.state?.discovered_latter_devices || []).length;
+    const isDeviceListScope =
+      !this.store.deviceSelected ||
+      this.store.currentViewId === "select_device_prompt" ||
+      this.store.currentViewId === "discovered_devices";
+    const managedActive =
+      isDeviceScope && isDeviceListScope && this.store.currentViewId !== "discovered_devices";
+    const discoveredActive = isDeviceScope && this.store.currentViewId === "discovered_devices";
     return html`<aside class="sidebar">
       <div role="tablist" aria-label="Scope" class="scope-tabs">
         <button
@@ -11439,18 +11666,30 @@ class LatterStudio extends LitElement {
               </button>`;
             })}
           </nav>`
-        : this.store.deviceSelected && this.store.currentViewId !== "select_device_prompt"
+        : !isDeviceListScope
           ? this._renderDeviceNav()
           : html`<nav id="nav-scope-devices-list" aria-label="Devices" class="nav-list">
               <button
                 type="button"
                 data-view="select_device_prompt"
-                aria-current=${allDevicesActive ? "page" : nothing}
+                aria-current=${managedActive ? "page" : nothing}
                 @click=${() => this.store.openDevicesLanding()}
-                class="nav-btn ${allDevicesActive ? "active" : ""}"
+                class="nav-btn ${managedActive ? "active" : ""}"
               >
-                <span>All Devices</span>
+                <span>Managed</span>
                 <span id="nav-system-count" class="nav-badge">${this.store.state ? String(deviceCount) : "—"}</span>
+              </button>
+              <button
+                type="button"
+                data-view="discovered_devices"
+                aria-current=${discoveredActive ? "page" : nothing}
+                @click=${() => this.store.openDiscoveredDevices()}
+                class="nav-btn ${discoveredActive ? "active" : ""}"
+              >
+                <span>Discovered</span>
+                ${discoveredLatterCount > 0
+                  ? html`<span id="nav-discovered-count" class="nav-badge">${String(discoveredLatterCount)}</span>`
+                  : nothing}
               </button>
             </nav>`}
     </aside>`;
@@ -11461,6 +11700,8 @@ class LatterStudio extends LitElement {
     const showHeaderUpdate =
       this.store.currentScope === "device" &&
       this.store.deviceSelected &&
+      this.store.currentViewId !== "select_device_prompt" &&
+      this.store.currentViewId !== "discovered_devices" &&
       Boolean(data?.live?.fw_update_available && data?.live?.fw_update_entity);
     const subtitle = this.store.pageSubtitle;
     return html`<div

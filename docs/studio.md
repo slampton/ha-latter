@@ -41,8 +41,7 @@ Shared entities, remotes, colors, and overrides live in the Latter hub entry's o
 
 ### BLE & Area Presence
 - **Live Area Presence & Sensor Fusion:** per-Area occupancy status, occupants, 6.0 dB cross-floor attenuation, and per-Area **Fusion Settings** (mode `weighted` / `any_or` / `ble_only` / `ble_and_sensor`, 20–95% threshold, and participating mmWave/PIR/door sensors).
-- **Per-Area BLE Signal Calibration:** live raw and effective RSSI per Area with **Live Stream On / Stream Paused** (`ble_survey_delta` WebSocket stream), **Calibrate Current Area**, and ±1 dB fine-tuning.
-- **Discovered Bluetooth Devices:** one-click **Adopt** for `private_ble_device` phones/watches, iBeacons, and static BLE MACs. → [Presence guide](presence.md)
+- **Per-Area BLE Signal Calibration:** live raw and effective RSSI per Area with **Live Stream On / Stream Paused** (`ble_survey_delta` WebSocket stream), **Calibrate Current Area**, and ±1 dB fine-tuning. → [Presence guide](presence.md)
 
 ### Tools
 | Card | What It Controls |
@@ -57,7 +56,9 @@ Shared entities, remotes, colors, and overrides live in the Latter hub entry's o
 
 ## Device Views
 
-**All Devices** (`/latter/devices`) filters by status, hardware class, BLE tracking, assigned person, firmware update availability, or Device Group, with **Add Device** and **Add BLE Tag** actions. Capabilities come directly from each device's Hardware Manifest v2 (screenless nodes and BLE tags hide display-only tabs).
+The **Devices** sidebar splits inventory lifecycle into two top-level views:
+- **Managed** (`/latter/devices`, page title **Managed Devices**): sortable inventory table whose card header updates dynamically with the selected category filter (*All Devices* by default, *Online Devices*, *Latter Displays*, *Screenless Devices*, *Roaming Devices*, *Stationary Devices*, *BLE-Tracked Devices*, *BLE Tags*, *Assigned to a Person*, *Updates Available*, or *Group: \<Name\>*). Capabilities come directly from each device's Hardware Manifest v2 (screenless nodes and BLE tags hide display-only tabs).
+- **Discovered** (`/latter/devices/discovered`, page title **Discovered Devices**, showing a sidebar count badge whenever unbound Latter ESPHome hardware is waiting): two stacked onboarding cards—**Latter Devices** (one-click **Adopt** for unbound ESPHome devices running Latter firmware with auto-detected Device Group and optional Person assignment, plus **Open Integration**) and **Bluetooth Devices** (searchable/filterable one-click **Adopt** for `private_ble_device` phones/watches, iBeacons, and named BLE advertisements, plus **Add BLE Tag**).
 
 ### Overview
 - **Needs Attention** banner whenever the device has open Repairs.
