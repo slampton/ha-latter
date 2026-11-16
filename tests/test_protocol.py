@@ -1054,14 +1054,18 @@ class TestDevicePrefsProtocol(unittest.TestCase):
         cascaded = studio_scope.clean_device_settings({"power_profile": "Always-On Wall / Desk"})
         self.assertEqual(cascaded["power_profile"], "Always-On Wall / Desk")
         self.assertEqual(cascaded["wake_word_mode"], "Always On")
+        self.assertEqual(cascaded["tap_to_wake"], "Single Tap")
         self.assertEqual(cascaded["battery_screen_timeout"], "Never")
         self.assertEqual(cascaded["battery_hibernate_timeout"], "Disabled")
 
+        watch_cascaded = studio_scope.clean_device_settings({"power_profile": "Wearable Watch"})
+        self.assertEqual(watch_cascaded["tap_to_wake"], "Double Tap")
+
         flipped = studio_scope.clean_device_settings(
-            {"tap_to_wake": "Disabled"},
+            {"tap_to_wake": "Double Tap"},
             current=cascaded,
         )
-        self.assertEqual(flipped["tap_to_wake"], "Disabled")
+        self.assertEqual(flipped["tap_to_wake"], "Double Tap")
         self.assertEqual(flipped["power_profile"], "Custom")
 
     def test_area_categories_parse_and_normalize(self) -> None:

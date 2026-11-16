@@ -723,7 +723,7 @@ const POWER_PROFILE_PREFS = {
   },
   "Handheld Roaming": {
     wake_word_mode: "Docked Only",
-    tap_to_wake: "Always On",
+    tap_to_wake: "Single Tap",
     pickup_to_wake: "Always On",
     battery_screen_timeout: "30s",
     docked_idle_timeout: "1 min",
@@ -732,7 +732,7 @@ const POWER_PROFILE_PREFS = {
   },
   "Wearable Watch": {
     wake_word_mode: "Docked Only",
-    tap_to_wake: "Always On",
+    tap_to_wake: "Double Tap",
     pickup_to_wake: "Always On",
     battery_screen_timeout: "15s",
     docked_idle_timeout: "1 min",
@@ -750,7 +750,7 @@ const POWER_PROFILE_PREFS = {
   },
   "Always-On Wall / Desk": {
     wake_word_mode: "Always On",
-    tap_to_wake: "Always On",
+    tap_to_wake: "Single Tap",
     pickup_to_wake: "Disabled",
     battery_screen_timeout: "Never",
     docked_idle_timeout: "5 min",

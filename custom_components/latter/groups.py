@@ -555,7 +555,7 @@ DEFAULT_DEVICE_GROUPS: list[dict[str, Any]] = [
             CONF_AREA_HANDOFF: False,
             "power_profile": "Custom",
             "wake_word_mode": "Always On",
-            "tap_to_wake": "Always On",
+            "tap_to_wake": "Single Tap",
             "pickup_to_wake": "Disabled",
             "battery_screen_timeout": "30s",
             "docked_idle_timeout": "5 min",

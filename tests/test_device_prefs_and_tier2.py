@@ -248,6 +248,7 @@ async def test_tier2_select_number_sleep_safe_and_buttons_online_vs_offline(
     await power_sel.async_select_option("Wearable Watch")
     assert hass.states.get(f"select.{slug}_power_profile").state == "Wearable Watch"
     assert coord.get_device_pref("battery_screen_timeout") == "15s"
+    assert coord.get_device_pref("tap_to_wake") == "Double Tap"
 
     await ww_sel.async_select_option("Always On")
     assert hass.states.get(f"select.{slug}_wake_word_mode").state == "Always On"

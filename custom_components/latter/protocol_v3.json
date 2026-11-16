@@ -646,7 +646,7 @@
           "name": "tap_to_wake",
           "cpp_enum": "TAP_TO_WAKE",
           "type": "string",
-          "description": "Touch wake policy (Always On|Docked Only|Disabled)"
+          "description": "Touch wake policy (Single Tap|Double Tap|Docked Only|Disabled)"
         },
         {
           "index": 7,
@@ -1187,7 +1187,7 @@
     },
     "Handheld Roaming": {
       "wake_word_mode": "Docked Only",
-      "tap_to_wake": "Always On",
+      "tap_to_wake": "Single Tap",
       "pickup_to_wake": "Always On",
       "battery_screen_timeout": "30s",
       "docked_idle_timeout": "1 min",
@@ -1196,7 +1196,7 @@
     },
     "Wearable Watch": {
       "wake_word_mode": "Docked Only",
-      "tap_to_wake": "Always On",
+      "tap_to_wake": "Double Tap",
       "pickup_to_wake": "Always On",
       "battery_screen_timeout": "15s",
       "docked_idle_timeout": "1 min",
@@ -1214,7 +1214,7 @@
     },
     "Always-On Wall / Desk": {
       "wake_word_mode": "Always On",
-      "tap_to_wake": "Always On",
+      "tap_to_wake": "Single Tap",
       "pickup_to_wake": "Disabled",
       "battery_screen_timeout": "Never",
       "docked_idle_timeout": "5 min",
