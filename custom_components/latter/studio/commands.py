@@ -1043,7 +1043,7 @@ async def _cmd_apply_batch_device_setting(
     _extra: dict[str, Any],
 ) -> None:
     raw_target = str(body.get("target") or body.get("group_id") or "all").strip()
-    if raw_target.startswith(("group:", "trait:")):
+    if raw_target.startswith("group:"):
         target_id = raw_target[6:].strip()
     else:
         target_id = raw_target or "all"
@@ -1061,10 +1061,6 @@ async def _cmd_apply_batch_device_setting(
     all_coords = [c for c in iter_coordinators(hass) if not c.is_ble_tag]
     if target_id == "all":
         targets = all_coords
-    elif target_id == "roaming":
-        targets = [c for c in all_coords if c.is_roaming_device]
-    elif target_id == "stationary":
-        targets = [c for c in all_coords if not c.is_roaming_device]
     else:
         targets = [c for c in all_coords if c.device_group == target_id]
 

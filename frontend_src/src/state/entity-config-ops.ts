@@ -179,7 +179,7 @@ function expandDevicePrefPatch(
     !("power_profile" in rawPatch) &&
     Object.keys(rawPatch).some((k) => POWER_PROFILE_SUBKEY_SET.has(k))
   ) {
-    const curProf = String(currentCfg.power_profile || "Portable Carry");
+    const curProf = String(currentCfg.power_profile || "Pocket Carry");
     const preset = POWER_PROFILE_PREFS[curProf];
     if (preset) {
       const merged = { ...currentCfg, ...rawPatch };

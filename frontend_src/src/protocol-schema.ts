@@ -25,7 +25,7 @@ export interface PowerProfileSettings {
 }
 
 export const POWER_PROFILE_PREFS: Record<string, PowerProfileSettings> = {
-  "Portable Carry": {
+  "Pocket Carry": {
     wake_word_mode: "Docked Only",
     tap_to_wake: "Docked Only",
     pickup_to_wake: "Docked Only",
@@ -49,15 +49,6 @@ export const POWER_PROFILE_PREFS: Record<string, PowerProfileSettings> = {
     pickup_to_wake: "Always On",
     battery_screen_timeout: "15s",
     docked_idle_timeout: "1 min",
-    battery_hibernate_timeout: "15 min",
-    docked_screensaver: true,
-  },
-  "Tabletop Dock": {
-    wake_word_mode: "Docked Only",
-    tap_to_wake: "Docked Only",
-    pickup_to_wake: "Disabled",
-    battery_screen_timeout: "30s",
-    docked_idle_timeout: "5 min",
     battery_hibernate_timeout: "15 min",
     docked_screensaver: true,
   },

@@ -137,13 +137,13 @@ async def test_online_set_device_prefs_rpc_and_diagnostic_sensor(
         "set_device_prefs",
         {
             "base_seq": 1,
-            "changes": "\x1e".join(["power_profile=Tabletop Dock", "alert_volume=70"]),
+            "changes": "\x1e".join(["power_profile=Pocket Carry", "alert_volume=70"]),
         },
     )
     assert coord.prefs_seq >= 2
-    assert coord.get_device_pref("power_profile") == "Tabletop Dock"
+    assert coord.get_device_pref("power_profile") == "Pocket Carry"
     assert coord.get_device_pref("tap_to_wake") == "Docked Only"
-    assert coord.get_device_pref("pickup_to_wake") == "Disabled"
+    assert coord.get_device_pref("pickup_to_wake") == "Docked Only"
     assert coord.get_device_pref("alert_volume") == 70
 
     # Diverging a subkey flips `power_profile` to `Custom`

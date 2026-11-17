@@ -1,9 +1,9 @@
 /**
- * Device Overview View (`dashboard`, D-029 / D-048):
- * - Column 1: High-level Status card (header state pill, 2x2 tonal metric tiles, footer links).
- * - Column 2: Quick Actions (immediate action tiles + live volume), unified Assignments card
- *   (Device Group with Custom / Save Custom Group / Manage Groups, Assigned Person, Remote Control Group),
- *   and spillover Sensors & Controls.
+ * Device Overview View (`dashboard`, D-029 / D-048 / D-049):
+ * - Column 1: High-level Status card (header state pill, 2x2 tonal metric tiles, footer links)
+ *   followed by Quick Actions (immediate action tiles + live volume).
+ * - Column 2: Unified Assignments card (Device Group with Custom / Save Custom Group / Manage Groups,
+ *   Assigned Person, Remote Control Group) followed by spillover Sensors & Controls.
  */
 
 import {
@@ -340,9 +340,7 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
               Download Backup
             </button>`,
         })}
-      </div>
 
-      <div class="column">
         ${showQuickActionsCard
           ? renderCard({
               title: "Quick Actions",
@@ -351,7 +349,9 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
                 ${otherQuickItems.map((it) => renderNativeControlRow(store, it))}`,
             })
           : nothing}
+      </div>
 
+      <div class="column">
         ${renderCard({
           id: "card-device-assignments",
           title: "Assignments",

@@ -156,8 +156,8 @@ class TestViewLayout(unittest.TestCase):
         self.assertIn("Add BLE Tag", discovered_view)
         self.assertIn('id="latter-adopt-table-box"', discovered_view)
         self.assertIn('id="ble-adopt-table-box"', discovered_view)
-        self.assertEqual(latter_const.STUDIO_REV, 22)
-        self.assertIn("const STUDIO_REV = 22;", js)
+        self.assertEqual(latter_const.STUDIO_REV, 23)
+        self.assertIn("const STUDIO_REV = 23;", js)
         self.assertNotIn("fusion-area", js)
         self.assertNotIn("d.has_ble ||", js)
         self.assertNotIn(".area-presence-box.occupied", js)
@@ -312,8 +312,13 @@ class TestViewLayout(unittest.TestCase):
             "Reset to Group",
             "Sync Group",
             "Screenless Devices",
+            "Portable Carry",
+            "Tabletop Dock",
+            "trait:roaming",
+            "trait:stationary",
         ):
             self.assertNotIn(retired_group_ui, js)
+        self.assertIn("Pocket Carry", js)
         self.assertNotIn("Configuration Profiles", js)
         self.assertNotIn("dash-power-profile-select", overview)
         self.assertNotIn("quick-profile-select", overview)
@@ -331,10 +336,14 @@ class TestViewLayout(unittest.TestCase):
         self.assertIn('store.switchView("interface")', overview)
         self.assertIn("renderQuickActionGrid(store, quickActionButtons)", overview)
         self.assertIn('id="cfg-device_group"', overview)
-        self.assertLess(
-            overview.index("renderQuickActionGrid(store, quickActionButtons)"),
-            overview.index('id="cfg-device_group"'),
-        )
+        overview_cols = overview.split('<div class="column">')
+        self.assertEqual(len(overview_cols), 3)
+        overview_col_1, overview_col_2 = overview_cols[1], overview_cols[2]
+        self.assertIn('id="st-status-chip"', overview_col_1)
+        self.assertIn("renderQuickActionGrid(store, quickActionButtons)", overview_col_1)
+        self.assertNotIn('id: "card-device-assignments"', overview_col_1)
+        self.assertIn('id: "card-device-assignments"', overview_col_2)
+        self.assertNotIn("renderQuickActionGrid(store, quickActionButtons)", overview_col_2)
         self.assertLess(
             overview.index('id="cfg-device_group"'),
             overview.index('id: "cfg-assigned_person"'),

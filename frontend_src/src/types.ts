@@ -375,7 +375,6 @@ export interface SharedControlTarget {
   subentry_id?: string;
   device_slug?: string;
   device_group?: string;
-  is_roaming?: boolean;
   entity_id: string;
   state: string;
 }

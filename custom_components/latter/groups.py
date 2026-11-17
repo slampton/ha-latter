@@ -542,7 +542,7 @@ DEFAULT_DEVICE_GROUPS: list[dict[str, Any]] = [
             "auto_brightness_mode": "Sun Synchronized",
             "day_brightness": "90%",
             "night_brightness": "70%",
-            "ble_beacon_mode": "Handheld Only",
+            "ble_beacon_mode": "Handheld + Screen Off",
         },
     },
     {

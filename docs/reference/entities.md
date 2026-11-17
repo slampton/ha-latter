@@ -27,7 +27,7 @@ Latter spans **6 Home Assistant platforms** ([`sensor.py`](../../custom_componen
 | `binary_sensor.<slug>_timer_active` | `binary_sensor` (`running`) | `on` / `off` *(display devices)* | `paused`, `remaining_seconds` — event-driven via `latter.timer_alarm_state` |
 | `sensor.<slug>_timer_remaining` | `sensor` (`duration`, `s`) | Remaining seconds *(display devices)* | `running`, `paused` — ticked locally at 1 Hz in Home Assistant while running (zero Wi-Fi polling) |
 | `binary_sensor.<slug>_alarm_ringing` | `binary_sensor` (`sound`) | `on` / `off` *(display devices)* | Asserts while an on-device alarm or timer chime is ringing (`latter.timer_alarm_state`) |
-| `select.<slug>_power_profile` | `select` (`config`) | *Portable Carry* · *Handheld Roaming* · *Wearable Watch* · *Tabletop Dock* · *Always-On Wall / Desk* · *Custom* | Sleep-safe subentry control *(display devices)*; syncs via `device_prefs` |
+| `select.<slug>_power_profile` | `select` (`config`) | *Pocket Carry* · *Handheld Roaming* · *Wearable Watch* · *Always-On Wall / Desk* · *Custom* | Sleep-safe subentry control *(display devices)*; syncs via `device_prefs` |
 | `select.<slug>_wake_word_mode` | `select` (`config`) | *Docked Only* · *Always On* · *Disabled* | Sleep-safe subentry control *(mic-equipped devices)*; syncs via `device_prefs` |
 | `number.<slug>_alert_volume` | `number` (`config`) | `20–100%` (step `5%`) | Sleep-safe chime/alarm volume *(speaker-equipped devices)*; syncs via `device_prefs` |
 | `button.<slug>_find_my_device` | `button` (`identify`) | Press | Dispatches `latter_device_command(command="find_my")` *(speaker-equipped devices)* |

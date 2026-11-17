@@ -928,7 +928,7 @@ WEATHER_SIM_CONDITION_OPTIONS: tuple[str, ...] = (
 )
 
 DEVICE_PREF_SPECS: tuple[DevicePrefSpec, ...] = (
-    DevicePrefSpec("power_profile", "Power Profile", "select", "Portable Carry", "sleep", "display", "behavior", options=POWER_PROFILE_OPTIONS),
+    DevicePrefSpec("power_profile", "Power Profile", "select", "Pocket Carry", "sleep", "display", "behavior", options=POWER_PROFILE_OPTIONS),
     DevicePrefSpec("wake_word_mode", "Wake Word Mode", "select", "Docked Only", "voice", "mic", "behavior", options=WAKE_WORD_MODE_OPTIONS),
     DevicePrefSpec("tap_to_wake", "Tap to Wake", "select", "Docked Only", "sleep", "display", "behavior", options=TAP_TO_WAKE_OPTIONS),
     DevicePrefSpec("pickup_to_wake", "Pickup to Wake", "select", "Docked Only", "sleep", "display_imu", "behavior", options=WAKE_GESTURE_OPTIONS),

@@ -14,7 +14,7 @@ const POWER_PROFILE_SUBKEYS = [
   "docked_screensaver",
 ];
 const POWER_PROFILE_PREFS = {
-  "Portable Carry": {
+  "Pocket Carry": {
     wake_word_mode: "Docked Only",
     tap_to_wake: "Docked Only",
     pickup_to_wake: "Docked Only",
@@ -38,15 +38,6 @@ const POWER_PROFILE_PREFS = {
     pickup_to_wake: "Always On",
     battery_screen_timeout: "15s",
     docked_idle_timeout: "1 min",
-    battery_hibernate_timeout: "15 min",
-    docked_screensaver: true,
-  },
-  "Tabletop Dock": {
-    wake_word_mode: "Docked Only",
-    tap_to_wake: "Docked Only",
-    pickup_to_wake: "Disabled",
-    battery_screen_timeout: "30s",
-    docked_idle_timeout: "5 min",
     battery_hibernate_timeout: "15 min",
     docked_screensaver: true,
   },
@@ -194,7 +185,7 @@ const DEFAULT_HOME_CATEGORIES_TOKENS = [
 /**
  * Canonical constants, route maps, issue messages, and Title Case dictionaries for Latter Studio.
  */
-const STUDIO_REV = 22;
+const STUDIO_REV = 23;
 const MAX_DOCK_ITEMS = 24;
 const MAX_PINNED_ITEMS = 96;
 const SHORTCUT_LABEL_MAX = 24;
@@ -4656,7 +4647,7 @@ function expandDevicePrefPatch(
     !("power_profile" in rawPatch) &&
     Object.keys(rawPatch).some((k) => POWER_PROFILE_SUBKEY_SET.has(k))
   ) {
-    const curProf = String(currentCfg.power_profile || "Portable Carry");
+    const curProf = String(currentCfg.power_profile || "Pocket Carry");
     const preset = POWER_PROFILE_PREFS[curProf];
     if (preset) {
       const merged = { ...currentCfg, ...rawPatch };
@@ -6183,8 +6174,6 @@ async function copyDeviceToGroupBaselineOp(
 function resolvedBatchTargetIdOp(store) {
   const filter = store.batchTargetFilter || "all";
   if (filter.startsWith("group:")) return filter.slice(6);
-  if (filter === "trait:roaming") return "roaming";
-  if (filter === "trait:stationary") return "stationary";
   return filter;
 }
 async function applyBatchDeviceSettingOp(
@@ -6211,9 +6200,7 @@ function filteredControlTargetsOp(store, ctrl) {
   return (ctrl.targets || [])
     .filter((t) => {
       if (grpId === "all") return true;
-      if (grpId === "roaming") return Boolean(t.is_roaming);
-      if (grpId === "stationary") return !t.is_roaming;
-      return t.device_group === grpId;
+      return (t.device_group || "custom") === grpId;
     })
     .map((t) => t.entity_id)
     .filter(Boolean);
@@ -10853,11 +10840,11 @@ function renderDeviceInterfaceView(store) {
 
 // --- src/views/device-overview-view.ts ---
 /**
- * Device Overview View (`dashboard`, D-029 / D-048):
- * - Column 1: High-level Status card (header state pill, 2x2 tonal metric tiles, footer links).
- * - Column 2: Quick Actions (immediate action tiles + live volume), unified Assignments card
- *   (Device Group with Custom / Save Custom Group / Manage Groups, Assigned Person, Remote Control Group),
- *   and spillover Sensors & Controls.
+ * Device Overview View (`dashboard`, D-029 / D-048 / D-049):
+ * - Column 1: High-level Status card (header state pill, 2x2 tonal metric tiles, footer links)
+ *   followed by Quick Actions (immediate action tiles + live volume).
+ * - Column 2: Unified Assignments card (Device Group with Custom / Save Custom Group / Manage Groups,
+ *   Assigned Person, Remote Control Group) followed by spillover Sensors & Controls.
  */
 const ICON_AREA = "M12,6.5A2.5,2.5 0 0,1 14.5,9A2.5,2.5 0 0,1 12,11.5A2.5,2.5 0 0,1 9.5,9A2.5,2.5 0 0,1 12,6.5M12,2A7,7 0 0,1 19,9C19,14.25 12,22 12,22C12,22 5,14.25 5,9A7,7 0 0,1 12,2M12,4A5,5 0 0,0 7,9C7,10 7,12 12,18.71C17,12 17,10 17,9A5,5 0 0,0 12,4Z";
 const ICON_BATTERY = "M16,20H8V6H16M16.67,4H15V2H9V4H7.33A1.33,1.33 0 0,0 6,5.33V20.67C6,21.4 6.6,22 7.33,22H16.67A1.33,1.33 0 0,0 18,20.67V5.33C18,4.6 17.4,4 16.67,4Z";
@@ -11158,9 +11145,7 @@ function renderDeviceOverviewView(store) {
               Download Backup
             </button>`,
         })}
-      </div>
 
-      <div class="column">
         ${showQuickActionsCard
           ? renderCard({
               title: "Quick Actions",
@@ -11169,7 +11154,9 @@ function renderDeviceOverviewView(store) {
                 ${otherQuickItems.map((it) => renderNativeControlRow(store, it))}`,
             })
           : nothing}
+      </div>
 
+      <div class="column">
         ${renderCard({
           id: "card-device-assignments",
           title: "Assignments",
@@ -12505,9 +12492,9 @@ function renderDevicesListView(store) {
 
 // --- src/views/system-groups-view.ts ---
 /**
- * System Device Groups & Batch Controls View (`system_sync`, D-048):
+ * System Device Groups & Batch Controls View (`system_sync`, D-048 / D-049):
  * Column 1: Enclosed per-Group containers with inline expandable Baseline Settings.
- * Column 2: Dedicated one-off Batch Controls across All, Roaming, Stationary, or populated Groups.
+ * Column 2: Dedicated one-off Batch Controls across All Latter Devices, any Device Group, or Custom.
  */
 const POWER_PROFILE_OPTIONS = [
   ...Object.keys(POWER_PROFILE_PREFS),
@@ -12655,7 +12642,7 @@ function renderGroupBaselineDrawer(
         "Power Profile",
         cfg.power_profile,
         POWER_PROFILE_OPTIONS,
-        "Portable Carry",
+        "Pocket Carry",
       )}
       ${renderBaselineSelect(
         store,
@@ -12968,25 +12955,31 @@ function renderSystemGroupsView(store) {
   const latterDevices = allDevices.filter((d) => d.kind !== "ble_tag");
   const groups = data?.device_groups || [];
   const systemControls = data?.system_controls || [];
-  const activeFilter = store.batchTargetFilter || "all";
-  const activeTargetId = store.resolvedBatchTargetId();
+  const validTargetFilters = new Set ([
+    "all",
+    "group:custom",
+    ...groups.map((g) => `group:${g.id}`),
+  ]);
+  const activeFilter = validTargetFilters.has(store.batchTargetFilter || "all")
+    ? store.batchTargetFilter || "all"
+    : "all";
+  const activeTargetId = activeFilter === "all" ? "all" : activeFilter.slice(6);
   const activeCat = store.batchCategoryFilter || "all";
-  const populatedGroups = groups.filter((g) =>
-    latterDevices.some((d) => d.device_group === g.id),
-  );
+  const selectedGroupName =
+    activeTargetId === "all"
+      ? "All Latter Devices"
+      : activeTargetId === "custom"
+        ? "Custom"
+        : groups.find((g) => g.id === activeTargetId)?.name || activeTargetId;
   const matchingDevs = latterDevices.filter((d) => {
     if (activeTargetId === "all") return true;
-    if (activeTargetId === "roaming") return Boolean(d.is_roaming);
-    if (activeTargetId === "stationary") return !d.is_roaming;
-    return d.device_group === activeTargetId;
+    return (d.device_group || "custom") === activeTargetId;
   });
   const renderBatchControlRow = (fc) => {
     if (activeCat !== "all" && fc.section !== activeCat) return nothing;
     const targets = (fc.targets || []).filter((t) => {
       if (activeTargetId === "all") return true;
-      if (activeTargetId === "roaming") return Boolean(t.is_roaming);
-      if (activeTargetId === "stationary") return !t.is_roaming;
-      return t.device_group === activeTargetId;
+      return (t.device_group || "custom") === activeTargetId;
     });
     if (!targets.length) return nothing;
     const states = Array.from(new Set(targets.map((t) => String(t.state ?? ""))));
@@ -13184,21 +13177,18 @@ function renderSystemGroupsView(store) {
               }}
             >
               <option value="all" ?selected=${activeFilter === "all"}>All Latter Devices</option>
-              <option value="trait:roaming" ?selected=${activeFilter === "trait:roaming"}>
-                Roaming Devices
-              </option>
-              <option value="trait:stationary" ?selected=${activeFilter === "trait:stationary"}>
-                Stationary Devices
-              </option>
-              ${populatedGroups.map(
+              ${groups.map(
                 (g) =>
                   html`<option
                     value=${`group:${g.id}`}
                     ?selected=${activeFilter === `group:${g.id}`}
                   >
-                    Group: ${g.name}
+                    ${g.name}
                   </option>`,
               )}
+              <option value="group:custom" ?selected=${activeFilter === "group:custom"}>
+                Custom
+              </option>
             </select>
             <select
               id="batch-cat-filter"
@@ -13221,7 +13211,11 @@ function renderSystemGroupsView(store) {
             </select>`,
           contentClass: "stack",
           body: !matchingDevs.length
-            ? html`<p class="empty-state">No Latter Devices match the selected target.</p>`
+            ? html`<p class="empty-state">
+                ${activeTargetId === "all"
+                  ? "No Latter Devices onboarded yet."
+                  : `No Latter Devices are currently assigned to ${selectedGroupName}.`}
+              </p>`
             : html`<div class="help-text">
                   Target (${fmtNumber(matchingDevs.length, store.hass, 0)}): ${matchingDevs.map((d) => d.title).join(", ")}
                 </div>

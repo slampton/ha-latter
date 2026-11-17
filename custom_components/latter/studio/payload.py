@@ -340,7 +340,6 @@ def _build_system_shared_controls(
                 {
                     "device_slug": coord.device_slug,
                     "device_group": coord.device_group,
-                    "is_roaming": coord.is_roaming_device,
                     "pref_key": spec.key,
                     "state": state_val,
                 }
@@ -384,7 +383,6 @@ def _build_system_shared_controls(
                 {
                     "device_slug": coord.device_slug,
                     "device_group": coord.device_group,
-                    "is_roaming": coord.is_roaming_device,
                     "pref_key": conf_key,
                     "state": "on" if cur_val else "off",
                 }

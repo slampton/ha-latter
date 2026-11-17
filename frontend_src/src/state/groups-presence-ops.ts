@@ -154,8 +154,6 @@ export async function copyDeviceToGroupBaselineOp(
 export function resolvedBatchTargetIdOp(store: StudioStore): string {
   const filter = store.batchTargetFilter || "all";
   if (filter.startsWith("group:")) return filter.slice(6);
-  if (filter === "trait:roaming") return "roaming";
-  if (filter === "trait:stationary") return "stationary";
   return filter;
 }
 
@@ -184,9 +182,7 @@ export function filteredControlTargetsOp(store: StudioStore, ctrl: SharedControl
   return (ctrl.targets || [])
     .filter((t) => {
       if (grpId === "all") return true;
-      if (grpId === "roaming") return Boolean(t.is_roaming);
-      if (grpId === "stationary") return !t.is_roaming;
-      return t.device_group === grpId;
+      return (t.device_group || "custom") === grpId;
     })
     .map((t) => t.entity_id)
     .filter(Boolean);

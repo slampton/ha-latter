@@ -2806,7 +2806,7 @@ store.ingestPayload(
         name: "Guest Suites",
         description: "Guest bedroom displays",
         builtin: false,
-        device_config: { power_profile: "Tabletop Dock", native_ble_tracking: false },
+        device_config: { power_profile: "Pocket Carry", native_ble_tracking: false },
       },
     ],
     system_devices: [
@@ -2999,18 +2999,22 @@ return {
             preamble_js=stub_deps,
         )
 
-        # Column 1 enclosed .area-presence-box containers + Column 2 Batch Controls with Mixed chip & populated-only group targets
+        # Column 1 enclosed .area-presence-box containers + Column 2 Batch Controls listing all Device Groups + Custom
         self.assertIn('id=group-box-handhelds class="area-presence-box"', got["groupsHtml"])
         self.assertIn('id=group-box-guest_suites class="area-presence-box"', got["groupsHtml"])
         self.assertIn("<summary>Baseline Settings</summary>", got["groupsHtml"])
+        self.assertIn("Pocket Carry", got["groupsHtml"])
+        self.assertNotIn("Portable Carry", got["groupsHtml"])
+        self.assertNotIn("Tabletop Dock", got["groupsHtml"])
         self.assertIn("aria-label=Delete group Guest Suites", got["groupsHtml"])
         self.assertNotIn("aria-label=Delete group Handhelds", got["groupsHtml"])
         batch_select = got["groupsHtml"][
             got["groupsHtml"].index('id="batch-target-filter"') : got["groupsHtml"].index('id="batch-cat-filter"')
         ]
-        self.assertIn("Group: Handhelds", batch_select)
-        self.assertNotIn("Group: Wearables", batch_select)
-        self.assertNotIn("Group: Guest Suites", batch_select)
+        for expected_opt in ("All Latter Devices", "Handhelds", "Wearables", "Wall & Desk Panels", "Guest Suites", "Custom"):
+            self.assertIn(expected_opt, batch_select)
+        self.assertNotIn("Roaming Devices", batch_select)
+        self.assertNotIn("Stationary Devices", batch_select)
         self.assertIn("Voice Follows Me", got["groupsHtml"])
         self.assertIn("Mixed values", got["groupsHtml"])
 

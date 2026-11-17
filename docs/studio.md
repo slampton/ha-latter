@@ -37,7 +37,7 @@ Shared entities, remotes, colors, and overrides live in the Latter hub entry's o
 
 ### Device Groups
 - **Column 1 — Device Groups:** 3 built-in hardware presets (*Handhelds*, *Wearables*, *Wall & Desk Panels*) plus custom groups rendered in enclosed cards, each storing a reusable **operational baseline** (power profile, timeouts, brightness schedule, wake-word mode & sensitivity, alert volume, BLE tracking, *Voice Follows Me*, media handoff, perimeter security policy) without overwriting personal appearance settings. Includes a top creation bar (with optional **Copy from** Device seeding) and an inline **Baseline Settings** + **Copy From Device** drawer inside each group box.
-- **Column 2 — Batch Controls:** applies a one-time live setting change across *All Latter Devices*, *Roaming Devices*, *Stationary Devices*, or any populated group (showing **Mixed** when matching Devices differ), plus a collapsible **Appearance & Personalization** drawer, without altering saved group baselines.
+- **Column 2 — Batch Controls:** applies a one-time live setting change across *All Latter Devices*, any configured Device Group (*Handhelds*, *Wearables*, *Wall & Desk Panels*, or custom groups), or *Custom* Devices (showing **Mixed** when matching Devices differ), plus a collapsible **Appearance & Personalization** drawer, without altering saved group baselines.
 
 ### BLE & Area Presence
 - **Column 1 — Area Presence & Sensors:** unified enclosed Area cards showing live occupancy confidence, Floor, and BLE coverage chips (`Signature`, `BLE Proxy`, or `No BLE Proxy`), occupant and distance telemetry, an inline **Calibrate** shortcut that smoothly scrolls to **Walk-Around BLE Calibration** with a warning-highlighted target handoff (and **Clear Signature** when calibrated), **Presence Mode** (`weighted` / `any_or` / `ble_only` / `ble_and_sensor`), and an enclosed **Sensor & Threshold Settings** drawer (**Occupied At** `20–95%` threshold and **Sensors That Count** mmWave/PIR/door pills).
@@ -63,9 +63,8 @@ The **Devices** sidebar splits inventory lifecycle into two top-level views:
 
 ### Overview
 - **Needs Attention** banner whenever the device has open Repairs.
-- **Status:** online/offline/update state chip, 2×2 glanceable tiles for **Area** (placement & closest BLE proxy), **Battery / Power** (*Plugged in* when docked), **Wi-Fi / BLE Signal**, and **Firmware**, plus **Open in ESPHome** and **Download Backup**.
-- **Quick Actions:** Find My Device, Trigger Voice Assistant, Activate Screensaver, Hibernate Device, Restart Device, and live **Speaker Volume**.
-- **Assignments:** unified card for **Device Group** (switches automatically to *Custom* whenever operational settings diverge from a group baseline, with **Save Custom Group** and **Manage Groups**), **Assigned Person**, and **Remote Control Group** (**Configure** shortcut to **Interface**).
+- **Column 1 — Status & Quick Actions:** **Status** renders an online/offline/update state chip, 2×2 glanceable tiles for **Area** (placement & closest BLE proxy), **Battery / Power** (*Plugged in* when docked), **Wi-Fi / BLE Signal**, and **Firmware**, plus **Open in ESPHome** and **Download Backup**; directly underneath, **Quick Actions** surfaces Find My Device, Trigger Voice Assistant, Activate Screensaver, Hibernate Device, Restart Device, and live **Speaker Volume**.
+- **Column 2 — Assignments:** unified card at the top of the right column for **Device Group** (switches automatically to *Custom* whenever operational settings diverge from a group baseline, with **Save Custom Group** and **Manage Groups**), **Assigned Person**, and **Remote Control Group** (**Configure** shortcut to **Interface**).
 
 ### Display *(Visual Appearance)*
 - **Column 1:** **Home Screen** (**Wake Greeting**, **Weather Background**, and **Sun & Moon** pills—when Weather Background is on, Home renders the live weather sky even if a wallpaper is active across other pages), **Screensavers** (docked switch, style, idle timeout, **Preview**), **Voice Assistant** (**Visual Profile**), **Brightness** (manual or Sun/schedule auto), and **Clock** (**Clock Face**: *Minimal Digital*, *Modern Analog*, *Hybrid Digital*; **Time Format**).
@@ -87,7 +86,7 @@ The **Devices** sidebar splits inventory lifecycle into two top-level views:
 - **Sound & Playback:** **Default Speaker**, conditional **Music Assistant Player** override, **Media Follows This Device to Its New Area**, **Alert Volume**, **Volume Step Size**, and **Game Sound Effects**.
 
 ### Power
-- **Sleep & Wake:** **Power Profile** (*Portable Carry*, *Handheld Roaming*, *Wearable Watch*, *Tabletop Dock*, *Always-On Wall / Desk*, *Custom*), **Tap to Wake**, **Pickup to Wake**, **Battery Screen Timeout**, **Battery Hibernate Timeout**, and **Hold Crown to Power Off**, alongside live **Power & Battery** telemetry.
+- **Sleep & Wake:** **Power Profile** (*Pocket Carry*, *Handheld Roaming*, *Wearable Watch*, *Always-On Wall / Desk*, *Custom*), **Tap to Wake**, **Pickup to Wake**, **Battery Screen Timeout**, **Battery Hibernate Timeout**, and **Hold Crown to Power Off**, alongside live **Power & Battery** telemetry.
 
 ### Presence
 - **Area Tracking:** **Track the Area with BLE Proxies**.

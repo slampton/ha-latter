@@ -1,7 +1,7 @@
 /**
- * System Device Groups & Batch Controls View (`system_sync`, D-048):
+ * System Device Groups & Batch Controls View (`system_sync`, D-048 / D-049):
  * Column 1: Enclosed per-Group containers with inline expandable Baseline Settings.
- * Column 2: Dedicated one-off Batch Controls across All, Roaming, Stationary, or populated Groups.
+ * Column 2: Dedicated one-off Batch Controls across All Latter Devices, any Device Group, or Custom.
  */
 
 import {
@@ -170,7 +170,7 @@ function renderGroupBaselineDrawer(
         "Power Profile",
         cfg.power_profile,
         POWER_PROFILE_OPTIONS,
-        "Portable Carry",
+        "Pocket Carry",
       )}
       ${renderBaselineSelect(
         store,
@@ -485,28 +485,34 @@ export function renderSystemGroupsView(store: StudioStore): TemplateResult {
   const groups = data?.device_groups || [];
   const systemControls = data?.system_controls || [];
 
-  const activeFilter = store.batchTargetFilter || "all";
-  const activeTargetId = store.resolvedBatchTargetId();
+  const validTargetFilters = new Set<string>([
+    "all",
+    "group:custom",
+    ...groups.map((g) => `group:${g.id}`),
+  ]);
+  const activeFilter = validTargetFilters.has(store.batchTargetFilter || "all")
+    ? store.batchTargetFilter || "all"
+    : "all";
+  const activeTargetId = activeFilter === "all" ? "all" : activeFilter.slice(6);
   const activeCat = store.batchCategoryFilter || "all";
 
-  const populatedGroups = groups.filter((g) =>
-    latterDevices.some((d) => d.device_group === g.id),
-  );
+  const selectedGroupName =
+    activeTargetId === "all"
+      ? "All Latter Devices"
+      : activeTargetId === "custom"
+        ? "Custom"
+        : groups.find((g) => g.id === activeTargetId)?.name || activeTargetId;
 
   const matchingDevs = latterDevices.filter((d) => {
     if (activeTargetId === "all") return true;
-    if (activeTargetId === "roaming") return Boolean(d.is_roaming);
-    if (activeTargetId === "stationary") return !d.is_roaming;
-    return d.device_group === activeTargetId;
+    return (d.device_group || "custom") === activeTargetId;
   });
 
   const renderBatchControlRow = (fc: SharedControlItem): TemplateResult | typeof nothing => {
     if (activeCat !== "all" && fc.section !== activeCat) return nothing;
     const targets = (fc.targets || []).filter((t) => {
       if (activeTargetId === "all") return true;
-      if (activeTargetId === "roaming") return Boolean(t.is_roaming);
-      if (activeTargetId === "stationary") return !t.is_roaming;
-      return t.device_group === activeTargetId;
+      return (t.device_group || "custom") === activeTargetId;
     });
     if (!targets.length) return nothing;
 
@@ -710,21 +716,18 @@ export function renderSystemGroupsView(store: StudioStore): TemplateResult {
               }}
             >
               <option value="all" ?selected=${activeFilter === "all"}>All Latter Devices</option>
-              <option value="trait:roaming" ?selected=${activeFilter === "trait:roaming"}>
-                Roaming Devices
-              </option>
-              <option value="trait:stationary" ?selected=${activeFilter === "trait:stationary"}>
-                Stationary Devices
-              </option>
-              ${populatedGroups.map(
+              ${groups.map(
                 (g) =>
                   html`<option
                     value=${`group:${g.id}`}
                     ?selected=${activeFilter === `group:${g.id}`}
                   >
-                    Group: ${g.name}
+                    ${g.name}
                   </option>`,
               )}
+              <option value="group:custom" ?selected=${activeFilter === "group:custom"}>
+                Custom
+              </option>
             </select>
             <select
               id="batch-cat-filter"
@@ -747,7 +750,11 @@ export function renderSystemGroupsView(store: StudioStore): TemplateResult {
             </select>`,
           contentClass: "stack",
           body: !matchingDevs.length
-            ? html`<p class="empty-state">No Latter Devices match the selected target.</p>`
+            ? html`<p class="empty-state">
+                ${activeTargetId === "all"
+                  ? "No Latter Devices onboarded yet."
+                  : `No Latter Devices are currently assigned to ${selectedGroupName}.`}
+              </p>`
             : html`<div class="help-text">
                   Target (${fmtNumber(matchingDevs.length, store.hass, 0)}): ${matchingDevs.map((d) => d.title).join(", ")}
                 </div>
