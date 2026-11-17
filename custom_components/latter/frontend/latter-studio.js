@@ -92,6 +92,22 @@ const HOME_CATEGORIES_CATALOG = [
   {token: "entry", label: "Entry & Garage"},
   {token: "vacuum", label: "Robot Vacuum"},
 ];
+const TOOLS_ITEMS_CATALOG = [
+  {token: "stopwatch", label: "Analog Chronograph", capability: "round"},
+  {token: "level", label: "Bubble Level", capability: "imu"},
+  {token: "flashlight", label: "Flashlight"},
+  {token: "calculator", label: "Calculator"},
+  {token: "dice", label: "Dice Roll"},
+  {token: "coin_flip", label: "Coin Flip"},
+];
+const GAMES_ITEMS_CATALOG = [
+  {token: "marbles", label: "Marbles"},
+  {token: "archery", label: "Archery"},
+  {token: "bricks", label: "Bricks"},
+  {token: "chomp", label: "Chomp"},
+  {token: "2048", label: "2048"},
+  {token: "memory", label: "Memory Match"},
+];
 const DEFAULT_DOCK_ROUTES = "app:pinned,app:music,app:home_hub,app:area,app:remote,app:games,app:tools";
 const DEFAULT_DOCK_ROUTES_TOKENS = [
   "app:pinned",
@@ -133,15 +149,68 @@ const DEFAULT_HOME_CATEGORIES_TOKENS = [
   "entry",
   "vacuum",
 ];
+const DEFAULT_TOOLS_ITEMS = "stopwatch,level,flashlight,calculator,dice,coin_flip";
+const DEFAULT_TOOLS_ITEMS_TOKENS = [
+  "stopwatch",
+  "level",
+  "flashlight",
+  "calculator",
+  "dice",
+  "coin_flip",
+];
+const DEFAULT_GAMES_ITEMS = "marbles,archery,bricks,chomp,2048,memory";
+const DEFAULT_GAMES_ITEMS_TOKENS = [
+  "marbles",
+  "archery",
+  "bricks",
+  "chomp",
+  "2048",
+  "memory",
+];
 
 // --- src/constants.ts ---
 /**
  * Canonical constants, route maps, issue messages, and Title Case dictionaries for Latter Studio.
  */
-const STUDIO_REV = 26;
+const STUDIO_REV = 27;
 const MAX_DOCK_ITEMS = 24;
 const MAX_PINNED_ITEMS = 96;
 const SHORTCUT_LABEL_MAX = 24;
+const NATIVE_DOCK_APP_TOKENS = [
+  "app:pinned",
+  "app:music",
+  "app:home_hub",
+  "app:area",
+  "app:remote",
+  "app:weather",
+  "app:time",
+  "app:clock",
+  "app:tools",
+  "app:games",
+];
+const NATIVE_DOCK_CONFIG_APP_MAP = {
+  "app:pinned": "pinned",
+  "app:music": "music",
+  "app:home_hub": "home_hub",
+  "app:area": "area",
+  "app:remote": "remote",
+  "app:time": "time",
+  "app:clock": "clock",
+  "app:tools": "tools",
+  "app:games": "games",
+};
+const START_SCREEN_CONFIG_APP_MAP = {
+  Pinned: "pinned",
+  Media: "music",
+  "Home Hub": "home_hub",
+  Cameras: "home_hub",
+  "Area Controls": "area",
+  Remote: "remote",
+  "Time App": "time",
+  "Clock Face": "clock",
+  Tools: "tools",
+  Games: "games",
+};
 const MAX_WALLPAPER_UPLOAD_BYTES = 15 * 1024 * 1024;
 const DEVICE_VIEW_SLUGS = {
   dashboard: "overview",
@@ -316,6 +385,8 @@ const GROUP_INTERFACE_NON_PREF_KEYS = [
   "pinned_items",
   "area_categories",
   "home_categories",
+  "tools_items",
+  "games_items",
   "activity_card",
   "activity_sources",
   "device_remote_group",
@@ -2935,10 +3006,146 @@ function renderQuickActionGrid(
 
 // --- src/components/dialogs.ts ---
 /**
- * Native `<dialog>` Modals for Latter Studio (Remove Device, Reset Device, Add BLE Tag, Custom Color Wheel).
- * Uses component-scoped pointer capture on `<canvas>` — zero `window.*` listeners.
+ * Native `<dialog>` Modals for Latter Studio:
+ * - Remove Device, Reset Device, Add BLE Tag, Custom Color Wheel, Save Custom Group
+ * - Custom Dock / Pinned Shortcut Modal (`#latter-shortcut-modal`)
+ * - Native App Configuration Modal (`#latter-app-config-modal`, D-053)
+ * Uses component-scoped pointer capture on `<canvas>` — zero `window.*` listeners,
+ * and two-pass dialog closing-before-opening so two modals are never open simultaneously.
  */
 let cwWheelPainted = false;
+const PINNED_UTC_ZONES = new Set([
+  "UTC",
+  "Etc/UTC",
+  "GMT",
+  "Etc/GMT",
+  "Etc/GMT+0",
+  "Etc/GMT-0",
+  "Etc/GMT0",
+]);
+const IANA_ZONE_PATTERN = /^[A-Za-z0-9_+-]+(?:\/[A-Za-z0-9_+-]+)+$/;
+const KNOWN_WORLD_CLOCK_ZONES = new Set(WORLD_CLOCK_ZONES_CATALOG.map((z) => z.iana));
+const TEXT_INPUT_DEBOUNCE_MS = 600;
+const FALLBACK_CLOCK_FACE_OPTIONS = [
+  "Minimal Digital",
+  "Modern Analog",
+  "Hybrid Digital",
+];
+const FALLBACK_TIME_FORMAT_OPTIONS = [
+  "12-Hour (AM/PM)",
+  "24-Hour",
+];
+const FALLBACK_ALBUM_SORT_OPTIONS = [
+  "Alphabetical",
+  "Newest on Top",
+  "Oldest on Top",
+];
+const FALLBACK_ARTIST_SORT_OPTIONS = [
+  "Oldest on Top",
+  "Newest on Top",
+  "Alphabetical",
+];
+const FALLBACK_PODCAST_SORT_OPTIONS = [
+  "Newest on Top",
+  "Oldest on Top",
+];
+const APP_MODAL_TITLES = {
+  pinned: "Pinned App",
+  home_hub: "Home Hub",
+  area: "Area Control",
+  music: "Music",
+  remote: "Remote Control",
+  time: "Time",
+  clock: "Clock Face",
+  tools: "Tools",
+  games: "Games",
+};
+function isImeSafeEnter(ev) {
+  return ev.key === "Enter" && !ev.isComposing && ev.keyCode !== 229;
+}
+function sanitizeClockLabel(raw, maxBytes = 32) {
+  const str = String(raw ?? "");
+  let collapsed = "";
+  let prevSpace = true;
+  for (const ch of str) {
+    const code = ch.charCodeAt(0);
+    if (
+      code < 0x20 ||
+      code === 0x7f ||
+      ch === "|" ||
+      ch === ";" ||
+      ch === "\x1e" ||
+      ch === "\x1f" ||
+      ch === " " ||
+      ch === "\t" ||
+      ch === "\r" ||
+      ch === "\n"
+    ) {
+      if (!prevSpace) {
+        collapsed += " ";
+        prevSpace = true;
+      }
+      continue;
+    }
+    collapsed += ch;
+    prevSpace = false;
+  }
+  const trimmed = collapsed.trim();
+  if (typeof TextEncoder === "undefined") {
+    return trimmed.slice(0, maxBytes).trimEnd();
+  }
+  const enc = new TextEncoder();
+  if (enc.encode(trimmed).length <= maxBytes) {
+    return trimmed;
+  }
+  let out = "";
+  for (const cp of trimmed) {
+    if (enc.encode(out + cp).length > maxBytes) break;
+    out += cp;
+  }
+  return out.trimEnd();
+}
+function fallbackLabelForIana(iana) {
+  const tail = iana.split("/").pop() || iana;
+  return sanitizeClockLabel(tail.replace(/_/g, " ")) || iana;
+}
+function parseWorldClocksSpec(raw) {
+  const out = [];
+  const seen = new Set();
+  for (const part of String(raw ?? "").split(";")) {
+    const rec = part.trim();
+    if (!rec) continue;
+    const pipeIdx = rec.indexOf("|");
+    if (pipeIdx < 0) continue;
+    const rawLbl = rec.slice(0, pipeIdx);
+    const iana = rec.slice(pipeIdx + 1).trim();
+    if (!iana || PINNED_UTC_ZONES.has(iana) || !IANA_ZONE_PATTERN.test(iana)) {
+      continue;
+    }
+    const label = sanitizeClockLabel(rawLbl) || fallbackLabelForIana(iana);
+    const dedupKey = `${label.toLowerCase()}|${iana}`;
+    if (seen.has(dedupKey)) continue;
+    seen.add(dedupKey);
+    out.push({ label, iana });
+    if (out.length >= MAX_WORLD_CLOCKS) break;
+  }
+  return out;
+}
+function serializeWorldClocksSpec(items) {
+  return items
+    .slice(0, MAX_WORLD_CLOCKS)
+    .map((item) => {
+      const cleaned = sanitizeClockLabel(item.label);
+      return cleaned ? `${cleaned}|${item.iana}` : "";
+    })
+    .filter(Boolean)
+    .join(";");
+}
+function dlgIsToolSupported(token, caps) {
+  if (token === "stopwatch" && caps.is_round === false) return false;
+  if (token === "level" && caps.has_imu === false) return false;
+  return true;
+}
 function paintHsvColorWheel(canvas) {
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
@@ -2986,22 +3193,30 @@ function syncStudioDialogs(renderRoot, store) {
     ["latter-add-dev-modal", store.addBleModal.open],
     ["latter-cw-modal", store.colorWheelModal.open],
     ["latter-save-group-modal", store.saveGroupModal?.open ?? false],
+    ["latter-app-config-modal", store.appConfigModal?.open ?? false],
     ["latter-shortcut-modal", store.shortcutModal?.open ?? false],
   ];
+  // Pass 1: close any open dialog that should now be closed BEFORE opening another modal.
   for (const [id, wantOpen] of pairs) {
+    if (wantOpen) continue;
     const dlg = renderRoot.getElementById(id);
-    if (!dlg) continue;
-    if (wantOpen && !dlg.open) {
-      try {
-        dlg.showModal();
-      } catch {
-        dlg.setAttribute("open", "");
-      }
-    } else if (!wantOpen && dlg.open) {
+    if (dlg && dlg.open) {
       try {
         dlg.close();
       } catch {
         dlg.removeAttribute("open");
+      }
+    }
+  }
+  // Pass 2: open the active dialog (never > 1 open simultaneously).
+  for (const [id, wantOpen] of pairs) {
+    if (!wantOpen) continue;
+    const dlg = renderRoot.getElementById(id);
+    if (dlg && !dlg.open) {
+      try {
+        dlg.showModal();
+      } catch {
+        dlg.setAttribute("open", "");
       }
     }
   }
@@ -3014,6 +3229,933 @@ function syncStudioDialogs(renderRoot, store) {
   } else if (!store.colorWheelModal.open) {
     cwWheelPainted = false;
   }
+}
+function renderAppConfigModalBody(store) {
+  const app = store.appConfigModal?.app ?? null;
+  if (!app) return nothing;
+  const data = store.state;
+  const cfg = data?.config || {};
+  const caps = data?.capabilities || {};
+  const title = APP_MODAL_TITLES[app] || "Configure App";
+  let body;
+  let extraAction = nothing;
+  let donePrimary = true;
+  if (app === "pinned") {
+    donePrimary = false;
+    const pinnedItems =
+      typeof store.getPinnedItems === "function" ? store.getPinnedItems() : [];
+    const shortcutEntityMap = new Map(
+      (data?.catalog?.shortcut_entities || []).map((e) => [e.id, e]),
+    );
+    const routeSpecMap = new Map(
+      SHORTCUT_ROUTES_CATALOG.map((r) => [r.token, r]),
+    );
+    const pinnedPages = [];
+    for (let i = 0; i < pinnedItems.length; i += 6) {
+      pinnedPages.push({
+        pageNum: Math.floor(i / 6) + 1,
+        startIdx: i,
+        items: pinnedItems.slice(i, i + 6),
+      });
+    }
+    const renderPinnedRow = (item, idx, total) => {
+      let displayTitle = item.label;
+      let metaLine = "";
+      let iconSlug = item.icon;
+      if (item.kind === "route") {
+        const spec = routeSpecMap.get(item.target);
+        if (!displayTitle) {
+          displayTitle = spec?.label || item.target;
+        }
+        metaLine = spec ? `${spec.group} • ${spec.label}` : item.target;
+        if (!iconSlug) {
+          iconSlug = ROUTE_PREVIEW_ICONS[item.target] || "mdi:apps";
+        }
+      } else {
+        const ent = shortcutEntityMap.get(item.target);
+        const dom = item.target.split(".", 1)[0] || "";
+        const actLbl = shortcutActionLabel(dom, item.action);
+        if (!displayTitle) {
+          displayTitle = ent?.name || item.target;
+        }
+        metaLine = `${actLbl} • ${item.confirm ? "Confirm" : "1-Tap"} • ${item.target}`;
+        if (!iconSlug) {
+          iconSlug = ent?.icon || "mdi:flash";
+        }
+      }
+      return html`<div class="shortcut-item-row">
+        <span class="shortcut-icon-badge" aria-hidden="true">
+          <ha-icon .icon=${iconSlug}></ha-icon>
+        </span>
+        <div class="shortcut-item-info">
+          <span class="shortcut-item-title">${displayTitle}</span>
+          <span class="shortcut-item-meta">${metaLine}</span>
+        </div>
+        ${idx > 0
+          ? html`<button
+              type="button"
+              aria-label=${`Move ${displayTitle} up`}
+              @click=${() => store.moveShortcutItem("pinned_items", idx, -1)}
+              class="btn-icon"
+            >
+              ↑
+            </button>`
+          : nothing}
+        ${idx < total - 1
+          ? html`<button
+              type="button"
+              aria-label=${`Move ${displayTitle} down`}
+              @click=${() => store.moveShortcutItem("pinned_items", idx, 1)}
+              class="btn-icon"
+            >
+              ↓
+            </button>`
+          : nothing}
+        <button
+          type="button"
+          aria-label=${`Edit ${displayTitle}`}
+          @click=${() => store.openShortcutModal("pinned_items", idx)}
+          class="btn btn-secondary btn-compact"
+        >
+          Edit
+        </button>
+        ${renderTrashIconButton(`Remove ${displayTitle}`, () =>
+          store.removeShortcutItem("pinned_items", idx),
+        )}
+      </div>`;
+    };
+    body = html`<div class="settings-list">
+      ${renderSettingsRow({
+        id: "pinned-shortcuts-row",
+        label: "Pinned Shortcuts",
+        description:
+          "Assign Home Assistant entity quick actions or deep-link any Latter app or subpage (6 buttons per page, swipable vertically).",
+        stacked: true,
+        control: html`<div
+          id="pinned-shortcuts-container"
+          class="stack"
+          role="group"
+          aria-label="Pinned App shortcuts"
+        >
+          ${pinnedPages.length > 0
+            ? pinnedPages.map(
+                (pg) => html`<div class="shortcut-page-group">
+                  <div class="shortcut-page-header">
+                    <span>Page ${pg.pageNum}</span>
+                    <span>${pg.items.length} of 6 Slots</span>
+                  </div>
+                  ${pg.items.map((item, localIdx) =>
+                    renderPinnedRow(item, pg.startIdx + localIdx, pinnedItems.length),
+                  )}
+                </div>`,
+              )
+            : html`<p class="row-description">
+                No pinned items configured yet. The Pinned icon stays hidden on the App Dock until you add at least one item.
+              </p>`}
+          <div class="shortcut-toolbar">
+            <button
+              type="button"
+              id="btn-add-pinned-item"
+              ?disabled=${pinnedItems.length >= MAX_PINNED_ITEMS}
+              @click=${() => store.openShortcutModal("pinned_items", null)}
+              class="btn btn-primary"
+            >
+              Add Pinned Item
+            </button>
+          </div>
+        </div>`,
+      })}
+    </div>`;
+  } else if (app === "home_hub") {
+    const enabledHomeCats =
+      typeof store.getEnabledHomeCategories === "function"
+        ? store.getEnabledHomeCategories()
+        : [...DEFAULT_HOME_CATEGORIES_TOKENS];
+    const disabledHomeCats = HOME_CATEGORIES_CATALOG.filter(
+      (c) => !enabledHomeCats.includes(c.token),
+    );
+    body = html`<div class="settings-list">
+      ${renderSettingsRow({
+        label: "Home Categories",
+        description:
+          "Toggle and reorder categories shown in the Home Hub. The first available category opens by default; categories with no configured entity are not displayed.",
+        stacked: true,
+        control: html`<div
+          id="home-categories-pills"
+          class="pill-list"
+          role="group"
+          aria-label="Home categories"
+        >
+          ${enabledHomeCats.map((tok, idx) => {
+            const meta = HOME_CATEGORIES_CATALOG.find((c) => c.token === tok);
+            const lbl = meta ? meta.label : tok;
+            return html`<span class="pill enabled">
+              ${idx > 0
+                ? html`<button
+                    type="button"
+                    aria-label=${`Move ${lbl} left`}
+                    @click=${() => store.moveHomeCategoryToken(tok, -1)}
+                    class="pill-move"
+                  >
+                    ‹
+                  </button>`
+                : nothing}
+              <button
+                type="button"
+                aria-pressed="true"
+                @click=${() => store.toggleHomeCategoryToken(tok)}
+                class="pill-toggle"
+              >
+                ✓ ${lbl}
+              </button>
+              ${idx < enabledHomeCats.length - 1
+                ? html`<button
+                    type="button"
+                    aria-label=${`Move ${lbl} right`}
+                    @click=${() => store.moveHomeCategoryToken(tok, 1)}
+                    class="pill-move"
+                  >
+                    ›
+                  </button>`
+                : nothing}
+            </span>`;
+          })}
+          ${disabledHomeCats.map(
+            (cat) => html`<span class="pill">
+              <button
+                type="button"
+                aria-pressed="false"
+                @click=${() => store.toggleHomeCategoryToken(cat.token)}
+                class="pill-toggle"
+              >
+                + ${cat.label}
+              </button>
+            </span>`,
+          )}
+        </div>`,
+      })}
+    </div>`;
+    extraAction = html`<button
+      type="button"
+      @click=${() => {
+        store.closeAppConfigModal();
+        store.openSystemSection("shared_entities");
+      }}
+      class="btn btn-text"
+    >
+      Open Shared Entities
+    </button>`;
+  } else if (app === "area") {
+    const enabledAreaCats =
+      typeof store.getEnabledAreaCategories === "function"
+        ? store.getEnabledAreaCategories()
+        : [...DEFAULT_AREA_CATEGORIES_TOKENS];
+    const disabledAreaCats = AREA_CATEGORIES_CATALOG.filter(
+      (c) => !enabledAreaCats.includes(c.token),
+    );
+    const areaExtraItems =
+      typeof store.getSectionItems === "function"
+        ? store.getSectionItems("area").filter((it) => it.key !== "ble_beacon_mode")
+        : [];
+    body = html`<div class="settings-list">
+      ${renderSettingsRow({
+        label: "Area Categories",
+        description:
+          "Toggle and reorder categories shown in the Area screen. The first available category opens by default; categories with no entities in the active Area are not displayed.",
+        stacked: true,
+        control: html`<div
+          id="area-categories-pills"
+          class="pill-list"
+          role="group"
+          aria-label="Area categories"
+        >
+          ${enabledAreaCats.map((tok, idx) => {
+            const meta = AREA_CATEGORIES_CATALOG.find((c) => c.token === tok);
+            const lbl = meta ? meta.label : tok;
+            return html`<span class="pill enabled">
+              ${idx > 0
+                ? html`<button
+                    type="button"
+                    aria-label=${`Move ${lbl} left`}
+                    @click=${() => store.moveAreaCategoryToken(tok, -1)}
+                    class="pill-move"
+                  >
+                    ‹
+                  </button>`
+                : nothing}
+              <button
+                type="button"
+                aria-pressed="true"
+                @click=${() => store.toggleAreaCategoryToken(tok)}
+                class="pill-toggle"
+              >
+                ✓ ${lbl}
+              </button>
+              ${idx < enabledAreaCats.length - 1
+                ? html`<button
+                    type="button"
+                    aria-label=${`Move ${lbl} right`}
+                    @click=${() => store.moveAreaCategoryToken(tok, 1)}
+                    class="pill-move"
+                  >
+                    ›
+                  </button>`
+                : nothing}
+            </span>`;
+          })}
+          ${disabledAreaCats.map(
+            (cat) => html`<span class="pill">
+              <button
+                type="button"
+                aria-pressed="false"
+                @click=${() => store.toggleAreaCategoryToken(cat.token)}
+                class="pill-toggle"
+              >
+                + ${cat.label}
+              </button>
+            </span>`,
+          )}
+        </div>`,
+      })}
+      ${areaExtraItems.map((it) => renderNativeControlRow(store, it))}
+    </div>`;
+  } else if (app === "music") {
+    const showSpeakerPref =
+      typeof store.getPref === "function" ? store.getPref("show_speaker_shortcut") : undefined;
+    const showLibraryPref =
+      typeof store.getPref === "function" ? store.getPref("show_library_shortcut") : undefined;
+    const speakerOn = showSpeakerPref
+      ? Boolean(showSpeakerPref.value)
+      : cfg.show_speaker_shortcut !== false;
+    const libraryOn = showLibraryPref
+      ? Boolean(showLibraryPref.value)
+      : cfg.show_library_shortcut !== false;
+    const sortPrefs =
+      typeof store.getPrefs === "function"
+        ? store.getPrefs(["album_sort_order", "artist_album_sort_order", "podcast_sort_order"])
+        : [];
+    const fallbackSortDefs
+       = [
+      {
+        key: "album_sort_order",
+        label: "Album Sort Order",
+        options: FALLBACK_ALBUM_SORT_OPTIONS,
+        defaultVal: "Alphabetical",
+      },
+      {
+        key: "artist_album_sort_order",
+        label: "Artist Album Sort Order",
+        options: FALLBACK_ARTIST_SORT_OPTIONS,
+        defaultVal: "Oldest on Top",
+      },
+      {
+        key: "podcast_sort_order",
+        label: "Podcast Sort Order",
+        options: FALLBACK_PODCAST_SORT_OPTIONS,
+        defaultVal: "Newest on Top",
+      },
+    ];
+    body = html`<div class="settings-list">
+      ${renderSettingsRow({
+        id: "media-player-shortcuts",
+        label: "Shortcuts",
+        description: "Choose which quick-access buttons appear on the Music player screen.",
+        control: html`<div class="pill-list" role="group" aria-label="Music shortcuts">
+          <span class="pill ${speakerOn ? "enabled" : ""}">
+            <button
+              type="button"
+              aria-pressed=${String(speakerOn)}
+              @click=${() => store.stageDeviceSetting("show_speaker_shortcut", !speakerOn)}
+              class="pill-toggle"
+            >
+              ${speakerOn ? "✓ Speaker" : "+ Speaker"}
+            </button>
+          </span>
+          <span class="pill ${libraryOn ? "enabled" : ""}">
+            <button
+              type="button"
+              aria-pressed=${String(libraryOn)}
+              @click=${() => store.stageDeviceSetting("show_library_shortcut", !libraryOn)}
+              class="pill-toggle"
+            >
+              ${libraryOn ? "✓ Library" : "+ Library"}
+            </button>
+          </span>
+        </div>`,
+      })}
+      ${sortPrefs.length > 0
+        ? sortPrefs.map((p) => renderPrefControlRow(store, p))
+        : fallbackSortDefs.map((def) =>
+            renderSelectRow({
+              label: def.label,
+              value: String(cfg[def.key] ?? def.defaultVal),
+              rawOptions: def.options.map((o) => ({ value: o, label: o })),
+              onChange: (val) => store.stageDeviceSetting(def.key, val),
+            }),
+          )}
+    </div>`;
+  } else if (app === "remote") {
+    const remoteGroups = data?.system_config?.remote_groups || [];
+    const curDevEntry = (data?.system_devices || []).find(
+      (d) => d.subentry_id === store.activeSubentryId,
+    );
+    const curRemoteMode =
+      String(cfg.device_remote_group || curDevEntry?.device_remote_group || "area_auto").trim() ||
+      "area_auto";
+    const remoteModeOptions = [
+      { value: "area_auto", label: "Follow the active Area" },
+      ...remoteGroups.map((g) => ({
+        value: `group:${g.id}`,
+        label: `Group: ${g.name}`,
+      })),
+      { value: "all", label: "All System remotes" },
+    ];
+    if (!remoteModeOptions.some((o) => o.value === curRemoteMode)) {
+      const rawId = curRemoteMode.startsWith("group:") ? curRemoteMode.slice(6) : curRemoteMode;
+      remoteModeOptions.push({
+        value: curRemoteMode,
+        label: `Missing group (${rawId})`,
+      });
+    }
+    const remoteEspItems =
+      typeof store.getSectionItems === "function" ? store.getSectionItems("remote") : [];
+    body = html`<div class="settings-list">
+      ${renderSelectRow({
+        id: "cfg-device_remote_group",
+        label: "Remote Control Group",
+        description: "Choose which remotes appear on this Device's Remote screen.",
+        value: curRemoteMode,
+        rawOptions: remoteModeOptions,
+        onChange: (val) =>
+          store.stageDeviceSetting("device_remote_group", val, "cfg-device_remote_group"),
+      })}
+      ${remoteEspItems.map((it) => renderNativeControlRow(store, it))}
+    </div>`;
+    extraAction = html`<button
+      type="button"
+      @click=${() => {
+        store.closeAppConfigModal();
+        store.openSystemSection("remotes");
+      }}
+      class="btn btn-text"
+    >
+      Manage Remote Groups
+    </button>`;
+  } else if (app === "time") {
+    donePrimary = false;
+    const localClockLabelPref =
+      typeof store.getPref === "function" ? store.getPref("local_clock_label") : undefined;
+    const localClockLabelValue = sanitizeClockLabel(
+      localClockLabelPref?.value ?? cfg.local_clock_label ?? "",
+    );
+    const showUtcClockPref =
+      typeof store.getPref === "function" ? store.getPref("show_utc_clock") : undefined;
+    const showUtcClock = showUtcClockPref
+      ? Boolean(showUtcClockPref.value)
+      : Boolean(cfg.show_utc_clock);
+    const worldClocksPref =
+      typeof store.getPref === "function" ? store.getPref("world_clocks") : undefined;
+    const enabledWorldClocks = parseWorldClocksSpec(
+      worldClocksPref?.value ?? cfg.world_clocks ?? "",
+    );
+    const atWorldClockLimit = enabledWorldClocks.length >= MAX_WORLD_CLOCKS;
+    const renderWorldClockZoneOptions = (selectedIana) => {
+      const missingSelected =
+        selectedIana && !KNOWN_WORLD_CLOCK_ZONES.has(selectedIana)
+          ? html`<option value=${selectedIana} selected>${selectedIana}</option>`
+          : nothing;
+      return html`${missingSelected}${WORLD_CLOCK_ZONES_CATALOG.map(
+        (z) =>
+          html`<option value=${z.iana} ?selected=${z.iana === selectedIana}>${z.label}</option>`,
+      )}`;
+    };
+    const updateWorldClocks = (
+      nextItems,
+      focusId,
+      debounceMs,
+    ) => {
+      store.stageDeviceSetting(
+        "world_clocks",
+        serializeWorldClocksSpec(nextItems),
+        focusId,
+        debounceMs,
+      );
+    };
+    const updateWorldClockItem = (
+      idx,
+      patch,
+      focusId,
+      debounceMs,
+    ) => {
+      if (idx < 0 || idx >= enabledWorldClocks.length) return;
+      const prev = enabledWorldClocks[idx];
+      const nextIana = (patch.iana ?? prev.iana).trim();
+      if (!nextIana || PINNED_UTC_ZONES.has(nextIana) || !IANA_ZONE_PATTERN.test(nextIana)) {
+        return;
+      }
+      const nextLabel =
+        patch.label !== undefined ? sanitizeClockLabel(patch.label) : prev.label;
+      if (!nextLabel) return;
+      const dup = enabledWorldClocks.some(
+        (item, i) =>
+          i !== idx &&
+          item.iana === nextIana &&
+          item.label.toLowerCase() === nextLabel.toLowerCase(),
+      );
+      if (dup) return;
+      const next = enabledWorldClocks.map((item, i) =>
+        i === idx ? { label: nextLabel, iana: nextIana } : { ...item },
+      );
+      updateWorldClocks(next, focusId, debounceMs);
+    };
+    const moveWorldClock = (idx, delta) => {
+      const target = idx + delta;
+      if (idx < 0 || target < 0 || target >= enabledWorldClocks.length) return;
+      const next = [...enabledWorldClocks];
+      const [picked] = next.splice(idx, 1);
+      next.splice(target, 0, picked);
+      updateWorldClocks(next);
+    };
+    const removeWorldClock = (idx) => {
+      updateWorldClocks(enabledWorldClocks.filter((_, i) => i !== idx));
+    };
+    const getRenderRoot = () =>
+      (store.host)?.renderRoot ?? null;
+    const onAddWorldClock = () => {
+      if (atWorldClockLimit) return;
+      const root = getRenderRoot();
+      const newLabelEl = root?.getElementById(
+        "cfg-world_clock_new_label",
+      );
+      const zoneSelEl = root?.getElementById(
+        "cfg-world_clocks_add",
+      );
+      const typedLabel = sanitizeClockLabel(newLabelEl?.value ?? store.worldClockNewLabel);
+      const picked = (zoneSelEl?.value ?? store.worldClockNewZone).trim();
+      if (!typedLabel) {
+        store.showToast("Enter a city or label for this World Clock", true);
+        newLabelEl?.focus();
+        return;
+      }
+      if (!picked || PINNED_UTC_ZONES.has(picked) || !IANA_ZONE_PATTERN.test(picked)) {
+        store.showToast("Select a time zone for this World Clock", true);
+        zoneSelEl?.focus();
+        return;
+      }
+      const dup = enabledWorldClocks.some(
+        (item) =>
+          item.iana === picked && item.label.toLowerCase() === typedLabel.toLowerCase(),
+      );
+      if (dup) {
+        store.showToast("That World Clock is already added", true);
+        return;
+      }
+      store.worldClockNewLabel = "";
+      store.worldClockNewZone = "";
+      if (newLabelEl) newLabelEl.value = "";
+      if (zoneSelEl) zoneSelEl.value = "";
+      updateWorldClocks(
+        [...enabledWorldClocks, { label: typedLabel, iana: picked }],
+        "btn-world_clock_add",
+      );
+    };
+    body = html`<div class="settings-list">
+      ${renderSettingsRow({
+        id: "time-local-clock-label",
+        label: "Local Clock Label",
+        forId: "cfg-local_clock_label",
+        description: "Optional custom label shown above local time on the Clock tab.",
+        control: html`<input
+          type="text"
+          id="cfg-local_clock_label"
+          maxlength="32"
+          enterkeyhint="done"
+          placeholder="Optional label…"
+          .value=${localClockLabelValue}
+          @input=${(ev) => {
+            const cleaned = sanitizeClockLabel((ev.currentTarget).value);
+            store.stageDeviceSetting(
+              "local_clock_label",
+              cleaned,
+              "cfg-local_clock_label",
+              TEXT_INPUT_DEBOUNCE_MS,
+            );
+          }}
+          @change=${(ev) => {
+            const el = ev.currentTarget;
+            const cleaned = sanitizeClockLabel(el.value);
+            el.value = cleaned;
+            store.stageDeviceSetting("local_clock_label", cleaned, "cfg-local_clock_label");
+          }}
+          @keydown=${(ev) => {
+            if (!isImeSafeEnter(ev)) return;
+            ev.preventDefault();
+            const el = ev.currentTarget;
+            const cleaned = sanitizeClockLabel(el.value);
+            el.value = cleaned;
+            store.stageDeviceSetting("local_clock_label", cleaned, "cfg-local_clock_label");
+            void store.flushAllPendingSettings();
+          }}
+        />`,
+      })}
+      ${renderSwitchRow({
+        id: "cfg-show_utc_clock",
+        label: "Show UTC Clock",
+        description: "Pin a live 24-hour UTC reference row to this Device's Clock tab.",
+        checked: showUtcClock,
+        onChange: (checked) => {
+          store.stageDeviceSetting("show_utc_clock", checked, "cfg-show_utc_clock");
+        },
+      })}
+      ${renderSettingsRow({
+        id: "time-world-clocks",
+        label: "World Clocks",
+        description:
+          "Configure up to 4 custom-labeled time zones (UTC-12:00 to UTC+14:00) shown on this Device's Clock tab.",
+        stacked: true,
+        control: html`<div class="stack">
+          ${enabledWorldClocks.length
+            ? html`<div
+                id="world-clocks-list"
+                class="stack"
+                role="group"
+                aria-label="Configured World Clocks"
+              >
+                ${enabledWorldClocks.map((entry, idx) => {
+                  const lblId = `cfg-world_clock_${idx + 1}_label`;
+                  const zoneId = `cfg-world_clock_${idx + 1}_zone`;
+                  return html`<div class="list-row">
+                    <div class="list-row-main">
+                      <div class="stacked-field">
+                        <label for=${lblId}>World Clock ${idx + 1} City Label</label>
+                        <input
+                          type="text"
+                          id=${lblId}
+                          maxlength="32"
+                          enterkeyhint="done"
+                          placeholder="Enter city or label…"
+                          .value=${entry.label}
+                          @input=${(ev) => {
+                            const cleaned = sanitizeClockLabel(
+                              (ev.currentTarget).value,
+                            );
+                            if (cleaned) {
+                              updateWorldClockItem(
+                                idx,
+                                { label: cleaned },
+                                lblId,
+                                TEXT_INPUT_DEBOUNCE_MS,
+                              );
+                            }
+                          }}
+                          @change=${(ev) => {
+                            const el = ev.currentTarget;
+                            const cleaned = sanitizeClockLabel(el.value);
+                            if (!cleaned) {
+                              el.value = entry.label;
+                              store.showToast("City label cannot be empty", true);
+                              return;
+                            }
+                            el.value = cleaned;
+                            updateWorldClockItem(idx, { label: cleaned }, lblId);
+                          }}
+                          @keydown=${(ev) => {
+                            if (!isImeSafeEnter(ev)) return;
+                            ev.preventDefault();
+                            const el = ev.currentTarget;
+                            const cleaned = sanitizeClockLabel(el.value);
+                            if (!cleaned) {
+                              el.value = entry.label;
+                              store.showToast("City label cannot be empty", true);
+                              return;
+                            }
+                            el.value = cleaned;
+                            updateWorldClockItem(idx, { label: cleaned }, lblId);
+                            void store.flushAllPendingSettings();
+                          }}
+                        />
+                      </div>
+                      <div class="stacked-field">
+                        <label for=${zoneId}>World Clock ${idx + 1} Time Zone</label>
+                        <select
+                          id=${zoneId}
+                          .value=${entry.iana}
+                          @change=${(ev) =>
+                            updateWorldClockItem(
+                              idx,
+                              { iana: (ev.currentTarget).value },
+                              zoneId,
+                            )}
+                        >
+                          ${renderWorldClockZoneOptions(entry.iana)}
+                        </select>
+                      </div>
+                    </div>
+                    ${idx > 0
+                      ? html`<button
+                          type="button"
+                          aria-label=${`Move ${entry.label} up`}
+                          @click=${() => moveWorldClock(idx, -1)}
+                          class="btn-icon"
+                        >
+                          ↑
+                        </button>`
+                      : nothing}
+                    ${idx < enabledWorldClocks.length - 1
+                      ? html`<button
+                          type="button"
+                          aria-label=${`Move ${entry.label} down`}
+                          @click=${() => moveWorldClock(idx, 1)}
+                          class="btn-icon"
+                        >
+                          ↓
+                        </button>`
+                      : nothing}
+                    ${renderTrashIconButton(
+                      `Remove ${entry.label} (${entry.iana})`,
+                      () => removeWorldClock(idx),
+                    )}
+                  </div>`;
+                })}
+              </div>`
+            : nothing}
+          <div class="list-row">
+            <div class="list-row-main">
+              <div class="stacked-field">
+                <label for="cfg-world_clock_new_label">New City Label</label>
+                <input
+                  type="text"
+                  id="cfg-world_clock_new_label"
+                  maxlength="32"
+                  enterkeyhint="done"
+                  placeholder="Enter city or label…"
+                  ?disabled=${atWorldClockLimit}
+                  .value=${store.worldClockNewLabel}
+                  @input=${(ev) => {
+                    store.worldClockNewLabel = (ev.currentTarget).value;
+                    store.host.requestUpdate();
+                  }}
+                  @keydown=${(ev) => {
+                    if (!isImeSafeEnter(ev)) return;
+                    ev.preventDefault();
+                    onAddWorldClock();
+                  }}
+                />
+              </div>
+              <div class="stacked-field">
+                <label for="cfg-world_clocks_add">Add Time Zone</label>
+                <select
+                  id="cfg-world_clocks_add"
+                  ?disabled=${atWorldClockLimit}
+                  .value=${store.worldClockNewZone}
+                  @change=${(ev) => {
+                    store.worldClockNewZone = (ev.currentTarget).value;
+                    store.host.requestUpdate();
+                  }}
+                >
+                  <option value="" ?selected=${!store.worldClockNewZone}>
+                    ${atWorldClockLimit
+                      ? "Maximum 4 World Clocks added"
+                      : "Select a time zone (UTC-12 to UTC+14)…"}
+                  </option>
+                  ${atWorldClockLimit
+                    ? nothing
+                    : renderWorldClockZoneOptions(store.worldClockNewZone)}
+                </select>
+              </div>
+            </div>
+            <button
+              type="button"
+              id="btn-world_clock_add"
+              ?disabled=${atWorldClockLimit}
+              @click=${() => onAddWorldClock()}
+              class="btn btn-primary"
+            >
+              Add
+            </button>
+          </div>
+        </div>`,
+      })}
+    </div>`;
+  } else if (app === "clock") {
+    const clockPrefs =
+      typeof store.getPrefs === "function"
+        ? store.getPrefs(["clock_face", "time_format"])
+        : [];
+    const faceOptions =
+      caps.is_round === false
+        ? FALLBACK_CLOCK_FACE_OPTIONS.filter((o) => o !== "Modern Analog")
+        : FALLBACK_CLOCK_FACE_OPTIONS;
+    body = html`<div class="settings-list">
+      ${clockPrefs.length > 0
+        ? clockPrefs.map((p) => renderPrefControlRow(store, p))
+        : html`${renderSelectRow({
+              id: "cfg-clock_face",
+              label: "Clock Face",
+              value: String(cfg.clock_face ?? "Minimal Digital"),
+              rawOptions: faceOptions.map((o) => ({ value: o, label: o })),
+              onChange: (val) => store.stageDeviceSetting("clock_face", val, "cfg-clock_face"),
+            })}
+            ${renderSelectRow({
+              id: "cfg-time_format",
+              label: "Time Format",
+              value: String(cfg.time_format ?? "12-Hour (AM/PM)"),
+              rawOptions: FALLBACK_TIME_FORMAT_OPTIONS.map((o) => ({ value: o, label: o })),
+              onChange: (val) => store.stageDeviceSetting("time_format", val, "cfg-time_format"),
+            })}`}
+    </div>`;
+  } else if (app === "tools") {
+    const visibleCatalog = TOOLS_ITEMS_CATALOG.filter((c) => dlgIsToolSupported(c.token, caps));
+    const visibleSet = new Set(visibleCatalog.map((c) => c.token));
+    const enabledTools = (
+      typeof store.getEnabledToolsItems === "function"
+        ? store.getEnabledToolsItems()
+        : [...DEFAULT_TOOLS_ITEMS_TOKENS]
+    ).filter((tok) => visibleSet.has(tok));
+    const disabledTools = visibleCatalog.filter((c) => !enabledTools.includes(c.token));
+    body = html`<div class="settings-list">
+      ${renderSettingsRow({
+        label: "Tools",
+        description:
+          "Toggle and reorder utilities shown in the Tools launcher. Calendar is configured independently via Shared Entities.",
+        stacked: true,
+        control: html`<div
+          id="tools-items-pills"
+          class="pill-list"
+          role="group"
+          aria-label="Tools"
+        >
+          ${enabledTools.map((tok, idx) => {
+            const meta = visibleCatalog.find((c) => c.token === tok);
+            const lbl = meta ? meta.label : tok;
+            return html`<span class="pill enabled">
+              ${idx > 0
+                ? html`<button
+                    type="button"
+                    aria-label=${`Move ${lbl} left`}
+                    @click=${() => store.moveToolItemToken(tok, -1)}
+                    class="pill-move"
+                  >
+                    ‹
+                  </button>`
+                : nothing}
+              <button
+                type="button"
+                aria-pressed="true"
+                @click=${() => store.toggleToolItemToken(tok)}
+                class="pill-toggle"
+              >
+                ✓ ${lbl}
+              </button>
+              ${idx < enabledTools.length - 1
+                ? html`<button
+                    type="button"
+                    aria-label=${`Move ${lbl} right`}
+                    @click=${() => store.moveToolItemToken(tok, 1)}
+                    class="pill-move"
+                  >
+                    ›
+                  </button>`
+                : nothing}
+            </span>`;
+          })}
+          ${disabledTools.map(
+            (cat) => html`<span class="pill">
+              <button
+                type="button"
+                aria-pressed="false"
+                @click=${() => store.toggleToolItemToken(cat.token)}
+                class="pill-toggle"
+              >
+                + ${cat.label}
+              </button>
+            </span>`,
+          )}
+        </div>`,
+      })}
+    </div>`;
+  } else {
+    const enabledGames =
+      typeof store.getEnabledGamesItems === "function"
+        ? store.getEnabledGamesItems()
+        : [...DEFAULT_GAMES_ITEMS_TOKENS];
+    const disabledGames = GAMES_ITEMS_CATALOG.filter((c) => !enabledGames.includes(c.token));
+    body = html`<div class="settings-list">
+      ${renderSettingsRow({
+        label: "Games",
+        description: "Toggle and reorder games shown in the Games launcher.",
+        stacked: true,
+        control: html`<div
+          id="games-items-pills"
+          class="pill-list"
+          role="group"
+          aria-label="Games"
+        >
+          ${enabledGames.map((tok, idx) => {
+            const meta = GAMES_ITEMS_CATALOG.find((c) => c.token === tok);
+            const lbl = meta ? meta.label : tok;
+            return html`<span class="pill enabled">
+              ${idx > 0
+                ? html`<button
+                    type="button"
+                    aria-label=${`Move ${lbl} left`}
+                    @click=${() => store.moveGameItemToken(tok, -1)}
+                    class="pill-move"
+                  >
+                    ‹
+                  </button>`
+                : nothing}
+              <button
+                type="button"
+                aria-pressed="true"
+                @click=${() => store.toggleGameItemToken(tok)}
+                class="pill-toggle"
+              >
+                ✓ ${lbl}
+              </button>
+              ${idx < enabledGames.length - 1
+                ? html`<button
+                    type="button"
+                    aria-label=${`Move ${lbl} right`}
+                    @click=${() => store.moveGameItemToken(tok, 1)}
+                    class="pill-move"
+                  >
+                    ›
+                  </button>`
+                : nothing}
+            </span>`;
+          })}
+          ${disabledGames.map(
+            (cat) => html`<span class="pill">
+              <button
+                type="button"
+                aria-pressed="false"
+                @click=${() => store.toggleGameItemToken(cat.token)}
+                class="pill-toggle"
+              >
+                + ${cat.label}
+              </button>
+            </span>`,
+          )}
+        </div>`,
+      })}
+    </div>`;
+  }
+  return html`<div class="dialog-body">
+    <h3 id="latter-app-config-title" class="dialog-title">${title}</h3>
+    ${body}
+    <div class="dialog-actions">
+      ${extraAction}
+      <button
+        type="button"
+        id="app-config-done-btn"
+        @click=${() => store.closeAppConfigModal()}
+        class="btn ${donePrimary ? "btn-primary" : "btn-secondary"}"
+      >
+        Done
+      </button>
+    </div>
+  </div>`;
 }
 function renderStudioDialogs(store) {
   const persons = store.state?.catalog?.persons || [];
@@ -3069,15 +4211,17 @@ function renderStudioDialogs(store) {
   const scTitle =
     scModal.editIndex !== null
       ? scIsDock
-        ? "Edit Dock Shortcut"
+        ? "Edit Custom Dock Shortcut"
         : "Edit Pinned Shortcut"
       : scIsDock
-        ? "Add Dock Shortcut"
+        ? "Add Custom Dock Shortcut"
         : "Add Pinned Shortcut";
   const devCaps = store.state?.capabilities || {};
   const availableRoutes = SHORTCUT_ROUTES_CATALOG.filter((r) => {
     if (!scIsDock && r.dockOnly) return false;
-    if (scIsDock && r.token === "settings:root") return false;
+    if (scIsDock && (r.token === "settings:root" || NATIVE_DOCK_APP_TOKENS.includes(r.token))) {
+      return false;
+    }
     if (r.capability === "round" && devCaps.is_round === false) return false;
     if (r.capability === "imu" && devCaps.has_imu === false) return false;
     return true;
@@ -3114,16 +4258,19 @@ function renderStudioDialogs(store) {
     ? selectedEntityObj.domain
     : (scModal.entityTarget.split(".", 1)[0] || "");
   const availableEntityActions = SHORTCUT_DOMAIN_ACTIONS[selectedEntityDomain] || [];
+  const effectiveRouteTarget = availableRoutes.some((r) => r.token === scModal.routeTarget)
+    ? scModal.routeTarget
+    : (availableRoutes[0]?.token || scModal.routeTarget);
   const selectedRouteSpec =
-    availableRoutes.find((r) => r.token === scModal.routeTarget) ||
-    SHORTCUT_ROUTES_CATALOG.find((r) => r.token === scModal.routeTarget);
+    availableRoutes.find((r) => r.token === effectiveRouteTarget) ||
+    SHORTCUT_ROUTES_CATALOG.find((r) => r.token === effectiveRouteTarget);
   const autoDefaultLabel =
     scModal.kind === "route"
       ? selectedRouteSpec?.label || "Shortcut"
       : selectedEntityObj?.name || scModal.entityTarget || "Entity Action";
   const autoDefaultIcon =
     scModal.kind === "route"
-      ? ROUTE_PREVIEW_ICONS[scModal.routeTarget] || "mdi:apps"
+      ? ROUTE_PREVIEW_ICONS[effectiveRouteTarget] || "mdi:apps"
       : selectedEntityObj?.icon || "mdi:flash";
   const selectedCustomIcon = normalizeMdiIconSlug(scModal.icon);
   const typedSearchIcon = normalizeMdiIconSlug(scModal.iconSearch);
@@ -3481,6 +4628,16 @@ function renderStudioDialogs(store) {
     </dialog>
 
     <dialog
+      id="latter-app-config-modal"
+      aria-labelledby="latter-app-config-title"
+      @cancel=${() => store.closeAppConfigModal()}
+      @click=${(ev) => onBackdropClick(ev, () => store.closeAppConfigModal())}
+      class="studio-dialog shortcut-dialog"
+    >
+      ${renderAppConfigModalBody(store)}
+    </dialog>
+
+    <dialog
       id="latter-shortcut-modal"
       aria-labelledby="latter-shortcut-title"
       @cancel=${() => store.closeShortcutModal()}
@@ -3500,7 +4657,7 @@ function renderStudioDialogs(store) {
             }}
             class="scope-tab ${scModal.kind === "route" ? "active" : ""}"
           >
-            App or Page
+            ${scIsDock ? "Subpage" : "App or Page"}
           </button>
           <button
             type="button"
@@ -3518,10 +4675,12 @@ function renderStudioDialogs(store) {
 
         ${scModal.kind === "route"
           ? html`<div class="stacked-field">
-              <label for="shortcut-route-select">Target App or Subpage</label>
+              <label for="shortcut-route-select">
+                ${scIsDock ? "Target Subpage" : "Target App or Subpage"}
+              </label>
               <select
                 id="shortcut-route-select"
-                .value=${scModal.routeTarget}
+                .value=${effectiveRouteTarget}
                 @change=${(ev) => {
                   const val = (ev.currentTarget).value;
                   store.shortcutModal = { ...store.shortcutModal, routeTarget: val };
@@ -3533,7 +4692,7 @@ function renderStudioDialogs(store) {
                     ${grp.items.map(
                       (item) => html`<option
                         value=${item.token}
-                        ?selected=${item.token === scModal.routeTarget}
+                        ?selected=${item.token === effectiveRouteTarget}
                       >
                         ${item.label}
                       </option>`,
@@ -5176,6 +6335,14 @@ function sanitizeShortcutLabel(raw) {
     ? trimmed.slice(0, SHORTCUT_LABEL_MAX).trimEnd()
     : trimmed;
 }
+function isProtectedNativeDockItem(item) {
+  return (
+    item.kind === "route" &&
+    NATIVE_DOCK_APP_TOKENS.includes(item.target) &&
+    !item.label &&
+    !item.icon
+  );
+}
 function defaultDockShortcutItems() {
   return DEFAULT_DOCK_ROUTES_TOKENS.map((tok) => ({
     kind: "route",
@@ -5211,12 +6378,13 @@ function normalizeShortcutArray(
       const dedupKey = `route|${target}|`;
       if (seen.has(dedupKey)) continue;
       seen.add(dedupKey);
+      const isNativeDockApp = isDock && NATIVE_DOCK_APP_TOKENS.includes(target);
       out.push({
         kind: "route",
         target,
         action: "",
-        label: sanitizeShortcutLabel(rec.label),
-        icon: normalizeMdiIconSlug(rec.icon),
+        label: isNativeDockApp ? "" : sanitizeShortcutLabel(rec.label),
+        icon: isNativeDockApp ? "" : normalizeMdiIconSlug(rec.icon),
         confirm: false,
       });
     } else if (kind === "entity") {
@@ -5290,17 +6458,59 @@ function resetDockItemsToDefaultOp(store) {
   store.stageDeviceSetting("dock_items", defaultDockShortcutItems());
   store.showToast("Restored default App Dock");
 }
+function toggleNativeDockAppOp(
+  store,
+  routeToken,
+  enabled,
+) {
+  const target = String(routeToken || "").trim().toLowerCase();
+  if (!NATIVE_DOCK_APP_TOKENS.includes(target)) return;
+  const current = getDockItemsOp(store).map((it) => ({ ...it }));
+  if (!enabled) {
+    const next = current.filter((it) => !(it.kind === "route" && it.target === target));
+    store.stageDeviceSetting("dock_items", next);
+    return;
+  }
+  if (current.some((it) => it.kind === "route" && it.target === target)) {
+    return;
+  }
+  if (current.length >= MAX_DOCK_ITEMS) {
+    store.showToast(`App Dock supports up to ${MAX_DOCK_ITEMS} shortcuts`, true);
+    return;
+  }
+  current.push({
+    kind: "route",
+    target,
+    action: "",
+    label: "",
+    icon: "",
+    confirm: false,
+  });
+  store.stageDeviceSetting("dock_items", current);
+}
 function openShortcutModalOp(
   store,
   listKey,
   editIndex = null,
 ) {
   const isDock = listKey === "dock_items";
+  if (
+    listKey === "pinned_items" &&
+    store.appConfigModal?.open &&
+    store.appConfigModal.app === "pinned"
+  ) {
+    store.returnToPinnedModal = true;
+    store.appConfigModal = { open: false, app: null };
+  } else {
+    store.returnToPinnedModal = false;
+  }
   const current = isDock ? getDockItemsOp(store) : getPinnedItemsOp(store);
   const caps = store.state?.capabilities || {};
   const compatibleRoutes = SHORTCUT_ROUTES_CATALOG.filter((r) => {
     if (!isDock && r.dockOnly) return false;
-    if (isDock && r.token === "settings:root") return false;
+    if (isDock && (r.token === "settings:root" || NATIVE_DOCK_APP_TOKENS.includes(r.token))) {
+      return false;
+    }
     if (r.capability === "round" && caps.is_round === false) return false;
     if (r.capability === "imu" && caps.has_imu === false) return false;
     return true;
@@ -5403,7 +6613,11 @@ function saveShortcutModalOp(store) {
   if (modal.kind === "route") {
     const routeTok = modal.routeTarget.trim().toLowerCase();
     const spec = SHORTCUT_ROUTES_CATALOG.find((r) => r.token === routeTok);
-    if (!spec || (!isDock && spec.dockOnly) || (isDock && routeTok === "settings:root")) {
+    if (
+      !spec ||
+      (!isDock && spec.dockOnly) ||
+      (isDock && (routeTok === "settings:root" || NATIVE_DOCK_APP_TOKENS.includes(routeTok)))
+    ) {
       store.showToast("Select an app or page to pin", true);
       return;
     }
@@ -5456,7 +6670,12 @@ function saveShortcutModalOp(store) {
   } else {
     current.push(built);
   }
+  const reopenPinned = Boolean(store.returnToPinnedModal);
+  store.returnToPinnedModal = false;
   store.shortcutModal = { ...store.shortcutModal, open: false };
+  if (reopenPinned) {
+    store.appConfigModal = { open: true, app: "pinned" };
+  }
   store.stageDeviceSetting(modal.listKey, current);
 }
 function getEnabledAreaCategoriesOp(store) {
@@ -5528,6 +6747,98 @@ function moveHomeCategoryTokenOp(store, token, delta) {
   const [moved] = current.splice(idx, 1);
   current.splice(nextIdx, 0, moved);
   store.stageDeviceSetting("home_categories", current.join(","));
+}
+function isToolTokenSupported(token, caps) {
+  if (token === "stopwatch" && caps?.is_round === false) return false;
+  if (token === "level" && caps?.has_imu === false) return false;
+  return true;
+}
+function getEnabledToolsItemsOp(store) {
+  const prefVal = typeof store.getPref === "function" ? store.getPref("tools_items")?.value : undefined;
+  const raw = String(store.state?.config?.tools_items ?? prefVal ?? "");
+  if (!raw.trim()) {
+    return [...DEFAULT_TOOLS_ITEMS_TOKENS];
+  }
+  const known = new Set(TOOLS_ITEMS_CATALOG.map((c) => c.token));
+  const parsed = raw
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter((s, i, arr) => Boolean(s) && known.has(s) && arr.indexOf(s) === i);
+  return parsed.length > 0 ? parsed : [...DEFAULT_TOOLS_ITEMS_TOKENS];
+}
+function toggleToolItemTokenOp(store, token) {
+  const current = getEnabledToolsItemsOp(store);
+  const caps = store.state?.capabilities || {};
+  const idx = current.indexOf(token);
+  if (idx >= 0) {
+    const visibleEnabled = current.filter((t) => isToolTokenSupported(t, caps));
+    if (
+      current.length <= 1 ||
+      (isToolTokenSupported(token, caps) && visibleEnabled.length <= 1)
+    ) {
+      store.showToast("Keep at least one tool enabled", true);
+      return;
+    }
+    current.splice(idx, 1);
+  } else {
+    current.push(token);
+  }
+  store.stageDeviceSetting("tools_items", current.join(","));
+}
+function moveToolItemTokenOp(store, token, delta) {
+  const current = getEnabledToolsItemsOp(store);
+  const caps = store.state?.capabilities || {};
+  const idx = current.indexOf(token);
+  if (idx < 0) return;
+  let swapIdx = idx + delta;
+  while (
+    swapIdx >= 0 &&
+    swapIdx < current.length &&
+    !isToolTokenSupported(current[swapIdx], caps)
+  ) {
+    swapIdx += delta;
+  }
+  if (swapIdx < 0 || swapIdx >= current.length) return;
+  const temp = current[idx];
+  current[idx] = current[swapIdx];
+  current[swapIdx] = temp;
+  store.stageDeviceSetting("tools_items", current.join(","));
+}
+function getEnabledGamesItemsOp(store) {
+  const prefVal = typeof store.getPref === "function" ? store.getPref("games_items")?.value : undefined;
+  const raw = String(store.state?.config?.games_items ?? prefVal ?? "");
+  if (!raw.trim()) {
+    return [...DEFAULT_GAMES_ITEMS_TOKENS];
+  }
+  const known = new Set(GAMES_ITEMS_CATALOG.map((c) => c.token));
+  const parsed = raw
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter((s, i, arr) => Boolean(s) && known.has(s) && arr.indexOf(s) === i);
+  return parsed.length > 0 ? parsed : [...DEFAULT_GAMES_ITEMS_TOKENS];
+}
+function toggleGameItemTokenOp(store, token) {
+  const current = getEnabledGamesItemsOp(store);
+  const idx = current.indexOf(token);
+  if (idx >= 0) {
+    if (current.length <= 1) {
+      store.showToast("Keep at least one game enabled", true);
+      return;
+    }
+    current.splice(idx, 1);
+  } else {
+    current.push(token);
+  }
+  store.stageDeviceSetting("games_items", current.join(","));
+}
+function moveGameItemTokenOp(store, token, delta) {
+  const current = getEnabledGamesItemsOp(store);
+  const idx = current.indexOf(token);
+  const nextIdx = idx + delta;
+  if (idx < 0 || nextIdx < 0 || nextIdx >= current.length) return;
+  const [moved] = current.splice(idx, 1);
+  current.splice(nextIdx, 0, moved);
+  store.stageDeviceSetting("games_items", current.join(","));
 }
 function getEnabledActivitySourcesOp(store) {
   const rawCfg = store.state?.config?.activity_sources;
@@ -6304,7 +7615,13 @@ async function bulkPillsToggleOp(
   if (activeSet.has(token)) {
     const minRequired = ctrl.min ?? 0;
     if (activeSet.size <= minRequired) {
-      store.showToast("Keep at least one category enabled", true);
+      const noun =
+        ctrl.pref_key === "tools_items"
+          ? "tool"
+          : ctrl.pref_key === "games_items"
+            ? "game"
+            : "category";
+      store.showToast(`Keep at least one ${noun} enabled`, true);
       return;
     }
     activeSet.delete(token);
@@ -6651,6 +7968,11 @@ class StudioStore {
     iconSearch: "",
     confirm: false,
   };
+  appConfigModal = {
+    open: false,
+    app: null,
+  };
+  returnToPinnedModal = false;
   pendingScrollCardId = "";
   pendingDomRevert = null;
   // Snapshot-isolated pending settings queues (shared with `state/*-ops.ts`)
@@ -6801,6 +8123,8 @@ class StudioStore {
         const subChanged = prevSubId !== nextSubId;
         if (prevSubId && subChanged) {
           void this.flushDeviceBucket(prevSubId);
+          this.appConfigModal = { open: false, app: null };
+          this.returnToPinnedModal = false;
         }
         this.bleCalibrateHandoffActive = false;
         this.activeSubentryId = nextSubId;
@@ -6979,6 +8303,8 @@ class StudioStore {
     this.devicePinDraft = "";
     this.worldClockNewLabel = "";
     this.worldClockNewZone = "";
+    this.appConfigModal = { open: false, app: null };
+    this.returnToPinnedModal = false;
     this.syncUrl();
     this.host.requestUpdate();
     await this.ensureSubscription(true);
@@ -7432,6 +8758,21 @@ class StudioStore {
   resetDockItemsToDefault() {
     resetDockItemsToDefaultOp(this);
   }
+  toggleNativeDockApp(routeToken, enabled) {
+    toggleNativeDockAppOp(this, routeToken, enabled);
+  }
+  openAppConfigModal(app) {
+    this.returnToPinnedModal = false;
+    if (this.shortcutModal.open) {
+      this.shortcutModal = { ...this.shortcutModal, open: false };
+    }
+    this.appConfigModal = { open: true, app };
+    this.host.requestUpdate();
+  }
+  closeAppConfigModal() {
+    this.appConfigModal = { open: false, app: null };
+    this.host.requestUpdate();
+  }
   openShortcutModal(
     listKey,
     editIndex = null,
@@ -7439,7 +8780,12 @@ class StudioStore {
     openShortcutModalOp(this, listKey, editIndex);
   }
   closeShortcutModal() {
+    const reopenPinned = this.returnToPinnedModal;
+    this.returnToPinnedModal = false;
     this.shortcutModal = { ...this.shortcutModal, open: false };
+    if (reopenPinned) {
+      this.appConfigModal = { open: true, app: "pinned" };
+    }
     this.host.requestUpdate();
   }
   saveShortcutModal() {
@@ -7462,6 +8808,24 @@ class StudioStore {
   }
   moveHomeCategoryToken(token, delta) {
     moveHomeCategoryTokenOp(this, token, delta);
+  }
+  getEnabledToolsItems() {
+    return getEnabledToolsItemsOp(this);
+  }
+  toggleToolItemToken(token) {
+    toggleToolItemTokenOp(this, token);
+  }
+  moveToolItemToken(token, delta) {
+    moveToolItemTokenOp(this, token, delta);
+  }
+  getEnabledGamesItems() {
+    return getEnabledGamesItemsOp(this);
+  }
+  toggleGameItemToken(token) {
+    toggleGameItemTokenOp(this, token);
+  }
+  moveGameItemToken(token, delta) {
+    moveGameItemTokenOp(this, token, delta);
   }
   getEnabledActivitySources() {
     return getEnabledActivitySourcesOp(this);
@@ -9121,6 +10485,15 @@ const STUDIO_STYLES = css`
     border-radius: var(--studio-radius-control);
     background: var(--studio-input-bg);
   }
+  .shortcut-item-row.shortcut-item-locked {
+    border-style: dashed;
+    background: transparent;
+  }
+  .shortcut-item-row.shortcut-item-locked .shortcut-icon-badge,
+  .shortcut-item-row.shortcut-item-hidden .shortcut-icon-badge {
+    background: var(--studio-surface-alt);
+    color: var(--studio-text-secondary);
+  }
   .shortcut-icon-badge {
     display: inline-flex;
     align-items: center;
@@ -9961,143 +11334,69 @@ function renderDeviceDisplayView(store) {
 
 // --- src/views/device-interface-view.ts ---
 /**
- * Device Interface View (`interface`, D-026 / D-028 / D-030 / D-033 / D-034 / D-035 / D-036 / D-037 / D-038):
- * Navigation, screen structure & content routing preferences.
- * Column 1: Home Screen (Enable Home Screen, Start Screen, Home Time Tap, Return to Home Timeout, Dock Apps & Activity Card),
- *           Home Controls & Time (Local Clock Label, Show UTC Clock, custom-labeled World Clocks & 2-way Alarms).
- * Column 2: Area Controls (Area Categories pills), Media Player (Shortcuts & Library Sorting) & Remote Controls.
+ * Device Interface View (`interface`, D-026 / D-035 / D-047 / D-053):
+ * Two balanced cards for top-level navigation and App Dock management:
+ * - Column 1: Home Screen (Enable Home Screen, Start Screen with Single-App Configure safeguard,
+ *   Home Time Tap, Return to Home Timeout, Show the Activity Card & Activity Card Sources).
+ * - Column 2: App Dock (Active on Dock with Protected Native Apps + Custom Shortcuts + locked Settings,
+ *   Add Custom Shortcut / Reset Default Dock, and Hidden From Dock) — or Single-App Mode Active when locked.
  */
-const DEFAULT_ALARM_SLOTS = [
-  { time: "07:00", enabled: false, recurrence: 1 },
-  { time: "08:30", enabled: false, recurrence: 2 },
-  { time: "09:00", enabled: false, recurrence: 2 },
-];
-const PINNED_UTC_ZONES = new Set(["UTC", "Etc/UTC", "GMT", "Etc/GMT", "Etc/GMT+0", "Etc/GMT-0", "Etc/GMT0"]);
-const IANA_ZONE_PATTERN = /^[A-Za-z0-9_+-]+(?:\/[A-Za-z0-9_+-]+)+$/;
-const TEXT_INPUT_DEBOUNCE_MS = 600;
-function isImeSafeEnter(ev) {
-  return ev.key === "Enter" && !ev.isComposing && ev.keyCode !== 229;
-}
-function sanitizeClockLabel(raw, maxBytes = 32) {
-  const str = String(raw ?? "");
-  let collapsed = "";
-  let prevSpace = true;
-  for (const ch of str) {
-    const code = ch.charCodeAt(0);
-    if (
-      code < 0x20 ||
-      code === 0x7f ||
-      ch === "|" ||
-      ch === ";" ||
-      ch === "\x1e" ||
-      ch === "\x1f" ||
-      ch === " " ||
-      ch === "\t" ||
-      ch === "\r" ||
-      ch === "\n"
-    ) {
-      if (!prevSpace) {
-        collapsed += " ";
-        prevSpace = true;
-      }
-      continue;
-    }
-    collapsed += ch;
-    prevSpace = false;
-  }
-  const trimmed = collapsed.trim();
-  if (typeof TextEncoder === "undefined") {
-    return trimmed.slice(0, maxBytes).trimEnd();
-  }
-  const enc = new TextEncoder();
-  if (enc.encode(trimmed).length <= maxBytes) {
-    return trimmed;
-  }
-  let out = "";
-  for (const cp of trimmed) {
-    if (enc.encode(out + cp).length > maxBytes) break;
-    out += cp;
-  }
-  return out.trimEnd();
-}
-function fallbackLabelForIana(iana) {
-  const tail = iana.split("/").pop() || iana;
-  return sanitizeClockLabel(tail.replace(/_/g, " ")) || iana;
-}
-function parseWorldClocksSpec(raw) {
-  const out = [];
+const IFACE_UTC_ZONES = new Set([
+  "UTC",
+  "Etc/UTC",
+  "GMT",
+  "Etc/GMT",
+  "Etc/GMT+0",
+  "Etc/GMT-0",
+  "Etc/GMT0",
+]);
+const IFACE_IANA_PATTERN = /^[A-Za-z0-9_+-]+(?:\/[A-Za-z0-9_+-]+)+$/;
+function countConfiguredWorldClocks(raw) {
+  let count = 0;
   const seen = new Set();
   for (const part of String(raw ?? "").split(";")) {
     const rec = part.trim();
     if (!rec) continue;
     const pipeIdx = rec.indexOf("|");
     if (pipeIdx < 0) continue;
-    const rawLbl = rec.slice(0, pipeIdx);
+    const rawLbl = rec.slice(0, pipeIdx).trim();
     const iana = rec.slice(pipeIdx + 1).trim();
-    if (!iana || PINNED_UTC_ZONES.has(iana) || !IANA_ZONE_PATTERN.test(iana)) {
+    if (!iana || IFACE_UTC_ZONES.has(iana) || !IFACE_IANA_PATTERN.test(iana)) {
       continue;
     }
-    const label = sanitizeClockLabel(rawLbl) || fallbackLabelForIana(iana);
-    const dedupKey = `${label.toLowerCase()}|${iana}`;
-    if (seen.has(dedupKey)) continue;
-    seen.add(dedupKey);
-    out.push({ label, iana });
-    if (out.length >= MAX_WORLD_CLOCKS) break;
+    const key = `${rawLbl.toLowerCase()}|${iana}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    count += 1;
+    if (count >= 4) break;
   }
-  return out;
+  return count;
 }
-function serializeWorldClocksSpec(items) {
-  return items
-    .slice(0, MAX_WORLD_CLOCKS)
-    .map((item) => {
-      const cleaned = sanitizeClockLabel(item.label);
-      return cleaned ? `${cleaned}|${item.iana}` : "";
-    })
-    .filter(Boolean)
-    .join(";");
+function isNativeDockRouteItem(item) {
+  return (
+    item.kind === "route" &&
+    NATIVE_DOCK_APP_TOKENS.includes(item.target) &&
+    !item.label &&
+    !item.icon
+  );
 }
-const KNOWN_WORLD_CLOCK_ZONES = new Set(WORLD_CLOCK_ZONES_CATALOG.map((z) => z.iana));
-function parseAlarmsSummary(raw) {
-  const text = String(raw || DEFAULT_ALARMS_SUMMARY).trim();
-  const parts = text.split(";");
-  const slots = [];
-  for (let i = 0; i < 3; i++) {
-    const fallback = DEFAULT_ALARM_SLOTS[i];
-    const seg = (parts[i] || "").trim();
-    const m = /^(\d{1,2}):(\d{2})\|([01])\|([0-3])$/.exec(seg);
-    if (!m) {
-      slots.push({ ...fallback });
-      continue;
-    }
-    const hh = Number(m[1]);
-    const mm = Number(m[2]);
-    if (hh < 0 || hh > 23 || mm < 0 || mm > 59) {
-      slots.push({ ...fallback });
-      continue;
-    }
-    slots.push({
-      time: `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`,
-      enabled: m[3] === "1",
-      recurrence: Number(m[4]),
-    });
-  }
-  return [slots[0], slots[1], slots[2]];
-}
-function serializeAlarmsSummary(slots) {
-  return slots
-    .slice(0, 3)
-    .map((s) => `${s.time}|${s.enabled ? 1 : 0}|${s.recurrence}`)
-    .join(";");
+function ifaceIsToolSupported(token, caps) {
+  if (token === "stopwatch" && caps.is_round === false) return false;
+  if (token === "level" && caps.has_imu === false) return false;
+  return true;
 }
 function renderDeviceInterfaceView(store) {
   const data = store.state;
   const cfg = data?.config || {};
+  const caps = data?.capabilities || {};
   const remoteGroups = data?.system_config?.remote_groups || [];
-  const homeScreenEnabledPref = store.getPref("home_screen_enabled");
+  const homeScreenEnabledPref =
+    typeof store.getPref === "function" ? store.getPref("home_screen_enabled") : undefined;
   const homeScreenEnabled = homeScreenEnabledPref
     ? Boolean(homeScreenEnabledPref.value)
     : cfg.home_screen_enabled !== false;
-  const startScreenPref = store.getPref("start_screen");
+  const startScreenPref =
+    typeof store.getPref === "function" ? store.getPref("start_screen") : undefined;
   const rawStartOptions =
     startScreenPref?.options && startScreenPref.options.length > 0
       ? startScreenPref.options
@@ -10110,7 +11409,11 @@ function renderDeviceInterfaceView(store) {
   );
   const startScreenValue =
     !homeScreenEnabled && rawStartValue === "Home" ? "Time App" : rawStartValue;
-  const homeClockTapPref = store.getPref("home_clock_tap_action");
+  const startScreenConfigApp = !homeScreenEnabled
+    ? START_SCREEN_CONFIG_APP_MAP[startScreenValue] || null
+    : null;
+  const homeClockTapPref =
+    typeof store.getPref === "function" ? store.getPref("home_clock_tap_action") : undefined;
   const homeClockTapOptions = (
     homeClockTapPref?.options && homeClockTapPref.options.length > 0
       ? homeClockTapPref.options
@@ -10119,117 +11422,8 @@ function renderDeviceInterfaceView(store) {
   const homeClockTapValue = String(
     homeClockTapPref?.value ?? cfg.home_clock_tap_action ?? "Time App",
   );
-  const localClockLabelPref = store.getPref("local_clock_label");
-  const localClockLabelValue = sanitizeClockLabel(
-    localClockLabelPref?.value ?? cfg.local_clock_label ?? "",
-  );
-  const showUtcClockPref = store.getPref("show_utc_clock");
-  const showUtcClock = showUtcClockPref
-    ? Boolean(showUtcClockPref.value)
-    : Boolean(cfg.show_utc_clock);
-  const worldClocksPref = store.getPref("world_clocks");
-  const enabledWorldClocks = parseWorldClocksSpec(worldClocksPref?.value ?? cfg.world_clocks ?? "");
-  const atWorldClockLimit = enabledWorldClocks.length >= MAX_WORLD_CLOCKS;
-  const renderWorldClockZoneOptions = (selectedIana) => {
-    const missingSelected =
-      selectedIana && !KNOWN_WORLD_CLOCK_ZONES.has(selectedIana)
-        ? html`<option value=${selectedIana} selected>${selectedIana}</option>`
-        : nothing;
-    return html`${missingSelected}${WORLD_CLOCK_ZONES_CATALOG.map(
-      (z) => html`<option value=${z.iana} ?selected=${z.iana === selectedIana}>${z.label}</option>`,
-    )}`;
-  };
-  const alarmsSummaryPref = store.getPref("alarms_summary");
-  const alarmSlots = parseAlarmsSummary(
-    alarmsSummaryPref?.value ?? cfg.alarms_summary ?? DEFAULT_ALARMS_SUMMARY,
-  );
-  const updateWorldClocks = (
-    nextItems,
-    focusId,
-    debounceMs,
-  ) => {
-    store.stageDeviceSetting("world_clocks", serializeWorldClocksSpec(nextItems), focusId, debounceMs);
-  };
-  const updateWorldClockItem = (
-    idx,
-    patch,
-    focusId,
-    debounceMs,
-  ) => {
-    if (idx < 0 || idx >= enabledWorldClocks.length) return;
-    const prev = enabledWorldClocks[idx];
-    const nextIana = (patch.iana ?? prev.iana).trim();
-    if (!nextIana || PINNED_UTC_ZONES.has(nextIana) || !IANA_ZONE_PATTERN.test(nextIana)) return;
-    const nextLabel =
-      patch.label !== undefined ? sanitizeClockLabel(patch.label) : prev.label;
-    if (!nextLabel) return;
-    const dup = enabledWorldClocks.some(
-      (item, i) =>
-        i !== idx && item.iana === nextIana && item.label.toLowerCase() === nextLabel.toLowerCase(),
-    );
-    if (dup) return;
-    const next = enabledWorldClocks.map((item, i) =>
-      i === idx ? { label: nextLabel, iana: nextIana } : { ...item },
-    );
-    updateWorldClocks(next, focusId, debounceMs);
-  };
-  const moveWorldClock = (idx, delta) => {
-    const target = idx + delta;
-    if (idx < 0 || target < 0 || target >= enabledWorldClocks.length) return;
-    const next = [...enabledWorldClocks];
-    const [picked] = next.splice(idx, 1);
-    next.splice(target, 0, picked);
-    updateWorldClocks(next);
-  };
-  const removeWorldClock = (idx) => {
-    updateWorldClocks(enabledWorldClocks.filter((_, i) => i !== idx));
-  };
-  const getRenderRoot = () =>
-    (store.host).renderRoot ?? null;
-  const onAddWorldClock = () => {
-    if (atWorldClockLimit) return;
-    const root = getRenderRoot();
-    const newLabelEl = root?.getElementById("cfg-world_clock_new_label");
-    const zoneSelEl = root?.getElementById("cfg-world_clocks_add");
-    const typedLabel = sanitizeClockLabel(newLabelEl?.value ?? store.worldClockNewLabel);
-    const picked = (zoneSelEl?.value ?? store.worldClockNewZone).trim();
-    if (!typedLabel) {
-      store.showToast("Enter a city or label for this World Clock", true);
-      newLabelEl?.focus();
-      return;
-    }
-    if (!picked || PINNED_UTC_ZONES.has(picked) || !IANA_ZONE_PATTERN.test(picked)) {
-      store.showToast("Select a time zone for this World Clock", true);
-      zoneSelEl?.focus();
-      return;
-    }
-    const dup = enabledWorldClocks.some(
-      (item) => item.iana === picked && item.label.toLowerCase() === typedLabel.toLowerCase(),
-    );
-    if (dup) {
-      store.showToast("That World Clock is already added", true);
-      return;
-    }
-    store.worldClockNewLabel = "";
-    store.worldClockNewZone = "";
-    if (newLabelEl) newLabelEl.value = "";
-    if (zoneSelEl) zoneSelEl.value = "";
-    updateWorldClocks([...enabledWorldClocks, { label: typedLabel, iana: picked }], "btn-world_clock_add");
-  };
-  const updateAlarmSlot = (idx, patch, focusId) => {
-    const next = [
-      { ...alarmSlots[0] },
-      { ...alarmSlots[1] },
-      { ...alarmSlots[2] },
-    ];
-    const merged = { ...next[idx], ...patch };
-    if (!/^\d{2}:\d{2}$/.test(merged.time)) {
-      return;
-    }
-    next[idx] = merged;
-    store.stageDeviceSetting("alarms_summary", serializeAlarmsSummary(next), focusId);
-  };
-  const returnTimeoutPref = store.getPref("return_to_home_timeout");
+  const returnTimeoutPref =
+    typeof store.getPref === "function" ? store.getPref("return_to_home_timeout") : undefined;
   const rawReturnTimeoutOptions = (
     returnTimeoutPref?.options && returnTimeoutPref.options.length > 0
       ? returnTimeoutPref.options
@@ -10238,44 +11432,181 @@ function renderDeviceInterfaceView(store) {
   const returnTimeoutValue = String(
     returnTimeoutPref?.value ?? cfg.return_to_home_timeout ?? "2 min",
   );
-  const enabledHomeCats = store.getEnabledHomeCategories();
-  const disabledHomeCats = HOME_CATEGORIES_CATALOG.filter(
-    (c) => !enabledHomeCats.includes(c.token),
-  );
-  const areaExtraItems = store.getSectionItems("area").filter((it) => it.key !== "ble_beacon_mode");
-  const enabledAreaCats = store.getEnabledAreaCategories();
-  const disabledAreaCats = AREA_CATEGORIES_CATALOG.filter(
-    (c) => !enabledAreaCats.includes(c.token),
-  );
-  // Media Player shortcuts and sorting prefs
-  const showSpeakerPref = store.getPref("show_speaker_shortcut");
-  const showLibraryPref = store.getPref("show_library_shortcut");
-  const shortcutPrefs = [
-    { pref: showSpeakerPref, label: "Speaker" },
-    { pref: showLibraryPref, label: "Library" },
-  ].filter((c) => Boolean(c.pref));
-  const sortMusicPrefs = store.getPrefs([
-    "album_sort_order",
-    "artist_album_sort_order",
-    "podcast_sort_order",
-  ]);
-  const remoteEspItems = store.getSectionItems("remote");
   const activityCardOn = cfg.activity_card !== false;
-  const enabledSources = new Set(store.getEnabledActivitySources());
-  const dockItems = store.getDockItems();
-  const pinnedItems = store.getPinnedItems();
+  const enabledSources = new Set(
+    typeof store.getEnabledActivitySources === "function"
+      ? store.getEnabledActivitySources()
+      : ACTIVITY_SOURCES_CATALOG.map((c) => c.token),
+  );
+  const dockItems =
+    typeof store.getDockItems === "function" ? store.getDockItems() : [];
+  const pinnedItems =
+    typeof store.getPinnedItems === "function" ? store.getPinnedItems() : [];
+  const enabledHomeCats =
+    typeof store.getEnabledHomeCategories === "function"
+      ? store.getEnabledHomeCategories()
+      : [...DEFAULT_HOME_CATEGORIES_TOKENS];
+  const enabledAreaCats =
+    typeof store.getEnabledAreaCategories === "function"
+      ? store.getEnabledAreaCategories()
+      : [...DEFAULT_AREA_CATEGORIES_TOKENS];
+  const enabledTools =
+    typeof store.getEnabledToolsItems === "function"
+      ? store.getEnabledToolsItems()
+      : [...DEFAULT_TOOLS_ITEMS_TOKENS];
+  const visibleToolsCount = enabledTools.filter((tok) => ifaceIsToolSupported(tok, caps)).length;
+  const enabledGames =
+    typeof store.getEnabledGamesItems === "function"
+      ? store.getEnabledGamesItems()
+      : [...DEFAULT_GAMES_ITEMS_TOKENS];
+  const curDevEntry = (data?.system_devices || []).find(
+    (d) => d.subentry_id === store.activeSubentryId,
+  );
+  const curRemoteMode =
+    String(cfg.device_remote_group || curDevEntry?.device_remote_group || "area_auto").trim() ||
+    "area_auto";
+  const showSpeakerPref =
+    typeof store.getPref === "function" ? store.getPref("show_speaker_shortcut") : undefined;
+  const showLibraryPref =
+    typeof store.getPref === "function" ? store.getPref("show_library_shortcut") : undefined;
+  const speakerShortcutOn = showSpeakerPref
+    ? Boolean(showSpeakerPref.value)
+    : cfg.show_speaker_shortcut !== false;
+  const libraryShortcutOn = showLibraryPref
+    ? Boolean(showLibraryPref.value)
+    : cfg.show_library_shortcut !== false;
+  const showUtcClockPref =
+    typeof store.getPref === "function" ? store.getPref("show_utc_clock") : undefined;
+  const showUtcClock = showUtcClockPref
+    ? Boolean(showUtcClockPref.value)
+    : Boolean(cfg.show_utc_clock);
+  const worldClocksPref =
+    typeof store.getPref === "function" ? store.getPref("world_clocks") : undefined;
+  const worldClockCount = countConfiguredWorldClocks(
+    worldClocksPref?.value ?? cfg.world_clocks ?? "",
+  );
+  const clockFacePref =
+    typeof store.getPref === "function" ? store.getPref("clock_face") : undefined;
+  const clockFaceVal = String(clockFacePref?.value ?? cfg.clock_face ?? "Minimal Digital");
+  const timeFormatPref =
+    typeof store.getPref === "function" ? store.getPref("time_format") : undefined;
+  const rawTimeFormat = String(timeFormatPref?.value ?? cfg.time_format ?? "12-Hour (AM/PM)");
+  const shortTimeFormat = rawTimeFormat.startsWith("24") ? "24-Hour" : "12-Hour";
+  const describeNativeDockApp = (routeToken) => {
+    switch (routeToken) {
+      case "app:pinned": {
+        if (pinnedItems.length === 0) {
+          return "Empty — auto-hidden on Dock";
+        }
+        const pages = Math.ceil(pinnedItems.length / 6);
+        return `${pinnedItems.length} shortcut${pinnedItems.length === 1 ? "" : "s"} • ${pages} page${pages === 1 ? "" : "s"}`;
+      }
+      case "app:music":
+        if (speakerShortcutOn && libraryShortcutOn) return "Speaker & Library shortcuts";
+        if (speakerShortcutOn) return "Speaker shortcut";
+        if (libraryShortcutOn) return "Library shortcut";
+        return "Shortcuts hidden";
+      case "app:home_hub":
+        return `${enabledHomeCats.length} ${enabledHomeCats.length === 1 ? "category" : "categories"} enabled`;
+      case "app:area":
+        return `${enabledAreaCats.length} ${enabledAreaCats.length === 1 ? "category" : "categories"} enabled`;
+      case "app:remote": {
+        if (curRemoteMode === "all") return "All System remotes";
+        if (curRemoteMode.startsWith("group:")) {
+          const gid = curRemoteMode.slice(6);
+          return remoteGroups.find((g) => g.id === gid)?.name || gid;
+        }
+        return "Follow the active Area";
+      }
+      case "app:weather":
+        return "Current, Forecast, Sun & Moon";
+      case "app:time":
+        if (showUtcClock && worldClockCount > 0) {
+          return `UTC + ${worldClockCount} World Clock${worldClockCount === 1 ? "" : "s"}`;
+        }
+        if (worldClockCount > 0) {
+          return `${worldClockCount} World Clock${worldClockCount === 1 ? "" : "s"}`;
+        }
+        return showUtcClock ? "Local time + UTC" : "Local time";
+      case "app:clock":
+        return `${clockFaceVal} • ${shortTimeFormat}`;
+      case "app:tools":
+        return `${visibleToolsCount} tool${visibleToolsCount === 1 ? "" : "s"} enabled`;
+      case "app:games":
+        return `${enabledGames.length} game${enabledGames.length === 1 ? "" : "s"} enabled`;
+      default:
+        return routeToken;
+    }
+  };
   const shortcutEntityMap = new Map(
     (data?.catalog?.shortcut_entities || []).map((e) => [e.id, e]),
   );
   const routeSpecMap = new Map(
     SHORTCUT_ROUTES_CATALOG.map((r) => [r.token, r]),
   );
-  const renderShortcutRow = (
-    listKey,
+  const activeNativeSet = new Set(
+    dockItems.filter((it) => isNativeDockRouteItem(it)).map((it) => it.target),
+  );
+  const hiddenNativeApps = NATIVE_DOCK_APP_TOKENS.filter((tok) => !activeNativeSet.has(tok));
+  const renderActiveDockRow = (
     item,
     idx,
     total,
   ) => {
+    if (isNativeDockRouteItem(item)) {
+      const spec = routeSpecMap.get(item.target);
+      const displayTitle = spec?.label || item.target;
+      const iconSlug = ROUTE_PREVIEW_ICONS[item.target] || "mdi:apps";
+      const configApp = NATIVE_DOCK_CONFIG_APP_MAP[item.target];
+      return html`<div class="shortcut-item-row">
+        <span class="shortcut-icon-badge" aria-hidden="true">
+          <ha-icon .icon=${iconSlug}></ha-icon>
+        </span>
+        <div class="shortcut-item-info">
+          <span class="shortcut-item-title">${displayTitle}</span>
+          <span class="shortcut-item-meta">${describeNativeDockApp(item.target)}</span>
+        </div>
+        ${idx > 0
+          ? html`<button
+              type="button"
+              aria-label=${`Move ${displayTitle} up`}
+              @click=${() => store.moveShortcutItem("dock_items", idx, -1)}
+              class="btn-icon"
+            >
+              ↑
+            </button>`
+          : nothing}
+        ${idx < total - 1
+          ? html`<button
+              type="button"
+              aria-label=${`Move ${displayTitle} down`}
+              @click=${() => store.moveShortcutItem("dock_items", idx, 1)}
+              class="btn-icon"
+            >
+              ↓
+            </button>`
+          : nothing}
+        ${configApp
+          ? html`<button
+              type="button"
+              aria-label=${`Configure ${displayTitle}`}
+              @click=${() => store.openAppConfigModal(configApp)}
+              class="btn btn-secondary btn-compact"
+            >
+              Configure
+            </button>`
+          : nothing}
+        <input
+          type="checkbox"
+          role="switch"
+          aria-label=${`Show ${displayTitle} on App Dock`}
+          .checked=${true}
+          @change=${(ev) =>
+            store.toggleNativeDockApp(item.target, (ev.currentTarget).checked)}
+          class="switch"
+        />
+      </div>`;
+    }
     let displayTitle = item.label;
     let metaLine = "";
     let iconSlug = item.icon;
@@ -10284,7 +11615,7 @@ function renderDeviceInterfaceView(store) {
       if (!displayTitle) {
         displayTitle = spec?.label || item.target;
       }
-      metaLine = spec ? `${spec.group} • ${spec.label}` : item.target;
+      metaLine = `Custom • ${spec ? `${spec.group} • ${spec.label}` : item.target}`;
       if (!iconSlug) {
         iconSlug = ROUTE_PREVIEW_ICONS[item.target] || "mdi:apps";
       }
@@ -10295,7 +11626,7 @@ function renderDeviceInterfaceView(store) {
       if (!displayTitle) {
         displayTitle = ent?.name || item.target;
       }
-      metaLine = `${actLbl} • ${item.confirm ? "Confirm" : "1-Tap"} • ${item.target}`;
+      metaLine = `Custom • ${actLbl} • ${item.confirm ? "Confirm" : "1-Tap"} • ${item.target}`;
       if (!iconSlug) {
         iconSlug = ent?.icon || "mdi:flash";
       }
@@ -10312,7 +11643,7 @@ function renderDeviceInterfaceView(store) {
         ? html`<button
             type="button"
             aria-label=${`Move ${displayTitle} up`}
-            @click=${() => store.moveShortcutItem(listKey, idx, -1)}
+            @click=${() => store.moveShortcutItem("dock_items", idx, -1)}
             class="btn-icon"
           >
             ↑
@@ -10322,7 +11653,7 @@ function renderDeviceInterfaceView(store) {
         ? html`<button
             type="button"
             aria-label=${`Move ${displayTitle} down`}
-            @click=${() => store.moveShortcutItem(listKey, idx, 1)}
+            @click=${() => store.moveShortcutItem("dock_items", idx, 1)}
             class="btn-icon"
           >
             ↓
@@ -10331,49 +11662,21 @@ function renderDeviceInterfaceView(store) {
       <button
         type="button"
         aria-label=${`Edit ${displayTitle}`}
-        @click=${() => store.openShortcutModal(listKey, idx)}
+        @click=${() => store.openShortcutModal("dock_items", idx)}
         class="btn btn-secondary btn-compact"
       >
         Edit
       </button>
       ${renderTrashIconButton(`Remove ${displayTitle}`, () =>
-        store.removeShortcutItem(listKey, idx),
+        store.removeShortcutItem("dock_items", idx),
       )}
     </div>`;
   };
-  const pinnedPages = [];
-  for (let i = 0; i < pinnedItems.length; i += 6) {
-    pinnedPages.push({
-      pageNum: Math.floor(i / 6) + 1,
-      startIdx: i,
-      items: pinnedItems.slice(i, i + 6),
-    });
-  }
-  const curDevEntry = (data?.system_devices || []).find(
-    (d) => d.subentry_id === store.activeSubentryId,
-  );
-  const curRemoteMode =
-    String(cfg.device_remote_group || curDevEntry?.device_remote_group || "area_auto").trim() ||
-    "area_auto";
-  const remoteModeOptions = [
-    { value: "area_auto", label: "Follow the active Area" },
-    ...remoteGroups.map((g) => ({
-      value: `group:${g.id}`,
-      label: `Group: ${g.name}`,
-    })),
-    { value: "all", label: "All System remotes" },
-  ];
-  if (!remoteModeOptions.some((o) => o.value === curRemoteMode)) {
-    const rawId = curRemoteMode.startsWith("group:") ? curRemoteMode.slice(6) : curRemoteMode;
-    remoteModeOptions.push({
-      value: curRemoteMode,
-      label: `Missing group (${rawId})`,
-    });
-  }
   return html`<section id="view-interface">
     <div class="columns">
       <div class="column">
         ${renderCard({
+          id: "card-home-screen",
           heading: html`<h3 class="card-title">Home Screen</h3>`,
           contentClass: "settings-list",
           body: html`${renderSwitchRow({
@@ -10390,21 +11693,40 @@ function renderDeviceInterfaceView(store) {
                 );
               },
             })}
-            ${renderSelectRow({
-              id: "cfg-start_screen",
+            ${renderSettingsRow({
               label: "Start Screen",
+              forId: "cfg-start_screen",
               description: homeScreenEnabled
                 ? "Choose the screen shown on startup. Swipe up from the bottom to return to Home."
                 : "Single-app screen shown at all times while the Home screen is disabled.",
-              value: startScreenValue,
-              rawOptions: visibleStartOptions,
-              onChange: (val) => {
-                store.stageDeviceSetting(
-                  "start_screen",
-                  val,
-                  "cfg-start_screen",
-                );
-              },
+              control: html`<select
+                  id="cfg-start_screen"
+                  .value=${startScreenValue}
+                  @change=${(ev) => {
+                    store.stageDeviceSetting(
+                      "start_screen",
+                      (ev.currentTarget).value,
+                      "cfg-start_screen",
+                    );
+                  }}
+                >
+                  ${visibleStartOptions.map(
+                    (o) =>
+                      html`<option value=${o.value} ?selected=${o.value === startScreenValue}>
+                        ${o.label}
+                      </option>`,
+                  )}
+                </select>
+                ${startScreenConfigApp
+                  ? html`<button
+                      type="button"
+                      id="btn-configure-start-screen"
+                      @click=${() => store.openAppConfigModal(startScreenConfigApp)}
+                      class="btn btn-secondary btn-compact"
+                    >
+                      Configure
+                    </button>`
+                  : nothing}`,
             })}
             ${homeScreenEnabled
               ? html`${renderSelectRow({
@@ -10436,42 +11758,6 @@ function renderDeviceInterfaceView(store) {
                         "cfg-return_to_home_timeout",
                       );
                     },
-                  })}
-                  ${renderSettingsRow({
-                    id: "dock-shortcuts-row",
-                    label: "App Dock",
-                    description:
-                      "Configure apps, subpages, and Home Assistant entity actions in the Home Dock. Pinned hides automatically when Pinned App is empty, and Settings is always shown last.",
-                    stacked: true,
-                    control: html`<div
-                      id="dock-shortcuts-container"
-                      class="stack"
-                      role="group"
-                      aria-label="App Dock shortcuts"
-                    >
-                      ${dockItems.map((item, idx) =>
-                        renderShortcutRow("dock_items", item, idx, dockItems.length),
-                      )}
-                      <div class="shortcut-toolbar">
-                        <button
-                          type="button"
-                          id="btn-add-dock-item"
-                          ?disabled=${dockItems.length >= MAX_DOCK_ITEMS}
-                          @click=${() => store.openShortcutModal("dock_items", null)}
-                          class="btn btn-secondary"
-                        >
-                          Add Dock Item
-                        </button>
-                        <button
-                          type="button"
-                          id="btn-reset-dock-items"
-                          @click=${() => store.resetDockItemsToDefault()}
-                          class="btn btn-text"
-                        >
-                          Reset Default Dock
-                        </button>
-                      </div>
-                    </div>`,
                   })}
                   ${renderSettingsRow({
                     labelHtml: html`<label for="cfg-activity_card" class="row-label">Show the Activity Card</label>`,
@@ -10524,541 +11810,124 @@ function renderDeviceInterfaceView(store) {
                     : nothing}`
               : nothing}`,
         })}
-
-        ${renderCard({
-          heading: html`<h3 class="card-title">Home Controls</h3>`,
-          contentClass: "settings-list",
-          body: html`${renderSettingsRow({
-            label: "Home Categories",
-            description:
-              "Toggle and reorder categories shown in the Home Hub. The first available category opens by default; categories with no configured entity are not displayed.",
-            stacked: true,
-            control: html`<div
-              id="home-categories-pills"
-              class="pill-list"
-              role="group"
-              aria-label="Home categories"
-            >
-              ${enabledHomeCats.map((tok, idx) => {
-                const meta = HOME_CATEGORIES_CATALOG.find((c) => c.token === tok);
-                const lbl = meta ? meta.label : tok;
-                return html`<span class="pill enabled">
-                  ${idx > 0
-                    ? html`<button
-                        type="button"
-                        aria-label=${`Move ${lbl} left`}
-                        @click=${() => store.moveHomeCategoryToken(tok, -1)}
-                        class="pill-move"
-                      >
-                        ‹
-                      </button>`
-                    : nothing}
-                  <button
-                    type="button"
-                    aria-pressed="true"
-                    @click=${() => store.toggleHomeCategoryToken(tok)}
-                    class="pill-toggle"
-                  >
-                    ✓ ${lbl}
-                  </button>
-                  ${idx < enabledHomeCats.length - 1
-                    ? html`<button
-                        type="button"
-                        aria-label=${`Move ${lbl} right`}
-                        @click=${() => store.moveHomeCategoryToken(tok, 1)}
-                        class="pill-move"
-                      >
-                        ›
-                      </button>`
-                    : nothing}
-                </span>`;
-              })}
-              ${disabledHomeCats.map(
-                (cat) => html`<span class="pill">
-                  <button
-                    type="button"
-                    aria-pressed="false"
-                    @click=${() => store.toggleHomeCategoryToken(cat.token)}
-                    class="pill-toggle"
-                  >
-                    + ${cat.label}
-                  </button>
-                </span>`,
-              )}
-            </div>`,
-          })}`,
-        })}
-
-        ${renderCard({
-          id: "card-time",
-          heading: html`<h3 class="card-title">Time</h3>`,
-          contentClass: "settings-list",
-          body: html`${renderSettingsRow({
-              id: "time-local-clock-label",
-              label: "Local Clock Label",
-              forId: "cfg-local_clock_label",
-              description: "Optional custom label shown above local time on the Clock tab.",
-              control: html`<input
-                type="text"
-                id="cfg-local_clock_label"
-                maxlength="32"
-                enterkeyhint="done"
-                placeholder="Optional label…"
-                .value=${localClockLabelValue}
-                @input=${(ev) => {
-                  const cleaned = sanitizeClockLabel((ev.currentTarget).value);
-                  store.stageDeviceSetting(
-                    "local_clock_label",
-                    cleaned,
-                    "cfg-local_clock_label",
-                    TEXT_INPUT_DEBOUNCE_MS,
-                  );
-                }}
-                @change=${(ev) => {
-                  const el = ev.currentTarget;
-                  const cleaned = sanitizeClockLabel(el.value);
-                  el.value = cleaned;
-                  store.stageDeviceSetting("local_clock_label", cleaned, "cfg-local_clock_label");
-                }}
-                @keydown=${(ev) => {
-                  if (!isImeSafeEnter(ev)) return;
-                  ev.preventDefault();
-                  const el = ev.currentTarget;
-                  const cleaned = sanitizeClockLabel(el.value);
-                  el.value = cleaned;
-                  store.stageDeviceSetting("local_clock_label", cleaned, "cfg-local_clock_label");
-                  void store.flushAllPendingSettings();
-                }}
-              />`,
-            })}
-            ${renderSwitchRow({
-              id: "cfg-show_utc_clock",
-              label: "Show UTC Clock",
-              description: "Pin a live 24-hour UTC reference row to this Device's Clock tab.",
-              checked: showUtcClock,
-              onChange: (checked) => {
-                store.stageDeviceSetting("show_utc_clock", checked, "cfg-show_utc_clock");
-              },
-            })}
-            ${renderSettingsRow({
-              id: "time-world-clocks",
-              label: "World Clocks",
-              description:
-                "Configure up to 4 custom-labeled time zones (UTC-12:00 to UTC+14:00) shown on this Device's Clock tab.",
-              stacked: true,
-              control: html`<div class="stack">
-                ${enabledWorldClocks.length
-                  ? html`<div
-                      id="world-clocks-list"
-                      class="stack"
-                      role="group"
-                      aria-label="Configured World Clocks"
-                    >
-                      ${enabledWorldClocks.map((entry, idx) => {
-                        const lblId = `cfg-world_clock_${idx + 1}_label`;
-                        const zoneId = `cfg-world_clock_${idx + 1}_zone`;
-                        return html`<div class="list-row">
-                          <div class="list-row-main">
-                            <div class="stacked-field">
-                              <label for=${lblId}>World Clock ${idx + 1} City Label</label>
-                              <input
-                                type="text"
-                                id=${lblId}
-                                maxlength="32"
-                                enterkeyhint="done"
-                                placeholder="Enter city or label…"
-                                .value=${entry.label}
-                                @input=${(ev) => {
-                                  const cleaned = sanitizeClockLabel(
-                                    (ev.currentTarget).value,
-                                  );
-                                  if (cleaned) {
-                                    updateWorldClockItem(
-                                      idx,
-                                      { label: cleaned },
-                                      lblId,
-                                      TEXT_INPUT_DEBOUNCE_MS,
-                                    );
-                                  }
-                                }}
-                                @change=${(ev) => {
-                                  const el = ev.currentTarget;
-                                  const cleaned = sanitizeClockLabel(el.value);
-                                  if (!cleaned) {
-                                    el.value = entry.label;
-                                    store.showToast("City label cannot be empty", true);
-                                    return;
-                                  }
-                                  el.value = cleaned;
-                                  updateWorldClockItem(idx, { label: cleaned }, lblId);
-                                }}
-                                @keydown=${(ev) => {
-                                  if (!isImeSafeEnter(ev)) return;
-                                  ev.preventDefault();
-                                  const el = ev.currentTarget;
-                                  const cleaned = sanitizeClockLabel(el.value);
-                                  if (!cleaned) {
-                                    el.value = entry.label;
-                                    store.showToast("City label cannot be empty", true);
-                                    return;
-                                  }
-                                  el.value = cleaned;
-                                  updateWorldClockItem(idx, { label: cleaned }, lblId);
-                                  void store.flushAllPendingSettings();
-                                }}
-                              />
-                            </div>
-                            <div class="stacked-field">
-                              <label for=${zoneId}>World Clock ${idx + 1} Time Zone</label>
-                              <select
-                                id=${zoneId}
-                                .value=${entry.iana}
-                                @change=${(ev) =>
-                                  updateWorldClockItem(
-                                    idx,
-                                    { iana: (ev.currentTarget).value },
-                                    zoneId,
-                                  )}
-                              >
-                                ${renderWorldClockZoneOptions(entry.iana)}
-                              </select>
-                            </div>
-                          </div>
-                          ${idx > 0
-                            ? html`<button
-                                type="button"
-                                aria-label=${`Move ${entry.label} up`}
-                                @click=${() => moveWorldClock(idx, -1)}
-                                class="btn-icon"
-                              >
-                                ↑
-                              </button>`
-                            : nothing}
-                          ${idx < enabledWorldClocks.length - 1
-                            ? html`<button
-                                type="button"
-                                aria-label=${`Move ${entry.label} down`}
-                                @click=${() => moveWorldClock(idx, 1)}
-                                class="btn-icon"
-                              >
-                                ↓
-                              </button>`
-                            : nothing}
-                          ${renderTrashIconButton(
-                            `Remove ${entry.label} (${entry.iana})`,
-                            () => removeWorldClock(idx),
-                          )}
-                        </div>`;
-                      })}
-                    </div>`
-                  : nothing}
-                <div class="list-row">
-                  <div class="list-row-main">
-                    <div class="stacked-field">
-                      <label for="cfg-world_clock_new_label">New City Label</label>
-                      <input
-                        type="text"
-                        id="cfg-world_clock_new_label"
-                        maxlength="32"
-                        enterkeyhint="done"
-                        placeholder="Enter city or label…"
-                        ?disabled=${atWorldClockLimit}
-                        .value=${store.worldClockNewLabel}
-                        @input=${(ev) => {
-                          store.worldClockNewLabel = (ev.currentTarget).value;
-                          store.host.requestUpdate();
-                        }}
-                        @keydown=${(ev) => {
-                          if (!isImeSafeEnter(ev)) return;
-                          ev.preventDefault();
-                          onAddWorldClock();
-                        }}
-                      />
-                    </div>
-                    <div class="stacked-field">
-                      <label for="cfg-world_clocks_add">Add Time Zone</label>
-                      <select
-                        id="cfg-world_clocks_add"
-                        ?disabled=${atWorldClockLimit}
-                        .value=${store.worldClockNewZone}
-                        @change=${(ev) => {
-                          store.worldClockNewZone = (ev.currentTarget).value;
-                          store.host.requestUpdate();
-                        }}
-                      >
-                        <option value="" ?selected=${!store.worldClockNewZone}>
-                          ${atWorldClockLimit
-                            ? "Maximum 4 World Clocks added"
-                            : "Select a time zone (UTC-12 to UTC+14)…"}
-                        </option>
-                        ${atWorldClockLimit
-                          ? nothing
-                          : renderWorldClockZoneOptions(store.worldClockNewZone)}
-                      </select>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    id="btn-world_clock_add"
-                    ?disabled=${atWorldClockLimit}
-                    @click=${() => onAddWorldClock()}
-                    class="btn btn-primary"
-                  >
-                    Add
-                  </button>
-                </div>
-              </div>`,
-            })}
-            ${renderSettingsRow({
-              id: "time-alarms",
-              label: "Alarms",
-              description: "Syncs 2-way with on-device alarm edits (1-minute precision).",
-              stacked: true,
-              control: html`<div class="stack" role="group" aria-label="Device alarms">
-                ${([0, 1, 2]).map((idx) => {
-                  const slot = alarmSlots[idx];
-                  const timeId = `cfg-alarm_${idx + 1}_time`;
-                  const recId = `cfg-alarm_${idx + 1}_recurrence`;
-                  const enId = `cfg-alarm_${idx + 1}_enabled`;
-                  return html`<div class="list-row">
-                    <div class="list-row-main">
-                      <div class="stacked-field">
-                        <label for=${timeId}>Alarm ${idx + 1} time</label>
-                        <input
-                          type="time"
-                          id=${timeId}
-                          step="60"
-                          .value=${slot.time}
-                          @change=${(ev) => {
-                            const val = (ev.currentTarget).value;
-                            if (val) updateAlarmSlot(idx, { time: val.slice(0, 5) }, timeId);
-                          }}
-                        />
-                      </div>
-                      <div class="stacked-field">
-                        <label for=${recId}>Alarm ${idx + 1} schedule</label>
-                        <select
-                          id=${recId}
-                          .value=${String(slot.recurrence)}
-                          @change=${(ev) =>
-                            updateAlarmSlot(
-                              idx,
-                              { recurrence: Number((ev.currentTarget).value) },
-                              recId,
-                            )}
-                        >
-                          ${ALARM_RECURRENCE_OPTIONS.map(
-                            (opt) =>
-                              html`<option
-                                value=${String(opt.value)}
-                                ?selected=${opt.value === slot.recurrence}
-                              >
-                                ${opt.label}
-                              </option>`,
-                          )}
-                        </select>
-                      </div>
-                    </div>
-                    <label for=${enId} class="inline-switch">
-                      <span>Enabled</span>
-                      <input
-                        type="checkbox"
-                        id=${enId}
-                        .checked=${slot.enabled}
-                        @change=${(ev) =>
-                          updateAlarmSlot(
-                            idx,
-                            { enabled: (ev.currentTarget).checked },
-                            enId,
-                          )}
-                        role="switch"
-                        class="switch"
-                      />
-                    </label>
-                  </div>`;
-                })}
-              </div>`,
-            })}`,
-        })}
       </div>
 
       <div class="column">
-        ${renderCard({
-          id: "card-pinned-app",
-          heading: html`<h3 class="card-title">Pinned App</h3>`,
-          contentClass: "settings-list",
-          body: html`${renderSettingsRow({
-            id: "pinned-shortcuts-row",
-            label: "Pinned Shortcuts",
-            description:
-              "Assign Home Assistant entity quick actions or deep-link any Latter app or subpage (6 buttons per page, swipable vertically).",
-            stacked: true,
-            control: html`<div
-              id="pinned-shortcuts-container"
-              class="stack"
-              role="group"
-              aria-label="Pinned App shortcuts"
-            >
-              ${pinnedPages.length > 0
-                ? pinnedPages.map(
-                    (pg) => html`<div class="shortcut-page-group">
-                      <div class="shortcut-page-header">
-                        <span>Page ${pg.pageNum}</span>
-                        <span>${pg.items.length} of 6 Slots</span>
-                      </div>
-                      ${pg.items.map((item, localIdx) =>
-                        renderShortcutRow(
-                          "pinned_items",
-                          item,
-                          pg.startIdx + localIdx,
-                          pinnedItems.length,
-                        ),
-                      )}
-                    </div>`,
-                  )
-                : html`<p class="row-description">
-                    No pinned items configured yet. The Pinned icon stays hidden on the Home Dock until you add at least one item.
-                  </p>`}
-              <div class="shortcut-toolbar">
-                <button
-                  type="button"
-                  id="btn-add-pinned-item"
-                  ?disabled=${pinnedItems.length >= MAX_PINNED_ITEMS}
-                  @click=${() => store.openShortcutModal("pinned_items", null)}
-                  class="btn btn-primary"
-                >
-                  Add Pinned Item
-                </button>
-              </div>
-            </div>`,
-          })}`,
-        })}
-
-        ${renderCard({
-          heading: html`<h3 class="card-title">Area Controls</h3>`,
-          contentClass: "settings-list",
-          body: html`${renderSettingsRow({
-              label: "Area Categories",
-              description:
-                "Toggle and reorder categories shown in the Area screen. The first available category opens by default; categories with no entities in the active Area are not displayed.",
-              stacked: true,
-              control: html`<div
-                id="area-categories-pills"
-                class="pill-list"
-                role="group"
-                aria-label="Area categories"
-              >
-                ${enabledAreaCats.map((tok, idx) => {
-                  const meta = AREA_CATEGORIES_CATALOG.find((c) => c.token === tok);
-                  const lbl = meta ? meta.label : tok;
-                  return html`<span class="pill enabled">
-                    ${idx > 0
-                      ? html`<button
-                          type="button"
-                          aria-label=${`Move ${lbl} left`}
-                          @click=${() => store.moveAreaCategoryToken(tok, -1)}
-                          class="pill-move"
-                        >
-                          ‹
-                        </button>`
-                      : nothing}
-                    <button
-                      type="button"
-                      aria-pressed="true"
-                      @click=${() => store.toggleAreaCategoryToken(tok)}
-                      class="pill-toggle"
-                    >
-                      ✓ ${lbl}
-                    </button>
-                    ${idx < enabledAreaCats.length - 1
-                      ? html`<button
-                          type="button"
-                          aria-label=${`Move ${lbl} right`}
-                          @click=${() => store.moveAreaCategoryToken(tok, 1)}
-                          class="pill-move"
-                        >
-                          ›
-                        </button>`
-                      : nothing}
-                  </span>`;
-                })}
-                ${disabledAreaCats.map(
-                  (cat) => html`<span class="pill">
-                    <button
-                      type="button"
-                      aria-pressed="false"
-                      @click=${() => store.toggleAreaCategoryToken(cat.token)}
-                      class="pill-toggle"
-                    >
-                      + ${cat.label}
-                    </button>
-                  </span>`,
-                )}
-              </div>`,
-            })}
-            ${areaExtraItems.map((it) => renderNativeControlRow(store, it))}`,
-        })}
-
-        ${shortcutPrefs.length || sortMusicPrefs.length
+        ${homeScreenEnabled
           ? renderCard({
-              heading: html`<h3 class="card-title">Media Player</h3>`,
-              contentClass: "settings-list",
-              body: html`${shortcutPrefs.length
-                  ? renderSettingsRow({
-                      id: "media-player-shortcuts",
-                      label: "Shortcuts",
-                      description:
-                        "Choose which quick-access buttons appear on the Music player screen.",
-                      control: html`<div
-                        class="pill-list"
-                        role="group"
-                        aria-label="Media Player shortcuts"
-                      >
-                        ${shortcutPrefs.map(({ pref, label }) => {
-                          const isOn = Boolean(pref.value);
-                          return html`<span class="pill ${isOn ? "enabled" : ""}">
-                            <button
-                              type="button"
-                              aria-pressed=${String(isOn)}
-                              @click=${() => store.stageDeviceSetting(pref.key, !isOn)}
-                              class="pill-toggle"
-                            >
-                              ${isOn ? `✓ ${label}` : `+ ${label}`}
-                            </button>
-                          </span>`;
-                        })}
-                      </div>`,
-                    })
-                  : nothing}
-                ${sortMusicPrefs.map((p) => renderPrefControlRow(store, p))}`,
+              id: "card-app-dock",
+              heading: html`<h3 class="card-title">App Dock</h3>`,
+              contentClass: "stack",
+              body: html`<p class="row-description">
+                  Toggle, reorder, and configure apps on the Home Dock, or add custom subpage and Home Assistant entity shortcuts. Pinned hides automatically when empty.
+                </p>
+                <div
+                  id="dock-shortcuts-container"
+                  class="stack"
+                  role="group"
+                  aria-label="Active on App Dock"
+                >
+                  ${dockItems.map((item, idx) =>
+                    renderActiveDockRow(item, idx, dockItems.length),
+                  )}
+                  <div class="shortcut-item-row shortcut-item-locked">
+                    <span class="shortcut-icon-badge" aria-hidden="true">
+                      <ha-icon .icon=${"mdi:cog"}></ha-icon>
+                    </span>
+                    <div class="shortcut-item-info">
+                      <span class="shortcut-item-title">Settings</span>
+                      <span class="shortcut-item-meta">Always shown last on the App Dock</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="shortcut-toolbar">
+                  <button
+                    type="button"
+                    id="btn-add-dock-item"
+                    ?disabled=${dockItems.length >= MAX_DOCK_ITEMS}
+                    @click=${() => store.openShortcutModal("dock_items", null)}
+                    class="btn btn-secondary"
+                  >
+                    Add Custom Shortcut
+                  </button>
+                  <button
+                    type="button"
+                    id="btn-reset-dock-items"
+                    @click=${() => store.resetDockItemsToDefault()}
+                    class="btn btn-text"
+                  >
+                    Reset Default Dock
+                  </button>
+                </div>
+                ${hiddenNativeApps.length > 0
+                  ? html`<div
+                      id="dock-hidden-native-apps"
+                      class="stack"
+                      role="group"
+                      aria-label="Hidden From Dock"
+                    >
+                      <div class="subsection-title">Hidden From Dock</div>
+                      ${hiddenNativeApps.map((tok) => {
+                        const spec = routeSpecMap.get(tok);
+                        const displayTitle = spec?.label || tok;
+                        const iconSlug = ROUTE_PREVIEW_ICONS[tok] || "mdi:apps";
+                        const configApp = NATIVE_DOCK_CONFIG_APP_MAP[tok];
+                        return html`<div class="shortcut-item-row shortcut-item-hidden">
+                          <span class="shortcut-icon-badge" aria-hidden="true">
+                            <ha-icon .icon=${iconSlug}></ha-icon>
+                          </span>
+                          <div class="shortcut-item-info">
+                            <span class="shortcut-item-title">${displayTitle}</span>
+                            <span class="shortcut-item-meta">${describeNativeDockApp(tok)}</span>
+                          </div>
+                          ${configApp
+                            ? html`<button
+                                type="button"
+                                aria-label=${`Configure ${displayTitle}`}
+                                @click=${() => store.openAppConfigModal(configApp)}
+                                class="btn btn-secondary btn-compact"
+                              >
+                                Configure
+                              </button>`
+                            : nothing}
+                          <input
+                            type="checkbox"
+                            role="switch"
+                            aria-label=${`Show ${displayTitle} on App Dock`}
+                            ?disabled=${dockItems.length >= MAX_DOCK_ITEMS}
+                            .checked=${false}
+                            @change=${(ev) =>
+                              store.toggleNativeDockApp(
+                                tok,
+                                (ev.currentTarget).checked,
+                              )}
+                            class="switch"
+                          />
+                        </div>`;
+                      })}
+                    </div>`
+                  : nothing}`,
             })
-          : nothing}
-
-        ${renderCard({
-          heading: html`<h3 class="card-title">Remote Controls</h3>`,
-          contentClass: "settings-list",
-          body: html`${renderSelectRow({
-              id: "cfg-device_remote_group",
-              label: "Remote Control Group",
-              description: "Choose which remotes appear on this Device's Remote screen.",
-              value: curRemoteMode,
-              rawOptions: remoteModeOptions,
-              onChange: (val) =>
-                store.stageDeviceSetting(
-                  "device_remote_group",
-                  val,
-                  "cfg-device_remote_group",
-                ),
+          : renderCard({
+              id: "card-single-app-mode",
+              heading: html`<h3 class="card-title">Single-App Mode Active</h3>`,
+              contentClass: "stack",
+              body: html`<p class="row-description">
+                  The Home Screen and App Dock are disabled while this Device is locked to ${startScreenValue}. Turn on Enable Home Screen to restore multi-app navigation and the App Dock.
+                </p>
+                ${startScreenConfigApp
+                  ? html`<div class="shortcut-toolbar">
+                      <button
+                        type="button"
+                        id="btn-configure-locked-app"
+                        @click=${() => store.openAppConfigModal(startScreenConfigApp)}
+                        class="btn btn-secondary"
+                      >
+                        ${`Configure ${startScreenValue}`}
+                      </button>
+                    </div>`
+                  : nothing}`,
             })}
-            ${remoteEspItems.map((it) => renderNativeControlRow(store, it))}`,
-          footerActions: html`<button
-            type="button"
-            @click=${() => store.openSystemSection("remotes")}
-            class="btn btn-text"
-          >
-            Manage Remote Groups
-          </button>`,
-        })}
       </div>
     </div>
   </section>`;
@@ -11066,11 +11935,12 @@ function renderDeviceInterfaceView(store) {
 
 // --- src/views/device-overview-view.ts ---
 /**
- * Device Overview View (`dashboard`, D-029 / D-048 / D-049 / D-051):
+ * Device Overview View (`dashboard`, D-029 / D-048 / D-049 / D-051 / D-053):
  * - Column 1: High-level Status card (header state pill + responsive 2x2 tonal metric tiles)
  *   followed by Quick Actions (immediate action tiles + live volume + Open in ESPHome & Download Backup footer links).
  * - Column 2: Unified Assignments card (Device Group with Custom / Save Custom Group / Manage Groups,
- *   Assigned Person, Remote Control Group) followed by spillover Sensors & Controls.
+ *   Assigned Person, Remote Control Group modal launcher), Timers & Alarms card (live ringing Dismiss,
+ *   Active Timer + Cancel Timer, Stopwatch + Reset Stopwatch, 3-slot 2-way Alarms), and spillover Sensors & Controls.
  */
 const DEV_ICON_AREA = "M12,6.5A2.5,2.5 0 0,1 14.5,9A2.5,2.5 0 0,1 12,11.5A2.5,2.5 0 0,1 9.5,9A2.5,2.5 0 0,1 12,6.5M12,2A7,7 0 0,1 19,9C19,14.25 12,22 12,22C12,22 5,14.25 5,9A7,7 0 0,1 12,2M12,4A5,5 0 0,0 7,9C7,10 7,12 12,18.71C17,12 17,10 17,9A5,5 0 0,0 12,4Z";
 const DEV_ICON_BATTERY = "M16,20H8V6H16M16.67,4H15V2H9V4H7.33A1.33,1.33 0 0,0 6,5.33V20.67C6,21.4 6.6,22 7.33,22H16.67A1.33,1.33 0 0,0 18,20.67V5.33C18,4.6 17.4,4 16.67,4Z";
@@ -11086,6 +11956,53 @@ function rssiQualityLabel(rssi) {
   if (rssi >= -70) return "Good";
   if (rssi >= -80) return "Fair";
   return "Weak";
+}
+const DEFAULT_ALARM_SLOTS = [
+  { time: "07:00", enabled: false, recurrence: 1 },
+  { time: "08:30", enabled: false, recurrence: 2 },
+  { time: "09:00", enabled: false, recurrence: 2 },
+];
+function parseAlarmsSummary(raw) {
+  const text = String(raw || DEFAULT_ALARMS_SUMMARY).trim();
+  const parts = text.split(";");
+  const slots = [];
+  for (let i = 0; i < 3; i++) {
+    const fallback = DEFAULT_ALARM_SLOTS[i];
+    const seg = (parts[i] || "").trim();
+    const m = /^(\d{1,2}):(\d{2})\|([01])\|([0-3])$/.exec(seg);
+    if (!m) {
+      slots.push({ ...fallback });
+      continue;
+    }
+    const hh = Number(m[1]);
+    const mm = Number(m[2]);
+    if (hh < 0 || hh > 23 || mm < 0 || mm > 59) {
+      slots.push({ ...fallback });
+      continue;
+    }
+    slots.push({
+      time: `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`,
+      enabled: m[3] === "1",
+      recurrence: Number(m[4]),
+    });
+  }
+  return [slots[0], slots[1], slots[2]];
+}
+function serializeAlarmsSummary(slots) {
+  return slots
+    .slice(0, 3)
+    .map((s) => `${s.time}|${s.enabled ? 1 : 0}|${s.recurrence}`)
+    .join(";");
+}
+function formatClockDuration(rawSec) {
+  const sec = Math.max(0, Math.floor(Number(rawSec) || 0));
+  const hh = Math.floor(sec / 3600);
+  const mm = Math.floor((sec % 3600) / 60);
+  const ss = sec % 60;
+  if (hh > 0) {
+    return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
+  }
+  return `${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
 }
 function renderDeviceOverviewView(store) {
   const data = store.state;
@@ -11214,6 +12131,31 @@ function renderDeviceOverviewView(store) {
     const gid = curRemoteMode.slice(6);
     remoteSummary = remoteGroups.find((g) => g.id === gid)?.name || gid;
   }
+  const alarmsSummaryPref =
+    typeof store.getPref === "function" ? store.getPref("alarms_summary") : undefined;
+  const alarmSlots = parseAlarmsSummary(
+    alarmsSummaryPref?.value ?? cfg.alarms_summary ?? DEFAULT_ALARMS_SUMMARY,
+  );
+  const updateAlarmSlot = (
+    idx,
+    patch,
+    focusId,
+  ) => {
+    const next = [
+      { ...alarmSlots[0] },
+      { ...alarmSlots[1] },
+      { ...alarmSlots[2] },
+    ];
+    const merged = { ...next[idx], ...patch };
+    if (!/^\d{2}:\d{2}$/.test(merged.time)) {
+      return;
+    }
+    next[idx] = merged;
+    store.stageDeviceSetting("alarms_summary", serializeAlarmsSummary(next), focusId);
+  };
+  const timerActive = Boolean(live.timer_running || live.timer_paused);
+  const stopwatchActive = Boolean(live.stopwatch_running || live.stopwatch_paused);
+  const alarmRinging = Boolean(live.alarm_ringing);
   const powerTileBody = hasBatteryReading
     ? html`<div class="status-tile-head">
           ${renderSvgIcon(DEV_ICON_BATTERY)}
@@ -11462,7 +12404,8 @@ function renderDeviceOverviewView(store) {
                   control: html`<span class="chip">${remoteSummary}</span>
                     <button
                       type="button"
-                      @click=${() => store.switchView("interface")}
+                      id="btn-configure-remote-group"
+                      @click=${() => store.openAppConfigModal("remote")}
                       class="btn btn-text btn-compact"
                     >
                       Configure
@@ -11470,6 +12413,147 @@ function renderDeviceOverviewView(store) {
                 })
               : nothing}`,
         })}
+
+        ${!isBleOnly && caps.has_display
+          ? renderCard({
+              id: "card-device-timers-alarms",
+              title: "Timers & Alarms",
+              body: html`${alarmRinging
+                  ? html`<div id="overview-ringing-alert" role="alert" class="alert alert-warning">
+                      <span>An alarm or timer is ringing on this Device.</span>
+                      <button
+                        type="button"
+                        id="btn-dismiss-ringing"
+                        @click=${() =>
+                          void store.runDeviceAction("dismiss_ringing", "Dismissed ringing alert")}
+                        class="btn btn-secondary btn-compact"
+                      >
+                        Dismiss
+                      </button>
+                    </div>`
+                  : nothing}
+                <div class="settings-list">
+                  ${renderSettingsRow({
+                    id: "overview-active-timer",
+                    label: "Active Timer",
+                    description: timerActive ? undefined : "No active timer",
+                    control: timerActive
+                      ? html`<span class="chip ${live.timer_running ? "chip-primary" : ""}">
+                            ${live.timer_running ? "Running" : "Paused"}
+                          </span>
+                          <strong class="kv-value">
+                            ${formatClockDuration(live.timer_remaining_sec)}
+                          </strong>
+                          <button
+                            type="button"
+                            id="btn-cancel-timer"
+                            @click=${() =>
+                              void store.runDeviceAction("cancel_timer", "Cancelled timer")}
+                            class="btn btn-secondary btn-compact"
+                          >
+                            Cancel Timer
+                          </button>`
+                      : html`<span class="kv-value">—</span>`,
+                  })}
+                  ${renderSettingsRow({
+                    id: "overview-stopwatch",
+                    label: "Stopwatch",
+                    description: stopwatchActive ? undefined : "Not running",
+                    control: stopwatchActive
+                      ? html`<span class="chip ${live.stopwatch_running ? "chip-primary" : ""}">
+                            ${live.stopwatch_running ? "Running" : "Paused"}
+                          </span>
+                          <strong class="kv-value">
+                            ${formatClockDuration(live.stopwatch_elapsed_sec)}
+                          </strong>
+                          <button
+                            type="button"
+                            id="btn-reset-stopwatch"
+                            @click=${() =>
+                              void store.runDeviceAction("reset_stopwatch", "Reset stopwatch")}
+                            class="btn btn-secondary btn-compact"
+                          >
+                            Reset Stopwatch
+                          </button>`
+                      : html`<span class="kv-value">—</span>`,
+                  })}
+                  ${renderSettingsRow({
+                    id: "overview-alarms",
+                    label: "Alarms",
+                    description: "Syncs 2-way with on-device alarm edits (1-minute precision).",
+                    stacked: true,
+                    control: html`<div class="stack" role="group" aria-label="Device alarms">
+                      ${([0, 1, 2]).map((idx) => {
+                        const slot = alarmSlots[idx];
+                        const timeId = `cfg-alarm_${idx + 1}_time`;
+                        const recId = `cfg-alarm_${idx + 1}_recurrence`;
+                        const enId = `cfg-alarm_${idx + 1}_enabled`;
+                        return html`<div class="list-row">
+                          <div class="list-row-main">
+                            <div class="stacked-field">
+                              <label for=${timeId}>Alarm ${idx + 1} Time</label>
+                              <input
+                                type="time"
+                                id=${timeId}
+                                step="60"
+                                .value=${slot.time}
+                                @change=${(ev) => {
+                                  const val = (ev.currentTarget).value;
+                                  if (val) updateAlarmSlot(idx, { time: val.slice(0, 5) }, timeId);
+                                }}
+                              />
+                            </div>
+                            <div class="stacked-field">
+                              <label for=${recId}>Alarm ${idx + 1} Schedule</label>
+                              <select
+                                id=${recId}
+                                .value=${String(slot.recurrence)}
+                                @change=${(ev) =>
+                                  updateAlarmSlot(
+                                    idx,
+                                    {
+                                      recurrence: Number(
+                                        (ev.currentTarget).value,
+                                      ),
+                                    },
+                                    recId,
+                                  )}
+                              >
+                                ${ALARM_RECURRENCE_OPTIONS.map(
+                                  (opt) =>
+                                    html`<option
+                                      value=${String(opt.value)}
+                                      ?selected=${opt.value === slot.recurrence}
+                                    >
+                                      ${opt.label}
+                                    </option>`,
+                                )}
+                              </select>
+                            </div>
+                          </div>
+                          <label for=${enId} class="inline-switch">
+                            <span>Enabled</span>
+                            <input
+                              type="checkbox"
+                              id=${enId}
+                              .checked=${slot.enabled}
+                              @change=${(ev) =>
+                                updateAlarmSlot(
+                                  idx,
+                                  { enabled: (ev.currentTarget).checked },
+                                  enId,
+                                )}
+                              role="switch"
+                              class="switch"
+                            />
+                          </label>
+                        </div>`;
+                      })}
+                    </div>`,
+                  })}
+                </div>`,
+            })
+          : nothing}
 
         ${otherSensorItems.length
           ? renderCard({
@@ -12854,6 +13938,17 @@ const BATCH_CATEGORY_META = [
 const DEFAULT_ACTIVITY_SOURCES_CSV = ACTIVITY_SOURCES_CATALOG.map((c) => c.token).join(",");
 const DEFAULT_HOME_CATEGORIES_CSV = DEFAULT_HOME_CATEGORIES_TOKENS.join(",");
 const DEFAULT_AREA_CATEGORIES_CSV = DEFAULT_AREA_CATEGORIES_TOKENS.join(",");
+const DEFAULT_TOOLS_ITEMS_CSV = DEFAULT_TOOLS_ITEMS_TOKENS.join(",");
+const DEFAULT_GAMES_ITEMS_CSV = DEFAULT_GAMES_ITEMS_TOKENS.join(",");
+const PILL_FALLBACK_LABELS = Object.fromEntries(
+  [
+    ...ACTIVITY_SOURCES_CATALOG,
+    ...HOME_CATEGORIES_CATALOG,
+    ...AREA_CATEGORIES_CATALOG,
+    ...TOOLS_ITEMS_CATALOG,
+    ...GAMES_ITEMS_CATALOG,
+  ].map((c) => [c.token, c.label]),
+);
 function renderBaselineSelect(
   store,
   groupId,
@@ -12959,7 +14054,13 @@ function renderBaselinePills(
     const next = new Set(activeSet);
     if (next.has(tok)) {
       if (next.size <= minRequired) {
-        store.showToast("Keep at least one category enabled", true);
+        const noun =
+          key === "tools_items"
+            ? "tool"
+            : key === "games_items"
+              ? "game"
+              : "category";
+        store.showToast(`Keep at least one ${noun} enabled`, true);
         return;
       }
       next.delete(tok);
@@ -13551,6 +14652,26 @@ function renderGroupBaselineDrawer(
                 DEFAULT_AREA_CATEGORIES_CSV,
                 1,
               )}
+              ${renderBaselinePills(
+                store,
+                gid,
+                "tools_items",
+                "Tools",
+                cfg.tools_items,
+                TOOLS_ITEMS_CATALOG,
+                DEFAULT_TOOLS_ITEMS_CSV,
+                1,
+              )}
+              ${renderBaselinePills(
+                store,
+                gid,
+                "games_items",
+                "Games",
+                cfg.games_items,
+                GAMES_ITEMS_CATALOG,
+                DEFAULT_GAMES_ITEMS_CSV,
+                1,
+              )}
               ${renderBaselineLabeledSelect(
                 store,
                 gid,
@@ -13817,7 +14938,7 @@ function renderSystemGroupsView(store) {
               @click=${() => void store.bulkPillsToggle(fc, tok, baseCsv)}
               class="pill-toggle"
             >
-              ${optLabels[tok] || tok}
+              ${optLabels[tok] || PILL_FALLBACK_LABELS[tok] || tok}
             </button>
           </span>`;
         })}

@@ -619,7 +619,15 @@ function makeStore({ weatherBgState = "Dynamic", cycleMins = 0, activeId = "", f
     getPinnedItems() { return []; },
     getEnabledAreaCategories() { return ["scene", "light"]; },
     getEnabledHomeCategories() { return ["alarm", "thermostat", "entry", "vacuum"]; },
+    getEnabledToolsItems() { return ["stopwatch", "level", "flashlight", "calculator", "dice", "coin_flip"]; },
+    getEnabledGamesItems() { return ["marbles", "archery", "bricks", "chomp", "2048", "memory"]; },
   };
+}
+
+function renderModalApp(app, opts = {}) {
+  const s = makeStore(opts);
+  s.appConfigModal = { open: true, app };
+  return flattenHtml(renderAppConfigModalBody(s));
 }
 
 const offMarkup = flattenHtml(renderDeviceDisplayView(makeStore({ cycleMins: 0, activeId: "", autoBrtState: "Disabled" })));
@@ -629,9 +637,32 @@ const rotatingMarkup = flattenHtml(renderDeviceDisplayView(makeStore({ cycleMins
 const powerMarkup = flattenHtml(renderDevicePowerView(makeStore({})));
 const audioMarkup = flattenHtml(renderDeviceAudioView(makeStore({})));
 const ifaceMarkup = flattenHtml(renderDeviceInterfaceView(makeStore({ weatherBgState: "Dynamic" })));
+const modalPinnedMarkup = renderModalApp("pinned");
+const modalAreaMarkup = renderModalApp("area");
+const modalTimeMarkup = renderModalApp("time");
+const modalMusicMarkup = renderModalApp("music");
+const modalRemoteMarkup = renderModalApp("remote", { remoteMode: "group:living_tv" });
+const modalToolsMarkup = renderModalApp("tools");
+const modalGamesMarkup = renderModalApp("games");
 const sysRemotesMarkup = flattenHtml(renderSystemRemotesView(makeStore({ remoteMode: "group:living_tv" })));
 
-return { offMarkup, dispWeatherOff, staticMarkup, rotatingMarkup, powerMarkup, audioMarkup, ifaceMarkup, sysRemotesMarkup };
+return {
+  offMarkup,
+  dispWeatherOff,
+  staticMarkup,
+  rotatingMarkup,
+  powerMarkup,
+  audioMarkup,
+  ifaceMarkup,
+  modalPinnedMarkup,
+  modalAreaMarkup,
+  modalTimeMarkup,
+  modalMusicMarkup,
+  modalRemoteMarkup,
+  modalToolsMarkup,
+  modalGamesMarkup,
+  sysRemotesMarkup,
+};
 """
         )
         got = _run_node_ts(
@@ -639,6 +670,7 @@ return { offMarkup, dispWeatherOff, staticMarkup, rotatingMarkup, powerMarkup, a
                 FRONTEND_SRC / "constants.ts",
                 FRONTEND_SRC / "utils" / "format.ts",
                 FRONTEND_SRC / "components" / "controls.ts",
+                FRONTEND_SRC / "components" / "dialogs.ts",
                 FRONTEND_SRC / "components" / "wallpaper-gallery.ts",
                 FRONTEND_SRC / "views" / "device-display-view.ts",
                 FRONTEND_SRC / "views" / "device-power-view.ts",
@@ -708,15 +740,22 @@ return { offMarkup, dispWeatherOff, staticMarkup, rotatingMarkup, powerMarkup, a
         for saver_label in ("Docked Screensaver", "Screensaver Style", "Docked Idle Timeout"):
             self.assertNotIn(saver_label, got["powerMarkup"])
 
-        # 2. Interface view (D-033/D-034/D-047): navigation & structure only (Start Screen, App Dock, Pinned App, Area Categories pills, uncollapsed Library Sorting, Remote Control Group)
+        # 2. Interface view (D-053): 2 balanced cards (Home Screen + App Dock) with per-app configuration in #latter-app-config-modal
         self.assertIn("Start Screen", got["ifaceMarkup"])
+        self.assertIn('<h3 class="card-title">Home Screen</h3>', got["ifaceMarkup"])
+        self.assertIn('<h3 class="card-title">App Dock</h3>', got["ifaceMarkup"])
         self.assertIn('id="dock-shortcuts-container"', got["ifaceMarkup"])
-        self.assertIn('id="pinned-shortcuts-container"', got["ifaceMarkup"])
-        self.assertIn('id="area-categories-pills"', got["ifaceMarkup"])
-        self.assertIn("✓ Scenes", got["ifaceMarkup"])
-        self.assertIn("✓ Lights", got["ifaceMarkup"])
-        self.assertIn("+ All Devices", got["ifaceMarkup"])
-        self.assertIn("categories with no entities in the active Area are not displayed", got["ifaceMarkup"])
+        self.assertIn('id="dock-hidden-native-apps"', got["ifaceMarkup"])
+        self.assertIn("Add Custom Shortcut", got["ifaceMarkup"])
+        self.assertIn("Hidden From Dock", got["ifaceMarkup"])
+        self.assertNotIn("Configure Sky & Weather", got["ifaceMarkup"])
+        self.assertNotIn('id="pinned-shortcuts-container"', got["ifaceMarkup"])
+        self.assertIn('id="pinned-shortcuts-container"', got["modalPinnedMarkup"])
+        self.assertIn('id="area-categories-pills"', got["modalAreaMarkup"])
+        self.assertIn("✓ Scenes", got["modalAreaMarkup"])
+        self.assertIn("✓ Lights", got["modalAreaMarkup"])
+        self.assertIn("+ All Devices", got["modalAreaMarkup"])
+        self.assertIn("categories with no entities in the active Area are not displayed", got["modalAreaMarkup"])
         self.assertNotIn("Area Cards Per Page", got["ifaceMarkup"])
         self.assertNotIn("cfg-default_page_size", got["ifaceMarkup"])
         self.assertNotIn("Default Category", got["ifaceMarkup"])
@@ -734,54 +773,57 @@ return { offMarkup, dispWeatherOff, staticMarkup, rotatingMarkup, powerMarkup, a
             self.assertNotIn(display_only_label, got["ifaceMarkup"])
         self.assertIn("Home Time Tap", got["ifaceMarkup"])
         self.assertIn("id=cfg-home_clock_tap_action", got["ifaceMarkup"])
-        self.assertIn("+ Time", got["ifaceMarkup"])
-        self.assertIn('<h3 class="card-title">Time</h3>', got["ifaceMarkup"])
-        self.assertIn("Local Clock Label", got["ifaceMarkup"])
-        self.assertIn('id="cfg-local_clock_label"', got["ifaceMarkup"])
-        self.assertIn("Show UTC Clock", got["ifaceMarkup"])
-        self.assertIn('id="cfg-world_clock_new_label"', got["ifaceMarkup"])
-        self.assertIn('id="cfg-world_clocks_add"', got["ifaceMarkup"])
-        self.assertIn('id="btn-world_clock_add"', got["ifaceMarkup"])
-        self.assertIn("UTC-12:00 — International Date Line West", got["ifaceMarkup"])
-        self.assertIn("UTC-05:00 — Eastern Time (EST/EDT)", got["ifaceMarkup"])
-        self.assertIn("UTC+14:00 — Line Islands Time (LINT)", got["ifaceMarkup"])
+        self.assertIn("Local Clock Label", got["modalTimeMarkup"])
+        self.assertIn('id="cfg-local_clock_label"', got["modalTimeMarkup"])
+        self.assertIn("Show UTC Clock", got["modalTimeMarkup"])
+        self.assertIn('id="cfg-world_clock_new_label"', got["modalTimeMarkup"])
+        self.assertIn('id="cfg-world_clocks_add"', got["modalTimeMarkup"])
+        self.assertIn('id="btn-world_clock_add"', got["modalTimeMarkup"])
+        self.assertIn("UTC-12:00 — International Date Line West", got["modalTimeMarkup"])
+        self.assertIn("UTC-05:00 — Eastern Time (EST/EDT)", got["modalTimeMarkup"])
+        self.assertIn("UTC+14:00 — Line Islands Time (LINT)", got["modalTimeMarkup"])
         self.assertLess(
-            got["ifaceMarkup"].index("UTC-12:00 — International Date Line West"),
-            got["ifaceMarkup"].index("UTC-05:00 — Eastern Time (EST/EDT)"),
+            got["modalTimeMarkup"].index("UTC-12:00 — International Date Line West"),
+            got["modalTimeMarkup"].index("UTC-05:00 — Eastern Time (EST/EDT)"),
         )
         self.assertLess(
-            got["ifaceMarkup"].index("UTC-05:00 — Eastern Time (EST/EDT)"),
-            got["ifaceMarkup"].index("UTC+14:00 — Line Islands Time (LINT)"),
+            got["modalTimeMarkup"].index("UTC-05:00 — Eastern Time (EST/EDT)"),
+            got["modalTimeMarkup"].index("UTC+14:00 — Line Islands Time (LINT)"),
         )
-        self.assertNotIn("Defaults to selected zone city", got["ifaceMarkup"])
-        self.assertNotIn('label="All Time Zones"', got["ifaceMarkup"])
-        self.assertIn("id=cfg-alarm_1_time", got["ifaceMarkup"])
-        self.assertIn('step="60"', got["ifaceMarkup"])
-        self.assertIn('<h3 class="card-title">Media Player</h3>', got["ifaceMarkup"])
-        self.assertIn("id=media-player-shortcuts", got["ifaceMarkup"])
-        self.assertIn("✓ Speaker", got["ifaceMarkup"])
-        self.assertIn("+ Library", got["ifaceMarkup"])
-        self.assertLess(got["ifaceMarkup"].index("✓ Speaker"), got["ifaceMarkup"].index("+ Library"))
+        self.assertNotIn("Defaults to selected zone city", got["modalTimeMarkup"])
+        self.assertNotIn('label="All Time Zones"', got["modalTimeMarkup"])
+        self.assertNotIn("cfg-alarm_1_time", got["modalTimeMarkup"])
+        self.assertNotIn("cfg-alarm_1_time", got["ifaceMarkup"])
+        self.assertIn("id=media-player-shortcuts", got["modalMusicMarkup"])
+        self.assertIn("✓ Speaker", got["modalMusicMarkup"])
+        self.assertIn("+ Library", got["modalMusicMarkup"])
+        self.assertLess(got["modalMusicMarkup"].index("✓ Speaker"), got["modalMusicMarkup"].index("+ Library"))
         self.assertNotIn("Show Speaker Shortcut", got["ifaceMarkup"])
         self.assertNotIn("Show Library Shortcut", got["ifaceMarkup"])
         self.assertNotIn("Show Speaker Shortcut", got["audioMarkup"])
         self.assertNotIn("Show Library Shortcut", got["audioMarkup"])
-        self.assertNotIn("<summary>Library Sorting</summary>", got["ifaceMarkup"])
+        self.assertNotIn("<summary>Library Sorting</summary>", got["modalMusicMarkup"])
         for media_nav_label in (
             "Shortcuts",
             "Album Sort Order",
             "Podcast Sort Order",
         ):
-            self.assertIn(media_nav_label, got["ifaceMarkup"])
+            self.assertIn(media_nav_label, got["modalMusicMarkup"])
             self.assertNotIn(media_nav_label, got["audioMarkup"])
         self.assertNotIn("Album Art Style", got["audioMarkup"])
         self.assertNotIn("Overlay Style", got["audioMarkup"])
-        self.assertLess(got["ifaceMarkup"].index("id=media-player-shortcuts"), got["ifaceMarkup"].index("Album Sort Order"))
-        self.assertLess(got["ifaceMarkup"].index("Album Sort Order"), got["ifaceMarkup"].index("Podcast Sort Order"))
+        self.assertLess(got["modalMusicMarkup"].index("id=media-player-shortcuts"), got["modalMusicMarkup"].index("Album Sort Order"))
+        self.assertLess(got["modalMusicMarkup"].index("Album Sort Order"), got["modalMusicMarkup"].index("Podcast Sort Order"))
         self.assertIn('<h3 class="card-title">Sound &amp; Playback</h3>', got["audioMarkup"])
         self.assertIn("Speaker Volume", got["audioMarkup"])
-        self.assertIn("id=cfg-device_remote_group", got["ifaceMarkup"])
-        self.assertIn("Group: Living Area TV", got["ifaceMarkup"])
+        self.assertIn("id=cfg-device_remote_group", got["modalRemoteMarkup"])
+        self.assertIn("Group: Living Area TV", got["modalRemoteMarkup"])
+        self.assertIn('id="tools-items-pills"', got["modalToolsMarkup"])
+        self.assertIn("✓ Analog Chronograph", got["modalToolsMarkup"])
+        self.assertIn("✓ Bubble Level", got["modalToolsMarkup"])
+        self.assertIn('id="games-items-pills"', got["modalGamesMarkup"])
+        self.assertIn("✓ Marbles", got["modalGamesMarkup"])
+        self.assertIn("✓ Memory Match", got["modalGamesMarkup"])
 
         # 3. System -> Media & Remotes (D-042): Remote Controls, Speaker Volume Overrides & Remote Control Groups only (no Device Assignments card)
         for rem_card in ("Remote Controls", "Speaker Volume Overrides", "Remote Control Groups"):
@@ -1503,11 +1545,27 @@ function makeInterfaceStore(homeEnabled) {
     getEnabledActivitySources() {
       return ["calendar", "timers"];
     },
+    getEnabledToolsItems() {
+      return ["stopwatch", "level", "flashlight", "calculator", "dice", "coin_flip"];
+    },
+    getEnabledGamesItems() {
+      return ["marbles", "archery", "bricks", "chomp", "2048", "memory"];
+    },
   };
+}
+function renderModal(app, caps = {}) {
+  const s = makeInterfaceStore(true);
+  s.state.capabilities = caps;
+  s.appConfigModal = { open: true, app };
+  return flattenHtml(renderAppConfigModalBody(s));
 }
 return {
   enabledMarkup: flattenHtml(renderDeviceInterfaceView(makeInterfaceStore(true))),
   singleAppMarkup: flattenHtml(renderDeviceInterfaceView(makeInterfaceStore(false))),
+  pinnedModalMarkup: renderModal("pinned"),
+  homeHubModalMarkup: renderModal("home_hub"),
+  timeModalMarkup: renderModal("time"),
+  rectWallToolsModalMarkup: renderModal("tools", { is_round: false, has_imu: false }),
 };
 """
         )
@@ -1516,6 +1574,7 @@ return {
                 FRONTEND_SRC / "constants.ts",
                 FRONTEND_SRC / "utils" / "format.ts",
                 FRONTEND_SRC / "components" / "controls.ts",
+                FRONTEND_SRC / "components" / "dialogs.ts",
                 FRONTEND_SRC / "components" / "wallpaper-gallery.ts",
                 FRONTEND_SRC / "views" / "device-display-view.ts",
                 FRONTEND_SRC / "views" / "device-interface-view.ts",
@@ -1524,55 +1583,71 @@ return {
         )
         enabled_html = got["enabledMarkup"]
         single_html = got["singleAppMarkup"]
+        pinned_modal = got["pinnedModalMarkup"]
+        home_hub_modal = got["homeHubModalMarkup"]
+        time_modal = got["timeModalMarkup"]
+        rect_wall_tools = got["rectWallToolsModalMarkup"]
 
         for expected in (
             "Enable Home Screen",
             "Start Screen",
             ".value=Home",
-            "<option value=Home ?selected=>Home</option>",
+            "<option value=Home ?selected=>",
             "Home Time Tap",
             "Return to Home Timeout",
             "App Dock",
-            "Add Dock Item",
+            "Add Custom Shortcut",
             "Reset Default Dock",
             "Moon Phase",
-            "Pinned App",
-            "Add Pinned Item",
-            "Baby Help",
-            "Page 1",
+            "Always shown last on the App Dock",
+            "Hidden From Dock",
+            "1 shortcut • 1 page",
             "Show the Activity Card",
             "Activity Card Sources",
-            "Home Controls",
+        ):
+            self.assertIn(expected, enabled_html)
+        self.assertNotIn("Configure Sky & Weather", enabled_html)
+
+        for expected_pinned in ("Pinned Shortcuts", "Add Pinned Item", "Baby Help", "Page 1"):
+            self.assertIn(expected_pinned, pinned_modal)
+        for expected_home in (
+            "Home Categories",
             "✓ Security Alarm",
             "✓ Thermostat",
             "✓ Entry & Garage",
             "+ Robot Vacuum",
+        ):
+            self.assertIn(expected_home, home_hub_modal)
+        for expected_time in (
             'id="cfg-local_clock_label"',
             ".value=Oakland",
             'id="world-clocks-list"',
             ".value=Westminster",
             ".value=Kyoto",
-            ".value=06:45",
         ):
-            self.assertIn(expected, enabled_html)
+            self.assertIn(expected_time, time_modal)
+        self.assertNotIn("Analog Chronograph", rect_wall_tools)
+        self.assertNotIn("Bubble Level", rect_wall_tools)
+        self.assertIn("✓ Flashlight", rect_wall_tools)
 
         self.assertIn("Enable Home Screen", single_html)
         self.assertIn("Start Screen", single_html)
         self.assertIn(".value=Time App", single_html)
-        self.assertIn("<option value=Pinned ?selected=>Pinned</option>", single_html)
-        self.assertIn("<option value=Time App ?selected=>Time App</option>", single_html)
-        self.assertIn("<option value=Clock Face ?selected=>Clock Face</option>", single_html)
-        self.assertIn("<option value=Home Hub ?selected=>Home Hub</option>", single_html)
-        self.assertNotIn("<option value=Home ?selected=>Home</option>", single_html)
+        self.assertIn("<option value=Pinned ?selected=>", single_html)
+        self.assertIn("<option value=Time App ?selected=>", single_html)
+        self.assertIn("<option value=Clock Face ?selected=>", single_html)
+        self.assertIn("<option value=Home Hub ?selected=>", single_html)
+        self.assertNotIn("<option value=Home ?selected=>", single_html)
+        self.assertIn('id="btn-configure-start-screen"', single_html)
+        self.assertIn('<h3 class="card-title">Single-App Mode Active</h3>', single_html)
+        self.assertIn('id="btn-configure-locked-app"', single_html)
+        self.assertIn("Configure Time App", single_html)
         self.assertNotIn("Home Time Tap", single_html)
         self.assertNotIn("Return to Home Timeout", single_html)
         self.assertNotIn('id="dock-shortcuts-container"', single_html)
-        self.assertNotIn("Add Dock Item", single_html)
+        self.assertNotIn("Add Custom Shortcut", single_html)
         self.assertNotIn("Show the Activity Card", single_html)
         self.assertNotIn("Activity Card Sources", single_html)
-        self.assertIn('<h3 class="card-title">Pinned App</h3>', single_html)
-        self.assertIn("Home Controls", single_html)
-        self.assertIn('<h3 class="card-title">Time</h3>', single_html)
 
     def test_time_card_focus_safe_typing_and_manual_world_clock_add(self) -> None:
         """D-039: Focused text inputs survive live WS re-renders, stop HA shortcut bubbling, and require manual World Clock labels."""
@@ -1631,6 +1706,7 @@ const domEls = {
 };
 const store = {
   activeSubentryId: "sub_1",
+  appConfigModal: { open: true, app: "time" },
   worldClockNewLabel: "",
   worldClockNewZone: "",
   requestCount: 0,
@@ -1706,7 +1782,7 @@ function collectHandlers(node, out = {}) {
   return out;
 }
 
-const tpl = renderDeviceInterfaceView(store);
+const tpl = renderAppConfigModalBody(store);
 const handlers = collectHandlers(tpl);
 
 // Type "Main " (with trailing space!) into Local Clock Label — DOM .value must NOT be trimmed mid-typing
@@ -1756,8 +1832,6 @@ return {
         stub_lit_dom = (
             "globalThis.HTMLElement = class { attachShadow() { return {}; } toggleAttribute() {} };\n"
             "globalThis.customElements = { get: () => true, define: () => {} };\n"
-            "function renderStudioDialogs() { return nothing; }\n"
-            "function syncStudioDialogs() {}\n"
             "function renderActiveView() { return nothing; }\n"
             "const STUDIO_STYLES = { styleSheetText: '' };\n"
             "class StudioStore { constructor() {} addController() {} }\n"
@@ -1768,7 +1842,7 @@ return {
                 FRONTEND_SRC / "constants.ts",
                 FRONTEND_SRC / "utils" / "format.ts",
                 FRONTEND_SRC / "components" / "controls.ts",
-                FRONTEND_SRC / "views" / "device-interface-view.ts",
+                FRONTEND_SRC / "components" / "dialogs.ts",
                 FRONTEND_SRC / "latter-studio.ts",
             ],
             runner,
@@ -2910,12 +2984,22 @@ store.openSaveGroupModal();
 store.saveGroupModal = { ...store.saveGroupModal, name: " Sean Carry ", description: "Personal handheld" };
 await store.confirmSaveGroupModal();
 
-// Switch active device to handhelds -> Save Custom Group button disappears
+// Switch active device to handhelds + active timer, stopwatch & ringing -> Save Custom Group hides and Timers & Alarms renders live controls
 store.ingestPayload(
   {
     ...structuredClone(store.state),
     config: { ...structuredClone(store.state.config), device_group: "handhelds" },
-    live: { ...structuredClone(store.state.live), device_group_name: "Handhelds" },
+    live: {
+      ...structuredClone(store.state.live),
+      device_group_name: "Handhelds",
+      timer_running: true,
+      timer_paused: false,
+      timer_remaining_sec: 125,
+      stopwatch_running: true,
+      stopwatch_paused: false,
+      stopwatch_elapsed_sec: 3665,
+      alarm_ringing: true,
+    },
   },
   false,
 );
@@ -3076,11 +3160,26 @@ return {
         self.assertNotIn("Updates Available", cat_select)
         self.assertNotIn("Screenless Devices", cat_select)
 
-        # Device Overview Assignments: Save Custom Group shown when Custom and hidden when on Handhelds
+        # Device Overview Assignments & Timers & Alarms: Save Custom Group shown when Custom and hidden when on Handhelds; live ringing/timer/stopwatch/alarms rendered
         self.assertIn("id=card-device-assignments", got["overviewCustomHtml"])
         self.assertIn('id="btn-save-custom-group"', got["overviewCustomHtml"])
+        self.assertIn('id="btn-configure-remote-group"', got["overviewCustomHtml"])
         self.assertIn("Save Custom Group", got["overviewCustomHtml"])
+        self.assertIn("id=card-device-timers-alarms", got["overviewCustomHtml"])
+        self.assertIn("No active timer", got["overviewCustomHtml"])
+        self.assertIn("Not running", got["overviewCustomHtml"])
+        self.assertNotIn('id="overview-ringing-alert"', got["overviewCustomHtml"])
+        self.assertIn("id=cfg-alarm_1_time", got["overviewCustomHtml"])
+
         self.assertNotIn('id="btn-save-custom-group"', got["overviewGroupHtml"])
+        self.assertIn('id="overview-ringing-alert"', got["overviewGroupHtml"])
+        self.assertIn('id="btn-dismiss-ringing"', got["overviewGroupHtml"])
+        self.assertIn("02:05", got["overviewGroupHtml"])
+        self.assertIn('id="btn-cancel-timer"', got["overviewGroupHtml"])
+        self.assertIn("01:01:05", got["overviewGroupHtml"])
+        self.assertIn('id="btn-reset-stopwatch"', got["overviewGroupHtml"])
+        self.assertIn("Tools", got["groupsHtml"])
+        self.assertIn("Games", got["groupsHtml"])
         self.assertEqual(
             got["wsCalls"][0],
             {

@@ -17,12 +17,16 @@ import {
   AREA_CATEGORIES_CATALOG,
   DEFAULT_AREA_CATEGORIES_TOKENS,
   DEFAULT_DEVICE_GROUP_IDS,
+  DEFAULT_GAMES_ITEMS_TOKENS,
   DEFAULT_HOME_CATEGORIES_TOKENS,
+  DEFAULT_TOOLS_ITEMS_TOKENS,
+  GAMES_ITEMS_CATALOG,
   HOME_CATEGORIES_CATALOG,
   HOME_CLOCK_TAP_OPTIONS,
   RETURN_TO_HOME_TIMEOUT_OPTIONS,
   SECURITY_PIN_POLICY_OPTIONS,
   START_SCREEN_OPTIONS,
+  TOOLS_ITEMS_CATALOG,
   WALLPAPER_ROTATION_OPTIONS,
 } from "../constants.js";
 import { html, nothing, repeat, type TemplateResult } from "../lib/lit.js";
@@ -140,6 +144,18 @@ const BATCH_CATEGORY_META: ReadonlyArray<{ id: string; title: string; defaultOpe
 const DEFAULT_ACTIVITY_SOURCES_CSV = ACTIVITY_SOURCES_CATALOG.map((c) => c.token).join(",");
 const DEFAULT_HOME_CATEGORIES_CSV = DEFAULT_HOME_CATEGORIES_TOKENS.join(",");
 const DEFAULT_AREA_CATEGORIES_CSV = DEFAULT_AREA_CATEGORIES_TOKENS.join(",");
+const DEFAULT_TOOLS_ITEMS_CSV = DEFAULT_TOOLS_ITEMS_TOKENS.join(",");
+const DEFAULT_GAMES_ITEMS_CSV = DEFAULT_GAMES_ITEMS_TOKENS.join(",");
+
+const PILL_FALLBACK_LABELS: Readonly<Record<string, string>> = Object.fromEntries(
+  [
+    ...ACTIVITY_SOURCES_CATALOG,
+    ...HOME_CATEGORIES_CATALOG,
+    ...AREA_CATEGORIES_CATALOG,
+    ...TOOLS_ITEMS_CATALOG,
+    ...GAMES_ITEMS_CATALOG,
+  ].map((c) => [c.token, c.label]),
+);
 
 function renderBaselineSelect(
   store: StudioStore,
@@ -249,7 +265,13 @@ function renderBaselinePills(
     const next = new Set(activeSet);
     if (next.has(tok)) {
       if (next.size <= minRequired) {
-        store.showToast("Keep at least one category enabled", true);
+        const noun =
+          key === "tools_items"
+            ? "tool"
+            : key === "games_items"
+              ? "game"
+              : "category";
+        store.showToast(`Keep at least one ${noun} enabled`, true);
         return;
       }
       next.delete(tok);
@@ -845,6 +867,26 @@ function renderGroupBaselineDrawer(
                 DEFAULT_AREA_CATEGORIES_CSV,
                 1,
               )}
+              ${renderBaselinePills(
+                store,
+                gid,
+                "tools_items",
+                "Tools",
+                cfg.tools_items,
+                TOOLS_ITEMS_CATALOG,
+                DEFAULT_TOOLS_ITEMS_CSV,
+                1,
+              )}
+              ${renderBaselinePills(
+                store,
+                gid,
+                "games_items",
+                "Games",
+                cfg.games_items,
+                GAMES_ITEMS_CATALOG,
+                DEFAULT_GAMES_ITEMS_CSV,
+                1,
+              )}
               ${renderBaselineLabeledSelect(
                 store,
                 gid,
@@ -1119,7 +1161,7 @@ export function renderSystemGroupsView(store: StudioStore): TemplateResult {
               @click=${() => void store.bulkPillsToggle(fc, tok, baseCsv)}
               class="pill-toggle"
             >
-              ${optLabels[tok] || tok}
+              ${optLabels[tok] || PILL_FALLBACK_LABELS[tok] || tok}
             </button>
           </span>`;
         })}

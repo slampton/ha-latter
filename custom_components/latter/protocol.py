@@ -22,8 +22,12 @@ from .studio.settings import (
     AREA_CATEGORY_TOKENS,
     DEFAULT_AREA_CATEGORIES,
     DEFAULT_DOCK_ROUTES,
+    DEFAULT_GAMES_ITEMS,
     DEFAULT_HOME_CATEGORIES,
+    DEFAULT_TOOLS_ITEMS,
     DEVICE_PREF_SPEC_MAP,
+    GAMES_ITEM_TOKENS,
+    GAMES_ITEMS_CATALOG,
     HOME_CATEGORY_TOKENS,
     MAX_DOCK_ITEMS,
     MAX_PINNED_ITEMS,
@@ -34,19 +38,25 @@ from .studio.settings import (
     SHORTCUT_ROUTE_TOKENS,
     SHORTCUT_ROUTES_CATALOG,
     SHORTCUT_SUPPORTED_DOMAINS,
+    TOOLS_ITEM_TOKENS,
+    TOOLS_ITEMS_CATALOG,
     WORLD_CLOCK_CATALOG_MAP,
     default_dock_items,
     normalize_activity_sources,
     normalize_alarms_summary,
     normalize_area_categories,
     normalize_dock_items,
+    normalize_games_items,
     normalize_home_categories,
     normalize_mdi_icon,
     normalize_pinned_items,
     normalize_shortcut_item,
+    normalize_tools_items,
     normalize_world_clocks_spec,
     parse_area_categories,
+    parse_games_items,
     parse_home_categories,
+    parse_tools_items,
     parse_world_clocks_spec,
     resolve_device_pref_value,
     sanitize_clock_label,
@@ -367,7 +377,7 @@ def pack_device_prefs_fields(
     custom_color_hex: str,
     is_round_display: bool = True,
 ) -> tuple[Any, ...]:
-    """Return the 53 ordered body fields (wire indices 3..55) for Protocol v3 `device_prefs`."""
+    """Return the 54 ordered body fields (wire indices 3..56) for Protocol v3 `device_prefs`."""
     home_enabled = bool(resolve_device_pref_value(cfg, "home_screen_enabled"))
     clean_hex = str(custom_color_hex or "").strip().upper()
     out: list[Any] = []
@@ -378,6 +388,20 @@ def pack_device_prefs_fields(
             out.append(bool(native_ble_tracking))
         elif name == "theme_color_hex":
             out.append(clean_hex)
+        elif name == "tools_items":
+            try:
+                out.append(
+                    normalize_tools_items(cfg.get("tools_items", DEFAULT_TOOLS_ITEMS))
+                )
+            except ValueError:
+                out.append(DEFAULT_TOOLS_ITEMS)
+        elif name == "games_items":
+            try:
+                out.append(
+                    normalize_games_items(cfg.get("games_items", DEFAULT_GAMES_ITEMS))
+                )
+            except ValueError:
+                out.append(DEFAULT_GAMES_ITEMS)
         else:
             val = resolve_device_pref_value(cfg, name)
             if name == "start_screen" and not home_enabled and val == "Home":
@@ -402,6 +426,18 @@ def parse_dirty_prefs_records(raw: str | None) -> dict[str, Any]:
         val = raw_val.strip()
         if key == "ble_beacon_enabled":
             out["native_ble_tracking"] = val.lower() in ("1", "true", "on", "yes")
+            continue
+        if key == "tools_items":
+            try:
+                out["tools_items"] = normalize_tools_items(val)
+            except ValueError:
+                pass
+            continue
+        if key == "games_items":
+            try:
+                out["games_items"] = normalize_games_items(val)
+            except ValueError:
+                pass
             continue
         spec = DEVICE_PREF_SPEC_MAP.get(key)
         if spec is None:
@@ -572,6 +608,16 @@ __all_area_categories__ = (
     DEFAULT_HOME_CATEGORIES,
     parse_home_categories,
     normalize_home_categories,
+    TOOLS_ITEMS_CATALOG,
+    TOOLS_ITEM_TOKENS,
+    DEFAULT_TOOLS_ITEMS,
+    parse_tools_items,
+    normalize_tools_items,
+    GAMES_ITEMS_CATALOG,
+    GAMES_ITEM_TOKENS,
+    DEFAULT_GAMES_ITEMS,
+    parse_games_items,
+    normalize_games_items,
     DEFAULT_DOCK_ROUTES,
     MAX_DOCK_ITEMS,
     MAX_PINNED_ITEMS,

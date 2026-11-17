@@ -162,8 +162,8 @@ class TestViewLayout(unittest.TestCase):
         for tracker_tok in ("companion app", "private ble", "ibeacon", "bthome", "tile", "itag", "ruuvitag", "eddystone"):
             self.assertIn(f'"{tracker_tok}"', js)
         self.assertIn("AA:BB:CC:DD:EE:FF, iBeacon UUID, or tracker entity", js)
-        self.assertEqual(latter_const.STUDIO_REV, 26)
-        self.assertIn("const STUDIO_REV = 26;", js)
+        self.assertEqual(latter_const.STUDIO_REV, 27)
+        self.assertIn("const STUDIO_REV = 27;", js)
         self.assertNotIn("power_profile", js)
         self.assertNotIn("Power Profile", js)
         self.assertNotIn("fusion-area", js)
@@ -287,14 +287,31 @@ class TestViewLayout(unittest.TestCase):
             )
         self.assertNotIn("Brightness &amp; Theme", js)
         self.assertNotIn("Brightness & Theme", js)
-        for title in ("Home Screen", "Home Controls", "Pinned App", "Area Controls", "Media Player", "Remote Controls"):
+        for title in ("Home Screen", "App Dock", "Single-App Mode Active"):
             self.assertIn(f'<h3 class="card-title">{title}</h3>', interface_view)
-        self.assertNotIn('<h3 class="card-title">Activity Card</h3>', interface_view)
-        self.assertIn('id="home-categories-pills"', interface_view)
+        for retired_iface_title in (
+            "Activity Card",
+            "Home Controls",
+            "Pinned App",
+            "Area Controls",
+            "Media Player",
+            "Remote Controls",
+            "Time",
+        ):
+            self.assertNotIn(f'<h3 class="card-title">{retired_iface_title}</h3>', interface_view)
+        self.assertIn('id="dock-shortcuts-container"', interface_view)
+        self.assertIn('id="dock-hidden-native-apps"', interface_view)
+        self.assertIn('id="btn-configure-start-screen"', interface_view)
+        self.assertIn('id="btn-configure-locked-app"', interface_view)
+        self.assertIn('id="latter-app-config-modal"', js)
+        self.assertIn('id="home-categories-pills"', js)
+        self.assertIn('id="area-categories-pills"', js)
+        self.assertIn('id="tools-items-pills"', js)
+        self.assertIn('id="games-items-pills"', js)
         self.assertNotIn("<summary>Library Sorting</summary>", js)
-        self.assertIn('id: "media-player-shortcuts"', interface_view)
-        self.assertIn('id: "cfg-device_remote_group"', interface_view)
-        self.assertIn("Manage Remote Groups", interface_view)
+        self.assertIn('id: "media-player-shortcuts"', js)
+        self.assertIn('id: "cfg-device_remote_group"', js)
+        self.assertIn("Manage Remote Groups", js)
         audio_view = section("audio_voice")
         for title in ("Voice Assistant &amp; Wake Word", "Sound &amp; Playback"):
             self.assertIn(f'<h3 class="card-title">{title}</h3>', audio_view)
@@ -343,7 +360,8 @@ class TestViewLayout(unittest.TestCase):
         self.assertIn('label: "Device Group"', overview)
         self.assertIn('label: "Remote Control Group"', overview)
         self.assertIn('store.switchView("tools")', overview)
-        self.assertIn('store.switchView("interface")', overview)
+        self.assertIn('id="btn-configure-remote-group"', overview)
+        self.assertIn('store.openAppConfigModal("remote")', overview)
         self.assertIn("renderQuickActionGrid(store, quickActionButtons)", overview)
         self.assertIn('id="cfg-device_group"', overview)
         overview_cols = overview.split('<div class="column">')
@@ -353,6 +371,13 @@ class TestViewLayout(unittest.TestCase):
         self.assertIn("renderQuickActionGrid(store, quickActionButtons)", overview_col_1)
         self.assertNotIn('id: "card-device-assignments"', overview_col_1)
         self.assertIn('id: "card-device-assignments"', overview_col_2)
+        self.assertIn('id: "card-device-timers-alarms"', overview_col_2)
+        self.assertIn('title: "Timers & Alarms"', overview_col_2)
+        self.assertIn('id="overview-ringing-alert"', overview_col_2)
+        self.assertIn('id="btn-dismiss-ringing"', overview_col_2)
+        self.assertIn('id="btn-cancel-timer"', overview_col_2)
+        self.assertIn('id="btn-reset-stopwatch"', overview_col_2)
+        self.assertIn('id: "overview-alarms"', overview_col_2)
         self.assertNotIn("renderQuickActionGrid(store, quickActionButtons)", overview_col_2)
         self.assertLess(
             overview.index('id="cfg-device_group"'),
@@ -444,12 +469,11 @@ class TestViewLayout(unittest.TestCase):
         start = js.index('<section id="view-interface"')
         view = js[start:js.index("</section>", start)]
         self.assertIn('<h3 class="card-title">Home Screen</h3>', view)
-        self.assertIn('<h3 class="card-title">Pinned App</h3>', view)
-        self.assertIn('<h3 class="card-title">Area Controls</h3>', view)
-        self.assertIn('<h3 class="card-title">Remote Controls</h3>', view)
+        self.assertIn('<h3 class="card-title">App Dock</h3>', view)
         self.assertIn('id="dock-shortcuts-container"', view)
-        self.assertIn('id="pinned-shortcuts-container"', view)
-        self.assertIn('id="area-categories-pills"', view)
+        self.assertIn('id="dock-hidden-native-apps"', view)
+        self.assertIn('id="pinned-shortcuts-container"', js)
+        self.assertIn('id="area-categories-pills"', js)
         self.assertNotIn('id="embedded-area-ui"', view)
         self.assertNotIn('id="embedded-home"', view)
 
@@ -575,7 +599,7 @@ class TestActivityCard(unittest.TestCase):
         )
         self.assertLess(
             view.index('id="cfg-activity_card"'),
-            view.index('<h3 class="card-title">Home Controls</h3>'),
+            view.index('<h3 class="card-title">App Dock</h3>'),
         )
         self.assertIn(">Show the Activity Card</label>", view)
         self.assertIn("ACTIVITY_SOURCES_CATALOG.map(", view)

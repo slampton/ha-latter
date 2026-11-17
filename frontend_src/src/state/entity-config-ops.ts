@@ -9,15 +9,20 @@ import {
   AREA_CATEGORIES_CATALOG,
   DEFAULT_AREA_CATEGORIES_TOKENS,
   DEFAULT_DOCK_ROUTES_TOKENS,
+  DEFAULT_GAMES_ITEMS_TOKENS,
   DEFAULT_HOME_CATEGORIES_TOKENS,
+  DEFAULT_TOOLS_ITEMS_TOKENS,
+  GAMES_ITEMS_CATALOG,
   GROUP_BEHAVIOR_NON_PREF_KEYS,
   GROUP_DISPLAY_NON_PREF_KEYS,
   GROUP_INTERFACE_NON_PREF_KEYS,
   HOME_CATEGORIES_CATALOG,
   MAX_DOCK_ITEMS,
   MAX_PINNED_ITEMS,
+  NATIVE_DOCK_APP_TOKENS,
   SHORTCUT_LABEL_MAX,
   SHORTCUT_ROUTES_CATALOG,
+  TOOLS_ITEMS_CATALOG,
 } from "../constants.js";
 import {
   isKnownMdiIcon,
@@ -26,6 +31,7 @@ import {
 } from "../mdi-catalog.js";
 import type {
   CustomPalette,
+  DeviceCapabilities,
   DeviceConfig,
   RemoteGroup,
   ShortcutItem,
@@ -734,6 +740,15 @@ export function sanitizeShortcutLabel(raw: unknown): string {
     : trimmed;
 }
 
+export function isProtectedNativeDockItem(item: ShortcutItem): boolean {
+  return (
+    item.kind === "route" &&
+    NATIVE_DOCK_APP_TOKENS.includes(item.target) &&
+    !item.label &&
+    !item.icon
+  );
+}
+
 export function defaultDockShortcutItems(): ShortcutItem[] {
   return DEFAULT_DOCK_ROUTES_TOKENS.map((tok) => ({
     kind: "route" as const,
@@ -770,12 +785,13 @@ function normalizeShortcutArray(
       const dedupKey = `route|${target}|`;
       if (seen.has(dedupKey)) continue;
       seen.add(dedupKey);
+      const isNativeDockApp = isDock && NATIVE_DOCK_APP_TOKENS.includes(target);
       out.push({
         kind: "route",
         target,
         action: "",
-        label: sanitizeShortcutLabel(rec.label),
-        icon: normalizeMdiIconSlug(rec.icon),
+        label: isNativeDockApp ? "" : sanitizeShortcutLabel(rec.label),
+        icon: isNativeDockApp ? "" : normalizeMdiIconSlug(rec.icon),
         confirm: false,
       });
     } else if (kind === "entity") {
@@ -855,17 +871,60 @@ export function resetDockItemsToDefaultOp(store: StudioStore): void {
   store.showToast("Restored default App Dock");
 }
 
+export function toggleNativeDockAppOp(
+  store: StudioStore,
+  routeToken: string,
+  enabled: boolean,
+): void {
+  const target = String(routeToken || "").trim().toLowerCase();
+  if (!NATIVE_DOCK_APP_TOKENS.includes(target)) return;
+  const current = getDockItemsOp(store).map((it) => ({ ...it }));
+  if (!enabled) {
+    const next = current.filter((it) => !(it.kind === "route" && it.target === target));
+    store.stageDeviceSetting("dock_items", next);
+    return;
+  }
+  if (current.some((it) => it.kind === "route" && it.target === target)) {
+    return;
+  }
+  if (current.length >= MAX_DOCK_ITEMS) {
+    store.showToast(`App Dock supports up to ${MAX_DOCK_ITEMS} shortcuts`, true);
+    return;
+  }
+  current.push({
+    kind: "route",
+    target,
+    action: "",
+    label: "",
+    icon: "",
+    confirm: false,
+  });
+  store.stageDeviceSetting("dock_items", current);
+}
+
 export function openShortcutModalOp(
   store: StudioStore,
   listKey: "dock_items" | "pinned_items",
   editIndex: number | null = null,
 ): void {
   const isDock = listKey === "dock_items";
+  if (
+    listKey === "pinned_items" &&
+    store.appConfigModal?.open &&
+    store.appConfigModal.app === "pinned"
+  ) {
+    store.returnToPinnedModal = true;
+    store.appConfigModal = { open: false, app: null };
+  } else {
+    store.returnToPinnedModal = false;
+  }
   const current = isDock ? getDockItemsOp(store) : getPinnedItemsOp(store);
   const caps = store.state?.capabilities || {};
   const compatibleRoutes = SHORTCUT_ROUTES_CATALOG.filter((r) => {
     if (!isDock && r.dockOnly) return false;
-    if (isDock && r.token === "settings:root") return false;
+    if (isDock && (r.token === "settings:root" || NATIVE_DOCK_APP_TOKENS.includes(r.token))) {
+      return false;
+    }
     if (r.capability === "round" && caps.is_round === false) return false;
     if (r.capability === "imu" && caps.has_imu === false) return false;
     return true;
@@ -973,7 +1032,11 @@ export function saveShortcutModalOp(store: StudioStore): void {
   if (modal.kind === "route") {
     const routeTok = modal.routeTarget.trim().toLowerCase();
     const spec = SHORTCUT_ROUTES_CATALOG.find((r) => r.token === routeTok);
-    if (!spec || (!isDock && spec.dockOnly) || (isDock && routeTok === "settings:root")) {
+    if (
+      !spec ||
+      (!isDock && spec.dockOnly) ||
+      (isDock && (routeTok === "settings:root" || NATIVE_DOCK_APP_TOKENS.includes(routeTok)))
+    ) {
       store.showToast("Select an app or page to pin", true);
       return;
     }
@@ -1029,7 +1092,12 @@ export function saveShortcutModalOp(store: StudioStore): void {
     current.push(built);
   }
 
+  const reopenPinned = Boolean(store.returnToPinnedModal);
+  store.returnToPinnedModal = false;
   store.shortcutModal = { ...store.shortcutModal, open: false };
+  if (reopenPinned) {
+    store.appConfigModal = { open: true, app: "pinned" };
+  }
   store.stageDeviceSetting(modal.listKey, current);
 }
 
@@ -1107,6 +1175,105 @@ export function moveHomeCategoryTokenOp(store: StudioStore, token: string, delta
   const [moved] = current.splice(idx, 1);
   current.splice(nextIdx, 0, moved);
   store.stageDeviceSetting("home_categories", current.join(","));
+}
+
+export function isToolTokenSupported(token: string, caps?: DeviceCapabilities): boolean {
+  if (token === "stopwatch" && caps?.is_round === false) return false;
+  if (token === "level" && caps?.has_imu === false) return false;
+  return true;
+}
+
+export function getEnabledToolsItemsOp(store: StudioStore): string[] {
+  const prefVal = typeof store.getPref === "function" ? store.getPref("tools_items")?.value : undefined;
+  const raw = String(store.state?.config?.tools_items ?? prefVal ?? "");
+  if (!raw.trim()) {
+    return [...DEFAULT_TOOLS_ITEMS_TOKENS];
+  }
+  const known = new Set(TOOLS_ITEMS_CATALOG.map((c) => c.token));
+  const parsed = raw
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter((s, i, arr) => Boolean(s) && known.has(s) && arr.indexOf(s) === i);
+  return parsed.length > 0 ? parsed : [...DEFAULT_TOOLS_ITEMS_TOKENS];
+}
+
+export function toggleToolItemTokenOp(store: StudioStore, token: string): void {
+  const current = getEnabledToolsItemsOp(store);
+  const caps = store.state?.capabilities || {};
+  const idx = current.indexOf(token);
+  if (idx >= 0) {
+    const visibleEnabled = current.filter((t) => isToolTokenSupported(t, caps));
+    if (
+      current.length <= 1 ||
+      (isToolTokenSupported(token, caps) && visibleEnabled.length <= 1)
+    ) {
+      store.showToast("Keep at least one tool enabled", true);
+      return;
+    }
+    current.splice(idx, 1);
+  } else {
+    current.push(token);
+  }
+  store.stageDeviceSetting("tools_items", current.join(","));
+}
+
+export function moveToolItemTokenOp(store: StudioStore, token: string, delta: -1 | 1): void {
+  const current = getEnabledToolsItemsOp(store);
+  const caps = store.state?.capabilities || {};
+  const idx = current.indexOf(token);
+  if (idx < 0) return;
+  let swapIdx = idx + delta;
+  while (
+    swapIdx >= 0 &&
+    swapIdx < current.length &&
+    !isToolTokenSupported(current[swapIdx], caps)
+  ) {
+    swapIdx += delta;
+  }
+  if (swapIdx < 0 || swapIdx >= current.length) return;
+  const temp = current[idx];
+  current[idx] = current[swapIdx];
+  current[swapIdx] = temp;
+  store.stageDeviceSetting("tools_items", current.join(","));
+}
+
+export function getEnabledGamesItemsOp(store: StudioStore): string[] {
+  const prefVal = typeof store.getPref === "function" ? store.getPref("games_items")?.value : undefined;
+  const raw = String(store.state?.config?.games_items ?? prefVal ?? "");
+  if (!raw.trim()) {
+    return [...DEFAULT_GAMES_ITEMS_TOKENS];
+  }
+  const known = new Set(GAMES_ITEMS_CATALOG.map((c) => c.token));
+  const parsed = raw
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter((s, i, arr) => Boolean(s) && known.has(s) && arr.indexOf(s) === i);
+  return parsed.length > 0 ? parsed : [...DEFAULT_GAMES_ITEMS_TOKENS];
+}
+
+export function toggleGameItemTokenOp(store: StudioStore, token: string): void {
+  const current = getEnabledGamesItemsOp(store);
+  const idx = current.indexOf(token);
+  if (idx >= 0) {
+    if (current.length <= 1) {
+      store.showToast("Keep at least one game enabled", true);
+      return;
+    }
+    current.splice(idx, 1);
+  } else {
+    current.push(token);
+  }
+  store.stageDeviceSetting("games_items", current.join(","));
+}
+
+export function moveGameItemTokenOp(store: StudioStore, token: string, delta: -1 | 1): void {
+  const current = getEnabledGamesItemsOp(store);
+  const idx = current.indexOf(token);
+  const nextIdx = idx + delta;
+  if (idx < 0 || nextIdx < 0 || nextIdx >= current.length) return;
+  const [moved] = current.splice(idx, 1);
+  current.splice(nextIdx, 0, moved);
+  store.stageDeviceSetting("games_items", current.join(","));
 }
 
 export function getEnabledActivitySourcesOp(store: StudioStore): string[] {

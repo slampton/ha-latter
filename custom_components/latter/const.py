@@ -3,15 +3,21 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+import json
+from pathlib import Path
 import re
 from typing import Any, Final, Literal
 
 from homeassistant.const import Platform
 
+_PROTOCOL_DEFAULTS: Final[dict[str, Any]] = json.loads(
+    (Path(__file__).resolve().parent / "protocol_v3.json").read_text(encoding="utf-8")
+)["defaults"]
+
 DOMAIN: Final = "latter"
 INTEGRATION_VERSION: Final = "3.0.0"
-STUDIO_REV: Final = 26
-MIN_FIRMWARE_SDK_REV: Final = 2026111605
+STUDIO_REV: Final = 27
+MIN_FIRMWARE_SDK_REV: Final = 2026111606
 PLATFORMS: Final[list[Platform]] = [
     Platform.SENSOR,
     Platform.BINARY_SENSOR,
@@ -69,6 +75,8 @@ CONF_DOCK_ITEMS: Final = "dock_items"
 CONF_PINNED_ITEMS: Final = "pinned_items"
 CONF_AREA_CATEGORIES: Final = "area_categories"
 CONF_HOME_CATEGORIES: Final = "home_categories"
+CONF_TOOLS_ITEMS: Final = "tools_items"
+CONF_GAMES_ITEMS: Final = "games_items"
 CONF_ACTIVITY_CARD: Final = "activity_card"
 CONF_ACTIVITY_SOURCES: Final = "activity_sources"
 CONF_WALLPAPER_SOURCE: Final = "wallpaper_source"
@@ -154,6 +162,8 @@ DEFAULT_AREA_HANDOFF: Final = False
 DEFAULT_DOCK_ROUTES: Final = "app:pinned,app:music,app:home_hub,app:area,app:remote,app:games,app:tools"
 DEFAULT_AREA_CATEGORIES: Final = "scene,light,cover,fan,switch,climate,media"
 DEFAULT_HOME_CATEGORIES: Final = "alarm,cameras,intercom,thermostat,entry,vacuum"
+DEFAULT_TOOLS_ITEMS: Final = str(_PROTOCOL_DEFAULTS["tools_items"])
+DEFAULT_GAMES_ITEMS: Final = str(_PROTOCOL_DEFAULTS["games_items"])
 # Home Activity Card: protocol_v3.json defaults.activity_card / defaults.activity_sources (checked by the tests)
 DEFAULT_ACTIVITY_CARD: Final = True
 DEFAULT_ACTIVITY_SOURCES: Final = "calendar,music_queue,stopwatch,alarms,timers"

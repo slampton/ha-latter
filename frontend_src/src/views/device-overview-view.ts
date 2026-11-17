@@ -1,9 +1,10 @@
 /**
- * Device Overview View (`dashboard`, D-029 / D-048 / D-049 / D-051):
+ * Device Overview View (`dashboard`, D-029 / D-048 / D-049 / D-051 / D-053):
  * - Column 1: High-level Status card (header state pill + responsive 2x2 tonal metric tiles)
  *   followed by Quick Actions (immediate action tiles + live volume + Open in ESPHome & Download Backup footer links).
  * - Column 2: Unified Assignments card (Device Group with Custom / Save Custom Group / Manage Groups,
- *   Assigned Person, Remote Control Group) followed by spillover Sensors & Controls.
+ *   Assigned Person, Remote Control Group modal launcher), Timers & Alarms card (live ringing Dismiss,
+ *   Active Timer + Cancel Timer, Stopwatch + Reset Stopwatch, 3-slot 2-way Alarms), and spillover Sensors & Controls.
  */
 
 import {
@@ -14,6 +15,7 @@ import {
   renderSettingsRow,
   renderSvgIcon,
 } from "../components/controls.js";
+import { ALARM_RECURRENCE_OPTIONS, DEFAULT_ALARMS_SUMMARY } from "../constants.js";
 import { html, nothing, type TemplateResult } from "../lib/lit.js";
 import type { StudioStore } from "../state/store.js";
 import type { EspHomeEntityItem } from "../types.js";
@@ -40,6 +42,63 @@ function rssiQualityLabel(rssi: number | null): string {
   if (rssi >= -70) return "Good";
   if (rssi >= -80) return "Fair";
   return "Weak";
+}
+
+interface AlarmSlotView {
+  time: string;
+  enabled: boolean;
+  recurrence: number;
+}
+
+const DEFAULT_ALARM_SLOTS: ReadonlyArray<AlarmSlotView> = [
+  { time: "07:00", enabled: false, recurrence: 1 },
+  { time: "08:30", enabled: false, recurrence: 2 },
+  { time: "09:00", enabled: false, recurrence: 2 },
+];
+
+function parseAlarmsSummary(raw: unknown): [AlarmSlotView, AlarmSlotView, AlarmSlotView] {
+  const text = String(raw || DEFAULT_ALARMS_SUMMARY).trim();
+  const parts = text.split(";");
+  const slots: AlarmSlotView[] = [];
+  for (let i = 0; i < 3; i++) {
+    const fallback = DEFAULT_ALARM_SLOTS[i];
+    const seg = (parts[i] || "").trim();
+    const m = /^(\d{1,2}):(\d{2})\|([01])\|([0-3])$/.exec(seg);
+    if (!m) {
+      slots.push({ ...fallback });
+      continue;
+    }
+    const hh = Number(m[1]);
+    const mm = Number(m[2]);
+    if (hh < 0 || hh > 23 || mm < 0 || mm > 59) {
+      slots.push({ ...fallback });
+      continue;
+    }
+    slots.push({
+      time: `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`,
+      enabled: m[3] === "1",
+      recurrence: Number(m[4]),
+    });
+  }
+  return [slots[0], slots[1], slots[2]];
+}
+
+function serializeAlarmsSummary(slots: ReadonlyArray<AlarmSlotView>): string {
+  return slots
+    .slice(0, 3)
+    .map((s) => `${s.time}|${s.enabled ? 1 : 0}|${s.recurrence}`)
+    .join(";");
+}
+
+function formatClockDuration(rawSec: unknown): string {
+  const sec = Math.max(0, Math.floor(Number(rawSec) || 0));
+  const hh = Math.floor(sec / 3600);
+  const mm = Math.floor((sec % 3600) / 60);
+  const ss = sec % 60;
+  if (hh > 0) {
+    return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
+  }
+  return `${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
 }
 
 export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
@@ -181,6 +240,33 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
     const gid = curRemoteMode.slice(6);
     remoteSummary = remoteGroups.find((g) => g.id === gid)?.name || gid;
   }
+
+  const alarmsSummaryPref =
+    typeof store.getPref === "function" ? store.getPref("alarms_summary") : undefined;
+  const alarmSlots = parseAlarmsSummary(
+    alarmsSummaryPref?.value ?? cfg.alarms_summary ?? DEFAULT_ALARMS_SUMMARY,
+  );
+  const updateAlarmSlot = (
+    idx: 0 | 1 | 2,
+    patch: Partial<AlarmSlotView>,
+    focusId?: string,
+  ): void => {
+    const next: [AlarmSlotView, AlarmSlotView, AlarmSlotView] = [
+      { ...alarmSlots[0] },
+      { ...alarmSlots[1] },
+      { ...alarmSlots[2] },
+    ];
+    const merged = { ...next[idx], ...patch };
+    if (!/^\d{2}:\d{2}$/.test(merged.time)) {
+      return;
+    }
+    next[idx] = merged;
+    store.stageDeviceSetting("alarms_summary", serializeAlarmsSummary(next), focusId);
+  };
+
+  const timerActive = Boolean(live.timer_running || live.timer_paused);
+  const stopwatchActive = Boolean(live.stopwatch_running || live.stopwatch_paused);
+  const alarmRinging = Boolean(live.alarm_ringing);
 
   const powerTileBody = hasBatteryReading
     ? html`<div class="status-tile-head">
@@ -431,7 +517,8 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
                   control: html`<span class="chip">${remoteSummary}</span>
                     <button
                       type="button"
-                      @click=${() => store.switchView("interface")}
+                      id="btn-configure-remote-group"
+                      @click=${() => store.openAppConfigModal("remote")}
                       class="btn btn-text btn-compact"
                     >
                       Configure
@@ -439,6 +526,147 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
                 })
               : nothing}`,
         })}
+
+        ${!isBleOnly && caps.has_display
+          ? renderCard({
+              id: "card-device-timers-alarms",
+              title: "Timers & Alarms",
+              body: html`${alarmRinging
+                  ? html`<div id="overview-ringing-alert" role="alert" class="alert alert-warning">
+                      <span>An alarm or timer is ringing on this Device.</span>
+                      <button
+                        type="button"
+                        id="btn-dismiss-ringing"
+                        @click=${() =>
+                          void store.runDeviceAction("dismiss_ringing", "Dismissed ringing alert")}
+                        class="btn btn-secondary btn-compact"
+                      >
+                        Dismiss
+                      </button>
+                    </div>`
+                  : nothing}
+                <div class="settings-list">
+                  ${renderSettingsRow({
+                    id: "overview-active-timer",
+                    label: "Active Timer",
+                    description: timerActive ? undefined : "No active timer",
+                    control: timerActive
+                      ? html`<span class="chip ${live.timer_running ? "chip-primary" : ""}">
+                            ${live.timer_running ? "Running" : "Paused"}
+                          </span>
+                          <strong class="kv-value">
+                            ${formatClockDuration(live.timer_remaining_sec)}
+                          </strong>
+                          <button
+                            type="button"
+                            id="btn-cancel-timer"
+                            @click=${() =>
+                              void store.runDeviceAction("cancel_timer", "Cancelled timer")}
+                            class="btn btn-secondary btn-compact"
+                          >
+                            Cancel Timer
+                          </button>`
+                      : html`<span class="kv-value">—</span>`,
+                  })}
+                  ${renderSettingsRow({
+                    id: "overview-stopwatch",
+                    label: "Stopwatch",
+                    description: stopwatchActive ? undefined : "Not running",
+                    control: stopwatchActive
+                      ? html`<span class="chip ${live.stopwatch_running ? "chip-primary" : ""}">
+                            ${live.stopwatch_running ? "Running" : "Paused"}
+                          </span>
+                          <strong class="kv-value">
+                            ${formatClockDuration(live.stopwatch_elapsed_sec)}
+                          </strong>
+                          <button
+                            type="button"
+                            id="btn-reset-stopwatch"
+                            @click=${() =>
+                              void store.runDeviceAction("reset_stopwatch", "Reset stopwatch")}
+                            class="btn btn-secondary btn-compact"
+                          >
+                            Reset Stopwatch
+                          </button>`
+                      : html`<span class="kv-value">—</span>`,
+                  })}
+                  ${renderSettingsRow({
+                    id: "overview-alarms",
+                    label: "Alarms",
+                    description: "Syncs 2-way with on-device alarm edits (1-minute precision).",
+                    stacked: true,
+                    control: html`<div class="stack" role="group" aria-label="Device alarms">
+                      ${([0, 1, 2] as const).map((idx) => {
+                        const slot = alarmSlots[idx];
+                        const timeId = `cfg-alarm_${idx + 1}_time`;
+                        const recId = `cfg-alarm_${idx + 1}_recurrence`;
+                        const enId = `cfg-alarm_${idx + 1}_enabled`;
+                        return html`<div class="list-row">
+                          <div class="list-row-main">
+                            <div class="stacked-field">
+                              <label for=${timeId}>Alarm ${idx + 1} Time</label>
+                              <input
+                                type="time"
+                                id=${timeId}
+                                step="60"
+                                .value=${slot.time}
+                                @change=${(ev: Event) => {
+                                  const val = (ev.currentTarget as HTMLInputElement).value;
+                                  if (val) updateAlarmSlot(idx, { time: val.slice(0, 5) }, timeId);
+                                }}
+                              />
+                            </div>
+                            <div class="stacked-field">
+                              <label for=${recId}>Alarm ${idx + 1} Schedule</label>
+                              <select
+                                id=${recId}
+                                .value=${String(slot.recurrence)}
+                                @change=${(ev: Event) =>
+                                  updateAlarmSlot(
+                                    idx,
+                                    {
+                                      recurrence: Number(
+                                        (ev.currentTarget as HTMLSelectElement).value,
+                                      ),
+                                    },
+                                    recId,
+                                  )}
+                              >
+                                ${ALARM_RECURRENCE_OPTIONS.map(
+                                  (opt) =>
+                                    html`<option
+                                      value=${String(opt.value)}
+                                      ?selected=${opt.value === slot.recurrence}
+                                    >
+                                      ${opt.label}
+                                    </option>`,
+                                )}
+                              </select>
+                            </div>
+                          </div>
+                          <label for=${enId} class="inline-switch">
+                            <span>Enabled</span>
+                            <input
+                              type="checkbox"
+                              id=${enId}
+                              .checked=${slot.enabled}
+                              @change=${(ev: Event) =>
+                                updateAlarmSlot(
+                                  idx,
+                                  { enabled: (ev.currentTarget as HTMLInputElement).checked },
+                                  enId,
+                                )}
+                              role="switch"
+                              class="switch"
+                            />
+                          </label>
+                        </div>`;
+                      })}
+                    </div>`,
+                  })}
+                </div>`,
+            })
+          : nothing}
 
         ${otherSensorItems.length
           ? renderCard({

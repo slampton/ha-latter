@@ -23,11 +23,13 @@ from .const import (
     CONF_DEVICE_GROUPS,
     CONF_DEVICE_REMOTE_GROUP,
     CONF_DOCK_ITEMS,
+    CONF_GAMES_ITEMS,
     CONF_HOME_CATEGORIES,
     CONF_NATIVE_BLE_TRACKING,
     CONF_PINNED_ITEMS,
     CONF_SECURITY_PIN_POLICY,
     CONF_SYNC_DEVICE_AREA,
+    CONF_TOOLS_ITEMS,
     CONF_WALLPAPER_CYCLE_MINUTES,
     CONF_WALLPAPER_SOURCE,
     DATA_GLOBAL_CONFIG,
@@ -36,7 +38,9 @@ from .const import (
     DEFAULT_AREA_CATEGORIES,
     DEFAULT_DEVICE_GROUP,
     DEFAULT_DEVICE_REMOTE_GROUP,
+    DEFAULT_GAMES_ITEMS,
     DEFAULT_HOME_CATEGORIES,
+    DEFAULT_TOOLS_ITEMS,
     DEFAULT_WALLPAPER_CYCLE_MINUTES,
     DOMAIN,
 )
@@ -51,8 +55,10 @@ from .studio.settings import (
     normalize_activity_sources,
     normalize_area_categories,
     normalize_dock_items,
+    normalize_games_items,
     normalize_home_categories,
     normalize_pinned_items,
+    normalize_tools_items,
     resolve_device_pref_value,
 )
 
@@ -483,15 +489,21 @@ GROUP_DISPLAY_DEVICE_KEYS: tuple[str, ...] = (
     *tuple(s.key for s in DEVICE_PREF_SPECS if s.group_tier == "display"),
 )
 
-# Optional Interface & Shortcut keys synced when a Group opts into `include_interface`.
-GROUP_INTERFACE_DEVICE_KEYS: tuple[str, ...] = (
+GROUP_INTERFACE_NON_PREF_KEYS: tuple[str, ...] = (
     CONF_DOCK_ITEMS,
     CONF_PINNED_ITEMS,
     CONF_AREA_CATEGORIES,
     CONF_HOME_CATEGORIES,
+    CONF_TOOLS_ITEMS,
+    CONF_GAMES_ITEMS,
     CONF_ACTIVITY_CARD,
     CONF_ACTIVITY_SOURCES,
     CONF_DEVICE_REMOTE_GROUP,
+)
+
+# Optional Interface & Shortcut keys synced when a Group opts into `include_interface`.
+GROUP_INTERFACE_DEVICE_KEYS: tuple[str, ...] = (
+    *GROUP_INTERFACE_NON_PREF_KEYS,
     *tuple(s.key for s in DEVICE_PREF_SPECS if s.group_tier == "interface"),
 )
 
@@ -511,13 +523,7 @@ _DISPLAY_CAPABILITY_NON_PREF_KEYS: frozenset[str] = frozenset(
         CONF_WALLPAPER_SOURCE,
         CONF_WALLPAPER_CYCLE_MINUTES,
         CONF_DEVICE_CUSTOM_COLOR,
-        CONF_DOCK_ITEMS,
-        CONF_PINNED_ITEMS,
-        CONF_AREA_CATEGORIES,
-        CONF_HOME_CATEGORIES,
-        CONF_ACTIVITY_CARD,
-        CONF_ACTIVITY_SOURCES,
-        CONF_DEVICE_REMOTE_GROUP,
+        *GROUP_INTERFACE_NON_PREF_KEYS,
     }
 )
 
@@ -577,6 +583,8 @@ def default_group_baseline_config(
         base[CONF_PINNED_ITEMS] = []
         base[CONF_AREA_CATEGORIES] = DEFAULT_AREA_CATEGORIES
         base[CONF_HOME_CATEGORIES] = DEFAULT_HOME_CATEGORIES
+        base[CONF_TOOLS_ITEMS] = DEFAULT_TOOLS_ITEMS
+        base[CONF_GAMES_ITEMS] = DEFAULT_GAMES_ITEMS
         base[CONF_ACTIVITY_CARD] = DEFAULT_ACTIVITY_CARD
         base[CONF_ACTIVITY_SOURCES] = DEFAULT_ACTIVITY_SOURCES
         base[CONF_DEVICE_REMOTE_GROUP] = DEFAULT_DEVICE_REMOTE_GROUP
@@ -649,6 +657,20 @@ def resolve_behavior_key_value(data: Mapping[str, Any], key: str) -> Any:
             )
         except ValueError:
             return DEFAULT_HOME_CATEGORIES
+    if key == CONF_TOOLS_ITEMS:
+        try:
+            return normalize_tools_items(
+                data.get(CONF_TOOLS_ITEMS, DEFAULT_TOOLS_ITEMS)
+            )
+        except ValueError:
+            return DEFAULT_TOOLS_ITEMS
+    if key == CONF_GAMES_ITEMS:
+        try:
+            return normalize_games_items(
+                data.get(CONF_GAMES_ITEMS, DEFAULT_GAMES_ITEMS)
+            )
+        except ValueError:
+            return DEFAULT_GAMES_ITEMS
     if key == CONF_ACTIVITY_CARD:
         raw_ac = data.get(CONF_ACTIVITY_CARD, DEFAULT_ACTIVITY_CARD)
         if isinstance(raw_ac, str):

@@ -1445,13 +1445,20 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     )
 
     async def _handle_timer_alarm_state(call: ServiceCall) -> None:
-        """Apply event-driven timer and alarm state reported by a Latter Device."""
+        """Apply event-driven timer, stopwatch, and alarm state reported by a Latter Device."""
         coord = _resolve_coordinator_from_call(hass, call)
         coord.handle_timer_alarm_state(
             timer_running=_parse_bool(call.data.get("timer_running"), default=False),
             timer_paused=_parse_bool(call.data.get("timer_paused"), default=False),
             remaining_sec=int(call.data.get("remaining_sec") or 0),
             ringing=_parse_bool(call.data.get("ringing"), default=False),
+            stopwatch_running=_parse_bool(
+                call.data.get("stopwatch_running"), default=False
+            ),
+            stopwatch_paused=_parse_bool(
+                call.data.get("stopwatch_paused"), default=False
+            ),
+            stopwatch_elapsed_sec=int(call.data.get("stopwatch_elapsed_sec") or 0),
         )
 
     hass.services.async_register(
@@ -1465,6 +1472,15 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 vol.Optional("timer_paused", default=False): vol.Any(bool, int, cv.string),
                 vol.Optional("remaining_sec", default=0): vol.Coerce(int),
                 vol.Optional("ringing", default=False): vol.Any(bool, int, cv.string),
+                vol.Optional("stopwatch_running", default=False): vol.Any(
+                    bool, int, cv.string
+                ),
+                vol.Optional("stopwatch_paused", default=False): vol.Any(
+                    bool, int, cv.string
+                ),
+                vol.Optional("stopwatch_elapsed_sec", default=0): vol.All(
+                    vol.Coerce(int), vol.Range(min=0)
+                ),
             }
         ),
     )

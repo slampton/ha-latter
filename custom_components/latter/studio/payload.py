@@ -35,6 +35,7 @@ from ..const import (
     CONF_DEVICE_REMOTE_GROUP,
     CONF_DEVICE_SLUG,
     CONF_DOCK_ITEMS,
+    CONF_GAMES_ITEMS,
     CONF_HOME_CATEGORIES,
     CONF_MA_PLAYER_ENTITY,
     CONF_NATIVE_BLE_TRACKING,
@@ -42,6 +43,7 @@ from ..const import (
     CONF_SECURITY_PIN_HASH,
     CONF_SECURITY_PIN_POLICY,
     CONF_SYNC_DEVICE_AREA,
+    CONF_TOOLS_ITEMS,
     CONF_WALLPAPER_CYCLE_MINUTES,
     CONF_WALLPAPER_SOURCE,
     DATA_GLOBAL_CONFIG,
@@ -79,7 +81,9 @@ from .settings import (
     ACTIVITY_SOURCES_CATALOG,
     AREA_CATEGORIES_CATALOG,
     DEVICE_PREF_SPECS,
+    GAMES_ITEMS_CATALOG,
     HOME_CATEGORIES_CATALOG,
+    TOOLS_ITEMS_CATALOG,
     find_by_subentry_id,
     resolve_device_pref_value,
     system_settings_view,
@@ -761,6 +765,62 @@ def _build_system_shared_controls(
                 "step": None,
                 "unit": "",
                 "targets": area_cat_targets,
+            }
+        )
+
+    tools_targets = _targets_for(
+        CONF_TOOLS_ITEMS,
+        display_only=True,
+        state_fn=lambda c: c.tools_items_csv,
+    )
+    if tools_targets:
+        controls.append(
+            {
+                "key": "interface:pills:tools",
+                "pref_key": CONF_TOOLS_ITEMS,
+                "tier": "interface",
+                "section": "interface",
+                "section_title": _SHARED_SECTION_TITLES["interface"],
+                "name": "Tools",
+                "domain": "pills",
+                "state": "",
+                "options": [str(c["token"]) for c in TOOLS_ITEMS_CATALOG],
+                "option_labels": {
+                    str(c["token"]): str(c["label"]) for c in TOOLS_ITEMS_CATALOG
+                },
+                "min": 1,
+                "max": None,
+                "step": None,
+                "unit": "",
+                "targets": tools_targets,
+            }
+        )
+
+    games_targets = _targets_for(
+        CONF_GAMES_ITEMS,
+        display_only=True,
+        state_fn=lambda c: c.games_items_csv,
+    )
+    if games_targets:
+        controls.append(
+            {
+                "key": "interface:pills:games",
+                "pref_key": CONF_GAMES_ITEMS,
+                "tier": "interface",
+                "section": "interface",
+                "section_title": _SHARED_SECTION_TITLES["interface"],
+                "name": "Games",
+                "domain": "pills",
+                "state": "",
+                "options": [str(c["token"]) for c in GAMES_ITEMS_CATALOG],
+                "option_labels": {
+                    str(c["token"]): str(c["label"]) for c in GAMES_ITEMS_CATALOG
+                },
+                "min": 1,
+                "max": None,
+                "step": None,
+                "unit": "",
+                "targets": games_targets,
             }
         )
 
@@ -1466,6 +1526,8 @@ def build_studio_state_payload(
         CONF_PINNED_ITEMS: coordinator.pinned_items,
         CONF_AREA_CATEGORIES: coordinator.area_categories_csv,
         CONF_HOME_CATEGORIES: coordinator.home_categories_csv,
+        CONF_TOOLS_ITEMS: coordinator.tools_items_csv,
+        CONF_GAMES_ITEMS: coordinator.games_items_csv,
         CONF_ACTIVITY_CARD: coordinator.activity_card_enabled,
         CONF_ACTIVITY_SOURCES: coordinator.activity_sources_csv,
         CONF_WALLPAPER_SOURCE: coordinator.wallpaper_source,
@@ -1540,5 +1602,22 @@ def build_studio_state_payload(
             "fw_update_available": any(it.get("state") == "on" for it in update_items),
             "effective_security_pin_policy": coordinator.security_pin_policy,
             "has_security_pin": coordinator.has_security_pin,
+            **(
+                {}
+                if coordinator.is_ble_tag
+                else {
+                    "timer_running": bool(coordinator.timer_running),
+                    "timer_paused": bool(coordinator.timer_paused),
+                    "timer_remaining_sec": int(
+                        coordinator.current_timer_remaining_sec
+                    ),
+                    "stopwatch_running": bool(coordinator.stopwatch_running),
+                    "stopwatch_paused": bool(coordinator.stopwatch_paused),
+                    "stopwatch_elapsed_sec": int(
+                        coordinator.current_stopwatch_elapsed_sec
+                    ),
+                    "alarm_ringing": bool(coordinator.alarm_ringing),
+                }
+            ),
         },
     }

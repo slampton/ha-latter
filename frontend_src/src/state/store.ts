@@ -18,6 +18,7 @@ import type {
   BleAreaSignatureSummary,
   BleSurveyDeltaEvent,
   BleSurveyRow,
+  ConfigurableAppId,
   DevicePrefItem,
   DeviceViewId,
   DiscoveredBleCandidate,
@@ -70,11 +71,15 @@ import {
   getDockItemsOp,
   getEnabledActivitySourcesOp,
   getEnabledAreaCategoriesOp,
+  getEnabledGamesItemsOp,
   getEnabledHomeCategoriesOp,
+  getEnabledToolsItemsOp,
   getPinnedItemsOp,
   moveAreaCategoryTokenOp,
+  moveGameItemTokenOp,
   moveHomeCategoryTokenOp,
   moveShortcutItemOp,
+  moveToolItemTokenOp,
   openShortcutModalOp,
   overlayDevicePrefsOnSections,
   overlayPendingBlankListSlots,
@@ -98,8 +103,11 @@ import {
   testDoorbellSpeakerOp,
   toggleActivitySourceOp,
   toggleAreaCategoryTokenOp,
+  toggleGameItemTokenOp,
   toggleHomeCategoryTokenOp,
+  toggleNativeDockAppOp,
   toggleRemoteInGroupOp,
+  toggleToolItemTokenOp,
   toggleWallpaperFavOp,
   updateRemoteGroupFieldOp,
   updateStringListRowOp,
@@ -280,6 +288,11 @@ export class StudioStore implements ReactiveController {
     iconSearch: "",
     confirm: false,
   };
+  appConfigModal: { open: boolean; app: ConfigurableAppId | null } = {
+    open: false,
+    app: null,
+  };
+  returnToPinnedModal = false;
 
   pendingScrollCardId = "";
   pendingDomRevert: PendingDomRevert | null = null;
@@ -447,6 +460,8 @@ export class StudioStore implements ReactiveController {
         const subChanged = prevSubId !== nextSubId;
         if (prevSubId && subChanged) {
           void this.flushDeviceBucket(prevSubId);
+          this.appConfigModal = { open: false, app: null };
+          this.returnToPinnedModal = false;
         }
         this.bleCalibrateHandoffActive = false;
         this.activeSubentryId = nextSubId;
@@ -635,6 +650,8 @@ export class StudioStore implements ReactiveController {
     this.devicePinDraft = "";
     this.worldClockNewLabel = "";
     this.worldClockNewZone = "";
+    this.appConfigModal = { open: false, app: null };
+    this.returnToPinnedModal = false;
     this.syncUrl();
     this.host.requestUpdate();
     await this.ensureSubscription(true);
@@ -1139,6 +1156,24 @@ export class StudioStore implements ReactiveController {
     resetDockItemsToDefaultOp(this);
   }
 
+  toggleNativeDockApp(routeToken: string, enabled: boolean): void {
+    toggleNativeDockAppOp(this, routeToken, enabled);
+  }
+
+  openAppConfigModal(app: ConfigurableAppId): void {
+    this.returnToPinnedModal = false;
+    if (this.shortcutModal.open) {
+      this.shortcutModal = { ...this.shortcutModal, open: false };
+    }
+    this.appConfigModal = { open: true, app };
+    this.host.requestUpdate();
+  }
+
+  closeAppConfigModal(): void {
+    this.appConfigModal = { open: false, app: null };
+    this.host.requestUpdate();
+  }
+
   openShortcutModal(
     listKey: "dock_items" | "pinned_items",
     editIndex: number | null = null,
@@ -1147,7 +1182,12 @@ export class StudioStore implements ReactiveController {
   }
 
   closeShortcutModal(): void {
+    const reopenPinned = this.returnToPinnedModal;
+    this.returnToPinnedModal = false;
     this.shortcutModal = { ...this.shortcutModal, open: false };
+    if (reopenPinned) {
+      this.appConfigModal = { open: true, app: "pinned" };
+    }
     this.host.requestUpdate();
   }
 
@@ -1177,6 +1217,30 @@ export class StudioStore implements ReactiveController {
 
   moveHomeCategoryToken(token: string, delta: -1 | 1): void {
     moveHomeCategoryTokenOp(this, token, delta);
+  }
+
+  getEnabledToolsItems(): string[] {
+    return getEnabledToolsItemsOp(this);
+  }
+
+  toggleToolItemToken(token: string): void {
+    toggleToolItemTokenOp(this, token);
+  }
+
+  moveToolItemToken(token: string, delta: -1 | 1): void {
+    moveToolItemTokenOp(this, token, delta);
+  }
+
+  getEnabledGamesItems(): string[] {
+    return getEnabledGamesItemsOp(this);
+  }
+
+  toggleGameItemToken(token: string): void {
+    toggleGameItemTokenOp(this, token);
+  }
+
+  moveGameItemToken(token: string, delta: -1 | 1): void {
+    moveGameItemTokenOp(this, token, delta);
   }
 
   getEnabledActivitySources(): string[] {

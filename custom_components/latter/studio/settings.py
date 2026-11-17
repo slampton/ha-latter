@@ -97,6 +97,9 @@ ALLOWED_DEVICE_ACTIONS: tuple[str, ...] = (
     "activate_screensaver",
     "trigger_va",
     "log_memory_report",
+    "dismiss_ringing",
+    "cancel_timer",
+    "reset_stopwatch",
 )
 
 DEVICE_ENTITY_VERBS: frozenset[str] = frozenset(
@@ -596,6 +599,72 @@ def normalize_home_categories(csv: str | None) -> str:
     return ",".join(cats)
 
 
+TOOLS_ITEMS_CATALOG: tuple[dict[str, Any], ...] = tuple(
+    _PROTOCOL_V3_DATA["catalogs"]["tools_items"]
+)
+TOOLS_ITEM_TOKENS: tuple[str, ...] = tuple(
+    c["token"] for c in TOOLS_ITEMS_CATALOG
+)
+DEFAULT_TOOLS_ITEMS: str = str(_PROTOCOL_V3_DATA["defaults"]["tools_items"])
+
+
+def parse_tools_items(csv: Any) -> list[str]:
+    """Return the known Tools launcher tokens named in `csv`, in order, without duplicates."""
+    raw_items = csv if isinstance(csv, (list, tuple)) else str(csv or "").split(",")
+    out: list[str] = []
+    for raw in raw_items:
+        tok = str(raw).strip().lower()
+        if tok in TOOLS_ITEM_TOKENS and tok not in out:
+            out.append(tok)
+    return out
+
+
+def normalize_tools_items(csv: Any) -> str:
+    """Return `csv` as canonical comma-separated Tools items; raise ValueError if empty or unknown."""
+    raw_items = csv if isinstance(csv, (list, tuple)) else str(csv or "").split(",")
+    names = [str(t).strip().lower() for t in raw_items if str(t).strip()]
+    unknown = sorted({t for t in names if t not in TOOLS_ITEM_TOKENS})
+    if unknown:
+        raise ValueError(f"Unknown Tool: {', '.join(unknown)}")
+    items = parse_tools_items(csv)
+    if not items:
+        raise ValueError("Keep at least one Tool enabled")
+    return ",".join(items)
+
+
+GAMES_ITEMS_CATALOG: tuple[dict[str, Any], ...] = tuple(
+    _PROTOCOL_V3_DATA["catalogs"]["games_items"]
+)
+GAMES_ITEM_TOKENS: tuple[str, ...] = tuple(
+    c["token"] for c in GAMES_ITEMS_CATALOG
+)
+DEFAULT_GAMES_ITEMS: str = str(_PROTOCOL_V3_DATA["defaults"]["games_items"])
+
+
+def parse_games_items(csv: Any) -> list[str]:
+    """Return the known Games launcher tokens named in `csv`, in order, without duplicates."""
+    raw_items = csv if isinstance(csv, (list, tuple)) else str(csv or "").split(",")
+    out: list[str] = []
+    for raw in raw_items:
+        tok = str(raw).strip().lower()
+        if tok in GAMES_ITEM_TOKENS and tok not in out:
+            out.append(tok)
+    return out
+
+
+def normalize_games_items(csv: Any) -> str:
+    """Return `csv` as canonical comma-separated Games items; raise ValueError if empty or unknown."""
+    raw_items = csv if isinstance(csv, (list, tuple)) else str(csv or "").split(",")
+    names = [str(t).strip().lower() for t in raw_items if str(t).strip()]
+    unknown = sorted({t for t in names if t not in GAMES_ITEM_TOKENS})
+    if unknown:
+        raise ValueError(f"Unknown Game: {', '.join(unknown)}")
+    items = parse_games_items(csv)
+    if not items:
+        raise ValueError("Keep at least one Game enabled")
+    return ",".join(items)
+
+
 ACTIVITY_SOURCES_CATALOG: tuple[dict[str, Any], ...] = tuple(
     _PROTOCOL_V3_DATA["catalogs"]["activity_sources"]
 )
@@ -1047,6 +1116,8 @@ DEVICE_TEXT_KEYS: tuple[str, ...] = (
     "assigned_person",
     "area_categories",
     "home_categories",
+    "tools_items",
+    "games_items",
     "activity_sources",
     "wallpaper_source",
     "security_pin_policy",
@@ -1385,6 +1456,18 @@ def clean_device_settings(
     if "home_categories" in out:
         try:
             out["home_categories"] = normalize_home_categories(out["home_categories"])
+        except ValueError as err:
+            raise SettingsScopeError(str(err)) from None
+
+    if "tools_items" in incoming:
+        try:
+            out["tools_items"] = normalize_tools_items(incoming["tools_items"])
+        except ValueError as err:
+            raise SettingsScopeError(str(err)) from None
+
+    if "games_items" in incoming:
+        try:
+            out["games_items"] = normalize_games_items(incoming["games_items"])
         except ValueError as err:
             raise SettingsScopeError(str(err)) from None
 

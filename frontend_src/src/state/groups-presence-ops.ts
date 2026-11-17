@@ -286,7 +286,13 @@ export async function bulkPillsToggleOp(
   if (activeSet.has(token)) {
     const minRequired = ctrl.min ?? 0;
     if (activeSet.size <= minRequired) {
-      store.showToast("Keep at least one category enabled", true);
+      const noun =
+        ctrl.pref_key === "tools_items"
+          ? "tool"
+          : ctrl.pref_key === "games_items"
+            ? "game"
+            : "category";
+      store.showToast(`Keep at least one ${noun} enabled`, true);
       return;
     }
     activeSet.delete(token);

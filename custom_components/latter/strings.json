@@ -339,5 +339,45 @@
     "shortcut_not_configured": {
       "message": "Shortcut action {action} on {entity_id} is not configured on this Device."
     }
+  },
+  "services": {
+    "timer_alarm_state": {
+      "name": "Timer, Stopwatch & Alarm State",
+      "description": "Event-driven timer, stopwatch, and alarm state update reported by a bound Latter Device.",
+      "fields": {
+        "target_device": {
+          "name": "Target Device",
+          "description": "Optional Latter device (auto-resolved when running a single Latter device)."
+        },
+        "timer_running": {
+          "name": "Timer Running",
+          "description": "True while the device countdown timer is actively ticking."
+        },
+        "timer_paused": {
+          "name": "Timer Paused",
+          "description": "True while the device countdown timer is paused."
+        },
+        "remaining_sec": {
+          "name": "Timer Remaining Seconds",
+          "description": "Remaining timer seconds at the moment of the state transition."
+        },
+        "ringing": {
+          "name": "Alarm or Timer Ringing",
+          "description": "True while an alarm or expired timer alert is actively ringing on the device."
+        },
+        "stopwatch_running": {
+          "name": "Stopwatch Running",
+          "description": "True while the device stopwatch is actively counting up."
+        },
+        "stopwatch_paused": {
+          "name": "Stopwatch Paused",
+          "description": "True while the device stopwatch is paused with elapsed time."
+        },
+        "stopwatch_elapsed_sec": {
+          "name": "Stopwatch Elapsed Seconds",
+          "description": "Elapsed stopwatch seconds at the moment of the state transition."
+        }
+      }
+    }
   }
 }

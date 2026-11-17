@@ -8,7 +8,9 @@
     "activity_card": "1",
     "activity_sources": "calendar,music_queue,stopwatch,alarms,timers",
     "area_categories": "scene,light,cover,fan,switch,climate,media",
-    "home_categories": "alarm,cameras,intercom,thermostat,entry,vacuum"
+    "home_categories": "alarm,cameras,intercom,thermostat,entry,vacuum",
+    "tools_items": "stopwatch,level,flashlight,calculator,dice,coin_flip",
+    "games_items": "marbles,archery,bricks,chomp,2048,memory"
   },
   "header": [
     {
@@ -976,6 +978,20 @@
           "cpp_enum": "LOCAL_CLOCK_LABEL",
           "type": "string",
           "description": "Optional user-defined label shown above local time on the Time App Clock tab (up to 32 chars)"
+        },
+        {
+          "index": 55,
+          "name": "tools_items",
+          "cpp_enum": "TOOLS_ITEMS",
+          "type": "csv",
+          "description": "Comma-separated enabled and ordered Tools launcher items (stopwatch,level,flashlight,calculator,dice,coin_flip; Calendar remains independent)"
+        },
+        {
+          "index": 56,
+          "name": "games_items",
+          "cpp_enum": "GAMES_ITEMS",
+          "type": "csv",
+          "description": "Comma-separated enabled and ordered Games launcher items (marbles,archery,bricks,chomp,2048,memory)"
         }
       ]
     },
@@ -1045,7 +1061,7 @@
       "variables": {}
     },
     "latter_device_command": {
-      "description": "Execute a typed Device lifecycle, diagnostic, or UI command (restart|find_my|activate_screensaver|trigger_va|log_memory_report)",
+      "description": "Execute a typed Device lifecycle, diagnostic, or UI command (restart|find_my|activate_screensaver|trigger_va|log_memory_report|dismiss_ringing|cancel_timer|reset_stopwatch)",
       "variables": {
         "command": "string"
       }
@@ -1473,6 +1489,60 @@
         "token": "vacuum",
         "label": "Robot Vacuum"
       }
+    ],
+    "tools_items": [
+      {
+        "token": "stopwatch",
+        "label": "Analog Chronograph",
+        "capability": "round"
+      },
+      {
+        "token": "level",
+        "label": "Bubble Level",
+        "capability": "imu"
+      },
+      {
+        "token": "flashlight",
+        "label": "Flashlight"
+      },
+      {
+        "token": "calculator",
+        "label": "Calculator"
+      },
+      {
+        "token": "dice",
+        "label": "Dice Roll"
+      },
+      {
+        "token": "coin_flip",
+        "label": "Coin Flip"
+      }
+    ],
+    "games_items": [
+      {
+        "token": "marbles",
+        "label": "Marbles"
+      },
+      {
+        "token": "archery",
+        "label": "Archery"
+      },
+      {
+        "token": "bricks",
+        "label": "Bricks"
+      },
+      {
+        "token": "chomp",
+        "label": "Chomp"
+      },
+      {
+        "token": "2048",
+        "label": "2048"
+      },
+      {
+        "token": "memory",
+        "label": "Memory Match"
+      }
     ]
   },
   "rpc_methods": {
@@ -1620,12 +1690,15 @@
       ]
     },
     "timer_alarm_state": {
-      "description": "Report on-device countdown timer and alarm ringing state transitions to Home Assistant",
+      "description": "Report on-device countdown timer, stopwatch, and alarm ringing state transitions to Home Assistant",
       "fields": [
         "timer_running",
         "timer_paused",
         "remaining_sec",
-        "ringing"
+        "ringing",
+        "stopwatch_running",
+        "stopwatch_paused",
+        "stopwatch_elapsed_sec"
       ]
     }
   },
@@ -1819,13 +1892,16 @@
       ]
     },
     "timer_alarm_state": {
-      "description": "Event-driven timer and alarm state update reported by a bound Latter Device.",
+      "description": "Event-driven timer, stopwatch, and alarm state update reported by a bound Latter Device.",
       "fields": [
         "target_device",
         "timer_running",
         "timer_paused",
         "remaining_sec",
-        "ringing"
+        "ringing",
+        "stopwatch_running",
+        "stopwatch_paused",
+        "stopwatch_elapsed_sec"
       ]
     }
   }

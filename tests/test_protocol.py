@@ -70,7 +70,7 @@ class TestProtocolV3Contract(unittest.TestCase):
             "remote_config": 3,
             "weather_forecast": 14,
             "calendar_agenda": 2,
-            "device_prefs": 52,
+            "device_prefs": 54,
             "shortcuts": 5,
         }
         domains = self.schema.get("domains", {})
@@ -1051,6 +1051,9 @@ class TestDevicePrefsProtocol(unittest.TestCase):
                 "show_utc_clock=1",
                 "world_clocks=London|Europe/London;Kyoto|Asia/Tokyo",
                 "alarms_summary=06:47|1|1;08:30|0|2;09:15|1|3",
+                "tools_items=dice,flashlight,dice",
+                "games_items=2048,chomp",
+                "invalid_empty_tools=",
             ]
         )
         parsed = _PAYLOADS_MOD.parse_dirty_prefs_records(raw)
@@ -1066,8 +1069,12 @@ class TestDevicePrefsProtocol(unittest.TestCase):
                 "show_utc_clock": True,
                 "world_clocks": "London|Europe/London;Kyoto|Asia/Tokyo",
                 "alarms_summary": "06:47|1|1;08:30|0|2;09:15|1|3",
+                "tools_items": "dice,flashlight",
+                "games_items": "2048,chomp",
             },
         )
+        bad_raw = "\x1e".join(["tools_items=", "games_items=not_a_game"])
+        self.assertEqual(_PAYLOADS_MOD.parse_dirty_prefs_records(bad_raw), {})
 
     def test_power_profile_retired_and_activity_sources_in_scope(self) -> None:
         self.assertNotIn("power_profile", studio_scope.DEVICE_PREF_KEYS)
@@ -1123,6 +1130,45 @@ class TestDevicePrefsProtocol(unittest.TestCase):
             with self.assertRaises(ValueError):
                 _PAYLOADS_MOD.normalize_home_categories(bad)
 
+        # Tools & Games CSV catalogs, parsers, normalizers, and Studio scope validation
+        self.assertEqual(_PAYLOADS_MOD.parse_tools_items(None), [])
+        self.assertEqual(
+            _PAYLOADS_MOD.parse_tools_items(_PAYLOADS_MOD.DEFAULT_TOOLS_ITEMS),
+            ["stopwatch", "level", "flashlight", "calculator", "dice", "coin_flip"],
+        )
+        self.assertEqual(
+            _PAYLOADS_MOD.normalize_tools_items(" Dice , flashlight , dice , COIN_FLIP "),
+            "dice,flashlight,coin_flip",
+        )
+        with self.assertRaisesRegex(ValueError, "Keep at least one Tool enabled"):
+            _PAYLOADS_MOD.normalize_tools_items("  ,  ")
+        with self.assertRaisesRegex(ValueError, "Unknown Tool: calendar"):
+            _PAYLOADS_MOD.normalize_tools_items("flashlight,calendar")
+
+        self.assertEqual(_PAYLOADS_MOD.parse_games_items(None), [])
+        self.assertEqual(
+            _PAYLOADS_MOD.parse_games_items(_PAYLOADS_MOD.DEFAULT_GAMES_ITEMS),
+            ["marbles", "archery", "bricks", "chomp", "2048", "memory"],
+        )
+        self.assertEqual(
+            _PAYLOADS_MOD.normalize_games_items(" 2048 , chomp , 2048 , MEMORY "),
+            "2048,chomp,memory",
+        )
+        with self.assertRaisesRegex(ValueError, "Keep at least one Game enabled"):
+            _PAYLOADS_MOD.normalize_games_items("")
+        with self.assertRaisesRegex(ValueError, "Unknown Game: tetris"):
+            _PAYLOADS_MOD.normalize_games_items("2048,tetris")
+
+        cleaned_tg = studio_scope.clean_device_settings(
+            {"tools_items": " dice , calculator ", "games_items": ["memory", "2048"]}
+        )
+        self.assertEqual(cleaned_tg["tools_items"], "dice,calculator")
+        self.assertEqual(cleaned_tg["games_items"], "memory,2048")
+        with self.assertRaisesRegex(studio_scope.SettingsScopeError, "Keep at least one Tool enabled"):
+            studio_scope.clean_device_settings({"tools_items": ""})
+        with self.assertRaisesRegex(studio_scope.SettingsScopeError, "Keep at least one Game enabled"):
+            studio_scope.clean_device_settings({"games_items": ""})
+
         coerced = studio_scope.clean_device_settings({"home_screen_enabled": False})
         self.assertFalse(coerced["home_screen_enabled"])
         self.assertEqual(coerced["start_screen"], "Time App")
@@ -1145,6 +1191,8 @@ class TestDevicePrefsProtocol(unittest.TestCase):
         self.assertIs(packed[idx_by_name["home_screen_enabled"]], False)
         self.assertEqual(packed[idx_by_name["start_screen"]], "Time App")
         self.assertEqual(packed[idx_by_name["return_to_home_timeout"]], "1 min")
+        self.assertEqual(packed[idx_by_name["tools_items"]], _PAYLOADS_MOD.DEFAULT_TOOLS_ITEMS)
+        self.assertEqual(packed[idx_by_name["games_items"]], _PAYLOADS_MOD.DEFAULT_GAMES_ITEMS)
 
     def test_time_app_world_clocks_alarms_and_tz_payloads(self) -> None:
         from datetime import UTC, datetime

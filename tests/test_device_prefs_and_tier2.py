@@ -461,3 +461,279 @@ async def test_studio_device_action_and_sleep_safe_device_groups(
         await group_sel.async_select_option("Nonexistent Group")
 
     assert await async_unload_entry(hass, entry) is True
+
+
+@pytest.mark.asyncio
+async def test_tools_games_prefs_and_stopwatch_live_device_actions(
+    hass: Any, setup_latter_hub: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Verify `tools_items`/`games_items` two-way sync + group baseline, stopwatch 1 Hz ticking + `live` payload, and `dismiss_ringing`/`cancel_timer`/`reset_stopwatch` commands."""
+    orig_sleep = asyncio.sleep
+    monkeypatch.setattr(asyncio, "sleep", lambda _d: orig_sleep(0))
+
+    entry, sys_obj, coord = await setup_latter_hub(
+        hass, with_device=True, with_ble_tag=True
+    )
+    slug = coord.device_slug
+    _register_wifi_sensor(hass, coord, "-49")
+    ble_coord = next(c for c in sys_obj.coordinators.values() if c.is_ble_tag)
+    conn = websocket_api.ActiveConnection()
+
+    # 1) Save `tools_items` & `games_items` via Studio `save_device_config` -> bumps prefs_seq & packs v3 indices 55..56
+    seq_before = coord.prefs_seq
+    await _call_ws(
+        hass,
+        conn,
+        1,
+        "latter/device/command",
+        studio_rev=STUDIO_REV,
+        subentry_id=coord.subentry_id,
+        command="save_device_config",
+        payload={
+            "config": {
+                "tools_items": "dice,flashlight,coin_flip",
+                "games_items": "2048,memory",
+            }
+        },
+    )
+    assert conn.errors == []
+    st_after_save = conn.results[-1][1]
+    assert st_after_save["config"]["tools_items"] == "dice,flashlight,coin_flip"
+    assert st_after_save["config"]["games_items"] == "2048,memory"
+    assert coord.prefs_seq > seq_before
+    _eff_seq, prefs_payload = coord.get_device_prefs_payload()
+    wire_tokens = prefs_payload["payload"].split("\x1f")
+    assert wire_tokens[55] == "dice,flashlight,coin_flip"
+    assert wire_tokens[56] == "2048,memory"
+
+    # Reject empty tools_items or games_items
+    await _call_ws(
+        hass,
+        conn,
+        2,
+        "latter/device/command",
+        studio_rev=STUDIO_REV,
+        subentry_id=coord.subentry_id,
+        command="save_device_config",
+        payload={"config": {"tools_items": ""}},
+    )
+    assert conn.errors[-1][1] == "invalid_format"
+    conn.errors.clear()
+
+    # On-device `set_device_prefs` RPC updates `tools_items` and `games_items`
+    await async_dispatch_bound_rpc(
+        hass,
+        coord,
+        "set_device_prefs",
+        {
+            "base_seq": coord.prefs_seq,
+            "changes": "\x1e".join(
+                ["tools_items=stopwatch,calculator", "games_items=marbles,chomp"]
+            ),
+        },
+    )
+    assert coord.tools_items_csv == "stopwatch,calculator"
+    assert coord.games_items_csv == "marbles,chomp"
+
+    # Device Group with `include_interface: True` enforces `tools_items` & `games_items`
+    await _call_ws(
+        hass,
+        conn,
+        3,
+        "latter/system/command",
+        studio_rev=STUDIO_REV,
+        command="create_device_group",
+        payload={
+            "name": "Arcade Stations",
+            "include_interface": True,
+            "source_subentry_id": coord.subentry_id,
+            "assign_source": True,
+        },
+    )
+    assert conn.errors == []
+    assert coord.device_group == "arcade_stations"
+    await _call_ws(
+        hass,
+        conn,
+        4,
+        "latter/system/command",
+        studio_rev=STUDIO_REV,
+        command="update_group_baseline",
+        payload={
+            "group_id": "arcade_stations",
+            "config": {
+                "tools_items": "flashlight,dice",
+                "games_items": "archery,bricks,2048",
+            },
+        },
+    )
+    assert conn.errors == []
+    assert coord.tools_items_csv == "flashlight,dice"
+    assert coord.games_items_csv == "archery,bricks,2048"
+    assert coord.device_group == "arcade_stations"
+
+    # 2) Stopwatch + Timer + Ringing live telemetry & 1 Hz local monotonic elapsed counter
+    anchor = 5000.0
+    monkeypatch.setattr(time, "monotonic", lambda: anchor)
+
+    await hass.services.async_call(
+        "latter",
+        "timer_alarm_state",
+        {
+            "target_device": coord.subentry_id,
+            "timer_running": True,
+            "timer_paused": False,
+            "remaining_sec": 90,
+            "ringing": True,
+            "stopwatch_running": True,
+            "stopwatch_paused": False,
+            "stopwatch_elapsed_sec": 15,
+        },
+        blocking=True,
+    )
+    assert coord._unsub_timer_tick is not None
+
+    monkeypatch.setattr(time, "monotonic", lambda: anchor + 22.8)
+    await _call_ws(
+        hass,
+        conn,
+        5,
+        "latter/system/get_state",
+        studio_rev=STUDIO_REV,
+        subentry_id=coord.subentry_id,
+    )
+    dev_state = conn.results[-1][1]
+    live = dev_state["live"]
+    assert live["timer_running"] is True
+    assert live["timer_paused"] is False
+    assert live["timer_remaining_sec"] == 67
+    assert live["stopwatch_running"] is True
+    assert live["stopwatch_paused"] is False
+    assert live["stopwatch_elapsed_sec"] == 37
+    assert live["alarm_ringing"] is True
+    # Quick Actions grid stays strictly at the 4 core actions
+    assert [a["key"] for a in dev_state["quick_actions"]] == [
+        "find_my",
+        "trigger_va",
+        "activate_screensaver",
+        "restart",
+    ]
+
+    # BLE tag payload omits display timer/stopwatch/ringing live keys
+    await _call_ws(
+        hass,
+        conn,
+        6,
+        "latter/system/get_state",
+        studio_rev=STUDIO_REV,
+        subentry_id=ble_coord.subentry_id,
+    )
+    ble_live = conn.results[-1][1]["live"]
+    for display_live_key in (
+        "timer_running",
+        "timer_paused",
+        "timer_remaining_sec",
+        "stopwatch_running",
+        "stopwatch_paused",
+        "stopwatch_elapsed_sec",
+        "alarm_ringing",
+    ):
+        assert display_live_key not in ble_live
+
+    # Pause stopwatch while timer stops -> 1 Hz tick unsubscribes and paused elapsed stays frozen
+    await async_dispatch_bound_rpc(
+        hass,
+        coord,
+        "timer_alarm_state",
+        {
+            "timer_running": 0,
+            "timer_paused": 1,
+            "remaining_sec": 67,
+            "ringing": 1,
+            "stopwatch_running": 0,
+            "stopwatch_paused": 1,
+            "stopwatch_elapsed_sec": 37,
+        },
+    )
+    assert coord._unsub_timer_tick is None
+    monkeypatch.setattr(time, "monotonic", lambda: anchor + 100.0)
+    assert coord.current_stopwatch_elapsed_sec == 37
+    assert coord.current_timer_remaining_sec == 67
+
+    # Stopwatch running alone keeps 1 Hz `_unsub_timer_tick` active even when countdown timer is idle!
+    await async_dispatch_bound_rpc(
+        hass,
+        coord,
+        "timer_alarm_state",
+        {
+            "timer_running": 0,
+            "timer_paused": 1,
+            "remaining_sec": 67,
+            "ringing": 1,
+            "stopwatch_running": 1,
+            "stopwatch_paused": 0,
+            "stopwatch_elapsed_sec": 37,
+        },
+    )
+    assert coord._unsub_timer_tick is not None
+
+    # 3) Contextual `device_action` commands: `dismiss_ringing`, `cancel_timer`, `reset_stopwatch`
+    hass.services.calls.clear()
+    await _call_ws(
+        hass,
+        conn,
+        7,
+        "latter/device/command",
+        studio_rev=STUDIO_REV,
+        subentry_id=coord.subentry_id,
+        command="device_action",
+        payload={"action": "dismiss_ringing"},
+    )
+    assert conn.errors == []
+    assert coord.alarm_ringing is False
+    assert conn.results[-1][1]["live"]["alarm_ringing"] is False
+    assert hass.states.get(f"binary_sensor.{slug}_alarm_ringing").state == "off"
+
+    await _call_ws(
+        hass,
+        conn,
+        8,
+        "latter/device/command",
+        studio_rev=STUDIO_REV,
+        subentry_id=coord.subentry_id,
+        command="device_action",
+        payload={"action": "cancel_timer"},
+    )
+    assert conn.errors == []
+    assert coord.timer_running is False
+    assert coord.timer_paused is False
+    assert coord.current_timer_remaining_sec == 0
+    assert conn.results[-1][1]["live"]["timer_remaining_sec"] == 0
+    # Stopwatch is still running, so 1 Hz tick remains active until reset_stopwatch!
+    assert coord._unsub_timer_tick is not None
+
+    await _call_ws(
+        hass,
+        conn,
+        9,
+        "latter/device/command",
+        studio_rev=STUDIO_REV,
+        subentry_id=coord.subentry_id,
+        command="device_action",
+        payload={"action": "reset_stopwatch"},
+    )
+    assert conn.errors == []
+    assert coord.stopwatch_running is False
+    assert coord.stopwatch_paused is False
+    assert coord.current_stopwatch_elapsed_sec == 0
+    assert conn.results[-1][1]["live"]["stopwatch_elapsed_sec"] == 0
+    assert coord._unsub_timer_tick is None
+
+    sent_cmds = [
+        c.data.get("command")
+        for c in hass.services.calls
+        if c.domain == "esphome" and c.service == f"{slug}_latter_device_command"
+    ]
+    assert sent_cmds == ["dismiss_ringing", "cancel_timer", "reset_stopwatch"]
+
+    assert await async_unload_entry(hass, entry) is True

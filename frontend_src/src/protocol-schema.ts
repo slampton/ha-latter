@@ -102,6 +102,24 @@ export const HOME_CATEGORIES_CATALOG: ReadonlyArray<CatalogItem> = [
   {token: "vacuum", label: "Robot Vacuum"},
 ];
 
+export const TOOLS_ITEMS_CATALOG: ReadonlyArray<CatalogItem> = [
+  {token: "stopwatch", label: "Analog Chronograph", capability: "round"},
+  {token: "level", label: "Bubble Level", capability: "imu"},
+  {token: "flashlight", label: "Flashlight"},
+  {token: "calculator", label: "Calculator"},
+  {token: "dice", label: "Dice Roll"},
+  {token: "coin_flip", label: "Coin Flip"},
+];
+
+export const GAMES_ITEMS_CATALOG: ReadonlyArray<CatalogItem> = [
+  {token: "marbles", label: "Marbles"},
+  {token: "archery", label: "Archery"},
+  {token: "bricks", label: "Bricks"},
+  {token: "chomp", label: "Chomp"},
+  {token: "2048", label: "2048"},
+  {token: "memory", label: "Memory Match"},
+];
+
 export const DEFAULT_DOCK_ROUTES = "app:pinned,app:music,app:home_hub,app:area,app:remote,app:games,app:tools";
 export const DEFAULT_DOCK_ROUTES_TOKENS: ReadonlyArray<string> = [
   "app:pinned",
@@ -146,4 +164,24 @@ export const DEFAULT_HOME_CATEGORIES_TOKENS: ReadonlyArray<string> = [
   "thermostat",
   "entry",
   "vacuum",
+];
+
+export const DEFAULT_TOOLS_ITEMS = "stopwatch,level,flashlight,calculator,dice,coin_flip";
+export const DEFAULT_TOOLS_ITEMS_TOKENS: ReadonlyArray<string> = [
+  "stopwatch",
+  "level",
+  "flashlight",
+  "calculator",
+  "dice",
+  "coin_flip",
+];
+
+export const DEFAULT_GAMES_ITEMS = "marbles,archery,bricks,chomp,2048,memory";
+export const DEFAULT_GAMES_ITEMS_TOKENS: ReadonlyArray<string> = [
+  "marbles",
+  "archery",
+  "bricks",
+  "chomp",
+  "2048",
+  "memory",
 ];

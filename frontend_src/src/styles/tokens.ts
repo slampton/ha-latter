@@ -1302,6 +1302,15 @@ export const STUDIO_STYLES = css`
     border-radius: var(--studio-radius-control);
     background: var(--studio-input-bg);
   }
+  .shortcut-item-row.shortcut-item-locked {
+    border-style: dashed;
+    background: transparent;
+  }
+  .shortcut-item-row.shortcut-item-locked .shortcut-icon-badge,
+  .shortcut-item-row.shortcut-item-hidden .shortcut-icon-badge {
+    background: var(--studio-surface-alt);
+    color: var(--studio-text-secondary);
+  }
   .shortcut-icon-badge {
     display: inline-flex;
     align-items: center;

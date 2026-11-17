@@ -27,6 +27,17 @@ export type StudioViewId = DeviceViewId | SystemViewId;
 
 export type SecurityPinPolicy = "auto" | "allow" | "require_pin" | "block";
 
+export type ConfigurableAppId =
+  | "pinned"
+  | "music"
+  | "home_hub"
+  | "area"
+  | "remote"
+  | "time"
+  | "tools"
+  | "games"
+  | "clock";
+
 export interface HassEntityState {
   entity_id: string;
   state: string;
@@ -261,6 +272,8 @@ export interface DeviceConfig {
   pinned_items?: ShortcutItem[];
   area_categories?: string;
   home_categories?: string;
+  tools_items?: string;
+  games_items?: string;
   activity_card?: boolean;
   activity_sources?: string;
   wallpaper_source?: string;
@@ -446,6 +459,13 @@ export interface LiveDeviceSection {
   fw_update_available?: boolean;
   effective_security_pin_policy?: string;
   has_security_pin?: boolean;
+  timer_running?: boolean;
+  timer_paused?: boolean;
+  timer_remaining_sec?: number;
+  stopwatch_running?: boolean;
+  stopwatch_paused?: boolean;
+  stopwatch_elapsed_sec?: number;
+  alarm_ringing?: boolean;
 }
 
 export interface QuickActionPayloadItem {

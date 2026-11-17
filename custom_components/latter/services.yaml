@@ -925,8 +925,8 @@ set_device_prefs:
         text:
 
 timer_alarm_state:
-  name: Timer & Alarm State
-  description: Event-driven timer and alarm state update reported by a bound Latter Device.
+  name: Timer, Stopwatch & Alarm State
+  description: Event-driven timer, stopwatch, and alarm state update reported by a bound Latter Device.
   fields:
     target_device:
       name: Target Device
@@ -966,3 +966,27 @@ timer_alarm_state:
       default: false
       selector:
         boolean:
+    stopwatch_running:
+      name: Stopwatch Running
+      description: True while the device stopwatch is actively counting up.
+      required: false
+      default: false
+      selector:
+        boolean:
+    stopwatch_paused:
+      name: Stopwatch Paused
+      description: True while the device stopwatch is paused with elapsed time.
+      required: false
+      default: false
+      selector:
+        boolean:
+    stopwatch_elapsed_sec:
+      name: Stopwatch Elapsed Seconds
+      description: Elapsed stopwatch seconds at the moment of the state transition.
+      required: false
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 359999
+          mode: box

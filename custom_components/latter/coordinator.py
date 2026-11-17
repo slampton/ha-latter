@@ -74,6 +74,7 @@ from .const import (
     CONF_DOCK_ITEMS,
     CONF_DOORBELL_NOISE_REDUCTION,
     CONF_ESPHOME_DEVICE_ID,
+    CONF_GAMES_ITEMS,
     CONF_GARAGE_ENTITY,
     CONF_HOME_CATEGORIES,
     CONF_LOCK_ENTITY,
@@ -87,6 +88,7 @@ from .const import (
     CONF_SYNC_DEVICE_AREA,
     CONF_SYSTEM_BLE_UUID,
     CONF_THERMOSTAT_ENTITY,
+    CONF_TOOLS_ITEMS,
     CONF_VACUUM_ENTITY,
     CONF_VOLUME_OVERRIDES,
     CONF_WALLPAPER_CYCLE_MINUTES,
@@ -110,12 +112,14 @@ from .const import (
     DEFAULT_DEVICE_REMOTE_GROUP,
     DEFAULT_DISPLAY_SHAPE,
     DEFAULT_DOORBELL_NOISE_REDUCTION,
+    DEFAULT_GAMES_ITEMS,
     DEFAULT_HOME_CATEGORIES,
     DEFAULT_LIST_SLOT_COUNT,
     DEFAULT_NATIVE_BLE_TRACKING,
     DEFAULT_SECURITY_PIN_POLICY,
     DEFAULT_SITE_ID,
     DEFAULT_SYNC_DEVICE_AREA,
+    DEFAULT_TOOLS_ITEMS,
     DEFAULT_WALLPAPER_CYCLE_MINUTES,
     DOMAIN,
     EVENT_LATTER,
@@ -185,9 +189,11 @@ from .protocol import (
     normalize_activity_sources,
     normalize_area_categories,
     normalize_dock_items,
+    normalize_games_items,
     normalize_home_categories,
     normalize_pinned_items,
     normalize_security_pin_policy,
+    normalize_tools_items,
     pack_device_prefs_fields,
     parse_dirty_prefs_records,
     resolve_shortcut_entity_icon,
@@ -453,6 +459,10 @@ class LatterCoordinator:
         self.timer_paused: bool = False
         self.timer_remaining_sec: int = 0
         self._timer_anchor_mono: float = 0.0
+        self.stopwatch_running: bool = False
+        self.stopwatch_paused: bool = False
+        self.stopwatch_elapsed_sec: int = 0
+        self._stopwatch_anchor_mono: float = 0.0
         self.alarm_ringing: bool = False
         self._unsub_timer_tick: Callable[[], None] | None = None
         self._unsub_core_config: Callable[[], None] | None = None
@@ -610,6 +620,20 @@ class LatterCoordinator:
                 != str(prev.get(CONF_DEVICE_CUSTOM_COLOR) or "").strip().upper()
             ):
                 changed_pref_keys.append(CONF_DEVICE_CUSTOM_COLOR)
+            for csv_key, csv_default, csv_norm in (
+                (CONF_TOOLS_ITEMS, DEFAULT_TOOLS_ITEMS, normalize_tools_items),
+                (CONF_GAMES_ITEMS, DEFAULT_GAMES_ITEMS, normalize_games_items),
+            ):
+                try:
+                    new_csv = csv_norm(merged_data.get(csv_key, csv_default))
+                except ValueError:
+                    new_csv = csv_default
+                try:
+                    old_csv = csv_norm(prev.get(csv_key, csv_default))
+                except ValueError:
+                    old_csv = csv_default
+                if new_csv != old_csv:
+                    changed_pref_keys.append(csv_key)
             if changed_pref_keys:
                 self.prefs_seq = max(1, self.prefs_seq + 1)
                 for k in changed_pref_keys:
@@ -807,6 +831,16 @@ class LatterCoordinator:
         return max(0, round(self.timer_remaining_sec - elapsed))
 
     @property
+    def current_stopwatch_elapsed_sec(self) -> int:
+        if not self.stopwatch_running and not self.stopwatch_paused:
+            return 0
+        base = max(0, int(self.stopwatch_elapsed_sec))
+        if not self.stopwatch_running:
+            return base
+        elapsed = max(0, int(time.monotonic() - self._stopwatch_anchor_mono))
+        return base + elapsed
+
+    @property
     def is_wearable(self) -> bool:
         return manifest_is_wearable(self.hardware_manifest)
 
@@ -870,6 +904,24 @@ class LatterCoordinator:
             )
         except ValueError:
             return DEFAULT_HOME_CATEGORIES
+
+    @property
+    def tools_items_csv(self) -> str:
+        try:
+            return normalize_tools_items(
+                self.get_opt(CONF_TOOLS_ITEMS, DEFAULT_TOOLS_ITEMS)
+            )
+        except ValueError:
+            return DEFAULT_TOOLS_ITEMS
+
+    @property
+    def games_items_csv(self) -> str:
+        try:
+            return normalize_games_items(
+                self.get_opt(CONF_GAMES_ITEMS, DEFAULT_GAMES_ITEMS)
+            )
+        except ValueError:
+            return DEFAULT_GAMES_ITEMS
 
     @property
     def activity_card_enabled(self) -> bool:
@@ -2035,6 +2087,8 @@ class LatterCoordinator:
                 *DEVICE_PREF_KEYS,
                 CONF_NATIVE_BLE_TRACKING,
                 CONF_DEVICE_CUSTOM_COLOR,
+                CONF_TOOLS_ITEMS,
+                CONF_GAMES_ITEMS,
             ):
                 if k in cur_sub:
                     self.prefs_key_seq.setdefault(k, self.prefs_seq)
@@ -2126,26 +2180,20 @@ class LatterCoordinator:
             self._unsub_timer_tick = None
 
     @callback
-    def handle_timer_alarm_state(
-        self,
-        timer_running: bool,
-        timer_paused: bool,
-        remaining_sec: int,
-        ringing: bool,
-    ) -> None:
-        """Update event-driven timer and alarm state and manage the local 1 Hz countdown tick."""
-        self.timer_running = bool(timer_running)
-        self.timer_paused = bool(timer_paused) and not self.timer_running
-        self.timer_remaining_sec = max(0, int(remaining_sec or 0))
-        self._timer_anchor_mono = time.monotonic()
-        self.alarm_ringing = bool(ringing)
-
-        if self.timer_running and self.timer_remaining_sec > 0:
+    def _sync_timer_tick(self) -> None:
+        need_tick = (
+            (self.timer_running and self.current_timer_remaining_sec > 0)
+            or self.stopwatch_running
+        )
+        if need_tick:
             if self._unsub_timer_tick is None:
 
                 @callback
                 def _on_timer_tick(_now: datetime) -> None:
-                    if not self.timer_running or self.current_timer_remaining_sec <= 0:
+                    if not (
+                        (self.timer_running and self.current_timer_remaining_sec > 0)
+                        or self.stopwatch_running
+                    ):
                         self._stop_timer_tick()
                     self.async_update_listeners()
 
@@ -2155,12 +2203,36 @@ class LatterCoordinator:
         else:
             self._stop_timer_tick()
 
+    @callback
+    def handle_timer_alarm_state(
+        self,
+        timer_running: bool,
+        timer_paused: bool,
+        remaining_sec: int,
+        ringing: bool,
+        stopwatch_running: bool = False,
+        stopwatch_paused: bool = False,
+        stopwatch_elapsed_sec: int = 0,
+    ) -> None:
+        """Update event-driven timer, stopwatch, and alarm state and manage the local 1 Hz tick."""
+        now_mono = time.monotonic()
+        self.timer_running = bool(timer_running)
+        self.timer_paused = bool(timer_paused) and not self.timer_running
+        self.timer_remaining_sec = max(0, int(remaining_sec or 0))
+        self._timer_anchor_mono = now_mono
+        self.alarm_ringing = bool(ringing)
+        self.stopwatch_running = bool(stopwatch_running)
+        self.stopwatch_paused = bool(stopwatch_paused) and not self.stopwatch_running
+        self.stopwatch_elapsed_sec = max(0, int(stopwatch_elapsed_sec or 0))
+        self._stopwatch_anchor_mono = now_mono
+
+        self._sync_timer_tick()
         self.async_update_listeners()
 
     async def async_send_device_command(
         self, command: str, *, raise_if_offline: bool = False
     ) -> bool:
-        """Send an immediate action (`restart`, `find_my`, `activate_screensaver`, `trigger_va`, `log_memory_report`) to the Device."""
+        """Send an immediate action (`restart`, `find_my`, `activate_screensaver`, `trigger_va`, `log_memory_report`, `dismiss_ringing`, `cancel_timer`, `reset_stopwatch`) to the Device."""
         cmd = str(command or "").strip().lower()
         if self.is_ble_tag:
             if raise_if_offline:
@@ -2185,6 +2257,21 @@ class LatterCoordinator:
                     await self.hass.services.async_call(
                         "esphome", svc, {"command": cmd}, blocking=True
                     )
+                    if cmd == "dismiss_ringing":
+                        self.alarm_ringing = False
+                        self.async_update_listeners()
+                    elif cmd == "cancel_timer":
+                        self.timer_running = False
+                        self.timer_paused = False
+                        self.timer_remaining_sec = 0
+                        self._sync_timer_tick()
+                        self.async_update_listeners()
+                    elif cmd == "reset_stopwatch":
+                        self.stopwatch_running = False
+                        self.stopwatch_paused = False
+                        self.stopwatch_elapsed_sec = 0
+                        self._sync_timer_tick()
+                        self.async_update_listeners()
                     return True
                 except Exception as err:
                     if raise_if_offline:

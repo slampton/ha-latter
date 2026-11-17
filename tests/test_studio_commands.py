@@ -39,7 +39,7 @@ async def test_studio_rev_mismatch_on_all_read_and_mutation_endpoints(
     hass: Any, setup_latter_hub: Any
 ) -> None:
     """Verify studio_rev mismatch rejects BOTH read (get_state, subscribe) and mutation WS commands."""
-    assert STUDIO_REV == 26
+    assert STUDIO_REV == 27
     entry, _sys_obj, coord = await setup_latter_hub(hass)
     from homeassistant.helpers import area_registry as ar
 
@@ -476,26 +476,43 @@ async def test_studio_commands_security_pin_secrecy_groups_and_backup_restore(
     sys_ctrl_by_pref = {
         c["pref_key"]: c for c in baseline_state["system_controls"] if c.get("pref_key")
     }
-    for op_key in ("native_ble_tracking", "ble_auto_switch", "sync_device_area", "area_handoff"):
+    for op_key in (
+        "native_ble_tracking",
+        "ble_auto_switch",
+        "sync_device_area",
+        "area_handoff",
+        "tools_items",
+        "games_items",
+    ):
         assert op_key in sys_ctrl_by_pref
+    assert sys_ctrl_by_pref["tools_items"]["section"] == "interface"
+    assert sys_ctrl_by_pref["tools_items"]["tier"] == "interface"
+    assert sys_ctrl_by_pref["tools_items"]["domain"] == "pills"
+    assert sys_ctrl_by_pref["games_items"]["section"] == "interface"
+    assert sys_ctrl_by_pref["games_items"]["tier"] == "interface"
+    assert sys_ctrl_by_pref["games_items"]["domain"] == "pills"
     assert any(
         t["device_slug"] == coord.device_slug and t["state"] == "on"
         for t in sys_ctrl_by_pref["area_handoff"]["targets"]
     )
 
-    # Appearance batch update preserves group assignment
+    # Appearance batch update preserves group assignment (including tools_items & games_items)
     await _sys_cmd(
         "apply_batch_device_setting",
         {
             "target": "group:guest_suites",
             "config": {
                 "area_categories": "light,scene,all",
+                "tools_items": "flashlight,calculator,dice",
+                "games_items": "2048,chomp",
                 "pinned_items": [
                     {"kind": "route", "target": "weather:moon", "label": "Moon"},
                 ],
             },
         },
     )
+    assert coord.tools_items_csv == "flashlight,calculator,dice"
+    assert coord.games_items_csv == "2048,chomp"
     assert len(coord.pinned_items) == 1
     assert coord.pinned_items[0]["target"] == "weather:moon"
     assert coord.device_group == "guest_suites"
@@ -577,6 +594,8 @@ async def test_studio_commands_security_pin_secrecy_groups_and_backup_restore(
     )
     dev_bundle = conn.results[-1][1]["bundle"]
     assert dev_bundle["scope"] == "device"
+    assert dev_bundle["device"]["device_config"]["tools_items"] == "flashlight,calculator,dice"
+    assert dev_bundle["device"]["device_config"]["games_items"] == "2048,chomp"
 
     msg_seq += 1
     await _call_ws(

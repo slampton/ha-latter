@@ -2,7 +2,14 @@
  * Canonical constants, route maps, issue messages, and Title Case dictionaries for Latter Studio.
  */
 
-import type { DeviceViewId, IssueItem, SecurityPinPolicy, StudioViewId, SystemViewId } from "./types.js";
+import type {
+  ConfigurableAppId,
+  DeviceViewId,
+  IssueItem,
+  SecurityPinPolicy,
+  StudioViewId,
+  SystemViewId,
+} from "./types.js";
 import {
   SHORTCUT_ROUTES_CATALOG,
   DEFAULT_DOCK_ROUTES_TOKENS,
@@ -11,6 +18,12 @@ import {
   DEFAULT_AREA_CATEGORIES_TOKENS,
   HOME_CATEGORIES_CATALOG,
   DEFAULT_HOME_CATEGORIES_TOKENS,
+  TOOLS_ITEMS_CATALOG,
+  DEFAULT_TOOLS_ITEMS,
+  DEFAULT_TOOLS_ITEMS_TOKENS,
+  GAMES_ITEMS_CATALOG,
+  DEFAULT_GAMES_ITEMS,
+  DEFAULT_GAMES_ITEMS_TOKENS,
   ACTIVITY_SOURCES_CATALOG,
 } from "./protocol-schema.js";
 
@@ -22,13 +35,57 @@ export {
   DEFAULT_AREA_CATEGORIES_TOKENS,
   HOME_CATEGORIES_CATALOG,
   DEFAULT_HOME_CATEGORIES_TOKENS,
+  TOOLS_ITEMS_CATALOG,
+  DEFAULT_TOOLS_ITEMS,
+  DEFAULT_TOOLS_ITEMS_TOKENS,
+  GAMES_ITEMS_CATALOG,
+  DEFAULT_GAMES_ITEMS,
+  DEFAULT_GAMES_ITEMS_TOKENS,
   ACTIVITY_SOURCES_CATALOG,
 };
 
-export const STUDIO_REV = 26;
+export const STUDIO_REV = 27;
 export const MAX_DOCK_ITEMS = 24;
 export const MAX_PINNED_ITEMS = 96;
 export const SHORTCUT_LABEL_MAX = 24;
+
+export const NATIVE_DOCK_APP_TOKENS: ReadonlyArray<string> = [
+  "app:pinned",
+  "app:music",
+  "app:home_hub",
+  "app:area",
+  "app:remote",
+  "app:weather",
+  "app:time",
+  "app:clock",
+  "app:tools",
+  "app:games",
+];
+
+export const NATIVE_DOCK_CONFIG_APP_MAP: Readonly<Partial<Record<string, ConfigurableAppId>>> = {
+  "app:pinned": "pinned",
+  "app:music": "music",
+  "app:home_hub": "home_hub",
+  "app:area": "area",
+  "app:remote": "remote",
+  "app:time": "time",
+  "app:clock": "clock",
+  "app:tools": "tools",
+  "app:games": "games",
+};
+
+export const START_SCREEN_CONFIG_APP_MAP: Readonly<Partial<Record<string, ConfigurableAppId>>> = {
+  Pinned: "pinned",
+  Media: "music",
+  "Home Hub": "home_hub",
+  Cameras: "home_hub",
+  "Area Controls": "area",
+  Remote: "remote",
+  "Time App": "time",
+  "Clock Face": "clock",
+  Tools: "tools",
+  Games: "games",
+};
 
 export const MAX_WALLPAPER_UPLOAD_BYTES = 15 * 1024 * 1024;
 
@@ -224,6 +281,8 @@ export const GROUP_INTERFACE_NON_PREF_KEYS: ReadonlyArray<string> = [
   "pinned_items",
   "area_categories",
   "home_categories",
+  "tools_items",
+  "games_items",
   "activity_card",
   "activity_sources",
   "device_remote_group",

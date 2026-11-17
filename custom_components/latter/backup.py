@@ -25,6 +25,7 @@ from .const import (
     CONF_DEVICE_GROUP,
     CONF_DEVICE_SLUG,
     CONF_DOCK_ITEMS,
+    CONF_GAMES_ITEMS,
     CONF_HOME_CATEGORIES,
     CONF_MA_PLAYER_ENTITY,
     CONF_NATIVE_BLE_TRACKING,
@@ -33,6 +34,7 @@ from .const import (
     CONF_SECURITY_PIN_POLICY,
     CONF_SITE_ID,
     CONF_SYNC_DEVICE_AREA,
+    CONF_TOOLS_ITEMS,
     CONF_WALLPAPER_CYCLE_MINUTES,
     CONF_WALLPAPER_FAVORITES,
     CONF_WALLPAPER_SOURCE,
@@ -65,6 +67,8 @@ DEVICE_CONFIG_EXPORT_KEYS: tuple[str, ...] = (
     CONF_PINNED_ITEMS,
     CONF_AREA_CATEGORIES,
     CONF_HOME_CATEGORIES,
+    CONF_TOOLS_ITEMS,
+    CONF_GAMES_ITEMS,
     CONF_ACTIVITY_CARD,
     CONF_ACTIVITY_SOURCES,
     CONF_WALLPAPER_SOURCE,
@@ -119,6 +123,10 @@ def _serialize_device_snapshot(hass: HomeAssistant, coordinator: Any) -> dict[st
             dev_cfg[k] = val
         elif k in pref_keys:
             dev_cfg[k] = resolve_device_pref_value(coordinator.device_data, k)
+        elif k == CONF_TOOLS_ITEMS:
+            dev_cfg[k] = coordinator.tools_items_csv
+        elif k == CONF_GAMES_ITEMS:
+            dev_cfg[k] = coordinator.games_items_csv
     dev_cfg.setdefault(CONF_DEVICE_GROUP, DEFAULT_DEVICE_GROUP)
     return {
         "device_slug": coordinator.device_slug,
