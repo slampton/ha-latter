@@ -70,7 +70,7 @@ class TestProtocolV3Contract(unittest.TestCase):
             "remote_config": 3,
             "weather_forecast": 14,
             "calendar_agenda": 2,
-            "device_prefs": 53,
+            "device_prefs": 52,
             "shortcuts": 5,
         }
         domains = self.schema.get("domains", {})
@@ -1069,23 +1069,23 @@ class TestDevicePrefsProtocol(unittest.TestCase):
             },
         )
 
-    def test_power_profile_cascade_and_custom_flip(self) -> None:
-        cascaded = studio_scope.clean_device_settings({"power_profile": "Always-On Wall / Desk"})
-        self.assertEqual(cascaded["power_profile"], "Always-On Wall / Desk")
-        self.assertEqual(cascaded["wake_word_mode"], "Always On")
-        self.assertEqual(cascaded["tap_to_wake"], "Single Tap")
-        self.assertEqual(cascaded["battery_screen_timeout"], "Never")
-        self.assertEqual(cascaded["battery_hibernate_timeout"], "Disabled")
+    def test_power_profile_retired_and_activity_sources_in_scope(self) -> None:
+        self.assertNotIn("power_profile", studio_scope.DEVICE_PREF_KEYS)
+        self.assertNotIn("power_profile", studio_scope.DEVICE_SETTING_KEYS)
+        self.assertEqual(len(studio_scope.DEVICE_PREF_SPECS), 49)
+        with self.assertRaises(studio_scope.SettingsScopeError):
+            studio_scope.clean_device_settings({"power_profile": "Pocket Carry"})
 
-        watch_cascaded = studio_scope.clean_device_settings({"power_profile": "Wearable Watch"})
-        self.assertEqual(watch_cascaded["tap_to_wake"], "Double Tap")
-
-        flipped = studio_scope.clean_device_settings(
-            {"tap_to_wake": "Double Tap"},
-            current=cascaded,
+        cleaned = studio_scope.clean_device_settings(
+            {
+                "tap_to_wake": "Double Tap",
+                "wallpaper_source": "preset:aurora",
+                "activity_sources": ["timers", "calendar"],
+            }
         )
-        self.assertEqual(flipped["tap_to_wake"], "Double Tap")
-        self.assertEqual(flipped["power_profile"], "Custom")
+        self.assertEqual(cleaned["tap_to_wake"], "Double Tap")
+        self.assertEqual(cleaned["wallpaper_source"], "preset:aurora")
+        self.assertEqual(cleaned["activity_sources"], "calendar,timers")
 
     def test_area_categories_parse_and_normalize(self) -> None:
         self.assertEqual(_PAYLOADS_MOD.parse_area_categories(None), [])

@@ -1,8 +1,8 @@
-"""Device Groups, Power Profile baselines, Studio entity classification, and Device reset for Latter."""
+"""Device Groups, group baselines, Studio entity classification, and Device reset for Latter."""
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -21,6 +21,7 @@ from .const import (
     CONF_BLE_TARGET_ADDRESS,
     CONF_DEVICE_CUSTOM_COLOR,
     CONF_DEVICE_GROUPS,
+    CONF_DEVICE_REMOTE_GROUP,
     CONF_DOCK_ITEMS,
     CONF_HOME_CATEGORIES,
     CONF_NATIVE_BLE_TRACKING,
@@ -30,7 +31,13 @@ from .const import (
     CONF_WALLPAPER_CYCLE_MINUTES,
     CONF_WALLPAPER_SOURCE,
     DATA_GLOBAL_CONFIG,
+    DEFAULT_ACTIVITY_CARD,
+    DEFAULT_ACTIVITY_SOURCES,
+    DEFAULT_AREA_CATEGORIES,
     DEFAULT_DEVICE_GROUP,
+    DEFAULT_DEVICE_REMOTE_GROUP,
+    DEFAULT_HOME_CATEGORIES,
+    DEFAULT_WALLPAPER_CYCLE_MINUTES,
     DOMAIN,
 )
 from .identity import device_entities, esphome_service, get_bound_esphome_device
@@ -38,10 +45,14 @@ from .studio.settings import (
     DEVICE_PREF_KEYS,
     DEVICE_PREF_SPEC_MAP,
     DEVICE_PREF_SPECS,
-    POWER_PROFILE_PREFS,
-    POWER_PROFILE_SUBKEYS,
     DevicePrefSpec,
     clean_device_settings,
+    default_dock_items,
+    normalize_activity_sources,
+    normalize_area_categories,
+    normalize_dock_items,
+    normalize_home_categories,
+    normalize_pinned_items,
     resolve_device_pref_value,
 )
 
@@ -422,7 +433,7 @@ def get_esphome_device_entities(
 
 
 # ---------------------------------------------------------------------------
-# Device Groups & Power Profile Baselines
+# Device Groups & Hardware Baselines
 # ---------------------------------------------------------------------------
 
 def coordinator_supports_pref(coordinator: Any, spec: DevicePrefSpec) -> bool:
@@ -453,7 +464,7 @@ def coordinator_supports_pref(coordinator: Any, spec: DevicePrefSpec) -> bool:
     return True
 
 
-# Tier 2: Operational Behavior keys synced automatically by a Device Group's baseline.
+# Operational Behavior keys synced automatically by every Device Group's baseline.
 GROUP_BEHAVIOR_DEVICE_KEYS: tuple[str, ...] = (
     CONF_NATIVE_BLE_TRACKING,
     CONF_BLE_AUTO_SWITCH,
@@ -464,23 +475,85 @@ GROUP_BEHAVIOR_DEVICE_KEYS: tuple[str, ...] = (
     *tuple(s.key for s in DEVICE_PREF_SPECS if s.group_tier == "behavior"),
 )
 
-# Tier 3: Personal & Area Appearance/Layout keys preserved per-device on group join/sync.
-GROUP_APPEARANCE_DEVICE_KEYS: tuple[str, ...] = (
+# Optional Display styling keys synced when a Group opts into `include_display`.
+GROUP_DISPLAY_DEVICE_KEYS: tuple[str, ...] = (
+    CONF_WALLPAPER_SOURCE,
+    CONF_WALLPAPER_CYCLE_MINUTES,
+    CONF_DEVICE_CUSTOM_COLOR,
+    *tuple(s.key for s in DEVICE_PREF_SPECS if s.group_tier == "display"),
+)
+
+# Optional Interface & Shortcut keys synced when a Group opts into `include_interface`.
+GROUP_INTERFACE_DEVICE_KEYS: tuple[str, ...] = (
     CONF_DOCK_ITEMS,
     CONF_PINNED_ITEMS,
     CONF_AREA_CATEGORIES,
     CONF_HOME_CATEGORIES,
     CONF_ACTIVITY_CARD,
     CONF_ACTIVITY_SOURCES,
-    CONF_WALLPAPER_SOURCE,
-    CONF_WALLPAPER_CYCLE_MINUTES,
-    CONF_DEVICE_CUSTOM_COLOR,
-    "device_remote_group",
-    *tuple(s.key for s in DEVICE_PREF_SPECS if s.group_tier == "appearance"),
+    CONF_DEVICE_REMOTE_GROUP,
+    *tuple(s.key for s in DEVICE_PREF_SPECS if s.group_tier == "interface"),
 )
 
-def default_group_baseline_config() -> dict[str, Any]:
-    """Return the complete canonical Tier 2 operational baseline dictionary."""
+GROUP_APPEARANCE_DEVICE_KEYS: tuple[str, ...] = (
+    *GROUP_DISPLAY_DEVICE_KEYS,
+    *GROUP_INTERFACE_DEVICE_KEYS,
+)
+
+GROUP_ALL_DEVICE_KEYS: tuple[str, ...] = (
+    *GROUP_BEHAVIOR_DEVICE_KEYS,
+    *GROUP_DISPLAY_DEVICE_KEYS,
+    *GROUP_INTERFACE_DEVICE_KEYS,
+)
+
+_DISPLAY_CAPABILITY_NON_PREF_KEYS: frozenset[str] = frozenset(
+    {
+        CONF_WALLPAPER_SOURCE,
+        CONF_WALLPAPER_CYCLE_MINUTES,
+        CONF_DEVICE_CUSTOM_COLOR,
+        CONF_DOCK_ITEMS,
+        CONF_PINNED_ITEMS,
+        CONF_AREA_CATEGORIES,
+        CONF_HOME_CATEGORIES,
+        CONF_ACTIVITY_CARD,
+        CONF_ACTIVITY_SOURCES,
+        CONF_DEVICE_REMOTE_GROUP,
+    }
+)
+
+
+def active_group_keys(group: Mapping[str, Any]) -> tuple[str, ...]:
+    """Return the baseline keys actively enforced by `group` based on its scope flags."""
+    keys: list[str] = list(GROUP_BEHAVIOR_DEVICE_KEYS)
+    if bool(group.get("include_display", False)):
+        keys.extend(GROUP_DISPLAY_DEVICE_KEYS)
+    if bool(group.get("include_interface", False)):
+        keys.extend(GROUP_INTERFACE_DEVICE_KEYS)
+    return tuple(keys)
+
+
+def coordinator_supports_group_key(coordinator: Any, key: str) -> bool:
+    """Return True when `coordinator`'s hardware supports group/batch setting `key`."""
+    if getattr(coordinator, "is_ble_tag", False):
+        return False
+    if key in (CONF_SYNC_DEVICE_AREA, CONF_AREA_FOLLOW_DWELL_S) and not bool(
+        getattr(coordinator, "is_roaming_device", True)
+    ):
+        return False
+    if key in _DISPLAY_CAPABILITY_NON_PREF_KEYS:
+        return bool(getattr(coordinator, "has_display", True))
+    spec = DEVICE_PREF_SPEC_MAP.get(key)
+    if spec is not None:
+        return coordinator_supports_pref(coordinator, spec)
+    return True
+
+
+def default_group_baseline_config(
+    *,
+    include_display: bool = False,
+    include_interface: bool = False,
+) -> dict[str, Any]:
+    """Return the canonical baseline dictionary for a Device Group."""
     base: dict[str, Any] = {
         CONF_NATIVE_BLE_TRACKING: False,
         CONF_BLE_AUTO_SWITCH: False,
@@ -492,11 +565,29 @@ def default_group_baseline_config() -> dict[str, Any]:
     for spec in DEVICE_PREF_SPECS:
         if spec.group_tier == "behavior":
             base[spec.key] = spec.default
+    if include_display:
+        base[CONF_WALLPAPER_SOURCE] = ""
+        base[CONF_WALLPAPER_CYCLE_MINUTES] = DEFAULT_WALLPAPER_CYCLE_MINUTES
+        base[CONF_DEVICE_CUSTOM_COLOR] = "#3898FF"
+        for spec in DEVICE_PREF_SPECS:
+            if spec.group_tier == "display":
+                base[spec.key] = spec.default
+    if include_interface:
+        base[CONF_DOCK_ITEMS] = default_dock_items()
+        base[CONF_PINNED_ITEMS] = []
+        base[CONF_AREA_CATEGORIES] = DEFAULT_AREA_CATEGORIES
+        base[CONF_HOME_CATEGORIES] = DEFAULT_HOME_CATEGORIES
+        base[CONF_ACTIVITY_CARD] = DEFAULT_ACTIVITY_CARD
+        base[CONF_ACTIVITY_SOURCES] = DEFAULT_ACTIVITY_SOURCES
+        base[CONF_DEVICE_REMOTE_GROUP] = DEFAULT_DEVICE_REMOTE_GROUP
+        for spec in DEVICE_PREF_SPECS:
+            if spec.group_tier == "interface":
+                base[spec.key] = spec.default
     return base
 
 
 def resolve_behavior_key_value(data: Mapping[str, Any], key: str) -> Any:
-    """Resolve the effective Tier 2 operational value for `key` from `data`."""
+    """Resolve the effective normalized value for any group/batch `key` from `data`."""
     spec = DEVICE_PREF_SPEC_MAP.get(key)
     if spec is not None:
         return resolve_device_pref_value(data, key)
@@ -522,23 +613,109 @@ def resolve_behavior_key_value(data: Mapping[str, Any], key: str) -> Any:
     if key == CONF_SECURITY_PIN_POLICY:
         pol = str(data.get(CONF_SECURITY_PIN_POLICY) or "auto").strip().lower()
         return pol if pol in ("auto", "allow", "require_pin", "block") else "auto"
+    if key == CONF_WALLPAPER_SOURCE:
+        return str(data.get(CONF_WALLPAPER_SOURCE) or "").strip()
+    if key == CONF_WALLPAPER_CYCLE_MINUTES:
+        try:
+            return max(
+                0,
+                int(
+                    data.get(
+                        CONF_WALLPAPER_CYCLE_MINUTES, DEFAULT_WALLPAPER_CYCLE_MINUTES
+                    )
+                    or 0
+                ),
+            )
+        except (TypeError, ValueError):
+            return 0
+    if key == CONF_DEVICE_CUSTOM_COLOR:
+        raw_c = str(data.get(CONF_DEVICE_CUSTOM_COLOR) or "").strip().upper()
+        return raw_c if raw_c.startswith("#") and len(raw_c) == 7 else "#3898FF"
+    if key == CONF_DOCK_ITEMS:
+        return normalize_dock_items(data.get(CONF_DOCK_ITEMS), strict=False)
+    if key == CONF_PINNED_ITEMS:
+        return normalize_pinned_items(data.get(CONF_PINNED_ITEMS), strict=False)
+    if key == CONF_AREA_CATEGORIES:
+        try:
+            return normalize_area_categories(
+                data.get(CONF_AREA_CATEGORIES, DEFAULT_AREA_CATEGORIES)
+            )
+        except ValueError:
+            return DEFAULT_AREA_CATEGORIES
+    if key == CONF_HOME_CATEGORIES:
+        try:
+            return normalize_home_categories(
+                data.get(CONF_HOME_CATEGORIES, DEFAULT_HOME_CATEGORIES)
+            )
+        except ValueError:
+            return DEFAULT_HOME_CATEGORIES
+    if key == CONF_ACTIVITY_CARD:
+        raw_ac = data.get(CONF_ACTIVITY_CARD, DEFAULT_ACTIVITY_CARD)
+        if isinstance(raw_ac, str):
+            return raw_ac.strip().lower() in ("1", "true", "on", "yes")
+        return bool(raw_ac)
+    if key == CONF_ACTIVITY_SOURCES:
+        try:
+            return normalize_activity_sources(
+                data.get(CONF_ACTIVITY_SOURCES, DEFAULT_ACTIVITY_SOURCES)
+            )
+        except ValueError:
+            return DEFAULT_ACTIVITY_SOURCES
+    if key == CONF_DEVICE_REMOTE_GROUP:
+        return (
+            str(data.get(CONF_DEVICE_REMOTE_GROUP) or DEFAULT_DEVICE_REMOTE_GROUP).strip()
+            or DEFAULT_DEVICE_REMOTE_GROUP
+        )
     return data.get(key)
 
 
 DEFAULT_DEVICE_GROUPS: list[dict[str, Any]] = [
     {
-        "id": "handhelds",
-        "name": "Handhelds",
-        "description": "Battery-powered roaming displays with pickup and tap wake",
+        "id": "pocket_carry",
+        "name": "Pocket Carry",
+        "description": "Compact pocket-carried displays with docked-only wake gestures and 15 min battery hibernate",
         "builtin": True,
+        "include_display": False,
+        "include_interface": False,
         "device_config": {
             CONF_NATIVE_BLE_TRACKING: True,
             CONF_BLE_AUTO_SWITCH: True,
             CONF_SYNC_DEVICE_AREA: True,
             CONF_AREA_FOLLOW_DWELL_S: 10,
             CONF_AREA_HANDOFF: False,
-            "power_profile": "Handheld Roaming",
-            **POWER_PROFILE_PREFS["Handheld Roaming"],
+            "tap_to_wake": "Docked Only",
+            "pickup_to_wake": "Docked Only",
+            "battery_screen_timeout": "30s",
+            "docked_idle_timeout": "1 min",
+            "battery_hibernate_timeout": "15 min",
+            "docked_screensaver": True,
+            "wake_word_mode": "Docked Only",
+            "auto_brightness_mode": "Sun Synchronized",
+            "day_brightness": "90%",
+            "night_brightness": "70%",
+            "ble_beacon_mode": "Handheld + Screen Off",
+        },
+    },
+    {
+        "id": "handhelds",
+        "name": "Handhelds",
+        "description": "Battery-powered roaming displays with pickup and single-tap wake",
+        "builtin": True,
+        "include_display": False,
+        "include_interface": False,
+        "device_config": {
+            CONF_NATIVE_BLE_TRACKING: True,
+            CONF_BLE_AUTO_SWITCH: True,
+            CONF_SYNC_DEVICE_AREA: True,
+            CONF_AREA_FOLLOW_DWELL_S: 10,
+            CONF_AREA_HANDOFF: False,
+            "tap_to_wake": "Single Tap",
+            "pickup_to_wake": "Always On",
+            "battery_screen_timeout": "30s",
+            "docked_idle_timeout": "1 min",
+            "battery_hibernate_timeout": "30 min",
+            "docked_screensaver": True,
+            "wake_word_mode": "Docked Only",
             "auto_brightness_mode": "Sun Synchronized",
             "day_brightness": "90%",
             "night_brightness": "70%",
@@ -550,14 +727,21 @@ DEFAULT_DEVICE_GROUPS: list[dict[str, Any]] = [
         "name": "Wearables",
         "description": "Compact wearable displays with double-tap wake on battery and 15s screen timeout",
         "builtin": True,
+        "include_display": False,
+        "include_interface": False,
         "device_config": {
             CONF_NATIVE_BLE_TRACKING: True,
             CONF_BLE_AUTO_SWITCH: True,
             CONF_SYNC_DEVICE_AREA: True,
             CONF_AREA_FOLLOW_DWELL_S: 10,
             CONF_AREA_HANDOFF: False,
-            "power_profile": "Wearable Watch",
-            **POWER_PROFILE_PREFS["Wearable Watch"],
+            "tap_to_wake": "Double Tap",
+            "pickup_to_wake": "Always On",
+            "battery_screen_timeout": "15s",
+            "docked_idle_timeout": "1 min",
+            "battery_hibernate_timeout": "15 min",
+            "docked_screensaver": True,
+            "wake_word_mode": "Docked Only",
             "auto_brightness_mode": "Sun Synchronized",
             "day_brightness": "80%",
             "night_brightness": "60%",
@@ -569,17 +753,25 @@ DEFAULT_DEVICE_GROUPS: list[dict[str, Any]] = [
         "name": "Wall & Desk Panels",
         "description": "Stationary mains-powered panels with Always-On wake word and no battery hibernate",
         "builtin": True,
+        "include_display": False,
+        "include_interface": False,
         "device_config": {
             CONF_NATIVE_BLE_TRACKING: False,
             CONF_BLE_AUTO_SWITCH: False,
             CONF_SYNC_DEVICE_AREA: False,
             CONF_AREA_FOLLOW_DWELL_S: 10,
             CONF_AREA_HANDOFF: False,
-            "power_profile": "Always-On Wall / Desk",
-            **POWER_PROFILE_PREFS["Always-On Wall / Desk"],
+            "tap_to_wake": "Single Tap",
+            "pickup_to_wake": "Disabled",
+            "battery_screen_timeout": "Never",
+            "docked_idle_timeout": "5 min",
+            "battery_hibernate_timeout": "Disabled",
+            "docked_screensaver": True,
+            "wake_word_mode": "Always On",
             "auto_brightness_mode": "Sun Synchronized",
             "day_brightness": "90%",
             "night_brightness": "70%",
+            "ble_beacon_mode": "Handheld Only",
         },
     },
 ]
@@ -590,7 +782,9 @@ _BUILTIN_GROUPS_BY_ID: dict[str, dict[str, Any]] = {
 
 
 def _same_control_val(a: Any, b: Any) -> bool:
-    """Compare two control values, treating numeric strings ('80' vs '80.0') and booleans/switches consistently."""
+    """Compare two control values, treating structured lists, numeric strings, and booleans consistently."""
+    if isinstance(a, (list, dict)) or isinstance(b, (list, dict)):
+        return a == b
     sa = str(a).strip()
     sb = str(b).strip()
     if sa == sb:
@@ -606,15 +800,30 @@ def _same_control_val(a: Any, b: Any) -> bool:
 
 
 def _normalize_group_entry(raw: Mapping[str, Any] | dict[str, Any]) -> dict[str, Any]:
-    """Normalize a single Device Group entry onto a complete Tier 2 operational baseline."""
+    """Normalize a single Device Group entry onto a complete baseline dictionary."""
     gid = str(raw.get("id") or "").strip()
     builtin_def = _BUILTIN_GROUPS_BY_ID.get(gid)
-    base_dev = default_group_baseline_config()
+    include_display = bool(
+        raw.get(
+            "include_display",
+            builtin_def.get("include_display", False) if builtin_def else False,
+        )
+    )
+    include_interface = bool(
+        raw.get(
+            "include_interface",
+            builtin_def.get("include_interface", False) if builtin_def else False,
+        )
+    )
+    base_dev = default_group_baseline_config(
+        include_display=include_display,
+        include_interface=include_interface,
+    )
     if builtin_def and isinstance(builtin_def.get("device_config"), dict):
         base_dev.update(builtin_def["device_config"])
     if isinstance(raw.get("device_config"), dict):
         for k, v in raw["device_config"].items():
-            if k in GROUP_BEHAVIOR_DEVICE_KEYS and v is not None:
+            if k in GROUP_ALL_DEVICE_KEYS and v is not None:
                 base_dev[k] = v
     return {
         "id": gid,
@@ -623,12 +832,14 @@ def _normalize_group_entry(raw: Mapping[str, Any] | dict[str, Any]) -> dict[str,
             (builtin_def["description"] if builtin_def else raw.get("description")) or ""
         ),
         "builtin": gid in _BUILTIN_GROUPS_BY_ID,
+        "include_display": include_display,
+        "include_interface": include_interface,
         "device_config": base_dev,
     }
 
 
 def get_device_groups(hass: HomeAssistant) -> list[dict[str, Any]]:
-    """Return the normalized named Device Groups list (each with its Tier 2 baseline) from Global System Config."""
+    """Return the normalized named Device Groups list from Global System Config."""
     domain_data = hass.data.get(DOMAIN, {})
     global_cfg = domain_data.get(DATA_GLOBAL_CONFIG) or {}
     raw_groups = global_cfg.get(CONF_DEVICE_GROUPS)
@@ -666,7 +877,7 @@ def device_matches_group_baseline(
     group_id: str | None = None,
     candidate_data: Mapping[str, Any] | None = None,
 ) -> bool:
-    """Return True when `coordinator` (or `candidate_data`) matches all supported Tier 2 keys of `group_id`."""
+    """Return True when `coordinator` (or `candidate_data`) matches all active keys of `group_id`."""
     if getattr(coordinator, "is_ble_tag", False):
         return False
     dev_data: Mapping[str, Any] = (
@@ -690,27 +901,19 @@ def device_matches_group_baseline(
     if not base_dev:
         return False
 
-    is_roaming = bool(getattr(coordinator, "is_roaming_device", True))
-    base_prof = str(base_dev.get("power_profile") or "").strip()
-    cur_prof = resolve_device_pref_value(dev_data, "power_profile")
-    prof_preset = POWER_PROFILE_PREFS.get(base_prof)
-    for k, want_v in base_dev.items():
-        if k not in GROUP_BEHAVIOR_DEVICE_KEYS:
+    enforced_keys = set(active_group_keys(grp))
+    is_round = bool(getattr(coordinator, "is_round_display", True))
+    for k in enforced_keys:
+        if k not in base_dev or base_dev[k] is None:
             continue
-        if k in (CONF_SYNC_DEVICE_AREA, CONF_AREA_FOLLOW_DWELL_S) and not is_roaming:
+        if not coordinator_supports_group_key(coordinator, k):
             continue
-        spec = DEVICE_PREF_SPEC_MAP.get(k)
-        if spec is not None:
-            if not coordinator_supports_pref(coordinator, spec):
-                continue
-            if (
-                prof_preset is not None
-                and k in POWER_PROFILE_SUBKEYS
-                and cur_prof == base_prof
-                and _same_control_val(want_v, prof_preset.get(k))
-            ):
-                continue
+        want_v = base_dev[k]
+        if k == "clock_face" and want_v == "Modern Analog" and not is_round:
+            want_v = "Minimal Digital"
         cur_v = resolve_behavior_key_value(dev_data, k)
+        if k == CONF_WALLPAPER_SOURCE and candidate_data is None:
+            cur_v = str(getattr(coordinator, "wallpaper_source", cur_v) or "").strip()
         if isinstance(want_v, bool):
             if bool(cur_v) != want_v:
                 return False
@@ -738,7 +941,9 @@ def resolve_effective_device_group(
     raw_grp = str(dev_data.get("device_group") or DEFAULT_DEVICE_GROUP).strip()
     if not raw_grp or raw_grp in (DEFAULT_DEVICE_GROUP, "unassigned"):
         return DEFAULT_DEVICE_GROUP
-    if raw_grp == "handhelds" and not bool(getattr(coordinator, "has_display", True)):
+    if raw_grp in ("pocket_carry", "handhelds", "wearables") and not bool(
+        getattr(coordinator, "has_display", True)
+    ):
         return DEFAULT_DEVICE_GROUP
     group_list = groups if groups is not None else get_device_groups(hass)
     if not device_matches_group_baseline(
@@ -756,20 +961,48 @@ def seed_group_baseline_from_coordinator(
     hass: HomeAssistant,
     group: dict[str, Any],
     coordinator: Any,
+    *,
+    only_keys: Iterable[str] | None = None,
 ) -> dict[str, Any]:
-    """Capture a Device's Operational Behavior settings into `group` as its new baseline."""
-    dev_cfg = default_group_baseline_config()
+    """Capture a Device's settings into `group` as its baseline (all supported keys or `only_keys`)."""
+    inc_disp = bool(group.get("include_display", False))
+    inc_iface = bool(group.get("include_interface", False))
+    dev_cfg = default_group_baseline_config(
+        include_display=inc_disp,
+        include_interface=inc_iface,
+    )
     existing_cfg = group.get("device_config")
     if isinstance(existing_cfg, dict):
         for k, v in existing_cfg.items():
-            if k in GROUP_BEHAVIOR_DEVICE_KEYS and v is not None:
+            if k in GROUP_ALL_DEVICE_KEYS and v is not None:
                 dev_cfg[k] = v
     dev_data = getattr(coordinator, "device_data", {}) or {}
-    for k in GROUP_BEHAVIOR_DEVICE_KEYS:
-        spec = DEVICE_PREF_SPEC_MAP.get(k)
-        if spec is not None:
-            if coordinator_supports_pref(coordinator, spec):
-                dev_cfg[k] = resolve_device_pref_value(dev_data, k)
+    keys_to_copy = (
+        tuple(k for k in only_keys if k in GROUP_ALL_DEVICE_KEYS)
+        if only_keys is not None
+        else active_group_keys(group)
+    )
+    for k in keys_to_copy:
+        if not coordinator_supports_group_key(coordinator, k):
+            continue
+        if k == CONF_WALLPAPER_SOURCE:
+            dev_cfg[k] = str(
+                getattr(
+                    coordinator,
+                    "wallpaper_source",
+                    resolve_behavior_key_value(dev_data, k),
+                )
+                or ""
+            ).strip()
+        elif k == CONF_DEVICE_CUSTOM_COLOR:
+            dev_cfg[k] = str(
+                getattr(
+                    coordinator,
+                    "device_custom_color",
+                    resolve_behavior_key_value(dev_data, k),
+                )
+                or "#3898FF"
+            ).strip().upper()
         else:
             dev_cfg[k] = resolve_behavior_key_value(dev_data, k)
     group["device_config"] = dev_cfg
@@ -781,34 +1014,47 @@ async def async_apply_group_baseline_to_coordinators(
     group: dict[str, Any],
     targets: list[Any],
 ) -> dict[str, int]:
-    """Apply a Device Group's Tier 2 Operational Baseline across one or more target coordinators."""
+    """Apply a Device Group's active baseline across one or more target coordinators."""
     dev_cfg = group.get("device_config") or {}
     grp_id = str(group.get("id") or "").strip()
+    enforced_keys = active_group_keys(group)
     updated_devices = 0
 
     for coord in targets:
         if getattr(coord, "is_ble_tag", False):
             continue
         cur_data: dict[str, Any] = dict(coord.device_data)
-        is_roaming = bool(getattr(coord, "is_roaming_device", True))
+        is_round = bool(getattr(coord, "is_round_display", True))
         updates: dict[str, Any] = {}
-        for k in GROUP_BEHAVIOR_DEVICE_KEYS:
+        for k in enforced_keys:
             if k not in dev_cfg or dev_cfg[k] is None:
                 continue
-            if k in (CONF_SYNC_DEVICE_AREA, CONF_AREA_FOLLOW_DWELL_S) and not is_roaming:
+            if not coordinator_supports_group_key(coord, k):
                 continue
-            spec = DEVICE_PREF_SPEC_MAP.get(k)
-            if spec is not None and not coordinator_supports_pref(coord, spec):
-                continue
-            if resolve_behavior_key_value(cur_data, k) != dev_cfg[k] or k not in cur_data:
-                updates[k] = dev_cfg[k]
+            want_v = dev_cfg[k]
+            if k == "clock_face" and want_v == "Modern Analog" and not is_round:
+                want_v = "Minimal Digital"
+            cur_v = resolve_behavior_key_value(cur_data, k)
+            if k == CONF_WALLPAPER_SOURCE:
+                cur_v = str(getattr(coord, "wallpaper_source", cur_v) or "").strip()
+            if not _same_control_val(cur_v, want_v) or k not in cur_data:
+                updates[k] = want_v
         cleaned = clean_device_settings(updates, current=cur_data) if updates else {}
         merged = {**cur_data, **(cleaned or updates)}
         if grp_id and grp_id not in (DEFAULT_DEVICE_GROUP, "unassigned"):
             merged["device_group"] = grp_id
-        if merged != cur_data:
+        wp_override = CONF_WALLPAPER_SOURCE in cleaned
+        if merged != cur_data or wp_override:
+            if wp_override:
+                wp_val = str(merged.get(CONF_WALLPAPER_SOURCE) or "").strip()
+                coord.current_wallpaper = wp_val
+                coord._configured_wallpaper_source = wp_val
             coord.update_device_config(merged, preserve_group=True)
             await coord.async_apply_options()
+            if hasattr(coord, "_bind_wallpaper_cycle_timer"):
+                coord._bind_wallpaper_cycle_timer()
+        if hasattr(coord, "async_update_listeners"):
+            coord.async_update_listeners()
         coord.async_notify_listeners()
         updated_devices += 1
 

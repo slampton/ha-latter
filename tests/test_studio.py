@@ -156,8 +156,10 @@ class TestViewLayout(unittest.TestCase):
         self.assertIn("Add BLE Tag", discovered_view)
         self.assertIn('id="latter-adopt-table-box"', discovered_view)
         self.assertIn('id="ble-adopt-table-box"', discovered_view)
-        self.assertEqual(latter_const.STUDIO_REV, 23)
-        self.assertIn("const STUDIO_REV = 23;", js)
+        self.assertEqual(latter_const.STUDIO_REV, 24)
+        self.assertIn("const STUDIO_REV = 24;", js)
+        self.assertNotIn("power_profile", js)
+        self.assertNotIn("Power Profile", js)
         self.assertNotIn("fusion-area", js)
         self.assertNotIn("d.has_ble ||", js)
         self.assertNotIn(".area-presence-box.occupied", js)
@@ -318,7 +320,9 @@ class TestViewLayout(unittest.TestCase):
             "trait:stationary",
         ):
             self.assertNotIn(retired_group_ui, js)
-        self.assertIn("Pocket Carry", js)
+        self.assertIn('"pocket_carry"', js)
+        self.assertIn("Include Display Settings", js)
+        self.assertIn("Include Interface & Shortcuts", js)
         self.assertNotIn("Configuration Profiles", js)
         self.assertNotIn("dash-power-profile-select", overview)
         self.assertNotIn("quick-profile-select", overview)

@@ -490,7 +490,7 @@ export function renderStudioDialogs(store: StudioStore): TemplateResult {
       <div class="dialog-body">
         <h3 id="latter-save-group-title" class="dialog-title">Save Custom Group</h3>
         <p class="dialog-text">
-          Saves this Device's operational settings as a reusable Device Group and assigns this Device to it.
+          Saves this Device's settings as a reusable Device Group and assigns this Device to it.
         </p>
         <div class="stacked-field">
           <label for="save-group-name">Group Name</label>
@@ -521,6 +521,34 @@ export function renderStudioDialogs(store: StudioStore): TemplateResult {
               };
             }}
           />
+        </div>
+        <div class="settings-list">
+          ${renderSwitchRow({
+            id: "save-group-include-display",
+            label: "Include Display Settings",
+            description: "Sync wallpapers, clock face, color profile, and media styling.",
+            checked: Boolean(store.saveGroupModal?.includeDisplay),
+            onChange: (checked) => {
+              store.saveGroupModal = {
+                ...store.saveGroupModal,
+                includeDisplay: checked,
+              };
+              store.host.requestUpdate();
+            },
+          })}
+          ${renderSwitchRow({
+            id: "save-group-include-interface",
+            label: "Include Interface & Shortcuts",
+            description: "Sync start screen, App Dock, pinned shortcuts, and hub categories.",
+            checked: Boolean(store.saveGroupModal?.includeInterface),
+            onChange: (checked) => {
+              store.saveGroupModal = {
+                ...store.saveGroupModal,
+                includeInterface: checked,
+              };
+              store.host.requestUpdate();
+            },
+          })}
         </div>
         <div class="dialog-actions">
           <button

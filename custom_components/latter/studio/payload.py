@@ -43,6 +43,7 @@ from ..const import (
     CONF_SECURITY_PIN_POLICY,
     CONF_SYNC_DEVICE_AREA,
     CONF_WALLPAPER_CYCLE_MINUTES,
+    CONF_WALLPAPER_SOURCE,
     DATA_GLOBAL_CONFIG,
     DEFAULT_DEVICE_GROUP,
     DOMAIN,
@@ -51,8 +52,7 @@ from ..const import (
 )
 from ..coordinator import LatterCoordinator
 from ..groups import (
-    UNIVERSAL_SECTION_META,
-    coordinator_supports_pref,
+     coordinator_supports_pref,
     get_device_groups,
     get_esphome_device_entities,
     present_section_ids,
@@ -75,7 +75,10 @@ from ..protocol import (
 from ..repairs import parse_device_issue_id
 from ..wallpapers import list_wallpaper_catalog
 from .settings import (
+    ACTIVITY_SOURCES_CATALOG,
+    AREA_CATEGORIES_CATALOG,
     DEVICE_PREF_SPECS,
+    HOME_CATEGORIES_CATALOG,
     find_by_subentry_id,
     resolve_device_pref_value,
     system_settings_view,
@@ -85,6 +88,7 @@ __all__ = [
     "MAX_INTERNAL_LOGS",
     "STUDIO_BULK_CONTROL_DOMAINS",
     "build_studio_state_payload",
+    "is_coordinator_online_for_studio",
     "log_studio_event",
     "resolve_target_coordinator",
 ]
@@ -318,40 +322,108 @@ def build_quick_actions_payload(
     return actions
 
 
+_SHARED_SECTION_TITLES: dict[str, str] = {
+    "display": "Display",
+    "interface": "Interface",
+    "audio": "Audio",
+    "power": "Power",
+    "presence": "Presence",
+    "security": "Security",
+}
+
+_SHARED_SECTION_ORDER: dict[str, int] = {
+    "display": 0,
+    "interface": 1,
+    "audio": 2,
+    "power": 3,
+    "presence": 4,
+    "security": 5,
+}
+
+
+def is_coordinator_online_for_studio(
+    hass: HomeAssistant,
+    coord: LatterCoordinator,
+) -> bool:
+    """Return True when `coord` is online using Studio's unified Wi-Fi/IP/ESPHome state check."""
+    if coord.is_ble_tag:
+        c_away = coord.is_device_away()
+        return bool(
+            coord._ble_tracker
+            and coord._ble_tracker.packets_seen > 0
+            and not c_away
+        )
+    if coord.is_device_online():
+        return True
+    c_wifi_st = coord.device_state("sensor", "_system_wi_fi_signal", "_wi_fi_signal")
+    if c_wifi_st and c_wifi_st.state not in ("unavailable", "unknown", ""):
+        return True
+    c_ip_st = coord.device_state("sensor", "_ip_address")
+    if c_ip_st and c_ip_st.state not in ("unavailable", "unknown", ""):
+        return True
+    c_dev_id = coord.esphome_device_id
+    if c_dev_id:
+        ent_reg = er.async_get(hass)
+        for e_reg in er.async_entries_for_device(ent_reg, c_dev_id):
+            if e_reg.platform == "esphome":
+                st_e = hass.states.get(e_reg.entity_id)
+                if st_e and st_e.state not in ("unavailable", "unknown"):
+                    return True
+    return False
+
+
 def _build_system_shared_controls(
     hass: HomeAssistant,
     coords: list[LatterCoordinator] | None = None,
 ) -> list[dict[str, Any]]:
-    """Build shared system controls directly from DEVICE_PREF_SPECS across all onboarded devices."""
-    all_coords = [c for c in (coords if coords is not None else iter_coordinators(hass)) if not c.is_ble_tag]
+    """Build tab-aligned shared controls across all onboarded Latter Devices."""
+    all_coords = [
+        c
+        for c in (coords if coords is not None else iter_coordinators(hass))
+        if not c.is_ble_tag
+    ]
+    coord_meta = [
+        (c, is_coordinator_online_for_studio(hass, c), c.is_roaming_device)
+        for c in all_coords
+    ]
     controls: list[dict[str, Any]] = []
-    sec_meta_map = {sid: (title, desc) for sid, title, desc in UNIVERSAL_SECTION_META}
 
     for spec in DEVICE_PREF_SPECS:
         if spec.group_tier is None or spec.domain not in STUDIO_BULK_CONTROL_DOMAINS:
             continue
         targets: list[dict[str, Any]] = []
-        for coord in all_coords:
+        for coord, is_online, is_roaming in coord_meta:
             if not coordinator_supports_pref(coord, spec):
                 continue
             cur_val = resolve_device_pref_value(coord.device_data, spec.key)
-            state_val = ("on" if cur_val else "off") if spec.domain == "switch" else str(cur_val)
+            if spec.key == "clock_face" and not coord.is_round_display and cur_val == "Modern Analog":
+                cur_val = "Minimal Digital"
+            state_val = (
+                ("on" if cur_val else "off")
+                if spec.domain == "switch"
+                else str(cur_val)
+            )
             targets.append(
                 {
                     "device_slug": coord.device_slug,
                     "device_group": coord.device_group,
+                    "is_online": is_online,
+                    "is_roaming": is_roaming,
                     "pref_key": spec.key,
                     "state": state_val,
                 }
             )
         if not targets:
             continue
-        sec_title = sec_meta_map.get(spec.section, (spec.section.title(), ""))[0]
-        def_state = ("on" if spec.default else "off") if spec.domain == "switch" else str(spec.default)
-        key = f"{spec.section}:{spec.domain}:{spec.label.lower()}"
+        sec_title = _SHARED_SECTION_TITLES.get(spec.section, spec.section.title())
+        def_state = (
+            ("on" if spec.default else "off")
+            if spec.domain == "switch"
+            else str(spec.default)
+        )
         controls.append(
             {
-                "key": key,
+                "key": f"{spec.section}:{spec.domain}:{spec.label.lower()}",
                 "pref_key": spec.key,
                 "tier": spec.group_tier,
                 "section": spec.section,
@@ -367,36 +439,55 @@ def _build_system_shared_controls(
                 "targets": targets,
             }
         )
-    subentry_behavior_switches: tuple[tuple[str, str, str, bool], ...] = (
-        (CONF_NATIVE_BLE_TRACKING, "Track the Area with BLE Proxies", "area", False),
-        (CONF_BLE_AUTO_SWITCH, "Auto-Switch Active Area", "area", False),
-        (CONF_SYNC_DEVICE_AREA, "Voice Follows Me", "voice", True),
-        (CONF_AREA_HANDOFF, "Media Follows Device to New Area", "music", False),
-    )
-    for conf_key, label, sec_id, roaming_only in subentry_behavior_switches:
-        targets = []
-        for coord in all_coords:
-            if roaming_only and not coord.is_roaming_device:
+
+    def _targets_for(
+        conf_key: str,
+        *,
+        roaming_only: bool = False,
+        display_only: bool = False,
+        state_fn: Any,
+    ) -> list[dict[str, Any]]:
+        out: list[dict[str, Any]] = []
+        for coord, is_online, is_roaming in coord_meta:
+            if roaming_only and not is_roaming:
                 continue
-            cur_val = bool(resolve_behavior_key_value(coord.device_data, conf_key))
-            targets.append(
+            if display_only and not coord.has_display:
+                continue
+            out.append(
                 {
                     "device_slug": coord.device_slug,
                     "device_group": coord.device_group,
+                    "is_online": is_online,
+                    "is_roaming": is_roaming,
                     "pref_key": conf_key,
-                    "state": "on" if cur_val else "off",
+                    "state": str(state_fn(coord)),
                 }
             )
+        return out
+
+    subentry_behavior_switches: tuple[tuple[str, str, str, bool], ...] = (
+        (CONF_NATIVE_BLE_TRACKING, "Track the Area with BLE Proxies", "presence", False),
+        (CONF_BLE_AUTO_SWITCH, "Auto-Switch Active Area", "presence", False),
+        (CONF_SYNC_DEVICE_AREA, "Voice Follows Me", "audio", True),
+        (CONF_AREA_HANDOFF, "Media Follows Device to New Area", "audio", False),
+    )
+    for conf_key, label, sec_id, roaming_only in subentry_behavior_switches:
+        targets = _targets_for(
+            conf_key,
+            roaming_only=roaming_only,
+            state_fn=lambda c, ck=conf_key: "on"
+            if bool(resolve_behavior_key_value(c.device_data, ck))
+            else "off",
+        )
         if not targets:
             continue
-        sec_title = sec_meta_map.get(sec_id, (sec_id.title(), ""))[0]
         controls.append(
             {
                 "key": f"{sec_id}:switch:{label.lower()}",
                 "pref_key": conf_key,
                 "tier": "behavior",
                 "section": sec_id,
-                "section_title": sec_title,
+                "section_title": _SHARED_SECTION_TITLES[sec_id],
                 "name": label,
                 "domain": "switch",
                 "state": "off",
@@ -409,9 +500,308 @@ def _build_system_shared_controls(
             }
         )
 
+    dwell_targets = _targets_for(
+        CONF_AREA_FOLLOW_DWELL_S,
+        roaming_only=True,
+        state_fn=lambda c: str(
+            resolve_behavior_key_value(c.device_data, CONF_AREA_FOLLOW_DWELL_S)
+        ),
+    )
+    if dwell_targets:
+        controls.append(
+            {
+                "key": "audio:number:area follow dwell",
+                "pref_key": CONF_AREA_FOLLOW_DWELL_S,
+                "tier": "behavior",
+                "section": "audio",
+                "section_title": _SHARED_SECTION_TITLES["audio"],
+                "name": "Area Follow Dwell",
+                "domain": "number",
+                "state": "10",
+                "options": [],
+                "min": 3,
+                "max": 60,
+                "step": 1,
+                "unit": "s",
+                "targets": dwell_targets,
+            }
+        )
+
+    pin_targets = _targets_for(
+        CONF_SECURITY_PIN_POLICY,
+        state_fn=lambda c: str(
+            resolve_behavior_key_value(c.device_data, CONF_SECURITY_PIN_POLICY)
+        ),
+    )
+    if pin_targets:
+        controls.append(
+            {
+                "key": "security:select:perimeter security policy",
+                "pref_key": CONF_SECURITY_PIN_POLICY,
+                "tier": "behavior",
+                "section": "security",
+                "section_title": _SHARED_SECTION_TITLES["security"],
+                "name": "Perimeter Security Policy",
+                "domain": "select",
+                "state": "auto",
+                "options": ["auto", "allow", "require_pin", "block"],
+                "option_labels": {
+                    "auto": "Auto (Roaming Requires PIN)",
+                    "allow": "Allow Without PIN",
+                    "require_pin": "Always Require PIN",
+                    "block": "Block Sensitive Actions",
+                },
+                "min": None,
+                "max": None,
+                "step": None,
+                "unit": "",
+                "targets": pin_targets,
+            }
+        )
+
+    color_targets = _targets_for(
+        CONF_DEVICE_CUSTOM_COLOR,
+        display_only=True,
+        state_fn=lambda c: c.device_custom_color,
+    )
+    if color_targets:
+        controls.append(
+            {
+                "key": "display:color:custom accent color",
+                "pref_key": CONF_DEVICE_CUSTOM_COLOR,
+                "tier": "display",
+                "section": "display",
+                "section_title": _SHARED_SECTION_TITLES["display"],
+                "name": "Custom Accent Color",
+                "domain": "color",
+                "state": "#3898FF",
+                "options": [],
+                "min": None,
+                "max": None,
+                "step": None,
+                "unit": "",
+                "targets": color_targets,
+            }
+        )
+
+    wp_targets = _targets_for(
+        CONF_WALLPAPER_SOURCE,
+        display_only=True,
+        state_fn=lambda c: c.wallpaper_source,
+    )
+    if wp_targets:
+        sys_wps = list_wallpaper_catalog(
+            hass, "system", "", [], sign_resource=None, display_shape="square"
+        )
+        wp_opts: list[str] = [""]
+        wp_labels: dict[str, str] = {"": "None (Weather / Solid)"}
+        for wp in sys_wps:
+            sid = str(wp.get("id") or "").strip()
+            if sid and sid not in wp_labels:
+                wp_opts.append(sid)
+                wp_labels[sid] = str(wp.get("label") or sid)
+        controls.append(
+            {
+                "key": "display:select:wallpaper",
+                "pref_key": CONF_WALLPAPER_SOURCE,
+                "tier": "display",
+                "section": "display",
+                "section_title": _SHARED_SECTION_TITLES["display"],
+                "name": "Wallpaper",
+                "domain": "select",
+                "state": "",
+                "options": wp_opts,
+                "option_labels": wp_labels,
+                "min": None,
+                "max": None,
+                "step": None,
+                "unit": "",
+                "targets": wp_targets,
+            }
+        )
+
+    wp_rot_targets = _targets_for(
+        CONF_WALLPAPER_CYCLE_MINUTES,
+        display_only=True,
+        state_fn=lambda c: str(c.wallpaper_cycle_minutes),
+    )
+    if wp_rot_targets:
+        controls.append(
+            {
+                "key": "display:select:wallpaper rotation",
+                "pref_key": CONF_WALLPAPER_CYCLE_MINUTES,
+                "tier": "display",
+                "section": "display",
+                "section_title": _SHARED_SECTION_TITLES["display"],
+                "name": "Wallpaper Rotation",
+                "domain": "select",
+                "state": "0",
+                "options": ["0", "5", "15", "30", "60", "360", "1440"],
+                "option_labels": {
+                    "0": "Off (Static)",
+                    "5": "Every 5 min",
+                    "15": "Every 15 min",
+                    "30": "Every 30 min",
+                    "60": "Every 1 hr",
+                    "360": "Every 6 hr",
+                    "1440": "Every 24 hr",
+                },
+                "min": None,
+                "max": None,
+                "step": None,
+                "unit": "",
+                "targets": wp_rot_targets,
+            }
+        )
+
+    act_card_targets = _targets_for(
+        CONF_ACTIVITY_CARD,
+        display_only=True,
+        state_fn=lambda c: "on" if c.activity_card_enabled else "off",
+    )
+    if act_card_targets:
+        controls.append(
+            {
+                "key": "interface:switch:home activity card",
+                "pref_key": CONF_ACTIVITY_CARD,
+                "tier": "interface",
+                "section": "interface",
+                "section_title": _SHARED_SECTION_TITLES["interface"],
+                "name": "Home Activity Card",
+                "domain": "switch",
+                "state": "on",
+                "options": [],
+                "min": None,
+                "max": None,
+                "step": None,
+                "unit": "",
+                "targets": act_card_targets,
+            }
+        )
+
+    act_src_targets = _targets_for(
+        CONF_ACTIVITY_SOURCES,
+        display_only=True,
+        state_fn=lambda c: c.activity_sources_csv,
+    )
+    if act_src_targets:
+        controls.append(
+            {
+                "key": "interface:pills:activity card sources",
+                "pref_key": CONF_ACTIVITY_SOURCES,
+                "tier": "interface",
+                "section": "interface",
+                "section_title": _SHARED_SECTION_TITLES["interface"],
+                "name": "Activity Card Sources",
+                "domain": "pills",
+                "state": "",
+                "options": [str(c["token"]) for c in ACTIVITY_SOURCES_CATALOG],
+                "option_labels": {
+                    str(c["token"]): str(c["label"]) for c in ACTIVITY_SOURCES_CATALOG
+                },
+                "min": 0,
+                "max": None,
+                "step": None,
+                "unit": "",
+                "targets": act_src_targets,
+            }
+        )
+
+    home_cat_targets = _targets_for(
+        CONF_HOME_CATEGORIES,
+        display_only=True,
+        state_fn=lambda c: c.home_categories_csv,
+    )
+    if home_cat_targets:
+        controls.append(
+            {
+                "key": "interface:pills:home hub categories",
+                "pref_key": CONF_HOME_CATEGORIES,
+                "tier": "interface",
+                "section": "interface",
+                "section_title": _SHARED_SECTION_TITLES["interface"],
+                "name": "Home Hub Categories",
+                "domain": "pills",
+                "state": "",
+                "options": [str(c["token"]) for c in HOME_CATEGORIES_CATALOG],
+                "option_labels": {
+                    str(c["token"]): str(c["label"]) for c in HOME_CATEGORIES_CATALOG
+                },
+                "min": 1,
+                "max": None,
+                "step": None,
+                "unit": "",
+                "targets": home_cat_targets,
+            }
+        )
+
+    area_cat_targets = _targets_for(
+        CONF_AREA_CATEGORIES,
+        display_only=True,
+        state_fn=lambda c: c.area_categories_csv,
+    )
+    if area_cat_targets:
+        controls.append(
+            {
+                "key": "interface:pills:area control categories",
+                "pref_key": CONF_AREA_CATEGORIES,
+                "tier": "interface",
+                "section": "interface",
+                "section_title": _SHARED_SECTION_TITLES["interface"],
+                "name": "Area Control Categories",
+                "domain": "pills",
+                "state": "",
+                "options": [str(c["token"]) for c in AREA_CATEGORIES_CATALOG],
+                "option_labels": {
+                    str(c["token"]): str(c["label"]) for c in AREA_CATEGORIES_CATALOG
+                },
+                "min": 1,
+                "max": None,
+                "step": None,
+                "unit": "",
+                "targets": area_cat_targets,
+            }
+        )
+
+    rem_targets = _targets_for(
+        CONF_DEVICE_REMOTE_GROUP,
+        display_only=True,
+        state_fn=lambda c: c.device_remote_group,
+    )
+    if rem_targets:
+        raw_global_cfg = hass.data.get(DOMAIN, {}).get(DATA_GLOBAL_CONFIG) or {}
+        rem_groups = system_settings_view(raw_global_cfg).get("remote_groups") or []
+        rem_opts: list[str] = ["area_auto"]
+        rem_labels: dict[str, str] = {"area_auto": "Match Active Area"}
+        for rg in rem_groups:
+            rg_id = f"group:{rg['id']}"
+            rem_opts.append(rg_id)
+            rem_labels[rg_id] = f"Group: {rg['name']}"
+        rem_opts.append("all")
+        rem_labels["all"] = "All System Remotes"
+        controls.append(
+            {
+                "key": "interface:select:remote control scope",
+                "pref_key": CONF_DEVICE_REMOTE_GROUP,
+                "tier": "interface",
+                "section": "interface",
+                "section_title": _SHARED_SECTION_TITLES["interface"],
+                "name": "Remote Control Scope",
+                "domain": "select",
+                "state": "area_auto",
+                "options": rem_opts,
+                "option_labels": rem_labels,
+                "min": None,
+                "max": None,
+                "step": None,
+                "unit": "",
+                "targets": rem_targets,
+            }
+        )
+
     return sorted(
         controls,
-        key=lambda x: (x["section"], x["name"].lower()),
+        key=lambda x: (_SHARED_SECTION_ORDER.get(x["section"], 99), x["name"].lower()),
     )
 
 
@@ -831,27 +1221,19 @@ def _build_system_section(
 
         c_upd_st = c.device_state("update", "_project_firmware")
         c_has_update = bool(c_upd_st and c_upd_st.state == "on")
-        c_is_online = bool(c_wifi_val is not None or c_ip_val)
-        if not c_is_online and c_dev_id:
+        if not c_has_update and c_dev_id:
             for e_reg in er.async_entries_for_device(ent_reg, c_dev_id):
-                if e_reg.platform == "esphome":
+                if e_reg.platform == "esphome" and e_reg.domain == "update":
                     st_e = hass.states.get(e_reg.entity_id)
-                    if st_e and st_e.state not in ("unavailable", "unknown"):
-                        c_is_online = True
-                        break
-                    if e_reg.domain == "update" and st_e and st_e.state == "on":
+                    if st_e and st_e.state == "on":
                         c_has_update = True
+                        break
+        c_is_online = is_coordinator_online_for_studio(hass, c)
         if c.is_ble_tag:
             c_away = c.is_device_away()
-            c_seen = bool(
-                c._ble_tracker
-                and c._ble_tracker.packets_seen > 0
-                and not c_away
-            )
-            c_is_online = c_seen
             c_status_label = (
                 f"Online ({c_area_name})"
-                if c_seen
+                if c_is_online
                 else ("Away" if c_away else "Scanning")
             )
         else:
@@ -1090,6 +1472,7 @@ def build_studio_state_payload(
         CONF_HOME_CATEGORIES: coordinator.home_categories_csv,
         CONF_ACTIVITY_CARD: coordinator.activity_card_enabled,
         CONF_ACTIVITY_SOURCES: coordinator.activity_sources_csv,
+        CONF_WALLPAPER_SOURCE: coordinator.wallpaper_source,
         CONF_WALLPAPER_CYCLE_MINUTES: coordinator.wallpaper_cycle_minutes,
         CONF_SECURITY_PIN_POLICY: coordinator.configured_security_pin_policy,
         "has_security_pin": coordinator.has_security_pin,

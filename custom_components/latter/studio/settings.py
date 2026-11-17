@@ -213,7 +213,7 @@ class DevicePrefSpec:
         "beacon",
         "beacon_battery",
     ]
-    group_tier: Literal["behavior", "appearance"] | None
+    group_tier: Literal["behavior", "display", "interface"] | None
     options: tuple[str, ...] = ()
     min_val: int | None = None
     max_val: int | None = None
@@ -221,10 +221,6 @@ class DevicePrefSpec:
     unit: str = ""
 
 
-POWER_PROFILE_OPTIONS: tuple[str, ...] = (
-    *_PROTOCOL_V3_DATA["power_profiles"].keys(),
-    "Custom",
-)
 WAKE_WORD_MODE_OPTIONS: tuple[str, ...] = ("Docked Only", "Always On", "Disabled")
 TAP_TO_WAKE_OPTIONS: tuple[str, ...] = (
     "Single Tap",
@@ -538,8 +534,11 @@ def normalize_alarms_summary(val: Any, *, strict: bool = False) -> str:
             return DEFAULT_ALARMS_SUMMARY
         normalized.append(f"{hh:02d}:{mm:02d}|{en}|{rec}")
     return ";".join(normalized)
+AREA_CATEGORIES_CATALOG: tuple[dict[str, Any], ...] = tuple(
+    _PROTOCOL_V3_DATA["catalogs"]["area_categories"]
+)
 AREA_CATEGORY_TOKENS: tuple[str, ...] = tuple(
-    c["token"] for c in _PROTOCOL_V3_DATA["catalogs"]["area_categories"]
+    c["token"] for c in AREA_CATEGORIES_CATALOG
 )
 DEFAULT_AREA_CATEGORIES: str = _PROTOCOL_V3_DATA["defaults"]["area_categories"]
 
@@ -566,8 +565,11 @@ def normalize_area_categories(csv: str | None) -> str:
     return ",".join(cats)
 
 
+HOME_CATEGORIES_CATALOG: tuple[dict[str, Any], ...] = tuple(
+    _PROTOCOL_V3_DATA["catalogs"]["home_categories"]
+)
 HOME_CATEGORY_TOKENS: tuple[str, ...] = tuple(
-    c["token"] for c in _PROTOCOL_V3_DATA["catalogs"]["home_categories"]
+    c["token"] for c in HOME_CATEGORIES_CATALOG
 )
 DEFAULT_HOME_CATEGORIES: str = _PROTOCOL_V3_DATA["defaults"]["home_categories"]
 
@@ -592,6 +594,25 @@ def normalize_home_categories(csv: str | None) -> str:
     if not cats:
         raise ValueError("Keep at least one Home category enabled")
     return ",".join(cats)
+
+
+ACTIVITY_SOURCES_CATALOG: tuple[dict[str, Any], ...] = tuple(
+    _PROTOCOL_V3_DATA["catalogs"]["activity_sources"]
+)
+ACTIVITY_SOURCE_KEYS: tuple[str, ...] = tuple(
+    c["token"] for c in ACTIVITY_SOURCES_CATALOG
+)
+DEFAULT_ACTIVITY_SOURCES: str = str(_PROTOCOL_V3_DATA["defaults"]["activity_sources"])
+
+
+def normalize_activity_sources(value: Any) -> str:
+    """Return the sources as canonical CSV ("" = every source off); raise ValueError for an unknown key."""
+    raw = value if isinstance(value, (list, tuple)) else str(value or "").split(",")
+    names = {str(t).strip().lower() for t in raw if str(t).strip()}
+    unknown = sorted(names - set(ACTIVITY_SOURCE_KEYS))
+    if unknown:
+        raise ValueError(f"Unknown Activity Card source: {', '.join(unknown)}")
+    return ",".join(k for k in ACTIVITY_SOURCE_KEYS if k in names)
 
 
 # ---------------------------------------------------------------------------
@@ -928,67 +949,59 @@ WEATHER_SIM_CONDITION_OPTIONS: tuple[str, ...] = (
 )
 
 DEVICE_PREF_SPECS: tuple[DevicePrefSpec, ...] = (
-    DevicePrefSpec("power_profile", "Power Profile", "select", "Pocket Carry", "sleep", "display", "behavior", options=POWER_PROFILE_OPTIONS),
-    DevicePrefSpec("wake_word_mode", "Wake Word Mode", "select", "Docked Only", "voice", "mic", "behavior", options=WAKE_WORD_MODE_OPTIONS),
-    DevicePrefSpec("tap_to_wake", "Tap to Wake", "select", "Docked Only", "sleep", "display", "behavior", options=TAP_TO_WAKE_OPTIONS),
-    DevicePrefSpec("pickup_to_wake", "Pickup to Wake", "select", "Docked Only", "sleep", "display_imu", "behavior", options=WAKE_GESTURE_OPTIONS),
-    DevicePrefSpec("battery_screen_timeout", "Battery Screen Timeout", "select", "30s", "sleep", "display_battery", "behavior", options=BATTERY_SCREEN_TIMEOUT_OPTIONS),
-    DevicePrefSpec("docked_idle_timeout", "Docked Idle Timeout", "select", "1 min", "sleep", "display", "behavior", options=DOCKED_IDLE_TIMEOUT_OPTIONS),
-    DevicePrefSpec("battery_hibernate_timeout", "Battery Hibernate Timeout", "select", "15 min", "sleep", "display_battery", "behavior", options=BATTERY_HIBERNATE_TIMEOUT_OPTIONS),
-    DevicePrefSpec("docked_screensaver", "Docked Screensaver", "switch", True, "sleep", "display", "behavior"),
-    DevicePrefSpec("screensaver_style", "Screensaver Style", "select", "Ambient Clock", "sleep", "display", "appearance", options=SCREENSAVER_STYLE_OPTIONS),
-    DevicePrefSpec("hold_crown_power_off", "Hold Crown to Power Off", "switch", False, "sleep", "display_battery", "behavior"),
+    DevicePrefSpec("wake_word_mode", "Wake Word Mode", "select", "Docked Only", "audio", "mic", "behavior", options=WAKE_WORD_MODE_OPTIONS),
+    DevicePrefSpec("tap_to_wake", "Tap to Wake", "select", "Docked Only", "power", "display", "behavior", options=TAP_TO_WAKE_OPTIONS),
+    DevicePrefSpec("pickup_to_wake", "Pickup to Wake", "select", "Docked Only", "power", "display_imu", "behavior", options=WAKE_GESTURE_OPTIONS),
+    DevicePrefSpec("battery_screen_timeout", "Battery Screen Timeout", "select", "30s", "power", "display_battery", "behavior", options=BATTERY_SCREEN_TIMEOUT_OPTIONS),
+    DevicePrefSpec("docked_idle_timeout", "Docked Idle Timeout", "select", "1 min", "display", "display", "behavior", options=DOCKED_IDLE_TIMEOUT_OPTIONS),
+    DevicePrefSpec("battery_hibernate_timeout", "Battery Hibernate Timeout", "select", "15 min", "power", "display_battery", "behavior", options=BATTERY_HIBERNATE_TIMEOUT_OPTIONS),
+    DevicePrefSpec("docked_screensaver", "Docked Screensaver", "switch", True, "display", "display", "behavior"),
+    DevicePrefSpec("screensaver_style", "Screensaver Style", "select", "Ambient Clock", "display", "display", "display", options=SCREENSAVER_STYLE_OPTIONS),
+    DevicePrefSpec("hold_crown_power_off", "Hold Crown to Power Off", "switch", False, "power", "display_battery", "behavior"),
     DevicePrefSpec("auto_brightness_mode", "Auto Brightness Mode", "select", "Sun Synchronized", "display", "display", "behavior", options=AUTO_BRIGHTNESS_MODE_OPTIONS),
     DevicePrefSpec("manual_brightness", "Manual Brightness", "select", "90%", "display", "display", "behavior", options=BRIGHTNESS_PCT_OPTIONS),
     DevicePrefSpec("day_brightness", "Day Brightness", "select", "90%", "display", "display", "behavior", options=BRIGHTNESS_PCT_OPTIONS),
     DevicePrefSpec("night_brightness", "Night Brightness", "select", "70%", "display", "display", "behavior", options=BRIGHTNESS_PCT_OPTIONS),
     DevicePrefSpec("day_start_hour", "Day Start Hour", "number", 7, "display", "display", "behavior", min_val=0, max_val=23, step=1, unit="h"),
     DevicePrefSpec("night_start_hour", "Night Start Hour", "number", 20, "display", "display", "behavior", min_val=0, max_val=23, step=1, unit="h"),
-    DevicePrefSpec("color_profile", "Color Profile", "select", "Steel Blue", "display", "display", "appearance", options=COLOR_PROFILE_OPTIONS),
-    DevicePrefSpec("va_visual_profile", "Visual Profile", "select", "Nebula", "voice", "display", "appearance", options=VA_VISUAL_PROFILE_OPTIONS),
-    DevicePrefSpec("home_screen_enabled", "Enable Home Screen", "switch", True, "display", "display", "appearance"),
-    DevicePrefSpec("start_screen", "Start Screen", "select", "Home", "display", "display", "appearance", options=START_SCREEN_OPTIONS),
-    DevicePrefSpec("return_to_home_timeout", "Return to Home Timeout", "select", "2 min", "display", "display", "appearance", options=RETURN_TO_HOME_TIMEOUT_OPTIONS),
-    DevicePrefSpec("clock_face", "Clock Face", "select", "Minimal Digital", "display", "display", "appearance", options=CLOCK_FACE_OPTIONS),
-    DevicePrefSpec("time_format", "Time Format", "select", "12-Hour (AM/PM)", "display", "display", "appearance", options=TIME_FORMAT_OPTIONS),
-    DevicePrefSpec("weather_background", "Weather Background", "switch", True, "home", "display", "appearance"),
-    DevicePrefSpec("home_sun", "Sun", "switch", True, "home", "display", "appearance"),
-    DevicePrefSpec("home_moon", "Moon", "switch", True, "home", "display", "appearance"),
-    DevicePrefSpec("wake_greeting", "Wake Greeting", "switch", True, "home", "display", "appearance"),
-    DevicePrefSpec("album_art_style", "Album Art Style", "select", "Full Screen", "music", "display", "appearance", options=ALBUM_ART_STYLE_OPTIONS),
-    DevicePrefSpec("music_overlay_style", "Overlay Style", "select", "Art + Metadata", "music", "display", "appearance", options=MUSIC_OVERLAY_STYLE_OPTIONS),
-    DevicePrefSpec("show_speaker_shortcut", "Show Speaker Shortcut", "switch", True, "music", "display", "appearance"),
-    DevicePrefSpec("show_library_shortcut", "Show Library Shortcut", "switch", True, "music", "display", "appearance"),
-    DevicePrefSpec("album_sort_order", "Album Sort Order", "select", "Alphabetical", "music", "display", "appearance", options=ALBUM_SORT_OPTIONS),
-    DevicePrefSpec("artist_album_sort_order", "Artist Album Sort Order", "select", "Oldest on Top", "music", "display", "appearance", options=ARTIST_ALBUM_SORT_OPTIONS),
-    DevicePrefSpec("podcast_sort_order", "Podcast Sort Order", "select", "Newest on Top", "music", "display", "appearance", options=PODCAST_SORT_OPTIONS),
-    DevicePrefSpec("ww_sens_okay_nabu", "Okay Nabu Sensitivity", "select", "Moderately sensitive", "voice", "mic", "behavior", options=WW_SENSITIVITY_OPTIONS),
-    DevicePrefSpec("ww_sens_hey_luna", "Hey Luna Sensitivity", "select", "Moderately sensitive", "voice", "mic", "behavior", options=WW_SENSITIVITY_OPTIONS),
-    DevicePrefSpec("ww_sens_hey_jarvis", "Hey Jarvis Sensitivity", "select", "Moderately sensitive", "voice", "mic", "behavior", options=WW_SENSITIVITY_OPTIONS),
-    DevicePrefSpec("ww_sens_hey_mycroft", "Hey Mycroft Sensitivity", "select", "Moderately sensitive", "voice", "mic", "behavior", options=WW_SENSITIVITY_OPTIONS),
-    DevicePrefSpec("ww_sens_alexa", "Alexa Sensitivity", "select", "Moderately sensitive", "voice", "mic", "behavior", options=WW_SENSITIVITY_OPTIONS),
-    DevicePrefSpec("wake_screen_on_assist", "Wake Screen on Assist", "switch", True, "voice", "display", "behavior"),
-    DevicePrefSpec("alert_volume", "Alert Volume", "number", 80, "sound", "speaker", "behavior", min_val=20, max_val=100, step=5, unit="%"),
-    DevicePrefSpec("volume_step_size", "Volume Step Size", "number", 5, "sound", "speaker", "behavior", min_val=1, max_val=10, step=1, unit="%"),
-    DevicePrefSpec("game_sound_effects", "Game Sound Effects", "switch", True, "sound", "display", "behavior"),
-    DevicePrefSpec("ble_beacon_mode", "BLE Beacon Mode", "select", "Handheld Only", "area", "beacon_battery", "behavior", options=BLE_BEACON_MODE_OPTIONS),
+    DevicePrefSpec("color_profile", "Color Profile", "select", "Steel Blue", "display", "display", "display", options=COLOR_PROFILE_OPTIONS),
+    DevicePrefSpec("va_visual_profile", "Visual Profile", "select", "Nebula", "display", "display", "display", options=VA_VISUAL_PROFILE_OPTIONS),
+    DevicePrefSpec("home_screen_enabled", "Enable Home Screen", "switch", True, "interface", "display", "interface"),
+    DevicePrefSpec("start_screen", "Start Screen", "select", "Home", "interface", "display", "interface", options=START_SCREEN_OPTIONS),
+    DevicePrefSpec("return_to_home_timeout", "Return to Home Timeout", "select", "2 min", "interface", "display", "interface", options=RETURN_TO_HOME_TIMEOUT_OPTIONS),
+    DevicePrefSpec("clock_face", "Clock Face", "select", "Minimal Digital", "display", "display", "display", options=CLOCK_FACE_OPTIONS),
+    DevicePrefSpec("time_format", "Time Format", "select", "12-Hour (AM/PM)", "display", "display", "display", options=TIME_FORMAT_OPTIONS),
+    DevicePrefSpec("weather_background", "Weather Background", "switch", True, "display", "display", "display"),
+    DevicePrefSpec("home_sun", "Sun", "switch", True, "display", "display", "display"),
+    DevicePrefSpec("home_moon", "Moon", "switch", True, "display", "display", "display"),
+    DevicePrefSpec("wake_greeting", "Wake Greeting", "switch", True, "display", "display", "display"),
+    DevicePrefSpec("album_art_style", "Album Art Style", "select", "Full Screen", "display", "display", "display", options=ALBUM_ART_STYLE_OPTIONS),
+    DevicePrefSpec("music_overlay_style", "Overlay Style", "select", "Art + Metadata", "display", "display", "display", options=MUSIC_OVERLAY_STYLE_OPTIONS),
+    DevicePrefSpec("show_speaker_shortcut", "Show Speaker Shortcut", "switch", True, "interface", "display", "interface"),
+    DevicePrefSpec("show_library_shortcut", "Show Library Shortcut", "switch", True, "interface", "display", "interface"),
+    DevicePrefSpec("album_sort_order", "Album Sort Order", "select", "Alphabetical", "interface", "display", "interface", options=ALBUM_SORT_OPTIONS),
+    DevicePrefSpec("artist_album_sort_order", "Artist Album Sort Order", "select", "Oldest on Top", "interface", "display", "interface", options=ARTIST_ALBUM_SORT_OPTIONS),
+    DevicePrefSpec("podcast_sort_order", "Podcast Sort Order", "select", "Newest on Top", "interface", "display", "interface", options=PODCAST_SORT_OPTIONS),
+    DevicePrefSpec("ww_sens_okay_nabu", "Okay Nabu Sensitivity", "select", "Moderately sensitive", "audio", "mic", "behavior", options=WW_SENSITIVITY_OPTIONS),
+    DevicePrefSpec("ww_sens_hey_luna", "Hey Luna Sensitivity", "select", "Moderately sensitive", "audio", "mic", "behavior", options=WW_SENSITIVITY_OPTIONS),
+    DevicePrefSpec("ww_sens_hey_jarvis", "Hey Jarvis Sensitivity", "select", "Moderately sensitive", "audio", "mic", "behavior", options=WW_SENSITIVITY_OPTIONS),
+    DevicePrefSpec("ww_sens_hey_mycroft", "Hey Mycroft Sensitivity", "select", "Moderately sensitive", "audio", "mic", "behavior", options=WW_SENSITIVITY_OPTIONS),
+    DevicePrefSpec("ww_sens_alexa", "Alexa Sensitivity", "select", "Moderately sensitive", "audio", "mic", "behavior", options=WW_SENSITIVITY_OPTIONS),
+    DevicePrefSpec("wake_screen_on_assist", "Wake Screen on Assist", "switch", True, "audio", "display", "behavior"),
+    DevicePrefSpec("alert_volume", "Alert Volume", "number", 80, "audio", "speaker", "behavior", min_val=20, max_val=100, step=5, unit="%"),
+    DevicePrefSpec("volume_step_size", "Volume Step Size", "number", 5, "audio", "speaker", "behavior", min_val=1, max_val=10, step=1, unit="%"),
+    DevicePrefSpec("game_sound_effects", "Game Sound Effects", "switch", True, "audio", "display", "behavior"),
+    DevicePrefSpec("ble_beacon_mode", "BLE Beacon Mode", "select", "Handheld Only", "presence", "beacon_battery", "behavior", options=BLE_BEACON_MODE_OPTIONS),
     DevicePrefSpec("weather_sim_condition", "Weather Simulation", "select", "Live (Home Assistant)", "developer", "display", None, options=WEATHER_SIM_CONDITION_OPTIONS),
-    DevicePrefSpec("home_clock_tap_action", "Home Time Tap", "select", "Time App", "home", "display", "appearance", options=HOME_CLOCK_TAP_OPTIONS),
+    DevicePrefSpec("home_clock_tap_action", "Home Time Tap", "select", "Time App", "interface", "display", "interface", options=HOME_CLOCK_TAP_OPTIONS),
     DevicePrefSpec("local_clock_label", "Local Clock Label", "text", "", "time", "display", None),
-    DevicePrefSpec("show_utc_clock", "Show UTC Clock", "switch", False, "time", "display", "appearance"),
-    DevicePrefSpec("world_clocks", "World Clocks", "text", "", "time", "display", None),
+    DevicePrefSpec("show_utc_clock", "Show UTC Clock", "switch", False, "interface", "display", "interface"),
+    DevicePrefSpec("world_clocks", "World Clocks", "text", "", "interface", "display", "interface"),
     DevicePrefSpec("alarms_summary", "Alarms", "text", DEFAULT_ALARMS_SUMMARY, "time", "display", None),
 )
 
 DEVICE_PREF_SPEC_MAP: dict[str, DevicePrefSpec] = {s.key: s for s in DEVICE_PREF_SPECS}
 DEVICE_PREF_KEYS: tuple[str, ...] = tuple(s.key for s in DEVICE_PREF_SPECS)
-
-POWER_PROFILE_PREFS: dict[str, dict[str, Any]] = dict(
-    _PROTOCOL_V3_DATA["power_profiles"]
-)
-POWER_PROFILE_SUBKEYS: frozenset[str] = frozenset(
-    next(iter(_PROTOCOL_V3_DATA["power_profiles"].values())).keys()
-)
 
 
 def resolve_device_pref_value(cfg: Mapping[str, Any], key: str) -> Any:
@@ -1035,6 +1048,7 @@ DEVICE_TEXT_KEYS: tuple[str, ...] = (
     "area_categories",
     "home_categories",
     "activity_sources",
+    "wallpaper_source",
     "security_pin_policy",
 )
 DEVICE_BOOL_KEYS: tuple[str, ...] = (
@@ -1374,6 +1388,14 @@ def clean_device_settings(
         except ValueError as err:
             raise SettingsScopeError(str(err)) from None
 
+    if "activity_sources" in incoming:
+        try:
+            out["activity_sources"] = normalize_activity_sources(
+                incoming["activity_sources"]
+            )
+        except ValueError as err:
+            raise SettingsScopeError(str(err)) from None
+
     if "dock_items" in incoming:
         try:
             out["dock_items"] = normalize_dock_items(
@@ -1441,25 +1463,6 @@ def clean_device_settings(
     )
     if not eff_home_enabled and eff_start == "Home":
         out["start_screen"] = "Time App"
-
-    if "power_profile" in out:
-        preset = POWER_PROFILE_PREFS.get(str(out["power_profile"]))
-        if preset is not None:
-            for sub_k, sub_v in preset.items():
-                if sub_k not in incoming:
-                    out[sub_k] = sub_v
-    elif any(sub_k in out for sub_k in POWER_PROFILE_SUBKEYS):
-        cur_prof = (
-            resolve_device_pref_value(current, "power_profile")
-            if current is not None
-            else "Custom"
-        )
-        preset = POWER_PROFILE_PREFS.get(str(cur_prof))
-        if preset is None or any(
-            sub_k in out and out[sub_k] != preset[sub_k]
-            for sub_k in POWER_PROFILE_SUBKEYS
-        ):
-            out["power_profile"] = "Custom"
 
     if (
         out.get("native_ble_tracking") is True

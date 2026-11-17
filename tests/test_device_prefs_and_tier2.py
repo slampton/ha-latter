@@ -127,34 +127,43 @@ async def test_device_hello_cases_a_b_and_c(
 async def test_online_set_device_prefs_rpc_and_diagnostic_sensor(
     hass: Any, setup_latter_hub: Any
 ) -> None:
-    """Verify `set_device_prefs` bound RPC updates subentry, cascades PowerProfile, and updates `sensor.<slug>_device_prefs`."""
+    """Verify `set_device_prefs` bound RPC updates subentry, auto-switches `device_group` to `custom` on behavior drift, and updates `sensor.<slug>_device_prefs`."""
     entry, _sys_obj, coord = await setup_latter_hub(hass, with_device=True)
     _register_wifi_sensor(hass, coord, "-50")
 
+    # Join Pocket Carry group baseline first
+    group_sel = _find_entity(hass, "select", f"select.{coord.device_slug}_device_group")
+    await group_sel.async_select_option("Pocket Carry")
+    assert coord.device_group == "pocket_carry"
+    assert coord.get_device_pref("tap_to_wake") == "Docked Only"
+    assert coord.get_device_pref("pickup_to_wake") == "Docked Only"
+
+    # Changing a personal Display preference (`clock_face`) preserves `pocket_carry`!
     await async_dispatch_bound_rpc(
         hass,
         coord,
         "set_device_prefs",
         {
-            "base_seq": 1,
-            "changes": "\x1e".join(["power_profile=Pocket Carry", "alert_volume=70"]),
+            "base_seq": coord.prefs_seq,
+            "changes": "clock_face=Hybrid Digital",
         },
     )
-    assert coord.prefs_seq >= 2
-    assert coord.get_device_pref("power_profile") == "Pocket Carry"
-    assert coord.get_device_pref("tap_to_wake") == "Docked Only"
-    assert coord.get_device_pref("pickup_to_wake") == "Docked Only"
-    assert coord.get_device_pref("alert_volume") == 70
+    assert coord.get_device_pref("clock_face") == "Hybrid Digital"
+    assert coord.device_group == "pocket_carry"
 
-    # Diverging a subkey flips `power_profile` to `Custom`
+    # Diverging an operational key (`tap_to_wake` or `alert_volume`) flips `device_group` to `custom`
     await async_dispatch_bound_rpc(
         hass,
         coord,
         "set_device_prefs",
-        {"base_seq": coord.prefs_seq, "changes": "tap_to_wake=Disabled"},
+        {
+            "base_seq": coord.prefs_seq,
+            "changes": "\x1e".join(["tap_to_wake=Disabled", "alert_volume=70"]),
+        },
     )
     assert coord.get_device_pref("tap_to_wake") == "Disabled"
-    assert coord.get_device_pref("power_profile") == "Custom"
+    assert coord.get_device_pref("alert_volume") == 70
+    assert coord.device_group == "custom"
 
     prefs_st = hass.states.get(f"sensor.{coord.device_slug}_device_prefs")
     assert prefs_st is not None
@@ -162,7 +171,7 @@ async def test_online_set_device_prefs_rpc_and_diagnostic_sensor(
     assert prefs_st.attributes["rev"] >= 1
 
     _seq, payload_attrs = coord.get_device_prefs_payload()
-    assert payload_attrs["power_profile"] == "Custom"
+    assert payload_attrs["device_group"] == "custom"
     assert payload_attrs["alert_volume"] == 70
     assert payload_attrs["payload"].startswith("v3\x1f")
 
@@ -235,25 +244,34 @@ async def test_tier2_select_number_sleep_safe_and_buttons_online_vs_offline(
     hass.states.async_set(f"sensor.{slug}_system_rpc_outbox", "unavailable")
 
     # BLE tags do not create Tier 2 display/audio controls
+    assert hass.states.get("select.keys_tag_device_group") is None
     assert hass.states.get("select.keys_tag_wake_word_mode") is None
     assert hass.states.get("number.keys_tag_alert_volume") is None
     assert hass.states.get("button.keys_tag_find_my_device") is None
 
     # Sleep-safe select & number succeed while ESPHome Wi-Fi is `unavailable`
-    power_sel = _find_entity(hass, "select", f"select.{slug}_power_profile")
+    assert hass.states.get(f"select.{slug}_power_profile") is None
+    group_sel = _find_entity(hass, "select", f"select.{slug}_device_group")
     ww_sel = _find_entity(hass, "select", f"select.{slug}_wake_word_mode")
     vol_num = _find_entity(hass, "number", f"number.{slug}_alert_volume")
     find_btn = _find_entity(hass, "button", f"button.{slug}_find_my_device")
     ss_btn = _find_entity(hass, "button", f"button.{slug}_activate_screensaver")
 
-    await power_sel.async_select_option("Wearable Watch")
-    assert hass.states.get(f"select.{slug}_power_profile").state == "Wearable Watch"
+    assert group_sel.options == [
+        "Pocket Carry",
+        "Handhelds",
+        "Wearables",
+        "Wall & Desk Panels",
+        "Custom",
+    ]
+    await group_sel.async_select_option("Wearables")
+    assert hass.states.get(f"select.{slug}_device_group").state == "Wearables"
     assert coord.get_device_pref("battery_screen_timeout") == "15s"
     assert coord.get_device_pref("tap_to_wake") == "Double Tap"
 
     await ww_sel.async_select_option("Always On")
     assert hass.states.get(f"select.{slug}_wake_word_mode").state == "Always On"
-    assert hass.states.get(f"select.{slug}_power_profile").state == "Custom"
+    assert hass.states.get(f"select.{slug}_device_group").state == "Custom"
 
     await vol_num.async_set_native_value(55)
     assert float(hass.states.get(f"number.{slug}_alert_volume").state) == 55.0
@@ -358,8 +376,88 @@ async def test_studio_device_action_and_sleep_safe_device_groups(
     )
     assert conn.errors == []
     groups = get_device_groups(hass)
+    assert [g["id"] for g in groups] == [
+        "pocket_carry",
+        "handhelds",
+        "wearables",
+        "wall_panels",
+    ]
     handhelds = next(g for g in groups if g["id"] == "handhelds")
     assert handhelds["device_config"]["alert_volume"] == 95
     assert device_matches_group_baseline(hass, coord, groups, group_id="handhelds") is True
+
+    # Re-assign `coord` back to `handhelds`, then opt `handhelds` into `include_display: True`
+    group_sel = _find_entity(hass, "select", f"select.{slug}_device_group")
+    await group_sel.async_select_option("Handhelds")
+    assert resolve_effective_device_group(hass, coord) == "handhelds"
+
+    await _call_ws(
+        hass,
+        conn,
+        5,
+        "latter/system/command",
+        studio_rev=STUDIO_REV,
+        command="update_group_baseline",
+        payload={
+            "group_id": "handhelds",
+            "include_display": True,
+            "config": {"clock_face": "Hybrid Digital"},
+        },
+    )
+    assert conn.errors == []
+    assert coord.get_device_pref("clock_face") == "Hybrid Digital"
+    assert resolve_effective_device_group(hass, coord) == "handhelds"
+    await coord.async_update_device_prefs({"clock_face": "Minimal Digital"})
+    assert resolve_effective_device_group(hass, coord) == "custom"
+
+    # Batch Controls target `roaming` pushes settings across roaming Devices without altering group baselines
+    await _call_ws(
+        hass,
+        conn,
+        6,
+        "latter/system/command",
+        studio_rev=STUDIO_REV,
+        command="apply_batch_device_setting",
+        payload={
+            "target": "roaming",
+            "config": {
+                "weather_background": False,
+                "activity_sources": "calendar,timers",
+                "world_clocks": "London|Europe/London",
+            },
+        },
+    )
+    assert conn.errors == []
+    assert coord.get_device_pref("weather_background") is False
+    assert coord.activity_sources_csv == "calendar,timers"
+    assert coord.get_device_pref("world_clocks") == "London|Europe/London"
+
+    # Opt `pocket_carry` into `include_interface: True` and copy `world_clocks` via `copy_keys`
+    await _call_ws(
+        hass,
+        conn,
+        7,
+        "latter/system/command",
+        studio_rev=STUDIO_REV,
+        command="update_group_baseline",
+        payload={
+            "group_id": "pocket_carry",
+            "include_interface": True,
+            "source_subentry_id": coord.subentry_id,
+            "copy_keys": ["world_clocks"],
+        },
+    )
+    assert conn.errors == []
+    pocket_grp = next(g for g in get_device_groups(hass) if g["id"] == "pocket_carry")
+    assert pocket_grp["include_interface"] is True
+    assert pocket_grp["device_config"]["world_clocks"] == "London|Europe/London"
+
+    # Explicit switch to Custom and invalid option validation on `select.<slug>_device_group`
+    await group_sel.async_select_option("Pocket Carry")
+    assert hass.states.get(f"select.{slug}_device_group").state == "Pocket Carry"
+    await group_sel.async_select_option("Custom")
+    assert hass.states.get(f"select.{slug}_device_group").state == "Custom"
+    with pytest.raises(HomeAssistantError):
+        await group_sel.async_select_option("Nonexistent Group")
 
     assert await async_unload_entry(hass, entry) is True

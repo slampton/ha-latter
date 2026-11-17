@@ -2,67 +2,6 @@
 
 export const PROTOCOL_CONTRACT_VERSION = 3;
 
-export const POWER_PROFILE_SUBKEYS = [
-  "wake_word_mode",
-  "tap_to_wake",
-  "pickup_to_wake",
-  "battery_screen_timeout",
-  "docked_idle_timeout",
-  "battery_hibernate_timeout",
-  "docked_screensaver",
-] as const;
-
-export type PowerProfileSubkey = (typeof POWER_PROFILE_SUBKEYS)[number];
-
-export interface PowerProfileSettings {
-  wake_word_mode: string;
-  tap_to_wake: string;
-  pickup_to_wake: string;
-  battery_screen_timeout: string;
-  docked_idle_timeout: string;
-  battery_hibernate_timeout: string;
-  docked_screensaver: boolean;
-}
-
-export const POWER_PROFILE_PREFS: Record<string, PowerProfileSettings> = {
-  "Pocket Carry": {
-    wake_word_mode: "Docked Only",
-    tap_to_wake: "Docked Only",
-    pickup_to_wake: "Docked Only",
-    battery_screen_timeout: "30s",
-    docked_idle_timeout: "1 min",
-    battery_hibernate_timeout: "15 min",
-    docked_screensaver: true,
-  },
-  "Handheld Roaming": {
-    wake_word_mode: "Docked Only",
-    tap_to_wake: "Single Tap",
-    pickup_to_wake: "Always On",
-    battery_screen_timeout: "30s",
-    docked_idle_timeout: "1 min",
-    battery_hibernate_timeout: "30 min",
-    docked_screensaver: true,
-  },
-  "Wearable Watch": {
-    wake_word_mode: "Docked Only",
-    tap_to_wake: "Double Tap",
-    pickup_to_wake: "Always On",
-    battery_screen_timeout: "15s",
-    docked_idle_timeout: "1 min",
-    battery_hibernate_timeout: "15 min",
-    docked_screensaver: true,
-  },
-  "Always-On Wall / Desk": {
-    wake_word_mode: "Always On",
-    tap_to_wake: "Single Tap",
-    pickup_to_wake: "Disabled",
-    battery_screen_timeout: "Never",
-    docked_idle_timeout: "5 min",
-    battery_hibernate_timeout: "Disabled",
-    docked_screensaver: true,
-  },
-};
-
 export interface CatalogItem {
   token: string;
   label: string;

@@ -10,8 +10,8 @@ from homeassistant.const import Platform
 
 DOMAIN: Final = "latter"
 INTEGRATION_VERSION: Final = "3.0.0"
-STUDIO_REV: Final = 23
-MIN_FIRMWARE_SDK_REV: Final = 2026111604
+STUDIO_REV: Final = 25
+MIN_FIRMWARE_SDK_REV: Final = 2026111605
 PLATFORMS: Final[list[Platform]] = [
     Platform.SENSOR,
     Platform.BINARY_SENSOR,
@@ -83,7 +83,6 @@ CONF_SECURITY_PIN: Final = "security_pin"
 CONF_SYSTEM_BLE_UUID: Final = "system_ble_uuid"
 
 # Device Preference Keys (Protocol v3 `device_prefs` domain)
-CONF_POWER_PROFILE: Final = "power_profile"
 CONF_WAKE_WORD_MODE: Final = "wake_word_mode"
 CONF_TAP_TO_WAKE: Final = "tap_to_wake"
 CONF_PICKUP_TO_WAKE: Final = "pickup_to_wake"

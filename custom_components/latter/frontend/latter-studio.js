@@ -4,53 +4,6 @@
 // --- src/protocol-schema.ts ---
 // AUTO-GENERATED FROM protocol/latter_v3.json BY tools/gen_protocol.py — DO NOT EDIT MANUALLY.
 const PROTOCOL_CONTRACT_VERSION = 3;
-const POWER_PROFILE_SUBKEYS = [
-  "wake_word_mode",
-  "tap_to_wake",
-  "pickup_to_wake",
-  "battery_screen_timeout",
-  "docked_idle_timeout",
-  "battery_hibernate_timeout",
-  "docked_screensaver",
-];
-const POWER_PROFILE_PREFS = {
-  "Pocket Carry": {
-    wake_word_mode: "Docked Only",
-    tap_to_wake: "Docked Only",
-    pickup_to_wake: "Docked Only",
-    battery_screen_timeout: "30s",
-    docked_idle_timeout: "1 min",
-    battery_hibernate_timeout: "15 min",
-    docked_screensaver: true,
-  },
-  "Handheld Roaming": {
-    wake_word_mode: "Docked Only",
-    tap_to_wake: "Single Tap",
-    pickup_to_wake: "Always On",
-    battery_screen_timeout: "30s",
-    docked_idle_timeout: "1 min",
-    battery_hibernate_timeout: "30 min",
-    docked_screensaver: true,
-  },
-  "Wearable Watch": {
-    wake_word_mode: "Docked Only",
-    tap_to_wake: "Double Tap",
-    pickup_to_wake: "Always On",
-    battery_screen_timeout: "15s",
-    docked_idle_timeout: "1 min",
-    battery_hibernate_timeout: "15 min",
-    docked_screensaver: true,
-  },
-  "Always-On Wall / Desk": {
-    wake_word_mode: "Always On",
-    tap_to_wake: "Single Tap",
-    pickup_to_wake: "Disabled",
-    battery_screen_timeout: "Never",
-    docked_idle_timeout: "5 min",
-    battery_hibernate_timeout: "Disabled",
-    docked_screensaver: true,
-  },
-};
 const SHORTCUT_ROUTES_CATALOG = [
   {token: "app:pinned", label: "Pinned", group: "Apps", dockOnly: true},
   {token: "app:music", label: "Music", group: "Apps"},
@@ -185,7 +138,7 @@ const DEFAULT_HOME_CATEGORIES_TOKENS = [
 /**
  * Canonical constants, route maps, issue messages, and Title Case dictionaries for Latter Studio.
  */
-const STUDIO_REV = 23;
+const STUDIO_REV = 24;
 const MAX_DOCK_ITEMS = 24;
 const MAX_PINNED_ITEMS = 96;
 const SHORTCUT_LABEL_MAX = 24;
@@ -340,6 +293,7 @@ const WALLPAPER_ROTATION_OPTIONS = [
   { value: 1440, label: "Once a day" },
 ];
 const DEFAULT_DEVICE_GROUP_IDS = new Set([
+  "pocket_carry",
   "handhelds",
   "wearables",
   "wall_panels",
@@ -351,6 +305,20 @@ const GROUP_BEHAVIOR_NON_PREF_KEYS = [
   "area_follow_dwell_s",
   "area_handoff",
   "security_pin_policy",
+];
+const GROUP_DISPLAY_NON_PREF_KEYS = [
+  "wallpaper_source",
+  "wallpaper_cycle_minutes",
+  "device_custom_color",
+];
+const GROUP_INTERFACE_NON_PREF_KEYS = [
+  "dock_items",
+  "pinned_items",
+  "area_categories",
+  "home_categories",
+  "activity_card",
+  "activity_sources",
+  "device_remote_group",
 ];
 const LABEL_MINOR_WORDS = new Set([
   "a",
@@ -3425,7 +3393,7 @@ function renderStudioDialogs(store) {
       <div class="dialog-body">
         <h3 id="latter-save-group-title" class="dialog-title">Save Custom Group</h3>
         <p class="dialog-text">
-          Saves this Device's operational settings as a reusable Device Group and assigns this Device to it.
+          Saves this Device's settings as a reusable Device Group and assigns this Device to it.
         </p>
         <div class="stacked-field">
           <label for="save-group-name">Group Name</label>
@@ -3456,6 +3424,34 @@ function renderStudioDialogs(store) {
               };
             }}
           />
+        </div>
+        <div class="settings-list">
+          ${renderSwitchRow({
+            id: "save-group-include-display",
+            label: "Include Display Settings",
+            description: "Sync wallpapers, clock face, color profile, and media styling.",
+            checked: Boolean(store.saveGroupModal?.includeDisplay),
+            onChange: (checked) => {
+              store.saveGroupModal = {
+                ...store.saveGroupModal,
+                includeDisplay: checked,
+              };
+              store.host.requestUpdate();
+            },
+          })}
+          ${renderSwitchRow({
+            id: "save-group-include-interface",
+            label: "Include Interface & Shortcuts",
+            description: "Sync start screen, App Dock, pinned shortcuts, and hub categories.",
+            checked: Boolean(store.saveGroupModal?.includeInterface),
+            onChange: (checked) => {
+              store.saveGroupModal = {
+                ...store.saveGroupModal,
+                includeInterface: checked,
+              };
+              store.host.requestUpdate();
+            },
+          })}
         </div>
         <div class="dialog-actions">
           <button
@@ -4629,37 +4625,39 @@ function overlayPendingBlankListSlots(
 const SAVE_DEBOUNCE_MS = 220;
 const ENTITY_OPTIMISTIC_TTL_MS = 8000;
 const PENDING_ENTITY_STATES = new Map();
-const POWER_PROFILE_SUBKEY_SET = new Set (POWER_PROFILE_SUBKEYS);
 const BEHAVIOR_NON_PREF_KEY_SET = new Set (GROUP_BEHAVIOR_NON_PREF_KEYS);
+const DISPLAY_NON_PREF_KEY_SET = new Set (GROUP_DISPLAY_NON_PREF_KEYS);
+const INTERFACE_NON_PREF_KEY_SET = new Set (GROUP_INTERFACE_NON_PREF_KEYS);
+function activeGroupKeySet(
+  grp,
+  devicePrefs,
+) {
+  const keys = new Set (BEHAVIOR_NON_PREF_KEY_SET);
+  for (const p of devicePrefs) {
+    if (p.group_tier === "behavior") keys.add(p.key);
+    else if (p.group_tier === "display" && grp.include_display) keys.add(p.key);
+    else if (p.group_tier === "interface" && grp.include_interface) keys.add(p.key);
+  }
+  if (grp.include_display) {
+    for (const k of DISPLAY_NON_PREF_KEY_SET) keys.add(k);
+  }
+  if (grp.include_interface) {
+    for (const k of INTERFACE_NON_PREF_KEY_SET) keys.add(k);
+  }
+  return keys;
+}
+function sameGroupControlVal(a, b) {
+  if (a === b) return true;
+  if ((Array.isArray(a) || (a && typeof a === "object")) || (Array.isArray(b) || (b && typeof b === "object"))) {
+    return JSON.stringify(a) === JSON.stringify(b);
+  }
+  return String(a) === String(b);
+}
 function expandDevicePrefPatch(
   currentCfg,
   rawPatch,
 ) {
   const expanded = { ...rawPatch };
-  if (typeof rawPatch.power_profile === "string" && rawPatch.power_profile in POWER_PROFILE_PREFS) {
-    const preset = POWER_PROFILE_PREFS[rawPatch.power_profile];
-    for (const [k, v] of Object.entries(preset)) {
-      if (!(k in rawPatch)) {
-        expanded[k] = v;
-      }
-    }
-  } else if (
-    !("power_profile" in rawPatch) &&
-    Object.keys(rawPatch).some((k) => POWER_PROFILE_SUBKEY_SET.has(k))
-  ) {
-    const curProf = String(currentCfg.power_profile || "Pocket Carry");
-    const preset = POWER_PROFILE_PREFS[curProf];
-    if (preset) {
-      const merged = { ...currentCfg, ...rawPatch };
-      for (const [k, want] of Object.entries(preset)) {
-        const have = merged[k] !== undefined ? merged[k] : want;
-        if (have !== want) {
-          expanded.power_profile = "Custom";
-          break;
-        }
-      }
-    }
-  }
   if (rawPatch.home_screen_enabled === false) {
     const effStart = String(rawPatch.start_screen ?? currentCfg.start_screen ?? "Home");
     if (effStart === "Home") {
@@ -4676,10 +4674,8 @@ function overlayDevicePrefsOnSections(
   const curCfg = (payload.config || {});
   const expanded = expandDevicePrefPatch(curCfg, rawPatch);
   const groups = payload.device_groups || [];
-  const supportedPrefKeys = new Set((payload.device_prefs || []).map((p) => p.key));
-  const behaviorPrefKeys = new Set(
-    (payload.device_prefs || []).filter((p) => p.group_tier === "behavior").map((p) => p.key),
-  );
+  const devicePrefs = payload.device_prefs || [];
+  const supportedPrefKeys = new Set(devicePrefs.map((p) => p.key));
   const isRoaming = curCfg.is_roaming !== false;
   if ("device_group" in rawPatch) {
     const targetGrpId = String(rawPatch.device_group || "custom").trim() || "custom";
@@ -4687,10 +4683,17 @@ function overlayDevicePrefsOnSections(
     if (targetGrpId !== "custom") {
       const grp = groups.find((g) => g.id === targetGrpId);
       if (grp?.device_config) {
+        const enforcedKeys = activeGroupKeySet(grp, devicePrefs);
         for (const [gk, gv] of Object.entries(grp.device_config)) {
           if (gk in rawPatch || gv === undefined || gv === null) continue;
+          if (!enforcedKeys.has(gk)) continue;
           if ((gk === "sync_device_area" || gk === "area_follow_dwell_s") && !isRoaming) continue;
-          if (BEHAVIOR_NON_PREF_KEY_SET.has(gk) || supportedPrefKeys.has(gk)) {
+          if (
+            BEHAVIOR_NON_PREF_KEY_SET.has(gk) ||
+            DISPLAY_NON_PREF_KEY_SET.has(gk) ||
+            INTERFACE_NON_PREF_KEY_SET.has(gk) ||
+            supportedPrefKeys.has(gk)
+          ) {
             expanded[gk] = gv;
           }
         }
@@ -4701,12 +4704,13 @@ function overlayDevicePrefsOnSections(
     if (curGrpId !== "custom") {
       const grp = groups.find((g) => g.id === curGrpId);
       if (grp?.device_config) {
+        const enforcedKeys = activeGroupKeySet(grp, devicePrefs);
         for (const [ek, ev] of Object.entries(expanded)) {
           if ((ek === "sync_device_area" || ek === "area_follow_dwell_s") && !isRoaming) continue;
           if (
-            (BEHAVIOR_NON_PREF_KEY_SET.has(ek) || behaviorPrefKeys.has(ek)) &&
+            enforcedKeys.has(ek) &&
             grp.device_config[ek] !== undefined &&
-            String(grp.device_config[ek]) !== String(ev)
+            !sameGroupControlVal(grp.device_config[ek], ev)
           ) {
             expanded.device_group = "custom";
             break;
@@ -4842,12 +4846,6 @@ function stageDeviceSettingOp(
   snapshotKey("device_group");
   if (key === "home_screen_enabled") {
     snapshotKey("start_screen");
-  }
-  if (key === "power_profile" || POWER_PROFILE_SUBKEY_SET.has(key)) {
-    snapshotKey("power_profile");
-    for (const sk of POWER_PROFILE_SUBKEYS) {
-      snapshotKey(sk);
-    }
   }
   if (controlDomId) {
     bucket.previousValues[`__dom:${controlDomId}`] = bucket.previousValues[key];
@@ -6052,6 +6050,12 @@ async function createDeviceGroupOp(store) {
     if (sourceSubentryId) {
       payload.source_subentry_id = sourceSubentryId;
     }
+    if (store.newGroupIncludeDisplay) {
+      payload.include_display = true;
+    }
+    if (store.newGroupIncludeInterface) {
+      payload.include_interface = true;
+    }
     const res = await store.ws.runSystemCommand(
       "create_device_group",
       payload,
@@ -6061,6 +6065,8 @@ async function createDeviceGroupOp(store) {
     store.newGroupName = "";
     store.newGroupDesc = "";
     store.newGroupSourceSubentryId = "";
+    store.newGroupIncludeDisplay = false;
+    store.newGroupIncludeInterface = false;
     store.openGroupIds.add(createdId);
     if (res) store.ingestPayload(res, false);
     store.showToast(`Created group "${name}"`);
@@ -6072,6 +6078,8 @@ async function confirmSaveDeviceAsGroupOp(store) {
   const name = store.saveGroupModal.name.trim();
   const description = store.saveGroupModal.description.trim();
   const sourceSubentryId = store.saveGroupModal.subentryId || store.activeSubentryId;
+  const includeDisplay = Boolean(store.saveGroupModal.includeDisplay);
+  const includeInterface = Boolean(store.saveGroupModal.includeInterface);
   if (!name) {
     store.showToast("Enter a Device Group name", true);
     return;
@@ -6083,14 +6091,17 @@ async function confirmSaveDeviceAsGroupOp(store) {
   store.saveGroupModal = { ...store.saveGroupModal, busy: true };
   store.host.requestUpdate();
   try {
+    const payload = {
+      name,
+      description,
+      source_subentry_id: sourceSubentryId,
+      assign_source: true,
+    };
+    if (includeDisplay) payload.include_display = true;
+    if (includeInterface) payload.include_interface = true;
     const res = await store.ws.runSystemCommand(
       "create_device_group",
-      {
-        name,
-        description,
-        source_subentry_id: sourceSubentryId,
-        assign_source: true,
-      },
+      payload,
       store.activeSubentryId || null,
     );
     store.saveGroupModal = {
@@ -6098,6 +6109,8 @@ async function confirmSaveDeviceAsGroupOp(store) {
       subentryId: "",
       name: "",
       description: "",
+      includeDisplay: false,
+      includeInterface: false,
       busy: false,
     };
     if (res) store.ingestPayload(res, false);
@@ -6147,22 +6160,47 @@ async function updateGroupBaselineOp(
     store.showToast(formatWsError(err, "Could not update group baseline"), true);
   }
 }
+async function updateGroupScopeOp(
+  store,
+  groupId,
+  scope,
+) {
+  if (!groupId) return;
+  try {
+    const res = await store.ws.runSystemCommand(
+      "update_group_baseline",
+      {
+        group_id: groupId,
+        ...scope,
+      },
+      store.activeSubentryId || null,
+    );
+    if (res) store.ingestPayload(res, false);
+  } catch (err) {
+    store.showToast(formatWsError(err, "Could not update group scope"), true);
+  }
+}
 async function copyDeviceToGroupBaselineOp(
   store,
   groupId,
   sourceSubentryId,
+  copyKeys,
 ) {
   if (!groupId || !sourceSubentryId) {
     store.showToast("Choose a Device to copy settings from", true);
     return;
   }
   try {
+    const payload = {
+      group_id: groupId,
+      source_subentry_id: sourceSubentryId,
+    };
+    if (copyKeys && copyKeys.length) {
+      payload.copy_keys = copyKeys;
+    }
     const res = await store.ws.runSystemCommand(
       "update_group_baseline",
-      {
-        group_id: groupId,
-        source_subentry_id: sourceSubentryId,
-      },
+      payload,
       store.activeSubentryId || null,
     );
     if (res) store.ingestPayload(res, false);
@@ -6195,15 +6233,82 @@ async function applyBatchDeviceSettingOp(
     store.showToast(formatWsError(err, "Could not apply batch setting"), true);
   }
 }
+async function applyBatchCopyFromDeviceOp(
+  store,
+  sourceSubentryId,
+  copyKeys,
+) {
+  if (!sourceSubentryId || !copyKeys.length) {
+    store.showToast("Choose a template Device first", true);
+    return;
+  }
+  try {
+    const res = await store.ws.runSystemCommand(
+      "apply_batch_device_setting",
+      {
+        target: store.batchTargetFilter || "all",
+        source_subentry_id: sourceSubentryId,
+        copy_keys: copyKeys,
+      },
+      store.activeSubentryId || null,
+    );
+    if (res) store.ingestPayload(res, false);
+    store.showToast("Pushed list from template Device");
+  } catch (err) {
+    store.showToast(formatWsError(err, "Could not copy list across target Devices"), true);
+  }
+}
 function filteredControlTargetsOp(store, ctrl) {
-  const grpId = resolvedBatchTargetIdOp(store);
+  const filter = store.batchTargetFilter || "all";
   return (ctrl.targets || [])
     .filter((t) => {
-      if (grpId === "all") return true;
+      if (filter === "all") return true;
+      if (filter === "online") return Boolean(t.is_online);
+      if (filter === "roaming") return Boolean(t.is_roaming);
+      if (filter === "stationary") return !t.is_roaming;
+      const grpId = filter.startsWith("group:") ? filter.slice(6) : filter;
       return (t.device_group || "custom") === grpId;
     })
-    .map((t) => t.entity_id)
+    .map((t) => t.entity_id || "")
     .filter(Boolean);
+}
+async function bulkColorOp(
+  store,
+  ctrl,
+  hex,
+) {
+  const cleaned = String(hex || "").trim().toUpperCase();
+  if (!ctrl.pref_key || !/^#[0-9A-F]{6}$/.test(cleaned)) return;
+  await applyBatchDeviceSettingOp(store, { [ctrl.pref_key]: cleaned });
+}
+async function bulkPillsToggleOp(
+  store,
+  ctrl,
+  token,
+  currentCsv,
+) {
+  if (!ctrl.pref_key) return;
+  const order = ctrl.options || [];
+  const activeSet = new Set(
+    String(currentCsv || "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
+  );
+  if (activeSet.has(token)) {
+    const minRequired = ctrl.min ?? 0;
+    if (activeSet.size <= minRequired) {
+      store.showToast("Keep at least one category enabled", true);
+      return;
+    }
+    activeSet.delete(token);
+  } else {
+    activeSet.add(token);
+  }
+  const ordered = order.length
+    ? order.filter((t) => activeSet.has(t))
+    : Array.from(activeSet);
+  await applyBatchDeviceSettingOp(store, { [ctrl.pref_key]: ordered.join(",") });
 }
 async function bulkToggleOp(
   store,
@@ -6468,10 +6573,13 @@ class StudioStore {
   newGroupName = "";
   newGroupDesc = "";
   newGroupSourceSubentryId = "";
+  newGroupIncludeDisplay = false;
+  newGroupIncludeInterface = false;
            openGroupIds = new Set();
            groupCopySourceDrafts = new Map();
   batchTargetFilter = "all";
   batchCategoryFilter = "all";
+  batchCopySourceSubentryId = "";
   // System BLE & Area Presence UI state
   bleSurveySubentryId = "";
   bleCalibrateAreaId = "";
@@ -6518,6 +6626,8 @@ class StudioStore {
     subentryId: "",
     name: "",
     description: "",
+    includeDisplay: false,
+    includeInterface: false,
     busy: false,
   };
   shortcutModal = {
@@ -7528,6 +7638,8 @@ class StudioStore {
       subentryId: this.activeSubentryId,
       name: "",
       description: devTitle ? `Saved from ${devTitle}` : "",
+      includeDisplay: false,
+      includeInterface: false,
       busy: false,
     };
     this.host.requestUpdate();
@@ -7548,14 +7660,27 @@ class StudioStore {
   async updateGroupBaseline(groupId, patch) {
     await updateGroupBaselineOp(this, groupId, patch);
   }
-  async copyDeviceToGroupBaseline(groupId, sourceSubentryId) {
-    await copyDeviceToGroupBaselineOp(this, groupId, sourceSubentryId);
+  async updateGroupScope(
+    groupId,
+    scope,
+  ) {
+    await updateGroupScopeOp(this, groupId, scope);
+  }
+  async copyDeviceToGroupBaseline(
+    groupId,
+    sourceSubentryId,
+    copyKeys,
+  ) {
+    await copyDeviceToGroupBaselineOp(this, groupId, sourceSubentryId, copyKeys);
   }
   resolvedBatchTargetId() {
     return resolvedBatchTargetIdOp(this);
   }
   async applyBatchDeviceSetting(patch) {
     await applyBatchDeviceSettingOp(this, patch);
+  }
+  async applyBatchCopyFromDevice(sourceSubentryId, copyKeys) {
+    await applyBatchCopyFromDeviceOp(this, sourceSubentryId, copyKeys);
   }
   filteredControlTargets(ctrl) {
     return filteredControlTargetsOp(this, ctrl);
@@ -7568,6 +7693,16 @@ class StudioStore {
   }
   async bulkNumber(ctrl, level) {
     await bulkNumberOp(this, ctrl, level);
+  }
+  async bulkColor(ctrl, hex) {
+    await bulkColorOp(this, ctrl, hex);
+  }
+  async bulkPillsToggle(
+    ctrl,
+    token,
+    currentCsv,
+  ) {
+    await bulkPillsToggleOp(this, ctrl, token, currentCsv);
   }
           ensureBleSurveyFrozenMap()
     {
@@ -11259,7 +11394,6 @@ const SCREENSAVER_KEYS = new Set([
 function renderDevicePowerView(store) {
   const sleepPrefs = store
     .getPrefs([
-      "power_profile",
       "tap_to_wake",
       "pickup_to_wake",
       "battery_screen_timeout",
@@ -12492,14 +12626,12 @@ function renderDevicesListView(store) {
 
 // --- src/views/system-groups-view.ts ---
 /**
- * System Device Groups & Batch Controls View (`system_sync`, D-048 / D-049):
- * Column 1: Enclosed per-Group containers with inline expandable Baseline Settings.
- * Column 2: Dedicated one-off Batch Controls across All Latter Devices, any Device Group, or Custom.
+ * System Device Groups & Batch Controls View (`system_sync`, D-048 / D-050):
+ * Column 1: Enclosed per-Group containers with inline expandable Baseline Settings
+ *   (Operational settings by default, plus opt-in Display and Interface & Shortcuts).
+ * Column 2: Tab-aligned Batch Controls across All, Online, Roaming, Stationary,
+ *   any built-in or custom Device Group, or Custom.
  */
-const POWER_PROFILE_OPTIONS = [
-  ...Object.keys(POWER_PROFILE_PREFS),
-  "Custom",
-];
 const WAKE_WORD_MODE_OPTIONS = ["Docked Only", "Always On", "Disabled"];
 const TAP_TO_WAKE_OPTIONS = [
   "Single Tap",
@@ -12548,6 +12680,66 @@ const BLE_BEACON_MODE_OPTIONS = [
   "Handheld + Screen Off",
   "Always",
 ];
+const SCREENSAVER_STYLE_OPTIONS = [
+  "Ambient Clock",
+  "Aurora",
+  "Starfield",
+  "Digital Rain",
+  "Fireworks",
+];
+const COLOR_PROFILE_OPTIONS = [
+  "Steel Blue",
+  "Pink",
+  "Blue",
+  "Green",
+  "Custom",
+];
+const VA_VISUAL_PROFILE_OPTIONS = [
+  "Nebula",
+  "Solaris",
+  "Rings",
+  "Light Bar",
+  "Dot Wave",
+];
+const CLOCK_FACE_OPTIONS = [
+  "Minimal Digital",
+  "Modern Analog",
+  "Hybrid Digital",
+];
+const TIME_FORMAT_OPTIONS = ["12-Hour (AM/PM)", "24-Hour"];
+const ALBUM_ART_STYLE_OPTIONS = [
+  "Full Screen",
+  "Letterbox",
+  "Standard",
+  "None",
+];
+const MUSIC_OVERLAY_STYLE_OPTIONS = [
+  "Art Only",
+  "Art + Metadata",
+  "Always Visible",
+];
+const ALBUM_SORT_OPTIONS = [
+  "Alphabetical",
+  "Newest on Top",
+  "Oldest on Top",
+];
+const ARTIST_ALBUM_SORT_OPTIONS = [
+  "Oldest on Top",
+  "Newest on Top",
+  "Alphabetical",
+];
+const PODCAST_SORT_OPTIONS = ["Newest on Top", "Oldest on Top"];
+const BATCH_CATEGORY_META = [
+  { id: "display", title: "Display", defaultOpen: false },
+  { id: "interface", title: "Interface", defaultOpen: false },
+  { id: "audio", title: "Audio", defaultOpen: true },
+  { id: "power", title: "Power", defaultOpen: true },
+  { id: "presence", title: "Presence", defaultOpen: false },
+  { id: "security", title: "Security", defaultOpen: false },
+];
+const DEFAULT_ACTIVITY_SOURCES_CSV = ACTIVITY_SOURCES_CATALOG.map((c) => c.token).join(",");
+const DEFAULT_HOME_CATEGORIES_CSV = DEFAULT_HOME_CATEGORIES_TOKENS.join(",");
+const DEFAULT_AREA_CATEGORIES_CSV = DEFAULT_AREA_CATEGORIES_TOKENS.join(",");
 function renderBaselineSelect(
   store,
   groupId,
@@ -12570,6 +12762,34 @@ function renderBaselineSelect(
     >
       ${options.map(
         (opt) => html`<option value=${opt} ?selected=${opt === cur}>${opt}</option>`,
+      )}
+    </select>`,
+  });
+}
+function renderBaselineLabeledSelect(
+  store,
+  groupId,
+  key,
+  label,
+  currentVal,
+  options,
+  defaultVal,
+) {
+  const curStr = currentVal !== undefined && currentVal !== null ? String(currentVal) : defaultVal;
+  const cur = options.some((o) => o.value === curStr) ? curStr : defaultVal;
+  return renderSettingsRow({
+    label,
+    control: html`<select
+      aria-label=${`${label} for ${groupId}`}
+      .value=${cur}
+      @change=${(ev) => {
+        const raw = (ev.currentTarget).value;
+        const val = key === "wallpaper_cycle_minutes" ? Number(raw) || 0 : raw;
+        void store.updateGroupBaseline(groupId, { [key]: val });
+      }}
+    >
+      ${options.map(
+        (opt) => html`<option value=${opt.value} ?selected=${opt.value === cur}>${opt.label}</option>`,
       )}
     </select>`,
   });
@@ -12604,6 +12824,56 @@ function renderBaselineRange(
       />`,
   });
 }
+function renderBaselinePills(
+  store,
+  groupId,
+  key,
+  label,
+  currentVal,
+  catalog,
+  defaultCsv,
+  minRequired,
+) {
+  const csvStr = typeof currentVal === "string" ? currentVal : defaultCsv;
+  const activeSet = new Set(
+    csvStr
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
+  );
+  const toggleTok = (tok) => {
+    const next = new Set(activeSet);
+    if (next.has(tok)) {
+      if (next.size <= minRequired) {
+        store.showToast("Keep at least one category enabled", true);
+        return;
+      }
+      next.delete(tok);
+    } else {
+      next.add(tok);
+    }
+    const ordered = catalog.map((c) => c.token).filter((t) => next.has(t));
+    void store.updateGroupBaseline(groupId, { [key]: ordered.join(",") });
+  };
+  return renderSettingsRow({
+    label,
+    control: html`<div class="pill-list">
+      ${catalog.map((item) => {
+        const on = activeSet.has(item.token);
+        return html`<span class="pill ${on ? "enabled" : ""}">
+          <button
+            type="button"
+            aria-pressed=${String(on)}
+            @click=${() => toggleTok(item.token)}
+            class="pill-toggle"
+          >
+            ${item.label}
+          </button>
+        </span>`;
+      })}
+    </div>`,
+  });
+}
 function renderGroupBaselineDrawer(
   store,
   group,
@@ -12611,6 +12881,8 @@ function renderGroupBaselineDrawer(
 ) {
   const gid = group.id;
   const cfg = group.device_config || {};
+  const includeDisplay = Boolean(group.include_display);
+  const includeInterface = Boolean(group.include_interface);
   const autoBrt = String(cfg.auto_brightness_mode || "Sun Synchronized");
   const wwMode = String(cfg.wake_word_mode || "Docked Only");
   const bleOn = Boolean(cfg.native_ble_tracking);
@@ -12618,11 +12890,34 @@ function renderGroupBaselineDrawer(
   const vfm = Boolean(cfg.sync_device_area);
   const handoff = Boolean(cfg.area_handoff);
   const pinPolicy = String(cfg.security_pin_policy || "auto");
+  const colorProfile = String(cfg.color_profile || "Steel Blue");
+  const customHex =
+    typeof cfg.device_custom_color === "string" && /^#[0-9A-Fa-f]{6}$/.test(cfg.device_custom_color)
+      ? cfg.device_custom_color.toUpperCase()
+      : "#3898FF";
   const copySrc =
     store.groupCopySourceDrafts?.get(gid) ||
     store.activeSubentryId ||
     latterDevices[0]?.subentry_id ||
     "";
+  const sysWallpapers = store.state?.system_wallpapers || [];
+  const wallpaperOptions = [
+    { value: "", label: "None (Weather / Solid)" },
+    ...sysWallpapers.map((wp) => ({ value: wp.id, label: wp.name || wp.id })),
+  ];
+  const rotationOptions = WALLPAPER_ROTATION_OPTIONS.map(
+    (o) => ({ value: String(o.value), label: o.label }),
+  );
+  const remoteGroups = store.state?.system_config?.remote_groups || [];
+  const remoteScopeOptions = [
+    { value: "area_auto", label: "Match Active Area" },
+    ...remoteGroups.map((rg) => ({ value: `group:${rg.id}`, label: `Group: ${rg.name}` })),
+    { value: "all", label: "All System Remotes" },
+  ];
+  const dockCount = Array.isArray(cfg.dock_items) ? cfg.dock_items.length : 7;
+  const pinnedCount = Array.isArray(cfg.pinned_items) ? cfg.pinned_items.length : 0;
+  const worldClocksStr = typeof cfg.world_clocks === "string" ? cfg.world_clocks.trim() : "";
+  const clockCount = worldClocksStr ? worldClocksStr.split(";").filter(Boolean).length : 0;
   return html`<details
     ?open=${Boolean(store.openGroupIds?.has(gid))}
     @toggle=${(ev) => {
@@ -12633,292 +12928,621 @@ function renderGroupBaselineDrawer(
     class="sub-collapsible"
   >
     <summary>Baseline Settings</summary>
-    <div class="card-content settings-list">
-      <div class="subsection-title">Power &amp; Sleep</div>
-      ${renderBaselineSelect(
-        store,
-        gid,
-        "power_profile",
-        "Power Profile",
-        cfg.power_profile,
-        POWER_PROFILE_OPTIONS,
-        "Pocket Carry",
-      )}
-      ${renderBaselineSelect(
-        store,
-        gid,
-        "tap_to_wake",
-        "Tap to Wake",
-        cfg.tap_to_wake,
-        TAP_TO_WAKE_OPTIONS,
-        "Docked Only",
-      )}
-      ${renderBaselineSelect(
-        store,
-        gid,
-        "pickup_to_wake",
-        "Pickup to Wake",
-        cfg.pickup_to_wake,
-        WAKE_GESTURE_OPTIONS,
-        "Docked Only",
-      )}
-      ${renderBaselineSelect(
-        store,
-        gid,
-        "battery_screen_timeout",
-        "Battery Screen Timeout",
-        cfg.battery_screen_timeout,
-        BATTERY_SCREEN_TIMEOUT_OPTIONS,
-        "30s",
-      )}
-      ${renderBaselineSelect(
-        store,
-        gid,
-        "battery_hibernate_timeout",
-        "Battery Hibernate Timeout",
-        cfg.battery_hibernate_timeout,
-        BATTERY_HIBERNATE_TIMEOUT_OPTIONS,
-        "15 min",
-      )}
-      ${renderSwitchRow({
-        label: "Docked Screensaver",
-        ariaLabel: `Docked Screensaver for ${gid}`,
-        checked: cfg.docked_screensaver !== false,
-        onChange: (checked) => void store.updateGroupBaseline(gid, { docked_screensaver: checked }),
-      })}
-      ${renderBaselineSelect(
-        store,
-        gid,
-        "docked_idle_timeout",
-        "Docked Idle Timeout",
-        cfg.docked_idle_timeout,
-        DOCKED_IDLE_TIMEOUT_OPTIONS,
-        "1 min",
-      )}
-      ${renderSwitchRow({
-        label: "Hold Crown to Power Off",
-        ariaLabel: `Hold Crown to Power Off for ${gid}`,
-        checked: Boolean(cfg.hold_crown_power_off),
-        onChange: (checked) =>
-          void store.updateGroupBaseline(gid, { hold_crown_power_off: checked }),
-      })}
+    <div class="card-content stack">
+      <div class="settings-list">
+        ${renderSwitchRow({
+          label: "Include Display Settings",
+          description: "Enforce wallpapers, clock face, color profile, and media styling for this group.",
+          ariaLabel: `Include Display Settings for ${gid}`,
+          checked: includeDisplay,
+          onChange: (checked) => void store.updateGroupScope(gid, { include_display: checked }),
+        })}
+        ${renderSwitchRow({
+          label: "Include Interface & Shortcuts",
+          description: "Enforce start screen, App Dock, pinned shortcuts, and hub categories for this group.",
+          ariaLabel: `Include Interface & Shortcuts for ${gid}`,
+          checked: includeInterface,
+          onChange: (checked) => void store.updateGroupScope(gid, { include_interface: checked }),
+        })}
+      </div>
 
-      <div class="subsection-title">Voice &amp; Sound</div>
-      ${renderBaselineSelect(
-        store,
-        gid,
-        "wake_word_mode",
-        "Wake Word Mode",
-        cfg.wake_word_mode,
-        WAKE_WORD_MODE_OPTIONS,
-        "Docked Only",
-      )}
-      ${wwMode !== "Disabled"
-        ? html`${renderBaselineSelect(
-              store,
-              gid,
-              "ww_sens_okay_nabu",
-              "Okay Nabu Sensitivity",
-              cfg.ww_sens_okay_nabu,
-              WW_SENSITIVITY_OPTIONS,
-              "Moderately sensitive",
-            )}
-            ${renderBaselineSelect(
-              store,
-              gid,
-              "ww_sens_hey_luna",
-              "Hey Luna Sensitivity",
-              cfg.ww_sens_hey_luna,
-              WW_SENSITIVITY_OPTIONS,
-              "Moderately sensitive",
-            )}
-            ${renderBaselineSelect(
-              store,
-              gid,
-              "ww_sens_hey_jarvis",
-              "Hey Jarvis Sensitivity",
-              cfg.ww_sens_hey_jarvis,
-              WW_SENSITIVITY_OPTIONS,
-              "Moderately sensitive",
-            )}
-            ${renderBaselineSelect(
-              store,
-              gid,
-              "ww_sens_hey_mycroft",
-              "Hey Mycroft Sensitivity",
-              cfg.ww_sens_hey_mycroft,
-              WW_SENSITIVITY_OPTIONS,
-              "Moderately sensitive",
-            )}
-            ${renderBaselineSelect(
-              store,
-              gid,
-              "ww_sens_alexa",
-              "Alexa Sensitivity",
-              cfg.ww_sens_alexa,
-              WW_SENSITIVITY_OPTIONS,
-              "Moderately sensitive",
-            )}`
-        : nothing}
-      ${renderSwitchRow({
-        label: "Wake Screen on Assist",
-        ariaLabel: `Wake Screen on Assist for ${gid}`,
-        checked: cfg.wake_screen_on_assist !== false,
-        onChange: (checked) =>
-          void store.updateGroupBaseline(gid, { wake_screen_on_assist: checked }),
-      })}
-      ${renderBaselineRange(store, gid, "alert_volume", "Alert Volume", cfg.alert_volume, 20, 100, 5, "%", 80)}
-      ${renderBaselineRange(store, gid, "volume_step_size", "Volume Step Size", cfg.volume_step_size, 1, 10, 1, "%", 5)}
-      ${renderSwitchRow({
-        label: "Game Sound Effects",
-        ariaLabel: `Game Sound Effects for ${gid}`,
-        checked: cfg.game_sound_effects !== false,
-        onChange: (checked) =>
-          void store.updateGroupBaseline(gid, { game_sound_effects: checked }),
-      })}
-
-      <div class="subsection-title">Brightness</div>
-      ${renderBaselineSelect(
-        store,
-        gid,
-        "auto_brightness_mode",
-        "Auto Brightness Mode",
-        cfg.auto_brightness_mode,
-        AUTO_BRIGHTNESS_MODE_OPTIONS,
-        "Sun Synchronized",
-      )}
-      ${autoBrt === "Disabled"
-        ? renderBaselineSelect(
+      <details class="sub-collapsible" open>
+        <summary>Power &amp; Brightness</summary>
+        <div class="card-content settings-list">
+          ${renderBaselineSelect(
             store,
             gid,
-            "manual_brightness",
-            "Manual Brightness",
-            cfg.manual_brightness,
-            BRIGHTNESS_PCT_OPTIONS,
-            "90%",
-          )
-        : html`${renderBaselineSelect(
-              store,
-              gid,
-              "day_brightness",
-              "Day Brightness",
-              cfg.day_brightness,
-              BRIGHTNESS_PCT_OPTIONS,
-              "90%",
-            )}
-            ${renderBaselineSelect(
-              store,
-              gid,
-              "night_brightness",
-              "Night Brightness",
-              cfg.night_brightness,
-              BRIGHTNESS_PCT_OPTIONS,
-              "70%",
-            )}`}
-      ${autoBrt === "Time Schedule"
-        ? html`${renderBaselineRange(
-              store,
-              gid,
-              "day_start_hour",
-              "Day Start Hour",
-              cfg.day_start_hour,
-              0,
-              23,
-              1,
-              "h",
-              7,
-            )}
-            ${renderBaselineRange(
-              store,
-              gid,
-              "night_start_hour",
-              "Night Start Hour",
-              cfg.night_start_hour,
-              0,
-              23,
-              1,
-              "h",
-              20,
-            )}`
-        : nothing}
-
-      <div class="subsection-title">Area &amp; Security</div>
-      ${renderSwitchRow({
-        label: "Track the Area with BLE Proxies",
-        ariaLabel: `Track the Area with BLE Proxies for ${gid}`,
-        checked: bleOn,
-        onChange: (checked) =>
-          void store.updateGroupBaseline(gid, { native_ble_tracking: checked }),
-      })}
-      ${bleOn
-        ? html`${renderSwitchRow({
-              label: "Auto-Switch Active Area",
-              ariaLabel: `Auto-Switch Active Area for ${gid}`,
-              checked: autoSw,
-              onChange: (checked) =>
-                void store.updateGroupBaseline(gid, { ble_auto_switch: checked }),
-            })}
-            ${renderSwitchRow({
-              label: "Voice Follows Me",
-              ariaLabel: `Voice Follows Me for ${gid}`,
-              checked: vfm,
-              onChange: (checked) =>
-                void store.updateGroupBaseline(gid, { sync_device_area: checked }),
-            })}
-            ${vfm
-              ? renderBaselineRange(
+            "tap_to_wake",
+            "Tap to Wake",
+            cfg.tap_to_wake,
+            TAP_TO_WAKE_OPTIONS,
+            "Docked Only",
+          )}
+          ${renderBaselineSelect(
+            store,
+            gid,
+            "pickup_to_wake",
+            "Pickup to Wake",
+            cfg.pickup_to_wake,
+            WAKE_GESTURE_OPTIONS,
+            "Docked Only",
+          )}
+          ${renderBaselineSelect(
+            store,
+            gid,
+            "battery_screen_timeout",
+            "Battery Screen Timeout",
+            cfg.battery_screen_timeout,
+            BATTERY_SCREEN_TIMEOUT_OPTIONS,
+            "30s",
+          )}
+          ${renderBaselineSelect(
+            store,
+            gid,
+            "battery_hibernate_timeout",
+            "Battery Hibernate Timeout",
+            cfg.battery_hibernate_timeout,
+            BATTERY_HIBERNATE_TIMEOUT_OPTIONS,
+            "15 min",
+          )}
+          ${renderSwitchRow({
+            label: "Docked Screensaver",
+            ariaLabel: `Docked Screensaver for ${gid}`,
+            checked: cfg.docked_screensaver !== false,
+            onChange: (checked) =>
+              void store.updateGroupBaseline(gid, { docked_screensaver: checked }),
+          })}
+          ${renderBaselineSelect(
+            store,
+            gid,
+            "docked_idle_timeout",
+            "Docked Idle Timeout",
+            cfg.docked_idle_timeout,
+            DOCKED_IDLE_TIMEOUT_OPTIONS,
+            "1 min",
+          )}
+          ${renderSwitchRow({
+            label: "Hold Crown to Power Off",
+            ariaLabel: `Hold Crown to Power Off for ${gid}`,
+            checked: Boolean(cfg.hold_crown_power_off),
+            onChange: (checked) =>
+              void store.updateGroupBaseline(gid, { hold_crown_power_off: checked }),
+          })}
+          ${renderBaselineSelect(
+            store,
+            gid,
+            "auto_brightness_mode",
+            "Auto Brightness Mode",
+            cfg.auto_brightness_mode,
+            AUTO_BRIGHTNESS_MODE_OPTIONS,
+            "Sun Synchronized",
+          )}
+          ${autoBrt === "Disabled"
+            ? renderBaselineSelect(
+                store,
+                gid,
+                "manual_brightness",
+                "Manual Brightness",
+                cfg.manual_brightness,
+                BRIGHTNESS_PCT_OPTIONS,
+                "90%",
+              )
+            : html`${renderBaselineSelect(
                   store,
                   gid,
-                  "area_follow_dwell_s",
-                  "Area Follow Dwell",
-                  cfg.area_follow_dwell_s,
-                  3,
-                  60,
+                  "day_brightness",
+                  "Day Brightness",
+                  cfg.day_brightness,
+                  BRIGHTNESS_PCT_OPTIONS,
+                  "90%",
+                )}
+                ${renderBaselineSelect(
+                  store,
+                  gid,
+                  "night_brightness",
+                  "Night Brightness",
+                  cfg.night_brightness,
+                  BRIGHTNESS_PCT_OPTIONS,
+                  "70%",
+                )}`}
+          ${autoBrt === "Time Schedule"
+            ? html`${renderBaselineRange(
+                  store,
+                  gid,
+                  "day_start_hour",
+                  "Day Start Hour",
+                  cfg.day_start_hour,
+                  0,
+                  23,
                   1,
-                  "s",
-                  10,
-                )
-              : nothing}
-            ${renderBaselineSelect(
-              store,
-              gid,
-              "ble_beacon_mode",
-              "BLE Beacon Mode",
-              cfg.ble_beacon_mode,
-              BLE_BEACON_MODE_OPTIONS,
-              "Handheld Only",
-            )}`
-        : nothing}
-      ${renderSwitchRow({
-        label: "Media Follows Device to New Area",
-        ariaLabel: `Media Follows Device to New Area for ${gid}`,
-        checked: handoff,
-        onChange: (checked) => void store.updateGroupBaseline(gid, { area_handoff: checked }),
-      })}
-      ${renderSettingsRow({
-        label: "Perimeter Security Policy",
-        control: html`<select
-          aria-label=${`Perimeter Security Policy for ${gid}`}
-          .value=${pinPolicy}
-          @change=${(ev) =>
-            void store.updateGroupBaseline(gid, {
-              security_pin_policy: (ev.currentTarget).value,
-            })}
-        >
-          ${SECURITY_PIN_POLICY_OPTIONS.map(
-            (opt) =>
-              html`<option value=${opt.value} ?selected=${opt.value === pinPolicy}>
-                ${opt.label}
-              </option>`,
+                  "h",
+                  7,
+                )}
+                ${renderBaselineRange(
+                  store,
+                  gid,
+                  "night_start_hour",
+                  "Night Start Hour",
+                  cfg.night_start_hour,
+                  0,
+                  23,
+                  1,
+                  "h",
+                  20,
+                )}`
+            : nothing}
+        </div>
+      </details>
+
+      <details class="sub-collapsible">
+        <summary>Audio &amp; Voice</summary>
+        <div class="card-content settings-list">
+          ${renderBaselineSelect(
+            store,
+            gid,
+            "wake_word_mode",
+            "Wake Word Mode",
+            cfg.wake_word_mode,
+            WAKE_WORD_MODE_OPTIONS,
+            "Docked Only",
           )}
-        </select>`,
-      })}
+          ${wwMode !== "Disabled"
+            ? html`${renderBaselineSelect(
+                  store,
+                  gid,
+                  "ww_sens_okay_nabu",
+                  "Okay Nabu Sensitivity",
+                  cfg.ww_sens_okay_nabu,
+                  WW_SENSITIVITY_OPTIONS,
+                  "Moderately sensitive",
+                )}
+                ${renderBaselineSelect(
+                  store,
+                  gid,
+                  "ww_sens_hey_luna",
+                  "Hey Luna Sensitivity",
+                  cfg.ww_sens_hey_luna,
+                  WW_SENSITIVITY_OPTIONS,
+                  "Moderately sensitive",
+                )}
+                ${renderBaselineSelect(
+                  store,
+                  gid,
+                  "ww_sens_hey_jarvis",
+                  "Hey Jarvis Sensitivity",
+                  cfg.ww_sens_hey_jarvis,
+                  WW_SENSITIVITY_OPTIONS,
+                  "Moderately sensitive",
+                )}
+                ${renderBaselineSelect(
+                  store,
+                  gid,
+                  "ww_sens_hey_mycroft",
+                  "Hey Mycroft Sensitivity",
+                  cfg.ww_sens_hey_mycroft,
+                  WW_SENSITIVITY_OPTIONS,
+                  "Moderately sensitive",
+                )}
+                ${renderBaselineSelect(
+                  store,
+                  gid,
+                  "ww_sens_alexa",
+                  "Alexa Sensitivity",
+                  cfg.ww_sens_alexa,
+                  WW_SENSITIVITY_OPTIONS,
+                  "Moderately sensitive",
+                )}`
+            : nothing}
+          ${renderSwitchRow({
+            label: "Wake Screen on Assist",
+            ariaLabel: `Wake Screen on Assist for ${gid}`,
+            checked: cfg.wake_screen_on_assist !== false,
+            onChange: (checked) =>
+              void store.updateGroupBaseline(gid, { wake_screen_on_assist: checked }),
+          })}
+          ${renderBaselineRange(store, gid, "alert_volume", "Alert Volume", cfg.alert_volume, 20, 100, 5, "%", 80)}
+          ${renderBaselineRange(store, gid, "volume_step_size", "Volume Step Size", cfg.volume_step_size, 1, 10, 1, "%", 5)}
+          ${renderSwitchRow({
+            label: "Game Sound Effects",
+            ariaLabel: `Game Sound Effects for ${gid}`,
+            checked: cfg.game_sound_effects !== false,
+            onChange: (checked) =>
+              void store.updateGroupBaseline(gid, { game_sound_effects: checked }),
+          })}
+          ${bleOn
+            ? html`${renderSwitchRow({
+                  label: "Voice Follows Me",
+                  ariaLabel: `Voice Follows Me for ${gid}`,
+                  checked: vfm,
+                  onChange: (checked) =>
+                    void store.updateGroupBaseline(gid, { sync_device_area: checked }),
+                })}
+                ${vfm
+                  ? renderBaselineRange(
+                      store,
+                      gid,
+                      "area_follow_dwell_s",
+                      "Area Follow Dwell",
+                      cfg.area_follow_dwell_s,
+                      3,
+                      60,
+                      1,
+                      "s",
+                      10,
+                    )
+                  : nothing}`
+            : nothing}
+          ${renderSwitchRow({
+            label: "Media Follows Device to New Area",
+            ariaLabel: `Media Follows Device to New Area for ${gid}`,
+            checked: handoff,
+            onChange: (checked) => void store.updateGroupBaseline(gid, { area_handoff: checked }),
+          })}
+        </div>
+      </details>
+
+      <details class="sub-collapsible">
+        <summary>Presence &amp; Security</summary>
+        <div class="card-content settings-list">
+          ${renderSwitchRow({
+            label: "Track the Area with BLE Proxies",
+            ariaLabel: `Track the Area with BLE Proxies for ${gid}`,
+            checked: bleOn,
+            onChange: (checked) =>
+              void store.updateGroupBaseline(gid, { native_ble_tracking: checked }),
+          })}
+          ${bleOn
+            ? html`${renderSwitchRow({
+                  label: "Auto-Switch Active Area",
+                  ariaLabel: `Auto-Switch Active Area for ${gid}`,
+                  checked: autoSw,
+                  onChange: (checked) =>
+                    void store.updateGroupBaseline(gid, { ble_auto_switch: checked }),
+                })}
+                ${renderBaselineSelect(
+                  store,
+                  gid,
+                  "ble_beacon_mode",
+                  "BLE Beacon Mode",
+                  cfg.ble_beacon_mode,
+                  BLE_BEACON_MODE_OPTIONS,
+                  "Handheld Only",
+                )}`
+            : nothing}
+          ${renderSettingsRow({
+            label: "Perimeter Security Policy",
+            control: html`<select
+              aria-label=${`Perimeter Security Policy for ${gid}`}
+              .value=${pinPolicy}
+              @change=${(ev) =>
+                void store.updateGroupBaseline(gid, {
+                  security_pin_policy: (ev.currentTarget).value,
+                })}
+            >
+              ${SECURITY_PIN_POLICY_OPTIONS.map(
+                (opt) =>
+                  html`<option value=${opt.value} ?selected=${opt.value === pinPolicy}>
+                    ${opt.label}
+                  </option>`,
+              )}
+            </select>`,
+          })}
+        </div>
+      </details>
+
+      ${includeDisplay
+        ? html`<details class="sub-collapsible" open>
+            <summary>Display</summary>
+            <div class="card-content settings-list">
+              ${renderBaselineLabeledSelect(
+                store,
+                gid,
+                "wallpaper_source",
+                "Wallpaper",
+                cfg.wallpaper_source,
+                wallpaperOptions,
+                "",
+              )}
+              ${renderBaselineLabeledSelect(
+                store,
+                gid,
+                "wallpaper_cycle_minutes",
+                "Wallpaper Rotation",
+                cfg.wallpaper_cycle_minutes,
+                rotationOptions,
+                "0",
+              )}
+              ${renderBaselineSelect(
+                store,
+                gid,
+                "screensaver_style",
+                "Screensaver Style",
+                cfg.screensaver_style,
+                SCREENSAVER_STYLE_OPTIONS,
+                "Ambient Clock",
+              )}
+              ${renderBaselineSelect(
+                store,
+                gid,
+                "color_profile",
+                "Color Profile",
+                cfg.color_profile,
+                COLOR_PROFILE_OPTIONS,
+                "Steel Blue",
+              )}
+              ${colorProfile === "Custom"
+                ? renderSettingsRow({
+                    label: "Custom Accent Color",
+                    control: html`<input
+                        type="color"
+                        aria-label=${`Custom Accent Color for ${gid}`}
+                        .value=${customHex}
+                        @change=${(ev) =>
+                          void store.updateGroupBaseline(gid, {
+                            device_custom_color: (
+                              ev.currentTarget
+                            ).value.toUpperCase(),
+                          })}
+                      />
+                      <span class="chip">${customHex}</span>`,
+                  })
+                : nothing}
+              ${renderBaselineSelect(
+                store,
+                gid,
+                "va_visual_profile",
+                "Visual Profile",
+                cfg.va_visual_profile,
+                VA_VISUAL_PROFILE_OPTIONS,
+                "Nebula",
+              )}
+              ${renderBaselineSelect(
+                store,
+                gid,
+                "clock_face",
+                "Clock Face",
+                cfg.clock_face,
+                CLOCK_FACE_OPTIONS,
+                "Minimal Digital",
+              )}
+              ${renderBaselineSelect(
+                store,
+                gid,
+                "time_format",
+                "Time Format",
+                cfg.time_format,
+                TIME_FORMAT_OPTIONS,
+                "12-Hour (AM/PM)",
+              )}
+              ${renderSwitchRow({
+                label: "Weather Background",
+                ariaLabel: `Weather Background for ${gid}`,
+                checked: cfg.weather_background !== false,
+                onChange: (checked) =>
+                  void store.updateGroupBaseline(gid, { weather_background: checked }),
+              })}
+              ${renderSwitchRow({
+                label: "Sun",
+                ariaLabel: `Sun for ${gid}`,
+                checked: cfg.home_sun !== false,
+                onChange: (checked) => void store.updateGroupBaseline(gid, { home_sun: checked }),
+              })}
+              ${renderSwitchRow({
+                label: "Moon",
+                ariaLabel: `Moon for ${gid}`,
+                checked: cfg.home_moon !== false,
+                onChange: (checked) => void store.updateGroupBaseline(gid, { home_moon: checked }),
+              })}
+              ${renderSwitchRow({
+                label: "Wake Greeting",
+                ariaLabel: `Wake Greeting for ${gid}`,
+                checked: cfg.wake_greeting !== false,
+                onChange: (checked) =>
+                  void store.updateGroupBaseline(gid, { wake_greeting: checked }),
+              })}
+              ${renderBaselineSelect(
+                store,
+                gid,
+                "album_art_style",
+                "Album Art Style",
+                cfg.album_art_style,
+                ALBUM_ART_STYLE_OPTIONS,
+                "Full Screen",
+              )}
+              ${renderBaselineSelect(
+                store,
+                gid,
+                "music_overlay_style",
+                "Overlay Style",
+                cfg.music_overlay_style,
+                MUSIC_OVERLAY_STYLE_OPTIONS,
+                "Art + Metadata",
+              )}
+            </div>
+          </details>`
+        : nothing}
+
+      ${includeInterface
+        ? html`<details class="sub-collapsible" open>
+            <summary>Interface &amp; Shortcuts</summary>
+            <div class="card-content settings-list">
+              ${renderSwitchRow({
+                label: "Enable Home Screen",
+                ariaLabel: `Enable Home Screen for ${gid}`,
+                checked: cfg.home_screen_enabled !== false,
+                onChange: (checked) =>
+                  void store.updateGroupBaseline(gid, { home_screen_enabled: checked }),
+              })}
+              ${renderBaselineSelect(
+                store,
+                gid,
+                "start_screen",
+                "Start Screen",
+                cfg.start_screen,
+                START_SCREEN_OPTIONS,
+                "Home",
+              )}
+              ${renderBaselineSelect(
+                store,
+                gid,
+                "home_clock_tap_action",
+                "Home Time Tap",
+                cfg.home_clock_tap_action,
+                HOME_CLOCK_TAP_OPTIONS,
+                "Time App",
+              )}
+              ${renderBaselineSelect(
+                store,
+                gid,
+                "return_to_home_timeout",
+                "Return to Home Timeout",
+                cfg.return_to_home_timeout,
+                RETURN_TO_HOME_TIMEOUT_OPTIONS,
+                "2 min",
+              )}
+              ${renderSwitchRow({
+                label: "Home Activity Card",
+                ariaLabel: `Home Activity Card for ${gid}`,
+                checked: cfg.activity_card !== false,
+                onChange: (checked) =>
+                  void store.updateGroupBaseline(gid, { activity_card: checked }),
+              })}
+              ${renderBaselinePills(
+                store,
+                gid,
+                "activity_sources",
+                "Activity Card Sources",
+                cfg.activity_sources,
+                ACTIVITY_SOURCES_CATALOG,
+                DEFAULT_ACTIVITY_SOURCES_CSV,
+                0,
+              )}
+              ${renderBaselinePills(
+                store,
+                gid,
+                "home_categories",
+                "Home Hub Categories",
+                cfg.home_categories,
+                HOME_CATEGORIES_CATALOG,
+                DEFAULT_HOME_CATEGORIES_CSV,
+                1,
+              )}
+              ${renderBaselinePills(
+                store,
+                gid,
+                "area_categories",
+                "Area Control Categories",
+                cfg.area_categories,
+                AREA_CATEGORIES_CATALOG,
+                DEFAULT_AREA_CATEGORIES_CSV,
+                1,
+              )}
+              ${renderBaselineLabeledSelect(
+                store,
+                gid,
+                "device_remote_group",
+                "Remote Control Scope",
+                cfg.device_remote_group,
+                remoteScopeOptions,
+                "area_auto",
+              )}
+              ${renderSwitchRow({
+                label: "Show UTC Clock",
+                ariaLabel: `Show UTC Clock for ${gid}`,
+                checked: Boolean(cfg.show_utc_clock),
+                onChange: (checked) =>
+                  void store.updateGroupBaseline(gid, { show_utc_clock: checked }),
+              })}
+              ${renderSwitchRow({
+                label: "Show Speaker Shortcut",
+                ariaLabel: `Show Speaker Shortcut for ${gid}`,
+                checked: cfg.show_speaker_shortcut !== false,
+                onChange: (checked) =>
+                  void store.updateGroupBaseline(gid, { show_speaker_shortcut: checked }),
+              })}
+              ${renderSwitchRow({
+                label: "Show Library Shortcut",
+                ariaLabel: `Show Library Shortcut for ${gid}`,
+                checked: cfg.show_library_shortcut !== false,
+                onChange: (checked) =>
+                  void store.updateGroupBaseline(gid, { show_library_shortcut: checked }),
+              })}
+              ${renderBaselineSelect(
+                store,
+                gid,
+                "album_sort_order",
+                "Album Sort Order",
+                cfg.album_sort_order,
+                ALBUM_SORT_OPTIONS,
+                "Alphabetical",
+              )}
+              ${renderBaselineSelect(
+                store,
+                gid,
+                "artist_album_sort_order",
+                "Artist Album Sort Order",
+                cfg.artist_album_sort_order,
+                ARTIST_ALBUM_SORT_OPTIONS,
+                "Oldest on Top",
+              )}
+              ${renderBaselineSelect(
+                store,
+                gid,
+                "podcast_sort_order",
+                "Podcast Sort Order",
+                cfg.podcast_sort_order,
+                PODCAST_SORT_OPTIONS,
+                "Newest on Top",
+              )}
+              ${latterDevices.length
+                ? html`${renderSettingsRow({
+                      label: "App Dock",
+                      description: `Baseline holds ${fmtNumber(dockCount, store.hass, 0)} shortcut${dockCount === 1 ? "" : "s"} (captures from Source Device below).`,
+                      control: html`<button
+                        type="button"
+                        @click=${() =>
+                          void store.copyDeviceToGroupBaseline(gid, copySrc, ["dock_items"])}
+                        class="btn btn-secondary btn-compact"
+                      >
+                        Copy Dock
+                      </button>`,
+                    })}
+                    ${renderSettingsRow({
+                      label: "Pinned Shortcuts",
+                      description: `Baseline holds ${fmtNumber(pinnedCount, store.hass, 0)} shortcut${pinnedCount === 1 ? "" : "s"} (captures from Source Device below).`,
+                      control: html`<button
+                        type="button"
+                        @click=${() =>
+                          void store.copyDeviceToGroupBaseline(gid, copySrc, ["pinned_items"])}
+                        class="btn btn-secondary btn-compact"
+                      >
+                        Copy Pinned
+                      </button>`,
+                    })}
+                    ${renderSettingsRow({
+                      label: "World Clocks",
+                      description: `Baseline holds ${fmtNumber(clockCount, store.hass, 0)} zone${clockCount === 1 ? "" : "s"} (captures from Source Device below).`,
+                      control: html`<button
+                        type="button"
+                        @click=${() =>
+                          void store.copyDeviceToGroupBaseline(gid, copySrc, ["world_clocks"])}
+                        class="btn btn-secondary btn-compact"
+                      >
+                        Copy Clocks
+                      </button>`,
+                    })}`
+                : nothing}
+            </div>
+          </details>`
+        : nothing}
 
       ${latterDevices.length
-        ? html`<div class="subsection-title">Copy From Device</div>
+        ? html`<div class="settings-list">
+            <div class="subsection-title">Copy From Device</div>
             ${renderSettingsRow({
               label: "Source Device",
-              description: "Replaces this group's baseline with an existing Device's operational settings.",
+              description:
+                "Replaces this group's active baseline scope with an existing Device's settings.",
               control: html`<select
                   aria-label=${`Copy settings into ${group.name}`}
                   .value=${copySrc}
@@ -12944,10 +13568,22 @@ function renderGroupBaselineDrawer(
                 >
                   Copy Settings
                 </button>`,
-            })}`
+            })}
+          </div>`
         : nothing}
     </div>
   </details>`;
+}
+function matchesBatchTargetFilter(
+  filter,
+  item,
+) {
+  if (filter === "all") return true;
+  if (filter === "online") return Boolean(item.is_online);
+  if (filter === "roaming") return Boolean(item.is_roaming);
+  if (filter === "stationary") return !item.is_roaming;
+  const grpId = filter.startsWith("group:") ? filter.slice(6) : filter;
+  return (item.device_group || "custom") === grpId;
 }
 function renderSystemGroupsView(store) {
   const data = store.state;
@@ -12957,35 +13593,45 @@ function renderSystemGroupsView(store) {
   const systemControls = data?.system_controls || [];
   const validTargetFilters = new Set ([
     "all",
+    "online",
+    "roaming",
+    "stationary",
     "group:custom",
     ...groups.map((g) => `group:${g.id}`),
   ]);
   const activeFilter = validTargetFilters.has(store.batchTargetFilter || "all")
     ? store.batchTargetFilter || "all"
     : "all";
-  const activeTargetId = activeFilter === "all" ? "all" : activeFilter.slice(6);
   const activeCat = store.batchCategoryFilter || "all";
-  const selectedGroupName =
-    activeTargetId === "all"
+  const selectedTargetName =
+    activeFilter === "all"
       ? "All Latter Devices"
-      : activeTargetId === "custom"
-        ? "Custom"
-        : groups.find((g) => g.id === activeTargetId)?.name || activeTargetId;
-  const matchingDevs = latterDevices.filter((d) => {
-    if (activeTargetId === "all") return true;
-    return (d.device_group || "custom") === activeTargetId;
-  });
+      : activeFilter === "online"
+        ? "Online Devices"
+        : activeFilter === "roaming"
+          ? "Roaming Devices"
+          : activeFilter === "stationary"
+            ? "Stationary Devices"
+            : activeFilter === "group:custom"
+              ? "Custom"
+              : groups.find((g) => `group:${g.id}` === activeFilter)?.name ||
+                activeFilter.replace(/^group:/, "");
+  const matchingDevs = latterDevices.filter((d) => matchesBatchTargetFilter(activeFilter, d));
+  const batchCopySrc =
+    store.batchCopySourceSubentryId ||
+    store.activeSubentryId ||
+    latterDevices[0]?.subentry_id ||
+    "";
   const renderBatchControlRow = (fc) => {
-    if (activeCat !== "all" && fc.section !== activeCat) return nothing;
-    const targets = (fc.targets || []).filter((t) => {
-      if (activeTargetId === "all") return true;
-      return (t.device_group || "custom") === activeTargetId;
-    });
+    const targets = (fc.targets || []).filter((t) =>
+      matchesBatchTargetFilter(activeFilter, t),
+    );
     if (!targets.length) return nothing;
     const states = Array.from(new Set(targets.map((t) => String(t.state ?? ""))));
     const mixed = states.length > 1;
     const curState = mixed ? "" : (states[0] ?? "");
     const desc = `${fc.section_title} • ${fmtNumber(targets.length, store.hass, 0)} Device${targets.length === 1 ? "" : "s"}${mixed ? " • Mixed values" : ""}`;
+    const optLabels = fc.option_labels || {};
     let control;
     if (fc.domain === "select" && fc.options && fc.options.length) {
       control = html`<select
@@ -12994,9 +13640,12 @@ function renderSystemGroupsView(store) {
         @change=${(ev) =>
           void store.bulkSelect(fc, (ev.currentTarget).value)}
       >
-        ${mixed ? html`<option value="" selected disabled>Mixed</option>` : nothing}
+        ${mixed ? html`<option value="__mixed__" selected disabled>Mixed</option>` : nothing}
         ${fc.options.map(
-          (opt) => html`<option value=${opt} ?selected=${opt === curState}>${opt}</option>`,
+          (opt) =>
+            html`<option value=${opt} ?selected=${!mixed && opt === curState}>
+              ${optLabels[opt] || opt}
+            </option>`,
         )}
       </select>`;
     } else if (fc.domain === "switch") {
@@ -13025,19 +13674,96 @@ function renderSystemGroupsView(store) {
         <span class="chip">
           ${mixed ? "Mixed" : `${curState} ${fc.unit || ""}`.trim()}
         </span>`;
+    } else if (fc.domain === "color") {
+      const hexVal = /^#[0-9A-Fa-f]{6}$/.test(curState) ? curState.toUpperCase() : "#3898FF";
+      control = html`<input
+          type="color"
+          aria-label=${fc.name}
+          .value=${hexVal}
+          @change=${(ev) =>
+            void store.bulkColor(fc, (ev.currentTarget).value)}
+        />
+        <span class="chip">${mixed ? "Mixed" : hexVal}</span>`;
+    } else if (fc.domain === "pills" && fc.options && fc.options.length) {
+      const baseCsv = mixed ? (states[0] ?? "") : curState;
+      const activeSet = new Set(
+        baseCsv
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean),
+      );
+      control = html`<div class="pill-list">
+        ${mixed ? html`<span class="chip">Mixed</span>` : nothing}
+        ${fc.options.map((tok) => {
+          const on = !mixed && activeSet.has(tok);
+          return html`<span class="pill ${on ? "enabled" : ""}">
+            <button
+              type="button"
+              aria-pressed=${String(on)}
+              @click=${() => void store.bulkPillsToggle(fc, tok, baseCsv)}
+              class="pill-toggle"
+            >
+              ${optLabels[tok] || tok}
+            </button>
+          </span>`;
+        })}
+      </div>`;
     } else {
       control = html`<span class="chip">${mixed ? "Mixed" : curState}</span>`;
     }
     return renderSettingsRow({ label: entityLabel(fc.name), description: desc, control });
   };
-  const visibleBehaviorRows = systemControls
-    .filter((fc) => fc.tier !== "appearance")
-    .map((fc) => renderBatchControlRow(fc))
-    .filter((row) => row !== nothing);
-  const visibleAppearanceRows = systemControls
-    .filter((fc) => fc.tier === "appearance")
-    .map((fc) => renderBatchControlRow(fc))
-    .filter((row) => row !== nothing);
+  const renderBatchCopyListsSection = () => {
+    if (!latterDevices.length || !matchingDevs.some((d) => d.has_display !== false)) {
+      return nothing;
+    }
+    return html`<div class="settings-list">
+      <div class="subsection-title">Copy Multi-Item Lists</div>
+      ${renderSettingsRow({
+        label: "Template Device",
+        description: `Copies App Dock, Pinned Shortcuts, or World Clocks to ${selectedTargetName}.`,
+        control: html`<select
+          id="batch-copy-source"
+          aria-label="Template Device for batch list copy"
+          .value=${batchCopySrc}
+          @change=${(ev) => {
+            store.batchCopySourceSubentryId = (ev.currentTarget).value;
+            store.host.requestUpdate();
+          }}
+        >
+          ${latterDevices.map(
+            (d) =>
+              html`<option value=${d.subentry_id} ?selected=${d.subentry_id === batchCopySrc}>
+                ${d.title}
+              </option>`,
+          )}
+        </select>`,
+      })}
+      <div class="input-action-row">
+        <button
+          type="button"
+          @click=${() => void store.applyBatchCopyFromDevice(batchCopySrc, ["dock_items"])}
+          class="btn btn-secondary btn-compact"
+        >
+          Push App Dock
+        </button>
+        <button
+          type="button"
+          @click=${() => void store.applyBatchCopyFromDevice(batchCopySrc, ["pinned_items"])}
+          class="btn btn-secondary btn-compact"
+        >
+          Push Pinned Shortcuts
+        </button>
+        <button
+          type="button"
+          @click=${() => void store.applyBatchCopyFromDevice(batchCopySrc, ["world_clocks"])}
+          class="btn btn-secondary btn-compact"
+        >
+          Push World Clocks
+        </button>
+      </div>
+    </div>`;
+  };
   return html`<section id="view-system_sync">
     <div class="columns">
       <div class="column">
@@ -13045,7 +13771,7 @@ function renderSystemGroupsView(store) {
           id: "card-device-groups",
           title: "Device Groups",
           subtitle:
-            "Reusable operational presets applied to assigned Devices without overwriting personal appearance.",
+            "Built-in hardware presets and custom Device Groups that keep assigned Devices aligned.",
           contentClass: "stack",
           body: html`<div class="list-block">
               <div class="list-row-main">
@@ -13073,6 +13799,34 @@ function renderSystemGroupsView(store) {
                     }}
                   />
                 </div>
+              </div>
+              <div class="pill-list">
+                <span class="pill ${store.newGroupIncludeDisplay ? "enabled" : ""}">
+                  <button
+                    type="button"
+                    aria-pressed=${String(Boolean(store.newGroupIncludeDisplay))}
+                    @click=${() => {
+                      store.newGroupIncludeDisplay = !store.newGroupIncludeDisplay;
+                      store.host.requestUpdate();
+                    }}
+                    class="pill-toggle"
+                  >
+                    Include Display Settings
+                  </button>
+                </span>
+                <span class="pill ${store.newGroupIncludeInterface ? "enabled" : ""}">
+                  <button
+                    type="button"
+                    aria-pressed=${String(Boolean(store.newGroupIncludeInterface))}
+                    @click=${() => {
+                      store.newGroupIncludeInterface = !store.newGroupIncludeInterface;
+                      store.host.requestUpdate();
+                    }}
+                    class="pill-toggle"
+                  >
+                    Include Interface &amp; Shortcuts
+                  </button>
+                </span>
               </div>
               <div class="input-action-row">
                 <select
@@ -13130,6 +13884,12 @@ function renderSystemGroupsView(store) {
                               ${fmtNumber(members.length, store.hass, 0)}
                               ${members.length === 1 ? "Device" : "Devices"}
                             </span>
+                            ${g.include_display
+                              ? html`<span class="chip">Display</span>`
+                              : nothing}
+                            ${g.include_interface
+                              ? html`<span class="chip">Interface</span>`
+                              : nothing}
                           </div>
                           <div class="area-box-actions">
                             ${members.length
@@ -13177,6 +13937,11 @@ function renderSystemGroupsView(store) {
               }}
             >
               <option value="all" ?selected=${activeFilter === "all"}>All Latter Devices</option>
+              <option value="online" ?selected=${activeFilter === "online"}>Online Devices</option>
+              <option value="roaming" ?selected=${activeFilter === "roaming"}>Roaming Devices</option>
+              <option value="stationary" ?selected=${activeFilter === "stationary"}>
+                Stationary Devices
+              </option>
               ${groups.map(
                 (g) =>
                   html`<option
@@ -13201,40 +13966,65 @@ function renderSystemGroupsView(store) {
               }}
             >
               <option value="all" ?selected=${activeCat === "all"}>All Categories</option>
-              <option value="sleep" ?selected=${activeCat === "sleep"}>Sleep &amp; Wake</option>
-              <option value="voice" ?selected=${activeCat === "voice"}>Voice &amp; Wake Word</option>
-              <option value="sound" ?selected=${activeCat === "sound"}>Sound</option>
-              <option value="area" ?selected=${activeCat === "area"}>Area &amp; BLE</option>
-              <option value="display" ?selected=${activeCat === "display"}>Display</option>
-              <option value="home" ?selected=${activeCat === "home"}>Home</option>
-              <option value="music" ?selected=${activeCat === "music"}>Music</option>
+              ${BATCH_CATEGORY_META.map(
+                (cat) =>
+                  html`<option value=${cat.id} ?selected=${activeCat === cat.id}>
+                    ${cat.title}
+                  </option>`,
+              )}
             </select>`,
           contentClass: "stack",
           body: !matchingDevs.length
             ? html`<p class="empty-state">
-                ${activeTargetId === "all"
+                ${activeFilter === "all"
                   ? "No Latter Devices onboarded yet."
-                  : `No Latter Devices are currently assigned to ${selectedGroupName}.`}
+                  : `No Latter Devices currently match ${selectedTargetName}.`}
               </p>`
             : html`<div class="help-text">
                   Target (${fmtNumber(matchingDevs.length, store.hass, 0)}): ${matchingDevs.map((d) => d.title).join(", ")}
                 </div>
 
-                <h4 class="subsection-title">Operational Settings</h4>
-                <div id="system-controls-list" class="settings-list">
-                  ${visibleBehaviorRows.length
-                    ? visibleBehaviorRows
-                    : html`<p class="empty-state">No operational controls match this filter.</p>`}
-                </div>
-
-                <details class="sub-collapsible">
-                  <summary>Appearance &amp; Personalization</summary>
-                  <div id="system-appearance-controls-list" class="card-content settings-list">
-                    ${visibleAppearanceRows.length
-                      ? visibleAppearanceRows
-                      : html`<p class="empty-state">No appearance controls match this filter.</p>`}
-                  </div>
-                </details>`,
+                <div id="system-controls-list" class="stack">
+                  ${activeCat === "all"
+                    ? BATCH_CATEGORY_META.map((cat) => {
+                        const rows = systemControls
+                          .filter((fc) => fc.section === cat.id)
+                          .map((fc) => renderBatchControlRow(fc))
+                          .filter((row) => row !== nothing);
+                        const copyBlock =
+                          cat.id === "interface" ? renderBatchCopyListsSection() : nothing;
+                        if (!rows.length && copyBlock === nothing) return nothing;
+                        return html`<details
+                          class="sub-collapsible"
+                          ?open=${cat.defaultOpen}
+                        >
+                          <summary>${cat.title}</summary>
+                          <div class="card-content stack">
+                            ${rows.length
+                              ? html`<div class="settings-list">${rows}</div>`
+                              : nothing}
+                            ${copyBlock}
+                          </div>
+                        </details>`;
+                      })
+                    : (() => {
+                        const rows = systemControls
+                          .filter((fc) => fc.section === activeCat)
+                          .map((fc) => renderBatchControlRow(fc))
+                          .filter((row) => row !== nothing);
+                        const copyBlock =
+                          activeCat === "interface" ? renderBatchCopyListsSection() : nothing;
+                        if (!rows.length && copyBlock === nothing) {
+                          return html`<p class="empty-state">
+                            No batch controls match this category.
+                          </p>`;
+                        }
+                        return html`${rows.length
+                          ? html`<div class="settings-list">${rows}</div>`
+                          : nothing}
+                        ${copyBlock}`;
+                      })()}
+                </div>`,
         })}
       </div>
     </div>

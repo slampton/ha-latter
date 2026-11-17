@@ -11,11 +11,11 @@ import {
   DEFAULT_DOCK_ROUTES_TOKENS,
   DEFAULT_HOME_CATEGORIES_TOKENS,
   GROUP_BEHAVIOR_NON_PREF_KEYS,
+  GROUP_DISPLAY_NON_PREF_KEYS,
+  GROUP_INTERFACE_NON_PREF_KEYS,
   HOME_CATEGORIES_CATALOG,
   MAX_DOCK_ITEMS,
   MAX_PINNED_ITEMS,
-  POWER_PROFILE_PREFS,
-  POWER_PROFILE_SUBKEYS,
   SHORTCUT_LABEL_MAX,
   SHORTCUT_ROUTES_CATALOG,
 } from "../constants.js";
@@ -160,38 +160,42 @@ const ENTITY_OPTIMISTIC_TTL_MS = 8000;
 
 export const PENDING_ENTITY_STATES = new Map<string, PendingEntityEntry>();
 
-const POWER_PROFILE_SUBKEY_SET = new Set<string>(POWER_PROFILE_SUBKEYS);
 const BEHAVIOR_NON_PREF_KEY_SET = new Set<string>(GROUP_BEHAVIOR_NON_PREF_KEYS);
+const DISPLAY_NON_PREF_KEY_SET = new Set<string>(GROUP_DISPLAY_NON_PREF_KEYS);
+const INTERFACE_NON_PREF_KEY_SET = new Set<string>(GROUP_INTERFACE_NON_PREF_KEYS);
+
+function activeGroupKeySet(
+  grp: { include_display?: boolean; include_interface?: boolean },
+  devicePrefs: ReadonlyArray<{ key: string; group_tier?: string }>,
+): Set<string> {
+  const keys = new Set<string>(BEHAVIOR_NON_PREF_KEY_SET);
+  for (const p of devicePrefs) {
+    if (p.group_tier === "behavior") keys.add(p.key);
+    else if (p.group_tier === "display" && grp.include_display) keys.add(p.key);
+    else if (p.group_tier === "interface" && grp.include_interface) keys.add(p.key);
+  }
+  if (grp.include_display) {
+    for (const k of DISPLAY_NON_PREF_KEY_SET) keys.add(k);
+  }
+  if (grp.include_interface) {
+    for (const k of INTERFACE_NON_PREF_KEY_SET) keys.add(k);
+  }
+  return keys;
+}
+
+function sameGroupControlVal(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if ((Array.isArray(a) || (a && typeof a === "object")) || (Array.isArray(b) || (b && typeof b === "object"))) {
+    return JSON.stringify(a) === JSON.stringify(b);
+  }
+  return String(a) === String(b);
+}
 
 function expandDevicePrefPatch(
   currentCfg: Record<string, unknown>,
   rawPatch: Record<string, unknown>,
 ): Record<string, unknown> {
   const expanded: Record<string, unknown> = { ...rawPatch };
-  if (typeof rawPatch.power_profile === "string" && rawPatch.power_profile in POWER_PROFILE_PREFS) {
-    const preset = POWER_PROFILE_PREFS[rawPatch.power_profile];
-    for (const [k, v] of Object.entries(preset)) {
-      if (!(k in rawPatch)) {
-        expanded[k] = v;
-      }
-    }
-  } else if (
-    !("power_profile" in rawPatch) &&
-    Object.keys(rawPatch).some((k) => POWER_PROFILE_SUBKEY_SET.has(k))
-  ) {
-    const curProf = String(currentCfg.power_profile || "Pocket Carry");
-    const preset = POWER_PROFILE_PREFS[curProf];
-    if (preset) {
-      const merged = { ...currentCfg, ...rawPatch };
-      for (const [k, want] of Object.entries(preset)) {
-        const have = merged[k] !== undefined ? merged[k] : want;
-        if (have !== want) {
-          expanded.power_profile = "Custom";
-          break;
-        }
-      }
-    }
-  }
   if (rawPatch.home_screen_enabled === false) {
     const effStart = String(rawPatch.start_screen ?? currentCfg.start_screen ?? "Home");
     if (effStart === "Home") {
@@ -209,10 +213,8 @@ export function overlayDevicePrefsOnSections(
   const curCfg = (payload.config || {}) as Record<string, unknown>;
   const expanded = expandDevicePrefPatch(curCfg, rawPatch);
   const groups = payload.device_groups || [];
-  const supportedPrefKeys = new Set((payload.device_prefs || []).map((p) => p.key));
-  const behaviorPrefKeys = new Set(
-    (payload.device_prefs || []).filter((p) => p.group_tier === "behavior").map((p) => p.key),
-  );
+  const devicePrefs = payload.device_prefs || [];
+  const supportedPrefKeys = new Set(devicePrefs.map((p) => p.key));
   const isRoaming = curCfg.is_roaming !== false;
 
   if ("device_group" in rawPatch) {
@@ -221,10 +223,17 @@ export function overlayDevicePrefsOnSections(
     if (targetGrpId !== "custom") {
       const grp = groups.find((g) => g.id === targetGrpId);
       if (grp?.device_config) {
+        const enforcedKeys = activeGroupKeySet(grp, devicePrefs);
         for (const [gk, gv] of Object.entries(grp.device_config)) {
           if (gk in rawPatch || gv === undefined || gv === null) continue;
+          if (!enforcedKeys.has(gk)) continue;
           if ((gk === "sync_device_area" || gk === "area_follow_dwell_s") && !isRoaming) continue;
-          if (BEHAVIOR_NON_PREF_KEY_SET.has(gk) || supportedPrefKeys.has(gk)) {
+          if (
+            BEHAVIOR_NON_PREF_KEY_SET.has(gk) ||
+            DISPLAY_NON_PREF_KEY_SET.has(gk) ||
+            INTERFACE_NON_PREF_KEY_SET.has(gk) ||
+            supportedPrefKeys.has(gk)
+          ) {
             expanded[gk] = gv;
           }
         }
@@ -235,12 +244,13 @@ export function overlayDevicePrefsOnSections(
     if (curGrpId !== "custom") {
       const grp = groups.find((g) => g.id === curGrpId);
       if (grp?.device_config) {
+        const enforcedKeys = activeGroupKeySet(grp, devicePrefs);
         for (const [ek, ev] of Object.entries(expanded)) {
           if ((ek === "sync_device_area" || ek === "area_follow_dwell_s") && !isRoaming) continue;
           if (
-            (BEHAVIOR_NON_PREF_KEY_SET.has(ek) || behaviorPrefKeys.has(ek)) &&
+            enforcedKeys.has(ek) &&
             grp.device_config[ek] !== undefined &&
-            String(grp.device_config[ek]) !== String(ev)
+            !sameGroupControlVal(grp.device_config[ek], ev)
           ) {
             expanded.device_group = "custom";
             break;
@@ -382,12 +392,6 @@ export function stageDeviceSettingOp(
   snapshotKey("device_group");
   if (key === "home_screen_enabled") {
     snapshotKey("start_screen");
-  }
-  if (key === "power_profile" || POWER_PROFILE_SUBKEY_SET.has(key)) {
-    snapshotKey("power_profile");
-    for (const sk of POWER_PROFILE_SUBKEYS) {
-      snapshotKey(sk);
-    }
   }
   if (controlDomId) {
     bucket.previousValues[`__dom:${controlDomId}`] = bucket.previousValues[key];

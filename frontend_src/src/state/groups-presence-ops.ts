@@ -27,6 +27,12 @@ export async function createDeviceGroupOp(store: StudioStore): Promise<void> {
     if (sourceSubentryId) {
       payload.source_subentry_id = sourceSubentryId;
     }
+    if (store.newGroupIncludeDisplay) {
+      payload.include_display = true;
+    }
+    if (store.newGroupIncludeInterface) {
+      payload.include_interface = true;
+    }
     const res = await store.ws.runSystemCommand(
       "create_device_group",
       payload,
@@ -36,6 +42,8 @@ export async function createDeviceGroupOp(store: StudioStore): Promise<void> {
     store.newGroupName = "";
     store.newGroupDesc = "";
     store.newGroupSourceSubentryId = "";
+    store.newGroupIncludeDisplay = false;
+    store.newGroupIncludeInterface = false;
     store.openGroupIds.add(createdId);
     if (res) store.ingestPayload(res, false);
     store.showToast(`Created group "${name}"`);
@@ -48,6 +56,8 @@ export async function confirmSaveDeviceAsGroupOp(store: StudioStore): Promise<vo
   const name = store.saveGroupModal.name.trim();
   const description = store.saveGroupModal.description.trim();
   const sourceSubentryId = store.saveGroupModal.subentryId || store.activeSubentryId;
+  const includeDisplay = Boolean(store.saveGroupModal.includeDisplay);
+  const includeInterface = Boolean(store.saveGroupModal.includeInterface);
   if (!name) {
     store.showToast("Enter a Device Group name", true);
     return;
@@ -59,14 +69,17 @@ export async function confirmSaveDeviceAsGroupOp(store: StudioStore): Promise<vo
   store.saveGroupModal = { ...store.saveGroupModal, busy: true };
   store.host.requestUpdate();
   try {
+    const payload: Record<string, unknown> = {
+      name,
+      description,
+      source_subentry_id: sourceSubentryId,
+      assign_source: true,
+    };
+    if (includeDisplay) payload.include_display = true;
+    if (includeInterface) payload.include_interface = true;
     const res = await store.ws.runSystemCommand(
       "create_device_group",
-      {
-        name,
-        description,
-        source_subentry_id: sourceSubentryId,
-        assign_source: true,
-      },
+      payload,
       store.activeSubentryId || null,
     );
     store.saveGroupModal = {
@@ -74,6 +87,8 @@ export async function confirmSaveDeviceAsGroupOp(store: StudioStore): Promise<vo
       subentryId: "",
       name: "",
       description: "",
+      includeDisplay: false,
+      includeInterface: false,
       busy: false,
     };
     if (res) store.ingestPayload(res, false);
@@ -126,22 +141,48 @@ export async function updateGroupBaselineOp(
   }
 }
 
+export async function updateGroupScopeOp(
+  store: StudioStore,
+  groupId: string,
+  scope: { include_display?: boolean; include_interface?: boolean },
+): Promise<void> {
+  if (!groupId) return;
+  try {
+    const res = await store.ws.runSystemCommand(
+      "update_group_baseline",
+      {
+        group_id: groupId,
+        ...scope,
+      },
+      store.activeSubentryId || null,
+    );
+    if (res) store.ingestPayload(res, false);
+  } catch (err) {
+    store.showToast(formatWsError(err, "Could not update group scope"), true);
+  }
+}
+
 export async function copyDeviceToGroupBaselineOp(
   store: StudioStore,
   groupId: string,
   sourceSubentryId: string,
+  copyKeys?: string[],
 ): Promise<void> {
   if (!groupId || !sourceSubentryId) {
     store.showToast("Choose a Device to copy settings from", true);
     return;
   }
   try {
+    const payload: Record<string, unknown> = {
+      group_id: groupId,
+      source_subentry_id: sourceSubentryId,
+    };
+    if (copyKeys && copyKeys.length) {
+      payload.copy_keys = copyKeys;
+    }
     const res = await store.ws.runSystemCommand(
       "update_group_baseline",
-      {
-        group_id: groupId,
-        source_subentry_id: sourceSubentryId,
-      },
+      payload,
       store.activeSubentryId || null,
     );
     if (res) store.ingestPayload(res, false);
@@ -177,15 +218,85 @@ export async function applyBatchDeviceSettingOp(
   }
 }
 
+export async function applyBatchCopyFromDeviceOp(
+  store: StudioStore,
+  sourceSubentryId: string,
+  copyKeys: string[],
+): Promise<void> {
+  if (!sourceSubentryId || !copyKeys.length) {
+    store.showToast("Choose a template Device first", true);
+    return;
+  }
+  try {
+    const res = await store.ws.runSystemCommand(
+      "apply_batch_device_setting",
+      {
+        target: store.batchTargetFilter || "all",
+        source_subentry_id: sourceSubentryId,
+        copy_keys: copyKeys,
+      },
+      store.activeSubentryId || null,
+    );
+    if (res) store.ingestPayload(res, false);
+    store.showToast("Pushed list from template Device");
+  } catch (err) {
+    store.showToast(formatWsError(err, "Could not copy list across target Devices"), true);
+  }
+}
+
 export function filteredControlTargetsOp(store: StudioStore, ctrl: SharedControlItem): string[] {
-  const grpId = resolvedBatchTargetIdOp(store);
+  const filter = store.batchTargetFilter || "all";
   return (ctrl.targets || [])
     .filter((t) => {
-      if (grpId === "all") return true;
+      if (filter === "all") return true;
+      if (filter === "online") return Boolean(t.is_online);
+      if (filter === "roaming") return Boolean(t.is_roaming);
+      if (filter === "stationary") return !t.is_roaming;
+      const grpId = filter.startsWith("group:") ? filter.slice(6) : filter;
       return (t.device_group || "custom") === grpId;
     })
-    .map((t) => t.entity_id)
+    .map((t) => t.entity_id || "")
     .filter(Boolean);
+}
+
+export async function bulkColorOp(
+  store: StudioStore,
+  ctrl: SharedControlItem,
+  hex: string,
+): Promise<void> {
+  const cleaned = String(hex || "").trim().toUpperCase();
+  if (!ctrl.pref_key || !/^#[0-9A-F]{6}$/.test(cleaned)) return;
+  await applyBatchDeviceSettingOp(store, { [ctrl.pref_key]: cleaned });
+}
+
+export async function bulkPillsToggleOp(
+  store: StudioStore,
+  ctrl: SharedControlItem,
+  token: string,
+  currentCsv: string,
+): Promise<void> {
+  if (!ctrl.pref_key) return;
+  const order = ctrl.options || [];
+  const activeSet = new Set(
+    String(currentCsv || "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
+  );
+  if (activeSet.has(token)) {
+    const minRequired = ctrl.min ?? 0;
+    if (activeSet.size <= minRequired) {
+      store.showToast("Keep at least one category enabled", true);
+      return;
+    }
+    activeSet.delete(token);
+  } else {
+    activeSet.add(token);
+  }
+  const ordered = order.length
+    ? order.filter((t) => activeSet.has(t))
+    : Array.from(activeSet);
+  await applyBatchDeviceSettingOp(store, { [ctrl.pref_key]: ordered.join(",") });
 }
 
 export async function bulkToggleOp(

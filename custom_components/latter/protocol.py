@@ -18,6 +18,7 @@ import unicodedata
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .studio.settings import (
+    ACTIVITY_SOURCE_KEYS,
     AREA_CATEGORY_TOKENS,
     DEFAULT_AREA_CATEGORIES,
     DEFAULT_DOCK_ROUTES,
@@ -35,6 +36,7 @@ from .studio.settings import (
     SHORTCUT_SUPPORTED_DOMAINS,
     WORLD_CLOCK_CATALOG_MAP,
     default_dock_items,
+    normalize_activity_sources,
     normalize_alarms_summary,
     normalize_area_categories,
     normalize_dock_items,
@@ -559,13 +561,9 @@ def build_time_zone_payloads(
 
 SHORTCUTS_CHUNK_SIZE = 18
 
-# Canonical order; Studio shows one switch per source in this order.
-ACTIVITY_SOURCE_KEYS: tuple[str, ...] = tuple(
-    c["token"] for c in _PROTOCOL_V3_DATA["catalogs"]["activity_sources"]
-)
-
 
 __all_area_categories__ = (
+    ACTIVITY_SOURCE_KEYS,
     AREA_CATEGORY_TOKENS,
     DEFAULT_AREA_CATEGORIES,
     parse_area_categories,
@@ -702,16 +700,6 @@ def shortcut_records(
         (None, None, None, SHORTCUT_LABEL_MAX, None, 1, 2),
         max_records,
     )
-
-
-def normalize_activity_sources(value: Any) -> str:
-    """Return the sources as canonical CSV ("" = every source off); raise ValueError for an unknown key."""
-    raw = value if isinstance(value, (list, tuple)) else str(value or "").split(",")
-    names = {str(t).strip().lower() for t in raw if str(t).strip()}
-    unknown = sorted(names - set(ACTIVITY_SOURCE_KEYS))
-    if unknown:
-        raise ValueError(f"Unknown Activity Card source: {', '.join(unknown)}")
-    return ",".join(k for k in ACTIVITY_SOURCE_KEYS if k in names)
 
 
 def activity_payload(card_on: bool, sources: str) -> tuple[int, str]:

@@ -36,8 +36,8 @@ Shared entities, remotes, colors, and overrides live in the Latter hub entry's o
 - **Speaker Volume Overrides:** routes volume changes for any speaker to an AV receiver `media_player` or amplifier `number` / `input_number` entity.
 
 ### Device Groups
-- **Column 1 — Device Groups:** 3 built-in hardware presets (*Handhelds*, *Wearables*, *Wall & Desk Panels*) plus custom groups rendered in enclosed cards, each storing a reusable **operational baseline** (power profile, timeouts, brightness schedule, wake-word mode & sensitivity, alert volume, BLE tracking, *Voice Follows Me*, media handoff, perimeter security policy) without overwriting personal appearance settings. Includes a top creation bar (with optional **Copy from** Device seeding) and an inline **Baseline Settings** + **Copy From Device** drawer inside each group box.
-- **Column 2 — Batch Controls:** applies a one-time live setting change across *All Latter Devices*, any configured Device Group (*Handhelds*, *Wearables*, *Wall & Desk Panels*, or custom groups), or *Custom* Devices (showing **Mixed** when matching Devices differ), plus a collapsible **Appearance & Personalization** drawer, without altering saved group baselines.
+- **Column 1 — Device Groups:** 4 built-in hardware presets (*Pocket Carry*, *Handhelds*, *Wearables*, *Wall & Desk Panels*) plus custom groups rendered in enclosed cards. By default each group manages **Operational** settings (power & wake timeouts, brightness schedule, wake-word mode & sensitivity, alert volume, BLE tracking, *Voice Follows Me*, media handoff, perimeter security policy) so personal wallpapers and shortcuts stay per-device, while any group can opt into **Include Display Settings** and/or **Include Interface & Shortcuts** to enforce visual styling, shortcuts, and categories too. Includes a top creation bar (with scope pills and optional **Copy from** Device seeding) and an inline **Baseline Settings** + **Copy From Device** drawer inside each group box.
+- **Column 2 — Batch Controls:** applies a one-time live setting change across *All Latter Devices*, *Online Devices*, *Roaming Devices* (rolling up Pocket Carry, Handhelds, Wearables, and roaming custom devices), *Stationary Devices*, any configured Device Group (*Pocket Carry*, *Handhelds*, *Wearables*, *Wall & Desk Panels*, or custom groups), or *Custom* Devices across all 6 Device tab categories (*Display*, *Interface*, *Audio*, *Power*, *Presence*, *Security*) plus **Copy Multi-Item Lists** (*App Dock*, *Pinned Shortcuts*, *World Clocks*) without altering saved group baselines.
 
 ### BLE & Area Presence
 - **Column 1 — Area Presence & Sensors:** unified enclosed Area cards showing live occupancy confidence, Floor, and BLE coverage chips (`Signature`, `BLE Proxy`, or `No BLE Proxy`), occupant and distance telemetry, an inline **Calibrate** shortcut that smoothly scrolls to **Walk-Around BLE Calibration** with a warning-highlighted target handoff (and **Clear Signature** when calibrated), **Presence Mode** (`weighted` / `any_or` / `ble_only` / `ble_and_sensor`), and an enclosed **Sensor & Threshold Settings** drawer (**Occupied At** `20–95%` threshold and **Sensors That Count** mmWave/PIR/door pills).
@@ -49,7 +49,7 @@ Shared entities, remotes, colors, and overrides live in the Latter hub entry's o
 | :--- | :--- |
 | **Notifications & Announcements** | Test **Screen Notification** (banner, chime, optional primary camera snapshot) or **Voice Broadcast** (TTS announcement) to a specific device, `occupied_areas`, or `all` via **Send Now**. |
 | **Doorbell & Intercom Audio** | Pick a **Source Device**, enter **Test Door Speaker Reply**, and click **Play on Door Speaker** to verify TTS routing on the primary camera's speaker. |
-| **Backup & Restore** | **Export** or **Restore** System or single-device `.json` bundles (`latter.backup.v3`: subentry configuration + all 50 typed device preferences, portable across hardware). Full storage is also included in native Home Assistant backups. |
+| **Backup & Restore** | **Export** or **Restore** System or single-device `.json` bundles (`latter.backup.v3`: subentry configuration + all 49 typed device preferences, portable across hardware). Full storage is also included in native Home Assistant backups. |
 | **Perimeter Security & Signing** | Set a fallback **System Security PIN** (used when a device requires a PIN and has no per-device PIN set) and **Rotate Signing Key** to invalidate previously issued HMAC media URLs immediately. |
 | **System & Device Logs** | Filterable event and Home Assistant log viewer (Latter, ESPHome, Music Assistant) with **Refresh Logs**, **Copy Logs**, **Clear Studio Events**, and **Open Native HA Logs**. |
 
@@ -86,7 +86,7 @@ The **Devices** sidebar splits inventory lifecycle into two top-level views:
 - **Sound & Playback:** **Default Speaker**, conditional **Music Assistant Player** override, **Media Follows This Device to Its New Area**, **Alert Volume**, **Volume Step Size**, and **Game Sound Effects**.
 
 ### Power
-- **Sleep & Wake:** **Power Profile** (*Pocket Carry*, *Handheld Roaming*, *Wearable Watch*, *Always-On Wall / Desk*, *Custom*), **Tap to Wake**, **Pickup to Wake**, **Battery Screen Timeout**, **Battery Hibernate Timeout**, and **Hold Crown to Power Off**, alongside live **Power & Battery** telemetry.
+- **Sleep & Wake:** **Tap to Wake**, **Pickup to Wake**, **Battery Screen Timeout**, **Battery Hibernate Timeout**, and **Hold Crown to Power Off**, alongside live **Power & Battery** telemetry.
 
 ### Presence
 - **Area Tracking:** **Track the Area with BLE Proxies**.

@@ -107,8 +107,11 @@ import {
   uploadWallpaperOp,
 } from "./entity-config-ops.js";
 import {
+  applyBatchCopyFromDeviceOp,
   applyBatchDeviceSettingOp,
+  bulkColorOp,
   bulkNumberOp,
+  bulkPillsToggleOp,
   bulkSelectOp,
   bulkToggleOp,
   captureBleAreaSignatureOp,
@@ -123,6 +126,7 @@ import {
   setAreaFusionOp,
   setBleScannerOffsetOp,
   updateGroupBaselineOp,
+  updateGroupScopeOp,
 } from "./groups-presence-ops.js";
 
 export { commitEntityChange, overlayPendingEntityStates, PENDING_ENTITY_STATES, type PendingEntityEntry };
@@ -199,10 +203,13 @@ export class StudioStore implements ReactiveController {
   newGroupName = "";
   newGroupDesc = "";
   newGroupSourceSubentryId = "";
+  newGroupIncludeDisplay = false;
+  newGroupIncludeInterface = false;
   readonly openGroupIds = new Set<string>();
   readonly groupCopySourceDrafts = new Map<string, string>();
   batchTargetFilter = "all";
   batchCategoryFilter = "all";
+  batchCopySourceSubentryId = "";
 
   // System BLE & Area Presence UI state
   bleSurveySubentryId = "";
@@ -254,6 +261,8 @@ export class StudioStore implements ReactiveController {
     subentryId: "",
     name: "",
     description: "",
+    includeDisplay: false,
+    includeInterface: false,
     busy: false,
   };
   shortcutModal = {
@@ -1395,6 +1404,8 @@ export class StudioStore implements ReactiveController {
       subentryId: this.activeSubentryId,
       name: "",
       description: devTitle ? `Saved from ${devTitle}` : "",
+      includeDisplay: false,
+      includeInterface: false,
       busy: false,
     };
     this.host.requestUpdate();
@@ -1421,8 +1432,19 @@ export class StudioStore implements ReactiveController {
     await updateGroupBaselineOp(this, groupId, patch);
   }
 
-  async copyDeviceToGroupBaseline(groupId: string, sourceSubentryId: string): Promise<void> {
-    await copyDeviceToGroupBaselineOp(this, groupId, sourceSubentryId);
+  async updateGroupScope(
+    groupId: string,
+    scope: { include_display?: boolean; include_interface?: boolean },
+  ): Promise<void> {
+    await updateGroupScopeOp(this, groupId, scope);
+  }
+
+  async copyDeviceToGroupBaseline(
+    groupId: string,
+    sourceSubentryId: string,
+    copyKeys?: string[],
+  ): Promise<void> {
+    await copyDeviceToGroupBaselineOp(this, groupId, sourceSubentryId, copyKeys);
   }
 
   resolvedBatchTargetId(): string {
@@ -1431,6 +1453,10 @@ export class StudioStore implements ReactiveController {
 
   async applyBatchDeviceSetting(patch: Record<string, unknown>): Promise<void> {
     await applyBatchDeviceSettingOp(this, patch);
+  }
+
+  async applyBatchCopyFromDevice(sourceSubentryId: string, copyKeys: string[]): Promise<void> {
+    await applyBatchCopyFromDeviceOp(this, sourceSubentryId, copyKeys);
   }
 
   filteredControlTargets(ctrl: SharedControlItem): string[] {
@@ -1447,6 +1473,18 @@ export class StudioStore implements ReactiveController {
 
   async bulkNumber(ctrl: SharedControlItem, level: number): Promise<void> {
     await bulkNumberOp(this, ctrl, level);
+  }
+
+  async bulkColor(ctrl: SharedControlItem, hex: string): Promise<void> {
+    await bulkColorOp(this, ctrl, hex);
+  }
+
+  async bulkPillsToggle(
+    ctrl: SharedControlItem,
+    token: string,
+    currentCsv: string,
+  ): Promise<void> {
+    await bulkPillsToggleOp(this, ctrl, token, currentCsv);
   }
 
   private ensureBleSurveyFrozenMap(): Map<

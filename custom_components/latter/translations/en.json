@@ -179,8 +179,8 @@
       }
     },
     "select": {
-      "power_profile": {
-        "name": "Power Profile"
+      "device_group": {
+        "name": "Device Group"
       },
       "wake_word_mode": {
         "name": "Wake Word Mode"

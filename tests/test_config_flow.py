@@ -282,7 +282,7 @@ async def test_onboarding_smart_area_and_roaming_defaults(
     assert merged_auto[CONF_BLE_AUTO_SWITCH] is True
     assert merged_auto[CONF_SYNC_DEVICE_AREA] is False
 
-    # 3) Roaming handheld WITH an ESPHome Area -> defaults to BLE Roaming (empty CONF_DEFAULT_AREA)
+    # 3) Roaming round battery display -> defaults to `pocket_carry` + BLE Roaming (empty CONF_DEFAULT_AREA)
     pocket_dev, _ = make_esphome_device(
         hass,
         slug="pocket_roam",
@@ -291,10 +291,32 @@ async def test_onboarding_smart_area_and_roaming_defaults(
         stationary=0,
     )
     defs_pocket = _detect_hardware_defaults(hass, pocket_dev)
+    assert defs_pocket[CONF_DEVICE_GROUP] == "pocket_carry"
     assert defs_pocket[CONF_NATIVE_BLE_TRACKING] is True
     assert defs_pocket[CONF_BLE_AUTO_SWITCH] is True
     assert defs_pocket[CONF_SYNC_DEVICE_AREA] is True
     assert defs_pocket[CONF_DEFAULT_AREA] == ""
+
+    # Square battery handheld -> defaults to `handhelds`; wearable -> defaults to `wearables`
+    mobile_dev, _ = make_esphome_device(
+        hass,
+        slug="mobile_roam",
+        mac="aa:bb:cc:11:00:04",
+        stationary=0,
+        shape="square",
+        w=368,
+        h=448,
+    )
+    assert _detect_hardware_defaults(hass, mobile_dev)[CONF_DEVICE_GROUP] == "handhelds"
+    wrist_dev, _ = make_esphome_device(
+        hass,
+        slug="wrist_roam",
+        mac="aa:bb:cc:11:00:05",
+        stationary=0,
+        wearable=1,
+        shape="square",
+    )
+    assert _detect_hardware_defaults(hass, wrist_dev)[CONF_DEVICE_GROUP] == "wearables"
 
     # 4) Explicit onboarding toggle override: pinning handheld to Static adopts ESPHome Area; enabling roaming on desk clears it
     pinned_pocket = _apply_onboarding_profile_and_defaults(

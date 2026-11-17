@@ -2845,7 +2845,7 @@ class LatterCoordinator:
             eff_seq,
             {
                 "prefs_seq": eff_seq,
-                "power_profile": self.get_device_pref("power_profile"),
+                "device_group": self.device_group,
                 "wake_word_mode": self.get_device_pref("wake_word_mode"),
                 "alert_volume": self.get_device_pref("alert_volume"),
                 "ble_beacon_enabled": self.native_ble_tracking_enabled,

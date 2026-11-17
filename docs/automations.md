@@ -141,9 +141,9 @@ actions:
       transition: 30
 ```
 
-## Change power profile or wake-word mode on a schedule (even while sleeping)
+## Switch Device Group or wake-word mode on a schedule (even while sleeping)
 
-Because `select.<slug>_power_profile`, `select.<slug>_wake_word_mode`, and `number.<slug>_alert_volume` write to the Device's sleep-safe subentry (`device_prefs`), automations succeed even if a battery handheld is currently hibernating:
+Because `select.<slug>_device_group`, `select.<slug>_wake_word_mode`, and `number.<slug>_alert_volume` write to the Device's sleep-safe subentry (`device_prefs`), automations succeed even if a battery handheld is currently hibernating:
 
 ```yaml
 alias: Quiet bedside alert volume at night

@@ -19,7 +19,6 @@ const SCREENSAVER_KEYS = new Set([
 export function renderDevicePowerView(store: StudioStore): TemplateResult {
   const sleepPrefs = store
     .getPrefs([
-      "power_profile",
       "tap_to_wake",
       "pickup_to_wake",
       "battery_screen_timeout",

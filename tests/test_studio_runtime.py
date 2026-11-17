@@ -2781,32 +2781,49 @@ store.ingestPayload(
     },
     device_groups: [
       {
+        id: "pocket_carry",
+        name: "Pocket Carry",
+        description: "Compact pocket-carried displays",
+        builtin: true,
+        include_display: false,
+        include_interface: false,
+        device_config: { tap_to_wake: "Docked Only", native_ble_tracking: true },
+      },
+      {
         id: "handhelds",
         name: "Handhelds",
         description: "Battery-powered roaming displays",
         builtin: true,
-        device_config: { power_profile: "Handheld Roaming", native_ble_tracking: true },
+        include_display: false,
+        include_interface: false,
+        device_config: { tap_to_wake: "Single Tap", native_ble_tracking: true },
       },
       {
         id: "wearables",
         name: "Wearables",
         description: "Compact wearable displays",
         builtin: true,
-        device_config: { power_profile: "Wearable Watch", native_ble_tracking: true },
+        include_display: false,
+        include_interface: false,
+        device_config: { tap_to_wake: "Double Tap", native_ble_tracking: true },
       },
       {
         id: "wall_panels",
         name: "Wall & Desk Panels",
         description: "Stationary mains-powered panels",
         builtin: true,
-        device_config: { power_profile: "Always-On Wall / Desk", native_ble_tracking: false },
+        include_display: false,
+        include_interface: false,
+        device_config: { tap_to_wake: "Single Tap", native_ble_tracking: false },
       },
       {
         id: "guest_suites",
         name: "Guest Suites",
         description: "Guest bedroom displays",
         builtin: false,
-        device_config: { power_profile: "Pocket Carry", native_ble_tracking: false },
+        include_display: true,
+        include_interface: true,
+        device_config: { tap_to_wake: "Docked Only", native_ble_tracking: false, clock_face: "Hybrid Digital" },
       },
     ],
     system_devices: [
@@ -2816,6 +2833,7 @@ store.ingestPayload(
         device_slug: "mobile_assistant",
         kind: "device",
         has_display: true,
+        is_online: true,
         is_roaming: true,
         ble_tracked: true,
         device_group: "custom",
@@ -2831,10 +2849,11 @@ store.ingestPayload(
         device_slug: "pocket_assistant",
         kind: "device",
         has_display: true,
+        is_online: true,
         is_roaming: true,
         ble_tracked: true,
-        device_group: "handhelds",
-        device_group_name: "Handhelds",
+        device_group: "pocket_carry",
+        device_group_name: "Pocket Carry",
         assigned_person: "",
         assigned_person_name: "",
         active_area_name: "Bedroom",
@@ -2846,6 +2865,7 @@ store.ingestPayload(
         device_slug: "keyring_tag",
         kind: "ble_tag",
         has_display: false,
+        is_online: true,
         is_roaming: true,
         ble_tracked: true,
         device_group: "",
@@ -2858,18 +2878,18 @@ store.ingestPayload(
     ],
     system_controls: [
       {
-        key: "voice:switch:voice follows me",
+        key: "audio:switch:voice follows me",
         pref_key: "sync_device_area",
         tier: "behavior",
-        section: "voice",
-        section_title: "Voice assistant",
+        section: "audio",
+        section_title: "Audio",
         name: "Voice Follows Me",
         domain: "switch",
         state: "off",
         options: [],
         targets: [
-          { device_slug: "mobile_assistant", device_group: "custom", is_roaming: true, pref_key: "sync_device_area", state: "on" },
-          { device_slug: "pocket_assistant", device_group: "handhelds", is_roaming: true, pref_key: "sync_device_area", state: "off" },
+          { device_slug: "mobile_assistant", device_group: "custom", is_online: true, is_roaming: true, pref_key: "sync_device_area", state: "on" },
+          { device_slug: "pocket_assistant", device_group: "pocket_carry", is_online: true, is_roaming: true, pref_key: "sync_device_area", state: "off" },
         ],
       },
     ],
@@ -2999,33 +3019,53 @@ return {
             preamble_js=stub_deps,
         )
 
-        # Column 1 enclosed .area-presence-box containers + Column 2 Batch Controls listing all Device Groups + Custom
+        # Column 1 enclosed .area-presence-box containers + Column 2 Batch Controls listing traits + all Device Groups + Custom
+        self.assertIn('id=group-box-pocket_carry class="area-presence-box"', got["groupsHtml"])
         self.assertIn('id=group-box-handhelds class="area-presence-box"', got["groupsHtml"])
         self.assertIn('id=group-box-guest_suites class="area-presence-box"', got["groupsHtml"])
         self.assertIn("<summary>Baseline Settings</summary>", got["groupsHtml"])
+        self.assertIn("Include Display Settings", got["groupsHtml"])
+        self.assertIn("Include Interface & Shortcuts", got["groupsHtml"])
+        self.assertIn("<summary>Interface &amp; Shortcuts</summary>", got["groupsHtml"])
         self.assertIn("Pocket Carry", got["groupsHtml"])
+        self.assertNotIn("Power Profile", got["groupsHtml"])
         self.assertNotIn("Portable Carry", got["groupsHtml"])
         self.assertNotIn("Tabletop Dock", got["groupsHtml"])
         self.assertIn("aria-label=Delete group Guest Suites", got["groupsHtml"])
+        self.assertNotIn("aria-label=Delete group Pocket Carry", got["groupsHtml"])
         self.assertNotIn("aria-label=Delete group Handhelds", got["groupsHtml"])
         batch_select = got["groupsHtml"][
             got["groupsHtml"].index('id="batch-target-filter"') : got["groupsHtml"].index('id="batch-cat-filter"')
         ]
-        for expected_opt in ("All Latter Devices", "Handhelds", "Wearables", "Wall & Desk Panels", "Guest Suites", "Custom"):
+        for expected_opt in (
+            "All Latter Devices",
+            "Online Devices",
+            "Roaming Devices",
+            "Stationary Devices",
+            "Pocket Carry",
+            "Handhelds",
+            "Wearables",
+            "Wall & Desk Panels",
+            "Guest Suites",
+            "Custom",
+        ):
             self.assertIn(expected_opt, batch_select)
-        self.assertNotIn("Roaming Devices", batch_select)
-        self.assertNotIn("Stationary Devices", batch_select)
+        after_cat = got["groupsHtml"][got["groupsHtml"].index('id="batch-cat-filter"') :]
+        cat_filter_select = after_cat[: after_cat.index("</select>")]
+        for expected_cat in ("All Categories", "Display", "Interface", "Audio", "Power", "Presence", "Security"):
+            self.assertIn(expected_cat, cat_filter_select)
         self.assertIn("Voice Follows Me", got["groupsHtml"])
         self.assertIn("Mixed values", got["groupsHtml"])
 
-        # Managed Devices filter diet: populated groups + Custom + BLE Tags + Assigned to a Person shown; 0-member groups & Updates Available hidden
+        # Managed Devices filter diet: populated groups (`Group: Pocket Carry`) + Custom + BLE Tags + Assigned to a Person shown; 0-member groups & Updates Available hidden
         cat_select = got["managedHtml"][
             got["managedHtml"].index('id="device-category-filter"') : got["managedHtml"].index("</select>")
         ]
-        self.assertIn("Group: Handhelds", cat_select)
+        self.assertIn("Group: Pocket Carry", cat_select)
         self.assertIn("Group: Custom", cat_select)
         self.assertIn("BLE Tags", cat_select)
         self.assertIn("Assigned to a Person", cat_select)
+        self.assertNotIn("Group: Handhelds", cat_select)
         self.assertNotIn("Group: Wearables", cat_select)
         self.assertNotIn("Group: Wall &amp; Desk Panels", cat_select)
         self.assertNotIn("Group: Guest Suites", cat_select)

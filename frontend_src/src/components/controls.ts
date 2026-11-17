@@ -197,6 +197,10 @@ export function renderSelectOptions(
   return out;
 }
 
+export function renderSvgIcon(pathD: string): TemplateResult {
+  return html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d=${pathD}></path></svg>`;
+}
+
 export function renderTrashIconButton(ariaLabel: string, onRemove: () => void): TemplateResult {
   return html`<button
     type="button"

@@ -263,6 +263,7 @@ export interface DeviceConfig {
   home_categories?: string;
   activity_card?: boolean;
   activity_sources?: string;
+  wallpaper_source?: string;
   wallpaper_cycle_minutes?: number;
   security_pin_policy?: SecurityPinPolicy | string;
   security_pin?: string;
@@ -375,21 +376,25 @@ export interface SharedControlTarget {
   subentry_id?: string;
   device_slug?: string;
   device_group?: string;
-  entity_id: string;
+  is_online?: boolean;
+  is_roaming?: boolean;
+  pref_key?: string;
+  entity_id?: string;
   state: string;
 }
 
 export interface SharedControlItem {
   key?: string;
-  canonical_key: string;
+  canonical_key?: string;
   pref_key?: string;
-  tier?: "behavior" | "appearance" | string;
+  tier?: "behavior" | "display" | "interface" | string;
   section: string;
   section_title: string;
   name: string;
   domain: string;
   state?: string;
   options?: string[];
+  option_labels?: Record<string, string>;
   min?: number;
   max?: number;
   step?: number;
@@ -416,6 +421,8 @@ export interface DeviceGroup {
   name: string;
   description: string;
   builtin?: boolean;
+  include_display?: boolean;
+  include_interface?: boolean;
   device_config?: Record<string, unknown>;
 }
 

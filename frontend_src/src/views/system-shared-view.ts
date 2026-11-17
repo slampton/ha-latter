@@ -66,6 +66,7 @@ export function renderSystemSharedView(store: StudioStore): TemplateResult {
     <div class="columns">
       <div class="column">
         ${renderCard({
+          id: "card-whole-home",
           heading: html`<h3 class="card-title">Whole-Home Entities</h3>`,
           subtitle: "Shared entities shown across Home Hub, Weather, and Area views on every Device.",
           contentClass: "settings-list",

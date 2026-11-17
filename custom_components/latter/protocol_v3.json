@@ -622,363 +622,356 @@
         },
         {
           "index": 4,
-          "name": "power_profile",
-          "cpp_enum": "POWER_PROFILE",
-          "type": "string",
-          "description": "Active power/sleep profile (Pocket Carry|Handheld Roaming|Wearable Watch|Always-On Wall / Desk|Custom)"
-        },
-        {
-          "index": 5,
           "name": "wake_word_mode",
           "cpp_enum": "WAKE_WORD_MODE",
           "type": "string",
           "description": "Wake word policy (Docked Only|Always On|Disabled)"
         },
         {
-          "index": 6,
+          "index": 5,
           "name": "tap_to_wake",
           "cpp_enum": "TAP_TO_WAKE",
           "type": "string",
           "description": "Touch wake policy (Single Tap|Double Tap|Docked Only|Disabled)"
         },
         {
-          "index": 7,
+          "index": 6,
           "name": "pickup_to_wake",
           "cpp_enum": "PICKUP_TO_WAKE",
           "type": "string",
           "description": "IMU pickup wake policy (Always On|Docked Only|Disabled)"
         },
         {
-          "index": 8,
+          "index": 7,
           "name": "battery_screen_timeout",
           "cpp_enum": "BATTERY_SCREEN_TIMEOUT",
           "type": "string",
           "description": "Battery screen timeout (10s|15s|30s|1 min|2 min|Never)"
         },
         {
-          "index": 9,
+          "index": 8,
           "name": "docked_idle_timeout",
           "cpp_enum": "DOCKED_IDLE_TIMEOUT",
           "type": "string",
           "description": "Docked idle timeout before screensaver/sleep (10s|15s|30s|1 min|2 min|5 min|Never)"
         },
         {
-          "index": 10,
+          "index": 9,
           "name": "battery_hibernate_timeout",
           "cpp_enum": "BATTERY_HIBERNATE_TIMEOUT",
           "type": "string",
           "description": "Battery deep sleep / hibernate timeout (5 min|10 min|15 min|30 min|Disabled)"
         },
         {
-          "index": 11,
+          "index": 10,
           "name": "docked_screensaver",
           "cpp_enum": "DOCKED_SCREENSAVER",
           "type": "bool",
           "description": "1 = launch screensaver instead of sleeping when docked idle timeout expires, else 0"
         },
         {
-          "index": 12,
+          "index": 11,
           "name": "screensaver_style",
           "cpp_enum": "SCREENSAVER_STYLE",
           "type": "string",
           "description": "Ambient screensaver style (Ambient Clock|Aurora|Starfield|Digital Rain|Fireworks)"
         },
         {
-          "index": 13,
+          "index": 12,
           "name": "hold_crown_power_off",
           "cpp_enum": "HOLD_CROWN_POWER_OFF",
           "type": "bool",
           "description": "1 = long-holding rotary crown enters deep sleep / power off, else 0"
         },
         {
-          "index": 14,
+          "index": 13,
           "name": "auto_brightness_mode",
           "cpp_enum": "AUTO_BRIGHTNESS_MODE",
           "type": "string",
           "description": "Automatic brightness mode (Disabled|Sun Synchronized|Time Schedule)"
         },
         {
-          "index": 15,
+          "index": 14,
           "name": "manual_brightness",
           "cpp_enum": "MANUAL_BRIGHTNESS",
           "type": "string",
           "description": "Manual brightness target when auto brightness is Disabled (60%|70%|80%|90%|100%)"
         },
         {
-          "index": 16,
+          "index": 15,
           "name": "day_brightness",
           "cpp_enum": "DAY_BRIGHTNESS",
           "type": "string",
           "description": "Daytime brightness target (60%|70%|80%|90%|100%)"
         },
         {
-          "index": 17,
+          "index": 16,
           "name": "night_brightness",
           "cpp_enum": "NIGHT_BRIGHTNESS",
           "type": "string",
           "description": "Nighttime brightness target (60%|70%|80%|90%|100%)"
         },
         {
-          "index": 18,
+          "index": 17,
           "name": "day_start_hour",
           "cpp_enum": "DAY_START_HOUR",
           "type": "u16",
           "description": "Time schedule daytime start hour (0..23)"
         },
         {
-          "index": 19,
+          "index": 18,
           "name": "night_start_hour",
           "cpp_enum": "NIGHT_START_HOUR",
           "type": "u16",
           "description": "Time schedule nighttime start hour (0..23)"
         },
         {
-          "index": 20,
+          "index": 19,
           "name": "color_profile",
           "cpp_enum": "COLOR_PROFILE",
           "type": "string",
           "description": "Theme accent preset (Steel Blue|Pink|Blue|Green|Custom)"
         },
         {
-          "index": 21,
+          "index": 20,
           "name": "va_visual_profile",
           "cpp_enum": "VA_VISUAL_PROFILE",
           "type": "string",
           "description": "Voice assistant visual overlay style (Nebula|Solaris|Rings|Light Bar|Dot Wave)"
         },
         {
-          "index": 22,
+          "index": 21,
           "name": "home_screen_enabled",
           "cpp_enum": "HOME_SCREEN_ENABLED",
           "type": "bool",
           "description": "1 = enable the Home Screen and App Dock, 0 = single-app mode locked to start_screen"
         },
         {
-          "index": 23,
+          "index": 22,
           "name": "start_screen",
           "cpp_enum": "START_SCREEN",
           "type": "string",
           "description": "Boot / single-app start screen (Home|Pinned|Time App|Clock Face|Media|Home Hub|Area Controls|Remote|Weather|Cameras|Games|Tools)"
         },
         {
-          "index": 24,
+          "index": 23,
           "name": "return_to_home_timeout",
           "cpp_enum": "RETURN_TO_HOME_TIMEOUT",
           "type": "string",
           "description": "Idle timeout before resetting navigation back to the Home Screen (15s|30s|1 min|2 min|5 min|10 min|Never)"
         },
         {
-          "index": 25,
+          "index": 24,
           "name": "clock_face",
           "cpp_enum": "CLOCK_FACE",
           "type": "string",
           "description": "Clock face style (Minimal Digital|Modern Analog|Hybrid Digital)"
         },
         {
-          "index": 26,
+          "index": 25,
           "name": "time_format",
           "cpp_enum": "TIME_FORMAT",
           "type": "string",
           "description": "Clock time format (12-Hour (AM/PM)|24-Hour)"
         },
         {
-          "index": 27,
+          "index": 26,
           "name": "weather_background",
           "cpp_enum": "WEATHER_BACKGROUND",
           "type": "bool",
           "description": "1 = animate ambient weather particles on Home screen, else 0"
         },
         {
-          "index": 28,
+          "index": 27,
           "name": "home_sun",
           "cpp_enum": "HOME_SUN",
           "type": "bool",
           "description": "1 = show daytime solar disc on Home screen, else 0"
         },
         {
-          "index": 29,
+          "index": 28,
           "name": "home_moon",
           "cpp_enum": "HOME_MOON",
           "type": "bool",
           "description": "1 = show nighttime lunar phase disc on Home screen, else 0"
         },
         {
-          "index": 30,
+          "index": 29,
           "name": "wake_greeting",
           "cpp_enum": "WAKE_GREETING",
           "type": "bool",
           "description": "1 = show time-of-day wake greeting toast, else 0"
         },
         {
-          "index": 31,
+          "index": 30,
           "name": "album_art_style",
           "cpp_enum": "ALBUM_ART_STYLE",
           "type": "string",
           "description": "Now Playing album art layout (Full Screen|Letterbox|Standard|None)"
         },
         {
-          "index": 32,
+          "index": 31,
           "name": "music_overlay_style",
           "cpp_enum": "MUSIC_OVERLAY_STYLE",
           "type": "string",
           "description": "Now Playing controls overlay visibility (Art Only|Art + Metadata|Always Visible)"
         },
         {
-          "index": 33,
+          "index": 32,
           "name": "show_speaker_shortcut",
           "cpp_enum": "SHOW_SPEAKER_SHORTCUT",
           "type": "bool",
           "description": "1 = show speaker selector shortcut on Now Playing, else 0"
         },
         {
-          "index": 34,
+          "index": 33,
           "name": "show_library_shortcut",
           "cpp_enum": "SHOW_LIBRARY_SHORTCUT",
           "type": "bool",
           "description": "1 = show library browse shortcut on Now Playing, else 0"
         },
         {
-          "index": 35,
+          "index": 34,
           "name": "album_sort_order",
           "cpp_enum": "ALBUM_SORT_ORDER",
           "type": "string",
           "description": "Album browser sort order (Alphabetical|Newest on Top|Oldest on Top)"
         },
         {
-          "index": 36,
+          "index": 35,
           "name": "artist_album_sort_order",
           "cpp_enum": "ARTIST_ALBUM_SORT_ORDER",
           "type": "string",
           "description": "Artist discography sort order (Oldest on Top|Newest on Top|Alphabetical)"
         },
         {
-          "index": 37,
+          "index": 36,
           "name": "podcast_sort_order",
           "cpp_enum": "PODCAST_SORT_ORDER",
           "type": "string",
           "description": "Podcast episode sort order (Newest on Top|Oldest on Top)"
         },
         {
-          "index": 38,
+          "index": 37,
           "name": "ww_sens_okay_nabu",
           "cpp_enum": "WW_SENS_OKAY_NABU",
           "type": "string",
           "description": "Okay Nabu wake word sensitivity (Slightly sensitive|Moderately sensitive|Very sensitive)"
         },
         {
-          "index": 39,
+          "index": 38,
           "name": "ww_sens_hey_luna",
           "cpp_enum": "WW_SENS_HEY_LUNA",
           "type": "string",
           "description": "Hey Luna wake word sensitivity (Slightly sensitive|Moderately sensitive|Very sensitive)"
         },
         {
-          "index": 40,
+          "index": 39,
           "name": "ww_sens_hey_jarvis",
           "cpp_enum": "WW_SENS_HEY_JARVIS",
           "type": "string",
           "description": "Hey Jarvis wake word sensitivity (Slightly sensitive|Moderately sensitive|Very sensitive)"
         },
         {
-          "index": 41,
+          "index": 40,
           "name": "ww_sens_hey_mycroft",
           "cpp_enum": "WW_SENS_HEY_MYCROFT",
           "type": "string",
           "description": "Hey Mycroft wake word sensitivity (Slightly sensitive|Moderately sensitive|Very sensitive)"
         },
         {
-          "index": 42,
+          "index": 41,
           "name": "ww_sens_alexa",
           "cpp_enum": "WW_SENS_ALEXA",
           "type": "string",
           "description": "Alexa wake word sensitivity (Slightly sensitive|Moderately sensitive|Very sensitive)"
         },
         {
-          "index": 43,
+          "index": 42,
           "name": "wake_screen_on_assist",
           "cpp_enum": "WAKE_SCREEN_ON_ASSIST",
           "type": "bool",
           "description": "1 = wake display automatically when voice assistant triggers, else 0"
         },
         {
-          "index": 44,
+          "index": 43,
           "name": "alert_volume",
           "cpp_enum": "ALERT_VOLUME",
           "type": "u16",
           "description": "Timer, alarm, and notification chime volume percentage (20..100)"
         },
         {
-          "index": 45,
+          "index": 44,
           "name": "volume_step_size",
           "cpp_enum": "VOLUME_STEP_SIZE",
           "type": "u16",
           "description": "Rotary/button volume increment step percentage (1..10)"
         },
         {
-          "index": 46,
+          "index": 45,
           "name": "game_sound_effects",
           "cpp_enum": "GAME_SOUND_EFFECTS",
           "type": "bool",
           "description": "1 = play arcade game sound effects, else 0"
         },
         {
-          "index": 47,
+          "index": 46,
           "name": "ble_beacon_enabled",
           "cpp_enum": "BLE_BEACON_ENABLED",
           "type": "bool",
           "description": "1 = enable BLE iBeacon presence advertising (derived from native_ble_tracking), else 0"
         },
         {
-          "index": 48,
+          "index": 47,
           "name": "ble_beacon_mode",
           "cpp_enum": "BLE_BEACON_MODE",
           "type": "string",
           "description": "BLE beacon advertising duty policy (Handheld Only|Handheld + Screen Off|Always)"
         },
         {
-          "index": 49,
+          "index": 48,
           "name": "weather_sim_condition",
           "cpp_enum": "WEATHER_SIM_CONDITION",
           "type": "string",
           "description": "Developer weather animation override (Live (Home Assistant) or simulated condition label)"
         },
         {
-          "index": 50,
+          "index": 49,
           "name": "theme_color_hex",
           "cpp_enum": "THEME_COLOR_HEX",
           "type": "string",
           "description": "Custom theme accent color (#RRGGBB) synchronized with device_custom_color"
         },
         {
-          "index": 51,
+          "index": 50,
           "name": "home_clock_tap_action",
           "cpp_enum": "HOME_CLOCK_TAP_ACTION",
           "type": "string",
           "description": "Action when tapping the time readout on the Home Screen (Time App|Clock Face)"
         },
         {
-          "index": 52,
+          "index": 51,
           "name": "show_utc_clock",
           "cpp_enum": "SHOW_UTC_CLOCK",
           "type": "bool",
           "description": "1 = show a dedicated UTC World Clock card on the Time App Clock tab, else 0"
         },
         {
-          "index": 53,
+          "index": 52,
           "name": "world_clocks",
           "cpp_enum": "WORLD_CLOCKS",
           "type": "string",
           "description": "Semicolon-delimited custom-labeled World Clock entries (up to 4, '<label>|<iana>;...') shown on the Time App Clock tab"
         },
         {
-          "index": 54,
+          "index": 53,
           "name": "alarms_summary",
           "cpp_enum": "ALARMS_SUMMARY",
           "type": "string",
           "description": "Semicolon-delimited 3-slot device alarm schedule ('HH:MM|enabled|recurrence;...')"
         },
         {
-          "index": 55,
+          "index": 54,
           "name": "local_clock_label",
           "cpp_enum": "LOCAL_CLOCK_LABEL",
           "type": "string",
@@ -1090,67 +1083,314 @@
   },
   "catalogs": {
     "shortcut_routes": [
-      { "token": "app:pinned", "label": "Pinned", "group": "Apps", "dock_only": true },
-      { "token": "app:music", "label": "Music", "group": "Apps" },
-      { "token": "app:home_hub", "label": "Home Hub", "group": "Apps" },
-      { "token": "app:area", "label": "Area Control", "group": "Apps" },
-      { "token": "app:remote", "label": "Remote", "group": "Apps" },
-      { "token": "app:weather", "label": "Sky & Weather", "group": "Apps" },
-      { "token": "app:time", "label": "Time", "group": "Apps" },
-      { "token": "app:tools", "label": "Tools", "group": "Apps" },
-      { "token": "app:games", "label": "Games", "group": "Apps" },
-      { "token": "app:clock", "label": "Clock Face", "group": "Apps" },
-      { "token": "home_hub:alarm", "label": "Security Alarm", "group": "Home Hub" },
-      { "token": "home_hub:cameras", "label": "Cameras", "group": "Home Hub" },
-      { "token": "home_hub:intercom", "label": "Intercom", "group": "Home Hub" },
-      { "token": "home_hub:thermostat", "label": "Thermostat", "group": "Home Hub" },
-      { "token": "home_hub:entry", "label": "Entry & Garage", "group": "Home Hub" },
-      { "token": "home_hub:vacuum", "label": "Robot Vacuum", "group": "Home Hub" },
-      { "token": "area:picker", "label": "Switch Area", "group": "Area Control" },
-      { "token": "area:scene", "label": "Area: Scenes", "group": "Area Control" },
-      { "token": "area:light", "label": "Area: Lights", "group": "Area Control" },
-      { "token": "area:cover", "label": "Area: Blinds & Curtains", "group": "Area Control" },
-      { "token": "area:fan", "label": "Area: Fans", "group": "Area Control" },
-      { "token": "area:switch", "label": "Area: Switches", "group": "Area Control" },
-      { "token": "area:climate", "label": "Area: Climate", "group": "Area Control" },
-      { "token": "area:media", "label": "Area: Media", "group": "Area Control" },
-      { "token": "area:all", "label": "Area: All Devices", "group": "Area Control" },
-      { "token": "weather:current", "label": "Current Weather", "group": "Sky & Weather" },
-      { "token": "weather:forecast", "label": "5-Day Forecast", "group": "Sky & Weather" },
-      { "token": "weather:sun", "label": "Sun Path", "group": "Sky & Weather" },
-      { "token": "weather:moon", "label": "Moon Phase", "group": "Sky & Weather" },
-      { "token": "time:clock", "label": "World Clocks", "group": "Time" },
-      { "token": "time:timers", "label": "Timers", "group": "Time" },
-      { "token": "time:alarms", "label": "Alarms", "group": "Time" },
-      { "token": "time:stopwatch", "label": "Stopwatch", "group": "Time" },
-      { "token": "music:speakers", "label": "Speakers", "group": "Music" },
-      { "token": "music:library", "label": "Music Library", "group": "Music" },
-      { "token": "music:favorites", "label": "Favorites", "group": "Music" },
-      { "token": "music:playlists", "label": "Playlists", "group": "Music" },
-      { "token": "music:queue", "label": "Playback Queue", "group": "Music" },
-      { "token": "remote:devices", "label": "Remote Devices", "group": "Remote" },
-      { "token": "tools:stopwatch", "label": "Analog Chronograph", "group": "Tools", "capability": "round" },
-      { "token": "tools:level", "label": "Bubble Level", "group": "Tools", "capability": "imu" },
-      { "token": "tools:flashlight", "label": "Flashlight", "group": "Tools" },
-      { "token": "tools:calculator", "label": "Calculator", "group": "Tools" },
-      { "token": "tools:calendar", "label": "Calendar", "group": "Tools" },
-      { "token": "tools:dice", "label": "Dice Roll", "group": "Tools" },
-      { "token": "tools:coin_flip", "label": "Coin Flip", "group": "Tools" },
-      { "token": "games:marbles", "label": "Marbles", "group": "Games" },
-      { "token": "games:archery", "label": "Archery", "group": "Games" },
-      { "token": "games:bricks", "label": "Bricks", "group": "Games" },
-      { "token": "games:chomp", "label": "Chomp", "group": "Games" },
-      { "token": "games:2048", "label": "2048", "group": "Games" },
-      { "token": "games:memory", "label": "Memory Match", "group": "Games" },
-      { "token": "settings:display", "label": "Display Settings", "group": "Settings" },
-      { "token": "settings:sleep", "label": "Sleep & Wake", "group": "Settings" },
-      { "token": "settings:sound", "label": "Sound Settings", "group": "Settings" },
-      { "token": "settings:voice", "label": "Voice Settings", "group": "Settings" },
-      { "token": "settings:music", "label": "Music Settings", "group": "Settings" },
-      { "token": "settings:home", "label": "Home Settings", "group": "Settings" },
-      { "token": "settings:actions", "label": "Device Actions", "group": "Settings" },
-      { "token": "settings:update", "label": "Software Update", "group": "Settings" },
-      { "token": "settings:info", "label": "System Info", "group": "Settings" }
+      {
+        "token": "app:pinned",
+        "label": "Pinned",
+        "group": "Apps",
+        "dock_only": true
+      },
+      {
+        "token": "app:music",
+        "label": "Music",
+        "group": "Apps"
+      },
+      {
+        "token": "app:home_hub",
+        "label": "Home Hub",
+        "group": "Apps"
+      },
+      {
+        "token": "app:area",
+        "label": "Area Control",
+        "group": "Apps"
+      },
+      {
+        "token": "app:remote",
+        "label": "Remote",
+        "group": "Apps"
+      },
+      {
+        "token": "app:weather",
+        "label": "Sky & Weather",
+        "group": "Apps"
+      },
+      {
+        "token": "app:time",
+        "label": "Time",
+        "group": "Apps"
+      },
+      {
+        "token": "app:tools",
+        "label": "Tools",
+        "group": "Apps"
+      },
+      {
+        "token": "app:games",
+        "label": "Games",
+        "group": "Apps"
+      },
+      {
+        "token": "app:clock",
+        "label": "Clock Face",
+        "group": "Apps"
+      },
+      {
+        "token": "home_hub:alarm",
+        "label": "Security Alarm",
+        "group": "Home Hub"
+      },
+      {
+        "token": "home_hub:cameras",
+        "label": "Cameras",
+        "group": "Home Hub"
+      },
+      {
+        "token": "home_hub:intercom",
+        "label": "Intercom",
+        "group": "Home Hub"
+      },
+      {
+        "token": "home_hub:thermostat",
+        "label": "Thermostat",
+        "group": "Home Hub"
+      },
+      {
+        "token": "home_hub:entry",
+        "label": "Entry & Garage",
+        "group": "Home Hub"
+      },
+      {
+        "token": "home_hub:vacuum",
+        "label": "Robot Vacuum",
+        "group": "Home Hub"
+      },
+      {
+        "token": "area:picker",
+        "label": "Switch Area",
+        "group": "Area Control"
+      },
+      {
+        "token": "area:scene",
+        "label": "Area: Scenes",
+        "group": "Area Control"
+      },
+      {
+        "token": "area:light",
+        "label": "Area: Lights",
+        "group": "Area Control"
+      },
+      {
+        "token": "area:cover",
+        "label": "Area: Blinds & Curtains",
+        "group": "Area Control"
+      },
+      {
+        "token": "area:fan",
+        "label": "Area: Fans",
+        "group": "Area Control"
+      },
+      {
+        "token": "area:switch",
+        "label": "Area: Switches",
+        "group": "Area Control"
+      },
+      {
+        "token": "area:climate",
+        "label": "Area: Climate",
+        "group": "Area Control"
+      },
+      {
+        "token": "area:media",
+        "label": "Area: Media",
+        "group": "Area Control"
+      },
+      {
+        "token": "area:all",
+        "label": "Area: All Devices",
+        "group": "Area Control"
+      },
+      {
+        "token": "weather:current",
+        "label": "Current Weather",
+        "group": "Sky & Weather"
+      },
+      {
+        "token": "weather:forecast",
+        "label": "5-Day Forecast",
+        "group": "Sky & Weather"
+      },
+      {
+        "token": "weather:sun",
+        "label": "Sun Path",
+        "group": "Sky & Weather"
+      },
+      {
+        "token": "weather:moon",
+        "label": "Moon Phase",
+        "group": "Sky & Weather"
+      },
+      {
+        "token": "time:clock",
+        "label": "World Clocks",
+        "group": "Time"
+      },
+      {
+        "token": "time:timers",
+        "label": "Timers",
+        "group": "Time"
+      },
+      {
+        "token": "time:alarms",
+        "label": "Alarms",
+        "group": "Time"
+      },
+      {
+        "token": "time:stopwatch",
+        "label": "Stopwatch",
+        "group": "Time"
+      },
+      {
+        "token": "music:speakers",
+        "label": "Speakers",
+        "group": "Music"
+      },
+      {
+        "token": "music:library",
+        "label": "Music Library",
+        "group": "Music"
+      },
+      {
+        "token": "music:favorites",
+        "label": "Favorites",
+        "group": "Music"
+      },
+      {
+        "token": "music:playlists",
+        "label": "Playlists",
+        "group": "Music"
+      },
+      {
+        "token": "music:queue",
+        "label": "Playback Queue",
+        "group": "Music"
+      },
+      {
+        "token": "remote:devices",
+        "label": "Remote Devices",
+        "group": "Remote"
+      },
+      {
+        "token": "tools:stopwatch",
+        "label": "Analog Chronograph",
+        "group": "Tools",
+        "capability": "round"
+      },
+      {
+        "token": "tools:level",
+        "label": "Bubble Level",
+        "group": "Tools",
+        "capability": "imu"
+      },
+      {
+        "token": "tools:flashlight",
+        "label": "Flashlight",
+        "group": "Tools"
+      },
+      {
+        "token": "tools:calculator",
+        "label": "Calculator",
+        "group": "Tools"
+      },
+      {
+        "token": "tools:calendar",
+        "label": "Calendar",
+        "group": "Tools"
+      },
+      {
+        "token": "tools:dice",
+        "label": "Dice Roll",
+        "group": "Tools"
+      },
+      {
+        "token": "tools:coin_flip",
+        "label": "Coin Flip",
+        "group": "Tools"
+      },
+      {
+        "token": "games:marbles",
+        "label": "Marbles",
+        "group": "Games"
+      },
+      {
+        "token": "games:archery",
+        "label": "Archery",
+        "group": "Games"
+      },
+      {
+        "token": "games:bricks",
+        "label": "Bricks",
+        "group": "Games"
+      },
+      {
+        "token": "games:chomp",
+        "label": "Chomp",
+        "group": "Games"
+      },
+      {
+        "token": "games:2048",
+        "label": "2048",
+        "group": "Games"
+      },
+      {
+        "token": "games:memory",
+        "label": "Memory Match",
+        "group": "Games"
+      },
+      {
+        "token": "settings:display",
+        "label": "Display Settings",
+        "group": "Settings"
+      },
+      {
+        "token": "settings:sleep",
+        "label": "Sleep & Wake",
+        "group": "Settings"
+      },
+      {
+        "token": "settings:sound",
+        "label": "Sound Settings",
+        "group": "Settings"
+      },
+      {
+        "token": "settings:voice",
+        "label": "Voice Settings",
+        "group": "Settings"
+      },
+      {
+        "token": "settings:music",
+        "label": "Music Settings",
+        "group": "Settings"
+      },
+      {
+        "token": "settings:home",
+        "label": "Home Settings",
+        "group": "Settings"
+      },
+      {
+        "token": "settings:actions",
+        "label": "Device Actions",
+        "group": "Settings"
+      },
+      {
+        "token": "settings:update",
+        "label": "Software Update",
+        "group": "Settings"
+      },
+      {
+        "token": "settings:info",
+        "label": "System Info",
+        "group": "Settings"
+      }
     ],
     "activity_sources": [
       {
@@ -1234,44 +1474,6 @@
         "label": "Robot Vacuum"
       }
     ]
-  },
-  "power_profiles": {
-    "Pocket Carry": {
-      "wake_word_mode": "Docked Only",
-      "tap_to_wake": "Docked Only",
-      "pickup_to_wake": "Docked Only",
-      "battery_screen_timeout": "30s",
-      "docked_idle_timeout": "1 min",
-      "battery_hibernate_timeout": "15 min",
-      "docked_screensaver": true
-    },
-    "Handheld Roaming": {
-      "wake_word_mode": "Docked Only",
-      "tap_to_wake": "Single Tap",
-      "pickup_to_wake": "Always On",
-      "battery_screen_timeout": "30s",
-      "docked_idle_timeout": "1 min",
-      "battery_hibernate_timeout": "30 min",
-      "docked_screensaver": true
-    },
-    "Wearable Watch": {
-      "wake_word_mode": "Docked Only",
-      "tap_to_wake": "Double Tap",
-      "pickup_to_wake": "Always On",
-      "battery_screen_timeout": "15s",
-      "docked_idle_timeout": "1 min",
-      "battery_hibernate_timeout": "15 min",
-      "docked_screensaver": true
-    },
-    "Always-On Wall / Desk": {
-      "wake_word_mode": "Always On",
-      "tap_to_wake": "Single Tap",
-      "pickup_to_wake": "Disabled",
-      "battery_screen_timeout": "Never",
-      "docked_idle_timeout": "5 min",
-      "battery_hibernate_timeout": "Disabled",
-      "docked_screensaver": true
-    }
   },
   "rpc_methods": {
     "device_hello": {

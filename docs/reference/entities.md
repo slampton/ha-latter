@@ -27,7 +27,7 @@ Latter spans **6 Home Assistant platforms** ([`sensor.py`](../../custom_componen
 | `binary_sensor.<slug>_timer_active` | `binary_sensor` (`running`) | `on` / `off` *(display devices)* | `paused`, `remaining_seconds` — event-driven via `latter.timer_alarm_state` |
 | `sensor.<slug>_timer_remaining` | `sensor` (`duration`, `s`) | Remaining seconds *(display devices)* | `running`, `paused` — ticked locally at 1 Hz in Home Assistant while running (zero Wi-Fi polling) |
 | `binary_sensor.<slug>_alarm_ringing` | `binary_sensor` (`sound`) | `on` / `off` *(display devices)* | Asserts while an on-device alarm or timer chime is ringing (`latter.timer_alarm_state`) |
-| `select.<slug>_power_profile` | `select` (`config`) | *Pocket Carry* · *Handheld Roaming* · *Wearable Watch* · *Always-On Wall / Desk* · *Custom* | Sleep-safe subentry control *(display devices)*; syncs via `device_prefs` |
+| `select.<slug>_device_group` | `select` (`config`) | *Pocket Carry* · *Handhelds* · *Wearables* · *Wall & Desk Panels* · custom groups · *Custom* | Sleep-safe subentry Device Group preset selector; syncs active group baseline via `device_prefs` |
 | `select.<slug>_wake_word_mode` | `select` (`config`) | *Docked Only* · *Always On* · *Disabled* | Sleep-safe subentry control *(mic-equipped devices)*; syncs via `device_prefs` |
 | `number.<slug>_alert_volume` | `number` (`config`) | `20–100%` (step `5%`) | Sleep-safe chime/alarm volume *(speaker-equipped devices)*; syncs via `device_prefs` |
 | `button.<slug>_find_my_device` | `button` (`identify`) | Press | Dispatches `latter_device_command(command="find_my")` *(speaker-equipped devices)* |
@@ -44,7 +44,7 @@ Enabled by default (`entity_registry_visible_default = False`, `EntityCategory.D
 | `sensor.<slug>_weather_forecast` | Current weather condition | `rev` | **`weather_forecast`:** temperature, condition, high/low, humidity, wind, 5-day `forecast_5d` records, solar arc (`sun_*`), `moon_phase` |
 | `sensor.<slug>_calendar_agenda` | Upcoming event count (up to 25) | `rev` | **`calendar_agenda`:** `summary` (up to 5 `time\|title\|location\|all_day` records) and `count` |
 | `sensor.<slug>_remote_config` | Active remote slot label | `rev` | **`remote_config`:** active slot, configured count, and up to 10 `slots_summary` records |
-| `sensor.<slug>_device_prefs` | Current `prefs_seq` | `rev`, `prefs_seq` | **`device_prefs`:** `prefs_seq` plus all 50 typed device preferences (`power_profile` through `local_clock_label`, including `theme_color_hex`, `world_clocks`, and `alarms_summary`) |
+| `sensor.<slug>_device_prefs` | Current `prefs_seq` | `rev`, `prefs_seq` | **`device_prefs`:** `prefs_seq` plus all 49 typed device preferences (`wake_word_mode` through `alarms_summary`, including `theme_color_hex`, `local_clock_label`, and `world_clocks`) |
 
 ---
 

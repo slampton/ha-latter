@@ -108,7 +108,7 @@ Saves `hex_color` (`#RRGGBB`, optional `name`) into the 24-swatch System color l
 Executes a Home Assistant entity shortcut (`entity_id`, `action`, optional `code`) configured on the target device's **App Dock** (`dock_items`) or **Pinned App** (`pinned_items`), strictly enforcing the device's configured `(entity_id, action)` allowlist and `security_pin_policy` (`auto` / `allow` / `require_pin` / `block`) on perimeter locks, garage/gate/door covers, and security alarms.
 
 ### `latter.set_device_prefs` *(admin / bound-device RPC)*
-Applies typed preference updates (`changes` dict, optional `base_seq`) to the Device's sleep-safe subentry (`studio/settings.py`), cascading `power_profile` presets when selected, incrementing `prefs_seq`, and pushing the updated `device_prefs` Protocol v3 frame.
+Applies typed preference updates (`changes` dict, optional `base_seq`) to the Device's sleep-safe subentry (`studio/settings.py`), switching `device_group` to `custom` when an enforced baseline setting diverges, incrementing `prefs_seq`, and pushing the updated `device_prefs` Protocol v3 frame.
 
 ### `latter.reset_device` *(admin)*
 Resets `target_device` (**required**; never falls back to a default device):

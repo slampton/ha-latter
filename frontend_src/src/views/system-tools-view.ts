@@ -414,6 +414,7 @@ export function renderSystemToolsView(store: StudioStore): TemplateResult {
         })}
 
         ${renderCard({
+          id: "card-perimeter-security",
           title: "Perimeter Security & Signing",
           contentClass: "settings-list",
           body: html`${renderSettingsRow({

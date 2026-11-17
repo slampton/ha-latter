@@ -4,8 +4,6 @@
 
 import type { DeviceViewId, IssueItem, SecurityPinPolicy, StudioViewId, SystemViewId } from "./types.js";
 import {
-  POWER_PROFILE_PREFS,
-  POWER_PROFILE_SUBKEYS,
   SHORTCUT_ROUTES_CATALOG,
   DEFAULT_DOCK_ROUTES_TOKENS,
   DEFAULT_DOCK_ROUTES,
@@ -17,8 +15,6 @@ import {
 } from "./protocol-schema.js";
 
 export {
-  POWER_PROFILE_PREFS,
-  POWER_PROFILE_SUBKEYS,
   SHORTCUT_ROUTES_CATALOG,
   DEFAULT_DOCK_ROUTES_TOKENS,
   DEFAULT_DOCK_ROUTES,
@@ -29,7 +25,7 @@ export {
   ACTIVITY_SOURCES_CATALOG,
 };
 
-export const STUDIO_REV = 23;
+export const STUDIO_REV = 25;
 export const MAX_DOCK_ITEMS = 24;
 export const MAX_PINNED_ITEMS = 96;
 export const SHORTCUT_LABEL_MAX = 24;
@@ -202,6 +198,7 @@ export const WALLPAPER_ROTATION_OPTIONS: ReadonlyArray<{ value: number; label: s
 ];
 
 export const DEFAULT_DEVICE_GROUP_IDS = new Set([
+  "pocket_carry",
   "handhelds",
   "wearables",
   "wall_panels",
@@ -214,6 +211,22 @@ export const GROUP_BEHAVIOR_NON_PREF_KEYS: ReadonlyArray<string> = [
   "area_follow_dwell_s",
   "area_handoff",
   "security_pin_policy",
+];
+
+export const GROUP_DISPLAY_NON_PREF_KEYS: ReadonlyArray<string> = [
+  "wallpaper_source",
+  "wallpaper_cycle_minutes",
+  "device_custom_color",
+];
+
+export const GROUP_INTERFACE_NON_PREF_KEYS: ReadonlyArray<string> = [
+  "dock_items",
+  "pinned_items",
+  "area_categories",
+  "home_categories",
+  "activity_card",
+  "activity_sources",
+  "device_remote_group",
 ];
 
 export const LABEL_MINOR_WORDS = new Set([

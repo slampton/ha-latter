@@ -1,7 +1,7 @@
 /**
- * Device Overview View (`dashboard`, D-029 / D-048 / D-049):
- * - Column 1: High-level Status card (header state pill, 2x2 tonal metric tiles, footer links)
- *   followed by Quick Actions (immediate action tiles + live volume).
+ * Device Overview View (`dashboard`, D-029 / D-048 / D-049 / D-050):
+ * - Column 1: High-level Status card (header state pill + responsive 2x2 tonal metric tiles)
+ *   followed by Quick Actions (immediate action tiles + live volume + Open in ESPHome & Download Backup footer links).
  * - Column 2: Unified Assignments card (Device Group with Custom / Save Custom Group / Manage Groups,
  *   Assigned Person, Remote Control Group) followed by spillover Sensors & Controls.
  */
@@ -12,6 +12,7 @@ import {
   renderQuickActionGrid,
   renderSelectRow,
   renderSettingsRow,
+  renderSvgIcon,
 } from "../components/controls.js";
 import { html, nothing, type TemplateResult } from "../lib/lit.js";
 import type { StudioStore } from "../state/store.js";
@@ -24,18 +25,14 @@ import {
   rssiToPercent,
 } from "../utils/format.js";
 
-const ICON_AREA = "M12,6.5A2.5,2.5 0 0,1 14.5,9A2.5,2.5 0 0,1 12,11.5A2.5,2.5 0 0,1 9.5,9A2.5,2.5 0 0,1 12,6.5M12,2A7,7 0 0,1 19,9C19,14.25 12,22 12,22C12,22 5,14.25 5,9A7,7 0 0,1 12,2M12,4A5,5 0 0,0 7,9C7,10 7,12 12,18.71C17,12 17,10 17,9A5,5 0 0,0 12,4Z";
-const ICON_BATTERY = "M16,20H8V6H16M16.67,4H15V2H9V4H7.33A1.33,1.33 0 0,0 6,5.33V20.67C6,21.4 6.6,22 7.33,22H16.67A1.33,1.33 0 0,0 18,20.67V5.33C18,4.6 17.4,4 16.67,4Z";
-const ICON_PLUG = "M16,7V3H14V7H10V3H8V7H8C7,7 6,8 6,9V14.5L9.5,18V21H14.5V18L18,14.5V9C18,8 17,7 16,7M16,13.67L12.5,17.17V19H11.5V17.17L8,13.67V9H16V13.67Z";
-const ICON_RADAR = "M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12C22,10.84 21.79,9.69 21.39,8.61L19.79,10.21C19.93,10.8 20,11.4 20,12A8,8 0 0,1 12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4C12.6,4 13.2,4.07 13.79,4.21L15.4,2.6C14.31,2.21 13.16,2 12,2M19,2A2,2 0 0,0 17,4A2,2 0 0,0 19,6A2,2 0 0,0 21,4A2,2 0 0,0 19,2M12,6A6,6 0 0,0 6,12A6,6 0 0,0 12,18A6,6 0 0,0 18,12H16A4,4 0 0,1 12,16A4,4 0 0,1 8,12A4,4 0 0,1 12,8V6M12,10A2,2 0 0,0 10,12A2,2 0 0,0 12,14A2,2 0 0,0 14,12A2,2 0 0,0 12,10Z";
-const ICON_WIFI = "M12,21L15.6,16.2C14.6,15.45 13.35,15 12,15C10.65,15 9.4,15.45 8.4,16.2L12,21M12,3C7.95,3 4.21,4.34 1.2,6.6L3,9C5.5,7.12 8.62,6 12,6C15.38,6 18.5,7.12 21,9L22.8,6.6C19.79,4.34 16.05,3 12,3M12,9C9.3,9 6.81,9.89 4.8,11.4L6.6,13.8C8.1,12.67 9.97,12 12,12C14.03,12 15.9,12.67 17.4,13.8L19.2,11.4C17.19,9.89 14.7,9 12,9Z";
-const ICON_BLUETOOTH = "M14.88,16.29L13,18.17V14.41M13,5.83L14.88,7.71L13,9.58M17.71,7.71L12,2H11V9.58L6.41,5L5,6.41L10.59,12L5,17.58L6.41,19L11,14.41V22H12L17.71,16.29L13.41,12L17.71,7.71Z";
-const ICON_CHIP = "M17,17H7V7H17M21,11V9H19V7C19,5.89 18.1,5 17,5H15V3H13V5H11V3H9V5H7C5.89,5 5,5.89 5,7V9H3V11H5V13H3V15H5V17A2,2 0 0,0 7,19H9V21H11V19H13V21H15V19H17A2,2 0 0,0 19,17V15H21V13H19V11M15,15H9V9H15V15Z";
-const ICON_TAG = "M21.41,11.58L12.41,2.58C12.05,2.22 11.55,2 11,2H4C2.9,2 2,2.9 2,4V11C2,11.55 2.22,12.05 2.59,12.42L11.59,21.42C11.95,21.78 12.45,22 13,22C13.55,22 14.05,21.78 14.41,21.41L21.41,14.41C21.78,14.05 22,13.55 22,13C22,12.45 21.77,11.94 21.41,11.58M13,20.01L4,11V4H11V3.99L20,12.99L13,20.01M6.5,5A1.5,1.5 0 0,1 8,6.5A1.5,1.5 0 0,1 6.5,8A1.5,1.5 0 0,1 5,6.5A1.5,1.5 0 0,1 6.5,5Z";
-
-function renderTileIcon(pathD: string): TemplateResult {
-  return html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d=${pathD}></path></svg>`;
-}
+const DEV_ICON_AREA = "M12,6.5A2.5,2.5 0 0,1 14.5,9A2.5,2.5 0 0,1 12,11.5A2.5,2.5 0 0,1 9.5,9A2.5,2.5 0 0,1 12,6.5M12,2A7,7 0 0,1 19,9C19,14.25 12,22 12,22C12,22 5,14.25 5,9A7,7 0 0,1 12,2M12,4A5,5 0 0,0 7,9C7,10 7,12 12,18.71C17,12 17,10 17,9A5,5 0 0,0 12,4Z";
+const DEV_ICON_BATTERY = "M16,20H8V6H16M16.67,4H15V2H9V4H7.33A1.33,1.33 0 0,0 6,5.33V20.67C6,21.4 6.6,22 7.33,22H16.67A1.33,1.33 0 0,0 18,20.67V5.33C18,4.6 17.4,4 16.67,4Z";
+const DEV_ICON_PLUG = "M16,7V3H14V7H10V3H8V7H8C7,7 6,8 6,9V14.5L9.5,18V21H14.5V18L18,14.5V9C18,8 17,7 16,7M16,13.67L12.5,17.17V19H11.5V17.17L8,13.67V9H16V13.67Z";
+const DEV_ICON_RADAR = "M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12C22,10.84 21.79,9.69 21.39,8.61L19.79,10.21C19.93,10.8 20,11.4 20,12A8,8 0 0,1 12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4C12.6,4 13.2,4.07 13.79,4.21L15.4,2.6C14.31,2.21 13.16,2 12,2M19,2A2,2 0 0,0 17,4A2,2 0 0,0 19,6A2,2 0 0,0 21,4A2,2 0 0,0 19,2M12,6A6,6 0 0,0 6,12A6,6 0 0,0 12,18A6,6 0 0,0 18,12H16A4,4 0 0,1 12,16A4,4 0 0,1 8,12A4,4 0 0,1 12,8V6M12,10A2,2 0 0,0 10,12A2,2 0 0,0 12,14A2,2 0 0,0 14,12A2,2 0 0,0 12,10Z";
+const DEV_ICON_WIFI = "M12,21L15.6,16.2C14.6,15.45 13.35,15 12,15C10.65,15 9.4,15.45 8.4,16.2L12,21M12,3C7.95,3 4.21,4.34 1.2,6.6L3,9C5.5,7.12 8.62,6 12,6C15.38,6 18.5,7.12 21,9L22.8,6.6C19.79,4.34 16.05,3 12,3M12,9C9.3,9 6.81,9.89 4.8,11.4L6.6,13.8C8.1,12.67 9.97,12 12,12C14.03,12 15.9,12.67 17.4,13.8L19.2,11.4C17.19,9.89 14.7,9 12,9Z";
+const DEV_ICON_BLUETOOTH = "M14.88,16.29L13,18.17V14.41M13,5.83L14.88,7.71L13,9.58M17.71,7.71L12,2H11V9.58L6.41,5L5,6.41L10.59,12L5,17.58L6.41,19L11,14.41V22H12L17.71,16.29L13.41,12L17.71,7.71Z";
+const DEV_ICON_CHIP = "M17,17H7V7H17M21,11V9H19V7C19,5.89 18.1,5 17,5H15V3H13V5H11V3H9V5H7C5.89,5 5,5.89 5,7V9H3V11H5V13H3V15H5V17A2,2 0 0,0 7,19H9V21H11V19H13V21H15V19H17A2,2 0 0,0 19,17V15H21V13H19V11M15,15H9V9H15V15Z";
+const DEV_ICON_TAG = "M21.41,11.58L12.41,2.58C12.05,2.22 11.55,2 11,2H4C2.9,2 2,2.9 2,4V11C2,11.55 2.22,12.05 2.59,12.42L11.59,21.42C11.95,21.78 12.45,22 13,22C13.55,22 14.05,21.78 14.41,21.41L21.41,14.41C21.78,14.05 22,13.55 22,13C22,12.45 21.77,11.94 21.41,11.58M13,20.01L4,11V4H11V3.99L20,12.99L13,20.01M6.5,5A1.5,1.5 0 0,1 8,6.5A1.5,1.5 0 0,1 6.5,8A1.5,1.5 0 0,1 5,6.5A1.5,1.5 0 0,1 6.5,5Z";
 
 function rssiQualityLabel(rssi: number | null): string {
   if (rssi === null || !Number.isFinite(rssi)) return "No reading";
@@ -162,8 +159,8 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
   ) {
     otherQuickItems.push(data.speaker_volume);
   }
-  const showQuickActionsCard =
-    !isBleOnly && (quickActionButtons.length > 0 || otherQuickItems.length > 0);
+  const hasQuickControls = quickActionButtons.length > 0 || otherQuickItems.length > 0;
+  const showQuickActionsCard = !isBleOnly;
   const otherSensorItems = store.getSectionItems("other");
 
   const groups = data?.device_groups || [];
@@ -187,7 +184,7 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
 
   const powerTileBody = hasBatteryReading
     ? html`<div class="status-tile-head">
-          ${renderTileIcon(ICON_BATTERY)}
+          ${renderSvgIcon(DEV_ICON_BATTERY)}
           <span>Battery</span>
         </div>
         <strong class="status-tile-value">${fmtPercent(curDevEntry?.battery_level, store.hass)}</strong>
@@ -199,11 +196,29 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
           ></div>
         </div>`
     : html`<div class="status-tile-head">
-          ${renderTileIcon(ICON_PLUG)}
+          ${renderSvgIcon(DEV_ICON_PLUG)}
           <span>Power</span>
         </div>
         <strong class="status-tile-value">Plugged in</strong>
         <span class="status-tile-meta">${caps.has_power ? "Sleep & wake active" : "Always on"}</span>`;
+
+  const utilityFooterLinks = html`${links.esphome_device_id
+      ? html`<button
+          type="button"
+          id="btn-open-in-ha"
+          @click=${() => store.openDeviceInHa()}
+          class="btn btn-text"
+        >
+          Open in ESPHome
+        </button>`
+      : nothing}
+    <button
+      type="button"
+      @click=${() => void store.exportBackup(store.activeSubentryId)}
+      class="btn btn-text"
+    >
+      Download Backup
+    </button>`;
 
   return html`<section id="view-dashboard" class="stack">
     ${deviceIssues.length
@@ -227,6 +242,7 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
     <div class="columns">
       <div class="column">
         ${renderCard({
+          id: "card-device-status",
           heading: html`<h3 class="card-title">Status</h3>`,
           headerActions: html`<span id="st-status-chip" class=${statusChipClass}>
             <span class=${statusDotClass} aria-hidden="true"></span>${statusLabel}
@@ -239,7 +255,7 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
               class="status-tile"
             >
               <div class="status-tile-head">
-                ${renderTileIcon(ICON_AREA)}
+                ${renderSvgIcon(DEV_ICON_AREA)}
                 <span id="st-area-label">${hasAssignedArea ? "Area" : "Current Area"}</span>
               </div>
               <strong class="status-tile-value">${areaText}</strong>
@@ -253,7 +269,7 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
                   class="status-tile"
                 >
                   <div class="status-tile-head">
-                    ${renderTileIcon(ICON_RADAR)}
+                    ${renderSvgIcon(DEV_ICON_RADAR)}
                     <span>Closest Proxy</span>
                   </div>
                   <strong class="status-tile-value">${live.ble_closest_proxy || "—"}</strong>
@@ -279,7 +295,7 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
               class="status-tile"
             >
               <div class="status-tile-head">
-                ${renderTileIcon(isBleOnly ? ICON_BLUETOOTH : ICON_WIFI)}
+                ${renderSvgIcon(isBleOnly ? DEV_ICON_BLUETOOTH : DEV_ICON_WIFI)}
                 <span id="st-wifi-label">${isBleOnly ? "BLE Signal" : "Wi-Fi Signal"}</span>
               </div>
               <strong class="status-tile-value">${rssiText}</strong>
@@ -301,7 +317,7 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
                   class="status-tile"
                 >
                   <div class="status-tile-head">
-                    ${renderTileIcon(ICON_TAG)}
+                    ${renderSvgIcon(DEV_ICON_TAG)}
                     <span>BLE Target</span>
                   </div>
                   <strong class="status-tile-value">
@@ -315,38 +331,26 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
                   class="status-tile"
                 >
                   <div class="status-tile-head">
-                    ${renderTileIcon(ICON_CHIP)}
+                    ${renderSvgIcon(DEV_ICON_CHIP)}
                     <span>Firmware</span>
                   </div>
                   <strong class="status-tile-value">${fwValue}</strong>
                   <span class="status-tile-meta">${fwMeta}</span>
                 </button>`}
           </div>`,
-          footerActions: html`${links.esphome_device_id
-              ? html`<button
-                  type="button"
-                  id="btn-open-in-ha"
-                  @click=${() => store.openDeviceInHa()}
-                  class="btn btn-text"
-                >
-                  Open in ESPHome
-                </button>`
-              : nothing}
-            <button
-              type="button"
-              @click=${() => void store.exportBackup(store.activeSubentryId)}
-              class="btn btn-text"
-            >
-              Download Backup
-            </button>`,
+          footerActions: isBleOnly ? utilityFooterLinks : nothing,
         })}
 
         ${showQuickActionsCard
           ? renderCard({
+              id: "card-device-quick-actions",
               title: "Quick Actions",
               contentClass: "settings-list",
-              body: html`${renderQuickActionGrid(store, quickActionButtons)}
-                ${otherQuickItems.map((it) => renderNativeControlRow(store, it))}`,
+              body: hasQuickControls
+                ? html`${renderQuickActionGrid(store, quickActionButtons)}
+                    ${otherQuickItems.map((it) => renderNativeControlRow(store, it))}`
+                : html`<p class="empty-state">No live actions reported by this Device.</p>`,
+              footerActions: utilityFooterLinks,
             })
           : nothing}
       </div>

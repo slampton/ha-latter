@@ -154,7 +154,7 @@ export function renderSystemPresenceView(store: StudioStore): TemplateResult {
                     const choices = row?.fusion_sensor_choices || [];
                     const thresholdId = `fusion-threshold-${areaId}`;
 
-                    return html`<div class="area-presence-box">
+                    return html`<div id=${`area-box-${areaId}`} class="area-presence-box">
                       <div class="area-box-head">
                         <div class="area-box-heading">
                           <span class="area-box-title">${areaName}</span>

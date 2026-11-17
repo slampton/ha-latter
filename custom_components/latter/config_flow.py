@@ -56,7 +56,7 @@ from .const import (
     SUBENTRY_DEVICE,
     normalize_device_slug,
 )
-from .groups import GROUP_BEHAVIOR_DEVICE_KEYS, get_device_groups
+from .groups import active_group_keys, get_device_groups
 from .hub import get_area_state_index, get_latter_system
 from .identity import (
     esphome_node_name,
@@ -218,10 +218,18 @@ def _detect_hardware_defaults(
     if manifest and "w" in manifest and "h" in manifest:
         is_stationary = bool(int(manifest.get("stationary") or 0) == 1)
         is_wearable = bool(int(manifest.get("wearable") or 0) == 1)
+        is_round_battery = (
+            str(manifest.get("shape") or "").strip().lower() == "circle"
+            and bool(int(manifest.get("battery") or 0) == 1)
+        )
         default_grp = (
             "wall_panels"
             if is_stationary
-            else ("wearables" if is_wearable else "handhelds")
+            else (
+                "wearables"
+                if is_wearable
+                else ("pocket_carry" if is_round_battery else "handhelds")
+            )
         )
         default_roaming = (not bool(esp_area)) if is_stationary else True
         return {
@@ -265,8 +273,28 @@ def device_option_defaults(
     hass: HomeAssistant, dev: dr.DeviceEntry | None, manifest: dict[str, Any]
 ) -> dict[str, Any]:
     """Return the option defaults a newly onboarded ESPHome Latter device gets (used by Reset to defaults)."""
+    hw_defs = _detect_hardware_defaults(hass, dev, manifest)
+    grp_id = str(hw_defs.get(CONF_DEVICE_GROUP) or DEFAULT_DEVICE_GROUP)
+    matched_grp = next(
+        (g for g in get_device_groups(hass) if g.get("id") == grp_id), None
+    )
+    group_defs: dict[str, Any] = {}
+    if matched_grp and isinstance(matched_grp.get("device_config"), dict):
+        for k in active_group_keys(matched_grp):
+            if k in (
+                CONF_NATIVE_BLE_TRACKING,
+                CONF_BLE_AUTO_SWITCH,
+                CONF_SYNC_DEVICE_AREA,
+            ):
+                continue
+            if (
+                k in matched_grp["device_config"]
+                and matched_grp["device_config"][k] is not None
+            ):
+                group_defs[k] = matched_grp["device_config"][k]
     return {
-        **_detect_hardware_defaults(hass, dev, manifest),
+        **hw_defs,
+        **group_defs,
         CONF_DEFAULT_SPEAKER: _discover_default_speaker(hass, dev.id if dev is not None else None),
     }
 
@@ -329,7 +357,7 @@ def _apply_onboarding_profile_and_defaults(
     if matched_grp:
         merged[CONF_DEVICE_GROUP] = str(matched_grp["id"])
         if isinstance(matched_grp.get("device_config"), dict):
-            for k in GROUP_BEHAVIOR_DEVICE_KEYS:
+            for k in active_group_keys(matched_grp):
                 if (
                     raw_grp_id == "auto"
                     and not existing
