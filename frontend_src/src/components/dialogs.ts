@@ -6,9 +6,11 @@
 import { SHORTCUT_LABEL_MAX, SHORTCUT_ROUTES_CATALOG } from "../constants.js";
 import { html, nothing, type TemplateResult } from "../lib/lit.js";
 import {
-  CURATED_MDI_ICONS,
+  isKnownMdiIcon,
+  MDI_TOTAL_ICON_COUNT,
   normalizeMdiIconSlug,
   ROUTE_PREVIEW_ICONS,
+  searchMdiIcons,
   SHORTCUT_DOMAIN_ACTIONS,
   SHORTCUT_DOMAIN_LABELS,
 } from "../mdi-catalog.js";
@@ -216,14 +218,16 @@ export function renderStudioDialogs(store: StudioStore): TemplateResult {
     scModal.kind === "route"
       ? ROUTE_PREVIEW_ICONS[scModal.routeTarget] || "mdi:apps"
       : selectedEntityObj?.icon || "mdi:flash";
-  const previewIcon = normalizeMdiIconSlug(scModal.icon) || autoDefaultIcon;
-  const iconFilterLower = (scModal.iconSearch || scModal.icon)
-    .trim()
-    .toLowerCase()
-    .replace(/^mdi:/, "");
-  const filteredMdiIcons = iconFilterLower
-    ? CURATED_MDI_ICONS.filter((slug) => slug.slice(4).includes(iconFilterLower))
-    : CURATED_MDI_ICONS;
+  const selectedCustomIcon = normalizeMdiIconSlug(scModal.icon);
+  const typedSearchIcon = normalizeMdiIconSlug(scModal.iconSearch);
+  const previewIcon =
+    selectedCustomIcon ||
+    (isKnownMdiIcon(typedSearchIcon) ? typedSearchIcon : autoDefaultIcon);
+  const hasIconQuery = scModal.iconSearch.trim().length > 0;
+  const { items: filteredMdiIcons, totalMatches: mdiMatchCount } = searchMdiIcons(
+    scModal.iconSearch,
+    120,
+  );
 
   return html`
     <dialog
@@ -776,19 +780,18 @@ export function renderStudioDialogs(store: StudioStore): TemplateResult {
             <input
               type="text"
               id="shortcut-icon-input"
-              placeholder=${`Default (${autoDefaultIcon}) or type any mdi:icon…`}
-              .value=${scModal.icon}
+              placeholder=${`Search all ${MDI_TOTAL_ICON_COUNT.toLocaleString()} icons (e.g. teddy-bear, baby, lamp)…`}
+              .value=${scModal.iconSearch}
               @input=${(ev: Event) => {
                 const raw = (ev.currentTarget as HTMLInputElement).value;
                 store.shortcutModal = {
                   ...store.shortcutModal,
-                  icon: raw,
                   iconSearch: raw,
                 };
                 store.host.requestUpdate();
               }}
             />
-            ${scModal.icon
+            ${scModal.icon || scModal.iconSearch
               ? html`<button
                   type="button"
                   @click=${() => {
@@ -805,22 +808,34 @@ export function renderStudioDialogs(store: StudioStore): TemplateResult {
                 </button>`
               : nothing}
           </div>
+          <p class="row-description">
+            ${selectedCustomIcon
+              ? `Selected: ${selectedCustomIcon}`
+              : `Default: ${autoDefaultIcon}`}
+            •
+            ${hasIconQuery
+              ? mdiMatchCount === 0
+                ? "No matching icons — try another keyword"
+                : mdiMatchCount > filteredMdiIcons.length
+                  ? `Showing ${filteredMdiIcons.length} of ${mdiMatchCount.toLocaleString()} matches`
+                  : `${mdiMatchCount.toLocaleString()} matching icon${mdiMatchCount === 1 ? "" : "s"}`
+              : `Showing popular icons (${MDI_TOTAL_ICON_COUNT.toLocaleString()} searchable)`}
+          </p>
           <div class="mdi-picker-grid" role="listbox" aria-label="Material Design Icons">
-            ${filteredMdiIcons.slice(0, 72).map(
+            ${filteredMdiIcons.map(
               (slug) => html`<button
                 type="button"
                 title=${slug}
                 aria-label=${slug}
-                aria-selected=${String(normalizeMdiIconSlug(scModal.icon) === slug)}
+                aria-selected=${String(selectedCustomIcon === slug)}
                 @click=${() => {
                   store.shortcutModal = {
                     ...store.shortcutModal,
                     icon: slug,
-                    iconSearch: "",
                   };
                   store.host.requestUpdate();
                 }}
-                class="mdi-picker-btn ${normalizeMdiIconSlug(scModal.icon) === slug ? "selected" : ""}"
+                class="mdi-picker-btn ${selectedCustomIcon === slug ? "selected" : ""}"
               >
                 <ha-icon .icon=${slug}></ha-icon>
               </button>`,

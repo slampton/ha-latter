@@ -29,7 +29,7 @@ export {
   ACTIVITY_SOURCES_CATALOG,
 };
 
-export const STUDIO_REV = 21;
+export const STUDIO_REV = 22;
 export const MAX_DOCK_ITEMS = 24;
 export const MAX_PINNED_ITEMS = 96;
 export const SHORTCUT_LABEL_MAX = 24;

@@ -3046,6 +3046,36 @@ return {
             },
         )
 
+    def test_full_7447_mdi_catalog_and_ranked_search(self) -> None:
+        """All 7,447 @mdi/js v7.4.47 icons decode in 1:1 parity with firmware ui_mdi.cpp and rank exact searches first."""
+        runner = """
+const all = getAllMdiIcons();
+const teddy = searchMdiIcons("teddy-bear");
+const multiWord = searchMdiIcons("teddy bear");
+const empty = searchMdiIcons("");
+return {
+  count: all.length,
+  hasTeddyBear: isKnownMdiIcon("mdi:teddy-bear"),
+  hasBareTeddy: isKnownMdiIcon("teddy-bear"),
+  unknownFake: isKnownMdiIcon("mdi:definitely-not-an-icon-xyz"),
+  teddyTop: teddy.items[0],
+  teddyTotal: teddy.totalMatches,
+  multiWordTop: multiWord.items[0],
+  emptyTotal: empty.totalMatches,
+  emptyLen: empty.items.length,
+};
+"""
+        got = _run_node_ts([FRONTEND_SRC / "mdi-catalog.ts"], runner)
+        self.assertEqual(got["count"], 7447)
+        self.assertTrue(got["hasTeddyBear"])
+        self.assertTrue(got["hasBareTeddy"])
+        self.assertFalse(got["unknownFake"])
+        self.assertEqual(got["teddyTop"], "mdi:teddy-bear")
+        self.assertGreaterEqual(got["teddyTotal"], 1)
+        self.assertEqual(got["multiWordTop"], "mdi:teddy-bear")
+        self.assertEqual(got["emptyTotal"], 7447)
+        self.assertGreater(got["emptyLen"], 100)
+
 
 if __name__ == "__main__":
     unittest.main()

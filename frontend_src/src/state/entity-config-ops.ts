@@ -19,7 +19,11 @@ import {
   SHORTCUT_LABEL_MAX,
   SHORTCUT_ROUTES_CATALOG,
 } from "../constants.js";
-import { normalizeMdiIconSlug, SHORTCUT_DOMAIN_ACTIONS } from "../mdi-catalog.js";
+import {
+  isKnownMdiIcon,
+  normalizeMdiIconSlug,
+  SHORTCUT_DOMAIN_ACTIONS,
+} from "../mdi-catalog.js";
 import type {
   CustomPalette,
   DeviceConfig,
@@ -940,11 +944,24 @@ export function saveShortcutModalOp(store: StudioStore): void {
     return;
   }
 
-  const rawIcon = modal.icon.trim();
-  const cleanIcon = rawIcon ? normalizeMdiIconSlug(rawIcon) : "";
-  if (rawIcon && !cleanIcon) {
-    store.showToast("Enter a valid Material Design Icon name (e.g. mdi:bell-ring)", true);
-    return;
+  const rawSelectedIcon = modal.icon.trim();
+  const rawTypedIcon = modal.iconSearch.trim();
+  let cleanIcon = "";
+  if (rawSelectedIcon) {
+    const candidate = normalizeMdiIconSlug(rawSelectedIcon);
+    if (!candidate || !isKnownMdiIcon(candidate)) {
+      store.showToast("Select a supported Material Design Icon", true);
+      return;
+    }
+    cleanIcon = candidate;
+  } else if (rawTypedIcon) {
+    const candidate = normalizeMdiIconSlug(rawTypedIcon);
+    if (candidate && isKnownMdiIcon(candidate)) {
+      cleanIcon = candidate;
+    } else {
+      store.showToast("Click one of the matching icons below (or clear the icon search)", true);
+      return;
+    }
   }
   const cleanLabel = sanitizeShortcutLabel(modal.label);
 
