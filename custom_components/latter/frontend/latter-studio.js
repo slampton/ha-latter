@@ -1,6 +1,417 @@
 // AUTO-GENERATED FILE — DO NOT EDIT DIRECTLY.
 // Source: ha-latter/frontend_src/src/ (build via `node ha-latter/frontend_src/build.mjs`).
 
+// --- src/protocol-schema.ts ---
+// AUTO-GENERATED FROM protocol/latter_v3.json BY tools/gen_protocol.py — DO NOT EDIT MANUALLY.
+const PROTOCOL_CONTRACT_VERSION = 3;
+const POWER_PROFILE_SUBKEYS = [
+  "wake_word_mode",
+  "tap_to_wake",
+  "pickup_to_wake",
+  "battery_screen_timeout",
+  "docked_idle_timeout",
+  "battery_hibernate_timeout",
+  "docked_screensaver",
+];
+const POWER_PROFILE_PREFS = {
+  "Portable Carry": {
+    wake_word_mode: "Docked Only",
+    tap_to_wake: "Docked Only",
+    pickup_to_wake: "Docked Only",
+    battery_screen_timeout: "30s",
+    docked_idle_timeout: "1 min",
+    battery_hibernate_timeout: "15 min",
+    docked_screensaver: true,
+  },
+  "Handheld Roaming": {
+    wake_word_mode: "Docked Only",
+    tap_to_wake: "Single Tap",
+    pickup_to_wake: "Always On",
+    battery_screen_timeout: "30s",
+    docked_idle_timeout: "1 min",
+    battery_hibernate_timeout: "30 min",
+    docked_screensaver: true,
+  },
+  "Wearable Watch": {
+    wake_word_mode: "Docked Only",
+    tap_to_wake: "Double Tap",
+    pickup_to_wake: "Always On",
+    battery_screen_timeout: "15s",
+    docked_idle_timeout: "1 min",
+    battery_hibernate_timeout: "15 min",
+    docked_screensaver: true,
+  },
+  "Tabletop Dock": {
+    wake_word_mode: "Docked Only",
+    tap_to_wake: "Docked Only",
+    pickup_to_wake: "Disabled",
+    battery_screen_timeout: "30s",
+    docked_idle_timeout: "5 min",
+    battery_hibernate_timeout: "15 min",
+    docked_screensaver: true,
+  },
+  "Always-On Wall / Desk": {
+    wake_word_mode: "Always On",
+    tap_to_wake: "Single Tap",
+    pickup_to_wake: "Disabled",
+    battery_screen_timeout: "Never",
+    docked_idle_timeout: "5 min",
+    battery_hibernate_timeout: "Disabled",
+    docked_screensaver: true,
+  },
+};
+const SHORTCUT_ROUTES_CATALOG = [
+  {token: "app:pinned", label: "Pinned", group: "Apps", dockOnly: true},
+  {token: "app:music", label: "Music", group: "Apps"},
+  {token: "app:home_hub", label: "Home Hub", group: "Apps"},
+  {token: "app:area", label: "Area Control", group: "Apps"},
+  {token: "app:remote", label: "Remote", group: "Apps"},
+  {token: "app:weather", label: "Sky & Weather", group: "Apps"},
+  {token: "app:time", label: "Time", group: "Apps"},
+  {token: "app:tools", label: "Tools", group: "Apps"},
+  {token: "app:games", label: "Games", group: "Apps"},
+  {token: "app:clock", label: "Clock Face", group: "Apps"},
+  {token: "home_hub:alarm", label: "Security Alarm", group: "Home Hub"},
+  {token: "home_hub:cameras", label: "Cameras", group: "Home Hub"},
+  {token: "home_hub:intercom", label: "Intercom", group: "Home Hub"},
+  {token: "home_hub:thermostat", label: "Thermostat", group: "Home Hub"},
+  {token: "home_hub:entry", label: "Entry & Garage", group: "Home Hub"},
+  {token: "home_hub:vacuum", label: "Robot Vacuum", group: "Home Hub"},
+  {token: "area:picker", label: "Switch Area", group: "Area Control"},
+  {token: "area:scene", label: "Area: Scenes", group: "Area Control"},
+  {token: "area:light", label: "Area: Lights", group: "Area Control"},
+  {token: "area:cover", label: "Area: Blinds & Curtains", group: "Area Control"},
+  {token: "area:fan", label: "Area: Fans", group: "Area Control"},
+  {token: "area:switch", label: "Area: Switches", group: "Area Control"},
+  {token: "area:climate", label: "Area: Climate", group: "Area Control"},
+  {token: "area:media", label: "Area: Media", group: "Area Control"},
+  {token: "area:all", label: "Area: All Devices", group: "Area Control"},
+  {token: "weather:current", label: "Current Weather", group: "Sky & Weather"},
+  {token: "weather:forecast", label: "5-Day Forecast", group: "Sky & Weather"},
+  {token: "weather:sun", label: "Sun Path", group: "Sky & Weather"},
+  {token: "weather:moon", label: "Moon Phase", group: "Sky & Weather"},
+  {token: "time:clock", label: "World Clocks", group: "Time"},
+  {token: "time:timers", label: "Timers", group: "Time"},
+  {token: "time:alarms", label: "Alarms", group: "Time"},
+  {token: "time:stopwatch", label: "Stopwatch", group: "Time"},
+  {token: "music:speakers", label: "Speakers", group: "Music"},
+  {token: "music:library", label: "Music Library", group: "Music"},
+  {token: "music:favorites", label: "Favorites", group: "Music"},
+  {token: "music:playlists", label: "Playlists", group: "Music"},
+  {token: "music:queue", label: "Playback Queue", group: "Music"},
+  {token: "remote:devices", label: "Remote Devices", group: "Remote"},
+  {token: "tools:stopwatch", label: "Analog Chronograph", group: "Tools", capability: "round"},
+  {token: "tools:level", label: "Bubble Level", group: "Tools", capability: "imu"},
+  {token: "tools:flashlight", label: "Flashlight", group: "Tools"},
+  {token: "tools:calculator", label: "Calculator", group: "Tools"},
+  {token: "tools:calendar", label: "Calendar", group: "Tools"},
+  {token: "tools:dice", label: "Dice Roll", group: "Tools"},
+  {token: "tools:coin_flip", label: "Coin Flip", group: "Tools"},
+  {token: "games:marbles", label: "Marbles", group: "Games"},
+  {token: "games:archery", label: "Archery", group: "Games"},
+  {token: "games:bricks", label: "Bricks", group: "Games"},
+  {token: "games:chomp", label: "Chomp", group: "Games"},
+  {token: "games:2048", label: "2048", group: "Games"},
+  {token: "games:memory", label: "Memory Match", group: "Games"},
+  {token: "settings:display", label: "Display Settings", group: "Settings"},
+  {token: "settings:sleep", label: "Sleep & Wake", group: "Settings"},
+  {token: "settings:sound", label: "Sound Settings", group: "Settings"},
+  {token: "settings:voice", label: "Voice Settings", group: "Settings"},
+  {token: "settings:music", label: "Music Settings", group: "Settings"},
+  {token: "settings:home", label: "Home Settings", group: "Settings"},
+  {token: "settings:actions", label: "Device Actions", group: "Settings"},
+  {token: "settings:update", label: "Software Update", group: "Settings"},
+  {token: "settings:info", label: "System Info", group: "Settings"},
+];
+const ACTIVITY_SOURCES_CATALOG = [
+  {token: "calendar", label: "Calendar"},
+  {token: "music_queue", label: "Music Queue"},
+  {token: "stopwatch", label: "Stopwatch"},
+  {token: "alarms", label: "Alarms"},
+  {token: "timers", label: "Timers"},
+];
+const AREA_CATEGORIES_CATALOG = [
+  {token: "scene", label: "Scenes"},
+  {token: "light", label: "Lights"},
+  {token: "cover", label: "Blinds & Curtains"},
+  {token: "fan", label: "Fans"},
+  {token: "switch", label: "Switches"},
+  {token: "climate", label: "Climate"},
+  {token: "media", label: "Media"},
+  {token: "all", label: "All Devices"},
+];
+const HOME_CATEGORIES_CATALOG = [
+  {token: "alarm", label: "Security Alarm"},
+  {token: "cameras", label: "Cameras"},
+  {token: "intercom", label: "Intercom"},
+  {token: "thermostat", label: "Thermostat"},
+  {token: "entry", label: "Entry & Garage"},
+  {token: "vacuum", label: "Robot Vacuum"},
+];
+const DEFAULT_DOCK_ROUTES = "app:pinned,app:music,app:home_hub,app:area,app:remote,app:games,app:tools";
+const DEFAULT_DOCK_ROUTES_TOKENS = [
+  "app:pinned",
+  "app:music",
+  "app:home_hub",
+  "app:area",
+  "app:remote",
+  "app:games",
+  "app:tools",
+];
+const DEFAULT_ACTIVITY_CARD = "1";
+const DEFAULT_ACTIVITY_CARD_TOKENS = [
+  "1",
+];
+const DEFAULT_ACTIVITY_SOURCES = "calendar,music_queue,stopwatch,alarms,timers";
+const DEFAULT_ACTIVITY_SOURCES_TOKENS = [
+  "calendar",
+  "music_queue",
+  "stopwatch",
+  "alarms",
+  "timers",
+];
+const DEFAULT_AREA_CATEGORIES = "scene,light,cover,fan,switch,climate,media";
+const DEFAULT_AREA_CATEGORIES_TOKENS = [
+  "scene",
+  "light",
+  "cover",
+  "fan",
+  "switch",
+  "climate",
+  "media",
+];
+const DEFAULT_HOME_CATEGORIES = "alarm,cameras,intercom,thermostat,entry,vacuum";
+const DEFAULT_HOME_CATEGORIES_TOKENS = [
+  "alarm",
+  "cameras",
+  "intercom",
+  "thermostat",
+  "entry",
+  "vacuum",
+];
+
+// --- src/constants.ts ---
+/**
+ * Canonical constants, route maps, issue messages, and Title Case dictionaries for Latter Studio.
+ */
+const STUDIO_REV = 20;
+const MAX_DOCK_ITEMS = 24;
+const MAX_PINNED_ITEMS = 96;
+const SHORTCUT_LABEL_MAX = 24;
+const MAX_WALLPAPER_UPLOAD_BYTES = 15 * 1024 * 1024;
+const DEVICE_VIEW_SLUGS = {
+  dashboard: "overview",
+  display: "display",
+  interface: "interface",
+  audio_voice: "audio",
+  power: "power",
+  presence: "presence",
+  tools: "tools",
+};
+const SYSTEM_VIEW_SLUGS = {system_overview: "overview", shared_entities: "shared", remotes: "remotes", system_sync: "groups", area_tracking: "presence", system_tools: "tools"};
+const VIEW_TITLES = {
+  system_overview: "Overview",
+  shared_entities: "Shared Entities",
+  remotes: "Media & Remotes",
+  system_sync: "Device Groups",
+  area_tracking: "BLE & Area Presence",
+  system_tools: "Tools",
+  select_device_prompt: "Managed Devices",
+  discovered_devices: "Discovered Devices",
+  dashboard: "Overview",
+  display: "Display",
+  interface: "Interface",
+  audio_voice: "Audio",
+  power: "Power",
+  presence: "Presence",
+  tools: "Tools",
+};
+const _typecheckViewMaps
+  = [DEVICE_VIEW_SLUGS, SYSTEM_VIEW_SLUGS, VIEW_TITLES];
+void _typecheckViewMaps;
+// Messages for Latter's Home Assistant Repairs (kind = translation key in strings.json).
+const ISSUE_TEXT = {
+  link_ma_player: () => "Not linked to its Music Assistant player.",
+  missing_mapped_entity: (i) =>
+    `A chosen entity no longer exists${i.detail ? `: ${i.detail}` : ""}.`,
+  ble_no_proxies: () =>
+    "BLE Area tracking is on, but no Bluetooth proxy is assigned to an Area.",
+  slot_push_failing: () =>
+    "Latter can't send Area and browse pages to this Device.",
+  device_crashed: (i) =>
+    i.detail === "stall"
+      ? "Restarted itself after its main loop stalled for 30 seconds."
+      : `Restarted after a crash${i.detail ? ` (${i.detail})` : ""}.`,
+  device_brownout: () => "Restarted after a power dip (brownout).",
+  firmware_rolled_back: () =>
+    "A firmware update failed to start; the previous firmware is running.",
+};
+const START_SCREEN_OPTIONS = [
+  "Home",
+  "Pinned",
+  "Time App",
+  "Clock Face",
+  "Media",
+  "Home Hub",
+  "Area Controls",
+  "Remote",
+  "Weather",
+  "Cameras",
+  "Games",
+  "Tools",
+];
+const HOME_CLOCK_TAP_OPTIONS = [
+  "Time App",
+  "Clock Face",
+];
+const MAX_WORLD_CLOCKS = 4;
+const DEFAULT_ALARMS_SUMMARY = "07:00|0|1;08:30|0|2;09:00|0|2";
+const ALARM_RECURRENCE_OPTIONS = [
+  { value: 0, label: "Daily" },
+  { value: 1, label: "Weekdays" },
+  { value: 2, label: "Weekends" },
+  { value: 3, label: "Once" },
+];
+const WORLD_CLOCK_ZONES_CATALOG = [
+  { iana: "Etc/GMT+12", label: "UTC-12:00 — International Date Line West" },
+  { iana: "Pacific/Pago_Pago", label: "UTC-11:00 — Samoa Standard Time (SST)" },
+  { iana: "Pacific/Honolulu", label: "UTC-10:00 — Hawaii-Aleutian Standard Time (HST)" },
+  { iana: "Pacific/Marquesas", label: "UTC-09:30 — Marquesas Time (MART)" },
+  { iana: "America/Anchorage", label: "UTC-09:00 — Alaska Time (AKST/AKDT)" },
+  { iana: "America/Los_Angeles", label: "UTC-08:00 — Pacific Time (PST/PDT)" },
+  { iana: "Etc/GMT+8", label: "UTC-08:00 — Coordinated Universal Time-08 (No DST)" },
+  { iana: "America/Denver", label: "UTC-07:00 — Mountain Time (MST/MDT)" },
+  { iana: "America/Phoenix", label: "UTC-07:00 — Mountain Standard Time (MST, No DST)" },
+  { iana: "America/Chicago", label: "UTC-06:00 — Central Time (CST/CDT)" },
+  { iana: "America/Regina", label: "UTC-06:00 — Central Standard Time (CST, No DST)" },
+  { iana: "America/New_York", label: "UTC-05:00 — Eastern Time (EST/EDT)" },
+  { iana: "America/Lima", label: "UTC-05:00 — Eastern Standard Time (EST, No DST)" },
+  { iana: "America/Halifax", label: "UTC-04:00 — Atlantic Time (AST/ADT)" },
+  { iana: "America/Puerto_Rico", label: "UTC-04:00 — Atlantic Standard Time (AST, No DST)" },
+  { iana: "America/St_Johns", label: "UTC-03:30 — Newfoundland Time (NST/NDT)" },
+  { iana: "America/Sao_Paulo", label: "UTC-03:00 — South America Eastern Time (BRT/ART)" },
+  { iana: "Etc/GMT+2", label: "UTC-02:00 — Coordinated Universal Time-02" },
+  { iana: "Atlantic/Azores", label: "UTC-01:00 — Azores Time (AZOT/AZOST)" },
+  { iana: "Atlantic/Cape_Verde", label: "UTC-01:00 — Cape Verde Time (CVT, No DST)" },
+  { iana: "Atlantic/Reykjavik", label: "UTC+00:00 — Greenwich Mean Time (GMT, No DST)" },
+  { iana: "Europe/London", label: "UTC+00:00 — Western European Time (GMT/BST)" },
+  { iana: "Europe/Berlin", label: "UTC+01:00 — Central European Time (CET/CEST)" },
+  { iana: "Africa/Lagos", label: "UTC+01:00 — West Africa Time (WAT, No DST)" },
+  { iana: "Europe/Athens", label: "UTC+02:00 — Eastern European Time (EET/EEST)" },
+  { iana: "Africa/Johannesburg", label: "UTC+02:00 — Central / South Africa Time (CAT/SAST)" },
+  { iana: "Asia/Riyadh", label: "UTC+03:00 — Arabia / East Africa Time (AST/EAT)" },
+  { iana: "Asia/Tehran", label: "UTC+03:30 — Iran Standard Time (IRST)" },
+  { iana: "Asia/Dubai", label: "UTC+04:00 — Gulf Standard Time (GST)" },
+  { iana: "Asia/Kabul", label: "UTC+04:30 — Afghanistan Time (AFT)" },
+  { iana: "Asia/Karachi", label: "UTC+05:00 — Pakistan / West Asia Time (PKT)" },
+  { iana: "Asia/Kolkata", label: "UTC+05:30 — India / Sri Lanka Standard Time (IST)" },
+  { iana: "Asia/Kathmandu", label: "UTC+05:45 — Nepal Time (NPT)" },
+  { iana: "Asia/Dhaka", label: "UTC+06:00 — Bangladesh / Central Asia Time (BST)" },
+  { iana: "Asia/Yangon", label: "UTC+06:30 — Myanmar Time (MMT)" },
+  { iana: "Asia/Bangkok", label: "UTC+07:00 — Indochina Time (ICT)" },
+  { iana: "Asia/Singapore", label: "UTC+08:00 — China / Singapore / AWST (CST/SGT/AWST)" },
+  { iana: "Australia/Eucla", label: "UTC+08:45 — Australian Central Western Time (ACWST)" },
+  { iana: "Asia/Tokyo", label: "UTC+09:00 — Japan / Korea Standard Time (JST/KST)" },
+  { iana: "Australia/Adelaide", label: "UTC+09:30 — Australian Central Time (ACST/ACDT)" },
+  { iana: "Australia/Darwin", label: "UTC+09:30 — Australian Central Standard Time (ACST, No DST)" },
+  { iana: "Australia/Sydney", label: "UTC+10:00 — Australian Eastern Time (AEST/AEDT)" },
+  { iana: "Australia/Brisbane", label: "UTC+10:00 — Australian Eastern Standard Time (AEST, No DST)" },
+  { iana: "Australia/Lord_Howe", label: "UTC+10:30 — Lord Howe Time (LHST/LHDT)" },
+  { iana: "Pacific/Guadalcanal", label: "UTC+11:00 — Solomon Islands / New Caledonia Time (SBT)" },
+  { iana: "Pacific/Auckland", label: "UTC+12:00 — New Zealand Time (NZST/NZDT)" },
+  { iana: "Etc/GMT-12", label: "UTC+12:00 — Coordinated Universal Time+12 (No DST)" },
+  { iana: "Pacific/Chatham", label: "UTC+12:45 — Chatham Islands Time (CHAST/CHADT)" },
+  { iana: "Pacific/Tongatapu", label: "UTC+13:00 — Tonga / Phoenix Islands Time (TOT)" },
+  { iana: "Pacific/Kiritimati", label: "UTC+14:00 — Line Islands Time (LINT)" },
+];
+const RETURN_TO_HOME_TIMEOUT_OPTIONS = [
+  "15s",
+  "30s",
+  "1 min",
+  "2 min",
+  "5 min",
+  "10 min",
+  "Never",
+];
+const SECURITY_PIN_POLICY_OPTIONS = [
+  { value: "auto", label: "Auto (Recommended)" },
+  { value: "allow", label: "Allow Without PIN" },
+  { value: "require_pin", label: "Require PIN" },
+  { value: "block", label: "Block Unlock & Disarm" },
+];
+const WALLPAPER_ROTATION_OPTIONS = [
+  { value: 0, label: "Do not rotate" },
+  { value: 5, label: "Every 5 minutes" },
+  { value: 15, label: "Every 15 minutes" },
+  { value: 30, label: "Every 30 minutes" },
+  { value: 60, label: "Every hour" },
+  { value: 360, label: "Every 6 hours" },
+  { value: 1440, label: "Once a day" },
+];
+const DEFAULT_DEVICE_GROUP_IDS = new Set([
+  "handhelds",
+  "wearables",
+  "wall_panels",
+]);
+const GROUP_BEHAVIOR_NON_PREF_KEYS = [
+  "native_ble_tracking",
+  "ble_auto_switch",
+  "sync_device_area",
+  "area_follow_dwell_s",
+  "area_handoff",
+  "security_pin_policy",
+];
+const LABEL_MINOR_WORDS = new Set([
+  "a",
+  "an",
+  "the",
+  "and",
+  "or",
+  "of",
+  "to",
+  "in",
+  "on",
+  "for",
+  "with",
+]);
+const LABEL_ACRONYMS = {
+  ble: "BLE",
+  cpu: "CPU",
+  db: "dB",
+  dbm: "dBm",
+  dns: "DNS",
+  esp: "ESP",
+  esphome: "ESPHome",
+  ha: "HA",
+  http: "HTTP",
+  id: "ID",
+  imu: "IMU",
+  ip: "IP",
+  ips: "IPS",
+  led: "LED",
+  ma: "MA",
+  mac: "MAC",
+  mic: "Mic",
+  ota: "OTA",
+  pin: "PIN",
+  pmu: "PMU",
+  psram: "PSRAM",
+  ram: "RAM",
+  rgb: "RGB",
+  rssi: "RSSI",
+  sdk: "SDK",
+  sram: "SRAM",
+  ssid: "SSID",
+  tts: "TTS",
+  ui: "UI",
+  url: "URL",
+  usb: "USB",
+  uuid: "UUID",
+  va: "VA",
+  wifi: "Wi-Fi",
+  "wi-fi": "Wi-Fi",
+};
+
 // --- src/lib/lit.ts ---
 /**
  * Lightweight, strictly typed Lit reactive element & `<template>` marker-part engine for Latter Studio.
@@ -699,354 +1110,435 @@ class LitElement extends HTMLElement {
             updated() {}
 }
 
-// --- src/protocol-schema.ts ---
-// AUTO-GENERATED FROM protocol/latter_v3.json BY tools/gen_protocol.py — DO NOT EDIT MANUALLY.
-const PROTOCOL_CONTRACT_VERSION = 3;
-const POWER_PROFILE_SUBKEYS = [
-  "wake_word_mode",
-  "tap_to_wake",
-  "pickup_to_wake",
-  "battery_screen_timeout",
-  "docked_idle_timeout",
-  "battery_hibernate_timeout",
-  "docked_screensaver",
-];
-const POWER_PROFILE_PREFS = {
-  "Portable Carry": {
-    wake_word_mode: "Docked Only",
-    tap_to_wake: "Docked Only",
-    pickup_to_wake: "Docked Only",
-    battery_screen_timeout: "30s",
-    docked_idle_timeout: "1 min",
-    battery_hibernate_timeout: "15 min",
-    docked_screensaver: true,
-  },
-  "Handheld Roaming": {
-    wake_word_mode: "Docked Only",
-    tap_to_wake: "Single Tap",
-    pickup_to_wake: "Always On",
-    battery_screen_timeout: "30s",
-    docked_idle_timeout: "1 min",
-    battery_hibernate_timeout: "30 min",
-    docked_screensaver: true,
-  },
-  "Wearable Watch": {
-    wake_word_mode: "Docked Only",
-    tap_to_wake: "Double Tap",
-    pickup_to_wake: "Always On",
-    battery_screen_timeout: "15s",
-    docked_idle_timeout: "1 min",
-    battery_hibernate_timeout: "15 min",
-    docked_screensaver: true,
-  },
-  "Tabletop Dock": {
-    wake_word_mode: "Docked Only",
-    tap_to_wake: "Docked Only",
-    pickup_to_wake: "Disabled",
-    battery_screen_timeout: "30s",
-    docked_idle_timeout: "5 min",
-    battery_hibernate_timeout: "15 min",
-    docked_screensaver: true,
-  },
-  "Always-On Wall / Desk": {
-    wake_word_mode: "Always On",
-    tap_to_wake: "Single Tap",
-    pickup_to_wake: "Disabled",
-    battery_screen_timeout: "Never",
-    docked_idle_timeout: "5 min",
-    battery_hibernate_timeout: "Disabled",
-    docked_screensaver: true,
-  },
-};
-const DOCK_APPS_CATALOG = [
-  {token: "music", label: "Music"},
-  {token: "home_hub", label: "Home Hub"},
-  {token: "area", label: "Area"},
-  {token: "remote", label: "Remote"},
-  {token: "weather", label: "Weather"},
-  {token: "time", label: "Time"},
-  {token: "camera", label: "Cameras"},
-  {token: "games", label: "Games"},
-  {token: "tools", label: "Tools"},
-];
-const ACTIVITY_SOURCES_CATALOG = [
-  {token: "calendar", label: "Calendar"},
-  {token: "music_queue", label: "Music Queue"},
-  {token: "stopwatch", label: "Stopwatch"},
-  {token: "alarms", label: "Alarms"},
-  {token: "timers", label: "Timers"},
-];
-const AREA_CATEGORIES_CATALOG = [
-  {token: "scene", label: "Scenes"},
-  {token: "light", label: "Lights"},
-  {token: "cover", label: "Blinds & Curtains"},
-  {token: "fan", label: "Fans"},
-  {token: "switch", label: "Switches"},
-  {token: "climate", label: "Climate"},
-  {token: "media", label: "Media"},
-  {token: "all", label: "All Devices"},
-];
-const HOME_CATEGORIES_CATALOG = [
-  {token: "alarm", label: "Security Alarm"},
-  {token: "cameras", label: "Cameras"},
-  {token: "intercom", label: "Intercom"},
-  {token: "thermostat", label: "Thermostat"},
-  {token: "entry", label: "Entry & Garage"},
-  {token: "vacuum", label: "Robot Vacuum"},
-];
-const DEFAULT_DOCK_APPS = "music,home_hub,area,remote,games,tools";
-const DEFAULT_DOCK_APPS_TOKENS = [
-  "music",
-  "home_hub",
-  "area",
-  "remote",
-  "games",
-  "tools",
-];
-const DEFAULT_ACTIVITY_CARD = "1";
-const DEFAULT_ACTIVITY_CARD_TOKENS = [
-  "1",
-];
-const DEFAULT_ACTIVITY_SOURCES = "calendar,music_queue,stopwatch,alarms,timers";
-const DEFAULT_ACTIVITY_SOURCES_TOKENS = [
-  "calendar",
-  "music_queue",
-  "stopwatch",
-  "alarms",
-  "timers",
-];
-const DEFAULT_AREA_CATEGORIES = "scene,light,cover,fan,switch,climate,media";
-const DEFAULT_AREA_CATEGORIES_TOKENS = [
-  "scene",
-  "light",
-  "cover",
-  "fan",
-  "switch",
-  "climate",
-  "media",
-];
-const DEFAULT_HOME_CATEGORIES = "alarm,cameras,intercom,thermostat,entry,vacuum";
-const DEFAULT_HOME_CATEGORIES_TOKENS = [
-  "alarm",
-  "cameras",
-  "intercom",
-  "thermostat",
-  "entry",
-  "vacuum",
-];
-
-// --- src/constants.ts ---
+// --- src/mdi-catalog.ts ---
 /**
- * Canonical constants, route maps, issue messages, and Title Case dictionaries for Latter Studio.
+ * Universal Shortcut Engine catalogs: domain action maps, route icon previews,
+ * and firmware-verified Material Design Icons (`ui_mdi.cpp` 7,447-icon parity).
  */
-const STUDIO_REV = 18;
-const MAX_WALLPAPER_UPLOAD_BYTES = 15 * 1024 * 1024;
-const DEVICE_VIEW_SLUGS = {
-  dashboard: "overview",
-  display: "display",
-  interface: "interface",
-  audio_voice: "audio",
-  power: "power",
-  presence: "presence",
-  tools: "tools",
+const SHORTCUT_DOMAIN_ACTIONS
+  = {
+  light: [
+    { action: "toggle", label: "Toggle" },
+    { action: "turn_on", label: "Turn On" },
+    { action: "turn_off", label: "Turn Off" },
+  ],
+  switch: [
+    { action: "toggle", label: "Toggle" },
+    { action: "turn_on", label: "Turn On" },
+    { action: "turn_off", label: "Turn Off" },
+  ],
+  input_boolean: [
+    { action: "toggle", label: "Toggle" },
+    { action: "turn_on", label: "Turn On" },
+    { action: "turn_off", label: "Turn Off" },
+  ],
+  fan: [
+    { action: "toggle", label: "Toggle" },
+    { action: "turn_on", label: "Turn On" },
+    { action: "turn_off", label: "Turn Off" },
+  ],
+  cover: [
+    { action: "toggle", label: "Toggle" },
+    { action: "open_cover", label: "Open" },
+    { action: "close_cover", label: "Close" },
+    { action: "stop_cover", label: "Stop" },
+  ],
+  valve: [
+    { action: "toggle", label: "Toggle" },
+    { action: "open_valve", label: "Open" },
+    { action: "close_valve", label: "Close" },
+    { action: "stop_valve", label: "Stop" },
+  ],
+  scene: [{ action: "turn_on", label: "Activate" }],
+  script: [
+    { action: "turn_on", label: "Run" },
+    { action: "turn_off", label: "Stop" },
+  ],
+  automation: [
+    { action: "trigger", label: "Trigger" },
+    { action: "toggle", label: "Toggle Enable" },
+    { action: "turn_on", label: "Enable" },
+    { action: "turn_off", label: "Disable" },
+  ],
+  button: [{ action: "press", label: "Press" }],
+  input_button: [{ action: "press", label: "Press" }],
+  lock: [
+    { action: "lock", label: "Lock" },
+    { action: "unlock", label: "Unlock" },
+    { action: "open", label: "Unlatch" },
+  ],
+  alarm_control_panel: [
+    { action: "disarm", label: "Disarm" },
+    { action: "arm_home", label: "Arm Home" },
+    { action: "arm_away", label: "Arm Away" },
+    { action: "arm_night", label: "Arm Night" },
+    { action: "arm_vacation", label: "Arm Vacation" },
+  ],
+  vacuum: [
+    { action: "start", label: "Start" },
+    { action: "pause", label: "Pause" },
+    { action: "return_to_base", label: "Return To Base" },
+    { action: "stop", label: "Stop" },
+    { action: "clean_spot", label: "Spot Clean" },
+    { action: "locate", label: "Locate" },
+  ],
+  lawn_mower: [
+    { action: "start_mowing", label: "Start Mowing" },
+    { action: "pause", label: "Pause" },
+    { action: "dock", label: "Dock" },
+  ],
+  media_player: [
+    { action: "media_play_pause", label: "Play / Pause" },
+    { action: "turn_on", label: "Turn On" },
+    { action: "turn_off", label: "Turn Off" },
+    { action: "media_next_track", label: "Next Track" },
+  ],
+  climate: [
+    { action: "turn_on", label: "Turn On" },
+    { action: "turn_off", label: "Turn Off" },
+  ],
+  humidifier: [
+    { action: "toggle", label: "Toggle" },
+    { action: "turn_on", label: "Turn On" },
+    { action: "turn_off", label: "Turn Off" },
+  ],
+  siren: [
+    { action: "turn_on", label: "Turn On" },
+    { action: "turn_off", label: "Turn Off" },
+  ],
+  water_heater: [
+    { action: "turn_on", label: "Turn On" },
+    { action: "turn_off", label: "Turn Off" },
+  ],
+  select: [
+    { action: "select_next", label: "Next Option" },
+    { action: "select_previous", label: "Previous Option" },
+  ],
+  input_select: [
+    { action: "select_next", label: "Next Option" },
+    { action: "select_previous", label: "Previous Option" },
+  ],
 };
-const SYSTEM_VIEW_SLUGS = {system_overview: "overview", shared_entities: "shared", remotes: "remotes", system_sync: "groups", area_tracking: "presence", system_tools: "tools"};
-const VIEW_TITLES = {
-  system_overview: "Overview",
-  shared_entities: "Shared Entities",
-  remotes: "Media & Remotes",
-  system_sync: "Device Groups",
-  area_tracking: "BLE & Area Presence",
-  system_tools: "Tools",
-  select_device_prompt: "Managed Devices",
-  discovered_devices: "Discovered Devices",
-  dashboard: "Overview",
-  display: "Display",
-  interface: "Interface",
-  audio_voice: "Audio",
-  power: "Power",
-  presence: "Presence",
-  tools: "Tools",
+const SHORTCUT_DOMAIN_LABELS = {
+  alarm_control_panel: "Security Alarm",
+  automation: "Automations",
+  button: "Buttons",
+  climate: "Climate",
+  cover: "Covers & Blinds",
+  fan: "Fans",
+  humidifier: "Humidifiers",
+  input_boolean: "Input Booleans",
+  input_button: "Input Buttons",
+  input_select: "Input Selects",
+  lawn_mower: "Lawn Mowers",
+  light: "Lights",
+  lock: "Locks",
+  media_player: "Media Players",
+  scene: "Scenes",
+  script: "Scripts",
+  select: "Selects",
+  siren: "Sirens",
+  switch: "Switches",
+  vacuum: "Vacuums",
+  valve: "Valves",
+  water_heater: "Water Heaters",
 };
-const _typecheckViewMaps
-  = [DEVICE_VIEW_SLUGS, SYSTEM_VIEW_SLUGS, VIEW_TITLES];
-void _typecheckViewMaps;
-// Messages for Latter's Home Assistant Repairs (kind = translation key in strings.json).
-const ISSUE_TEXT = {
-  link_ma_player: () => "Not linked to its Music Assistant player.",
-  missing_mapped_entity: (i) =>
-    `A chosen entity no longer exists${i.detail ? `: ${i.detail}` : ""}.`,
-  ble_no_proxies: () =>
-    "BLE Area tracking is on, but no Bluetooth proxy is assigned to an Area.",
-  slot_push_failing: () =>
-    "Latter can't send Area and browse pages to this Device.",
-  device_crashed: (i) =>
-    i.detail === "stall"
-      ? "Restarted itself after its main loop stalled for 30 seconds."
-      : `Restarted after a crash${i.detail ? ` (${i.detail})` : ""}.`,
-  device_brownout: () => "Restarted after a power dip (brownout).",
-  firmware_rolled_back: () =>
-    "A firmware update failed to start; the previous firmware is running.",
+function shortcutActionLabel(domain, action) {
+  const list = SHORTCUT_DOMAIN_ACTIONS[domain] || [];
+  const found = list.find((it) => it.action === action);
+  return found ? found.label : action;
+}
+const ROUTE_PREVIEW_ICONS = {
+  "app:pinned": "mdi:pin",
+  "app:music": "mdi:music",
+  "music:speakers": "mdi:speaker-multiple",
+  "music:library": "mdi:music-box-outline",
+  "music:favorites": "mdi:heart",
+  "music:playlists": "mdi:playlist-music",
+  "music:queue": "mdi:playlist-play",
+  "app:home_hub": "mdi:home",
+  "home_hub:alarm": "mdi:shield-home",
+  "home_hub:cameras": "mdi:cctv",
+  "home_hub:intercom": "mdi:phone-in-talk",
+  "home_hub:thermostat": "mdi:thermostat",
+  "home_hub:entry": "mdi:lock",
+  "home_hub:vacuum": "mdi:robot-vacuum",
+  "app:area": "mdi:sofa",
+  "area:picker": "mdi:floor-plan",
+  "area:scene": "mdi:shimmer",
+  "area:light": "mdi:lightbulb",
+  "area:cover": "mdi:blinds-horizontal",
+  "area:climate": "mdi:thermometer",
+  "area:fan": "mdi:ceiling-fan",
+  "area:switch": "mdi:toggle-switch",
+  "area:media": "mdi:television-speaker",
+  "area:all": "mdi:view-grid",
+  "app:remote": "mdi:remote-tv",
+  "remote:devices": "mdi:remote",
+  "app:weather": "mdi:weather-partly-cloudy",
+  "weather:current": "mdi:weather-partly-cloudy",
+  "weather:forecast": "mdi:calendar-week",
+  "weather:sun": "mdi:white-balance-sunny",
+  "weather:moon": "mdi:moon-waning-crescent",
+  "app:time": "mdi:clock-outline",
+  "time:clock": "mdi:clock-outline",
+  "time:timers": "mdi:timer-sand",
+  "time:alarms": "mdi:alarm",
+  "time:stopwatch": "mdi:timer-outline",
+  "app:clock": "mdi:clock-outline",
+  "app:tools": "mdi:apps",
+  "tools:stopwatch": "mdi:timer-outline",
+  "tools:level": "mdi:spirit-level",
+  "tools:flashlight": "mdi:flashlight",
+  "tools:calculator": "mdi:calculator-variant",
+  "tools:calendar": "mdi:calendar",
+  "tools:dice": "mdi:dice-5",
+  "tools:coin_flip": "mdi:alpha-c-circle",
+  "app:games": "mdi:gamepad-variant",
+  "games:marbles": "mdi:billiards",
+  "games:archery": "mdi:bullseye-arrow",
+  "games:bricks": "mdi:wall",
+  "games:chomp": "mdi:pac-man",
+  "games:2048": "mdi:numeric-2-box-multiple",
+  "games:memory": "mdi:cards",
+  "settings:root": "mdi:cog",
+  "settings:display": "mdi:brightness-6",
+  "settings:sleep": "mdi:power-sleep",
+  "settings:sound": "mdi:volume-high",
+  "settings:voice": "mdi:microphone",
+  "settings:music": "mdi:music-box-outline",
+  "settings:home": "mdi:home-outline",
+  "settings:actions": "mdi:gesture-tap-button",
+  "settings:update": "mdi:cellphone-arrow-down",
+  "settings:info": "mdi:information-outline",
 };
-const START_SCREEN_OPTIONS = [
-  "Home",
-  "Time App",
-  "Clock Face",
-  "Media",
-  "Home Hub",
-  "Area Controls",
-  "Remote",
-  "Weather",
-  "Cameras",
-  "Games",
-  "Tools",
+const MDI_SLUG_PATTERN = /^mdi:[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const BARE_MDI_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+function normalizeMdiIconSlug(raw) {
+  let clean = String(raw ?? "").trim().toLowerCase().replace(/_/g, "-");
+  if (!clean) return "";
+  if (clean.startsWith("mdi-")) {
+    clean = `mdi:${clean.slice(4)}`;
+  } else if (!clean.startsWith("mdi:") && BARE_MDI_SLUG_PATTERN.test(clean)) {
+    clean = `mdi:${clean}`;
+  }
+  return MDI_SLUG_PATTERN.test(clean) ? clean : "";
+}
+const CURATED_MDI_ICONS = [
+  "mdi:pin",
+  "mdi:pin-outline",
+  "mdi:bell-ring",
+  "mdi:bell",
+  "mdi:bell-alert",
+  "mdi:bullhorn",
+  "mdi:lifebuoy",
+  "mdi:alert-circle",
+  "mdi:hand-wave",
+  "mdi:baby-carriage",
+  "mdi:baby-bottle-outline",
+  "mdi:baby-face-outline",
+  "mdi:cradle-outline",
+  "mdi:human-male-female-child",
+  "mdi:account-heart",
+  "mdi:heart",
+  "mdi:medical-bag",
+  "mdi:phone-in-talk",
+  "mdi:message-alert",
+  "mdi:flash",
+  "mdi:lightning-bolt",
+  "mdi:star",
+  "mdi:shimmer",
+  "mdi:magic-staff",
+  "mdi:check-circle",
+  "mdi:lightbulb",
+  "mdi:lightbulb-on",
+  "mdi:lightbulb-outline",
+  "mdi:lightbulb-group",
+  "mdi:lamp",
+  "mdi:desk-lamp",
+  "mdi:floor-lamp",
+  "mdi:ceiling-light",
+  "mdi:chandelier",
+  "mdi:coach-lamp",
+  "mdi:outdoor-lamp",
+  "mdi:wall-sconce",
+  "mdi:led-strip-variant",
+  "mdi:string-lights",
+  "mdi:track-light",
+  "mdi:lava-lamp",
+  "mdi:candle",
+  "mdi:fireplace",
+  "mdi:brightness-6",
+  "mdi:creation",
+  "mdi:palette",
+  "mdi:toggle-switch",
+  "mdi:toggle-switch-off-outline",
+  "mdi:power",
+  "mdi:power-plug",
+  "mdi:power-socket-us",
+  "mdi:power-socket-eu",
+  "mdi:light-switch",
+  "mdi:battery-charging",
+  "mdi:solar-power",
+  "mdi:ev-station",
+  "mdi:car-electric",
+  "mdi:blinds-horizontal",
+  "mdi:blinds-horizontal-closed",
+  "mdi:blinds-open",
+  "mdi:blinds-vertical",
+  "mdi:curtains",
+  "mdi:curtains-closed",
+  "mdi:roller-shade",
+  "mdi:roller-shade-closed",
+  "mdi:window-shutter",
+  "mdi:window-shutter-open",
+  "mdi:window-open-variant",
+  "mdi:window-closed-variant",
+  "mdi:garage",
+  "mdi:garage-open",
+  "mdi:garage-variant",
+  "mdi:garage-open-variant",
+  "mdi:gate",
+  "mdi:gate-open",
+  "mdi:door",
+  "mdi:door-open",
+  "mdi:door-closed",
+  "mdi:door-sliding",
+  "mdi:awning-outline",
+  "mdi:lock",
+  "mdi:lock-open",
+  "mdi:lock-smart",
+  "mdi:key-variant",
+  "mdi:shield-home",
+  "mdi:shield-lock",
+  "mdi:shield-check",
+  "mdi:shield-moon",
+  "mdi:shield-airplane",
+  "mdi:security",
+  "mdi:alarm-light",
+  "mdi:cctv",
+  "mdi:video",
+  "mdi:webcam",
+  "mdi:doorbell-video",
+  "mdi:motion-sensor",
+  "mdi:smoke-detector-variant",
+  "mdi:thermostat",
+  "mdi:thermometer",
+  "mdi:fire",
+  "mdi:snowflake",
+  "mdi:sun-snowflake-variant",
+  "mdi:fan",
+  "mdi:ceiling-fan",
+  "mdi:air-purifier",
+  "mdi:air-humidifier",
+  "mdi:water-percent",
+  "mdi:water-boiler",
+  "mdi:water",
+  "mdi:water-pump",
+  "mdi:pipe-valve",
+  "mdi:sprinkler-variant",
+  "mdi:faucet",
+  "mdi:radiator",
+  "mdi:hvac",
+  "mdi:robot-vacuum",
+  "mdi:robot-mower",
+  "mdi:washing-machine",
+  "mdi:tumble-dryer",
+  "mdi:dishwasher",
+  "mdi:fridge-outline",
+  "mdi:stove",
+  "mdi:coffee-maker",
+  "mdi:kettle-steam",
+  "mdi:music",
+  "mdi:music-note",
+  "mdi:playlist-music",
+  "mdi:playlist-play",
+  "mdi:radio",
+  "mdi:podcast",
+  "mdi:speaker",
+  "mdi:speaker-multiple",
+  "mdi:cast-audio",
+  "mdi:television",
+  "mdi:television-speaker",
+  "mdi:remote",
+  "mdi:remote-tv",
+  "mdi:play-pause",
+  "mdi:play",
+  "mdi:pause",
+  "mdi:skip-next",
+  "mdi:volume-high",
+  "mdi:volume-mute",
+  "mdi:movie-open",
+  "mdi:gamepad-variant",
+  "mdi:headphones",
+  "mdi:script-text-play",
+  "mdi:script-text",
+  "mdi:robot",
+  "mdi:gesture-tap-button",
+  "mdi:cog",
+  "mdi:cog-play",
+  "mdi:autorenew",
+  "mdi:timer-play",
+  "mdi:weather-night",
+  "mdi:sleep",
+  "mdi:bed",
+  "mdi:coffee",
+  "mdi:silverware-fork-knife",
+  "mdi:party-popper",
+  "mdi:airplane",
+  "mdi:home-export-outline",
+  "mdi:home-import-outline",
+  "mdi:briefcase",
+  "mdi:laptop",
+  "mdi:book-open-variant",
+  "mdi:meditation",
+  "mdi:dumbbell",
+  "mdi:home",
+  "mdi:home-outline",
+  "mdi:sofa",
+  "mdi:bed-king-outline",
+  "mdi:desk",
+  "mdi:countertop-outline",
+  "mdi:shower-head",
+  "mdi:bathtub-outline",
+  "mdi:stairs",
+  "mdi:balcony",
+  "mdi:flower",
+  "mdi:tree",
+  "mdi:pine-tree",
+  "mdi:pool",
+  "mdi:grill",
+  "mdi:car",
+  "mdi:bicycle",
+  "mdi:dog",
+  "mdi:cat",
+  "mdi:paw",
+  "mdi:weather-sunny",
+  "mdi:weather-partly-cloudy",
+  "mdi:weather-cloudy",
+  "mdi:weather-rainy",
+  "mdi:weather-pouring",
+  "mdi:weather-snowy",
+  "mdi:weather-lightning",
+  "mdi:weather-windy",
+  "mdi:white-balance-sunny",
+  "mdi:moon-waning-crescent",
+  "mdi:moon-full",
+  "mdi:clock-outline",
+  "mdi:alarm",
+  "mdi:timer-sand",
+  "mdi:timer-outline",
+  "mdi:calendar",
+  "mdi:calculator-variant",
+  "mdi:flashlight",
+  "mdi:spirit-level",
+  "mdi:dice-5",
+  "mdi:compass-outline",
+  "mdi:map-marker",
+  "mdi:apps",
+  "mdi:view-grid",
+  "mdi:form-select",
 ];
-const HOME_CLOCK_TAP_OPTIONS = [
-  "Time App",
-  "Clock Face",
-];
-const MAX_WORLD_CLOCKS = 4;
-const DEFAULT_ALARMS_SUMMARY = "07:00|0|1;08:30|0|2;09:00|0|2";
-const ALARM_RECURRENCE_OPTIONS = [
-  { value: 0, label: "Daily" },
-  { value: 1, label: "Weekdays" },
-  { value: 2, label: "Weekends" },
-  { value: 3, label: "Once" },
-];
-const WORLD_CLOCK_ZONES_CATALOG = [
-  { iana: "Etc/GMT+12", label: "UTC-12:00 — International Date Line West" },
-  { iana: "Pacific/Pago_Pago", label: "UTC-11:00 — Samoa Standard Time (SST)" },
-  { iana: "Pacific/Honolulu", label: "UTC-10:00 — Hawaii-Aleutian Standard Time (HST)" },
-  { iana: "Pacific/Marquesas", label: "UTC-09:30 — Marquesas Time (MART)" },
-  { iana: "America/Anchorage", label: "UTC-09:00 — Alaska Time (AKST/AKDT)" },
-  { iana: "America/Los_Angeles", label: "UTC-08:00 — Pacific Time (PST/PDT)" },
-  { iana: "Etc/GMT+8", label: "UTC-08:00 — Coordinated Universal Time-08 (No DST)" },
-  { iana: "America/Denver", label: "UTC-07:00 — Mountain Time (MST/MDT)" },
-  { iana: "America/Phoenix", label: "UTC-07:00 — Mountain Standard Time (MST, No DST)" },
-  { iana: "America/Chicago", label: "UTC-06:00 — Central Time (CST/CDT)" },
-  { iana: "America/Regina", label: "UTC-06:00 — Central Standard Time (CST, No DST)" },
-  { iana: "America/New_York", label: "UTC-05:00 — Eastern Time (EST/EDT)" },
-  { iana: "America/Lima", label: "UTC-05:00 — Eastern Standard Time (EST, No DST)" },
-  { iana: "America/Halifax", label: "UTC-04:00 — Atlantic Time (AST/ADT)" },
-  { iana: "America/Puerto_Rico", label: "UTC-04:00 — Atlantic Standard Time (AST, No DST)" },
-  { iana: "America/St_Johns", label: "UTC-03:30 — Newfoundland Time (NST/NDT)" },
-  { iana: "America/Sao_Paulo", label: "UTC-03:00 — South America Eastern Time (BRT/ART)" },
-  { iana: "Etc/GMT+2", label: "UTC-02:00 — Coordinated Universal Time-02" },
-  { iana: "Atlantic/Azores", label: "UTC-01:00 — Azores Time (AZOT/AZOST)" },
-  { iana: "Atlantic/Cape_Verde", label: "UTC-01:00 — Cape Verde Time (CVT, No DST)" },
-  { iana: "Atlantic/Reykjavik", label: "UTC+00:00 — Greenwich Mean Time (GMT, No DST)" },
-  { iana: "Europe/London", label: "UTC+00:00 — Western European Time (GMT/BST)" },
-  { iana: "Europe/Berlin", label: "UTC+01:00 — Central European Time (CET/CEST)" },
-  { iana: "Africa/Lagos", label: "UTC+01:00 — West Africa Time (WAT, No DST)" },
-  { iana: "Europe/Athens", label: "UTC+02:00 — Eastern European Time (EET/EEST)" },
-  { iana: "Africa/Johannesburg", label: "UTC+02:00 — Central / South Africa Time (CAT/SAST)" },
-  { iana: "Asia/Riyadh", label: "UTC+03:00 — Arabia / East Africa Time (AST/EAT)" },
-  { iana: "Asia/Tehran", label: "UTC+03:30 — Iran Standard Time (IRST)" },
-  { iana: "Asia/Dubai", label: "UTC+04:00 — Gulf Standard Time (GST)" },
-  { iana: "Asia/Kabul", label: "UTC+04:30 — Afghanistan Time (AFT)" },
-  { iana: "Asia/Karachi", label: "UTC+05:00 — Pakistan / West Asia Time (PKT)" },
-  { iana: "Asia/Kolkata", label: "UTC+05:30 — India / Sri Lanka Standard Time (IST)" },
-  { iana: "Asia/Kathmandu", label: "UTC+05:45 — Nepal Time (NPT)" },
-  { iana: "Asia/Dhaka", label: "UTC+06:00 — Bangladesh / Central Asia Time (BST)" },
-  { iana: "Asia/Yangon", label: "UTC+06:30 — Myanmar Time (MMT)" },
-  { iana: "Asia/Bangkok", label: "UTC+07:00 — Indochina Time (ICT)" },
-  { iana: "Asia/Singapore", label: "UTC+08:00 — China / Singapore / AWST (CST/SGT/AWST)" },
-  { iana: "Australia/Eucla", label: "UTC+08:45 — Australian Central Western Time (ACWST)" },
-  { iana: "Asia/Tokyo", label: "UTC+09:00 — Japan / Korea Standard Time (JST/KST)" },
-  { iana: "Australia/Adelaide", label: "UTC+09:30 — Australian Central Time (ACST/ACDT)" },
-  { iana: "Australia/Darwin", label: "UTC+09:30 — Australian Central Standard Time (ACST, No DST)" },
-  { iana: "Australia/Sydney", label: "UTC+10:00 — Australian Eastern Time (AEST/AEDT)" },
-  { iana: "Australia/Brisbane", label: "UTC+10:00 — Australian Eastern Standard Time (AEST, No DST)" },
-  { iana: "Australia/Lord_Howe", label: "UTC+10:30 — Lord Howe Time (LHST/LHDT)" },
-  { iana: "Pacific/Guadalcanal", label: "UTC+11:00 — Solomon Islands / New Caledonia Time (SBT)" },
-  { iana: "Pacific/Auckland", label: "UTC+12:00 — New Zealand Time (NZST/NZDT)" },
-  { iana: "Etc/GMT-12", label: "UTC+12:00 — Coordinated Universal Time+12 (No DST)" },
-  { iana: "Pacific/Chatham", label: "UTC+12:45 — Chatham Islands Time (CHAST/CHADT)" },
-  { iana: "Pacific/Tongatapu", label: "UTC+13:00 — Tonga / Phoenix Islands Time (TOT)" },
-  { iana: "Pacific/Kiritimati", label: "UTC+14:00 — Line Islands Time (LINT)" },
-];
-const RETURN_TO_HOME_TIMEOUT_OPTIONS = [
-  "15s",
-  "30s",
-  "1 min",
-  "2 min",
-  "5 min",
-  "10 min",
-  "Never",
-];
-const SECURITY_PIN_POLICY_OPTIONS = [
-  { value: "auto", label: "Auto (Recommended)" },
-  { value: "allow", label: "Allow Without PIN" },
-  { value: "require_pin", label: "Require PIN" },
-  { value: "block", label: "Block Unlock & Disarm" },
-];
-const WALLPAPER_ROTATION_OPTIONS = [
-  { value: 0, label: "Do not rotate" },
-  { value: 5, label: "Every 5 minutes" },
-  { value: 15, label: "Every 15 minutes" },
-  { value: 30, label: "Every 30 minutes" },
-  { value: 60, label: "Every hour" },
-  { value: 360, label: "Every 6 hours" },
-  { value: 1440, label: "Once a day" },
-];
-const DEFAULT_DEVICE_GROUP_IDS = new Set([
-  "unassigned",
-  "handhelds",
-  "wearables",
-  "bedrooms",
-  "common_areas",
-  "wall_panels",
-]);
-const LABEL_MINOR_WORDS = new Set([
-  "a",
-  "an",
-  "the",
-  "and",
-  "or",
-  "of",
-  "to",
-  "in",
-  "on",
-  "for",
-  "with",
-]);
-const LABEL_ACRONYMS = {
-  ble: "BLE",
-  cpu: "CPU",
-  db: "dB",
-  dbm: "dBm",
-  dns: "DNS",
-  esp: "ESP",
-  esphome: "ESPHome",
-  ha: "HA",
-  http: "HTTP",
-  id: "ID",
-  imu: "IMU",
-  ip: "IP",
-  ips: "IPS",
-  led: "LED",
-  ma: "MA",
-  mac: "MAC",
-  mic: "Mic",
-  ota: "OTA",
-  pin: "PIN",
-  pmu: "PMU",
-  psram: "PSRAM",
-  ram: "RAM",
-  rgb: "RGB",
-  rssi: "RSSI",
-  sdk: "SDK",
-  sram: "SRAM",
-  ssid: "SSID",
-  tts: "TTS",
-  ui: "UI",
-  url: "URL",
-  usb: "USB",
-  uuid: "UUID",
-  va: "VA",
-  wifi: "Wi-Fi",
-  "wi-fi": "Wi-Fi",
-};
 
 // --- src/utils/format.ts ---
 /**
@@ -1206,14 +1698,6 @@ function issueMessage(issue) {
   if (fn) return fn(issue);
   const label = kind ? kind.replace(/_/g, " ") : "issue";
   return `Repair: ${label}.`;
-}
-function isGroupCustomized(status) {
-  if (!status) return false;
-  if (typeof status === "string") return status === "customized";
-  if (typeof status === "object" && "in_sync" in status) {
-    return (status).in_sync === false;
-  }
-  return false;
 }
 function rssiToPercent(rssi) {
   if (rssi === null || rssi === undefined || !Number.isFinite(Number(rssi))) return 0;
@@ -1885,6 +2369,8 @@ function syncStudioDialogs(renderRoot, store) {
     ["latter-reset-modal", store.resetModal.open],
     ["latter-add-dev-modal", store.addBleModal.open],
     ["latter-cw-modal", store.colorWheelModal.open],
+    ["latter-save-group-modal", store.saveGroupModal?.open ?? false],
+    ["latter-shortcut-modal", store.shortcutModal?.open ?? false],
   ];
   for (const [id, wantOpen] of pairs) {
     const dlg = renderRoot.getElementById(id);
@@ -1962,6 +2448,75 @@ function renderStudioDialogs(store) {
   const cwValidHex = isValidHexColor(store.colorWheelModal.hex)
     ? store.colorWheelModal.hex
     : "";
+  const scModal = store.shortcutModal;
+  const scIsDock = scModal.listKey === "dock_items";
+  const scTitle =
+    scModal.editIndex !== null
+      ? scIsDock
+        ? "Edit Dock Shortcut"
+        : "Edit Pinned Shortcut"
+      : scIsDock
+        ? "Add Dock Shortcut"
+        : "Add Pinned Shortcut";
+  const devCaps = store.state?.capabilities || {};
+  const availableRoutes = SHORTCUT_ROUTES_CATALOG.filter((r) => {
+    if (!scIsDock && r.dockOnly) return false;
+    if (scIsDock && r.token === "settings:root") return false;
+    if (r.capability === "round" && devCaps.is_round === false) return false;
+    if (r.capability === "imu" && devCaps.has_imu === false) return false;
+    return true;
+  });
+  const routeGroups = [];
+  for (const r of availableRoutes) {
+    const grpName = r.group || "Apps";
+    const existingGrp = routeGroups.find((g) => g.group === grpName);
+    if (existingGrp) {
+      existingGrp.items.push(r);
+    } else {
+      routeGroups.push({ group: grpName, items: [r] });
+    }
+  }
+  const allShortcutEntities = store.state?.catalog?.shortcut_entities || [];
+  const availableDomains = Array.from(
+    new Set(allShortcutEntities.map((e) => e.domain)),
+  ).sort();
+  const scSearchLower = scModal.entitySearch.trim().toLowerCase();
+  const filteredShortcutEntities = allShortcutEntities.filter((e) => {
+    if (scModal.entityDomainFilter !== "all" && e.domain !== scModal.entityDomainFilter) {
+      return false;
+    }
+    if (!scSearchLower) return true;
+    return (
+      e.name.toLowerCase().includes(scSearchLower) ||
+      e.id.toLowerCase().includes(scSearchLower) ||
+      e.area_name.toLowerCase().includes(scSearchLower)
+    );
+  });
+  const selectedEntityObj =
+    allShortcutEntities.find((e) => e.id === scModal.entityTarget) || null;
+  const selectedEntityDomain = selectedEntityObj
+    ? selectedEntityObj.domain
+    : (scModal.entityTarget.split(".", 1)[0] || "");
+  const availableEntityActions = SHORTCUT_DOMAIN_ACTIONS[selectedEntityDomain] || [];
+  const selectedRouteSpec =
+    availableRoutes.find((r) => r.token === scModal.routeTarget) ||
+    SHORTCUT_ROUTES_CATALOG.find((r) => r.token === scModal.routeTarget);
+  const autoDefaultLabel =
+    scModal.kind === "route"
+      ? selectedRouteSpec?.label || "Shortcut"
+      : selectedEntityObj?.name || scModal.entityTarget || "Entity Action";
+  const autoDefaultIcon =
+    scModal.kind === "route"
+      ? ROUTE_PREVIEW_ICONS[scModal.routeTarget] || "mdi:apps"
+      : selectedEntityObj?.icon || "mdi:flash";
+  const previewIcon = normalizeMdiIconSlug(scModal.icon) || autoDefaultIcon;
+  const iconFilterLower = (scModal.iconSearch || scModal.icon)
+    .trim()
+    .toLowerCase()
+    .replace(/^mdi:/, "");
+  const filteredMdiIcons = iconFilterLower
+    ? CURATED_MDI_ICONS.filter((slug) => slug.slice(4).includes(iconFilterLower))
+    : CURATED_MDI_ICONS;
   return html`
     <dialog
       id="latter-rm-modal"
@@ -2212,6 +2767,378 @@ function renderStudioDialogs(store) {
         </div>
       </div>
     </dialog>
+
+    <dialog
+      id="latter-save-group-modal"
+      aria-labelledby="latter-save-group-title"
+      @cancel=${() => store.closeSaveGroupModal()}
+      @click=${(ev) => onBackdropClick(ev, () => store.closeSaveGroupModal())}
+      class="studio-dialog"
+    >
+      <div class="dialog-body">
+        <h3 id="latter-save-group-title" class="dialog-title">Save Custom Group</h3>
+        <p class="dialog-text">
+          Saves this Device's operational settings as a reusable Device Group and assigns this Device to it.
+        </p>
+        <div class="stacked-field">
+          <label for="save-group-name">Group Name</label>
+          <input
+            type="text"
+            id="save-group-name"
+            placeholder="e.g. Nightstands, Guest Suites"
+            .value=${store.saveGroupModal?.name || ""}
+            @input=${(ev) => {
+              store.saveGroupModal = {
+                ...store.saveGroupModal,
+                name: (ev.currentTarget).value,
+              };
+            }}
+          />
+        </div>
+        <div class="stacked-field">
+          <label for="save-group-desc">Description (Optional)</label>
+          <input
+            type="text"
+            id="save-group-desc"
+            placeholder="Optional summary of these settings"
+            .value=${store.saveGroupModal?.description || ""}
+            @input=${(ev) => {
+              store.saveGroupModal = {
+                ...store.saveGroupModal,
+                description: (ev.currentTarget).value,
+              };
+            }}
+          />
+        </div>
+        <div class="dialog-actions">
+          <button
+            type="button"
+            @click=${() => store.closeSaveGroupModal()}
+            class="btn btn-secondary"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            id="latter-save-group-confirm-btn"
+            ?disabled=${Boolean(store.saveGroupModal?.busy)}
+            @click=${() => void store.confirmSaveGroupModal()}
+            class="btn btn-primary"
+          >
+            Save Group
+          </button>
+        </div>
+      </div>
+    </dialog>
+
+    <dialog
+      id="latter-shortcut-modal"
+      aria-labelledby="latter-shortcut-title"
+      @cancel=${() => store.closeShortcutModal()}
+      @click=${(ev) => onBackdropClick(ev, () => store.closeShortcutModal())}
+      class="studio-dialog shortcut-dialog"
+    >
+      <div class="dialog-body">
+        <h3 id="latter-shortcut-title" class="dialog-title">${scTitle}</h3>
+        <div class="scope-tabs" role="tablist" aria-label="Shortcut Type">
+          <button
+            type="button"
+            role="tab"
+            aria-selected=${String(scModal.kind === "route")}
+            @click=${() => {
+              store.shortcutModal = { ...store.shortcutModal, kind: "route" };
+              store.host.requestUpdate();
+            }}
+            class="scope-tab ${scModal.kind === "route" ? "active" : ""}"
+          >
+            App or Page
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected=${String(scModal.kind === "entity")}
+            @click=${() => {
+              store.shortcutModal = { ...store.shortcutModal, kind: "entity" };
+              store.host.requestUpdate();
+            }}
+            class="scope-tab ${scModal.kind === "entity" ? "active" : ""}"
+          >
+            Home Assistant Entity
+          </button>
+        </div>
+
+        ${scModal.kind === "route"
+          ? html`<div class="stacked-field">
+              <label for="shortcut-route-select">Target App or Subpage</label>
+              <select
+                id="shortcut-route-select"
+                .value=${scModal.routeTarget}
+                @change=${(ev) => {
+                  const val = (ev.currentTarget).value;
+                  store.shortcutModal = { ...store.shortcutModal, routeTarget: val };
+                  store.host.requestUpdate();
+                }}
+              >
+                ${routeGroups.map(
+                  (grp) => html`<optgroup label=${grp.group}>
+                    ${grp.items.map(
+                      (item) => html`<option
+                        value=${item.token}
+                        ?selected=${item.token === scModal.routeTarget}
+                      >
+                        ${item.label}
+                      </option>`,
+                    )}
+                  </optgroup>`,
+                )}
+              </select>
+            </div>`
+          : html`<div class="list-row-main">
+                <div class="stacked-field">
+                  <label for="shortcut-domain-filter">Domain Filter</label>
+                  <select
+                    id="shortcut-domain-filter"
+                    .value=${scModal.entityDomainFilter}
+                    @change=${(ev) => {
+                      const nextDom = (ev.currentTarget).value;
+                      const nextList = allShortcutEntities.filter(
+                        (e) => nextDom === "all" || e.domain === nextDom,
+                      );
+                      const keepEnt = nextList.some((e) => e.id === scModal.entityTarget)
+                        ? scModal.entityTarget
+                        : (nextList[0]?.id || "");
+                      const effDom = keepEnt.split(".", 1)[0] || nextDom;
+                      const nextAct = SHORTCUT_DOMAIN_ACTIONS[effDom]?.[0]?.action || "";
+                      store.shortcutModal = {
+                        ...store.shortcutModal,
+                        entityDomainFilter: nextDom,
+                        entityTarget: keepEnt,
+                        action: nextAct,
+                      };
+                      store.host.requestUpdate();
+                    }}
+                  >
+                    <option value="all" ?selected=${scModal.entityDomainFilter === "all"}>
+                      All Domains
+                    </option>
+                    ${availableDomains.map(
+                      (dom) => html`<option
+                        value=${dom}
+                        ?selected=${dom === scModal.entityDomainFilter}
+                      >
+                        ${SHORTCUT_DOMAIN_LABELS[dom] || dom}
+                      </option>`,
+                    )}
+                  </select>
+                </div>
+                <div class="stacked-field">
+                  <label for="shortcut-entity-search">Filter Entities</label>
+                  <input
+                    type="search"
+                    id="shortcut-entity-search"
+                    placeholder="Search name, Area, or entity ID…"
+                    .value=${scModal.entitySearch}
+                    @input=${(ev) => {
+                      const query = (ev.currentTarget).value;
+                      const qLow = query.trim().toLowerCase();
+                      const matches = allShortcutEntities.filter((e) => {
+                        if (
+                          scModal.entityDomainFilter !== "all" &&
+                          e.domain !== scModal.entityDomainFilter
+                        ) {
+                          return false;
+                        }
+                        if (!qLow) return true;
+                        return (
+                          e.name.toLowerCase().includes(qLow) ||
+                          e.id.toLowerCase().includes(qLow) ||
+                          e.area_name.toLowerCase().includes(qLow)
+                        );
+                      });
+                      const nextTarget = matches.some((e) => e.id === scModal.entityTarget)
+                        ? scModal.entityTarget
+                        : (matches[0]?.id || scModal.entityTarget);
+                      const nextDom = nextTarget.split(".", 1)[0] || "";
+                      const validActs = SHORTCUT_DOMAIN_ACTIONS[nextDom] || [];
+                      const nextAct = validActs.some((a) => a.action === scModal.action)
+                        ? scModal.action
+                        : (validActs[0]?.action || scModal.action);
+                      store.shortcutModal = {
+                        ...store.shortcutModal,
+                        entitySearch: query,
+                        entityTarget: nextTarget,
+                        action: nextAct,
+                      };
+                      store.host.requestUpdate();
+                    }}
+                  />
+                </div>
+              </div>
+              <div class="stacked-field">
+                <label for="shortcut-entity-select">Entity</label>
+                <select
+                  id="shortcut-entity-select"
+                  .value=${scModal.entityTarget}
+                  @change=${(ev) => {
+                    const nextEnt = (ev.currentTarget).value;
+                    const dom = nextEnt.split(".", 1)[0] || "";
+                    const acts = SHORTCUT_DOMAIN_ACTIONS[dom] || [];
+                    const nextAct = acts.some((a) => a.action === scModal.action)
+                      ? scModal.action
+                      : (acts[0]?.action || "");
+                    store.shortcutModal = {
+                      ...store.shortcutModal,
+                      entityTarget: nextEnt,
+                      action: nextAct,
+                    };
+                    store.host.requestUpdate();
+                  }}
+                >
+                  ${filteredShortcutEntities.length === 0
+                    ? html`<option value="">No matching Home Assistant entities</option>`
+                    : filteredShortcutEntities.map(
+                        (e) => html`<option
+                          value=${e.id}
+                          ?selected=${e.id === scModal.entityTarget}
+                        >
+                          ${e.area_name ? `${e.area_name} — ` : ""}${e.name} (${e.id})
+                        </option>`,
+                      )}
+                </select>
+              </div>
+              <div class="stacked-field">
+                <label for="shortcut-action-select">Action</label>
+                <select
+                  id="shortcut-action-select"
+                  .value=${scModal.action}
+                  @change=${(ev) => {
+                    store.shortcutModal = {
+                      ...store.shortcutModal,
+                      action: (ev.currentTarget).value,
+                    };
+                    store.host.requestUpdate();
+                  }}
+                >
+                  ${availableEntityActions.map(
+                    (act) => html`<option
+                      value=${act.action}
+                      ?selected=${act.action === scModal.action}
+                    >
+                      ${act.label}
+                    </option>`,
+                  )}
+                </select>
+              </div>
+              ${renderSwitchRow({
+                id: "shortcut-confirm-switch",
+                label: "Confirm Before Running",
+                description: scIsDock
+                  ? "Shows a confirmation prompt before running this action from the App Dock."
+                  : "Require a confirmation tap instead of running immediately on a single tap.",
+                checked: scModal.confirm,
+                onChange: (checked) => {
+                  store.shortcutModal = { ...store.shortcutModal, confirm: checked };
+                  store.host.requestUpdate();
+                },
+              })}`}
+
+        <div class="stacked-field">
+          <label for="shortcut-label-input">Custom Label (Optional)</label>
+          <input
+            type="text"
+            id="shortcut-label-input"
+            maxlength=${String(SHORTCUT_LABEL_MAX)}
+            placeholder=${autoDefaultLabel}
+            .value=${scModal.label}
+            @input=${(ev) => {
+              store.shortcutModal = {
+                ...store.shortcutModal,
+                label: (ev.currentTarget).value,
+              };
+            }}
+          />
+        </div>
+
+        <div class="stacked-field">
+          <label for="shortcut-icon-input">Icon (Optional MDI Override)</label>
+          <div class="shortcut-icon-row">
+            <span class="shortcut-icon-badge" aria-hidden="true">
+              <ha-icon .icon=${previewIcon}></ha-icon>
+            </span>
+            <input
+              type="text"
+              id="shortcut-icon-input"
+              placeholder=${`Default (${autoDefaultIcon}) or type any mdi:icon…`}
+              .value=${scModal.icon}
+              @input=${(ev) => {
+                const raw = (ev.currentTarget).value;
+                store.shortcutModal = {
+                  ...store.shortcutModal,
+                  icon: raw,
+                  iconSearch: raw,
+                };
+                store.host.requestUpdate();
+              }}
+            />
+            ${scModal.icon
+              ? html`<button
+                  type="button"
+                  @click=${() => {
+                    store.shortcutModal = {
+                      ...store.shortcutModal,
+                      icon: "",
+                      iconSearch: "",
+                    };
+                    store.host.requestUpdate();
+                  }}
+                  class="btn btn-text btn-compact"
+                >
+                  Default Icon
+                </button>`
+              : nothing}
+          </div>
+          <div class="mdi-picker-grid" role="listbox" aria-label="Material Design Icons">
+            ${filteredMdiIcons.slice(0, 72).map(
+              (slug) => html`<button
+                type="button"
+                title=${slug}
+                aria-label=${slug}
+                aria-selected=${String(normalizeMdiIconSlug(scModal.icon) === slug)}
+                @click=${() => {
+                  store.shortcutModal = {
+                    ...store.shortcutModal,
+                    icon: slug,
+                    iconSearch: "",
+                  };
+                  store.host.requestUpdate();
+                }}
+                class="mdi-picker-btn ${normalizeMdiIconSlug(scModal.icon) === slug ? "selected" : ""}"
+              >
+                <ha-icon .icon=${slug}></ha-icon>
+              </button>`,
+            )}
+          </div>
+        </div>
+
+        <div class="dialog-actions">
+          <button
+            type="button"
+            @click=${() => store.closeShortcutModal()}
+            class="btn btn-secondary"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            id="shortcut-save-btn"
+            @click=${() => store.saveShortcutModal()}
+            class="btn btn-primary"
+          >
+            Save Shortcut
+          </button>
+        </div>
+      </div>
+    </dialog>
   `;
 }
 
@@ -2234,9 +3161,8 @@ const SYSTEM_WS_COMMANDS = new Set([
   "add_ble_device",
   "create_device_group",
   "delete_device_group",
-  "sync_device_group",
-  "seed_group_baseline",
-  "set_group_device_setting",
+  "update_group_baseline",
+  "apply_batch_device_setting",
   "test_doorbell_speaker",
   "delete_system_wallpaper",
   "save_system_config",
@@ -3046,6 +3972,7 @@ const SAVE_DEBOUNCE_MS = 220;
 const ENTITY_OPTIMISTIC_TTL_MS = 8000;
 const PENDING_ENTITY_STATES = new Map();
 const POWER_PROFILE_SUBKEY_SET = new Set (POWER_PROFILE_SUBKEYS);
+const BEHAVIOR_NON_PREF_KEY_SET = new Set (GROUP_BEHAVIOR_NON_PREF_KEYS);
 function expandDevicePrefPatch(
   currentCfg,
   rawPatch,
@@ -3090,10 +4017,62 @@ function overlayDevicePrefsOnSections(
   if (!rawPatch || Object.keys(rawPatch).length === 0) return;
   const curCfg = (payload.config || {});
   const expanded = expandDevicePrefPatch(curCfg, rawPatch);
+  const groups = payload.device_groups || [];
+  const supportedPrefKeys = new Set((payload.device_prefs || []).map((p) => p.key));
+  const behaviorPrefKeys = new Set(
+    (payload.device_prefs || []).filter((p) => p.group_tier === "behavior").map((p) => p.key),
+  );
+  const isRoaming = curCfg.is_roaming !== false;
+  if ("device_group" in rawPatch) {
+    const targetGrpId = String(rawPatch.device_group || "custom").trim() || "custom";
+    expanded.device_group = targetGrpId;
+    if (targetGrpId !== "custom") {
+      const grp = groups.find((g) => g.id === targetGrpId);
+      if (grp?.device_config) {
+        for (const [gk, gv] of Object.entries(grp.device_config)) {
+          if (gk in rawPatch || gv === undefined || gv === null) continue;
+          if ((gk === "sync_device_area" || gk === "area_follow_dwell_s") && !isRoaming) continue;
+          if (BEHAVIOR_NON_PREF_KEY_SET.has(gk) || supportedPrefKeys.has(gk)) {
+            expanded[gk] = gv;
+          }
+        }
+      }
+    }
+  } else {
+    const curGrpId = String(curCfg.device_group || "custom").trim() || "custom";
+    if (curGrpId !== "custom") {
+      const grp = groups.find((g) => g.id === curGrpId);
+      if (grp?.device_config) {
+        for (const [ek, ev] of Object.entries(expanded)) {
+          if ((ek === "sync_device_area" || ek === "area_follow_dwell_s") && !isRoaming) continue;
+          if (
+            (BEHAVIOR_NON_PREF_KEY_SET.has(ek) || behaviorPrefKeys.has(ek)) &&
+            grp.device_config[ek] !== undefined &&
+            String(grp.device_config[ek]) !== String(ev)
+          ) {
+            expanded.device_group = "custom";
+            break;
+          }
+        }
+      }
+    }
+  }
   payload.config = {
     ...payload.config,
     ...expanded,
   };
+  if ("device_group" in expanded && Array.isArray(payload.system_devices) && payload.subentry_id) {
+    const nextGrp = String(expanded.device_group || "custom");
+    const nextGrpName =
+      nextGrp === "custom"
+        ? "Custom"
+        : groups.find((g) => g.id === nextGrp)?.name || nextGrp;
+    payload.system_devices = payload.system_devices.map((d) =>
+      d.subentry_id === payload.subentry_id
+        ? { ...d, device_group: nextGrp, device_group_name: nextGrpName }
+        : d,
+    );
+  }
   if (payload.device_prefs) {
     payload.device_prefs = payload.device_prefs.map((p) => {
       if (p.key in expanded) {
@@ -3202,6 +4181,7 @@ function stageDeviceSettingOp(
     }
   };
   snapshotKey(key);
+  snapshotKey("device_group");
   if (key === "home_screen_enabled") {
     snapshotKey("start_screen");
   }
@@ -3503,40 +4483,306 @@ async function runDeviceActionOp(
     return false;
   }
 }
-function getEnabledDockTokensOp(store) {
-  const raw = String(store.state?.config?.dock_apps ?? "");
-  if (!raw.trim()) {
-    return [...DEFAULT_DOCK_APPS_TOKENS];
+function sanitizeShortcutLabel(raw) {
+  const str = String(raw ?? "");
+  let collapsed = "";
+  let prevSpace = true;
+  for (const ch of str) {
+    const code = ch.charCodeAt(0);
+    if (
+      code < 0x20 ||
+      code === 0x7f ||
+      ch === "|" ||
+      ch === "\x1e" ||
+      ch === "\x1f" ||
+      ch === " " ||
+      ch === "\t" ||
+      ch === "\r" ||
+      ch === "\n"
+    ) {
+      if (!prevSpace) {
+        collapsed += " ";
+        prevSpace = true;
+      }
+      continue;
+    }
+    collapsed += ch;
+    prevSpace = false;
   }
-  const known = new Set(DOCK_APPS_CATALOG.map((a) => a.token));
-  const parsed = raw
-    .split(",")
-    .map((s) => s.trim())
-    .filter((s, i, arr) => Boolean(s) && known.has(s) && arr.indexOf(s) === i);
-  return parsed.length > 0 ? parsed : [...DEFAULT_DOCK_APPS_TOKENS];
+  const trimmed = collapsed.trim();
+  return trimmed.length > SHORTCUT_LABEL_MAX
+    ? trimmed.slice(0, SHORTCUT_LABEL_MAX).trimEnd()
+    : trimmed;
 }
-function toggleDockAppTokenOp(store, appId) {
-  const current = getEnabledDockTokensOp(store);
-  const idx = current.indexOf(appId);
-  if (idx >= 0) {
-    if (current.length <= 1) {
-      store.showToast("Keep at least one Dock app enabled", true);
+function defaultDockShortcutItems() {
+  return DEFAULT_DOCK_ROUTES_TOKENS.map((tok) => ({
+    kind: "route",
+    target: tok,
+    action: "",
+    label: "",
+    icon: "",
+    confirm: false,
+  }));
+}
+function normalizeShortcutArray(
+  raw,
+  isDock,
+) {
+  if (!Array.isArray(raw)) {
+    return isDock ? defaultDockShortcutItems() : [];
+  }
+  const knownRoutes = new Map(SHORTCUT_ROUTES_CATALOG.map((r) => [r.token, r]));
+  const maxItems = isDock ? MAX_DOCK_ITEMS : MAX_PINNED_ITEMS;
+  const out = [];
+  const seen = new Set();
+  for (const entry of raw) {
+    if (!entry || typeof entry !== "object") continue;
+    const rec = entry;
+    const kind = String(rec.kind || "").trim().toLowerCase();
+    if (kind === "route") {
+      const target = String(rec.target || "").trim().toLowerCase();
+      if (isDock && (target === "settings:root" || target === "app:settings")) {
+        continue;
+      }
+      const spec = knownRoutes.get(target);
+      if (!spec || (!isDock && spec.dockOnly)) continue;
+      const dedupKey = `route|${target}|`;
+      if (seen.has(dedupKey)) continue;
+      seen.add(dedupKey);
+      out.push({
+        kind: "route",
+        target,
+        action: "",
+        label: sanitizeShortcutLabel(rec.label),
+        icon: normalizeMdiIconSlug(rec.icon),
+        confirm: false,
+      });
+    } else if (kind === "entity") {
+      const target = String(rec.target || "").trim().toLowerCase();
+      const dotIdx = target.indexOf(".");
+      if (dotIdx <= 0) continue;
+      const domain = target.slice(0, dotIdx);
+      const validActions = SHORTCUT_DOMAIN_ACTIONS[domain];
+      if (!validActions || validActions.length === 0) continue;
+      const rawAct = String(rec.action || "").trim().toLowerCase();
+      const action = validActions.some((a) => a.action === rawAct)
+        ? rawAct
+        : validActions[0].action;
+      const dedupKey = `entity|${target}|${action}`;
+      if (seen.has(dedupKey)) continue;
+      seen.add(dedupKey);
+      out.push({
+        kind: "entity",
+        target,
+        action,
+        label: sanitizeShortcutLabel(rec.label),
+        icon: normalizeMdiIconSlug(rec.icon),
+        confirm: rec.confirm === undefined ? isDock : Boolean(rec.confirm),
+      });
+    }
+    if (out.length >= maxItems) break;
+  }
+  return out;
+}
+function getDockItemsOp(store) {
+  const raw = store.state?.config?.dock_items;
+  if (raw === undefined || raw === null) {
+    return defaultDockShortcutItems();
+  }
+  return normalizeShortcutArray(raw, true);
+}
+function getPinnedItemsOp(store) {
+  const raw = store.state?.config?.pinned_items;
+  if (raw === undefined || raw === null) {
+    return [];
+  }
+  return normalizeShortcutArray(raw, false);
+}
+function moveShortcutItemOp(
+  store,
+  listKey,
+  idx,
+  delta,
+) {
+  const current = listKey === "dock_items" ? getDockItemsOp(store) : getPinnedItemsOp(store);
+  const nextIdx = idx + delta;
+  if (idx < 0 || nextIdx < 0 || idx >= current.length || nextIdx >= current.length) {
+    return;
+  }
+  const next = current.map((it) => ({ ...it }));
+  const [moved] = next.splice(idx, 1);
+  next.splice(nextIdx, 0, moved);
+  store.stageDeviceSetting(listKey, next);
+}
+function removeShortcutItemOp(
+  store,
+  listKey,
+  idx,
+) {
+  const current = listKey === "dock_items" ? getDockItemsOp(store) : getPinnedItemsOp(store);
+  if (idx < 0 || idx >= current.length) return;
+  const next = current.filter((_, i) => i !== idx).map((it) => ({ ...it }));
+  store.stageDeviceSetting(listKey, next);
+}
+function resetDockItemsToDefaultOp(store) {
+  store.stageDeviceSetting("dock_items", defaultDockShortcutItems());
+  store.showToast("Restored default App Dock");
+}
+function openShortcutModalOp(
+  store,
+  listKey,
+  editIndex = null,
+) {
+  const isDock = listKey === "dock_items";
+  const current = isDock ? getDockItemsOp(store) : getPinnedItemsOp(store);
+  const caps = store.state?.capabilities || {};
+  const compatibleRoutes = SHORTCUT_ROUTES_CATALOG.filter((r) => {
+    if (!isDock && r.dockOnly) return false;
+    if (isDock && r.token === "settings:root") return false;
+    if (r.capability === "round" && caps.is_round === false) return false;
+    if (r.capability === "imu" && caps.has_imu === false) return false;
+    return true;
+  });
+  const firstRoute = compatibleRoutes[0]?.token || "weather:moon";
+  const entities = store.state?.catalog?.shortcut_entities || [];
+  const firstEnt = entities[0];
+  const firstDomain = firstEnt ? firstEnt.domain : "light";
+  const firstAction = SHORTCUT_DOMAIN_ACTIONS[firstDomain]?.[0]?.action || "toggle";
+  if (editIndex !== null && editIndex >= 0 && editIndex < current.length) {
+    const existing = current[editIndex];
+    if (existing.kind === "entity") {
+      const dom = existing.target.split(".", 1)[0] || firstDomain;
+      store.shortcutModal = {
+        open: true,
+        listKey,
+        editIndex,
+        kind: "entity",
+        routeTarget: firstRoute,
+        entityDomainFilter: "all",
+        entitySearch: "",
+        entityTarget: existing.target,
+        action: existing.action || SHORTCUT_DOMAIN_ACTIONS[dom]?.[0]?.action || "toggle",
+        label: existing.label,
+        icon: existing.icon,
+        iconSearch: "",
+        confirm: Boolean(existing.confirm),
+      };
+    } else {
+      store.shortcutModal = {
+        open: true,
+        listKey,
+        editIndex,
+        kind: "route",
+        routeTarget: existing.target,
+        entityDomainFilter: "all",
+        entitySearch: "",
+        entityTarget: firstEnt?.id || "",
+        action: firstAction,
+        label: existing.label,
+        icon: existing.icon,
+        iconSearch: "",
+        confirm: isDock,
+      };
+    }
+  } else {
+    store.shortcutModal = {
+      open: true,
+      listKey,
+      editIndex: null,
+      kind: isDock ? "route" : (entities.length > 0 ? "entity" : "route"),
+      routeTarget: firstRoute,
+      entityDomainFilter: "all",
+      entitySearch: "",
+      entityTarget: firstEnt?.id || "",
+      action: firstAction,
+      label: "",
+      icon: "",
+      iconSearch: "",
+      confirm: isDock,
+    };
+  }
+  store.host.requestUpdate();
+}
+function saveShortcutModalOp(store) {
+  const modal = store.shortcutModal;
+  const isDock = modal.listKey === "dock_items";
+  const maxItems = isDock ? MAX_DOCK_ITEMS : MAX_PINNED_ITEMS;
+  const current = (isDock ? getDockItemsOp(store) : getPinnedItemsOp(store)).map((it) => ({
+    ...it,
+  }));
+  if (modal.editIndex === null && current.length >= maxItems) {
+    store.showToast(
+      `${isDock ? "App Dock" : "Pinned App"} supports up to ${maxItems} shortcuts`,
+      true,
+    );
+    return;
+  }
+  const rawIcon = modal.icon.trim();
+  const cleanIcon = rawIcon ? normalizeMdiIconSlug(rawIcon) : "";
+  if (rawIcon && !cleanIcon) {
+    store.showToast("Enter a valid Material Design Icon name (e.g. mdi:bell-ring)", true);
+    return;
+  }
+  const cleanLabel = sanitizeShortcutLabel(modal.label);
+  let built;
+  if (modal.kind === "route") {
+    const routeTok = modal.routeTarget.trim().toLowerCase();
+    const spec = SHORTCUT_ROUTES_CATALOG.find((r) => r.token === routeTok);
+    if (!spec || (!isDock && spec.dockOnly) || (isDock && routeTok === "settings:root")) {
+      store.showToast("Select an app or page to pin", true);
       return;
     }
-    current.splice(idx, 1);
+    built = {
+      kind: "route",
+      target: routeTok,
+      action: "",
+      label: cleanLabel,
+      icon: cleanIcon,
+      confirm: false,
+    };
   } else {
-    current.push(appId);
+    const entId = modal.entityTarget.trim().toLowerCase();
+    const dotIdx = entId.indexOf(".");
+    if (dotIdx <= 0) {
+      store.showToast("Select a Home Assistant entity", true);
+      return;
+    }
+    const dom = entId.slice(0, dotIdx);
+    const validActs = SHORTCUT_DOMAIN_ACTIONS[dom] || [];
+    const act = validActs.some((a) => a.action === modal.action)
+      ? modal.action
+      : (validActs[0]?.action || "");
+    if (!act) {
+      store.showToast(`Unsupported entity domain '${dom}'`, true);
+      return;
+    }
+    built = {
+      kind: "entity",
+      target: entId,
+      action: act,
+      label: cleanLabel,
+      icon: cleanIcon,
+      confirm: Boolean(modal.confirm),
+    };
   }
-  store.stageDeviceSetting("dock_apps", current.join(","));
-}
-function moveDockAppTokenOp(store, appId, delta) {
-  const current = getEnabledDockTokensOp(store);
-  const idx = current.indexOf(appId);
-  const nextIdx = idx + delta;
-  if (idx < 0 || nextIdx < 0 || nextIdx >= current.length) return;
-  const [moved] = current.splice(idx, 1);
-  current.splice(nextIdx, 0, moved);
-  store.stageDeviceSetting("dock_apps", current.join(","));
+  const dupIdx = current.findIndex(
+    (it, idx) =>
+      idx !== modal.editIndex &&
+      it.kind === built.kind &&
+      it.target === built.target &&
+      it.action === built.action,
+  );
+  if (dupIdx >= 0) {
+    store.showToast("That shortcut is already in this list", true);
+    return;
+  }
+  if (modal.editIndex !== null && modal.editIndex >= 0 && modal.editIndex < current.length) {
+    current[modal.editIndex] = built;
+  } else {
+    current.push(built);
+  }
+  store.shortcutModal = { ...store.shortcutModal, open: false };
+  store.stageDeviceSetting(modal.listKey, current);
 }
 function getEnabledAreaCategoriesOp(store) {
   const raw = String(store.state?.config?.area_categories ?? "");
@@ -4113,27 +5359,83 @@ async function testDoorbellSpeakerOp(store) {
 
 // --- src/state/groups-presence-ops.ts ---
 /**
- * Device Groups, bulk ESPHome control actions, BLE calibration, and Area sensor fusion operations.
+ * Device Groups, Batch Controls, BLE calibration, and Area sensor fusion operations.
  */
+function slugifyGroupName(raw) {
+  return raw
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
 async function createDeviceGroupOp(store) {
   const name = store.newGroupName.trim();
   const description = store.newGroupDesc.trim();
+  const sourceSubentryId = store.newGroupSourceSubentryId.trim();
   if (!name) {
     store.showToast("Enter a Device Group name", true);
     return;
   }
   try {
+    const payload = { name, description };
+    if (sourceSubentryId) {
+      payload.source_subentry_id = sourceSubentryId;
+    }
     const res = await store.ws.runSystemCommand(
       "create_device_group",
-      { name, description },
+      payload,
       store.activeSubentryId || null,
     );
+    const createdId = slugifyGroupName(name) || "group";
     store.newGroupName = "";
     store.newGroupDesc = "";
+    store.newGroupSourceSubentryId = "";
+    store.openGroupIds.add(createdId);
     if (res) store.ingestPayload(res, false);
     store.showToast(`Created group "${name}"`);
   } catch (err) {
     store.showToast(formatWsError(err, "Could not create Device Group"), true);
+  }
+}
+async function confirmSaveDeviceAsGroupOp(store) {
+  const name = store.saveGroupModal.name.trim();
+  const description = store.saveGroupModal.description.trim();
+  const sourceSubentryId = store.saveGroupModal.subentryId || store.activeSubentryId;
+  if (!name) {
+    store.showToast("Enter a Device Group name", true);
+    return;
+  }
+  if (!sourceSubentryId) {
+    store.showToast("Choose a Device first", true);
+    return;
+  }
+  store.saveGroupModal = { ...store.saveGroupModal, busy: true };
+  store.host.requestUpdate();
+  try {
+    const res = await store.ws.runSystemCommand(
+      "create_device_group",
+      {
+        name,
+        description,
+        source_subentry_id: sourceSubentryId,
+        assign_source: true,
+      },
+      store.activeSubentryId || null,
+    );
+    store.saveGroupModal = {
+      open: false,
+      subentryId: "",
+      name: "",
+      description: "",
+      busy: false,
+    };
+    if (res) store.ingestPayload(res, false);
+    else store.host.requestUpdate();
+    store.showToast(`Saved custom group "${name}"`);
+  } catch (err) {
+    store.saveGroupModal = { ...store.saveGroupModal, busy: false };
+    store.host.requestUpdate();
+    store.showToast(formatWsError(err, "Could not save custom Device Group"), true);
   }
 }
 async function deleteDeviceGroupOp(store, groupId) {
@@ -4143,79 +5445,89 @@ async function deleteDeviceGroupOp(store, groupId) {
       { group_id: groupId },
       store.activeSubentryId || null,
     );
+    store.openGroupIds.delete(groupId);
+    store.groupCopySourceDrafts.delete(groupId);
+    if (store.batchTargetFilter === `group:${groupId}`) {
+      store.batchTargetFilter = "all";
+    }
     if (res) store.ingestPayload(res, false);
     store.showToast("Deleted Device Group");
   } catch (err) {
     store.showToast(formatWsError(err, "Could not delete Device Group"), true);
   }
 }
-async function syncDeviceGroupOp(
+async function updateGroupBaselineOp(
   store,
   groupId,
-  singleSubentryId,
-) {
-  try {
-    const payload = { group_id: groupId };
-    if (singleSubentryId) payload.subentry_id = singleSubentryId;
-    const res = await store.ws.runSystemCommand(
-      "sync_device_group",
-      payload,
-      store.activeSubentryId || null,
-    );
-    if (res) store.ingestPayload(res, false);
-    store.showToast("Synced to group baseline");
-  } catch (err) {
-    store.showToast(formatWsError(err, "Could not sync Device Group"), true);
-  }
-}
-async function seedGroupBaselineFromDeviceOp(store) {
-  if (!store.seedGroupTargetId || !store.seedSourceSubentryId) {
-    store.showToast("Choose both a target group and a source Device", true);
-    return;
-  }
-  try {
-    const res = await store.ws.runSystemCommand(
-      "seed_group_baseline",
-      {
-        group_id: store.seedGroupTargetId,
-        subentry_id: store.seedSourceSubentryId,
-      },
-      store.activeSubentryId || null,
-    );
-    if (res) store.ingestPayload(res, false);
-    store.showToast("Saved group baseline from Device");
-  } catch (err) {
-    store.showToast(formatWsError(err, "Could not seed group baseline"), true);
-  }
-}
-function resolvedGroupCtrlIdOp(store) {
-  const filter = store.groupCtrlFilter || "all";
-  if (filter.startsWith("group:")) return filter.slice(6);
-  if (filter === "trait:roaming") return "roaming";
-  if (filter === "trait:stationary") return "stationary";
-  return filter;
-}
-async function setGroupDeviceSettingOp(
-  store,
   patch,
 ) {
+  if (!groupId) return;
   try {
     const res = await store.ws.runSystemCommand(
-      "set_group_device_setting",
+      "update_group_baseline",
       {
-        group_id: resolvedGroupCtrlIdOp(store) || "all",
+        group_id: groupId,
         config: patch,
       },
       store.activeSubentryId || null,
     );
     if (res) store.ingestPayload(res, false);
-    store.showToast("Applied group setting");
   } catch (err) {
-    store.showToast(formatWsError(err, "Could not apply group setting"), true);
+    store.showToast(formatWsError(err, "Could not update group baseline"), true);
+  }
+}
+async function copyDeviceToGroupBaselineOp(
+  store,
+  groupId,
+  sourceSubentryId,
+) {
+  if (!groupId || !sourceSubentryId) {
+    store.showToast("Choose a Device to copy settings from", true);
+    return;
+  }
+  try {
+    const res = await store.ws.runSystemCommand(
+      "update_group_baseline",
+      {
+        group_id: groupId,
+        source_subentry_id: sourceSubentryId,
+      },
+      store.activeSubentryId || null,
+    );
+    if (res) store.ingestPayload(res, false);
+    store.showToast("Copied Device settings into group baseline");
+  } catch (err) {
+    store.showToast(formatWsError(err, "Could not copy Device settings"), true);
+  }
+}
+function resolvedBatchTargetIdOp(store) {
+  const filter = store.batchTargetFilter || "all";
+  if (filter.startsWith("group:")) return filter.slice(6);
+  if (filter === "trait:roaming") return "roaming";
+  if (filter === "trait:stationary") return "stationary";
+  return filter;
+}
+async function applyBatchDeviceSettingOp(
+  store,
+  patch,
+) {
+  try {
+    const res = await store.ws.runSystemCommand(
+      "apply_batch_device_setting",
+      {
+        target: store.batchTargetFilter || "all",
+        config: patch,
+      },
+      store.activeSubentryId || null,
+    );
+    if (res) store.ingestPayload(res, false);
+    store.showToast("Applied batch setting");
+  } catch (err) {
+    store.showToast(formatWsError(err, "Could not apply batch setting"), true);
   }
 }
 function filteredControlTargetsOp(store, ctrl) {
-  const grpId = resolvedGroupCtrlIdOp(store);
+  const grpId = resolvedBatchTargetIdOp(store);
   return (ctrl.targets || [])
     .filter((t) => {
       if (grpId === "all") return true;
@@ -4232,7 +5544,7 @@ async function bulkToggleOp(
   turnOn,
 ) {
   if (ctrl.pref_key) {
-    await setGroupDeviceSettingOp(store, { [ctrl.pref_key]: turnOn });
+    await applyBatchDeviceSettingOp(store, { [ctrl.pref_key]: turnOn });
     return;
   }
   const entityIds = filteredControlTargetsOp(store, ctrl);
@@ -4243,14 +5555,14 @@ async function bulkToggleOp(
       {
         entity_ids: entityIds,
         action: turnOn ? "turn_on" : "turn_off",
-        group_id: resolvedGroupCtrlIdOp(store) || "all",
+        group_id: resolvedBatchTargetIdOp(store) || "all",
         canonical_key: ctrl.canonical_key,
       },
       store.activeSubentryId || null,
     );
     if (res) store.ingestPayload(res, false);
   } catch (err) {
-    store.showToast(formatWsError(err, "Bulk switch update failed"), true);
+    store.showToast(formatWsError(err, "Batch switch update failed"), true);
   }
 }
 async function bulkSelectOp(
@@ -4259,7 +5571,7 @@ async function bulkSelectOp(
   option,
 ) {
   if (ctrl.pref_key) {
-    await setGroupDeviceSettingOp(store, { [ctrl.pref_key]: option });
+    await applyBatchDeviceSettingOp(store, { [ctrl.pref_key]: option });
     return;
   }
   const entityIds = filteredControlTargetsOp(store, ctrl);
@@ -4270,14 +5582,14 @@ async function bulkSelectOp(
       {
         entity_ids: entityIds,
         option,
-        group_id: resolvedGroupCtrlIdOp(store) || "all",
+        group_id: resolvedBatchTargetIdOp(store) || "all",
         canonical_key: ctrl.canonical_key,
       },
       store.activeSubentryId || null,
     );
     if (res) store.ingestPayload(res, false);
   } catch (err) {
-    store.showToast(formatWsError(err, "Bulk option update failed"), true);
+    store.showToast(formatWsError(err, "Batch option update failed"), true);
   }
 }
 async function bulkNumberOp(
@@ -4287,7 +5599,7 @@ async function bulkNumberOp(
 ) {
   if (!Number.isFinite(level)) return;
   if (ctrl.pref_key) {
-    await setGroupDeviceSettingOp(store, { [ctrl.pref_key]: level });
+    await applyBatchDeviceSettingOp(store, { [ctrl.pref_key]: level });
     return;
   }
   const entityIds = filteredControlTargetsOp(store, ctrl);
@@ -4298,14 +5610,14 @@ async function bulkNumberOp(
       {
         entity_ids: entityIds,
         level,
-        group_id: resolvedGroupCtrlIdOp(store) || "all",
+        group_id: resolvedBatchTargetIdOp(store) || "all",
         canonical_key: ctrl.canonical_key,
       },
       store.activeSubentryId || null,
     );
     if (res) store.ingestPayload(res, false);
   } catch (err) {
-    store.showToast(formatWsError(err, "Bulk number update failed"), true);
+    store.showToast(formatWsError(err, "Batch number update failed"), true);
   }
 }
 function getActiveSurveyDeviceOp(store) {
@@ -4485,13 +5797,14 @@ class StudioStore {
   // System Shared Entities UI state
   activeCameraPreviewEntity = "";
   cameraPreviewUrl = "";
-  // System Device Groups UI state
+  // System Device Groups & Batch Controls UI state
   newGroupName = "";
   newGroupDesc = "";
-  seedGroupTargetId = "";
-  seedSourceSubentryId = "";
-  groupCtrlFilter = "all";
-  groupCtrlCategoryFilter = "all";
+  newGroupSourceSubentryId = "";
+           openGroupIds = new Set();
+           groupCopySourceDrafts = new Map();
+  batchTargetFilter = "all";
+  batchCategoryFilter = "all";
   // System BLE & Area Presence UI state
   bleSurveySubentryId = "";
   bleCalibrateAreaId = "";
@@ -4532,6 +5845,28 @@ class StudioStore {
     hex: "",
     name: "",
     busy: false,
+  };
+  saveGroupModal = {
+    open: false,
+    subentryId: "",
+    name: "",
+    description: "",
+    busy: false,
+  };
+  shortcutModal = {
+    open: false,
+    listKey: "pinned_items",
+    editIndex: null,
+    kind: "route",
+    routeTarget: "weather:moon",
+    entityDomainFilter: "all",
+    entitySearch: "",
+    entityTarget: "",
+    action: "",
+    label: "",
+    icon: "",
+    iconSearch: "",
+    confirm: false,
   };
   pendingScrollCardId = "";
   pendingDomRevert = null;
@@ -4834,6 +6169,15 @@ class StudioStore {
     this.pendingScrollCardId = cardId;
     this.switchView(viewId);
   }
+  openManageGroups(groupId = "") {
+    const cleanId = String(groupId || "").trim();
+    if (cleanId && cleanId !== "custom") {
+      this.openGroupIds.add(cleanId);
+      this.openSystemSection("system_sync", `group-box-${cleanId}`);
+      return;
+    }
+    this.openSystemSection("system_sync");
+  }
   async switchSystemDevice(nextSubentryId, targetView = "dashboard") {
     const cleanNext = String(nextSubentryId || "").trim();
     if (!cleanNext) return;
@@ -5125,7 +6469,7 @@ class StudioStore {
     this.state = merged;
     this.ensureDefaultSurveyDevice();
     this.ensureDefaultDoorbellTester();
-    this.ensureDefaultSeedSelections();
+    this.ensureValidBatchTargetFilter();
     this.host.requestUpdate();
   }
           stabilizeDiscoveredBle(incoming) {
@@ -5197,14 +6541,15 @@ class StudioStore {
     }
     this.doorbellTestSubentryId = devs[0]?.subentry_id || "";
   }
-          ensureDefaultSeedSelections() {
+          ensureValidBatchTargetFilter() {
+    if (!this.batchTargetFilter.startsWith("group:")) return;
+    const gid = this.batchTargetFilter.slice(6);
     const groups = this.state?.device_groups || [];
-    if (!this.seedGroupTargetId || !groups.some((g) => g.id === this.seedGroupTargetId)) {
-      this.seedGroupTargetId = groups[0]?.id || "";
-    }
     const devs = (this.state?.system_devices || []).filter((d) => d.kind !== "ble_tag");
-    if (!this.seedSourceSubentryId || !devs.some((d) => d.subentry_id === this.seedSourceSubentryId)) {
-      this.seedSourceSubentryId = this.activeSubentryId || devs[0]?.subentry_id || "";
+    const hasGroupWithMembers =
+      groups.some((g) => g.id === gid) && devs.some((d) => d.device_group === gid);
+    if (!hasGroupWithMembers) {
+      this.batchTargetFilter = "all";
     }
   }
   // ---------- Delegated Domain Operations ----------
@@ -5285,14 +6630,37 @@ class StudioStore {
       this.showToast("Firmware update started");
     }
   }
-  getEnabledDockTokens() {
-    return getEnabledDockTokensOp(this);
+  getDockItems() {
+    return getDockItemsOp(this);
   }
-  toggleDockAppToken(appId) {
-    toggleDockAppTokenOp(this, appId);
+  getPinnedItems() {
+    return getPinnedItemsOp(this);
   }
-  moveDockAppToken(appId, delta) {
-    moveDockAppTokenOp(this, appId, delta);
+  moveShortcutItem(
+    listKey,
+    idx,
+    delta,
+  ) {
+    moveShortcutItemOp(this, listKey, idx, delta);
+  }
+  removeShortcutItem(listKey, idx) {
+    removeShortcutItemOp(this, listKey, idx);
+  }
+  resetDockItemsToDefault() {
+    resetDockItemsToDefaultOp(this);
+  }
+  openShortcutModal(
+    listKey,
+    editIndex = null,
+  ) {
+    openShortcutModalOp(this, listKey, editIndex);
+  }
+  closeShortcutModal() {
+    this.shortcutModal = { ...this.shortcutModal, open: false };
+    this.host.requestUpdate();
+  }
+  saveShortcutModal() {
+    saveShortcutModalOp(this);
   }
   getEnabledAreaCategories() {
     return getEnabledAreaCategoriesOp(this);
@@ -5485,23 +6853,42 @@ class StudioStore {
   async testDoorbellSpeaker() {
     await testDoorbellSpeakerOp(this);
   }
+  openSaveGroupModal() {
+    if (!this.activeSubentryId) return;
+    const devTitle = this.state?.title || "";
+    this.saveGroupModal = {
+      open: true,
+      subentryId: this.activeSubentryId,
+      name: "",
+      description: devTitle ? `Saved from ${devTitle}` : "",
+      busy: false,
+    };
+    this.host.requestUpdate();
+  }
+  closeSaveGroupModal() {
+    this.saveGroupModal = { ...this.saveGroupModal, open: false, busy: false };
+    this.host.requestUpdate();
+  }
+  async confirmSaveGroupModal() {
+    await confirmSaveDeviceAsGroupOp(this);
+  }
   async createDeviceGroup() {
     await createDeviceGroupOp(this);
   }
   async deleteDeviceGroup(groupId) {
     await deleteDeviceGroupOp(this, groupId);
   }
-  async syncDeviceGroup(groupId, singleSubentryId) {
-    await syncDeviceGroupOp(this, groupId, singleSubentryId);
+  async updateGroupBaseline(groupId, patch) {
+    await updateGroupBaselineOp(this, groupId, patch);
   }
-  async seedGroupBaselineFromDevice() {
-    await seedGroupBaselineFromDeviceOp(this);
+  async copyDeviceToGroupBaseline(groupId, sourceSubentryId) {
+    await copyDeviceToGroupBaselineOp(this, groupId, sourceSubentryId);
   }
-  resolvedGroupCtrlId() {
-    return resolvedGroupCtrlIdOp(this);
+  resolvedBatchTargetId() {
+    return resolvedBatchTargetIdOp(this);
   }
-  async setGroupDeviceSetting(patch) {
-    await setGroupDeviceSettingOp(this, patch);
+  async applyBatchDeviceSetting(patch) {
+    await applyBatchDeviceSettingOp(this, patch);
   }
   filteredControlTargets(ctrl) {
     return filteredControlTargetsOp(this, ctrl);
@@ -6018,6 +7405,7 @@ const STUDIO_STYLES = css`
     border: 1px solid var(--studio-divider);
     border-radius: var(--studio-radius-control);
     background: var(--studio-input-bg);
+    scroll-margin-top: calc(var(--studio-header-height) + var(--studio-space-4));
   }
   .area-box-head {
     display: flex;
@@ -6825,6 +8213,113 @@ const STUDIO_STYLES = css`
     justify-content: flex-end;
     gap: var(--studio-space-2);
     margin-top: var(--studio-space-2);
+  }
+  dialog.studio-dialog.shortcut-dialog {
+    width: min(560px, calc(100vw - 32px));
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
+  }
+  .shortcut-item-row {
+    display: flex;
+    align-items: center;
+    gap: var(--studio-space-2);
+    padding: var(--studio-space-2) var(--studio-space-3);
+    border: 1px solid var(--studio-divider);
+    border-radius: var(--studio-radius-control);
+    background: var(--studio-input-bg);
+  }
+  .shortcut-icon-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--studio-control-height-compact);
+    height: var(--studio-control-height-compact);
+    border-radius: var(--studio-radius-pill);
+    background: var(--studio-primary-tint);
+    color: var(--studio-primary);
+    flex-shrink: 0;
+  }
+  .shortcut-item-info {
+    display: flex;
+    flex-direction: column;
+    gap: var(--studio-space-1);
+    min-width: 0;
+    flex: 1;
+  }
+  .shortcut-item-title {
+    font-weight: var(--studio-weight-medium);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .shortcut-item-meta {
+    font-size:var(--studio-font-secondary);
+    color: var(--studio-text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .shortcut-page-group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--studio-space-2);
+    padding: var(--studio-space-3);
+    border: 1px solid var(--studio-divider);
+    border-radius: var(--studio-radius-control);
+    background: var(--studio-surface-alt);
+  }
+  .shortcut-page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size:var(--studio-font-secondary);
+    font-weight: var(--studio-weight-medium);
+    color: var(--studio-text-secondary);
+  }
+  .shortcut-toolbar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--studio-space-2);
+  }
+  .shortcut-icon-row {
+    display: flex;
+    align-items: center;
+    gap: var(--studio-space-2);
+  }
+  .shortcut-icon-row input[type="text"] {
+    flex: 1;
+    min-width: 0;
+  }
+  .mdi-picker-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
+    gap: var(--studio-space-1);
+    max-height: 168px;
+    overflow-y: auto;
+    padding: var(--studio-space-2);
+    border: 1px solid var(--studio-divider);
+    border-radius: var(--studio-radius-control);
+    background: var(--studio-input-bg);
+  }
+  .mdi-picker-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: var(--studio-control-height);
+    border: 1px solid transparent;
+    border-radius: var(--studio-radius-control);
+    background: transparent;
+    color: var(--studio-text);
+    cursor: pointer;
+  }
+  .mdi-picker-btn:hover {
+    background: var(--studio-hover);
+  }
+  .mdi-picker-btn.selected {
+    background: var(--studio-primary-tint-strong);
+    border-color: var(--studio-primary);
+    color: var(--studio-primary);
   }
   .color-wheel { display: flex; justify-content: center; }
   .color-wheel canvas { border-radius: 50%; cursor: crosshair; touch-action: none; }
@@ -7874,8 +9369,93 @@ function renderDeviceInterfaceView(store) {
   const remoteEspItems = store.getSectionItems("remote");
   const activityCardOn = cfg.activity_card !== false;
   const enabledSources = new Set(store.getEnabledActivitySources());
-  const enabledDock = store.getEnabledDockTokens();
-  const disabledDock = DOCK_APPS_CATALOG.filter((a) => !enabledDock.includes(a.token));
+  const dockItems = store.getDockItems();
+  const pinnedItems = store.getPinnedItems();
+  const shortcutEntityMap = new Map(
+    (data?.catalog?.shortcut_entities || []).map((e) => [e.id, e]),
+  );
+  const routeSpecMap = new Map(
+    SHORTCUT_ROUTES_CATALOG.map((r) => [r.token, r]),
+  );
+  const renderShortcutRow = (
+    listKey,
+    item,
+    idx,
+    total,
+  ) => {
+    let displayTitle = item.label;
+    let metaLine = "";
+    let iconSlug = item.icon;
+    if (item.kind === "route") {
+      const spec = routeSpecMap.get(item.target);
+      if (!displayTitle) {
+        displayTitle = spec?.label || item.target;
+      }
+      metaLine = spec ? `${spec.group} • ${spec.label}` : item.target;
+      if (!iconSlug) {
+        iconSlug = ROUTE_PREVIEW_ICONS[item.target] || "mdi:apps";
+      }
+    } else {
+      const ent = shortcutEntityMap.get(item.target);
+      const dom = item.target.split(".", 1)[0] || "";
+      const actLbl = shortcutActionLabel(dom, item.action);
+      if (!displayTitle) {
+        displayTitle = ent?.name || item.target;
+      }
+      metaLine = `${actLbl} • ${item.confirm ? "Confirm" : "1-Tap"} • ${item.target}`;
+      if (!iconSlug) {
+        iconSlug = ent?.icon || "mdi:flash";
+      }
+    }
+    return html`<div class="shortcut-item-row">
+      <span class="shortcut-icon-badge" aria-hidden="true">
+        <ha-icon .icon=${iconSlug}></ha-icon>
+      </span>
+      <div class="shortcut-item-info">
+        <span class="shortcut-item-title">${displayTitle}</span>
+        <span class="shortcut-item-meta">${metaLine}</span>
+      </div>
+      ${idx > 0
+        ? html`<button
+            type="button"
+            aria-label=${`Move ${displayTitle} up`}
+            @click=${() => store.moveShortcutItem(listKey, idx, -1)}
+            class="btn-icon"
+          >
+            ↑
+          </button>`
+        : nothing}
+      ${idx < total - 1
+        ? html`<button
+            type="button"
+            aria-label=${`Move ${displayTitle} down`}
+            @click=${() => store.moveShortcutItem(listKey, idx, 1)}
+            class="btn-icon"
+          >
+            ↓
+          </button>`
+        : nothing}
+      <button
+        type="button"
+        aria-label=${`Edit ${displayTitle}`}
+        @click=${() => store.openShortcutModal(listKey, idx)}
+        class="btn btn-secondary btn-compact"
+      >
+        Edit
+      </button>
+      ${renderTrashIconButton(`Remove ${displayTitle}`, () =>
+        store.removeShortcutItem(listKey, idx),
+      )}
+    </div>`;
+  };
+  const pinnedPages = [];
+  for (let i = 0; i < pinnedItems.length; i += 6) {
+    pinnedPages.push({
+      pageNum: Math.floor(i / 6) + 1,
+      startIdx: i,
+      items: pinnedItems.slice(i, i + 6),
+    });
+  }
   const curDevEntry = (data?.system_devices || []).find(
     (d) => d.subentry_id === store.activeSubentryId,
   );
@@ -7965,61 +9545,39 @@ function renderDeviceInterfaceView(store) {
                     },
                   })}
                   ${renderSettingsRow({
-                    label: "Dock Apps",
-                    description: "Toggle and reorder apps shown in the Home Dock.",
+                    id: "dock-shortcuts-row",
+                    label: "App Dock",
+                    description:
+                      "Configure apps, subpages, and Home Assistant entity actions in the Home Dock. Pinned hides automatically when Pinned App is empty, and Settings is always shown last.",
                     stacked: true,
                     control: html`<div
-                      id="dock-pills-container"
-                      class="pill-list"
+                      id="dock-shortcuts-container"
+                      class="stack"
                       role="group"
-                      aria-label="Dock apps"
+                      aria-label="App Dock shortcuts"
                     >
-                      ${enabledDock.map((tok, idx) => {
-                        const meta = DOCK_APPS_CATALOG.find((a) => a.token === tok);
-                        const lbl = meta ? meta.label : tok;
-                        return html`<span class="pill enabled">
-                          ${idx > 0
-                            ? html`<button
-                                type="button"
-                                aria-label=${`Move ${lbl} left`}
-                                @click=${() => store.moveDockAppToken(tok, -1)}
-                                class="pill-move"
-                              >
-                                ‹
-                              </button>`
-                            : nothing}
-                          <button
-                            type="button"
-                            aria-pressed="true"
-                            @click=${() => store.toggleDockAppToken(tok)}
-                            class="pill-toggle"
-                          >
-                            ✓ ${lbl}
-                          </button>
-                          ${idx < enabledDock.length - 1
-                            ? html`<button
-                                type="button"
-                                aria-label=${`Move ${lbl} right`}
-                                @click=${() => store.moveDockAppToken(tok, 1)}
-                                class="pill-move"
-                              >
-                                ›
-                              </button>`
-                            : nothing}
-                        </span>`;
-                      })}
-                      ${disabledDock.map(
-                        (app) => html`<span class="pill">
-                          <button
-                            type="button"
-                            aria-pressed="false"
-                            @click=${() => store.toggleDockAppToken(app.token)}
-                            class="pill-toggle"
-                          >
-                            + ${app.label}
-                          </button>
-                        </span>`,
+                      ${dockItems.map((item, idx) =>
+                        renderShortcutRow("dock_items", item, idx, dockItems.length),
                       )}
+                      <div class="shortcut-toolbar">
+                        <button
+                          type="button"
+                          id="btn-add-dock-item"
+                          ?disabled=${dockItems.length >= MAX_DOCK_ITEMS}
+                          @click=${() => store.openShortcutModal("dock_items", null)}
+                          class="btn btn-secondary"
+                        >
+                          Add Dock Item
+                        </button>
+                        <button
+                          type="button"
+                          id="btn-reset-dock-items"
+                          @click=${() => store.resetDockItemsToDefault()}
+                          class="btn btn-text"
+                        >
+                          Reset Default Dock
+                        </button>
+                      </div>
                     </div>`,
                   })}
                   ${renderSettingsRow({
@@ -8433,6 +9991,57 @@ function renderDeviceInterfaceView(store) {
 
       <div class="column">
         ${renderCard({
+          id: "card-pinned-app",
+          heading: html`<h3 class="card-title">Pinned App</h3>`,
+          contentClass: "settings-list",
+          body: html`${renderSettingsRow({
+            id: "pinned-shortcuts-row",
+            label: "Pinned Shortcuts",
+            description:
+              "Assign Home Assistant entity quick actions or deep-link any Latter app or subpage (6 buttons per page, swipable vertically).",
+            stacked: true,
+            control: html`<div
+              id="pinned-shortcuts-container"
+              class="stack"
+              role="group"
+              aria-label="Pinned App shortcuts"
+            >
+              ${pinnedPages.length > 0
+                ? pinnedPages.map(
+                    (pg) => html`<div class="shortcut-page-group">
+                      <div class="shortcut-page-header">
+                        <span>Page ${pg.pageNum}</span>
+                        <span>${pg.items.length} of 6 Slots</span>
+                      </div>
+                      ${pg.items.map((item, localIdx) =>
+                        renderShortcutRow(
+                          "pinned_items",
+                          item,
+                          pg.startIdx + localIdx,
+                          pinnedItems.length,
+                        ),
+                      )}
+                    </div>`,
+                  )
+                : html`<p class="row-description">
+                    No pinned items configured yet. The Pinned icon stays hidden on the Home Dock until you add at least one item.
+                  </p>`}
+              <div class="shortcut-toolbar">
+                <button
+                  type="button"
+                  id="btn-add-pinned-item"
+                  ?disabled=${pinnedItems.length >= MAX_PINNED_ITEMS}
+                  @click=${() => store.openShortcutModal("pinned_items", null)}
+                  class="btn btn-primary"
+                >
+                  Add Pinned Item
+                </button>
+              </div>
+            </div>`,
+          })}`,
+        })}
+
+        ${renderCard({
           heading: html`<h3 class="card-title">Area Controls</h3>`,
           contentClass: "settings-list",
           body: html`${renderSettingsRow({
@@ -8564,9 +10173,11 @@ function renderDeviceInterfaceView(store) {
 
 // --- src/views/device-overview-view.ts ---
 /**
- * Device Overview View (`dashboard`, D-029): Health repairs alert, high-level Status card
- * (header state pill, 2x2 tonal metric tiles, clickable assignment summary rows + footer),
- * Quick Actions & Sensors.
+ * Device Overview View (`dashboard`, D-029 / D-047):
+ * - Column 1: High-level Status card (header state pill, 2x2 tonal metric tiles, footer links).
+ * - Column 2: Quick Actions (immediate action tiles + live volume), unified Assignments card
+ *   (Device Group with Custom / Save Custom Group / Manage Groups, Assigned Person, Remote Control Group),
+ *   and spillover Sensors & Controls.
  */
 const ICON_AREA = "M12,6.5A2.5,2.5 0 0,1 14.5,9A2.5,2.5 0 0,1 12,11.5A2.5,2.5 0 0,1 9.5,9A2.5,2.5 0 0,1 12,6.5M12,2A7,7 0 0,1 19,9C19,14.25 12,22 12,22C12,22 5,14.25 5,9A7,7 0 0,1 12,2M12,4A5,5 0 0,0 7,9C7,10 7,12 12,18.71C17,12 17,10 17,9A5,5 0 0,0 12,4Z";
 const ICON_BATTERY = "M16,20H8V6H16M16.67,4H15V2H9V4H7.33A1.33,1.33 0 0,0 6,5.33V20.67C6,21.4 6.6,22 7.33,22H16.67A1.33,1.33 0 0,0 18,20.67V5.33C18,4.6 17.4,4 16.67,4Z";
@@ -8668,19 +10279,40 @@ function renderDeviceOverviewView(store) {
   } else if (curDevEntry?.is_online === false) {
     statusLabel = "Offline";
   }
-  const quickActionItems = store
+  const sectionActionItems = store
     .getSectionItems("actions")
     .concat(store.getSectionItems("overview"));
-  const quickActionButtons = quickActionItems.filter((it) => it.domain === "button");
-  const otherQuickItems = quickActionItems.filter((it) => it.domain !== "button");
+  const sectionButtons = sectionActionItems.filter((it) => it.domain === "button");
+  const synthesizedButtons = (data?.quick_actions || []).map((qa) => ({
+    entity_id: `cmd:${qa.key}`,
+    domain: "button",
+    name: qa.label,
+    state: qa.state,
+    device_command: qa.device_command,
+    device_class: qa.device_class,
+  }));
+  const hasRestartInSection = sectionButtons.some(
+    (b) => b.device_class === "restart" || (b.name || "").toLowerCase().includes("restart"),
+  );
+  const quickActionButtons = sectionButtons.concat(
+    synthesizedButtons.filter((sb) => !(hasRestartInSection && sb.device_command === "restart")),
+  );
+  const otherQuickItems = sectionActionItems.filter((it) => it.domain !== "button");
+  if (
+    data?.speaker_volume &&
+    !otherQuickItems.some((it) => it.entity_id === data.speaker_volume?.entity_id)
+  ) {
+    otherQuickItems.push(data.speaker_volume);
+  }
+  const showQuickActionsCard =
+    !isBleOnly && (quickActionButtons.length > 0 || otherQuickItems.length > 0);
   const otherSensorItems = store.getSectionItems("other");
   const groups = data?.device_groups || [];
-  const curGroupId = cfg.device_group || "unassigned";
-  const curGroupName =
-    groups.find((g) => g.id === curGroupId)?.name ||
-    (curGroupId === "unassigned" ? "Unassigned" : curGroupId);
-  const syncStatus = live.group_sync_status ?? curDevEntry?.group_sync_status;
-  const isCustomized = curGroupId !== "unassigned" && isGroupCustomized(syncStatus);
+  const rawGroupId = String(cfg.device_group || "custom").trim() || "custom";
+  const curGroupId =
+    rawGroupId === "custom" || groups.some((g) => g.id === rawGroupId)
+      ? rawGroupId
+      : "custom";
   const remoteGroups = data?.system_config?.remote_groups || [];
   const curRemoteMode =
     String(cfg.device_remote_group || curDevEntry?.device_remote_group || "area_auto").trim() ||
@@ -8739,126 +10371,95 @@ function renderDeviceOverviewView(store) {
           </span>`,
           contentClass: "stack",
           body: html`<div class="status-tiles">
-              <button
-                type="button"
-                @click=${() => store.switchView("presence")}
-                class="status-tile"
-              >
-                <div class="status-tile-head">
-                  ${renderTileIcon(ICON_AREA)}
-                  <span id="st-area-label">${hasAssignedArea ? "Area" : "Current Area"}</span>
-                </div>
-                <strong class="status-tile-value">${areaText}</strong>
-                <span class="status-tile-meta">${areaMeta}</span>
-              </button>
+            <button
+              type="button"
+              @click=${() => store.switchView("presence")}
+              class="status-tile"
+            >
+              <div class="status-tile-head">
+                ${renderTileIcon(ICON_AREA)}
+                <span id="st-area-label">${hasAssignedArea ? "Area" : "Current Area"}</span>
+              </div>
+              <strong class="status-tile-value">${areaText}</strong>
+              <span class="status-tile-meta">${areaMeta}</span>
+            </button>
 
-              ${isBleOnly
+            ${isBleOnly
+              ? html`<button
+                  type="button"
+                  @click=${() => store.switchView("presence")}
+                  class="status-tile"
+                >
+                  <div class="status-tile-head">
+                    ${renderTileIcon(ICON_RADAR)}
+                    <span>Closest Proxy</span>
+                  </div>
+                  <strong class="status-tile-value">${live.ble_closest_proxy || "—"}</strong>
+                  <span class="status-tile-meta">
+                    ${winRow && winRow.distance_m !== null && winRow.distance_m !== undefined
+                      ? `~${fmtDistance(winRow.distance_m, store.hass, winRow.distance_ft)}`
+                      : "BLE presence"}
+                  </span>
+                </button>`
+              : hasBatteryReading || caps.has_power
                 ? html`<button
                     type="button"
-                    @click=${() => store.switchView("presence")}
+                    @click=${() => store.switchView("power")}
                     class="status-tile"
                   >
-                    <div class="status-tile-head">
-                      ${renderTileIcon(ICON_RADAR)}
-                      <span>Closest Proxy</span>
-                    </div>
-                    <strong class="status-tile-value">${live.ble_closest_proxy || "—"}</strong>
-                    <span class="status-tile-meta">
-                      ${winRow && winRow.distance_m !== null && winRow.distance_m !== undefined
-                        ? `~${fmtDistance(winRow.distance_m, store.hass, winRow.distance_ft)}`
-                        : "BLE presence"}
-                    </span>
+                    ${powerTileBody}
                   </button>`
-                : hasBatteryReading || caps.has_power
-                  ? html`<button
-                      type="button"
-                      @click=${() => store.switchView("power")}
-                      class="status-tile"
-                    >
-                      ${powerTileBody}
-                    </button>`
-                  : html`<div class="status-tile">${powerTileBody}</div>`}
+                : html`<div class="status-tile">${powerTileBody}</div>`}
 
-              <button
-                type="button"
-                @click=${() => store.switchView(isBleOnly ? "presence" : "tools")}
-                class="status-tile"
-              >
-                <div class="status-tile-head">
-                  ${renderTileIcon(isBleOnly ? ICON_BLUETOOTH : ICON_WIFI)}
-                  <span id="st-wifi-label">${isBleOnly ? "BLE Signal" : "Wi-Fi Signal"}</span>
-                </div>
-                <strong class="status-tile-value">${rssiText}</strong>
-                <span class="status-tile-meta">${rssiQualityLabel(rssiVal)}</span>
-                ${hasRssi
-                  ? html`<div class="signal-track" aria-hidden="true">
-                      <div
-                        class="signal-fill${rssiVal !== null && rssiVal < -80 ? " low" : ""}"
-                        style=${`--signal-pct:${rssiPct}%`}
-                      ></div>
-                    </div>`
-                  : nothing}
-              </button>
+            <button
+              type="button"
+              @click=${() => store.switchView(isBleOnly ? "presence" : "tools")}
+              class="status-tile"
+            >
+              <div class="status-tile-head">
+                ${renderTileIcon(isBleOnly ? ICON_BLUETOOTH : ICON_WIFI)}
+                <span id="st-wifi-label">${isBleOnly ? "BLE Signal" : "Wi-Fi Signal"}</span>
+              </div>
+              <strong class="status-tile-value">${rssiText}</strong>
+              <span class="status-tile-meta">${rssiQualityLabel(rssiVal)}</span>
+              ${hasRssi
+                ? html`<div class="signal-track" aria-hidden="true">
+                    <div
+                      class="signal-fill${rssiVal !== null && rssiVal < -80 ? " low" : ""}"
+                      style=${`--signal-pct:${rssiPct}%`}
+                    ></div>
+                  </div>`
+                : nothing}
+            </button>
 
-              ${isBleOnly
-                ? html`<button
-                    type="button"
-                    @click=${() => store.switchView("presence")}
-                    class="status-tile"
-                  >
-                    <div class="status-tile-head">
-                      ${renderTileIcon(ICON_TAG)}
-                      <span>BLE Target</span>
-                    </div>
-                    <strong class="status-tile-value">
-                      <code>${cfg.ble_target_address || "—"}</code>
-                    </strong>
-                    <span class="status-tile-meta">Bluetooth address</span>
-                  </button>`
-                : html`<button
-                    type="button"
-                    @click=${() => store.switchView("tools")}
-                    class="status-tile"
-                  >
-                    <div class="status-tile-head">
-                      ${renderTileIcon(ICON_CHIP)}
-                      <span>Firmware</span>
-                    </div>
-                    <strong class="status-tile-value">${fwValue}</strong>
-                    <span class="status-tile-meta">${fwMeta}</span>
-                  </button>`}
-            </div>
-
-            ${!isBleOnly
-              ? html`<div class="kv-list status-assignments">
-                  <button
-                    type="button"
-                    @click=${() => store.openSystemSection("system_sync")}
-                    class="kv-row"
-                  >
-                    <span>Device Group</span>
-                    <strong>
-                      ${curGroupId !== "unassigned"
-                        ? html`<span
-                            class="chip ${isCustomized ? "chip-warning" : "chip-success"}"
-                          >
-                            ${isCustomized ? "Customized" : "In Sync"}
-                          </span>`
-                        : nothing}${curGroupName}
-                    </strong>
-                  </button>
-                  ${caps.has_display
-                    ? html`<button
-                        type="button"
-                        @click=${() => store.switchView("interface")}
-                        class="kv-row"
-                      >
-                        <span>Remote Group</span>
-                        <strong>${remoteSummary}</strong>
-                      </button>`
-                    : nothing}
-                </div>`
-              : nothing}`,
+            ${isBleOnly
+              ? html`<button
+                  type="button"
+                  @click=${() => store.switchView("presence")}
+                  class="status-tile"
+                >
+                  <div class="status-tile-head">
+                    ${renderTileIcon(ICON_TAG)}
+                    <span>BLE Target</span>
+                  </div>
+                  <strong class="status-tile-value">
+                    <code>${cfg.ble_target_address || "—"}</code>
+                  </strong>
+                  <span class="status-tile-meta">Bluetooth address</span>
+                </button>`
+              : html`<button
+                  type="button"
+                  @click=${() => store.switchView("tools")}
+                  class="status-tile"
+                >
+                  <div class="status-tile-head">
+                    ${renderTileIcon(ICON_CHIP)}
+                    <span>Firmware</span>
+                  </div>
+                  <strong class="status-tile-value">${fwValue}</strong>
+                  <span class="status-tile-meta">${fwMeta}</span>
+                </button>`}
+          </div>`,
           footerActions: html`${links.esphome_device_id
               ? html`<button
                   type="button"
@@ -8880,25 +10481,28 @@ function renderDeviceOverviewView(store) {
       </div>
 
       <div class="column">
+        ${showQuickActionsCard
+          ? renderCard({
+              title: "Quick Actions",
+              contentClass: "settings-list",
+              body: html`${renderQuickActionGrid(store, quickActionButtons)}
+                ${otherQuickItems.map((it) => renderNativeControlRow(store, it))}`,
+            })
+          : nothing}
+
         ${renderCard({
-          title: "Quick Actions",
+          id: "card-device-assignments",
+          title: "Assignments",
           contentClass: "settings-list",
-          body: html`${renderQuickActionGrid(store, quickActionButtons)}
-            ${!isBleOnly
+          body: html`${!isBleOnly
               ? renderSettingsRow({
                   label: "Device Group",
                   forId: "cfg-device_group",
                   description:
-                    "Shares operational behavior (sleep, wake word, BLE) across matching Devices.",
-                  control: html`${curGroupId !== "unassigned"
-                      ? html`<span
-                          id="dash-group-sync-chip"
-                          class="chip ${isCustomized ? "chip-warning" : "chip-success"}"
-                        >
-                          ${isCustomized ? "Customized" : "In Sync"}
-                        </span>`
-                      : nothing}
-                    <select
+                    curGroupId === "custom"
+                      ? "Uses individual operational settings; save as a reusable group or pick an existing preset."
+                      : "Applies shared operational settings (power, wake word, brightness, BLE).",
+                  control: html`<select
                       id="cfg-device_group"
                       .value=${curGroupId}
                       @change=${(ev) =>
@@ -8908,6 +10512,9 @@ function renderDeviceOverviewView(store) {
                           "cfg-device_group",
                         )}
                     >
+                      <option value="custom" ?selected=${curGroupId === "custom"}>
+                        Custom
+                      </option>
                       ${groups.map(
                         (g) =>
                           html`<option value=${g.id} ?selected=${g.id === curGroupId}>
@@ -8915,16 +10522,24 @@ function renderDeviceOverviewView(store) {
                           </option>`,
                       )}
                     </select>
-                    ${isCustomized
+                    ${curGroupId === "custom"
                       ? html`<button
                           type="button"
-                          id="btn-reset-to-group"
-                          @click=${() => void store.syncDeviceGroup(curGroupId, store.activeSubentryId)}
+                          id="btn-save-custom-group"
+                          @click=${() => store.openSaveGroupModal()}
                           class="btn btn-secondary btn-compact"
                         >
-                          Reset to Group
+                          Save Custom Group
                         </button>`
-                      : nothing}`,
+                      : nothing}
+                    <button
+                      type="button"
+                      id="btn-manage-groups"
+                      @click=${() => store.openManageGroups(curGroupId)}
+                      class="btn btn-text btn-compact"
+                    >
+                      Manage Groups
+                    </button>`,
                 })
               : nothing}
             ${renderSelectRow({
@@ -8937,7 +10552,20 @@ function renderDeviceOverviewView(store) {
               onChange: (val) =>
                 store.stageDeviceSetting("assigned_person", val, "cfg-assigned_person"),
             })}
-            ${otherQuickItems.map((it) => renderNativeControlRow(store, it))}`,
+            ${!isBleOnly && caps.has_display
+              ? renderSettingsRow({
+                  label: "Remote Control Group",
+                  description: "Controls which TV and AV remotes appear in the Remote app.",
+                  control: html`<span class="chip">${remoteSummary}</span>
+                    <button
+                      type="button"
+                      @click=${() => store.switchView("interface")}
+                      class="btn btn-text btn-compact"
+                    >
+                      Configure
+                    </button>`,
+                })
+              : nothing}`,
         })}
 
         ${otherSensorItems.length
@@ -9809,7 +11437,7 @@ function renderDevicesDiscoveredView(store) {
                 const title = d.title || d.node_name || "Latter Device";
                 const defGrpName =
                   groupNameMap.get(d.default_group) ||
-                  entityLabel((d.default_group || "unassigned").replace(/_/g, " "));
+                  entityLabel((d.default_group || "custom").replace(/_/g, " "));
                 const meta = [d.model_label || "Latter ESPHome Device"];
                 if (d.node_name) meta.push(`Node: ${d.node_name}`);
                 if (d.area_name) meta.push(`Area: ${d.area_name}`);
@@ -9831,6 +11459,9 @@ function renderDevicesDiscoveredView(store) {
                     >
                       <option value="auto" ?selected=${curGrp === "auto"}>
                         Auto (${defGrpName})
+                      </option>
+                      <option value="custom" ?selected=${curGrp === "custom"}>
+                        Custom
                       </option>
                       ${groups.map(
                         (g) =>
@@ -10029,7 +11660,8 @@ function renderDevicesDiscoveredView(store) {
 // --- src/views/devices-list-view.ts ---
 /**
  * Managed Devices View (`select_device_prompt`): Filterable, keyboard-accessible sortable Devices table.
- * Card header dynamically reflects the active category selection (`D-041`).
+ * Card header dynamically reflects the active category selection (`D-041`), while zero-member groups
+ * and unused specialty categories stay hidden unless active (`D-047`).
  */
 function statusRank(st) {
   if (st === "Update available") return 1;
@@ -10040,22 +11672,43 @@ function renderDevicesListView(store) {
   const allDevices = store.state?.system_devices || [];
   const groups = store.state?.device_groups || [];
   const rawCat = store.deviceCategoryFilter || "all";
+  const hasBleTags = allDevices.some((d) => d.kind === "ble_tag");
+  const hasAssignedPeople = allDevices.some((d) => Boolean(d.assigned_person));
+  const hasUpdates = allDevices.some((d) => d.status_label === "Update available");
+  const hasCustomGroup = allDevices.some(
+    (d) => d.kind !== "ble_tag" && (!d.device_group || d.device_group === "custom"),
+  );
   const baseCategories = [
     { id: "all", label: "All Devices" },
     { id: "online", label: "Online Devices" },
-    { id: "native", label: "Latter Displays" },
-    { id: "headless", label: "Screenless Devices" },
     { id: "roaming", label: "Roaming Devices" },
     { id: "stationary", label: "Stationary Devices" },
-    { id: "ble_tracked", label: "BLE-Tracked Devices" },
-    { id: "ble_tag", label: "BLE Tags" },
-    { id: "assigned_person", label: "Assigned to a Person" },
-    { id: "updates", label: "Updates Available" },
   ];
+  if (rawCat === "native") {
+    baseCategories.push({ id: "native", label: "Latter Displays" });
+  }
+  if (rawCat === "ble_tracked") {
+    baseCategories.push({ id: "ble_tracked", label: "BLE-Tracked Devices" });
+  }
+  if (hasBleTags || rawCat === "ble_tag") {
+    baseCategories.push({ id: "ble_tag", label: "BLE Tags" });
+  }
+  if (hasAssignedPeople || rawCat === "assigned_person") {
+    baseCategories.push({ id: "assigned_person", label: "Assigned to a Person" });
+  }
+  if (hasUpdates || rawCat === "updates") {
+    baseCategories.push({ id: "updates", label: "Updates Available" });
+  }
   for (const g of groups) {
-    if (g && g.id && g.id !== "unassigned") {
-      baseCategories.push({ id: `group:${g.id}`, label: `Group: ${entityLabel(g.name)}` });
+    if (!g || !g.id || g.id === "custom") continue;
+    const grpFilterId = `group:${g.id}`;
+    const hasMembers = allDevices.some((d) => d.kind !== "ble_tag" && d.device_group === g.id);
+    if (hasMembers || rawCat === grpFilterId) {
+      baseCategories.push({ id: grpFilterId, label: `Group: ${entityLabel(g.name)}` });
     }
+  }
+  if (hasCustomGroup || rawCat === "group:custom") {
+    baseCategories.push({ id: "group:custom", label: "Group: Custom" });
   }
   const activeCategory = baseCategories.find((o) => o.id === rawCat) || baseCategories[0];
   const cat = activeCategory.id;
@@ -10068,10 +11721,12 @@ function renderDevicesListView(store) {
     if (cat === "assigned_person") return Boolean(d.assigned_person);
     if (cat === "roaming") return isRoaming;
     if (cat === "stationary") return !isRoaming;
-    if (cat === "headless") return isBleTag || !d.has_display;
     if (cat === "ble_tag") return isBleTag;
     if (cat === "updates") return d.status_label === "Update available";
-    if (cat.startsWith("group:")) return d.device_group === cat.slice(6);
+    if (cat === "group:custom") {
+      return !isBleTag && (!d.device_group || d.device_group === "custom");
+    }
+    if (cat.startsWith("group:")) return !isBleTag && d.device_group === cat.slice(6);
     return true;
   });
   filtered.sort((a, b) => {
@@ -10127,6 +11782,10 @@ function renderDevicesListView(store) {
                     const st = d.status_label || "—";
                     const dotCls =
                       st === "Update available" ? "update" : st === "Offline" ? "" : "online";
+                    const grpCell =
+                      d.kind === "ble_tag"
+                        ? "—"
+                        : d.device_group_name || (d.device_group === "custom" ? "Custom" : "—");
                     const openRow = () => {
                       void store.switchSystemDevice(d.subentry_id);
                     };
@@ -10146,7 +11805,7 @@ function renderDevicesListView(store) {
                       <td class="col-name">${d.title}</td>
                       <td>${d.model_label || "—"}</td>
                       <td>${d.area_label || "—"}</td>
-                      <td>${d.device_group_name || "—"}</td>
+                      <td>${grpCell}</td>
                       <td><span class="status-dot ${dotCls}"></span>${st}</td>
                       <td class="col-open" aria-hidden="true">›</td>
                     </tr>`;
@@ -10166,70 +11825,497 @@ function renderDevicesListView(store) {
 
 // --- src/views/system-groups-view.ts ---
 /**
- * System Device Groups View (`system_sync`, D-021): Device Groups, Baseline Seeding, Tier 2 Operational & Tier 3 Appearance Bulk Controls.
+ * System Device Groups & Batch Controls View (`system_sync`, D-047):
+ * Column 1: Enclosed per-Group containers with inline expandable Baseline Settings.
+ * Column 2: Dedicated one-off Batch Controls across All, Roaming, Stationary, or populated Groups.
  */
+const POWER_PROFILE_OPTIONS = [
+  ...Object.keys(POWER_PROFILE_PREFS),
+  "Custom",
+];
+const WAKE_WORD_MODE_OPTIONS = ["Docked Only", "Always On", "Disabled"];
+const TAP_TO_WAKE_OPTIONS = [
+  "Single Tap",
+  "Double Tap",
+  "Docked Only",
+  "Disabled",
+];
+const WAKE_GESTURE_OPTIONS = ["Always On", "Docked Only", "Disabled"];
+const BATTERY_SCREEN_TIMEOUT_OPTIONS = [
+  "10s",
+  "15s",
+  "30s",
+  "1 min",
+  "2 min",
+  "Never",
+];
+const DOCKED_IDLE_TIMEOUT_OPTIONS = [
+  "10s",
+  "15s",
+  "30s",
+  "1 min",
+  "2 min",
+  "5 min",
+  "Never",
+];
+const BATTERY_HIBERNATE_TIMEOUT_OPTIONS = [
+  "5 min",
+  "10 min",
+  "15 min",
+  "30 min",
+  "Disabled",
+];
+const AUTO_BRIGHTNESS_MODE_OPTIONS = [
+  "Disabled",
+  "Sun Synchronized",
+  "Time Schedule",
+];
+const BRIGHTNESS_PCT_OPTIONS = ["60%", "70%", "80%", "90%", "100%"];
+const WW_SENSITIVITY_OPTIONS = [
+  "Slightly sensitive",
+  "Moderately sensitive",
+  "Very sensitive",
+];
+const BLE_BEACON_MODE_OPTIONS = [
+  "Handheld Only",
+  "Handheld + Screen Off",
+  "Always",
+];
+function renderBaselineSelect(
+  store,
+  groupId,
+  key,
+  label,
+  currentVal,
+  options,
+  defaultVal,
+) {
+  const cur = typeof currentVal === "string" && options.includes(currentVal) ? currentVal : defaultVal;
+  return renderSettingsRow({
+    label,
+    control: html`<select
+      aria-label=${`${label} for ${groupId}`}
+      .value=${cur}
+      @change=${(ev) =>
+        void store.updateGroupBaseline(groupId, {
+          [key]: (ev.currentTarget).value,
+        })}
+    >
+      ${options.map(
+        (opt) => html`<option value=${opt} ?selected=${opt === cur}>${opt}</option>`,
+      )}
+    </select>`,
+  });
+}
+function renderBaselineRange(
+  store,
+  groupId,
+  key,
+  label,
+  currentVal,
+  min,
+  max,
+  step,
+  unit,
+  defaultVal,
+) {
+  const numVal = Number.isFinite(Number(currentVal)) ? Number(currentVal) : defaultVal;
+  return renderSettingsRow({
+    label,
+    control: html`<span class="kv-value">${fmtNumber(numVal, store.hass, 0)}${unit ? ` ${unit}` : ""}</span>
+      <input
+        type="range"
+        aria-label=${`${label} for ${groupId}`}
+        min=${String(min)}
+        max=${String(max)}
+        step=${String(step)}
+        .value=${String(numVal)}
+        @change=${(ev) =>
+          void store.updateGroupBaseline(groupId, {
+            [key]: Number((ev.currentTarget).value),
+          })}
+      />`,
+  });
+}
+function renderGroupBaselineDrawer(
+  store,
+  group,
+  latterDevices,
+) {
+  const gid = group.id;
+  const cfg = group.device_config || {};
+  const autoBrt = String(cfg.auto_brightness_mode || "Sun Synchronized");
+  const wwMode = String(cfg.wake_word_mode || "Docked Only");
+  const bleOn = Boolean(cfg.native_ble_tracking);
+  const autoSw = cfg.ble_auto_switch !== undefined ? Boolean(cfg.ble_auto_switch) : bleOn;
+  const vfm = Boolean(cfg.sync_device_area);
+  const handoff = Boolean(cfg.area_handoff);
+  const pinPolicy = String(cfg.security_pin_policy || "auto");
+  const copySrc =
+    store.groupCopySourceDrafts?.get(gid) ||
+    store.activeSubentryId ||
+    latterDevices[0]?.subentry_id ||
+    "";
+  return html`<details
+    ?open=${Boolean(store.openGroupIds?.has(gid))}
+    @toggle=${(ev) => {
+      const isOpen = (ev.currentTarget).open;
+      if (isOpen) store.openGroupIds?.add(gid);
+      else store.openGroupIds?.delete(gid);
+    }}
+    class="sub-collapsible"
+  >
+    <summary>Baseline Settings</summary>
+    <div class="card-content settings-list">
+      <div class="subsection-title">Power &amp; Sleep</div>
+      ${renderBaselineSelect(
+        store,
+        gid,
+        "power_profile",
+        "Power Profile",
+        cfg.power_profile,
+        POWER_PROFILE_OPTIONS,
+        "Portable Carry",
+      )}
+      ${renderBaselineSelect(
+        store,
+        gid,
+        "tap_to_wake",
+        "Tap to Wake",
+        cfg.tap_to_wake,
+        TAP_TO_WAKE_OPTIONS,
+        "Docked Only",
+      )}
+      ${renderBaselineSelect(
+        store,
+        gid,
+        "pickup_to_wake",
+        "Pickup to Wake",
+        cfg.pickup_to_wake,
+        WAKE_GESTURE_OPTIONS,
+        "Docked Only",
+      )}
+      ${renderBaselineSelect(
+        store,
+        gid,
+        "battery_screen_timeout",
+        "Battery Screen Timeout",
+        cfg.battery_screen_timeout,
+        BATTERY_SCREEN_TIMEOUT_OPTIONS,
+        "30s",
+      )}
+      ${renderBaselineSelect(
+        store,
+        gid,
+        "battery_hibernate_timeout",
+        "Battery Hibernate Timeout",
+        cfg.battery_hibernate_timeout,
+        BATTERY_HIBERNATE_TIMEOUT_OPTIONS,
+        "15 min",
+      )}
+      ${renderSwitchRow({
+        label: "Docked Screensaver",
+        ariaLabel: `Docked Screensaver for ${gid}`,
+        checked: cfg.docked_screensaver !== false,
+        onChange: (checked) => void store.updateGroupBaseline(gid, { docked_screensaver: checked }),
+      })}
+      ${renderBaselineSelect(
+        store,
+        gid,
+        "docked_idle_timeout",
+        "Docked Idle Timeout",
+        cfg.docked_idle_timeout,
+        DOCKED_IDLE_TIMEOUT_OPTIONS,
+        "1 min",
+      )}
+      ${renderSwitchRow({
+        label: "Hold Crown to Power Off",
+        ariaLabel: `Hold Crown to Power Off for ${gid}`,
+        checked: Boolean(cfg.hold_crown_power_off),
+        onChange: (checked) =>
+          void store.updateGroupBaseline(gid, { hold_crown_power_off: checked }),
+      })}
+
+      <div class="subsection-title">Voice &amp; Sound</div>
+      ${renderBaselineSelect(
+        store,
+        gid,
+        "wake_word_mode",
+        "Wake Word Mode",
+        cfg.wake_word_mode,
+        WAKE_WORD_MODE_OPTIONS,
+        "Docked Only",
+      )}
+      ${wwMode !== "Disabled"
+        ? html`${renderBaselineSelect(
+              store,
+              gid,
+              "ww_sens_okay_nabu",
+              "Okay Nabu Sensitivity",
+              cfg.ww_sens_okay_nabu,
+              WW_SENSITIVITY_OPTIONS,
+              "Moderately sensitive",
+            )}
+            ${renderBaselineSelect(
+              store,
+              gid,
+              "ww_sens_hey_luna",
+              "Hey Luna Sensitivity",
+              cfg.ww_sens_hey_luna,
+              WW_SENSITIVITY_OPTIONS,
+              "Moderately sensitive",
+            )}
+            ${renderBaselineSelect(
+              store,
+              gid,
+              "ww_sens_hey_jarvis",
+              "Hey Jarvis Sensitivity",
+              cfg.ww_sens_hey_jarvis,
+              WW_SENSITIVITY_OPTIONS,
+              "Moderately sensitive",
+            )}
+            ${renderBaselineSelect(
+              store,
+              gid,
+              "ww_sens_hey_mycroft",
+              "Hey Mycroft Sensitivity",
+              cfg.ww_sens_hey_mycroft,
+              WW_SENSITIVITY_OPTIONS,
+              "Moderately sensitive",
+            )}
+            ${renderBaselineSelect(
+              store,
+              gid,
+              "ww_sens_alexa",
+              "Alexa Sensitivity",
+              cfg.ww_sens_alexa,
+              WW_SENSITIVITY_OPTIONS,
+              "Moderately sensitive",
+            )}`
+        : nothing}
+      ${renderSwitchRow({
+        label: "Wake Screen on Assist",
+        ariaLabel: `Wake Screen on Assist for ${gid}`,
+        checked: cfg.wake_screen_on_assist !== false,
+        onChange: (checked) =>
+          void store.updateGroupBaseline(gid, { wake_screen_on_assist: checked }),
+      })}
+      ${renderBaselineRange(store, gid, "alert_volume", "Alert Volume", cfg.alert_volume, 20, 100, 5, "%", 80)}
+      ${renderBaselineRange(store, gid, "volume_step_size", "Volume Step Size", cfg.volume_step_size, 1, 10, 1, "%", 5)}
+      ${renderSwitchRow({
+        label: "Game Sound Effects",
+        ariaLabel: `Game Sound Effects for ${gid}`,
+        checked: cfg.game_sound_effects !== false,
+        onChange: (checked) =>
+          void store.updateGroupBaseline(gid, { game_sound_effects: checked }),
+      })}
+
+      <div class="subsection-title">Brightness</div>
+      ${renderBaselineSelect(
+        store,
+        gid,
+        "auto_brightness_mode",
+        "Auto Brightness Mode",
+        cfg.auto_brightness_mode,
+        AUTO_BRIGHTNESS_MODE_OPTIONS,
+        "Sun Synchronized",
+      )}
+      ${autoBrt === "Disabled"
+        ? renderBaselineSelect(
+            store,
+            gid,
+            "manual_brightness",
+            "Manual Brightness",
+            cfg.manual_brightness,
+            BRIGHTNESS_PCT_OPTIONS,
+            "90%",
+          )
+        : html`${renderBaselineSelect(
+              store,
+              gid,
+              "day_brightness",
+              "Day Brightness",
+              cfg.day_brightness,
+              BRIGHTNESS_PCT_OPTIONS,
+              "90%",
+            )}
+            ${renderBaselineSelect(
+              store,
+              gid,
+              "night_brightness",
+              "Night Brightness",
+              cfg.night_brightness,
+              BRIGHTNESS_PCT_OPTIONS,
+              "70%",
+            )}`}
+      ${autoBrt === "Time Schedule"
+        ? html`${renderBaselineRange(
+              store,
+              gid,
+              "day_start_hour",
+              "Day Start Hour",
+              cfg.day_start_hour,
+              0,
+              23,
+              1,
+              "h",
+              7,
+            )}
+            ${renderBaselineRange(
+              store,
+              gid,
+              "night_start_hour",
+              "Night Start Hour",
+              cfg.night_start_hour,
+              0,
+              23,
+              1,
+              "h",
+              20,
+            )}`
+        : nothing}
+
+      <div class="subsection-title">Area &amp; Security</div>
+      ${renderSwitchRow({
+        label: "Track the Area with BLE Proxies",
+        ariaLabel: `Track the Area with BLE Proxies for ${gid}`,
+        checked: bleOn,
+        onChange: (checked) =>
+          void store.updateGroupBaseline(gid, { native_ble_tracking: checked }),
+      })}
+      ${bleOn
+        ? html`${renderSwitchRow({
+              label: "Auto-Switch Active Area",
+              ariaLabel: `Auto-Switch Active Area for ${gid}`,
+              checked: autoSw,
+              onChange: (checked) =>
+                void store.updateGroupBaseline(gid, { ble_auto_switch: checked }),
+            })}
+            ${renderSwitchRow({
+              label: "Voice Follows Me",
+              ariaLabel: `Voice Follows Me for ${gid}`,
+              checked: vfm,
+              onChange: (checked) =>
+                void store.updateGroupBaseline(gid, { sync_device_area: checked }),
+            })}
+            ${vfm
+              ? renderBaselineRange(
+                  store,
+                  gid,
+                  "area_follow_dwell_s",
+                  "Area Follow Dwell",
+                  cfg.area_follow_dwell_s,
+                  3,
+                  60,
+                  1,
+                  "s",
+                  10,
+                )
+              : nothing}
+            ${renderBaselineSelect(
+              store,
+              gid,
+              "ble_beacon_mode",
+              "BLE Beacon Mode",
+              cfg.ble_beacon_mode,
+              BLE_BEACON_MODE_OPTIONS,
+              "Handheld Only",
+            )}`
+        : nothing}
+      ${renderSwitchRow({
+        label: "Media Follows Device to New Area",
+        ariaLabel: `Media Follows Device to New Area for ${gid}`,
+        checked: handoff,
+        onChange: (checked) => void store.updateGroupBaseline(gid, { area_handoff: checked }),
+      })}
+      ${renderSettingsRow({
+        label: "Perimeter Security Policy",
+        control: html`<select
+          aria-label=${`Perimeter Security Policy for ${gid}`}
+          .value=${pinPolicy}
+          @change=${(ev) =>
+            void store.updateGroupBaseline(gid, {
+              security_pin_policy: (ev.currentTarget).value,
+            })}
+        >
+          ${SECURITY_PIN_POLICY_OPTIONS.map(
+            (opt) =>
+              html`<option value=${opt.value} ?selected=${opt.value === pinPolicy}>
+                ${opt.label}
+              </option>`,
+          )}
+        </select>`,
+      })}
+
+      ${latterDevices.length
+        ? html`<div class="subsection-title">Copy From Device</div>
+            ${renderSettingsRow({
+              label: "Source Device",
+              description: "Replaces this group's baseline with an existing Device's operational settings.",
+              control: html`<select
+                  aria-label=${`Copy settings into ${group.name}`}
+                  .value=${copySrc}
+                  @change=${(ev) => {
+                    store.groupCopySourceDrafts?.set(
+                      gid,
+                      (ev.currentTarget).value,
+                    );
+                    store.host.requestUpdate();
+                  }}
+                >
+                  ${latterDevices.map(
+                    (d) =>
+                      html`<option value=${d.subentry_id} ?selected=${d.subentry_id === copySrc}>
+                        ${d.title}
+                      </option>`,
+                  )}
+                </select>
+                <button
+                  type="button"
+                  @click=${() => void store.copyDeviceToGroupBaseline(gid, copySrc)}
+                  class="btn btn-secondary btn-compact"
+                >
+                  Copy Settings
+                </button>`,
+            })}`
+        : nothing}
+    </div>
+  </details>`;
+}
 function renderSystemGroupsView(store) {
   const data = store.state;
   const allDevices = data?.system_devices || [];
   const latterDevices = allDevices.filter((d) => d.kind !== "ble_tag");
   const groups = data?.device_groups || [];
   const systemControls = data?.system_controls || [];
-  const activeFilter = store.groupCtrlFilter || "all";
-  const activeGrpId = store.resolvedGroupCtrlId();
-  const selectedGrpObj = groups.find((g) => g.id === activeGrpId) || null;
-  const activeCat = store.groupCtrlCategoryFilter || "all";
+  const activeFilter = store.batchTargetFilter || "all";
+  const activeTargetId = store.resolvedBatchTargetId();
+  const activeCat = store.batchCategoryFilter || "all";
+  const populatedGroups = groups.filter((g) =>
+    latterDevices.some((d) => d.device_group === g.id),
+  );
   const matchingDevs = latterDevices.filter((d) => {
-    if (activeGrpId === "all") return true;
-    if (activeGrpId === "roaming") return Boolean(d.is_roaming);
-    if (activeGrpId === "stationary") return !d.is_roaming;
-    return d.device_group === activeGrpId;
+    if (activeTargetId === "all") return true;
+    if (activeTargetId === "roaming") return Boolean(d.is_roaming);
+    if (activeTargetId === "stationary") return !d.is_roaming;
+    return d.device_group === activeTargetId;
   });
-  const baseCfg = selectedGrpObj?.device_config || {};
-  const bleOn =
-    selectedGrpObj && baseCfg.native_ble_tracking !== undefined
-      ? Boolean(baseCfg.native_ble_tracking)
-      : matchingDevs.length
-        ? matchingDevs.every((d) => d.ble_tracked)
-        : false;
-  const autoSw =
-    selectedGrpObj && baseCfg.ble_auto_switch !== undefined
-      ? Boolean(baseCfg.ble_auto_switch)
-      : bleOn;
-  const vfm =
-    selectedGrpObj && baseCfg.sync_device_area !== undefined
-      ? Boolean(baseCfg.sync_device_area)
-      : false;
-  const handoff =
-    selectedGrpObj && baseCfg.area_handoff !== undefined
-      ? Boolean(baseCfg.area_handoff)
-      : false;
-  const renderBulkControlRow = (fc) => {
+  const bleStates = matchingDevs.map((d) => Boolean(d.ble_tracked));
+  const bleMixed = new Set(bleStates).size > 1;
+  const bleOn = matchingDevs.length > 0 && bleStates.every(Boolean);
+  const renderBatchControlRow = (fc) => {
     if (activeCat !== "all" && fc.section !== activeCat) return nothing;
     const targets = (fc.targets || []).filter((t) => {
-      if (activeGrpId === "all") return true;
-      if (activeGrpId === "roaming") return Boolean(t.is_roaming);
-      if (activeGrpId === "stationary") return !t.is_roaming;
-      return t.device_group === activeGrpId;
+      if (activeTargetId === "all") return true;
+      if (activeTargetId === "roaming") return Boolean(t.is_roaming);
+      if (activeTargetId === "stationary") return !t.is_roaming;
+      return t.device_group === activeTargetId;
     });
-    const rawBaselineVal = fc.pref_key
-      ? selectedGrpObj?.device_config?.[fc.pref_key]
-      : undefined;
-    const baselineVal =
-      rawBaselineVal !== undefined && fc.domain === "switch" && typeof rawBaselineVal === "boolean"
-        ? rawBaselineVal
-          ? "on"
-          : "off"
-        : rawBaselineVal;
-    if (!targets.length && baselineVal === undefined) return nothing;
-    const states = targets.length
-      ? Array.from(new Set(targets.map((t) => String(t.state ?? ""))))
-      : baselineVal !== undefined
-        ? [String(baselineVal)]
-        : [];
+    if (!targets.length) return nothing;
+    const states = Array.from(new Set(targets.map((t) => String(t.state ?? ""))));
     const mixed = states.length > 1;
     const curState = mixed ? "" : (states[0] ?? "");
-    const baseNote = baselineVal !== undefined ? ` • Baseline: ${String(baselineVal)}` : "";
-    const desc = `${fc.section_title} • ${targets.length} Device${targets.length === 1 ? "" : "s"}${mixed ? " • Mixed values" : ""}${baseNote}`;
+    const desc = `${fc.section_title} • ${fmtNumber(targets.length, store.hass, 0)} Device${targets.length === 1 ? "" : "s"}${mixed ? " • Mixed values" : ""}`;
     let control;
     if (fc.domain === "select" && fc.options && fc.options.length) {
       control = html`<select
@@ -10280,162 +12366,137 @@ function renderSystemGroupsView(store) {
     <div class="columns">
       <div class="column">
         ${renderCard({
-          heading: html`<h3 class="card-title">Device Groups</h3>`,
+          id: "card-device-groups",
+          title: "Device Groups",
           subtitle:
-            "Operational baselines (sleep, wake word, BLE) shared across assigned Devices without overwriting personal appearance.",
+            "Reusable operational presets applied to assigned Devices without overwriting personal appearance.",
           contentClass: "stack",
-          body: html`<div class="input-action-row">
-              <input
-                type="text"
-                id="new-group-name"
-                aria-label="New Device Group name"
-                placeholder="Group name (e.g. Guest Suites)"
-                .value=${store.newGroupName}
-                @input=${(ev) => {
-                  store.newGroupName = (ev.currentTarget).value;
-                }}
-              />
-              <input
-                type="text"
-                id="new-group-desc"
-                aria-label="New Device Group description"
-                placeholder="Optional description"
-                .value=${store.newGroupDesc}
-                @input=${(ev) => {
-                  store.newGroupDesc = (ev.currentTarget).value;
-                }}
-              />
-              <button
-                type="button"
-                @click=${() => void store.createDeviceGroup()}
-                class="btn btn-primary"
-              >
-                Create Group
-              </button>
-            </div>
-
-            <div id="device-groups-list" class="settings-list">
-              ${groups.map((g) => {
-                const members = allDevices.filter((d) => d.device_group === g.id);
-                const isDefault = DEFAULT_DEVICE_GROUP_IDS.has(g.id) || Boolean(g.builtin);
-                const customizedCnt = members.filter((m) =>
-                  isGroupCustomized(m.group_sync_status),
-                ).length;
-                const syncMeta =
-                  g.id === "unassigned" || !members.length
-                    ? ""
-                    : customizedCnt
-                      ? `${customizedCnt} customized`
-                      : "All in sync";
-                const desc = [
-                  g.description || "",
-                  members.length ? `Devices: ${members.map((m) => m.title).join(", ")}` : "No Devices",
-                  syncMeta,
-                ]
-                  .filter(Boolean)
-                  .join(" • ");
-                return renderSettingsRow({
-                  labelHtml: html`<span class="row-label">
-                    ${g.name} <span class="chip">${members.length}</span>
-                  </span>`,
-                  description: desc,
-                  control: html`<button
-                      type="button"
-                      @click=${() => {
-                        store.groupCtrlFilter = `group:${g.id}`;
-                        store.host.requestUpdate();
-                      }}
-                      class="btn btn-text btn-compact"
-                    >
-                      Edit Controls
-                    </button>
-                    ${g.id !== "unassigned" && members.length
-                      ? html`<button
-                          type="button"
-                          @click=${() => void store.syncDeviceGroup(g.id)}
-                          class="btn btn-secondary btn-compact"
-                        >
-                          Sync Group
-                        </button>`
-                      : nothing}
-                    ${!isDefault
-                      ? renderTrashIconButton(`Delete group ${g.name}`, () =>
-                          void store.deleteDeviceGroup(g.id),
-                        )
-                      : nothing}`,
-                });
-              })}
-            </div>`,
-        })}
-
-        ${renderCard({
-          title: "Seed Baseline From Device",
-          subtitle: "Captures an existing Device's operational settings as a group's baseline.",
-          contentClass: "stack",
-          body: html`<div class="list-row-main">
-              <div class="stacked-field">
-                <label for="seed-group-target">Target Group</label>
-                <select
-                  id="seed-group-target"
-                  .value=${store.seedGroupTargetId}
-                  @change=${(ev) => {
-                    store.seedGroupTargetId = (ev.currentTarget).value;
-                    store.host.requestUpdate();
-                  }}
-                >
-                  ${groups
-                    .filter((g) => g.id !== "unassigned")
-                    .map(
-                      (g) =>
-                        html`<option value=${g.id} ?selected=${g.id === store.seedGroupTargetId}>
-                          ${g.name}
-                        </option>`,
-                    )}
-                </select>
+          body: html`<div class="list-block">
+              <div class="list-row-main">
+                <div class="stacked-field">
+                  <label for="new-group-name">Group Name</label>
+                  <input
+                    type="text"
+                    id="new-group-name"
+                    placeholder="e.g. Guest Suites"
+                    .value=${store.newGroupName}
+                    @input=${(ev) => {
+                      store.newGroupName = (ev.currentTarget).value;
+                    }}
+                  />
+                </div>
+                <div class="stacked-field">
+                  <label for="new-group-desc">Description (Optional)</label>
+                  <input
+                    type="text"
+                    id="new-group-desc"
+                    placeholder="Optional description"
+                    .value=${store.newGroupDesc}
+                    @input=${(ev) => {
+                      store.newGroupDesc = (ev.currentTarget).value;
+                    }}
+                  />
+                </div>
               </div>
-              <div class="stacked-field">
-                <label for="seed-source-device">Source Device</label>
+              <div class="input-action-row">
                 <select
-                  id="seed-source-device"
-                  .value=${store.seedSourceSubentryId}
+                  id="new-group-source"
+                  aria-label="Copy settings from Device"
+                  .value=${store.newGroupSourceSubentryId}
                   @change=${(ev) => {
-                    store.seedSourceSubentryId = (ev.currentTarget).value;
-                    store.host.requestUpdate();
+                    store.newGroupSourceSubentryId = (ev.currentTarget).value;
                   }}
                 >
+                  <option value="" ?selected=${!store.newGroupSourceSubentryId}>
+                    Start from default settings
+                  </option>
                   ${latterDevices.map(
                     (d) =>
                       html`<option
                         value=${d.subentry_id}
-                        ?selected=${d.subentry_id === store.seedSourceSubentryId}
+                        ?selected=${d.subentry_id === store.newGroupSourceSubentryId}
                       >
-                        ${d.title}
+                        Copy from: ${d.title}
                       </option>`,
                   )}
                 </select>
+                <button
+                  type="button"
+                  id="btn-create-device-group"
+                  @click=${() => void store.createDeviceGroup()}
+                  class="btn btn-primary"
+                >
+                  Create Group
+                </button>
               </div>
             </div>
-            <div class="input-action-row">
-              <button
-                type="button"
-                @click=${() => void store.seedGroupBaselineFromDevice()}
-                class="btn btn-secondary"
-              >
-                Save Group Baseline
-              </button>
+
+            <div id="device-groups-list" class="stack">
+              ${groups.length
+                ? repeat(
+                    groups,
+                    (g) => g.id,
+                    (g) => {
+                      const members = latterDevices.filter((d) => d.device_group === g.id);
+                      const isDefault =
+                        DEFAULT_DEVICE_GROUP_IDS.has(g.id) || Boolean(g.builtin);
+                      const metaParts = [
+                        g.description || "",
+                        members.length
+                          ? `Devices: ${members.map((m) => m.title).join(", ")}`
+                          : "No Devices assigned",
+                      ].filter(Boolean);
+                      return html`<div id=${`group-box-${g.id}`} class="area-presence-box">
+                        <div class="area-box-head">
+                          <div class="area-box-heading">
+                            <span class="area-box-title">${g.name}</span>
+                            <span class="chip ${members.length ? "chip-primary" : ""}">
+                              ${fmtNumber(members.length, store.hass, 0)}
+                              ${members.length === 1 ? "Device" : "Devices"}
+                            </span>
+                          </div>
+                          <div class="area-box-actions">
+                            ${members.length
+                              ? html`<button
+                                  type="button"
+                                  @click=${() => store.openDevicesWithCategory(`group:${g.id}`)}
+                                  class="btn btn-text btn-compact"
+                                >
+                                  View Devices
+                                </button>`
+                              : nothing}
+                            ${!isDefault
+                              ? renderTrashIconButton(`Delete group ${g.name}`, () =>
+                                  void store.deleteDeviceGroup(g.id),
+                                )
+                              : nothing}
+                          </div>
+                        </div>
+
+                        <div class="area-box-meta">${metaParts.join(" • ")}</div>
+
+                        ${renderGroupBaselineDrawer(store, g, latterDevices)}
+                      </div>`;
+                    },
+                  )
+                : html`<p class="empty-state">No Device Groups configured.</p>`}
             </div>`,
         })}
       </div>
 
       <div class="column">
         ${renderCard({
-          heading: html`<h3 class="card-title">Group Controls &amp; Baseline</h3>`,
+          id: "card-batch-controls",
+          title: "Batch Controls",
+          subtitle:
+            "Applies a one-time setting change across matching Devices without altering saved Group baselines.",
           headerActions: html`<select
-              id="group-ctrl-filter"
-              aria-label="Target Devices or group"
+              id="batch-target-filter"
+              aria-label="Target Devices for Batch Controls"
               .value=${activeFilter}
               @change=${(ev) => {
-                store.groupCtrlFilter = (ev.currentTarget).value || "all";
+                store.batchTargetFilter =
+                  (ev.currentTarget).value || "all";
                 store.host.requestUpdate();
               }}
             >
@@ -10446,24 +12507,22 @@ function renderSystemGroupsView(store) {
               <option value="trait:stationary" ?selected=${activeFilter === "trait:stationary"}>
                 Stationary Devices
               </option>
-              ${groups
-                .filter((g) => g.id !== "unassigned")
-                .map(
-                  (g) =>
-                    html`<option
-                      value=${`group:${g.id}`}
-                      ?selected=${activeFilter === `group:${g.id}`}
-                    >
-                      Group: ${g.name}
-                    </option>`,
-                )}
+              ${populatedGroups.map(
+                (g) =>
+                  html`<option
+                    value=${`group:${g.id}`}
+                    ?selected=${activeFilter === `group:${g.id}`}
+                  >
+                    Group: ${g.name}
+                  </option>`,
+              )}
             </select>
             <select
-              id="group-ctrl-cat-filter"
-              aria-label="Filter controls by category"
+              id="batch-cat-filter"
+              aria-label="Filter Batch Controls by category"
               .value=${activeCat}
               @change=${(ev) => {
-                store.groupCtrlCategoryFilter =
+                store.batchCategoryFilter =
                   (ev.currentTarget).value || "all";
                 store.host.requestUpdate();
               }}
@@ -10478,60 +12537,76 @@ function renderSystemGroupsView(store) {
               <option value="music" ?selected=${activeCat === "music"}>Music</option>
             </select>`,
           contentClass: "stack",
-          body: html`<h4 class="subsection-title">Operational Behavior (Synced with Group)</h4>
-            <div id="group-latter-behavior-list" class="settings-list">
-              ${activeCat === "all" || activeCat === "area"
-                ? html`${renderSwitchRow({
-                      label: "Track the Area with BLE Proxies",
-                      description: selectedGrpObj
-                        ? `Group Baseline • ${matchingDevs.length} Device(s)`
-                        : `${matchingDevs.length} Device(s)`,
-                      checked: bleOn,
-                      onChange: (checked) =>
-                        void store.setGroupDeviceSetting({ native_ble_tracking: checked }),
-                    })}
-                    ${renderSwitchRow({
-                      label: "Auto-Switch Active Area",
-                      description: "Follows BLE Area changes automatically.",
-                      checked: autoSw,
-                      onChange: (checked) =>
-                        void store.setGroupDeviceSetting({ ble_auto_switch: checked }),
-                    })}`
-                : nothing}
-              ${activeCat === "all" || activeCat === "voice"
-                ? renderSwitchRow({
-                    label: "Voice Follows Me",
-                    description: "Moves roaming Devices' Home Assistant Area with them.",
-                    checked: vfm,
-                    onChange: (checked) =>
-                      void store.setGroupDeviceSetting({ sync_device_area: checked }),
-                  })
-                : nothing}
-              ${activeCat === "all" || activeCat === "music"
-                ? renderSwitchRow({
-                    label: "Media Follows Device to New Area",
-                    description: "Hands off active playback when the Area changes.",
-                    checked: handoff,
-                    onChange: (checked) =>
-                      void store.setGroupDeviceSetting({ area_handoff: checked }),
-                  })
-                : nothing}
-            </div>
+          body: !matchingDevs.length
+            ? html`<p class="empty-state">No Latter Devices match the selected target.</p>`
+            : html`<div class="help-text">
+                  Target (${fmtNumber(matchingDevs.length, store.hass, 0)}): ${matchingDevs.map((d) => d.title).join(", ")}
+                </div>
 
-            <div id="system-controls-list" class="settings-list">
-              ${behaviorControls.length
-                ? behaviorControls.map((fc) => renderBulkControlRow(fc))
-                : html`<p class="empty-state">No shared Device controls found.</p>`}
-            </div>
+                <h4 class="subsection-title">Operational Settings</h4>
+                <div id="batch-latter-behavior-list" class="settings-list">
+                  ${activeCat === "all" || activeCat === "area"
+                    ? html`${renderSettingsRow({
+                          label: "Track the Area with BLE Proxies",
+                          description: `${fmtNumber(matchingDevs.length, store.hass, 0)} Device${matchingDevs.length === 1 ? "" : "s"}${bleMixed ? " • Mixed values" : ""}`,
+                          control: html`${bleMixed ? html`<span class="chip">Mixed</span>` : nothing}
+                            <input
+                              type="checkbox"
+                              role="switch"
+                              aria-label="Batch Track the Area with BLE Proxies"
+                              .checked=${bleOn}
+                              @change=${(ev) =>
+                                void store.applyBatchDeviceSetting({
+                                  native_ble_tracking: (ev.currentTarget).checked,
+                                })}
+                              class="switch"
+                            />`,
+                        })}
+                        ${renderSwitchRow({
+                          label: "Auto-Switch Active Area",
+                          ariaLabel: "Batch Auto-Switch Active Area",
+                          description: "Follows BLE Area changes automatically.",
+                          checked: bleOn,
+                          onChange: (checked) =>
+                            void store.applyBatchDeviceSetting({ ble_auto_switch: checked }),
+                        })}`
+                    : nothing}
+                  ${activeCat === "all" || activeCat === "voice"
+                    ? renderSwitchRow({
+                        label: "Voice Follows Me",
+                        ariaLabel: "Batch Voice Follows Me",
+                        description: "Moves roaming Devices' Home Assistant Area with them.",
+                        checked: false,
+                        onChange: (checked) =>
+                          void store.applyBatchDeviceSetting({ sync_device_area: checked }),
+                      })
+                    : nothing}
+                  ${activeCat === "all" || activeCat === "music"
+                    ? renderSwitchRow({
+                        label: "Media Follows Device to New Area",
+                        ariaLabel: "Batch Media Follows Device to New Area",
+                        description: "Hands off active playback when the Area changes.",
+                        checked: false,
+                        onChange: (checked) =>
+                          void store.applyBatchDeviceSetting({ area_handoff: checked }),
+                      })
+                    : nothing}
+                </div>
 
-            <details class="sub-collapsible">
-              <summary>Appearance &amp; Personalization (Bulk Override)</summary>
-              <div id="system-appearance-controls-list" class="card-content settings-list">
-                ${appearanceControls.length
-                  ? appearanceControls.map((fc) => renderBulkControlRow(fc))
-                  : html`<p class="empty-state">No appearance controls match this filter.</p>`}
-              </div>
-            </details>`,
+                <div id="system-controls-list" class="settings-list">
+                  ${behaviorControls.length
+                    ? behaviorControls.map((fc) => renderBatchControlRow(fc))
+                    : html`<p class="empty-state">No shared Device controls found.</p>`}
+                </div>
+
+                <details class="sub-collapsible">
+                  <summary>Appearance &amp; Personalization</summary>
+                  <div id="system-appearance-controls-list" class="card-content settings-list">
+                    ${appearanceControls.length
+                      ? appearanceControls.map((fc) => renderBatchControlRow(fc))
+                      : html`<p class="empty-state">No appearance controls match this filter.</p>`}
+                  </div>
+                </details>`,
         })}
       </div>
     </div>

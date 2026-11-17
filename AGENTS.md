@@ -29,7 +29,7 @@ Do **not** create backward-compatibility shims, `try/except ImportError` wrapper
 - `media_browse.py` — Paginated Music Assistant and Home Assistant media browser slot builders.
 - `number.py` — Curated Tier 2 sleep-safe `alert_volume` slider entity backed by the Device subentry.
 - `presence.py` — `LatterBleFabric`, RSSI path-loss math, `6.0 dB` cross-floor vertical attenuation, weighted Area sensor fusion, and dwell-gated Area follow.
-- `protocol.py` — Pure-stdlib Protocol v3 `\x1f` frame packer (`v3␟<epoch>␟<rev>` across 6 domains including `device_prefs`), content-hash `rev` tracker, dock/activity normalizers, and PBKDF2 security PIN hashing.
+- `protocol.py` — Pure-stdlib Protocol v3 `\x1f` frame packer (`v3␟<epoch>␟<rev>` across 7 domains including `device_prefs` and `shortcuts`), content-hash `rev` tracker, shortcut/activity normalizers, and PBKDF2 security PIN hashing.
 - `remotes.py` — TV/AV remote slot discovery, canonical navigation command maps, `remote_config` v3 builder, and `async_execute_remote_action`.
 - `repairs.py` — Home Assistant Repairs issue helpers and System health checks.
 - `select.py` — Curated Tier 2 sleep-safe `power_profile` and `wake_word_mode` select entities backed by the Device subentry.

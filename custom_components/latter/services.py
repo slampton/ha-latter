@@ -42,7 +42,6 @@ from .const import (
     CONF_CUSTOM_PALETTES,
     CONF_DEFAULT_SPEAKER,
     CONF_DEVICE_CUSTOM_COLOR,
-    CONF_DOCK_APPS,
     DATA_GLOBAL_CONFIG,
     DOMAIN,
     DOORBELL_NOISE_REDUCTION_LEVELS,
@@ -63,7 +62,7 @@ from .const import (
     SERVICE_SET_ACTIVE_AREA,
     SERVICE_SET_ACTIVE_SPEAKER,
     SERVICE_SET_DEVICE_PREFS,
-    SERVICE_SET_DOCK_APPS,
+    SERVICE_SHORTCUT_ACTION,
     SERVICE_TIMER_ALARM_STATE,
     target_kind,
 )
@@ -86,9 +85,9 @@ from .media import (
 from .media_browse import async_browse_media_items, is_music_assistant_player
 from .presence import get_ble_fabric
 from .protocol import (
+    SHORTCUT_DOMAIN_ACTION_SETS,
     check_perimeter_action_allowed,
     is_sensitive_perimeter_action,
-    normalize_dock_apps,
 )
 from .remotes import async_execute_remote_action
 from .repairs import slot_push_failing_issue_id
@@ -1293,31 +1292,59 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         ),
     )
 
-    async def _handle_set_dock_apps(call: ServiceCall) -> None:
-        """Save the Home dock chosen on the device (Home settings) as the Device's dock_apps setting."""
-        await _require_admin_if_user_call(hass, call)
+    async def _handle_shortcut_action(call: ServiceCall) -> None:
+        """Execute a Home Assistant entity shortcut configured on the calling Latter Device's Dock or Pinned App."""
         coord = _resolve_coordinator_from_call(hass, call)
-        try:
-            dock_csv = normalize_dock_apps(call.data.get("dock_apps"))
-        except ValueError as err:
+        entity_id = str(call.data.get("entity_id") or "").strip().lower()
+        action = str(call.data.get("action") or "").strip().lower()
+        code = str(call.data.get("code") or "").strip()
+
+        allowed_pairs = {
+            (str(sc.get("target") or "").lower(), str(sc.get("action") or "").lower())
+            for sc_list in (coord.dock_items, coord.pinned_items)
+            for sc in sc_list
+            if sc.get("kind") == "entity"
+        }
+        domain = entity_id.split(".", 1)[0] if "." in entity_id else ""
+        if (
+            (entity_id, action) not in allowed_pairs
+            or domain not in SHORTCUT_DOMAIN_ACTION_SETS
+            or action not in SHORTCUT_DOMAIN_ACTION_SETS[domain]
+        ):
             raise ServiceValidationError(
-                str(err),
+                f"Shortcut ({entity_id}, {action}) is not configured on {coord.device_title}.",
                 translation_domain=DOMAIN,
-                translation_key="invalid_dock_apps",
-                translation_placeholders={"error": str(err)},
-            ) from err
-        if dock_csv != coord.dock_apps_csv:
-            coord.update_device_config({**coord.device_data, CONF_DOCK_APPS: dock_csv})
-            await coord.async_apply_options()
+                translation_key="shortcut_not_configured",
+                translation_placeholders={
+                    "entity_id": entity_id or "(empty)",
+                    "action": action or "(empty)",
+                },
+            )
+
+        _enforce_perimeter_security_policy(
+            hass,
+            coord,
+            entity_id=entity_id,
+            action=action,
+            provided_code=code or None,
+        )
+        await async_execute_area_action(
+            hass,
+            entity_id=entity_id,
+            action=action,
+            code=code or None,
+        )
 
     hass.services.async_register(
         DOMAIN,
-        SERVICE_SET_DOCK_APPS,
-        _handle_set_dock_apps,
+        SERVICE_SHORTCUT_ACTION,
+        _handle_shortcut_action,
         schema=vol.Schema(
             {
                 **BASE_TARGET_FIELDS,
-                vol.Required("dock_apps"): cv.string,
+                vol.Required("entity_id"): vol.All(cv.string, vol.Strip, vol.Length(min=1)),
+                vol.Required("action"): cv.string,
+                vol.Optional("code", default=""): cv.string,
             }
         ),
     )
@@ -1459,7 +1486,7 @@ _BOUND_DEVICE_RPC_SERVICES: frozenset[str] = frozenset(
         SERVICE_INTERCOM_BROADCAST,
         SERVICE_NOTIFY,
         SERVICE_SAVE_CUSTOM_COLOR,
-        SERVICE_SET_DOCK_APPS,
+        SERVICE_SHORTCUT_ACTION,
         SERVICE_SET_DEVICE_PREFS,
         SERVICE_TIMER_ALARM_STATE,
         SERVICE_DOORBELL_INTERCOM,

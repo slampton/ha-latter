@@ -17,7 +17,10 @@ import pytest
 from custom_components.latter import async_unload_entry
 from custom_components.latter.const import (
     CONF_CAMERA_ENTITIES,
+    CONF_PINNED_ITEMS,
     CONF_REMOTES_LIST,
+    CONF_SECURITY_PIN_HASH,
+    CONF_SECURITY_PIN_POLICY,
     CONF_VOLUME_OVERRIDES,
     DATA_GLOBAL_CONFIG,
     DOMAIN,
@@ -38,7 +41,7 @@ from custom_components.latter.const import (
     SERVICE_SAVE_CUSTOM_COLOR,
     SERVICE_SET_ACTIVE_AREA,
     SERVICE_SET_ACTIVE_SPEAKER,
-    SERVICE_SET_DOCK_APPS,
+    SERVICE_SHORTCUT_ACTION,
 )
 from custom_components.latter.media import (
     clear_ma_counterpart_cache,
@@ -51,6 +54,7 @@ from custom_components.latter.media_browse import (
     clear_browse_cache,
 )
 from custom_components.latter.presence import get_ble_fabric
+from custom_components.latter.protocol import hash_security_pin
 
 
 @pytest.mark.asyncio
@@ -65,7 +69,6 @@ async def test_services_rbac_and_validation_errors(
 
     for svc_name, payload in (
         (SERVICE_SAVE_CUSTOM_COLOR, {"target_device": coord.device_slug, "hex_color": "#112233"}),
-        (SERVICE_SET_DOCK_APPS, {"target_device": coord.device_slug, "dock_apps": "music,home_hub,area,remote"}),
         (SERVICE_RESET_DEVICE, {"target_device": coord.device_slug, "device_settings": False, "latter_options": True}),
     ):
         with pytest.raises(Unauthorized):
@@ -94,24 +97,88 @@ async def test_services_rbac_and_validation_errors(
     assert exc_hex.value.translation_domain == DOMAIN
     assert exc_hex.value.translation_key == "invalid_hex_color"
 
-    await hass.services.async_call(
-        DOMAIN,
-        SERVICE_SET_DOCK_APPS,
-        {"target_device": coord.device_slug, "dock_apps": "music,home_hub,area,remote,games"},
-        blocking=True,
-        context=admin_ctx,
-    )
-    assert "games" in coord.dock_apps_csv
+    # shortcut_action enforces per-Device configured (entity_id, action) allowlist + perimeter PIN policy
+    dispatched_shortcuts: list[tuple[str, str, dict[str, Any]]] = []
 
-    with pytest.raises(ServiceValidationError) as exc_dock:
+    async def _rec_shortcut_svc(call: Any) -> None:
+        dispatched_shortcuts.append((call.domain, call.service, dict(call.data)))
+
+    hass.services.async_register("script", "turn_on", _rec_shortcut_svc)
+    hass.services.async_register("lock", "unlock", _rec_shortcut_svc)
+    hass.states.async_set("script.baby_help", "off", {"friendly_name": "Baby Help"})
+    hass.states.async_set("lock.front_door", "locked", {"friendly_name": "Front Door"})
+
+    with pytest.raises(ServiceValidationError) as exc_unconf:
         await hass.services.async_call(
             DOMAIN,
-            SERVICE_SET_DOCK_APPS,
-            {"target_device": coord.device_slug, "dock_apps": "not_an_app"},
+            SERVICE_SHORTCUT_ACTION,
+            {"target_device": coord.device_slug, "entity_id": "script.baby_help", "action": "turn_on"},
             blocking=True,
-            context=admin_ctx,
         )
-    assert exc_dock.value.translation_key == "invalid_dock_apps"
+    assert exc_unconf.value.translation_key == "shortcut_not_configured"
+
+    coord.update_device_config(
+        {
+            **coord.device_data,
+            CONF_PINNED_ITEMS: [
+                {
+                    "kind": "entity",
+                    "target": "script.baby_help",
+                    "action": "turn_on",
+                    "label": "Baby Help",
+                    "icon": "mdi:baby-face-outline",
+                    "confirm": False,
+                },
+                {
+                    "kind": "entity",
+                    "target": "lock.front_door",
+                    "action": "unlock",
+                    "label": "Unlock Door",
+                    "icon": "mdi:lock-open",
+                    "confirm": True,
+                },
+            ],
+            CONF_SECURITY_PIN_POLICY: "require_pin",
+            CONF_SECURITY_PIN_HASH: hash_security_pin("4826"),
+        }
+    )
+
+    # Configured non-perimeter shortcut executes directly
+    await hass.services.async_call(
+        DOMAIN,
+        SERVICE_SHORTCUT_ACTION,
+        {"target_device": coord.device_slug, "entity_id": "script.baby_help", "action": "turn_on"},
+        blocking=True,
+    )
+    assert ("script", "turn_on") in {(d, s) for d, s, _ in dispatched_shortcuts}
+
+    # Wrong verb on configured entity is still rejected by allowlist
+    with pytest.raises(ServiceValidationError) as exc_wrong_verb:
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_SHORTCUT_ACTION,
+            {"target_device": coord.device_slug, "entity_id": "script.baby_help", "action": "turn_off"},
+            blocking=True,
+        )
+    assert exc_wrong_verb.value.translation_key == "shortcut_not_configured"
+
+    # Configured perimeter shortcut requires PIN when policy == require_pin
+    with pytest.raises(ServiceValidationError) as exc_pin_req:
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_SHORTCUT_ACTION,
+            {"target_device": coord.device_slug, "entity_id": "lock.front_door", "action": "unlock"},
+            blocking=True,
+        )
+    assert exc_pin_req.value.translation_key == "security_pin_required"
+
+    await hass.services.async_call(
+        DOMAIN,
+        SERVICE_SHORTCUT_ACTION,
+        {"target_device": coord.device_slug, "entity_id": "lock.front_door", "action": "unlock", "code": "4826"},
+        blocking=True,
+    )
+    assert ("lock", "unlock") in {(d, s) for d, s, _ in dispatched_shortcuts}
 
     with pytest.raises(ServiceValidationError) as exc_target:
         await hass.services.async_call(

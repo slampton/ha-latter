@@ -10,8 +10,8 @@ from homeassistant.const import Platform
 
 DOMAIN: Final = "latter"
 INTEGRATION_VERSION: Final = "3.0.0"
-STUDIO_REV: Final = 18
-MIN_FIRMWARE_SDK_REV: Final = 2026111602
+STUDIO_REV: Final = 20
+MIN_FIRMWARE_SDK_REV: Final = 2026111603
 PLATFORMS: Final[list[Platform]] = [
     Platform.SENSOR,
     Platform.BINARY_SENSOR,
@@ -65,7 +65,8 @@ CONF_REMOTE_GROUPS: Final = "remote_groups"
 CONF_DEVICE_REMOTE_GROUP: Final = "device_remote_group"
 DEFAULT_DEVICE_REMOTE_GROUP: Final = "area_auto"
 CONF_CALENDAR_ENTITIES: Final = "calendar_entities"
-CONF_DOCK_APPS: Final = "dock_apps"
+CONF_DOCK_ITEMS: Final = "dock_items"
+CONF_PINNED_ITEMS: Final = "pinned_items"
 CONF_AREA_CATEGORIES: Final = "area_categories"
 CONF_HOME_CATEGORIES: Final = "home_categories"
 CONF_ACTIVITY_CARD: Final = "activity_card"
@@ -151,7 +152,7 @@ DEFAULT_BLE_AUTO_SWITCH: Final = True
 DEFAULT_SYNC_DEVICE_AREA: Final = True
 DEFAULT_AREA_FOLLOW_DWELL_S: Final = 10
 DEFAULT_AREA_HANDOFF: Final = False
-DEFAULT_DOCK_APPS: Final = "music,home_hub,area,remote,games,tools"
+DEFAULT_DOCK_ROUTES: Final = "app:pinned,app:music,app:home_hub,app:area,app:remote,app:games,app:tools"
 DEFAULT_AREA_CATEGORIES: Final = "scene,light,cover,fan,switch,climate,media"
 DEFAULT_HOME_CATEGORIES: Final = "alarm,cameras,intercom,thermostat,entry,vacuum"
 # Home Activity Card: protocol_v3.json defaults.activity_card / defaults.activity_sources (checked by the tests)
@@ -178,7 +179,7 @@ SERVICE_CALENDAR_CREATE_EVENT: Final = "calendar_create_event"
 SERVICE_INTERCOM_BROADCAST: Final = "intercom_broadcast"
 SERVICE_NOTIFY: Final = "notify"
 SERVICE_SAVE_CUSTOM_COLOR: Final = "save_custom_color"
-SERVICE_SET_DOCK_APPS: Final = "set_dock_apps"
+SERVICE_SHORTCUT_ACTION: Final = "shortcut_action"
 SERVICE_DOORBELL_INTERCOM: Final = "doorbell_intercom"
 SERVICE_RESET_DEVICE: Final = "reset_device"
 
@@ -205,7 +206,7 @@ DATA_GLOBAL_STORE: Final = "global_store"
 CONF_SITE_ID: Final = "site_id"
 DEFAULT_SITE_ID: Final = "primary"
 CONF_DEVICE_GROUP: Final = "device_group"
-DEFAULT_DEVICE_GROUP: Final = "unassigned"
+DEFAULT_DEVICE_GROUP: Final = "custom"
 CONF_DEVICE_GROUPS: Final = "device_groups"
 
 # Area Sensor Fusion & Event Bus

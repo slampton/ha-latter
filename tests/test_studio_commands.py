@@ -39,7 +39,7 @@ async def test_studio_rev_mismatch_on_all_read_and_mutation_endpoints(
     hass: Any, setup_latter_hub: Any
 ) -> None:
     """Verify studio_rev mismatch rejects BOTH read (get_state, subscribe) and mutation WS commands."""
-    assert STUDIO_REV == 18
+    assert STUDIO_REV == 20
     entry, _sys_obj, coord = await setup_latter_hub(hass)
     from homeassistant.helpers import area_registry as ar
 
@@ -177,7 +177,15 @@ async def test_studio_commands_security_pin_secrecy_groups_and_backup_restore(
         {
             "config": {
                 "security_pin_policy": "require_pin",
-                "dock_apps": "music,home_hub,area,remote",
+                "dock_items": [
+                    {"kind": "route", "target": "app:pinned"},
+                    {"kind": "route", "target": "app:music"},
+                    {"kind": "entity", "target": "scene.movie_night", "action": "turn_on", "label": "Movie", "confirm": True},
+                ],
+                "pinned_items": [
+                    {"kind": "route", "target": "weather:moon", "label": "Moon"},
+                    {"kind": "entity", "target": "script.baby_help", "action": "turn_on", "label": "Baby Help", "confirm": False},
+                ],
             }
         },
     )
@@ -190,6 +198,8 @@ async def test_studio_commands_security_pin_secrecy_groups_and_backup_restore(
     assert coord.device_data[CONF_SECURITY_PIN_HASH] not in serialized
     assert "security_pin" not in coord.device_data
     assert state_after_pin["config"]["security_pin_policy"] == "require_pin"
+    assert len(state_after_pin["config"]["dock_items"]) == 3
+    assert len(state_after_pin["config"]["pinned_items"]) == 2
     assert state_after_pin["config"]["has_security_pin"] is True
     assert state_after_pin["live"]["has_security_pin"] is True
 
@@ -449,20 +459,31 @@ async def test_studio_commands_security_pin_secrecy_groups_and_backup_restore(
     assert coord._unsub_wallpaper_timer is None
     assert final_off["config"]["wallpaper_cycle_minutes"] == 0
 
-    # Device Groups lifecycle: create -> seed -> set_group_device_setting -> sync -> delete
+    # Device Groups lifecycle: create -> update_group_baseline -> apply_batch_device_setting -> delete
     await _sys_cmd("create_device_group", {"name": "Guest Suites", "description": "Guest displays"})
+    await _dev_cmd("save_device_config", {"config": {"device_group": "guest_suites"}})
     await _sys_cmd(
-        "seed_group_baseline",
-        {"group_id": "guest_suites", "subentry_id": coord.subentry_id},
+        "update_group_baseline",
+        {"group_id": "guest_suites", "source_subentry_id": coord.subentry_id},
     )
     await _sys_cmd(
-        "set_group_device_setting",
-        {"group_id": "guest_suites", "config": {"area_categories": "light,scene,all"}},
+        "update_group_baseline",
+        {"group_id": "guest_suites", "config": {"alert_volume": 65}},
     )
     await _sys_cmd(
-        "sync_device_group",
-        {"group_id": "guest_suites", "subentry_id": coord.subentry_id},
+        "apply_batch_device_setting",
+        {
+            "target": "group:guest_suites",
+            "config": {
+                "area_categories": "light,scene,all",
+                "pinned_items": [
+                    {"kind": "route", "target": "weather:moon", "label": "Moon"},
+                ],
+            },
+        },
     )
+    assert len(coord.pinned_items) == 1
+    assert coord.pinned_items[0]["target"] == "weather:moon"
     await _sys_cmd("delete_device_group", {"group_id": "guest_suites"})
 
     # Wrong scope error check ('save_device_config' sent to system scope)

@@ -1,7 +1,9 @@
 /**
- * Device Overview View (`dashboard`, D-029): Health repairs alert, high-level Status card
- * (header state pill, 2x2 tonal metric tiles, clickable assignment summary rows + footer),
- * Quick Actions & Sensors.
+ * Device Overview View (`dashboard`, D-029 / D-047):
+ * - Column 1: High-level Status card (header state pill, 2x2 tonal metric tiles, footer links).
+ * - Column 2: Quick Actions (immediate action tiles + live volume), unified Assignments card
+ *   (Device Group with Custom / Save Custom Group / Manage Groups, Assigned Person, Remote Control Group),
+ *   and spillover Sensors & Controls.
  */
 
 import {
@@ -13,11 +15,11 @@ import {
 } from "../components/controls.js";
 import { html, nothing, type TemplateResult } from "../lib/lit.js";
 import type { StudioStore } from "../state/store.js";
+import type { EspHomeEntityItem } from "../types.js";
 import {
   fmtDistance,
   fmtNumber,
   fmtPercent,
-  isGroupCustomized,
   issueMessage,
   rssiToPercent,
 } from "../utils/format.js";
@@ -134,20 +136,42 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
     statusLabel = "Offline";
   }
 
-  const quickActionItems = store
+  const sectionActionItems = store
     .getSectionItems("actions")
     .concat(store.getSectionItems("overview"));
-  const quickActionButtons = quickActionItems.filter((it) => it.domain === "button");
-  const otherQuickItems = quickActionItems.filter((it) => it.domain !== "button");
+  const sectionButtons = sectionActionItems.filter((it) => it.domain === "button");
+  const synthesizedButtons: EspHomeEntityItem[] = (data?.quick_actions || []).map((qa) => ({
+    entity_id: `cmd:${qa.key}`,
+    domain: "button",
+    name: qa.label,
+    state: qa.state,
+    device_command: qa.device_command,
+    device_class: qa.device_class,
+  }));
+  const hasRestartInSection = sectionButtons.some(
+    (b) => b.device_class === "restart" || (b.name || "").toLowerCase().includes("restart"),
+  );
+  const quickActionButtons = sectionButtons.concat(
+    synthesizedButtons.filter((sb) => !(hasRestartInSection && sb.device_command === "restart")),
+  );
+
+  const otherQuickItems = sectionActionItems.filter((it) => it.domain !== "button");
+  if (
+    data?.speaker_volume &&
+    !otherQuickItems.some((it) => it.entity_id === data.speaker_volume?.entity_id)
+  ) {
+    otherQuickItems.push(data.speaker_volume);
+  }
+  const showQuickActionsCard =
+    !isBleOnly && (quickActionButtons.length > 0 || otherQuickItems.length > 0);
   const otherSensorItems = store.getSectionItems("other");
 
   const groups = data?.device_groups || [];
-  const curGroupId = cfg.device_group || "unassigned";
-  const curGroupName =
-    groups.find((g) => g.id === curGroupId)?.name ||
-    (curGroupId === "unassigned" ? "Unassigned" : curGroupId);
-  const syncStatus = live.group_sync_status ?? curDevEntry?.group_sync_status;
-  const isCustomized = curGroupId !== "unassigned" && isGroupCustomized(syncStatus);
+  const rawGroupId = String(cfg.device_group || "custom").trim() || "custom";
+  const curGroupId =
+    rawGroupId === "custom" || groups.some((g) => g.id === rawGroupId)
+      ? rawGroupId
+      : "custom";
 
   const remoteGroups = data?.system_config?.remote_groups || [];
   const curRemoteMode =
@@ -209,126 +233,95 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
           </span>`,
           contentClass: "stack",
           body: html`<div class="status-tiles">
-              <button
-                type="button"
-                @click=${() => store.switchView("presence")}
-                class="status-tile"
-              >
-                <div class="status-tile-head">
-                  ${renderTileIcon(ICON_AREA)}
-                  <span id="st-area-label">${hasAssignedArea ? "Area" : "Current Area"}</span>
-                </div>
-                <strong class="status-tile-value">${areaText}</strong>
-                <span class="status-tile-meta">${areaMeta}</span>
-              </button>
+            <button
+              type="button"
+              @click=${() => store.switchView("presence")}
+              class="status-tile"
+            >
+              <div class="status-tile-head">
+                ${renderTileIcon(ICON_AREA)}
+                <span id="st-area-label">${hasAssignedArea ? "Area" : "Current Area"}</span>
+              </div>
+              <strong class="status-tile-value">${areaText}</strong>
+              <span class="status-tile-meta">${areaMeta}</span>
+            </button>
 
-              ${isBleOnly
+            ${isBleOnly
+              ? html`<button
+                  type="button"
+                  @click=${() => store.switchView("presence")}
+                  class="status-tile"
+                >
+                  <div class="status-tile-head">
+                    ${renderTileIcon(ICON_RADAR)}
+                    <span>Closest Proxy</span>
+                  </div>
+                  <strong class="status-tile-value">${live.ble_closest_proxy || "—"}</strong>
+                  <span class="status-tile-meta">
+                    ${winRow && winRow.distance_m !== null && winRow.distance_m !== undefined
+                      ? `~${fmtDistance(winRow.distance_m, store.hass, winRow.distance_ft)}`
+                      : "BLE presence"}
+                  </span>
+                </button>`
+              : hasBatteryReading || caps.has_power
                 ? html`<button
                     type="button"
-                    @click=${() => store.switchView("presence")}
+                    @click=${() => store.switchView("power")}
                     class="status-tile"
                   >
-                    <div class="status-tile-head">
-                      ${renderTileIcon(ICON_RADAR)}
-                      <span>Closest Proxy</span>
-                    </div>
-                    <strong class="status-tile-value">${live.ble_closest_proxy || "—"}</strong>
-                    <span class="status-tile-meta">
-                      ${winRow && winRow.distance_m !== null && winRow.distance_m !== undefined
-                        ? `~${fmtDistance(winRow.distance_m, store.hass, winRow.distance_ft)}`
-                        : "BLE presence"}
-                    </span>
+                    ${powerTileBody}
                   </button>`
-                : hasBatteryReading || caps.has_power
-                  ? html`<button
-                      type="button"
-                      @click=${() => store.switchView("power")}
-                      class="status-tile"
-                    >
-                      ${powerTileBody}
-                    </button>`
-                  : html`<div class="status-tile">${powerTileBody}</div>`}
+                : html`<div class="status-tile">${powerTileBody}</div>`}
 
-              <button
-                type="button"
-                @click=${() => store.switchView(isBleOnly ? "presence" : "tools")}
-                class="status-tile"
-              >
-                <div class="status-tile-head">
-                  ${renderTileIcon(isBleOnly ? ICON_BLUETOOTH : ICON_WIFI)}
-                  <span id="st-wifi-label">${isBleOnly ? "BLE Signal" : "Wi-Fi Signal"}</span>
-                </div>
-                <strong class="status-tile-value">${rssiText}</strong>
-                <span class="status-tile-meta">${rssiQualityLabel(rssiVal)}</span>
-                ${hasRssi
-                  ? html`<div class="signal-track" aria-hidden="true">
-                      <div
-                        class="signal-fill${rssiVal !== null && rssiVal < -80 ? " low" : ""}"
-                        style=${`--signal-pct:${rssiPct}%`}
-                      ></div>
-                    </div>`
-                  : nothing}
-              </button>
+            <button
+              type="button"
+              @click=${() => store.switchView(isBleOnly ? "presence" : "tools")}
+              class="status-tile"
+            >
+              <div class="status-tile-head">
+                ${renderTileIcon(isBleOnly ? ICON_BLUETOOTH : ICON_WIFI)}
+                <span id="st-wifi-label">${isBleOnly ? "BLE Signal" : "Wi-Fi Signal"}</span>
+              </div>
+              <strong class="status-tile-value">${rssiText}</strong>
+              <span class="status-tile-meta">${rssiQualityLabel(rssiVal)}</span>
+              ${hasRssi
+                ? html`<div class="signal-track" aria-hidden="true">
+                    <div
+                      class="signal-fill${rssiVal !== null && rssiVal < -80 ? " low" : ""}"
+                      style=${`--signal-pct:${rssiPct}%`}
+                    ></div>
+                  </div>`
+                : nothing}
+            </button>
 
-              ${isBleOnly
-                ? html`<button
-                    type="button"
-                    @click=${() => store.switchView("presence")}
-                    class="status-tile"
-                  >
-                    <div class="status-tile-head">
-                      ${renderTileIcon(ICON_TAG)}
-                      <span>BLE Target</span>
-                    </div>
-                    <strong class="status-tile-value">
-                      <code>${cfg.ble_target_address || "—"}</code>
-                    </strong>
-                    <span class="status-tile-meta">Bluetooth address</span>
-                  </button>`
-                : html`<button
-                    type="button"
-                    @click=${() => store.switchView("tools")}
-                    class="status-tile"
-                  >
-                    <div class="status-tile-head">
-                      ${renderTileIcon(ICON_CHIP)}
-                      <span>Firmware</span>
-                    </div>
-                    <strong class="status-tile-value">${fwValue}</strong>
-                    <span class="status-tile-meta">${fwMeta}</span>
-                  </button>`}
-            </div>
-
-            ${!isBleOnly
-              ? html`<div class="kv-list status-assignments">
-                  <button
-                    type="button"
-                    @click=${() => store.openSystemSection("system_sync")}
-                    class="kv-row"
-                  >
-                    <span>Device Group</span>
-                    <strong>
-                      ${curGroupId !== "unassigned"
-                        ? html`<span
-                            class="chip ${isCustomized ? "chip-warning" : "chip-success"}"
-                          >
-                            ${isCustomized ? "Customized" : "In Sync"}
-                          </span>`
-                        : nothing}${curGroupName}
-                    </strong>
-                  </button>
-                  ${caps.has_display
-                    ? html`<button
-                        type="button"
-                        @click=${() => store.switchView("interface")}
-                        class="kv-row"
-                      >
-                        <span>Remote Group</span>
-                        <strong>${remoteSummary}</strong>
-                      </button>`
-                    : nothing}
-                </div>`
-              : nothing}`,
+            ${isBleOnly
+              ? html`<button
+                  type="button"
+                  @click=${() => store.switchView("presence")}
+                  class="status-tile"
+                >
+                  <div class="status-tile-head">
+                    ${renderTileIcon(ICON_TAG)}
+                    <span>BLE Target</span>
+                  </div>
+                  <strong class="status-tile-value">
+                    <code>${cfg.ble_target_address || "—"}</code>
+                  </strong>
+                  <span class="status-tile-meta">Bluetooth address</span>
+                </button>`
+              : html`<button
+                  type="button"
+                  @click=${() => store.switchView("tools")}
+                  class="status-tile"
+                >
+                  <div class="status-tile-head">
+                    ${renderTileIcon(ICON_CHIP)}
+                    <span>Firmware</span>
+                  </div>
+                  <strong class="status-tile-value">${fwValue}</strong>
+                  <span class="status-tile-meta">${fwMeta}</span>
+                </button>`}
+          </div>`,
           footerActions: html`${links.esphome_device_id
               ? html`<button
                   type="button"
@@ -350,25 +343,28 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
       </div>
 
       <div class="column">
+        ${showQuickActionsCard
+          ? renderCard({
+              title: "Quick Actions",
+              contentClass: "settings-list",
+              body: html`${renderQuickActionGrid(store, quickActionButtons)}
+                ${otherQuickItems.map((it) => renderNativeControlRow(store, it))}`,
+            })
+          : nothing}
+
         ${renderCard({
-          title: "Quick Actions",
+          id: "card-device-assignments",
+          title: "Assignments",
           contentClass: "settings-list",
-          body: html`${renderQuickActionGrid(store, quickActionButtons)}
-            ${!isBleOnly
+          body: html`${!isBleOnly
               ? renderSettingsRow({
                   label: "Device Group",
                   forId: "cfg-device_group",
                   description:
-                    "Shares operational behavior (sleep, wake word, BLE) across matching Devices.",
-                  control: html`${curGroupId !== "unassigned"
-                      ? html`<span
-                          id="dash-group-sync-chip"
-                          class="chip ${isCustomized ? "chip-warning" : "chip-success"}"
-                        >
-                          ${isCustomized ? "Customized" : "In Sync"}
-                        </span>`
-                      : nothing}
-                    <select
+                    curGroupId === "custom"
+                      ? "Uses individual operational settings; save as a reusable group or pick an existing preset."
+                      : "Applies shared operational settings (power, wake word, brightness, BLE).",
+                  control: html`<select
                       id="cfg-device_group"
                       .value=${curGroupId}
                       @change=${(ev: Event) =>
@@ -378,6 +374,9 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
                           "cfg-device_group",
                         )}
                     >
+                      <option value="custom" ?selected=${curGroupId === "custom"}>
+                        Custom
+                      </option>
                       ${groups.map(
                         (g) =>
                           html`<option value=${g.id} ?selected=${g.id === curGroupId}>
@@ -385,16 +384,24 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
                           </option>`,
                       )}
                     </select>
-                    ${isCustomized
+                    ${curGroupId === "custom"
                       ? html`<button
                           type="button"
-                          id="btn-reset-to-group"
-                          @click=${() => void store.syncDeviceGroup(curGroupId, store.activeSubentryId)}
+                          id="btn-save-custom-group"
+                          @click=${() => store.openSaveGroupModal()}
                           class="btn btn-secondary btn-compact"
                         >
-                          Reset to Group
+                          Save Custom Group
                         </button>`
-                      : nothing}`,
+                      : nothing}
+                    <button
+                      type="button"
+                      id="btn-manage-groups"
+                      @click=${() => store.openManageGroups(curGroupId)}
+                      class="btn btn-text btn-compact"
+                    >
+                      Manage Groups
+                    </button>`,
                 })
               : nothing}
             ${renderSelectRow({
@@ -407,7 +414,20 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
               onChange: (val) =>
                 store.stageDeviceSetting("assigned_person", val, "cfg-assigned_person"),
             })}
-            ${otherQuickItems.map((it) => renderNativeControlRow(store, it))}`,
+            ${!isBleOnly && caps.has_display
+              ? renderSettingsRow({
+                  label: "Remote Control Group",
+                  description: "Controls which TV and AV remotes appear in the Remote app.",
+                  control: html`<span class="chip">${remoteSummary}</span>
+                    <button
+                      type="button"
+                      @click=${() => store.switchView("interface")}
+                      class="btn btn-text btn-compact"
+                    >
+                      Configure
+                    </button>`,
+                })
+              : nothing}`,
         })}
 
         ${otherSensorItems.length

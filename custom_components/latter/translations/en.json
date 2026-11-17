@@ -336,8 +336,8 @@
     "invalid_hex_color": {
       "message": "Invalid hex color {hex_color}; expected #RRGGBB."
     },
-    "invalid_dock_apps": {
-      "message": "Invalid dock_apps selection: {error}"
+    "shortcut_not_configured": {
+      "message": "Shortcut action {action} on {entity_id} is not configured on this Device."
     }
   }
 }

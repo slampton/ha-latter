@@ -394,6 +394,7 @@ export const STUDIO_STYLES = css`
     border: 1px solid var(--studio-divider);
     border-radius: var(--studio-radius-control);
     background: var(--studio-input-bg);
+    scroll-margin-top: calc(var(--studio-header-height) + var(--studio-space-4));
   }
   .area-box-head {
     display: flex;
@@ -1201,6 +1202,113 @@ export const STUDIO_STYLES = css`
     justify-content: flex-end;
     gap: var(--studio-space-2);
     margin-top: var(--studio-space-2);
+  }
+  dialog.studio-dialog.shortcut-dialog {
+    width: min(560px, calc(100vw - 32px));
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
+  }
+  .shortcut-item-row {
+    display: flex;
+    align-items: center;
+    gap: var(--studio-space-2);
+    padding: var(--studio-space-2) var(--studio-space-3);
+    border: 1px solid var(--studio-divider);
+    border-radius: var(--studio-radius-control);
+    background: var(--studio-input-bg);
+  }
+  .shortcut-icon-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--studio-control-height-compact);
+    height: var(--studio-control-height-compact);
+    border-radius: var(--studio-radius-pill);
+    background: var(--studio-primary-tint);
+    color: var(--studio-primary);
+    flex-shrink: 0;
+  }
+  .shortcut-item-info {
+    display: flex;
+    flex-direction: column;
+    gap: var(--studio-space-1);
+    min-width: 0;
+    flex: 1;
+  }
+  .shortcut-item-title {
+    font-weight: var(--studio-weight-medium);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .shortcut-item-meta {
+    font-size:var(--studio-font-secondary);
+    color: var(--studio-text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .shortcut-page-group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--studio-space-2);
+    padding: var(--studio-space-3);
+    border: 1px solid var(--studio-divider);
+    border-radius: var(--studio-radius-control);
+    background: var(--studio-surface-alt);
+  }
+  .shortcut-page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size:var(--studio-font-secondary);
+    font-weight: var(--studio-weight-medium);
+    color: var(--studio-text-secondary);
+  }
+  .shortcut-toolbar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--studio-space-2);
+  }
+  .shortcut-icon-row {
+    display: flex;
+    align-items: center;
+    gap: var(--studio-space-2);
+  }
+  .shortcut-icon-row input[type="text"] {
+    flex: 1;
+    min-width: 0;
+  }
+  .mdi-picker-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
+    gap: var(--studio-space-1);
+    max-height: 168px;
+    overflow-y: auto;
+    padding: var(--studio-space-2);
+    border: 1px solid var(--studio-divider);
+    border-radius: var(--studio-radius-control);
+    background: var(--studio-input-bg);
+  }
+  .mdi-picker-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: var(--studio-control-height);
+    border: 1px solid transparent;
+    border-radius: var(--studio-radius-control);
+    background: transparent;
+    color: var(--studio-text);
+    cursor: pointer;
+  }
+  .mdi-picker-btn:hover {
+    background: var(--studio-hover);
+  }
+  .mdi-picker-btn.selected {
+    background: var(--studio-primary-tint-strong);
+    border-color: var(--studio-primary);
+    color: var(--studio-primary);
   }
   .color-wheel { display: flex; justify-content: center; }
   .color-wheel canvas { border-radius: 50%; cursor: crosshair; touch-action: none; }

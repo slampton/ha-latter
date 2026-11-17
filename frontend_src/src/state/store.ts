@@ -25,6 +25,7 @@ import type {
   HassRoute,
   HomeAssistant,
   SharedControlItem,
+  ShortcutItem,
   StudioScope,
   StudioStatePayload,
   StudioViewId,
@@ -66,13 +67,15 @@ import {
   executeEntityActionOp,
   flushDeviceBucketOp,
   flushSystemSettingsOp,
+  getDockItemsOp,
   getEnabledActivitySourcesOp,
   getEnabledAreaCategoriesOp,
-  getEnabledDockTokensOp,
   getEnabledHomeCategoriesOp,
+  getPinnedItemsOp,
   moveAreaCategoryTokenOp,
-  moveDockAppTokenOp,
   moveHomeCategoryTokenOp,
+  moveShortcutItemOp,
+  openShortcutModalOp,
   overlayDevicePrefsOnSections,
   overlayPendingBlankListSlots,
   overlayPendingEntityStates,
@@ -80,9 +83,12 @@ import {
   type PendingEntityEntry,
   previewCameraOp,
   removeRemoteGroupRowOp,
+  removeShortcutItemOp,
   removeStringListRowOp,
   removeVolumeOverrideRowOp,
+  resetDockItemsToDefaultOp,
   runDeviceActionOp,
+  saveShortcutModalOp,
   selectWallpaperSourceOp,
   setAllWallpaperFavoritesOp,
   setWallpaperRotationOp,
@@ -92,7 +98,6 @@ import {
   testDoorbellSpeakerOp,
   toggleActivitySourceOp,
   toggleAreaCategoryTokenOp,
-  toggleDockAppTokenOp,
   toggleHomeCategoryTokenOp,
   toggleRemoteInGroupOp,
   toggleWallpaperFavOp,
@@ -102,21 +107,22 @@ import {
   uploadWallpaperOp,
 } from "./entity-config-ops.js";
 import {
+  applyBatchDeviceSettingOp,
   bulkNumberOp,
   bulkSelectOp,
   bulkToggleOp,
   captureBleAreaSignatureOp,
   clearBleAreaSignatureOp,
+  confirmSaveDeviceAsGroupOp,
+  copyDeviceToGroupBaselineOp,
   createDeviceGroupOp,
   deleteDeviceGroupOp,
   filteredControlTargetsOp,
   getActiveSurveyDeviceOp,
-  resolvedGroupCtrlIdOp,
-  seedGroupBaselineFromDeviceOp,
+  resolvedBatchTargetIdOp,
   setAreaFusionOp,
   setBleScannerOffsetOp,
-  setGroupDeviceSettingOp,
-  syncDeviceGroupOp,
+  updateGroupBaselineOp,
 } from "./groups-presence-ops.js";
 
 export { commitEntityChange, overlayPendingEntityStates, PENDING_ENTITY_STATES, type PendingEntityEntry };
@@ -189,13 +195,14 @@ export class StudioStore implements ReactiveController {
   activeCameraPreviewEntity = "";
   cameraPreviewUrl = "";
 
-  // System Device Groups UI state
+  // System Device Groups & Batch Controls UI state
   newGroupName = "";
   newGroupDesc = "";
-  seedGroupTargetId = "";
-  seedSourceSubentryId = "";
-  groupCtrlFilter = "all";
-  groupCtrlCategoryFilter = "all";
+  newGroupSourceSubentryId = "";
+  readonly openGroupIds = new Set<string>();
+  readonly groupCopySourceDrafts = new Map<string, string>();
+  batchTargetFilter = "all";
+  batchCategoryFilter = "all";
 
   // System BLE & Area Presence UI state
   bleSurveySubentryId = "";
@@ -241,6 +248,28 @@ export class StudioStore implements ReactiveController {
     hex: "",
     name: "",
     busy: false,
+  };
+  saveGroupModal = {
+    open: false,
+    subentryId: "",
+    name: "",
+    description: "",
+    busy: false,
+  };
+  shortcutModal = {
+    open: false,
+    listKey: "pinned_items" as "dock_items" | "pinned_items",
+    editIndex: null as number | null,
+    kind: "route" as "route" | "entity",
+    routeTarget: "weather:moon",
+    entityDomainFilter: "all",
+    entitySearch: "",
+    entityTarget: "",
+    action: "",
+    label: "",
+    icon: "",
+    iconSearch: "",
+    confirm: false,
   };
 
   pendingScrollCardId = "";
@@ -569,6 +598,16 @@ export class StudioStore implements ReactiveController {
     this.switchView(viewId);
   }
 
+  openManageGroups(groupId = ""): void {
+    const cleanId = String(groupId || "").trim();
+    if (cleanId && cleanId !== "custom") {
+      this.openGroupIds.add(cleanId);
+      this.openSystemSection("system_sync", `group-box-${cleanId}`);
+      return;
+    }
+    this.openSystemSection("system_sync");
+  }
+
   async switchSystemDevice(nextSubentryId: string, targetView: DeviceViewId = "dashboard"): Promise<void> {
     const cleanNext = String(nextSubentryId || "").trim();
     if (!cleanNext) return;
@@ -884,7 +923,7 @@ export class StudioStore implements ReactiveController {
     this.state = merged;
     this.ensureDefaultSurveyDevice();
     this.ensureDefaultDoorbellTester();
-    this.ensureDefaultSeedSelections();
+    this.ensureValidBatchTargetFilter();
     this.host.requestUpdate();
   }
 
@@ -962,14 +1001,15 @@ export class StudioStore implements ReactiveController {
     this.doorbellTestSubentryId = devs[0]?.subentry_id || "";
   }
 
-  private ensureDefaultSeedSelections(): void {
+  private ensureValidBatchTargetFilter(): void {
+    if (!this.batchTargetFilter.startsWith("group:")) return;
+    const gid = this.batchTargetFilter.slice(6);
     const groups = this.state?.device_groups || [];
-    if (!this.seedGroupTargetId || !groups.some((g) => g.id === this.seedGroupTargetId)) {
-      this.seedGroupTargetId = groups[0]?.id || "";
-    }
     const devs = (this.state?.system_devices || []).filter((d) => d.kind !== "ble_tag");
-    if (!this.seedSourceSubentryId || !devs.some((d) => d.subentry_id === this.seedSourceSubentryId)) {
-      this.seedSourceSubentryId = this.activeSubentryId || devs[0]?.subentry_id || "";
+    const hasGroupWithMembers =
+      groups.some((g) => g.id === gid) && devs.some((d) => d.device_group === gid);
+    if (!hasGroupWithMembers) {
+      this.batchTargetFilter = "all";
     }
   }
 
@@ -1066,16 +1106,44 @@ export class StudioStore implements ReactiveController {
     }
   }
 
-  getEnabledDockTokens(): string[] {
-    return getEnabledDockTokensOp(this);
+  getDockItems(): ShortcutItem[] {
+    return getDockItemsOp(this);
   }
 
-  toggleDockAppToken(appId: string): void {
-    toggleDockAppTokenOp(this, appId);
+  getPinnedItems(): ShortcutItem[] {
+    return getPinnedItemsOp(this);
   }
 
-  moveDockAppToken(appId: string, delta: -1 | 1): void {
-    moveDockAppTokenOp(this, appId, delta);
+  moveShortcutItem(
+    listKey: "dock_items" | "pinned_items",
+    idx: number,
+    delta: -1 | 1,
+  ): void {
+    moveShortcutItemOp(this, listKey, idx, delta);
+  }
+
+  removeShortcutItem(listKey: "dock_items" | "pinned_items", idx: number): void {
+    removeShortcutItemOp(this, listKey, idx);
+  }
+
+  resetDockItemsToDefault(): void {
+    resetDockItemsToDefaultOp(this);
+  }
+
+  openShortcutModal(
+    listKey: "dock_items" | "pinned_items",
+    editIndex: number | null = null,
+  ): void {
+    openShortcutModalOp(this, listKey, editIndex);
+  }
+
+  closeShortcutModal(): void {
+    this.shortcutModal = { ...this.shortcutModal, open: false };
+    this.host.requestUpdate();
+  }
+
+  saveShortcutModal(): void {
+    saveShortcutModalOp(this);
   }
 
   getEnabledAreaCategories(): string[] {
@@ -1319,6 +1387,28 @@ export class StudioStore implements ReactiveController {
     await testDoorbellSpeakerOp(this);
   }
 
+  openSaveGroupModal(): void {
+    if (!this.activeSubentryId) return;
+    const devTitle = this.state?.title || "";
+    this.saveGroupModal = {
+      open: true,
+      subentryId: this.activeSubentryId,
+      name: "",
+      description: devTitle ? `Saved from ${devTitle}` : "",
+      busy: false,
+    };
+    this.host.requestUpdate();
+  }
+
+  closeSaveGroupModal(): void {
+    this.saveGroupModal = { ...this.saveGroupModal, open: false, busy: false };
+    this.host.requestUpdate();
+  }
+
+  async confirmSaveGroupModal(): Promise<void> {
+    await confirmSaveDeviceAsGroupOp(this);
+  }
+
   async createDeviceGroup(): Promise<void> {
     await createDeviceGroupOp(this);
   }
@@ -1327,20 +1417,20 @@ export class StudioStore implements ReactiveController {
     await deleteDeviceGroupOp(this, groupId);
   }
 
-  async syncDeviceGroup(groupId: string, singleSubentryId?: string): Promise<void> {
-    await syncDeviceGroupOp(this, groupId, singleSubentryId);
+  async updateGroupBaseline(groupId: string, patch: Record<string, unknown>): Promise<void> {
+    await updateGroupBaselineOp(this, groupId, patch);
   }
 
-  async seedGroupBaselineFromDevice(): Promise<void> {
-    await seedGroupBaselineFromDeviceOp(this);
+  async copyDeviceToGroupBaseline(groupId: string, sourceSubentryId: string): Promise<void> {
+    await copyDeviceToGroupBaselineOp(this, groupId, sourceSubentryId);
   }
 
-  resolvedGroupCtrlId(): string {
-    return resolvedGroupCtrlIdOp(this);
+  resolvedBatchTargetId(): string {
+    return resolvedBatchTargetIdOp(this);
   }
 
-  async setGroupDeviceSetting(patch: Record<string, unknown>): Promise<void> {
-    await setGroupDeviceSettingOp(this, patch);
+  async applyBatchDeviceSetting(patch: Record<string, unknown>): Promise<void> {
+    await applyBatchDeviceSettingOp(this, patch);
   }
 
   filteredControlTargets(ctrl: SharedControlItem): string[] {

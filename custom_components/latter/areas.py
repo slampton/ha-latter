@@ -1130,9 +1130,9 @@ async def async_execute_area_action(
         action = "toggle"
     cur_level = max(0, get_entity_level(state_obj))
 
-    if domain == "button":
+    if domain in ("button", "input_button"):
         await hass.services.async_call(
-            "button", "press", {ATTR_ENTITY_ID: entity_id}, blocking=False
+            domain, "press", {ATTR_ENTITY_ID: entity_id}, blocking=False
         )
         return
 
@@ -1150,14 +1150,20 @@ async def async_execute_area_action(
             )
         return
 
-    if domain in ("select", "input_select") and option is not None:
-        await hass.services.async_call(
-            domain,
-            "select_option",
-            {ATTR_ENTITY_ID: entity_id, "option": str(option)},
-            blocking=False,
-        )
-        return
+    if domain in ("select", "input_select"):
+        if option is not None:
+            await hass.services.async_call(
+                domain,
+                "select_option",
+                {ATTR_ENTITY_ID: entity_id, "option": str(option)},
+                blocking=False,
+            )
+            return
+        if action in ("select_next", "select_previous"):
+            await hass.services.async_call(
+                domain, action, {ATTR_ENTITY_ID: entity_id}, blocking=False
+            )
+            return
 
     if domain in ("number", "input_number") and level is not None:
         await hass.services.async_call(
@@ -1257,9 +1263,56 @@ async def async_execute_area_action(
             level = max(0, min(100, cur_level + (10 if action == "step_up" else -10)))
         action = "set_level"
 
-    if domain in ("scene", "script"):
+    if domain == "scene":
         await hass.services.async_call(
-            domain, "turn_on", {ATTR_ENTITY_ID: entity_id}, blocking=False
+            "scene", "turn_on", {ATTR_ENTITY_ID: entity_id}, blocking=False
+        )
+        return
+
+    if domain == "script":
+        svc_script = "turn_off" if action == "turn_off" else "turn_on"
+        await hass.services.async_call(
+            "script", svc_script, {ATTR_ENTITY_ID: entity_id}, blocking=False
+        )
+        return
+
+    if domain == "automation":
+        svc_auto = (
+            action if action in ("trigger", "toggle", "turn_on", "turn_off") else "trigger"
+        )
+        await hass.services.async_call(
+            "automation", svc_auto, {ATTR_ENTITY_ID: entity_id}, blocking=False
+        )
+        return
+
+    if domain == "valve":
+        if action in ("open_valve", "open"):
+            svc_valve = "open_valve"
+        elif action in ("close_valve", "close"):
+            svc_valve = "close_valve"
+        elif action in ("stop_valve", "stop"):
+            svc_valve = "stop_valve"
+        else:
+            svc_valve = "close_valve" if state_obj.state == STATE_OPEN else "open_valve"
+        await hass.services.async_call(
+            "valve", svc_valve, {ATTR_ENTITY_ID: entity_id}, blocking=False
+        )
+        return
+
+    if domain == "lawn_mower":
+        svc_mower = action if action in ("start_mowing", "pause", "dock") else "start_mowing"
+        await hass.services.async_call(
+            "lawn_mower", svc_mower, {ATTR_ENTITY_ID: entity_id}, blocking=False
+        )
+        return
+
+    if domain == "media_player" and action in (
+        "media_play_pause",
+        "media_next_track",
+        "media_previous_track",
+    ):
+        await hass.services.async_call(
+            "media_player", action, {ATTR_ENTITY_ID: entity_id}, blocking=False
         )
         return
 
@@ -1724,7 +1777,6 @@ def build_area_context_payload(coordinator: Any) -> tuple[str, dict[str, Any]]:
         "ble_closest_proxy": (
             coordinator._ble_tracker.closest_scanner if coordinator._ble_tracker else ""
         ),
-        "dock_apps": coordinator.dock_apps_csv,
         "activity_card": coordinator.activity_card_enabled,
         "activity_sources": coordinator.activity_sources_csv,
         "security_pin_policy": eff_pin_policy,
@@ -1770,7 +1822,6 @@ def build_area_context_payload(coordinator: Any) -> tuple[str, dict[str, Any]]:
         area_entry.name if area_entry else "",
         area_attrs["site_id"],
         area_attrs["ble_closest_proxy"],
-        area_attrs["dock_apps"],
         area_attrs["wallpaper_url"],
         area_attrs["available_domains"],
         area_attrs["area_temp"],
@@ -1827,11 +1878,12 @@ def build_area_context_payload(coordinator: Any) -> tuple[str, dict[str, Any]]:
 
 @callback
 def bind_coordinator_area_listeners(coordinator: Any) -> None:
-    """Bind active Area, Whole-Home, and Remote Slot state listeners on `coordinator`."""
+    """Bind active Area, Whole-Home, Remote Slot, and Shortcut entity state listeners on `coordinator`."""
     for attr in (
         "_unsub_area_entities_state",
         "_unsub_alarm_state",
         "_unsub_remotes_state",
+        "_unsub_shortcuts_state",
     ):
         prev = getattr(coordinator, attr, None)
         if prev is not None:
@@ -1933,4 +1985,36 @@ def bind_coordinator_area_listeners(coordinator: Any) -> None:
             coordinator.hass,
             tracked_rem,
             lambda _ev: coordinator.async_notify_listeners(),
+        )
+
+    tracked_shortcuts: list[str] = []
+    for sc_list in (coordinator.dock_items, coordinator.pinned_items):
+        for sc in sc_list:
+            if sc.get("kind") == "entity":
+                ent = str(sc.get("target") or "").strip()
+                if ent and ent not in tracked_shortcuts:
+                    tracked_shortcuts.append(ent)
+    if tracked_shortcuts:
+
+        @callback
+        def _on_shortcut_entity_event(event: Event[EventStateChangedData]) -> None:
+            old_st = event.data.get("old_state")
+            new_st = event.data.get("new_state")
+            if is_media_position_only_tick(old_st, new_st):
+                return
+            if (
+                old_st is not None
+                and new_st is not None
+                and old_st.state == new_st.state
+                and old_st.attributes.get("icon") == new_st.attributes.get("icon")
+                and old_st.attributes.get("friendly_name")
+                == new_st.attributes.get("friendly_name")
+            ):
+                return
+            coordinator.async_notify_listeners()
+
+        coordinator._unsub_shortcuts_state = async_track_state_change_event(
+            coordinator.hass,
+            tracked_shortcuts,
+            _on_shortcut_entity_event,
         )

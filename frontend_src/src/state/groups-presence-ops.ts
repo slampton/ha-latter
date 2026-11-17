@@ -1,30 +1,88 @@
 /**
- * Device Groups, bulk ESPHome control actions, BLE calibration, and Area sensor fusion operations.
+ * Device Groups, Batch Controls, BLE calibration, and Area sensor fusion operations.
  */
 
 import { formatWsError } from "../api/ws-client.js";
 import type { SharedControlItem, SystemDeviceEntry } from "../types.js";
 import type { StudioStore } from "./store.js";
 
+function slugifyGroupName(raw: string): string {
+  return raw
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
 export async function createDeviceGroupOp(store: StudioStore): Promise<void> {
   const name = store.newGroupName.trim();
   const description = store.newGroupDesc.trim();
+  const sourceSubentryId = store.newGroupSourceSubentryId.trim();
   if (!name) {
     store.showToast("Enter a Device Group name", true);
     return;
   }
   try {
+    const payload: Record<string, unknown> = { name, description };
+    if (sourceSubentryId) {
+      payload.source_subentry_id = sourceSubentryId;
+    }
     const res = await store.ws.runSystemCommand(
       "create_device_group",
-      { name, description },
+      payload,
       store.activeSubentryId || null,
     );
+    const createdId = slugifyGroupName(name) || "group";
     store.newGroupName = "";
     store.newGroupDesc = "";
+    store.newGroupSourceSubentryId = "";
+    store.openGroupIds.add(createdId);
     if (res) store.ingestPayload(res, false);
     store.showToast(`Created group "${name}"`);
   } catch (err) {
     store.showToast(formatWsError(err, "Could not create Device Group"), true);
+  }
+}
+
+export async function confirmSaveDeviceAsGroupOp(store: StudioStore): Promise<void> {
+  const name = store.saveGroupModal.name.trim();
+  const description = store.saveGroupModal.description.trim();
+  const sourceSubentryId = store.saveGroupModal.subentryId || store.activeSubentryId;
+  if (!name) {
+    store.showToast("Enter a Device Group name", true);
+    return;
+  }
+  if (!sourceSubentryId) {
+    store.showToast("Choose a Device first", true);
+    return;
+  }
+  store.saveGroupModal = { ...store.saveGroupModal, busy: true };
+  store.host.requestUpdate();
+  try {
+    const res = await store.ws.runSystemCommand(
+      "create_device_group",
+      {
+        name,
+        description,
+        source_subentry_id: sourceSubentryId,
+        assign_source: true,
+      },
+      store.activeSubentryId || null,
+    );
+    store.saveGroupModal = {
+      open: false,
+      subentryId: "",
+      name: "",
+      description: "",
+      busy: false,
+    };
+    if (res) store.ingestPayload(res, false);
+    else store.host.requestUpdate();
+    store.showToast(`Saved custom group "${name}"`);
+  } catch (err) {
+    store.saveGroupModal = { ...store.saveGroupModal, busy: false };
+    store.host.requestUpdate();
+    store.showToast(formatWsError(err, "Could not save custom Device Group"), true);
   }
 }
 
@@ -35,6 +93,11 @@ export async function deleteDeviceGroupOp(store: StudioStore, groupId: string): 
       { group_id: groupId },
       store.activeSubentryId || null,
     );
+    store.openGroupIds.delete(groupId);
+    store.groupCopySourceDrafts.delete(groupId);
+    if (store.batchTargetFilter === `group:${groupId}`) {
+      store.batchTargetFilter = "all";
+    }
     if (res) store.ingestPayload(res, false);
     store.showToast("Deleted Device Group");
   } catch (err) {
@@ -42,77 +105,82 @@ export async function deleteDeviceGroupOp(store: StudioStore, groupId: string): 
   }
 }
 
-export async function syncDeviceGroupOp(
+export async function updateGroupBaselineOp(
   store: StudioStore,
   groupId: string,
-  singleSubentryId?: string,
+  patch: Record<string, unknown>,
 ): Promise<void> {
-  try {
-    const payload: Record<string, unknown> = { group_id: groupId };
-    if (singleSubentryId) payload.subentry_id = singleSubentryId;
-    const res = await store.ws.runSystemCommand(
-      "sync_device_group",
-      payload,
-      store.activeSubentryId || null,
-    );
-    if (res) store.ingestPayload(res, false);
-    store.showToast("Synced to group baseline");
-  } catch (err) {
-    store.showToast(formatWsError(err, "Could not sync Device Group"), true);
-  }
-}
-
-export async function seedGroupBaselineFromDeviceOp(store: StudioStore): Promise<void> {
-  if (!store.seedGroupTargetId || !store.seedSourceSubentryId) {
-    store.showToast("Choose both a target group and a source Device", true);
-    return;
-  }
+  if (!groupId) return;
   try {
     const res = await store.ws.runSystemCommand(
-      "seed_group_baseline",
+      "update_group_baseline",
       {
-        group_id: store.seedGroupTargetId,
-        subentry_id: store.seedSourceSubentryId,
+        group_id: groupId,
+        config: patch,
       },
       store.activeSubentryId || null,
     );
     if (res) store.ingestPayload(res, false);
-    store.showToast("Saved group baseline from Device");
   } catch (err) {
-    store.showToast(formatWsError(err, "Could not seed group baseline"), true);
+    store.showToast(formatWsError(err, "Could not update group baseline"), true);
   }
 }
 
-export function resolvedGroupCtrlIdOp(store: StudioStore): string {
-  const filter = store.groupCtrlFilter || "all";
+export async function copyDeviceToGroupBaselineOp(
+  store: StudioStore,
+  groupId: string,
+  sourceSubentryId: string,
+): Promise<void> {
+  if (!groupId || !sourceSubentryId) {
+    store.showToast("Choose a Device to copy settings from", true);
+    return;
+  }
+  try {
+    const res = await store.ws.runSystemCommand(
+      "update_group_baseline",
+      {
+        group_id: groupId,
+        source_subentry_id: sourceSubentryId,
+      },
+      store.activeSubentryId || null,
+    );
+    if (res) store.ingestPayload(res, false);
+    store.showToast("Copied Device settings into group baseline");
+  } catch (err) {
+    store.showToast(formatWsError(err, "Could not copy Device settings"), true);
+  }
+}
+
+export function resolvedBatchTargetIdOp(store: StudioStore): string {
+  const filter = store.batchTargetFilter || "all";
   if (filter.startsWith("group:")) return filter.slice(6);
   if (filter === "trait:roaming") return "roaming";
   if (filter === "trait:stationary") return "stationary";
   return filter;
 }
 
-export async function setGroupDeviceSettingOp(
+export async function applyBatchDeviceSettingOp(
   store: StudioStore,
   patch: Record<string, unknown>,
 ): Promise<void> {
   try {
     const res = await store.ws.runSystemCommand(
-      "set_group_device_setting",
+      "apply_batch_device_setting",
       {
-        group_id: resolvedGroupCtrlIdOp(store) || "all",
+        target: store.batchTargetFilter || "all",
         config: patch,
       },
       store.activeSubentryId || null,
     );
     if (res) store.ingestPayload(res, false);
-    store.showToast("Applied group setting");
+    store.showToast("Applied batch setting");
   } catch (err) {
-    store.showToast(formatWsError(err, "Could not apply group setting"), true);
+    store.showToast(formatWsError(err, "Could not apply batch setting"), true);
   }
 }
 
 export function filteredControlTargetsOp(store: StudioStore, ctrl: SharedControlItem): string[] {
-  const grpId = resolvedGroupCtrlIdOp(store);
+  const grpId = resolvedBatchTargetIdOp(store);
   return (ctrl.targets || [])
     .filter((t) => {
       if (grpId === "all") return true;
@@ -130,7 +198,7 @@ export async function bulkToggleOp(
   turnOn: boolean,
 ): Promise<void> {
   if (ctrl.pref_key) {
-    await setGroupDeviceSettingOp(store, { [ctrl.pref_key]: turnOn });
+    await applyBatchDeviceSettingOp(store, { [ctrl.pref_key]: turnOn });
     return;
   }
   const entityIds = filteredControlTargetsOp(store, ctrl);
@@ -141,14 +209,14 @@ export async function bulkToggleOp(
       {
         entity_ids: entityIds,
         action: turnOn ? "turn_on" : "turn_off",
-        group_id: resolvedGroupCtrlIdOp(store) || "all",
+        group_id: resolvedBatchTargetIdOp(store) || "all",
         canonical_key: ctrl.canonical_key,
       },
       store.activeSubentryId || null,
     );
     if (res) store.ingestPayload(res, false);
   } catch (err) {
-    store.showToast(formatWsError(err, "Bulk switch update failed"), true);
+    store.showToast(formatWsError(err, "Batch switch update failed"), true);
   }
 }
 
@@ -158,7 +226,7 @@ export async function bulkSelectOp(
   option: string,
 ): Promise<void> {
   if (ctrl.pref_key) {
-    await setGroupDeviceSettingOp(store, { [ctrl.pref_key]: option });
+    await applyBatchDeviceSettingOp(store, { [ctrl.pref_key]: option });
     return;
   }
   const entityIds = filteredControlTargetsOp(store, ctrl);
@@ -169,14 +237,14 @@ export async function bulkSelectOp(
       {
         entity_ids: entityIds,
         option,
-        group_id: resolvedGroupCtrlIdOp(store) || "all",
+        group_id: resolvedBatchTargetIdOp(store) || "all",
         canonical_key: ctrl.canonical_key,
       },
       store.activeSubentryId || null,
     );
     if (res) store.ingestPayload(res, false);
   } catch (err) {
-    store.showToast(formatWsError(err, "Bulk option update failed"), true);
+    store.showToast(formatWsError(err, "Batch option update failed"), true);
   }
 }
 
@@ -187,7 +255,7 @@ export async function bulkNumberOp(
 ): Promise<void> {
   if (!Number.isFinite(level)) return;
   if (ctrl.pref_key) {
-    await setGroupDeviceSettingOp(store, { [ctrl.pref_key]: level });
+    await applyBatchDeviceSettingOp(store, { [ctrl.pref_key]: level });
     return;
   }
   const entityIds = filteredControlTargetsOp(store, ctrl);
@@ -198,14 +266,14 @@ export async function bulkNumberOp(
       {
         entity_ids: entityIds,
         level,
-        group_id: resolvedGroupCtrlIdOp(store) || "all",
+        group_id: resolvedBatchTargetIdOp(store) || "all",
         canonical_key: ctrl.canonical_key,
       },
       store.activeSubentryId || null,
     );
     if (res) store.ingestPayload(res, false);
   } catch (err) {
-    store.showToast(formatWsError(err, "Bulk number update failed"), true);
+    store.showToast(formatWsError(err, "Batch number update failed"), true);
   }
 }
 

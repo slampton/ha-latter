@@ -34,15 +34,17 @@ from ..const import (
     CONF_DEVICE_GROUP,
     CONF_DEVICE_REMOTE_GROUP,
     CONF_DEVICE_SLUG,
-    CONF_DOCK_APPS,
+    CONF_DOCK_ITEMS,
     CONF_HOME_CATEGORIES,
     CONF_MA_PLAYER_ENTITY,
     CONF_NATIVE_BLE_TRACKING,
+    CONF_PINNED_ITEMS,
     CONF_SECURITY_PIN_HASH,
     CONF_SECURITY_PIN_POLICY,
     CONF_SYNC_DEVICE_AREA,
     CONF_WALLPAPER_CYCLE_MINUTES,
     DATA_GLOBAL_CONFIG,
+    DEFAULT_DEVICE_GROUP,
     DOMAIN,
     INTEGRATION_VERSION,
     STUDIO_REV,
@@ -50,7 +52,6 @@ from ..const import (
 from ..coordinator import LatterCoordinator
 from ..groups import (
     UNIVERSAL_SECTION_META,
-    compute_device_group_sync_status,
     coordinator_supports_pref,
     get_device_groups,
     get_esphome_device_entities,
@@ -65,6 +66,10 @@ from ..presence import (
     get_all_areas_presence_summary,
     get_area_signatures_summary,
     get_discovered_ble_candidates,
+)
+from ..protocol import (
+    SHORTCUT_SUPPORTED_DOMAINS,
+    resolve_shortcut_entity_icon,
 )
 from ..repairs import parse_device_issue_id
 from ..wallpapers import list_wallpaper_catalog
@@ -524,6 +529,44 @@ def _build_entity_catalog(
         )
     ma_players.sort(key=lambda item: item["name"].lower())
 
+    area_name_by_id = {a["id"]: a["name"] for a in areas_list}
+    shortcut_entities: list[dict[str, str]] = []
+    seen_sc_ids: set[str] = set()
+    for sc_dom in sorted(SHORTCUT_SUPPORTED_DOMAINS):
+        for st_obj in idx.states_for_domain(sc_dom):
+            eid = st_obj.entity_id
+            if eid in seen_sc_ids:
+                continue
+            seen_sc_ids.add(eid)
+            friendly_lbl = str(st_obj.attributes.get("friendly_name") or eid)
+            dclass = str(st_obj.attributes.get("device_class") or "")
+            ent_icon = resolve_shortcut_entity_icon(
+                sc_dom,
+                device_class=dclass,
+                entity_icon=str(st_obj.attributes.get("icon") or ""),
+                state=str(st_obj.state or ""),
+            )
+            aid = idx.resolve_entity_area_id(eid) or ""
+            area_lbl = area_name_by_id.get(aid, "")
+            shortcut_entities.append(
+                {
+                    "id": eid,
+                    "name": friendly_lbl,
+                    "domain": sc_dom,
+                    "device_class": dclass,
+                    "icon": ent_icon,
+                    "area_name": area_lbl,
+                }
+            )
+    shortcut_entities.sort(
+        key=lambda item: (
+            item["area_name"] == "",
+            item["area_name"].lower(),
+            item["name"].lower(),
+            item["id"],
+        )
+    )
+
     return {
         "areas": areas_list,
         "ma_speakers": ma_speakers,
@@ -539,6 +582,7 @@ def _build_entity_catalog(
         "weathers": weathers_list,
         "calendars": calendars_list,
         "persons": persons_list,
+        "shortcut_entities": shortcut_entities,
     }
 
 
@@ -795,11 +839,16 @@ def _build_system_section(
                 "is_roaming": c.is_roaming_device,
                 "device_group": c_grp,
                 "device_remote_group": c.device_remote_group,
-                "device_group_name": group_name_map.get(
-                    c_grp, c_grp.replace("_", " ").title()
-                ),
-                "group_sync_status": compute_device_group_sync_status(
-                    hass, c, device_groups
+                "device_group_name": (
+                    ""
+                    if c.is_ble_tag
+                    else (
+                        "Custom"
+                        if c_grp == DEFAULT_DEVICE_GROUP
+                        else group_name_map.get(
+                            c_grp, c_grp.replace("_", " ").title()
+                        )
+                    )
                 ),
                 "assigned_person": c.assigned_person,
                 "active_area_name": c_area_name,
@@ -930,6 +979,8 @@ def build_studio_state_payload(
 
     device_capabilities = {
         "has_display": coordinator.has_display,
+        "has_imu": coordinator.has_imu,
+        "is_round": coordinator.is_round_display,
         "has_power": ("sleep" in sec_ids) or ("battery" in sec_ids),
         "has_voice": not coordinator.is_ble_tag and (coordinator.has_mic or ("voice" in sec_ids)),
         "has_audio": (
@@ -991,7 +1042,8 @@ def build_studio_state_payload(
         CONF_AREA_FOLLOW_DWELL_S: coordinator.area_follow_dwell_s,
         CONF_AREA_HANDOFF: coordinator.area_handoff_enabled,
         CONF_DEVICE_CUSTOM_COLOR: coordinator.device_custom_color,
-        CONF_DOCK_APPS: coordinator.dock_apps_csv,
+        CONF_DOCK_ITEMS: coordinator.dock_items,
+        CONF_PINNED_ITEMS: coordinator.pinned_items,
         CONF_AREA_CATEGORIES: coordinator.area_categories_csv,
         CONF_HOME_CATEGORIES: coordinator.home_categories_csv,
         CONF_ACTIVITY_CARD: coordinator.activity_card_enabled,
@@ -1053,9 +1105,6 @@ def build_studio_state_payload(
                 local_ma_id
                 or not local_spk_id
                 or not hass.config_entries.async_entries("music_assistant")
-            ),
-            "group_sync_status": compute_device_group_sync_status(
-                hass, coordinator, base.get("device_groups")
             ),
             "ble_closest_proxy": coordinator._ble_tracker.closest_scanner if coordinator._ble_tracker else "",
             "ble_detected_ref_power": (

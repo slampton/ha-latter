@@ -169,15 +169,6 @@ export function issueMessage(issue: IssueItem): string {
   return `Repair: ${label}.`;
 }
 
-export function isGroupCustomized(status: unknown): boolean {
-  if (!status) return false;
-  if (typeof status === "string") return status === "customized";
-  if (typeof status === "object" && "in_sync" in status) {
-    return (status as { in_sync?: boolean }).in_sync === false;
-  }
-  return false;
-}
-
 export function rssiToPercent(rssi: number | null | undefined): number {
   if (rssi === null || rssi === undefined || !Number.isFinite(Number(rssi))) return 0;
   const clamped = Math.max(-95, Math.min(-35, Number(rssi)));

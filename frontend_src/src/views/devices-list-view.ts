@@ -1,6 +1,7 @@
 /**
  * Managed Devices View (`select_device_prompt`): Filterable, keyboard-accessible sortable Devices table.
- * Card header dynamically reflects the active category selection (`D-041`).
+ * Card header dynamically reflects the active category selection (`D-041`), while zero-member groups
+ * and unused specialty categories stay hidden unless active (`D-047`).
  */
 
 import { renderCard, renderSortHeader } from "../components/controls.js";
@@ -20,22 +21,44 @@ export function renderDevicesListView(store: StudioStore): TemplateResult {
   const groups = store.state?.device_groups || [];
   const rawCat = store.deviceCategoryFilter || "all";
 
+  const hasBleTags = allDevices.some((d) => d.kind === "ble_tag");
+  const hasAssignedPeople = allDevices.some((d) => Boolean(d.assigned_person));
+  const hasUpdates = allDevices.some((d) => d.status_label === "Update available");
+  const hasCustomGroup = allDevices.some(
+    (d) => d.kind !== "ble_tag" && (!d.device_group || d.device_group === "custom"),
+  );
+
   const baseCategories: Array<{ id: string; label: string }> = [
     { id: "all", label: "All Devices" },
     { id: "online", label: "Online Devices" },
-    { id: "native", label: "Latter Displays" },
-    { id: "headless", label: "Screenless Devices" },
     { id: "roaming", label: "Roaming Devices" },
     { id: "stationary", label: "Stationary Devices" },
-    { id: "ble_tracked", label: "BLE-Tracked Devices" },
-    { id: "ble_tag", label: "BLE Tags" },
-    { id: "assigned_person", label: "Assigned to a Person" },
-    { id: "updates", label: "Updates Available" },
   ];
+  if (rawCat === "native") {
+    baseCategories.push({ id: "native", label: "Latter Displays" });
+  }
+  if (rawCat === "ble_tracked") {
+    baseCategories.push({ id: "ble_tracked", label: "BLE-Tracked Devices" });
+  }
+  if (hasBleTags || rawCat === "ble_tag") {
+    baseCategories.push({ id: "ble_tag", label: "BLE Tags" });
+  }
+  if (hasAssignedPeople || rawCat === "assigned_person") {
+    baseCategories.push({ id: "assigned_person", label: "Assigned to a Person" });
+  }
+  if (hasUpdates || rawCat === "updates") {
+    baseCategories.push({ id: "updates", label: "Updates Available" });
+  }
   for (const g of groups) {
-    if (g && g.id && g.id !== "unassigned") {
-      baseCategories.push({ id: `group:${g.id}`, label: `Group: ${entityLabel(g.name)}` });
+    if (!g || !g.id || g.id === "custom") continue;
+    const grpFilterId = `group:${g.id}`;
+    const hasMembers = allDevices.some((d) => d.kind !== "ble_tag" && d.device_group === g.id);
+    if (hasMembers || rawCat === grpFilterId) {
+      baseCategories.push({ id: grpFilterId, label: `Group: ${entityLabel(g.name)}` });
     }
+  }
+  if (hasCustomGroup || rawCat === "group:custom") {
+    baseCategories.push({ id: "group:custom", label: "Group: Custom" });
   }
 
   const activeCategory = baseCategories.find((o) => o.id === rawCat) || baseCategories[0];
@@ -50,10 +73,12 @@ export function renderDevicesListView(store: StudioStore): TemplateResult {
     if (cat === "assigned_person") return Boolean(d.assigned_person);
     if (cat === "roaming") return isRoaming;
     if (cat === "stationary") return !isRoaming;
-    if (cat === "headless") return isBleTag || !d.has_display;
     if (cat === "ble_tag") return isBleTag;
     if (cat === "updates") return d.status_label === "Update available";
-    if (cat.startsWith("group:")) return d.device_group === cat.slice(6);
+    if (cat === "group:custom") {
+      return !isBleTag && (!d.device_group || d.device_group === "custom");
+    }
+    if (cat.startsWith("group:")) return !isBleTag && d.device_group === cat.slice(6);
     return true;
   });
 
@@ -111,6 +136,10 @@ export function renderDevicesListView(store: StudioStore): TemplateResult {
                     const st = d.status_label || "—";
                     const dotCls =
                       st === "Update available" ? "update" : st === "Offline" ? "" : "online";
+                    const grpCell =
+                      d.kind === "ble_tag"
+                        ? "—"
+                        : d.device_group_name || (d.device_group === "custom" ? "Custom" : "—");
                     const openRow = (): void => {
                       void store.switchSystemDevice(d.subentry_id);
                     };
@@ -130,7 +159,7 @@ export function renderDevicesListView(store: StudioStore): TemplateResult {
                       <td class="col-name">${d.title}</td>
                       <td>${d.model_label || "—"}</td>
                       <td>${d.area_label || "—"}</td>
-                      <td>${d.device_group_name || "—"}</td>
+                      <td>${grpCell}</td>
                       <td><span class="status-dot ${dotCls}"></span>${st}</td>
                       <td class="col-open" aria-hidden="true">›</td>
                     </tr>`;

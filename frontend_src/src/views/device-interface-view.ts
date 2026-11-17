@@ -20,17 +20,20 @@ import {
   ALARM_RECURRENCE_OPTIONS,
   AREA_CATEGORIES_CATALOG,
   DEFAULT_ALARMS_SUMMARY,
-  DOCK_APPS_CATALOG,
   HOME_CATEGORIES_CATALOG,
   HOME_CLOCK_TAP_OPTIONS,
+  MAX_DOCK_ITEMS,
+  MAX_PINNED_ITEMS,
   MAX_WORLD_CLOCKS,
   RETURN_TO_HOME_TIMEOUT_OPTIONS,
+  SHORTCUT_ROUTES_CATALOG,
   START_SCREEN_OPTIONS,
   WORLD_CLOCK_ZONES_CATALOG,
 } from "../constants.js";
 import { html, nothing, type TemplateResult } from "../lib/lit.js";
+import { ROUTE_PREVIEW_ICONS, shortcutActionLabel } from "../mdi-catalog.js";
 import type { StudioStore } from "../state/store.js";
-import type { DevicePrefItem } from "../types.js";
+import type { DevicePrefItem, ShortcutItem } from "../types.js";
 
 interface AlarmSlotView {
   time: string;
@@ -370,8 +373,95 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
 
   const activityCardOn = cfg.activity_card !== false;
   const enabledSources = new Set(store.getEnabledActivitySources());
-  const enabledDock = store.getEnabledDockTokens();
-  const disabledDock = DOCK_APPS_CATALOG.filter((a) => !enabledDock.includes(a.token));
+  const dockItems = store.getDockItems();
+  const pinnedItems = store.getPinnedItems();
+  const shortcutEntityMap = new Map(
+    (data?.catalog?.shortcut_entities || []).map((e) => [e.id, e]),
+  );
+  const routeSpecMap = new Map(
+    SHORTCUT_ROUTES_CATALOG.map((r) => [r.token, r]),
+  );
+
+  const renderShortcutRow = (
+    listKey: "dock_items" | "pinned_items",
+    item: ShortcutItem,
+    idx: number,
+    total: number,
+  ): TemplateResult => {
+    let displayTitle = item.label;
+    let metaLine = "";
+    let iconSlug = item.icon;
+    if (item.kind === "route") {
+      const spec = routeSpecMap.get(item.target);
+      if (!displayTitle) {
+        displayTitle = spec?.label || item.target;
+      }
+      metaLine = spec ? `${spec.group} • ${spec.label}` : item.target;
+      if (!iconSlug) {
+        iconSlug = ROUTE_PREVIEW_ICONS[item.target] || "mdi:apps";
+      }
+    } else {
+      const ent = shortcutEntityMap.get(item.target);
+      const dom = item.target.split(".", 1)[0] || "";
+      const actLbl = shortcutActionLabel(dom, item.action);
+      if (!displayTitle) {
+        displayTitle = ent?.name || item.target;
+      }
+      metaLine = `${actLbl} • ${item.confirm ? "Confirm" : "1-Tap"} • ${item.target}`;
+      if (!iconSlug) {
+        iconSlug = ent?.icon || "mdi:flash";
+      }
+    }
+    return html`<div class="shortcut-item-row">
+      <span class="shortcut-icon-badge" aria-hidden="true">
+        <ha-icon .icon=${iconSlug}></ha-icon>
+      </span>
+      <div class="shortcut-item-info">
+        <span class="shortcut-item-title">${displayTitle}</span>
+        <span class="shortcut-item-meta">${metaLine}</span>
+      </div>
+      ${idx > 0
+        ? html`<button
+            type="button"
+            aria-label=${`Move ${displayTitle} up`}
+            @click=${() => store.moveShortcutItem(listKey, idx, -1)}
+            class="btn-icon"
+          >
+            ↑
+          </button>`
+        : nothing}
+      ${idx < total - 1
+        ? html`<button
+            type="button"
+            aria-label=${`Move ${displayTitle} down`}
+            @click=${() => store.moveShortcutItem(listKey, idx, 1)}
+            class="btn-icon"
+          >
+            ↓
+          </button>`
+        : nothing}
+      <button
+        type="button"
+        aria-label=${`Edit ${displayTitle}`}
+        @click=${() => store.openShortcutModal(listKey, idx)}
+        class="btn btn-secondary btn-compact"
+      >
+        Edit
+      </button>
+      ${renderTrashIconButton(`Remove ${displayTitle}`, () =>
+        store.removeShortcutItem(listKey, idx),
+      )}
+    </div>`;
+  };
+
+  const pinnedPages: Array<{ pageNum: number; startIdx: number; items: ShortcutItem[] }> = [];
+  for (let i = 0; i < pinnedItems.length; i += 6) {
+    pinnedPages.push({
+      pageNum: Math.floor(i / 6) + 1,
+      startIdx: i,
+      items: pinnedItems.slice(i, i + 6),
+    });
+  }
 
   const curDevEntry = (data?.system_devices || []).find(
     (d) => d.subentry_id === store.activeSubentryId,
@@ -463,61 +553,39 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
                     },
                   })}
                   ${renderSettingsRow({
-                    label: "Dock Apps",
-                    description: "Toggle and reorder apps shown in the Home Dock.",
+                    id: "dock-shortcuts-row",
+                    label: "App Dock",
+                    description:
+                      "Configure apps, subpages, and Home Assistant entity actions in the Home Dock. Pinned hides automatically when Pinned App is empty, and Settings is always shown last.",
                     stacked: true,
                     control: html`<div
-                      id="dock-pills-container"
-                      class="pill-list"
+                      id="dock-shortcuts-container"
+                      class="stack"
                       role="group"
-                      aria-label="Dock apps"
+                      aria-label="App Dock shortcuts"
                     >
-                      ${enabledDock.map((tok, idx) => {
-                        const meta = DOCK_APPS_CATALOG.find((a) => a.token === tok);
-                        const lbl = meta ? meta.label : tok;
-                        return html`<span class="pill enabled">
-                          ${idx > 0
-                            ? html`<button
-                                type="button"
-                                aria-label=${`Move ${lbl} left`}
-                                @click=${() => store.moveDockAppToken(tok, -1)}
-                                class="pill-move"
-                              >
-                                ‹
-                              </button>`
-                            : nothing}
-                          <button
-                            type="button"
-                            aria-pressed="true"
-                            @click=${() => store.toggleDockAppToken(tok)}
-                            class="pill-toggle"
-                          >
-                            ✓ ${lbl}
-                          </button>
-                          ${idx < enabledDock.length - 1
-                            ? html`<button
-                                type="button"
-                                aria-label=${`Move ${lbl} right`}
-                                @click=${() => store.moveDockAppToken(tok, 1)}
-                                class="pill-move"
-                              >
-                                ›
-                              </button>`
-                            : nothing}
-                        </span>`;
-                      })}
-                      ${disabledDock.map(
-                        (app) => html`<span class="pill">
-                          <button
-                            type="button"
-                            aria-pressed="false"
-                            @click=${() => store.toggleDockAppToken(app.token)}
-                            class="pill-toggle"
-                          >
-                            + ${app.label}
-                          </button>
-                        </span>`,
+                      ${dockItems.map((item, idx) =>
+                        renderShortcutRow("dock_items", item, idx, dockItems.length),
                       )}
+                      <div class="shortcut-toolbar">
+                        <button
+                          type="button"
+                          id="btn-add-dock-item"
+                          ?disabled=${dockItems.length >= MAX_DOCK_ITEMS}
+                          @click=${() => store.openShortcutModal("dock_items", null)}
+                          class="btn btn-secondary"
+                        >
+                          Add Dock Item
+                        </button>
+                        <button
+                          type="button"
+                          id="btn-reset-dock-items"
+                          @click=${() => store.resetDockItemsToDefault()}
+                          class="btn btn-text"
+                        >
+                          Reset Default Dock
+                        </button>
+                      </div>
                     </div>`,
                   })}
                   ${renderSettingsRow({
@@ -930,6 +998,57 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
       </div>
 
       <div class="column">
+        ${renderCard({
+          id: "card-pinned-app",
+          heading: html`<h3 class="card-title">Pinned App</h3>`,
+          contentClass: "settings-list",
+          body: html`${renderSettingsRow({
+            id: "pinned-shortcuts-row",
+            label: "Pinned Shortcuts",
+            description:
+              "Assign Home Assistant entity quick actions or deep-link any Latter app or subpage (6 buttons per page, swipable vertically).",
+            stacked: true,
+            control: html`<div
+              id="pinned-shortcuts-container"
+              class="stack"
+              role="group"
+              aria-label="Pinned App shortcuts"
+            >
+              ${pinnedPages.length > 0
+                ? pinnedPages.map(
+                    (pg) => html`<div class="shortcut-page-group">
+                      <div class="shortcut-page-header">
+                        <span>Page ${pg.pageNum}</span>
+                        <span>${pg.items.length} of 6 Slots</span>
+                      </div>
+                      ${pg.items.map((item, localIdx) =>
+                        renderShortcutRow(
+                          "pinned_items",
+                          item,
+                          pg.startIdx + localIdx,
+                          pinnedItems.length,
+                        ),
+                      )}
+                    </div>`,
+                  )
+                : html`<p class="row-description">
+                    No pinned items configured yet. The Pinned icon stays hidden on the Home Dock until you add at least one item.
+                  </p>`}
+              <div class="shortcut-toolbar">
+                <button
+                  type="button"
+                  id="btn-add-pinned-item"
+                  ?disabled=${pinnedItems.length >= MAX_PINNED_ITEMS}
+                  @click=${() => store.openShortcutModal("pinned_items", null)}
+                  class="btn btn-primary"
+                >
+                  Add Pinned Item
+                </button>
+              </div>
+            </div>`,
+          })}`,
+        })}
+
         ${renderCard({
           heading: html`<h3 class="card-title">Area Controls</h3>`,
           contentClass: "settings-list",

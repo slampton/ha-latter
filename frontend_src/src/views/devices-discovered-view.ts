@@ -120,7 +120,7 @@ export function renderDevicesDiscoveredView(store: StudioStore): TemplateResult 
                 const title = d.title || d.node_name || "Latter Device";
                 const defGrpName =
                   groupNameMap.get(d.default_group) ||
-                  entityLabel((d.default_group || "unassigned").replace(/_/g, " "));
+                  entityLabel((d.default_group || "custom").replace(/_/g, " "));
                 const meta: string[] = [d.model_label || "Latter ESPHome Device"];
                 if (d.node_name) meta.push(`Node: ${d.node_name}`);
                 if (d.area_name) meta.push(`Area: ${d.area_name}`);
@@ -143,6 +143,9 @@ export function renderDevicesDiscoveredView(store: StudioStore): TemplateResult 
                     >
                       <option value="auto" ?selected=${curGrp === "auto"}>
                         Auto (${defGrpName})
+                      </option>
+                      <option value="custom" ?selected=${curGrp === "custom"}>
+                        Custom
                       </option>
                       ${groups.map(
                         (g) =>

@@ -65,12 +65,13 @@ class TestProtocolV3Contract(unittest.TestCase):
     def test_domain_field_counts_and_contiguous_indices(self) -> None:
         """Every v3 domain must have contiguous 3..COUNT-1 indices matching expected counts."""
         expected_counts = {
-            "area_context": 44,
+            "area_context": 43,
             "active_media": 15,
             "remote_config": 3,
             "weather_forecast": 14,
             "calendar_agenda": 2,
             "device_prefs": 53,
+            "shortcuts": 5,
         }
         domains = self.schema.get("domains", {})
         self.assertEqual(set(domains.keys()), set(expected_counts.keys()))
@@ -288,16 +289,20 @@ class TestRecordsFields(unittest.TestCase):
                 ("remote_config", "slots_summary"),
                 ("weather_forecast", "forecast_5d"),
                 ("calendar_agenda", "summary"),
+                ("shortcuts", "dock_items"),
+                ("shortcuts", "pinned_items"),
             },
         )
         ctx_src = (LATTER_DIR / "areas.py").read_text(encoding="utf-8")
         rem_src = (LATTER_DIR / "remotes.py").read_text(encoding="utf-8")
         feeds_src = (LATTER_DIR / "feeds.py").read_text(encoding="utf-8")
+        coord_src = (LATTER_DIR / "coordinator.py").read_text(encoding="utf-8")
         for builder in ("camera_records(", "intercom_target_records("):
             self.assertIn(builder, ctx_src)
         self.assertIn("remote_slot_records(", rem_src)
         self.assertIn("forecast_records(", feeds_src)
         self.assertIn("calendar_agenda_records(", feeds_src)
+        self.assertIn("shortcut_records(", coord_src)
 
     def test_cameras(self) -> None:
         self.assertEqual(self.layout("area_context", "cameras_summary"), ["entity_id", "name", "area_id", "snapshot_url"])
@@ -748,10 +753,21 @@ class TestStudioTargeting(unittest.TestCase):
         self.assertEqual(scope("save_system_config"), "system")
         self.assertEqual(scope("save_device_config"), "device")
         self.assertEqual(scope("esphome_entity_action"), "device")
-        # System actions that act on one Device name it in their payload, so they stay System commands.
-        for cmd in ("seed_group_baseline", "test_doorbell_speaker", "remove_device", "sync_device_group"):
+        # System actions that act on one Device or Group name it in their payload, so they stay System commands.
+        for cmd in ("update_group_baseline", "apply_batch_device_setting", "test_doorbell_speaker", "remove_device"):
             self.assertEqual(scope(cmd), "system", cmd)
-        for retired in ("save_config", "log_client_error", "export_backup_json", "restore_backup", "format_disk", "capture_profile", "apply_profile"):
+        for retired in (
+            "save_config",
+            "log_client_error",
+            "export_backup_json",
+            "restore_backup",
+            "format_disk",
+            "capture_profile",
+            "apply_profile",
+            "seed_group_baseline",
+            "sync_device_group",
+            "set_group_device_setting",
+        ):
             with self.assertRaises(studio_scope.UnknownStudioCommand):
                 scope(retired)
 
@@ -908,7 +924,8 @@ class TestResetPolicy(unittest.TestCase):
         "mac": "aa:bb:cc:dd:ee:ff",
         "device_slug": "desk_assistant",
         "ma_player_entity": "media_player.desk_assistant",
-        "dock_apps": "music,games",
+        "dock_items": [{"kind": "route", "target": "app:music", "action": "", "label": "", "icon": "", "confirm": False}],
+        "pinned_items": [{"kind": "entity", "target": "script.baby_help", "action": "turn_on", "label": "Baby Help", "icon": "mdi:baby-face-outline", "confirm": False}],
         "wallpaper_source": "upload:desk/beach.jpg",
         "wallpaper_favorites": ["a", "b"],
         "device_custom_color": "#FF0000",
@@ -924,7 +941,8 @@ class TestResetPolicy(unittest.TestCase):
         "sync_device_area": False,
         "area_handoff": False,
         "default_area": "office",
-        "dock_apps": "music,alarm,area,remote,games,tools",
+        "dock_items": studio_scope.default_dock_items(),
+        "pinned_items": [],
         "default_speaker": "media_player.desk_assistant_music",
         "esphome_device_id": "must_not_win",
     }
@@ -935,7 +953,8 @@ class TestResetPolicy(unittest.TestCase):
         )
         for key in ("esphome_device_id", "mac", "device_slug", "ma_player_entity"):
             self.assertEqual(out[key], self.CURRENT[key], key)
-        self.assertEqual(out["dock_apps"], self.DEFAULTS["dock_apps"])
+        self.assertEqual(out["dock_items"], self.DEFAULTS["dock_items"])
+        self.assertEqual(out["pinned_items"], [])
         self.assertEqual(out["default_area"], "office")
         self.assertFalse(out["native_ble_tracking"])
         for dropped in ("wallpaper_source", "wallpaper_favorites", "device_custom_color", "custom_palettes"):
@@ -1371,6 +1390,112 @@ class TestDiagnosticsSanitizer(unittest.TestCase):
             clean["sensors"]["calendar_agenda"]["records"],
             [["TODAY 14:30", "**REDACTED**", "**REDACTED**", "0"]],
         )
+
+
+class TestShortcutsProtocolAndPolicy(unittest.TestCase):
+    """Universal Shortcut Engine: normalization, confirm defaults, explicit security verbs, live state, and multi-chunk packing."""
+
+    def test_shortcut_item_normalization_and_confirm_defaults(self) -> None:
+        # Entity on App Dock defaults confirm=True; entity in Pinned defaults confirm=False
+        dock_ent = studio_scope.normalize_shortcut_item(
+            {"kind": "entity", "target": "Script.Baby_Help", "action": "turn_on", "label": "  Baby | Help  ", "icon": "baby_face_outline"},
+            is_dock=True,
+        )
+        assert dock_ent is not None
+        self.assertEqual(dock_ent["target"], "script.baby_help")
+        self.assertEqual(dock_ent["label"], "Baby Help")
+        self.assertEqual(dock_ent["icon"], "mdi:baby-face-outline")
+        self.assertTrue(dock_ent["confirm"])
+
+        pinned_ent = studio_scope.normalize_shortcut_item(
+            {"kind": "entity", "target": "light.nursery_lamp", "action": "toggle"},
+            is_dock=False,
+        )
+        assert pinned_ent is not None
+        self.assertFalse(pinned_ent["confirm"])
+
+        # Settings route is stripped on dock (always rendered last by firmware)
+        self.assertIsNone(
+            studio_scope.normalize_shortcut_item({"kind": "route", "target": "settings:root"}, is_dock=True)
+        )
+        # app:pinned is dock_only — rejected inside Pinned App
+        with self.assertRaises(ValueError):
+            studio_scope.normalize_shortcut_item({"kind": "route", "target": "app:pinned"}, is_dock=False)
+
+        # lock and alarm_control_panel NEVER allow toggle
+        for bad_target in ("lock.front_door", "alarm_control_panel.home_alarm"):
+            with self.assertRaises(ValueError):
+                studio_scope.normalize_shortcut_item(
+                    {"kind": "entity", "target": bad_target, "action": "toggle"},
+                    is_dock=False,
+                )
+
+    def test_live_state_and_entity_icon_resolution(self) -> None:
+        self.assertEqual(_PAYLOADS_MOD.resolve_shortcut_live_state("light", "on"), 1)
+        self.assertEqual(_PAYLOADS_MOD.resolve_shortcut_live_state("light", "off"), 0)
+        self.assertEqual(_PAYLOADS_MOD.resolve_shortcut_live_state("light", "unavailable"), 2)
+        self.assertEqual(_PAYLOADS_MOD.resolve_shortcut_live_state("scene", "scening"), -1)
+        self.assertEqual(_PAYLOADS_MOD.resolve_shortcut_live_state("lock", "unlocked"), 1)
+        self.assertEqual(_PAYLOADS_MOD.resolve_shortcut_live_state("lock", "locked"), 0)
+        self.assertEqual(_PAYLOADS_MOD.resolve_shortcut_live_state("cover", "open"), 1)
+        self.assertEqual(_PAYLOADS_MOD.resolve_shortcut_live_state("cover", "closed"), 0)
+        self.assertEqual(
+            _PAYLOADS_MOD.resolve_shortcut_entity_icon("cover", device_class="garage", state="open"),
+            "mdi:garage-open",
+        )
+        self.assertEqual(
+            _PAYLOADS_MOD.resolve_shortcut_entity_icon("switch", entity_icon="mdi:coffee-maker"),
+            "mdi:coffee-maker",
+        )
+
+    def test_multi_chunk_shortcuts_packing_shares_single_revision(self) -> None:
+        packer = DomainPayloadPacker(epoch=777)
+        dock_recs = _PAYLOADS_MOD.shortcut_records(
+            [
+                {"kind": "route", "target": "app:pinned", "action": "", "label": "", "icon": "", "confirm": False, "state": -1},
+                {"kind": "entity", "target": "scene.movie_night", "action": "turn_on", "label": "Movie", "icon": "mdi:movie-open", "confirm": True, "state": -1},
+            ],
+            max_records=studio_scope.MAX_DOCK_ITEMS,
+        )
+        pinned_items = [
+            {
+                "kind": "entity",
+                "target": f"switch.zone_{idx}",
+                "action": "toggle",
+                "label": f"Zone {idx}",
+                "icon": "mdi:toggle-switch",
+                "confirm": False,
+                "state": idx % 2,
+            }
+            for idx in range(25)
+        ]
+        pinned_recs = _PAYLOADS_MOD.shortcut_records(pinned_items, max_records=studio_scope.MAX_PINNED_ITEMS)
+        rev1, frames1 = packer.pack_shortcuts(dock_recs, pinned_recs)
+        self.assertEqual(rev1, 1)
+        self.assertEqual(len(frames1), 2)
+
+        # Chunk 0 carries dock_items + first 18 pinned items; Chunk 1 carries empty dock_items + remaining 7 pinned items
+        parts0 = frames1[0].split("\x1f")
+        parts1 = frames1[1].split("\x1f")
+        self.assertEqual(parts0[:5], ["v3", "777", "1", "0", "2"])
+        self.assertEqual(parts1[:5], ["v3", "777", "1", "1", "2"])
+        self.assertIn("app:pinned", parts0[5])
+        self.assertEqual(parts1[5], "")
+        self.assertEqual(parts0[6], "25")
+        self.assertEqual(parts1[6], "25")
+        self.assertEqual(len(parts0[7].split("\x1e")), 18)
+        self.assertEqual(len(parts1[7].split("\x1e")), 7)
+
+        # Identical snapshot preserves rev; mutated state increments rev across all chunks
+        rev_same, _ = packer.pack_shortcuts(dock_recs, pinned_recs)
+        self.assertEqual(rev_same, 1)
+        pinned_items[0]["state"] = 1
+        rev2, frames2 = packer.pack_shortcuts(
+            dock_recs,
+            _PAYLOADS_MOD.shortcut_records(pinned_items, max_records=studio_scope.MAX_PINNED_ITEMS),
+        )
+        self.assertEqual(rev2, 2)
+        self.assertTrue(all(f.startswith("v3\x1f777\x1f2\x1f") for f in frames2))
 
 
 if __name__ == "__main__":

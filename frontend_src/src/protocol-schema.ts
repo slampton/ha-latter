@@ -75,18 +75,73 @@ export const POWER_PROFILE_PREFS: Record<string, PowerProfileSettings> = {
 export interface CatalogItem {
   token: string;
   label: string;
+  group?: string;
+  dockOnly?: boolean;
+  capability?: string;
 }
 
-export const DOCK_APPS_CATALOG: ReadonlyArray<CatalogItem> = [
-  {token: "music", label: "Music"},
-  {token: "home_hub", label: "Home Hub"},
-  {token: "area", label: "Area"},
-  {token: "remote", label: "Remote"},
-  {token: "weather", label: "Weather"},
-  {token: "time", label: "Time"},
-  {token: "camera", label: "Cameras"},
-  {token: "games", label: "Games"},
-  {token: "tools", label: "Tools"},
+export const SHORTCUT_ROUTES_CATALOG: ReadonlyArray<CatalogItem> = [
+  {token: "app:pinned", label: "Pinned", group: "Apps", dockOnly: true},
+  {token: "app:music", label: "Music", group: "Apps"},
+  {token: "app:home_hub", label: "Home Hub", group: "Apps"},
+  {token: "app:area", label: "Area Control", group: "Apps"},
+  {token: "app:remote", label: "Remote", group: "Apps"},
+  {token: "app:weather", label: "Sky & Weather", group: "Apps"},
+  {token: "app:time", label: "Time", group: "Apps"},
+  {token: "app:tools", label: "Tools", group: "Apps"},
+  {token: "app:games", label: "Games", group: "Apps"},
+  {token: "app:clock", label: "Clock Face", group: "Apps"},
+  {token: "home_hub:alarm", label: "Security Alarm", group: "Home Hub"},
+  {token: "home_hub:cameras", label: "Cameras", group: "Home Hub"},
+  {token: "home_hub:intercom", label: "Intercom", group: "Home Hub"},
+  {token: "home_hub:thermostat", label: "Thermostat", group: "Home Hub"},
+  {token: "home_hub:entry", label: "Entry & Garage", group: "Home Hub"},
+  {token: "home_hub:vacuum", label: "Robot Vacuum", group: "Home Hub"},
+  {token: "area:picker", label: "Switch Area", group: "Area Control"},
+  {token: "area:scene", label: "Area: Scenes", group: "Area Control"},
+  {token: "area:light", label: "Area: Lights", group: "Area Control"},
+  {token: "area:cover", label: "Area: Blinds & Curtains", group: "Area Control"},
+  {token: "area:fan", label: "Area: Fans", group: "Area Control"},
+  {token: "area:switch", label: "Area: Switches", group: "Area Control"},
+  {token: "area:climate", label: "Area: Climate", group: "Area Control"},
+  {token: "area:media", label: "Area: Media", group: "Area Control"},
+  {token: "area:all", label: "Area: All Devices", group: "Area Control"},
+  {token: "weather:current", label: "Current Weather", group: "Sky & Weather"},
+  {token: "weather:forecast", label: "5-Day Forecast", group: "Sky & Weather"},
+  {token: "weather:sun", label: "Sun Path", group: "Sky & Weather"},
+  {token: "weather:moon", label: "Moon Phase", group: "Sky & Weather"},
+  {token: "time:clock", label: "World Clocks", group: "Time"},
+  {token: "time:timers", label: "Timers", group: "Time"},
+  {token: "time:alarms", label: "Alarms", group: "Time"},
+  {token: "time:stopwatch", label: "Stopwatch", group: "Time"},
+  {token: "music:speakers", label: "Speakers", group: "Music"},
+  {token: "music:library", label: "Music Library", group: "Music"},
+  {token: "music:favorites", label: "Favorites", group: "Music"},
+  {token: "music:playlists", label: "Playlists", group: "Music"},
+  {token: "music:queue", label: "Playback Queue", group: "Music"},
+  {token: "remote:devices", label: "Remote Devices", group: "Remote"},
+  {token: "tools:stopwatch", label: "Analog Chronograph", group: "Tools", capability: "round"},
+  {token: "tools:level", label: "Bubble Level", group: "Tools", capability: "imu"},
+  {token: "tools:flashlight", label: "Flashlight", group: "Tools"},
+  {token: "tools:calculator", label: "Calculator", group: "Tools"},
+  {token: "tools:calendar", label: "Calendar", group: "Tools"},
+  {token: "tools:dice", label: "Dice Roll", group: "Tools"},
+  {token: "tools:coin_flip", label: "Coin Flip", group: "Tools"},
+  {token: "games:marbles", label: "Marbles", group: "Games"},
+  {token: "games:archery", label: "Archery", group: "Games"},
+  {token: "games:bricks", label: "Bricks", group: "Games"},
+  {token: "games:chomp", label: "Chomp", group: "Games"},
+  {token: "games:2048", label: "2048", group: "Games"},
+  {token: "games:memory", label: "Memory Match", group: "Games"},
+  {token: "settings:display", label: "Display Settings", group: "Settings"},
+  {token: "settings:sleep", label: "Sleep & Wake", group: "Settings"},
+  {token: "settings:sound", label: "Sound Settings", group: "Settings"},
+  {token: "settings:voice", label: "Voice Settings", group: "Settings"},
+  {token: "settings:music", label: "Music Settings", group: "Settings"},
+  {token: "settings:home", label: "Home Settings", group: "Settings"},
+  {token: "settings:actions", label: "Device Actions", group: "Settings"},
+  {token: "settings:update", label: "Software Update", group: "Settings"},
+  {token: "settings:info", label: "System Info", group: "Settings"},
 ];
 
 export const ACTIVITY_SOURCES_CATALOG: ReadonlyArray<CatalogItem> = [
@@ -117,14 +172,15 @@ export const HOME_CATEGORIES_CATALOG: ReadonlyArray<CatalogItem> = [
   {token: "vacuum", label: "Robot Vacuum"},
 ];
 
-export const DEFAULT_DOCK_APPS = "music,home_hub,area,remote,games,tools";
-export const DEFAULT_DOCK_APPS_TOKENS: ReadonlyArray<string> = [
-  "music",
-  "home_hub",
-  "area",
-  "remote",
-  "games",
-  "tools",
+export const DEFAULT_DOCK_ROUTES = "app:pinned,app:music,app:home_hub,app:area,app:remote,app:games,app:tools";
+export const DEFAULT_DOCK_ROUTES_TOKENS: ReadonlyArray<string> = [
+  "app:pinned",
+  "app:music",
+  "app:home_hub",
+  "app:area",
+  "app:remote",
+  "app:games",
+  "app:tools",
 ];
 
 export const DEFAULT_ACTIVITY_CARD = "1";

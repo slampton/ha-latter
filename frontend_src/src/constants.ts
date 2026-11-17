@@ -6,9 +6,9 @@ import type { DeviceViewId, IssueItem, SecurityPinPolicy, StudioViewId, SystemVi
 import {
   POWER_PROFILE_PREFS,
   POWER_PROFILE_SUBKEYS,
-  DOCK_APPS_CATALOG,
-  DEFAULT_DOCK_APPS_TOKENS,
-  DEFAULT_DOCK_APPS,
+  SHORTCUT_ROUTES_CATALOG,
+  DEFAULT_DOCK_ROUTES_TOKENS,
+  DEFAULT_DOCK_ROUTES,
   AREA_CATEGORIES_CATALOG,
   DEFAULT_AREA_CATEGORIES_TOKENS,
   HOME_CATEGORIES_CATALOG,
@@ -19,9 +19,9 @@ import {
 export {
   POWER_PROFILE_PREFS,
   POWER_PROFILE_SUBKEYS,
-  DOCK_APPS_CATALOG,
-  DEFAULT_DOCK_APPS_TOKENS,
-  DEFAULT_DOCK_APPS,
+  SHORTCUT_ROUTES_CATALOG,
+  DEFAULT_DOCK_ROUTES_TOKENS,
+  DEFAULT_DOCK_ROUTES,
   AREA_CATEGORIES_CATALOG,
   DEFAULT_AREA_CATEGORIES_TOKENS,
   HOME_CATEGORIES_CATALOG,
@@ -29,7 +29,10 @@ export {
   ACTIVITY_SOURCES_CATALOG,
 };
 
-export const STUDIO_REV = 18;
+export const STUDIO_REV = 20;
+export const MAX_DOCK_ITEMS = 24;
+export const MAX_PINNED_ITEMS = 96;
+export const SHORTCUT_LABEL_MAX = 24;
 
 export const MAX_WALLPAPER_UPLOAD_BYTES = 15 * 1024 * 1024;
 
@@ -90,6 +93,7 @@ export const ISSUE_TEXT: Record<string, (issue: IssueItem) => string> = {
 
 export const START_SCREEN_OPTIONS: ReadonlyArray<string> = [
   "Home",
+  "Pinned",
   "Time App",
   "Clock Face",
   "Media",
@@ -198,13 +202,19 @@ export const WALLPAPER_ROTATION_OPTIONS: ReadonlyArray<{ value: number; label: s
 ];
 
 export const DEFAULT_DEVICE_GROUP_IDS = new Set([
-  "unassigned",
   "handhelds",
   "wearables",
-  "bedrooms",
-  "common_areas",
   "wall_panels",
 ]);
+
+export const GROUP_BEHAVIOR_NON_PREF_KEYS: ReadonlyArray<string> = [
+  "native_ble_tracking",
+  "ble_auto_switch",
+  "sync_device_area",
+  "area_follow_dwell_s",
+  "area_handoff",
+  "security_pin_policy",
+];
 
 export const LABEL_MINOR_WORDS = new Set([
   "a",

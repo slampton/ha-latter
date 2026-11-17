@@ -156,8 +156,8 @@ class TestViewLayout(unittest.TestCase):
         self.assertIn("Add BLE Tag", discovered_view)
         self.assertIn('id="latter-adopt-table-box"', discovered_view)
         self.assertIn('id="ble-adopt-table-box"', discovered_view)
-        self.assertEqual(latter_const.STUDIO_REV, 18)
-        self.assertIn("const STUDIO_REV = 18;", js)
+        self.assertEqual(latter_const.STUDIO_REV, 20)
+        self.assertIn("const STUDIO_REV = 20;", js)
         self.assertNotIn("fusion-area", js)
         self.assertNotIn("d.has_ble ||", js)
         self.assertNotIn(".area-presence-box.occupied", js)
@@ -279,7 +279,7 @@ class TestViewLayout(unittest.TestCase):
             )
         self.assertNotIn("Brightness &amp; Theme", js)
         self.assertNotIn("Brightness & Theme", js)
-        for title in ("Home Screen", "Home Controls", "Area Controls", "Media Player", "Remote Controls"):
+        for title in ("Home Screen", "Home Controls", "Pinned App", "Area Controls", "Media Player", "Remote Controls"):
             self.assertIn(f'<h3 class="card-title">{title}</h3>', interface_view)
         self.assertNotIn('<h3 class="card-title">Activity Card</h3>', interface_view)
         self.assertIn('id="home-categories-pills"', interface_view)
@@ -297,8 +297,8 @@ class TestViewLayout(unittest.TestCase):
         self.assertNotIn('id="device-remote-assignments-list"', remotes_view)
         self.assertNotIn("Export Settings", js)
         self.assertNotIn("Restore From File", js)
-        self.assertIn('<h3 class="card-title">Device Groups</h3>', groups)
-        self.assertIn('<h3 class="card-title">Group Controls &amp; Baseline</h3>', groups)
+        self.assertIn('title: "Device Groups"', groups)
+        self.assertIn('title: "Batch Controls"', groups)
         self.assertNotIn("Configuration Profiles", js)
         self.assertNotIn("dash-power-profile-select", overview)
         self.assertNotIn("quick-profile-select", overview)
@@ -309,9 +309,9 @@ class TestViewLayout(unittest.TestCase):
         self.assertIn('"btn-upload-sys-wp"', js)
         self.assertIn('id="st-status-chip"', overview)
         self.assertIn('class="status-tiles"', overview)
-        self.assertIn('class="kv-list status-assignments"', overview)
-        self.assertIn("<span>Device Group</span>", overview)
-        self.assertIn("<span>Remote Group</span>", overview)
+        self.assertIn('id: "card-device-assignments"', overview)
+        self.assertIn('label: "Device Group"', overview)
+        self.assertIn('label: "Remote Control Group"', overview)
         self.assertIn('store.switchView("tools")', overview)
         self.assertIn('store.switchView("interface")', overview)
         self.assertIn("renderQuickActionGrid(store, quickActionButtons)", overview)
@@ -324,8 +324,8 @@ class TestViewLayout(unittest.TestCase):
             overview.index('id="cfg-device_group"'),
             overview.index('id: "cfg-assigned_person"'),
         )
-        self.assertIn('id="dash-group-sync-chip"', overview)
-        self.assertIn('id="btn-reset-to-group"', overview)
+        self.assertIn('id="btn-save-custom-group"', overview)
+        self.assertIn('id="btn-manage-groups"', overview)
         self.assertIn('id="btn-open-in-ha"', overview)
         self.assertIn("Open in ESPHome", overview)
         self.assertNotIn("Open in Home Assistant", overview)
@@ -375,9 +375,11 @@ class TestViewLayout(unittest.TestCase):
         start = js.index('<section id="view-interface"')
         view = js[start:js.index("</section>", start)]
         self.assertIn('<h3 class="card-title">Home Screen</h3>', view)
+        self.assertIn('<h3 class="card-title">Pinned App</h3>', view)
         self.assertIn('<h3 class="card-title">Area Controls</h3>', view)
         self.assertIn('<h3 class="card-title">Remote Controls</h3>', view)
-        self.assertIn('id="dock-pills-container"', view)
+        self.assertIn('id="dock-shortcuts-container"', view)
+        self.assertIn('id="pinned-shortcuts-container"', view)
         self.assertIn('id="area-categories-pills"', view)
         self.assertNotIn('id="embedded-area-ui"', view)
         self.assertNotIn('id="embedded-home"', view)
@@ -478,8 +480,8 @@ class TestActivityCard(unittest.TestCase):
         self.assertIn("DEFAULT_ACTIVITY_CARD: Final = True\n", const_src)
         self.assertIn(f'DEFAULT_ACTIVITY_SOURCES: Final = "{protocol["defaults"]["activity_sources"]}"\n', const_src)
         fields = {f["name"]: f for f in protocol["domains"]["area_context"]["fields"]}
-        self.assertEqual((fields["activity_card"]["index"], fields["activity_card"]["type"]), (37, "bool"))
-        self.assertEqual((fields["activity_sources"]["index"], fields["activity_sources"]["type"]), (38, "csv"))
+        self.assertEqual((fields["activity_card"]["index"], fields["activity_card"]["type"]), (36, "bool"))
+        self.assertEqual((fields["activity_sources"]["index"], fields["activity_sources"]["type"]), (37, "csv"))
         self.assertIn("activity_card", settings.DEVICE_BOOL_KEYS)
         self.assertIn("activity_sources", settings.DEVICE_TEXT_KEYS)
         self.assertNotIn(
@@ -513,39 +515,62 @@ class TestActivityCard(unittest.TestCase):
             self.assertIn(f'label: "{label}"', js)
 
 
-class TestDockPolicy(unittest.TestCase):
-    """dock_apps is the one source for the Home dock: the firmware shows exactly the listed apps."""
+class TestShortcutPolicy(unittest.TestCase):
+    """dock_items and pinned_items share one Universal Shortcut Engine across Protocol v3, HA, and Studio."""
 
-    def test_normalize_and_parse(self) -> None:
-        self.assertEqual(
-            dock_policy.normalize_dock_apps(" Music,weather,area,music ,camera"),
-            "music,weather,area,camera",
+    def test_normalize_dock_and_pinned_lists(self) -> None:
+        dock_out = settings.normalize_dock_items(
+            [
+                {"kind": "route", "target": "app:pinned"},
+                {"kind": "route", "target": "weather:moon", "label": "Moon Phase"},
+                {"kind": "route", "target": "settings:root"},
+                {"kind": "entity", "target": "scene.evening", "action": "turn_on"},
+            ]
         )
-        for bad in ("", " , ", "music,spotify", "settings"):
+        self.assertEqual([it["target"] for it in dock_out], ["app:pinned", "weather:moon", "scene.evening"])
+        self.assertTrue(dock_out[2]["confirm"])
+
+        pinned_out = settings.normalize_pinned_items(
+            [
+                {"kind": "route", "target": "time:stopwatch"},
+                {"kind": "entity", "target": "script.baby_help", "action": "turn_on", "label": "Baby Help"},
+            ]
+        )
+        self.assertEqual([it["target"] for it in pinned_out], ["time:stopwatch", "script.baby_help"])
+        self.assertFalse(pinned_out[1]["confirm"])
+
+        for bad_pinned in (
+            [{"kind": "route", "target": "app:pinned"}],
+            [{"kind": "route", "target": "not:a_route"}],
+            [{"kind": "entity", "target": "lock.front", "action": "toggle"}],
+        ):
             with self.assertRaises(ValueError):
-                dock_policy.normalize_dock_apps(bad)
-        self.assertEqual(
-            dock_policy.parse_dock_apps("tools, weather,games,home_hub,junk"),
-            ["tools", "weather", "games", "home_hub"],
-        )
+                settings.normalize_pinned_items(bad_pinned, strict=True)
 
-    def test_one_default_and_one_token_set_in_both_repos(self) -> None:
-        protocol = json.loads((LATTER_DIR / "protocol_v3.json").read_text(encoding="utf-8"))
-        default = protocol["defaults"]["dock_apps"]
-        self.assertEqual(dock_policy.normalize_dock_apps(default), default)
+    def test_one_default_and_route_catalog_in_both_repos(self) -> None:
+        protocol_json = json.loads((LATTER_DIR / "protocol_v3.json").read_text(encoding="utf-8"))
+        default_routes = protocol_json["defaults"]["dock_routes"]
+        self.assertEqual(settings.DEFAULT_DOCK_ROUTES, default_routes)
         const_src = (LATTER_DIR / "const.py").read_text(encoding="utf-8")
-        self.assertIn(f'DEFAULT_DOCK_APPS: Final = "{default}"\n', const_src)
+        self.assertIn(f'DEFAULT_DOCK_ROUTES: Final = "{default_routes}"\n', const_src)
         js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
-        for tok in dock_policy.DOCK_APP_TOKENS:
-            target = "alarm" if tok == "home_hub" and 'token: "home_hub"' not in js else tok
-            self.assertIn(f'token: "{target}"', js)
-        self.assertEqual(protocol["ha_services"]["set_dock_apps"]["fields"], ["target_device", "dock_apps"])
-        self.assertNotIn("dock_switch", (LATTER_DIR / "coordinator.py").read_text(encoding="utf-8"))
+        for route in protocol_json["catalogs"]["shortcut_routes"]:
+            self.assertIn(f'token: "{route["token"]}"', js)
+        self.assertEqual(
+            protocol_json["ha_services"]["shortcut_action"]["fields"],
+            ["target_device", "entity_id", "action", "code"],
+        )
+        for key in ("dock_items", "pinned_items"):
+            self.assertIn(key, settings.DEVICE_SETTING_KEYS)
+            self.assertIn(key, groups.GROUP_APPEARANCE_DEVICE_KEYS)
+            self.assertIn(key, backup.DEVICE_CONFIG_EXPORT_KEYS)
+        self.assertNotIn("dock_apps", (LATTER_DIR / "coordinator.py").read_text(encoding="utf-8"))
+        self.assertNotIn("set_dock_apps", (LATTER_DIR / "services.py").read_text(encoding="utf-8"))
 
     def test_media_handoff_is_one_latter_setting(self) -> None:
-        protocol = json.loads((LATTER_DIR / "protocol_v3.json").read_text(encoding="utf-8"))
+        protocol_json = json.loads((LATTER_DIR / "protocol_v3.json").read_text(encoding="utf-8"))
         for svc in ("set_active_area", "area_browse"):
-            self.assertNotIn("handoff_media", protocol["ha_services"][svc]["fields"])
+            self.assertNotIn("handoff_media", protocol_json["ha_services"][svc]["fields"])
         services_src = (LATTER_DIR / "services.py").read_text(encoding="utf-8")
         self.assertNotIn('"handoff_media"', services_src)
         self.assertIn("area_handoff", settings.DEVICE_SETTING_KEYS)

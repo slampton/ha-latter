@@ -29,6 +29,9 @@ def _strip_module_syntax(ts_text: str) -> str:
 def _run_node_ts(ts_sources: list[Path], runner_js: str, preamble_js: str = "") -> object:
     """Strip TypeScript types via Node's built-in `module.stripTypeScriptTypes` and evaluate `runner_js`."""
     sources = list(ts_sources)
+    mdi_catalog = FRONTEND_SRC / "mdi-catalog.ts"
+    if mdi_catalog.exists() and mdi_catalog not in sources:
+        sources.insert(0, mdi_catalog)
     proto_schema = FRONTEND_SRC / "protocol-schema.ts"
     if proto_schema.exists() and proto_schema not in sources:
         sources.insert(0, proto_schema)
@@ -607,7 +610,13 @@ function makeStore({ weatherBgState = "Dynamic", cycleMins = 0, activeId = "", f
       return (keys || []).map((k) => this.getPref(k)).filter(Boolean);
     },
     getEnabledActivitySources() { return ["calendar"]; },
-    getEnabledDockTokens() { return ["area", "music"]; },
+    getDockItems() {
+      return [
+        { kind: "route", target: "app:area", action: "", label: "", icon: "", confirm: false },
+        { kind: "route", target: "app:music", action: "", label: "", icon: "", confirm: false },
+      ];
+    },
+    getPinnedItems() { return []; },
     getEnabledAreaCategories() { return ["scene", "light"]; },
     getEnabledHomeCategories() { return ["alarm", "thermostat", "entry", "vacuum"]; },
   };
@@ -699,9 +708,10 @@ return { offMarkup, dispWeatherOff, staticMarkup, rotatingMarkup, powerMarkup, a
         for saver_label in ("Docked Screensaver", "Screensaver Style", "Docked Idle Timeout"):
             self.assertNotIn(saver_label, got["powerMarkup"])
 
-        # 2. Interface view (D-033/D-034): navigation & structure only (Start Screen, Dock Apps, Area Categories pills, uncollapsed Library Sorting, Remote Control Group)
+        # 2. Interface view (D-033/D-034/D-047): navigation & structure only (Start Screen, App Dock, Pinned App, Area Categories pills, uncollapsed Library Sorting, Remote Control Group)
         self.assertIn("Start Screen", got["ifaceMarkup"])
-        self.assertIn('id="dock-pills-container"', got["ifaceMarkup"])
+        self.assertIn('id="dock-shortcuts-container"', got["ifaceMarkup"])
+        self.assertIn('id="pinned-shortcuts-container"', got["ifaceMarkup"])
         self.assertIn('id="area-categories-pills"', got["ifaceMarkup"])
         self.assertIn("✓ Scenes", got["ifaceMarkup"])
         self.assertIn("✓ Lights", got["ifaceMarkup"])
@@ -1237,8 +1247,9 @@ return {
             "Up to date",
             "Device Group",
             "Handhelds",
-            "Customized",
-            "Remote Group",
+            "Custom",
+            "Manage Groups",
+            "Remote Control Group",
             "Living Area TV",
             "Open in ESPHome",
             "Download Backup",
@@ -1402,7 +1413,13 @@ function makeInterfaceStore(homeEnabled) {
         start_screen: homeEnabled ? "Home" : "Home",
         return_to_home_timeout: "2 min",
         activity_card: true,
-        dock_apps: "music,home_hub,area,remote,games,tools",
+        dock_items: [
+          { kind: "route", target: "app:pinned", action: "", label: "", icon: "", confirm: false },
+          { kind: "route", target: "app:music", action: "", label: "", icon: "", confirm: false },
+        ],
+        pinned_items: [
+          { kind: "entity", target: "script.baby_help", action: "turn_on", label: "Baby Help", icon: "mdi:baby-face-outline", confirm: false },
+        ],
         local_clock_label: "Oakland",
         world_clocks: "Westminster|Europe/London;Kyoto|Asia/Tokyo",
         alarms_summary: "06:45|1|1;08:30|0|2;09:00|0|3",
@@ -1461,8 +1478,17 @@ function makeInterfaceStore(homeEnabled) {
     getPrefs(keys) {
       return (keys || []).map((k) => this.getPref(k)).filter(Boolean);
     },
-    getEnabledDockTokens() {
-      return ["music", "home_hub", "area", "remote", "games", "tools"];
+    getDockItems() {
+      return [
+        { kind: "route", target: "app:pinned", action: "", label: "", icon: "", confirm: false },
+        { kind: "route", target: "app:music", action: "", label: "", icon: "", confirm: false },
+        { kind: "route", target: "weather:moon", action: "", label: "Moon Phase", icon: "", confirm: false },
+      ];
+    },
+    getPinnedItems() {
+      return [
+        { kind: "entity", target: "script.baby_help", action: "turn_on", label: "Baby Help", icon: "mdi:baby-face-outline", confirm: false },
+      ];
     },
     getEnabledHomeCategories() {
       return ["alarm", "thermostat", "entry"];
@@ -1502,9 +1528,14 @@ return {
             "<option value=Home ?selected=>Home</option>",
             "Home Time Tap",
             "Return to Home Timeout",
-            "Dock Apps",
-            "+ Weather",
-            "+ Time",
+            "App Dock",
+            "Add Dock Item",
+            "Reset Default Dock",
+            "Moon Phase",
+            "Pinned App",
+            "Add Pinned Item",
+            "Baby Help",
+            "Page 1",
             "Show the Activity Card",
             "Activity Card Sources",
             "Home Controls",
@@ -1524,15 +1555,18 @@ return {
         self.assertIn("Enable Home Screen", single_html)
         self.assertIn("Start Screen", single_html)
         self.assertIn(".value=Time App", single_html)
+        self.assertIn("<option value=Pinned ?selected=>Pinned</option>", single_html)
         self.assertIn("<option value=Time App ?selected=>Time App</option>", single_html)
         self.assertIn("<option value=Clock Face ?selected=>Clock Face</option>", single_html)
         self.assertIn("<option value=Home Hub ?selected=>Home Hub</option>", single_html)
         self.assertNotIn("<option value=Home ?selected=>Home</option>", single_html)
         self.assertNotIn("Home Time Tap", single_html)
         self.assertNotIn("Return to Home Timeout", single_html)
-        self.assertNotIn("Dock Apps", single_html)
+        self.assertNotIn('id="dock-shortcuts-container"', single_html)
+        self.assertNotIn("Add Dock Item", single_html)
         self.assertNotIn("Show the Activity Card", single_html)
         self.assertNotIn("Activity Card Sources", single_html)
+        self.assertIn('<h3 class="card-title">Pinned App</h3>', single_html)
         self.assertIn("Home Controls", single_html)
         self.assertIn('<h3 class="card-title">Time</h3>', single_html)
 
@@ -1609,7 +1643,8 @@ const store = {
       start_screen: "Home",
       return_to_home_timeout: "2 min",
       activity_card: true,
-      dock_apps: "music,tools",
+      dock_items: [],
+      pinned_items: [],
       local_clock_label: "",
       world_clocks: "Westminster|Europe/London",
       alarms_summary: "07:00|0|1;08:30|0|2;09:00|0|2",
@@ -1620,7 +1655,8 @@ const store = {
   getSectionItems() { return []; },
   getPref() { return undefined; },
   getPrefs() { return []; },
-  getEnabledDockTokens() { return ["music", "tools"]; },
+  getDockItems() { return []; },
+  getPinnedItems() { return []; },
   getEnabledHomeCategories() { return []; },
   getEnabledAreaCategories() { return []; },
   getEnabledActivitySources() { return []; },
@@ -2491,21 +2527,26 @@ return {
                     "executeEntityActionOp",
                     "flushDeviceBucketOp",
                     "flushSystemSettingsOp",
+                    "getDockItemsOp",
                     "getEnabledActivitySourcesOp",
                     "getEnabledAreaCategoriesOp",
-                    "getEnabledDockTokensOp",
                     "getEnabledHomeCategoriesOp",
+                    "getPinnedItemsOp",
                     "moveAreaCategoryTokenOp",
-                    "moveDockAppTokenOp",
                     "moveHomeCategoryTokenOp",
+                    "moveShortcutItemOp",
+                    "openShortcutModalOp",
                     "overlayDevicePrefsOnSections",
                     "overlayPendingBlankListSlots",
                     "overlayPendingEntityStates",
                     "previewCameraOp",
                     "removeRemoteGroupRowOp",
+                    "removeShortcutItemOp",
                     "removeStringListRowOp",
                     "removeVolumeOverrideRowOp",
+                    "resetDockItemsToDefaultOp",
                     "runDeviceActionOp",
+                    "saveShortcutModalOp",
                     "selectWallpaperSourceOp",
                     "setAllWallpaperFavoritesOp",
                     "setWallpaperRotationOp",
@@ -2514,7 +2555,6 @@ return {
                     "testDoorbellSpeakerOp",
                     "toggleActivitySourceOp",
                     "toggleAreaCategoryTokenOp",
-                    "toggleDockAppTokenOp",
                     "toggleHomeCategoryTokenOp",
                     "toggleRemoteInGroupOp",
                     "toggleWallpaperFavOp",

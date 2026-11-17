@@ -39,7 +39,6 @@ from ..const import (
     CONF_DEVICE_GROUP,
     CONF_DEVICE_GROUPS,
     CONF_DEVICE_REMOTE_GROUP,
-    CONF_DOCK_APPS,
     CONF_ESPHOME_DEVICE_ID,
     CONF_MA_PLAYER_ENTITY,
     CONF_SECURITY_PIN,
@@ -48,6 +47,7 @@ from ..const import (
     CONF_WALLPAPER_FAVORITES,
     CONF_WALLPAPER_SOURCE,
     DATA_GLOBAL_CONFIG,
+    DEFAULT_DEVICE_GROUP,
     DEFAULT_DEVICE_REMOTE_GROUP,
     DOMAIN,
     GLOBAL_CONFIG_KEYS,
@@ -60,10 +60,12 @@ from ..const import (
 from ..coordinator import LatterCoordinator
 from ..doorbell import async_execute_doorbell_intercom
 from ..groups import (
+    DEFAULT_DEVICE_GROUPS,
     GROUP_APPEARANCE_DEVICE_KEYS,
     GROUP_BEHAVIOR_DEVICE_KEYS,
     async_apply_group_baseline_to_coordinators,
     async_reset_device,
+    default_group_baseline_config,
     get_device_groups,
     seed_group_baseline_from_coordinator,
 )
@@ -85,7 +87,7 @@ from ..presence import (
     get_area_signatures_summary,
     get_ble_fabric,
 )
-from ..protocol import hash_security_pin, normalize_activity_sources, normalize_dock_apps
+from ..protocol import hash_security_pin, normalize_activity_sources
 from ..wallpapers import (
     async_refresh_wallpaper_cache,
     delete_uploaded_wallpaper,
@@ -676,8 +678,6 @@ async def _cmd_save_device_config(
             )
 
     try:
-        if CONF_DOCK_APPS in updates:
-            updates[CONF_DOCK_APPS] = normalize_dock_apps(updates[CONF_DOCK_APPS])
         if CONF_ACTIVITY_SOURCES in updates:
             updates[CONF_ACTIVITY_SOURCES] = normalize_activity_sources(
                 updates[CONF_ACTIVITY_SOURCES]
@@ -706,19 +706,32 @@ async def _cmd_save_device_config(
     ma_link_changed = merged_device.get(CONF_MA_PLAYER_ENTITY, "") != current.get(
         CONF_MA_PLAYER_ENTITY, ""
     )
+    group_in_updates = CONF_DEVICE_GROUP in updates
     new_grp_id = str(merged_device.get(CONF_DEVICE_GROUP) or "").strip()
-    old_grp_id = str(current.get(CONF_DEVICE_GROUP) or "").strip()
-    group_changed = bool(new_grp_id and new_grp_id != old_grp_id)
-    if merged_device != current:
-        coordinator.update_device_config(merged_device)
+    old_grp_id = coordinator.device_group
+    target_grp: dict[str, Any] | None = None
+    if group_in_updates:
+        if new_grp_id in ("", DEFAULT_DEVICE_GROUP, "unassigned"):
+            new_grp_id = DEFAULT_DEVICE_GROUP
+            merged_device[CONF_DEVICE_GROUP] = DEFAULT_DEVICE_GROUP
+        else:
+            groups = get_device_groups(hass)
+            target_grp = next((g for g in groups if g.get("id") == new_grp_id), None)
+            if target_grp is None:
+                raise StudioCommandError(
+                    "not_found", f"Unknown Device Group '{new_grp_id}'"
+                )
+            merged_device[CONF_DEVICE_GROUP] = new_grp_id
+    group_changed = bool(group_in_updates and new_grp_id != old_grp_id)
+    if merged_device != current or group_changed:
+        coordinator.update_device_config(
+            merged_device, preserve_group=(target_grp is not None)
+        )
         await coordinator.async_apply_options()
-    if group_changed and new_grp_id != "unassigned":
-        groups = get_device_groups(hass)
-        grp = next((g for g in groups if g.get("id") == new_grp_id), None)
-        if grp is not None:
-            await async_apply_group_baseline_to_coordinators(
-                hass, grp, [coordinator]
-            )
+    if target_grp is not None:
+        await async_apply_group_baseline_to_coordinators(
+            hass, target_grp, [coordinator]
+        )
     if ma_link_changed:
         async_refresh_ma_link(hass, coordinator)
     coordinator._bind_wallpaper_cycle_timer()
@@ -802,7 +815,9 @@ async def _cmd_add_latter_device(
             f"'{_device_title(dev)}' is already managed in Latter",
         )
     raw_group = str(body.get("device_group") or "auto").strip() or "auto"
-    if raw_group != "auto" and not any(
+    if raw_group == "unassigned":
+        raw_group = DEFAULT_DEVICE_GROUP
+    if raw_group not in ("auto", DEFAULT_DEVICE_GROUP) and not any(
         g.get("id") == raw_group for g in get_device_groups(hass)
     ):
         raise StudioCommandError("not_found", f"Unknown Device Group '{raw_group}'")
@@ -881,22 +896,47 @@ async def _cmd_create_device_group(
     if not g_name:
         raise StudioCommandError("invalid_format", "A Device Group needs a name")
     g_id = re.sub(r"[^a-z0-9]+", "_", g_name.lower()).strip("_") or "group"
+    if g_id in ("auto", DEFAULT_DEVICE_GROUP, "unassigned", "all", "roaming", "stationary"):
+        raise StudioCommandError(
+            "invalid_format", f"'{g_name}' is a reserved Device Group name"
+        )
     groups = get_device_groups(hass)
     if any(g.get("id") == g_id for g in groups):
         raise StudioCommandError(
             "already_configured", f"A group named '{g_name}' already exists"
         )
-    groups.append(
-        {
-            "id": g_id,
-            "name": g_name,
-            "description": g_desc or f"Custom group ({g_name})",
-            "device_config": {},
-        }
-    )
+    source_sub_id = str(
+        body.get("source_subentry_id") or body.get("subentry_id") or ""
+    ).strip()
+    assign_source = bool(body.get("assign_source"))
+    source_coord: LatterCoordinator | None = None
+    if source_sub_id:
+        source_coord = find_by_subentry_id(iter_coordinators(hass), source_sub_id)
+        if source_coord is None or source_coord.is_ble_tag:
+            raise StudioCommandError(
+                "not_found", f"No Latter Device with subentry_id '{source_sub_id}'"
+            )
+
+    new_group: dict[str, Any] = {
+        "id": g_id,
+        "name": g_name,
+        "description": g_desc or f"Custom group ({g_name})",
+        "builtin": False,
+        "device_config": default_group_baseline_config(),
+    }
+    if source_coord is not None:
+        seed_group_baseline_from_coordinator(hass, new_group, source_coord)
+
+    groups.append(new_group)
     await async_save_and_broadcast_global_config(
         hass, {CONF_DEVICE_GROUPS: groups}
     )
+    if assign_source and source_coord is not None:
+        source_coord.update_device_config(
+            {**source_coord.device_data, CONF_DEVICE_GROUP: g_id},
+            preserve_group=True,
+        )
+        source_coord.async_notify_listeners()
 
 
 async def _cmd_delete_device_group(
@@ -907,47 +947,24 @@ async def _cmd_delete_device_group(
     _extra: dict[str, Any],
 ) -> None:
     g_id = str(body.get("group_id") or "").strip()
+    if any(b["id"] == g_id for b in DEFAULT_DEVICE_GROUPS):
+        raise StudioCommandError(
+            "not_allowed", "Built-in Device Groups cannot be deleted"
+        )
     groups = get_device_groups(hass)
     groups = [g for g in groups if g.get("id") != g_id]
     await async_save_and_broadcast_global_config(
         hass, {CONF_DEVICE_GROUPS: groups}
     )
-
-
-async def _cmd_sync_device_group(
-    hass: HomeAssistant,
-    _coordinator: LatterCoordinator | None,
-    body: dict[str, Any],
-    _global_cfg: dict[str, Any],
-    _extra: dict[str, Any],
-) -> None:
-    g_id = str(body.get("group_id") or "").strip()
-    sub_id = str(body.get("subentry_id") or "").strip()
-    groups = get_device_groups(hass)
-    all_coords = iter_coordinators(hass)
-    if sub_id:
-        target_coord = find_by_subentry_id(all_coords, sub_id)
-        if target_coord is None:
-            raise StudioCommandError(
-                "not_found", f"No Latter Device with subentry_id '{sub_id}'"
+    for c in iter_coordinators(hass):
+        if not c.is_ble_tag and str(c.get_opt(CONF_DEVICE_GROUP) or "").strip() == g_id:
+            c.update_device_config(
+                {**c.device_data, CONF_DEVICE_GROUP: DEFAULT_DEVICE_GROUP}
             )
-        g_id = g_id or target_coord.device_group
-        targets = [target_coord]
-    else:
-        targets = [c for c in all_coords if c.device_group == g_id]
-    grp = next((g for g in groups if g.get("id") == g_id), None)
-    if grp is None:
-        raise StudioCommandError("not_found", f"Unknown Device Group '{g_id}'")
-    await async_apply_group_baseline_to_coordinators(hass, grp, targets)
-    log_studio_event(
-        hass,
-        "INFO",
-        "studio",
-        f"Synced {len(targets)} device(s) to group '{grp.get('name', g_id)}' baseline",
-    )
+            c.async_notify_listeners()
 
 
-async def _cmd_seed_group_baseline(
+async def _cmd_update_group_baseline(
     hass: HomeAssistant,
     _coordinator: LatterCoordinator | None,
     body: dict[str, Any],
@@ -955,58 +972,102 @@ async def _cmd_seed_group_baseline(
     _extra: dict[str, Any],
 ) -> None:
     g_id = str(body.get("group_id") or "").strip()
-    source_coord = _payload_device(
-        hass, body, "the Device to seed the group baseline from"
-    )
     groups = get_device_groups(hass)
     grp = next((g for g in groups if g.get("id") == g_id), None)
     if grp is None:
         raise StudioCommandError("not_found", f"Unknown Device Group '{g_id}'")
-    seed_group_baseline_from_coordinator(hass, grp, source_coord)
+
+    all_coords = iter_coordinators(hass)
+    member_targets = [
+        c for c in all_coords if not c.is_ble_tag and c.device_group == g_id
+    ]
+
+    source_sub_id = str(
+        body.get("source_subentry_id") or body.get("subentry_id") or ""
+    ).strip()
+    raw_updates = dict(body.get("config") or {})
+    did_update = False
+
+    if source_sub_id:
+        source_coord = find_by_subentry_id(all_coords, source_sub_id)
+        if source_coord is None or source_coord.is_ble_tag:
+            raise StudioCommandError(
+                "not_found", f"No Latter Device with subentry_id '{source_sub_id}'"
+            )
+        seed_group_baseline_from_coordinator(hass, grp, source_coord)
+        did_update = True
+
+    if raw_updates:
+        filtered = {
+            k: v for k, v in raw_updates.items() if k in GROUP_BEHAVIOR_DEVICE_KEYS
+        }
+        if not filtered:
+            raise StudioCommandError(
+                "invalid_format",
+                "Group baselines store operational settings only; use Batch Controls for appearance overrides",
+            )
+        cleaned = clean_device_settings(filtered, current=grp.get("device_config"))
+        behavior_updates = {
+            k: v for k, v in cleaned.items() if k in GROUP_BEHAVIOR_DEVICE_KEYS
+        }
+        if behavior_updates:
+            dev_cfg = dict(grp.get("device_config") or default_group_baseline_config())
+            dev_cfg.update(behavior_updates)
+            grp["device_config"] = dev_cfg
+            did_update = True
+
+    if not did_update:
+        raise StudioCommandError(
+            "invalid_format",
+            "Provide operational settings or a source Device to update the group baseline",
+        )
+
     await async_save_and_broadcast_global_config(
         hass, {CONF_DEVICE_GROUPS: groups}
     )
+    if member_targets:
+        await async_apply_group_baseline_to_coordinators(hass, grp, member_targets)
     log_studio_event(
         hass,
         "INFO",
         "studio",
-        f"Updated '{grp.get('name', g_id)}' baseline from '{source_coord.device_slug}'",
+        f"Updated baseline for '{grp.get('name', g_id)}' ({len(member_targets)} Device(s))",
     )
 
 
-async def _cmd_set_group_device_setting(
+async def _cmd_apply_batch_device_setting(
     hass: HomeAssistant,
     _coordinator: LatterCoordinator | None,
     body: dict[str, Any],
     _global_cfg: dict[str, Any],
     _extra: dict[str, Any],
 ) -> None:
-    g_id = str(body.get("group_id") or "all").strip()
+    raw_target = str(body.get("target") or body.get("group_id") or "all").strip()
+    if raw_target.startswith(("group:", "trait:")):
+        target_id = raw_target[6:].strip()
+    else:
+        target_id = raw_target or "all"
+
     raw_updates = dict(body.get("config") or {})
     allowed_keys = set(GROUP_BEHAVIOR_DEVICE_KEYS) | set(GROUP_APPEARANCE_DEVICE_KEYS)
     filtered = {k: v for k, v in raw_updates.items() if k in allowed_keys}
     if not filtered:
         raise StudioCommandError(
-            "invalid_format", "No supported group device settings in payload"
+            "invalid_format", "No supported batch device settings in payload"
         )
-    groups = get_device_groups(hass) if g_id not in ("all", "roaming", "stationary") else []
-    grp = next((g for g in groups if g.get("id") == g_id), None)
-    cleaned = clean_device_settings(
-        filtered, current=(grp.get("device_config") if grp is not None else None)
-    )
-    all_coords = iter_coordinators(hass)
-    if g_id == "all":
-        targets = [c for c in all_coords if not c.is_ble_tag]
-    elif g_id == "roaming":
-        targets = [c for c in all_coords if not c.is_ble_tag and c.is_roaming_device]
-    elif g_id == "stationary":
-        targets = [
-            c for c in all_coords if not c.is_ble_tag and not c.is_roaming_device
-        ]
+    # Validate syntax once even if 0 target devices match
+    clean_device_settings(filtered, current=None)
+
+    all_coords = [c for c in iter_coordinators(hass) if not c.is_ble_tag]
+    if target_id == "all":
+        targets = all_coords
+    elif target_id == "roaming":
+        targets = [c for c in all_coords if c.is_roaming_device]
+    elif target_id == "stationary":
+        targets = [c for c in all_coords if not c.is_roaming_device]
     else:
-        targets = [
-            c for c in all_coords if not c.is_ble_tag and c.device_group == g_id
-        ]
+        targets = [c for c in all_coords if c.device_group == target_id]
+
     for c in targets:
         dev_cleaned = clean_device_settings(filtered, current=c.device_data)
         merged = {**c.device_data, **dev_cleaned}
@@ -1015,17 +1076,6 @@ async def _cmd_set_group_device_setting(
             await c.async_apply_options()
             c._bind_wallpaper_cycle_timer()
             c.async_notify_listeners()
-    if grp is not None:
-        behavior_updates = {
-            k: v for k, v in cleaned.items() if k in GROUP_BEHAVIOR_DEVICE_KEYS
-        }
-        if behavior_updates:
-            dev_cfg = dict(grp.get("device_config") or {})
-            dev_cfg.update(behavior_updates)
-            grp["device_config"] = dev_cfg
-            await async_save_and_broadcast_global_config(
-                hass, {CONF_DEVICE_GROUPS: groups}
-            )
 
 
 async def _cmd_rotate_signing_key(
@@ -1120,9 +1170,8 @@ _STUDIO_COMMAND_HANDLERS: dict[str, _CommandHandler] = {
     "add_ble_device": _cmd_add_ble_device,
     "create_device_group": _cmd_create_device_group,
     "delete_device_group": _cmd_delete_device_group,
-    "sync_device_group": _cmd_sync_device_group,
-    "seed_group_baseline": _cmd_seed_group_baseline,
-    "set_group_device_setting": _cmd_set_group_device_setting,
+    "update_group_baseline": _cmd_update_group_baseline,
+    "apply_batch_device_setting": _cmd_apply_batch_device_setting,
     "rotate_signing_key": _cmd_rotate_signing_key,
     "set_security_pin": _cmd_set_security_pin,
 }

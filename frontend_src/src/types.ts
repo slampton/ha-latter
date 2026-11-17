@@ -77,6 +77,24 @@ export interface AreaChoice {
   name: string;
 }
 
+export interface ShortcutItem {
+  kind: "route" | "entity";
+  target: string;
+  action: string;
+  label: string;
+  icon: string;
+  confirm: boolean;
+}
+
+export interface ShortcutEntityOption {
+  id: string;
+  name: string;
+  domain: string;
+  device_class: string;
+  icon: string;
+  area_name: string;
+}
+
 export interface EntityCatalog {
   areas?: AreaChoice[];
   ma_speakers?: CatalogChoice[];
@@ -92,6 +110,7 @@ export interface EntityCatalog {
   weathers?: CatalogChoice[];
   calendars?: CatalogChoice[];
   persons?: CatalogChoice[];
+  shortcut_entities?: ShortcutEntityOption[];
 }
 
 export interface BleSurveyRow {
@@ -121,15 +140,6 @@ export interface BleAreaSignatureSummary {
   captured_at: string;
 }
 
-export type GroupSyncStatus =
-  | "in_sync"
-  | "customized"
-  | string
-  | {
-      in_sync?: boolean;
-      status?: string;
-    };
-
 export interface SystemDeviceEntry {
   subentry_id: string;
   device_slug: string;
@@ -145,7 +155,6 @@ export interface SystemDeviceEntry {
   device_group: string;
   device_remote_group: string;
   device_group_name: string;
-  group_sync_status?: GroupSyncStatus | null;
   assigned_person: string;
   active_area_name: string;
   is_latter_native: boolean;
@@ -248,7 +257,8 @@ export interface DeviceConfig {
   area_follow_dwell_s?: number;
   area_handoff?: boolean;
   device_custom_color?: string;
-  dock_apps?: string;
+  dock_items?: ShortcutItem[];
+  pinned_items?: ShortcutItem[];
   area_categories?: string;
   home_categories?: string;
   activity_card?: boolean;
@@ -262,6 +272,8 @@ export interface DeviceConfig {
 
 export interface DeviceCapabilities {
   has_display?: boolean;
+  has_imu?: boolean;
+  is_round?: boolean;
   has_power?: boolean;
   has_voice?: boolean;
   has_audio?: boolean;
@@ -419,7 +431,6 @@ export interface LogEntry {
 export interface LiveDeviceSection {
   active_area_name?: string;
   ma_link_matched?: boolean;
-  group_sync_status?: GroupSyncStatus | null;
   ble_closest_proxy?: string;
   ble_detected_ref_power?: number | null;
   area_presence_grid?: AreaPresenceRow[];
@@ -429,6 +440,15 @@ export interface LiveDeviceSection {
   fw_update_available?: boolean;
   effective_security_pin_policy?: string;
   has_security_pin?: boolean;
+}
+
+export interface QuickActionPayloadItem {
+  key: string;
+  device_command: string;
+  label: string;
+  domain: string;
+  state: string;
+  device_class?: string;
 }
 
 export interface DeviceLinks {
@@ -458,6 +478,8 @@ export interface StudioStatePayload {
   capabilities: DeviceCapabilities;
   config: DeviceConfig;
   device_prefs?: DevicePrefItem[];
+  quick_actions?: QuickActionPayloadItem[];
+  speaker_volume?: EspHomeEntityItem | null;
   esphome: EspHomeInspector;
   wallpapers: WallpaperItem[];
   links?: DeviceLinks;

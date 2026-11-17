@@ -8,17 +8,23 @@ import {
   ACTIVITY_SOURCES_CATALOG,
   AREA_CATEGORIES_CATALOG,
   DEFAULT_AREA_CATEGORIES_TOKENS,
-  DEFAULT_DOCK_APPS_TOKENS,
+  DEFAULT_DOCK_ROUTES_TOKENS,
   DEFAULT_HOME_CATEGORIES_TOKENS,
-  DOCK_APPS_CATALOG,
+  GROUP_BEHAVIOR_NON_PREF_KEYS,
   HOME_CATEGORIES_CATALOG,
+  MAX_DOCK_ITEMS,
+  MAX_PINNED_ITEMS,
   POWER_PROFILE_PREFS,
   POWER_PROFILE_SUBKEYS,
+  SHORTCUT_LABEL_MAX,
+  SHORTCUT_ROUTES_CATALOG,
 } from "../constants.js";
+import { normalizeMdiIconSlug, SHORTCUT_DOMAIN_ACTIONS } from "../mdi-catalog.js";
 import type {
   CustomPalette,
   DeviceConfig,
   RemoteGroup,
+  ShortcutItem,
   StudioScope,
   StudioStatePayload,
   SystemConfig,
@@ -151,6 +157,7 @@ const ENTITY_OPTIMISTIC_TTL_MS = 8000;
 export const PENDING_ENTITY_STATES = new Map<string, PendingEntityEntry>();
 
 const POWER_PROFILE_SUBKEY_SET = new Set<string>(POWER_PROFILE_SUBKEYS);
+const BEHAVIOR_NON_PREF_KEY_SET = new Set<string>(GROUP_BEHAVIOR_NON_PREF_KEYS);
 
 function expandDevicePrefPatch(
   currentCfg: Record<string, unknown>,
@@ -197,10 +204,64 @@ export function overlayDevicePrefsOnSections(
   if (!rawPatch || Object.keys(rawPatch).length === 0) return;
   const curCfg = (payload.config || {}) as Record<string, unknown>;
   const expanded = expandDevicePrefPatch(curCfg, rawPatch);
+  const groups = payload.device_groups || [];
+  const supportedPrefKeys = new Set((payload.device_prefs || []).map((p) => p.key));
+  const behaviorPrefKeys = new Set(
+    (payload.device_prefs || []).filter((p) => p.group_tier === "behavior").map((p) => p.key),
+  );
+  const isRoaming = curCfg.is_roaming !== false;
+
+  if ("device_group" in rawPatch) {
+    const targetGrpId = String(rawPatch.device_group || "custom").trim() || "custom";
+    expanded.device_group = targetGrpId;
+    if (targetGrpId !== "custom") {
+      const grp = groups.find((g) => g.id === targetGrpId);
+      if (grp?.device_config) {
+        for (const [gk, gv] of Object.entries(grp.device_config)) {
+          if (gk in rawPatch || gv === undefined || gv === null) continue;
+          if ((gk === "sync_device_area" || gk === "area_follow_dwell_s") && !isRoaming) continue;
+          if (BEHAVIOR_NON_PREF_KEY_SET.has(gk) || supportedPrefKeys.has(gk)) {
+            expanded[gk] = gv;
+          }
+        }
+      }
+    }
+  } else {
+    const curGrpId = String(curCfg.device_group || "custom").trim() || "custom";
+    if (curGrpId !== "custom") {
+      const grp = groups.find((g) => g.id === curGrpId);
+      if (grp?.device_config) {
+        for (const [ek, ev] of Object.entries(expanded)) {
+          if ((ek === "sync_device_area" || ek === "area_follow_dwell_s") && !isRoaming) continue;
+          if (
+            (BEHAVIOR_NON_PREF_KEY_SET.has(ek) || behaviorPrefKeys.has(ek)) &&
+            grp.device_config[ek] !== undefined &&
+            String(grp.device_config[ek]) !== String(ev)
+          ) {
+            expanded.device_group = "custom";
+            break;
+          }
+        }
+      }
+    }
+  }
+
   payload.config = {
     ...payload.config,
     ...expanded,
   };
+  if ("device_group" in expanded && Array.isArray(payload.system_devices) && payload.subentry_id) {
+    const nextGrp = String(expanded.device_group || "custom");
+    const nextGrpName =
+      nextGrp === "custom"
+        ? "Custom"
+        : groups.find((g) => g.id === nextGrp)?.name || nextGrp;
+    payload.system_devices = payload.system_devices.map((d) =>
+      d.subentry_id === payload.subentry_id
+        ? { ...d, device_group: nextGrp, device_group_name: nextGrpName }
+        : d,
+    );
+  }
   if (payload.device_prefs) {
     payload.device_prefs = payload.device_prefs.map((p) => {
       if (p.key in expanded) {
@@ -314,6 +375,7 @@ export function stageDeviceSettingOp(
     }
   };
   snapshotKey(key);
+  snapshotKey("device_group");
   if (key === "home_screen_enabled") {
     snapshotKey("start_screen");
   }
@@ -632,42 +694,322 @@ export async function runDeviceActionOp(
   }
 }
 
-export function getEnabledDockTokensOp(store: StudioStore): string[] {
-  const raw = String(store.state?.config?.dock_apps ?? "");
-  if (!raw.trim()) {
-    return [...DEFAULT_DOCK_APPS_TOKENS];
+export function sanitizeShortcutLabel(raw: unknown): string {
+  const str = String(raw ?? "");
+  let collapsed = "";
+  let prevSpace = true;
+  for (const ch of str) {
+    const code = ch.charCodeAt(0);
+    if (
+      code < 0x20 ||
+      code === 0x7f ||
+      ch === "|" ||
+      ch === "\x1e" ||
+      ch === "\x1f" ||
+      ch === " " ||
+      ch === "\t" ||
+      ch === "\r" ||
+      ch === "\n"
+    ) {
+      if (!prevSpace) {
+        collapsed += " ";
+        prevSpace = true;
+      }
+      continue;
+    }
+    collapsed += ch;
+    prevSpace = false;
   }
-  const known = new Set(DOCK_APPS_CATALOG.map((a) => a.token));
-  const parsed = raw
-    .split(",")
-    .map((s) => s.trim())
-    .filter((s, i, arr) => Boolean(s) && known.has(s) && arr.indexOf(s) === i);
-  return parsed.length > 0 ? parsed : [...DEFAULT_DOCK_APPS_TOKENS];
+  const trimmed = collapsed.trim();
+  return trimmed.length > SHORTCUT_LABEL_MAX
+    ? trimmed.slice(0, SHORTCUT_LABEL_MAX).trimEnd()
+    : trimmed;
 }
 
-export function toggleDockAppTokenOp(store: StudioStore, appId: string): void {
-  const current = getEnabledDockTokensOp(store);
-  const idx = current.indexOf(appId);
-  if (idx >= 0) {
-    if (current.length <= 1) {
-      store.showToast("Keep at least one Dock app enabled", true);
+export function defaultDockShortcutItems(): ShortcutItem[] {
+  return DEFAULT_DOCK_ROUTES_TOKENS.map((tok) => ({
+    kind: "route" as const,
+    target: tok,
+    action: "",
+    label: "",
+    icon: "",
+    confirm: false,
+  }));
+}
+
+function normalizeShortcutArray(
+  raw: unknown,
+  isDock: boolean,
+): ShortcutItem[] {
+  if (!Array.isArray(raw)) {
+    return isDock ? defaultDockShortcutItems() : [];
+  }
+  const knownRoutes = new Map(SHORTCUT_ROUTES_CATALOG.map((r) => [r.token, r]));
+  const maxItems = isDock ? MAX_DOCK_ITEMS : MAX_PINNED_ITEMS;
+  const out: ShortcutItem[] = [];
+  const seen = new Set<string>();
+  for (const entry of raw) {
+    if (!entry || typeof entry !== "object") continue;
+    const rec = entry as Record<string, unknown>;
+    const kind = String(rec.kind || "").trim().toLowerCase();
+    if (kind === "route") {
+      const target = String(rec.target || "").trim().toLowerCase();
+      if (isDock && (target === "settings:root" || target === "app:settings")) {
+        continue;
+      }
+      const spec = knownRoutes.get(target);
+      if (!spec || (!isDock && spec.dockOnly)) continue;
+      const dedupKey = `route|${target}|`;
+      if (seen.has(dedupKey)) continue;
+      seen.add(dedupKey);
+      out.push({
+        kind: "route",
+        target,
+        action: "",
+        label: sanitizeShortcutLabel(rec.label),
+        icon: normalizeMdiIconSlug(rec.icon),
+        confirm: false,
+      });
+    } else if (kind === "entity") {
+      const target = String(rec.target || "").trim().toLowerCase();
+      const dotIdx = target.indexOf(".");
+      if (dotIdx <= 0) continue;
+      const domain = target.slice(0, dotIdx);
+      const validActions = SHORTCUT_DOMAIN_ACTIONS[domain];
+      if (!validActions || validActions.length === 0) continue;
+      const rawAct = String(rec.action || "").trim().toLowerCase();
+      const action = validActions.some((a) => a.action === rawAct)
+        ? rawAct
+        : validActions[0].action;
+      const dedupKey = `entity|${target}|${action}`;
+      if (seen.has(dedupKey)) continue;
+      seen.add(dedupKey);
+      out.push({
+        kind: "entity",
+        target,
+        action,
+        label: sanitizeShortcutLabel(rec.label),
+        icon: normalizeMdiIconSlug(rec.icon),
+        confirm: rec.confirm === undefined ? isDock : Boolean(rec.confirm),
+      });
+    }
+    if (out.length >= maxItems) break;
+  }
+  return out;
+}
+
+export function getDockItemsOp(store: StudioStore): ShortcutItem[] {
+  const raw = store.state?.config?.dock_items;
+  if (raw === undefined || raw === null) {
+    return defaultDockShortcutItems();
+  }
+  return normalizeShortcutArray(raw, true);
+}
+
+export function getPinnedItemsOp(store: StudioStore): ShortcutItem[] {
+  const raw = store.state?.config?.pinned_items;
+  if (raw === undefined || raw === null) {
+    return [];
+  }
+  return normalizeShortcutArray(raw, false);
+}
+
+export function moveShortcutItemOp(
+  store: StudioStore,
+  listKey: "dock_items" | "pinned_items",
+  idx: number,
+  delta: -1 | 1,
+): void {
+  const current = listKey === "dock_items" ? getDockItemsOp(store) : getPinnedItemsOp(store);
+  const nextIdx = idx + delta;
+  if (idx < 0 || nextIdx < 0 || idx >= current.length || nextIdx >= current.length) {
+    return;
+  }
+  const next = current.map((it) => ({ ...it }));
+  const [moved] = next.splice(idx, 1);
+  next.splice(nextIdx, 0, moved);
+  store.stageDeviceSetting(listKey, next);
+}
+
+export function removeShortcutItemOp(
+  store: StudioStore,
+  listKey: "dock_items" | "pinned_items",
+  idx: number,
+): void {
+  const current = listKey === "dock_items" ? getDockItemsOp(store) : getPinnedItemsOp(store);
+  if (idx < 0 || idx >= current.length) return;
+  const next = current.filter((_, i) => i !== idx).map((it) => ({ ...it }));
+  store.stageDeviceSetting(listKey, next);
+}
+
+export function resetDockItemsToDefaultOp(store: StudioStore): void {
+  store.stageDeviceSetting("dock_items", defaultDockShortcutItems());
+  store.showToast("Restored default App Dock");
+}
+
+export function openShortcutModalOp(
+  store: StudioStore,
+  listKey: "dock_items" | "pinned_items",
+  editIndex: number | null = null,
+): void {
+  const isDock = listKey === "dock_items";
+  const current = isDock ? getDockItemsOp(store) : getPinnedItemsOp(store);
+  const caps = store.state?.capabilities || {};
+  const compatibleRoutes = SHORTCUT_ROUTES_CATALOG.filter((r) => {
+    if (!isDock && r.dockOnly) return false;
+    if (isDock && r.token === "settings:root") return false;
+    if (r.capability === "round" && caps.is_round === false) return false;
+    if (r.capability === "imu" && caps.has_imu === false) return false;
+    return true;
+  });
+  const firstRoute = compatibleRoutes[0]?.token || "weather:moon";
+  const entities = store.state?.catalog?.shortcut_entities || [];
+  const firstEnt = entities[0];
+  const firstDomain = firstEnt ? firstEnt.domain : "light";
+  const firstAction = SHORTCUT_DOMAIN_ACTIONS[firstDomain]?.[0]?.action || "toggle";
+
+  if (editIndex !== null && editIndex >= 0 && editIndex < current.length) {
+    const existing = current[editIndex];
+    if (existing.kind === "entity") {
+      const dom = existing.target.split(".", 1)[0] || firstDomain;
+      store.shortcutModal = {
+        open: true,
+        listKey,
+        editIndex,
+        kind: "entity",
+        routeTarget: firstRoute,
+        entityDomainFilter: "all",
+        entitySearch: "",
+        entityTarget: existing.target,
+        action: existing.action || SHORTCUT_DOMAIN_ACTIONS[dom]?.[0]?.action || "toggle",
+        label: existing.label,
+        icon: existing.icon,
+        iconSearch: "",
+        confirm: Boolean(existing.confirm),
+      };
+    } else {
+      store.shortcutModal = {
+        open: true,
+        listKey,
+        editIndex,
+        kind: "route",
+        routeTarget: existing.target,
+        entityDomainFilter: "all",
+        entitySearch: "",
+        entityTarget: firstEnt?.id || "",
+        action: firstAction,
+        label: existing.label,
+        icon: existing.icon,
+        iconSearch: "",
+        confirm: isDock,
+      };
+    }
+  } else {
+    store.shortcutModal = {
+      open: true,
+      listKey,
+      editIndex: null,
+      kind: isDock ? "route" : (entities.length > 0 ? "entity" : "route"),
+      routeTarget: firstRoute,
+      entityDomainFilter: "all",
+      entitySearch: "",
+      entityTarget: firstEnt?.id || "",
+      action: firstAction,
+      label: "",
+      icon: "",
+      iconSearch: "",
+      confirm: isDock,
+    };
+  }
+  store.host.requestUpdate();
+}
+
+export function saveShortcutModalOp(store: StudioStore): void {
+  const modal = store.shortcutModal;
+  const isDock = modal.listKey === "dock_items";
+  const maxItems = isDock ? MAX_DOCK_ITEMS : MAX_PINNED_ITEMS;
+  const current = (isDock ? getDockItemsOp(store) : getPinnedItemsOp(store)).map((it) => ({
+    ...it,
+  }));
+
+  if (modal.editIndex === null && current.length >= maxItems) {
+    store.showToast(
+      `${isDock ? "App Dock" : "Pinned App"} supports up to ${maxItems} shortcuts`,
+      true,
+    );
+    return;
+  }
+
+  const rawIcon = modal.icon.trim();
+  const cleanIcon = rawIcon ? normalizeMdiIconSlug(rawIcon) : "";
+  if (rawIcon && !cleanIcon) {
+    store.showToast("Enter a valid Material Design Icon name (e.g. mdi:bell-ring)", true);
+    return;
+  }
+  const cleanLabel = sanitizeShortcutLabel(modal.label);
+
+  let built: ShortcutItem;
+  if (modal.kind === "route") {
+    const routeTok = modal.routeTarget.trim().toLowerCase();
+    const spec = SHORTCUT_ROUTES_CATALOG.find((r) => r.token === routeTok);
+    if (!spec || (!isDock && spec.dockOnly) || (isDock && routeTok === "settings:root")) {
+      store.showToast("Select an app or page to pin", true);
       return;
     }
-    current.splice(idx, 1);
+    built = {
+      kind: "route",
+      target: routeTok,
+      action: "",
+      label: cleanLabel,
+      icon: cleanIcon,
+      confirm: false,
+    };
   } else {
-    current.push(appId);
+    const entId = modal.entityTarget.trim().toLowerCase();
+    const dotIdx = entId.indexOf(".");
+    if (dotIdx <= 0) {
+      store.showToast("Select a Home Assistant entity", true);
+      return;
+    }
+    const dom = entId.slice(0, dotIdx);
+    const validActs = SHORTCUT_DOMAIN_ACTIONS[dom] || [];
+    const act = validActs.some((a) => a.action === modal.action)
+      ? modal.action
+      : (validActs[0]?.action || "");
+    if (!act) {
+      store.showToast(`Unsupported entity domain '${dom}'`, true);
+      return;
+    }
+    built = {
+      kind: "entity",
+      target: entId,
+      action: act,
+      label: cleanLabel,
+      icon: cleanIcon,
+      confirm: Boolean(modal.confirm),
+    };
   }
-  store.stageDeviceSetting("dock_apps", current.join(","));
-}
 
-export function moveDockAppTokenOp(store: StudioStore, appId: string, delta: -1 | 1): void {
-  const current = getEnabledDockTokensOp(store);
-  const idx = current.indexOf(appId);
-  const nextIdx = idx + delta;
-  if (idx < 0 || nextIdx < 0 || nextIdx >= current.length) return;
-  const [moved] = current.splice(idx, 1);
-  current.splice(nextIdx, 0, moved);
-  store.stageDeviceSetting("dock_apps", current.join(","));
+  const dupIdx = current.findIndex(
+    (it, idx) =>
+      idx !== modal.editIndex &&
+      it.kind === built.kind &&
+      it.target === built.target &&
+      it.action === built.action,
+  );
+  if (dupIdx >= 0) {
+    store.showToast("That shortcut is already in this list", true);
+    return;
+  }
+
+  if (modal.editIndex !== null && modal.editIndex >= 0 && modal.editIndex < current.length) {
+    current[modal.editIndex] = built;
+  } else {
+    current.push(built);
+  }
+
+  store.shortcutModal = { ...store.shortcutModal, open: false };
+  store.stageDeviceSetting(modal.listKey, current);
 }
 
 export function getEnabledAreaCategoriesOp(store: StudioStore): string[] {

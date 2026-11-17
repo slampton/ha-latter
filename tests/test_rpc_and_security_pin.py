@@ -899,7 +899,7 @@ async def test_home_hub_rebuild_alarm_caps_separate_pins_climate_cover_and_categ
     assert compute_climate_caps(None) == 0
     assert compute_vacuum_caps(None) == 0
 
-    # Verify area_context wire indices 44..46 carry alarm_caps="13", climate_caps="79", vacuum_caps="11"
+    # Verify area_context wire indices 43..45 carry alarm_caps="13", climate_caps="79", vacuum_caps="11"
     coord._cached_area_payload = None
     _area_st, area_attrs = coord.get_area_context_payload()
     assert area_attrs["alarm_caps"] == 13
@@ -907,11 +907,11 @@ async def test_home_hub_rebuild_alarm_caps_separate_pins_climate_cover_and_categ
     assert area_attrs["vacuum_caps"] == 11
     assert area_attrs["home_categories"] == "alarm,cameras,intercom,thermostat,entry,vacuum"
     wire_fields = area_attrs["payload"].split("\x1f")
-    assert len(wire_fields) == 47  # 3 header fields + 44 body fields (indices 3..46)
-    assert wire_fields[44] == "13"
-    assert wire_fields[45] == "79"
-    assert wire_fields[46] == "11"
-    assert wire_fields[40] == "alarm,cameras,intercom,thermostat,entry,vacuum"
+    assert len(wire_fields) == 46  # 3 header fields + 43 body fields (indices 3..45)
+    assert wire_fields[43] == "13"
+    assert wire_fields[44] == "79"
+    assert wire_fields[45] == "11"
+    assert wire_fields[39] == "alarm,cameras,intercom,thermostat,entry,vacuum"
 
     # Custom category ordering is preserved
     hub_sum = get_home_hub_summary(

@@ -732,20 +732,20 @@ async def test_area_icon_resolution_wire_packing_and_live_registry_update(
     assert area_state == "Living Area"
     assert area_attrs["area_icon"] == "mdi:sofa"
     wire_tokens = area_attrs["payload"].split("\x1f")
-    assert len(wire_tokens) == 47
-    assert wire_tokens[41] == "mdi:sofa"
-    assert wire_tokens[42].startswith("America/Los_Angeles|Los Angeles|")
-    assert wire_tokens[43] == ""
+    assert len(wire_tokens) == 46
+    assert wire_tokens[40] == "mdi:sofa"
+    assert wire_tokens[41].startswith("America/Los_Angeles|Los Angeles|")
+    assert wire_tokens[42] == ""
+    assert wire_tokens[43] == "0"
     assert wire_tokens[44] == "0"
     assert wire_tokens[45] == "0"
-    assert wire_tokens[46] == "0"
 
-    # Live Area registry icon edit invalidates cached payload and updates wire index 41
+    # Live Area registry icon edit invalidates cached payload and updates wire index 40
     area_reg.async_update("living", icon="mdi:television-classic")
     area_state_updated, area_attrs_updated = coord.get_area_context_payload()
     assert area_state_updated == "Living Area"
     assert area_attrs_updated["area_icon"] == "mdi:television-classic"
-    assert area_attrs_updated["payload"].split("\x1f")[41] == "mdi:television-classic"
+    assert area_attrs_updated["payload"].split("\x1f")[40] == "mdi:television-classic"
 
     # Unassigned Device sends empty area_icon ("")
     esp_dev = dev_reg.async_get(coord.esphome_device_id)
@@ -757,7 +757,7 @@ async def test_area_icon_resolution_wire_packing_and_live_registry_update(
     unassigned_state, unassigned_attrs = coord.get_area_context_payload()
     assert unassigned_state == "Unassigned"
     assert unassigned_attrs["area_icon"] == ""
-    assert unassigned_attrs["payload"].split("\x1f")[41] == ""
+    assert unassigned_attrs["payload"].split("\x1f")[40] == ""
 
     assert await async_unload_entry(hass, entry) is True
 
@@ -863,7 +863,7 @@ async def test_home_hub_strict_shared_entities_no_auto_discovery(
     assert empty_attrs["garage_entity"] == ""
     assert empty_attrs["vacuum_entity"] == ""
     assert empty_attrs["vacuum_caps"] == 0
-    assert empty_attrs["payload"].split("\x1f")[40] == ""
+    assert empty_attrs["payload"].split("\x1f")[39] == ""
 
     # Unassigned home_hub.* action aliases must NOT command unconfigured HA entities
     dispatched: list[tuple[str, str, dict[str, Any]]] = []

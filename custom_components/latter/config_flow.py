@@ -38,9 +38,11 @@ from .const import (
     CONF_DEFAULT_SPEAKER,
     CONF_DEVICE_GROUP,
     CONF_DEVICE_SLUG,
+    CONF_DOCK_ITEMS,
     CONF_ESPHOME_DEVICE_ID,
     CONF_HOME_CATEGORIES,
     CONF_NATIVE_BLE_TRACKING,
+    CONF_PINNED_ITEMS,
     CONF_SYNC_DEVICE_AREA,
     CONF_WEATHER_ENTITY,
     DATA_GLOBAL_CONFIG,
@@ -48,7 +50,6 @@ from .const import (
     DEFAULT_AREA_CATEGORIES,
     DEFAULT_AREA_HANDOFF,
     DEFAULT_DEVICE_GROUP,
-    DEFAULT_DOCK_APPS,
     DEFAULT_HOME_CATEGORIES,
     DOMAIN,
     SUBENTRY_BLE_TAG,
@@ -67,6 +68,7 @@ from .identity import (
     read_device_hardware_manifest,
 )
 from .presence import _iter_devices
+from .protocol import default_dock_items
 
 
 def _iter_configured_device_records(hass: HomeAssistant) -> list[tuple[dict[str, Any], str | None]]:
@@ -229,7 +231,8 @@ def _detect_hardware_defaults(
             CONF_SYNC_DEVICE_AREA: default_roaming and not is_stationary,
             CONF_AREA_HANDOFF: DEFAULT_AREA_HANDOFF,
             CONF_DEFAULT_AREA: "" if default_roaming else esp_area,
-            "dock_apps": DEFAULT_DOCK_APPS,
+            CONF_DOCK_ITEMS: default_dock_items(),
+            CONF_PINNED_ITEMS: [],
             CONF_AREA_CATEGORIES: DEFAULT_AREA_CATEGORIES,
             CONF_HOME_CATEGORIES: DEFAULT_HOME_CATEGORIES,
         }
@@ -242,7 +245,8 @@ def _detect_hardware_defaults(
             CONF_SYNC_DEVICE_AREA: True,
             CONF_AREA_HANDOFF: DEFAULT_AREA_HANDOFF,
             CONF_DEFAULT_AREA: "",
-            "dock_apps": DEFAULT_DOCK_APPS,
+            CONF_DOCK_ITEMS: default_dock_items(),
+            CONF_PINNED_ITEMS: [],
             CONF_AREA_CATEGORIES: DEFAULT_AREA_CATEGORIES,
             CONF_HOME_CATEGORIES: DEFAULT_HOME_CATEGORIES,
         }
@@ -317,7 +321,11 @@ def _apply_onboarding_profile_and_defaults(
     groups = get_device_groups(hass)
     if grp_id == "auto":
         grp_id = str(hw_defaults.get(CONF_DEVICE_GROUP) or DEFAULT_DEVICE_GROUP)
-    matched_grp = next((g for g in groups if g.get("id") == grp_id), None)
+    if grp_id in ("", DEFAULT_DEVICE_GROUP, "unassigned"):
+        merged[CONF_DEVICE_GROUP] = DEFAULT_DEVICE_GROUP
+        matched_grp = None
+    else:
+        matched_grp = next((g for g in groups if g.get("id") == grp_id), None)
     if matched_grp:
         merged[CONF_DEVICE_GROUP] = str(matched_grp["id"])
         if isinstance(matched_grp.get("device_config"), dict):
@@ -336,6 +344,8 @@ def _apply_onboarding_profile_and_defaults(
                     continue
                 if k in matched_grp["device_config"] and matched_grp["device_config"][k] is not None:
                     merged[k] = matched_grp["device_config"][k]
+    else:
+        merged[CONF_DEVICE_GROUP] = DEFAULT_DEVICE_GROUP
 
     if CONF_NATIVE_BLE_TRACKING in user_input:
         is_roaming = bool(user_input[CONF_NATIVE_BLE_TRACKING])
@@ -346,6 +356,19 @@ def _apply_onboarding_profile_and_defaults(
             merged[CONF_DEFAULT_AREA] = (
                 "" if is_roaming else str(dev.area_id or "").strip()
             )
+
+    if matched_grp and isinstance(matched_grp.get("device_config"), dict):
+        base_cfg = matched_grp["device_config"]
+        if bool(merged.get(CONF_NATIVE_BLE_TRACKING)) != bool(
+            base_cfg.get(CONF_NATIVE_BLE_TRACKING)
+        ) or bool(merged.get(CONF_BLE_AUTO_SWITCH)) != bool(
+            base_cfg.get(CONF_BLE_AUTO_SWITCH)
+        ) or (
+            not is_stationary_hw
+            and bool(merged.get(CONF_SYNC_DEVICE_AREA))
+            != bool(base_cfg.get(CONF_SYNC_DEVICE_AREA))
+        ):
+            merged[CONF_DEVICE_GROUP] = DEFAULT_DEVICE_GROUP
 
     if CONF_ASSIGNED_PERSON in user_input:
         merged[CONF_ASSIGNED_PERSON] = str(
@@ -418,7 +441,11 @@ def _build_schema(
         selector.SelectOptionDict(
             value="auto",
             label=f"Auto-Detect from Device Hardware ({hw_shape_lbl})",
-        )
+        ),
+        selector.SelectOptionDict(
+            value=DEFAULT_DEVICE_GROUP,
+            label="Custom (Individual Settings)",
+        ),
     ]
     for g in groups:
         if isinstance(g, dict) and g.get("id") and g.get("name"):

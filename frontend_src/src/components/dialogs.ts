@@ -3,7 +3,15 @@
  * Uses component-scoped pointer capture on `<canvas>` — zero `window.*` listeners.
  */
 
-import { html, type TemplateResult } from "../lib/lit.js";
+import { SHORTCUT_LABEL_MAX, SHORTCUT_ROUTES_CATALOG } from "../constants.js";
+import { html, nothing, type TemplateResult } from "../lib/lit.js";
+import {
+  CURATED_MDI_ICONS,
+  normalizeMdiIconSlug,
+  ROUTE_PREVIEW_ICONS,
+  SHORTCUT_DOMAIN_ACTIONS,
+  SHORTCUT_DOMAIN_LABELS,
+} from "../mdi-catalog.js";
 import type { StudioStore } from "../state/store.js";
 import { hsvToHex, hsvToRgbJS, isValidHexColor } from "../utils/format.js";
 import { renderSelectOptions, renderSwitchRow } from "./controls.js";
@@ -58,6 +66,8 @@ export function syncStudioDialogs(renderRoot: ShadowRoot, store: StudioStore): v
     ["latter-reset-modal", store.resetModal.open],
     ["latter-add-dev-modal", store.addBleModal.open],
     ["latter-cw-modal", store.colorWheelModal.open],
+    ["latter-save-group-modal", store.saveGroupModal?.open ?? false],
+    ["latter-shortcut-modal", store.shortcutModal?.open ?? false],
   ];
   for (const [id, wantOpen] of pairs) {
     const dlg = renderRoot.getElementById(id) as HTMLDialogElement | null;
@@ -143,6 +153,77 @@ export function renderStudioDialogs(store: StudioStore): TemplateResult {
   const cwValidHex = isValidHexColor(store.colorWheelModal.hex)
     ? store.colorWheelModal.hex
     : "";
+
+  const scModal = store.shortcutModal;
+  const scIsDock = scModal.listKey === "dock_items";
+  const scTitle =
+    scModal.editIndex !== null
+      ? scIsDock
+        ? "Edit Dock Shortcut"
+        : "Edit Pinned Shortcut"
+      : scIsDock
+        ? "Add Dock Shortcut"
+        : "Add Pinned Shortcut";
+  const devCaps = store.state?.capabilities || {};
+  const availableRoutes = SHORTCUT_ROUTES_CATALOG.filter((r) => {
+    if (!scIsDock && r.dockOnly) return false;
+    if (scIsDock && r.token === "settings:root") return false;
+    if (r.capability === "round" && devCaps.is_round === false) return false;
+    if (r.capability === "imu" && devCaps.has_imu === false) return false;
+    return true;
+  });
+  const routeGroups: Array<{ group: string; items: typeof availableRoutes }> = [];
+  for (const r of availableRoutes) {
+    const grpName = r.group || "Apps";
+    const existingGrp = routeGroups.find((g) => g.group === grpName);
+    if (existingGrp) {
+      existingGrp.items.push(r);
+    } else {
+      routeGroups.push({ group: grpName, items: [r] });
+    }
+  }
+
+  const allShortcutEntities = store.state?.catalog?.shortcut_entities || [];
+  const availableDomains = Array.from(
+    new Set(allShortcutEntities.map((e) => e.domain)),
+  ).sort();
+  const scSearchLower = scModal.entitySearch.trim().toLowerCase();
+  const filteredShortcutEntities = allShortcutEntities.filter((e) => {
+    if (scModal.entityDomainFilter !== "all" && e.domain !== scModal.entityDomainFilter) {
+      return false;
+    }
+    if (!scSearchLower) return true;
+    return (
+      e.name.toLowerCase().includes(scSearchLower) ||
+      e.id.toLowerCase().includes(scSearchLower) ||
+      e.area_name.toLowerCase().includes(scSearchLower)
+    );
+  });
+  const selectedEntityObj =
+    allShortcutEntities.find((e) => e.id === scModal.entityTarget) || null;
+  const selectedEntityDomain = selectedEntityObj
+    ? selectedEntityObj.domain
+    : (scModal.entityTarget.split(".", 1)[0] || "");
+  const availableEntityActions = SHORTCUT_DOMAIN_ACTIONS[selectedEntityDomain] || [];
+  const selectedRouteSpec =
+    availableRoutes.find((r) => r.token === scModal.routeTarget) ||
+    SHORTCUT_ROUTES_CATALOG.find((r) => r.token === scModal.routeTarget);
+  const autoDefaultLabel =
+    scModal.kind === "route"
+      ? selectedRouteSpec?.label || "Shortcut"
+      : selectedEntityObj?.name || scModal.entityTarget || "Entity Action";
+  const autoDefaultIcon =
+    scModal.kind === "route"
+      ? ROUTE_PREVIEW_ICONS[scModal.routeTarget] || "mdi:apps"
+      : selectedEntityObj?.icon || "mdi:flash";
+  const previewIcon = normalizeMdiIconSlug(scModal.icon) || autoDefaultIcon;
+  const iconFilterLower = (scModal.iconSearch || scModal.icon)
+    .trim()
+    .toLowerCase()
+    .replace(/^mdi:/, "");
+  const filteredMdiIcons = iconFilterLower
+    ? CURATED_MDI_ICONS.filter((slug) => slug.slice(4).includes(iconFilterLower))
+    : CURATED_MDI_ICONS;
 
   return html`
     <dialog
@@ -390,6 +471,378 @@ export function renderStudioDialogs(store: StudioStore): TemplateResult {
             class="btn btn-primary"
           >
             Save Color
+          </button>
+        </div>
+      </div>
+    </dialog>
+
+    <dialog
+      id="latter-save-group-modal"
+      aria-labelledby="latter-save-group-title"
+      @cancel=${() => store.closeSaveGroupModal()}
+      @click=${(ev: Event) => onBackdropClick(ev, () => store.closeSaveGroupModal())}
+      class="studio-dialog"
+    >
+      <div class="dialog-body">
+        <h3 id="latter-save-group-title" class="dialog-title">Save Custom Group</h3>
+        <p class="dialog-text">
+          Saves this Device's operational settings as a reusable Device Group and assigns this Device to it.
+        </p>
+        <div class="stacked-field">
+          <label for="save-group-name">Group Name</label>
+          <input
+            type="text"
+            id="save-group-name"
+            placeholder="e.g. Nightstands, Guest Suites"
+            .value=${store.saveGroupModal?.name || ""}
+            @input=${(ev: Event) => {
+              store.saveGroupModal = {
+                ...store.saveGroupModal,
+                name: (ev.currentTarget as HTMLInputElement).value,
+              };
+            }}
+          />
+        </div>
+        <div class="stacked-field">
+          <label for="save-group-desc">Description (Optional)</label>
+          <input
+            type="text"
+            id="save-group-desc"
+            placeholder="Optional summary of these settings"
+            .value=${store.saveGroupModal?.description || ""}
+            @input=${(ev: Event) => {
+              store.saveGroupModal = {
+                ...store.saveGroupModal,
+                description: (ev.currentTarget as HTMLInputElement).value,
+              };
+            }}
+          />
+        </div>
+        <div class="dialog-actions">
+          <button
+            type="button"
+            @click=${() => store.closeSaveGroupModal()}
+            class="btn btn-secondary"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            id="latter-save-group-confirm-btn"
+            ?disabled=${Boolean(store.saveGroupModal?.busy)}
+            @click=${() => void store.confirmSaveGroupModal()}
+            class="btn btn-primary"
+          >
+            Save Group
+          </button>
+        </div>
+      </div>
+    </dialog>
+
+    <dialog
+      id="latter-shortcut-modal"
+      aria-labelledby="latter-shortcut-title"
+      @cancel=${() => store.closeShortcutModal()}
+      @click=${(ev: Event) => onBackdropClick(ev, () => store.closeShortcutModal())}
+      class="studio-dialog shortcut-dialog"
+    >
+      <div class="dialog-body">
+        <h3 id="latter-shortcut-title" class="dialog-title">${scTitle}</h3>
+        <div class="scope-tabs" role="tablist" aria-label="Shortcut Type">
+          <button
+            type="button"
+            role="tab"
+            aria-selected=${String(scModal.kind === "route")}
+            @click=${() => {
+              store.shortcutModal = { ...store.shortcutModal, kind: "route" };
+              store.host.requestUpdate();
+            }}
+            class="scope-tab ${scModal.kind === "route" ? "active" : ""}"
+          >
+            App or Page
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected=${String(scModal.kind === "entity")}
+            @click=${() => {
+              store.shortcutModal = { ...store.shortcutModal, kind: "entity" };
+              store.host.requestUpdate();
+            }}
+            class="scope-tab ${scModal.kind === "entity" ? "active" : ""}"
+          >
+            Home Assistant Entity
+          </button>
+        </div>
+
+        ${scModal.kind === "route"
+          ? html`<div class="stacked-field">
+              <label for="shortcut-route-select">Target App or Subpage</label>
+              <select
+                id="shortcut-route-select"
+                .value=${scModal.routeTarget}
+                @change=${(ev: Event) => {
+                  const val = (ev.currentTarget as HTMLSelectElement).value;
+                  store.shortcutModal = { ...store.shortcutModal, routeTarget: val };
+                  store.host.requestUpdate();
+                }}
+              >
+                ${routeGroups.map(
+                  (grp) => html`<optgroup label=${grp.group}>
+                    ${grp.items.map(
+                      (item) => html`<option
+                        value=${item.token}
+                        ?selected=${item.token === scModal.routeTarget}
+                      >
+                        ${item.label}
+                      </option>`,
+                    )}
+                  </optgroup>`,
+                )}
+              </select>
+            </div>`
+          : html`<div class="list-row-main">
+                <div class="stacked-field">
+                  <label for="shortcut-domain-filter">Domain Filter</label>
+                  <select
+                    id="shortcut-domain-filter"
+                    .value=${scModal.entityDomainFilter}
+                    @change=${(ev: Event) => {
+                      const nextDom = (ev.currentTarget as HTMLSelectElement).value;
+                      const nextList = allShortcutEntities.filter(
+                        (e) => nextDom === "all" || e.domain === nextDom,
+                      );
+                      const keepEnt = nextList.some((e) => e.id === scModal.entityTarget)
+                        ? scModal.entityTarget
+                        : (nextList[0]?.id || "");
+                      const effDom = keepEnt.split(".", 1)[0] || nextDom;
+                      const nextAct = SHORTCUT_DOMAIN_ACTIONS[effDom]?.[0]?.action || "";
+                      store.shortcutModal = {
+                        ...store.shortcutModal,
+                        entityDomainFilter: nextDom,
+                        entityTarget: keepEnt,
+                        action: nextAct,
+                      };
+                      store.host.requestUpdate();
+                    }}
+                  >
+                    <option value="all" ?selected=${scModal.entityDomainFilter === "all"}>
+                      All Domains
+                    </option>
+                    ${availableDomains.map(
+                      (dom) => html`<option
+                        value=${dom}
+                        ?selected=${dom === scModal.entityDomainFilter}
+                      >
+                        ${SHORTCUT_DOMAIN_LABELS[dom] || dom}
+                      </option>`,
+                    )}
+                  </select>
+                </div>
+                <div class="stacked-field">
+                  <label for="shortcut-entity-search">Filter Entities</label>
+                  <input
+                    type="search"
+                    id="shortcut-entity-search"
+                    placeholder="Search name, Area, or entity ID…"
+                    .value=${scModal.entitySearch}
+                    @input=${(ev: Event) => {
+                      const query = (ev.currentTarget as HTMLInputElement).value;
+                      const qLow = query.trim().toLowerCase();
+                      const matches = allShortcutEntities.filter((e) => {
+                        if (
+                          scModal.entityDomainFilter !== "all" &&
+                          e.domain !== scModal.entityDomainFilter
+                        ) {
+                          return false;
+                        }
+                        if (!qLow) return true;
+                        return (
+                          e.name.toLowerCase().includes(qLow) ||
+                          e.id.toLowerCase().includes(qLow) ||
+                          e.area_name.toLowerCase().includes(qLow)
+                        );
+                      });
+                      const nextTarget = matches.some((e) => e.id === scModal.entityTarget)
+                        ? scModal.entityTarget
+                        : (matches[0]?.id || scModal.entityTarget);
+                      const nextDom = nextTarget.split(".", 1)[0] || "";
+                      const validActs = SHORTCUT_DOMAIN_ACTIONS[nextDom] || [];
+                      const nextAct = validActs.some((a) => a.action === scModal.action)
+                        ? scModal.action
+                        : (validActs[0]?.action || scModal.action);
+                      store.shortcutModal = {
+                        ...store.shortcutModal,
+                        entitySearch: query,
+                        entityTarget: nextTarget,
+                        action: nextAct,
+                      };
+                      store.host.requestUpdate();
+                    }}
+                  />
+                </div>
+              </div>
+              <div class="stacked-field">
+                <label for="shortcut-entity-select">Entity</label>
+                <select
+                  id="shortcut-entity-select"
+                  .value=${scModal.entityTarget}
+                  @change=${(ev: Event) => {
+                    const nextEnt = (ev.currentTarget as HTMLSelectElement).value;
+                    const dom = nextEnt.split(".", 1)[0] || "";
+                    const acts = SHORTCUT_DOMAIN_ACTIONS[dom] || [];
+                    const nextAct = acts.some((a) => a.action === scModal.action)
+                      ? scModal.action
+                      : (acts[0]?.action || "");
+                    store.shortcutModal = {
+                      ...store.shortcutModal,
+                      entityTarget: nextEnt,
+                      action: nextAct,
+                    };
+                    store.host.requestUpdate();
+                  }}
+                >
+                  ${filteredShortcutEntities.length === 0
+                    ? html`<option value="">No matching Home Assistant entities</option>`
+                    : filteredShortcutEntities.map(
+                        (e) => html`<option
+                          value=${e.id}
+                          ?selected=${e.id === scModal.entityTarget}
+                        >
+                          ${e.area_name ? `${e.area_name} — ` : ""}${e.name} (${e.id})
+                        </option>`,
+                      )}
+                </select>
+              </div>
+              <div class="stacked-field">
+                <label for="shortcut-action-select">Action</label>
+                <select
+                  id="shortcut-action-select"
+                  .value=${scModal.action}
+                  @change=${(ev: Event) => {
+                    store.shortcutModal = {
+                      ...store.shortcutModal,
+                      action: (ev.currentTarget as HTMLSelectElement).value,
+                    };
+                    store.host.requestUpdate();
+                  }}
+                >
+                  ${availableEntityActions.map(
+                    (act) => html`<option
+                      value=${act.action}
+                      ?selected=${act.action === scModal.action}
+                    >
+                      ${act.label}
+                    </option>`,
+                  )}
+                </select>
+              </div>
+              ${renderSwitchRow({
+                id: "shortcut-confirm-switch",
+                label: "Confirm Before Running",
+                description: scIsDock
+                  ? "Shows a confirmation prompt before running this action from the App Dock."
+                  : "Require a confirmation tap instead of running immediately on a single tap.",
+                checked: scModal.confirm,
+                onChange: (checked) => {
+                  store.shortcutModal = { ...store.shortcutModal, confirm: checked };
+                  store.host.requestUpdate();
+                },
+              })}`}
+
+        <div class="stacked-field">
+          <label for="shortcut-label-input">Custom Label (Optional)</label>
+          <input
+            type="text"
+            id="shortcut-label-input"
+            maxlength=${String(SHORTCUT_LABEL_MAX)}
+            placeholder=${autoDefaultLabel}
+            .value=${scModal.label}
+            @input=${(ev: Event) => {
+              store.shortcutModal = {
+                ...store.shortcutModal,
+                label: (ev.currentTarget as HTMLInputElement).value,
+              };
+            }}
+          />
+        </div>
+
+        <div class="stacked-field">
+          <label for="shortcut-icon-input">Icon (Optional MDI Override)</label>
+          <div class="shortcut-icon-row">
+            <span class="shortcut-icon-badge" aria-hidden="true">
+              <ha-icon .icon=${previewIcon}></ha-icon>
+            </span>
+            <input
+              type="text"
+              id="shortcut-icon-input"
+              placeholder=${`Default (${autoDefaultIcon}) or type any mdi:icon…`}
+              .value=${scModal.icon}
+              @input=${(ev: Event) => {
+                const raw = (ev.currentTarget as HTMLInputElement).value;
+                store.shortcutModal = {
+                  ...store.shortcutModal,
+                  icon: raw,
+                  iconSearch: raw,
+                };
+                store.host.requestUpdate();
+              }}
+            />
+            ${scModal.icon
+              ? html`<button
+                  type="button"
+                  @click=${() => {
+                    store.shortcutModal = {
+                      ...store.shortcutModal,
+                      icon: "",
+                      iconSearch: "",
+                    };
+                    store.host.requestUpdate();
+                  }}
+                  class="btn btn-text btn-compact"
+                >
+                  Default Icon
+                </button>`
+              : nothing}
+          </div>
+          <div class="mdi-picker-grid" role="listbox" aria-label="Material Design Icons">
+            ${filteredMdiIcons.slice(0, 72).map(
+              (slug) => html`<button
+                type="button"
+                title=${slug}
+                aria-label=${slug}
+                aria-selected=${String(normalizeMdiIconSlug(scModal.icon) === slug)}
+                @click=${() => {
+                  store.shortcutModal = {
+                    ...store.shortcutModal,
+                    icon: slug,
+                    iconSearch: "",
+                  };
+                  store.host.requestUpdate();
+                }}
+                class="mdi-picker-btn ${normalizeMdiIconSlug(scModal.icon) === slug ? "selected" : ""}"
+              >
+                <ha-icon .icon=${slug}></ha-icon>
+              </button>`,
+            )}
+          </div>
+        </div>
+
+        <div class="dialog-actions">
+          <button
+            type="button"
+            @click=${() => store.closeShortcutModal()}
+            class="btn btn-secondary"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            id="shortcut-save-btn"
+            @click=${() => store.saveShortcutModal()}
+            class="btn btn-primary"
+          >
+            Save Shortcut
           </button>
         </div>
       </div>

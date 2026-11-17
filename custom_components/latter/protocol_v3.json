@@ -4,7 +4,7 @@
   "record_separator": "\u001e",
   "absent_value": "A field with no value is the empty string, never a placeholder (none, NONE, None, unknown, unavailable, Idle, Unassigned) or a made-up number. A state field carries only the values its description lists.",
   "defaults": {
-    "dock_apps": "music,home_hub,area,remote,games,tools",
+    "dock_routes": "app:pinned,app:music,app:home_hub,app:area,app:remote,app:games,app:tools",
     "activity_card": "1",
     "activity_sources": "calendar,music_queue,stopwatch,alarms,timers",
     "area_categories": "scene,light,cover,fan,switch,climate,media",
@@ -69,279 +69,272 @@
         },
         {
           "index": 7,
-          "name": "dock_apps",
-          "cpp_enum": "DOCK_APPS",
-          "type": "csv",
-          "description": "Home dock apps in order, and the only ones shown (music, home_hub, area, remote, weather, time, camera, games, tools; Settings is always last). Empty until set: the device shows defaults.dock_apps"
-        },
-        {
-          "index": 8,
           "name": "wallpaper_url",
           "cpp_enum": "WALLPAPER_URL",
           "type": "url",
           "description": "Signed HTTP URL for active wallpaper"
         },
         {
-          "index": 9,
+          "index": 8,
           "name": "available_domains",
           "cpp_enum": "AVAILABLE_DOMAINS",
           "type": "csv",
           "description": "Comma-separated enabled Area categories with >= 1 entity in the active Area, in configured order (scene, light, cover, fan, switch, climate, media, all); empty when no categories have entities"
         },
         {
-          "index": 10,
+          "index": 9,
           "name": "area_temp",
           "cpp_enum": "AREA_TEMP",
           "type": "string",
           "description": "Formatted Area temperature"
         },
         {
-          "index": 11,
+          "index": 10,
           "name": "area_humidity",
           "cpp_enum": "AREA_HUMIDITY",
           "type": "string",
           "description": "Formatted Area relative humidity"
         },
         {
-          "index": 12,
+          "index": 11,
           "name": "lights_on",
           "cpp_enum": "LIGHTS_ON",
           "type": "u16",
           "description": "Count of active lights in Area"
         },
         {
-          "index": 13,
+          "index": 12,
           "name": "covers_open",
           "cpp_enum": "COVERS_OPEN",
           "type": "u16",
           "description": "Count of open covers in Area"
         },
         {
-          "index": 14,
+          "index": 13,
           "name": "alarm_entity",
           "cpp_enum": "ALARM_ENTITY",
           "type": "entity_id",
           "description": "Primary alarm control panel entity ID"
         },
         {
-          "index": 15,
+          "index": 14,
           "name": "alarm_state",
           "cpp_enum": "ALARM_STATE",
           "type": "string",
           "description": "Primary alarm state"
         },
         {
-          "index": 16,
+          "index": 15,
           "name": "thermostat_entity",
           "cpp_enum": "THERMOSTAT_ENTITY",
           "type": "entity_id",
           "description": "Primary climate entity ID"
         },
         {
-          "index": 17,
+          "index": 16,
           "name": "thermostat_state",
           "cpp_enum": "THERMOSTAT_STATE",
           "type": "string",
           "description": "Primary climate state/HVAC mode"
         },
         {
-          "index": 18,
+          "index": 17,
           "name": "thermostat_temp",
           "cpp_enum": "THERMOSTAT_TEMP",
           "type": "f32",
           "description": "Target thermostat setpoint temperature"
         },
         {
-          "index": 19,
+          "index": 18,
           "name": "thermostat_current_temp",
           "cpp_enum": "THERMOSTAT_CURRENT_TEMP",
           "type": "f32",
           "description": "Current measured thermostat temperature"
         },
         {
-          "index": 20,
+          "index": 19,
           "name": "lock_entity",
           "cpp_enum": "LOCK_ENTITY",
           "type": "entity_id",
           "description": "Primary lock entity ID"
         },
         {
-          "index": 21,
+          "index": 20,
           "name": "lock_state",
           "cpp_enum": "LOCK_STATE",
           "type": "string",
           "description": "Primary lock state"
         },
         {
-          "index": 22,
+          "index": 21,
           "name": "garage_entity",
           "cpp_enum": "GARAGE_ENTITY",
           "type": "entity_id",
           "description": "Primary garage cover entity ID"
         },
         {
-          "index": 23,
+          "index": 22,
           "name": "garage_state",
           "cpp_enum": "GARAGE_STATE",
           "type": "string",
           "description": "Primary garage cover state"
         },
         {
-          "index": 24,
+          "index": 23,
           "name": "vacuum_entity",
           "cpp_enum": "VACUUM_ENTITY",
           "type": "entity_id",
           "description": "Primary vacuum entity ID"
         },
         {
-          "index": 25,
+          "index": 24,
           "name": "vacuum_state",
           "cpp_enum": "VACUUM_STATE",
           "type": "string",
           "description": "Primary vacuum state"
         },
         {
-          "index": 26,
+          "index": 25,
           "name": "camera_snapshot_url",
           "cpp_enum": "CAMERA_SNAPSHOT_URL",
           "type": "url",
           "description": "Signed HTTP URL for primary camera snapshot"
         },
         {
-          "index": 27,
+          "index": 26,
           "name": "cameras_summary",
           "cpp_enum": "CAMERAS_SUMMARY",
           "type": "records",
           "description": "0x1E-joined entity_id|name|area_id|snapshot_url camera records (up to 10, in configured order; area_id empty when the camera has no Area)"
         },
         {
-          "index": 28,
+          "index": 27,
           "name": "doorbell_talk_state",
           "cpp_enum": "DOORBELL_TALK_STATE",
           "type": "string",
           "description": "Doorbell talkback state"
         },
         {
-          "index": 29,
+          "index": 28,
           "name": "intercom_targets_summary",
           "cpp_enum": "INTERCOM_TARGETS_SUMMARY",
           "type": "records",
           "description": "0x1E-joined target_id|label|kind call_target records (up to 10; kind all = every other Latter Device, listed first; kind device = one Latter Device, labelled by its title); empty when there is no other Device"
         },
         {
-          "index": 30,
+          "index": 29,
           "name": "alert_id",
           "cpp_enum": "ALERT_ID",
           "type": "u32",
           "description": "Monotonic alert/notification identifier"
         },
         {
-          "index": 31,
+          "index": 30,
           "name": "alert_title",
           "cpp_enum": "ALERT_TITLE",
           "type": "string",
           "description": "Alert banner title"
         },
         {
-          "index": 32,
+          "index": 31,
           "name": "alert_message",
           "cpp_enum": "ALERT_MESSAGE",
           "type": "string",
           "description": "Alert banner message body"
         },
         {
-          "index": 33,
+          "index": 32,
           "name": "alert_priority",
           "cpp_enum": "ALERT_PRIORITY",
           "type": "string",
           "description": "Alert priority level (normal|warning|critical)"
         },
         {
-          "index": 34,
+          "index": 33,
           "name": "alert_duration",
           "cpp_enum": "ALERT_DURATION",
           "type": "u16",
           "description": "Alert display duration in seconds"
         },
         {
-          "index": 35,
+          "index": 34,
           "name": "alert_chime",
           "cpp_enum": "ALERT_CHIME",
           "type": "bool",
           "description": "1 = play the alert chime (embedded WAV: sfx 9 for warning/critical, otherwise sfx 6), else 0"
         },
         {
-          "index": 36,
+          "index": 35,
           "name": "alert_camera_url",
           "cpp_enum": "ALERT_CAMERA_URL",
           "type": "url",
           "description": "Signed HTTP URL for alert camera snapshot"
         },
         {
-          "index": 37,
+          "index": 36,
           "name": "activity_card",
           "cpp_enum": "ACTIVITY_CARD",
           "type": "bool",
           "description": "1 = show the Home Activity Card, 0 = hide it (also sent when every source is off); empty until set: the device uses defaults.activity_card"
         },
         {
-          "index": 38,
+          "index": 37,
           "name": "activity_sources",
           "cpp_enum": "ACTIVITY_SOURCES",
           "type": "csv",
           "description": "Activity Card sources that are on, in this order: calendar, music_queue, stopwatch, alarms, timers (unknown keys are ignored); empty until set: the device uses defaults.activity_sources"
         },
         {
-          "index": 39,
+          "index": 38,
           "name": "security_pin_policy",
           "cpp_enum": "SECURITY_PIN_POLICY",
           "type": "string",
           "description": "Perimeter action policy for unlock, disarm, and open_cover (allow|require_pin|block)"
         },
         {
-          "index": 40,
+          "index": 39,
           "name": "home_categories",
           "cpp_enum": "HOME_CATEGORIES",
           "type": "csv",
           "description": "Comma-separated enabled Home Hub categories with >= 1 configured entity, in configured order (alarm, cameras, intercom, thermostat, entry, vacuum); empty when no categories have entities"
         },
         {
-          "index": 41,
+          "index": 40,
           "name": "area_icon",
           "cpp_enum": "AREA_ICON",
           "type": "string",
           "description": "Home Assistant AreaEntry icon string (e.g. mdi:sofa) or inferred Area archetype icon; empty when unassigned"
         },
         {
-          "index": 42,
+          "index": 41,
           "name": "local_tz_info",
           "cpp_enum": "LOCAL_TZ_INFO",
           "type": "string",
           "description": "Pipe-delimited local time zone status ('<iana>|<city>|<abbr>|<utc_offset_min>|<is_dst>')"
         },
         {
-          "index": 43,
+          "index": 42,
           "name": "world_clocks_summary",
           "cpp_enum": "WORLD_CLOCKS_SUMMARY",
           "type": "string",
           "description": "Semicolon-delimited configured World Clocks ('<iana>|<label>|<abbr>|<utc_offset_min>|<is_dst>;...')"
         },
         {
-          "index": 44,
+          "index": 43,
           "name": "alarm_caps",
           "cpp_enum": "ALARM_CAPS",
           "type": "u16",
           "description": "Alarm capability & code bitmask (1=code_disarm_required, 2=code_arm_required, 4=supports_arm_home, 8=supports_arm_away, 16=supports_arm_night, 32=supports_arm_vacation)"
         },
         {
-          "index": 45,
+          "index": 44,
           "name": "climate_caps",
           "cpp_enum": "CLIMATE_CAPS",
           "type": "u16",
           "description": "Thermostat capability & HVAC mode bitmask (1=off, 2=heat, 4=cool, 8=heat_cool_or_auto, 16=fan_only, 32=dry, 64=target_temp, 128=celsius)"
         },
         {
-          "index": 46,
+          "index": 45,
           "name": "vacuum_caps",
           "cpp_enum": "VACUUM_CAPS",
           "type": "u16",
@@ -765,7 +758,7 @@
           "name": "start_screen",
           "cpp_enum": "START_SCREEN",
           "type": "string",
-          "description": "Boot / single-app start screen (Home|Time App|Clock Face|Media|Home Hub|Area Controls|Remote|Weather|Cameras|Games|Tools)"
+          "description": "Boot / single-app start screen (Home|Pinned|Time App|Clock Face|Media|Home Hub|Area Controls|Remote|Weather|Cameras|Games|Tools)"
         },
         {
           "index": 24,
@@ -992,6 +985,48 @@
           "description": "Optional user-defined label shown above local time on the Time App Clock tab (up to 32 chars)"
         }
       ]
+    },
+    "shortcuts": {
+      "entity_suffix": "shortcuts",
+      "cpp_enum_name": "ShortcutsField",
+      "description": "App Dock and Pinned App shortcut tables (Latter OS routes and Home Assistant entity actions with live state), chunked across <=24-item frames for unlimited pages",
+      "fields": [
+        {
+          "index": 3,
+          "name": "chunk_index",
+          "cpp_enum": "CHUNK_INDEX",
+          "type": "u16",
+          "description": "0-based chunk index (0 .. chunk_count - 1)"
+        },
+        {
+          "index": 4,
+          "name": "chunk_count",
+          "cpp_enum": "CHUNK_COUNT",
+          "type": "u16",
+          "description": "Total chunks in this shortcuts snapshot (>= 1; commits atomically on chunk_index + 1 == chunk_count)"
+        },
+        {
+          "index": 5,
+          "name": "dock_items",
+          "cpp_enum": "DOCK_ITEMS",
+          "type": "records",
+          "description": "0x1E-joined kind|target|action|label|icon|confirm|state App Dock shortcut records (sent on chunk_index == 0, up to 16; empty until configured so device uses defaults.dock_routes; Settings is always appended last)"
+        },
+        {
+          "index": 6,
+          "name": "pinned_total",
+          "cpp_enum": "PINNED_TOTAL",
+          "type": "u16",
+          "description": "Total configured Pinned App items across all chunks (0 auto-hides app:pinned on the App Dock)"
+        },
+        {
+          "index": 7,
+          "name": "pinned_items",
+          "cpp_enum": "PINNED_ITEMS",
+          "type": "records",
+          "description": "0x1E-joined kind|target|action|label|icon|confirm|state Pinned App shortcut records for this chunk (up to 24 per chunk, rendered 6 per page)"
+        }
+      ]
     }
   },
   "device_actions": {
@@ -1054,43 +1089,68 @@
     }
   },
   "catalogs": {
-    "dock_apps": [
-      {
-        "token": "music",
-        "label": "Music"
-      },
-      {
-        "token": "home_hub",
-        "label": "Home Hub"
-      },
-      {
-        "token": "area",
-        "label": "Area"
-      },
-      {
-        "token": "remote",
-        "label": "Remote"
-      },
-      {
-        "token": "weather",
-        "label": "Weather"
-      },
-      {
-        "token": "time",
-        "label": "Time"
-      },
-      {
-        "token": "camera",
-        "label": "Cameras"
-      },
-      {
-        "token": "games",
-        "label": "Games"
-      },
-      {
-        "token": "tools",
-        "label": "Tools"
-      }
+    "shortcut_routes": [
+      { "token": "app:pinned", "label": "Pinned", "group": "Apps", "dock_only": true },
+      { "token": "app:music", "label": "Music", "group": "Apps" },
+      { "token": "app:home_hub", "label": "Home Hub", "group": "Apps" },
+      { "token": "app:area", "label": "Area Control", "group": "Apps" },
+      { "token": "app:remote", "label": "Remote", "group": "Apps" },
+      { "token": "app:weather", "label": "Sky & Weather", "group": "Apps" },
+      { "token": "app:time", "label": "Time", "group": "Apps" },
+      { "token": "app:tools", "label": "Tools", "group": "Apps" },
+      { "token": "app:games", "label": "Games", "group": "Apps" },
+      { "token": "app:clock", "label": "Clock Face", "group": "Apps" },
+      { "token": "home_hub:alarm", "label": "Security Alarm", "group": "Home Hub" },
+      { "token": "home_hub:cameras", "label": "Cameras", "group": "Home Hub" },
+      { "token": "home_hub:intercom", "label": "Intercom", "group": "Home Hub" },
+      { "token": "home_hub:thermostat", "label": "Thermostat", "group": "Home Hub" },
+      { "token": "home_hub:entry", "label": "Entry & Garage", "group": "Home Hub" },
+      { "token": "home_hub:vacuum", "label": "Robot Vacuum", "group": "Home Hub" },
+      { "token": "area:picker", "label": "Switch Area", "group": "Area Control" },
+      { "token": "area:scene", "label": "Area: Scenes", "group": "Area Control" },
+      { "token": "area:light", "label": "Area: Lights", "group": "Area Control" },
+      { "token": "area:cover", "label": "Area: Blinds & Curtains", "group": "Area Control" },
+      { "token": "area:fan", "label": "Area: Fans", "group": "Area Control" },
+      { "token": "area:switch", "label": "Area: Switches", "group": "Area Control" },
+      { "token": "area:climate", "label": "Area: Climate", "group": "Area Control" },
+      { "token": "area:media", "label": "Area: Media", "group": "Area Control" },
+      { "token": "area:all", "label": "Area: All Devices", "group": "Area Control" },
+      { "token": "weather:current", "label": "Current Weather", "group": "Sky & Weather" },
+      { "token": "weather:forecast", "label": "5-Day Forecast", "group": "Sky & Weather" },
+      { "token": "weather:sun", "label": "Sun Path", "group": "Sky & Weather" },
+      { "token": "weather:moon", "label": "Moon Phase", "group": "Sky & Weather" },
+      { "token": "time:clock", "label": "World Clocks", "group": "Time" },
+      { "token": "time:timers", "label": "Timers", "group": "Time" },
+      { "token": "time:alarms", "label": "Alarms", "group": "Time" },
+      { "token": "time:stopwatch", "label": "Stopwatch", "group": "Time" },
+      { "token": "music:speakers", "label": "Speakers", "group": "Music" },
+      { "token": "music:library", "label": "Music Library", "group": "Music" },
+      { "token": "music:favorites", "label": "Favorites", "group": "Music" },
+      { "token": "music:playlists", "label": "Playlists", "group": "Music" },
+      { "token": "music:queue", "label": "Playback Queue", "group": "Music" },
+      { "token": "remote:devices", "label": "Remote Devices", "group": "Remote" },
+      { "token": "tools:stopwatch", "label": "Analog Chronograph", "group": "Tools", "capability": "round" },
+      { "token": "tools:level", "label": "Bubble Level", "group": "Tools", "capability": "imu" },
+      { "token": "tools:flashlight", "label": "Flashlight", "group": "Tools" },
+      { "token": "tools:calculator", "label": "Calculator", "group": "Tools" },
+      { "token": "tools:calendar", "label": "Calendar", "group": "Tools" },
+      { "token": "tools:dice", "label": "Dice Roll", "group": "Tools" },
+      { "token": "tools:coin_flip", "label": "Coin Flip", "group": "Tools" },
+      { "token": "games:marbles", "label": "Marbles", "group": "Games" },
+      { "token": "games:archery", "label": "Archery", "group": "Games" },
+      { "token": "games:bricks", "label": "Bricks", "group": "Games" },
+      { "token": "games:chomp", "label": "Chomp", "group": "Games" },
+      { "token": "games:2048", "label": "2048", "group": "Games" },
+      { "token": "games:memory", "label": "Memory Match", "group": "Games" },
+      { "token": "settings:display", "label": "Display Settings", "group": "Settings" },
+      { "token": "settings:sleep", "label": "Sleep & Wake", "group": "Settings" },
+      { "token": "settings:sound", "label": "Sound Settings", "group": "Settings" },
+      { "token": "settings:voice", "label": "Voice Settings", "group": "Settings" },
+      { "token": "settings:music", "label": "Music Settings", "group": "Settings" },
+      { "token": "settings:home", "label": "Home Settings", "group": "Settings" },
+      { "token": "settings:actions", "label": "Device Actions", "group": "Settings" },
+      { "token": "settings:update", "label": "Software Update", "group": "Settings" },
+      { "token": "settings:info", "label": "System Info", "group": "Settings" }
     ],
     "activity_sources": [
       {
@@ -1351,10 +1411,12 @@
         "hex_color"
       ]
     },
-    "set_dock_apps": {
-      "description": "Save the Home dock apps chosen on the device (Home settings) as the Device's Latter dock setting",
+    "shortcut_action": {
+      "description": "Execute an allowlisted Home Assistant entity action from a configured App Dock or Pinned shortcut",
       "fields": [
-        "dock_apps"
+        "entity_id",
+        "action",
+        "code"
       ]
     },
     "set_device_prefs": {
@@ -1526,11 +1588,13 @@
         "name"
       ]
     },
-    "set_dock_apps": {
-      "description": "Save a device's Home dock apps (the apps shown, in order; Settings is always last). The device sends this from its Home settings; Studio edits the same setting.",
+    "shortcut_action": {
+      "description": "Execute a configured App Dock or Pinned Home Assistant entity action on behalf of a bound Latter Device, enforcing allowlist membership and Perimeter Security Policy.",
       "fields": [
         "target_device",
-        "dock_apps"
+        "entity_id",
+        "action",
+        "code"
       ]
     },
     "doorbell_intercom": {

@@ -71,13 +71,14 @@ from .const import (
     CONF_DEVICE_GROUP,
     CONF_DEVICE_REMOTE_GROUP,
     CONF_DEVICE_SLUG,
-    CONF_DOCK_APPS,
+    CONF_DOCK_ITEMS,
     CONF_DOORBELL_NOISE_REDUCTION,
     CONF_ESPHOME_DEVICE_ID,
     CONF_GARAGE_ENTITY,
     CONF_HOME_CATEGORIES,
     CONF_LOCK_ENTITY,
     CONF_NATIVE_BLE_TRACKING,
+    CONF_PINNED_ITEMS,
     CONF_REMOTE_GROUPS,
     CONF_REMOTES_LIST,
     CONF_SECURITY_PIN_HASH,
@@ -106,10 +107,8 @@ from .const import (
     DEFAULT_BLE_MAX_RADIUS_M,
     DEFAULT_BLE_MAX_VELOCITY_MPS,
     DEFAULT_CARD_SLOT_COUNT,
-    DEFAULT_DEVICE_GROUP,
     DEFAULT_DEVICE_REMOTE_GROUP,
     DEFAULT_DISPLAY_SHAPE,
-    DEFAULT_DOCK_APPS,
     DEFAULT_DOORBELL_NOISE_REDUCTION,
     DEFAULT_HOME_CATEGORIES,
     DEFAULT_LIST_SLOT_COUNT,
@@ -138,6 +137,7 @@ from .feeds import (
     build_calendar_agenda_payload,
     init_weather_attributes,
 )
+from .groups import resolve_effective_device_group
 from .http import UrlSigner
 from .hub import get_latter_system, iter_coordinators
 from .identity import (
@@ -177,15 +177,23 @@ from .presence import (
     resolve_floor_info,
 )
 from .protocol import (
+    MAX_DOCK_ITEMS,
+    MAX_PINNED_ITEMS,
     DomainPayloadPacker,
     V3Records,
     effective_security_pin_policy,
     normalize_activity_sources,
     normalize_area_categories,
+    normalize_dock_items,
     normalize_home_categories,
+    normalize_pinned_items,
     normalize_security_pin_policy,
     pack_device_prefs_fields,
     parse_dirty_prefs_records,
+    resolve_shortcut_entity_icon,
+    resolve_shortcut_live_state,
+    sanitize_shortcut_label,
+    shortcut_records,
 )
 from .remotes import (
     build_remote_config_payload,
@@ -438,6 +446,7 @@ class LatterCoordinator:
         self._cached_area_payload: tuple[float, tuple[str, dict[str, Any]]] | None = None
         self._cached_remote_payload: tuple[float, tuple[str | None, dict[str, Any]]] | None = None
         self._cached_prefs_payload: tuple[int, dict[str, Any]] | None = None
+        self._cached_shortcuts_payload: tuple[int, tuple[str, ...]] | None = None
         self.prefs_seq: int = 0
         self.prefs_key_seq: dict[str, int] = {}
         self.timer_running: bool = False
@@ -451,6 +460,7 @@ class LatterCoordinator:
         self._tracked_ma_counterpart: str | None = None
         self._unsub_alarm_state: Callable[[], None] | None = None
         self._unsub_remotes_state: Callable[[], None] | None = None
+        self._unsub_shortcuts_state: Callable[[], None] | None = None
         self._unsub_area_entities_state: Callable[[], None] | None = None
         self._unsub_area_debounce: Callable[[], None] | None = None
         self._unsub_wallpaper_timer: Callable[[], None] | None = None
@@ -573,9 +583,19 @@ class LatterCoordinator:
         return dict(self._live_subentry().data)
 
     def update_device_config(
-        self, merged_data: dict[str, Any], *, bump_prefs_seq: bool = True
+        self,
+        merged_data: dict[str, Any],
+        *,
+        bump_prefs_seq: bool = True,
+        preserve_group: bool = False,
     ) -> None:
         prev = self._live_subentry().data
+        if not self.is_ble_tag and not preserve_group:
+            eff_grp = resolve_effective_device_group(
+                self.hass, self, candidate_data=merged_data
+            )
+            if merged_data.get(CONF_DEVICE_GROUP) != eff_grp:
+                merged_data = {**merged_data, CONF_DEVICE_GROUP: eff_grp}
         changed_pref_keys: list[str] = []
         if bump_prefs_seq:
             for k in DEVICE_PREF_KEYS:
@@ -796,10 +816,7 @@ class LatterCoordinator:
 
     @property
     def device_group(self) -> str:
-        raw = str(
-            self.get_opt(CONF_DEVICE_GROUP, DEFAULT_DEVICE_GROUP) or DEFAULT_DEVICE_GROUP
-        ).strip()
-        return DEFAULT_DEVICE_GROUP if raw == "handhelds" and not self.has_display else raw
+        return resolve_effective_device_group(self.hass, self)
 
     @property
     def display_shape(self) -> str:
@@ -825,8 +842,16 @@ class LatterCoordinator:
         return max(1, min(20, val))
 
     @property
-    def dock_apps_csv(self) -> str:
-        return str(self.get_opt(CONF_DOCK_APPS, DEFAULT_DOCK_APPS)).strip()
+    def dock_items(self) -> list[dict[str, Any]]:
+        return normalize_dock_items(
+            self._live_subentry().data.get(CONF_DOCK_ITEMS), strict=False
+        )
+
+    @property
+    def pinned_items(self) -> list[dict[str, Any]]:
+        return normalize_pinned_items(
+            self._live_subentry().data.get(CONF_PINNED_ITEMS), strict=False
+        )
 
     @property
     def area_categories_csv(self) -> str:
@@ -1870,6 +1895,7 @@ class LatterCoordinator:
             "_unsub_speaker_state",
             "_unsub_alarm_state",
             "_unsub_remotes_state",
+            "_unsub_shortcuts_state",
             "_unsub_area_entities_state",
             "_unsub_area_debounce",
             "_unsub_wallpaper_timer",
@@ -2665,6 +2691,22 @@ class LatterCoordinator:
                 self._last_pushed_v3.pop(dom, None)
                 _LOGGER.debug("esphome.%s (%s) failed: %s", svc, dom, err)
 
+        _, shortcuts_frames = self.get_shortcuts_payload()
+        shortcuts_sig = "\n".join(shortcuts_frames)
+        if shortcuts_frames and self._last_pushed_v3.get("shortcuts") != shortcuts_sig:
+            try:
+                for frame in shortcuts_frames:
+                    await self.hass.services.async_call(
+                        "esphome",
+                        svc,
+                        {"domain": "shortcuts", "payload": frame},
+                        blocking=True,
+                    )
+                self._last_pushed_v3["shortcuts"] = shortcuts_sig
+            except Exception as err:  # noqa: BLE001
+                self._last_pushed_v3.pop("shortcuts", None)
+                _LOGGER.debug("esphome.%s (shortcuts) failed: %s", svc, err)
+
     @callback
     def force_republish_all_domains(self) -> None:
         self._packer.force_republish_all_domains()
@@ -2675,6 +2717,7 @@ class LatterCoordinator:
         self._cached_area_payload = None
         self._cached_remote_payload = None
         self._cached_prefs_payload = None
+        self._cached_shortcuts_payload = None
         if self.weather_attributes and "condition" in self.weather_attributes:
             wa = self.weather_attributes
             wa["rev"], wa["payload"] = self._pack_domain_payload(
@@ -2712,8 +2755,78 @@ class LatterCoordinator:
         self._cached_area_payload = None
         self._cached_remote_payload = None
         self._cached_prefs_payload = None
+        self._cached_shortcuts_payload = None
         self._schedule_persist_runtime_state()
         self._notify_debouncer.async_schedule_call()
+
+    def _resolve_shortcut_wire_items(
+        self, items: list[dict[str, Any]], *, max_len: int
+    ) -> list[dict[str, Any]]:
+        resolved: list[dict[str, Any]] = []
+        for item in items[:max_len]:
+            if item.get("kind") == "route":
+                resolved.append(
+                    {
+                        "kind": "route",
+                        "target": item["target"],
+                        "action": "",
+                        "label": item.get("label") or "",
+                        "icon": item.get("icon") or "",
+                        "confirm": False,
+                        "state": -1,
+                    }
+                )
+                continue
+            target = str(item.get("target") or "").strip().lower()
+            domain = target.split(".", 1)[0] if "." in target else ""
+            st = self.hass.states.get(target)
+            raw_state = st.state if st is not None else None
+            live_state = resolve_shortcut_live_state(domain, raw_state)
+            eff_label = str(item.get("label") or "") or sanitize_shortcut_label(
+                (st.attributes.get("friendly_name") if st is not None else None)
+                or target
+            )
+            eff_icon = str(item.get("icon") or "") or resolve_shortcut_entity_icon(
+                domain,
+                device_class=(
+                    str(st.attributes.get("device_class") or "")
+                    if st is not None
+                    else ""
+                ),
+                entity_icon=(
+                    str(st.attributes.get("icon") or "") if st is not None else ""
+                ),
+                state=str(raw_state or ""),
+            )
+            resolved.append(
+                {
+                    "kind": "entity",
+                    "target": target,
+                    "action": item.get("action") or "",
+                    "label": eff_label,
+                    "icon": eff_icon,
+                    "confirm": bool(item.get("confirm", False)),
+                    "state": live_state,
+                }
+            )
+        return resolved
+
+    def get_shortcuts_payload(self) -> tuple[int, tuple[str, ...]]:
+        if self._cached_shortcuts_payload is not None:
+            return self._cached_shortcuts_payload
+        dock_wire = self._resolve_shortcut_wire_items(
+            self.dock_items, max_len=MAX_DOCK_ITEMS
+        )
+        pinned_wire = self._resolve_shortcut_wire_items(
+            self.pinned_items, max_len=MAX_PINNED_ITEMS
+        )
+        dock_recs = shortcut_records(dock_wire, max_records=MAX_DOCK_ITEMS)
+        pinned_recs = shortcut_records(pinned_wire, max_records=MAX_PINNED_ITEMS)
+        cur_rev, frames = self._packer.pack_shortcuts(dock_recs, pinned_recs)
+        self.rev = max(self.rev, self._packer.rev)
+        res = (cur_rev, frames)
+        self._cached_shortcuts_payload = res
+        return res
 
     def get_device_prefs_payload(self) -> tuple[int, dict[str, Any]]:
         if self._cached_prefs_payload is not None:

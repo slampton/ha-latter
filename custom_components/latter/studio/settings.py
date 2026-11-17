@@ -70,9 +70,8 @@ SYSTEM_COMMANDS: frozenset[str] = frozenset(
         "add_ble_device",
         "create_device_group",
         "delete_device_group",
-        "sync_device_group",
-        "seed_group_baseline",
-        "set_group_device_setting",
+        "update_group_baseline",
+        "apply_batch_device_setting",
         "test_doorbell_speaker",
         "delete_system_wallpaper",
         "save_system_config",
@@ -287,6 +286,7 @@ VA_VISUAL_PROFILE_OPTIONS: tuple[str, ...] = (
 )
 START_SCREEN_OPTIONS: tuple[str, ...] = (
     "Home",
+    "Pinned",
     "Time App",
     "Clock Face",
     "Media",
@@ -594,6 +594,287 @@ def normalize_home_categories(csv: str | None) -> str:
     return ",".join(cats)
 
 
+# ---------------------------------------------------------------------------
+# Universal Shortcut Engine (`dock_items` & `pinned_items`)
+# ---------------------------------------------------------------------------
+
+SHORTCUT_ROUTES_CATALOG: tuple[dict[str, Any], ...] = tuple(
+    _PROTOCOL_V3_DATA["catalogs"]["shortcut_routes"]
+)
+SHORTCUT_ROUTE_MAP: dict[str, dict[str, Any]] = {
+    str(r["token"]): r for r in SHORTCUT_ROUTES_CATALOG
+}
+SHORTCUT_ROUTE_TOKENS: tuple[str, ...] = tuple(SHORTCUT_ROUTE_MAP.keys())
+DEFAULT_DOCK_ROUTES: str = str(_PROTOCOL_V3_DATA["defaults"]["dock_routes"])
+
+MAX_DOCK_ITEMS = 24
+MAX_PINNED_ITEMS = 96
+SHORTCUT_LABEL_MAX = 24
+
+SHORTCUT_DOMAIN_ACTIONS: dict[str, tuple[tuple[str, str], ...]] = {
+    "light": (("toggle", "Toggle"), ("turn_on", "Turn On"), ("turn_off", "Turn Off")),
+    "switch": (("toggle", "Toggle"), ("turn_on", "Turn On"), ("turn_off", "Turn Off")),
+    "input_boolean": (("toggle", "Toggle"), ("turn_on", "Turn On"), ("turn_off", "Turn Off")),
+    "fan": (("toggle", "Toggle"), ("turn_on", "Turn On"), ("turn_off", "Turn Off")),
+    "cover": (
+        ("toggle", "Toggle"),
+        ("open_cover", "Open"),
+        ("close_cover", "Close"),
+        ("stop_cover", "Stop"),
+    ),
+    "valve": (
+        ("toggle", "Toggle"),
+        ("open_valve", "Open"),
+        ("close_valve", "Close"),
+        ("stop_valve", "Stop"),
+    ),
+    "scene": (("turn_on", "Activate"),),
+    "script": (("turn_on", "Run"), ("turn_off", "Stop")),
+    "automation": (
+        ("trigger", "Trigger"),
+        ("toggle", "Toggle Enable"),
+        ("turn_on", "Enable"),
+        ("turn_off", "Disable"),
+    ),
+    "button": (("press", "Press"),),
+    "input_button": (("press", "Press"),),
+    "lock": (("lock", "Lock"), ("unlock", "Unlock"), ("open", "Unlatch")),
+    "alarm_control_panel": (
+        ("disarm", "Disarm"),
+        ("arm_home", "Arm Home"),
+        ("arm_away", "Arm Away"),
+        ("arm_night", "Arm Night"),
+        ("arm_vacation", "Arm Vacation"),
+    ),
+    "vacuum": (
+        ("start", "Start"),
+        ("pause", "Pause"),
+        ("return_to_base", "Return To Base"),
+        ("stop", "Stop"),
+        ("clean_spot", "Spot Clean"),
+        ("locate", "Locate"),
+    ),
+    "lawn_mower": (
+        ("start_mowing", "Start Mowing"),
+        ("pause", "Pause"),
+        ("dock", "Dock"),
+    ),
+    "media_player": (
+        ("media_play_pause", "Play / Pause"),
+        ("turn_on", "Turn On"),
+        ("turn_off", "Turn Off"),
+        ("media_next_track", "Next Track"),
+    ),
+    "climate": (("turn_on", "Turn On"), ("turn_off", "Turn Off")),
+    "humidifier": (("toggle", "Toggle"), ("turn_on", "Turn On"), ("turn_off", "Turn Off")),
+    "siren": (("turn_on", "Turn On"), ("turn_off", "Turn Off")),
+    "water_heater": (("turn_on", "Turn On"), ("turn_off", "Turn Off")),
+    "select": (("select_next", "Next Option"), ("select_previous", "Previous Option")),
+    "input_select": (("select_next", "Next Option"), ("select_previous", "Previous Option")),
+}
+SHORTCUT_SUPPORTED_DOMAINS: frozenset[str] = frozenset(SHORTCUT_DOMAIN_ACTIONS.keys())
+SHORTCUT_DOMAIN_ACTION_SETS: dict[str, frozenset[str]] = {
+    dom: frozenset(act for act, _ in acts)
+    for dom, acts in SHORTCUT_DOMAIN_ACTIONS.items()
+}
+_MDI_ICON_RE = re.compile(r"^mdi:[a-z0-9]+(?:-[a-z0-9]+)*$")
+_ENTITY_ID_RE = re.compile(r"^([a-z0-9_]+)\.([a-z0-9_]+)$")
+
+
+def default_dock_items() -> list[dict[str, Any]]:
+    """Return the canonical default Home Dock `ShortcutItem` list."""
+    out: list[dict[str, Any]] = []
+    for raw in DEFAULT_DOCK_ROUTES.split(","):
+        tok = raw.strip().lower()
+        if tok in SHORTCUT_ROUTE_MAP and tok != "settings:root":
+            out.append(
+                {
+                    "kind": "route",
+                    "target": tok,
+                    "action": "",
+                    "label": "",
+                    "icon": "",
+                    "confirm": False,
+                }
+            )
+    return out
+
+
+def sanitize_shortcut_label(val: Any, max_chars: int = SHORTCUT_LABEL_MAX) -> str:
+    """Return a single-line delimiter-safe shortcut label capped at `max_chars` characters."""
+    raw = str(val or "")
+    chars: list[str] = []
+    prev_space = True
+    for ch in raw:
+        code = ord(ch)
+        if (
+            code < 0x20
+            or code == 0x7F
+            or ch in ("|", "\x1e", "\x1f", " ", "\t", "\r", "\n")
+        ):
+            if not prev_space:
+                chars.append(" ")
+                prev_space = True
+            continue
+        chars.append(ch)
+        prev_space = False
+    cleaned = "".join(chars).strip()
+    if len(cleaned) > max_chars:
+        cleaned = cleaned[:max_chars].rstrip()
+    return cleaned
+
+
+def normalize_mdi_icon(val: Any, *, strict: bool = False) -> str:
+    """Validate and normalize an optional `mdi:<slug>` icon string (`""` = default icon)."""
+    raw = str(val or "").strip().lower().replace("_", "-")
+    if not raw:
+        return ""
+    if raw.startswith("mdi-"):
+        raw = "mdi:" + raw[4:]
+    elif not raw.startswith("mdi:") and re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", raw):
+        raw = f"mdi:{raw}"
+    if _MDI_ICON_RE.fullmatch(raw):
+        return raw
+    if strict:
+        raise ValueError(f"Invalid MDI icon: {val!r}")
+    return ""
+
+
+def normalize_shortcut_item(
+    raw: Any,
+    *,
+    is_dock: bool,
+    strict: bool = True,
+) -> dict[str, Any] | None:
+    """Validate and normalize one `ShortcutItem` dict (`route` or `entity`)."""
+    if not isinstance(raw, Mapping):
+        if strict:
+            raise ValueError("Each shortcut item must be an object")
+        return None
+    kind = str(raw.get("kind") or "").strip().lower()
+    if kind == "route":
+        target = str(raw.get("target") or "").strip().lower()
+        if is_dock and target in ("settings:root", "app:settings"):
+            # Settings is always rendered last on the Home Dock by firmware.
+            return None
+        spec = SHORTCUT_ROUTE_MAP.get(target)
+        if spec is None:
+            if strict:
+                raise ValueError(f"Unknown shortcut route: {target or '(empty)'}")
+            return None
+        if not is_dock and bool(spec.get("dock_only")):
+            if strict:
+                raise ValueError(f"Route '{target}' can only be placed on the App Dock")
+            return None
+        label = sanitize_shortcut_label(raw.get("label"))
+        icon = normalize_mdi_icon(raw.get("icon"), strict=strict)
+        return {
+            "kind": "route",
+            "target": target,
+            "action": "",
+            "label": label,
+            "icon": icon,
+            "confirm": False,
+        }
+
+    if kind == "entity":
+        target = str(raw.get("target") or "").strip().lower()
+        m_ent = _ENTITY_ID_RE.fullmatch(target)
+        if not m_ent:
+            if strict:
+                raise ValueError(f"Invalid entity_id: {target or '(empty)'}")
+            return None
+        domain = m_ent.group(1)
+        allowed_actions = SHORTCUT_DOMAIN_ACTION_SETS.get(domain)
+        if allowed_actions is None:
+            if strict:
+                raise ValueError(f"Unsupported shortcut entity domain: {domain}")
+            return None
+        action = str(raw.get("action") or "").strip().lower()
+        if not action and not strict:
+            action = SHORTCUT_DOMAIN_ACTIONS[domain][0][0]
+        if action not in allowed_actions:
+            if strict:
+                raise ValueError(
+                    f"Unsupported action '{action or '(empty)'}' for domain '{domain}'"
+                )
+            return None
+        label = sanitize_shortcut_label(raw.get("label"))
+        icon = normalize_mdi_icon(raw.get("icon"), strict=strict)
+        raw_confirm = raw.get("confirm")
+        if raw_confirm is None:
+            confirm = bool(is_dock)
+        elif isinstance(raw_confirm, str):
+            confirm = raw_confirm.strip().lower() in ("1", "true", "on", "yes")
+        else:
+            confirm = bool(raw_confirm)
+        return {
+            "kind": "entity",
+            "target": target,
+            "action": action,
+            "label": label,
+            "icon": icon,
+            "confirm": confirm,
+        }
+
+    if strict:
+        raise ValueError(f"Unknown shortcut kind: {kind or '(empty)'}")
+    return None
+
+
+def _normalize_shortcut_list(
+    val: Any,
+    *,
+    is_dock: bool,
+    max_items: int,
+    strict: bool,
+) -> list[dict[str, Any]]:
+    if not isinstance(val, (list, tuple)):
+        if strict:
+            name = "dock_items" if is_dock else "pinned_items"
+            raise ValueError(f"{name} must be a list")
+        return default_dock_items() if is_dock else []
+    out: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str]] = set()
+    for raw in val:
+        norm = normalize_shortcut_item(raw, is_dock=is_dock, strict=strict)
+        if norm is None:
+            continue
+        dedup_key = (norm["kind"], norm["target"], norm["action"])
+        if dedup_key in seen:
+            continue
+        if len(out) >= max_items:
+            if strict:
+                label = "App Dock" if is_dock else "Pinned App"
+                raise ValueError(f"{label} supports at most {max_items} shortcuts")
+            break
+        seen.add(dedup_key)
+        out.append(norm)
+    return out
+
+
+def normalize_dock_items(
+    val: Any, *, strict: bool = False
+) -> list[dict[str, Any]]:
+    """Validate and normalize a Device's `dock_items` list (`None` -> default Home Dock)."""
+    if val is None:
+        return default_dock_items()
+    return _normalize_shortcut_list(
+        val, is_dock=True, max_items=MAX_DOCK_ITEMS, strict=strict
+    )
+
+
+def normalize_pinned_items(
+    val: Any, *, strict: bool = False
+) -> list[dict[str, Any]]:
+    """Validate and normalize a Device's `pinned_items` list (`None` -> `[]`)."""
+    if val is None:
+        return []
+    return _normalize_shortcut_list(
+        val, is_dock=False, max_items=MAX_PINNED_ITEMS, strict=strict
+    )
+
+
 ALBUM_ART_STYLE_OPTIONS: tuple[str, ...] = (
     "Full Screen",
     "Letterbox",
@@ -751,7 +1032,6 @@ DEVICE_TEXT_KEYS: tuple[str, ...] = (
     "ble_beacon_uuid",
     "ble_target_address",
     "assigned_person",
-    "dock_apps",
     "area_categories",
     "home_categories",
     "activity_sources",
@@ -767,6 +1047,8 @@ DEVICE_BOOL_KEYS: tuple[str, ...] = (
 DEVICE_SETTING_KEYS: tuple[str, ...] = (
     *DEVICE_TEXT_KEYS,
     *DEVICE_BOOL_KEYS,
+    "dock_items",
+    "pinned_items",
     "wallpaper_cycle_minutes",
     "device_custom_color",
     "area_follow_dwell_s",
@@ -1089,6 +1371,22 @@ def clean_device_settings(
     if "home_categories" in out:
         try:
             out["home_categories"] = normalize_home_categories(out["home_categories"])
+        except ValueError as err:
+            raise SettingsScopeError(str(err)) from None
+
+    if "dock_items" in incoming:
+        try:
+            out["dock_items"] = normalize_dock_items(
+                incoming["dock_items"], strict=True
+            )
+        except ValueError as err:
+            raise SettingsScopeError(str(err)) from None
+
+    if "pinned_items" in incoming:
+        try:
+            out["pinned_items"] = normalize_pinned_items(
+                incoming["pinned_items"], strict=True
+            )
         except ValueError as err:
             raise SettingsScopeError(str(err)) from None
 

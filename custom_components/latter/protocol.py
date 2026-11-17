@@ -10,6 +10,7 @@ from datetime import UTC, date, datetime, timedelta
 import hashlib
 import hmac
 import json
+import math
 from pathlib import Path
 import secrets
 from typing import Any
@@ -19,19 +20,35 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from .studio.settings import (
     AREA_CATEGORY_TOKENS,
     DEFAULT_AREA_CATEGORIES,
+    DEFAULT_DOCK_ROUTES,
     DEFAULT_HOME_CATEGORIES,
     DEVICE_PREF_SPEC_MAP,
     HOME_CATEGORY_TOKENS,
+    MAX_DOCK_ITEMS,
+    MAX_PINNED_ITEMS,
+    SHORTCUT_DOMAIN_ACTION_SETS,
+    SHORTCUT_DOMAIN_ACTIONS,
+    SHORTCUT_LABEL_MAX,
+    SHORTCUT_ROUTE_MAP,
+    SHORTCUT_ROUTE_TOKENS,
+    SHORTCUT_ROUTES_CATALOG,
+    SHORTCUT_SUPPORTED_DOMAINS,
     WORLD_CLOCK_CATALOG_MAP,
+    default_dock_items,
     normalize_alarms_summary,
     normalize_area_categories,
+    normalize_dock_items,
     normalize_home_categories,
+    normalize_mdi_icon,
+    normalize_pinned_items,
+    normalize_shortcut_item,
     normalize_world_clocks_spec,
     parse_area_categories,
     parse_home_categories,
     parse_world_clocks_spec,
     resolve_device_pref_value,
     sanitize_clock_label,
+    sanitize_shortcut_label,
 )
 
 # ---------------------------------------------------------------------------
@@ -280,8 +297,55 @@ class DomainPayloadPacker:
             self.rev = max(self.rev, cur_rev)
         return cur_rev, f"v3\x1f{self.epoch}\x1f{cur_rev}\x1f{body}"
 
+    def pack_shortcuts(
+        self,
+        dock_records: V3Records,
+        pinned_records: V3Records,
+        *,
+        chunk_size: int = 18,
+    ) -> tuple[int, tuple[str, ...]]:
+        """Pack chunked `shortcuts` frames sharing one content-hashed revision across all chunks."""
+        eff_chunk_size = max(1, int(chunk_size))
+        dock_blob = encode_v3_records(dock_records)
+        pinned_full_blob = encode_v3_records(pinned_records)
+        digest = hashlib.sha256(
+            f"{dock_blob}\x1f{pinned_full_blob}".encode()
+        ).hexdigest()[:16]
+        prev_digest = self._domain_hashes.get("shortcuts")
+        cur_rev = self._domain_revs.get("shortcuts", 0)
+        if prev_digest is None:
+            cur_rev = max(1, cur_rev)
+            self._domain_hashes["shortcuts"] = digest
+            self._domain_revs["shortcuts"] = cur_rev
+        elif prev_digest != digest:
+            cur_rev = max(1, cur_rev) + 1
+            self._domain_hashes["shortcuts"] = digest
+            self._domain_revs["shortcuts"] = cur_rev
+            self.rev = max(self.rev, cur_rev)
+
+        pinned_total = len(pinned_records)
+        chunk_count = max(1, math.ceil(pinned_total / eff_chunk_size))
+        frames: list[str] = []
+        for chunk_idx in range(chunk_count):
+            dock_field = dock_blob if chunk_idx == 0 else ""
+            slice_recs = pinned_records[
+                chunk_idx * eff_chunk_size : (chunk_idx + 1) * eff_chunk_size
+            ]
+            pinned_field = encode_v3_records(slice_recs)
+            body = FIELD_SEP.join(
+                (
+                    str(chunk_idx),
+                    str(chunk_count),
+                    dock_field,
+                    str(pinned_total),
+                    pinned_field,
+                )
+            )
+            frames.append(f"v3\x1f{self.epoch}\x1f{cur_rev}\x1f{body}")
+        return cur_rev, tuple(frames)
+
     def force_republish_all_domains(self) -> None:
-        """Bump per-domain revisions across all 6 domains so a reconnected device receives a full snapshot."""
+        """Bump per-domain revisions across all 7 domains so a reconnected device receives a full snapshot."""
         for dom in PROTOCOL_V3_DOMAINS:
             self._domain_revs[dom] = max(1, self._domain_revs.get(dom, 1)) + 1
             self.rev = max(self.rev, self._domain_revs[dom])
@@ -490,12 +554,10 @@ def build_time_zone_payloads(
 
 
 # ---------------------------------------------------------------------------
-# Home Dock & Activity Card Policies
+# Universal Shortcut Engine, Home Dock & Activity Card Policies
 # ---------------------------------------------------------------------------
 
-DOCK_APP_TOKENS: tuple[str, ...] = tuple(
-    c["token"] for c in _PROTOCOL_V3_DATA["catalogs"]["dock_apps"]
-)
+SHORTCUTS_CHUNK_SIZE = 18
 
 # Canonical order; Studio shows one switch per source in this order.
 ACTIVITY_SOURCE_KEYS: tuple[str, ...] = tuple(
@@ -512,29 +574,134 @@ __all_area_categories__ = (
     DEFAULT_HOME_CATEGORIES,
     parse_home_categories,
     normalize_home_categories,
+    DEFAULT_DOCK_ROUTES,
+    MAX_DOCK_ITEMS,
+    MAX_PINNED_ITEMS,
+    SHORTCUT_ROUTES_CATALOG,
+    SHORTCUT_ROUTE_MAP,
+    SHORTCUT_ROUTE_TOKENS,
+    SHORTCUT_DOMAIN_ACTIONS,
+    SHORTCUT_DOMAIN_ACTION_SETS,
+    SHORTCUT_SUPPORTED_DOMAINS,
+    default_dock_items,
+    normalize_dock_items,
+    normalize_pinned_items,
+    normalize_shortcut_item,
+    sanitize_shortcut_label,
 )
 
 
-def parse_dock_apps(csv: str | None) -> list[str]:
-    """Return the known dock apps named in `csv`, in order, without duplicates."""
-    out: list[str] = []
-    for raw in str(csv or "").split(","):
-        tok = raw.strip().lower()
-        if tok in DOCK_APP_TOKENS and tok not in out:
-            out.append(tok)
-    return out
+def resolve_shortcut_entity_icon(
+    domain: str,
+    *,
+    device_class: str = "",
+    entity_icon: str = "",
+    state: str = "",
+) -> str:
+    """Return the canonical `mdi:<slug>` icon for an entity shortcut when no custom override is set."""
+    explicit = normalize_mdi_icon(entity_icon, strict=False)
+    if explicit:
+        return explicit
+    dom = str(domain or "").strip().lower()
+    dclass = str(device_class or "").strip().lower()
+    st = str(state or "").strip().lower()
+    if dom == "light":
+        return "mdi:lightbulb"
+    if dom in ("switch", "input_boolean"):
+        return "mdi:power-plug" if dclass == "outlet" else "mdi:toggle-switch"
+    if dom == "cover":
+        if dclass == "garage":
+            return "mdi:garage-open" if st in ("open", "opening") else "mdi:garage"
+        if dclass == "gate":
+            return "mdi:gate"
+        if dclass == "door":
+            return "mdi:door-open" if st in ("open", "opening") else "mdi:door-closed"
+        if dclass == "curtain":
+            return "mdi:curtains"
+        if dclass in ("blind", "shade", "shutter"):
+            return "mdi:blinds-horizontal"
+        return "mdi:window-shutter"
+    if dom == "fan":
+        return "mdi:fan"
+    if dom == "valve":
+        return "mdi:pipe-valve"
+    if dom == "scene":
+        return "mdi:palette"
+    if dom == "script":
+        return "mdi:script-text-play"
+    if dom == "automation":
+        return "mdi:robot"
+    if dom in ("button", "input_button"):
+        return "mdi:gesture-tap-button"
+    if dom == "lock":
+        return "mdi:lock-open" if st in ("unlocked", "unlocking", "open", "opening") else "mdi:lock"
+    if dom == "alarm_control_panel":
+        return "mdi:shield-home"
+    if dom == "vacuum":
+        return "mdi:robot-vacuum"
+    if dom == "lawn_mower":
+        return "mdi:robot-mower"
+    if dom == "media_player":
+        return "mdi:television" if dclass in ("tv", "receiver") else "mdi:speaker"
+    if dom == "climate":
+        return "mdi:thermostat"
+    if dom == "humidifier":
+        return "mdi:air-humidifier"
+    if dom == "siren":
+        return "mdi:bullhorn"
+    if dom == "water_heater":
+        return "mdi:water-boiler"
+    if dom in ("select", "input_select"):
+        return "mdi:form-select"
+    return "mdi:flash"
 
 
-def normalize_dock_apps(csv: str | None) -> str:
-    """Return `csv` as canonical comma-separated dock apps; raise ValueError if it names none or an unknown app."""
-    names = [t.strip().lower() for t in str(csv or "").split(",") if t.strip()]
-    unknown = sorted({t for t in names if t not in DOCK_APP_TOKENS})
-    if unknown:
-        raise ValueError(f"Unknown dock app: {', '.join(unknown)}")
-    apps = parse_dock_apps(csv)
-    if not apps:
-        raise ValueError("The Home dock needs at least one app")
-    return ",".join(apps)
+def resolve_shortcut_live_state(domain: str, raw_state: str | None) -> int:
+    """Map an HA entity state to compact shortcut wire state (`-1` stateless, `0` off, `1` on, `2` unavailable)."""
+    if raw_state is None:
+        return 2
+    st = str(raw_state).strip().lower()
+    if st == "unavailable":
+        return 2
+    dom = str(domain or "").strip().lower()
+    if dom in ("scene", "button", "input_button", "select", "input_select"):
+        return -1
+    if st in ("", "unknown"):
+        return 0 if dom in ("script", "automation") else -1
+    if dom in ("cover", "valve"):
+        return 1 if st in ("open", "opening") else 0
+    if dom == "lock":
+        return 1 if st in ("unlocked", "unlocking", "open", "opening") else 0
+    if dom == "alarm_control_panel":
+        return 0 if st == "disarmed" else 1
+    if dom in ("vacuum", "lawn_mower"):
+        return 1 if st in ("cleaning", "mowing", "returning") else 0
+    if dom == "media_player":
+        return 1 if st in ("playing", "buffering") else 0
+    if dom in ("climate", "water_heater"):
+        return 0 if st == "off" else 1
+    return 1 if st == "on" else 0
+
+
+def shortcut_records(
+    items: Iterable[Mapping[str, Any]], *, max_records: int = MAX_PINNED_ITEMS
+) -> V3Records:
+    """Encode resolved shortcut items (`kind|target|action|label|icon|confirm|state`) into `V3Records`."""
+    rows: list[tuple[Any, ...]] = []
+    for it in items:
+        kind = str(it.get("kind") or "")
+        target = str(it.get("target") or "")
+        action = str(it.get("action") or "") if kind == "entity" else ""
+        label = str(it.get("label") or "")
+        icon = str(it.get("icon") or "")
+        confirm = "1" if (kind == "entity" and bool(it.get("confirm"))) else "0"
+        state_val = int(it.get("state", -1)) if kind == "entity" else -1
+        rows.append((kind, target, action, label, icon, confirm, str(state_val)))
+    return build_v3_records(
+        rows,
+        (None, None, None, SHORTCUT_LABEL_MAX, None, 1, 2),
+        max_records,
+    )
 
 
 def normalize_activity_sources(value: Any) -> str:

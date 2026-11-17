@@ -771,9 +771,9 @@ save_custom_color:
       selector:
         text:
 
-set_dock_apps:
-  name: Set Home Dock Apps
-  description: Save a device's Home dock apps (the apps shown, in order; Settings is always last). The device sends this from its Home settings; Studio edits the same setting.
+shortcut_action:
+  name: Execute Shortcut Action
+  description: Execute a Home Assistant entity shortcut configured on the target Latter device's App Dock or Pinned App, enforcing per-device shortcut allowlists and perimeter security PIN policy.
   fields:
     target_device:
       name: Target Device
@@ -782,11 +782,24 @@ set_dock_apps:
       selector:
         device:
           integration: latter
-    dock_apps:
-      name: Dock Apps
-      description: Comma-separated apps in order, from music, home_hub, area, remote, weather, time, camera, games, tools.
+    entity_id:
+      name: Entity ID
+      description: Configured Home Assistant entity ID to trigger or control.
       required: true
-      example: "music,home_hub,area,remote,games,tools"
+      example: "script.call_for_help"
+      selector:
+        entity:
+    action:
+      name: Action
+      description: Configured domain action verb (e.g., toggle, turn_on, turn_off, open_cover, close_cover, trigger, press, lock, unlock, disarm, arm_home).
+      required: true
+      example: "turn_on"
+      selector:
+        text:
+    code:
+      name: Security PIN
+      description: Optional security PIN digits when unlocking perimeter locks/garages or disarming alarms.
+      required: false
       selector:
         text:
 

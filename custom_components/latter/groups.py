@@ -21,9 +21,10 @@ from .const import (
     CONF_BLE_TARGET_ADDRESS,
     CONF_DEVICE_CUSTOM_COLOR,
     CONF_DEVICE_GROUPS,
-    CONF_DOCK_APPS,
+    CONF_DOCK_ITEMS,
     CONF_HOME_CATEGORIES,
     CONF_NATIVE_BLE_TRACKING,
+    CONF_PINNED_ITEMS,
     CONF_SECURITY_PIN_POLICY,
     CONF_SYNC_DEVICE_AREA,
     CONF_WALLPAPER_CYCLE_MINUTES,
@@ -465,7 +466,8 @@ GROUP_BEHAVIOR_DEVICE_KEYS: tuple[str, ...] = (
 
 # Tier 3: Personal & Area Appearance/Layout keys preserved per-device on group join/sync.
 GROUP_APPEARANCE_DEVICE_KEYS: tuple[str, ...] = (
-    CONF_DOCK_APPS,
+    CONF_DOCK_ITEMS,
+    CONF_PINNED_ITEMS,
     CONF_AREA_CATEGORIES,
     CONF_HOME_CATEGORIES,
     CONF_ACTIVITY_CARD,
@@ -477,14 +479,53 @@ GROUP_APPEARANCE_DEVICE_KEYS: tuple[str, ...] = (
     *tuple(s.key for s in DEVICE_PREF_SPECS if s.group_tier == "appearance"),
 )
 
+def default_group_baseline_config() -> dict[str, Any]:
+    """Return the complete canonical Tier 2 operational baseline dictionary."""
+    base: dict[str, Any] = {
+        CONF_NATIVE_BLE_TRACKING: False,
+        CONF_BLE_AUTO_SWITCH: False,
+        CONF_SYNC_DEVICE_AREA: False,
+        CONF_AREA_FOLLOW_DWELL_S: 10,
+        CONF_AREA_HANDOFF: False,
+        CONF_SECURITY_PIN_POLICY: "auto",
+    }
+    for spec in DEVICE_PREF_SPECS:
+        if spec.group_tier == "behavior":
+            base[spec.key] = spec.default
+    return base
+
+
+def resolve_behavior_key_value(data: Mapping[str, Any], key: str) -> Any:
+    """Resolve the effective Tier 2 operational value for `key` from `data`."""
+    spec = DEVICE_PREF_SPEC_MAP.get(key)
+    if spec is not None:
+        return resolve_device_pref_value(data, key)
+    if key == CONF_NATIVE_BLE_TRACKING:
+        return bool(data.get(CONF_NATIVE_BLE_TRACKING, False))
+    if key == CONF_BLE_AUTO_SWITCH:
+        return bool(
+            data.get(
+                CONF_BLE_AUTO_SWITCH,
+                bool(data.get(CONF_NATIVE_BLE_TRACKING, False)),
+            )
+        )
+    if key == CONF_SYNC_DEVICE_AREA:
+        return bool(data.get(CONF_SYNC_DEVICE_AREA, False))
+    if key == CONF_AREA_FOLLOW_DWELL_S:
+        try:
+            val = int(data.get(CONF_AREA_FOLLOW_DWELL_S, 10))
+        except (TypeError, ValueError):
+            val = 10
+        return max(3, min(60, val))
+    if key == CONF_AREA_HANDOFF:
+        return bool(data.get(CONF_AREA_HANDOFF, False))
+    if key == CONF_SECURITY_PIN_POLICY:
+        pol = str(data.get(CONF_SECURITY_PIN_POLICY) or "auto").strip().lower()
+        return pol if pol in ("auto", "allow", "require_pin", "block") else "auto"
+    return data.get(key)
+
+
 DEFAULT_DEVICE_GROUPS: list[dict[str, Any]] = [
-    {
-        "id": "unassigned",
-        "name": "Unassigned",
-        "description": "Default group with no baseline settings applied",
-        "builtin": True,
-        "device_config": {},
-    },
     {
         "id": "handhelds",
         "name": "Handhelds",
@@ -521,49 +562,6 @@ DEFAULT_DEVICE_GROUPS: list[dict[str, Any]] = [
             "day_brightness": "80%",
             "night_brightness": "60%",
             "ble_beacon_mode": "Handheld + Screen Off",
-        },
-    },
-    {
-        "id": "bedrooms",
-        "name": "Bedrooms",
-        "description": "Nightstand and quiet tabletop displays with dimmed night brightness and docked wake word",
-        "builtin": True,
-        "device_config": {
-            CONF_NATIVE_BLE_TRACKING: False,
-            CONF_BLE_AUTO_SWITCH: False,
-            CONF_SYNC_DEVICE_AREA: False,
-            CONF_AREA_FOLLOW_DWELL_S: 10,
-            CONF_AREA_HANDOFF: False,
-            "power_profile": "Tabletop Dock",
-            **POWER_PROFILE_PREFS["Tabletop Dock"],
-            "auto_brightness_mode": "Sun Synchronized",
-            "day_brightness": "80%",
-            "night_brightness": "60%",
-            "alert_volume": 50,
-        },
-    },
-    {
-        "id": "common_areas",
-        "name": "Common Areas",
-        "description": "Shared tabletop displays with Always-On wake word and 5 min docked idle timeout",
-        "builtin": True,
-        "device_config": {
-            CONF_NATIVE_BLE_TRACKING: False,
-            CONF_BLE_AUTO_SWITCH: False,
-            CONF_SYNC_DEVICE_AREA: False,
-            CONF_AREA_FOLLOW_DWELL_S: 10,
-            CONF_AREA_HANDOFF: False,
-            "power_profile": "Custom",
-            "wake_word_mode": "Always On",
-            "tap_to_wake": "Single Tap",
-            "pickup_to_wake": "Disabled",
-            "battery_screen_timeout": "30s",
-            "docked_idle_timeout": "5 min",
-            "battery_hibernate_timeout": "15 min",
-            "docked_screensaver": True,
-            "auto_brightness_mode": "Sun Synchronized",
-            "day_brightness": "90%",
-            "night_brightness": "70%",
         },
     },
     {
@@ -608,10 +606,12 @@ def _same_control_val(a: Any, b: Any) -> bool:
 
 
 def _normalize_group_entry(raw: Mapping[str, Any] | dict[str, Any]) -> dict[str, Any]:
-    """Normalize a single Device Group entry, merging built-in baseline defaults when not yet customized."""
+    """Normalize a single Device Group entry onto a complete Tier 2 operational baseline."""
     gid = str(raw.get("id") or "").strip()
     builtin_def = _BUILTIN_GROUPS_BY_ID.get(gid)
-    base_dev = dict(builtin_def.get("device_config") or {}) if builtin_def else {}
+    base_dev = default_group_baseline_config()
+    if builtin_def and isinstance(builtin_def.get("device_config"), dict):
+        base_dev.update(builtin_def["device_config"])
     if isinstance(raw.get("device_config"), dict):
         for k, v in raw["device_config"].items():
             if k in GROUP_BEHAVIOR_DEVICE_KEYS and v is not None:
@@ -628,7 +628,7 @@ def _normalize_group_entry(raw: Mapping[str, Any] | dict[str, Any]) -> dict[str,
 
 
 def get_device_groups(hass: HomeAssistant) -> list[dict[str, Any]]:
-    """Return the normalized Device Groups list (each with its Tier 2 baseline) from Global System Config."""
+    """Return the normalized named Device Groups list (each with its Tier 2 baseline) from Global System Config."""
     domain_data = hass.data.get(DOMAIN, {})
     global_cfg = domain_data.get(DATA_GLOBAL_CONFIG) or {}
     raw_groups = global_cfg.get(CONF_DEVICE_GROUPS)
@@ -641,7 +641,9 @@ def get_device_groups(hass: HomeAssistant) -> list[dict[str, Any]]:
         if not isinstance(item, dict):
             continue
         gid = str(item.get("id") or "").strip()
-        if not gid:
+        if not gid or gid in (DEFAULT_DEVICE_GROUP, "unassigned"):
+            continue
+        if item.get("builtin") is True and gid not in _BUILTIN_GROUPS_BY_ID:
             continue
         by_id[gid] = _normalize_group_entry(item)
         if gid not in _BUILTIN_GROUPS_BY_ID and gid not in custom_order:
@@ -656,28 +658,39 @@ def get_device_groups(hass: HomeAssistant) -> list[dict[str, Any]]:
     return out
 
 
-def compute_device_group_sync_status(
+def device_matches_group_baseline(
     hass: HomeAssistant,
     coordinator: Any,
     groups: list[dict[str, Any]] | None = None,
-) -> str:
-    """Return 'in_sync', 'customized', or 'unmanaged' comparing the device's Tier 2 settings to its Group baseline."""
+    *,
+    group_id: str | None = None,
+    candidate_data: Mapping[str, Any] | None = None,
+) -> bool:
+    """Return True when `coordinator` (or `candidate_data`) matches all supported Tier 2 keys of `group_id`."""
     if getattr(coordinator, "is_ble_tag", False):
-        return "unmanaged"
-    grp_id = str(getattr(coordinator, "device_group", "") or DEFAULT_DEVICE_GROUP).strip()
-    if not grp_id or grp_id == DEFAULT_DEVICE_GROUP:
-        return "unmanaged"
+        return False
+    dev_data: Mapping[str, Any] = (
+        candidate_data
+        if candidate_data is not None
+        else (getattr(coordinator, "device_data", {}) or {})
+    )
+    grp_id = str(
+        group_id
+        if group_id is not None
+        else (dev_data.get("device_group") or getattr(coordinator, "_raw_device_group", "") or DEFAULT_DEVICE_GROUP)
+    ).strip()
+    if not grp_id or grp_id in (DEFAULT_DEVICE_GROUP, "unassigned"):
+        return False
     group_list = groups if groups is not None else get_device_groups(hass)
     grp = next((g for g in group_list if g.get("id") == grp_id), None)
     if grp is None:
-        return "unmanaged"
+        return False
 
     base_dev = grp.get("device_config") or {}
     if not base_dev:
-        return "unmanaged"
+        return False
 
     is_roaming = bool(getattr(coordinator, "is_roaming_device", True))
-    dev_data = getattr(coordinator, "device_data", {}) or {}
     base_prof = str(base_dev.get("power_profile") or "").strip()
     cur_prof = resolve_device_pref_value(dev_data, "power_profile")
     prof_preset = POWER_PROFILE_PREFS.get(base_prof)
@@ -697,16 +710,46 @@ def compute_device_group_sync_status(
                 and _same_control_val(want_v, prof_preset.get(k))
             ):
                 continue
-            cur_v = resolve_device_pref_value(dev_data, k)
-        else:
-            cur_v = coordinator.get_opt(k)
+        cur_v = resolve_behavior_key_value(dev_data, k)
         if isinstance(want_v, bool):
             if bool(cur_v) != want_v:
-                return "customized"
+                return False
         elif not _same_control_val(cur_v, want_v):
-            return "customized"
+            return False
 
-    return "in_sync"
+    return True
+
+
+def resolve_effective_device_group(
+    hass: HomeAssistant,
+    coordinator: Any,
+    groups: list[dict[str, Any]] | None = None,
+    *,
+    candidate_data: Mapping[str, Any] | None = None,
+) -> str:
+    """Return the Device's effective group ID, switching to `'custom'` if unknown or diverged from baseline."""
+    if getattr(coordinator, "is_ble_tag", False):
+        return ""
+    dev_data: Mapping[str, Any] = (
+        candidate_data
+        if candidate_data is not None
+        else (getattr(coordinator, "device_data", {}) or {})
+    )
+    raw_grp = str(dev_data.get("device_group") or DEFAULT_DEVICE_GROUP).strip()
+    if not raw_grp or raw_grp in (DEFAULT_DEVICE_GROUP, "unassigned"):
+        return DEFAULT_DEVICE_GROUP
+    if raw_grp == "handhelds" and not bool(getattr(coordinator, "has_display", True)):
+        return DEFAULT_DEVICE_GROUP
+    group_list = groups if groups is not None else get_device_groups(hass)
+    if not device_matches_group_baseline(
+        hass,
+        coordinator,
+        group_list,
+        group_id=raw_grp,
+        candidate_data=dev_data,
+    ):
+        return DEFAULT_DEVICE_GROUP
+    return raw_grp
 
 
 def seed_group_baseline_from_coordinator(
@@ -715,7 +758,12 @@ def seed_group_baseline_from_coordinator(
     coordinator: Any,
 ) -> dict[str, Any]:
     """Capture a Device's Operational Behavior settings into `group` as its new baseline."""
-    dev_cfg: dict[str, Any] = {}
+    dev_cfg = default_group_baseline_config()
+    existing_cfg = group.get("device_config")
+    if isinstance(existing_cfg, dict):
+        for k, v in existing_cfg.items():
+            if k in GROUP_BEHAVIOR_DEVICE_KEYS and v is not None:
+                dev_cfg[k] = v
     dev_data = getattr(coordinator, "device_data", {}) or {}
     for k in GROUP_BEHAVIOR_DEVICE_KEYS:
         spec = DEVICE_PREF_SPEC_MAP.get(k)
@@ -723,9 +771,7 @@ def seed_group_baseline_from_coordinator(
             if coordinator_supports_pref(coordinator, spec):
                 dev_cfg[k] = resolve_device_pref_value(dev_data, k)
         else:
-            val = coordinator.get_opt(k)
-            if val is not None:
-                dev_cfg[k] = val
+            dev_cfg[k] = resolve_behavior_key_value(dev_data, k)
     group["device_config"] = dev_cfg
     return group
 
@@ -737,6 +783,7 @@ async def async_apply_group_baseline_to_coordinators(
 ) -> dict[str, int]:
     """Apply a Device Group's Tier 2 Operational Baseline across one or more target coordinators."""
     dev_cfg = group.get("device_config") or {}
+    grp_id = str(group.get("id") or "").strip()
     updated_devices = 0
 
     for coord in targets:
@@ -751,19 +798,17 @@ async def async_apply_group_baseline_to_coordinators(
             if k in (CONF_SYNC_DEVICE_AREA, CONF_AREA_FOLLOW_DWELL_S) and not is_roaming:
                 continue
             spec = DEVICE_PREF_SPEC_MAP.get(k)
-            if spec is not None:
-                if not coordinator_supports_pref(coord, spec):
-                    continue
-                if resolve_device_pref_value(cur_data, k) != dev_cfg[k] or k not in cur_data:
-                    updates[k] = dev_cfg[k]
-            elif cur_data.get(k) != dev_cfg[k]:
+            if spec is not None and not coordinator_supports_pref(coord, spec):
+                continue
+            if resolve_behavior_key_value(cur_data, k) != dev_cfg[k] or k not in cur_data:
                 updates[k] = dev_cfg[k]
-        if updates:
-            cleaned = clean_device_settings(updates, current=cur_data)
-            merged = {**cur_data, **(cleaned or updates)}
-            if merged != cur_data:
-                coord.update_device_config(merged)
-                await coord.async_apply_options()
+        cleaned = clean_device_settings(updates, current=cur_data) if updates else {}
+        merged = {**cur_data, **(cleaned or updates)}
+        if grp_id and grp_id not in (DEFAULT_DEVICE_GROUP, "unassigned"):
+            merged["device_group"] = grp_id
+        if merged != cur_data:
+            coord.update_device_config(merged, preserve_group=True)
+            await coord.async_apply_options()
         coord.async_notify_listeners()
         updated_devices += 1
 

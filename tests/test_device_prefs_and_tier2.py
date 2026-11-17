@@ -13,8 +13,9 @@ import pytest
 
 from custom_components.latter import async_unload_entry
 from custom_components.latter.groups import (
-    compute_device_group_sync_status,
+    device_matches_group_baseline,
     get_device_groups,
+    resolve_effective_device_group,
 )
 from custom_components.latter.services import async_dispatch_bound_rpc
 from custom_components.latter.studio.commands import STUDIO_REV
@@ -314,18 +315,18 @@ async def test_studio_device_action_and_sleep_safe_device_groups(
     hass.states.async_set(wifi_eid, "unavailable")
     hass.states.async_set(f"sensor.{slug}_system_rpc_outbox", "unavailable")
 
-    coord.update_device_config({**coord.device_data, "device_group": "handhelds"})
     await _call_ws(
         hass,
         conn,
         2,
-        "latter/system/command",
+        "latter/device/command",
         studio_rev=STUDIO_REV,
-        command="sync_device_group",
-        payload={"group_id": "handhelds"},
+        subentry_id=coord.subentry_id,
+        command="save_device_config",
+        payload={"config": {"device_group": "handhelds"}},
     )
     assert conn.errors == []
-    assert compute_device_group_sync_status(hass, coord) == "in_sync"
+    assert resolve_effective_device_group(hass, coord) == "handhelds"
 
     # Update a group preference while Device is offline -> pushes into subentry immediately
     await _call_ws(
@@ -334,31 +335,31 @@ async def test_studio_device_action_and_sleep_safe_device_groups(
         3,
         "latter/system/command",
         studio_rev=STUDIO_REV,
-        command="set_group_device_setting",
+        command="update_group_baseline",
         payload={"group_id": "handhelds", "config": {"alert_volume": 60}},
     )
     assert conn.errors == []
     assert coord.get_device_pref("alert_volume") == 60
-    assert compute_device_group_sync_status(hass, coord) == "in_sync"
+    assert resolve_effective_device_group(hass, coord) == "handhelds"
 
-    # Customize one preference on the sleeping Device -> group status reports `customized`
+    # Customize one preference on the sleeping Device -> effective group switches to `custom`
     await coord.async_update_device_prefs({"alert_volume": 95})
-    assert compute_device_group_sync_status(hass, coord) == "customized"
+    assert resolve_effective_device_group(hass, coord) == "custom"
 
-    # Seed group baseline from sleeping Device -> captures all subentry preferences cleanly
+    # Update group baseline from sleeping Device -> captures all subentry preferences cleanly
     await _call_ws(
         hass,
         conn,
         4,
         "latter/system/command",
         studio_rev=STUDIO_REV,
-        command="seed_group_baseline",
-        payload={"group_id": "handhelds", "subentry_id": coord.subentry_id},
+        command="update_group_baseline",
+        payload={"group_id": "handhelds", "source_subentry_id": coord.subentry_id},
     )
     assert conn.errors == []
     groups = get_device_groups(hass)
     handhelds = next(g for g in groups if g["id"] == "handhelds")
     assert handhelds["device_config"]["alert_volume"] == 95
-    assert compute_device_group_sync_status(hass, coord) == "in_sync"
+    assert device_matches_group_baseline(hass, coord, groups, group_id="handhelds") is True
 
     assert await async_unload_entry(hass, entry) is True
