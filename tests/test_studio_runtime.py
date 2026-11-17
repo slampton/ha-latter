@@ -1255,6 +1255,9 @@ return {
             "Download Backup",
         ):
             self.assertIn(expected, ov_bat)
+        # Overview -> Status & Quick Actions (D-029 / D-051): utility links moved from Status into Quick Actions footer
+        self.assertLess(ov_bat.index("Quick Actions"), ov_bat.index("Open in ESPHome"))
+        self.assertLess(ov_bat.index("Quick Actions"), ov_bat.index("Download Backup"))
         for retired in ("Now Playing", "IP Address", "192.168.1.44", "Latter SDK", "ESPHome Node", "roaming_pocket"):
             self.assertNotIn(retired, ov_bat)
 
@@ -1263,9 +1266,10 @@ return {
             self.assertIn(expected, ov_mains)
         self.assertNotIn("Mains", ov_mains)
 
-        # BLE Tag Overview Status tiles
-        for expected in ("Detected", "Entryway", "Closest Proxy", "Entry Proxy", "BLE Signal", "-64 dBm", "BLE Target", "AA:BB:CC:11:22:33"):
+        # BLE Tag Overview Status tiles (retains Download Backup in Status footer since Quick Actions is hidden)
+        for expected in ("Detected", "Entryway", "Closest Proxy", "Entry Proxy", "BLE Signal", "-64 dBm", "BLE Target", "AA:BB:CC:11:22:33", "Download Backup"):
             self.assertIn(expected, ov_ble)
+        self.assertNotIn("Quick Actions", ov_ble)
         self.assertNotIn("status-assignments", ov_ble)
 
     def test_presence_view_static_assigned_area_vs_ble_roaming_modes(self) -> None:
@@ -3119,6 +3123,206 @@ return {
         self.assertEqual(got["multiWordTop"], "mdi:teddy-bear")
         self.assertEqual(got["emptyTotal"], 7447)
         self.assertGreater(got["emptyLen"], 100)
+
+    def test_system_overview_visual_status_deployment_and_capabilities(self) -> None:
+        """D-051: System Overview renders conditional alerts, Status 2x2 tiles, Area Deployment, and System Capabilities."""
+        stub_lit = """
+const nothing = Symbol.for("latter.lit.nothing");
+function html(strings, ...values) { return { _$litType$: 1, strings, values }; }
+function flattenHtml(node) {
+  if (node === null || node === undefined || node === nothing || typeof node === "boolean") return "";
+  if (Array.isArray(node)) return node.map(flattenHtml).join("");
+  if (typeof node === "object" && node._$litType$ === 1) {
+    let out = "";
+    for (let i = 0; i < node.strings.length; i += 1) {
+      out += node.strings[i];
+      if (i < node.values.length) {
+        const v = node.values[i];
+        out += typeof v === "function" ? "[fn]" : flattenHtml(v);
+      }
+    }
+    return out;
+  }
+  return String(node);
+}
+"""
+        runner = (
+            stub_lit
+            + """
+function makeSysStore(withAlerts) {
+  return {
+    hass: null,
+    host: null,
+    state: {
+      version: "3.0.0",
+      ble_proxy_count: 5,
+      has_security_pin: !withAlerts,
+      issues: withAlerts
+        ? [{ issue_id: "device_crashed_sub1", kind: "device_crashed", severity: "error", subentry_id: "sub_1", device_title: "Kitchen Panel" }]
+        : [],
+      discovered_latter_devices: withAlerts
+        ? [{ esphome_device_id: "esp_new", node_name: "office_dock", title: "Office Dock", model_label: "Latter 4.0", area_name: "Office", default_group: "wall_panels" }]
+        : [],
+      device_groups: [
+        { id: "pocket_carry", name: "Pocket Carry", description: "" },
+        { id: "handhelds", name: "Handhelds", description: "" },
+        { id: "wall_panels", name: "Wall & Desk Panels", description: "" },
+      ],
+      system_devices: [
+        {
+          subentry_id: "sub_1",
+          title: "Living Panel",
+          kind: "device",
+          is_online: true,
+          has_display: true,
+          is_roaming: false,
+          has_assigned_area: true,
+          area_label: "Living Area",
+          active_area_name: "Living Area",
+          device_group: "wall_panels",
+          assigned_person: "",
+          ble_tracked: false,
+          status_label: "Online",
+        },
+        {
+          subentry_id: "sub_2",
+          title: "Sean Pocket",
+          kind: "device",
+          is_online: true,
+          has_display: true,
+          is_roaming: true,
+          has_assigned_area: false,
+          area_label: "Roaming",
+          active_area_name: "Living Area",
+          device_group: "pocket_carry",
+          assigned_person: "person.sean",
+          ble_tracked: true,
+          status_label: "Online",
+        },
+      ],
+      live: {
+        area_presence_grid: [
+          {
+            area_id: "living",
+            area_name: "Living Area",
+            floor_name: "Main Floor",
+            is_occupied: true,
+            occupant_names: ["Sean"],
+            active_sensors: ["binary_sensor.living_mmwave"],
+            fusion_sensors: ["binary_sensor.living_mmwave"],
+          },
+          {
+            area_id: "study",
+            area_name: "Study",
+            is_occupied: false,
+            occupant_names: [],
+            active_sensors: [],
+            fusion_sensors: ["binary_sensor.study_pir"],
+          },
+        ],
+      },
+      ble_area_signatures: [
+        { area_id: "living", area_name: "Living Area", has_ble_proxy: true, has_signature: true, scanner_count: 3, sample_count: 15, captured_at: "" },
+        { area_id: "study", area_name: "Study", has_ble_proxy: false, has_signature: false, scanner_count: 0, sample_count: 0, captured_at: "" },
+      ],
+      system_config: {
+        weather_entity: "weather.home",
+        alarm_entity: "alarm_control_panel.home",
+        thermostat_entity: "climate.main",
+        lock_entity: "lock.front",
+        garage_entity: "",
+        vacuum_entity: "vacuum.robo",
+        camera_entities: ["camera.front_door", "camera.patio"],
+        calendar_entities: ["calendar.family"],
+        remotes_list: ["remote.living_tv"],
+        remote_groups: [{ id: "rg_living", name: "Living TV", area_id: "living", remotes: ["remote.living_tv"] }],
+        volume_overrides: [{ speaker: "media_player.living", target: "media_player.avr" }],
+        custom_palettes: [{ name: "Ocean", hex: "#009ac7" }],
+        doorbell_noise_reduction: "strong",
+      },
+      doorbells: [{ camera_entity: "camera.front_door", ring_entity: "binary_sensor.front_doorbell" }],
+      system_wallpapers: [
+        { id: "preset:forest_mountains", name: "Forest Mountains", kind: "preset" },
+        { id: "upload:1", name: "Custom Photo", kind: "upload", deletable: true },
+      ],
+    },
+  };
+}
+return {
+  healthyHtml: flattenHtml(renderSystemOverviewView(makeSysStore(false))),
+  alertsHtml: flattenHtml(renderSystemOverviewView(makeSysStore(true))),
+};
+"""
+        )
+        got = _run_node_ts(
+            [
+                FRONTEND_SRC / "constants.ts",
+                FRONTEND_SRC / "utils" / "format.ts",
+                FRONTEND_SRC / "components" / "controls.ts",
+                FRONTEND_SRC / "views" / "system-overview-view.ts",
+            ],
+            runner,
+        )
+        healthy = re.sub(r"\s+", " ", got["healthyHtml"])
+        alerts = re.sub(r"\s+", " ", got["alertsHtml"])
+
+        self.assertNotIn("sys-issues-banner", healthy)
+        self.assertNotIn("sys-discovered-banner", healthy)
+        self.assertNotIn("Configured Items", healthy)
+        for expected in (
+            "All Online",
+            "2 / 2 Online",
+            "2 displays",
+            "1 Occupied",
+            "2 Areas • 5 BLE proxies",
+            "1 Tracked",
+            "1 person assigned",
+            "v3.0.0",
+            "Firmware up to date",
+            "Open Repairs",
+            "Check Firmware Updates",
+            "Area Deployment",
+            "Roaming Devices",
+            "Sean Pocket (Living Area)",
+            "Living Area",
+            "Main Floor",
+            "Signature (3)",
+            "Living Panel • Here: Sean Pocket • 1 remote • 1 active sensor",
+            "Study",
+            "No BLE Proxy",
+            "System Capabilities",
+            "5 / 6 Active",
+            "✓ Weather",
+            "✓ Alarm",
+            "✓ Thermostat",
+            "✓ Door Lock",
+            "✓ Vacuum",
+            "2 Cameras",
+            "1 Doorbell",
+            "1 Calendar",
+            "1 Remote",
+            "1 Area group • 1 volume override",
+            "Pocket Carry: 1",
+            "Wall & Desk Panels: 1",
+            "--swatch-color:#009AC7",
+            "1 custom color • 1 preset, 1 uploaded",
+            "System PIN Set",
+        ):
+            self.assertIn(expected, healthy)
+
+        for expected_alert in (
+            "sys-issues-banner",
+            "Needs Attention",
+            "Kitchen Panel",
+            "Open Device",
+            "sys-discovered-banner",
+            "Hardware Ready to Adopt",
+            "Office Dock",
+            "Open Discovered",
+            "1 Issue",
+            "No System PIN",
+        ):
+            self.assertIn(expected_alert, alerts)
 
 
 if __name__ == "__main__":

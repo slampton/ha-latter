@@ -82,7 +82,10 @@ class TestPayloadDiet(unittest.TestCase):
         js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
         self.assertIn('id="diag-sdk-rev">${live.sdk_rev || "—"}', js)
         self.assertIn('class="status-tiles"', js)
-        self.assertEqual(js.count('<h3 class="card-title">Status</h3>'), 1)
+        self.assertEqual(js.count('<h3 class="card-title">Status</h3>'), 2)
+        self.assertIn("@container (max-width: 420px)", js)
+        self.assertIn("@container (max-width: 260px)", js)
+        self.assertNotIn("status-assignments", js)
         for gone in (
             'class="stat-grid"',
             'id="dash-sdk-rev"',
@@ -156,8 +159,8 @@ class TestViewLayout(unittest.TestCase):
         self.assertIn("Add BLE Tag", discovered_view)
         self.assertIn('id="latter-adopt-table-box"', discovered_view)
         self.assertIn('id="ble-adopt-table-box"', discovered_view)
-        self.assertEqual(latter_const.STUDIO_REV, 24)
-        self.assertIn("const STUDIO_REV = 24;", js)
+        self.assertEqual(latter_const.STUDIO_REV, 25)
+        self.assertIn("const STUDIO_REV = 25;", js)
         self.assertNotIn("power_profile", js)
         self.assertNotIn("Power Profile", js)
         self.assertNotIn("fusion-area", js)
@@ -358,6 +361,41 @@ class TestViewLayout(unittest.TestCase):
         self.assertIn("Open in ESPHome", overview)
         self.assertNotIn("Open in Home Assistant", overview)
         self.assertIn("Download Backup", overview)
+        self.assertLess(
+            overview.index('id: "card-device-status"'),
+            overview.index('id: "card-device-quick-actions"'),
+        )
+        self.assertLess(
+            overview.index('id: "card-device-quick-actions"'),
+            overview.index('id="btn-open-in-ha"'),
+        )
+
+        sys_overview = section("system_overview")
+        self.assertNotIn("Configured Items", sys_overview)
+        self.assertNotIn("No issues.", sys_overview)
+        for sys_ov_snippet in (
+            'id="sys-issues-banner"',
+            'id="sys-discovered-banner"',
+            'id: "card-system-status"',
+            'id="sys-status-chip"',
+            'id="sys-tile-devices"',
+            'id="sys-tile-areas"',
+            'id="sys-tile-roaming"',
+            'id="sys-tile-release"',
+            'id: "card-area-deployment"',
+            'title: "Area Deployment"',
+            'id: "card-system-capabilities"',
+            'title: "System Capabilities"',
+            'id="cap-home-hub"',
+            'id="cap-cameras-calendars"',
+            'id="cap-media-remotes"',
+            'id="cap-device-groups"',
+            'id="cap-colors-wallpapers"',
+            'id="cap-perimeter-security"',
+            "Open Repairs",
+            "Check Firmware Updates",
+        ):
+            self.assertIn(sys_ov_snippet, sys_overview)
         presence_view = section("presence")
         self.assertIn('id="cfg-ble_target_address"', presence_view)
         self.assertIn('id="cfg-ble_ref_power"', presence_view)

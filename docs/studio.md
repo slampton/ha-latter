@@ -17,9 +17,9 @@ There is no Save button: controls apply immediately (text and number inputs comm
 Shared entities, remotes, colors, and overrides live in the Latter hub entry's options; Device Groups, BLE calibration, Area fusion, signing/PIN secrets, and Studio logs live in `.storage/latter.site`; wallpapers live in `.storage/latter/wallpapers/`.
 
 ### Overview
-- **Issues:** open Home Assistant Repairs for Latter (crashes, brownouts, firmware rollbacks, missing entities, BLE proxy coverage, unlinked Music Assistant players), with an **Open Repairs** shortcut.
-- **System:** integration version, **Check Firmware Updates** across all devices, and clickable counts for **Devices Online**, **Latter Displays**, **BLE Tracked Devices**, **Assigned People**, and **Area BLE Proxies**.
-- **Configured Items:** quick summary counts linking to configured remotes, volume overrides, cameras, calendars, custom colors, wallpapers, and Device Groups.
+- **Conditional Alerts:** **Needs Attention** banner whenever Latter has open Home Assistant Repairs (with per-issue **Open Device** and **Open Repairs**) plus **Hardware Ready to Adopt** whenever unbound Latter ESPHome hardware is detected on the network (**Open Discovered**).
+- **Column 1 — Status & Area Deployment:** **Status** renders a live System health chip (`All Online`, `<N> / <M> Online`, updates, or issues), `2×2` glanceable tiles for **Managed Devices**, **Area Presence**, **People & Roaming**, and **System Release**, plus **Open Repairs** and **Check Firmware Updates** footer links; underneath, **Area Deployment** maps active **Roaming Devices** and deployed **Areas** with live occupancy, stationed Devices, remotes, sensors, and BLE signature/proxy coverage.
+- **Column 2 — System Capabilities:** visual readiness blocks linking directly to **Home Hub & Weather** (6 shared domain pills), **Cameras, Doorbells & Calendars**, **Media & Remotes**, **Device Groups**, **Colors & Wallpapers** (live color swatches + wallpaper counts), and **Perimeter Security** (**System PIN Set** / **No System PIN**).
 
 ### Shared Entities
 | Card | What It Controls |
@@ -63,7 +63,7 @@ The **Devices** sidebar splits inventory lifecycle into two top-level views:
 
 ### Overview
 - **Needs Attention** banner whenever the device has open Repairs.
-- **Column 1 — Status & Quick Actions:** **Status** renders an online/offline/update state chip, 2×2 glanceable tiles for **Area** (placement & closest BLE proxy), **Battery / Power** (*Plugged in* when docked), **Wi-Fi / BLE Signal**, and **Firmware**, plus **Open in ESPHome** and **Download Backup**; directly underneath, **Quick Actions** surfaces Find My Device, Trigger Voice Assistant, Activate Screensaver, Hibernate Device, Restart Device, and live **Speaker Volume**.
+- **Column 1 — Status & Quick Actions:** **Status** renders an online/offline/update state chip and compact responsive `2×2` glanceable tiles for **Area** (placement & closest BLE proxy), **Battery / Power** (*Plugged in* when docked), **Wi-Fi / BLE Signal**, and **Firmware**; directly underneath, **Quick Actions** surfaces Find My Device, Trigger Voice Assistant, Activate Screensaver, Hibernate Device, Restart Device, live **Speaker Volume**, and **Open in ESPHome** + **Download Backup** footer links.
 - **Column 2 — Assignments:** unified card at the top of the right column for **Device Group** (switches automatically to *Custom* whenever operational settings diverge from a group baseline, with **Save Custom Group** and **Manage Groups**), **Assigned Person**, and **Remote Control Group** (**Configure** shortcut to **Interface**).
 
 ### Display *(Visual Appearance)*

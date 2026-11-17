@@ -1,5 +1,5 @@
 /**
- * Device Overview View (`dashboard`, D-029 / D-048 / D-049 / D-050):
+ * Device Overview View (`dashboard`, D-029 / D-048 / D-049 / D-051):
  * - Column 1: High-level Status card (header state pill + responsive 2x2 tonal metric tiles)
  *   followed by Quick Actions (immediate action tiles + live volume + Open in ESPHome & Download Backup footer links).
  * - Column 2: Unified Assignments card (Device Group with Custom / Save Custom Group / Manage Groups,
@@ -202,24 +202,6 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
         <strong class="status-tile-value">Plugged in</strong>
         <span class="status-tile-meta">${caps.has_power ? "Sleep & wake active" : "Always on"}</span>`;
 
-  const utilityFooterLinks = html`${links.esphome_device_id
-      ? html`<button
-          type="button"
-          id="btn-open-in-ha"
-          @click=${() => store.openDeviceInHa()}
-          class="btn btn-text"
-        >
-          Open in ESPHome
-        </button>`
-      : nothing}
-    <button
-      type="button"
-      @click=${() => void store.exportBackup(store.activeSubentryId)}
-      class="btn btn-text"
-    >
-      Download Backup
-    </button>`;
-
   return html`<section id="view-dashboard" class="stack">
     ${deviceIssues.length
       ? html`<div role="alert" class="alert ${hasErrorIssue ? "alert-error" : "alert-warning"}">
@@ -338,7 +320,15 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
                   <span class="status-tile-meta">${fwMeta}</span>
                 </button>`}
           </div>`,
-          footerActions: isBleOnly ? utilityFooterLinks : nothing,
+          footerActions: isBleOnly
+            ? html`<button
+                type="button"
+                @click=${() => void store.exportBackup(store.activeSubentryId)}
+                class="btn btn-text"
+              >
+                Download Backup
+              </button>`
+            : nothing,
         })}
 
         ${showQuickActionsCard
@@ -350,7 +340,23 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
                 ? html`${renderQuickActionGrid(store, quickActionButtons)}
                     ${otherQuickItems.map((it) => renderNativeControlRow(store, it))}`
                 : html`<p class="empty-state">No live actions reported by this Device.</p>`,
-              footerActions: utilityFooterLinks,
+              footerActions: html`${links.esphome_device_id
+                  ? html`<button
+                      type="button"
+                      id="btn-open-in-ha"
+                      @click=${() => store.openDeviceInHa()}
+                      class="btn btn-text"
+                    >
+                      Open in ESPHome
+                    </button>`
+                  : nothing}
+                <button
+                  type="button"
+                  @click=${() => void store.exportBackup(store.activeSubentryId)}
+                  class="btn btn-text"
+                >
+                  Download Backup
+                </button>`,
             })
           : nothing}
       </div>
