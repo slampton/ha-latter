@@ -138,7 +138,7 @@ const DEFAULT_HOME_CATEGORIES_TOKENS = [
 /**
  * Canonical constants, route maps, issue messages, and Title Case dictionaries for Latter Studio.
  */
-const STUDIO_REV = 25;
+const STUDIO_REV = 26;
 const MAX_DOCK_ITEMS = 24;
 const MAX_PINNED_ITEMS = 96;
 const SHORTCUT_LABEL_MAX = 24;
@@ -3270,11 +3270,11 @@ function renderStudioDialogs(store) {
           />
         </div>
         <div class="stacked-field">
-          <span class="field-label">Target Address or Entity</span>
+          <label for="ble-custom-addr">Target Address or Entity</label>
           <input
             type="text"
             id="ble-custom-addr"
-            placeholder="AA:BB:CC:DD:EE:FF or device_tracker.phone_ble"
+            placeholder="AA:BB:CC:DD:EE:FF, iBeacon UUID, or tracker entity"
             .value=${store.addBleModal.address}
             @input=${(ev) => {
               store.addBleModal = {
@@ -3284,6 +3284,9 @@ function renderStudioDialogs(store) {
             }}
             class="mono"
           />
+          <span class="help-text">
+            Enter a static BLE MAC address, iBeacon UUID (with optional major:minor), or Home Assistant Companion App or tracker entity.
+          </span>
         </div>
         <div class="stacked-field">
           <label for="ble-custom-person">Assigned Person (Optional)</label>
@@ -12236,10 +12239,20 @@ function renderDeviceToolsView(store) {
  * 2. `Bluetooth Devices` — Filterable, sortable (Name default so RSSI changes never reorder rows),
  *    and pausable BLE trackers, phones, and named advertisements with keyed DOM identity.
  */
+const TRACKER_KIND_TOKENS = [
+  "companion app",
+  "private ble",
+  "ibeacon",
+  "bthome",
+  "tile",
+  "itag",
+  "ruuvitag",
+  "eddystone",
+];
 function isTrackerCandidate(c) {
   const kind = String(c.kind || "").toLowerCase();
   const addr = String(c.target_address || c.address || "");
-  return kind.includes("private ble") || kind.includes("ibeacon") || addr.includes(".");
+  return addr.includes(".") || TRACKER_KIND_TOKENS.some((tok) => kind.includes(tok));
 }
 function candidateTitle(c) {
   return c.title || c.name || c.target_address || c.address || "BLE Tag";
@@ -12498,7 +12511,10 @@ function renderDevicesDiscoveredView(store) {
                 const addr = candidateAddr(c);
                 const addrKey = (addr || title).toLowerCase();
                 const curPerson = bleDraftPersons?.get(addrKey) || "";
-                const meta = [c.kind || "BLE device", addr];
+                const kindLabel = c.kind || "BLE device";
+                const showAddr =
+                  Boolean(addr) && !kindLabel.toLowerCase().includes(addr.toLowerCase());
+                const meta = [kindLabel, ...(showAddr ? [addr] : [])];
                 if (c.rssi !== null && c.rssi !== undefined) {
                   meta.push(`${fmtNumber(c.rssi, store.hass, 0)} dBm`);
                 }

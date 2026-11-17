@@ -573,12 +573,179 @@ def evaluate_area_sensor_fusion(
 # ---------------------------------------------------------------------------
 
 APPLE_COMPANY_ID = 0x004C
+MICROSOFT_COMPANY_ID = 0x0006
+SAMSUNG_COMPANY_ID = 0x0075
+GOOGLE_COMPANY_ID = 0x00E0
+RUUVI_COMPANY_ID = 0x0499
+SHELLY_COMPANY_ID = 0x0B9A
 IBEACON_PREFIX = b"\x02\x15"
 _UNMAPPED = "__unmapped__"
 SURVEY_RETENTION_SECONDS = 180.0
 WAKE_GAP_SECONDS = 8.0
 AWAY_CHECK_INTERVAL_SECONDS = 15.0
 AWAY_TIMEOUT_SECONDS = 180.0
+
+_IBEACON_IDENTITY_RE = re.compile(
+    r"^(?P<uuid>[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-f]{32})"
+    r"(?:[-:_](?P<major>\d{1,5})[-:_](?P<minor>\d{1,5}))?$",
+    re.IGNORECASE,
+)
+_IBEACON_ENTITY_PREFIX_RE = re.compile(
+    r"^(?P<uuid>[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-f]{32})"
+    r"[-:_](?P<major>\d{1,5})[-:_](?P<minor>\d{1,5})(?:[-_].+)?$",
+    re.IGNORECASE,
+)
+_TRAILING_ROTATING_HEX4_RE = re.compile(r"\s+[0-9A-Fa-f]{4}$")
+
+
+def _format_uuid_dashed(uuid_hex: str) -> str:
+    """Format a 32-char lowercase hex UUID as 8-4-4-4-12 dashed string."""
+    clean = _normalize_uuid_hex(uuid_hex)
+    if len(clean) != 32:
+        return uuid_hex.strip()
+    return f"{clean[0:8]}-{clean[8:12]}-{clean[12:16]}-{clean[16:20]}-{clean[20:32]}"
+
+
+def _coerce_uint16(val: Any) -> int | None:
+    """Return an integer in 0..65535 when `val` is a valid uint16, else None."""
+    if val is None or isinstance(val, bool) or val == "":
+        return None
+    if isinstance(val, float) and not val.is_integer():
+        return None
+    try:
+        parsed = int(val)
+    except (TypeError, ValueError):
+        return None
+    return parsed if 0 <= parsed <= 65535 else None
+
+
+def parse_ibeacon_identity(
+    raw: str, major_attr: Any = None, minor_attr: Any = None
+) -> tuple[str, int | None, int | None] | None:
+    """Parse `<uuid>[-/:]<major>[-/:]<minor>` or `<uuid>` + optional major/minor attributes."""
+    text = str(raw or "").strip()
+    if not text:
+        return None
+    low = text.lower()
+    if low.startswith(("eddystone:", "bthome:")):
+        return None
+    if low.startswith("ibeacon:"):
+        text = text[8:].strip()
+    match = _IBEACON_IDENTITY_RE.match(text)
+    if match is None:
+        return None
+    uuid_hex = _normalize_uuid_hex(match.group("uuid"))
+    if len(uuid_hex) != 32:
+        return None
+    maj_grp = match.group("major")
+    min_grp = match.group("minor")
+    if maj_grp is not None or min_grp is not None:
+        maj = _coerce_uint16(maj_grp)
+        min_ = _coerce_uint16(min_grp)
+        if maj is None or min_ is None:
+            return None
+        return uuid_hex, maj, min_
+    return uuid_hex, _coerce_uint16(major_attr), _coerce_uint16(minor_attr)
+
+
+def _extract_uuid16(raw_uuid: str) -> str:
+    """Extract lowercase 4-hex Bluetooth SIG 16-bit UUID from 16/32/128-bit representations."""
+    u = str(raw_uuid or "").strip().lower()
+    if u.startswith("0x"):
+        u = u[2:]
+    if len(u) == 4 and all(ch in "0123456789abcdef" for ch in u):
+        return u
+    if (
+        len(u) >= 8
+        and u.startswith("0000")
+        and (len(u) == 8 or u[8] == "-")
+        and all(ch in "0123456789abcdef" for ch in u[4:8])
+    ):
+        return u[4:8]
+    return ""
+
+
+def _normalize_mfg_map(mfg_data: Mapping[int, bytes] | None) -> dict[int, bytes]:
+    """Normalize manufacturer_data dictionary keys to int and payloads to bytes."""
+    out: dict[int, bytes] = {}
+    for raw_k, raw_v in (mfg_data or {}).items():
+        if not isinstance(raw_v, (bytes, bytearray)):
+            continue
+        try:
+            cid = int(raw_k, 0) if isinstance(raw_k, str) else int(raw_k)
+        except (TypeError, ValueError):
+            continue
+        out[cid] = bytes(raw_v)
+    return out
+
+
+def classify_ble_advertisement_kind(
+    local_name: str,
+    mfg_data: Mapping[int, bytes],
+    service_data: Mapping[str, bytes],
+    service_uuids: Iterable[str],
+    *,
+    is_private_ble: bool = False,
+) -> str:
+    """Classify a BLE advertisement into a friendly vendor/device-type or local tag label."""
+    mfg_map = _normalize_mfg_map(mfg_data)
+    svc_data_keys = [str(k or "").strip().lower() for k in (service_data or {})]
+    svc_uuid_list = [str(u or "").strip().lower() for u in (service_uuids or ())]
+    svc_all_16 = {
+        u16
+        for raw_u in (*svc_data_keys, *svc_uuid_list)
+        if (u16 := _extract_uuid16(raw_u))
+    }
+
+    if is_private_ble:
+        if APPLE_COMPANY_ID in mfg_map:
+            apple_payload = mfg_map[APPLE_COMPANY_ID]
+            if len(apple_payload) >= 1 and apple_payload[0] == 0x07:
+                return "Apple AirPods or Beats (Private BLE)"
+            return "Apple iPhone, Watch, or iPad (Private BLE)"
+        if SAMSUNG_COMPANY_ID in mfg_map:
+            return "Samsung Galaxy Phone or Watch (Private BLE)"
+        if (
+            GOOGLE_COMPANY_ID in mfg_map
+            or "fe2c" in svc_all_16
+            or any("fe2c" in raw_u for raw_u in (*svc_data_keys, *svc_uuid_list))
+        ):
+            return "Android / Pixel Phone (Private BLE)"
+        if MICROSOFT_COMPANY_ID in mfg_map:
+            return "Windows PC or Surface (Private BLE)"
+        return "Phone or Watch (Private BLE / IRK)"
+
+    name_low = str(local_name or "").strip().lower()
+    if "feed" in svc_all_16 or name_low.startswith("tile"):
+        return "Tile Tracker"
+    if name_low.startswith("itag") or ("ffe0" in svc_all_16 and "tag" in name_low):
+        return "iTag Keychain Tag"
+    if "fcd2" in svc_all_16:
+        if SHELLY_COMPANY_ID in mfg_map or name_low.startswith(
+            ("shelly", "sbbt", "sbdw", "sbmv", "sbht")
+        ):
+            return "Shelly BLU Tag (BTHome v2)"
+        return "BTHome v2 Tag"
+    if RUUVI_COMPANY_ID in mfg_map or name_low.startswith("ruuvi"):
+        return "RuuviTag Beacon"
+    for raw_k, raw_v in (service_data or {}).items():
+        if (
+            _extract_uuid16(str(raw_k)) == "feaa"
+            and isinstance(raw_v, (bytes, bytearray))
+            and len(raw_v) >= 1
+            and (raw_v[0] & 0xF0) == 0x00
+        ):
+            return "Eddystone-UID Beacon"
+
+    if APPLE_COMPANY_ID in mfg_map:
+        return "Named BLE device (Apple)"
+    if SAMSUNG_COMPANY_ID in mfg_map:
+        return "Named BLE device (Samsung)"
+    if MICROSOFT_COMPANY_ID in mfg_map:
+        return "Named BLE device (Windows PC)"
+    if GOOGLE_COMPANY_ID in mfg_map:
+        return "Named BLE device (Google)"
+    return "Named BLE device"
 
 
 def _iter_devices(dev_reg: dr.DeviceRegistry) -> list[dr.DeviceEntry]:
@@ -1003,6 +1170,8 @@ class LatterNativeBleTracker:
         self.hass = hass
         self.beacon_uuid = str(beacon_uuid or "").strip()
         self._target_uuid_hex = _normalize_uuid_hex(beacon_uuid)
+        self._explicit_major: int | None = None
+        self._explicit_minor: int | None = None
         self._target_eddystone_namespace_hex: str = ""
         self._target_address = str(target_address or "").strip()
         self.target_address = self._target_address
@@ -1303,15 +1472,33 @@ class LatterNativeBleTracker:
     def _async_on_target_entity_state_change(
         self, event: Event[EventStateChangedData]
     ) -> None:
-        """React in 0 ms when a tracked `private_ble_device` or `ibeacon` entity rotates its RPA."""
+        """React in 0 ms when a tracked `private_ble_device`, `mobile_app`, or `ibeacon` entity updates."""
         new_st = event.data.get("new_state")
         if new_st is None:
             return
+        old_st = event.data.get("old_state")
+        old_mp = (
+            old_st.attributes.get("Measured power")
+            if old_st is not None and old_st.attributes.get("Measured power") is not None
+            else (old_st.attributes.get("measured_power") if old_st is not None else None)
+        )
+        new_mp = (
+            new_st.attributes.get("Measured power")
+            if new_st.attributes.get("Measured power") is not None
+            else new_st.attributes.get("measured_power")
+        )
+        if new_mp != old_mp and new_mp is not None and not isinstance(new_mp, bool):
+            try:
+                mp_f = float(new_mp)
+                if -90.0 <= mp_f <= -30.0:
+                    self.detected_ref_power_dbm = mp_f
+            except (TypeError, ValueError):
+                pass
         self._seed_explicit_target_address(sync_fabric=True)
 
     @callback
     def _seed_explicit_target_address(self, *, sync_fabric: bool = True) -> None:
-        """Seed MAC, iBeacon/Eddystone UID, or dynamic `private_ble_device` RPA from `_target_address`."""
+        """Seed MAC, iBeacon/Eddystone UID, Companion App UUID-Major-Minor, or dynamic RPA from `_target_address`."""
         t_addr = self._target_address
         if not t_addr:
             return
@@ -1322,6 +1509,13 @@ class LatterNativeBleTracker:
             return
         if "." in t_addr:
             st = self.hass.states.get(t_addr)
+            ent_entry = er.async_get(self.hass).async_get(t_addr)
+            prev_ib = (
+                self._target_uuid_hex,
+                self._explicit_major,
+                self._explicit_minor,
+            )
+            parsed_ib: tuple[str, int | None, int | None] | None = None
             cur_mac = ""
             if st is not None:
                 cur_mac = str(
@@ -1330,29 +1524,96 @@ class LatterNativeBleTracker:
                     or st.attributes.get("address")
                     or ""
                 ).strip()
-                u_attr = str(st.attributes.get("uuid") or "").strip()
-                norm_u_attr = _normalize_uuid_hex(u_attr)
-                if len(norm_u_attr) == 32:
-                    self._target_uuid_hex = norm_u_attr
-            if not cur_mac:
-                ent_entry = er.async_get(self.hass).async_get(t_addr)
-                if ent_entry is not None and ent_entry.device_id:
-                    dev_entry = dr.async_get(self.hass).async_get(ent_entry.device_id)
-                    if dev_entry is not None:
-                        for _ct, cv in dev_entry.connections:
-                            if _mac_to_int(str(cv)) is not None:
-                                cur_mac = str(cv)
+                raw_id = str(
+                    st.attributes.get("id") or st.attributes.get("uuid") or ""
+                ).strip()
+                if raw_id:
+                    parsed_ib = parse_ibeacon_identity(
+                        raw_id,
+                        st.attributes.get("major"),
+                        st.attributes.get("minor"),
+                    )
+                mp_raw = (
+                    st.attributes.get("Measured power")
+                    if st.attributes.get("Measured power") is not None
+                    else st.attributes.get("measured_power")
+                )
+                if (
+                    mp_raw is not None
+                    and not isinstance(mp_raw, bool)
+                    and self.detected_ref_power_dbm is None
+                ):
+                    try:
+                        mp_f = float(mp_raw)
+                        if -90.0 <= mp_f <= -30.0:
+                            self.detected_ref_power_dbm = mp_f
+                    except (TypeError, ValueError):
+                        pass
+            if (
+                parsed_ib is None
+                and ent_entry is not None
+                and ent_entry.platform == "ibeacon"
+            ):
+                parsed_ib = _extract_ibeacon_entity_identity(
+                    self.hass, ent_entry, st
+                )
+            if parsed_ib is not None:
+                (
+                    self._target_uuid_hex,
+                    self._explicit_major,
+                    self._explicit_minor,
+                ) = parsed_ib
+
+            is_beacon_entity = parsed_ib is not None or (
+                ent_entry is not None
+                and ent_entry.platform in ("mobile_app", "ibeacon")
+            )
+            if (
+                not cur_mac
+                and not is_beacon_entity
+                and ent_entry is not None
+                and ent_entry.device_id
+            ):
+                dev_entry = dr.async_get(self.hass).async_get(ent_entry.device_id)
+                if dev_entry is not None:
+                    for _ct, cv in dev_entry.connections:
+                        if _mac_to_int(str(cv)) is not None:
+                            cur_mac = str(cv)
+                            break
+                    if not cur_mac:
+                        for _dom, iv in dev_entry.identifiers:
+                            if _mac_to_int(str(iv)) is not None:
+                                cur_mac = str(iv)
                                 break
-                        if not cur_mac:
-                            for _dom, iv in dev_entry.identifiers:
-                                if _mac_to_int(str(iv)) is not None:
-                                    cur_mac = str(iv)
-                                    break
             if cur_mac:
                 self._apply_dynamic_entity_mac(cur_mac, sync_fabric=sync_fabric)
+            elif (
+                not self._esphome_device_id
+                and (
+                    self._target_uuid_hex,
+                    self._explicit_major,
+                    self._explicit_minor,
+                )
+                != prev_ib
+            ):
+                self._matched_ble_addresses.clear()
+                if sync_fabric:
+                    fabric = get_ble_fabric(self.hass)
+                    if self in fabric._trackers:
+                        fabric.sync_tracker_addresses()
+                        fabric._async_seed_tracker_from_scanners_once(self)
             return
 
         stripped = t_addr.strip()
+        if not stripped.lower().startswith(("eddystone:", "bthome:")):
+            parsed_direct = parse_ibeacon_identity(stripped)
+            if parsed_direct is not None:
+                (
+                    self._target_uuid_hex,
+                    self._explicit_major,
+                    self._explicit_minor,
+                ) = parsed_direct
+                return
         for prefix in ("eddystone:", "ibeacon:", "bthome:"):
             if stripped.lower().startswith(prefix):
                 stripped = stripped[len(prefix) :].strip()
@@ -1448,7 +1709,9 @@ class LatterNativeBleTracker:
                     fabric._async_seed_tracker_from_scanners_once(self)
 
     def _resolve_beacon_major_minor(self) -> tuple[int | None, int | None]:
-        """Return expected iBeacon (major, minor) IDs from the device's hardware manifest."""
+        """Return expected iBeacon (major, minor) IDs from explicit target config or hardware manifest."""
+        if self._explicit_major is not None or self._explicit_minor is not None:
+            return self._explicit_major, self._explicit_minor
         beacon_cfg = self._manifest_beacon
         if not beacon_cfg:
             hw = read_device_hardware_manifest(self.hass, self._esphome_device_id)
@@ -1739,17 +2002,25 @@ class LatterNativeBleTracker:
 
         if self._dynamic_target_mac_int is not None and adv_int == self._dynamic_target_mac_int:
             return True
-        if norm_addr and norm_addr in self._matched_ble_addresses:
-            return True
         if self._target_mac_ints and adv_int is not None and adv_int in self._target_mac_ints:
             return True
 
         apple_bytes = mfg_data.get(APPLE_COMPANY_ID)
+        has_ibeacon_frame = bool(
+            apple_bytes and len(apple_bytes) >= 20 and apple_bytes[:2] == IBEACON_PREFIX
+        )
+        if (
+            norm_addr
+            and norm_addr in self._matched_ble_addresses
+            and not (has_ibeacon_frame and self._target_uuid_hex)
+        ):
+            return True
+
         if apple_bytes and len(apple_bytes) >= 18 and self._target_uuid_hex:
             uuid_matched = False
             major_val: int | None = None
             minor_val: int | None = None
-            if len(apple_bytes) >= 20 and apple_bytes[:2] == IBEACON_PREFIX:
+            if has_ibeacon_frame:
                 uuid_hex = apple_bytes[2:18].hex().lower()
                 uuid_matched = uuid_hex == self._target_uuid_hex
                 if len(apple_bytes) >= 20:
@@ -1760,8 +2031,20 @@ class LatterNativeBleTracker:
                 uuid_matched = True
             if uuid_matched:
                 expected_major, expected_minor = self._resolve_beacon_major_minor()
-                if expected_major is not None and expected_major >= 1 and major_val != expected_major:
+                if self._explicit_major is not None:
+                    if major_val != expected_major:
+                        return False
+                elif (
+                    expected_major is not None
+                    and expected_major >= 1
+                    and major_val != expected_major
+                ):
                     return False
+
+                if self._explicit_minor is not None:
+                    return minor_val == expected_minor
+                if self._explicit_major is not None:
+                    return True
                 if expected_minor is not None and expected_minor >= 1:
                     return minor_val == expected_minor
                 return not bool(self._esphome_device_id)
@@ -2644,43 +2927,48 @@ class LatterBleFabric:
         adv_int = _mac_to_int(adv_addr) if adv_addr else None
         raw_major = data.get("major")
         raw_minor = data.get("minor")
-        ev_major = (
-            int(raw_major)
-            if isinstance(raw_major, (int, float))
-            or (isinstance(raw_major, str) and raw_major.isdigit())
-            else None
-        )
-        ev_minor = (
-            int(raw_minor)
-            if isinstance(raw_minor, (int, float))
-            or (isinstance(raw_minor, str) and raw_minor.isdigit())
-            else None
-        )
+        ev_major = _coerce_uint16(raw_major)
+        ev_minor = _coerce_uint16(raw_minor)
         now_mono = time.monotonic()
         for tracker in list(self._trackers):
             if not (uuid_raw and uuid_raw == tracker._target_uuid_hex):
                 continue
-            mac_ok = bool(
-                (adv_addr and adv_addr in tracker._matched_ble_addresses)
-                or (
-                    tracker._target_mac_ints
-                    and adv_int is not None
-                    and adv_int in tracker._target_mac_ints
-                )
-            )
-            if not mac_ok:
-                expected_major, expected_minor = tracker._resolve_beacon_major_minor()
+            expected_major, expected_minor = tracker._resolve_beacon_major_minor()
+            if (
+                tracker._explicit_major is not None
+                or tracker._explicit_minor is not None
+            ):
                 if (
-                    expected_major is not None
-                    and expected_major >= 1
+                    tracker._explicit_major is not None
                     and ev_major != expected_major
                 ):
                     continue
-                if expected_minor is not None and expected_minor >= 1:
-                    if ev_minor != expected_minor:
-                        continue
-                elif tracker._esphome_device_id:
+                if (
+                    tracker._explicit_minor is not None
+                    and ev_minor != expected_minor
+                ):
                     continue
+            else:
+                mac_ok = bool(
+                    (adv_addr and adv_addr in tracker._matched_ble_addresses)
+                    or (
+                        tracker._target_mac_ints
+                        and adv_int is not None
+                        and adv_int in tracker._target_mac_ints
+                    )
+                )
+                if not mac_ok:
+                    if (
+                        expected_major is not None
+                        and expected_major >= 1
+                        and ev_major != expected_major
+                    ):
+                        continue
+                    if expected_minor is not None and expected_minor >= 1:
+                        if ev_minor != expected_minor:
+                            continue
+                    elif tracker._esphome_device_id:
+                        continue
             tracker._ingest_proxy_observation(source, int(rssi), now_mono, source)
 
     @callback
@@ -2831,87 +3119,85 @@ def get_all_areas_presence_summary(hass: HomeAssistant) -> list[dict[str, Any]]:
     return rows
 
 
-def get_discovered_ble_candidates(
-    hass: HomeAssistant, onboarded_slugs: set[str], onboarded_addresses: set[str]
-) -> list[dict[str, Any]]:
-    """Discover non-ESPHome BLE devices (private_ble_device, ibeacon, BTHome v2, Eddystone-UID, named BLE tags)."""
-    candidates: list[dict[str, Any]] = []
-    seen_targets: set[str] = {a.lower() for a in onboarded_addresses if a}
-    ent_reg = er.async_get(hass)
-    area_reg = ar.async_get(hass)
-
-    for entry in _iter_entities(ent_reg):
-        if entry.disabled_by:
-            continue
-        if entry.platform in ("private_ble_device", "ibeacon", "bthome") and entry.domain in (
-            "device_tracker",
-            "sensor",
-            "binary_sensor",
-        ):
-            if (
-                entry.platform != "bthome"
-                and entry.domain == "sensor"
-                and not entry.entity_id.endswith("estimated_distance")
-            ):
-                continue
-            if (
-                entry.platform == "bthome"
-                and entry.domain in ("sensor", "binary_sensor")
-                and not any(
-                    entry.entity_id.endswith(sfx)
-                    for sfx in ("signal_strength", "battery", "motion", "button")
-                )
-            ):
-                continue
-            st = hass.states.get(entry.entity_id)
-            friendly = (
-                str(st.attributes.get("friendly_name") if st else "")
-                or entry.name
-                or entry.original_name
-                or entry.entity_id
-            ).strip()
-            for suffix in (
-                " Estimated Distance",
-                " Signal Strength",
-                "Signal Strength",
-                " Battery",
-                " Motion",
-            ):
-                if friendly.endswith(suffix):
-                    friendly = friendly[: -len(suffix)].strip()
-            cand_slug = normalize_device_slug(friendly)
-            if (
-                not cand_slug
-                or cand_slug == "esphome_device"
-                or cand_slug in onboarded_slugs
-                or entry.entity_id.lower() in seen_targets
-            ):
-                continue
-            seen_targets.add(entry.entity_id.lower())
-            if entry.platform == "private_ble_device":
-                kind_lbl = "Private BLE (phone or watch)"
-            elif entry.platform == "bthome":
-                kind_lbl = "BTHome v2 tag"
-            else:
-                kind_lbl = "iBeacon tracker"
-            rssi_val = st.attributes.get("rssi") if st else None
-            src_scanner = str(st.attributes.get("source") or "") if st else ""
-            a_id = _resolve_scanner_area_id(hass, src_scanner) if src_scanner else None
-            a_obj = area_reg.async_get_area(a_id) if a_id else None
-            candidates.append(
-                {
-                    "slug": cand_slug,
-                    "title": friendly,
-                    "target_address": entry.entity_id,
-                    "kind": kind_lbl,
-                    "rssi": int(rssi_val) if isinstance(rssi_val, (int, float)) else None,
-                    "area_name": a_obj.name if a_obj else "",
-                    "scanner": src_scanner,
-                    "label": f"{friendly} [{kind_lbl}]",
-                }
+def _extract_ibeacon_entity_identity(
+    hass: HomeAssistant,
+    entry: er.RegistryEntry | None,
+    st: Any,
+) -> tuple[str, int | None, int | None] | None:
+    """Extract `(uuid_hex, major, minor)` from an entity's state attributes, `unique_id`, or parent device."""
+    if st is not None:
+        raw_attr = str(
+            st.attributes.get("id") or st.attributes.get("uuid") or ""
+        ).strip()
+        if raw_attr:
+            parsed = parse_ibeacon_identity(
+                raw_attr,
+                st.attributes.get("major"),
+                st.attributes.get("minor"),
             )
+            if parsed is not None:
+                return parsed
 
-    best_by_addr: dict[str, dict[str, Any]] = {}
+    raw_candidates: list[str] = []
+    if entry is not None:
+        if entry.unique_id:
+            raw_candidates.append(str(entry.unique_id).strip())
+        if entry.device_id:
+            dev_entry = dr.async_get(hass).async_get(entry.device_id)
+            if dev_entry is not None:
+                for _dom, ident_val in dev_entry.identifiers:
+                    if ident_val:
+                        raw_candidates.append(str(ident_val).strip())
+
+    for cand in raw_candidates:
+        direct = parse_ibeacon_identity(cand)
+        if direct is not None:
+            return direct
+        m_pref = _IBEACON_ENTITY_PREFIX_RE.match(cand)
+        if m_pref is not None:
+            u_hex = _normalize_uuid_hex(m_pref.group("uuid"))
+            maj = _coerce_uint16(m_pref.group("major"))
+            min_ = _coerce_uint16(m_pref.group("minor"))
+            if len(u_hex) == 32 and maj is not None and min_ is not None:
+                return u_hex, maj, min_
+    return None
+
+
+def _is_excluded_cloud_find_adv(
+    local_name: str,
+    mfg_data: Mapping[int, bytes],
+    service_data: Mapping[str, bytes],
+) -> bool:
+    """Return True for unresolvable rolling-EID cloud Find-network frames (Google FMDN 0x40, Apple Find My 0x12)."""
+    for raw_k, raw_v in (service_data or {}).items():
+        if (
+            _extract_uuid16(str(raw_k)) == "feaa"
+            and isinstance(raw_v, (bytes, bytearray))
+            and len(raw_v) >= 1
+            and (raw_v[0] & 0xF0) == 0x40
+        ):
+            return True
+
+    mfg_map = _normalize_mfg_map(mfg_data)
+    apple_payload = mfg_map.get(APPLE_COMPANY_ID)
+    return bool(
+        apple_payload is not None
+        and len(apple_payload) >= 1
+        and apple_payload[0] == 0x12
+        and not local_name
+    )
+
+
+def _index_live_ble_advertisements(
+    hass: HomeAssistant,
+) -> tuple[
+    dict[str, dict[str, Any]],
+    dict[tuple[str, int | None, int | None], dict[str, Any]],
+]:
+    """Scan HA Bluetooth scanners once to index strongest live advertisements by MAC and by iBeacon tuple."""
+    by_mac: dict[str, dict[str, Any]] = {}
+    by_ibeacon: dict[tuple[str, int | None, int | None], dict[str, Any]] = {}
+    area_reg = ar.async_get(hass)
     try:
         from homeassistant.components import bluetooth
 
@@ -2930,29 +3216,8 @@ def get_discovered_ble_candidates(
                 if not isinstance(pair, tuple) or len(pair) != 2:
                     continue
                 ble_dev, adv_data = pair
-                addr_str = str(addr).upper()
-                svc_data: Mapping[str, bytes] = (
-                    getattr(adv_data, "service_data", {}) or {}
-                )
-                is_bthome = any(
-                    str(k).lower().startswith(BTHOME_UUID_PREFIX)
-                    or str(k).lower() == "fcd2"
-                    for k in svc_data
-                )
-                eddystone_uid_target = ""
-                for k_svc, v_svc in svc_data.items():
-                    k_low = str(k_svc).lower()
-                    if (
-                        (k_low.startswith(EDDYSTONE_UUID_PREFIX) or k_low == "feaa")
-                        and isinstance(v_svc, (bytes, bytearray))
-                        and len(v_svc) >= 18
-                        and (v_svc[0] & 0xF0) == 0x00
-                    ):
-                        eddystone_uid_target = bytes(v_svc[2:18]).hex().upper()
-                        break
-
-                target_key = eddystone_uid_target or addr_str
-                if target_key.lower() in seen_targets or addr_str.lower() in seen_targets:
+                addr_str = str(addr or "").strip().upper()
+                if not addr_str:
                     continue
                 local_name = str(
                     getattr(adv_data, "local_name", "")
@@ -2962,57 +3227,766 @@ def get_discovered_ble_candidates(
                 if (
                     local_name
                     and local_name.replace(":", "").replace("-", "").upper()
-                    == addr_str.replace(":", "")
+                    == addr_str.replace(":", "").replace("-", "")
                 ):
                     local_name = ""
 
-                if not local_name:
-                    if is_bthome:
-                        local_name = f"BTHome {addr_str[-5:]}"
-                    elif eddystone_uid_target:
-                        local_name = f"Eddystone {addr_str[-5:]}"
-                    else:
-                        continue
-
-                cand_slug = normalize_device_slug(local_name)
-                if (
-                    not cand_slug
-                    or cand_slug == "esphome_device"
-                    or cand_slug in onboarded_slugs
-                ):
-                    continue
-                rssi = getattr(adv_data, "rssi", None)
-                if rssi is None:
-                    rssi = getattr(ble_dev, "rssi", None)
-                rssi_int = int(rssi) if rssi is not None else None
-                kind_lbl = (
-                    "BTHome v2 tag"
-                    if is_bthome
-                    else (
-                        "Eddystone-UID beacon"
-                        if eddystone_uid_target
-                        else "Named BLE device"
-                    )
+                mfg_map = _normalize_mfg_map(
+                    getattr(adv_data, "manufacturer_data", None) or {}
                 )
-                prev = best_by_addr.get(target_key)
-                if prev is None or (
+                raw_svc_data = getattr(adv_data, "service_data", None) or {}
+                svc_data: dict[str, bytes] = {
+                    str(k): bytes(v)
+                    for k, v in raw_svc_data.items()
+                    if isinstance(v, (bytes, bytearray))
+                }
+                raw_uuids = getattr(adv_data, "service_uuids", None) or ()
+                svc_uuids = tuple(str(u) for u in raw_uuids if u)
+
+                rssi_raw = getattr(adv_data, "rssi", None)
+                if rssi_raw is None:
+                    rssi_raw = getattr(ble_dev, "rssi", None)
+                rssi_int = (
+                    int(rssi_raw)
+                    if isinstance(rssi_raw, (int, float))
+                    and not isinstance(rssi_raw, bool)
+                    else None
+                )
+
+                prev = by_mac.get(addr_str)
+                better = prev is None or (
                     rssi_int is not None
                     and (prev["rssi"] is None or rssi_int > prev["rssi"])
-                ):
-                    rssi_str = f" ({rssi_int} dBm)" if rssi_int is not None else ""
-                    area_str = f" • {area_name}" if area_name else ""
-                    best_by_addr[target_key] = {
-                        "slug": cand_slug,
-                        "title": local_name,
-                        "target_address": target_key,
-                        "kind": kind_lbl,
+                )
+                if better:
+                    by_mac[addr_str] = {
+                        "mac": addr_str,
+                        "local_name": local_name or (prev["local_name"] if prev else ""),
+                        "mfg_data": mfg_map or (prev["mfg_data"] if prev else {}),
+                        "service_data": svc_data or (prev["service_data"] if prev else {}),
+                        "service_uuids": svc_uuids or (prev["service_uuids"] if prev else ()),
                         "rssi": rssi_int,
                         "area_name": area_name,
                         "scanner": scanner_name,
-                        "label": f"{local_name} [{kind_lbl}]{rssi_str}{area_str}",
+                        "source": source,
                     }
+                elif prev is not None:
+                    if local_name and not prev["local_name"]:
+                        prev["local_name"] = local_name
+                    if mfg_map and not prev["mfg_data"]:
+                        prev["mfg_data"] = mfg_map
+                    if svc_data and not prev["service_data"]:
+                        prev["service_data"] = svc_data
+                    if svc_uuids and not prev["service_uuids"]:
+                        prev["service_uuids"] = svc_uuids
+
+                apple_b = mfg_map.get(APPLE_COMPANY_ID)
+                if (
+                    apple_b is not None
+                    and len(apple_b) >= 20
+                    and apple_b[:2] == IBEACON_PREFIX
+                ):
+                    ib_uuid = apple_b[2:18].hex().lower()
+                    ib_maj = (apple_b[18] << 8) | apple_b[19]
+                    ib_min = (
+                        ((apple_b[20] << 8) | apple_b[21])
+                        if len(apple_b) >= 22
+                        else None
+                    )
+                    ib_info = {
+                        "rssi": rssi_int,
+                        "area_name": area_name,
+                        "scanner": scanner_name,
+                        "mac": addr_str,
+                    }
+                    for ib_k in ((ib_uuid, ib_maj, ib_min), (ib_uuid, None, None)):
+                        prev_ib = by_ibeacon.get(ib_k)
+                        if prev_ib is None or (
+                            rssi_int is not None
+                            and (
+                                prev_ib["rssi"] is None
+                                or rssi_int > prev_ib["rssi"]
+                            )
+                        ):
+                            by_ibeacon[ib_k] = ib_info
     except Exception:  # noqa: BLE001
         pass
+    return by_mac, by_ibeacon
+
+
+def _is_mobile_app_ble_emitter(entry: er.RegistryEntry) -> bool:
+    """Return True if `entry` is a Home Assistant Companion App BLE Transmitter sensor."""
+    if entry.platform != "mobile_app" or entry.domain != "sensor":
+        return False
+    uid = str(entry.unique_id or "").lower()
+    eid = entry.entity_id.lower()
+    return uid.endswith(("_ble_emitter", "_ble_transmitter")) or eid.endswith(
+        ("_ble_transmitter", "_ble_emitter")
+    )
+
+
+def describe_ble_target_model(hass: HomeAssistant, target_address: str) -> str:
+    """Return a human-friendly model / tag classification label for a managed BLE tag."""
+    addr = str(target_address or "").strip()
+    if not addr:
+        return "BLE beacon or tag"
+
+    ent_reg = er.async_get(hass)
+    dev_reg = dr.async_get(hass)
+    live_by_mac, _ = _index_live_ble_advertisements(hass)
+
+    if "." in addr:
+        ent_entry = ent_reg.async_get(addr)
+        dev_entry = (
+            dev_reg.async_get(ent_entry.device_id)
+            if (ent_entry is not None and ent_entry.device_id)
+            else None
+        )
+        st = hass.states.get(addr)
+
+        if (
+            (ent_entry is not None and ent_entry.platform == "mobile_app")
+            or addr.lower().endswith(("_ble_transmitter", "_ble_emitter"))
+            or (
+                ent_entry is not None
+                and ent_entry.unique_id
+                and str(ent_entry.unique_id).lower().endswith("_ble_emitter")
+            )
+        ):
+            model_str = str(dev_entry.model or "").strip() if dev_entry else ""
+            return f"{model_str} (HA Companion App)" if model_str else "HA Companion App"
+
+        if (
+            (ent_entry is not None and ent_entry.platform == "private_ble_device")
+            or "private_ble" in addr.lower()
+            or (st is not None and st.attributes.get("current_address"))
+        ):
+            cur_mac = str(
+                (st.attributes.get("current_address") if st else "") or ""
+            ).strip().upper()
+            live_adv = live_by_mac.get(cur_mac) if cur_mac else None
+            if live_adv is not None:
+                classified = classify_ble_advertisement_kind(
+                    live_adv["local_name"],
+                    live_adv["mfg_data"],
+                    live_adv["service_data"],
+                    live_adv["service_uuids"],
+                    is_private_ble=True,
+                )
+                if classified != "Phone or Watch (Private BLE / IRK)":
+                    return classified
+            return "Private BLE (phone or watch)"
+
+        if (ent_entry is not None and ent_entry.platform == "bthome") or (
+            "bthome" in addr.lower()
+        ):
+            if dev_entry is not None:
+                for _ct, cv in dev_entry.connections:
+                    m_int = _mac_to_int(str(cv))
+                    if m_int is not None:
+                        live_adv = live_by_mac.get(_int_to_mac(m_int))
+                        if live_adv is not None:
+                            classified = classify_ble_advertisement_kind(
+                                live_adv["local_name"],
+                                live_adv["mfg_data"],
+                                live_adv["service_data"],
+                                live_adv["service_uuids"],
+                                is_private_ble=False,
+                            )
+                            if classified in (
+                                "Shelly BLU Tag (BTHome v2)",
+                                "BTHome v2 Tag",
+                            ):
+                                return classified
+                dev_text = " ".join(
+                    str(x or "")
+                    for x in (
+                        dev_entry.manufacturer,
+                        dev_entry.model,
+                        dev_entry.name_by_user,
+                        dev_entry.name,
+                    )
+                ).lower()
+                if "shelly" in dev_text:
+                    return "Shelly BLU Tag (BTHome v2)"
+            return "BTHome v2 Tag"
+
+        if (ent_entry is not None and ent_entry.platform == "ibeacon") or (
+            _extract_ibeacon_entity_identity(hass, ent_entry, st) is not None
+        ):
+            return "iBeacon Tag"
+
+        return "Private BLE (phone or watch)"
+
+    low = addr.lower()
+    if low.startswith("bthome:"):
+        return "BTHome v2 Tag"
+    if low.startswith("eddystone:"):
+        return "Eddystone-UID Beacon"
+    if low.startswith("ibeacon:"):
+        return "iBeacon Tag"
+
+    m_int = _mac_to_int(addr)
+    if m_int is not None:
+        live_adv = live_by_mac.get(_int_to_mac(m_int))
+        if live_adv is not None:
+            classified = classify_ble_advertisement_kind(
+                live_adv["local_name"],
+                live_adv["mfg_data"],
+                live_adv["service_data"],
+                live_adv["service_uuids"],
+                is_private_ble=False,
+            )
+            if classified in (
+                "Tile Tracker",
+                "iTag Keychain Tag",
+                "Shelly BLU Tag (BTHome v2)",
+                "BTHome v2 Tag",
+                "RuuviTag Beacon",
+                "Eddystone-UID Beacon",
+            ):
+                return classified
+            apple_b = live_adv["mfg_data"].get(APPLE_COMPANY_ID)
+            if (
+                apple_b is not None
+                and len(apple_b) >= 20
+                and apple_b[:2] == IBEACON_PREFIX
+            ):
+                return "iBeacon Tag"
+        return "BLE beacon or tag"
+
+    hex_clean = low.replace("-", "")
+    if len(hex_clean) == 32 and all(ch in "0123456789abcdef" for ch in hex_clean):
+        for adv_entry in live_by_mac.values():
+            for k_svc, v_svc in adv_entry["service_data"].items():
+                if (
+                    _extract_uuid16(k_svc) == "feaa"
+                    and len(v_svc) >= 18
+                    and (v_svc[0] & 0xF0) == 0x00
+                    and bytes(v_svc[2:18]).hex().lower() == hex_clean
+                ):
+                    return "Eddystone-UID Beacon"
+        if "-" not in addr and ":" not in addr and "_" not in addr and addr == addr.upper():
+            return "Eddystone-UID Beacon"
+        return "iBeacon Tag"
+    if len(hex_clean) == 20 and all(ch in "0123456789abcdef" for ch in hex_clean):
+        return "Eddystone-UID Beacon"
+    if parse_ibeacon_identity(addr) is not None:
+        return "iBeacon Tag"
+    return "BLE beacon or tag"
+
+
+def get_discovered_ble_candidates(
+    hass: HomeAssistant, onboarded_slugs: set[str], onboarded_addresses: set[str]
+) -> list[dict[str, Any]]:
+    """Discover phones and BLE tags (HA Companion App, Private BLE, iBeacon, BTHome, Tile, iTag, RuuviTag, Eddystone)."""
+    candidates: list[dict[str, Any]] = []
+    seen_targets: set[str] = {str(a).strip().lower() for a in onboarded_addresses if a and str(a).strip()}
+    ent_reg = er.async_get(hass)
+    dev_reg = dr.async_get(hass)
+    area_reg = ar.async_get(hass)
+    live_by_mac, live_ibeacons = _index_live_ble_advertisements(hass)
+
+    onboarded_ibeacons: set[tuple[str, int | None, int | None]] = set()
+    onboarded_uuid_only: set[str] = set()
+    for raw_onb in onboarded_addresses:
+        clean_onb = str(raw_onb or "").strip()
+        if not clean_onb:
+            continue
+        if "." in clean_onb:
+            st_onb = hass.states.get(clean_onb)
+            ent_onb = ent_reg.async_get(clean_onb)
+            ib_onb = _extract_ibeacon_entity_identity(hass, ent_onb, st_onb)
+            if ib_onb is not None:
+                onboarded_ibeacons.add(ib_onb)
+            if st_onb is not None:
+                cur_onb_mac = str(
+                    st_onb.attributes.get("current_address")
+                    or st_onb.attributes.get("mac")
+                    or st_onb.attributes.get("address")
+                    or ""
+                ).strip()
+                if cur_onb_mac:
+                    seen_targets.add(cur_onb_mac.lower())
+        else:
+            ib_onb = parse_ibeacon_identity(clean_onb)
+            if ib_onb is not None:
+                onboarded_ibeacons.add(ib_onb)
+                if ib_onb[1] is None and ib_onb[2] is None:
+                    onboarded_uuid_only.add(ib_onb[0])
+
+    all_entities = _iter_entities(ent_reg)
+    companion_app_beacons: set[tuple[str, int | None, int | None]] = set()
+
+    # 1. Direct 1-click Home Assistant Companion App BLE Transmitter discovery
+    for entry in all_entities:
+        if entry.disabled_by or not _is_mobile_app_ble_emitter(entry):
+            continue
+        st = hass.states.get(entry.entity_id)
+        if st is None or str(st.state or "").strip().lower() in (
+            "disabled",
+            "stopped",
+            "off",
+            "unavailable",
+        ):
+            continue
+        raw_id = str(
+            st.attributes.get("id") or st.attributes.get("uuid") or ""
+        ).strip()
+        parsed_ib = (
+            parse_ibeacon_identity(
+                raw_id,
+                st.attributes.get("major"),
+                st.attributes.get("minor"),
+            )
+            if raw_id
+            else None
+        )
+        if parsed_ib is None:
+            continue
+        uuid_hex, maj, min_ = parsed_ib
+        companion_app_beacons.add((uuid_hex, maj, min_))
+
+        live_hit = (
+            live_ibeacons.get((uuid_hex, maj, min_))
+            if (maj is not None or min_ is not None)
+            else live_ibeacons.get((uuid_hex, None, None))
+        )
+        if live_hit is not None and live_hit.get("mac"):
+            seen_targets.add(str(live_hit["mac"]).lower())
+
+        uuid_dashed = _format_uuid_dashed(uuid_hex)
+        if (
+            entry.entity_id.lower() in seen_targets
+            or uuid_hex in seen_targets
+            or uuid_dashed.lower() in seen_targets
+            or (uuid_hex, maj, min_) in onboarded_ibeacons
+            or uuid_hex in onboarded_uuid_only
+        ):
+            seen_targets.add(entry.entity_id.lower())
+            continue
+
+        friendly = ""
+        if entry.device_id:
+            dev_entry = dev_reg.async_get(entry.device_id)
+            if dev_entry is not None:
+                friendly = str(dev_entry.name_by_user or dev_entry.name or "").strip()
+        if not friendly:
+            friendly = (
+                str(st.attributes.get("friendly_name") or "")
+                or entry.name
+                or entry.original_name
+                or entry.entity_id
+            ).strip()
+            for sfx in (" BLE Transmitter", " BLE Emitter"):
+                if friendly.lower().endswith(sfx.lower()):
+                    friendly = friendly[: -len(sfx)].strip()
+                    break
+
+        cand_slug = normalize_device_slug(friendly)
+        if (
+            not cand_slug
+            or cand_slug == "esphome_device"
+            or cand_slug in onboarded_slugs
+        ):
+            seen_targets.add(entry.entity_id.lower())
+            continue
+
+        seen_targets.add(entry.entity_id.lower())
+        mm_suffix = (
+            f" • {maj}:{min_}" if maj is not None and min_ is not None else ""
+        )
+        kind_lbl = f"HA Companion App ({uuid_dashed}{mm_suffix})"
+        rssi_int = live_hit["rssi"] if live_hit is not None else None
+        area_name = str(live_hit["area_name"]) if live_hit is not None else ""
+        scanner_str = str(live_hit["scanner"]) if live_hit is not None else ""
+        rssi_str = f" ({rssi_int} dBm)" if rssi_int is not None else ""
+        area_str = f" • {area_name}" if area_name else ""
+        candidates.append(
+            {
+                "slug": cand_slug,
+                "title": friendly,
+                "target_address": entry.entity_id,
+                "kind": kind_lbl,
+                "rssi": rssi_int,
+                "area_name": area_name,
+                "scanner": scanner_str,
+                "label": f"{friendly} [{kind_lbl}]{rssi_str}{area_str}",
+            }
+        )
+
+    # 2. Deduplicate `private_ble_device`, `ibeacon`, and `bthome` by `device_id` (preferring `device_tracker`)
+    raw_reg_entries: list[er.RegistryEntry] = []
+    for entry in all_entities:
+        if entry.disabled_by:
+            continue
+        if entry.platform not in ("private_ble_device", "ibeacon", "bthome"):
+            continue
+        if entry.domain not in ("device_tracker", "sensor", "binary_sensor"):
+            continue
+        if entry.platform != "bthome":
+            if entry.domain == "binary_sensor":
+                continue
+            if entry.domain == "sensor" and not entry.entity_id.endswith(
+                "estimated_distance"
+            ):
+                continue
+        elif entry.domain in ("sensor", "binary_sensor") and not any(
+            entry.entity_id.endswith(sfx)
+            for sfx in ("signal_strength", "battery", "motion", "button")
+        ):
+            continue
+        raw_reg_entries.append(entry)
+
+    def _domain_rank(ent: er.RegistryEntry) -> int:
+        if ent.domain == "device_tracker":
+            return 0
+        if ent.domain == "sensor":
+            return 1
+        return 2
+
+    by_dev_id: dict[tuple[str, str], list[er.RegistryEntry]] = {}
+    devless_entries: list[er.RegistryEntry] = []
+    for entry in raw_reg_entries:
+        if entry.device_id:
+            by_dev_id.setdefault((entry.platform, entry.device_id), []).append(entry)
+        else:
+            devless_entries.append(entry)
+
+    deduped_entries: list[er.RegistryEntry] = []
+    for grp_entries in by_dev_id.values():
+        if any(e.entity_id.lower() in seen_targets for e in grp_entries):
+            for e in grp_entries:
+                seen_targets.add(e.entity_id.lower())
+            continue
+        grp_entries.sort(
+            key=lambda e: (
+                _domain_rank(e),
+                hass.states.get(e.entity_id) is None,
+                e.entity_id,
+            )
+        )
+        deduped_entries.append(grp_entries[0])
+    deduped_entries.extend(devless_entries)
+
+    def _clean_entity_friendly(ent: er.RegistryEntry, st_obj: Any) -> str:
+        dev_entry = (
+            dev_reg.async_get(ent.device_id) if ent.device_id else None
+        )
+        if dev_entry is not None and dev_entry.name_by_user:
+            return str(dev_entry.name_by_user).strip()
+        friendly_raw = (
+            str(st_obj.attributes.get("friendly_name") if st_obj else "")
+            or ent.name
+            or ent.original_name
+            or (str(dev_entry.name or "") if dev_entry else "")
+            or ent.entity_id
+        ).strip()
+        for suffix in (
+            " Estimated Distance",
+            " Signal Strength",
+            "Signal Strength",
+            " Battery",
+            " Motion",
+            " Button",
+        ):
+            if friendly_raw.endswith(suffix):
+                friendly_raw = friendly_raw[: -len(suffix)].strip()
+        return friendly_raw
+
+    # Consolidate rotating-MAC `ibeacon` duplicates sharing `(uuid_hex, major, minor)` & suppress Companion App overlaps
+    ibeacon_groups: dict[
+        tuple[str, int | None, int | None],
+        list[tuple[er.RegistryEntry, Any, str, int | None]],
+    ] = {}
+    final_entity_items: list[tuple[er.RegistryEntry, bool]] = []
+
+    for entry in deduped_entries:
+        if entry.platform != "ibeacon":
+            final_entity_items.append((entry, False))
+            continue
+        st = hass.states.get(entry.entity_id)
+        ib_key = _extract_ibeacon_entity_identity(hass, entry, st)
+        if ib_key is not None:
+            u_hex, maj, min_ = ib_key
+            u_dashed = _format_uuid_dashed(u_hex)
+            covered_by_companion = (
+                (u_hex, maj, min_) in companion_app_beacons
+                or (u_hex, None, None) in companion_app_beacons
+                or (
+                    maj is None
+                    and min_ is None
+                    and any(cu == u_hex for cu, _cmaj, _cmin in companion_app_beacons)
+                )
+            )
+            covered_by_onboarded = (
+                (u_hex, maj, min_) in onboarded_ibeacons
+                or u_hex in onboarded_uuid_only
+                or u_hex in seen_targets
+                or u_dashed.lower() in seen_targets
+            )
+            if covered_by_companion or covered_by_onboarded:
+                seen_targets.add(entry.entity_id.lower())
+                continue
+            friendly_lbl = _clean_entity_friendly(entry, st)
+            st_rssi = st.attributes.get("rssi") if st else None
+            rssi_num = (
+                int(st_rssi)
+                if isinstance(st_rssi, (int, float)) and not isinstance(st_rssi, bool)
+                else None
+            )
+            if rssi_num is None:
+                live_ib = (
+                    live_ibeacons.get((u_hex, maj, min_))
+                    if (maj is not None or min_ is not None)
+                    else live_ibeacons.get((u_hex, None, None))
+                )
+                if live_ib is not None:
+                    rssi_num = live_ib["rssi"]
+            ibeacon_groups.setdefault(ib_key, []).append(
+                (entry, st, friendly_lbl, rssi_num)
+            )
+        else:
+            final_entity_items.append((entry, False))
+
+    for ib_items in ibeacon_groups.values():
+        if any(it[0].entity_id.lower() in seen_targets for it in ib_items):
+            for it in ib_items:
+                seen_targets.add(it[0].entity_id.lower())
+            continue
+        ib_items.sort(
+            key=lambda it: (
+                _domain_rank(it[0]),
+                1 if _TRAILING_ROTATING_HEX4_RE.search(it[2]) else 0,
+                -(it[3] if it[3] is not None else -999),
+                it[0].entity_id,
+            )
+        )
+        final_entity_items.append((ib_items[0][0], len(ib_items) > 1))
+
+    for entry, consolidated_dup in final_entity_items:
+        st = hass.states.get(entry.entity_id)
+        friendly = _clean_entity_friendly(entry, st)
+        if consolidated_dup:
+            friendly = _TRAILING_ROTATING_HEX4_RE.sub("", friendly).strip() or friendly
+        cand_slug = normalize_device_slug(friendly)
+        if (
+            not cand_slug
+            or cand_slug == "esphome_device"
+            or cand_slug in onboarded_slugs
+            or entry.entity_id.lower() in seen_targets
+        ):
+            continue
+        seen_targets.add(entry.entity_id.lower())
+
+        rssi_val = st.attributes.get("rssi") if st else None
+        rssi_int = (
+            int(rssi_val)
+            if isinstance(rssi_val, (int, float)) and not isinstance(rssi_val, bool)
+            else None
+        )
+        src_scanner = str(st.attributes.get("source") or "").strip() if st else ""
+        a_id = _resolve_scanner_area_id(hass, src_scanner) if src_scanner else None
+        a_obj = area_reg.async_get_area(a_id) if a_id else None
+        area_name = a_obj.name if a_obj else ""
+
+        if entry.platform == "private_ble_device":
+            cur_mac = str(
+                (st.attributes.get("current_address") if st else "") or ""
+            ).strip().upper()
+            if cur_mac:
+                seen_targets.add(cur_mac.lower())
+            live_adv = live_by_mac.get(cur_mac) if cur_mac else None
+            if live_adv is not None:
+                kind_lbl = classify_ble_advertisement_kind(
+                    live_adv["local_name"],
+                    live_adv["mfg_data"],
+                    live_adv["service_data"],
+                    live_adv["service_uuids"],
+                    is_private_ble=True,
+                )
+                if rssi_int is None and live_adv["rssi"] is not None:
+                    rssi_int = live_adv["rssi"]
+                if not area_name and live_adv["area_name"]:
+                    area_name = str(live_adv["area_name"])
+                if not src_scanner and live_adv["scanner"]:
+                    src_scanner = str(live_adv["scanner"])
+            else:
+                kind_lbl = classify_ble_advertisement_kind(
+                    "", {}, {}, (), is_private_ble=True
+                )
+        elif entry.platform == "bthome":
+            kind_lbl = "BTHome v2 Tag"
+            dev_entry = (
+                dev_reg.async_get(entry.device_id) if entry.device_id else None
+            )
+            if dev_entry is not None:
+                for _ct, cv in dev_entry.connections:
+                    m_int = _mac_to_int(str(cv))
+                    if m_int is not None:
+                        mac_fmt = _int_to_mac(m_int)
+                        seen_targets.add(mac_fmt.lower())
+                        live_adv = live_by_mac.get(mac_fmt)
+                        if live_adv is not None:
+                            classified_bt = classify_ble_advertisement_kind(
+                                live_adv["local_name"],
+                                live_adv["mfg_data"],
+                                live_adv["service_data"],
+                                live_adv["service_uuids"],
+                                is_private_ble=False,
+                            )
+                            if classified_bt in (
+                                "Shelly BLU Tag (BTHome v2)",
+                                "BTHome v2 Tag",
+                            ):
+                                kind_lbl = classified_bt
+                            if rssi_int is None and live_adv["rssi"] is not None:
+                                rssi_int = live_adv["rssi"]
+                            if not area_name and live_adv["area_name"]:
+                                area_name = str(live_adv["area_name"])
+                            if not src_scanner and live_adv["scanner"]:
+                                src_scanner = str(live_adv["scanner"])
+        else:
+            ib_key = _extract_ibeacon_entity_identity(hass, entry, st)
+            if ib_key is not None:
+                u_hex, maj, min_ = ib_key
+                live_ib = (
+                    live_ibeacons.get((u_hex, maj, min_))
+                    if (maj is not None or min_ is not None)
+                    else live_ibeacons.get((u_hex, None, None))
+                )
+                if live_ib is not None:
+                    if live_ib.get("mac"):
+                        seen_targets.add(str(live_ib["mac"]).lower())
+                    if rssi_int is None and live_ib["rssi"] is not None:
+                        rssi_int = live_ib["rssi"]
+                    if not area_name and live_ib["area_name"]:
+                        area_name = str(live_ib["area_name"])
+                    if not src_scanner and live_ib["scanner"]:
+                        src_scanner = str(live_ib["scanner"])
+                u_dashed = _format_uuid_dashed(u_hex)
+                mm = (
+                    f" • {maj}:{min_}"
+                    if maj is not None and min_ is not None
+                    else ""
+                )
+                kind_lbl = f"iBeacon Tag ({u_dashed}{mm})"
+            else:
+                kind_lbl = "iBeacon Tag"
+
+        rssi_str = f" ({rssi_int} dBm)" if rssi_int is not None else ""
+        area_str = f" • {area_name}" if area_name else ""
+        candidates.append(
+            {
+                "slug": cand_slug,
+                "title": friendly,
+                "target_address": entry.entity_id,
+                "kind": kind_lbl,
+                "rssi": rssi_int,
+                "area_name": area_name,
+                "scanner": src_scanner,
+                "label": f"{friendly} [{kind_lbl}]{rssi_str}{area_str}",
+            }
+        )
+
+    # 3. Ambient scanner-table discovery (excluding rolling-EID cloud Find frames)
+    best_by_addr: dict[str, dict[str, Any]] = {}
+    for addr_str, adv_entry in live_by_mac.items():
+        local_name = str(adv_entry["local_name"] or "").strip()
+        mfg_data: Mapping[int, bytes] = adv_entry["mfg_data"]
+        svc_data: Mapping[str, bytes] = adv_entry["service_data"]
+        svc_uuids: Iterable[str] = adv_entry["service_uuids"]
+
+        if _is_excluded_cloud_find_adv(local_name, mfg_data, svc_data):
+            continue
+
+        apple_b = mfg_data.get(APPLE_COMPANY_ID)
+        if (
+            apple_b is not None
+            and len(apple_b) >= 20
+            and apple_b[:2] == IBEACON_PREFIX
+        ):
+            ib_u = apple_b[2:18].hex().lower()
+            ib_maj = (apple_b[18] << 8) | apple_b[19]
+            ib_min = (
+                ((apple_b[20] << 8) | apple_b[21])
+                if len(apple_b) >= 22
+                else None
+            )
+            if (
+                (ib_u, ib_maj, ib_min) in companion_app_beacons
+                or (ib_u, ib_maj, ib_min) in onboarded_ibeacons
+                or ib_u in onboarded_uuid_only
+            ):
+                continue
+
+        eddystone_uid_target = ""
+        for k_svc, v_svc in svc_data.items():
+            if (
+                _extract_uuid16(k_svc) == "feaa"
+                and isinstance(v_svc, (bytes, bytearray))
+                and len(v_svc) >= 18
+                and (v_svc[0] & 0xF0) == 0x00
+            ):
+                eddystone_uid_target = bytes(v_svc[2:18]).hex().upper()
+                break
+
+        target_key = eddystone_uid_target or addr_str
+        if target_key.lower() in seen_targets or addr_str.lower() in seen_targets:
+            continue
+
+        kind_lbl = classify_ble_advertisement_kind(
+            local_name,
+            mfg_data,
+            svc_data,
+            svc_uuids,
+            is_private_ble=False,
+        )
+        title = local_name
+        if not title:
+            if kind_lbl == "Tile Tracker":
+                title = f"Tile Tracker {addr_str[-5:]}"
+            elif kind_lbl == "Shelly BLU Tag (BTHome v2)":
+                title = f"Shelly BLU {addr_str[-5:]}"
+            elif kind_lbl == "BTHome v2 Tag":
+                title = f"BTHome {addr_str[-5:]}"
+            elif kind_lbl == "RuuviTag Beacon":
+                title = f"RuuviTag {addr_str[-5:]}"
+            elif kind_lbl == "Eddystone-UID Beacon" and eddystone_uid_target:
+                title = f"Eddystone {addr_str[-5:]}"
+            elif kind_lbl == "iTag Keychain Tag":
+                title = f"iTag {addr_str[-5:]}"
+            else:
+                continue
+
+        cand_slug = normalize_device_slug(title)
+        if (
+            not cand_slug
+            or cand_slug == "esphome_device"
+            or cand_slug in onboarded_slugs
+        ):
+            continue
+
+        rssi_int = adv_entry["rssi"]
+        area_name = str(adv_entry["area_name"] or "")
+        scanner_name = str(adv_entry["scanner"] or "")
+        prev = best_by_addr.get(target_key)
+        if prev is None or (
+            rssi_int is not None
+            and (prev["rssi"] is None or rssi_int > prev["rssi"])
+        ):
+            rssi_str = f" ({rssi_int} dBm)" if rssi_int is not None else ""
+            area_str = f" • {area_name}" if area_name else ""
+            best_by_addr[target_key] = {
+                "slug": cand_slug,
+                "title": title,
+                "target_address": target_key,
+                "kind": kind_lbl,
+                "rssi": rssi_int,
+                "area_name": area_name,
+                "scanner": scanner_name,
+                "label": f"{title} [{kind_lbl}]{rssi_str}{area_str}",
+            }
 
     for addr_str, item in best_by_addr.items():
         seen_targets.add(addr_str.lower())

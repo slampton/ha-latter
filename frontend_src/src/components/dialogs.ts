@@ -364,11 +364,11 @@ export function renderStudioDialogs(store: StudioStore): TemplateResult {
           />
         </div>
         <div class="stacked-field">
-          <span class="field-label">Target Address or Entity</span>
+          <label for="ble-custom-addr">Target Address or Entity</label>
           <input
             type="text"
             id="ble-custom-addr"
-            placeholder="AA:BB:CC:DD:EE:FF or device_tracker.phone_ble"
+            placeholder="AA:BB:CC:DD:EE:FF, iBeacon UUID, or tracker entity"
             .value=${store.addBleModal.address}
             @input=${(ev: Event) => {
               store.addBleModal = {
@@ -378,6 +378,9 @@ export function renderStudioDialogs(store: StudioStore): TemplateResult {
             }}
             class="mono"
           />
+          <span class="help-text">
+            Enter a static BLE MAC address, iBeacon UUID (with optional major:minor), or Home Assistant Companion App or tracker entity.
+          </span>
         </div>
         <div class="stacked-field">
           <label for="ble-custom-person">Assigned Person (Optional)</label>

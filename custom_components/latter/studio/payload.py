@@ -64,6 +64,7 @@ from ..media import ma_player_entities
 from ..media_browse import is_music_assistant_player
 from ..presence import (
     count_area_ble_proxies,
+    describe_ble_target_model,
     get_all_areas_presence_summary,
     get_area_signatures_summary,
     get_discovered_ble_candidates,
@@ -1185,12 +1186,7 @@ def _build_system_section(
         c_h = int(c_manifest.get("h") or 0)
         c_board = str(c_manifest.get("board") or "").strip()
         if c.is_ble_tag:
-            c_model_label = (
-                "Private BLE (phone or watch)"
-                if "private_ble" in c.ble_target_address
-                or "." in c.ble_target_address
-                else "BLE beacon or tag"
-            )
+            c_model_label = describe_ble_target_model(hass, c.ble_target_address)
         elif c_w > 0 and c_h > 0:
             c_model_label = (
                 f"{raw_model} ({c_w}x{c_h})"

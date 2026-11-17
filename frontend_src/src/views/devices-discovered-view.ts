@@ -11,10 +11,21 @@ import type { StudioStore } from "../state/store.js";
 import type { DiscoveredBleCandidate, DiscoveredLatterDevice } from "../types.js";
 import { entityLabel, fmtNumber } from "../utils/format.js";
 
+const TRACKER_KIND_TOKENS: ReadonlyArray<string> = [
+  "companion app",
+  "private ble",
+  "ibeacon",
+  "bthome",
+  "tile",
+  "itag",
+  "ruuvitag",
+  "eddystone",
+];
+
 function isTrackerCandidate(c: DiscoveredBleCandidate): boolean {
   const kind = String(c.kind || "").toLowerCase();
   const addr = String(c.target_address || c.address || "");
-  return kind.includes("private ble") || kind.includes("ibeacon") || addr.includes(".");
+  return addr.includes(".") || TRACKER_KIND_TOKENS.some((tok) => kind.includes(tok));
 }
 
 function candidateTitle(c: DiscoveredBleCandidate): string {
@@ -283,7 +294,10 @@ export function renderDevicesDiscoveredView(store: StudioStore): TemplateResult 
                 const addr = candidateAddr(c);
                 const addrKey = (addr || title).toLowerCase();
                 const curPerson = bleDraftPersons?.get(addrKey) || "";
-                const meta = [c.kind || "BLE device", addr];
+                const kindLabel = c.kind || "BLE device";
+                const showAddr =
+                  Boolean(addr) && !kindLabel.toLowerCase().includes(addr.toLowerCase());
+                const meta = [kindLabel, ...(showAddr ? [addr] : [])];
                 if (c.rssi !== null && c.rssi !== undefined) {
                   meta.push(`${fmtNumber(c.rssi, store.hass, 0)} dBm`);
                 }

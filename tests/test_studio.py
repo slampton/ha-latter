@@ -159,8 +159,11 @@ class TestViewLayout(unittest.TestCase):
         self.assertIn("Add BLE Tag", discovered_view)
         self.assertIn('id="latter-adopt-table-box"', discovered_view)
         self.assertIn('id="ble-adopt-table-box"', discovered_view)
-        self.assertEqual(latter_const.STUDIO_REV, 25)
-        self.assertIn("const STUDIO_REV = 25;", js)
+        for tracker_tok in ("companion app", "private ble", "ibeacon", "bthome", "tile", "itag", "ruuvitag", "eddystone"):
+            self.assertIn(f'"{tracker_tok}"', js)
+        self.assertIn("AA:BB:CC:DD:EE:FF, iBeacon UUID, or tracker entity", js)
+        self.assertEqual(latter_const.STUDIO_REV, 26)
+        self.assertIn("const STUDIO_REV = 26;", js)
         self.assertNotIn("power_profile", js)
         self.assertNotIn("Power Profile", js)
         self.assertNotIn("fusion-area", js)
