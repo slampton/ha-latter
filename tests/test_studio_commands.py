@@ -39,7 +39,7 @@ async def test_studio_rev_mismatch_on_all_read_and_mutation_endpoints(
     hass: Any, setup_latter_hub: Any
 ) -> None:
     """Verify studio_rev mismatch rejects BOTH read (get_state, subscribe) and mutation WS commands."""
-    assert STUDIO_REV == 20
+    assert STUDIO_REV == 21
     entry, _sys_obj, coord = await setup_latter_hub(hass)
     from homeassistant.helpers import area_registry as ar
 
@@ -459,17 +459,31 @@ async def test_studio_commands_security_pin_secrecy_groups_and_backup_restore(
     assert coord._unsub_wallpaper_timer is None
     assert final_off["config"]["wallpaper_cycle_minutes"] == 0
 
-    # Device Groups lifecycle: create -> update_group_baseline -> apply_batch_device_setting -> delete
+    # Device Groups lifecycle: create -> update_group_baseline -> apply_batch_device_setting -> Save Custom Group -> delete
     await _sys_cmd("create_device_group", {"name": "Guest Suites", "description": "Guest displays"})
     await _dev_cmd("save_device_config", {"config": {"device_group": "guest_suites"}})
+    assert coord.device_group == "guest_suites"
     await _sys_cmd(
         "update_group_baseline",
         {"group_id": "guest_suites", "source_subentry_id": coord.subentry_id},
     )
-    await _sys_cmd(
+    assert coord.device_group == "guest_suites"
+    baseline_state = await _sys_cmd(
         "update_group_baseline",
-        {"group_id": "guest_suites", "config": {"alert_volume": 65}},
+        {"group_id": "guest_suites", "config": {"alert_volume": 65, "area_handoff": True}},
     )
+    assert coord.device_group == "guest_suites"
+    sys_ctrl_by_pref = {
+        c["pref_key"]: c for c in baseline_state["system_controls"] if c.get("pref_key")
+    }
+    for op_key in ("native_ble_tracking", "ble_auto_switch", "sync_device_area", "area_handoff"):
+        assert op_key in sys_ctrl_by_pref
+    assert any(
+        t["device_slug"] == coord.device_slug and t["state"] == "on"
+        for t in sys_ctrl_by_pref["area_handoff"]["targets"]
+    )
+
+    # Appearance batch update preserves group assignment
     await _sys_cmd(
         "apply_batch_device_setting",
         {
@@ -484,6 +498,45 @@ async def test_studio_commands_security_pin_secrecy_groups_and_backup_restore(
     )
     assert len(coord.pinned_items) == 1
     assert coord.pinned_items[0]["target"] == "weather:moon"
+    assert coord.device_group == "guest_suites"
+
+    # Operational one-off batch tweak diverges from Guest Suites baseline -> auto-switches to 'custom'
+    await _sys_cmd(
+        "apply_batch_device_setting",
+        {"target": "group:guest_suites", "config": {"alert_volume": 40}},
+    )
+    assert coord.device_group == "custom"
+
+    # Save Custom Group (source_subentry_id + assign_source=True) creates group & assigns device
+    saved_grp_state = await _sys_cmd(
+        "create_device_group",
+        {
+            "name": "VIP Suites",
+            "description": "Saved from custom device",
+            "source_subentry_id": coord.subentry_id,
+            "assign_source": True,
+        },
+    )
+    assert coord.device_group == "vip_suites"
+    vip_grp = next(g for g in saved_grp_state["device_groups"] if g["id"] == "vip_suites")
+    assert vip_grp["device_config"]["alert_volume"] == 40
+
+    # Built-in groups cannot be deleted; deleting custom group resets members to 'custom'
+    msg_seq += 1
+    await _call_ws(
+        hass,
+        conn,
+        msg_seq,
+        "latter/system/command",
+        command="delete_device_group",
+        payload={"group_id": "handhelds"},
+        studio_rev=STUDIO_REV,
+    )
+    assert conn.errors[-1][1] == "not_allowed"
+    conn.errors.clear()
+
+    await _sys_cmd("delete_device_group", {"group_id": "vip_suites"})
+    assert coord.device_group == "custom"
     await _sys_cmd("delete_device_group", {"group_id": "guest_suites"})
 
     # Wrong scope error check ('save_device_config' sent to system scope)

@@ -2694,5 +2694,358 @@ return {
         self.assertIn("Open Discovered Devices", got["emptyBleRendered"])
 
 
+@unittest.skipUnless(NODE, "node is not installed")
+class TestDeviceGroupsAndCustomFlow(unittest.TestCase):
+    """D-048: Enclosed Device Groups boxes, Batch Controls live state, Managed Devices filter diet, and Save Custom Group modal."""
+
+    def test_groups_boxes_batch_controls_overview_assignments_and_save_custom_modal(self) -> None:
+        runner = """
+return (async () => {
+function flattenHtml(val) {
+  if (val === null || val === undefined || typeof val === "symbol") return "";
+  if (Array.isArray(val)) return val.map(flattenHtml).join("");
+  if (typeof val === "object") {
+    if (Array.isArray(val.strings) && Array.isArray(val.values)) {
+      let out = "";
+      for (let i = 0; i < val.strings.length; i += 1) {
+        out += val.strings[i];
+        if (i < val.values.length) {
+          const prev = val.strings[i];
+          const v = val.values[i];
+          if (typeof v === "boolean" && /\\?[a-zA-Z0-9_-]+=$/.test(prev)) {
+            out += String(v);
+          } else {
+            out += flattenHtml(v);
+          }
+        }
+      }
+      return out;
+    }
+    if (val._$litKeyed$ === 1 && Array.isArray(val.templates)) {
+      return val.templates.map(flattenHtml).join("");
+    }
+  }
+  return String(val);
+}
+
+const fakeHost = {
+  isConnected: true,
+  requestUpdate() {},
+  addController() {},
+  removeController() {},
+  updateComplete: Promise.resolve(true),
+  renderRoot: { getElementById() { return null; } },
+};
+
+const wsCalls = [];
+const store = new StudioStore(fakeHost);
+store.ws.hass = { locale: { language: "en" }, config: { unit_system: { length: "km" } } };
+store.ws.runSystemCommand = async (command, payload) => {
+  wsCalls.push({ command, payload });
+  return structuredClone(store.state);
+};
+store.ensureSubscription = async () => {};
+
+store.ingestPayload(
+  {
+    studio_rev: STUDIO_REV,
+    subentry_id: "sub_mobile",
+    title: "Mobile Assistant",
+    config: {
+      kind: "device",
+      device_slug: "mobile_assistant",
+      device_group: "custom",
+      assigned_person: "person.sean",
+      device_remote_group: "area_auto",
+      native_ble_tracking: true,
+    },
+    capabilities: {
+      has_display: true,
+      has_battery: true,
+      is_roaming_device: true,
+    },
+    live: {
+      device_online: true,
+      device_group_name: "Custom",
+      device_remote_group_name: "Area Automatic",
+      active_area_name: "Office",
+      battery_level: 88,
+      wifi_rssi: -54,
+      sw_version: "2026.11.0",
+      issues: [],
+    },
+    esphome_inspector: { sections: [] },
+    catalog: {
+      people: [{ id: "person.sean", name: "Sean" }],
+      areas: [{ id: "office", name: "Office" }],
+    },
+    device_groups: [
+      {
+        id: "handhelds",
+        name: "Handhelds",
+        description: "Battery-powered roaming displays",
+        builtin: true,
+        device_config: { power_profile: "Handheld Roaming", native_ble_tracking: true },
+      },
+      {
+        id: "wearables",
+        name: "Wearables",
+        description: "Compact wearable displays",
+        builtin: true,
+        device_config: { power_profile: "Wearable Watch", native_ble_tracking: true },
+      },
+      {
+        id: "wall_panels",
+        name: "Wall & Desk Panels",
+        description: "Stationary mains-powered panels",
+        builtin: true,
+        device_config: { power_profile: "Always-On Wall / Desk", native_ble_tracking: false },
+      },
+      {
+        id: "guest_suites",
+        name: "Guest Suites",
+        description: "Guest bedroom displays",
+        builtin: false,
+        device_config: { power_profile: "Tabletop Dock", native_ble_tracking: false },
+      },
+    ],
+    system_devices: [
+      {
+        subentry_id: "sub_mobile",
+        title: "Mobile Assistant",
+        device_slug: "mobile_assistant",
+        kind: "device",
+        has_display: true,
+        is_roaming: true,
+        ble_tracked: true,
+        device_group: "custom",
+        device_group_name: "Custom",
+        assigned_person: "person.sean",
+        assigned_person_name: "Sean",
+        active_area_name: "Office",
+        status_label: "Online",
+      },
+      {
+        subentry_id: "sub_pocket",
+        title: "Pocket Assistant",
+        device_slug: "pocket_assistant",
+        kind: "device",
+        has_display: true,
+        is_roaming: true,
+        ble_tracked: true,
+        device_group: "handhelds",
+        device_group_name: "Handhelds",
+        assigned_person: "",
+        assigned_person_name: "",
+        active_area_name: "Bedroom",
+        status_label: "Online",
+      },
+      {
+        subentry_id: "sub_tag",
+        title: "Keyring Tag",
+        device_slug: "keyring_tag",
+        kind: "ble_tag",
+        has_display: false,
+        is_roaming: true,
+        ble_tracked: true,
+        device_group: "",
+        device_group_name: "",
+        assigned_person: "",
+        assigned_person_name: "",
+        active_area_name: "Kitchen",
+        status_label: "Detected",
+      },
+    ],
+    system_controls: [
+      {
+        key: "voice:switch:voice follows me",
+        pref_key: "sync_device_area",
+        tier: "behavior",
+        section: "voice",
+        section_title: "Voice assistant",
+        name: "Voice Follows Me",
+        domain: "switch",
+        state: "off",
+        options: [],
+        targets: [
+          { device_slug: "mobile_assistant", device_group: "custom", is_roaming: true, pref_key: "sync_device_area", state: "on" },
+          { device_slug: "pocket_assistant", device_group: "handhelds", is_roaming: true, pref_key: "sync_device_area", state: "off" },
+        ],
+      },
+    ],
+  },
+  false,
+);
+
+const groupsHtml = flattenHtml(renderSystemGroupsView(store));
+const managedHtml = flattenHtml(renderDevicesListView(store));
+const overviewCustomHtml = flattenHtml(renderDeviceOverviewView(store));
+
+store.activeSubentryId = "sub_mobile";
+store.openSaveGroupModal();
+store.saveGroupModal = { ...store.saveGroupModal, name: " Sean Carry ", description: "Personal handheld" };
+await store.confirmSaveGroupModal();
+
+// Switch active device to handhelds -> Save Custom Group button disappears
+store.ingestPayload(
+  {
+    ...structuredClone(store.state),
+    config: { ...structuredClone(store.state.config), device_group: "handhelds" },
+    live: { ...structuredClone(store.state.live), device_group_name: "Handhelds" },
+  },
+  false,
+);
+const overviewGroupHtml = flattenHtml(renderDeviceOverviewView(store));
+
+return {
+  groupsHtml,
+  managedHtml,
+  overviewCustomHtml,
+  overviewGroupHtml,
+  wsCalls,
+};
+})();
+"""
+        stub_deps = (
+            "globalThis.HTMLElement = class { attachShadow() { return {}; } toggleAttribute() {} };\n"
+            "function navigateHaPath() {}\n"
+            "class StudioWsClient {}\n"
+            "function formatWsError(_e, f) { return f; }\n"
+            + "".join(
+                f"function {fn}() {{}}\n"
+                for fn in (
+                    "adoptLatterDeviceOp",
+                    "checkSystemUpdatesOp",
+                    "clearInternalLogsOp",
+                    "clearSecurityPinOp",
+                    "confirmAddBleModalOp",
+                    "confirmRemoveDeviceOp",
+                    "confirmResetDeviceOp",
+                    "copyLogsToClipboardOp",
+                    "downloadDeviceDiagnosticsOp",
+                    "exportBackupOp",
+                    "formatVisibleLogsOp",
+                    "openColorWheelModalOp",
+                    "quickAdoptBleCandidateOp",
+                    "restoreFromUploadedFileOp",
+                    "rotateSigningKeyOp",
+                    "saveColorWheelSelectionOp",
+                    "saveSecurityPinOp",
+                    "selectBleCandidateInModalOp",
+                    "sendAnnouncementOp",
+                    "addRemoteGroupRowOp",
+                    "addStringListRowOp",
+                    "addVolumeOverrideRowOp",
+                    "applyDeviceCustomColorOp",
+                    "commitEntityChange",
+                    "deleteCustomPaletteOp",
+                    "deleteWallpaperOp",
+                    "executeEntityActionOp",
+                    "flushDeviceBucketOp",
+                    "flushSystemSettingsOp",
+                    "getDockItemsOp",
+                    "getEnabledActivitySourcesOp",
+                    "getEnabledAreaCategoriesOp",
+                    "getEnabledHomeCategoriesOp",
+                    "getPinnedItemsOp",
+                    "moveAreaCategoryTokenOp",
+                    "moveHomeCategoryTokenOp",
+                    "moveShortcutItemOp",
+                    "openShortcutModalOp",
+                    "overlayDevicePrefsOnSections",
+                    "overlayPendingBlankListSlots",
+                    "overlayPendingEntityStates",
+                    "previewCameraOp",
+                    "removeRemoteGroupRowOp",
+                    "removeShortcutItemOp",
+                    "removeStringListRowOp",
+                    "removeVolumeOverrideRowOp",
+                    "resetDockItemsToDefaultOp",
+                    "runDeviceActionOp",
+                    "saveShortcutModalOp",
+                    "selectWallpaperSourceOp",
+                    "setAllWallpaperFavoritesOp",
+                    "setWallpaperRotationOp",
+                    "stageDeviceSettingOp",
+                    "stageSystemSettingOp",
+                    "testDoorbellSpeakerOp",
+                    "toggleActivitySourceOp",
+                    "toggleAreaCategoryTokenOp",
+                    "toggleHomeCategoryTokenOp",
+                    "toggleRemoteInGroupOp",
+                    "toggleWallpaperFavOp",
+                    "updateRemoteGroupFieldOp",
+                    "updateStringListRowOp",
+                    "updateVolumeOverrideRowOp",
+                    "uploadWallpaperOp",
+                )
+            )
+            + "const PENDING_ENTITY_STATES = new Map();\n"
+        )
+        got = _run_node_ts(
+            [
+                FRONTEND_SRC / "lib" / "lit.ts",
+                FRONTEND_SRC / "protocol-schema.ts",
+                FRONTEND_SRC / "constants.ts",
+                FRONTEND_SRC / "utils" / "format.ts",
+                FRONTEND_SRC / "components" / "controls.ts",
+                FRONTEND_SRC / "state" / "groups-presence-ops.ts",
+                FRONTEND_SRC / "state" / "store.ts",
+                FRONTEND_SRC / "views" / "system-groups-view.ts",
+                FRONTEND_SRC / "views" / "devices-list-view.ts",
+                FRONTEND_SRC / "views" / "device-overview-view.ts",
+            ],
+            runner,
+            preamble_js=stub_deps,
+        )
+
+        # Column 1 enclosed .area-presence-box containers + Column 2 Batch Controls with Mixed chip & populated-only group targets
+        self.assertIn('id=group-box-handhelds class="area-presence-box"', got["groupsHtml"])
+        self.assertIn('id=group-box-guest_suites class="area-presence-box"', got["groupsHtml"])
+        self.assertIn("<summary>Baseline Settings</summary>", got["groupsHtml"])
+        self.assertIn("aria-label=Delete group Guest Suites", got["groupsHtml"])
+        self.assertNotIn("aria-label=Delete group Handhelds", got["groupsHtml"])
+        batch_select = got["groupsHtml"][
+            got["groupsHtml"].index('id="batch-target-filter"') : got["groupsHtml"].index('id="batch-cat-filter"')
+        ]
+        self.assertIn("Group: Handhelds", batch_select)
+        self.assertNotIn("Group: Wearables", batch_select)
+        self.assertNotIn("Group: Guest Suites", batch_select)
+        self.assertIn("Voice Follows Me", got["groupsHtml"])
+        self.assertIn("Mixed values", got["groupsHtml"])
+
+        # Managed Devices filter diet: populated groups + Custom + BLE Tags + Assigned to a Person shown; 0-member groups & Updates Available hidden
+        cat_select = got["managedHtml"][
+            got["managedHtml"].index('id="device-category-filter"') : got["managedHtml"].index("</select>")
+        ]
+        self.assertIn("Group: Handhelds", cat_select)
+        self.assertIn("Group: Custom", cat_select)
+        self.assertIn("BLE Tags", cat_select)
+        self.assertIn("Assigned to a Person", cat_select)
+        self.assertNotIn("Group: Wearables", cat_select)
+        self.assertNotIn("Group: Wall &amp; Desk Panels", cat_select)
+        self.assertNotIn("Group: Guest Suites", cat_select)
+        self.assertNotIn("Updates Available", cat_select)
+        self.assertNotIn("Screenless Devices", cat_select)
+
+        # Device Overview Assignments: Save Custom Group shown when Custom and hidden when on Handhelds
+        self.assertIn("id=card-device-assignments", got["overviewCustomHtml"])
+        self.assertIn('id="btn-save-custom-group"', got["overviewCustomHtml"])
+        self.assertIn("Save Custom Group", got["overviewCustomHtml"])
+        self.assertNotIn('id="btn-save-custom-group"', got["overviewGroupHtml"])
+        self.assertEqual(
+            got["wsCalls"][0],
+            {
+                "command": "create_device_group",
+                "payload": {
+                    "name": "Sean Carry",
+                    "description": "Personal handheld",
+                    "source_subentry_id": "sub_mobile",
+                    "assign_source": True,
+                },
+            },
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

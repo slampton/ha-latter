@@ -1,5 +1,5 @@
 /**
- * Device Overview View (`dashboard`, D-029 / D-047):
+ * Device Overview View (`dashboard`, D-029 / D-048):
  * - Column 1: High-level Status card (header state pill, 2x2 tonal metric tiles, footer links).
  * - Column 2: Quick Actions (immediate action tiles + live volume), unified Assignments card
  *   (Device Group with Custom / Save Custom Group / Manage Groups, Assigned Person, Remote Control Group),

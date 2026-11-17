@@ -156,8 +156,8 @@ class TestViewLayout(unittest.TestCase):
         self.assertIn("Add BLE Tag", discovered_view)
         self.assertIn('id="latter-adopt-table-box"', discovered_view)
         self.assertIn('id="ble-adopt-table-box"', discovered_view)
-        self.assertEqual(latter_const.STUDIO_REV, 20)
-        self.assertIn("const STUDIO_REV = 20;", js)
+        self.assertEqual(latter_const.STUDIO_REV, 21)
+        self.assertIn("const STUDIO_REV = 21;", js)
         self.assertNotIn("fusion-area", js)
         self.assertNotIn("d.has_ble ||", js)
         self.assertNotIn(".area-presence-box.occupied", js)
@@ -299,6 +299,21 @@ class TestViewLayout(unittest.TestCase):
         self.assertNotIn("Restore From File", js)
         self.assertIn('title: "Device Groups"', groups)
         self.assertIn('title: "Batch Controls"', groups)
+        self.assertIn("group-box-", groups)
+        self.assertIn("renderGroupBaselineDrawer(store, g, latterDevices)", groups)
+        self.assertIn("<summary>Baseline Settings</summary>", js)
+        self.assertIn('id="latter-save-group-modal"', js)
+        for retired_group_ui in (
+            "batch-latter-behavior-list",
+            "group_sync_status",
+            "Seed Baseline From Device",
+            "Group Controls & Baseline",
+            "Group Controls &amp; Baseline",
+            "Reset to Group",
+            "Sync Group",
+            "Screenless Devices",
+        ):
+            self.assertNotIn(retired_group_ui, js)
         self.assertNotIn("Configuration Profiles", js)
         self.assertNotIn("dash-power-profile-select", overview)
         self.assertNotIn("quick-profile-select", overview)

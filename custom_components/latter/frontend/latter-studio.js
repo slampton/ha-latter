@@ -194,7 +194,7 @@ const DEFAULT_HOME_CATEGORIES_TOKENS = [
 /**
  * Canonical constants, route maps, issue messages, and Title Case dictionaries for Latter Studio.
  */
-const STUDIO_REV = 20;
+const STUDIO_REV = 21;
 const MAX_DOCK_ITEMS = 24;
 const MAX_PINNED_ITEMS = 96;
 const SHORTCUT_LABEL_MAX = 24;
@@ -10173,7 +10173,7 @@ function renderDeviceInterfaceView(store) {
 
 // --- src/views/device-overview-view.ts ---
 /**
- * Device Overview View (`dashboard`, D-029 / D-047):
+ * Device Overview View (`dashboard`, D-029 / D-048):
  * - Column 1: High-level Status card (header state pill, 2x2 tonal metric tiles, footer links).
  * - Column 2: Quick Actions (immediate action tiles + live volume), unified Assignments card
  *   (Device Group with Custom / Save Custom Group / Manage Groups, Assigned Person, Remote Control Group),
@@ -11661,7 +11661,7 @@ function renderDevicesDiscoveredView(store) {
 /**
  * Managed Devices View (`select_device_prompt`): Filterable, keyboard-accessible sortable Devices table.
  * Card header dynamically reflects the active category selection (`D-041`), while zero-member groups
- * and unused specialty categories stay hidden unless active (`D-047`).
+ * and unused specialty categories stay hidden unless active (`D-048`).
  */
 function statusRank(st) {
   if (st === "Update available") return 1;
@@ -11825,7 +11825,7 @@ function renderDevicesListView(store) {
 
 // --- src/views/system-groups-view.ts ---
 /**
- * System Device Groups & Batch Controls View (`system_sync`, D-047):
+ * System Device Groups & Batch Controls View (`system_sync`, D-048):
  * Column 1: Enclosed per-Group containers with inline expandable Baseline Settings.
  * Column 2: Dedicated one-off Batch Controls across All, Roaming, Stationary, or populated Groups.
  */
@@ -12300,9 +12300,6 @@ function renderSystemGroupsView(store) {
     if (activeTargetId === "stationary") return !d.is_roaming;
     return d.device_group === activeTargetId;
   });
-  const bleStates = matchingDevs.map((d) => Boolean(d.ble_tracked));
-  const bleMixed = new Set(bleStates).size > 1;
-  const bleOn = matchingDevs.length > 0 && bleStates.every(Boolean);
   const renderBatchControlRow = (fc) => {
     if (activeCat !== "all" && fc.section !== activeCat) return nothing;
     const targets = (fc.targets || []).filter((t) => {
@@ -12360,8 +12357,14 @@ function renderSystemGroupsView(store) {
     }
     return renderSettingsRow({ label: entityLabel(fc.name), description: desc, control });
   };
-  const behaviorControls = systemControls.filter((fc) => fc.tier !== "appearance");
-  const appearanceControls = systemControls.filter((fc) => fc.tier === "appearance");
+  const visibleBehaviorRows = systemControls
+    .filter((fc) => fc.tier !== "appearance")
+    .map((fc) => renderBatchControlRow(fc))
+    .filter((row) => row !== nothing);
+  const visibleAppearanceRows = systemControls
+    .filter((fc) => fc.tier === "appearance")
+    .map((fc) => renderBatchControlRow(fc))
+    .filter((row) => row !== nothing);
   return html`<section id="view-system_sync">
     <div class="columns">
       <div class="column">
@@ -12544,66 +12547,17 @@ function renderSystemGroupsView(store) {
                 </div>
 
                 <h4 class="subsection-title">Operational Settings</h4>
-                <div id="batch-latter-behavior-list" class="settings-list">
-                  ${activeCat === "all" || activeCat === "area"
-                    ? html`${renderSettingsRow({
-                          label: "Track the Area with BLE Proxies",
-                          description: `${fmtNumber(matchingDevs.length, store.hass, 0)} Device${matchingDevs.length === 1 ? "" : "s"}${bleMixed ? " • Mixed values" : ""}`,
-                          control: html`${bleMixed ? html`<span class="chip">Mixed</span>` : nothing}
-                            <input
-                              type="checkbox"
-                              role="switch"
-                              aria-label="Batch Track the Area with BLE Proxies"
-                              .checked=${bleOn}
-                              @change=${(ev) =>
-                                void store.applyBatchDeviceSetting({
-                                  native_ble_tracking: (ev.currentTarget).checked,
-                                })}
-                              class="switch"
-                            />`,
-                        })}
-                        ${renderSwitchRow({
-                          label: "Auto-Switch Active Area",
-                          ariaLabel: "Batch Auto-Switch Active Area",
-                          description: "Follows BLE Area changes automatically.",
-                          checked: bleOn,
-                          onChange: (checked) =>
-                            void store.applyBatchDeviceSetting({ ble_auto_switch: checked }),
-                        })}`
-                    : nothing}
-                  ${activeCat === "all" || activeCat === "voice"
-                    ? renderSwitchRow({
-                        label: "Voice Follows Me",
-                        ariaLabel: "Batch Voice Follows Me",
-                        description: "Moves roaming Devices' Home Assistant Area with them.",
-                        checked: false,
-                        onChange: (checked) =>
-                          void store.applyBatchDeviceSetting({ sync_device_area: checked }),
-                      })
-                    : nothing}
-                  ${activeCat === "all" || activeCat === "music"
-                    ? renderSwitchRow({
-                        label: "Media Follows Device to New Area",
-                        ariaLabel: "Batch Media Follows Device to New Area",
-                        description: "Hands off active playback when the Area changes.",
-                        checked: false,
-                        onChange: (checked) =>
-                          void store.applyBatchDeviceSetting({ area_handoff: checked }),
-                      })
-                    : nothing}
-                </div>
-
                 <div id="system-controls-list" class="settings-list">
-                  ${behaviorControls.length
-                    ? behaviorControls.map((fc) => renderBatchControlRow(fc))
-                    : html`<p class="empty-state">No shared Device controls found.</p>`}
+                  ${visibleBehaviorRows.length
+                    ? visibleBehaviorRows
+                    : html`<p class="empty-state">No operational controls match this filter.</p>`}
                 </div>
 
                 <details class="sub-collapsible">
                   <summary>Appearance &amp; Personalization</summary>
                   <div id="system-appearance-controls-list" class="card-content settings-list">
-                    ${appearanceControls.length
-                      ? appearanceControls.map((fc) => renderBatchControlRow(fc))
+                    ${visibleAppearanceRows.length
+                      ? visibleAppearanceRows
                       : html`<p class="empty-state">No appearance controls match this filter.</p>`}
                   </div>
                 </details>`,

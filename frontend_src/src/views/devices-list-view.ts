@@ -1,7 +1,7 @@
 /**
  * Managed Devices View (`select_device_prompt`): Filterable, keyboard-accessible sortable Devices table.
  * Card header dynamically reflects the active category selection (`D-041`), while zero-member groups
- * and unused specialty categories stay hidden unless active (`D-047`).
+ * and unused specialty categories stay hidden unless active (`D-048`).
  */
 
 import { renderCard, renderSortHeader } from "../components/controls.js";

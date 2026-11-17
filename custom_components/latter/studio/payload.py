@@ -56,6 +56,7 @@ from ..groups import (
     get_device_groups,
     get_esphome_device_entities,
     present_section_ids,
+    resolve_behavior_key_value,
 )
 from ..hub import get_area_state_index, get_latter_system, iter_coordinators
 from ..identity import esphome_service
@@ -367,6 +368,49 @@ def _build_system_shared_controls(
                 "targets": targets,
             }
         )
+    subentry_behavior_switches: tuple[tuple[str, str, str, bool], ...] = (
+        (CONF_NATIVE_BLE_TRACKING, "Track the Area with BLE Proxies", "area", False),
+        (CONF_BLE_AUTO_SWITCH, "Auto-Switch Active Area", "area", False),
+        (CONF_SYNC_DEVICE_AREA, "Voice Follows Me", "voice", True),
+        (CONF_AREA_HANDOFF, "Media Follows Device to New Area", "music", False),
+    )
+    for conf_key, label, sec_id, roaming_only in subentry_behavior_switches:
+        targets = []
+        for coord in all_coords:
+            if roaming_only and not coord.is_roaming_device:
+                continue
+            cur_val = bool(resolve_behavior_key_value(coord.device_data, conf_key))
+            targets.append(
+                {
+                    "device_slug": coord.device_slug,
+                    "device_group": coord.device_group,
+                    "is_roaming": coord.is_roaming_device,
+                    "pref_key": conf_key,
+                    "state": "on" if cur_val else "off",
+                }
+            )
+        if not targets:
+            continue
+        sec_title = sec_meta_map.get(sec_id, (sec_id.title(), ""))[0]
+        controls.append(
+            {
+                "key": f"{sec_id}:switch:{label.lower()}",
+                "pref_key": conf_key,
+                "tier": "behavior",
+                "section": sec_id,
+                "section_title": sec_title,
+                "name": label,
+                "domain": "switch",
+                "state": "off",
+                "options": [],
+                "min": None,
+                "max": None,
+                "step": None,
+                "unit": "",
+                "targets": targets,
+            }
+        )
+
     return sorted(
         controls,
         key=lambda x: (x["section"], x["name"].lower()),
