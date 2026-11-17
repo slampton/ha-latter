@@ -40,6 +40,7 @@ from .const import (
 from .groups import _apply_ha_display_precision
 from .hub import get_area_state_index, is_media_position_only_tick, iter_coordinators
 from .identity import resolve_bound_esphome_device_id
+from .media import async_execute_volume_action
 from .media_browse import is_music_assistant_player
 from .presence import get_ble_proxy_area_ids, get_ble_signature_area_ids
 from .protocol import (
@@ -1175,14 +1176,8 @@ async def async_execute_area_action(
         return
 
     if domain == "media_player" and level is not None and not action:
-        await hass.services.async_call(
-            "media_player",
-            "volume_set",
-            {
-                ATTR_ENTITY_ID: entity_id,
-                "volume_level": round(max(0.0, min(100.0, float(level))) / 100.0, 2),
-            },
-            blocking=False,
+        await async_execute_volume_action(
+            hass, entity_id, "set", volume_level=float(level)
         )
         return
 
@@ -1254,11 +1249,22 @@ async def async_execute_area_action(
             level = max(5, min(100, base_t + (1 if action == "step_up" else -1)))
         elif domain == "media_player":
             raw_v = state_obj.attributes.get("volume_level")
-            try:
-                base_v = round(float(raw_v) * 100) if raw_v is not None else 0
-            except (ValueError, TypeError):
-                base_v = 0
-            level = max(0, min(100, base_v + (10 if action == "step_up" else -10)))
+            step_lvl: float | None = None
+            if raw_v is not None:
+                try:
+                    base_v = round(float(raw_v) * 100)
+                    step_lvl = float(
+                        max(0, min(100, base_v + (10 if action == "step_up" else -10)))
+                    )
+                except (ValueError, TypeError):
+                    step_lvl = None
+            await async_execute_volume_action(
+                hass,
+                entity_id,
+                "up" if action == "step_up" else "down",
+                volume_level=step_lvl,
+            )
+            return
         else:
             level = max(0, min(100, cur_level + (10 if action == "step_up" else -10)))
         action = "set_level"
@@ -1509,11 +1515,8 @@ async def async_execute_area_action(
             )
             return
         if domain == "media_player":
-            await hass.services.async_call(
-                "media_player",
-                "volume_set",
-                {ATTR_ENTITY_ID: entity_id, "volume_level": round(lvl / 100.0, 2)},
-                blocking=False,
+            await async_execute_volume_action(
+                hass, entity_id, "set", volume_level=float(lvl)
             )
             return
 

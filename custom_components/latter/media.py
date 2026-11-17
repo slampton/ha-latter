@@ -54,7 +54,10 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 
-VOLUME_FEATURE_FLAGS: int = 4 | 8 | 1024  # VOLUME_SET | VOLUME_MUTE | VOLUME_STEP
+VOLUME_SET_FLAG: int = 4
+VOLUME_MUTE_FLAG: int = 8
+VOLUME_STEP_FLAG: int = 1024
+VOLUME_FEATURE_FLAGS: int = VOLUME_SET_FLAG | VOLUME_MUTE_FLAG | VOLUME_STEP_FLAG
 
 _MAC_TOKEN_RE = re.compile(
     r"(?:^|[^0-9a-fA-F])((?:[0-9a-fA-F]{2}[:\-]){5}[0-9a-fA-F]{2}|[0-9a-fA-F]{12})(?:$|[^0-9a-fA-F])"
@@ -75,6 +78,9 @@ _KNOWN_URI_MEDIA_TYPES: frozenset[str] = frozenset(
 
 __all__ = [
     "VOLUME_FEATURE_FLAGS",
+    "VOLUME_MUTE_FLAG",
+    "VOLUME_SET_FLAG",
+    "VOLUME_STEP_FLAG",
     "async_announce_on_targets",
     "async_execute_ma_queue_transfer",
     "async_execute_volume_action",
@@ -719,8 +725,25 @@ async def async_execute_volume_action(
     if target_domain != "media_player":
         return False
 
+    raw_sf = (
+        state_obj.attributes.get("supported_features")
+        if state_obj is not None
+        else None
+    )
+    sf: int | None = None
+    if raw_sf is not None:
+        try:
+            sf = int(raw_sf)
+        except (ValueError, TypeError):
+            sf = None
+    can_set = (sf & VOLUME_SET_FLAG) != 0 if sf is not None else True
+    can_mute = (sf & VOLUME_MUTE_FLAG) != 0 if sf is not None else True
+    can_step = (sf & VOLUME_STEP_FLAG) != 0 if sf is not None else True
+
     supports_vol_set = bool(
-        state_obj is not None and state_obj.attributes.get("volume_level") is not None
+        can_set
+        and state_obj is not None
+        and state_obj.attributes.get("volume_level") is not None
     )
     if norm_action in ("up", "down") and volume_level is not None and supports_vol_set:
         lvl = volume_level / 100.0 if volume_level > 1.0 else volume_level
@@ -733,16 +756,22 @@ async def async_execute_volume_action(
         )
         return True
     if norm_action == "up":
+        if not can_step:
+            return False
         await hass.services.async_call(
             "media_player", "volume_up", {ATTR_ENTITY_ID: vol_target}, blocking=False
         )
         return True
     if norm_action == "down":
+        if not can_step:
+            return False
         await hass.services.async_call(
             "media_player", "volume_down", {ATTR_ENTITY_ID: vol_target}, blocking=False
         )
         return True
     if norm_action == "mute":
+        if not can_mute:
+            return False
         is_muted = (
             bool(state_obj.attributes.get("is_volume_muted", False))
             if state_obj
@@ -756,6 +785,8 @@ async def async_execute_volume_action(
         )
         return True
     if volume_level is not None:
+        if not can_set:
+            return False
         lvl = volume_level / 100.0 if volume_level > 1.0 else volume_level
         lvl = max(0.0, min(1.0, lvl))
         await hass.services.async_call(

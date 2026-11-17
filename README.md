@@ -117,7 +117,7 @@ flowchart LR
 | :--- | :--- | :--- |
 | **Home Assistant** | `2026.10` or newer | |
 | **ESPHome** | `2026.11.0b6` or newer | Only needed when compiling firmware in ESPHome Device Builder |
-| **Music Assistant** | `2.10.8` or newer *(optional)* | Needed for library browsing, queue transfer, and default intercom speakers |
+| **Music Assistant** | `2.10.12` or newer *(optional)* | Needed for library browsing, queue transfer, and default intercom speakers |
 | **Bluetooth proxies** | 1 per Area *(optional)* | ESPHome active proxies verified; assign each proxy to its Home Assistant Area |
 | **`ffmpeg`** | Optional (bundled in HA OS) | Used for noise-reduced doorbell camera audio streaming |
 
