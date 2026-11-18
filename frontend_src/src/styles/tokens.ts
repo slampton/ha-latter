@@ -415,26 +415,36 @@ export const STUDIO_STYLES = css`
   }
   .area-box-head {
     display: flex;
-    align-items: center;
+    align-items: safe center;
     justify-content: space-between;
     flex-wrap: wrap;
     gap: var(--studio-space-2);
   }
   .area-box-heading {
     display: flex;
-    align-items: center;
+    align-items: safe center;
     flex-wrap: wrap;
     gap: var(--studio-space-2);
   }
   .area-box-title {
+    flex: 1 1 140px;
+    min-inline-size: 0;
     font-size:var(--studio-font-section);
     font-weight: var(--studio-weight-medium);
     line-height: var(--studio-line-height-condensed);
   }
   .area-box-actions {
     display: flex;
-    align-items: center;
+    align-items: safe center;
     flex-wrap: wrap;
+    gap: var(--studio-space-2);
+    margin-inline-start: auto;
+  }
+  .area-box-badges {
+    display: flex;
+    align-items: safe center;
+    flex-wrap: wrap;
+    flex-wrap: balance;
     gap: var(--studio-space-2);
   }
   .area-box-meta {

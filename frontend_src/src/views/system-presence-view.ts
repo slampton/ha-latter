@@ -158,28 +158,8 @@ export function renderSystemPresenceView(store: StudioStore): TemplateResult {
 
                     return html`<div id=${areaBoxId} class="area-presence-box${isAreaHandoff ? " handoff-active" : ""}">
                       <div class="area-box-head">
-                        <div class="area-box-heading">
-                          <span class="area-box-title">${areaName}</span>
-                          ${isOcc
-                            ? html`<span class="chip chip-success">Occupied • ${fmtPercent(confPct, store.hass)}</span>`
-                            : html`<span class="chip">Clear</span>`}
-                          ${floorLabel ? html`<span class="chip">${floorLabel}</span>` : nothing}
-                          ${sig?.has_signature
-                            ? html`<span class="chip chip-primary">Signature (${fmtNumber(sig.scanner_count, store.hass, 0)} ${sig.scanner_count === 1 ? "Proxy" : "Proxies"})</span>`
-                            : hasBleProxy
-                              ? html`<span class="chip">BLE Proxy</span>`
-                              : html`<span class="chip chip-warning">No BLE Proxy</span>`}
-                        </div>
+                        <span class="area-box-title">${areaName}</span>
                         <div class="area-box-actions">
-                          ${bleDevs.length > 0
-                            ? html`<button
-                                type="button"
-                                @click=${() => store.selectBleCalibrateArea(areaId, true)}
-                                class="btn btn-secondary btn-compact"
-                              >
-                                Calibrate
-                              </button>`
-                            : nothing}
                           ${sig?.has_signature
                             ? html`<button
                                 type="button"
@@ -189,7 +169,28 @@ export function renderSystemPresenceView(store: StudioStore): TemplateResult {
                                 Clear Signature
                               </button>`
                             : nothing}
+                          ${bleDevs.length > 0
+                            ? html`<button
+                                type="button"
+                                @click=${() => store.selectBleCalibrateArea(areaId, true)}
+                                class="btn btn-secondary btn-compact"
+                              >
+                                Calibrate
+                              </button>`
+                            : nothing}
                         </div>
+                      </div>
+
+                      <div class="area-box-badges">
+                        ${isOcc
+                          ? html`<span class="chip chip-success">Occupied • ${fmtPercent(confPct, store.hass)}</span>`
+                          : html`<span class="chip">Clear</span>`}
+                        ${floorLabel ? html`<span class="chip">${floorLabel}</span>` : nothing}
+                        ${sig?.has_signature
+                          ? html`<span class="chip chip-primary">Signature (${fmtNumber(sig.scanner_count, store.hass, 0)} ${sig.scanner_count === 1 ? "Proxy" : "Proxies"})</span>`
+                          : hasBleProxy
+                            ? html`<span class="chip">BLE Proxy</span>`
+                            : html`<span class="chip chip-warning">No BLE Proxy</span>`}
                       </div>
 
                       <div class="area-box-meta">${parts.join(" • ")}</div>

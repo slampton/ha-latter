@@ -709,3 +709,12 @@ A standing decision stays in force until a new entry supersedes it. Changing one
 - **Why:** Orange (`--studio-warning`) visually read like a fault or alert rather than a spatial arrival cue, while clicking an Area box on **System → Overview** (hovered in `--studio-primary` blue) or jumping into 5-card pages like **Shared Entities** and **Tools** scrolled without visually anchoring which specific box or card needed configuration.
 - **Alternatives:** Keep `--studio-warning` orange on handoffs (implies something is wrong); highlight whole-page destinations like **Media & Remotes** or **Device Groups** from **System Capabilities** (adds visual noise when the entire page already applies).
 - **Status:** Accepted.
+
+### D-058: Two-Row `.area-presence-box` Header Hierarchy (Dedicated Title + Top-Right `Calibrate` Row Above `.area-box-badges`) and `STUDIO_REV` 32
+- **Date:** 2026-11-18
+- **Decision:** (`STUDIO_REV` `31 → 32`) Amends D-044 (1)'s `.area-presence-box` header layout on **System → BLE & Area Presence → Area Presence & Sensors** (`/latter/system/presence`):
+  1. **Row 1 (`.area-box-head`) — Dedicated Area Title & Pinned Top-Right Actions**: Reserves the top row strictly for `<span class="area-box-title">${areaName}</span>` on the left and `.area-box-actions` on the right (`Clear Signature` placed to the left of `Calibrate` so **Calibrate** stays anchored at the exact far top-right corner of every Area container).
+  2. **Row 2 (`.area-box-badges`) — Status Chips Aligned Directly Under Area Title**: Moves the occupancy chip (`Occupied • <pct>` / `Clear`), optional Floor chip, and BLE coverage chip (`Signature (<N> Proxy/Proxies)`, `BLE Proxy`, or `No BLE Proxy`) onto a dedicated second row left-aligned directly beneath `${areaName}`.
+- **Why:** Packing the Area title, up to 3 status chips, `Calibrate`, and `Clear Signature` onto a single flex row visually buried the Area name inside a horizontal chip strip and caused multi-proxy calibrated Areas (for example `Garage` with `Occupied`, `Basement`, `Signature (6 Proxies)`, `Calibrate`, and `Clear Signature`) to wrap their action buttons onto a second line inconsistently across Areas.
+- **Alternatives:** Keep chips inline next to `.area-box-title` with `flex-wrap: nowrap` on `.area-box-head` (forces horizontal clipping or squishes `.area-box-title` on calibrated multi-proxy Areas).
+- **Status:** Accepted.

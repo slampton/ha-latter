@@ -162,8 +162,8 @@ class TestViewLayout(unittest.TestCase):
         for tracker_tok in ("companion app", "private ble", "ibeacon", "bthome", "tile", "itag", "ruuvitag", "eddystone"):
             self.assertIn(f'"{tracker_tok}"', js)
         self.assertIn("AA:BB:CC:DD:EE:FF, iBeacon UUID, or tracker entity", js)
-        self.assertEqual(latter_const.STUDIO_REV, 31)
-        self.assertIn("const STUDIO_REV = 31;", js)
+        self.assertEqual(latter_const.STUDIO_REV, 32)
+        self.assertIn("const STUDIO_REV = 32;", js)
         self.assertIn(".card.handoff-active", js)
         self.assertIn(".area-presence-box.handoff-active", js)
         self.assertIn(".calibrate-target-box.handoff-active", js)
@@ -203,6 +203,7 @@ class TestViewLayout(unittest.TestCase):
             'title: "Area Presence & Sensors"',
             "area-presence-box",
             'class="area-box-title"',
+            'class="area-box-badges"',
             "<summary>Sensor &amp; Threshold Settings</summary>",
             'id: "card-ble-calibration"',
             'title: "Walk-Around BLE Calibration"',
@@ -223,6 +224,14 @@ class TestViewLayout(unittest.TestCase):
             '<h3 class="card-title">Advanced BLE Settings</h3>',
         ):
             self.assertIn(expected_snippet, area_tracking_view)
+        self.assertLess(
+            area_tracking_view.index('class="area-box-head"'),
+            area_tracking_view.index('class="area-box-badges"'),
+        )
+        self.assertLess(
+            area_tracking_view.index('class="area-box-actions"'),
+            area_tracking_view.index('class="area-box-badges"'),
+        )
         signal_row_idx = area_tracking_view.index('class="signal-row')
         self.assertIn("<summary>Antenna Trim</summary>", area_tracking_view[signal_row_idx:])
         self.assertEqual(area_tracking_view.count("btn-primary"), 1)

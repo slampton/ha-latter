@@ -179,7 +179,7 @@ const DEFAULT_GAMES_ITEMS_TOKENS = [
 /**
  * Canonical constants, route maps, issue messages, and Title Case dictionaries for Latter Studio.
  */
-const STUDIO_REV = 31;
+const STUDIO_REV = 32;
 const MAX_DOCK_ITEMS = 24;
 const MAX_PINNED_ITEMS = 96;
 const SHORTCUT_LABEL_MAX = 24;
@@ -9804,26 +9804,36 @@ const STUDIO_STYLES = css`
   }
   .area-box-head {
     display: flex;
-    align-items: center;
+    align-items: safe center;
     justify-content: space-between;
     flex-wrap: wrap;
     gap: var(--studio-space-2);
   }
   .area-box-heading {
     display: flex;
-    align-items: center;
+    align-items: safe center;
     flex-wrap: wrap;
     gap: var(--studio-space-2);
   }
   .area-box-title {
+    flex: 1 1 140px;
+    min-inline-size: 0;
     font-size:var(--studio-font-section);
     font-weight: var(--studio-weight-medium);
     line-height: var(--studio-line-height-condensed);
   }
   .area-box-actions {
     display: flex;
-    align-items: center;
+    align-items: safe center;
     flex-wrap: wrap;
+    gap: var(--studio-space-2);
+    margin-inline-start: auto;
+  }
+  .area-box-badges {
+    display: flex;
+    align-items: safe center;
+    flex-wrap: wrap;
+    flex-wrap: balance;
     gap: var(--studio-space-2);
   }
   .area-box-meta {
@@ -16530,28 +16540,8 @@ function renderSystemPresenceView(store) {
                     const isAreaHandoff = Boolean(store.isHandoffTarget?.(areaBoxId));
                     return html`<div id=${areaBoxId} class="area-presence-box${isAreaHandoff ? " handoff-active" : ""}">
                       <div class="area-box-head">
-                        <div class="area-box-heading">
-                          <span class="area-box-title">${areaName}</span>
-                          ${isOcc
-                            ? html`<span class="chip chip-success">Occupied • ${fmtPercent(confPct, store.hass)}</span>`
-                            : html`<span class="chip">Clear</span>`}
-                          ${floorLabel ? html`<span class="chip">${floorLabel}</span>` : nothing}
-                          ${sig?.has_signature
-                            ? html`<span class="chip chip-primary">Signature (${fmtNumber(sig.scanner_count, store.hass, 0)} ${sig.scanner_count === 1 ? "Proxy" : "Proxies"})</span>`
-                            : hasBleProxy
-                              ? html`<span class="chip">BLE Proxy</span>`
-                              : html`<span class="chip chip-warning">No BLE Proxy</span>`}
-                        </div>
+                        <span class="area-box-title">${areaName}</span>
                         <div class="area-box-actions">
-                          ${bleDevs.length > 0
-                            ? html`<button
-                                type="button"
-                                @click=${() => store.selectBleCalibrateArea(areaId, true)}
-                                class="btn btn-secondary btn-compact"
-                              >
-                                Calibrate
-                              </button>`
-                            : nothing}
                           ${sig?.has_signature
                             ? html`<button
                                 type="button"
@@ -16561,7 +16551,28 @@ function renderSystemPresenceView(store) {
                                 Clear Signature
                               </button>`
                             : nothing}
+                          ${bleDevs.length > 0
+                            ? html`<button
+                                type="button"
+                                @click=${() => store.selectBleCalibrateArea(areaId, true)}
+                                class="btn btn-secondary btn-compact"
+                              >
+                                Calibrate
+                              </button>`
+                            : nothing}
                         </div>
+                      </div>
+
+                      <div class="area-box-badges">
+                        ${isOcc
+                          ? html`<span class="chip chip-success">Occupied • ${fmtPercent(confPct, store.hass)}</span>`
+                          : html`<span class="chip">Clear</span>`}
+                        ${floorLabel ? html`<span class="chip">${floorLabel}</span>` : nothing}
+                        ${sig?.has_signature
+                          ? html`<span class="chip chip-primary">Signature (${fmtNumber(sig.scanner_count, store.hass, 0)} ${sig.scanner_count === 1 ? "Proxy" : "Proxies"})</span>`
+                          : hasBleProxy
+                            ? html`<span class="chip">BLE Proxy</span>`
+                            : html`<span class="chip chip-warning">No BLE Proxy</span>`}
                       </div>
 
                       <div class="area-box-meta">${parts.join(" • ")}</div>
