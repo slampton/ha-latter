@@ -2975,6 +2975,11 @@ store.ingestPayload(
 );
 
 const groupsHtml = flattenHtml(renderSystemGroupsView(store));
+store.toggleNewGroupForm(true);
+const groupsCreateOpenHtml = flattenHtml(renderSystemGroupsView(store));
+store.newGroupName = "Patio Panels";
+await store.createDeviceGroup();
+const groupsAfterCreateHtml = flattenHtml(renderSystemGroupsView(store));
 const managedHtml = flattenHtml(renderDevicesListView(store));
 const overviewCustomHtml = flattenHtml(renderDeviceOverviewView(store));
 
@@ -3006,6 +3011,8 @@ const overviewGroupHtml = flattenHtml(renderDeviceOverviewView(store));
 
 return {
   groupsHtml,
+  groupsCreateOpenHtml,
+  groupsAfterCreateHtml,
   managedHtml,
   overviewCustomHtml,
   overviewGroupHtml,
@@ -3106,13 +3113,23 @@ return {
             preamble_js=stub_deps,
         )
 
+        # Column 1 collapsed Create Group button by default -> reveals form on click -> collapses again on create
+        self.assertIn('id="btn-open-create-group"', got["groupsHtml"])
+        self.assertNotIn('id="create-group-form"', got["groupsHtml"])
+        self.assertNotIn('id="new-group-name"', got["groupsHtml"])
+        self.assertIn('id="create-group-form"', got["groupsCreateOpenHtml"])
+        self.assertIn('id="new-group-name"', got["groupsCreateOpenHtml"])
+        self.assertIn('id="btn-cancel-create-group"', got["groupsCreateOpenHtml"])
+        self.assertNotIn('id="create-group-form"', got["groupsAfterCreateHtml"])
+        self.assertIn('id="btn-open-create-group"', got["groupsAfterCreateHtml"])
+
         # Column 1 enclosed .area-presence-box containers + Column 2 Batch Controls listing traits + all Device Groups + Custom
         self.assertIn('id=group-box-pocket_carry class="area-presence-box"', got["groupsHtml"])
         self.assertIn('id=group-box-handhelds class="area-presence-box"', got["groupsHtml"])
         self.assertIn('id=group-box-guest_suites class="area-presence-box"', got["groupsHtml"])
         self.assertIn("<summary>Baseline Settings</summary>", got["groupsHtml"])
         self.assertIn("Include Display Settings", got["groupsHtml"])
-        self.assertIn("Include Interface & Shortcuts", got["groupsHtml"])
+        self.assertIn("Include Interface &amp; Shortcuts", got["groupsCreateOpenHtml"])
         self.assertIn("<summary>Interface &amp; Shortcuts</summary>", got["groupsHtml"])
         self.assertIn("Pocket Carry", got["groupsHtml"])
         self.assertNotIn("Power Profile", got["groupsHtml"])
@@ -3145,6 +3162,9 @@ return {
             self.assertIn(expected_cat, cat_filter_select)
         self.assertIn("Voice Follows Me", got["groupsHtml"])
         self.assertIn("Mixed values", got["groupsHtml"])
+        batch_controls_list = got["groupsHtml"][got["groupsHtml"].index('id="system-controls-list"') :]
+        self.assertNotIn("?open=true", batch_controls_list)
+        self.assertIn("?open=false", batch_controls_list)
 
         # Managed Devices filter diet: populated groups (`Group: Pocket Carry`) + Custom + BLE Tags + Assigned to a Person shown; 0-member groups & Updates Available hidden
         cat_select = got["managedHtml"][
@@ -3182,16 +3202,25 @@ return {
         self.assertIn("Tools", got["groupsHtml"])
         self.assertIn("Games", got["groupsHtml"])
         self.assertEqual(
-            got["wsCalls"][0],
-            {
-                "command": "create_device_group",
-                "payload": {
-                    "name": "Sean Carry",
-                    "description": "Personal handheld",
-                    "source_subentry_id": "sub_mobile",
-                    "assign_source": True,
+            got["wsCalls"],
+            [
+                {
+                    "command": "create_device_group",
+                    "payload": {
+                        "name": "Patio Panels",
+                        "description": "",
+                    },
                 },
-            },
+                {
+                    "command": "create_device_group",
+                    "payload": {
+                        "name": "Sean Carry",
+                        "description": "Personal handheld",
+                        "source_subentry_id": "sub_mobile",
+                        "assign_source": True,
+                    },
+                },
+            ],
         )
 
     def test_full_7447_mdi_catalog_and_ranked_search(self) -> None:

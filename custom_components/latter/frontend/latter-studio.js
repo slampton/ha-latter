@@ -179,7 +179,7 @@ const DEFAULT_GAMES_ITEMS_TOKENS = [
 /**
  * Canonical constants, route maps, issue messages, and Title Case dictionaries for Latter Studio.
  */
-const STUDIO_REV = 28;
+const STUDIO_REV = 29;
 const MAX_DOCK_ITEMS = 24;
 const MAX_PINNED_ITEMS = 96;
 const SHORTCUT_LABEL_MAX = 24;
@@ -7426,6 +7426,7 @@ async function createDeviceGroupOp(store) {
       store.activeSubentryId || null,
     );
     const createdId = slugifyGroupName(name) || "group";
+    store.newGroupFormOpen = false;
     store.newGroupName = "";
     store.newGroupDesc = "";
     store.newGroupSourceSubentryId = "";
@@ -7940,6 +7941,7 @@ class StudioStore {
   activeCameraPreviewEntity = "";
   cameraPreviewUrl = "";
   // System Device Groups & Batch Controls UI state
+  newGroupFormOpen = false;
   newGroupName = "";
   newGroupDesc = "";
   newGroupSourceSubentryId = "";
@@ -7950,6 +7952,7 @@ class StudioStore {
   batchTargetFilter = "all";
   batchCategoryFilter = "all";
   batchCopySourceSubentryId = "";
+           openBatchCategories = new Set();
   // System BLE & Area Presence UI state
   bleSurveySubentryId = "";
   bleCalibrateAreaId = "";
@@ -9067,6 +9070,33 @@ class StudioStore {
   }
   async confirmSaveGroupModal() {
     await confirmSaveDeviceAsGroupOp(this);
+  }
+  toggleNewGroupForm(open) {
+    const nextOpen = open !== undefined ? Boolean(open) : !this.newGroupFormOpen;
+    this.newGroupFormOpen = nextOpen;
+    if (!nextOpen) {
+      this.newGroupName = "";
+      this.newGroupDesc = "";
+      this.newGroupSourceSubentryId = "";
+      this.newGroupIncludeDisplay = false;
+      this.newGroupIncludeInterface = false;
+    }
+    this.host.requestUpdate();
+    if (nextOpen && typeof globalThis.requestAnimationFrame === "function") {
+      globalThis.requestAnimationFrame(() => {
+        const root =
+          (this.host).renderRoot ||
+          this.host.shadowRoot;
+        const inputEl = root?.getElementById("new-group-name");
+        if (inputEl && typeof inputEl.focus === "function") {
+          try {
+            inputEl.focus({ preventScroll: true });
+          } catch {
+            inputEl.focus();
+          }
+        }
+      });
+    }
   }
   async createDeviceGroup() {
     await createDeviceGroupOp(this);
@@ -14008,12 +14038,12 @@ const ARTIST_ALBUM_SORT_OPTIONS = [
 ];
 const PODCAST_SORT_OPTIONS = ["Newest on Top", "Oldest on Top"];
 const BATCH_CATEGORY_META = [
-  { id: "display", title: "Display", defaultOpen: false },
-  { id: "interface", title: "Interface", defaultOpen: false },
-  { id: "audio", title: "Audio", defaultOpen: true },
-  { id: "power", title: "Power", defaultOpen: true },
-  { id: "presence", title: "Presence", defaultOpen: false },
-  { id: "security", title: "Security", defaultOpen: false },
+  { id: "display", title: "Display" },
+  { id: "interface", title: "Interface" },
+  { id: "audio", title: "Audio" },
+  { id: "power", title: "Power" },
+  { id: "presence", title: "Presence" },
+  { id: "security", title: "Security" },
 ];
 const DEFAULT_ACTIVITY_SOURCES_CSV = ACTIVITY_SOURCES_CATALOG.map((c) => c.token).join(",");
 const DEFAULT_HOME_CATEGORIES_CSV = DEFAULT_HOME_CATEGORIES_TOKENS.join(",");
@@ -15073,94 +15103,116 @@ function renderSystemGroupsView(store) {
           title: "Device Groups",
           subtitle:
             "Built-in hardware presets and custom Device Groups that keep assigned Devices aligned.",
+          headerActions: !store.newGroupFormOpen
+            ? html`<button
+                type="button"
+                id="btn-open-create-group"
+                @click=${() => store.toggleNewGroupForm(true)}
+                class="btn btn-secondary btn-compact"
+              >
+                Create Group
+              </button>`
+            : nothing,
           contentClass: "stack",
-          body: html`<div class="list-block">
-              <div class="list-row-main">
-                <div class="stacked-field">
-                  <label for="new-group-name">Group Name</label>
-                  <input
-                    type="text"
-                    id="new-group-name"
-                    placeholder="e.g. Guest Suites"
-                    .value=${store.newGroupName}
-                    @input=${(ev) => {
-                      store.newGroupName = (ev.currentTarget).value;
-                    }}
-                  />
-                </div>
-                <div class="stacked-field">
-                  <label for="new-group-desc">Description (Optional)</label>
-                  <input
-                    type="text"
-                    id="new-group-desc"
-                    placeholder="Optional description"
-                    .value=${store.newGroupDesc}
-                    @input=${(ev) => {
-                      store.newGroupDesc = (ev.currentTarget).value;
-                    }}
-                  />
-                </div>
-              </div>
-              <div class="pill-list">
-                <span class="pill ${store.newGroupIncludeDisplay ? "enabled" : ""}">
-                  <button
-                    type="button"
-                    aria-pressed=${String(Boolean(store.newGroupIncludeDisplay))}
-                    @click=${() => {
-                      store.newGroupIncludeDisplay = !store.newGroupIncludeDisplay;
-                      store.host.requestUpdate();
-                    }}
-                    class="pill-toggle"
-                  >
-                    Include Display Settings
-                  </button>
-                </span>
-                <span class="pill ${store.newGroupIncludeInterface ? "enabled" : ""}">
-                  <button
-                    type="button"
-                    aria-pressed=${String(Boolean(store.newGroupIncludeInterface))}
-                    @click=${() => {
-                      store.newGroupIncludeInterface = !store.newGroupIncludeInterface;
-                      store.host.requestUpdate();
-                    }}
-                    class="pill-toggle"
-                  >
-                    Include Interface &amp; Shortcuts
-                  </button>
-                </span>
-              </div>
-              <div class="input-action-row">
-                <select
-                  id="new-group-source"
-                  aria-label="Copy settings from Device"
-                  .value=${store.newGroupSourceSubentryId}
-                  @change=${(ev) => {
-                    store.newGroupSourceSubentryId = (ev.currentTarget).value;
-                  }}
-                >
-                  <option value="" ?selected=${!store.newGroupSourceSubentryId}>
-                    Start from default settings
-                  </option>
-                  ${latterDevices.map(
-                    (d) =>
-                      html`<option
-                        value=${d.subentry_id}
-                        ?selected=${d.subentry_id === store.newGroupSourceSubentryId}
+          body: html`${store.newGroupFormOpen
+              ? html`<div id="create-group-form" class="list-block">
+                  <div class="list-row-main">
+                    <div class="stacked-field">
+                      <label for="new-group-name">Group Name</label>
+                      <input
+                        type="text"
+                        id="new-group-name"
+                        placeholder="e.g. Guest Suites"
+                        .value=${store.newGroupName}
+                        @input=${(ev) => {
+                          store.newGroupName = (ev.currentTarget).value;
+                        }}
+                      />
+                    </div>
+                    <div class="stacked-field">
+                      <label for="new-group-desc">Description (Optional)</label>
+                      <input
+                        type="text"
+                        id="new-group-desc"
+                        placeholder="Optional description"
+                        .value=${store.newGroupDesc}
+                        @input=${(ev) => {
+                          store.newGroupDesc = (ev.currentTarget).value;
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <div class="pill-list">
+                    <span class="pill ${store.newGroupIncludeDisplay ? "enabled" : ""}">
+                      <button
+                        type="button"
+                        aria-pressed=${String(Boolean(store.newGroupIncludeDisplay))}
+                        @click=${() => {
+                          store.newGroupIncludeDisplay = !store.newGroupIncludeDisplay;
+                          store.host.requestUpdate();
+                        }}
+                        class="pill-toggle"
                       >
-                        Copy from: ${d.title}
-                      </option>`,
-                  )}
-                </select>
-                <button
-                  type="button"
-                  id="btn-create-device-group"
-                  @click=${() => void store.createDeviceGroup()}
-                  class="btn btn-primary"
-                >
-                  Create Group
-                </button>
-              </div>
-            </div>
+                        Include Display Settings
+                      </button>
+                    </span>
+                    <span class="pill ${store.newGroupIncludeInterface ? "enabled" : ""}">
+                      <button
+                        type="button"
+                        aria-pressed=${String(Boolean(store.newGroupIncludeInterface))}
+                        @click=${() => {
+                          store.newGroupIncludeInterface = !store.newGroupIncludeInterface;
+                          store.host.requestUpdate();
+                        }}
+                        class="pill-toggle"
+                      >
+                        Include Interface &amp; Shortcuts
+                      </button>
+                    </span>
+                  </div>
+                  <div class="input-action-row">
+                    <select
+                      id="new-group-source"
+                      aria-label="Copy settings from Device"
+                      .value=${store.newGroupSourceSubentryId}
+                      @change=${(ev) => {
+                        store.newGroupSourceSubentryId = (
+                          ev.currentTarget
+                        ).value;
+                      }}
+                    >
+                      <option value="" ?selected=${!store.newGroupSourceSubentryId}>
+                        Start from default settings
+                      </option>
+                      ${latterDevices.map(
+                        (d) =>
+                          html`<option
+                            value=${d.subentry_id}
+                            ?selected=${d.subentry_id === store.newGroupSourceSubentryId}
+                          >
+                            Copy from: ${d.title}
+                          </option>`,
+                      )}
+                    </select>
+                    <button
+                      type="button"
+                      id="btn-cancel-create-group"
+                      @click=${() => store.toggleNewGroupForm(false)}
+                      class="btn btn-secondary"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      id="btn-create-device-group"
+                      @click=${() => void store.createDeviceGroup()}
+                      class="btn btn-primary"
+                    >
+                      Create Group
+                    </button>
+                  </div>
+                </div>`
+              : nothing}
 
             <div id="device-groups-list" class="stack">
               ${groups.length
@@ -15297,7 +15349,13 @@ function renderSystemGroupsView(store) {
                         if (!rows.length && copyBlock === nothing) return nothing;
                         return html`<details
                           class="sub-collapsible"
-                          ?open=${cat.defaultOpen}
+                          ?open=${Boolean(store.openBatchCategories?.has(cat.id))}
+                          @toggle=${(ev) => {
+                            if (ev.target !== ev.currentTarget) return;
+                            const isOpen = (ev.currentTarget).open;
+                            if (isOpen) store.openBatchCategories?.add(cat.id);
+                            else store.openBatchCategories?.delete(cat.id);
+                          }}
                         >
                           <summary>${cat.title}</summary>
                           <div class="card-content stack">

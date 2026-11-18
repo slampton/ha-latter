@@ -39,6 +39,7 @@ export async function createDeviceGroupOp(store: StudioStore): Promise<void> {
       store.activeSubentryId || null,
     );
     const createdId = slugifyGroupName(name) || "group";
+    store.newGroupFormOpen = false;
     store.newGroupName = "";
     store.newGroupDesc = "";
     store.newGroupSourceSubentryId = "";

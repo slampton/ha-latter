@@ -208,6 +208,7 @@ export class StudioStore implements ReactiveController {
   cameraPreviewUrl = "";
 
   // System Device Groups & Batch Controls UI state
+  newGroupFormOpen = false;
   newGroupName = "";
   newGroupDesc = "";
   newGroupSourceSubentryId = "";
@@ -218,6 +219,7 @@ export class StudioStore implements ReactiveController {
   batchTargetFilter = "all";
   batchCategoryFilter = "all";
   batchCopySourceSubentryId = "";
+  readonly openBatchCategories = new Set<string>();
 
   // System BLE & Area Presence UI state
   bleSurveySubentryId = "";
@@ -1482,6 +1484,34 @@ export class StudioStore implements ReactiveController {
 
   async confirmSaveGroupModal(): Promise<void> {
     await confirmSaveDeviceAsGroupOp(this);
+  }
+
+  toggleNewGroupForm(open?: boolean): void {
+    const nextOpen = open !== undefined ? Boolean(open) : !this.newGroupFormOpen;
+    this.newGroupFormOpen = nextOpen;
+    if (!nextOpen) {
+      this.newGroupName = "";
+      this.newGroupDesc = "";
+      this.newGroupSourceSubentryId = "";
+      this.newGroupIncludeDisplay = false;
+      this.newGroupIncludeInterface = false;
+    }
+    this.host.requestUpdate();
+    if (nextOpen && typeof globalThis.requestAnimationFrame === "function") {
+      globalThis.requestAnimationFrame(() => {
+        const root =
+          (this.host as unknown as { renderRoot?: ShadowRoot }).renderRoot ||
+          this.host.shadowRoot;
+        const inputEl = root?.getElementById("new-group-name") as HTMLInputElement | null;
+        if (inputEl && typeof inputEl.focus === "function") {
+          try {
+            inputEl.focus({ preventScroll: true });
+          } catch {
+            inputEl.focus();
+          }
+        }
+      });
+    }
   }
 
   async createDeviceGroup(): Promise<void> {
