@@ -1,8 +1,8 @@
 # Services Reference
 
-Latter registers **19 services** under the `latter` domain ([`services.py`](../../custom_components/latter/services.py), [`services.yaml`](../../custom_components/latter/services.yaml)): **17 user/automation-callable services** plus **2 device-reported state/handshake services** (`latter.device_hello` and `latter.timer_alarm_state`).
+Latter registers **20 services** under the `latter` domain ([`services.py`](../../custom_components/latter/services.py), [`services.yaml`](../../custom_components/latter/services.yaml)): **18 user/automation-callable services** plus **2 device-reported state/handshake services** (`latter.device_hello` and `latter.timer_alarm_state`).
 
-Bound ESPHome displays invoke the 15 device-permitted operations over their Zero-Privilege **System: RPC Outbox** (`LatterRpcReceiver` in `identity.py`, authenticated by `esphome_device_id` so `allow_service_calls` is never required), while Home Assistant automations and scripts call `latter.*` directly. Administrative mutations (`reset_device`, `save_custom_color`, `set_dock_apps`, `set_device_prefs`) require an admin user context when invoked from Home Assistant.
+Bound ESPHome displays invoke the 19 device-permitted operations over their Zero-Privilege **System: RPC Outbox** (`LatterRpcReceiver` in `identity.py`, authenticated by `esphome_device_id` so `allow_service_calls` is never required), while Home Assistant automations and scripts call `latter.*` directly. Administrative mutations (`reset_device`, `save_custom_color`, `set_device_prefs`) require an admin user context when invoked from Home Assistant.
 
 ---
 
@@ -93,8 +93,9 @@ Executes an explicit Area or Home Hub control action.
 
 ## Calendar & Doorbell
 
-- **`latter.calendar_fetch`** (`days: 1–60` default `30`, `page: 1`, `page_size: 5`, `req_id: 0`): deduplicates up to 25 upcoming events across configured calendars, signs OpenStreetMap `map_url`s for events with locations, and pushes slots via `latter_set_slots`.
-- **`latter.calendar_create_event`** (`summary` required, optional `calendar_entity`, `start_date_time`, `end_date_time`, `in_minutes: 15`, `duration_minutes: 30`, `description`): creates an event and refreshes `calendar_agenda`.
+- **`latter.calendar_fetch`** (`mode`: `window` \| `map` default `window`, `start_date`, `end_date`, `days: 1–60` default `30`, `location`, `req_id: 0`): in `window` mode, fetches and deduplicates up to 64 structured events across configured Site calendars (`[start_date .. end_date]`) and pushes atomic chunks via `esphome.<node>_latter_set_calendar_view`; in `map` mode, signs a baseline-JPEG OpenStreetMap snapshot URL for `location` and pushes `map_url` via `latter_set_calendar_view`.
+- **`latter.calendar_create_event`** (`summary` required, optional `calendar_entity`, `location`, `description`, `all_day: false`, `start_date`, `end_date`, `start_date_time`, `end_date_time`, `rrule`): creates a timed, all-day, or RFC 5545 recurring (`rrule`) event on a writable configured Site calendar, refreshes `calendar_agenda`, and pushes the updated window to the device.
+- **`latter.calendar_delete_event`** (`calendar_entity` and `uid` required, optional `recurrence_id`, `recurrence_range`): deletes an event (or recurring instance) from a configured Site calendar advertising `DELETE_EVENT`, refreshes `calendar_agenda`, and pushes the updated window to the device.
 - **`latter.doorbell_intercom`** *(experimental)* (`action`: `listen_start` \| `listen_stop` \| `listen_toggle` \| `talk_message` \| `quick_reply` \| `unlock_door` \| `call_target` \| `set_noise_reduction` \| `select_camera`, plus `camera_entity` / `camera_index`, `message`, `noise_reduction`: `strong` \| `light` \| `off`, `code`): streams noise-reduced camera audio as FLAC, speaks push-to-talk/quick replies via TTS on the camera's speaker, unlocks the door (`code` verified under `require_pin`), or rings other displays (`call_target`).
 
 ---

@@ -9,6 +9,8 @@
 
 import {
   AREA_CATEGORIES_CATALOG,
+  CALENDAR_LOOKAHEAD_OPTIONS,
+  CALENDAR_WEEK_START_OPTIONS,
   DEFAULT_AREA_CATEGORIES_TOKENS,
   DEFAULT_GAMES_ITEMS_TOKENS,
   DEFAULT_HOME_CATEGORIES_TOKENS,
@@ -98,6 +100,7 @@ const APP_MODAL_TITLES: Record<ConfigurableAppId, string> = {
   music: "Music",
   remote: "Remote Control",
   time: "Time",
+  calendar: "Calendar",
   clock: "Clock Face",
   tools: "Tools",
   games: "Games",
@@ -576,16 +579,6 @@ export function renderAppConfigModalBody(store: StudioStore): TemplateResult | t
       ${areaExtraItems.map((it) => renderNativeControlRow(store, it))}
     </div>`;
   } else if (app === "music") {
-    const showSpeakerPref =
-      typeof store.getPref === "function" ? store.getPref("show_speaker_shortcut") : undefined;
-    const showLibraryPref =
-      typeof store.getPref === "function" ? store.getPref("show_library_shortcut") : undefined;
-    const speakerOn = showSpeakerPref
-      ? Boolean(showSpeakerPref.value)
-      : cfg.show_speaker_shortcut !== false;
-    const libraryOn = showLibraryPref
-      ? Boolean(showLibraryPref.value)
-      : cfg.show_library_shortcut !== false;
     const sortPrefs =
       typeof store.getPrefs === "function"
         ? store.getPrefs(["album_sort_order", "artist_album_sort_order", "podcast_sort_order"])
@@ -616,33 +609,6 @@ export function renderAppConfigModalBody(store: StudioStore): TemplateResult | t
       },
     ];
     body = html`<div class="settings-list">
-      ${renderSettingsRow({
-        id: "media-player-shortcuts",
-        label: "Shortcuts",
-        description: "Choose which quick-access buttons appear on the Music player screen.",
-        control: html`<div class="pill-list" role="group" aria-label="Music shortcuts">
-          <span class="pill ${speakerOn ? "enabled" : ""}">
-            <button
-              type="button"
-              aria-pressed=${String(speakerOn)}
-              @click=${() => store.stageDeviceSetting("show_speaker_shortcut", !speakerOn)}
-              class="pill-toggle"
-            >
-              ${speakerOn ? "✓ Speaker" : "+ Speaker"}
-            </button>
-          </span>
-          <span class="pill ${libraryOn ? "enabled" : ""}">
-            <button
-              type="button"
-              aria-pressed=${String(libraryOn)}
-              @click=${() => store.stageDeviceSetting("show_library_shortcut", !libraryOn)}
-              class="pill-toggle"
-            >
-              ${libraryOn ? "✓ Library" : "+ Library"}
-            </button>
-          </span>
-        </div>`,
-      })}
       ${sortPrefs.length > 0
         ? sortPrefs.map((p: DevicePrefItem) => renderPrefControlRow(store, p))
         : fallbackSortDefs.map((def) =>
@@ -1072,6 +1038,60 @@ export function renderAppConfigModalBody(store: StudioStore): TemplateResult | t
               onChange: (val) => store.stageDeviceSetting("time_format", val, "cfg-time_format"),
             })}`}
     </div>`;
+  } else if (app === "calendar") {
+    const lookaheadPref =
+      typeof store.getPref === "function" ? store.getPref("calendar_lookahead_days") : undefined;
+    const rawLookahead = Number(lookaheadPref?.value ?? cfg.calendar_lookahead_days ?? 30);
+    const lookaheadDays =
+      rawLookahead <= 10 ? 7 : rawLookahead <= 21 ? 14 : rawLookahead <= 45 ? 30 : 60;
+
+    const weekStartPref =
+      typeof store.getPref === "function" ? store.getPref("calendar_week_start") : undefined;
+    const weekStartOptions = (
+      weekStartPref?.options && weekStartPref.options.length > 0
+        ? weekStartPref.options
+        : CALENDAR_WEEK_START_OPTIONS
+    ).map((opt) => ({ value: opt, label: opt }));
+    const weekStartVal = String(weekStartPref?.value ?? cfg.calendar_week_start ?? "Sunday");
+
+    body = html`<div class="settings-list">
+      ${renderSelectRow({
+        id: "cfg-calendar_lookahead_days",
+        label: "Overview Lookahead",
+        description:
+          "Number of upcoming days shown on the Overview tab (days with no events are omitted).",
+        value: String(lookaheadDays),
+        rawOptions: CALENDAR_LOOKAHEAD_OPTIONS.map((o) => ({
+          value: String(o.value),
+          label: o.label,
+        })),
+        onChange: (val) =>
+          store.stageDeviceSetting(
+            "calendar_lookahead_days",
+            Number(val),
+            "cfg-calendar_lookahead_days",
+          ),
+      })}
+      ${renderSelectRow({
+        id: "cfg-calendar_week_start",
+        label: "Start Week On",
+        description: "First column shown in Week and Month views.",
+        value: weekStartVal,
+        rawOptions: weekStartOptions,
+        onChange: (val) =>
+          store.stageDeviceSetting("calendar_week_start", val, "cfg-calendar_week_start"),
+      })}
+    </div>`;
+    extraAction = html`<button
+      type="button"
+      @click=${() => {
+        store.closeAppConfigModal();
+        store.openSystemSection("shared_entities");
+      }}
+      class="btn btn-text"
+    >
+      Open Shared Entities
+    </button>`;
   } else if (app === "tools") {
     const visibleCatalog = TOOLS_ITEMS_CATALOG.filter((c) => dlgIsToolSupported(c.token, caps));
     const visibleSet = new Set(visibleCatalog.map((c) => c.token));
@@ -1085,8 +1105,7 @@ export function renderAppConfigModalBody(store: StudioStore): TemplateResult | t
     body = html`<div class="settings-list">
       ${renderSettingsRow({
         label: "Tools",
-        description:
-          "Toggle and reorder utilities shown in the Tools launcher. Calendar is configured independently via Shared Entities.",
+        description: "Toggle and reorder utilities shown in the Tools launcher.",
         stacked: true,
         control: html`<div
           id="tools-items-pills"

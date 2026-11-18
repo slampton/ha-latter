@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from datetime import datetime
+import inspect
 import logging
+import math
 import re
 import time
 from typing import TYPE_CHECKING, Any
@@ -35,13 +37,19 @@ from .const import CONF_MA_PLAYER_ENTITY, DOMAIN, TRANSFER_HOLD_WINDOW_SECONDS
 from .hub import get_area_state_index, is_media_position_only_tick, iter_coordinators
 from .identity import (
     device_entities,
+    esphome_service,
     find_device_entity_by_suffix,
     get_bound_esphome_device,
 )
 from .media_browse import (
+    MAX_LYRIC_LINES,
+    _extract_item_dict,
     async_browse_media_items,
+    async_fetch_track_lyrics,
     async_lookup_ma_track_uri,
+    get_ma_mass_client,
     is_music_assistant_player,
+    resolve_ma_queue_id_sync,
 )
 from .protocol import ha_value
 from .repairs import link_ma_player_issue_id
@@ -58,6 +66,39 @@ VOLUME_SET_FLAG: int = 4
 VOLUME_MUTE_FLAG: int = 8
 VOLUME_STEP_FLAG: int = 1024
 VOLUME_FEATURE_FLAGS: int = VOLUME_SET_FLAG | VOLUME_MUTE_FLAG | VOLUME_STEP_FLAG
+
+MEDIA_CAP_PAUSE: int = 1
+MEDIA_CAP_SEEK: int = 2
+MEDIA_CAP_VOLUME_SET: int = 4
+MEDIA_CAP_VOLUME_MUTE: int = 8
+MEDIA_CAP_PREVIOUS_TRACK: int = 16
+MEDIA_CAP_NEXT_TRACK: int = 32
+MEDIA_CAP_SHUFFLE_SET: int = 64
+MEDIA_CAP_REPEAT_SET: int = 128
+MEDIA_CAP_GROUPING: int = 256
+MEDIA_CAP_MUSIC_ASSISTANT: int = 512
+MEDIA_CAP_FAVORITE: int = 1024
+MEDIA_CAP_DEFAULT_TRANSPORT: int = (
+    MEDIA_CAP_PAUSE
+    | MEDIA_CAP_SEEK
+    | MEDIA_CAP_VOLUME_SET
+    | MEDIA_CAP_VOLUME_MUTE
+    | MEDIA_CAP_PREVIOUS_TRACK
+    | MEDIA_CAP_NEXT_TRACK
+)
+
+_HA_FEATURE_PAUSE: int = 1
+_HA_FEATURE_SEEK: int = 2
+_HA_FEATURE_PREVIOUS_TRACK: int = 16
+_HA_FEATURE_NEXT_TRACK: int = 32
+_HA_FEATURE_SHUFFLE_SET: int = 16384
+_HA_FEATURE_REPEAT_SET: int = 262144
+_HA_FEATURE_GROUPING: int = 524288
+
+VALID_MA_ENQUEUE_MODES: frozenset[str] = frozenset(
+    {"play", "next", "add", "replace", "replace_next"}
+)
+LYRICS_CHUNK_SIZE: int = 32
 
 _MAC_TOKEN_RE = re.compile(
     r"(?:^|[^0-9a-fA-F])((?:[0-9a-fA-F]{2}[:\-]){5}[0-9a-fA-F]{2}|[0-9a-fA-F]{12})(?:$|[^0-9a-fA-F])"
@@ -77,6 +118,18 @@ _KNOWN_URI_MEDIA_TYPES: frozenset[str] = frozenset(
 )
 
 __all__ = [
+    "MEDIA_CAP_DEFAULT_TRANSPORT",
+    "MEDIA_CAP_FAVORITE",
+    "MEDIA_CAP_GROUPING",
+    "MEDIA_CAP_MUSIC_ASSISTANT",
+    "MEDIA_CAP_NEXT_TRACK",
+    "MEDIA_CAP_PAUSE",
+    "MEDIA_CAP_PREVIOUS_TRACK",
+    "MEDIA_CAP_REPEAT_SET",
+    "MEDIA_CAP_SEEK",
+    "MEDIA_CAP_SHUFFLE_SET",
+    "MEDIA_CAP_VOLUME_MUTE",
+    "MEDIA_CAP_VOLUME_SET",
     "VOLUME_FEATURE_FLAGS",
     "VOLUME_MUTE_FLAG",
     "VOLUME_SET_FLAG",
@@ -84,16 +137,19 @@ __all__ = [
     "async_announce_on_targets",
     "async_execute_ma_queue_transfer",
     "async_execute_volume_action",
+    "async_fetch_and_push_music_lyrics",
     "async_find_queue_resume_item",
     "async_find_queue_resume_items",
     "async_heal_coordinator_ma_links",
     "async_play_media_with_ma_fallback",
+    "async_push_music_lyrics",
     "async_refresh_ma_link",
     "async_resume_idle_speaker_queue",
     "async_set_ma_player_link",
     "bind_coordinator_speaker_listener",
     "build_active_media_payload",
     "clear_ma_counterpart_cache",
+    "compute_media_caps",
     "configured_link",
     "enforce_local_speaker_if_remote_idle",
     "execute_coordinator_media_command",
@@ -994,6 +1050,7 @@ async def async_play_media_with_ma_fallback(
     media_id: str | list[str],
     media_type: str | None = None,
     enqueue: str | None = None,
+    radio_mode: bool = False,
 ) -> None:
     """Play media via Music Assistant (expanding artist/album containers into tracks when needed)."""
     if isinstance(media_id, list):
@@ -1016,6 +1073,10 @@ async def async_play_media_with_ma_fallback(
         if parsed_uri_type:
             eff_type = parsed_uri_type
 
+    norm_enqueue = (enqueue or "").strip().lower()
+    if norm_enqueue and norm_enqueue not in VALID_MA_ENQUEUE_MODES:
+        norm_enqueue = ""
+
     ma_st = hass.states.get(ma_target) if ma_target else None
     ma_usable = bool(
         ma_target
@@ -1028,8 +1089,10 @@ async def async_play_media_with_ma_fallback(
         }
         if eff_type:
             payload["media_type"] = eff_type
-        if enqueue:
-            payload["enqueue"] = enqueue
+        if norm_enqueue:
+            payload["enqueue"] = norm_enqueue
+        if radio_mode:
+            payload["radio_mode"] = True
         try:
             await hass.services.async_call(
                 "music_assistant", "play_media", payload, blocking=True
@@ -1074,15 +1137,18 @@ async def async_play_media_with_ma_fallback(
                         ]
                         if track_slots:
                             track_uris = [str(s["id"]) for s in track_slots]
+                            fb_payload: dict[str, Any] = {
+                                ATTR_ENTITY_ID: ma_target,
+                                "media_id": track_uris[0] if radio_mode else track_uris,
+                                "media_type": "track",
+                                "enqueue": norm_enqueue or "replace",
+                            }
+                            if radio_mode:
+                                fb_payload["radio_mode"] = True
                             await hass.services.async_call(
                                 "music_assistant",
                                 "play_media",
-                                {
-                                    ATTR_ENTITY_ID: ma_target,
-                                    "media_id": track_uris,
-                                    "media_type": "track",
-                                    "enqueue": enqueue or "replace",
-                                },
+                                fb_payload,
                                 blocking=True,
                             )
                             return
@@ -1101,16 +1167,120 @@ async def async_play_media_with_ma_fallback(
             translation_placeholders={"speaker": target_spk},
         )
 
+    ha_play_payload: dict[str, Any] = {
+        ATTR_ENTITY_ID: target_spk,
+        "media_content_id": first_uri,
+        "media_content_type": eff_type or "music",
+    }
+    if norm_enqueue in ("play", "next", "add", "replace"):
+        ha_play_payload["enqueue"] = norm_enqueue
     await hass.services.async_call(
         "media_player",
         "play_media",
-        {
-            ATTR_ENTITY_ID: target_spk,
-            "media_content_id": first_uri,
-            "media_content_type": eff_type or "music",
-        },
+        ha_play_payload,
         blocking=False,
     )
+
+
+async def async_push_music_lyrics(
+    hass: HomeAssistant,
+    coordinator: LatterCoordinator,
+    *,
+    req_id: int = 0,
+    track_key: str = "",
+    synced: bool = False,
+    lines: Sequence[dict[str, Any]] = (),
+) -> bool:
+    """Push chunked LRC or plain lyrics to the Device's bound `latter_set_music_lyrics` action."""
+    esphome_action = esphome_service(
+        hass, coordinator.esphome_device_id, "latter_set_music_lyrics"
+    )
+    if esphome_action is None:
+        return False
+
+    clean_key = (
+        str(track_key or "")[:160]
+        .replace("\x1f", " ")
+        .replace("\x1e", " ")
+        .replace("\r", " ")
+        .replace("\n", " ")
+        .strip()
+    )
+    capped = list(lines)[:MAX_LYRIC_LINES]
+    encoded_rows: list[str] = []
+    for row in capped:
+        t_ms = int(row.get("t_ms", -1))
+        txt = (
+            str(row.get("text") or "")[:200]
+            .replace("\x1f", " ")
+            .replace("\x1e", " ")
+            .replace("\r", " ")
+            .replace("\n", " ")
+            .strip()
+        )
+        if not txt:
+            continue
+        encoded_rows.append(f"{t_ms}\x1f{txt}")
+
+    chunk_count = max(1, math.ceil(len(encoded_rows) / LYRICS_CHUNK_SIZE))
+    safe_req_id = max(0, int(req_id))
+    try:
+        for chunk_idx in range(chunk_count):
+            chunk_slice = encoded_rows[
+                chunk_idx * LYRICS_CHUNK_SIZE : (chunk_idx + 1) * LYRICS_CHUNK_SIZE
+            ]
+            await hass.services.async_call(
+                "esphome",
+                esphome_action,
+                {
+                    "req_id": safe_req_id,
+                    "chunk_index": int(chunk_idx),
+                    "chunk_count": int(chunk_count),
+                    "track_key": clean_key,
+                    "synced": bool(synced and encoded_rows),
+                    "lines": "\x1e".join(chunk_slice),
+                },
+                blocking=True,
+            )
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.debug("esphome.%s failed for '%s': %s", esphome_action, coordinator.device_slug, err)
+        return False
+    return True
+
+
+async def async_fetch_and_push_music_lyrics(
+    hass: HomeAssistant,
+    coordinator: LatterCoordinator,
+    *,
+    req_id: int = 0,
+    speaker: str | None = None,
+    search: str = "",
+    max_lines: int = MAX_LYRIC_LINES,
+) -> tuple[str, bool, list[dict[str, Any]]]:
+    """Fetch lyrics (cached in 64-entry LRU) and push them to `latter_set_music_lyrics`."""
+    eff_spk = (
+        str(speaker or coordinator.active_speaker or coordinator.local_speaker).strip()
+    )
+    track_key, synced, parsed_lines = await async_fetch_track_lyrics(
+        hass,
+        eff_spk,
+        search,
+        fallback_title=coordinator.last_media_title,
+        fallback_artist=coordinator.last_media_artist,
+        fallback_album=coordinator.last_media_album,
+        max_lines=max_lines,
+    )
+    coordinator._lyrics_watch_active = True
+    coordinator._last_pushed_lyrics_key = track_key
+    await async_push_music_lyrics(
+        hass,
+        coordinator,
+        req_id=req_id,
+        track_key=track_key,
+        synced=synced,
+        lines=parsed_lines,
+    )
+    return track_key, synced, parsed_lines
 
 
 def resolve_assist_satellite_entity(
@@ -1717,8 +1887,37 @@ def bind_coordinator_speaker_listener(coordinator: LatterCoordinator) -> None:
     def _on_speaker_state_change(event: Event[EventStateChangedData]) -> None:
         old_state = event.data.get("old_state")
         new_state = event.data.get("new_state")
+        prev_lyr_key = (
+            f"{coordinator.last_media_title}|{coordinator.last_media_artist}"
+            if coordinator.last_media_title
+            else ""
+        )
         coordinator._cached_media_anchor = None
+        coordinator._cached_media_payload = None
         _sync_active_speaker_media_snapshot(coordinator)
+        new_lyr_key = (
+            f"{coordinator.last_media_title}|{coordinator.last_media_artist}"
+            if coordinator.last_media_title
+            else ""
+        )
+        if (
+            getattr(coordinator, "_lyrics_watch_active", False)
+            and new_lyr_key
+            and new_lyr_key != prev_lyr_key
+            and new_lyr_key != getattr(coordinator, "_last_pushed_lyrics_key", "")
+            and not coordinator._rpc_receiver.is_device_unavailable()
+        ):
+            coordinator._last_pushed_lyrics_key = new_lyr_key
+            coordinator.entry.async_create_background_task(
+                coordinator.hass,
+                async_fetch_and_push_music_lyrics(
+                    coordinator.hass,
+                    coordinator,
+                    req_id=0,
+                    search=new_lyr_key,
+                ),
+                f"latter_lyrics_autopush_{coordinator.device_slug}",
+            )
         if is_media_position_only_tick(old_state, new_state):
             coordinator._cached_media_payload = None
             coordinator._notify_debouncer.async_schedule_call()
@@ -1893,6 +2092,396 @@ def set_coordinator_active_speaker(
     coordinator.async_notify_listeners()
 
 
+def _normalize_repeat_mode(val: Any) -> str:
+    """Normalize HA / Music Assistant repeat mode to `'off'`, `'all'`, `'one'`, or `''`."""
+    if val is None:
+        return ""
+    if hasattr(val, "value"):
+        val = val.value
+    if isinstance(val, bool):
+        return "all" if val else "off"
+    raw = str(val).strip().lower()
+    if raw in ("one", "repeat_one", "single"):
+        return "one"
+    if raw in ("all", "repeat_all"):
+        return "all"
+    if raw in ("off", "none", "false", "0"):
+        return "off"
+    return ""
+
+
+def _parse_int_features(state_obj: State | None) -> int | None:
+    """Parse `supported_features` integer from a Home Assistant State, or None if absent."""
+    if state_obj is None:
+        return None
+    raw = state_obj.attributes.get("supported_features")
+    if raw is None:
+        return None
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+def compute_media_caps(
+    hass: HomeAssistant,
+    state_obj: State | None,
+    ma_st: State | None,
+    ma_counterpart: str | None,
+    vol_target: str,
+) -> int:
+    """Compute the 11-bit `active_media.media_caps` capability bitmask for the active speaker."""
+    has_ma = bool(ma_counterpart)
+    vol_st = hass.states.get(vol_target) if vol_target else None
+    if state_obj is None and ma_st is None and not has_ma:
+        if vol_st is not None and vol_st.domain in ("number", "input_number"):
+            return MEDIA_CAP_VOLUME_SET
+        return 0
+
+    sf_spk = _parse_int_features(state_obj)
+    sf_ma = _parse_int_features(ma_st)
+    if sf_spk is None and sf_ma is None:
+        caps = MEDIA_CAP_DEFAULT_TRANSPORT
+    else:
+        sf = (sf_spk or 0) | (sf_ma or 0)
+        caps = 0
+        if sf & _HA_FEATURE_PAUSE:
+            caps |= MEDIA_CAP_PAUSE
+        if sf & _HA_FEATURE_SEEK:
+            caps |= MEDIA_CAP_SEEK
+        if sf & VOLUME_SET_FLAG:
+            caps |= MEDIA_CAP_VOLUME_SET
+        if sf & VOLUME_MUTE_FLAG:
+            caps |= MEDIA_CAP_VOLUME_MUTE
+        if sf & _HA_FEATURE_PREVIOUS_TRACK:
+            caps |= MEDIA_CAP_PREVIOUS_TRACK
+        if sf & _HA_FEATURE_NEXT_TRACK:
+            caps |= MEDIA_CAP_NEXT_TRACK
+        if sf & _HA_FEATURE_SHUFFLE_SET:
+            caps |= MEDIA_CAP_SHUFFLE_SET
+        if sf & _HA_FEATURE_REPEAT_SET:
+            caps |= MEDIA_CAP_REPEAT_SET
+        if sf & _HA_FEATURE_GROUPING:
+            caps |= MEDIA_CAP_GROUPING
+
+    if vol_st is not None and vol_st.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+        if vol_st.domain in ("number", "input_number"):
+            caps |= MEDIA_CAP_VOLUME_SET
+        elif vol_st.domain == "media_player":
+            sf_vol = _parse_int_features(vol_st)
+            if sf_vol is None:
+                caps |= MEDIA_CAP_VOLUME_SET | MEDIA_CAP_VOLUME_MUTE
+            else:
+                if sf_vol & VOLUME_SET_FLAG:
+                    caps |= MEDIA_CAP_VOLUME_SET
+                if sf_vol & VOLUME_MUTE_FLAG:
+                    caps |= MEDIA_CAP_VOLUME_MUTE
+
+    if has_ma:
+        caps |= (
+            MEDIA_CAP_MUSIC_ASSISTANT
+            | MEDIA_CAP_FAVORITE
+            | MEDIA_CAP_SHUFFLE_SET
+            | MEDIA_CAP_REPEAT_SET
+        )
+    return caps & 0xFFFF
+
+
+def _read_muted_from_targets(
+    hass: HomeAssistant,
+    vol_target: str,
+    attrs: dict[str, Any],
+    m_attrs: dict[str, Any],
+) -> bool:
+    """Read `is_volume_muted` from the volume target entity first, falling back to speaker/MA attributes."""
+    if vol_target:
+        vol_st = hass.states.get(vol_target)
+        if (
+            vol_st is not None
+            and vol_st.domain == "media_player"
+            and vol_st.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN)
+            and "is_volume_muted" in vol_st.attributes
+        ):
+            return bool(vol_st.attributes.get("is_volume_muted"))
+    if "is_volume_muted" in attrs and attrs.get("is_volume_muted") is not None:
+        return bool(attrs.get("is_volume_muted"))
+    if "is_volume_muted" in m_attrs and m_attrs.get("is_volume_muted") is not None:
+        return bool(m_attrs.get("is_volume_muted"))
+    return False
+
+
+def _read_live_ma_queue_state(
+    hass: HomeAssistant, ma_target: str | None
+) -> tuple[bool | None, str, bool | None, int | None, str]:
+    """Read `(shuffle, repeat, favorite, queue_count, current_uri)` from in-memory `mass.player_queues`."""
+    if not ma_target:
+        return None, "", None, None, ""
+    mass = get_ma_mass_client(hass)
+    if mass is None or not hasattr(mass, "player_queues"):
+        return None, "", None, None, ""
+    qid = resolve_ma_queue_id_sync(hass, ma_target, mass) or ma_target
+    pqs = mass.player_queues
+    q_obj: Any = None
+    try:
+        if hasattr(pqs, "get") or isinstance(pqs, dict):
+            q_obj = pqs.get(qid)
+    except Exception:  # noqa: BLE001
+        q_obj = None
+    if q_obj is None:
+        return None, "", None, None, ""
+
+    q_dict = _extract_item_dict(q_obj) if isinstance(q_obj, dict) else None
+    raw_shuf = (
+        q_dict.get("shuffle_enabled")
+        if q_dict is not None
+        else getattr(q_obj, "shuffle_enabled", None)
+    )
+    shuf = bool(raw_shuf) if raw_shuf is not None else None
+
+    raw_rep = (
+        q_dict.get("repeat_mode")
+        if q_dict is not None
+        else getattr(q_obj, "repeat_mode", None)
+    )
+    rep = _normalize_repeat_mode(raw_rep)
+
+    raw_items = (
+        q_dict.get("items")
+        if q_dict is not None
+        else getattr(q_obj, "items", None)
+    )
+    q_cnt: int | None = None
+    if isinstance(raw_items, int) and not isinstance(raw_items, bool):
+        q_cnt = max(0, raw_items)
+    elif isinstance(raw_items, list):
+        q_cnt = len(raw_items)
+
+    cur_item = (
+        q_dict.get("current_item")
+        if q_dict is not None
+        else getattr(q_obj, "current_item", None)
+    )
+    fav: bool | None = None
+    cur_uri = ""
+    if cur_item is not None:
+        cur_d = _extract_item_dict(cur_item)
+        m_item = _extract_item_dict(cur_d.get("media_item") or {})
+        raw_fav = m_item.get("favorite")
+        if raw_fav is None:
+            raw_fav = cur_d.get("favorite")
+        if raw_fav is not None:
+            fav = bool(raw_fav)
+        cur_uri = str(
+            m_item.get("uri")
+            or cur_d.get("uri")
+            or cur_d.get("media_content_id")
+            or ""
+        ).strip()
+    return shuf, rep, fav, q_cnt, cur_uri
+
+
+def _resolve_raw_source_favorite(
+    attrs: dict[str, Any],
+    m_attrs: dict[str, Any],
+    live_q_fav: bool | None,
+) -> bool | None:
+    """Extract raw `favorite` boolean from MA state/queue attributes, or None when unreported."""
+    for d in (m_attrs, attrs):
+        for key in ("favorite", "media_favorite", "is_favorite"):
+            val = d.get(key)
+            if isinstance(val, bool):
+                return val
+            if isinstance(val, (int, str)) and str(val).strip().lower() in (
+                "true",
+                "false",
+                "1",
+                "0",
+            ):
+                return str(val).strip().lower() in ("true", "1")
+    return live_q_fav
+
+
+def _resolve_effective_favorite(
+    coordinator: LatterCoordinator,
+    title: str,
+    artist: str,
+    media_uri: str,
+    raw_source_fav: bool | None,
+) -> bool:
+    """Resolve current track `favorite` state, honoring optimistic toggles until source updates."""
+    overrides: dict[str, tuple[bool, bool | None]] = getattr(
+        coordinator, "_media_favorite_overrides", {}
+    )
+    keys = [
+        k
+        for k in (
+            media_uri.strip(),
+            f"{title.strip().lower()}|{artist.strip().lower()}" if title.strip() else "",
+        )
+        if k
+    ]
+    for k in keys:
+        entry = overrides.get(k)
+        if entry is not None:
+            opt_val, snap_val = entry
+            if raw_source_fav is not None and raw_source_fav != snap_val:
+                overrides.pop(k, None)
+                return bool(raw_source_fav)
+            return bool(opt_val)
+    return bool(raw_source_fav) if raw_source_fav is not None else False
+
+
+async def _async_resolve_ma_queue_context(
+    hass: HomeAssistant, ma_target: str
+) -> tuple[Any | None, str, dict[str, Any]]:
+    """Resolve `(mass_client, queue_id, get_queue_dict)` for Music Assistant queue commands."""
+    mass = get_ma_mass_client(hass)
+    q_data: dict[str, Any] = {}
+    queue_id = ""
+    if ma_target and hass.services.has_service("music_assistant", "get_queue"):
+        try:
+            resp = await hass.services.async_call(
+                "music_assistant",
+                "get_queue",
+                {ATTR_ENTITY_ID: ma_target},
+                blocking=True,
+                return_response=True,
+            )
+            if isinstance(resp, dict):
+                cand = resp.get(ma_target) or resp
+                if isinstance(cand, dict):
+                    q_data = cand
+                    queue_id = str(q_data.get("queue_id") or "").strip()
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("music_assistant.get_queue context lookup failed: %s", err)
+    if not queue_id:
+        queue_id = resolve_ma_queue_id_sync(hass, ma_target, mass) or ma_target
+    return mass, queue_id, q_data
+
+
+async def _async_execute_favorite_toggle(
+    coordinator: LatterCoordinator,
+    target_spk: str,
+    ma_target: str | None,
+    state_obj: State | None,
+    ma_state_obj: State | None,
+    explicit_media_id: str | None,
+) -> None:
+    """Toggle Music Assistant favorite state for the specified or active track."""
+    hass = coordinator.hass
+    attrs = dict(state_obj.attributes) if state_obj is not None else {}
+    m_attrs = dict(ma_state_obj.attributes) if ma_state_obj is not None else {}
+    title = str(
+        m_attrs.get("media_title")
+        or attrs.get("media_title")
+        or coordinator.last_media_title
+        or ""
+    ).strip()
+    artist = str(
+        m_attrs.get("media_artist")
+        or attrs.get("media_artist")
+        or coordinator.last_media_artist
+        or ""
+    ).strip()
+
+    _shuf, _rep, live_q_fav, _q_cnt, live_q_uri = _read_live_ma_queue_state(
+        hass, ma_target
+    )
+    raw_explicit = str(explicit_media_id or "").strip()
+    item_uri = raw_explicit if "://" in raw_explicit else ""
+    if raw_explicit and not item_uri and not title:
+        title = raw_explicit
+    if not item_uri:
+        for cand_uri in (
+            live_q_uri,
+            str(m_attrs.get("media_content_id") or "").strip(),
+            str(attrs.get("media_content_id") or "").strip(),
+            coordinator.last_media_uri.strip(),
+        ):
+            if (
+                cand_uri
+                and "://" in cand_uri
+                and not _is_ephemeral_announcement_uri(cand_uri)
+            ):
+                item_uri = cand_uri
+                break
+    if not item_uri and title:
+        item_uri = await async_lookup_ma_track_uri(hass, title, artist)
+
+    raw_source_fav = _resolve_raw_source_favorite(attrs, m_attrs, live_q_fav)
+    cur_fav = _resolve_effective_favorite(
+        coordinator, title, artist, item_uri, raw_source_fav
+    )
+    target_fav = not cur_fav
+
+    overrides: dict[str, tuple[bool, bool | None]] = getattr(
+        coordinator, "_media_favorite_overrides", None
+    )
+    if overrides is None:
+        overrides = {}
+        coordinator._media_favorite_overrides = overrides
+    for k in (
+        item_uri,
+        f"{title.lower()}|{artist.lower()}" if title else "",
+    ):
+        if k:
+            overrides[k] = (target_fav, raw_source_fav)
+
+    mass = get_ma_mass_client(hass)
+    music_ctrl = getattr(mass, "music", None) if mass is not None else None
+    handled = False
+    if music_ctrl is not None and item_uri:
+        try:
+            if target_fav and hasattr(music_ctrl, "add_item_to_favorites"):
+                await music_ctrl.add_item_to_favorites(item_uri)
+                handled = True
+            elif not target_fav and hasattr(music_ctrl, "remove_item_from_favorites"):
+                rem_fn = music_ctrl.remove_item_from_favorites
+                mtype = _parse_media_uri_type(item_uri) or "track"
+                item_id: str | int = ""
+                if item_uri.startswith("library://") and "/" in item_uri[10:]:
+                    item_id = item_uri.rsplit("/", 1)[-1]
+                elif hasattr(music_ctrl, "get_item_by_uri"):
+                    fetched_item = await music_ctrl.get_item_by_uri(item_uri)
+                    item_d = _extract_item_dict(fetched_item)
+                    if item_d.get("item_id") is not None:
+                        item_id = item_d["item_id"]
+                    if item_d.get("media_type"):
+                        mtype = str(item_d["media_type"])
+                if not item_id and "://" in item_uri:
+                    item_id = item_uri.rsplit("/", 1)[-1]
+                params = list(inspect.signature(rem_fn).parameters.values())
+                pos_params = [
+                    p
+                    for p in params
+                    if p.kind
+                    in (
+                        inspect.Parameter.POSITIONAL_ONLY,
+                        inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                    )
+                ]
+                if len(pos_params) == 1:
+                    await rem_fn(item_uri)
+                else:
+                    await rem_fn(mtype, item_id or item_uri)
+                handled = True
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("mass.music favorite toggle for '%s' failed: %s", item_uri, err)
+
+    if not handled:
+        cmd_entity = ma_target or target_spk
+        svc_name = "add_to_favorites" if target_fav else "remove_from_favorites"
+        if hass.services.has_service("music_assistant", svc_name):
+            svc_payload: dict[str, Any] = {ATTR_ENTITY_ID: cmd_entity}
+            if item_uri:
+                svc_payload["media_id"] = item_uri
+            await hass.services.async_call(
+                "music_assistant", svc_name, svc_payload, blocking=True
+            )
+
+    coordinator.async_notify_listeners()
+
+
 async def execute_coordinator_media_command(
     coordinator: LatterCoordinator,
     command: str,
@@ -1902,19 +2491,23 @@ async def execute_coordinator_media_command(
     media_type: str | None = None,
     enqueue: str | None = None,
     group_members: list[str] | str | None = None,
+    *,
+    radio_mode: bool = False,
+    queue_item_id: str | None = None,
+    pos_shift: int | str | None = None,
 ) -> None:
-    """Execute a unified media playback command with 2.5s play debounce and post-reboot Sendspin queue recovery."""
+    """Execute a unified media playback, queue, or player toggle command."""
     hass = coordinator.hass
     target_spk = (
         speaker or coordinator.active_speaker or coordinator.local_speaker
     ).strip()
-    if not target_spk:
+    if not target_spk and command.strip().lower() != "lyrics_fetch":
         return
 
     cmd = command.strip().lower()
-    ma_target = resolve_ma_counterpart_entity(hass, target_spk)
+    ma_target = resolve_ma_counterpart_entity(hass, target_spk) if target_spk else None
     cmd_target = ma_target or target_spk
-    state_obj = hass.states.get(target_spk)
+    state_obj = hass.states.get(target_spk) if target_spk else None
     ma_state_obj = (
         hass.states.get(ma_target)
         if ma_target and ma_target != target_spk
@@ -1931,12 +2524,13 @@ async def execute_coordinator_media_command(
     if cmd == "toggle":
         cmd = "pause" if cur_state in (STATE_PLAYING, STATE_BUFFERING) else "play"
 
-    if cmd == "play_media" and media_id:
+    if cmd in ("play_media", "play_slot") and media_id:
         coordinator._local_needs_cold_resume = False
         coordinator._resuming_guard_until = 0.0
         play_payload_id: str | list[str] = media_id
         if (
-            (media_type or "").strip().lower() == "track"
+            not radio_mode
+            and (media_type or "").strip().lower() == "track"
             and (enqueue or "replace").strip().lower() == "replace"
             and media_id in coordinator._browsed_album_track_uris
         ):
@@ -1950,6 +2544,176 @@ async def execute_coordinator_media_command(
             play_payload_id,
             media_type=media_type,
             enqueue=enqueue,
+            radio_mode=radio_mode,
+        )
+        return
+
+    if cmd == "queue_play":
+        clean_qid = str(queue_item_id or "").strip()
+        if not clean_qid or not ma_target:
+            return
+        mass, queue_id, _q_data = await _async_resolve_ma_queue_context(hass, ma_target)
+        if mass is not None and hasattr(mass, "player_queues") and queue_id:
+            await mass.player_queues.play_index(queue_id, clean_qid)
+            coordinator.async_notify_listeners()
+        return
+
+    if cmd == "queue_move":
+        clean_qid = str(queue_item_id or "").strip()
+        if not clean_qid or pos_shift is None or not ma_target:
+            return
+        mass, queue_id, q_data = await _async_resolve_ma_queue_context(hass, ma_target)
+        if mass is None or not hasattr(mass, "player_queues") or not queue_id:
+            return
+        pqs = mass.player_queues
+        raw_shift_str = str(pos_shift).strip().lower()
+        shift_int = 0
+        if raw_shift_str == "next":
+            items_list: list[dict[str, Any]] = []
+            if hasattr(pqs, "fetch_player_queue_items"):
+                fetched = await pqs.fetch_player_queue_items(
+                    queue_id, limit=50, offset=0
+                )
+                if isinstance(fetched, Sequence) and not isinstance(
+                    fetched, (str, bytes)
+                ):
+                    items_list = [_extract_item_dict(x) for x in fetched]
+            if not items_list:
+                for list_key in ("queue_items", "items"):
+                    cand_l = q_data.get(list_key)
+                    if isinstance(cand_l, list):
+                        items_list = [_extract_item_dict(x) for x in cand_l]
+                        break
+            item_index = next(
+                (
+                    idx
+                    for idx, it in enumerate(items_list)
+                    if str(it.get("queue_item_id") or "").strip() == clean_qid
+                ),
+                -1,
+            )
+            if item_index < 0:
+                return
+            current_index: int | None = None
+            raw_cur_idx = q_data.get("current_index")
+            if isinstance(raw_cur_idx, int) and not isinstance(raw_cur_idx, bool):
+                current_index = raw_cur_idx
+            elif hasattr(pqs, "get"):
+                q_obj = pqs.get(queue_id)
+                cand_idx = getattr(q_obj, "current_index", None) if q_obj is not None else None
+                if isinstance(cand_idx, int) and not isinstance(cand_idx, bool):
+                    current_index = cand_idx
+            if current_index is None:
+                cur_item_raw = q_data.get("current_item")
+                cur_qid = (
+                    str(_extract_item_dict(cur_item_raw).get("queue_item_id") or "").strip()
+                    if cur_item_raw is not None
+                    else ""
+                )
+                current_index = next(
+                    (
+                        idx
+                        for idx, it in enumerate(items_list)
+                        if cur_qid and str(it.get("queue_item_id") or "").strip() == cur_qid
+                    ),
+                    0,
+                )
+            shift_int = (current_index + 1) - item_index
+        else:
+            try:
+                shift_int = int(raw_shift_str)
+            except ValueError:
+                return
+        if shift_int != 0:
+            await pqs.move_item(queue_id, clean_qid, pos_shift=shift_int)
+            coordinator.async_notify_listeners()
+        return
+
+    if cmd == "queue_delete":
+        clean_qid = str(queue_item_id or "").strip()
+        if not clean_qid or not ma_target:
+            return
+        mass, queue_id, _q_data = await _async_resolve_ma_queue_context(hass, ma_target)
+        if mass is not None and hasattr(mass, "player_queues") and queue_id:
+            await mass.player_queues.delete_item(
+                queue_id, item_id_or_index=clean_qid
+            )
+            q_counts = hass.data.get(DOMAIN, {}).get("_ma_queue_counts")
+            if isinstance(q_counts, dict) and q_counts.get(ma_target, 0) > 0:
+                q_counts[ma_target] = q_counts[ma_target] - 1
+            coordinator.async_notify_listeners()
+        return
+
+    if cmd == "mute_toggle":
+        vol_target = coordinator.get_volume_target_entity(target_spk)
+        mute_entity = vol_target or cmd_target
+        mute_st = hass.states.get(mute_entity)
+        if (
+            (mute_st is None or mute_st.state in (STATE_UNAVAILABLE, STATE_UNKNOWN))
+            and mute_entity == target_spk
+            and ma_target
+        ):
+            mute_entity = ma_target
+        await async_execute_volume_action(hass, mute_entity, "mute")
+        return
+
+    if cmd == "shuffle_toggle":
+        m_attrs = dict(ma_state_obj.attributes) if ma_state_obj is not None else {}
+        s_attrs = dict(state_obj.attributes) if state_obj is not None else {}
+        live_shuf, _, _, _, _ = _read_live_ma_queue_state(hass, ma_target)
+        if "shuffle" in m_attrs and m_attrs.get("shuffle") is not None:
+            cur_shuf = bool(m_attrs.get("shuffle"))
+        elif "shuffle" in s_attrs and s_attrs.get("shuffle") is not None:
+            cur_shuf = bool(s_attrs.get("shuffle"))
+        elif live_shuf is not None:
+            cur_shuf = live_shuf
+        else:
+            cur_shuf = False
+        await hass.services.async_call(
+            "media_player",
+            "shuffle_set",
+            {ATTR_ENTITY_ID: cmd_target, "shuffle": not cur_shuf},
+            blocking=False,
+        )
+        return
+
+    if cmd == "repeat_cycle":
+        m_attrs = dict(ma_state_obj.attributes) if ma_state_obj is not None else {}
+        s_attrs = dict(state_obj.attributes) if state_obj is not None else {}
+        _, live_rep, _, _, _ = _read_live_ma_queue_state(hass, ma_target)
+        cur_rep = (
+            _normalize_repeat_mode(m_attrs.get("repeat"))
+            or _normalize_repeat_mode(s_attrs.get("repeat"))
+            or live_rep
+            or "off"
+        )
+        next_rep = {"off": "all", "all": "one", "one": "off"}.get(cur_rep, "all")
+        await hass.services.async_call(
+            "media_player",
+            "repeat_set",
+            {ATTR_ENTITY_ID: cmd_target, "repeat": next_rep},
+            blocking=False,
+        )
+        return
+
+    if cmd == "favorite_toggle":
+        await _async_execute_favorite_toggle(
+            coordinator,
+            target_spk,
+            ma_target,
+            state_obj,
+            ma_state_obj,
+            media_id,
+        )
+        return
+
+    if cmd == "lyrics_fetch":
+        await async_fetch_and_push_music_lyrics(
+            hass,
+            coordinator,
+            req_id=0,
+            speaker=target_spk,
+            search=str(media_id or "").strip(),
         )
         return
 
@@ -2067,6 +2831,10 @@ async def execute_coordinator_media_command(
 
     if cmd == "clear_queue":
         coordinator._transfer_hold_spinup_until = 0.0
+        if ma_target:
+            q_counts = hass.data.get(DOMAIN, {}).get("_ma_queue_counts")
+            if isinstance(q_counts, dict):
+                q_counts[ma_target] = 0
         await hass.services.async_call(
             "media_player",
             "clear_playlist",
@@ -2132,7 +2900,7 @@ def build_active_media_payload(
         return coordinator._cached_media_payload[1]
     (
         state_obj,
-        _ma_st,
+        ma_st,
         state,
         attrs,
         m_attrs,
@@ -2145,6 +2913,11 @@ def build_active_media_payload(
         is_local_flag,
     ) = _resolve_speaker_media_snapshot(coordinator)
 
+    ma_counterpart = (
+        resolve_ma_counterpart_entity(coordinator.hass, coordinator.active_speaker)
+        if coordinator.active_speaker
+        else None
+    )
     vol_target = coordinator.get_volume_target_entity(coordinator.active_speaker)
     fallback_spk_name = (
         coordinator.device_title
@@ -2174,6 +2947,10 @@ def build_active_media_payload(
             if idle_vol is not None
             else None
         )
+        idle_muted = _read_muted_from_targets(coordinator.hass, vol_target, {}, {})
+        idle_caps = compute_media_caps(
+            coordinator.hass, None, ma_st, ma_counterpart, vol_target
+        )
         med_rev, med_payload = coordinator._pack_domain_payload(
             "active_media",
             "",
@@ -2191,6 +2968,12 @@ def build_active_media_payload(
             coordinator.last_speaker,
             coordinator.local_speaker,
             is_local_flag,
+            False,
+            "",
+            idle_muted,
+            False,
+            0,
+            idle_caps,
         )
         res: tuple[str | None, dict[str, Any]] = (
             None,
@@ -2209,6 +2992,12 @@ def build_active_media_payload(
                 "last_speaker": coordinator.last_speaker,
                 "local_speaker": coordinator.local_speaker,
                 "is_local": bool(is_local_flag),
+                "shuffle": False,
+                "repeat": "",
+                "muted": idle_muted,
+                "favorite": False,
+                "queue_count": 0,
+                "media_caps": idle_caps,
                 "rev": med_rev,
                 "payload": med_payload,
             },
@@ -2295,6 +3084,75 @@ def build_active_media_payload(
     else:
         pos_updated_at = 0
 
+    live_shuf, live_rep, live_fav, live_q_cnt, live_q_uri = _read_live_ma_queue_state(
+        coordinator.hass, ma_counterpart
+    )
+    if "shuffle" in m_attrs and m_attrs.get("shuffle") is not None:
+        shuffle_flag = bool(m_attrs.get("shuffle"))
+    elif "shuffle" in attrs and attrs.get("shuffle") is not None:
+        shuffle_flag = bool(attrs.get("shuffle"))
+    elif live_shuf is not None:
+        shuffle_flag = live_shuf
+    else:
+        shuffle_flag = False
+
+    repeat_str = (
+        _normalize_repeat_mode(m_attrs.get("repeat"))
+        or _normalize_repeat_mode(attrs.get("repeat"))
+        or live_rep
+        or "off"
+    )
+    muted_flag = _read_muted_from_targets(coordinator.hass, vol_target, attrs, m_attrs)
+
+    active_media_uri = ""
+    for cand_cid in (
+        live_q_uri,
+        str(m_attrs.get("media_content_id") or "").strip(),
+        str(attrs.get("media_content_id") or "").strip(),
+        coordinator.last_media_uri.strip(),
+    ):
+        if cand_cid and not _is_ephemeral_announcement_uri(cand_cid):
+            active_media_uri = cand_cid
+            break
+    raw_source_fav = _resolve_raw_source_favorite(attrs, m_attrs, live_fav)
+    favorite_flag = (
+        _resolve_effective_favorite(
+            coordinator, title, artist, active_media_uri, raw_source_fav
+        )
+        if title
+        else False
+    )
+
+    queue_count = 0
+    if live_q_cnt is not None:
+        queue_count = live_q_cnt
+    else:
+        found_attr_q = False
+        for q_src in (m_attrs, attrs):
+            for q_key in ("queue_count", "items"):
+                q_val = q_src.get(q_key)
+                if isinstance(q_val, int) and not isinstance(q_val, bool):
+                    queue_count = max(0, q_val)
+                    found_attr_q = True
+                    break
+                if isinstance(q_val, list):
+                    queue_count = len(q_val)
+                    found_attr_q = True
+                    break
+            if found_attr_q:
+                break
+        if not found_attr_q and ma_counterpart:
+            cached_q_counts = coordinator.hass.data.get(DOMAIN, {}).get(
+                "_ma_queue_counts"
+            )
+            if isinstance(cached_q_counts, dict):
+                queue_count = max(0, int(cached_q_counts.get(ma_counterpart, 0)))
+    queue_count = max(0, min(65535, int(queue_count)))
+
+    media_caps = compute_media_caps(
+        coordinator.hass, state_obj, ma_st, ma_counterpart, vol_target
+    )
+
     dur_r = round(duration, 1) if duration > 0 else None
     vol_r = round(volume, 2) if volume is not None else None
     vol_pct = (
@@ -2319,6 +3177,12 @@ def build_active_media_payload(
         coordinator.last_speaker,
         coordinator.local_speaker,
         is_local_flag,
+        shuffle_flag,
+        repeat_str,
+        muted_flag,
+        favorite_flag,
+        queue_count,
+        media_caps,
     )
     if (
         coordinator._cached_media_anchor is not None
@@ -2346,6 +3210,12 @@ def build_active_media_payload(
         coordinator.last_speaker,
         coordinator.local_speaker,
         is_local_flag,
+        shuffle_flag,
+        repeat_str,
+        muted_flag,
+        favorite_flag,
+        queue_count,
+        media_caps,
     )
     res = (
         state,
@@ -2364,6 +3234,12 @@ def build_active_media_payload(
             "last_speaker": coordinator.last_speaker,
             "local_speaker": coordinator.local_speaker,
             "is_local": bool(is_local_flag),
+            "shuffle": shuffle_flag,
+            "repeat": repeat_str,
+            "muted": muted_flag,
+            "favorite": favorite_flag,
+            "queue_count": queue_count,
+            "media_caps": media_caps,
             "rev": med_rev,
             "payload": med_payload,
         },

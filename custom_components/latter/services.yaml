@@ -92,7 +92,9 @@ music_browse:
             - "active_queue"
             - "podcast_episodes"
             - "lyrics"
+            - "lyrics_fetch"
             - "bio"
+            - "track_info"
     page:
       name: Page Number
       description: 1-based page index.
@@ -105,13 +107,13 @@ music_browse:
           mode: box
     page_size:
       name: Page Size
-      description: Items per page (default 5, supports up to 20).
+      description: Items per page (default 5; up to 128 lines when mode is lyrics_fetch).
       required: false
       default: 5
       selector:
         number:
           min: 1
-          max: 20
+          max: 128
           mode: box
     search:
       name: Search / Filter Context
@@ -451,8 +453,8 @@ area_action:
         text:
 
 calendar_fetch:
-  name: Calendar Fetch Agenda
-  description: Refresh upcoming system calendar events and push a 5-slot agenda page to the ESPHome device.
+  name: Calendar Fetch Window or Map
+  description: Refresh system calendar events and push structured multi-view window chunks or a signed location map URL via latter_set_calendar_view.
   fields:
     target_device:
       name: Target Device
@@ -463,7 +465,7 @@ calendar_fetch:
           integration: latter
     req_id:
       name: Request ID
-      description: Optional monotonically increasing request correlation ID echoed back in latter_set_slots.
+      description: Optional monotonically increasing request correlation ID echoed back in latter_set_calendar_view.
       required: false
       default: 0
       selector:
@@ -471,9 +473,31 @@ calendar_fetch:
           min: 0
           max: 2147483647
           mode: box
+    mode:
+      name: Fetch Mode
+      description: Fetch structured event window chunks ("window") or mint a signed location map URL ("map").
+      required: false
+      default: "window"
+      selector:
+        select:
+          options:
+            - "window"
+            - "map"
+    start_date:
+      name: Window Start Date
+      description: Optional inclusive YYYY-MM-DD local start date for window mode.
+      required: false
+      selector:
+        text:
+    end_date:
+      name: Window End Date
+      description: Optional inclusive YYYY-MM-DD local end date for window mode.
+      required: false
+      selector:
+        text:
     days:
       name: Lookahead Days
-      description: Number of days ahead to query (default 30).
+      description: Fallback lookahead horizon in days when end_date is omitted (default 30).
       required: false
       default: 30
       selector:
@@ -481,30 +505,16 @@ calendar_fetch:
           min: 1
           max: 60
           mode: box
-    page:
-      name: Page Number
-      description: 1-based page index.
+    location:
+      name: Map Location
+      description: Event location string to geocode and sign when mode is "map".
       required: false
-      default: 1
       selector:
-        number:
-          min: 1
-          max: 20
-          mode: box
-    page_size:
-      name: Page Size
-      description: Items per page (default 5).
-      required: false
-      default: 5
-      selector:
-        number:
-          min: 1
-          max: 20
-          mode: box
+        text:
 
 calendar_create_event:
   name: Calendar Create Event
-  description: Create a new event or quick reminder on the primary system calendar and refresh the agenda sensor.
+  description: Create a timed, all-day, or repeating event on a configured Site calendar and refresh the Calendar App window.
   fields:
     target_device:
       name: Target Device
@@ -515,7 +525,7 @@ calendar_create_event:
           integration: latter
     calendar_entity:
       name: Calendar Entity
-      description: Target calendar.* entity (defaults to primary configured calendar).
+      description: Target calendar.* entity (defaults to the first writable configured Site calendar).
       required: false
       selector:
         entity:
@@ -526,41 +536,89 @@ calendar_create_event:
       required: true
       selector:
         text:
+    location:
+      name: Location
+      description: Optional event location or address (supports on-device OpenStreetMap preview).
+      required: false
+      selector:
+        text:
+    description:
+      name: Description
+      description: Optional event notes or description.
+      required: false
+      selector:
+        text:
+    all_day:
+      name: All-Day Event
+      description: True to create an all-day event using start_date and end_date.
+      required: false
+      default: false
+      selector:
+        boolean:
+    start_date:
+      name: Start Date (All-Day)
+      description: Inclusive YYYY-MM-DD start date when all_day is true.
+      required: false
+      selector:
+        text:
+    end_date:
+      name: End Date (All-Day)
+      description: Exclusive YYYY-MM-DD end date when all_day is true (defaults to start_date + 1 day).
+      required: false
+      selector:
+        text:
     start_date_time:
       name: Start Date & Time
-      description: Optional ISO 8601 start datetime string (if omitted, computed from in_minutes).
+      description: Optional ISO 8601 local start datetime string when all_day is false.
       required: false
       selector:
         text:
     end_date_time:
       name: End Date & Time
-      description: Optional ISO 8601 end datetime string (if omitted, computed from duration_minutes).
+      description: Optional ISO 8601 local end datetime string when all_day is false.
       required: false
       selector:
         text:
-    in_minutes:
-      name: Start In (Minutes from Now)
-      description: Relative start offset in minutes when start_date_time is omitted (default 15).
+    rrule:
+      name: Recurrence Rule (RFC 5545 RRULE)
+      description: Optional RFC 5545 recurrence rule (e.g. FREQ=WEEKLY or FREQ=DAILY).
       required: false
-      default: 15
       selector:
-        number:
-          min: 1
-          max: 10080
-          mode: box
-    duration_minutes:
-      name: Duration (Minutes)
-      description: Event duration in minutes when end_date_time is omitted (default 30).
+        text:
+
+calendar_delete_event:
+  name: Calendar Delete Event
+  description: Delete an event (or recurring instance) by UID from a configured Site calendar that advertises DELETE_EVENT support.
+  fields:
+    target_device:
+      name: Target Device
+      description: Optional Latter device (auto-resolved when running a single Latter device).
       required: false
-      default: 30
       selector:
-        number:
-          min: 5
-          max: 1440
-          mode: box
-    description:
-      name: Description
-      description: Optional event notes or description.
+        device:
+          integration: latter
+    calendar_entity:
+      name: Calendar Entity
+      description: Target calendar.* entity owning the event.
+      required: true
+      selector:
+        entity:
+          domain: calendar
+    uid:
+      name: Event UID
+      description: Unique calendar event identifier (UID) to delete.
+      required: true
+      selector:
+        text:
+    recurrence_id:
+      name: Recurrence Instance ID
+      description: Optional recurrence instance identifier when deleting a recurring event occurrence.
+      required: false
+      selector:
+        text:
+    recurrence_range:
+      name: Recurrence Range
+      description: Optional recurrence deletion scope (e.g. THISANDFUTURE).
       required: false
       selector:
         text:
@@ -605,7 +663,7 @@ intercom_broadcast:
 
 media_command:
   name: Media Command
-  description: Run a playback command (play, pause, toggle, next, previous, stop, seek, play_media, clear_queue) on the active speaker. If the device restarted or slept and its Sendspin buffer is empty, play re-streams the Music Assistant queue.
+  description: Run a playback, queue, or player toggle command (play, pause, toggle, next, previous, stop, seek, play_media, clear_queue, queue_play, queue_move, queue_delete, mute_toggle, shuffle_toggle, repeat_cycle, favorite_toggle, lyrics_fetch, join, unjoin) on the active speaker. If the device restarted or slept and its Sendspin buffer is empty, play re-streams the Music Assistant queue.
   fields:
     target_device:
       name: Target Device
@@ -616,7 +674,7 @@ media_command:
           integration: latter
     command:
       name: Playback Command
-      description: Media transport command to execute.
+      description: Media transport, queue, or player toggle command to execute.
       required: true
       default: "toggle"
       selector:
@@ -631,6 +689,14 @@ media_command:
             - "seek"
             - "play_media"
             - "clear_queue"
+            - "queue_play"
+            - "queue_move"
+            - "queue_delete"
+            - "mute_toggle"
+            - "shuffle_toggle"
+            - "repeat_cycle"
+            - "favorite_toggle"
+            - "lyrics_fetch"
             - "join"
             - "unjoin"
     entity_id:
@@ -651,7 +717,7 @@ media_command:
           mode: box
     media_id:
       name: Media URI / ID
-      description: Optional Music Assistant URI or media_content_id when command is play_media.
+      description: Optional Music Assistant URI or media_content_id when command is play_media or favorite_toggle.
       required: false
       selector:
         text:
@@ -672,6 +738,25 @@ media_command:
             - "next"
             - "add"
             - "replace"
+    radio_mode:
+      name: Radio Mode
+      description: Optional flag passed to Music Assistant play_media to start dynamic radio from the selected item.
+      required: false
+      default: false
+      selector:
+        boolean:
+    queue_item_id:
+      name: Queue Item ID
+      description: Target Music Assistant queue_item_id when command is queue_play, queue_move, or queue_delete.
+      required: false
+      selector:
+        text:
+    pos_shift:
+      name: Queue Position Shift
+      description: Signed shift (-1 for Move Up, +1 for Move Down, or "next" to move directly after the playing item) when command is queue_move.
+      required: false
+      selector:
+        text:
     group_members:
       name: Group Member Speakers
       description: Media player entity IDs to join with the target speaker when command is join.

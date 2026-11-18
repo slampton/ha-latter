@@ -104,6 +104,7 @@ LATTER_CONTRACT_ACTION_SUFFIXES: tuple[str, ...] = (
     "_latter_push_v3",
     "_latter_device_command",
     "_latter_set_slots",
+    "_latter_set_calendar_view",
     "_latter_show_notification",
     "_latter_ui_input",
     "_latter_ping",

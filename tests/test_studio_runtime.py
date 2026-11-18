@@ -509,12 +509,11 @@ function makeStore({ weatherBgState = "Dynamic", cycleMins = 0, activeId = "", f
   ];
   const musicSection = [
     { entity_id: "media_player.pocket", domain: "media_player", name: "Player", state: "idle" },
-    { entity_id: "switch.pocket_music_show_library_shortcut", domain: "switch", name: "Show Library Shortcut", state: "off" },
     { entity_id: "select.pocket_music_overlay_style", domain: "select", name: "Overlay Style", state: "Art + Metadata", options: ["Art Only", "Art + Metadata"] },
     { entity_id: "select.pocket_music_album_art_style", domain: "select", name: "Album Art Style", state: "Full Screen", options: ["Full Screen", "Standard"] },
-    { entity_id: "switch.pocket_music_show_speaker_shortcut", domain: "switch", name: "Show Speaker Shortcut", state: "on" },
-    { entity_id: "select.pocket_music_podcast_sort_order", domain: "select", name: "Podcast Sort Order", state: "Newest on Top", options: ["Newest on Top"] },
     { entity_id: "select.pocket_music_album_sort_order", domain: "select", name: "Album Sort Order", state: "Alphabetical", options: ["Alphabetical"] },
+    { entity_id: "select.pocket_music_artist_album_sort_order", domain: "select", name: "Artist Album Sort Order", state: "Oldest on Top", options: ["Oldest on Top", "Newest on Top"] },
+    { entity_id: "select.pocket_music_podcast_sort_order", domain: "select", name: "Podcast Sort Order", state: "Newest on Top", options: ["Newest on Top"] },
   ];
   const soundSection = [
     { entity_id: "number.pocket_sound_speaker_volume", domain: "number", name: "Speaker Volume", state: "60", min: 10, max: 100, step: 5, unit: "%" },
@@ -794,26 +793,26 @@ return {
         self.assertNotIn('label="All Time Zones"', got["modalTimeMarkup"])
         self.assertNotIn("cfg-alarm_1_time", got["modalTimeMarkup"])
         self.assertNotIn("cfg-alarm_1_time", got["ifaceMarkup"])
-        self.assertIn("id=media-player-shortcuts", got["modalMusicMarkup"])
-        self.assertIn("✓ Speaker", got["modalMusicMarkup"])
-        self.assertIn("+ Library", got["modalMusicMarkup"])
-        self.assertLess(got["modalMusicMarkup"].index("✓ Speaker"), got["modalMusicMarkup"].index("+ Library"))
+        self.assertIn("Albums: Alphabetical • Artists: Oldest on Top", got["ifaceMarkup"])
+        self.assertNotIn("media-player-shortcuts", got["modalMusicMarkup"])
+        self.assertNotIn("Show Speaker Shortcut", got["modalMusicMarkup"])
+        self.assertNotIn("Show Library Shortcut", got["modalMusicMarkup"])
         self.assertNotIn("Show Speaker Shortcut", got["ifaceMarkup"])
         self.assertNotIn("Show Library Shortcut", got["ifaceMarkup"])
         self.assertNotIn("Show Speaker Shortcut", got["audioMarkup"])
         self.assertNotIn("Show Library Shortcut", got["audioMarkup"])
         self.assertNotIn("<summary>Library Sorting</summary>", got["modalMusicMarkup"])
         for media_nav_label in (
-            "Shortcuts",
             "Album Sort Order",
+            "Artist Album Sort Order",
             "Podcast Sort Order",
         ):
             self.assertIn(media_nav_label, got["modalMusicMarkup"])
             self.assertNotIn(media_nav_label, got["audioMarkup"])
         self.assertNotIn("Album Art Style", got["audioMarkup"])
         self.assertNotIn("Overlay Style", got["audioMarkup"])
-        self.assertLess(got["modalMusicMarkup"].index("id=media-player-shortcuts"), got["modalMusicMarkup"].index("Album Sort Order"))
-        self.assertLess(got["modalMusicMarkup"].index("Album Sort Order"), got["modalMusicMarkup"].index("Podcast Sort Order"))
+        self.assertLess(got["modalMusicMarkup"].index("Album Sort Order"), got["modalMusicMarkup"].index("Artist Album Sort Order"))
+        self.assertLess(got["modalMusicMarkup"].index("Artist Album Sort Order"), got["modalMusicMarkup"].index("Podcast Sort Order"))
         self.assertIn('<h3 class="card-title">Sound &amp; Playback</h3>', got["audioMarkup"])
         self.assertIn("Speaker Volume", got["audioMarkup"])
         self.assertIn("id=cfg-device_remote_group", got["modalRemoteMarkup"])
@@ -3117,6 +3116,8 @@ return {
         self.assertIn("<summary>Interface &amp; Shortcuts</summary>", got["groupsHtml"])
         self.assertIn("Pocket Carry", got["groupsHtml"])
         self.assertNotIn("Power Profile", got["groupsHtml"])
+        self.assertNotIn("Show Speaker Shortcut", got["groupsHtml"])
+        self.assertNotIn("Show Library Shortcut", got["groupsHtml"])
         self.assertNotIn("Portable Carry", got["groupsHtml"])
         self.assertNotIn("Tabletop Dock", got["groupsHtml"])
         self.assertIn("aria-label=Delete group Guest Suites", got["groupsHtml"])
@@ -3200,6 +3201,9 @@ const all = getAllMdiIcons();
 const teddy = searchMdiIcons("teddy-bear");
 const multiWord = searchMdiIcons("teddy bear");
 const empty = searchMdiIcons("");
+const missingRouteIcons = SHORTCUT_ROUTES_CATALOG
+  .map((r) => r.token)
+  .filter((tok) => !ROUTE_PREVIEW_ICONS[tok] || !isKnownMdiIcon(ROUTE_PREVIEW_ICONS[tok]));
 return {
   count: all.length,
   hasTeddyBear: isKnownMdiIcon("mdi:teddy-bear"),
@@ -3210,10 +3214,12 @@ return {
   multiWordTop: multiWord.items[0],
   emptyTotal: empty.totalMatches,
   emptyLen: empty.items.length,
+  missingRouteIcons,
 };
 """
         got = _run_node_ts([FRONTEND_SRC / "mdi-catalog.ts"], runner)
         self.assertEqual(got["count"], 7447)
+        self.assertEqual(got["missingRouteIcons"], [])
         self.assertTrue(got["hasTeddyBear"])
         self.assertTrue(got["hasBareTeddy"])
         self.assertFalse(got["unknownFake"])

@@ -66,11 +66,11 @@ class TestProtocolV3Contract(unittest.TestCase):
         """Every v3 domain must have contiguous 3..COUNT-1 indices matching expected counts."""
         expected_counts = {
             "area_context": 43,
-            "active_media": 15,
+            "active_media": 21,
             "remote_config": 3,
             "weather_forecast": 14,
-            "calendar_agenda": 2,
-            "device_prefs": 54,
+            "calendar_agenda": 4,
+            "device_prefs": 55,
             "shortcuts": 5,
         }
         domains = self.schema.get("domains", {})
@@ -289,6 +289,8 @@ class TestRecordsFields(unittest.TestCase):
                 ("remote_config", "slots_summary"),
                 ("weather_forecast", "forecast_5d"),
                 ("calendar_agenda", "summary"),
+                ("calendar_agenda", "calendars_meta"),
+                ("calendar_agenda", "locations_catalog"),
                 ("shortcuts", "dock_items"),
                 ("shortcuts", "pinned_items"),
             },
@@ -302,6 +304,8 @@ class TestRecordsFields(unittest.TestCase):
         self.assertIn("remote_slot_records(", rem_src)
         self.assertIn("forecast_records(", feeds_src)
         self.assertIn("calendar_agenda_records(", feeds_src)
+        self.assertIn("calendar_sources_records(", feeds_src)
+        self.assertIn("calendar_locations_records(", feeds_src)
         self.assertIn("shortcut_records(", coord_src)
 
     def test_cameras(self) -> None:
@@ -1077,22 +1081,69 @@ class TestDevicePrefsProtocol(unittest.TestCase):
         self.assertEqual(_PAYLOADS_MOD.parse_dirty_prefs_records(bad_raw), {})
 
     def test_power_profile_retired_and_activity_sources_in_scope(self) -> None:
-        self.assertNotIn("power_profile", studio_scope.DEVICE_PREF_KEYS)
-        self.assertNotIn("power_profile", studio_scope.DEVICE_SETTING_KEYS)
-        self.assertEqual(len(studio_scope.DEVICE_PREF_SPECS), 49)
-        with self.assertRaises(studio_scope.SettingsScopeError):
-            studio_scope.clean_device_settings({"power_profile": "Pocket Carry"})
+        for retired_key in ("power_profile", "show_speaker_shortcut", "show_library_shortcut"):
+            self.assertNotIn(retired_key, studio_scope.DEVICE_PREF_KEYS)
+            self.assertNotIn(retired_key, studio_scope.DEVICE_SETTING_KEYS)
+            with self.assertRaises(studio_scope.SettingsScopeError):
+                studio_scope.clean_device_settings({retired_key: "1"})
+        self.assertEqual(len(studio_scope.DEVICE_PREF_SPECS), 50)
 
         cleaned = studio_scope.clean_device_settings(
             {
                 "tap_to_wake": "Double Tap",
                 "wallpaper_source": "preset:aurora",
                 "activity_sources": ["timers", "calendar"],
+                "home_date_tap_action": "Overview",
+                "calendar_lookahead_days": 14,
+                "calendar_week_start": "Monday",
             }
         )
         self.assertEqual(cleaned["tap_to_wake"], "Double Tap")
         self.assertEqual(cleaned["wallpaper_source"], "preset:aurora")
         self.assertEqual(cleaned["activity_sources"], "calendar,timers")
+        self.assertEqual(cleaned["home_date_tap_action"], "Overview")
+        self.assertEqual(cleaned["calendar_lookahead_days"], 14)
+        self.assertEqual(cleaned["calendar_week_start"], "Monday")
+
+        # Calendar sources, locations, and structured window chunk packing
+        srcs = _PAYLOADS_MOD.calendar_sources_records(
+            [
+                {"entity_id": "calendar.family", "label": "Family | Shared", "color_idx": 0, "can_create": True, "can_delete": True},
+                {"entity_id": "calendar.holidays", "label": "Holidays", "color_idx": 3, "can_create": False, "can_delete": False},
+            ]
+        )
+        self.assertEqual(len(srcs), 2)
+        self.assertEqual(srcs[0], ("calendar.family", "Family / Shared", "0", "1", "1"))
+        self.assertEqual(srcs[1], ("calendar.holidays", "Holidays", "3", "0", "0"))
+
+        locs = _PAYLOADS_MOD.calendar_locations_records(["Home", "Oakland HQ", "home", "", "  Gym  "])
+        self.assertEqual(list(locs), [("Home",), ("Oakland HQ",), ("Gym",)])
+
+        win_events = [
+            {
+                "start_ymd": "2026-11-17",
+                "end_ymd": "2026-11-17",
+                "start_min": 540 + i,
+                "end_min": 600 + i,
+                "all_day": False,
+                "cal_idx": i % 2,
+                "uid": f"uid_{i}",
+                "recurrence_id": "",
+                "summary": f"Sync | #{i}",
+                "location": "Lab",
+                "description": "Notes",
+            }
+            for i in range(15)
+        ]
+        chunks = _PAYLOADS_MOD.pack_calendar_window_chunks(
+            win_events, "2026-10-15", "2027-01-20", req_id=9, chunk_size=12
+        )
+        self.assertEqual(len(chunks), 2)
+        self.assertEqual(chunks[0]["chunk_index"], 0)
+        self.assertEqual(chunks[0]["chunk_count"], 2)
+        self.assertIn("Sync | #0", chunks[0]["events"])
+        self.assertEqual(chunks[1]["chunk_index"], 1)
+        self.assertEqual(len(chunks[1]["events"].split("\x1e")), 3)
 
     def test_area_categories_parse_and_normalize(self) -> None:
         self.assertEqual(_PAYLOADS_MOD.parse_area_categories(None), [])

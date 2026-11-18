@@ -39,7 +39,7 @@ async def test_studio_rev_mismatch_on_all_read_and_mutation_endpoints(
     hass: Any, setup_latter_hub: Any
 ) -> None:
     """Verify studio_rev mismatch rejects BOTH read (get_state, subscribe) and mutation WS commands."""
-    assert STUDIO_REV == 27
+    assert STUDIO_REV == 28
     entry, _sys_obj, coord = await setup_latter_hub(hass)
     from homeassistant.helpers import area_registry as ar
 
@@ -184,6 +184,7 @@ async def test_studio_commands_security_pin_secrecy_groups_and_backup_restore(
                 ],
                 "pinned_items": [
                     {"kind": "route", "target": "weather:moon", "label": "Moon"},
+                    {"kind": "route", "target": "music:lyrics"},
                     {"kind": "entity", "target": "script.baby_help", "action": "turn_on", "label": "Baby Help", "confirm": False},
                 ],
             }
@@ -199,7 +200,22 @@ async def test_studio_commands_security_pin_secrecy_groups_and_backup_restore(
     assert "security_pin" not in coord.device_data
     assert state_after_pin["config"]["security_pin_policy"] == "require_pin"
     assert len(state_after_pin["config"]["dock_items"]) == 3
-    assert len(state_after_pin["config"]["pinned_items"]) == 2
+    assert len(state_after_pin["config"]["pinned_items"]) == 3
+    for retired_music_key in ("show_speaker_shortcut", "show_library_shortcut"):
+        assert retired_music_key not in state_after_pin["config"]
+        msg_seq += 1
+        await _call_ws(
+            hass,
+            conn,
+            msg_seq,
+            "latter/device/command",
+            command="save_device_config",
+            subentry_id=coord.subentry_id,
+            payload={"config": {retired_music_key: True}},
+            studio_rev=STUDIO_REV,
+        )
+        assert conn.errors[-1][1] == "invalid_format"
+        conn.errors.clear()
     assert state_after_pin["config"]["has_security_pin"] is True
     assert state_after_pin["live"]["has_security_pin"] is True
 

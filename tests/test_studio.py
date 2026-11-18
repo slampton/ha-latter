@@ -162,8 +162,12 @@ class TestViewLayout(unittest.TestCase):
         for tracker_tok in ("companion app", "private ble", "ibeacon", "bthome", "tile", "itag", "ruuvitag", "eddystone"):
             self.assertIn(f'"{tracker_tok}"', js)
         self.assertIn("AA:BB:CC:DD:EE:FF, iBeacon UUID, or tracker entity", js)
-        self.assertEqual(latter_const.STUDIO_REV, 27)
-        self.assertIn("const STUDIO_REV = 27;", js)
+        self.assertEqual(latter_const.STUDIO_REV, 28)
+        self.assertIn("const STUDIO_REV = 28;", js)
+        self.assertIn("cfg-home_date_tap_action", js)
+        self.assertIn("cfg-calendar_lookahead_days", js)
+        self.assertIn("cfg-calendar_week_start", js)
+        self.assertNotIn("tools:calendar", js)
         self.assertNotIn("power_profile", js)
         self.assertNotIn("Power Profile", js)
         self.assertNotIn("fusion-area", js)
@@ -309,7 +313,14 @@ class TestViewLayout(unittest.TestCase):
         self.assertIn('id="tools-items-pills"', js)
         self.assertIn('id="games-items-pills"', js)
         self.assertNotIn("<summary>Library Sorting</summary>", js)
-        self.assertIn('id: "media-player-shortcuts"', js)
+        for retired_music_pref in (
+            'id: "media-player-shortcuts"',
+            "show_speaker_shortcut",
+            "show_library_shortcut",
+            "Show Speaker Shortcut",
+            "Show Library Shortcut",
+        ):
+            self.assertNotIn(retired_music_pref, js)
         self.assertIn('id: "cfg-device_remote_group"', js)
         self.assertIn("Manage Remote Groups", js)
         audio_view = section("audio_voice")
@@ -626,11 +637,17 @@ class TestShortcutPolicy(unittest.TestCase):
         pinned_out = settings.normalize_pinned_items(
             [
                 {"kind": "route", "target": "time:stopwatch"},
+                {"kind": "route", "target": "music:album_tracks"},
+                {"kind": "route", "target": "music:lyrics"},
+                {"kind": "route", "target": "music:info"},
                 {"kind": "entity", "target": "script.baby_help", "action": "turn_on", "label": "Baby Help"},
             ]
         )
-        self.assertEqual([it["target"] for it in pinned_out], ["time:stopwatch", "script.baby_help"])
-        self.assertFalse(pinned_out[1]["confirm"])
+        self.assertEqual(
+            [it["target"] for it in pinned_out],
+            ["time:stopwatch", "music:album_tracks", "music:lyrics", "music:info", "script.baby_help"],
+        )
+        self.assertFalse(pinned_out[-1]["confirm"])
 
         for bad_pinned in (
             [{"kind": "route", "target": "app:pinned"}],
@@ -649,6 +666,13 @@ class TestShortcutPolicy(unittest.TestCase):
         js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
         for route in protocol_json["catalogs"]["shortcut_routes"]:
             self.assertIn(f'token: "{route["token"]}"', js)
+        for music_tok, music_lbl in (
+            ("music:album_tracks", "Album Tracks"),
+            ("music:lyrics", "Music Lyrics"),
+            ("music:info", "Track Info"),
+        ):
+            self.assertEqual(settings.SHORTCUT_ROUTE_MAP[music_tok]["label"], music_lbl)
+            self.assertIn(f'token: "{music_tok}", label: "{music_lbl}"', js)
         self.assertEqual(
             protocol_json["ha_services"]["shortcut_action"]["fields"],
             ["target_device", "entity_id", "action", "code"],

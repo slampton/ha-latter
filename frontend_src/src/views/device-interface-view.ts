@@ -21,6 +21,7 @@ import {
   DEFAULT_HOME_CATEGORIES_TOKENS,
   DEFAULT_TOOLS_ITEMS_TOKENS,
   HOME_CLOCK_TAP_OPTIONS,
+  HOME_DATE_TAP_OPTIONS,
   MAX_DOCK_ITEMS,
   NATIVE_DOCK_APP_TOKENS,
   NATIVE_DOCK_CONFIG_APP_MAP,
@@ -123,6 +124,17 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
     homeClockTapPref?.value ?? cfg.home_clock_tap_action ?? "Time App",
   );
 
+  const homeDateTapPref =
+    typeof store.getPref === "function" ? store.getPref("home_date_tap_action") : undefined;
+  const homeDateTapOptions = (
+    homeDateTapPref?.options && homeDateTapPref.options.length > 0
+      ? homeDateTapPref.options
+      : HOME_DATE_TAP_OPTIONS
+  ).map((opt) => ({ value: opt, label: opt }));
+  const homeDateTapValue = String(
+    homeDateTapPref?.value ?? cfg.home_date_tap_action ?? "Day View",
+  );
+
   const returnTimeoutPref =
     typeof store.getPref === "function" ? store.getPref("return_to_home_timeout") : undefined;
   const rawReturnTimeoutOptions = (
@@ -169,16 +181,14 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
     String(cfg.device_remote_group || curDevEntry?.device_remote_group || "area_auto").trim() ||
     "area_auto";
 
-  const showSpeakerPref =
-    typeof store.getPref === "function" ? store.getPref("show_speaker_shortcut") : undefined;
-  const showLibraryPref =
-    typeof store.getPref === "function" ? store.getPref("show_library_shortcut") : undefined;
-  const speakerShortcutOn = showSpeakerPref
-    ? Boolean(showSpeakerPref.value)
-    : cfg.show_speaker_shortcut !== false;
-  const libraryShortcutOn = showLibraryPref
-    ? Boolean(showLibraryPref.value)
-    : cfg.show_library_shortcut !== false;
+  const albumSortPref =
+    typeof store.getPref === "function" ? store.getPref("album_sort_order") : undefined;
+  const albumSortVal = String(albumSortPref?.value ?? cfg.album_sort_order ?? "Alphabetical");
+  const artistSortPref =
+    typeof store.getPref === "function" ? store.getPref("artist_album_sort_order") : undefined;
+  const artistSortVal = String(
+    artistSortPref?.value ?? cfg.artist_album_sort_order ?? "Oldest on Top",
+  );
 
   const showUtcClockPref =
     typeof store.getPref === "function" ? store.getPref("show_utc_clock") : undefined;
@@ -199,6 +209,18 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
   const rawTimeFormat = String(timeFormatPref?.value ?? cfg.time_format ?? "12-Hour (AM/PM)");
   const shortTimeFormat = rawTimeFormat.startsWith("24") ? "24-Hour" : "12-Hour";
 
+  const calLookaheadPref =
+    typeof store.getPref === "function" ? store.getPref("calendar_lookahead_days") : undefined;
+  const rawLookahead = Number(calLookaheadPref?.value ?? cfg.calendar_lookahead_days ?? 30);
+  const calLookaheadDays =
+    rawLookahead <= 10 ? 7 : rawLookahead <= 21 ? 14 : rawLookahead <= 45 ? 30 : 60;
+  const calWeekStartPref =
+    typeof store.getPref === "function" ? store.getPref("calendar_week_start") : undefined;
+  const calWeekStart =
+    String(calWeekStartPref?.value ?? cfg.calendar_week_start ?? "Sunday") === "Monday"
+      ? "Monday"
+      : "Sunday";
+
   const describeNativeDockApp = (routeToken: string): string => {
     switch (routeToken) {
       case "app:pinned": {
@@ -209,10 +231,7 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
         return `${pinnedItems.length} shortcut${pinnedItems.length === 1 ? "" : "s"} • ${pages} page${pages === 1 ? "" : "s"}`;
       }
       case "app:music":
-        if (speakerShortcutOn && libraryShortcutOn) return "Speaker & Library shortcuts";
-        if (speakerShortcutOn) return "Speaker shortcut";
-        if (libraryShortcutOn) return "Library shortcut";
-        return "Shortcuts hidden";
+        return `Albums: ${albumSortVal} • Artists: ${artistSortVal}`;
       case "app:home_hub":
         return `${enabledHomeCats.length} ${enabledHomeCats.length === 1 ? "category" : "categories"} enabled`;
       case "app:area":
@@ -237,6 +256,8 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
         return showUtcClock ? "Local time + UTC" : "Local time";
       case "app:clock":
         return `${clockFaceVal} • ${shortTimeFormat}`;
+      case "app:calendar":
+        return `${calLookaheadDays}-day lookahead • Starts ${calWeekStart}`;
       case "app:tools":
         return `${visibleToolsCount} tool${visibleToolsCount === 1 ? "" : "s"} enabled`;
       case "app:games":
@@ -453,6 +474,21 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
                         "home_clock_tap_action",
                         val,
                         "cfg-home_clock_tap_action",
+                      );
+                    },
+                  })}
+                  ${renderSelectRow({
+                    id: "cfg-home_date_tap_action",
+                    label: "Home Date Tap",
+                    description:
+                      "Choose whether tapping the date readout on Home opens Day View or Overview in the Calendar app.",
+                    value: homeDateTapValue,
+                    rawOptions: homeDateTapOptions,
+                    onChange: (val) => {
+                      store.stageDeviceSetting(
+                        "home_date_tap_action",
+                        val,
+                        "cfg-home_date_tap_action",
                       );
                     },
                   })}

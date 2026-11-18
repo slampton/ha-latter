@@ -511,18 +511,121 @@ async def test_all_domain_services_ma_link_and_browse_lru(
         "command": "input keyevent --longpress 23",
     } in adb_calls
 
-    # 6) calendar_fetch & calendar_create_event
-    hass.states.async_set("calendar.work", "off", {"friendly_name": "Work"})
-    hass.services.async_register("calendar", "get_events", lambda _c: {"calendar.work": {"events": []}})
+    # 6) calendar_fetch, calendar_create_event & calendar_delete_event
+    hass.states.async_set(
+        "calendar.work",
+        "off",
+        {"friendly_name": "Work", "supported_features": 3},
+    )
+    created_rrule_events: list[dict[str, Any]] = []
+    deleted_events: list[tuple[str, Any, Any]] = []
+
+    class _FakeCalEntity:
+        async def async_create_event(self, **kwargs: Any) -> None:
+            created_rrule_events.append(kwargs)
+
+        async def async_delete_event(
+            self,
+            uid: str,
+            recurrence_id: str | None = None,
+            recurrence_range: str | None = None,
+        ) -> None:
+            deleted_events.append((uid, recurrence_id, recurrence_range))
+
+    class _FakeCalComp:
+        def get_entity(self, eid: str) -> Any:
+            return _FakeCalEntity() if eid == "calendar.work" else None
+
+    hass.data["calendar"] = _FakeCalComp()
+    hass.services.async_register(
+        "calendar",
+        "get_events",
+        lambda _c: {
+            "calendar.work": {
+                "events": [
+                    {
+                        "summary": "Standup",
+                        "start": "2026-11-18T09:00:00-08:00",
+                        "end": "2026-11-18T09:30:00-08:00",
+                        "location": "Oakland HQ",
+                        "uid": "evt-1",
+                    }
+                ]
+            }
+        },
+    )
     await hass.services.async_call(
-        DOMAIN, SERVICE_CALENDAR_FETCH, {"target_device": coord.device_slug, "days": 30}, blocking=True
+        DOMAIN,
+        SERVICE_CALENDAR_FETCH,
+        {
+            "target_device": coord.device_slug,
+            "mode": "window",
+            "start_date": "2026-11-01",
+            "end_date": "2026-11-30",
+            "days": 30,
+        },
+        blocking=True,
+    )
+    await hass.services.async_call(
+        DOMAIN,
+        SERVICE_CALENDAR_FETCH,
+        {
+            "target_device": coord.device_slug,
+            "mode": "map",
+            "location": "Oakland HQ",
+        },
+        blocking=True,
     )
     await hass.services.async_call(
         DOMAIN,
         SERVICE_CALENDAR_CREATE_EVENT,
-        {"target_device": coord.device_slug, "summary": "Standup", "in_minutes": 10, "duration_minutes": 20},
+        {
+            "target_device": coord.device_slug,
+            "calendar_entity": "calendar.work",
+            "summary": "Standup",
+            "location": "Oakland HQ",
+            "start_date_time": "2026-11-18 09:00:00",
+            "end_date_time": "2026-11-18 09:30:00",
+            "rrule": "FREQ=WEEKLY",
+        },
         blocking=True,
     )
+    assert len(created_rrule_events) == 1
+    assert created_rrule_events[0]["rrule"] == "FREQ=WEEKLY"
+
+    hass.states.async_set(
+        "calendar.personal",
+        "off",
+        {"friendly_name": "Personal", "supported_features": 1},
+    )
+    await hass.services.async_call(
+        DOMAIN,
+        SERVICE_CALENDAR_CREATE_EVENT,
+        {
+            "target_device": coord.device_slug,
+            "calendar_entity": "calendar.personal",
+            "summary": "Trip",
+            "all_day": True,
+            "start_date": "2026-11-20",
+            "end_date": "2026-11-21",
+        },
+        blocking=True,
+    )
+
+    from custom_components.latter.const import SERVICE_CALENDAR_DELETE_EVENT
+
+    await hass.services.async_call(
+        DOMAIN,
+        SERVICE_CALENDAR_DELETE_EVENT,
+        {
+            "target_device": coord.device_slug,
+            "calendar_entity": "calendar.work",
+            "uid": "evt-1",
+            "recurrence_id": "20261118T170000Z",
+        },
+        blocking=True,
+    )
+    assert deleted_events == [("evt-1", "20261118T170000Z", None)]
 
     # 7) notify & intercom_broadcast ('all', 'occupied_areas', 'person.sean', invalid media_url check)
     fabric = get_ble_fabric(hass)

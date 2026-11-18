@@ -20,7 +20,7 @@ Do **not** create backward-compatibility shims, `try/except ImportError` wrapper
 - `device_tracker.py` — BLE Tag and roaming Device Area `ScannerEntity` trackers.
 - `diagnostics.py` — Redacted System and Device diagnostics snapshots.
 - `doorbell.py` — Auto-detected doorbell ring reflexes, exact `device_id` sibling speaker resolution, noise-reduced RTSP audio URL minting, and PTT TTS replies.
-- `feeds.py` — Weather forecast, sun/sky elevation, moon phase, and calendar agenda v3 builders.
+- `feeds.py` — Weather forecast, sun/sky elevation, moon phase, `calendar_agenda` (`calendars_meta` + `locations_catalog`), and `latter_set_calendar_view` window event builders.
 - `groups.py` — Sleep-safe subentry-backed Device Groups (4 built-in hardware presets plus custom groups with opt-in Display & Interface scope), Studio entity section classifier, and Device factory/option reset (`async_reset_device`).
 - `http.py` — Constant-time HMAC `UrlSigner` (`sign_payload_resource`, `sign_on_demand_resource`, `verify_resource`) and all 7 `HomeAssistantView` endpoints (`/api/latter/*`).
 - `hub.py` — `LatterSystemHub`, `iter_coordinators`, `AreaStateIndex` (incremental O(1) Area state index; never call `hass.states.async_all()`), and global config persistence.
@@ -34,7 +34,7 @@ Do **not** create backward-compatibility shims, `try/except ImportError` wrapper
 - `repairs.py` — Home Assistant Repairs issue helpers and System health checks.
 - `select.py` — Curated Tier 2 sleep-safe `device_group` and `wake_word_mode` select entities backed by the Device subentry.
 - `sensor.py` — System diagnostic, BLE presence, Person Area, and display-gated `timer_remaining` sensors.
-- `services.py` — All 19 `latter.*` Home Assistant service schemas and handlers (`target_device="occupied_areas"` supported on `notify` and `intercom_broadcast`).
+- `services.py` — All 20 `latter.*` Home Assistant service schemas and handlers (`target_device="occupied_areas"` supported on `notify` and `intercom_broadcast`).
 - `wallpapers.py` — Built-in preset catalog and private `.storage/latter/wallpapers/` asset management.
 
 ### Latter Studio Package (`studio/`, 4)

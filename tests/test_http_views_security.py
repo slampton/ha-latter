@@ -280,12 +280,12 @@ async def test_hmac_rotation_and_wallpaper_upload_and_proxy_views(
     assert r_wp_hit.status == 200
     assert r_wp_hit.headers["X-Latter-Cache"] == "HIT"
 
-    # 720x720 square display manifest keeps album art capped at 480 while serving crisp 720x720 wallpapers
+    # 720x720 square display manifest serves native 720x720 album art and 720x720 wallpapers
     hass2.states.async_set(
         f"sensor.{coord.device_slug}_system_hardware_manifest",
         json.dumps({"v": 2, "contract": 3, "w": 720, "h": 720, "shape": "square", "display": 1}),
     )
-    assert coord.art_dimensions == (480, 480)
+    assert coord.art_dimensions == (720, 720)
     assert coord.wallpaper_dimensions == (720, 720)
     wp_720_url = coord.build_wallpaper_url()
     assert "w=720&h=720&shape=square" in wp_720_url

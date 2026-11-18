@@ -61,6 +61,7 @@ from .studio.settings import (
     resolve_device_pref_value,
     sanitize_clock_label,
     sanitize_shortcut_label,
+    snap_calendar_lookahead_days,
 )
 
 # ---------------------------------------------------------------------------
@@ -266,6 +267,140 @@ def calendar_agenda_records(events: Iterable[dict[str, Any]], today: date) -> V3
     return V3Records(out)
 
 
+# calendar_agenda.calendars_meta: entity_id|label|color_idx|can_create|can_delete
+CALENDAR_SOURCES_MAX = 8
+CALENDAR_SOURCE_LABEL_MAX = 32
+CALENDAR_LOCATIONS_MAX = 12
+CALENDAR_LOCATION_ITEM_MAX = 64
+
+# latter_set_calendar_view structured event window chunks
+CALENDAR_WINDOW_MAX_EVENTS = 64
+CALENDAR_WINDOW_CHUNK_SIZE = 12
+CALENDAR_WINDOW_UID_MAX = 96
+CALENDAR_WINDOW_TITLE_MAX = 64
+CALENDAR_WINDOW_LOCATION_MAX = 64
+CALENDAR_WINDOW_DESC_MAX = 160
+
+
+def calendar_sources_records(sources: Iterable[Mapping[str, Any]]) -> V3Records:
+    """Records for configured/discovered calendars (`entity_id|label|color_idx|can_create|can_delete`)."""
+    rows: list[tuple[Any, ...]] = []
+    for idx, src in enumerate(sources):
+        if idx >= CALENDAR_SOURCES_MAX:
+            break
+        ent_id = str(src.get("entity_id") or "").strip()
+        if not ent_id:
+            continue
+        label = str(src.get("label") or ent_id.split(".", 1)[-1].replace("_", " ").title()).strip()
+        color_idx = int(src.get("color_idx", idx % 6)) % 6
+        can_create = "1" if bool(src.get("can_create", False)) else "0"
+        can_delete = "1" if bool(src.get("can_delete", False)) else "0"
+        rows.append((ent_id, label, str(color_idx), can_create, can_delete))
+    return build_v3_records(
+        rows,
+        (None, CALENDAR_SOURCE_LABEL_MAX, 1, 1, 1),
+        CALENDAR_SOURCES_MAX,
+    )
+
+
+def calendar_locations_records(locations: Iterable[Any]) -> V3Records:
+    """Single-subfield 0x1E-joined location suggestions (`zone.*` friendly names + recent event locations)."""
+    rows: list[tuple[str]] = []
+    seen: set[str] = set()
+    for raw in locations:
+        clean = sanitize_v3_subfield(raw, CALENDAR_LOCATION_ITEM_MAX)
+        if not clean:
+            continue
+        key = clean.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        rows.append((clean,))
+        if len(rows) >= CALENDAR_LOCATIONS_MAX:
+            break
+    return V3Records(rows)
+
+
+def _sanitize_window_field(val: Any, max_len: int | None = None) -> str:
+    """Sanitize a `latter_set_calendar_view` 0x1F-delimited event field while preserving literal '|' characters."""
+    if val is None:
+        return ""
+    if isinstance(val, bool):
+        return "1" if val else "0"
+    s = "".join(
+        " " if unicodedata.category(ch) in ("Cc", "Zl", "Zp") else ch
+        for ch in str(val)
+    )
+    s = " ".join(s.split())
+    if max_len is not None and len(s) > max_len:
+        s = s[:max_len].rstrip()
+    return s
+
+
+def pack_calendar_window_chunks(
+    events: Sequence[Mapping[str, Any]],
+    window_start: str,
+    window_end: str,
+    *,
+    req_id: int = 0,
+    chunk_size: int = CALENDAR_WINDOW_CHUNK_SIZE,
+) -> list[dict[str, Any]]:
+    """Pack up to 64 structured calendar events into `latter_set_calendar_view` action chunk dicts."""
+    eff_chunk_size = max(1, min(16, int(chunk_size)))
+    encoded_records: list[str] = []
+    for ev in events[:CALENDAR_WINDOW_MAX_EVENTS]:
+        start_ymd = _sanitize_window_field(ev.get("start_ymd"), 10)
+        end_ymd = _sanitize_window_field(ev.get("end_ymd") or start_ymd, 10)
+        if not start_ymd:
+            continue
+        all_day = bool(ev.get("all_day"))
+        start_min = -1 if all_day else max(-1, min(1439, int(ev.get("start_min", 0))))
+        end_min = -1 if all_day else max(-1, min(1440, int(ev.get("end_min", -1))))
+        cal_idx = max(0, min(7, int(ev.get("cal_idx", 0))))
+        uid = _sanitize_window_field(ev.get("uid"), CALENDAR_WINDOW_UID_MAX)
+        rec_id = _sanitize_window_field(ev.get("recurrence_id"), CALENDAR_WINDOW_UID_MAX)
+        title = _sanitize_window_field(ev.get("summary") or "Event", CALENDAR_WINDOW_TITLE_MAX) or "Event"
+        loc = _sanitize_window_field(ev.get("location"), CALENDAR_WINDOW_LOCATION_MAX)
+        desc = _sanitize_window_field(ev.get("description"), CALENDAR_WINDOW_DESC_MAX)
+        encoded_records.append(
+            FIELD_SEP.join(
+                (
+                    start_ymd,
+                    end_ymd,
+                    str(start_min),
+                    str(end_min),
+                    "1" if all_day else "0",
+                    str(cal_idx),
+                    uid,
+                    rec_id,
+                    title,
+                    loc,
+                    desc,
+                )
+            )
+        )
+
+    chunk_count = max(1, math.ceil(len(encoded_records) / eff_chunk_size))
+    clean_req = max(0, int(req_id))
+    clean_ws = _sanitize_window_field(window_start, 10)
+    clean_we = _sanitize_window_field(window_end, 10)
+    chunks: list[dict[str, Any]] = []
+    for idx in range(chunk_count):
+        slice_recs = encoded_records[idx * eff_chunk_size : (idx + 1) * eff_chunk_size]
+        chunks.append(
+            {
+                "req_id": clean_req,
+                "chunk_index": idx,
+                "chunk_count": chunk_count,
+                "window_start": clean_ws,
+                "window_end": clean_we,
+                "map_url": "",
+                "events": RECORD_SEP.join(slice_recs),
+            }
+        )
+    return chunks
+
+
 def sanitize_v3_field(val: Any) -> str:
     """Convert a field value to a delimiter-safe Protocol v3 string (a V3Records field is encoded as records)."""
     if val is None:
@@ -377,7 +512,7 @@ def pack_device_prefs_fields(
     custom_color_hex: str,
     is_round_display: bool = True,
 ) -> tuple[Any, ...]:
-    """Return the 54 ordered body fields (wire indices 3..56) for Protocol v3 `device_prefs`."""
+    """Return the 57 ordered body fields (wire indices 3..59) for Protocol v3 `device_prefs`."""
     home_enabled = bool(resolve_device_pref_value(cfg, "home_screen_enabled"))
     clean_hex = str(custom_color_hex or "").strip().upper()
     out: list[Any] = []
@@ -458,14 +593,19 @@ def parse_dirty_prefs_records(raw: str | None) -> dict[str, Any]:
                 except ValueError:
                     continue
         elif spec.domain == "number":
+            if isinstance(val, bool):
+                continue
             try:
                 ival = int(float(val))
             except (TypeError, ValueError):
                 continue
-            if spec.min_val is not None:
-                ival = max(spec.min_val, ival)
-            if spec.max_val is not None:
-                ival = min(spec.max_val, ival)
+            if key == "calendar_lookahead_days":
+                ival = snap_calendar_lookahead_days(ival)
+            else:
+                if spec.min_val is not None:
+                    ival = max(spec.min_val, ival)
+                if spec.max_val is not None:
+                    ival = min(spec.max_val, ival)
             out[key] = ival
     return out
 

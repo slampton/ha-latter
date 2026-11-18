@@ -48,6 +48,7 @@ from .const import (
     SERVICE_AREA_ACTION,
     SERVICE_AREA_BROWSE,
     SERVICE_CALENDAR_CREATE_EVENT,
+    SERVICE_CALENDAR_DELETE_EVENT,
     SERVICE_CALENDAR_FETCH,
     SERVICE_DEVICE_HELLO,
     SERVICE_DOORBELL_INTERCOM,
@@ -68,7 +69,7 @@ from .const import (
 )
 from .coordinator import LatterCoordinator, resolve_coordinator
 from .doorbell import async_execute_doorbell_intercom
-from .feeds import async_fetch_calendar_snapshot
+from .feeds import _discover_calendars, async_fetch_calendar_window
 from .groups import async_reset_device
 from .hub import (
     async_save_and_broadcast_global_config,
@@ -80,7 +81,9 @@ from .identity import device_entities, esphome_service
 from .media import (
     async_announce_on_targets,
     async_execute_volume_action,
+    async_fetch_and_push_music_lyrics,
     resolve_assist_satellite_entity,
+    resolve_ma_counterpart_entity,
 )
 from .media_browse import async_browse_media_items, is_music_assistant_player
 from .presence import get_ble_fabric
@@ -88,6 +91,7 @@ from .protocol import (
     SHORTCUT_DOMAIN_ACTION_SETS,
     check_perimeter_action_allowed,
     is_sensitive_perimeter_action,
+    pack_calendar_window_chunks,
 )
 from .remotes import async_execute_remote_action
 from .repairs import slot_push_failing_issue_id
@@ -298,6 +302,9 @@ async def async_push_browse_slots(
     items: list[dict[str, Any]],
     is_area_slots: bool = False,
     req_id: int = 0,
+    *,
+    total_items_override: int | None = None,
+    items_offset: int = 0,
 ) -> None:
     """Paginate items and push them to the Device's bound esphome.<node>_latter_set_slots action."""
     device_slug = coord.device_slug
@@ -306,20 +313,36 @@ async def async_push_browse_slots(
 
     slot_capacity = coord.card_slot_capacity if include_levels else coord.list_slot_capacity
     eff_page_size = max(1, min(slot_capacity, int(page_size)))
-    total_items = len(items)
+    eff_offset = max(0, int(items_offset))
+    total_items = (
+        max(eff_offset + len(items), int(total_items_override))
+        if total_items_override is not None and items
+        else (eff_offset + len(items))
+    )
     total_pages = max(1, math.ceil(total_items / eff_page_size))
     page = max(1, min(int(page), total_pages))
     start_idx = (page - 1) * eff_page_size
-    page_slice = items[start_idx : start_idx + eff_page_size]
+    local_start = max(0, start_idx - eff_offset)
+    page_slice = items[local_start : local_start + eff_page_size]
 
+    mode_low = str(mode).strip().lower()
+    name_cap = 512 if mode_low in ("bio", "track_info", "lyrics") else 64
     packed_rows: list[str] = []
     for slot in page_slice:
-        s_name = str(slot.get("name", ""))[:64].replace("\x1f", " ").replace("\x1e", " ")
+        s_name = str(slot.get("name", ""))[:name_cap].replace("\x1f", " ").replace("\x1e", " ")
         s_id = str(slot.get("id", ""))[:255].replace("\x1f", " ").replace("\x1e", " ")
         s_type = str(slot.get("type", mode))[:32].replace("\x1f", " ").replace("\x1e", " ")
         s_act = 1 if bool(slot.get("active", False)) else 0
         s_lvl = int(slot.get("level", -1)) if include_levels else -1
-        packed_rows.append(f"{s_name}\x1f{s_id}\x1f{s_type}\x1f{s_act}\x1f{s_lvl}")
+        raw_qid = slot.get("queue_item_id")
+        if raw_qid is not None or "is_current" in slot:
+            s_qid = str(raw_qid or "")[:128].replace("\x1f", " ").replace("\x1e", " ")
+            s_cur = 1 if bool(slot.get("is_current", False)) else 0
+            packed_rows.append(
+                f"{s_name}\x1f{s_id}\x1f{s_type}\x1f{s_act}\x1f{s_lvl}\x1f{s_qid}\x1f{s_cur}"
+            )
+        else:
+            packed_rows.append(f"{s_name}\x1f{s_id}\x1f{s_type}\x1f{s_act}\x1f{s_lvl}")
 
     payload: dict[str, Any] = {
         "is_area_slots": bool(is_area_slots),
@@ -506,6 +529,14 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         media_id = str(data.get("media_id") or "").strip() or None
         media_type = str(data.get("media_type") or "").strip() or None
         enqueue = str(data.get("enqueue") or "").strip() or None
+        radio_mode = _parse_bool(data.get("radio_mode"), default=False)
+        queue_item_id = str(data.get("queue_item_id") or "").strip() or None
+        raw_shift = data.get("pos_shift")
+        pos_shift: int | str | None = (
+            raw_shift
+            if raw_shift is not None and str(raw_shift).strip() != ""
+            else None
+        )
         group_members = data.get("group_members")
 
         await coord.async_execute_media_command(
@@ -516,6 +547,9 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             media_type=media_type,
             enqueue=enqueue,
             group_members=group_members,
+            radio_mode=radio_mode,
+            queue_item_id=queue_item_id,
+            pos_shift=pos_shift,
         )
 
     async def _handle_media_volume(call: ServiceCall) -> None:
@@ -575,6 +609,25 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         artist_album_sort = str(data.get("artist_album_sort") or "year")
         podcast_sort = str(data.get("podcast_sort") or "newest")
 
+        mode_norm = mode.strip().lower()
+        if mode_norm == "lyrics_fetch":
+            max_lines = max(1, min(128, int(data.get("page_size") or 128)))
+            await async_fetch_and_push_music_lyrics(
+                hass,
+                coord,
+                req_id=req_id,
+                speaker=speaker,
+                search=search,
+                max_lines=max_lines,
+            )
+            return
+
+        eff_ps = max(1, min(coord.list_slot_capacity, page_size))
+        queue_offset = (
+            ((max(1, page) - 1) * eff_ps // 50) * 50
+            if mode_norm == "active_queue"
+            else 0
+        )
         items = await async_browse_media_items(
             hass=hass,
             mode=mode,
@@ -589,17 +642,57 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             fallback_title=coord.last_media_title,
             fallback_artist=coord.last_media_artist,
             fallback_album=coord.last_media_album,
+            offset=queue_offset,
         )
-        mode_norm = mode.strip().lower()
+        total_items_override: int | None = None
+        if mode_norm == "active_queue":
+            if queue_offset > 0 and not items:
+                queue_offset = 0
+                items = await async_browse_media_items(
+                    hass=hass,
+                    mode=mode,
+                    speaker=speaker,
+                    last_speaker=last_speaker,
+                    local_speaker=local_speaker,
+                    search=search,
+                    default_speaker=str(coord.get_opt(CONF_DEFAULT_SPEAKER) or ""),
+                    album_sort=album_sort,
+                    artist_album_sort=artist_album_sort,
+                    podcast_sort=podcast_sort,
+                    fallback_title=coord.last_media_title,
+                    fallback_artist=coord.last_media_artist,
+                    fallback_album=coord.last_media_album,
+                    offset=0,
+                )
+            ma_target = resolve_ma_counterpart_entity(hass, speaker) if speaker else None
+            if ma_target and items:
+                q_counts = hass.data.get(DOMAIN, {}).get("_ma_queue_counts", {})
+                raw_q_total = q_counts.get(ma_target)
+                if (
+                    isinstance(raw_q_total, int)
+                    and raw_q_total > 0
+                    and (len(items) > 2 or raw_q_total <= len(items))
+                ):
+                    # Only apply raw_q_total when we have a multi-item fetch (not a 2-item fallback)
+                    total_items_override = raw_q_total
+        if mode_norm == "lyrics":
+            await async_fetch_and_push_music_lyrics(
+                hass,
+                coord,
+                req_id=0,
+                speaker=speaker,
+                search=search,
+            )
         if mode_norm in ("album_tracks", "current_album_tracks"):
             coord._browsed_album_track_uris = [
                 str(it["id"])
                 for it in items
                 if isinstance(it, dict) and it.get("type") == "track" and it.get("id")
             ]
-        elif mode_norm not in ("speakers", "lyrics", "bio"):
+        elif mode_norm not in ("speakers", "lyrics", "lyrics_fetch", "bio", "track_info"):
             coord._browsed_album_track_uris = []
         if not items and mode != "speakers":
+            queue_offset = 0
             items = [
                 {
                     "name": "No items found",
@@ -618,6 +711,8 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             items=items,
             is_area_slots=False,
             req_id=req_id,
+            total_items_override=total_items_override,
+            items_offset=queue_offset,
         )
 
     async def _handle_area_browse(call: ServiceCall) -> None:
@@ -754,92 +849,300 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             coord.async_notify_listeners()
             await async_push_active_area_entities(hass, coord)
 
+    _RRULE_RE = re.compile(
+        r"^FREQ=(?:DAILY|WEEKLY|MONTHLY|YEARLY)(?:;[A-Z_]+=[A-Za-z0-9,+-]+)*$"
+    )
+
+    def _is_calendar_writable(cal_id: str) -> bool:
+        st = hass.states.get(cal_id)
+        if st is not None and "supported_features" in st.attributes:
+            return (int(st.attributes.get("supported_features") or 0) & 1) != 0
+        return True
+
+    def _is_calendar_deletable(cal_id: str) -> bool:
+        st = hass.states.get(cal_id)
+        if st is not None and "supported_features" in st.attributes:
+            return (int(st.attributes.get("supported_features") or 0) & 2) != 0
+        return True
+
+    def _get_calendar_entity_obj(cal_id: str) -> Any | None:
+        comp = hass.data.get("calendar")
+        if comp is not None and hasattr(comp, "get_entity"):
+            return comp.get_entity(cal_id)
+        return None
+
+    async def _async_push_calendar_window(
+        coord: LatterCoordinator,
+        *,
+        req_id: int = 0,
+        days: int = 30,
+        start_date_raw: str = "",
+        end_date_raw: str = "",
+    ) -> None:
+        today = dt_util.now().date()
+        start_d = dt_util.parse_date(start_date_raw) if start_date_raw else None
+        end_d = dt_util.parse_date(end_date_raw) if end_date_raw else None
+        if start_d is None:
+            start_d = today - timedelta(days=35)
+        if end_d is None or end_d < start_d:
+            end_d = today + timedelta(days=max(62, int(days or 30) + 7))
+            if end_d < start_d:
+                end_d = start_d + timedelta(days=62)
+        if (end_d - start_d).days > 180:
+            end_d = start_d + timedelta(days=180)
+        coord._last_cal_window = (start_d, end_d)  # type: ignore[attr-defined]
+
+        window_events = await async_fetch_calendar_window(
+            hass, coord.calendar_entities, start_d, end_d
+        )
+        esphome_action = esphome_service(
+            hass, coord.esphome_device_id, "latter_set_calendar_view"
+        )
+        if esphome_action is None:
+            return
+        chunks = pack_calendar_window_chunks(
+            window_events,
+            start_d.isoformat(),
+            end_d.isoformat(),
+            req_id=req_id,
+        )
+        for chunk in chunks:
+            try:
+                await hass.services.async_call(
+                    "esphome", esphome_action, chunk, blocking=True
+                )
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.debug("esphome.%s failed: %s", esphome_action, err)
+                break
+
     async def _handle_calendar_fetch(call: ServiceCall) -> None:
         coord = _resolve_coordinator_from_call(hass, call)
         data = call.data
 
-        req_id = int(data.get("req_id") or 0)
-        days = int(data.get("days") or 30)
-        page = int(data.get("page") or 1)
-        page_size = int(data.get("page_size") or coord.list_slot_capacity)
-
-        if days == 30:
-            sys_obj = get_latter_system(hass)
-            if page > 1 and coord.calendar_events:
-                items = coord.calendar_events
-            elif sys_obj is not None:
-                await sys_obj.async_refresh_calendar_agenda(
-                    days=30, coalesce=(page > 1)
-                )
-                items = coord.calendar_events
-            else:
-                await coord.async_refresh_calendar_agenda(days=30)
-                items = coord.calendar_events
-        else:
-            _, items = await async_fetch_calendar_snapshot(
-                hass,
-                coord.calendar_entities,
-                days=days,
-                map_url_builder=coord.build_map_snapshot_url,
+        req_id = max(0, int(data.get("req_id") or 0))
+        mode = str(data.get("mode") or "window").strip().lower()
+        if mode == "map":
+            location = str(data.get("location") or "").strip()
+            map_url = coord.build_map_snapshot_url(location) if location else ""
+            esphome_action = esphome_service(
+                hass, coord.esphome_device_id, "latter_set_calendar_view"
             )
+            if esphome_action is not None and map_url:
+                try:
+                    await hass.services.async_call(
+                        "esphome",
+                        esphome_action,
+                        {
+                            "req_id": req_id,
+                            "chunk_index": 0,
+                            "chunk_count": 0,
+                            "window_start": "",
+                            "window_end": "",
+                            "map_url": map_url,
+                            "events": "",
+                        },
+                        blocking=True,
+                    )
+                except Exception as err:  # noqa: BLE001
+                    _LOGGER.debug("esphome.%s map push failed: %s", esphome_action, err)
+            return
 
-        await async_push_browse_slots(
-            hass=hass,
-            coord=coord,
-            mode="calendar_agenda",
-            page=page,
-            page_size=page_size,
-            items=items,
+        days = max(1, min(60, int(data.get("days") or 30)))
+        sys_obj = get_latter_system(hass)
+        if sys_obj is not None:
+            await sys_obj.async_refresh_calendar_agenda(days=30, coalesce=True)
+        else:
+            await coord.async_refresh_calendar_agenda(days=30)
+
+        await _async_push_calendar_window(
+            coord,
             req_id=req_id,
+            days=days,
+            start_date_raw=str(data.get("start_date") or "").strip(),
+            end_date_raw=str(data.get("end_date") or "").strip(),
         )
 
     async def _handle_calendar_create_event(call: ServiceCall) -> None:
         coord = _resolve_coordinator_from_call(hass, call)
         data = call.data
 
-        cal_entity = str(data.get("calendar_entity") or "").strip()
-        if not cal_entity and coord.calendar_entities:
-            cal_entity = coord.calendar_entities[0]
-        if not cal_entity:
-            states = sorted(
-                get_area_state_index(hass).states_for_domain("calendar"),
-                key=lambda s: s.entity_id,
+        valid_cals = _discover_calendars(hass, coord.calendar_entities)
+        requested_cal = str(data.get("calendar_entity") or "").strip()
+        if requested_cal:
+            if requested_cal not in valid_cals or not _is_calendar_writable(requested_cal):
+                raise ServiceValidationError(
+                    f"Calendar '{requested_cal}' is not writable or not configured for this Site.",
+                    translation_domain=DOMAIN,
+                    translation_key="not_supported",
+                )
+            cal_entity = requested_cal
+        else:
+            cal_entity = next(
+                (c for c in valid_cals if _is_calendar_writable(c)), ""
             )
-            if states:
-                cal_entity = states[0].entity_id
 
-        if not cal_entity or not hass.services.has_service("calendar", "create_event"):
+        cal_ent_obj = _get_calendar_entity_obj(cal_entity) if cal_entity else None
+        if not cal_entity or (
+            cal_ent_obj is None
+            and not hass.services.has_service("calendar", "create_event")
+        ):
             _LOGGER.warning("No writable calendar entity found for calendar_create_event.")
             return
 
-        start_str = str(data.get("start_date_time") or "").strip()
-        end_str = str(data.get("end_date_time") or "").strip()
-        if not start_str or not end_str:
-            in_mins = max(1, int(float(data.get("in_minutes") or 15)))
-            dur_mins = max(5, int(float(data.get("duration_minutes") or 30)))
-            now_local = dt_util.now().replace(second=0, microsecond=0)
-            start_dt = now_local + timedelta(minutes=in_mins)
-            end_dt = start_dt + timedelta(minutes=dur_mins)
-            start_str = start_dt.strftime("%Y-%m-%d %H:%M:%S")
-            end_str = end_dt.strftime("%Y-%m-%d %H:%M:%S")
+        summary = str(data.get("summary") or "Reminder").strip() or "Reminder"
+        location = str(data.get("location") or "").strip()
+        description = str(data.get("description") or "").strip()
+        rrule = str(data.get("rrule") or "").strip().upper()
+        if rrule and not _RRULE_RE.fullmatch(rrule):
+            raise ServiceValidationError(
+                f"Invalid calendar recurrence rule '{rrule}'.",
+                translation_domain=DOMAIN,
+                translation_key="not_supported",
+            )
 
-        payload: dict[str, Any] = {
-            ATTR_ENTITY_ID: cal_entity,
-            "summary": str(data.get("summary") or "Reminder"),
-            "start_date_time": start_str,
-            "end_date_time": end_str,
-        }
-        if data.get("description"):
-            payload["description"] = str(data["description"])
-
-        await hass.services.async_call(
-            "calendar",
-            "create_event",
-            payload,
-            blocking=True,
-            context=call.context,
+        is_all_day = _parse_bool(data.get("all_day"), default=False) or (
+            bool(str(data.get("start_date") or "").strip())
+            and not bool(str(data.get("start_date_time") or "").strip())
         )
+
+        now_local = dt_util.now().replace(second=0, microsecond=0)
+        if is_all_day:
+            sd = dt_util.parse_date(str(data.get("start_date") or "").strip()) or now_local.date()
+            ed = dt_util.parse_date(str(data.get("end_date") or "").strip())
+            if ed is None or ed <= sd:
+                ed = sd + timedelta(days=1)
+            dtstart_val: Any = sd
+            dtend_val: Any = ed
+        else:
+            raw_sdt = str(data.get("start_date_time") or "").strip()
+            raw_edt = str(data.get("end_date_time") or "").strip()
+            parsed_s = dt_util.parse_datetime(raw_sdt) if raw_sdt else None
+            parsed_e = dt_util.parse_datetime(raw_edt) if raw_edt else None
+            if parsed_s is not None:
+                start_dt = (
+                    dt_util.as_local(parsed_s)
+                    if parsed_s.tzinfo is not None
+                    else parsed_s.replace(tzinfo=now_local.tzinfo)
+                )
+            else:
+                rem = 15 - (now_local.minute % 15)
+                start_dt = now_local + timedelta(minutes=rem)
+            if parsed_e is not None:
+                end_dt = (
+                    dt_util.as_local(parsed_e)
+                    if parsed_e.tzinfo is not None
+                    else parsed_e.replace(tzinfo=now_local.tzinfo)
+                )
+            else:
+                end_dt = start_dt + timedelta(minutes=60)
+            if end_dt <= start_dt:
+                end_dt = start_dt + timedelta(minutes=60)
+            dtstart_val = start_dt
+            dtend_val = end_dt
+
+        if (
+            rrule
+            and cal_ent_obj is not None
+            and callable(getattr(cal_ent_obj, "async_create_event", None))
+        ):
+            rfc_kwargs: dict[str, Any] = {
+                "dtstart": dtstart_val,
+                "dtend": dtend_val,
+                "summary": summary,
+                "rrule": rrule,
+            }
+            if location:
+                rfc_kwargs["location"] = location
+            if description:
+                rfc_kwargs["description"] = description
+            await cal_ent_obj.async_create_event(**rfc_kwargs)
+        else:
+            payload: dict[str, Any] = {
+                ATTR_ENTITY_ID: cal_entity,
+                "summary": summary,
+            }
+            if is_all_day:
+                payload["start_date"] = dtstart_val.isoformat()
+                payload["end_date"] = dtend_val.isoformat()
+            else:
+                payload["start_date_time"] = dtstart_val.strftime("%Y-%m-%d %H:%M:%S")
+                payload["end_date_time"] = dtend_val.strftime("%Y-%m-%d %H:%M:%S")
+            if location:
+                payload["location"] = location
+            if description:
+                payload["description"] = description
+            await hass.services.async_call(
+                "calendar",
+                "create_event",
+                payload,
+                blocking=True,
+                context=call.context,
+            )
+
         await coord.async_refresh_calendar_agenda()
+        prev_win = getattr(coord, "_last_cal_window", None)
+        await _async_push_calendar_window(
+            coord,
+            start_date_raw=prev_win[0].isoformat() if prev_win else "",
+            end_date_raw=prev_win[1].isoformat() if prev_win else "",
+        )
+
+    async def _handle_calendar_delete_event(call: ServiceCall) -> None:
+        coord = _resolve_coordinator_from_call(hass, call)
+        data = call.data
+
+        cal_entity = str(data.get("calendar_entity") or "").strip()
+        uid = str(data.get("uid") or "").strip()
+        recurrence_id = str(data.get("recurrence_id") or "").strip()
+        recurrence_range = str(data.get("recurrence_range") or "").strip()
+
+        valid_cals = _discover_calendars(hass, coord.calendar_entities)
+        if not cal_entity or not uid or cal_entity not in valid_cals or not _is_calendar_deletable(cal_entity):
+            raise ServiceValidationError(
+                f"Calendar '{cal_entity or '(empty)'}' does not support deleting events.",
+                translation_domain=DOMAIN,
+                translation_key="not_supported",
+            )
+
+        cal_ent_obj = _get_calendar_entity_obj(cal_entity)
+        if cal_ent_obj is not None and callable(
+            getattr(cal_ent_obj, "async_delete_event", None)
+        ):
+            await cal_ent_obj.async_delete_event(
+                uid,
+                recurrence_id=recurrence_id or None,
+                recurrence_range=recurrence_range or None,
+            )
+        elif hass.services.has_service("calendar", "delete_event"):
+            del_payload: dict[str, Any] = {
+                ATTR_ENTITY_ID: cal_entity,
+                "uid": uid,
+            }
+            if recurrence_id:
+                del_payload["recurrence_id"] = recurrence_id
+            if recurrence_range:
+                del_payload["recurrence_range"] = recurrence_range
+            await hass.services.async_call(
+                "calendar",
+                "delete_event",
+                del_payload,
+                blocking=True,
+                context=call.context,
+            )
+        else:
+            raise ServiceValidationError(
+                f"Calendar '{cal_entity}' does not support deleting events.",
+                translation_domain=DOMAIN,
+                translation_key="not_supported",
+            )
+
+        await coord.async_refresh_calendar_agenda()
+        prev_win = getattr(coord, "_last_cal_window", None)
+        await _async_push_calendar_window(
+            coord,
+            start_date_raw=prev_win[0].isoformat() if prev_win else "",
+            end_date_raw=prev_win[1].isoformat() if prev_win else "",
+        )
 
     async def _handle_intercom_broadcast(call: ServiceCall) -> ServiceResponse:
         data = call.data
@@ -990,6 +1293,9 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 vol.Optional("media_id"): cv.string,
                 vol.Optional("media_type"): cv.string,
                 vol.Optional("enqueue"): cv.string,
+                vol.Optional("radio_mode", default=False): vol.Any(bool, int, cv.string),
+                vol.Optional("queue_item_id"): cv.string,
+                vol.Optional("pos_shift"): vol.Any(int, cv.string),
                 vol.Optional("group_members"): vol.Any(cv.string, [cv.string]),
             }
         ),
@@ -1095,9 +1401,11 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             {
                 **BASE_TARGET_FIELDS,
                 vol.Optional("req_id", default=0): vol.Coerce(int),
+                vol.Optional("mode", default="window"): cv.string,
+                vol.Optional("start_date", default=""): cv.string,
+                vol.Optional("end_date", default=""): cv.string,
                 vol.Optional("days", default=30): vol.Coerce(int),
-                vol.Optional("page", default=1): vol.Coerce(int),
-                vol.Optional("page_size"): vol.Coerce(int),
+                vol.Optional("location", default=""): cv.string,
             }
         ),
     )
@@ -1110,11 +1418,28 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 **BASE_TARGET_FIELDS,
                 vol.Optional("calendar_entity"): cv.string,
                 vol.Required("summary"): cv.string,
+                vol.Optional("location"): cv.string,
+                vol.Optional("description"): cv.string,
+                vol.Optional("all_day", default=False): vol.Any(bool, int, cv.string),
+                vol.Optional("start_date"): cv.string,
+                vol.Optional("end_date"): cv.string,
                 vol.Optional("start_date_time"): cv.string,
                 vol.Optional("end_date_time"): cv.string,
-                vol.Optional("in_minutes", default=15): vol.Any(vol.Coerce(int), cv.string),
-                vol.Optional("duration_minutes", default=30): vol.Any(vol.Coerce(int), cv.string),
-                vol.Optional("description"): cv.string,
+                vol.Optional("rrule"): cv.string,
+            }
+        ),
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_CALENDAR_DELETE_EVENT,
+        _handle_calendar_delete_event,
+        schema=vol.Schema(
+            {
+                **BASE_TARGET_FIELDS,
+                vol.Required("calendar_entity"): cv.string,
+                vol.Required("uid"): cv.string,
+                vol.Optional("recurrence_id", default=""): cv.string,
+                vol.Optional("recurrence_range", default=""): cv.string,
             }
         ),
     )
@@ -1499,6 +1824,7 @@ _BOUND_DEVICE_RPC_SERVICES: frozenset[str] = frozenset(
         SERVICE_REMOTE_ACTION,
         SERVICE_CALENDAR_FETCH,
         SERVICE_CALENDAR_CREATE_EVENT,
+        SERVICE_CALENDAR_DELETE_EVENT,
         SERVICE_INTERCOM_BROADCAST,
         SERVICE_NOTIFY,
         SERVICE_SAVE_CUSTOM_COLOR,

@@ -378,6 +378,32 @@
           "description": "Elapsed stopwatch seconds at the moment of the state transition."
         }
       }
+    },
+    "calendar_delete_event": {
+      "name": "Calendar Delete Event",
+      "description": "Delete an event or recurring instance by UID from a configured Site calendar that supports event deletion.",
+      "fields": {
+        "target_device": {
+          "name": "Target Device",
+          "description": "Optional Latter device (auto-resolved when running a single Latter device)."
+        },
+        "calendar_entity": {
+          "name": "Calendar Entity",
+          "description": "Target calendar.* entity owning the event."
+        },
+        "uid": {
+          "name": "Event UID",
+          "description": "Unique calendar event identifier (UID) to delete."
+        },
+        "recurrence_id": {
+          "name": "Recurrence Instance ID",
+          "description": "Optional recurrence instance identifier when deleting a recurring occurrence."
+        },
+        "recurrence_range": {
+          "name": "Recurrence Range",
+          "description": "Optional recurrence deletion scope (for example THISANDFUTURE)."
+        }
+      }
     }
   }
 }

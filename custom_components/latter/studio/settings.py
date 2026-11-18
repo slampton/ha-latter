@@ -287,6 +287,7 @@ START_SCREEN_OPTIONS: tuple[str, ...] = (
     "Home",
     "Pinned",
     "Time App",
+    "Calendar",
     "Clock Face",
     "Media",
     "Home Hub",
@@ -312,7 +313,27 @@ CLOCK_FACE_OPTIONS: tuple[str, ...] = (
     "Hybrid Digital",
 )
 HOME_CLOCK_TAP_OPTIONS: tuple[str, ...] = ("Time App", "Clock Face")
+HOME_DATE_TAP_OPTIONS: tuple[str, ...] = ("Day View", "Overview")
+CALENDAR_LOOKAHEAD_VALUES: tuple[int, ...] = (7, 14, 30, 60)
+CALENDAR_WEEK_START_OPTIONS: tuple[str, ...] = ("Sunday", "Monday")
 TIME_FORMAT_OPTIONS: tuple[str, ...] = ("12-Hour (AM/PM)", "24-Hour")
+
+
+def snap_calendar_lookahead_days(val: Any) -> int:
+    """Snap `calendar_lookahead_days` to one of the canonical horizons (7, 14, 30, 60)."""
+    if isinstance(val, bool):
+        return 30
+    try:
+        ival = int(float(val))
+    except (TypeError, ValueError):
+        return 30
+    if ival <= 10:
+        return 7
+    if ival <= 21:
+        return 14
+    if ival <= 45:
+        return 30
+    return 60
 MAX_WORLD_CLOCKS = 4
 DEFAULT_ALARMS_SUMMARY = "07:00|0|1;08:30|0|2;09:00|0|2"
 
@@ -1046,8 +1067,6 @@ DEVICE_PREF_SPECS: tuple[DevicePrefSpec, ...] = (
     DevicePrefSpec("wake_greeting", "Wake Greeting", "switch", True, "display", "display", "display"),
     DevicePrefSpec("album_art_style", "Album Art Style", "select", "Full Screen", "display", "display", "display", options=ALBUM_ART_STYLE_OPTIONS),
     DevicePrefSpec("music_overlay_style", "Overlay Style", "select", "Art + Metadata", "display", "display", "display", options=MUSIC_OVERLAY_STYLE_OPTIONS),
-    DevicePrefSpec("show_speaker_shortcut", "Show Speaker Shortcut", "switch", True, "interface", "display", "interface"),
-    DevicePrefSpec("show_library_shortcut", "Show Library Shortcut", "switch", True, "interface", "display", "interface"),
     DevicePrefSpec("album_sort_order", "Album Sort Order", "select", "Alphabetical", "interface", "display", "interface", options=ALBUM_SORT_OPTIONS),
     DevicePrefSpec("artist_album_sort_order", "Artist Album Sort Order", "select", "Oldest on Top", "interface", "display", "interface", options=ARTIST_ALBUM_SORT_OPTIONS),
     DevicePrefSpec("podcast_sort_order", "Podcast Sort Order", "select", "Newest on Top", "interface", "display", "interface", options=PODCAST_SORT_OPTIONS),
@@ -1063,10 +1082,13 @@ DEVICE_PREF_SPECS: tuple[DevicePrefSpec, ...] = (
     DevicePrefSpec("ble_beacon_mode", "BLE Beacon Mode", "select", "Handheld Only", "presence", "beacon_battery", "behavior", options=BLE_BEACON_MODE_OPTIONS),
     DevicePrefSpec("weather_sim_condition", "Weather Simulation", "select", "Live (Home Assistant)", "developer", "display", None, options=WEATHER_SIM_CONDITION_OPTIONS),
     DevicePrefSpec("home_clock_tap_action", "Home Time Tap", "select", "Time App", "interface", "display", "interface", options=HOME_CLOCK_TAP_OPTIONS),
+    DevicePrefSpec("home_date_tap_action", "Home Date Tap", "select", "Day View", "interface", "display", "interface", options=HOME_DATE_TAP_OPTIONS),
     DevicePrefSpec("local_clock_label", "Local Clock Label", "text", "", "time", "display", None),
     DevicePrefSpec("show_utc_clock", "Show UTC Clock", "switch", False, "interface", "display", "interface"),
     DevicePrefSpec("world_clocks", "World Clocks", "text", "", "interface", "display", "interface"),
     DevicePrefSpec("alarms_summary", "Alarms", "text", DEFAULT_ALARMS_SUMMARY, "time", "display", None),
+    DevicePrefSpec("calendar_lookahead_days", "Overview Lookahead", "number", 30, "interface", "display", "interface", min_val=7, max_val=60, step=1, unit="d"),
+    DevicePrefSpec("calendar_week_start", "Start Week On", "select", "Sunday", "interface", "display", "interface", options=CALENDAR_WEEK_START_OPTIONS),
 )
 
 DEVICE_PREF_SPEC_MAP: dict[str, DevicePrefSpec] = {s.key: s for s in DEVICE_PREF_SPECS}
@@ -1094,6 +1116,8 @@ def resolve_device_pref_value(cfg: Mapping[str, Any], key: str) -> Any:
         if key == "alarms_summary":
             return normalize_alarms_summary(raw, strict=False)
         return str(raw).strip()
+    if key == "calendar_lookahead_days":
+        return snap_calendar_lookahead_days(raw)
     try:
         ival = int(raw)
     except (TypeError, ValueError):
@@ -1524,14 +1548,19 @@ def clean_device_settings(
             except ValueError as err:
                 raise SettingsScopeError(str(err)) from None
         else:
+            if isinstance(raw_v, bool):
+                raise SettingsScopeError(f"Expected a whole number for {spec.key}, not a boolean")
             try:
                 num_v = int(raw_v)
             except (TypeError, ValueError) as err:
                 raise SettingsScopeError(f"Not a whole number: {err}") from None
-            if spec.min_val is not None:
-                num_v = max(spec.min_val, num_v)
-            if spec.max_val is not None:
-                num_v = min(spec.max_val, num_v)
+            if spec.key == "calendar_lookahead_days":
+                num_v = snap_calendar_lookahead_days(num_v)
+            else:
+                if spec.min_val is not None:
+                    num_v = max(spec.min_val, num_v)
+                if spec.max_val is not None:
+                    num_v = min(spec.max_val, num_v)
             out[spec.key] = num_v
 
     eff_home_enabled = (

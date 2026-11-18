@@ -34,6 +34,7 @@ export type ConfigurableAppId =
   | "area"
   | "remote"
   | "time"
+  | "calendar"
   | "tools"
   | "games"
   | "clock";

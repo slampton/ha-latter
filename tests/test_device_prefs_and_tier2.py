@@ -479,7 +479,7 @@ async def test_tools_games_prefs_and_stopwatch_live_device_actions(
     ble_coord = next(c for c in sys_obj.coordinators.values() if c.is_ble_tag)
     conn = websocket_api.ActiveConnection()
 
-    # 1) Save `tools_items` & `games_items` via Studio `save_device_config` -> bumps prefs_seq & packs v3 indices 55..56
+    # 1) Save `tools_items` & `games_items` via Studio `save_device_config` -> bumps prefs_seq & packs v3 indices 53..54
     seq_before = coord.prefs_seq
     await _call_ws(
         hass,
@@ -503,8 +503,8 @@ async def test_tools_games_prefs_and_stopwatch_live_device_actions(
     assert coord.prefs_seq > seq_before
     _eff_seq, prefs_payload = coord.get_device_prefs_payload()
     wire_tokens = prefs_payload["payload"].split("\x1f")
-    assert wire_tokens[55] == "dice,flashlight,coin_flip"
-    assert wire_tokens[56] == "2048,memory"
+    assert wire_tokens[53] == "dice,flashlight,coin_flip"
+    assert wire_tokens[54] == "2048,memory"
 
     # Reject empty tools_items or games_items
     await _call_ws(

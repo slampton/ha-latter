@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from datetime import datetime, timedelta
+from collections.abc import Callable, Iterable
+from datetime import UTC, date, datetime, timedelta
 import logging
 from typing import Any
 
@@ -11,8 +11,12 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.util import dt as dt_util
 
 from .protocol import (
+    CALENDAR_SOURCES_MAX,
+    CALENDAR_WINDOW_MAX_EVENTS,
     V3Records,
     calendar_agenda_records,
+    calendar_locations_records,
+    calendar_sources_records,
     forecast_records,
     ha_value,
 )
@@ -93,8 +97,63 @@ def _discover_calendars(hass: HomeAssistant, configured: list[str]) -> list[str]
     ]
 
 
+def build_calendar_sources_and_locations(
+    hass: HomeAssistant,
+    calendar_entities: list[str],
+    recent_locations: Iterable[str] = (),
+) -> tuple[V3Records, V3Records]:
+    """Build Protocol v3 `calendars_meta` and `locations_catalog` records for `calendar_agenda`."""
+    from .hub import get_area_state_index
+
+    targets = _discover_calendars(hass, calendar_entities)[:CALENDAR_SOURCES_MAX]
+    has_create_svc = hass.services.has_service("calendar", "create_event")
+    sources: list[dict[str, Any]] = []
+    for idx, cal_id in enumerate(targets):
+        st = hass.states.get(cal_id)
+        attrs = st.attributes if st is not None else {}
+        label = str(
+            attrs.get("friendly_name")
+            or cal_id.split(".", 1)[-1].replace("_", " ").title()
+        ).strip()
+        if st is not None and "supported_features" in attrs:
+            feats = int(attrs.get("supported_features") or 0)
+            can_create = (feats & 1) != 0
+            can_delete = (feats & 2) != 0
+        else:
+            can_create = has_create_svc
+            can_delete = False
+        sources.append(
+            {
+                "entity_id": cal_id,
+                "label": label,
+                "color_idx": idx % 6,
+                "can_create": can_create,
+                "can_delete": can_delete,
+            }
+        )
+
+    loc_candidates: list[str] = []
+    for zone_st in get_area_state_index(hass).states_for_domain("zone"):
+        if zone_st.state in ("unavailable", "unknown"):
+            continue
+        z_name = str(
+            zone_st.attributes.get("friendly_name")
+            or zone_st.entity_id.split(".", 1)[-1].replace("_", " ").title()
+        ).strip()
+        if z_name:
+            loc_candidates.append(z_name)
+    for loc in recent_locations:
+        if loc:
+            loc_candidates.append(str(loc))
+
+    return calendar_sources_records(sources), calendar_locations_records(loc_candidates)
+
+
 def _parse_event_dict(
-    ev: dict[str, Any], cal_id: str, now_local: datetime
+    ev: dict[str, Any],
+    cal_id: str,
+    now_local: datetime,
+    cal_idx: int = 0,
 ) -> dict[str, Any] | None:
     """Parse one event from calendar.get_events into a normalized structure."""
     start_raw = ev.get("start")
@@ -115,13 +174,57 @@ def _parse_event_dict(
     if parsed_start is None:
         return None
 
+    local_start = dt_util.as_local(parsed_start)
+    start_date = local_start.date()
+    end_raw = str(ev.get("end") or "")
+
+    if is_all_day:
+        start_min = -1
+        end_min = -1
+        end_d = dt_util.parse_date(end_raw) if end_raw else None
+        if end_d is None and end_raw:
+            parsed_end_dt = dt_util.parse_datetime(end_raw)
+            if parsed_end_dt is not None:
+                end_d = dt_util.as_local(parsed_end_dt).date()
+        inclusive_end = max(start_date, end_d - timedelta(days=1)) if end_d else start_date
+    else:
+        start_min = local_start.hour * 60 + local_start.minute
+        parsed_end = dt_util.parse_datetime(end_raw) if end_raw else None
+        if parsed_end is not None:
+            local_end = dt_util.as_local(parsed_end)
+            if local_end <= local_start:
+                inclusive_end = start_date
+                end_min = min(1440, start_min + 60)
+            elif (
+                local_end.hour == 0
+                and local_end.minute == 0
+                and local_end.second == 0
+                and local_end.date() > start_date
+            ):
+                inclusive_end = local_end.date() - timedelta(days=1)
+                end_min = 1440 if inclusive_end == start_date else 0
+            else:
+                inclusive_end = local_end.date()
+                end_min = local_end.hour * 60 + local_end.minute
+        else:
+            inclusive_end = start_date
+            end_min = min(1440, start_min + 60)
+
     return {
-        "summary": str(ev.get("summary") or "Event").strip(),
-        "start_dt": dt_util.as_local(parsed_start),
+        "summary": str(ev.get("summary") or "Event").strip() or "Event",
+        "start_dt": local_start,
         "start_raw": str(start_raw),
-        "end_raw": str(ev.get("end") or ""),
+        "end_raw": end_raw,
+        "start_ymd": start_date.isoformat(),
+        "end_ymd": inclusive_end.isoformat(),
+        "start_min": start_min,
+        "end_min": end_min,
         "location": str(ev.get("location") or "").strip(),
+        "description": str(ev.get("description") or "").strip(),
+        "uid": str(ev.get("uid") or "").strip(),
+        "recurrence_id": str(ev.get("recurrence_id") or "").strip(),
         "calendar_id": cal_id,
+        "cal_idx": max(0, min(7, int(cal_idx))),
         "all_day": is_all_day,
     }
 
@@ -143,7 +246,7 @@ async def async_fetch_raw_calendar_events(
     end_utc = now_utc + timedelta(days=lookahead_days)
 
     raw_events: list[dict[str, Any]] = []
-    for cal_id in targets:
+    for cal_idx, cal_id in enumerate(targets[:CALENDAR_SOURCES_MAX]):
         try:
             resp = await hass.services.async_call(
                 "calendar",
@@ -163,7 +266,7 @@ async def async_fetch_raw_calendar_events(
         events_list = cal_data.get("events", []) if isinstance(cal_data, dict) else []
         for ev in events_list:
             if isinstance(ev, dict):
-                parsed = _parse_event_dict(ev, cal_id, now_local)
+                parsed = _parse_event_dict(ev, cal_id, now_local, cal_idx=cal_idx)
                 if parsed is not None:
                     raw_events.append(parsed)
 
@@ -405,13 +508,104 @@ async def async_refresh_coordinator_calendar(
     coordinator.async_notify_listeners()
 
 
+async def async_fetch_calendar_window(
+    hass: HomeAssistant,
+    calendar_entities: list[str],
+    start_date: date,
+    end_date: date,
+    max_events: int = CALENDAR_WINDOW_MAX_EVENTS,
+) -> list[dict[str, Any]]:
+    """Fetch structured calendar events across `[start_date .. end_date]` for `latter_set_calendar_view`."""
+    targets = _discover_calendars(hass, calendar_entities)[:CALENDAR_SOURCES_MAX]
+    if not targets:
+        return []
+
+    now_local = dt_util.now()
+    tz = now_local.tzinfo
+    start_local = datetime.combine(start_date, datetime.min.time(), tzinfo=tz)
+    end_local = datetime.combine(
+        max(start_date, end_date) + timedelta(days=1),
+        datetime.min.time(),
+        tzinfo=tz,
+    )
+    start_utc = start_local.astimezone(UTC)
+    end_utc = end_local.astimezone(UTC)
+
+    raw_events: list[dict[str, Any]] = []
+    for cal_idx, cal_id in enumerate(targets):
+        try:
+            resp = await hass.services.async_call(
+                "calendar",
+                "get_events",
+                {
+                    "entity_id": cal_id,
+                    "start_date_time": start_utc.isoformat(),
+                    "end_date_time": end_utc.isoformat(),
+                },
+                blocking=True,
+                return_response=True,
+            )
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("calendar.get_events window failed for %s: %s", cal_id, err)
+            continue
+        cal_data = resp.get(cal_id) if isinstance(resp, dict) else None
+        events_list = cal_data.get("events", []) if isinstance(cal_data, dict) else []
+        for ev in events_list:
+            if isinstance(ev, dict):
+                parsed = _parse_event_dict(ev, cal_id, now_local, cal_idx=cal_idx)
+                if parsed is not None:
+                    raw_events.append(parsed)
+
+    raw_events.sort(
+        key=lambda x: (
+            x["start_ymd"],
+            0 if x["all_day"] else 1,
+            x["start_min"],
+            x["summary"].lower(),
+            x["cal_idx"],
+        )
+    )
+
+    seen: set[tuple[str, str, int]] = set()
+    seen_summary_no_uid: set[tuple[str, str]] = set()
+    unique_events: list[dict[str, Any]] = []
+    for ev in raw_events:
+        if ev["uid"]:
+            uid_key = (ev["uid"], ev["start_dt"].isoformat(), int(ev["cal_idx"]))
+            if uid_key in seen:
+                continue
+            seen.add(uid_key)
+        else:
+            sum_key = (ev["summary"].lower(), ev["start_dt"].isoformat())
+            if sum_key in seen_summary_no_uid:
+                continue
+            seen_summary_no_uid.add(sum_key)
+        unique_events.append(ev)
+        if len(unique_events) >= max_events:
+            break
+
+    return unique_events
+
+
 def build_calendar_agenda_payload(coordinator: Any) -> tuple[int, dict[str, Any]]:
     """Return upcoming event count and Protocol v3 `calendar_agenda` payload."""
     count = len(coordinator.calendar_events)
+    recent_locs = [
+        str(ev.get("location") or "")
+        for ev in coordinator.calendar_events
+        if isinstance(ev, dict) and ev.get("location")
+    ]
+    sources_recs, locations_recs = build_calendar_sources_and_locations(
+        coordinator.hass,
+        coordinator.calendar_entities,
+        recent_locations=recent_locs,
+    )
     cal_rev, cal_payload = coordinator._pack_domain_payload(
         "calendar_agenda",
         coordinator.calendar_records,
         count,
+        sources_recs,
+        locations_recs,
     )
     return count, {
         "event_count": count,

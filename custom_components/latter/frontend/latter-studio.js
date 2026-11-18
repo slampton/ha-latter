@@ -12,6 +12,7 @@ const SHORTCUT_ROUTES_CATALOG = [
   {token: "app:remote", label: "Remote", group: "Apps"},
   {token: "app:weather", label: "Sky & Weather", group: "Apps"},
   {token: "app:time", label: "Time", group: "Apps"},
+  {token: "app:calendar", label: "Calendar", group: "Apps"},
   {token: "app:tools", label: "Tools", group: "Apps"},
   {token: "app:games", label: "Games", group: "Apps"},
   {token: "app:clock", label: "Clock Face", group: "Apps"},
@@ -38,17 +39,23 @@ const SHORTCUT_ROUTES_CATALOG = [
   {token: "time:timers", label: "Timers", group: "Time"},
   {token: "time:alarms", label: "Alarms", group: "Time"},
   {token: "time:stopwatch", label: "Stopwatch", group: "Time"},
+  {token: "calendar:overview", label: "Upcoming Events", group: "Calendar"},
+  {token: "calendar:day", label: "Day View", group: "Calendar"},
+  {token: "calendar:week", label: "Week View", group: "Calendar"},
+  {token: "calendar:month", label: "Month View", group: "Calendar"},
   {token: "music:speakers", label: "Speakers", group: "Music"},
   {token: "music:library", label: "Music Library", group: "Music"},
   {token: "music:favorites", label: "Favorites", group: "Music"},
   {token: "music:playlists", label: "Playlists", group: "Music"},
   {token: "music:queue", label: "Playback Queue", group: "Music"},
+  {token: "music:album_tracks", label: "Album Tracks", group: "Music"},
+  {token: "music:lyrics", label: "Music Lyrics", group: "Music"},
+  {token: "music:info", label: "Track Info", group: "Music"},
   {token: "remote:devices", label: "Remote Devices", group: "Remote"},
   {token: "tools:stopwatch", label: "Analog Chronograph", group: "Tools", capability: "round"},
   {token: "tools:level", label: "Bubble Level", group: "Tools", capability: "imu"},
   {token: "tools:flashlight", label: "Flashlight", group: "Tools"},
   {token: "tools:calculator", label: "Calculator", group: "Tools"},
-  {token: "tools:calendar", label: "Calendar", group: "Tools"},
   {token: "tools:dice", label: "Dice Roll", group: "Tools"},
   {token: "tools:coin_flip", label: "Coin Flip", group: "Tools"},
   {token: "games:marbles", label: "Marbles", group: "Games"},
@@ -172,7 +179,7 @@ const DEFAULT_GAMES_ITEMS_TOKENS = [
 /**
  * Canonical constants, route maps, issue messages, and Title Case dictionaries for Latter Studio.
  */
-const STUDIO_REV = 27;
+const STUDIO_REV = 28;
 const MAX_DOCK_ITEMS = 24;
 const MAX_PINNED_ITEMS = 96;
 const SHORTCUT_LABEL_MAX = 24;
@@ -184,6 +191,7 @@ const NATIVE_DOCK_APP_TOKENS = [
   "app:remote",
   "app:weather",
   "app:time",
+  "app:calendar",
   "app:clock",
   "app:tools",
   "app:games",
@@ -195,6 +203,7 @@ const NATIVE_DOCK_CONFIG_APP_MAP = {
   "app:area": "area",
   "app:remote": "remote",
   "app:time": "time",
+  "app:calendar": "calendar",
   "app:clock": "clock",
   "app:tools": "tools",
   "app:games": "games",
@@ -207,6 +216,7 @@ const START_SCREEN_CONFIG_APP_MAP = {
   "Area Controls": "area",
   Remote: "remote",
   "Time App": "time",
+  Calendar: "calendar",
   "Clock Face": "clock",
   Tools: "tools",
   Games: "games",
@@ -263,6 +273,7 @@ const START_SCREEN_OPTIONS = [
   "Home",
   "Pinned",
   "Time App",
+  "Calendar",
   "Clock Face",
   "Media",
   "Home Hub",
@@ -276,6 +287,20 @@ const START_SCREEN_OPTIONS = [
 const HOME_CLOCK_TAP_OPTIONS = [
   "Time App",
   "Clock Face",
+];
+const HOME_DATE_TAP_OPTIONS = [
+  "Day View",
+  "Overview",
+];
+const CALENDAR_LOOKAHEAD_OPTIONS = [
+  { value: 7, label: "7 Days" },
+  { value: 14, label: "14 Days" },
+  { value: 30, label: "30 Days" },
+  { value: 60, label: "60 Days" },
+];
+const CALENDAR_WEEK_START_OPTIONS = [
+  "Sunday",
+  "Monday",
 ];
 const MAX_WORLD_CLOCKS = 4;
 const DEFAULT_ALARMS_SUMMARY = "07:00|0|1;08:30|0|2;09:00|0|2";
@@ -1286,6 +1311,9 @@ const ROUTE_PREVIEW_ICONS = {
   "music:favorites": "mdi:heart",
   "music:playlists": "mdi:playlist-music",
   "music:queue": "mdi:playlist-play",
+  "music:album_tracks": "mdi:album",
+  "music:lyrics": "mdi:script-text",
+  "music:info": "mdi:information-outline",
   "app:home_hub": "mdi:home",
   "home_hub:alarm": "mdi:shield-home",
   "home_hub:cameras": "mdi:cctv",
@@ -1316,12 +1344,16 @@ const ROUTE_PREVIEW_ICONS = {
   "time:alarms": "mdi:alarm",
   "time:stopwatch": "mdi:timer-outline",
   "app:clock": "mdi:clock-outline",
+  "app:calendar": "mdi:calendar",
+  "calendar:overview": "mdi:calendar-text",
+  "calendar:day": "mdi:calendar-today",
+  "calendar:week": "mdi:calendar-week",
+  "calendar:month": "mdi:calendar-month",
   "app:tools": "mdi:apps",
   "tools:stopwatch": "mdi:timer-outline",
   "tools:level": "mdi:spirit-level",
   "tools:flashlight": "mdi:flashlight",
   "tools:calculator": "mdi:calculator-variant",
-  "tools:calendar": "mdi:calendar",
   "tools:dice": "mdi:dice-5",
   "tools:coin_flip": "mdi:alpha-c-circle",
   "app:games": "mdi:gamepad-variant",
@@ -3056,6 +3088,7 @@ const APP_MODAL_TITLES = {
   music: "Music",
   remote: "Remote Control",
   time: "Time",
+  calendar: "Calendar",
   clock: "Clock Face",
   tools: "Tools",
   games: "Games",
@@ -3520,16 +3553,6 @@ function renderAppConfigModalBody(store) {
       ${areaExtraItems.map((it) => renderNativeControlRow(store, it))}
     </div>`;
   } else if (app === "music") {
-    const showSpeakerPref =
-      typeof store.getPref === "function" ? store.getPref("show_speaker_shortcut") : undefined;
-    const showLibraryPref =
-      typeof store.getPref === "function" ? store.getPref("show_library_shortcut") : undefined;
-    const speakerOn = showSpeakerPref
-      ? Boolean(showSpeakerPref.value)
-      : cfg.show_speaker_shortcut !== false;
-    const libraryOn = showLibraryPref
-      ? Boolean(showLibraryPref.value)
-      : cfg.show_library_shortcut !== false;
     const sortPrefs =
       typeof store.getPrefs === "function"
         ? store.getPrefs(["album_sort_order", "artist_album_sort_order", "podcast_sort_order"])
@@ -3556,33 +3579,6 @@ function renderAppConfigModalBody(store) {
       },
     ];
     body = html`<div class="settings-list">
-      ${renderSettingsRow({
-        id: "media-player-shortcuts",
-        label: "Shortcuts",
-        description: "Choose which quick-access buttons appear on the Music player screen.",
-        control: html`<div class="pill-list" role="group" aria-label="Music shortcuts">
-          <span class="pill ${speakerOn ? "enabled" : ""}">
-            <button
-              type="button"
-              aria-pressed=${String(speakerOn)}
-              @click=${() => store.stageDeviceSetting("show_speaker_shortcut", !speakerOn)}
-              class="pill-toggle"
-            >
-              ${speakerOn ? "✓ Speaker" : "+ Speaker"}
-            </button>
-          </span>
-          <span class="pill ${libraryOn ? "enabled" : ""}">
-            <button
-              type="button"
-              aria-pressed=${String(libraryOn)}
-              @click=${() => store.stageDeviceSetting("show_library_shortcut", !libraryOn)}
-              class="pill-toggle"
-            >
-              ${libraryOn ? "✓ Library" : "+ Library"}
-            </button>
-          </span>
-        </div>`,
-      })}
       ${sortPrefs.length > 0
         ? sortPrefs.map((p) => renderPrefControlRow(store, p))
         : fallbackSortDefs.map((def) =>
@@ -4004,6 +4000,58 @@ function renderAppConfigModalBody(store) {
               onChange: (val) => store.stageDeviceSetting("time_format", val, "cfg-time_format"),
             })}`}
     </div>`;
+  } else if (app === "calendar") {
+    const lookaheadPref =
+      typeof store.getPref === "function" ? store.getPref("calendar_lookahead_days") : undefined;
+    const rawLookahead = Number(lookaheadPref?.value ?? cfg.calendar_lookahead_days ?? 30);
+    const lookaheadDays =
+      rawLookahead <= 10 ? 7 : rawLookahead <= 21 ? 14 : rawLookahead <= 45 ? 30 : 60;
+    const weekStartPref =
+      typeof store.getPref === "function" ? store.getPref("calendar_week_start") : undefined;
+    const weekStartOptions = (
+      weekStartPref?.options && weekStartPref.options.length > 0
+        ? weekStartPref.options
+        : CALENDAR_WEEK_START_OPTIONS
+    ).map((opt) => ({ value: opt, label: opt }));
+    const weekStartVal = String(weekStartPref?.value ?? cfg.calendar_week_start ?? "Sunday");
+    body = html`<div class="settings-list">
+      ${renderSelectRow({
+        id: "cfg-calendar_lookahead_days",
+        label: "Overview Lookahead",
+        description:
+          "Number of upcoming days shown on the Overview tab (days with no events are omitted).",
+        value: String(lookaheadDays),
+        rawOptions: CALENDAR_LOOKAHEAD_OPTIONS.map((o) => ({
+          value: String(o.value),
+          label: o.label,
+        })),
+        onChange: (val) =>
+          store.stageDeviceSetting(
+            "calendar_lookahead_days",
+            Number(val),
+            "cfg-calendar_lookahead_days",
+          ),
+      })}
+      ${renderSelectRow({
+        id: "cfg-calendar_week_start",
+        label: "Start Week On",
+        description: "First column shown in Week and Month views.",
+        value: weekStartVal,
+        rawOptions: weekStartOptions,
+        onChange: (val) =>
+          store.stageDeviceSetting("calendar_week_start", val, "cfg-calendar_week_start"),
+      })}
+    </div>`;
+    extraAction = html`<button
+      type="button"
+      @click=${() => {
+        store.closeAppConfigModal();
+        store.openSystemSection("shared_entities");
+      }}
+      class="btn btn-text"
+    >
+      Open Shared Entities
+    </button>`;
   } else if (app === "tools") {
     const visibleCatalog = TOOLS_ITEMS_CATALOG.filter((c) => dlgIsToolSupported(c.token, caps));
     const visibleSet = new Set(visibleCatalog.map((c) => c.token));
@@ -4016,8 +4064,7 @@ function renderAppConfigModalBody(store) {
     body = html`<div class="settings-list">
       ${renderSettingsRow({
         label: "Tools",
-        description:
-          "Toggle and reorder utilities shown in the Tools launcher. Calendar is configured independently via Shared Entities.",
+        description: "Toggle and reorder utilities shown in the Tools launcher.",
         stacked: true,
         control: html`<div
           id="tools-items-pills"
@@ -11422,6 +11469,16 @@ function renderDeviceInterfaceView(store) {
   const homeClockTapValue = String(
     homeClockTapPref?.value ?? cfg.home_clock_tap_action ?? "Time App",
   );
+  const homeDateTapPref =
+    typeof store.getPref === "function" ? store.getPref("home_date_tap_action") : undefined;
+  const homeDateTapOptions = (
+    homeDateTapPref?.options && homeDateTapPref.options.length > 0
+      ? homeDateTapPref.options
+      : HOME_DATE_TAP_OPTIONS
+  ).map((opt) => ({ value: opt, label: opt }));
+  const homeDateTapValue = String(
+    homeDateTapPref?.value ?? cfg.home_date_tap_action ?? "Day View",
+  );
   const returnTimeoutPref =
     typeof store.getPref === "function" ? store.getPref("return_to_home_timeout") : undefined;
   const rawReturnTimeoutOptions = (
@@ -11465,16 +11522,14 @@ function renderDeviceInterfaceView(store) {
   const curRemoteMode =
     String(cfg.device_remote_group || curDevEntry?.device_remote_group || "area_auto").trim() ||
     "area_auto";
-  const showSpeakerPref =
-    typeof store.getPref === "function" ? store.getPref("show_speaker_shortcut") : undefined;
-  const showLibraryPref =
-    typeof store.getPref === "function" ? store.getPref("show_library_shortcut") : undefined;
-  const speakerShortcutOn = showSpeakerPref
-    ? Boolean(showSpeakerPref.value)
-    : cfg.show_speaker_shortcut !== false;
-  const libraryShortcutOn = showLibraryPref
-    ? Boolean(showLibraryPref.value)
-    : cfg.show_library_shortcut !== false;
+  const albumSortPref =
+    typeof store.getPref === "function" ? store.getPref("album_sort_order") : undefined;
+  const albumSortVal = String(albumSortPref?.value ?? cfg.album_sort_order ?? "Alphabetical");
+  const artistSortPref =
+    typeof store.getPref === "function" ? store.getPref("artist_album_sort_order") : undefined;
+  const artistSortVal = String(
+    artistSortPref?.value ?? cfg.artist_album_sort_order ?? "Oldest on Top",
+  );
   const showUtcClockPref =
     typeof store.getPref === "function" ? store.getPref("show_utc_clock") : undefined;
   const showUtcClock = showUtcClockPref
@@ -11492,6 +11547,17 @@ function renderDeviceInterfaceView(store) {
     typeof store.getPref === "function" ? store.getPref("time_format") : undefined;
   const rawTimeFormat = String(timeFormatPref?.value ?? cfg.time_format ?? "12-Hour (AM/PM)");
   const shortTimeFormat = rawTimeFormat.startsWith("24") ? "24-Hour" : "12-Hour";
+  const calLookaheadPref =
+    typeof store.getPref === "function" ? store.getPref("calendar_lookahead_days") : undefined;
+  const rawLookahead = Number(calLookaheadPref?.value ?? cfg.calendar_lookahead_days ?? 30);
+  const calLookaheadDays =
+    rawLookahead <= 10 ? 7 : rawLookahead <= 21 ? 14 : rawLookahead <= 45 ? 30 : 60;
+  const calWeekStartPref =
+    typeof store.getPref === "function" ? store.getPref("calendar_week_start") : undefined;
+  const calWeekStart =
+    String(calWeekStartPref?.value ?? cfg.calendar_week_start ?? "Sunday") === "Monday"
+      ? "Monday"
+      : "Sunday";
   const describeNativeDockApp = (routeToken) => {
     switch (routeToken) {
       case "app:pinned": {
@@ -11502,10 +11568,7 @@ function renderDeviceInterfaceView(store) {
         return `${pinnedItems.length} shortcut${pinnedItems.length === 1 ? "" : "s"} • ${pages} page${pages === 1 ? "" : "s"}`;
       }
       case "app:music":
-        if (speakerShortcutOn && libraryShortcutOn) return "Speaker & Library shortcuts";
-        if (speakerShortcutOn) return "Speaker shortcut";
-        if (libraryShortcutOn) return "Library shortcut";
-        return "Shortcuts hidden";
+        return `Albums: ${albumSortVal} • Artists: ${artistSortVal}`;
       case "app:home_hub":
         return `${enabledHomeCats.length} ${enabledHomeCats.length === 1 ? "category" : "categories"} enabled`;
       case "app:area":
@@ -11530,6 +11593,8 @@ function renderDeviceInterfaceView(store) {
         return showUtcClock ? "Local time + UTC" : "Local time";
       case "app:clock":
         return `${clockFaceVal} • ${shortTimeFormat}`;
+      case "app:calendar":
+        return `${calLookaheadDays}-day lookahead • Starts ${calWeekStart}`;
       case "app:tools":
         return `${visibleToolsCount} tool${visibleToolsCount === 1 ? "" : "s"} enabled`;
       case "app:games":
@@ -11741,6 +11806,21 @@ function renderDeviceInterfaceView(store) {
                         "home_clock_tap_action",
                         val,
                         "cfg-home_clock_tap_action",
+                      );
+                    },
+                  })}
+                  ${renderSelectRow({
+                    id: "cfg-home_date_tap_action",
+                    label: "Home Date Tap",
+                    description:
+                      "Choose whether tapping the date readout on Home opens Day View or Overview in the Calendar app.",
+                    value: homeDateTapValue,
+                    rawOptions: homeDateTapOptions,
+                    onChange: (val) => {
+                      store.stageDeviceSetting(
+                        "home_date_tap_action",
+                        val,
+                        "cfg-home_date_tap_action",
                       );
                     },
                   })}
@@ -14687,20 +14767,6 @@ function renderGroupBaselineDrawer(
                 checked: Boolean(cfg.show_utc_clock),
                 onChange: (checked) =>
                   void store.updateGroupBaseline(gid, { show_utc_clock: checked }),
-              })}
-              ${renderSwitchRow({
-                label: "Show Speaker Shortcut",
-                ariaLabel: `Show Speaker Shortcut for ${gid}`,
-                checked: cfg.show_speaker_shortcut !== false,
-                onChange: (checked) =>
-                  void store.updateGroupBaseline(gid, { show_speaker_shortcut: checked }),
-              })}
-              ${renderSwitchRow({
-                label: "Show Library Shortcut",
-                ariaLabel: `Show Library Shortcut for ${gid}`,
-                checked: cfg.show_library_shortcut !== false,
-                onChange: (checked) =>
-                  void store.updateGroupBaseline(gid, { show_library_shortcut: checked }),
               })}
               ${renderBaselineSelect(
                 store,

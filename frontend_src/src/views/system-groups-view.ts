@@ -903,20 +903,6 @@ function renderGroupBaselineDrawer(
                 onChange: (checked) =>
                   void store.updateGroupBaseline(gid, { show_utc_clock: checked }),
               })}
-              ${renderSwitchRow({
-                label: "Show Speaker Shortcut",
-                ariaLabel: `Show Speaker Shortcut for ${gid}`,
-                checked: cfg.show_speaker_shortcut !== false,
-                onChange: (checked) =>
-                  void store.updateGroupBaseline(gid, { show_speaker_shortcut: checked }),
-              })}
-              ${renderSwitchRow({
-                label: "Show Library Shortcut",
-                ariaLabel: `Show Library Shortcut for ${gid}`,
-                checked: cfg.show_library_shortcut !== false,
-                onChange: (checked) =>
-                  void store.updateGroupBaseline(gid, { show_library_shortcut: checked }),
-              })}
               ${renderBaselineSelect(
                 store,
                 gid,

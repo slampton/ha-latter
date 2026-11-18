@@ -502,6 +502,9 @@ class LatterCoordinator:
         self._resuming_guard_until: float = 0.0
         self._local_needs_cold_resume: bool = True
         self._browsed_album_track_uris: list[str] = []
+        self._lyrics_watch_active: bool = False
+        self._last_pushed_lyrics_key: str = ""
+        self._media_favorite_overrides: dict[str, tuple[bool, bool | None]] = {}
         self.last_valid_raw_pic: str = ""
         self._last_art_track_key: str = ""
         self._last_art_proxy_url: str = ""
@@ -1255,8 +1258,11 @@ class LatterCoordinator:
         peak = max(w, h)
         return (
             (w, h)
-            if peak <= 502
-            else (max(64, round(w * 480.0 / peak)), max(64, round(h * 480.0 / peak)))
+            if peak <= WALLPAPER_MAX_DIM
+            else (
+                max(64, round(w * float(WALLPAPER_MAX_DIM) / peak)),
+                max(64, round(h * float(WALLPAPER_MAX_DIM) / peak)),
+            )
         )
 
     @property
@@ -2309,6 +2315,10 @@ class LatterCoordinator:
         media_type: str | None = None,
         enqueue: str | None = None,
         group_members: list[str] | str | None = None,
+        *,
+        radio_mode: bool = False,
+        queue_item_id: str | None = None,
+        pos_shift: int | str | None = None,
     ) -> None:
         await execute_coordinator_media_command(
             self,
@@ -2319,6 +2329,9 @@ class LatterCoordinator:
             media_type,
             enqueue,
             group_members,
+            radio_mode=radio_mode,
+            queue_item_id=queue_item_id,
+            pos_shift=pos_shift,
         )
 
     @callback

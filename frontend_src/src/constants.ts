@@ -44,7 +44,7 @@ export {
   ACTIVITY_SOURCES_CATALOG,
 };
 
-export const STUDIO_REV = 27;
+export const STUDIO_REV = 28;
 export const MAX_DOCK_ITEMS = 24;
 export const MAX_PINNED_ITEMS = 96;
 export const SHORTCUT_LABEL_MAX = 24;
@@ -57,6 +57,7 @@ export const NATIVE_DOCK_APP_TOKENS: ReadonlyArray<string> = [
   "app:remote",
   "app:weather",
   "app:time",
+  "app:calendar",
   "app:clock",
   "app:tools",
   "app:games",
@@ -69,6 +70,7 @@ export const NATIVE_DOCK_CONFIG_APP_MAP: Readonly<Partial<Record<string, Configu
   "app:area": "area",
   "app:remote": "remote",
   "app:time": "time",
+  "app:calendar": "calendar",
   "app:clock": "clock",
   "app:tools": "tools",
   "app:games": "games",
@@ -82,6 +84,7 @@ export const START_SCREEN_CONFIG_APP_MAP: Readonly<Partial<Record<string, Config
   "Area Controls": "area",
   Remote: "remote",
   "Time App": "time",
+  Calendar: "calendar",
   "Clock Face": "clock",
   Tools: "tools",
   Games: "games",
@@ -148,6 +151,7 @@ export const START_SCREEN_OPTIONS: ReadonlyArray<string> = [
   "Home",
   "Pinned",
   "Time App",
+  "Calendar",
   "Clock Face",
   "Media",
   "Home Hub",
@@ -162,6 +166,23 @@ export const START_SCREEN_OPTIONS: ReadonlyArray<string> = [
 export const HOME_CLOCK_TAP_OPTIONS: ReadonlyArray<string> = [
   "Time App",
   "Clock Face",
+];
+
+export const HOME_DATE_TAP_OPTIONS: ReadonlyArray<string> = [
+  "Day View",
+  "Overview",
+];
+
+export const CALENDAR_LOOKAHEAD_OPTIONS: ReadonlyArray<{ value: number; label: string }> = [
+  { value: 7, label: "7 Days" },
+  { value: 14, label: "14 Days" },
+  { value: 30, label: "30 Days" },
+  { value: 60, label: "60 Days" },
+];
+
+export const CALENDAR_WEEK_START_OPTIONS: ReadonlyArray<string> = [
+  "Sunday",
+  "Monday",
 ];
 
 export const MAX_WORLD_CLOCKS = 4;
