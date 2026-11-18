@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from datetime import datetime
 import logging
 import re
@@ -44,17 +44,26 @@ from .media import async_execute_volume_action
 from .media_browse import is_music_assistant_player
 from .presence import get_ble_proxy_area_ids, get_ble_signature_area_ids
 from .protocol import (
+    AREA_CLIMATES_MAX_RECORDS,
     CAMERAS_MAX_RECORDS,
     DEFAULT_AREA_CATEGORIES,
     DEFAULT_HOME_CATEGORIES,
+    GARAGES_MAX_RECORDS,
+    LOCKS_MAX_RECORDS,
+    THERMOSTATS_MAX_RECORDS,
+    VACUUMS_MAX_RECORDS,
     V3Records,
     activity_payload,
+    area_climate_records,
     build_time_zone_payloads,
     camera_records,
+    entry_records,
     ha_value,
     intercom_target_records,
     parse_area_categories,
     parse_home_categories,
+    thermostat_records,
+    vacuum_records,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -552,84 +561,145 @@ def get_home_alarm_summary(
     }
 
 
+def _extract_climate_temps(state_obj: State) -> tuple[int | float | None, float | None]:
+    """Extract target setpoint (or target_temp_low/high midpoint) and current temperature."""
+    tgt_out: int | float | None = None
+    cur_out: float | None = None
+    tgt_t = state_obj.attributes.get("temperature")
+    if tgt_t is not None:
+        try:
+            val_f = round(float(tgt_t), 1)
+            tgt_out = int(val_f) if val_f.is_integer() else val_f
+        except (ValueError, TypeError):
+            pass
+    else:
+        low_t = state_obj.attributes.get("target_temp_low")
+        high_t = state_obj.attributes.get("target_temp_high")
+        if low_t is not None and high_t is not None:
+            try:
+                mid_f = round((float(low_t) + float(high_t)) / 2.0, 1)
+                tgt_out = int(mid_f) if mid_f.is_integer() else mid_f
+            except (ValueError, TypeError):
+                pass
+        elif low_t is not None:
+            try:
+                val_f = round(float(low_t), 1)
+                tgt_out = int(val_f) if val_f.is_integer() else val_f
+            except (ValueError, TypeError):
+                pass
+    cur_t = state_obj.attributes.get("current_temperature")
+    if cur_t is not None:
+        try:
+            cur_out = round(float(cur_t), 1)
+        except (ValueError, TypeError):
+            pass
+    return tgt_out, cur_out
+
+
+def _clean_configured_ids(raw: Iterable[str] | None, limit: int) -> list[str]:
+    if not raw or isinstance(raw, (str, bytes)):
+        return []
+    out: list[str] = []
+    for item in raw:
+        s = str(item or "").strip()
+        if s and s not in out:
+            out.append(s)
+    return out[:limit]
+
+
 def get_home_hub_summary(
     hass: HomeAssistant,
-    thermostat_entity: str | None = None,
-    lock_entity: str | None = None,
-    garage_entity: str | None = None,
-    vacuum_entity: str | None = None,
+    thermostat_entities: Iterable[str] | None = None,
+    lock_entities: Iterable[str] | None = None,
+    garage_entities: Iterable[str] | None = None,
+    vacuum_entities: Iterable[str] | None = None,
 ) -> dict[str, Any]:
-    """Resolve explicitly configured Home Hub Thermostat, Lock, Garage, and Vacuum states."""
-    out: dict[str, Any] = {
-        "thermostat_entity": "",
-        "thermostat_state": "",
-        "thermostat_temp": None,
-        "thermostat_current_temp": None,
-        "climate_caps": 0,
-        "lock_entity": "",
-        "lock_state": "",
-        "garage_entity": "",
-        "garage_state": "",
-        "vacuum_entity": "",
-        "vacuum_state": "",
-        "vacuum_caps": 0,
+    """Resolve explicitly configured multi-entity Home Hub Thermostats, Locks, Garage Doors, and Vacuums."""
+    idx = get_area_state_index(hass)
+    ent_reg = er.async_get(hass)
+    dev_reg = dr.async_get(hass)
+
+    def _area_of(ent_id: str) -> str:
+        if idx.started:
+            return idx.resolve_entity_area_id(ent_id) or ""
+        return (
+            resolve_entity_area_id(
+                hass, ent_id, ent_reg=ent_reg, dev_reg=dev_reg
+            )
+            or ""
+        )
+
+    thermostats: list[dict[str, Any]] = []
+    for ent_id in _clean_configured_ids(thermostat_entities, THERMOSTATS_MAX_RECORDS):
+        t_st = hass.states.get(ent_id)
+        if t_st is None:
+            continue
+        tgt_temp, cur_temp = _extract_climate_temps(t_st)
+        thermostats.append(
+            {
+                "entity_id": t_st.entity_id,
+                "name": str(t_st.attributes.get("friendly_name") or t_st.entity_id),
+                "area_id": _area_of(t_st.entity_id),
+                "state": ha_value(t_st.state),
+                "target_temp": tgt_temp,
+                "current_temp": cur_temp,
+                "caps": compute_climate_caps(t_st),
+            }
+        )
+
+    locks: list[dict[str, Any]] = []
+    for ent_id in _clean_configured_ids(lock_entities, LOCKS_MAX_RECORDS):
+        l_st = hass.states.get(ent_id)
+        if l_st is None:
+            continue
+        locks.append(
+            {
+                "entity_id": l_st.entity_id,
+                "name": str(l_st.attributes.get("friendly_name") or l_st.entity_id),
+                "area_id": _area_of(l_st.entity_id),
+                "state": ha_value(l_st.state),
+            }
+        )
+
+    garages: list[dict[str, Any]] = []
+    for ent_id in _clean_configured_ids(garage_entities, GARAGES_MAX_RECORDS):
+        g_st = hass.states.get(ent_id)
+        if g_st is None:
+            continue
+        garages.append(
+            {
+                "entity_id": g_st.entity_id,
+                "name": str(g_st.attributes.get("friendly_name") or g_st.entity_id),
+                "area_id": _area_of(g_st.entity_id),
+                "state": ha_value(g_st.state),
+            }
+        )
+
+    vacuums: list[dict[str, Any]] = []
+    for ent_id in _clean_configured_ids(vacuum_entities, VACUUMS_MAX_RECORDS):
+        v_st = hass.states.get(ent_id)
+        if v_st is None:
+            continue
+        vacuums.append(
+            {
+                "entity_id": v_st.entity_id,
+                "name": str(v_st.attributes.get("friendly_name") or v_st.entity_id),
+                "area_id": _area_of(v_st.entity_id),
+                "state": ha_value(v_st.state),
+                "caps": compute_vacuum_caps(v_st),
+            }
+        )
+
+    return {
+        "thermostats": thermostats,
+        "thermostats_summary": thermostat_records(thermostats),
+        "locks": locks,
+        "locks_summary": entry_records(locks, LOCKS_MAX_RECORDS),
+        "garages": garages,
+        "garages_summary": entry_records(garages, GARAGES_MAX_RECORDS),
+        "vacuums": vacuums,
+        "vacuums_summary": vacuum_records(vacuums),
     }
-
-    clean_thermostat = str(thermostat_entity or "").strip()
-    t_st = hass.states.get(clean_thermostat) if clean_thermostat else None
-    if t_st is not None:
-        out["thermostat_entity"] = t_st.entity_id
-        out["thermostat_state"] = ha_value(t_st.state)
-        out["climate_caps"] = compute_climate_caps(t_st)
-        tgt_t = t_st.attributes.get("temperature")
-        if tgt_t is not None:
-            try:
-                val_f = round(float(tgt_t), 1)
-                out["thermostat_temp"] = int(val_f) if val_f.is_integer() else val_f
-            except (ValueError, TypeError):
-                pass
-        else:
-            low_t = t_st.attributes.get("target_temp_low")
-            high_t = t_st.attributes.get("target_temp_high")
-            if low_t is not None and high_t is not None:
-                try:
-                    mid_f = round((float(low_t) + float(high_t)) / 2.0, 1)
-                    out["thermostat_temp"] = int(mid_f) if mid_f.is_integer() else mid_f
-                except (ValueError, TypeError):
-                    pass
-            elif low_t is not None:
-                try:
-                    val_f = round(float(low_t), 1)
-                    out["thermostat_temp"] = int(val_f) if val_f.is_integer() else val_f
-                except (ValueError, TypeError):
-                    pass
-        cur_t = t_st.attributes.get("current_temperature")
-        if cur_t is not None:
-            try:
-                out["thermostat_current_temp"] = round(float(cur_t), 1)
-            except (ValueError, TypeError):
-                pass
-
-    clean_lock = str(lock_entity or "").strip()
-    l_st = hass.states.get(clean_lock) if clean_lock else None
-    if l_st is not None:
-        out["lock_entity"] = l_st.entity_id
-        out["lock_state"] = ha_value(l_st.state)
-
-    clean_garage = str(garage_entity or "").strip()
-    g_st = hass.states.get(clean_garage) if clean_garage else None
-    if g_st is not None:
-        out["garage_entity"] = g_st.entity_id
-        out["garage_state"] = ha_value(g_st.state)
-
-    clean_vacuum = str(vacuum_entity or "").strip()
-    v_st = hass.states.get(clean_vacuum) if clean_vacuum else None
-    if v_st is not None:
-        out["vacuum_entity"] = v_st.entity_id
-        out["vacuum_state"] = ha_value(v_st.state)
-        out["vacuum_caps"] = compute_vacuum_caps(v_st)
-
-    return out
 
 
 def get_home_wide_entities(
@@ -922,13 +992,13 @@ def get_available_home_categories(
             ordered.append("cameras")
         elif tok == "intercom" and intercom_ok:
             ordered.append("intercom")
-        elif tok == "thermostat" and hub_info.get("thermostat_entity"):
+        elif tok == "thermostat" and hub_info.get("thermostats"):
             ordered.append("thermostat")
         elif tok == "entry" and (
-            hub_info.get("lock_entity") or hub_info.get("garage_entity")
+            hub_info.get("locks") or hub_info.get("garages")
         ):
             ordered.append("entry")
-        elif tok == "vacuum" and hub_info.get("vacuum_entity"):
+        elif tok == "vacuum" and hub_info.get("vacuums"):
             ordered.append("vacuum")
     return ",".join(ordered)
 
@@ -991,6 +1061,10 @@ def get_area_entities(
             "auto",
         )
         level = get_entity_level(state_obj)
+        if state_obj.domain == "climate" and level < 0:
+            tgt_val, _ = _extract_climate_temps(state_obj)
+            if tgt_val is not None:
+                level = round(float(tgt_val))
         items.append(
             {
                 "name": format_entity_slot_name(state_obj, area_name),
@@ -1004,6 +1078,54 @@ def get_area_entities(
 
     items.sort(key=lambda x: (x["_prio"], not x["active"], x["name"].lower()))
     return items
+
+
+def get_area_climates_summary(
+    hass: HomeAssistant,
+    area_id: str | None,
+    local_speaker: str = "",
+) -> V3Records:
+    """Return `area_climate_records` for curated `climate.*` entities in `area_id`."""
+    if not area_id:
+        return area_climate_records(())
+    area_reg = ar.async_get(hass)
+    ent_reg = er.async_get(hass)
+    idx = get_area_state_index(hass)
+    bound_device_ids = latter_bound_esphome_device_ids(hass)
+    area_entry = area_reg.async_get_area(area_id)
+    area_name = area_entry.name if area_entry else ""
+
+    rows: list[dict[str, Any]] = []
+    for state_obj in sorted(
+        idx.entities_in_area(area_id, ("climate",)), key=lambda s: s.entity_id
+    ):
+        if state_obj.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+            continue
+        if not _is_curated_area_entity(
+            hass,
+            state_obj,
+            local_speaker,
+            ent_reg=ent_reg,
+            bound_device_ids=bound_device_ids,
+        ):
+            continue
+        tgt_temp, cur_temp = _extract_climate_temps(state_obj)
+        friendly = str(state_obj.attributes.get("friendly_name") or state_obj.entity_id)
+        if area_name and friendly.lower().startswith(area_name.lower() + " "):
+            friendly = friendly[len(area_name) + 1 :].strip() or friendly
+        rows.append(
+            {
+                "entity_id": state_obj.entity_id,
+                "name": friendly,
+                "state": ha_value(state_obj.state),
+                "target_temp": tgt_temp,
+                "current_temp": cur_temp,
+                "caps": compute_climate_caps(state_obj),
+            }
+        )
+        if len(rows) >= AREA_CLIMATES_MAX_RECORDS:
+            break
+    return area_climate_records(rows)
 
 
 def find_area_media_entities(
@@ -1092,28 +1214,11 @@ async def async_execute_area_action(
         entity_id = "home_hub.alarm"
 
     state_obj = hass.states.get(entity_id)
-    if state_obj is None and entity_id.startswith("home_hub."):
-        hub_kind = entity_id.split(".", 1)[1].lower()
+    if state_obj is None and entity_id == "home_hub.alarm":
         global_cfg = hass.data.get(DOMAIN, {}).get("global_config") or {}
-        if hub_kind == "alarm":
-            mapped_id = get_home_alarm_summary(
-                hass, global_cfg.get("alarm_entity")
-            )["entity_id"]
-        else:
-            hub_summary = get_home_hub_summary(
-                hass,
-                thermostat_entity=global_cfg.get("thermostat_entity"),
-                lock_entity=global_cfg.get("lock_entity"),
-                garage_entity=global_cfg.get("garage_entity"),
-                vacuum_entity=global_cfg.get("vacuum_entity"),
-            )
-            mapped_id = {
-                "thermostat": hub_summary["thermostat_entity"],
-                "climate": hub_summary["thermostat_entity"],
-                "lock": hub_summary["lock_entity"],
-                "garage": hub_summary["garage_entity"],
-                "vacuum": hub_summary["vacuum_entity"],
-            }.get(hub_kind, "")
+        mapped_id = get_home_alarm_summary(
+            hass, global_cfg.get("alarm_entity")
+        )["entity_id"]
         if mapped_id:
             entity_id = mapped_id
             state_obj = hass.states.get(entity_id)
@@ -1747,10 +1852,13 @@ def build_area_context_payload(coordinator: Any) -> tuple[str, dict[str, Any]]:
     )
     hub_info = get_home_hub_summary(
         coordinator.hass,
-        thermostat_entity=coordinator.thermostat_entity,
-        lock_entity=coordinator.lock_entity,
-        garage_entity=coordinator.garage_entity,
-        vacuum_entity=coordinator.vacuum_entity,
+        thermostat_entities=coordinator.thermostat_entities,
+        lock_entities=coordinator.lock_entities,
+        garage_entities=coordinator.garage_entities,
+        vacuum_entities=coordinator.vacuum_entities,
+    )
+    area_climates_summary = get_area_climates_summary(
+        coordinator.hass, eff_area_id or None, coordinator.local_speaker
     )
     active_cam = coordinator.active_carousel_camera or coordinator.camera_entity
     camera_snapshot_url = (
@@ -1759,8 +1867,6 @@ def build_area_context_payload(coordinator: Any) -> tuple[str, dict[str, Any]]:
 
     eff_pin_policy = coordinator.security_pin_policy
     alarm_caps = int(alarm_info.get("alarm_caps") or 0)
-    climate_caps = int(hub_info.get("climate_caps") or 0)
-    vacuum_caps = int(hub_info.get("vacuum_caps") or 0)
     avail_home_cats = get_available_home_categories(
         alarm_info,
         hub_info,
@@ -1793,18 +1899,15 @@ def build_area_context_payload(coordinator: Any) -> tuple[str, dict[str, Any]]:
         "alarm_entity": alarm_info["entity_id"],
         "alarm_state": alarm_info["state"],
         "alarm_caps": alarm_caps,
-        "thermostat_entity": hub_info["thermostat_entity"],
-        "thermostat_state": hub_info["thermostat_state"],
-        "thermostat_temp": hub_info["thermostat_temp"],
-        "thermostat_current_temp": hub_info["thermostat_current_temp"],
-        "climate_caps": climate_caps,
-        "lock_entity": hub_info["lock_entity"],
-        "lock_state": hub_info["lock_state"],
-        "garage_entity": hub_info["garage_entity"],
-        "garage_state": hub_info["garage_state"],
-        "vacuum_entity": hub_info["vacuum_entity"],
-        "vacuum_state": hub_info["vacuum_state"],
-        "vacuum_caps": vacuum_caps,
+        "thermostats": hub_info["thermostats"],
+        "thermostats_summary": hub_info["thermostats_summary"],
+        "locks": hub_info["locks"],
+        "locks_summary": hub_info["locks_summary"],
+        "garages": hub_info["garages"],
+        "garages_summary": hub_info["garages_summary"],
+        "vacuums": hub_info["vacuums"],
+        "vacuums_summary": hub_info["vacuums_summary"],
+        "area_climates_summary": area_climates_summary,
         "camera_snapshot_url": camera_snapshot_url,
         "cameras_summary": _build_cameras_summary(coordinator),
         "doorbell_talk_state": coordinator.doorbell_talk_state,
@@ -1833,16 +1936,11 @@ def build_area_context_payload(coordinator: Any) -> tuple[str, dict[str, Any]]:
         covers_open,
         area_attrs["alarm_entity"],
         area_attrs["alarm_state"],
-        area_attrs["thermostat_entity"],
-        area_attrs["thermostat_state"],
-        area_attrs["thermostat_temp"],
-        area_attrs["thermostat_current_temp"],
-        area_attrs["lock_entity"],
-        area_attrs["lock_state"],
-        area_attrs["garage_entity"],
-        area_attrs["garage_state"],
-        area_attrs["vacuum_entity"],
-        area_attrs["vacuum_state"],
+        area_attrs["thermostats_summary"],
+        area_attrs["locks_summary"],
+        area_attrs["garages_summary"],
+        area_attrs["vacuums_summary"],
+        area_attrs["area_climates_summary"],
         area_attrs["camera_snapshot_url"],
         area_attrs["cameras_summary"],
         area_attrs["doorbell_talk_state"],
@@ -1869,8 +1967,6 @@ def build_area_context_payload(coordinator: Any) -> tuple[str, dict[str, Any]]:
         local_tz_info,
         world_clocks_summary,
         alarm_caps,
-        climate_caps,
-        vacuum_caps,
     )
     area_attrs["rev"] = area_rev
     area_attrs["payload"] = area_payload
@@ -1963,10 +2059,10 @@ def bind_coordinator_area_listeners(coordinator: Any) -> None:
     tracked_hub: list[str] = []
     for cand in (
         coordinator.alarm_entity,
-        coordinator.thermostat_entity,
-        coordinator.lock_entity,
-        coordinator.garage_entity,
-        coordinator.vacuum_entity,
+        *coordinator.thermostat_entities,
+        *coordinator.lock_entities,
+        *coordinator.garage_entities,
+        *coordinator.vacuum_entities,
     ):
         if cand and cand not in tracked_hub:
             tracked_hub.append(cand)

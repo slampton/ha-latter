@@ -56,25 +56,44 @@ export interface PendingEntityEntry {
   expires: number;
 }
 
-export type StringListKey = "calendar_entities" | "camera_entities" | "remotes_list";
+export type StringListKey =
+  | "calendar_entities"
+  | "camera_entities"
+  | "remotes_list"
+  | "thermostat_entities"
+  | "lock_entities"
+  | "garage_entities"
+  | "vacuum_entities";
 
 export const STRING_LIST_KEYS: readonly StringListKey[] = [
   "calendar_entities",
   "camera_entities",
   "remotes_list",
+  "thermostat_entities",
+  "lock_entities",
+  "garage_entities",
+  "vacuum_entities",
 ];
 
 export const STRING_LIST_MAX_ITEMS: Record<StringListKey, number> = {
   camera_entities: 10,
   remotes_list: 10,
   calendar_entities: 50,
+  thermostat_entities: 8,
+  lock_entities: 8,
+  garage_entities: 6,
+  vacuum_entities: 6,
 };
 
 function isStringListKey(key: string): key is StringListKey {
   return (
     key === "calendar_entities" ||
     key === "camera_entities" ||
-    key === "remotes_list"
+    key === "remotes_list" ||
+    key === "thermostat_entities" ||
+    key === "lock_entities" ||
+    key === "garage_entities" ||
+    key === "vacuum_entities"
   );
 }
 
@@ -1664,6 +1683,53 @@ export function removeStringListRowOp(
       system_config: {
         ...store.state.system_config,
         [key]: uiList,
+      },
+    };
+    store.host.requestUpdate();
+  }
+}
+
+export function moveStringListRowOp(
+  store: StudioStore,
+  key: StringListKey,
+  index: number,
+  direction: -1 | 1,
+): void {
+  const maxItems = STRING_LIST_MAX_ITEMS[key];
+  const list = [...(store.state?.system_config?.[key] || [])];
+  const targetIdx = index + direction;
+  if (index < 0 || index >= list.length || targetIdx < 0 || targetIdx >= list.length) {
+    return;
+  }
+  const prevPersisted = cleanPersistedStringList(list, maxItems);
+  const tmp = list[index];
+  list[index] = list[targetIdx];
+  list[targetIdx] = tmp;
+  const nextPersisted = cleanPersistedStringList(list, maxItems);
+  store.pendingBlankListSlots[key] = list.filter((s) => !String(s || "").trim()).length;
+
+  const persistedChanged =
+    prevPersisted.length !== nextPersisted.length ||
+    prevPersisted.some((v, i) => v !== nextPersisted[i]);
+
+  if (persistedChanged) {
+    store.stageSystemSetting(key, nextPersisted);
+    if (store.state?.system_config && store.pendingBlankListSlots[key] > 0) {
+      store.state = {
+        ...store.state,
+        system_config: {
+          ...store.state.system_config,
+          [key]: list,
+        },
+      };
+      store.host.requestUpdate();
+    }
+  } else if (store.state?.system_config) {
+    store.state = {
+      ...store.state,
+      system_config: {
+        ...store.state.system_config,
+        [key]: list,
       },
     };
     store.host.requestUpdate();

@@ -59,6 +59,7 @@ import {
 import {
   addRemoteGroupRowOp,
   addStringListRowOp,
+  moveStringListRowOp,
   addVolumeOverrideRowOp,
   applyDeviceCustomColorOp,
   commitEntityChange,
@@ -202,6 +203,7 @@ export class StudioStore implements ReactiveController {
   pinBusy = false;
   worldClockNewLabel = "";
   worldClockNewZone = "";
+  overviewAlarmsOpen = false;
 
   // System Shared Entities UI state
   activeCameraPreviewEntity = "";
@@ -310,6 +312,10 @@ export class StudioStore implements ReactiveController {
     calendar_entities: 0,
     camera_entities: 0,
     remotes_list: 0,
+    thermostat_entities: 0,
+    lock_entities: 0,
+    garage_entities: 0,
+    vacuum_entities: 0,
   };
   readonly pendingDeviceBuckets = new Map<string, DevicePendingBucket>();
   readonly pendingEntityStates = new Map<string, PendingEntityEntry>();
@@ -573,6 +579,7 @@ export class StudioStore implements ReactiveController {
         const subChanged = prevSubId !== nextSubId;
         if (prevSubId && subChanged) {
           void this.flushDeviceBucket(prevSubId);
+          this.overviewAlarmsOpen = false;
           this.appConfigModal = { open: false, app: null };
           this.returnToPinnedModal = false;
         }
@@ -780,6 +787,9 @@ export class StudioStore implements ReactiveController {
       targetView === "select_device_prompt" || targetView === "discovered_devices"
         ? "dashboard"
         : targetView;
+    if (prevSubId !== cleanNext) {
+      this.overviewAlarmsOpen = false;
+    }
     this.devicePinDraft = "";
     this.worldClockNewLabel = "";
     this.worldClockNewZone = "";
@@ -1532,7 +1542,7 @@ export class StudioStore implements ReactiveController {
   }
 
   updateStringListRow(
-    key: "calendar_entities" | "camera_entities" | "remotes_list",
+    key: StringListKey,
     index: number,
     value: string,
   ): void {
@@ -1540,15 +1550,19 @@ export class StudioStore implements ReactiveController {
   }
 
   addStringListRow(
-    key: "calendar_entities" | "camera_entities" | "remotes_list",
+    key: StringListKey,
     defaultEntity = "",
     maxLen = 10,
   ): void {
     addStringListRowOp(this, key, defaultEntity, maxLen);
   }
 
-  removeStringListRow(key: "calendar_entities" | "camera_entities" | "remotes_list", index: number): void {
+  removeStringListRow(key: StringListKey, index: number): void {
     removeStringListRowOp(this, key, index);
+  }
+
+  moveStringListRow(key: StringListKey, index: number, direction: -1 | 1): void {
+    moveStringListRowOp(this, key, index, direction);
   }
 
   addVolumeOverrideRow(): void {

@@ -65,7 +65,7 @@ class TestProtocolV3Contract(unittest.TestCase):
     def test_domain_field_counts_and_contiguous_indices(self) -> None:
         """Every v3 domain must have contiguous 3..COUNT-1 indices matching expected counts."""
         expected_counts = {
-            "area_context": 43,
+            "area_context": 36,
             "active_media": 21,
             "remote_config": 3,
             "weather_forecast": 14,
@@ -286,6 +286,11 @@ class TestRecordsFields(unittest.TestCase):
             {
                 ("area_context", "cameras_summary"),
                 ("area_context", "intercom_targets_summary"),
+                ("area_context", "thermostats_summary"),
+                ("area_context", "locks_summary"),
+                ("area_context", "garages_summary"),
+                ("area_context", "vacuums_summary"),
+                ("area_context", "area_climates_summary"),
                 ("remote_config", "slots_summary"),
                 ("weather_forecast", "forecast_5d"),
                 ("calendar_agenda", "summary"),
@@ -299,7 +304,14 @@ class TestRecordsFields(unittest.TestCase):
         rem_src = (LATTER_DIR / "remotes.py").read_text(encoding="utf-8")
         feeds_src = (LATTER_DIR / "feeds.py").read_text(encoding="utf-8")
         coord_src = (LATTER_DIR / "coordinator.py").read_text(encoding="utf-8")
-        for builder in ("camera_records(", "intercom_target_records("):
+        for builder in (
+            "camera_records(",
+            "intercom_target_records(",
+            "thermostat_records(",
+            "entry_records(",
+            "vacuum_records(",
+            "area_climate_records(",
+        ):
             self.assertIn(builder, ctx_src)
         self.assertIn("remote_slot_records(", rem_src)
         self.assertIn("forecast_records(", feeds_src)
@@ -337,6 +349,39 @@ class TestRecordsFields(unittest.TestCase):
             self.p.intercom_target_records([{"target_id": "x", "label": "x", "kind": "speaker"}])
         for kind in self.p.INTERCOM_KINDS:
             self.assertIn(kind, next(f for f in self.spec["domains"]["area_context"]["fields"] if f["name"] == "intercom_targets_summary")["description"])
+
+    def test_home_hub_and_area_climate_records(self) -> None:
+        self.assertEqual(
+            self.layout("area_context", "thermostats_summary"),
+            ["entity_id", "name", "area_id", "state", "target_temp", "current_temp", "caps"],
+        )
+        self.assertEqual(self.layout("area_context", "locks_summary"), ["entity_id", "name", "area_id", "state"])
+        self.assertEqual(self.layout("area_context", "garages_summary"), ["entity_id", "name", "area_id", "state"])
+        self.assertEqual(
+            self.layout("area_context", "vacuums_summary"),
+            ["entity_id", "name", "area_id", "state", "caps"],
+        )
+        self.assertEqual(
+            self.layout("area_context", "area_climates_summary"),
+            ["entity_id", "name", "state", "target_temp", "current_temp", "caps"],
+        )
+        therms = self.p.thermostat_records(
+            [{"entity_id": "climate.main", "name": "Main|Zone", "area_id": "living", "state": "heat", "target_temp": 72, "current_temp": 70.5, "caps": 7}]
+        )
+        self.assertEqual(list(therms), [("climate.main", "Main/Zone", "living", "heat", "72", "70.5", "7")])
+        locks = self.p.entry_records(
+            [{"entity_id": "lock.front", "name": "Front Door", "area_id": "entry", "state": "locked"}],
+            max_records=self.p.LOCKS_MAX_RECORDS,
+        )
+        self.assertEqual(list(locks), [("lock.front", "Front Door", "entry", "locked")])
+        vacs = self.p.vacuum_records(
+            [{"entity_id": "vacuum.main", "name": "Downstairs Vac", "area_id": "living", "state": "docked", "caps": 7}]
+        )
+        self.assertEqual(list(vacs), [("vacuum.main", "Downstairs Vac", "living", "docked", "7")])
+        climates = self.p.area_climate_records(
+            [{"entity_id": "climate.office", "name": "Office Split", "state": "cool", "target_temp": 70, "current_temp": 73.2, "caps": 15}]
+        )
+        self.assertEqual(list(climates), [("climate.office", "Office Split", "cool", "70", "73.2", "15")])
 
     def test_remote_slots(self) -> None:
         self.assertEqual(

@@ -178,13 +178,13 @@ def checked_entity_verb(body: Mapping[str, Any], verbs: Collection[str]) -> str:
 SYSTEM_ENTITY_KEYS: tuple[str, ...] = (
     "weather_entity",
     "alarm_entity",
-    "thermostat_entity",
-    "lock_entity",
-    "garage_entity",
-    "vacuum_entity",
 )
 SYSTEM_SETTING_KEYS: tuple[str, ...] = (
     *SYSTEM_ENTITY_KEYS,
+    "thermostat_entities",
+    "lock_entities",
+    "garage_entities",
+    "vacuum_entities",
     "camera_entities",
     "remotes_list",
     "remote_groups",
@@ -1167,6 +1167,10 @@ DEVICE_SETTING_KEYS: tuple[str, ...] = (
 )
 
 MAX_LIST_ITEMS = 10
+MAX_THERMOSTATS = 8
+MAX_LOCKS = 8
+MAX_GARAGES = 6
+MAX_VACUUMS = 6
 MAX_CALENDARS = 50
 MAX_CUSTOM_PALETTES = 24
 DWELL_MIN_S = 3
@@ -1362,6 +1366,34 @@ def clean_area_fusion(
     return out
 
 
+def _domain_entity_list(val: Any, prefix: str, limit: int, label: str) -> list[str]:
+    if not isinstance(val, (list, tuple)):
+        raise SettingsScopeError(f"{label} must be a list of entity IDs")
+    out: list[str] = []
+    for item in val:
+        ent = _text(item)
+        if not ent:
+            continue
+        if not ent.startswith(prefix):
+            raise SettingsScopeError(
+                f"Expected a {prefix}* entity for {label}, got {ent}"
+            )
+        if ent not in out:
+            out.append(ent)
+    return out[:limit]
+
+
+def _safe_domain_entity_list(val: Any, prefix: str, limit: int) -> list[str]:
+    if not isinstance(val, (list, tuple)):
+        return []
+    out: list[str] = []
+    for item in val:
+        ent = _text(item)
+        if ent and ent.startswith(prefix) and ent not in out:
+            out.append(ent)
+    return out[:limit]
+
+
 def clean_system_settings(incoming: Mapping[str, Any]) -> dict[str, Any]:
     """Validate and normalize a System save. The primary camera (`camera_entity`) is derived, never sent."""
     _check_scope(incoming, SYSTEM_SETTING_KEYS, "System")
@@ -1369,6 +1401,34 @@ def clean_system_settings(incoming: Mapping[str, Any]) -> dict[str, Any]:
     for key in SYSTEM_ENTITY_KEYS:
         if key in incoming:
             out[key] = _text(incoming[key])
+    if "thermostat_entities" in incoming:
+        out["thermostat_entities"] = _domain_entity_list(
+            incoming["thermostat_entities"],
+            "climate.",
+            MAX_THERMOSTATS,
+            "thermostat_entities",
+        )
+    if "lock_entities" in incoming:
+        out["lock_entities"] = _domain_entity_list(
+            incoming["lock_entities"],
+            "lock.",
+            MAX_LOCKS,
+            "lock_entities",
+        )
+    if "garage_entities" in incoming:
+        out["garage_entities"] = _domain_entity_list(
+            incoming["garage_entities"],
+            "cover.",
+            MAX_GARAGES,
+            "garage_entities",
+        )
+    if "vacuum_entities" in incoming:
+        out["vacuum_entities"] = _domain_entity_list(
+            incoming["vacuum_entities"],
+            "vacuum.",
+            MAX_VACUUMS,
+            "vacuum_entities",
+        )
     if "camera_entities" in incoming:
         cams = _entity_list(incoming["camera_entities"])
         out["camera_entities"] = cams
@@ -1625,6 +1685,18 @@ def system_settings_view(global_cfg: Mapping[str, Any]) -> dict[str, Any]:
     }
     view.update(
         {
+            "thermostat_entities": _safe_domain_entity_list(
+                global_cfg.get("thermostat_entities"), "climate.", MAX_THERMOSTATS
+            ),
+            "lock_entities": _safe_domain_entity_list(
+                global_cfg.get("lock_entities"), "lock.", MAX_LOCKS
+            ),
+            "garage_entities": _safe_domain_entity_list(
+                global_cfg.get("garage_entities"), "cover.", MAX_GARAGES
+            ),
+            "vacuum_entities": _safe_domain_entity_list(
+                global_cfg.get("vacuum_entities"), "vacuum.", MAX_VACUUMS
+            ),
             "camera_entities": cams,
             "remotes_list": _entity_list(global_cfg.get("remotes_list")),
             "remote_groups": _remote_groups(global_cfg.get("remote_groups")),

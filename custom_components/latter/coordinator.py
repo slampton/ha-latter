@@ -76,9 +76,9 @@ from .const import (
     CONF_DOORBELL_NOISE_REDUCTION,
     CONF_ESPHOME_DEVICE_ID,
     CONF_GAMES_ITEMS,
-    CONF_GARAGE_ENTITY,
+    CONF_GARAGE_ENTITIES,
     CONF_HOME_CATEGORIES,
-    CONF_LOCK_ENTITY,
+    CONF_LOCK_ENTITIES,
     CONF_NATIVE_BLE_TRACKING,
     CONF_PINNED_ITEMS,
     CONF_REMOTE_GROUPS,
@@ -88,9 +88,9 @@ from .const import (
     CONF_SITE_ID,
     CONF_SYNC_DEVICE_AREA,
     CONF_SYSTEM_BLE_UUID,
-    CONF_THERMOSTAT_ENTITY,
+    CONF_THERMOSTAT_ENTITIES,
     CONF_TOOLS_ITEMS,
-    CONF_VACUUM_ENTITY,
+    CONF_VACUUM_ENTITIES,
     CONF_VOLUME_OVERRIDES,
     CONF_WALLPAPER_CYCLE_MINUTES,
     CONF_WALLPAPER_FAVORITES,
@@ -1021,21 +1021,31 @@ class LatterCoordinator:
             else (str(self.get_opt(CONF_CAMERA_ENTITY) or "").strip() or None)
         )
 
-    @property
-    def thermostat_entity(self) -> str | None:
-        return str(self.get_opt(CONF_THERMOSTAT_ENTITY) or "").strip() or None
+    def _clean_entity_list_opt(self, key: str, prefix: str, limit: int) -> list[str]:
+        raw_list = self.get_opt(key)
+        cleaned: list[str] = []
+        if isinstance(raw_list, (list, tuple)):
+            for item in raw_list:
+                s = str(item or "").strip()
+                if s.startswith(prefix) and s not in cleaned:
+                    cleaned.append(s)
+        return cleaned[:limit]
 
     @property
-    def lock_entity(self) -> str | None:
-        return str(self.get_opt(CONF_LOCK_ENTITY) or "").strip() or None
+    def thermostat_entities(self) -> list[str]:
+        return self._clean_entity_list_opt(CONF_THERMOSTAT_ENTITIES, "climate.", 8)
 
     @property
-    def garage_entity(self) -> str | None:
-        return str(self.get_opt(CONF_GARAGE_ENTITY) or "").strip() or None
+    def lock_entities(self) -> list[str]:
+        return self._clean_entity_list_opt(CONF_LOCK_ENTITIES, "lock.", 8)
 
     @property
-    def vacuum_entity(self) -> str | None:
-        return str(self.get_opt(CONF_VACUUM_ENTITY) or "").strip() or None
+    def garage_entities(self) -> list[str]:
+        return self._clean_entity_list_opt(CONF_GARAGE_ENTITIES, "cover.", 6)
+
+    @property
+    def vacuum_entities(self) -> list[str]:
+        return self._clean_entity_list_opt(CONF_VACUUM_ENTITIES, "vacuum.", 6)
 
     @property
     def native_ble_tracking_enabled(self) -> bool:

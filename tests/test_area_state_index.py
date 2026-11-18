@@ -39,10 +39,10 @@ from custom_components.latter.const import (
     CONF_DEFAULT_SPEAKER,
     CONF_DEVICE_SLUG,
     CONF_ESPHOME_DEVICE_ID,
-    CONF_GARAGE_ENTITY,
-    CONF_LOCK_ENTITY,
-    CONF_THERMOSTAT_ENTITY,
-    CONF_VACUUM_ENTITY,
+    CONF_GARAGE_ENTITIES,
+    CONF_LOCK_ENTITIES,
+    CONF_THERMOSTAT_ENTITIES,
+    CONF_VACUUM_ENTITIES,
     DATA_GLOBAL_CONFIG,
     DOMAIN,
     SUBENTRY_DEVICE,
@@ -321,14 +321,14 @@ async def test_context_builder_curated_entities_and_area_actions(
 
     assert get_home_wide_entities(hass) == []
     assert get_home_alarm_summary(hass)["entity_id"] == ""
-    assert get_home_hub_summary(hass)["thermostat_entity"] == ""
+    assert get_home_hub_summary(hass)["thermostats"] == []
 
     global_cfg = hass.data[DOMAIN][DATA_GLOBAL_CONFIG]
     global_cfg[CONF_ALARM_ENTITY] = "alarm_control_panel.home_alarm"
-    global_cfg[CONF_THERMOSTAT_ENTITY] = "climate.lr_hvac"
-    global_cfg[CONF_LOCK_ENTITY] = "lock.front_door"
-    global_cfg[CONF_GARAGE_ENTITY] = "cover.main_garage"
-    global_cfg[CONF_VACUUM_ENTITY] = "vacuum.roborock"
+    global_cfg[CONF_THERMOSTAT_ENTITIES] = ["climate.lr_hvac"]
+    global_cfg[CONF_LOCK_ENTITIES] = ["lock.front_door"]
+    global_cfg[CONF_GARAGE_ENTITIES] = ["cover.main_garage"]
+    global_cfg[CONF_VACUUM_ENTITIES] = ["vacuum.roborock"]
 
     home_wide = get_home_wide_entities(
         hass, configured_alarm_entity="alarm_control_panel.home_alarm"
@@ -337,15 +337,15 @@ async def test_context_builder_curated_entities_and_area_actions(
 
     wh = get_home_hub_summary(
         hass,
-        thermostat_entity="climate.lr_hvac",
-        lock_entity="lock.front_door",
-        garage_entity="cover.main_garage",
-        vacuum_entity="vacuum.roborock",
+        thermostat_entities=["climate.lr_hvac"],
+        lock_entities=["lock.front_door"],
+        garage_entities=["cover.main_garage"],
+        vacuum_entities=["vacuum.roborock"],
     )
-    assert wh["thermostat_entity"] == "climate.lr_hvac"
-    assert wh["lock_entity"] == "lock.front_door"
-    assert wh["garage_entity"] == "cover.main_garage"
-    assert wh["vacuum_entity"] == "vacuum.roborock"
+    assert wh["thermostats"][0]["entity_id"] == "climate.lr_hvac"
+    assert wh["locks"][0]["entity_id"] == "lock.front_door"
+    assert wh["garages"][0]["entity_id"] == "cover.main_garage"
+    assert wh["vacuums"][0]["entity_id"] == "vacuum.roborock"
     alarm_sum = get_home_alarm_summary(hass, "alarm_control_panel.home_alarm")
     assert (
         get_available_home_categories(alarm_sum, wh)
@@ -361,10 +361,10 @@ async def test_context_builder_curated_entities_and_area_actions(
         get_available_home_categories(
             {"entity_id": ""},
             {
-                "thermostat_entity": "",
-                "lock_entity": "lock.front_door",
-                "garage_entity": "",
-                "vacuum_entity": "",
+                "thermostats": [],
+                "locks": [{"entity_id": "lock.front_door"}],
+                "garages": [],
+                "vacuums": [],
             },
             home_categories="alarm,thermostat,entry,vacuum",
         )
@@ -425,7 +425,7 @@ async def test_context_builder_curated_entities_and_area_actions(
     await async_execute_area_action(hass, "climate.lr_hvac", "step_up")
     await async_execute_area_action(hass, "scene.movie_time", "turn_on")
     await async_execute_area_action(hass, "script.goodnight", "turn_on")
-    await async_execute_area_action(hass, "home_hub.vacuum", "dock")
+    await async_execute_area_action(hass, "vacuum.roborock", "dock")
     await async_execute_area_action(hass, "button.reboot_router", "toggle")
     await async_execute_area_action(hass, "select.theme_mode", "select", option="light")
     await async_execute_area_action(hass, "number.amp_gain", "set_level", level=65)
@@ -732,20 +732,18 @@ async def test_area_icon_resolution_wire_packing_and_live_registry_update(
     assert area_state == "Living Area"
     assert area_attrs["area_icon"] == "mdi:sofa"
     wire_tokens = area_attrs["payload"].split("\x1f")
-    assert len(wire_tokens) == 46
-    assert wire_tokens[40] == "mdi:sofa"
-    assert wire_tokens[41].startswith("America/Los_Angeles|Los Angeles|")
-    assert wire_tokens[42] == ""
-    assert wire_tokens[43] == "0"
-    assert wire_tokens[44] == "0"
-    assert wire_tokens[45] == "0"
+    assert len(wire_tokens) == 39
+    assert wire_tokens[35] == "mdi:sofa"
+    assert wire_tokens[36].startswith("America/Los_Angeles|Los Angeles|")
+    assert wire_tokens[37] == ""
+    assert wire_tokens[38] == "0"
 
-    # Live Area registry icon edit invalidates cached payload and updates wire index 40
+    # Live Area registry icon edit invalidates cached payload and updates wire index 35
     area_reg.async_update("living", icon="mdi:television-classic")
     area_state_updated, area_attrs_updated = coord.get_area_context_payload()
     assert area_state_updated == "Living Area"
     assert area_attrs_updated["area_icon"] == "mdi:television-classic"
-    assert area_attrs_updated["payload"].split("\x1f")[40] == "mdi:television-classic"
+    assert area_attrs_updated["payload"].split("\x1f")[35] == "mdi:television-classic"
 
     # Unassigned Device sends empty area_icon ("")
     esp_dev = dev_reg.async_get(coord.esphome_device_id)
@@ -757,7 +755,7 @@ async def test_area_icon_resolution_wire_packing_and_live_registry_update(
     unassigned_state, unassigned_attrs = coord.get_area_context_payload()
     assert unassigned_state == "Unassigned"
     assert unassigned_attrs["area_icon"] == ""
-    assert unassigned_attrs["payload"].split("\x1f")[40] == ""
+    assert unassigned_attrs["payload"].split("\x1f")[35] == ""
 
     assert await async_unload_entry(hass, entry) is True
 
@@ -831,20 +829,14 @@ async def test_home_hub_strict_shared_entities_no_auto_discovery(
     assert get_home_wide_entities(hass) == []
 
     hub_empty = get_home_hub_summary(hass)
-    assert hub_empty == {
-        "thermostat_entity": "",
-        "thermostat_state": "",
-        "thermostat_temp": None,
-        "thermostat_current_temp": None,
-        "climate_caps": 0,
-        "lock_entity": "",
-        "lock_state": "",
-        "garage_entity": "",
-        "garage_state": "",
-        "vacuum_entity": "",
-        "vacuum_state": "",
-        "vacuum_caps": 0,
-    }
+    assert hub_empty["thermostats"] == []
+    assert hub_empty["locks"] == []
+    assert hub_empty["garages"] == []
+    assert hub_empty["vacuums"] == []
+    assert list(hub_empty["thermostats_summary"]) == []
+    assert list(hub_empty["locks_summary"]) == []
+    assert list(hub_empty["garages_summary"]) == []
+    assert list(hub_empty["vacuums_summary"]) == []
     assert (
         get_available_home_categories(
             alarm_empty, hub_empty, coordinator=coord, hass=hass
@@ -857,22 +849,20 @@ async def test_home_hub_strict_shared_entities_no_auto_discovery(
     assert empty_attrs["home_categories"] == ""
     assert empty_attrs["alarm_entity"] == ""
     assert empty_attrs["alarm_caps"] == 0
-    assert empty_attrs["thermostat_entity"] == ""
-    assert empty_attrs["climate_caps"] == 0
-    assert empty_attrs["lock_entity"] == ""
-    assert empty_attrs["garage_entity"] == ""
-    assert empty_attrs["vacuum_entity"] == ""
-    assert empty_attrs["vacuum_caps"] == 0
-    assert empty_attrs["payload"].split("\x1f")[39] == ""
+    assert empty_attrs["thermostats"] == []
+    assert empty_attrs["locks"] == []
+    assert empty_attrs["garages"] == []
+    assert empty_attrs["vacuums"] == []
+    assert empty_attrs["payload"].split("\x1f")[34] == ""
 
-    # Unassigned home_hub.* action aliases must NOT command unconfigured HA entities
+    # Unassigned home_hub.alarm must NOT command unconfigured HA entities
     dispatched: list[tuple[str, str, dict[str, Any]]] = []
     hass.services.async_register(
         "vacuum",
         "return_to_base",
         lambda call: dispatched.append(("vacuum", "return_to_base", dict(call.data))),
     )
-    await async_execute_area_action(hass, "home_hub.vacuum", "dock")
+    await async_execute_area_action(hass, "home_hub.alarm", "disarm")
     assert dispatched == []
 
     # 2. Explicitly assigning each Shared Entity immediately enables only its corresponding category
@@ -886,7 +876,7 @@ async def test_home_hub_strict_shared_entities_no_auto_discovery(
     coord._cached_area_payload = None
     assert coord.get_area_context_payload()[1]["home_categories"] == "alarm,cameras"
 
-    global_cfg[CONF_THERMOSTAT_ENTITY] = "climate.unassigned_hvac"
+    global_cfg[CONF_THERMOSTAT_ENTITIES] = ["climate.unassigned_hvac"]
     coord._cached_area_payload = None
     assert (
         coord.get_area_context_payload()[1]["home_categories"]
@@ -894,27 +884,27 @@ async def test_home_hub_strict_shared_entities_no_auto_discovery(
     )
 
     # Assigning lock/garage enables 'entry' ONLY (never 'intercom' by itself)
-    global_cfg[CONF_LOCK_ENTITY] = "lock.unassigned_lock"
+    global_cfg[CONF_LOCK_ENTITIES] = ["lock.unassigned_lock"]
     coord._cached_area_payload = None
     assert (
         coord.get_area_context_payload()[1]["home_categories"]
         == "alarm,cameras,thermostat,entry"
     )
-    global_cfg.pop(CONF_LOCK_ENTITY)
-    global_cfg[CONF_GARAGE_ENTITY] = "cover.unassigned_garage"
+    global_cfg.pop(CONF_LOCK_ENTITIES)
+    global_cfg[CONF_GARAGE_ENTITIES] = ["cover.unassigned_garage"]
     coord._cached_area_payload = None
     assert (
         coord.get_area_context_payload()[1]["home_categories"]
         == "alarm,cameras,thermostat,entry"
     )
 
-    global_cfg[CONF_VACUUM_ENTITY] = "vacuum.unassigned_vac"
+    global_cfg[CONF_VACUUM_ENTITIES] = ["vacuum.unassigned_vac"]
     coord._cached_area_payload = None
     assert (
         coord.get_area_context_payload()[1]["home_categories"]
         == "alarm,cameras,thermostat,entry,vacuum"
     )
-    await async_execute_area_action(hass, "home_hub.vacuum", "dock")
+    await async_execute_area_action(hass, "vacuum.unassigned_vac", "dock")
     assert dispatched == [
         ("vacuum", "return_to_base", {"entity_id": "vacuum.unassigned_vac"})
     ]

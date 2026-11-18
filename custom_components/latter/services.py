@@ -177,11 +177,7 @@ def _enforce_perimeter_security_policy(
     raw_act = action.strip().lower()
     act = _ALARM_ACTION_ALIASES.get(raw_act, raw_act)
     resolved_ent = entity_id.strip()
-    if resolved_ent == "home_hub.lock":
-        resolved_ent = coord.lock_entity or ""
-    elif resolved_ent == "home_hub.garage":
-        resolved_ent = coord.garage_entity or ""
-    elif resolved_ent == "home_hub.alarm" or (
+    if resolved_ent == "home_hub.alarm" or (
         not resolved_ent
         and act in ("arm_home", "arm_away", "arm_night", "arm_vacation", "disarm")
     ):
@@ -819,7 +815,6 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 f_lvl = float(raw_level)
                 if (
                     action == "set_temperature"
-                    or entity_id in ("home_hub.thermostat", "home_hub.climate")
                     or entity_id.startswith("climate.")
                 ):
                     level = f_lvl

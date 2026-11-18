@@ -10,7 +10,7 @@
 import { renderCard, renderSvgIcon } from "../components/controls.js";
 import { html, nothing, type TemplateResult } from "../lib/lit.js";
 import type { StudioStore } from "../state/store.js";
-import type { AreaPresenceRow, BleAreaSignatureSummary, SystemConfig } from "../types.js";
+import type { AreaPresenceRow, BleAreaSignatureSummary } from "../types.js";
 import { entityLabel, fmtNumber, issueMessage } from "../utils/format.js";
 
 const SYS_ICON_DEVICES = "M4,6H20V16H4M20,18A2,2 0 0,0 22,16V6C22,4.89 21.1,4 20,4H4C2.89,4 2,4.89 2,6V16A2,2 0 0,0 4,18H0V20H24V18H20Z";
@@ -23,26 +23,6 @@ const SYS_ICON_REMOTE = "M9,2A2,2 0 0,0 7,4V20A2,2 0 0,0 9,22H15A2,2 0 0,0 17,20
 const SYS_ICON_GROUPS = "M3,3H11V11H3V3M13,3H21V11H13V3M3,13H11V21H3V13M13,13H21V21H13V13M5,5V9H9V5H5M15,5V9H19V5H15M5,15V19H9V15H5M15,15V19H19V15H15Z";
 const SYS_ICON_PALETTE = "M17.5,12A1.5,1.5 0 0,1 16,10.5A1.5,1.5 0 0,1 17.5,9A1.5,1.5 0 0,1 19,10.5A1.5,1.5 0 0,1 17.5,12M14.5,8A1.5,1.5 0 0,1 13,6.5A1.5,1.5 0 0,1 14.5,5A1.5,1.5 0 0,1 16,6.5A1.5,1.5 0 0,1 14.5,8M9.5,8A1.5,1.5 0 0,1 8,6.5A1.5,1.5 0 0,1 9.5,5A1.5,1.5 0 0,1 11,6.5A1.5,1.5 0 0,1 9.5,8M6.5,12A1.5,1.5 0 0,1 5,10.5A1.5,1.5 0 0,1 6.5,9A1.5,1.5 0 0,1 8,10.5A1.5,1.5 0 0,1 6.5,12M12,3A9,9 0 0,0 3,12A9,9 0 0,0 12,21A1.5,1.5 0 0,0 13.5,19.5C13.5,19.11 13.35,18.76 13.11,18.5C12.88,18.23 12.73,17.88 12.73,17.5A1.5,1.5 0 0,1 14.23,16H16A5,5 0 0,0 21,11C21,6.58 16.97,3 12,3Z";
 const SYS_ICON_SHIELD = "M12,1L3,5V11C3,16.55 6.84,21.74 12,23C17.16,21.74 21,16.55 21,11V5L12,1M12,7C13.4,7 14.8,8.1 14.8,9.5V11C15.4,11 16,11.6 16,12.3V15.8C16,16.4 15.4,17 14.7,17H9.2C8.6,17 8,16.4 8,15.7V12.2C8,11.6 8.6,11 9.2,11V9.5C9.2,8.1 10.6,7 12,7M12,8.2C11.2,8.2 10.5,8.7 10.5,9.5V11H13.5V9.5C13.5,8.7 12.8,8.2 12,8.2Z";
-
-const WHOLE_HOME_DOMAINS: ReadonlyArray<{
-  key: keyof Pick<
-    SystemConfig,
-    | "weather_entity"
-    | "alarm_entity"
-    | "thermostat_entity"
-    | "lock_entity"
-    | "garage_entity"
-    | "vacuum_entity"
-  >;
-  label: string;
-}> = [
-  { key: "weather_entity", label: "Weather" },
-  { key: "alarm_entity", label: "Alarm" },
-  { key: "thermostat_entity", label: "Thermostat" },
-  { key: "lock_entity", label: "Door Lock" },
-  { key: "garage_entity", label: "Garage" },
-  { key: "vacuum_entity", label: "Vacuum" },
-];
 
 interface OverviewAreaEntry {
   areaId: string;
@@ -242,10 +222,36 @@ export function renderSystemOverviewView(store: StudioStore): TemplateResult {
   const roamingOnlineCount = roamingDevices.filter((d) => d.is_online).length;
 
   // System Capabilities metrics
-  const wholeHomeStatuses = WHOLE_HOME_DOMAINS.map((d) => ({
-    label: d.label,
-    configured: Boolean(String(sysCfg?.[d.key] || "").trim()),
-  }));
+  const thermCount = (sysCfg?.thermostat_entities || []).filter((s) => Boolean(String(s || "").trim())).length;
+  const lockCount = (sysCfg?.lock_entities || []).filter((s) => Boolean(String(s || "").trim())).length;
+  const garageCount = (sysCfg?.garage_entities || []).filter((s) => Boolean(String(s || "").trim())).length;
+  const vacCount = (sysCfg?.vacuum_entities || []).filter((s) => Boolean(String(s || "").trim())).length;
+  const wholeHomeStatuses: ReadonlyArray<{ label: string; configured: boolean }> = [
+    {
+      label: "Weather",
+      configured: Boolean(String(sysCfg?.weather_entity || "").trim()),
+    },
+    {
+      label: "Alarm",
+      configured: Boolean(String(sysCfg?.alarm_entity || "").trim()),
+    },
+    {
+      label: thermCount > 1 ? `${fmtNumber(thermCount, store.hass, 0)} Zones` : "Thermostat",
+      configured: thermCount > 0,
+    },
+    {
+      label: lockCount > 1 ? `${fmtNumber(lockCount, store.hass, 0)} Locks` : "Door Lock",
+      configured: lockCount > 0,
+    },
+    {
+      label: garageCount > 1 ? `${fmtNumber(garageCount, store.hass, 0)} Garage Doors` : "Garage Door",
+      configured: garageCount > 0,
+    },
+    {
+      label: vacCount > 1 ? `${fmtNumber(vacCount, store.hass, 0)} Vacuums` : "Vacuum",
+      configured: vacCount > 0,
+    },
+  ];
   const wholeHomeActiveCount = wholeHomeStatuses.filter((s) => s.configured).length;
 
   const camerasCount = (sysCfg?.camera_entities || []).filter(Boolean).length;

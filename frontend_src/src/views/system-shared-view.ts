@@ -1,12 +1,14 @@
 /**
- * System Shared Entities View (`shared_entities`): Whole-Home Entities, Calendars, Cameras & Doorbell Audio, Custom Colors & Wallpapers (D-022).
+ * System Shared Entities View (`shared_entities`): Home Hub & Weather, Calendars, Cameras & Doorbell Audio, Custom Colors & Wallpapers (D-022 / D-059).
  */
 
 import {
   renderCard,
   renderEntitySlotList,
+  renderSelectOptions,
   renderSelectRow,
   renderSettingsRow,
+  renderSvgIcon,
   renderTrashIconButton,
 } from "../components/controls.js";
 import {
@@ -15,9 +17,38 @@ import {
   renderWallpaperUploadTrigger,
 } from "../components/wallpaper-gallery.js";
 import { html, nothing, type TemplateResult } from "../lib/lit.js";
+import type { StringListKey } from "../state/entity-config-ops.js";
 import type { StudioStore } from "../state/store.js";
 import type { CatalogChoice, SystemConfig } from "../types.js";
-import { entityLabel, fmtAgo } from "../utils/format.js";
+import { entityLabel, fmtAgo, fmtNumber } from "../utils/format.js";
+
+const ICON_THERMOSTAT =
+  "M15,13V5A3,3 0 0,0 9,5V13A5,5 0 1,0 15,13M12,4A1,1 0 0,1 13,5V8H11V5A1,1 0 0,1 12,4Z";
+const ICON_LOCK =
+  "M12,17A2,2 0 0,0 14,15C14,13.89 13.1,13 12,13A2,2 0 0,0 10,15A2,2 0 0,0 12,17M18,8A2,2 0 0,1 20,10V20A2,2 0 0,1 18,22H6A2,2 0 0,1 4,20V10C4,8.89 4.9,8 6,8H7V6A5,5 0 0,1 12,1A5,5 0 0,1 17,6V8H18M12,3A3,3 0 0,0 9,6V8H15V6A3,3 0 0,0 12,3Z";
+const ICON_GARAGE =
+  "M19,20H17V11H7V20H5V9L12,5L19,9V20M8,12H16V14H8V12M8,15H16V17H8V15M16,18V20H8V18H16Z";
+const ICON_VACUUM =
+  "M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22A10,10 0 0,1 2,12A10,10 0 0,1 12,2M12,4A8,8 0 0,0 4,12C4,13.38 4.35,14.68 4.97,15.81L18.81,7.82C17.34,5.53 14.84,4 12,4M19.56,9.5L5.72,17.5C7.19,19.62 9.45,21 12,21A8,8 0 0,0 20,13C20,11.75 19.84,10.58 19.56,9.5M12,11A2,2 0 0,1 14,13A2,2 0 0,1 12,15A2,2 0 0,1 10,13A2,2 0 0,1 12,11Z";
+const ICON_ARROW_UP = "M7.41,15.41L12,10.83L16.59,15.41L18,14L12,8L6,14L7.41,15.41Z";
+const ICON_ARROW_DOWN = "M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z";
+
+function toneChipClass(tone: string | undefined): string {
+  if (tone === "primary") return "chip chip-primary";
+  if (tone === "success") return "chip chip-success";
+  if (tone === "warning") return "chip chip-warning";
+  if (tone === "error") return "chip chip-error";
+  return "chip";
+}
+
+function findCatalogChoice(
+  choices: readonly CatalogChoice[] | undefined,
+  id: string | undefined,
+): CatalogChoice | undefined {
+  const clean = String(id || "").trim();
+  if (!clean || !choices) return undefined;
+  return choices.find((c) => c.id === clean);
+}
 
 const TALK_STATE_TEXT: Record<string, string> = {
   listening: "listening",
@@ -41,25 +72,78 @@ export function renderSystemSharedView(store: StudioStore): TemplateResult {
   const wallpapers = data?.system_wallpapers || [];
   const noiseRed = sc?.doorbell_noise_reduction || "strong";
 
-  const wholeHomeFields: ReadonlyArray<{
-    key: keyof Pick<
-      SystemConfig,
-      | "weather_entity"
-      | "alarm_entity"
-      | "thermostat_entity"
-      | "lock_entity"
-      | "garage_entity"
-      | "vacuum_entity"
-    >;
+  const singletonFields: ReadonlyArray<{
+    key: keyof Pick<SystemConfig, "weather_entity" | "alarm_entity">;
     label: string;
     choices: readonly CatalogChoice[] | undefined;
   }> = [
     { key: "weather_entity", label: "Weather", choices: cat.weathers },
-    { key: "alarm_entity", label: "Alarm Control Panel", choices: cat.alarms },
-    { key: "thermostat_entity", label: "Primary Thermostat", choices: cat.climates },
-    { key: "lock_entity", label: "Primary Door Lock", choices: cat.locks },
-    { key: "garage_entity", label: "Garage or Gate Cover", choices: cat.garages },
-    { key: "vacuum_entity", label: "Robot Vacuum", choices: cat.vacuums },
+    { key: "alarm_entity", label: "Security Alarm", choices: cat.alarms },
+  ];
+
+  const multiDomainGroups: ReadonlyArray<{
+    key: Extract<
+      StringListKey,
+      "thermostat_entities" | "lock_entities" | "garage_entities" | "vacuum_entities"
+    >;
+    title: string;
+    addLabel: string;
+    emptyPlaceholder: string;
+    selectAriaLabel: string;
+    removeAriaLabel: string;
+    icon: string;
+    maxItems: number;
+    items: readonly string[];
+    choices: readonly CatalogChoice[] | undefined;
+  }> = [
+    {
+      key: "thermostat_entities",
+      title: "Thermostat Zones",
+      addLabel: "Add Zone",
+      emptyPlaceholder: "— Choose a thermostat —",
+      selectAriaLabel: "Thermostat zone",
+      removeAriaLabel: "Remove thermostat zone",
+      icon: ICON_THERMOSTAT,
+      maxItems: 8,
+      items: sc?.thermostat_entities || [],
+      choices: cat.climates,
+    },
+    {
+      key: "lock_entities",
+      title: "Door Locks",
+      addLabel: "Add Lock",
+      emptyPlaceholder: "— Choose a door lock —",
+      selectAriaLabel: "Door lock",
+      removeAriaLabel: "Remove door lock",
+      icon: ICON_LOCK,
+      maxItems: 8,
+      items: sc?.lock_entities || [],
+      choices: cat.locks,
+    },
+    {
+      key: "garage_entities",
+      title: "Garage Doors",
+      addLabel: "Add Garage Door",
+      emptyPlaceholder: "— Choose a garage door —",
+      selectAriaLabel: "Garage door",
+      removeAriaLabel: "Remove garage door",
+      icon: ICON_GARAGE,
+      maxItems: 6,
+      items: sc?.garage_entities || [],
+      choices: cat.garages,
+    },
+    {
+      key: "vacuum_entities",
+      title: "Robot Vacuums",
+      addLabel: "Add Vacuum",
+      emptyPlaceholder: "— Choose a robot vacuum —",
+      selectAriaLabel: "Robot vacuum",
+      removeAriaLabel: "Remove robot vacuum",
+      icon: ICON_VACUUM,
+      maxItems: 6,
+      items: sc?.vacuum_entities || [],
+      choices: cat.vacuums,
+    },
   ];
 
   return html`<section id="view-shared_entities">
@@ -68,19 +152,117 @@ export function renderSystemSharedView(store: StudioStore): TemplateResult {
         ${renderCard({
           id: "card-whole-home",
           handoffActive: Boolean(store.isHandoffTarget?.("card-whole-home")),
-          heading: html`<h3 class="card-title">Whole-Home Entities</h3>`,
-          subtitle: "Shared entities shown across Home Hub, Weather, and Area views on every Device.",
-          contentClass: "settings-list",
-          body: wholeHomeFields.map((f) =>
-            renderSelectRow({
-              id: `cfg-${f.key}`,
-              label: f.label,
-              value: sc?.[f.key],
-              choices: f.choices,
-              emptyOptionLabel: "— None —",
-              onChange: (val) => store.stageSystemSetting(f.key, val, `cfg-${f.key}`),
-            }),
-          ),
+          heading: html`<h3 class="card-title">Home Hub &amp; Weather</h3>`,
+          subtitle:
+            "Shared climate zones, entry controls, vacuums, security, and weather across every Device.",
+          contentClass: "stack",
+          body: html`<div class="settings-list">
+              ${singletonFields.map((f) => {
+                const curVal = String(sc?.[f.key] || "");
+                const meta = findCatalogChoice(f.choices, curVal);
+                const selectId = `cfg-${f.key}`;
+                return renderSettingsRow({
+                  label: f.label,
+                  forId: selectId,
+                  control: html`${meta?.state_label
+                      ? html`<span class=${toneChipClass(meta.state_tone)}>
+                          ${meta.state_label}
+                        </span>`
+                      : nothing}
+                    <select
+                      id=${selectId}
+                      .value=${curVal}
+                      @change=${(ev: Event) =>
+                        store.stageSystemSetting(
+                          f.key,
+                          (ev.currentTarget as HTMLSelectElement).value,
+                          selectId,
+                        )}
+                    >
+                      ${renderSelectOptions(f.choices, curVal, "— None —")}
+                    </select>`,
+                });
+              })}
+            </div>
+
+            ${multiDomainGroups.map((g) => {
+              const configuredCount = g.items.filter((s) => Boolean(String(s || "").trim())).length;
+              return html`<div id="hub-domain-${g.key}" class="hub-domain-box">
+                <div class="hub-domain-head">
+                  <span class="hub-domain-title">
+                    ${renderSvgIcon(g.icon)}
+                    <span>${g.title}</span>
+                    ${configuredCount > 0
+                      ? html`<span class="chip chip-primary">
+                          ${fmtNumber(configuredCount, store.hass, 0)}
+                        </span>`
+                      : html`<span class="hub-domain-empty">None configured</span>`}
+                  </span>
+                  <button
+                    type="button"
+                    ?disabled=${g.items.length >= g.maxItems}
+                    @click=${() => store.addStringListRow(g.key, "", g.maxItems)}
+                    class="btn btn-secondary btn-compact"
+                  >
+                    ${g.addLabel}
+                  </button>
+                </div>
+                ${g.items.length
+                  ? g.items.map((val, idx) => {
+                      const meta = findCatalogChoice(g.choices, val);
+                      return html`<div class="hub-slot-row">
+                        <select
+                          aria-label=${g.selectAriaLabel}
+                          .value=${val}
+                          @change=${(ev: Event) =>
+                            store.updateStringListRow(
+                              g.key,
+                              idx,
+                              (ev.currentTarget as HTMLSelectElement).value,
+                            )}
+                        >
+                          ${renderSelectOptions(g.choices, val, g.emptyPlaceholder)}
+                        </select>
+                        ${meta?.area_name || meta?.state_label
+                          ? html`<span class="hub-slot-meta">
+                              ${meta.area_name
+                                ? html`<span class="chip">${meta.area_name}</span>`
+                                : nothing}
+                              ${meta.state_label
+                                ? html`<span class=${toneChipClass(meta.state_tone)}>
+                                    ${meta.state_label}
+                                  </span>`
+                                : nothing}
+                            </span>`
+                          : nothing}
+                        ${g.items.length > 1
+                          ? html`<button
+                                type="button"
+                                aria-label="Move up"
+                                ?disabled=${idx === 0}
+                                @click=${() => store.moveStringListRow(g.key, idx, -1)}
+                                class="btn-icon"
+                              >
+                                ${renderSvgIcon(ICON_ARROW_UP)}
+                              </button>
+                              <button
+                                type="button"
+                                aria-label="Move down"
+                                ?disabled=${idx === g.items.length - 1}
+                                @click=${() => store.moveStringListRow(g.key, idx, 1)}
+                                class="btn-icon"
+                              >
+                                ${renderSvgIcon(ICON_ARROW_DOWN)}
+                              </button>`
+                          : nothing}
+                        ${renderTrashIconButton(g.removeAriaLabel, () =>
+                          store.removeStringListRow(g.key, idx),
+                        )}
+                      </div>`;
+                    })
+                  : nothing}
+              </div>`;
+            })}`,
         })}
 
         ${renderCard({

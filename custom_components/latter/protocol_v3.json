@@ -127,220 +127,171 @@
         },
         {
           "index": 15,
-          "name": "thermostat_entity",
-          "cpp_enum": "THERMOSTAT_ENTITY",
-          "type": "entity_id",
-          "description": "Primary climate entity ID"
+          "name": "thermostats_summary",
+          "cpp_enum": "THERMOSTATS_SUMMARY",
+          "type": "records",
+          "description": "0x1E-joined entity_id|name|area_id|state|target_temp|current_temp|caps thermostat zone records (up to 8, in configured order; caps is the u16 climate capability bitmask: 1=off, 2=heat, 4=cool, 8=heat_cool_or_auto, 16=fan_only, 32=dry, 64=target_temp, 128=celsius)"
         },
         {
           "index": 16,
-          "name": "thermostat_state",
-          "cpp_enum": "THERMOSTAT_STATE",
-          "type": "string",
-          "description": "Primary climate state/HVAC mode"
+          "name": "locks_summary",
+          "cpp_enum": "LOCKS_SUMMARY",
+          "type": "records",
+          "description": "0x1E-joined entity_id|name|area_id|state door lock records (up to 8, in configured order)"
         },
         {
           "index": 17,
-          "name": "thermostat_temp",
-          "cpp_enum": "THERMOSTAT_TEMP",
-          "type": "f32",
-          "description": "Target thermostat setpoint temperature"
+          "name": "garages_summary",
+          "cpp_enum": "GARAGES_SUMMARY",
+          "type": "records",
+          "description": "0x1E-joined entity_id|name|area_id|state garage door cover records (up to 6, in configured order)"
         },
         {
           "index": 18,
-          "name": "thermostat_current_temp",
-          "cpp_enum": "THERMOSTAT_CURRENT_TEMP",
-          "type": "f32",
-          "description": "Current measured thermostat temperature"
+          "name": "vacuums_summary",
+          "cpp_enum": "VACUUMS_SUMMARY",
+          "type": "records",
+          "description": "0x1E-joined entity_id|name|area_id|state|caps robot vacuum records (up to 6, in configured order; caps is the u16 VacuumEntityFeature bitmask: 1=start, 2=pause, 4=stop, 8=return_home, 16=clean_spot, 32=locate)"
         },
         {
           "index": 19,
-          "name": "lock_entity",
-          "cpp_enum": "LOCK_ENTITY",
-          "type": "entity_id",
-          "description": "Primary lock entity ID"
+          "name": "area_climates_summary",
+          "cpp_enum": "AREA_CLIMATES_SUMMARY",
+          "type": "records",
+          "description": "0x1E-joined entity_id|name|state|target_temp|current_temp|caps climate records for the active Area (up to 6)"
         },
         {
           "index": 20,
-          "name": "lock_state",
-          "cpp_enum": "LOCK_STATE",
-          "type": "string",
-          "description": "Primary lock state"
-        },
-        {
-          "index": 21,
-          "name": "garage_entity",
-          "cpp_enum": "GARAGE_ENTITY",
-          "type": "entity_id",
-          "description": "Primary garage cover entity ID"
-        },
-        {
-          "index": 22,
-          "name": "garage_state",
-          "cpp_enum": "GARAGE_STATE",
-          "type": "string",
-          "description": "Primary garage cover state"
-        },
-        {
-          "index": 23,
-          "name": "vacuum_entity",
-          "cpp_enum": "VACUUM_ENTITY",
-          "type": "entity_id",
-          "description": "Primary vacuum entity ID"
-        },
-        {
-          "index": 24,
-          "name": "vacuum_state",
-          "cpp_enum": "VACUUM_STATE",
-          "type": "string",
-          "description": "Primary vacuum state"
-        },
-        {
-          "index": 25,
           "name": "camera_snapshot_url",
           "cpp_enum": "CAMERA_SNAPSHOT_URL",
           "type": "url",
           "description": "Signed HTTP URL for primary camera snapshot"
         },
         {
-          "index": 26,
+          "index": 21,
           "name": "cameras_summary",
           "cpp_enum": "CAMERAS_SUMMARY",
           "type": "records",
           "description": "0x1E-joined entity_id|name|area_id|snapshot_url camera records (up to 10, in configured order; area_id empty when the camera has no Area)"
         },
         {
-          "index": 27,
+          "index": 22,
           "name": "doorbell_talk_state",
           "cpp_enum": "DOORBELL_TALK_STATE",
           "type": "string",
           "description": "Doorbell talkback state"
         },
         {
-          "index": 28,
+          "index": 23,
           "name": "intercom_targets_summary",
           "cpp_enum": "INTERCOM_TARGETS_SUMMARY",
           "type": "records",
           "description": "0x1E-joined target_id|label|kind call_target records (up to 10; kind all = every other Latter Device, listed first; kind device = one Latter Device, labelled by its title); empty when there is no other Device"
         },
         {
-          "index": 29,
+          "index": 24,
           "name": "alert_id",
           "cpp_enum": "ALERT_ID",
           "type": "u32",
           "description": "Monotonic alert/notification identifier"
         },
         {
-          "index": 30,
+          "index": 25,
           "name": "alert_title",
           "cpp_enum": "ALERT_TITLE",
           "type": "string",
           "description": "Alert banner title"
         },
         {
-          "index": 31,
+          "index": 26,
           "name": "alert_message",
           "cpp_enum": "ALERT_MESSAGE",
           "type": "string",
           "description": "Alert banner message body"
         },
         {
-          "index": 32,
+          "index": 27,
           "name": "alert_priority",
           "cpp_enum": "ALERT_PRIORITY",
           "type": "string",
           "description": "Alert priority level (normal|warning|critical)"
         },
         {
-          "index": 33,
+          "index": 28,
           "name": "alert_duration",
           "cpp_enum": "ALERT_DURATION",
           "type": "u16",
           "description": "Alert display duration in seconds"
         },
         {
-          "index": 34,
+          "index": 29,
           "name": "alert_chime",
           "cpp_enum": "ALERT_CHIME",
           "type": "bool",
           "description": "1 = play the alert chime (embedded WAV: sfx 9 for warning/critical, otherwise sfx 6), else 0"
         },
         {
-          "index": 35,
+          "index": 30,
           "name": "alert_camera_url",
           "cpp_enum": "ALERT_CAMERA_URL",
           "type": "url",
           "description": "Signed HTTP URL for alert camera snapshot"
         },
         {
-          "index": 36,
+          "index": 31,
           "name": "activity_card",
           "cpp_enum": "ACTIVITY_CARD",
           "type": "bool",
           "description": "1 = show the Home Activity Card, 0 = hide it (also sent when every source is off); empty until set: the device uses defaults.activity_card"
         },
         {
-          "index": 37,
+          "index": 32,
           "name": "activity_sources",
           "cpp_enum": "ACTIVITY_SOURCES",
           "type": "csv",
           "description": "Activity Card sources that are on, in this order: calendar, music_queue, stopwatch, alarms, timers (unknown keys are ignored); empty until set: the device uses defaults.activity_sources"
         },
         {
-          "index": 38,
+          "index": 33,
           "name": "security_pin_policy",
           "cpp_enum": "SECURITY_PIN_POLICY",
           "type": "string",
           "description": "Perimeter action policy for unlock, disarm, and open_cover (allow|require_pin|block)"
         },
         {
-          "index": 39,
+          "index": 34,
           "name": "home_categories",
           "cpp_enum": "HOME_CATEGORIES",
           "type": "csv",
           "description": "Comma-separated enabled Home Hub categories with >= 1 configured entity, in configured order (alarm, cameras, intercom, thermostat, entry, vacuum); empty when no categories have entities"
         },
         {
-          "index": 40,
+          "index": 35,
           "name": "area_icon",
           "cpp_enum": "AREA_ICON",
           "type": "string",
           "description": "Home Assistant AreaEntry icon string (e.g. mdi:sofa) or inferred Area archetype icon; empty when unassigned"
         },
         {
-          "index": 41,
+          "index": 36,
           "name": "local_tz_info",
           "cpp_enum": "LOCAL_TZ_INFO",
           "type": "string",
           "description": "Pipe-delimited local time zone status ('<iana>|<city>|<abbr>|<utc_offset_min>|<is_dst>')"
         },
         {
-          "index": 42,
+          "index": 37,
           "name": "world_clocks_summary",
           "cpp_enum": "WORLD_CLOCKS_SUMMARY",
           "type": "string",
           "description": "Semicolon-delimited configured World Clocks ('<iana>|<label>|<abbr>|<utc_offset_min>|<is_dst>;...')"
         },
         {
-          "index": 43,
+          "index": 38,
           "name": "alarm_caps",
           "cpp_enum": "ALARM_CAPS",
           "type": "u16",
           "description": "Alarm capability & code bitmask (1=code_disarm_required, 2=code_arm_required, 4=supports_arm_home, 8=supports_arm_away, 16=supports_arm_night, 32=supports_arm_vacation)"
-        },
-        {
-          "index": 44,
-          "name": "climate_caps",
-          "cpp_enum": "CLIMATE_CAPS",
-          "type": "u16",
-          "description": "Thermostat capability & HVAC mode bitmask (1=off, 2=heat, 4=cool, 8=heat_cool_or_auto, 16=fan_only, 32=dry, 64=target_temp, 128=celsius)"
-        },
-        {
-          "index": 45,
-          "name": "vacuum_caps",
-          "cpp_enum": "VACUUM_CAPS",
-          "type": "u16",
-          "description": "Robot vacuum capability bitmask from VacuumEntityFeature (1=start, 2=pause, 4=stop, 8=return_home, 16=clean_spot, 32=locate)"
         }
       ]
     },

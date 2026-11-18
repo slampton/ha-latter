@@ -82,6 +82,9 @@ export interface CatalogChoice {
   id: string;
   name: string;
   preview_url?: string;
+  area_name?: string;
+  state_label?: string;
+  state_tone?: "primary" | "success" | "warning" | "error" | "" | string;
 }
 
 export interface AreaChoice {
@@ -233,10 +236,10 @@ export interface CustomPalette {
 export interface SystemConfig {
   weather_entity: string;
   alarm_entity: string;
-  thermostat_entity: string;
-  lock_entity: string;
-  garage_entity: string;
-  vacuum_entity: string;
+  thermostat_entities: string[];
+  lock_entities: string[];
+  garage_entities: string[];
+  vacuum_entities: string[];
   camera_entities: string[];
   remotes_list: string[];
   remote_groups: RemoteGroup[];

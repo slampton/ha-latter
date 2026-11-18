@@ -24,7 +24,7 @@ Shared entities, remotes, colors, and overrides live in the Latter hub entry's o
 ### Shared Entities
 | Card | What It Controls |
 | :--- | :--- |
-| **Whole-Home Entities** | Weather provider, security alarm panel, primary thermostat, entry lock, garage door, and robot vacuum powering **Sky & Weather** and the **Home Hub**. |
+| **Home Hub & Weather** | Weather provider, security alarm panel, and multi-entity **Thermostat Zones** (up to 8), **Door Locks** (up to 8), **Garage Doors** (up to 6, filtered to garage `cover.*` entities), and **Robot Vacuums** (up to 6) with inline Area and live status chips powering **Sky & Weather**, **Home Hub**, and **Area Control**. |
 | **Cameras & Doorbell Audio** | Up to 10 cameras (with live **Preview**) for the on-device camera view and doorbell popups, **Doorbell Audio Filter** (*Strong*, *Light*, *Off*), and read-only **Doorbells** status showing auto-detected ring entities and active listen/reply sessions. |
 | **Calendars** | Home Assistant calendars merged and deduplicated into the on-device agenda (events with locations get signed OpenStreetMap pins). |
 | **Custom Colors** | Up to 24 shared theme swatches available to any device whose **Color Profile** is **Custom**. |
@@ -66,7 +66,7 @@ The **Devices** sidebar splits inventory lifecycle into two top-level views:
 - **Column 1 — Status & Quick Actions:** **Status** renders an online/offline/update state chip and compact responsive `2×2` glanceable tiles for **Area** (placement & closest BLE proxy), **Battery / Power** (*Plugged in* when docked), **Wi-Fi / BLE Signal**, and **Firmware**; directly underneath, **Quick Actions** surfaces Find My Device, Trigger Voice Assistant, Activate Screensaver, Hibernate Device, Restart Device, live **Speaker Volume**, and **Open in ESPHome** + **Download Backup** footer links.
 - **Column 2 — Assignments & Timers & Alarms:**
   - **Assignments:** unified card at the top of the right column for **Device Group** (switches automatically to *Custom* whenever operational settings diverge from a group baseline, with **Save Custom Group** and **Manage Groups**), **Assigned Person**, and **Remote Control Group** (**Configure** opens the **Remote Control** modal directly on **Overview**).
-  - **Timers & Alarms:** conditional ringing alert banner with one-tap **Dismiss**, live **Active Timer** countdown (`MM:SS` / `HH:MM:SS`) with **Cancel Timer**, live **Stopwatch** elapsed time with **Reset Stopwatch**, and the 3-slot recurring 1-minute **Alarms** editor synced two-way with on-device alarm edits.
+  - **Timers & Alarms:** conditional ringing alert banner with one-tap **Dismiss**, live **Active Timer** countdown (`MM:SS` / `HH:MM:SS`) with **Cancel Timer**, live **Stopwatch** elapsed time with **Reset Stopwatch**, and a collapsed-by-default **Alarms** drawer (`All Off` / `<N> Enabled • <HH:MM>` summary chip) containing the 3-slot recurring 1-minute alarm editor synced two-way with on-device alarm edits.
 
 ### Display *(Visual Appearance)*
 - **Column 1:** **Home Screen** (**Wake Greeting**, **Weather Background**, and **Sun & Moon** pills—when Weather Background is on, Home renders the live weather sky even if a wallpaper is active across other pages), **Screensavers** (docked switch, style, idle timeout, **Preview**), **Voice Assistant** (**Visual Profile**), **Brightness** (manual or Sun/schedule auto), and **Clock** (**Clock Face**: *Minimal Digital*, *Modern Analog*, *Hybrid Digital*; **Time Format**).

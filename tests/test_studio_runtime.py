@@ -3190,6 +3190,9 @@ return {
         self.assertIn("No active timer", got["overviewCustomHtml"])
         self.assertIn("Not running", got["overviewCustomHtml"])
         self.assertNotIn('id="overview-ringing-alert"', got["overviewCustomHtml"])
+        self.assertIn('id="overview-alarms-drawer"', got["overviewCustomHtml"])
+        self.assertIn("?open=false", got["overviewCustomHtml"])
+        self.assertIn("All Off", got["overviewCustomHtml"])
         self.assertIn("id=cfg-alarm_1_time", got["overviewCustomHtml"])
 
         self.assertNotIn('id="btn-save-custom-group"', got["overviewGroupHtml"])
@@ -3362,10 +3365,10 @@ function makeSysStore(withAlerts) {
       system_config: {
         weather_entity: "weather.home",
         alarm_entity: "alarm_control_panel.home",
-        thermostat_entity: "climate.main",
-        lock_entity: "lock.front",
-        garage_entity: "",
-        vacuum_entity: "vacuum.robo",
+        thermostat_entities: ["climate.main", "climate.upstairs"],
+        lock_entities: ["lock.front"],
+        garage_entities: [],
+        vacuum_entities: ["vacuum.robo"],
         camera_entities: ["camera.front_door", "camera.patio"],
         calendar_entities: ["calendar.family"],
         remotes_list: ["remote.living_tv"],
@@ -3428,7 +3431,7 @@ return {
             "5 / 6 Active",
             "✓ Weather",
             "✓ Alarm",
-            "✓ Thermostat",
+            "✓ 2 Zones",
             "✓ Door Lock",
             "✓ Vacuum",
             "2 Cameras",

@@ -39,7 +39,7 @@ async def test_studio_rev_mismatch_on_all_read_and_mutation_endpoints(
     hass: Any, setup_latter_hub: Any
 ) -> None:
     """Verify studio_rev mismatch rejects BOTH read (get_state, subscribe) and mutation WS commands."""
-    assert STUDIO_REV == 32
+    assert STUDIO_REV == 33
     entry, _sys_obj, coord = await setup_latter_hub(hass)
     from homeassistant.helpers import area_registry as ar
 
@@ -65,6 +65,7 @@ async def test_studio_rev_mismatch_on_all_read_and_mutation_endpoints(
     assert all(code == "studio_rev_mismatch" for _id, code, _msg in conn.errors)
 
     assert await async_unload_entry(hass, entry) is True
+
 
 
 @pytest.mark.asyncio
@@ -641,6 +642,7 @@ async def test_studio_commands_security_pin_secrecy_groups_and_backup_restore(
     assert await async_unload_entry(hass, entry) is True
 
 
+
 @pytest.mark.asyncio
 async def test_discovered_latter_devices_and_add_latter_device_command(
     hass: Any, setup_latter_hub: Any, make_esphome_device: Any
@@ -755,5 +757,103 @@ async def test_discovered_latter_devices_and_add_latter_device_command(
         "device_group": "auto",
         "assigned_person": "person.sean",
     }
+
+    assert await async_unload_entry(hass, entry) is True
+
+
+
+@pytest.mark.asyncio
+async def test_multi_entity_home_hub_settings_and_strict_garage_cover_filtering(
+    hass: Any, setup_latter_hub: Any
+) -> None:
+    """Verify D-059 multi-entity Home Hub lists, domain validation, and strict garage-only cover catalog filtering."""
+    entry, _sys_obj, coord = await setup_latter_hub(hass)
+
+    hass.states.async_set(
+        "cover.main_garage",
+        "closed",
+        {"device_class": "garage", "friendly_name": "Main Garage"},
+    )
+    hass.states.async_set(
+        "cover.workshop_bay_garage",
+        "open",
+        {"friendly_name": "Workshop Garage Door"},
+    )
+    hass.states.async_set(
+        "cover.living_blinds",
+        "open",
+        {"device_class": "blind", "friendly_name": "Living Blinds"},
+    )
+    hass.states.async_set(
+        "cover.bedroom_curtains",
+        "closed",
+        {"device_class": "curtain", "friendly_name": "Bedroom Curtains"},
+    )
+    hass.states.async_set(
+        "cover.driveway_gate",
+        "closed",
+        {"device_class": "gate", "friendly_name": "Driveway Gate"},
+    )
+    hass.states.async_set(
+        "cover.untyped_shades",
+        "closed",
+        {"friendly_name": "Office Shades"},
+    )
+    hass.states.async_set(
+        "climate.downstairs",
+        "heat",
+        {"friendly_name": "Downstairs", "temperature": 70},
+    )
+    hass.states.async_set(
+        "climate.upstairs",
+        "cool",
+        {"friendly_name": "Upstairs", "temperature": 74},
+    )
+    await hass.async_block_till_done()
+
+    conn = websocket_api.ActiveConnection()
+    await _call_ws(hass, conn, 1, "latter/system/get_state", studio_rev=STUDIO_REV)
+    assert not conn.errors
+    st = conn.results[-1][1]
+    garage_ids = [item["id"] for item in st["catalog"]["garages"]]
+    assert garage_ids == ["cover.main_garage", "cover.workshop_bay_garage"]
+    clim_meta = {item["id"]: item for item in st["catalog"]["climates"]}
+    assert clim_meta["climate.downstairs"]["state_label"] == "Heating • 70°"
+
+    await _call_ws(
+        hass,
+        conn,
+        2,
+        "latter/system/command",
+        command="save_system_config",
+        payload={
+            "config": {
+                "thermostat_entities": ["climate.downstairs", "climate.upstairs"],
+                "lock_entities": ["lock.front_door", "lock.back_door"],
+                "garage_entities": ["cover.main_garage", "cover.workshop_bay_garage"],
+                "vacuum_entities": ["vacuum.main_floor", "vacuum.upstairs"],
+            }
+        },
+        studio_rev=STUDIO_REV,
+    )
+    assert not conn.errors
+    saved_sc = conn.results[-1][1]["system_config"]
+    assert saved_sc["thermostat_entities"] == ["climate.downstairs", "climate.upstairs"]
+    assert saved_sc["lock_entities"] == ["lock.front_door", "lock.back_door"]
+    assert saved_sc["garage_entities"] == ["cover.main_garage", "cover.workshop_bay_garage"]
+    assert saved_sc["vacuum_entities"] == ["vacuum.main_floor", "vacuum.upstairs"]
+    assert coord.thermostat_entities == ["climate.downstairs", "climate.upstairs"]
+
+    # Wrong domain inside thermostat_entities is rejected cleanly
+    await _call_ws(
+        hass,
+        conn,
+        3,
+        "latter/system/command",
+        command="save_system_config",
+        payload={"config": {"thermostat_entities": ["light.kitchen"]}},
+        studio_rev=STUDIO_REV,
+    )
+    assert conn.errors and conn.errors[-1][0] == 3
 
     assert await async_unload_entry(hass, entry) is True

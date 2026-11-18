@@ -397,6 +397,79 @@ export const STUDIO_STYLES = css`
     font-weight: var(--studio-weight-medium);
   }
   details.sub-collapsible > .card-content { padding: var(--studio-space-3) 0 0; }
+  details.sub-collapsible.summary-row > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--studio-space-2);
+    list-style: none;
+  }
+  details.sub-collapsible.summary-row > summary::-webkit-details-marker { display: none; }
+  .summary-row-end {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--studio-space-2);
+  }
+  .summary-chevron {
+    color: var(--studio-text-secondary);
+    transition: transform 0.15s ease;
+  }
+  details.sub-collapsible.summary-row[open] > summary .summary-chevron {
+    transform: rotate(180deg);
+  }
+  .hub-domain-box {
+    display: flex;
+    flex-direction: column;
+    gap: var(--studio-space-2);
+    padding: var(--studio-space-2) var(--studio-space-3);
+    border: 1px solid var(--studio-divider);
+    border-radius: var(--studio-radius-control);
+    background: var(--studio-input-bg);
+  }
+  .hub-domain-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--studio-space-2);
+    min-height: var(--studio-control-height-compact);
+  }
+  .hub-domain-title {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--studio-space-2);
+    font-weight: var(--studio-weight-medium);
+  }
+  .hub-domain-title svg {
+    width: 18px;
+    height: 18px;
+    fill: var(--studio-primary);
+    flex-shrink: 0;
+  }
+  .hub-domain-empty {
+    color: var(--studio-text-secondary);
+    font-size:var(--studio-font-secondary);
+    font-weight: var(--studio-weight-regular);
+  }
+  .hub-slot-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--studio-space-2);
+    padding-top: var(--studio-space-2);
+    border-top: 1px solid var(--studio-divider);
+  }
+  .hub-slot-row > select {
+    flex: 1 1 200px;
+    min-width: 0;
+  }
+  .hub-slot-meta {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--studio-space-1);
+  }
   .area-presence-box {
     display: flex;
     flex-direction: column;

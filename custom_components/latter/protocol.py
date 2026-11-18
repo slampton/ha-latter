@@ -172,6 +172,92 @@ def _whole_number(val: Any) -> str:
 # area_context.cameras_summary: entity_id|name|area_id|snapshot_url
 CAMERAS_MAX_RECORDS = 10
 CAMERA_NAME_MAX = 32
+HUB_ENTITY_NAME_MAX = 32
+THERMOSTATS_MAX_RECORDS = 8
+LOCKS_MAX_RECORDS = 8
+GARAGES_MAX_RECORDS = 6
+VACUUMS_MAX_RECORDS = 6
+AREA_CLIMATES_MAX_RECORDS = 6
+
+
+def _temp_tenths(val: Any) -> str:
+    """Return a temperature formatted to whole or .1 precision, or '' when unknown."""
+    if val is None or isinstance(val, bool):
+        return ""
+    try:
+        val_f = round(float(val), 1)
+        return str(int(val_f)) if val_f.is_integer() else f"{val_f:.1f}"
+    except (TypeError, ValueError, OverflowError):
+        return ""
+
+
+def thermostat_records(thermostats: Iterable[Mapping[str, Any]]) -> V3Records:
+    """Records for configured Home Hub thermostats (`entity_id|name|area_id|state|target_temp|current_temp|caps`)."""
+    return build_v3_records(
+        (
+            (
+                t.get("entity_id"),
+                t.get("name"),
+                t.get("area_id"),
+                t.get("state"),
+                _temp_tenths(t.get("target_temp")),
+                _temp_tenths(t.get("current_temp")),
+                int(t.get("caps") or 0),
+            )
+            for t in thermostats
+        ),
+        (None, HUB_ENTITY_NAME_MAX, None, 24, None, None, None),
+        THERMOSTATS_MAX_RECORDS,
+    )
+
+
+def entry_records(entries: Iterable[Mapping[str, Any]], max_records: int) -> V3Records:
+    """Records for configured Home Hub locks or garage doors (`entity_id|name|area_id|state`)."""
+    return build_v3_records(
+        (
+            (e.get("entity_id"), e.get("name"), e.get("area_id"), e.get("state"))
+            for e in entries
+        ),
+        (None, HUB_ENTITY_NAME_MAX, None, 24),
+        max_records,
+    )
+
+
+def vacuum_records(vacuums: Iterable[Mapping[str, Any]]) -> V3Records:
+    """Records for configured Home Hub robot vacuums (`entity_id|name|area_id|state|caps`)."""
+    return build_v3_records(
+        (
+            (
+                v.get("entity_id"),
+                v.get("name"),
+                v.get("area_id"),
+                v.get("state"),
+                int(v.get("caps") or 0),
+            )
+            for v in vacuums
+        ),
+        (None, HUB_ENTITY_NAME_MAX, None, 24, None),
+        VACUUMS_MAX_RECORDS,
+    )
+
+
+def area_climate_records(climates: Iterable[Mapping[str, Any]]) -> V3Records:
+    """Records for active-Area climate entities (`entity_id|name|state|target_temp|current_temp|caps`)."""
+    return build_v3_records(
+        (
+            (
+                c.get("entity_id"),
+                c.get("name"),
+                c.get("state"),
+                _temp_tenths(c.get("target_temp")),
+                _temp_tenths(c.get("current_temp")),
+                int(c.get("caps") or 0),
+            )
+            for c in climates
+        ),
+        (None, HUB_ENTITY_NAME_MAX, 24, None, None, None),
+        AREA_CLIMATES_MAX_RECORDS,
+    )
 
 
 def camera_records(cameras: Iterable[Mapping[str, Any]]) -> V3Records:

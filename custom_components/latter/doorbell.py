@@ -149,10 +149,37 @@ async def async_execute_doorbell_intercom(
                 translation_domain=DOMAIN,
                 translation_key=err_key,
             )
-        lock_ent = target_info.get("lock_entity") or coordinator.lock_entity
+        idx_areas = get_area_state_index(hass)
+        cam_area = str(target_info.get("area_id") or "")
+        lock_ent = str(target_info.get("lock_entity") or "").strip()
+        if not lock_ent:
+            lock_cands = list(getattr(coordinator, "lock_entities", ()) or ())
+            if cam_area:
+                for cand in lock_cands:
+                    if idx_areas.resolve_entity_area_id(cand) == cam_area:
+                        lock_ent = cand
+                        break
+            if not lock_ent and lock_cands:
+                lock_ent = lock_cands[0]
+
         if lock_ent and hass.states.get(lock_ent) is not None:
             await hass.services.async_call(
                 "lock", "unlock", {ATTR_ENTITY_ID: lock_ent}, blocking=True
+            )
+            return target_info
+
+        garage_cands = list(getattr(coordinator, "garage_entities", ()) or ())
+        garage_ent = ""
+        if cam_area:
+            for cand in garage_cands:
+                if idx_areas.resolve_entity_area_id(cand) == cam_area:
+                    garage_ent = cand
+                    break
+        if not garage_ent and garage_cands:
+            garage_ent = garage_cands[0]
+        if garage_ent and hass.states.get(garage_ent) is not None:
+            await hass.services.async_call(
+                "cover", "open_cover", {ATTR_ENTITY_ID: garage_ent}, blocking=True
             )
         return target_info
 

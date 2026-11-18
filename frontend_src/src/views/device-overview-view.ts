@@ -284,6 +284,14 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
   const timerActive = Boolean(live.timer_running || live.timer_paused);
   const stopwatchActive = Boolean(live.stopwatch_running || live.stopwatch_paused);
   const alarmRinging = Boolean(live.alarm_ringing);
+  const enabledAlarmSlots = alarmSlots
+    .filter((s) => s.enabled)
+    .sort((a, b) => a.time.localeCompare(b.time));
+  const alarmsSummaryLabel =
+    enabledAlarmSlots.length > 0
+      ? `${fmtNumber(enabledAlarmSlots.length, store.hass, 0)} Enabled • ${enabledAlarmSlots[0].time}`
+      : "All Off";
+  const alarmsSummaryChipClass = enabledAlarmSlots.length > 0 ? "chip chip-primary" : "chip";
 
   const powerTileBody = hasBatteryReading
     ? html`<div class="status-tile-head">
@@ -650,80 +658,97 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
                           </button>`
                       : html`<span class="kv-value">—</span>`,
                   })}
-                  ${renderSettingsRow({
-                    id: "overview-alarms",
-                    label: "Alarms",
-                    description: "Syncs 2-way with on-device alarm edits (1-minute precision).",
-                    stacked: true,
-                    control: html`<div class="stack" role="group" aria-label="Device alarms">
-                      ${([0, 1, 2] as const).map((idx) => {
-                        const slot = alarmSlots[idx];
-                        const timeId = `cfg-alarm_${idx + 1}_time`;
-                        const recId = `cfg-alarm_${idx + 1}_recurrence`;
-                        const enId = `cfg-alarm_${idx + 1}_enabled`;
-                        return html`<div class="list-row">
-                          <div class="list-row-main">
-                            <div class="stacked-field">
-                              <label for=${timeId}>Alarm ${idx + 1} Time</label>
-                              <input
-                                type="time"
-                                id=${timeId}
-                                step="60"
-                                .value=${slot.time}
-                                @change=${(ev: Event) => {
-                                  const val = (ev.currentTarget as HTMLInputElement).value;
-                                  if (val) updateAlarmSlot(idx, { time: val.slice(0, 5) }, timeId);
-                                }}
-                              />
+                  <details
+                    id="overview-alarms-drawer"
+                    class="sub-collapsible summary-row"
+                    ?open=${store.overviewAlarmsOpen}
+                    @toggle=${(ev: Event) => {
+                      store.overviewAlarmsOpen = (ev.currentTarget as HTMLDetailsElement).open;
+                    }}
+                  >
+                    <summary>
+                      <span class="row-label">Alarms</span>
+                      <span class="summary-row-end">
+                        <span id="overview-alarms-chip" class=${alarmsSummaryChipClass}>
+                          ${alarmsSummaryLabel}
+                        </span>
+                        <span class="summary-chevron" aria-hidden="true">▾</span>
+                      </span>
+                    </summary>
+                    <div id="overview-alarms" class="card-content stack">
+                      <p class="row-description">
+                        Syncs 2-way with on-device alarm edits (1-minute precision).
+                      </p>
+                      <div class="stack" role="group" aria-label="Device alarms">
+                        ${([0, 1, 2] as const).map((idx) => {
+                          const slot = alarmSlots[idx];
+                          const timeId = `cfg-alarm_${idx + 1}_time`;
+                          const recId = `cfg-alarm_${idx + 1}_recurrence`;
+                          const enId = `cfg-alarm_${idx + 1}_enabled`;
+                          return html`<div class="list-row">
+                            <div class="list-row-main">
+                              <div class="stacked-field">
+                                <label for=${timeId}>Alarm ${idx + 1} Time</label>
+                                <input
+                                  type="time"
+                                  id=${timeId}
+                                  step="60"
+                                  .value=${slot.time}
+                                  @change=${(ev: Event) => {
+                                    const val = (ev.currentTarget as HTMLInputElement).value;
+                                    if (val) updateAlarmSlot(idx, { time: val.slice(0, 5) }, timeId);
+                                  }}
+                                />
+                              </div>
+                              <div class="stacked-field">
+                                <label for=${recId}>Alarm ${idx + 1} Schedule</label>
+                                <select
+                                  id=${recId}
+                                  .value=${String(slot.recurrence)}
+                                  @change=${(ev: Event) =>
+                                    updateAlarmSlot(
+                                      idx,
+                                      {
+                                        recurrence: Number(
+                                          (ev.currentTarget as HTMLSelectElement).value,
+                                        ),
+                                      },
+                                      recId,
+                                    )}
+                                >
+                                  ${ALARM_RECURRENCE_OPTIONS.map(
+                                    (opt) =>
+                                      html`<option
+                                        value=${String(opt.value)}
+                                        ?selected=${opt.value === slot.recurrence}
+                                      >
+                                        ${opt.label}
+                                      </option>`,
+                                  )}
+                                </select>
+                              </div>
                             </div>
-                            <div class="stacked-field">
-                              <label for=${recId}>Alarm ${idx + 1} Schedule</label>
-                              <select
-                                id=${recId}
-                                .value=${String(slot.recurrence)}
+                            <label for=${enId} class="inline-switch">
+                              <span>Enabled</span>
+                              <input
+                                type="checkbox"
+                                id=${enId}
+                                .checked=${slot.enabled}
                                 @change=${(ev: Event) =>
                                   updateAlarmSlot(
                                     idx,
-                                    {
-                                      recurrence: Number(
-                                        (ev.currentTarget as HTMLSelectElement).value,
-                                      ),
-                                    },
-                                    recId,
+                                    { enabled: (ev.currentTarget as HTMLInputElement).checked },
+                                    enId,
                                   )}
-                              >
-                                ${ALARM_RECURRENCE_OPTIONS.map(
-                                  (opt) =>
-                                    html`<option
-                                      value=${String(opt.value)}
-                                      ?selected=${opt.value === slot.recurrence}
-                                    >
-                                      ${opt.label}
-                                    </option>`,
-                                )}
-                              </select>
-                            </div>
-                          </div>
-                          <label for=${enId} class="inline-switch">
-                            <span>Enabled</span>
-                            <input
-                              type="checkbox"
-                              id=${enId}
-                              .checked=${slot.enabled}
-                              @change=${(ev: Event) =>
-                                updateAlarmSlot(
-                                  idx,
-                                  { enabled: (ev.currentTarget as HTMLInputElement).checked },
-                                  enId,
-                                )}
-                              role="switch"
-                              class="switch"
-                            />
-                          </label>
-                        </div>`;
-                      })}
-                    </div>`,
-                  })}
+                                role="switch"
+                                class="switch"
+                              />
+                            </label>
+                          </div>`;
+                        })}
+                      </div>
+                    </div>
+                  </details>
                 </div>`,
             })
           : nothing}

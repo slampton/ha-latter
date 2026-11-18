@@ -16,8 +16,8 @@ _PROTOCOL_DEFAULTS: Final[dict[str, Any]] = json.loads(
 
 DOMAIN: Final = "latter"
 INTEGRATION_VERSION: Final = "3.0.0"
-STUDIO_REV: Final = 32
-MIN_FIRMWARE_SDK_REV: Final = 2026111702
+STUDIO_REV: Final = 33
+MIN_FIRMWARE_SDK_REV: Final = 2026111801
 PLATFORMS: Final[list[Platform]] = [
     Platform.SENSOR,
     Platform.BINARY_SENSOR,
@@ -42,10 +42,10 @@ CONF_WEATHER_ENTITY: Final = "weather_entity"
 CONF_ALARM_ENTITY: Final = "alarm_entity"
 CONF_CAMERA_ENTITY: Final = "camera_entity"
 CONF_CAMERA_ENTITIES: Final = "camera_entities"
-CONF_THERMOSTAT_ENTITY: Final = "thermostat_entity"
-CONF_LOCK_ENTITY: Final = "lock_entity"
-CONF_GARAGE_ENTITY: Final = "garage_entity"
-CONF_VACUUM_ENTITY: Final = "vacuum_entity"
+CONF_THERMOSTAT_ENTITIES: Final = "thermostat_entities"
+CONF_LOCK_ENTITIES: Final = "lock_entities"
+CONF_GARAGE_ENTITIES: Final = "garage_entities"
+CONF_VACUUM_ENTITIES: Final = "vacuum_entities"
 CONF_DEFAULT_SPEAKER: Final = "default_speaker"
 # The Device's own Music Assistant player (explicit link: MA reports neither its device nor its MAC)
 CONF_MA_PLAYER_ENTITY: Final = "ma_player_entity"
@@ -232,10 +232,10 @@ GLOBAL_CONFIG_KEYS: Final[tuple[str, ...]] = (
     CONF_ALARM_ENTITY,
     CONF_CAMERA_ENTITY,
     CONF_CAMERA_ENTITIES,
-    CONF_THERMOSTAT_ENTITY,
-    CONF_LOCK_ENTITY,
-    CONF_GARAGE_ENTITY,
-    CONF_VACUUM_ENTITY,
+    CONF_THERMOSTAT_ENTITIES,
+    CONF_LOCK_ENTITIES,
+    CONF_GARAGE_ENTITIES,
+    CONF_VACUUM_ENTITIES,
     CONF_VOLUME_OVERRIDES,
     CONF_BLE_SCANNER_OFFSETS,
     CONF_BLE_AREA_SIGNATURES,

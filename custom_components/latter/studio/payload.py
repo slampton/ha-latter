@@ -883,6 +883,122 @@ def _camera_preview_url(
     )
 
 
+def _is_garage_cover_state(state_obj: Any) -> bool:
+    """Return True strictly for garage door `cover.*` entities (excluding blinds, curtains, gates, and interior doors)."""
+    dev_class = str(state_obj.attributes.get("device_class") or "").strip().lower()
+    if dev_class == "garage":
+        return True
+    if dev_class != "":
+        return False
+    friendly = str(state_obj.attributes.get("friendly_name") or "")
+    return "garage" in f"{state_obj.entity_id} {friendly}".lower()
+
+
+def _enrich_hub_catalog_item(
+    base_item: dict[str, str],
+    state_obj: Any,
+    idx: Any,
+    area_reg: ar.AreaRegistry,
+) -> dict[str, Any]:
+    """Attach `area_name`, `state_label`, and `state_tone` for Studio Home Hub & Weather status chips."""
+    enriched: dict[str, Any] = dict(base_item)
+    area_id = idx.resolve_entity_area_id(state_obj.entity_id) or ""
+    area_entry = area_reg.async_get_area(area_id) if area_id else None
+    if area_entry is not None:
+        enriched["area_name"] = area_entry.name
+
+    raw_st = str(state_obj.state or "").strip().lower()
+    domain = state_obj.domain
+    attrs = state_obj.attributes
+
+    if raw_st == "unavailable":
+        enriched["state_label"] = "Unavailable"
+        enriched["state_tone"] = "warning"
+        return enriched
+    if not raw_st or raw_st == "unknown":
+        enriched["state_label"] = "—"
+        enriched["state_tone"] = ""
+        return enriched
+
+    if domain == "weather":
+        cond = raw_st.replace("-", " ").replace("_", " ").title()
+        temp = attrs.get("temperature")
+        if temp is not None:
+            try:
+                enriched["state_label"] = f"{round(float(temp))}° • {cond}"
+            except (ValueError, TypeError):
+                enriched["state_label"] = cond
+        else:
+            enriched["state_label"] = cond
+        enriched["state_tone"] = "primary"
+    elif domain == "alarm_control_panel":
+        enriched["state_label"] = raw_st.replace("_", " ").title()
+        if raw_st == "disarmed":
+            enriched["state_tone"] = "success"
+        elif raw_st == "triggered":
+            enriched["state_tone"] = "error"
+        else:
+            enriched["state_tone"] = "warning"
+    elif domain == "climate":
+        mode_map = {
+            "heat": "Heating",
+            "cool": "Cooling",
+            "heat_cool": "Auto",
+            "auto": "Auto",
+            "fan_only": "Fan",
+            "dry": "Dry",
+            "off": "Off",
+        }
+        mode_lbl = mode_map.get(raw_st, raw_st.replace("_", " ").title())
+        tgt = attrs.get("temperature")
+        cur = attrs.get("current_temperature")
+        temp_part = ""
+        if raw_st != "off" and tgt is not None:
+            try:
+                temp_part = f"{round(float(tgt))}°"
+            except (ValueError, TypeError):
+                pass
+        elif cur is not None:
+            try:
+                temp_part = f"{round(float(cur))}°"
+            except (ValueError, TypeError):
+                pass
+        enriched["state_label"] = (
+            f"{mode_lbl} • {temp_part}" if temp_part else mode_lbl
+        )
+        enriched["state_tone"] = (
+            "" if raw_st == "off" else ("warning" if raw_st == "heat" else "primary")
+        )
+    elif domain == "lock":
+        enriched["state_label"] = raw_st.replace("_", " ").title()
+        if raw_st == "locked":
+            enriched["state_tone"] = "success"
+        elif raw_st in ("unlocked", "open"):
+            enriched["state_tone"] = "warning"
+        elif raw_st == "jammed":
+            enriched["state_tone"] = "error"
+        else:
+            enriched["state_tone"] = ""
+    elif domain == "cover":
+        enriched["state_label"] = raw_st.replace("_", " ").title()
+        enriched["state_tone"] = (
+            "success"
+            if raw_st == "closed"
+            else ("warning" if raw_st in ("open", "opening") else "")
+        )
+    elif domain == "vacuum":
+        enriched["state_label"] = raw_st.replace("_", " ").title()
+        if raw_st == "cleaning":
+            enriched["state_tone"] = "primary"
+        elif raw_st == "docked":
+            enriched["state_tone"] = "success"
+        elif raw_st == "error":
+            enriched["state_tone"] = "error"
+        else:
+            enriched["state_tone"] = ""
+    return enriched
+
+
 def _build_entity_catalog(
     hass: HomeAssistant,
     coordinator: LatterCoordinator | None,
@@ -898,13 +1014,13 @@ def _build_entity_catalog(
     ma_speakers: list[dict[str, str]] = []
     remotes_list: list[dict[str, str]] = []
     volume_targets: list[dict[str, str]] = []
-    alarms_list: list[dict[str, str]] = []
+    alarms_list: list[dict[str, Any]] = []
     cameras_list: list[dict[str, Any]] = []
-    climates_list: list[dict[str, str]] = []
-    locks_list: list[dict[str, str]] = []
-    garages_list: list[dict[str, str]] = []
-    vacuums_list: list[dict[str, str]] = []
-    weathers_list: list[dict[str, str]] = []
+    climates_list: list[dict[str, Any]] = []
+    locks_list: list[dict[str, Any]] = []
+    garages_list: list[dict[str, Any]] = []
+    vacuums_list: list[dict[str, Any]] = []
+    weathers_list: list[dict[str, Any]] = []
     calendars_list: list[dict[str, str]] = []
     persons_list: list[dict[str, str]] = []
 
@@ -973,22 +1089,23 @@ def _build_entity_catalog(
         elif domain in ("number", "input_number"):
             volume_targets.append(item)
         elif domain == "alarm_control_panel":
-            alarms_list.append(item)
+            alarms_list.append(_enrich_hub_catalog_item(item, state_obj, idx, area_reg))
         elif domain == "camera":
             cam_item: dict[str, Any] = dict(item)
             if sig_coord is not None and ent_id in allowed_cams_set:
                 cam_item["preview_url"] = _camera_preview_url(sig_coord, ent_id)
             cameras_list.append(cam_item)
         elif domain == "climate":
-            climates_list.append(item)
+            climates_list.append(_enrich_hub_catalog_item(item, state_obj, idx, area_reg))
         elif domain == "lock":
-            locks_list.append(item)
+            locks_list.append(_enrich_hub_catalog_item(item, state_obj, idx, area_reg))
         elif domain == "cover":
-            garages_list.append(item)
+            if _is_garage_cover_state(state_obj):
+                garages_list.append(_enrich_hub_catalog_item(item, state_obj, idx, area_reg))
         elif domain == "vacuum":
-            vacuums_list.append(item)
+            vacuums_list.append(_enrich_hub_catalog_item(item, state_obj, idx, area_reg))
         elif domain == "weather":
-            weathers_list.append(item)
+            weathers_list.append(_enrich_hub_catalog_item(item, state_obj, idx, area_reg))
         elif domain == "calendar":
             calendars_list.append(item)
         elif domain == "person":

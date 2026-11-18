@@ -162,8 +162,8 @@ class TestViewLayout(unittest.TestCase):
         for tracker_tok in ("companion app", "private ble", "ibeacon", "bthome", "tile", "itag", "ruuvitag", "eddystone"):
             self.assertIn(f'"{tracker_tok}"', js)
         self.assertIn("AA:BB:CC:DD:EE:FF, iBeacon UUID, or tracker entity", js)
-        self.assertEqual(latter_const.STUDIO_REV, 32)
-        self.assertIn("const STUDIO_REV = 32;", js)
+        self.assertEqual(latter_const.STUDIO_REV, 33)
+        self.assertIn("const STUDIO_REV = 33;", js)
         self.assertIn(".card.handoff-active", js)
         self.assertIn(".area-presence-box.handoff-active", js)
         self.assertIn(".calibrate-target-box.handoff-active", js)
@@ -285,8 +285,13 @@ class TestViewLayout(unittest.TestCase):
         self.assertNotIn("entitySearchQuery", js)
         for title in ("Notifications &amp; Announcements", "Backup &amp; Restore", "System &amp; Device Logs"):
             self.assertIn(f'<h3 class="card-title">{title}</h3>', sys_tools)
-        for title in ("Whole-Home Entities", "Calendars", "Cameras &amp; Doorbell Audio", "Custom Colors", "Wallpapers"):
+        for title in ("Home Hub &amp; Weather", "Calendars", "Cameras &amp; Doorbell Audio", "Custom Colors", "Wallpapers"):
             self.assertIn(f'<h3 class="card-title">{title}</h3>', shared_entities)
+        self.assertNotIn("Whole-Home Entities", shared_entities)
+        self.assertNotIn("Garage or Gate", shared_entities)
+        self.assertIn('class="hub-domain-box"', shared_entities)
+        for domain_title in ("Thermostat Zones", "Door Locks", "Garage Doors", "Robot Vacuums"):
+            self.assertIn(domain_title, js)
         display_order = (
             "Home Screen",
             "Screensavers",
@@ -406,7 +411,8 @@ class TestViewLayout(unittest.TestCase):
         self.assertIn('id="btn-dismiss-ringing"', overview_col_2)
         self.assertIn('id="btn-cancel-timer"', overview_col_2)
         self.assertIn('id="btn-reset-stopwatch"', overview_col_2)
-        self.assertIn('id: "overview-alarms"', overview_col_2)
+        self.assertIn('id="overview-alarms-drawer"', overview_col_2)
+        self.assertIn('id="overview-alarms"', overview_col_2)
         self.assertNotIn("renderQuickActionGrid(store, quickActionButtons)", overview_col_2)
         self.assertLess(
             overview.index('id="cfg-device_group"'),
@@ -610,8 +616,8 @@ class TestActivityCard(unittest.TestCase):
         self.assertIn("DEFAULT_ACTIVITY_CARD: Final = True\n", const_src)
         self.assertIn(f'DEFAULT_ACTIVITY_SOURCES: Final = "{protocol["defaults"]["activity_sources"]}"\n', const_src)
         fields = {f["name"]: f for f in protocol["domains"]["area_context"]["fields"]}
-        self.assertEqual((fields["activity_card"]["index"], fields["activity_card"]["type"]), (36, "bool"))
-        self.assertEqual((fields["activity_sources"]["index"], fields["activity_sources"]["type"]), (37, "csv"))
+        self.assertEqual((fields["activity_card"]["index"], fields["activity_card"]["type"]), (31, "bool"))
+        self.assertEqual((fields["activity_sources"]["index"], fields["activity_sources"]["type"]), (32, "csv"))
         self.assertIn("activity_card", settings.DEVICE_BOOL_KEYS)
         self.assertIn("activity_sources", settings.DEVICE_TEXT_KEYS)
         self.assertNotIn(

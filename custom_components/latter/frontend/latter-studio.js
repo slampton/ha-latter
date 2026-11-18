@@ -179,7 +179,7 @@ const DEFAULT_GAMES_ITEMS_TOKENS = [
 /**
  * Canonical constants, route maps, issue messages, and Title Case dictionaries for Latter Studio.
  */
-const STUDIO_REV = 32;
+const STUDIO_REV = 33;
 const MAX_DOCK_ITEMS = 24;
 const MAX_PINNED_ITEMS = 96;
 const SHORTCUT_LABEL_MAX = 24;
@@ -5744,17 +5744,29 @@ const STRING_LIST_KEYS = [
   "calendar_entities",
   "camera_entities",
   "remotes_list",
+  "thermostat_entities",
+  "lock_entities",
+  "garage_entities",
+  "vacuum_entities",
 ];
 const STRING_LIST_MAX_ITEMS = {
   camera_entities: 10,
   remotes_list: 10,
   calendar_entities: 50,
+  thermostat_entities: 8,
+  lock_entities: 8,
+  garage_entities: 6,
+  vacuum_entities: 6,
 };
 function isStringListKey(key) {
   return (
     key === "calendar_entities" ||
     key === "camera_entities" ||
-    key === "remotes_list"
+    key === "remotes_list" ||
+    key === "thermostat_entities" ||
+    key === "lock_entities" ||
+    key === "garage_entities" ||
+    key === "vacuum_entities"
   );
 }
 function cleanPersistedStringList(items, maxItems) {
@@ -7259,6 +7271,50 @@ function removeStringListRowOp(
     store.host.requestUpdate();
   }
 }
+function moveStringListRowOp(
+  store,
+  key,
+  index,
+  direction,
+) {
+  const maxItems = STRING_LIST_MAX_ITEMS[key];
+  const list = [...(store.state?.system_config?.[key] || [])];
+  const targetIdx = index + direction;
+  if (index < 0 || index >= list.length || targetIdx < 0 || targetIdx >= list.length) {
+    return;
+  }
+  const prevPersisted = cleanPersistedStringList(list, maxItems);
+  const tmp = list[index];
+  list[index] = list[targetIdx];
+  list[targetIdx] = tmp;
+  const nextPersisted = cleanPersistedStringList(list, maxItems);
+  store.pendingBlankListSlots[key] = list.filter((s) => !String(s || "").trim()).length;
+  const persistedChanged =
+    prevPersisted.length !== nextPersisted.length ||
+    prevPersisted.some((v, i) => v !== nextPersisted[i]);
+  if (persistedChanged) {
+    store.stageSystemSetting(key, nextPersisted);
+    if (store.state?.system_config && store.pendingBlankListSlots[key] > 0) {
+      store.state = {
+        ...store.state,
+        system_config: {
+          ...store.state.system_config,
+          [key]: list,
+        },
+      };
+      store.host.requestUpdate();
+    }
+  } else if (store.state?.system_config) {
+    store.state = {
+      ...store.state,
+      system_config: {
+        ...store.state.system_config,
+        [key]: list,
+      },
+    };
+    store.host.requestUpdate();
+  }
+}
 function addVolumeOverrideRowOp(store) {
   const list = [...(store.state?.system_config?.volume_overrides || [])];
   if (list.length >= 10) {
@@ -7940,6 +7996,7 @@ class StudioStore {
   pinBusy = false;
   worldClockNewLabel = "";
   worldClockNewZone = "";
+  overviewAlarmsOpen = false;
   // System Shared Entities UI state
   activeCameraPreviewEntity = "";
   cameraPreviewUrl = "";
@@ -8039,6 +8096,10 @@ class StudioStore {
     calendar_entities: 0,
     camera_entities: 0,
     remotes_list: 0,
+    thermostat_entities: 0,
+    lock_entities: 0,
+    garage_entities: 0,
+    vacuum_entities: 0,
   };
            pendingDeviceBuckets = new Map();
            pendingEntityStates = new Map();
@@ -8282,6 +8343,7 @@ class StudioStore {
         const subChanged = prevSubId !== nextSubId;
         if (prevSubId && subChanged) {
           void this.flushDeviceBucket(prevSubId);
+          this.overviewAlarmsOpen = false;
           this.appConfigModal = { open: false, app: null };
           this.returnToPinnedModal = false;
         }
@@ -8478,6 +8540,9 @@ class StudioStore {
       targetView === "select_device_prompt" || targetView === "discovered_devices"
         ? "dashboard"
         : targetView;
+    if (prevSubId !== cleanNext) {
+      this.overviewAlarmsOpen = false;
+    }
     this.devicePinDraft = "";
     this.worldClockNewLabel = "";
     this.worldClockNewZone = "";
@@ -9146,6 +9211,9 @@ class StudioStore {
   removeStringListRow(key, index) {
     removeStringListRowOp(this, key, index);
   }
+  moveStringListRow(key, index, direction) {
+    moveStringListRowOp(this, key, index, direction);
+  }
   addVolumeOverrideRow() {
     addVolumeOverrideRowOp(this);
   }
@@ -9786,6 +9854,79 @@ const STUDIO_STYLES = css`
     font-weight: var(--studio-weight-medium);
   }
   details.sub-collapsible > .card-content { padding: var(--studio-space-3) 0 0; }
+  details.sub-collapsible.summary-row > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--studio-space-2);
+    list-style: none;
+  }
+  details.sub-collapsible.summary-row > summary::-webkit-details-marker { display: none; }
+  .summary-row-end {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--studio-space-2);
+  }
+  .summary-chevron {
+    color: var(--studio-text-secondary);
+    transition: transform 0.15s ease;
+  }
+  details.sub-collapsible.summary-row[open] > summary .summary-chevron {
+    transform: rotate(180deg);
+  }
+  .hub-domain-box {
+    display: flex;
+    flex-direction: column;
+    gap: var(--studio-space-2);
+    padding: var(--studio-space-2) var(--studio-space-3);
+    border: 1px solid var(--studio-divider);
+    border-radius: var(--studio-radius-control);
+    background: var(--studio-input-bg);
+  }
+  .hub-domain-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--studio-space-2);
+    min-height: var(--studio-control-height-compact);
+  }
+  .hub-domain-title {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--studio-space-2);
+    font-weight: var(--studio-weight-medium);
+  }
+  .hub-domain-title svg {
+    width: 18px;
+    height: 18px;
+    fill: var(--studio-primary);
+    flex-shrink: 0;
+  }
+  .hub-domain-empty {
+    color: var(--studio-text-secondary);
+    font-size:var(--studio-font-secondary);
+    font-weight: var(--studio-weight-regular);
+  }
+  .hub-slot-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--studio-space-2);
+    padding-top: var(--studio-space-2);
+    border-top: 1px solid var(--studio-divider);
+  }
+  .hub-slot-row > select {
+    flex: 1 1 200px;
+    min-width: 0;
+  }
+  .hub-slot-meta {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--studio-space-1);
+  }
   .area-presence-box {
     display: flex;
     flex-direction: column;
@@ -12441,6 +12582,14 @@ function renderDeviceOverviewView(store) {
   const timerActive = Boolean(live.timer_running || live.timer_paused);
   const stopwatchActive = Boolean(live.stopwatch_running || live.stopwatch_paused);
   const alarmRinging = Boolean(live.alarm_ringing);
+  const enabledAlarmSlots = alarmSlots
+    .filter((s) => s.enabled)
+    .sort((a, b) => a.time.localeCompare(b.time));
+  const alarmsSummaryLabel =
+    enabledAlarmSlots.length > 0
+      ? `${fmtNumber(enabledAlarmSlots.length, store.hass, 0)} Enabled • ${enabledAlarmSlots[0].time}`
+      : "All Off";
+  const alarmsSummaryChipClass = enabledAlarmSlots.length > 0 ? "chip chip-primary" : "chip";
   const powerTileBody = hasBatteryReading
     ? html`<div class="status-tile-head">
           ${renderSvgIcon(DEV_ICON_BATTERY)}
@@ -12805,80 +12954,97 @@ function renderDeviceOverviewView(store) {
                           </button>`
                       : html`<span class="kv-value">—</span>`,
                   })}
-                  ${renderSettingsRow({
-                    id: "overview-alarms",
-                    label: "Alarms",
-                    description: "Syncs 2-way with on-device alarm edits (1-minute precision).",
-                    stacked: true,
-                    control: html`<div class="stack" role="group" aria-label="Device alarms">
-                      ${([0, 1, 2]).map((idx) => {
-                        const slot = alarmSlots[idx];
-                        const timeId = `cfg-alarm_${idx + 1}_time`;
-                        const recId = `cfg-alarm_${idx + 1}_recurrence`;
-                        const enId = `cfg-alarm_${idx + 1}_enabled`;
-                        return html`<div class="list-row">
-                          <div class="list-row-main">
-                            <div class="stacked-field">
-                              <label for=${timeId}>Alarm ${idx + 1} Time</label>
-                              <input
-                                type="time"
-                                id=${timeId}
-                                step="60"
-                                .value=${slot.time}
-                                @change=${(ev) => {
-                                  const val = (ev.currentTarget).value;
-                                  if (val) updateAlarmSlot(idx, { time: val.slice(0, 5) }, timeId);
-                                }}
-                              />
+                  <details
+                    id="overview-alarms-drawer"
+                    class="sub-collapsible summary-row"
+                    ?open=${store.overviewAlarmsOpen}
+                    @toggle=${(ev) => {
+                      store.overviewAlarmsOpen = (ev.currentTarget).open;
+                    }}
+                  >
+                    <summary>
+                      <span class="row-label">Alarms</span>
+                      <span class="summary-row-end">
+                        <span id="overview-alarms-chip" class=${alarmsSummaryChipClass}>
+                          ${alarmsSummaryLabel}
+                        </span>
+                        <span class="summary-chevron" aria-hidden="true">▾</span>
+                      </span>
+                    </summary>
+                    <div id="overview-alarms" class="card-content stack">
+                      <p class="row-description">
+                        Syncs 2-way with on-device alarm edits (1-minute precision).
+                      </p>
+                      <div class="stack" role="group" aria-label="Device alarms">
+                        ${([0, 1, 2]).map((idx) => {
+                          const slot = alarmSlots[idx];
+                          const timeId = `cfg-alarm_${idx + 1}_time`;
+                          const recId = `cfg-alarm_${idx + 1}_recurrence`;
+                          const enId = `cfg-alarm_${idx + 1}_enabled`;
+                          return html`<div class="list-row">
+                            <div class="list-row-main">
+                              <div class="stacked-field">
+                                <label for=${timeId}>Alarm ${idx + 1} Time</label>
+                                <input
+                                  type="time"
+                                  id=${timeId}
+                                  step="60"
+                                  .value=${slot.time}
+                                  @change=${(ev) => {
+                                    const val = (ev.currentTarget).value;
+                                    if (val) updateAlarmSlot(idx, { time: val.slice(0, 5) }, timeId);
+                                  }}
+                                />
+                              </div>
+                              <div class="stacked-field">
+                                <label for=${recId}>Alarm ${idx + 1} Schedule</label>
+                                <select
+                                  id=${recId}
+                                  .value=${String(slot.recurrence)}
+                                  @change=${(ev) =>
+                                    updateAlarmSlot(
+                                      idx,
+                                      {
+                                        recurrence: Number(
+                                          (ev.currentTarget).value,
+                                        ),
+                                      },
+                                      recId,
+                                    )}
+                                >
+                                  ${ALARM_RECURRENCE_OPTIONS.map(
+                                    (opt) =>
+                                      html`<option
+                                        value=${String(opt.value)}
+                                        ?selected=${opt.value === slot.recurrence}
+                                      >
+                                        ${opt.label}
+                                      </option>`,
+                                  )}
+                                </select>
+                              </div>
                             </div>
-                            <div class="stacked-field">
-                              <label for=${recId}>Alarm ${idx + 1} Schedule</label>
-                              <select
-                                id=${recId}
-                                .value=${String(slot.recurrence)}
+                            <label for=${enId} class="inline-switch">
+                              <span>Enabled</span>
+                              <input
+                                type="checkbox"
+                                id=${enId}
+                                .checked=${slot.enabled}
                                 @change=${(ev) =>
                                   updateAlarmSlot(
                                     idx,
-                                    {
-                                      recurrence: Number(
-                                        (ev.currentTarget).value,
-                                      ),
-                                    },
-                                    recId,
+                                    { enabled: (ev.currentTarget).checked },
+                                    enId,
                                   )}
-                              >
-                                ${ALARM_RECURRENCE_OPTIONS.map(
-                                  (opt) =>
-                                    html`<option
-                                      value=${String(opt.value)}
-                                      ?selected=${opt.value === slot.recurrence}
-                                    >
-                                      ${opt.label}
-                                    </option>`,
-                                )}
-                              </select>
-                            </div>
-                          </div>
-                          <label for=${enId} class="inline-switch">
-                            <span>Enabled</span>
-                            <input
-                              type="checkbox"
-                              id=${enId}
-                              .checked=${slot.enabled}
-                              @change=${(ev) =>
-                                updateAlarmSlot(
-                                  idx,
-                                  { enabled: (ev.currentTarget).checked },
-                                  enId,
-                                )}
-                              role="switch"
-                              class="switch"
-                            />
-                          </label>
-                        </div>`;
-                      })}
-                    </div>`,
-                  })}
+                                role="switch"
+                                class="switch"
+                              />
+                            </label>
+                          </div>`;
+                        })}
+                      </div>
+                    </div>
+                  </details>
                 </div>`,
             })
           : nothing}
@@ -15667,15 +15833,6 @@ const SYS_ICON_REMOTE = "M9,2A2,2 0 0,0 7,4V20A2,2 0 0,0 9,22H15A2,2 0 0,0 17,20
 const SYS_ICON_GROUPS = "M3,3H11V11H3V3M13,3H21V11H13V3M3,13H11V21H3V13M13,13H21V21H13V13M5,5V9H9V5H5M15,5V9H19V5H15M5,15V19H9V15H5M15,15V19H19V15H15Z";
 const SYS_ICON_PALETTE = "M17.5,12A1.5,1.5 0 0,1 16,10.5A1.5,1.5 0 0,1 17.5,9A1.5,1.5 0 0,1 19,10.5A1.5,1.5 0 0,1 17.5,12M14.5,8A1.5,1.5 0 0,1 13,6.5A1.5,1.5 0 0,1 14.5,5A1.5,1.5 0 0,1 16,6.5A1.5,1.5 0 0,1 14.5,8M9.5,8A1.5,1.5 0 0,1 8,6.5A1.5,1.5 0 0,1 9.5,5A1.5,1.5 0 0,1 11,6.5A1.5,1.5 0 0,1 9.5,8M6.5,12A1.5,1.5 0 0,1 5,10.5A1.5,1.5 0 0,1 6.5,9A1.5,1.5 0 0,1 8,10.5A1.5,1.5 0 0,1 6.5,12M12,3A9,9 0 0,0 3,12A9,9 0 0,0 12,21A1.5,1.5 0 0,0 13.5,19.5C13.5,19.11 13.35,18.76 13.11,18.5C12.88,18.23 12.73,17.88 12.73,17.5A1.5,1.5 0 0,1 14.23,16H16A5,5 0 0,0 21,11C21,6.58 16.97,3 12,3Z";
 const SYS_ICON_SHIELD = "M12,1L3,5V11C3,16.55 6.84,21.74 12,23C17.16,21.74 21,16.55 21,11V5L12,1M12,7C13.4,7 14.8,8.1 14.8,9.5V11C15.4,11 16,11.6 16,12.3V15.8C16,16.4 15.4,17 14.7,17H9.2C8.6,17 8,16.4 8,15.7V12.2C8,11.6 8.6,11 9.2,11V9.5C9.2,8.1 10.6,7 12,7M12,8.2C11.2,8.2 10.5,8.7 10.5,9.5V11H13.5V9.5C13.5,8.7 12.8,8.2 12,8.2Z";
-const WHOLE_HOME_DOMAINS
-   = [
-  { key: "weather_entity", label: "Weather" },
-  { key: "alarm_entity", label: "Alarm" },
-  { key: "thermostat_entity", label: "Thermostat" },
-  { key: "lock_entity", label: "Door Lock" },
-  { key: "garage_entity", label: "Garage" },
-  { key: "vacuum_entity", label: "Vacuum" },
-];
 function renderSystemOverviewView(store) {
   const data = store.state;
   const allDevices = data?.system_devices || [];
@@ -15842,10 +15999,36 @@ function renderSystemOverviewView(store) {
   const roamingDevices = allDevices.filter((d) => !d.has_assigned_area && (d.is_roaming || d.kind === "ble_tag"));
   const roamingOnlineCount = roamingDevices.filter((d) => d.is_online).length;
   // System Capabilities metrics
-  const wholeHomeStatuses = WHOLE_HOME_DOMAINS.map((d) => ({
-    label: d.label,
-    configured: Boolean(String(sysCfg?.[d.key] || "").trim()),
-  }));
+  const thermCount = (sysCfg?.thermostat_entities || []).filter((s) => Boolean(String(s || "").trim())).length;
+  const lockCount = (sysCfg?.lock_entities || []).filter((s) => Boolean(String(s || "").trim())).length;
+  const garageCount = (sysCfg?.garage_entities || []).filter((s) => Boolean(String(s || "").trim())).length;
+  const vacCount = (sysCfg?.vacuum_entities || []).filter((s) => Boolean(String(s || "").trim())).length;
+  const wholeHomeStatuses = [
+    {
+      label: "Weather",
+      configured: Boolean(String(sysCfg?.weather_entity || "").trim()),
+    },
+    {
+      label: "Alarm",
+      configured: Boolean(String(sysCfg?.alarm_entity || "").trim()),
+    },
+    {
+      label: thermCount > 1 ? `${fmtNumber(thermCount, store.hass, 0)} Zones` : "Thermostat",
+      configured: thermCount > 0,
+    },
+    {
+      label: lockCount > 1 ? `${fmtNumber(lockCount, store.hass, 0)} Locks` : "Door Lock",
+      configured: lockCount > 0,
+    },
+    {
+      label: garageCount > 1 ? `${fmtNumber(garageCount, store.hass, 0)} Garage Doors` : "Garage Door",
+      configured: garageCount > 0,
+    },
+    {
+      label: vacCount > 1 ? `${fmtNumber(vacCount, store.hass, 0)} Vacuums` : "Vacuum",
+      configured: vacCount > 0,
+    },
+  ];
   const wholeHomeActiveCount = wholeHomeStatuses.filter((s) => s.configured).length;
   const camerasCount = (sysCfg?.camera_entities || []).filter(Boolean).length;
   const doorbellsCount = (data?.doorbells || []).filter((b) => Boolean(b.ring_entity)).length;
@@ -17219,8 +17402,33 @@ function renderSystemRemotesView(store) {
 
 // --- src/views/system-shared-view.ts ---
 /**
- * System Shared Entities View (`shared_entities`): Whole-Home Entities, Calendars, Cameras & Doorbell Audio, Custom Colors & Wallpapers (D-022).
+ * System Shared Entities View (`shared_entities`): Home Hub & Weather, Calendars, Cameras & Doorbell Audio, Custom Colors & Wallpapers (D-022 / D-059).
  */
+const ICON_THERMOSTAT =
+  "M15,13V5A3,3 0 0,0 9,5V13A5,5 0 1,0 15,13M12,4A1,1 0 0,1 13,5V8H11V5A1,1 0 0,1 12,4Z";
+const ICON_LOCK =
+  "M12,17A2,2 0 0,0 14,15C14,13.89 13.1,13 12,13A2,2 0 0,0 10,15A2,2 0 0,0 12,17M18,8A2,2 0 0,1 20,10V20A2,2 0 0,1 18,22H6A2,2 0 0,1 4,20V10C4,8.89 4.9,8 6,8H7V6A5,5 0 0,1 12,1A5,5 0 0,1 17,6V8H18M12,3A3,3 0 0,0 9,6V8H15V6A3,3 0 0,0 12,3Z";
+const ICON_GARAGE =
+  "M19,20H17V11H7V20H5V9L12,5L19,9V20M8,12H16V14H8V12M8,15H16V17H8V15M16,18V20H8V18H16Z";
+const ICON_VACUUM =
+  "M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22A10,10 0 0,1 2,12A10,10 0 0,1 12,2M12,4A8,8 0 0,0 4,12C4,13.38 4.35,14.68 4.97,15.81L18.81,7.82C17.34,5.53 14.84,4 12,4M19.56,9.5L5.72,17.5C7.19,19.62 9.45,21 12,21A8,8 0 0,0 20,13C20,11.75 19.84,10.58 19.56,9.5M12,11A2,2 0 0,1 14,13A2,2 0 0,1 12,15A2,2 0 0,1 10,13A2,2 0 0,1 12,11Z";
+const ICON_ARROW_UP = "M7.41,15.41L12,10.83L16.59,15.41L18,14L12,8L6,14L7.41,15.41Z";
+const ICON_ARROW_DOWN = "M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z";
+function toneChipClass(tone) {
+  if (tone === "primary") return "chip chip-primary";
+  if (tone === "success") return "chip chip-success";
+  if (tone === "warning") return "chip chip-warning";
+  if (tone === "error") return "chip chip-error";
+  return "chip";
+}
+function findCatalogChoice(
+  choices,
+  id,
+) {
+  const clean = String(id || "").trim();
+  if (!clean || !choices) return undefined;
+  return choices.find((c) => c.id === clean);
+}
 const TALK_STATE_TEXT = {
   listening: "listening",
   talking: "replying",
@@ -17240,14 +17448,61 @@ function renderSystemSharedView(store) {
   const doorbells = data?.doorbells || [];
   const wallpapers = data?.system_wallpapers || [];
   const noiseRed = sc?.doorbell_noise_reduction || "strong";
-  const wholeHomeFields
+  const singletonFields
      = [
     { key: "weather_entity", label: "Weather", choices: cat.weathers },
-    { key: "alarm_entity", label: "Alarm Control Panel", choices: cat.alarms },
-    { key: "thermostat_entity", label: "Primary Thermostat", choices: cat.climates },
-    { key: "lock_entity", label: "Primary Door Lock", choices: cat.locks },
-    { key: "garage_entity", label: "Garage or Gate Cover", choices: cat.garages },
-    { key: "vacuum_entity", label: "Robot Vacuum", choices: cat.vacuums },
+    { key: "alarm_entity", label: "Security Alarm", choices: cat.alarms },
+  ];
+  const multiDomainGroups
+     = [
+    {
+      key: "thermostat_entities",
+      title: "Thermostat Zones",
+      addLabel: "Add Zone",
+      emptyPlaceholder: "— Choose a thermostat —",
+      selectAriaLabel: "Thermostat zone",
+      removeAriaLabel: "Remove thermostat zone",
+      icon: ICON_THERMOSTAT,
+      maxItems: 8,
+      items: sc?.thermostat_entities || [],
+      choices: cat.climates,
+    },
+    {
+      key: "lock_entities",
+      title: "Door Locks",
+      addLabel: "Add Lock",
+      emptyPlaceholder: "— Choose a door lock —",
+      selectAriaLabel: "Door lock",
+      removeAriaLabel: "Remove door lock",
+      icon: ICON_LOCK,
+      maxItems: 8,
+      items: sc?.lock_entities || [],
+      choices: cat.locks,
+    },
+    {
+      key: "garage_entities",
+      title: "Garage Doors",
+      addLabel: "Add Garage Door",
+      emptyPlaceholder: "— Choose a garage door —",
+      selectAriaLabel: "Garage door",
+      removeAriaLabel: "Remove garage door",
+      icon: ICON_GARAGE,
+      maxItems: 6,
+      items: sc?.garage_entities || [],
+      choices: cat.garages,
+    },
+    {
+      key: "vacuum_entities",
+      title: "Robot Vacuums",
+      addLabel: "Add Vacuum",
+      emptyPlaceholder: "— Choose a robot vacuum —",
+      selectAriaLabel: "Robot vacuum",
+      removeAriaLabel: "Remove robot vacuum",
+      icon: ICON_VACUUM,
+      maxItems: 6,
+      items: sc?.vacuum_entities || [],
+      choices: cat.vacuums,
+    },
   ];
   return html`<section id="view-shared_entities">
     <div class="columns">
@@ -17255,19 +17510,117 @@ function renderSystemSharedView(store) {
         ${renderCard({
           id: "card-whole-home",
           handoffActive: Boolean(store.isHandoffTarget?.("card-whole-home")),
-          heading: html`<h3 class="card-title">Whole-Home Entities</h3>`,
-          subtitle: "Shared entities shown across Home Hub, Weather, and Area views on every Device.",
-          contentClass: "settings-list",
-          body: wholeHomeFields.map((f) =>
-            renderSelectRow({
-              id: `cfg-${f.key}`,
-              label: f.label,
-              value: sc?.[f.key],
-              choices: f.choices,
-              emptyOptionLabel: "— None —",
-              onChange: (val) => store.stageSystemSetting(f.key, val, `cfg-${f.key}`),
-            }),
-          ),
+          heading: html`<h3 class="card-title">Home Hub &amp; Weather</h3>`,
+          subtitle:
+            "Shared climate zones, entry controls, vacuums, security, and weather across every Device.",
+          contentClass: "stack",
+          body: html`<div class="settings-list">
+              ${singletonFields.map((f) => {
+                const curVal = String(sc?.[f.key] || "");
+                const meta = findCatalogChoice(f.choices, curVal);
+                const selectId = `cfg-${f.key}`;
+                return renderSettingsRow({
+                  label: f.label,
+                  forId: selectId,
+                  control: html`${meta?.state_label
+                      ? html`<span class=${toneChipClass(meta.state_tone)}>
+                          ${meta.state_label}
+                        </span>`
+                      : nothing}
+                    <select
+                      id=${selectId}
+                      .value=${curVal}
+                      @change=${(ev) =>
+                        store.stageSystemSetting(
+                          f.key,
+                          (ev.currentTarget).value,
+                          selectId,
+                        )}
+                    >
+                      ${renderSelectOptions(f.choices, curVal, "— None —")}
+                    </select>`,
+                });
+              })}
+            </div>
+
+            ${multiDomainGroups.map((g) => {
+              const configuredCount = g.items.filter((s) => Boolean(String(s || "").trim())).length;
+              return html`<div id="hub-domain-${g.key}" class="hub-domain-box">
+                <div class="hub-domain-head">
+                  <span class="hub-domain-title">
+                    ${renderSvgIcon(g.icon)}
+                    <span>${g.title}</span>
+                    ${configuredCount > 0
+                      ? html`<span class="chip chip-primary">
+                          ${fmtNumber(configuredCount, store.hass, 0)}
+                        </span>`
+                      : html`<span class="hub-domain-empty">None configured</span>`}
+                  </span>
+                  <button
+                    type="button"
+                    ?disabled=${g.items.length >= g.maxItems}
+                    @click=${() => store.addStringListRow(g.key, "", g.maxItems)}
+                    class="btn btn-secondary btn-compact"
+                  >
+                    ${g.addLabel}
+                  </button>
+                </div>
+                ${g.items.length
+                  ? g.items.map((val, idx) => {
+                      const meta = findCatalogChoice(g.choices, val);
+                      return html`<div class="hub-slot-row">
+                        <select
+                          aria-label=${g.selectAriaLabel}
+                          .value=${val}
+                          @change=${(ev) =>
+                            store.updateStringListRow(
+                              g.key,
+                              idx,
+                              (ev.currentTarget).value,
+                            )}
+                        >
+                          ${renderSelectOptions(g.choices, val, g.emptyPlaceholder)}
+                        </select>
+                        ${meta?.area_name || meta?.state_label
+                          ? html`<span class="hub-slot-meta">
+                              ${meta.area_name
+                                ? html`<span class="chip">${meta.area_name}</span>`
+                                : nothing}
+                              ${meta.state_label
+                                ? html`<span class=${toneChipClass(meta.state_tone)}>
+                                    ${meta.state_label}
+                                  </span>`
+                                : nothing}
+                            </span>`
+                          : nothing}
+                        ${g.items.length > 1
+                          ? html`<button
+                                type="button"
+                                aria-label="Move up"
+                                ?disabled=${idx === 0}
+                                @click=${() => store.moveStringListRow(g.key, idx, -1)}
+                                class="btn-icon"
+                              >
+                                ${renderSvgIcon(ICON_ARROW_UP)}
+                              </button>
+                              <button
+                                type="button"
+                                aria-label="Move down"
+                                ?disabled=${idx === g.items.length - 1}
+                                @click=${() => store.moveStringListRow(g.key, idx, 1)}
+                                class="btn-icon"
+                              >
+                                ${renderSvgIcon(ICON_ARROW_DOWN)}
+                              </button>`
+                          : nothing}
+                        ${renderTrashIconButton(g.removeAriaLabel, () =>
+                          store.removeStringListRow(g.key, idx),
+                        )}
+                      </div>`;
+                    })
+                  : nothing}
+              </div>`;
+            })}`,
         })}
 
         ${renderCard({

@@ -802,11 +802,11 @@ async def test_home_hub_rebuild_alarm_caps_separate_pins_climate_cover_and_categ
     from custom_components.latter.const import (
         CONF_ALARM_ENTITY,
         CONF_CAMERA_ENTITIES,
-        CONF_GARAGE_ENTITY,
+        CONF_GARAGE_ENTITIES,
         CONF_HOME_CATEGORIES,
-        CONF_LOCK_ENTITY,
-        CONF_THERMOSTAT_ENTITY,
-        CONF_VACUUM_ENTITY,
+        CONF_LOCK_ENTITIES,
+        CONF_THERMOSTAT_ENTITIES,
+        CONF_VACUUM_ENTITIES,
     )
 
     entry, _sys_obj, coord = await setup_latter_hub(hass)
@@ -861,10 +861,10 @@ async def test_home_hub_rebuild_alarm_caps_separate_pins_climate_cover_and_categ
 
     global_cfg = hass.data[DOMAIN][DATA_GLOBAL_CONFIG]
     global_cfg[CONF_ALARM_ENTITY] = "alarm_control_panel.home_alarm"
-    global_cfg[CONF_THERMOSTAT_ENTITY] = "climate.main_thermostat"
-    global_cfg[CONF_LOCK_ENTITY] = "lock.front_door"
-    global_cfg[CONF_GARAGE_ENTITY] = "cover.main_garage"
-    global_cfg[CONF_VACUUM_ENTITY] = "vacuum.robo_vac"
+    global_cfg[CONF_THERMOSTAT_ENTITIES] = ["climate.main_thermostat"]
+    global_cfg[CONF_LOCK_ENTITIES] = ["lock.front_door"]
+    global_cfg[CONF_GARAGE_ENTITIES] = ["cover.main_garage"]
+    global_cfg[CONF_VACUUM_ENTITIES] = ["vacuum.robo_vac"]
     global_cfg[CONF_CAMERA_ENTITIES] = ["camera.front_porch"]
 
     # Set Latter System Security PIN to "2580" and stationary require_pin policy
@@ -899,27 +899,29 @@ async def test_home_hub_rebuild_alarm_caps_separate_pins_climate_cover_and_categ
     assert compute_climate_caps(None) == 0
     assert compute_vacuum_caps(None) == 0
 
-    # Verify area_context wire indices 43..45 carry alarm_caps="13", climate_caps="79", vacuum_caps="11"
+    # Verify area_context wire indices 15..19 (summaries), 34 (home_categories), 38 (alarm_caps="13")
     coord._cached_area_payload = None
     _area_st, area_attrs = coord.get_area_context_payload()
     assert area_attrs["alarm_caps"] == 13
-    assert area_attrs["climate_caps"] == 79
-    assert area_attrs["vacuum_caps"] == 11
+    assert area_attrs["thermostats"][0]["caps"] == 79
+    assert area_attrs["vacuums"][0]["caps"] == 11
     assert area_attrs["home_categories"] == "alarm,cameras,intercom,thermostat,entry,vacuum"
     wire_fields = area_attrs["payload"].split("\x1f")
-    assert len(wire_fields) == 46  # 3 header fields + 43 body fields (indices 3..45)
-    assert wire_fields[43] == "13"
-    assert wire_fields[44] == "79"
-    assert wire_fields[45] == "11"
-    assert wire_fields[39] == "alarm,cameras,intercom,thermostat,entry,vacuum"
+    assert len(wire_fields) == 39  # 3 header fields + 36 body fields (indices 3..38)
+    assert "climate.main_thermostat|Main Thermostat||heat|70|68.5|79" in wire_fields[15]
+    assert "lock.front_door|Front Door||locked" in wire_fields[16]
+    assert "cover.main_garage|Main Garage||closed" in wire_fields[17]
+    assert "vacuum.robo_vac|Robo Vac||docked|11" in wire_fields[18]
+    assert wire_fields[34] == "alarm,cameras,intercom,thermostat,entry,vacuum"
+    assert wire_fields[38] == "13"
 
     # Custom category ordering is preserved
     hub_sum = get_home_hub_summary(
         hass,
-        thermostat_entity="climate.main_thermostat",
-        lock_entity="lock.front_door",
-        garage_entity="cover.main_garage",
-        vacuum_entity="vacuum.robo_vac",
+        thermostat_entities=["climate.main_thermostat"],
+        lock_entities=["lock.front_door"],
+        garage_entities=["cover.main_garage"],
+        vacuum_entities=["vacuum.robo_vac"],
     )
     assert (
         get_available_home_categories(
@@ -1124,7 +1126,7 @@ async def test_home_hub_rebuild_alarm_caps_separate_pins_climate_cover_and_categ
         "area_action",
         {
             "target_device": coord.device_slug,
-            "entity_id": "home_hub.thermostat",
+            "entity_id": "climate.main_thermostat",
             "action": "set_temperature",
             "level": 72.5,
         },
@@ -1135,7 +1137,7 @@ async def test_home_hub_rebuild_alarm_caps_separate_pins_climate_cover_and_categ
         "area_action",
         {
             "target_device": coord.device_slug,
-            "entity_id": "home_hub.thermostat",
+            "entity_id": "climate.main_thermostat",
             "action": "hvac_heat",
         },
         blocking=True,
@@ -1145,7 +1147,7 @@ async def test_home_hub_rebuild_alarm_caps_separate_pins_climate_cover_and_categ
         "area_action",
         {
             "target_device": coord.device_slug,
-            "entity_id": "home_hub.thermostat",
+            "entity_id": "climate.main_thermostat",
             "action": "hvac_cool",
         },
         blocking=True,
@@ -1156,7 +1158,7 @@ async def test_home_hub_rebuild_alarm_caps_separate_pins_climate_cover_and_categ
         "area_action",
         {
             "target_device": coord.device_slug,
-            "entity_id": "home_hub.thermostat",
+            "entity_id": "climate.main_thermostat",
             "action": "hvac_heat_cool",
         },
         blocking=True,
@@ -1166,7 +1168,7 @@ async def test_home_hub_rebuild_alarm_caps_separate_pins_climate_cover_and_categ
         "area_action",
         {
             "target_device": coord.device_slug,
-            "entity_id": "home_hub.thermostat",
+            "entity_id": "climate.main_thermostat",
             "action": "hvac_off",
         },
         blocking=True,
@@ -1182,7 +1184,7 @@ async def test_home_hub_rebuild_alarm_caps_separate_pins_climate_cover_and_categ
         "area_action",
         {
             "target_device": coord.device_slug,
-            "entity_id": "home_hub.thermostat",
+            "entity_id": "climate.main_thermostat",
             "action": "hvac_auto",
         },
         blocking=True,
@@ -1225,7 +1227,7 @@ async def test_home_hub_rebuild_alarm_caps_separate_pins_climate_cover_and_categ
         "area_action",
         {
             "target_device": coord.device_slug,
-            "entity_id": "home_hub.lock",
+            "entity_id": "lock.front_door",
             "action": "lock",
         },
         blocking=True,
@@ -1236,7 +1238,7 @@ async def test_home_hub_rebuild_alarm_caps_separate_pins_climate_cover_and_categ
             "area_action",
             {
                 "target_device": coord.device_slug,
-                "entity_id": "home_hub.lock",
+                "entity_id": "lock.front_door",
                 "action": "unlock",
                 "code": "9876",
             },
@@ -1248,7 +1250,7 @@ async def test_home_hub_rebuild_alarm_caps_separate_pins_climate_cover_and_categ
         "area_action",
         {
             "target_device": coord.device_slug,
-            "entity_id": "home_hub.lock",
+            "entity_id": "lock.front_door",
             "action": "unlock",
             "code": "2580",
         },
@@ -1261,7 +1263,7 @@ async def test_home_hub_rebuild_alarm_caps_separate_pins_climate_cover_and_categ
         "area_action",
         {
             "target_device": coord.device_slug,
-            "entity_id": "home_hub.garage",
+            "entity_id": "cover.main_garage",
             "action": "close_cover",
         },
         blocking=True,
@@ -1271,7 +1273,7 @@ async def test_home_hub_rebuild_alarm_caps_separate_pins_climate_cover_and_categ
         "area_action",
         {
             "target_device": coord.device_slug,
-            "entity_id": "home_hub.garage",
+            "entity_id": "cover.main_garage",
             "action": "open_cover",
             "code": "2580",
         },
@@ -1282,7 +1284,7 @@ async def test_home_hub_rebuild_alarm_caps_separate_pins_climate_cover_and_categ
         "area_action",
         {
             "target_device": coord.device_slug,
-            "entity_id": "home_hub.garage",
+            "entity_id": "cover.main_garage",
             "action": "stop_cover",
         },
         blocking=True,
@@ -1292,7 +1294,7 @@ async def test_home_hub_rebuild_alarm_caps_separate_pins_climate_cover_and_categ
         "area_action",
         {
             "target_device": coord.device_slug,
-            "entity_id": "home_hub.vacuum",
+            "entity_id": "vacuum.robo_vac",
             "action": "start",
         },
         blocking=True,
@@ -1302,7 +1304,7 @@ async def test_home_hub_rebuild_alarm_caps_separate_pins_climate_cover_and_categ
         "area_action",
         {
             "target_device": coord.device_slug,
-            "entity_id": "home_hub.vacuum",
+            "entity_id": "vacuum.robo_vac",
             "action": "pause",
         },
         blocking=True,
@@ -1312,7 +1314,7 @@ async def test_home_hub_rebuild_alarm_caps_separate_pins_climate_cover_and_categ
         "area_action",
         {
             "target_device": coord.device_slug,
-            "entity_id": "home_hub.vacuum",
+            "entity_id": "vacuum.robo_vac",
             "action": "return_to_base",
         },
         blocking=True,
@@ -1344,10 +1346,10 @@ async def test_home_hub_rebuild_alarm_caps_separate_pins_climate_cover_and_categ
     )
     assert compute_climate_caps(hass.states.get("climate.main_thermostat")) == 0xFF
     range_sum = get_home_hub_summary(
-        hass, thermostat_entity="climate.main_thermostat"
+        hass, thermostat_entities=["climate.main_thermostat"]
     )
-    assert range_sum["thermostat_temp"] == 22
-    assert range_sum["climate_caps"] == 0xFF
+    assert range_sum["thermostats"][0]["target_temp"] == 22
+    assert range_sum["thermostats"][0]["caps"] == 0xFF
 
     # Odd spread midpoint (20.0 .. 23.0 -> 21.5)
     hass.states.async_set(
@@ -1365,9 +1367,9 @@ async def test_home_hub_rebuild_alarm_caps_separate_pins_climate_cover_and_categ
         },
     )
     assert (
-        get_home_hub_summary(hass, thermostat_entity="climate.main_thermostat")[
-            "thermostat_temp"
-        ]
+        get_home_hub_summary(hass, thermostat_entities=["climate.main_thermostat"])[
+            "thermostats"
+        ][0]["target_temp"]
         == 21.5
     )
 
@@ -1396,7 +1398,7 @@ async def test_home_hub_rebuild_alarm_caps_separate_pins_climate_cover_and_categ
             "area_action",
             {
                 "target_device": coord.device_slug,
-                "entity_id": "home_hub.thermostat",
+                "entity_id": "climate.main_thermostat",
                 "action": act_c,
                 **extra_c,
             },
@@ -1439,7 +1441,7 @@ async def test_home_hub_rebuild_alarm_caps_separate_pins_climate_cover_and_categ
             "area_action",
             {
                 "target_device": coord.device_slug,
-                "entity_id": "home_hub.vacuum",
+                "entity_id": "vacuum.robo_vac",
                 "action": vac_act,
             },
             blocking=True,
@@ -1465,7 +1467,7 @@ async def test_home_hub_rebuild_alarm_caps_separate_pins_climate_cover_and_categ
             "area_action",
             {
                 "target_device": coord.device_slug,
-                "entity_id": "home_hub.vacuum",
+                "entity_id": "vacuum.robo_vac",
                 "action": vac_act,
             },
             blocking=True,
