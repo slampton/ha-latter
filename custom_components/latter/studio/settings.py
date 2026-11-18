@@ -1137,6 +1137,7 @@ DEVICE_TEXT_KEYS: tuple[str, ...] = (
     "default_area",
     "ble_beacon_uuid",
     "ble_target_address",
+    "ble_category",
     "assigned_person",
     "area_categories",
     "home_categories",
@@ -1187,6 +1188,7 @@ BLE_REF_POWER_MAX_DBM = -30
 NOISE_REDUCTION_LEVELS: tuple[str, ...] = ("strong", "light", "off")
 DEFAULT_NOISE_REDUCTION = "strong"
 SECURITY_PIN_POLICIES: tuple[str, ...] = ("auto", "allow", "require_pin", "block")
+BLE_CATEGORIES: tuple[str, ...] = ("auto", "phone", "ble_tag")
 _HEX_COLOR = re.compile(r"^#[0-9A-F]{6}$")
 _REMOTE_GROUP_REF = re.compile(r"^group:[A-Za-z0-9_-]+$")
 
@@ -1603,6 +1605,13 @@ def clean_device_settings(
                 f"Unknown remote group mode: {rem_grp}"
             )
         out["device_remote_group"] = rem_grp
+    if "ble_category" in out:
+        ble_cat = (out["ble_category"] or "auto").lower()
+        if ble_cat not in BLE_CATEGORIES:
+            raise SettingsScopeError(
+                f"Unknown BLE category: {ble_cat}"
+            )
+        out["ble_category"] = ble_cat
     return out
 
 

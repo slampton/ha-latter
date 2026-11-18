@@ -179,7 +179,7 @@ const DEFAULT_GAMES_ITEMS_TOKENS = [
 /**
  * Canonical constants, route maps, issue messages, and Title Case dictionaries for Latter Studio.
  */
-const STUDIO_REV = 29;
+const STUDIO_REV = 30;
 const MAX_DOCK_ITEMS = 24;
 const MAX_PINNED_ITEMS = 96;
 const SHORTCUT_LABEL_MAX = 24;
@@ -12159,12 +12159,27 @@ function renderDeviceOverviewView(store) {
   const areaText = hasAssignedArea
     ? curDevEntry?.area_label || live.active_area_name || "—"
     : live.active_area_name || "—";
+  const effBleCat = String(cfg.effective_ble_category || curDevEntry?.ble_category || "ble_tag");
+  const rawBleCat = String(cfg.ble_category || "auto").trim().toLowerCase();
+  const curBleCat = rawBleCat === "phone" || rawBleCat === "ble_tag" ? rawBleCat : "auto";
+  const txStatus = isBleOnly ? live.ble_transmitter_status : null;
+  const txStateText = String(txStatus?.state || "").trim();
+  const showTxOffBanner =
+    Boolean(txStatus) && Boolean(txStateText) && txStateText.toLowerCase() !== "transmitting";
   const distSuffix =
     live.ble_closest_proxy && winRow && winRow.distance_m !== null && winRow.distance_m !== undefined
       ? ` (~${fmtDistance(winRow.distance_m, store.hass, winRow.distance_ft)})`
       : "";
-  const showProxyMeta = Boolean(!isBleOnly && caps.has_ble_beacon && cfg.native_ble_tracking && live.ble_closest_proxy);
-  const areaMetaBase = isBleOnly ? "BLE tag" : hasAssignedArea ? "Stationary" : "Roaming";
+  const showProxyMeta = Boolean(
+    (isBleOnly || (caps.has_ble_beacon && cfg.native_ble_tracking)) && live.ble_closest_proxy,
+  );
+  const areaMetaBase = isBleOnly
+    ? effBleCat === "phone"
+      ? "Phone"
+      : "BLE tag"
+    : hasAssignedArea
+      ? "Stationary"
+      : "Roaming";
   const areaMeta = showProxyMeta
     ? `${areaMetaBase} • ${live.ble_closest_proxy}${distSuffix}`
     : areaMetaBase;
@@ -12180,7 +12195,8 @@ function renderDeviceOverviewView(store) {
   let statusLabel = "—";
   if (isBleOnly) {
     statusLabel = curDevEntry?.status_label || "—";
-    const detected = statusLabel.toLowerCase().includes("detected") || Boolean(winRow);
+    const detected =
+      Boolean(curDevEntry?.is_online) || statusLabel === "Online" || Boolean(winRow);
     if (detected) {
       statusChipClass = "chip chip-success";
       statusDotClass = "status-dot online";
@@ -12301,6 +12317,17 @@ function renderDeviceOverviewView(store) {
           >
             Open Repairs
           </button>
+        </div>`
+      : nothing}
+
+    ${showTxOffBanner
+      ? html`<div id="ble-transmitter-off-banner" role="alert" class="alert alert-warning">
+          <div class="alert-body">
+            <strong>BLE Transmitter Not Active (${txStateText})</strong>
+            <span>
+              Enable the BLE Transmitter sensor in the Home Assistant Companion App on this phone so Bluetooth proxies can detect its Area.
+            </span>
+          </div>
         </div>`
       : nothing}
 
@@ -12496,7 +12523,28 @@ function renderDeviceOverviewView(store) {
                       Manage Groups
                     </button>`,
                 })
-              : nothing}
+              : renderSettingsRow({
+                  label: "Device Category",
+                  forId: "cfg-ble_category",
+                  description:
+                    "Classifies this Bluetooth Device under Phones or BLE Tags across Managed Devices.",
+                  control: html`<select
+                    id="cfg-ble_category"
+                    .value=${curBleCat}
+                    @change=${(ev) =>
+                      store.stageDeviceSetting(
+                        "ble_category",
+                        (ev.currentTarget).value,
+                        "cfg-ble_category",
+                      )}
+                  >
+                    <option value="auto" ?selected=${curBleCat === "auto"}>
+                      Auto (${effBleCat === "phone" ? "Phone" : "BLE Tag"})
+                    </option>
+                    <option value="phone" ?selected=${curBleCat === "phone"}>Phone</option>
+                    <option value="ble_tag" ?selected=${curBleCat === "ble_tag"}>BLE Tag</option>
+                  </select>`,
+                })}
             ${renderSelectRow({
               id: "cfg-assigned_person",
               label: "Assigned Person",
@@ -12765,6 +12813,14 @@ function renderDevicePresenceView(store) {
     cfg.ble_ref_power !== null && cfg.ble_ref_power !== undefined
       ? String(cfg.ble_ref_power)
       : "";
+  const txStatus = isBleOnly ? data?.live?.ble_transmitter_status : null;
+  const txPowerRaw = String(txStatus?.tx_power || "").trim();
+  const advModeRaw = String(txStatus?.advertise_mode || "").trim();
+  const txPowerNorm = txPowerRaw.toLowerCase().replace(/[^a-z]/g, "");
+  const advModeNorm = advModeRaw.toLowerCase().replace(/[^a-z]/g, "");
+  const showCompanionPowerTip =
+    Boolean(txStatus) &&
+    (txPowerNorm === "ultralow" || txPowerNorm === "low" || advModeNorm === "lowpower");
   const bleBeaconPref = store.getPref("ble_beacon_mode");
   const bleAreaItems = store
     .getSectionItems("area")
@@ -12889,6 +12945,18 @@ function renderDevicePresenceView(store) {
                 Leave blank to use auto-detected beacon power in dBm, or enter -90 to -30 dBm to calibrate this Device.
               </span>
             </div>
+            ${showCompanionPowerTip
+              ? html`<div id="ble-companion-power-tip" class="alert">
+                  <div class="alert-body">
+                    <strong>Companion App Low-Power Beacon Detected</strong>
+                    <span>
+                      This phone is advertising at <code>${txPowerRaw || "default"}</code> power${advModeRaw
+                        ? html` (<code>${advModeRaw}</code> mode)`
+                        : nothing}. Latter automatically compensates its 1 m reference power (${fmtNumber(detectedRefPower, store.hass, 0)} dBm), and setting <strong>Transmit Power</strong> to <strong>Medium</strong> or <strong>High</strong> and <strong>Advertise Mode</strong> to <strong>Balanced</strong> in the Home Assistant Companion App improves multi-Area accuracy through walls.
+                    </span>
+                  </div>
+                </div>`
+              : nothing}
             ${!isBleOnly
               ? html`<div class="stacked-field">
                   <label for="cfg-ble_beacon_uuid">iBeacon UUID</label>
@@ -13774,14 +13842,15 @@ function renderDevicesDiscoveredView(store) {
  */
 function statusRank(st) {
   if (st === "Update available") return 1;
-  if (st === "Offline") return 2;
+  if (st === "Offline" || st === "Away" || st === "Scanning") return 2;
   return 3;
 }
 function renderDevicesListView(store) {
   const allDevices = store.state?.system_devices || [];
   const groups = store.state?.device_groups || [];
   const rawCat = store.deviceCategoryFilter || "all";
-  const hasBleTags = allDevices.some((d) => d.kind === "ble_tag");
+  const hasPhones = allDevices.some((d) => d.kind === "ble_tag" && d.ble_category === "phone");
+  const hasBleTags = allDevices.some((d) => d.kind === "ble_tag" && d.ble_category !== "phone");
   const hasAssignedPeople = allDevices.some((d) => Boolean(d.assigned_person));
   const hasUpdates = allDevices.some((d) => d.status_label === "Update available");
   const hasCustomGroup = allDevices.some(
@@ -13798,6 +13867,9 @@ function renderDevicesListView(store) {
   }
   if (rawCat === "ble_tracked") {
     baseCategories.push({ id: "ble_tracked", label: "BLE-Tracked Devices" });
+  }
+  if (hasPhones || rawCat === "phone") {
+    baseCategories.push({ id: "phone", label: "Phones" });
   }
   if (hasBleTags || rawCat === "ble_tag") {
     baseCategories.push({ id: "ble_tag", label: "BLE Tags" });
@@ -13830,7 +13902,8 @@ function renderDevicesListView(store) {
     if (cat === "assigned_person") return Boolean(d.assigned_person);
     if (cat === "roaming") return isRoaming;
     if (cat === "stationary") return !isRoaming;
-    if (cat === "ble_tag") return isBleTag;
+    if (cat === "phone") return isBleTag && d.ble_category === "phone";
+    if (cat === "ble_tag") return isBleTag && d.ble_category !== "phone";
     if (cat === "updates") return d.status_label === "Update available";
     if (cat === "group:custom") {
       return !isBleTag && (!d.device_group || d.device_group === "custom");
@@ -13890,11 +13963,16 @@ function renderDevicesListView(store) {
                   (d) => {
                     const st = d.status_label || "—";
                     const dotCls =
-                      st === "Update available" ? "update" : st === "Offline" ? "" : "online";
+                      st === "Update available" ? "update" : st === "Online" ? "online" : "";
                     const grpCell =
-                      d.kind === "ble_tag"
-                        ? "—"
-                        : d.device_group_name || (d.device_group === "custom" ? "Custom" : "—");
+                      d.device_group_name ||
+                      (d.kind === "ble_tag"
+                        ? d.ble_category === "phone"
+                          ? "Phone"
+                          : "BLE Tag"
+                        : d.device_group === "custom"
+                          ? "Custom"
+                          : "—");
                     const openRow = () => {
                       void store.switchSystemDevice(d.subentry_id);
                     };
@@ -15431,7 +15509,12 @@ function renderSystemOverviewView(store) {
   const onlineCount = allDevices.filter((d) => d.is_online).length;
   const offlineCount = Math.max(0, totalCount - onlineCount);
   const displayCount = allDevices.filter((d) => d.kind !== "ble_tag" && d.has_display).length;
-  const bleTagCount = allDevices.filter((d) => d.kind === "ble_tag").length;
+  const phoneCount = allDevices.filter(
+    (d) => d.kind === "ble_tag" && d.ble_category === "phone",
+  ).length;
+  const bleTagOnlyCount = allDevices.filter(
+    (d) => d.kind === "ble_tag" && d.ble_category !== "phone",
+  ).length;
   const audioOnlyCount = allDevices.filter((d) => d.kind !== "ble_tag" && !d.has_display).length;
   const bleTrackedCount = allDevices.filter((d) => d.ble_tracked || d.kind === "ble_tag").length;
   const assignedPeopleCount = allDevices.filter((d) => Boolean(d.assigned_person)).length;
@@ -15469,9 +15552,14 @@ function renderSystemOverviewView(store) {
     devMetaParts.push("Ready to onboard");
   } else {
     devMetaParts.push(`${fmtNumber(displayCount, store.hass, 0)} ${displayCount === 1 ? "display" : "displays"}`);
-    if (bleTagCount > 0) {
-      devMetaParts.push(`${fmtNumber(bleTagCount, store.hass, 0)} BLE ${bleTagCount === 1 ? "tag" : "tags"}`);
-    } else if (audioOnlyCount > 0) {
+    if (phoneCount > 0) {
+      devMetaParts.push(`${fmtNumber(phoneCount, store.hass, 0)} ${phoneCount === 1 ? "phone" : "phones"}`);
+    }
+    if (bleTagOnlyCount > 0) {
+      devMetaParts.push(
+        `${fmtNumber(bleTagOnlyCount, store.hass, 0)} BLE ${bleTagOnlyCount === 1 ? "tag" : "tags"}`,
+      );
+    } else if (phoneCount === 0 && audioOnlyCount > 0) {
       devMetaParts.push(`${fmtNumber(audioOnlyCount, store.hass, 0)} audio`);
     }
   }

@@ -162,6 +162,7 @@ export interface SystemDeviceEntry {
   status_label: string;
   is_online: boolean;
   kind: "device" | "ble_tag";
+  ble_category?: "phone" | "ble_tag" | "" | string;
   has_display: boolean;
   is_roaming: boolean;
   device_group: string;
@@ -262,6 +263,8 @@ export interface DeviceConfig {
   native_ble_tracking?: boolean;
   ble_beacon_uuid?: string;
   ble_target_address?: string;
+  ble_category?: "auto" | "phone" | "ble_tag" | string;
+  effective_ble_category?: "phone" | "ble_tag" | "" | string;
   ble_ref_power?: number | null;
   assigned_person?: string;
   ble_auto_switch?: boolean;
@@ -448,11 +451,18 @@ export interface LogEntry {
   message?: string;
 }
 
+export interface BleTransmitterStatus {
+  state: string;
+  tx_power: string;
+  advertise_mode: string;
+}
+
 export interface LiveDeviceSection {
   active_area_name?: string;
   ma_link_matched?: boolean;
   ble_closest_proxy?: string;
   ble_detected_ref_power?: number | null;
+  ble_transmitter_status?: BleTransmitterStatus | null;
   area_presence_grid?: AreaPresenceRow[];
   device_sw_version?: string;
   sdk_rev?: string;

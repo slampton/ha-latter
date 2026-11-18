@@ -12,7 +12,7 @@ import { entityLabel } from "../utils/format.js";
 
 function statusRank(st: string): number {
   if (st === "Update available") return 1;
-  if (st === "Offline") return 2;
+  if (st === "Offline" || st === "Away" || st === "Scanning") return 2;
   return 3;
 }
 
@@ -21,7 +21,8 @@ export function renderDevicesListView(store: StudioStore): TemplateResult {
   const groups = store.state?.device_groups || [];
   const rawCat = store.deviceCategoryFilter || "all";
 
-  const hasBleTags = allDevices.some((d) => d.kind === "ble_tag");
+  const hasPhones = allDevices.some((d) => d.kind === "ble_tag" && d.ble_category === "phone");
+  const hasBleTags = allDevices.some((d) => d.kind === "ble_tag" && d.ble_category !== "phone");
   const hasAssignedPeople = allDevices.some((d) => Boolean(d.assigned_person));
   const hasUpdates = allDevices.some((d) => d.status_label === "Update available");
   const hasCustomGroup = allDevices.some(
@@ -39,6 +40,9 @@ export function renderDevicesListView(store: StudioStore): TemplateResult {
   }
   if (rawCat === "ble_tracked") {
     baseCategories.push({ id: "ble_tracked", label: "BLE-Tracked Devices" });
+  }
+  if (hasPhones || rawCat === "phone") {
+    baseCategories.push({ id: "phone", label: "Phones" });
   }
   if (hasBleTags || rawCat === "ble_tag") {
     baseCategories.push({ id: "ble_tag", label: "BLE Tags" });
@@ -73,7 +77,8 @@ export function renderDevicesListView(store: StudioStore): TemplateResult {
     if (cat === "assigned_person") return Boolean(d.assigned_person);
     if (cat === "roaming") return isRoaming;
     if (cat === "stationary") return !isRoaming;
-    if (cat === "ble_tag") return isBleTag;
+    if (cat === "phone") return isBleTag && d.ble_category === "phone";
+    if (cat === "ble_tag") return isBleTag && d.ble_category !== "phone";
     if (cat === "updates") return d.status_label === "Update available";
     if (cat === "group:custom") {
       return !isBleTag && (!d.device_group || d.device_group === "custom");
@@ -135,11 +140,16 @@ export function renderDevicesListView(store: StudioStore): TemplateResult {
                   (d) => {
                     const st = d.status_label || "—";
                     const dotCls =
-                      st === "Update available" ? "update" : st === "Offline" ? "" : "online";
+                      st === "Update available" ? "update" : st === "Online" ? "online" : "";
                     const grpCell =
-                      d.kind === "ble_tag"
-                        ? "—"
-                        : d.device_group_name || (d.device_group === "custom" ? "Custom" : "—");
+                      d.device_group_name ||
+                      (d.kind === "ble_tag"
+                        ? d.ble_category === "phone"
+                          ? "Phone"
+                          : "BLE Tag"
+                        : d.device_group === "custom"
+                          ? "Custom"
+                          : "—");
                     const openRow = (): void => {
                       void store.switchSystemDevice(d.subentry_id);
                     };

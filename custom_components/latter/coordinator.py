@@ -56,6 +56,7 @@ from .const import (
     CONF_BLE_AUTO_SWITCH,
     CONF_BLE_AWAY_TIMEOUT_S,
     CONF_BLE_BEACON_UUID,
+    CONF_BLE_CATEGORY,
     CONF_BLE_MAX_RADIUS_M,
     CONF_BLE_MAX_VELOCITY_MPS,
     CONF_BLE_REF_POWER,
@@ -106,6 +107,7 @@ from .const import (
     DEFAULT_BLE_AUTO_SWITCH,
     DEFAULT_BLE_AWAY_TIMEOUT_S,
     DEFAULT_BLE_BEACON_UUID,
+    DEFAULT_BLE_CATEGORY,
     DEFAULT_BLE_MAX_RADIUS_M,
     DEFAULT_BLE_MAX_VELOCITY_MPS,
     DEFAULT_CARD_SLOT_COUNT,
@@ -175,6 +177,7 @@ from .presence import (
     AreaFollowDwell,
     FollowAction,
     LatterNativeBleTracker,
+    classify_ble_target_category,
     get_ble_fabric,
     get_ble_proxy_area_ids,
     get_ble_signature_area_ids,
@@ -1092,6 +1095,23 @@ class LatterCoordinator:
     @property
     def ble_target_address(self) -> str:
         return str(self.get_opt(CONF_BLE_TARGET_ADDRESS, "") or "").strip()
+
+    @property
+    def configured_ble_category(self) -> str:
+        raw = (
+            str(self.get_opt(CONF_BLE_CATEGORY, DEFAULT_BLE_CATEGORY) or DEFAULT_BLE_CATEGORY)
+            .strip()
+            .lower()
+        )
+        return raw if raw in ("auto", "phone", "ble_tag") else DEFAULT_BLE_CATEGORY
+
+    @property
+    def effective_ble_category(self) -> str:
+        if not self.is_ble_tag:
+            return ""
+        return classify_ble_target_category(
+            self.hass, self.ble_target_address, self.configured_ble_category
+        )
 
     @property
     def ble_scanner_offsets(self) -> dict[str, float]:

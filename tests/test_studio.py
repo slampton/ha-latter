@@ -162,8 +162,10 @@ class TestViewLayout(unittest.TestCase):
         for tracker_tok in ("companion app", "private ble", "ibeacon", "bthome", "tile", "itag", "ruuvitag", "eddystone"):
             self.assertIn(f'"{tracker_tok}"', js)
         self.assertIn("AA:BB:CC:DD:EE:FF, iBeacon UUID, or tracker entity", js)
-        self.assertEqual(latter_const.STUDIO_REV, 29)
-        self.assertIn("const STUDIO_REV = 29;", js)
+        self.assertEqual(latter_const.STUDIO_REV, 30)
+        self.assertIn("const STUDIO_REV = 30;", js)
+        self.assertIn('{ id: "phone", label: "Phones" }', js)
+        self.assertIn('{ id: "ble_tag", label: "BLE Tags" }', js)
         self.assertIn("cfg-home_date_tap_action", js)
         self.assertIn("cfg-calendar_lookahead_days", js)
         self.assertIn("cfg-calendar_week_start", js)
@@ -397,6 +399,13 @@ class TestViewLayout(unittest.TestCase):
             overview.index('id="cfg-device_group"'),
             overview.index('id: "cfg-assigned_person"'),
         )
+        self.assertIn('label: "Device Category"', overview)
+        self.assertIn('id="cfg-ble_category"', overview)
+        self.assertLess(
+            overview.index('id="cfg-ble_category"'),
+            overview.index('id: "cfg-assigned_person"'),
+        )
+        self.assertIn('id="ble-transmitter-off-banner"', overview)
         self.assertIn('id="btn-save-custom-group"', overview)
         self.assertIn('id="btn-manage-groups"', overview)
         self.assertIn('id="btn-open-in-ha"', overview)
@@ -442,6 +451,7 @@ class TestViewLayout(unittest.TestCase):
         self.assertIn('id="cfg-ble_target_address"', presence_view)
         self.assertIn('id="cfg-ble_ref_power"', presence_view)
         self.assertIn("Reference Power (1 Meter)", presence_view)
+        self.assertIn('id="ble-companion-power-tip"', presence_view)
         for gone in ("In Home Assistant</h3>", "Location &amp; BLE</h3>", 'id="cfg-device_slug"', 'id="st-group"'):
             self.assertNotIn(gone, js)
         self.assertNotIn('"count": len(', (LATTER_DIR / "areas.py").read_text(encoding="utf-8"))
@@ -875,6 +885,12 @@ class TestSaveScopes(unittest.TestCase):
         self.assertEqual(settings.clean_device_settings({"ble_ref_power": "-51"}), {"ble_ref_power": -51})
         with self.assertRaises(settings.SettingsScopeError):
             settings.clean_device_settings({"ble_ref_power": "loud"})
+        self.assertEqual(settings.clean_device_settings({"ble_category": ""}), {"ble_category": "auto"})
+        self.assertEqual(settings.clean_device_settings({"ble_category": " Phone "}), {"ble_category": "phone"})
+        self.assertEqual(settings.clean_device_settings({"ble_category": "BLE_TAG"}), {"ble_category": "ble_tag"})
+        self.assertIn("ble_category", backup.DEVICE_CONFIG_EXPORT_KEYS)
+        with self.assertRaises(settings.SettingsScopeError):
+            settings.clean_device_settings({"ble_category": "laptop"})
 
     def test_voice_follows_me_dwell_is_a_device_setting(self) -> None:
         self.assertIn("area_follow_dwell_s", settings.DEVICE_SETTING_KEYS)

@@ -34,6 +34,7 @@ from ..const import (
     CONF_AREA_FUSION_CONFIG,
     CONF_ASSIGNED_PERSON,
     CONF_BLE_AREA_SIGNATURES,
+    CONF_BLE_CATEGORY,
     CONF_BLE_SCANNER_OFFSETS,
     CONF_BLE_TARGET_ADDRESS,
     CONF_DEVICE_GROUP,
@@ -47,6 +48,7 @@ from ..const import (
     CONF_WALLPAPER_FAVORITES,
     CONF_WALLPAPER_SOURCE,
     DATA_GLOBAL_CONFIG,
+    DEFAULT_BLE_CATEGORY,
     DEFAULT_DEVICE_GROUP,
     DEFAULT_DEVICE_REMOTE_GROUP,
     DOMAIN,
@@ -866,6 +868,9 @@ async def _cmd_add_ble_device(
     raw_name = str(body.get("name") or "").strip()
     target_addr = str(body.get("target_address") or "").strip()
     assigned_person = str(body.get("assigned_person") or "").strip()
+    raw_cat = str(body.get(CONF_BLE_CATEGORY) or DEFAULT_BLE_CATEGORY).strip().lower()
+    if raw_cat not in ("auto", "phone", "ble_tag"):
+        raise StudioCommandError("invalid_format", f"Unknown BLE category '{raw_cat}'")
     target_slug = normalize_device_slug(raw_name) if raw_name else ""
     if not target_slug or not target_addr:
         raise StudioCommandError(
@@ -881,6 +886,7 @@ async def _cmd_add_ble_device(
         data={
             "name": raw_name,
             CONF_BLE_TARGET_ADDRESS: target_addr,
+            CONF_BLE_CATEGORY: raw_cat,
             CONF_ASSIGNED_PERSON: assigned_person,
         },
     )

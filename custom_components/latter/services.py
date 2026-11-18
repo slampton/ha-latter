@@ -326,7 +326,7 @@ async def async_push_browse_slots(
     page_slice = items[local_start : local_start + eff_page_size]
 
     mode_low = str(mode).strip().lower()
-    name_cap = 512 if mode_low in ("bio", "track_info", "lyrics") else 64
+    name_cap = 512 if mode_low in ("bio", "track_info", "lyrics") else 120
     packed_rows: list[str] = []
     for slot in page_slice:
         s_name = str(slot.get("name", ""))[:name_cap].replace("\x1f", " ").replace("\x1e", " ")

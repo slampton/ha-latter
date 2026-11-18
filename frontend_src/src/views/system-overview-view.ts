@@ -75,7 +75,12 @@ export function renderSystemOverviewView(store: StudioStore): TemplateResult {
   const onlineCount = allDevices.filter((d) => d.is_online).length;
   const offlineCount = Math.max(0, totalCount - onlineCount);
   const displayCount = allDevices.filter((d) => d.kind !== "ble_tag" && d.has_display).length;
-  const bleTagCount = allDevices.filter((d) => d.kind === "ble_tag").length;
+  const phoneCount = allDevices.filter(
+    (d) => d.kind === "ble_tag" && d.ble_category === "phone",
+  ).length;
+  const bleTagOnlyCount = allDevices.filter(
+    (d) => d.kind === "ble_tag" && d.ble_category !== "phone",
+  ).length;
   const audioOnlyCount = allDevices.filter((d) => d.kind !== "ble_tag" && !d.has_display).length;
   const bleTrackedCount = allDevices.filter((d) => d.ble_tracked || d.kind === "ble_tag").length;
   const assignedPeopleCount = allDevices.filter((d) => Boolean(d.assigned_person)).length;
@@ -116,9 +121,14 @@ export function renderSystemOverviewView(store: StudioStore): TemplateResult {
     devMetaParts.push("Ready to onboard");
   } else {
     devMetaParts.push(`${fmtNumber(displayCount, store.hass, 0)} ${displayCount === 1 ? "display" : "displays"}`);
-    if (bleTagCount > 0) {
-      devMetaParts.push(`${fmtNumber(bleTagCount, store.hass, 0)} BLE ${bleTagCount === 1 ? "tag" : "tags"}`);
-    } else if (audioOnlyCount > 0) {
+    if (phoneCount > 0) {
+      devMetaParts.push(`${fmtNumber(phoneCount, store.hass, 0)} ${phoneCount === 1 ? "phone" : "phones"}`);
+    }
+    if (bleTagOnlyCount > 0) {
+      devMetaParts.push(
+        `${fmtNumber(bleTagOnlyCount, store.hass, 0)} BLE ${bleTagOnlyCount === 1 ? "tag" : "tags"}`,
+      );
+    } else if (phoneCount === 0 && audioOnlyCount > 0) {
       devMetaParts.push(`${fmtNumber(audioOnlyCount, store.hass, 0)} audio`);
     }
   }

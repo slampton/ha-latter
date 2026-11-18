@@ -152,12 +152,28 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
     ? curDevEntry?.area_label || live.active_area_name || "—"
     : live.active_area_name || "—";
 
+  const effBleCat = String(cfg.effective_ble_category || curDevEntry?.ble_category || "ble_tag");
+  const rawBleCat = String(cfg.ble_category || "auto").trim().toLowerCase();
+  const curBleCat = rawBleCat === "phone" || rawBleCat === "ble_tag" ? rawBleCat : "auto";
+  const txStatus = isBleOnly ? live.ble_transmitter_status : null;
+  const txStateText = String(txStatus?.state || "").trim();
+  const showTxOffBanner =
+    Boolean(txStatus) && Boolean(txStateText) && txStateText.toLowerCase() !== "transmitting";
+
   const distSuffix =
     live.ble_closest_proxy && winRow && winRow.distance_m !== null && winRow.distance_m !== undefined
       ? ` (~${fmtDistance(winRow.distance_m, store.hass, winRow.distance_ft)})`
       : "";
-  const showProxyMeta = Boolean(!isBleOnly && caps.has_ble_beacon && cfg.native_ble_tracking && live.ble_closest_proxy);
-  const areaMetaBase = isBleOnly ? "BLE tag" : hasAssignedArea ? "Stationary" : "Roaming";
+  const showProxyMeta = Boolean(
+    (isBleOnly || (caps.has_ble_beacon && cfg.native_ble_tracking)) && live.ble_closest_proxy,
+  );
+  const areaMetaBase = isBleOnly
+    ? effBleCat === "phone"
+      ? "Phone"
+      : "BLE tag"
+    : hasAssignedArea
+      ? "Stationary"
+      : "Roaming";
   const areaMeta = showProxyMeta
     ? `${areaMetaBase} • ${live.ble_closest_proxy}${distSuffix}`
     : areaMetaBase;
@@ -175,7 +191,8 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
   let statusLabel = "—";
   if (isBleOnly) {
     statusLabel = curDevEntry?.status_label || "—";
-    const detected = statusLabel.toLowerCase().includes("detected") || Boolean(winRow);
+    const detected =
+      Boolean(curDevEntry?.is_online) || statusLabel === "Online" || Boolean(winRow);
     if (detected) {
       statusChipClass = "chip chip-success";
       statusDotClass = "status-dot online";
@@ -304,6 +321,17 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
           >
             Open Repairs
           </button>
+        </div>`
+      : nothing}
+
+    ${showTxOffBanner
+      ? html`<div id="ble-transmitter-off-banner" role="alert" class="alert alert-warning">
+          <div class="alert-body">
+            <strong>BLE Transmitter Not Active (${txStateText})</strong>
+            <span>
+              Enable the BLE Transmitter sensor in the Home Assistant Companion App on this phone so Bluetooth proxies can detect its Area.
+            </span>
+          </div>
         </div>`
       : nothing}
 
@@ -499,7 +527,28 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
                       Manage Groups
                     </button>`,
                 })
-              : nothing}
+              : renderSettingsRow({
+                  label: "Device Category",
+                  forId: "cfg-ble_category",
+                  description:
+                    "Classifies this Bluetooth Device under Phones or BLE Tags across Managed Devices.",
+                  control: html`<select
+                    id="cfg-ble_category"
+                    .value=${curBleCat}
+                    @change=${(ev: Event) =>
+                      store.stageDeviceSetting(
+                        "ble_category",
+                        (ev.currentTarget as HTMLSelectElement).value,
+                        "cfg-ble_category",
+                      )}
+                  >
+                    <option value="auto" ?selected=${curBleCat === "auto"}>
+                      Auto (${effBleCat === "phone" ? "Phone" : "BLE Tag"})
+                    </option>
+                    <option value="phone" ?selected=${curBleCat === "phone"}>Phone</option>
+                    <option value="ble_tag" ?selected=${curBleCat === "ble_tag"}>BLE Tag</option>
+                  </select>`,
+                })}
             ${renderSelectRow({
               id: "cfg-assigned_person",
               label: "Assigned Person",

@@ -16,7 +16,7 @@ _PROTOCOL_DEFAULTS: Final[dict[str, Any]] = json.loads(
 
 DOMAIN: Final = "latter"
 INTEGRATION_VERSION: Final = "3.0.0"
-STUDIO_REV: Final = 29
+STUDIO_REV: Final = 30
 MIN_FIRMWARE_SDK_REV: Final = 2026111702
 PLATFORMS: Final[list[Platform]] = [
     Platform.SENSOR,
@@ -54,6 +54,8 @@ CONF_DEFAULT_AREA: Final = "default_area"
 CONF_NATIVE_BLE_TRACKING: Final = "native_ble_tracking"
 CONF_BLE_BEACON_UUID: Final = "ble_beacon_uuid"
 CONF_BLE_TARGET_ADDRESS: Final = "ble_target_address"
+CONF_BLE_CATEGORY: Final = "ble_category"
+DEFAULT_BLE_CATEGORY: Final = "auto"
 CONF_BLE_SCANNER_OFFSETS: Final = "ble_scanner_offsets"
 CONF_BLE_AREA_SIGNATURES: Final = "ble_area_signatures"
 CONF_BLE_REF_POWER: Final = "ble_ref_power"

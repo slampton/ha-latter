@@ -66,6 +66,38 @@ WAKE_COALESCE_SECONDS = 0.35
 KALMAN_MEASUREMENT_VAR = 9.0
 EDDYSTONE_UUID_PREFIX = "0000feaa"
 BTHOME_UUID_PREFIX = "0000fcd2"
+COMPANION_TX_POWER_1M_DBM: dict[str, float] = {
+    "ultralow": -81.0,
+    "low": -75.0,
+    "medium": -67.0,
+    "high": -59.0,
+}
+
+
+def resolve_companion_tx_ref_power_dbm(
+    measured_power: Any, tx_power_level: Any
+) -> float | None:
+    """Resolve 1 m reference power for a Home Assistant Companion App BLE Transmitter.
+
+    Android's Companion App defaults `Transmitting power` to `ultraLow` (-21 dBm TX) while
+    leaving `Measured power` at the uncalibrated `-59` default (both in entity attributes
+    and iBeacon byte 22). When `Measured power` is unset or left at `-59`, compensate using
+    the reported `Transmitting power` tier so 1 m path-loss and Area Signatures stay aligned.
+    """
+    mp_f: float | None = None
+    if measured_power is not None and not isinstance(measured_power, bool):
+        try:
+            cand = float(measured_power)
+            if -90.0 <= cand <= -30.0:
+                mp_f = cand
+        except (TypeError, ValueError):
+            mp_f = None
+    tx_key = re.sub(r"[^a-z]", "", str(tx_power_level or "").lower())
+    if tx_key in COMPANION_TX_POWER_1M_DBM and (
+        mp_f is None or abs(mp_f - TX_POWER_1M_DBM) < 0.5
+    ):
+        return COMPANION_TX_POWER_1M_DBM[tx_key]
+    return mp_f
 
 
 def within_rssi_deadband(
@@ -1187,6 +1219,7 @@ class LatterNativeBleTracker:
         self._scanner_offsets: dict[str, float] = {}
         self._area_signatures: dict[str, dict[str, Any]] = {}
         self._configured_ref_power_dbm: float | None = None
+        self._entity_ref_power_dbm: float | None = None
         self.detected_ref_power_dbm: float | None = None
         self._attenuation: float = float(DEFAULT_BLE_ATTENUATION)
         self._max_radius_m: float = float(DEFAULT_BLE_MAX_RADIUS_M)
@@ -1242,9 +1275,11 @@ class LatterNativeBleTracker:
 
     @property
     def effective_ref_power_dbm(self) -> float:
-        """Return configured 1 m reference power, auto-detected advertisement reference power, or -59.0 dBm."""
+        """Return configured 1 m reference power, entity-derived TX power, advertisement power, or -59.0 dBm."""
         if self._configured_ref_power_dbm is not None:
             return float(self._configured_ref_power_dbm)
+        if self._entity_ref_power_dbm is not None:
+            return float(self._entity_ref_power_dbm)
         if self.detected_ref_power_dbm is not None:
             return float(self.detected_ref_power_dbm)
         return TX_POWER_1M_DBM
@@ -1404,7 +1439,9 @@ class LatterNativeBleTracker:
         return area_id in get_ble_proxy_area_ids(self.hass)
 
     @callback
-    def _record_matched_ble_address(self, addr: str) -> None:
+    def _record_matched_ble_address(
+        self, addr: str, *, seed_scanners: bool = True
+    ) -> None:
         """Record a matched BLE address with a monotonic timestamp, bounding cache to 64 entries."""
         norm = str(addr or "").strip().upper()
         if not norm:
@@ -1429,7 +1466,12 @@ class LatterNativeBleTracker:
         if is_new and self._on_address_matched is not None:
             self._on_address_matched(norm)
         if is_new or evicted:
-            get_ble_fabric(self.hass).sync_tracker_addresses()
+            fabric = get_ble_fabric(self.hass)
+            fabric.sync_tracker_addresses()
+            if is_new and seed_scanners and self in fabric._trackers:
+                fabric._async_seed_tracker_from_scanners_once(
+                    self, only_address=norm
+                )
 
     @property
     def matched_ble_addresses(self) -> list[str]:
@@ -1476,24 +1518,6 @@ class LatterNativeBleTracker:
         new_st = event.data.get("new_state")
         if new_st is None:
             return
-        old_st = event.data.get("old_state")
-        old_mp = (
-            old_st.attributes.get("Measured power")
-            if old_st is not None and old_st.attributes.get("Measured power") is not None
-            else (old_st.attributes.get("measured_power") if old_st is not None else None)
-        )
-        new_mp = (
-            new_st.attributes.get("Measured power")
-            if new_st.attributes.get("Measured power") is not None
-            else new_st.attributes.get("measured_power")
-        )
-        if new_mp != old_mp and new_mp is not None and not isinstance(new_mp, bool):
-            try:
-                mp_f = float(new_mp)
-                if -90.0 <= mp_f <= -30.0:
-                    self.detected_ref_power_dbm = mp_f
-            except (TypeError, ValueError):
-                pass
         self._seed_explicit_target_address(sync_fabric=True)
 
     @callback
@@ -1505,7 +1529,7 @@ class LatterNativeBleTracker:
         m_int = _mac_to_int(t_addr)
         if m_int is not None:
             self._target_mac_ints.add(m_int)
-            self._record_matched_ble_address(_int_to_mac(m_int))
+            self._record_matched_ble_address(_int_to_mac(m_int), seed_scanners=sync_fabric)
             return
         if "." in t_addr:
             st = self.hass.states.get(t_addr)
@@ -1515,6 +1539,7 @@ class LatterNativeBleTracker:
                 self._explicit_major,
                 self._explicit_minor,
             )
+            prev_ent_ref = self._entity_ref_power_dbm
             parsed_ib: tuple[str, int | None, int | None] | None = None
             cur_mac = ""
             if st is not None:
@@ -1538,17 +1563,15 @@ class LatterNativeBleTracker:
                     if st.attributes.get("Measured power") is not None
                     else st.attributes.get("measured_power")
                 )
-                if (
-                    mp_raw is not None
-                    and not isinstance(mp_raw, bool)
-                    and self.detected_ref_power_dbm is None
-                ):
-                    try:
-                        mp_f = float(mp_raw)
-                        if -90.0 <= mp_f <= -30.0:
-                            self.detected_ref_power_dbm = mp_f
-                    except (TypeError, ValueError):
-                        pass
+                tx_lvl = (
+                    st.attributes.get("Transmitting power")
+                    if st.attributes.get("Transmitting power") is not None
+                    else st.attributes.get("transmitting_power")
+                )
+                ent_ref = resolve_companion_tx_ref_power_dbm(mp_raw, tx_lvl)
+                if ent_ref is not None:
+                    self._entity_ref_power_dbm = ent_ref
+                    self.detected_ref_power_dbm = ent_ref
             if (
                 parsed_ib is None
                 and ent_entry is not None
@@ -1602,6 +1625,12 @@ class LatterNativeBleTracker:
                     if self in fabric._trackers:
                         fabric.sync_tracker_addresses()
                         fabric._async_seed_tracker_from_scanners_once(self)
+            if (
+                sync_fabric
+                and self._entity_ref_power_dbm != prev_ent_ref
+                and self._scanner_states
+            ):
+                self._evaluate_best_area(time.monotonic())
             return
 
         stripped = t_addr.strip()
@@ -2446,6 +2475,14 @@ class LatterNativeBleTracker:
             if sig_res is None:
                 continue
             sig_score, sig_best_src = sig_res
+            sig_scanners = sig.get("scanners", {})
+            if (
+                sig_area_id in scores
+                and len(fresh_norm) < 2
+                and len(sig_scanners) >= 2
+                and sig_score < scores[sig_area_id]
+            ):
+                continue
             sig_st = self._scanner_states.get(sig_best_src)
             sig_norm = fresh_norm.get(sig_best_src, sig_score)
             sig_raw = sig_st.raw_rssi if sig_st is not None else round(sig_norm)
@@ -2456,7 +2493,6 @@ class LatterNativeBleTracker:
                 sig_raw,
                 "signature",
             )
-            sig_scanners = sig.get("scanners", {})
             area_packet_counts[sig_area_id] = max(
                 1,
                 sum(
@@ -2848,12 +2884,15 @@ class LatterBleFabric:
             from homeassistant.components import bluetooth
 
             try:
-                matcher = bluetooth.BluetoothCallbackMatcher()
+                matcher = bluetooth.BluetoothCallbackMatcher(connectable=False)
             except TypeError:
-                matcher = bluetooth.BluetoothCallbackMatcher(
-                    manufacturer_id=APPLE_COMPANY_ID,
-                    manufacturer_data_start=[0x02, 0x15],
-                )
+                try:
+                    matcher = bluetooth.BluetoothCallbackMatcher()
+                except TypeError:
+                    matcher = bluetooth.BluetoothCallbackMatcher(
+                        manufacturer_id=APPLE_COMPANY_ID,
+                        manufacturer_data_start=[0x02, 0x15],
+                    )
             unsubs.append(
                 bluetooth.async_register_callback(
                     self.hass,
@@ -2986,12 +3025,17 @@ class LatterBleFabric:
 
     @callback
     def _async_check_away_timeouts(self, _now_dt: datetime) -> None:
-        """Lightweight away-timeout & deferred MAC discovery check (no scanner-table walk)."""
+        """Away-timeout, deferred MAC discovery, and rotating-MAC scanner fallback check."""
         if not self._trackers:
             return
         now_mono = time.monotonic()
         discovered_any = False
         for tracker in list(self._trackers):
+            if (
+                tracker.packets_seen == 0
+                or (now_mono - tracker.last_packet_monotonic) > STALE_PROXY_SECONDS
+            ):
+                self._async_seed_tracker_from_scanners_once(tracker)
             tracker.check_away_timeout(now_mono)
             if (
                 not tracker._target_mac_ints
@@ -3008,12 +3052,13 @@ class LatterBleFabric:
 
     @callback
     def _async_seed_tracker_from_scanners_once(
-        self, tracker: LatterNativeBleTracker
+        self, tracker: LatterNativeBleTracker, *, only_address: str = ""
     ) -> None:
-        """Seed one newly registered tracker from current Bluetooth scanner state once."""
+        """Seed a tracker from current Bluetooth scanner state (optionally restricted to `only_address`)."""
         try:
             from homeassistant.components import bluetooth
 
+            only_norm = only_address.strip().upper()
             now_mono = time.monotonic()
             for scanner in bluetooth.async_current_scanners(self.hass):
                 source = str(getattr(scanner, "source", "") or "")
@@ -3032,13 +3077,15 @@ class LatterBleFabric:
                 for addr, pair in dev_adv_map.items():
                     if not isinstance(pair, tuple) or len(pair) != 2:
                         continue
+                    addr_str = str(addr)
+                    if only_norm and addr_str.strip().upper() != only_norm:
+                        continue
                     ble_dev, adv_data = pair
                     mfg_data = getattr(adv_data, "manufacturer_data", {}) or {}
                     svc_data = getattr(adv_data, "service_data", {}) or {}
-                    addr_str = str(addr)
                     if not tracker._matches_raw_adv(addr_str, mfg_data, svc_data):
                         continue
-                    tracker._record_matched_ble_address(addr_str)
+                    tracker._record_matched_ble_address(addr_str, seed_scanners=False)
                     det_rp = _extract_adv_ref_power_dbm(adv_data, mfg_data, svc_data)
                     if det_rp is not None:
                         tracker.detected_ref_power_dbm = det_rp
@@ -3474,6 +3521,73 @@ def describe_ble_target_model(hass: HomeAssistant, target_address: str) -> str:
     if parse_ibeacon_identity(addr) is not None:
         return "iBeacon Tag"
     return "BLE beacon or tag"
+
+
+def inspect_companion_ble_transmitter(
+    hass: HomeAssistant, target_address: str
+) -> dict[str, str] | None:
+    """Return live state, TX power, and advertise mode when `target_address` is a Companion App BLE Transmitter."""
+    addr = str(target_address or "").strip()
+    if "." not in addr:
+        return None
+    ent_entry = er.async_get(hass).async_get(addr)
+    is_companion = (
+        _is_mobile_app_ble_emitter(ent_entry)
+        if ent_entry is not None
+        else addr.lower().endswith(("_ble_transmitter", "_ble_emitter"))
+    )
+    if not is_companion:
+        return None
+    st = hass.states.get(addr)
+    if st is None:
+        return None
+    return {
+        "state": str(st.state or "").strip(),
+        "tx_power": str(
+            st.attributes.get("Transmitting power")
+            or st.attributes.get("transmitting_power")
+            or ""
+        ).strip(),
+        "advertise_mode": str(
+            st.attributes.get("Advertise mode")
+            or st.attributes.get("advertise_mode")
+            or ""
+        ).strip(),
+    }
+
+
+def classify_ble_target_category(
+    hass: HomeAssistant, target_address: str, configured_category: str = "auto"
+) -> str:
+    """Resolve a managed BLE subentry's effective category (`phone` vs. `ble_tag`)."""
+    cfg_norm = str(configured_category or "auto").strip().lower()
+    if cfg_norm in ("phone", "ble_tag"):
+        return cfg_norm
+
+    addr = str(target_address or "").strip()
+    if "." in addr:
+        ent_entry = er.async_get(hass).async_get(addr)
+        st = hass.states.get(addr)
+        if (
+            (ent_entry is not None and ent_entry.platform == "mobile_app")
+            or addr.lower().endswith(("_ble_transmitter", "_ble_emitter"))
+            or (
+                ent_entry is not None
+                and ent_entry.unique_id
+                and str(ent_entry.unique_id).lower().endswith("_ble_emitter")
+            )
+        ):
+            return "phone"
+        if (
+            (ent_entry is not None and ent_entry.platform == "private_ble_device")
+            or "private_ble" in addr.lower()
+            or (st is not None and st.attributes.get("current_address"))
+        ):
+            model_lbl = describe_ble_target_model(hass, addr)
+            if "airpods" in model_lbl.lower():
+                return "ble_tag"
+            return "phone"
+    return "ble_tag"
 
 
 def get_discovered_ble_candidates(

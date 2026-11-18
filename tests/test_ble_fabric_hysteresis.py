@@ -101,7 +101,7 @@ async def test_ble_passive_matcher_rssi_hysteresis_and_cross_floor_penalty(
     bt_callbacks = hass.data.get("_bt_callbacks", [])
     assert len(bt_callbacks) >= 1
     _cb_fn, matcher_dict, scan_mode = bt_callbacks[0]
-    assert matcher_dict == {}
+    assert matcher_dict == {"connectable": False}
     assert str(scan_mode) == "passive"
 
     assert get_ble_proxy_area_ids(hass) == {"living_room", "kitchen", "bedroom"}
@@ -1273,7 +1273,7 @@ async def test_zero_ms_private_ble_rpa_rotation_connectable_and_eddystone_uid(
 
     # 3) Connectable BLE advertisement (`connectable=True`, empty mfg_data) on rpa_2 matches passively!
     shared_cb, matcher_dict, _mode = hass.data["_bt_callbacks"][0]
-    assert matcher_dict == {}
+    assert matcher_dict == {"connectable": False}
     t0 = time.monotonic()
     conn_adv = SimpleNamespace(
         address=rpa_2,
@@ -2075,3 +2075,312 @@ async def test_local_ble_tag_fingerprinting_and_cloud_rolling_eid_exclusion(
     assert ruuvi_row["kind"] == "RuuviTag Beacon"
     assert ruuvi_row["title"] == "RuuviTag 88:4F"
     assert describe_ble_target_model(hass, "CB:B8:33:4C:88:4F") == "RuuviTag Beacon"
+
+
+@pytest.mark.asyncio
+async def test_companion_app_ultralow_phone_nonconnectable_matcher_and_phone_category(
+    hass: Any, make_esphome_device: Any
+) -> None:
+    """Verify connectable=False matcher, Companion App ultraLow (-81 dBm) compensation, single-scanner signature guard, and Phone category."""
+    from collections.abc import Mapping
+
+    from homeassistant.components import websocket_api
+    from homeassistant.config_entries import ConfigEntry, ConfigSubentry
+
+    from custom_components.latter import async_setup, async_setup_entry
+    from custom_components.latter.const import (
+        CONF_ASSIGNED_PERSON,
+        CONF_BLE_AREA_SIGNATURES,
+        CONF_BLE_CATEGORY,
+        CONF_BLE_TARGET_ADDRESS,
+        CONF_DEVICE_SLUG,
+        CONF_ESPHOME_DEVICE_ID,
+        CONF_NATIVE_BLE_TRACKING,
+        STUDIO_REV,
+        SUBENTRY_BLE_TAG,
+        SUBENTRY_DEVICE,
+    )
+    from custom_components.latter.presence import (
+        classify_ble_target_category,
+        inspect_companion_ble_transmitter,
+        resolve_companion_tx_ref_power_dbm,
+    )
+    from custom_components.latter.studio.payload import build_studio_state_payload
+
+    assert resolve_companion_tx_ref_power_dbm(-59, "ultraLow") == -81.0
+    assert resolve_companion_tx_ref_power_dbm(None, "low") == -75.0
+    assert resolve_companion_tx_ref_power_dbm(-59, "medium") == -67.0
+    assert resolve_companion_tx_ref_power_dbm(-59, "high") == -59.0
+    # Custom calibrated Measured power is preserved over tier defaults
+    assert resolve_companion_tx_ref_power_dbm(-64, "ultraLow") == -64.0
+
+    area_reg = ar.async_get(hass)
+    area_reg.async_create("Garage", area_id="garage")
+    area_reg.async_create("Office", area_id="office")
+    dev_reg = dr.async_get(hass)
+    ent_reg = er.async_get(hass)
+
+    dev_reg.async_get_or_create(
+        config_entry_id="esp_garage_proxy",
+        connections={(dr.CONNECTION_NETWORK_MAC, "a8:42:e3:21:af:e2")},
+        identifiers={("esphome", "a8:42:e3:21:af:e2")},
+        name="garage-ep1",
+        area_id="garage",
+    )
+    dev_reg.async_get_or_create(
+        config_entry_id="esp_office_proxy",
+        connections={(dr.CONNECTION_NETWORK_MAC, "a8:42:e3:21:af:f9")},
+        identifiers={("esphome", "a8:42:e3:21:af:f9")},
+        name="office-ep1",
+        area_id="office",
+    )
+
+    phone_dev = dev_reg.async_get_or_create(
+        config_entry_id="mobile_app_pixel",
+        identifiers={("mobile_app", "pixel_10_pro_xl")},
+        name="Pixel 10 Pro XL",
+        manufacturer="Google",
+        model="Pixel 10 Pro XL",
+    )
+    tx_entity = "sensor.pixel_10_pro_xl_ble_transmitter"
+    ent_reg.async_register(
+        er.RegistryEntry(
+            entity_id=tx_entity,
+            platform="mobile_app",
+            device_id=phone_dev.id,
+            unique_id="pixel_10_pro_xl_ble_emitter",
+            original_name="BLE Transmitter",
+        )
+    )
+    phone_uuid = "1f8a61b7-424a-4df4-8527-14dd55ca0bb6"
+    hass.states.async_set(
+        tx_entity,
+        "Transmitting",
+        {
+            "id": f"{phone_uuid}_100_40004",
+            "Transmitting power": "ultraLow",
+            "Advertise mode": "lowPower",
+            "Measured power": -59,
+        },
+    )
+    hass.states.async_set("person.sean", "home", {"friendly_name": "Sean"})
+
+    # Private BLE classification checks (iPhone -> phone, AirPods -> ble_tag)
+    ent_reg.async_register(
+        er.RegistryEntry(
+            entity_id="device_tracker.private_ble_iphone",
+            platform="private_ble_device",
+            unique_id="irk_iphone",
+            original_name="Sean iPhone",
+        )
+    )
+    hass.states.async_set(
+        "device_tracker.private_ble_iphone",
+        "home",
+        {"current_address": "51:AA:BB:CC:DD:01"},
+    )
+    ent_reg.async_register(
+        er.RegistryEntry(
+            entity_id="device_tracker.private_ble_airpods",
+            platform="private_ble_device",
+            unique_id="irk_airpods",
+            original_name="AirPods Pro",
+        )
+    )
+    hass.states.async_set(
+        "device_tracker.private_ble_airpods",
+        "home",
+        {"current_address": "52:AA:BB:CC:DD:02"},
+    )
+    hass.data["_bt_scanners"] = [
+        SimpleNamespace(
+            source="A8:42:E3:21:AF:E2",
+            name="garage-ep1",
+            details={"source": "a8:42:e3:21:af:e2"},
+            discovered_devices_and_advertisement_data={
+                "51:AA:BB:CC:DD:01": (
+                    SimpleNamespace(rssi=-61, name=None),
+                    SimpleNamespace(
+                        local_name="",
+                        manufacturer_data={APPLE_COMPANY_ID: b"\x10\x05\x01\x18\xaa\xbb\xcc"},
+                        service_data={},
+                        service_uuids=(),
+                        rssi=-61,
+                    ),
+                ),
+                "52:AA:BB:CC:DD:02": (
+                    SimpleNamespace(rssi=-58, name=None),
+                    SimpleNamespace(
+                        local_name="",
+                        manufacturer_data={APPLE_COMPANY_ID: b"\x07\x19\x01\x0e\x20\x75\xaa\xb0"},
+                        service_data={},
+                        service_uuids=(),
+                        rssi=-58,
+                    ),
+                ),
+            },
+        )
+    ]
+    assert classify_ble_target_category(hass, tx_entity) == "phone"
+    assert classify_ble_target_category(hass, "device_tracker.private_ble_iphone") == "phone"
+    assert classify_ble_target_category(hass, "device_tracker.private_ble_airpods") == "ble_tag"
+    assert classify_ble_target_category(hass, "DC:11:22:33:E4:12") == "ble_tag"
+    assert classify_ble_target_category(hass, "DC:11:22:33:E4:12", "phone") == "phone"
+
+    esp_dev, mac = make_esphome_device(
+        hass, slug="desk_assistant", name="Desk Assistant", area_id="office", stationary=1
+    )
+    await async_setup(hass, {})
+    entry = hass.config_entries.add_entry(
+        ConfigEntry(
+            entry_id="latter_hub_phone",
+            domain=DOMAIN,
+            title="Latter",
+            data={},
+            subentries_data=[
+                ConfigSubentry(
+                    subentry_id="sub_desk",
+                    subentry_type=SUBENTRY_DEVICE,
+                    title="Desk Assistant",
+                    unique_id=mac,
+                    data={
+                        CONF_DEVICE_SLUG: "desk_assistant",
+                        CONF_ESPHOME_DEVICE_ID: esp_dev.id,
+                        "mac": mac,
+                        CONF_NATIVE_BLE_TRACKING: False,
+                    },
+                ),
+                ConfigSubentry(
+                    subentry_id="sub_pixel_phone",
+                    subentry_type=SUBENTRY_BLE_TAG,
+                    title="Pixel 10 Pro XL",
+                    unique_id="latter_ble_pixel_10_pro_xl",
+                    data={
+                        CONF_DEVICE_SLUG: "pixel_10_pro_xl",
+                        CONF_BLE_TARGET_ADDRESS: tx_entity,
+                        CONF_BLE_CATEGORY: "auto",
+                        CONF_ASSIGNED_PERSON: "person.sean",
+                        CONF_NATIVE_BLE_TRACKING: True,
+                    },
+                ),
+                ConfigSubentry(
+                    subentry_id="sub_tile_keys",
+                    subentry_type=SUBENTRY_BLE_TAG,
+                    title="Keys Tile",
+                    unique_id="latter_ble_keys_tile",
+                    data={
+                        CONF_DEVICE_SLUG: "keys_tile",
+                        CONF_BLE_TARGET_ADDRESS: "DC:11:22:33:E4:12",
+                        CONF_BLE_CATEGORY: "auto",
+                        CONF_NATIVE_BLE_TRACKING: True,
+                    },
+                ),
+            ],
+            unique_id=DOMAIN,
+        )
+    )
+    assert await async_setup_entry(hass, entry) is True
+    await hass.async_block_till_done()
+
+    # 1) Shared Bluetooth callback matcher MUST include connectable=False so HA Core indexes it into self.connectable
+    bt_cbs = hass.data.get("_bt_callbacks", [])
+    assert bt_cbs
+    shared_cb, registered_matcher, _mode = bt_cbs[0]
+    assert isinstance(registered_matcher, Mapping)
+    assert registered_matcher.get("connectable") is False
+
+    # Configure a multi-scanner Area signature on Garage (where secondary scanners would be missing at ultraLow TX power)
+    phone_coord = entry.runtime_data.coordinators["sub_pixel_phone"]
+    hass.data[DOMAIN][DATA_GLOBAL_CONFIG][CONF_BLE_AREA_SIGNATURES] = {
+        "garage": {
+            "scanners": {
+                "A8:42:E3:21:AF:E2": {"mean": -69.5, "std": 3.5, "n": 10},
+                "A8:42:E3:21:AF:F9": {"mean": -72.0, "std": 3.5, "n": 10},
+                "11:22:33:44:55:66": {"mean": -74.0, "std": 3.5, "n": 10},
+            },
+            "captured_at": "2026-11-17T20:00:00Z",
+            "sample_count": 30,
+        }
+    }
+    await phone_coord.async_on_global_config_updated({CONF_BLE_AREA_SIGNATURES})
+
+    tracker = phone_coord._ble_tracker
+    assert tracker is not None
+    assert tracker.effective_ref_power_dbm == -81.0
+
+    # 2) Rotating-MAC non-connectable iBeacon advertisement at -91 dBm raw with byte-22 = -59 arrives on Garage proxy
+    t_now = time.monotonic()
+    adv_packet = _make_ibeacon_adv(
+        phone_uuid,
+        rssi=-91,
+        source="A8:42:E3:21:AF:E2",
+        obs_time=t_now,
+        address="49:C9:FA:11:24:F1",
+        major=100,
+        minor=40004,
+        tx_power_1m=-59,
+    )
+    shared_cb(adv_packet, "advertisement")
+
+    # Byte-22 (-59) MUST NOT overwrite Companion App ultraLow (-81 dBm); -91 dBm raw normalizes to -69 dBm (~2.8 m) in Garage!
+    assert tracker.effective_ref_power_dbm == -81.0
+    assert tracker.packets_seen == 1
+    assert tracker.current_area_id == "garage"
+    assert tracker.winning_rssi == -69
+    assert tracker.winning_raw_rssi == -91
+    assert phone_coord.get_current_area_and_distance()[0] == "Garage"
+
+    # 3) Studio payload exposes Phone vs. BLE Tag categories, "Garage (Roaming)", and Companion App transmitter telemetry
+    state_payload = build_studio_state_payload(hass, phone_coord)
+    by_sub = {d["subentry_id"]: d for d in state_payload["system_devices"]}
+    pixel_entry = by_sub["sub_pixel_phone"]
+    assert pixel_entry["ble_category"] == "phone"
+    assert pixel_entry["device_group_name"] == "Phone"
+    assert pixel_entry["area_label"] == "Garage (Roaming)"
+    assert pixel_entry["status_label"] == "Online"
+    assert pixel_entry["active_area_name"] == "Garage"
+
+    tile_entry = by_sub["sub_tile_keys"]
+    assert tile_entry["ble_category"] == "ble_tag"
+    assert tile_entry["device_group_name"] == "BLE Tag"
+    assert tile_entry["area_label"] == "Roaming"
+    assert tile_entry["status_label"] == "Scanning"
+
+    assert state_payload["config"]["ble_category"] == "auto"
+    assert state_payload["config"]["effective_ble_category"] == "phone"
+    assert state_payload["live"]["ble_detected_ref_power"] == -81
+    assert state_payload["live"]["ble_transmitter_status"] == {
+        "state": "Transmitting",
+        "tx_power": "ultraLow",
+        "advertise_mode": "lowPower",
+    }
+
+    # 4) Turning Bluetooth off in Companion App surfaces immediately in inspect_companion_ble_transmitter
+    hass.states.async_set(
+        tx_entity,
+        "Bluetooth is turned off",
+        {"Transmitting power": "ultraLow", "Advertise mode": "lowPower"},
+    )
+    await hass.async_block_till_done()
+    tx_off = inspect_companion_ble_transmitter(hass, tx_entity)
+    assert tx_off is not None
+    assert tx_off["state"] == "Bluetooth is turned off"
+
+    # 5) Explicit Device Category override via save_device_config switches Phone <-> BLE Tag
+    conn = websocket_api.ActiveConnection()
+    dev_cmd_handler = hass._ws_commands["latter/device/command"]
+    schema = getattr(dev_cmd_handler, "_ws_schema", None)
+    raw_msg = {
+        "id": 99,
+        "type": "latter/device/command",
+        "subentry_id": "sub_pixel_phone",
+        "command": "save_device_config",
+        "payload": {"config": {"ble_category": "ble_tag"}},
+        "studio_rev": STUDIO_REV,
+    }
+    await dev_cmd_handler(hass, conn, schema(raw_msg) if schema is not None else raw_msg)
+    assert not conn.errors
+    assert phone_coord.configured_ble_category == "ble_tag"
+    assert phone_coord.effective_ble_category == "ble_tag"
+
+    assert await async_unload_entry(hass, entry) is True

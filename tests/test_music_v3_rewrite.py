@@ -35,6 +35,7 @@ from custom_components.latter.media import (
     build_active_media_payload,
 )
 from custom_components.latter.protocol import _PROTOCOL_V3_DATA, FIELD_SEP, RECORD_SEP
+from custom_components.latter.services import async_push_browse_slots
 
 
 class _FakeResponse:
@@ -1044,3 +1045,65 @@ async def test_desk_720x720_native_album_art_dimensions_and_http_proxy(
         assert out_img.size == (720, 720)
         if hasattr(out_img, "info"):
             assert out_img.info.get("progressive", 0) == 0
+
+
+@pytest.mark.asyncio
+async def test_push_browse_slots_preserves_long_album_and_artist_names_up_to_120_chars(
+    hass: Any, setup_latter_hub: Any
+) -> None:
+    """`async_push_browse_slots` preserves >64-char album/artist/queue names up to 120 chars (512 for bio/lyrics)."""
+    _entry, _sys_obj, coord = await setup_latter_hub(hass)
+    assert coord is not None
+
+    pushed_slots: list[dict[str, Any]] = []
+    hass.services.async_register(
+        "esphome",
+        f"{coord.device_slug}_latter_set_slots",
+        lambda call: pushed_slots.append(dict(call.data)),
+    )
+
+    long_album_name = (
+        "Jar of Flies / Sap (30th Anniversary Remastered Super Deluxe Edition) — Alice In Chains (1994)"
+    )
+    assert 64 < len(long_album_name) <= 120
+    exact_120_artist_name = (
+        "King Gizzard & The Lizard Wizard with Mild High Club & The Melbourne Symphony Orchestra Live! [120]"
+        + ("!" * 21)
+    )
+    assert len(exact_120_artist_name) == 120
+    over_120_name = "X" * 145
+
+    await async_push_browse_slots(
+        hass,
+        coord,
+        mode="album",
+        page=1,
+        page_size=5,
+        items=[
+            {"name": long_album_name, "id": "library://album/301", "type": "album"},
+            {"name": exact_120_artist_name, "id": "library://artist/302", "type": "artist"},
+            {"name": over_120_name, "id": "library://album/303", "type": "album"},
+        ],
+        req_id=55,
+    )
+    assert len(pushed_slots) == 1
+    rows = [r.split(FIELD_SEP)[0] for r in pushed_slots[0]["slots"].split(RECORD_SEP)]
+    assert rows[0] == long_album_name
+    assert rows[1] == exact_120_artist_name
+    assert rows[2] == "X" * 120
+
+    # Verify bio / track_info / lyrics retain the 512-char cap
+    pushed_slots.clear()
+    long_bio = "B" * 300
+    await async_push_browse_slots(
+        hass,
+        coord,
+        mode="bio",
+        page=1,
+        page_size=5,
+        items=[{"name": long_bio, "id": "bio_0", "type": "bio"}],
+        req_id=56,
+    )
+    assert len(pushed_slots) == 1
+    assert pushed_slots[0]["slots"].split(RECORD_SEP)[0].split(FIELD_SEP)[0] == long_bio
+

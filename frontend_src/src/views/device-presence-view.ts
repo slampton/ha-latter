@@ -25,6 +25,14 @@ export function renderDevicePresenceView(store: StudioStore): TemplateResult {
     cfg.ble_ref_power !== null && cfg.ble_ref_power !== undefined
       ? String(cfg.ble_ref_power)
       : "";
+  const txStatus = isBleOnly ? data?.live?.ble_transmitter_status : null;
+  const txPowerRaw = String(txStatus?.tx_power || "").trim();
+  const advModeRaw = String(txStatus?.advertise_mode || "").trim();
+  const txPowerNorm = txPowerRaw.toLowerCase().replace(/[^a-z]/g, "");
+  const advModeNorm = advModeRaw.toLowerCase().replace(/[^a-z]/g, "");
+  const showCompanionPowerTip =
+    Boolean(txStatus) &&
+    (txPowerNorm === "ultralow" || txPowerNorm === "low" || advModeNorm === "lowpower");
 
   const bleBeaconPref = store.getPref("ble_beacon_mode");
   const bleAreaItems = store
@@ -151,6 +159,18 @@ export function renderDevicePresenceView(store: StudioStore): TemplateResult {
                 Leave blank to use auto-detected beacon power in dBm, or enter -90 to -30 dBm to calibrate this Device.
               </span>
             </div>
+            ${showCompanionPowerTip
+              ? html`<div id="ble-companion-power-tip" class="alert">
+                  <div class="alert-body">
+                    <strong>Companion App Low-Power Beacon Detected</strong>
+                    <span>
+                      This phone is advertising at <code>${txPowerRaw || "default"}</code> power${advModeRaw
+                        ? html` (<code>${advModeRaw}</code> mode)`
+                        : nothing}. Latter automatically compensates its 1 m reference power (${fmtNumber(detectedRefPower, store.hass, 0)} dBm), and setting <strong>Transmit Power</strong> to <strong>Medium</strong> or <strong>High</strong> and <strong>Advertise Mode</strong> to <strong>Balanced</strong> in the Home Assistant Companion App improves multi-Area accuracy through walls.
+                    </span>
+                  </div>
+                </div>`
+              : nothing}
             ${!isBleOnly
               ? html`<div class="stacked-field">
                   <label for="cfg-ble_beacon_uuid">iBeacon UUID</label>

@@ -26,6 +26,7 @@ from ..const import (
     CONF_ASSIGNED_PERSON,
     CONF_BLE_AUTO_SWITCH,
     CONF_BLE_BEACON_UUID,
+    CONF_BLE_CATEGORY,
     CONF_BLE_REF_POWER,
     CONF_BLE_TARGET_ADDRESS,
     CONF_DEFAULT_AREA,
@@ -70,6 +71,7 @@ from ..presence import (
     get_all_areas_presence_summary,
     get_area_signatures_summary,
     get_discovered_ble_candidates,
+    inspect_companion_ble_transmitter,
 )
 from ..protocol import (
     SHORTCUT_SUPPORTED_DOMAINS,
@@ -1174,6 +1176,8 @@ def _build_system_section(
     system_devices: list[dict[str, Any]] = []
     for c in coords:
         c_area_name = c.active_area_name
+        live_area_state, _ = c.get_current_area_and_distance()
+        c_ble_cat = c.effective_ble_category if c.is_ble_tag else ""
         c_grp = c.device_group
         c_manifest = c.hardware_manifest
         c_has_native_svc = bool(
@@ -1269,12 +1273,6 @@ def _build_system_section(
             else None
         )
         c_has_assigned_area = a_obj is not None
-        c_area_label = (
-            a_obj.name
-            if a_obj is not None
-            else ("Roaming" if (c.native_ble_tracking_enabled or c.is_ble_tag) else "")
-        )
-
         c_upd_st = c.device_state("update", "_project_firmware")
         c_has_update = bool(c_upd_st and c_upd_st.state == "on")
         if not c_has_update and c_dev_id:
@@ -1285,10 +1283,24 @@ def _build_system_section(
                         c_has_update = True
                         break
         c_is_online = is_coordinator_online_for_studio(hass, c)
+        c_away = c.is_device_away()
+        if a_obj is not None:
+            c_area_label = a_obj.name
+        elif c.native_ble_tracking_enabled or c.is_ble_tag:
+            if (
+                not c_away
+                and (not c.is_ble_tag or c_is_online)
+                and live_area_state not in ("", "Away", "Unassigned")
+            ):
+                c_area_label = f"{live_area_state} (Roaming)"
+            else:
+                c_area_label = "Roaming"
+        else:
+            c_area_label = ""
+
         if c.is_ble_tag:
-            c_away = c.is_device_away()
             c_status_label = (
-                f"Online ({c_area_name})"
+                "Online"
                 if c_is_online
                 else ("Away" if c_away else "Scanning")
             )
@@ -1315,12 +1327,13 @@ def _build_system_section(
                 "status_label": c_status_label,
                 "is_online": c_is_online,
                 "kind": "ble_tag" if c.is_ble_tag else "device",
+                "ble_category": c_ble_cat,
                 "has_display": c.has_display,
                 "is_roaming": c.is_roaming_device,
                 "device_group": c_grp,
                 "device_remote_group": c.device_remote_group,
                 "device_group_name": (
-                    ""
+                    ("Phone" if c_ble_cat == "phone" else "BLE Tag")
                     if c.is_ble_tag
                     else (
                         "Custom"
@@ -1331,7 +1344,7 @@ def _build_system_section(
                     )
                 ),
                 "assigned_person": c.assigned_person,
-                "active_area_name": c_area_name,
+                "active_area_name": live_area_state if c.is_ble_tag else c_area_name,
                 "is_latter_native": c_is_latter_native,
                 "battery_level": c_bat_val,
                 "is_charging": bool(c_chg_st and c_chg_st.state == "on"),
@@ -1511,6 +1524,8 @@ def build_studio_state_payload(
         CONF_NATIVE_BLE_TRACKING: coordinator.native_ble_tracking_enabled,
         CONF_BLE_BEACON_UUID: coordinator.ble_beacon_uuid,
         CONF_BLE_TARGET_ADDRESS: coordinator.ble_target_address,
+        CONF_BLE_CATEGORY: coordinator.configured_ble_category,
+        "effective_ble_category": coordinator.effective_ble_category,
         CONF_BLE_REF_POWER: (
             round(coordinator.ble_ref_power)
             if coordinator.ble_ref_power is not None
@@ -1583,7 +1598,11 @@ def build_studio_state_payload(
             "latter_device_id": latter_dev.id if latter_dev is not None else "",
         },
         "live": {
-            "active_area_name": coordinator.active_area_name,
+            "active_area_name": (
+                coordinator.get_current_area_and_distance()[0]
+                if coordinator.is_ble_tag
+                else coordinator.active_area_name
+            ),
             "ma_link_matched": bool(
                 local_ma_id
                 or not local_spk_id
@@ -1594,6 +1613,11 @@ def build_studio_state_payload(
                 round(float(getattr(coordinator._ble_tracker, "effective_ref_power_dbm", -59)))
                 if coordinator._ble_tracker is not None
                 else -59
+            ),
+            "ble_transmitter_status": (
+                inspect_companion_ble_transmitter(hass, coordinator.ble_target_address)
+                if coordinator.is_ble_tag
+                else None
             ),
             "area_presence_grid": presence_grid,
             "device_sw_version": fw_version,

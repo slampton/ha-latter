@@ -33,6 +33,7 @@ from .const import (
     CONF_AREA_HANDOFF,
     CONF_ASSIGNED_PERSON,
     CONF_BLE_AUTO_SWITCH,
+    CONF_BLE_CATEGORY,
     CONF_BLE_TARGET_ADDRESS,
     CONF_DEFAULT_AREA,
     CONF_DEFAULT_SPEAKER,
@@ -51,6 +52,7 @@ from .const import (
     DATA_GLOBAL_STORE,
     DEFAULT_AREA_CATEGORIES,
     DEFAULT_AREA_HANDOFF,
+    DEFAULT_BLE_CATEGORY,
     DEFAULT_DEVICE_GROUP,
     DEFAULT_GAMES_ITEMS,
     DEFAULT_HOME_CATEGORIES,
@@ -436,9 +438,13 @@ def _build_ble_tag_data(user_input: dict[str, Any]) -> dict[str, Any] | None:
     target = str(user_input.get(CONF_BLE_TARGET_ADDRESS) or "").strip()
     if slug == "esphome_device" or not target:
         return None
+    raw_cat = str(user_input.get(CONF_BLE_CATEGORY) or DEFAULT_BLE_CATEGORY).strip().lower()
+    if raw_cat not in ("auto", "phone", "ble_tag"):
+        raw_cat = DEFAULT_BLE_CATEGORY
     return {
         CONF_DEVICE_SLUG: slug,
         CONF_BLE_TARGET_ADDRESS: target,
+        CONF_BLE_CATEGORY: raw_cat,
         CONF_ASSIGNED_PERSON: str(user_input.get(CONF_ASSIGNED_PERSON) or "").strip(),
         CONF_DEVICE_GROUP: DEFAULT_DEVICE_GROUP,
         CONF_DEFAULT_SPEAKER: "",
