@@ -16,7 +16,7 @@ _PROTOCOL_DEFAULTS: Final[dict[str, Any]] = json.loads(
 
 DOMAIN: Final = "latter"
 INTEGRATION_VERSION: Final = "3.0.0"
-STUDIO_REV: Final = 30
+STUDIO_REV: Final = 31
 MIN_FIRMWARE_SDK_REV: Final = 2026111702
 PLATFORMS: Final[list[Platform]] = [
     Platform.SENSOR,

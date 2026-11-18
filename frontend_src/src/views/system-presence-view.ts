@@ -153,8 +153,10 @@ export function renderSystemPresenceView(store: StudioStore): TemplateResult {
                     const chosen = row?.fusion_sensors || [];
                     const choices = row?.fusion_sensor_choices || [];
                     const thresholdId = `fusion-threshold-${areaId}`;
+                    const areaBoxId = `area-box-${areaId}`;
+                    const isAreaHandoff = Boolean(store.isHandoffTarget?.(areaBoxId));
 
-                    return html`<div id=${`area-box-${areaId}`} class="area-presence-box">
+                    return html`<div id=${areaBoxId} class="area-presence-box${isAreaHandoff ? " handoff-active" : ""}">
                       <div class="area-box-head">
                         <div class="area-box-heading">
                           <span class="area-box-title">${areaName}</span>
@@ -316,7 +318,7 @@ export function renderSystemPresenceView(store: StudioStore): TemplateResult {
             bleDevs.length === 0
               ? html`<button
                   type="button"
-                  @click=${() => store.openDiscoveredDevices()}
+                  @click=${() => store.openDiscoveredDevices("card-discovered-ble")}
                   class="btn btn-secondary"
                 >
                   Open Discovered Devices

@@ -1346,7 +1346,10 @@ export function renderSystemGroupsView(store: StudioStore): TemplateResult {
                           : "No Devices assigned",
                       ].filter(Boolean);
 
-                      return html`<div id=${`group-box-${g.id}`} class="area-presence-box">
+                      const groupBoxId = `group-box-${g.id}`;
+                      const isGroupHandoff = Boolean(store.isHandoffTarget?.(groupBoxId));
+
+                      return html`<div id=${groupBoxId} class="area-presence-box${isGroupHandoff ? " handoff-active" : ""}">
                         <div class="area-box-head">
                           <div class="area-box-heading">
                             <span class="area-box-title">${g.name}</span>

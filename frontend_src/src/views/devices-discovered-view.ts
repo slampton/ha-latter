@@ -113,6 +113,8 @@ export function renderDevicesDiscoveredView(store: StudioStore): TemplateResult 
 
   return html`<section id="view-discovered_devices">
     ${renderCard({
+      id: "card-discovered-latter",
+      handoffActive: Boolean(store.isHandoffTarget?.("card-discovered-latter")),
       title: "Latter Devices",
       headerActions: html`<button
         type="button"
@@ -216,6 +218,8 @@ export function renderDevicesDiscoveredView(store: StudioStore): TemplateResult 
     })}
 
     ${renderCard({
+      id: "card-discovered-ble",
+      handoffActive: Boolean(store.isHandoffTarget?.("card-discovered-ble")),
       title: "Bluetooth Devices",
       headerActions: html`<input
           type="search"

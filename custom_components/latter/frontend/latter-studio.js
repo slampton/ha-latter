@@ -179,7 +179,7 @@ const DEFAULT_GAMES_ITEMS_TOKENS = [
 /**
  * Canonical constants, route maps, issue messages, and Title Case dictionaries for Latter Studio.
  */
-const STUDIO_REV = 30;
+const STUDIO_REV = 31;
 const MAX_DOCK_ITEMS = 24;
 const MAX_PINNED_ITEMS = 96;
 const SHORTCUT_LABEL_MAX = 24;
@@ -2531,7 +2531,7 @@ function renderCard(opts) {
             : nothing}`
       : headingEl;
   const contentCls = opts.contentClass ? `card-content ${opts.contentClass}` : "card-content";
-  return html`<div id=${opts.id || nothing} class="card${opts.danger ? " danger" : ""}">
+  return html`<div id=${opts.id || nothing} class="card${opts.danger ? " danger" : ""}${opts.handoffActive ? " handoff-active" : ""}">
     <div class="card-header">${headerInner}</div>
     <div class=${contentCls}>${opts.body}</div>
     ${opts.footerActions && opts.footerActions !== nothing
@@ -3472,7 +3472,10 @@ function renderAppConfigModalBody(store) {
       type="button"
       @click=${() => {
         store.closeAppConfigModal();
-        store.openSystemSection("shared_entities");
+        store.openSystemSection("shared_entities", "card-whole-home", [
+          "card-whole-home",
+          "card-cameras-doorbell",
+        ]);
       }}
       class="btn btn-text"
     >
@@ -3631,7 +3634,7 @@ function renderAppConfigModalBody(store) {
       type="button"
       @click=${() => {
         store.closeAppConfigModal();
-        store.openSystemSection("remotes");
+        store.openSystemSection("remotes", "card-remote-groups");
       }}
       class="btn btn-text"
     >
@@ -4046,7 +4049,7 @@ function renderAppConfigModalBody(store) {
       type="button"
       @click=${() => {
         store.closeAppConfigModal();
-        store.openSystemSection("shared_entities");
+        store.openSystemSection("shared_entities", "card-calendars");
       }}
       class="btn btn-text"
     >
@@ -8024,7 +8027,10 @@ class StudioStore {
   };
   returnToPinnedModal = false;
   pendingScrollCardId = "";
+           handoffTargetIds = new Set();
   pendingDomRevert = null;
+          scrollGen = 0;
+          handoffArming = false;
   // Snapshot-isolated pending settings queues (shared with `state/*-ops.ts`)
   pendingSystemPatch = {};
   pendingSystemPrevious = {};
@@ -8086,12 +8092,111 @@ class StudioStore {
     if (this.pendingScrollCardId) {
       const cardId = this.pendingScrollCardId;
       this.pendingScrollCardId = "";
-      const root = (this.host).renderRoot;
+      const root =
+        (this.host).renderRoot ||
+        this.host.shadowRoot;
       const target = root?.getElementById(cardId);
       if (target && typeof target.scrollIntoView === "function") {
-        target.scrollIntoView({ behavior: "smooth", block: "start" });
+        const myGen = ++this.scrollGen;
+        const reducedMotion = Boolean(
+          typeof globalThis.matchMedia === "function" &&
+            globalThis.matchMedia("(prefers-reduced-motion: reduce)").matches,
+        );
+        void this.scrollIntoViewAsync(target, {
+          behavior: reducedMotion ? "auto" : "smooth",
+          block: "start",
+        }).then(() => {
+          if (myGen !== this.scrollGen || !this.handoffTargetIds.has(cardId)) return;
+          if (typeof target.focus === "function") {
+            if (typeof target.hasAttribute === "function" && !target.hasAttribute("tabindex")) {
+              target.setAttribute?.("tabindex", "-1");
+            }
+            try {
+              target.focus({ preventScroll: true });
+            } catch {
+              target.focus();
+            }
+          }
+        });
       }
     }
+    this.handoffArming = false;
+  }
+          scrollIntoViewAsync(
+    element,
+    options,
+  ) {
+    const result = element.scrollIntoView(options);
+    if (result instanceof Promise) {
+      return result;
+    }
+    const scroller = globalThis.window;
+    if (!scroller || typeof scroller.addEventListener !== "function") {
+      return Promise.resolve();
+    }
+    return new Promise ((resolve) => {
+      let timeoutId;
+      const finish = () => {
+        clearTimeout(timeoutId);
+        scroller.removeEventListener("scrollend", finish);
+        scroller.removeEventListener("scroll", onScroll);
+        resolve();
+      };
+      const onScroll = () => {
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(finish, 100);
+      };
+      scroller.addEventListener("scrollend", finish, { once: true });
+      scroller.addEventListener("scroll", onScroll, { passive: true });
+      timeoutId = setTimeout(finish, 100);
+    });
+  }
+  isHandoffTarget(targetId) {
+    return Boolean(targetId) && this.handoffTargetIds.has(targetId);
+  }
+  clearHandoffTargets() {
+    this.bleCalibrateHandoffActive = false;
+    this.handoffTargetIds.clear();
+    this.handoffArming = false;
+  }
+          applySectionHandoff(scrollId = "", highlightIds) {
+    const cleanScroll = String(scrollId || "").trim();
+    this.pendingScrollCardId = cleanScroll;
+    const ids = highlightIds && highlightIds.length > 0 ? highlightIds : cleanScroll ? [cleanScroll] : [];
+    for (const rawId of ids) {
+      const id = String(rawId || "").trim();
+      if (id) this.handoffTargetIds.add(id);
+    }
+    if (this.handoffTargetIds.size > 0) {
+      this.handoffArming = true;
+      this.host.requestUpdate();
+    }
+  }
+  onMainFocusIn(ev) {
+    if (this.handoffArming || this.handoffTargetIds.size === 0) return;
+    const path = typeof ev.composedPath === "function" ? ev.composedPath() : [];
+    const target = (path[0] ?? ev.target);
+    if (!target || typeof target.tagName !== "string") return;
+    const tag = target.tagName.toUpperCase();
+    if (
+      tag !== "BUTTON" &&
+      tag !== "INPUT" &&
+      tag !== "SELECT" &&
+      tag !== "TEXTAREA" &&
+      tag !== "SUMMARY" &&
+      tag !== "A"
+    ) {
+      return;
+    }
+    let cur = target;
+    while (cur) {
+      if (cur.id && this.handoffTargetIds.has(cur.id)) {
+        return;
+      }
+      cur = cur.parentElement;
+    }
+    this.handoffTargetIds.clear();
+    this.host.requestUpdate();
   }
   setHass(hass) {
     const firstHass = !this.ws.hass && Boolean(hass);
@@ -8147,13 +8252,18 @@ class StudioStore {
           return seg;
         }
       });
+    const prevScope = this.currentScope;
+    const prevViewId = this.currentViewId;
+    const prevSubId = this.activeSubentryId;
     this.routeApplying = true;
     try {
       if (parts[0] === "devices" && parts[1]?.toLowerCase() === "discovered") {
         if (this.activeSubentryId) {
           void this.flushDeviceBucket(this.activeSubentryId);
         }
-        this.bleCalibrateHandoffActive = false;
+        if (prevScope !== "device" || prevViewId !== "discovered_devices") {
+          this.clearHandoffTargets();
+        }
         this.deviceSelected = false;
         this.currentScope = "device";
         this.currentViewId = "discovered_devices";
@@ -8169,14 +8279,15 @@ class StudioStore {
           return;
         }
         const viewId = slugToView(DEVICE_VIEW_SLUGS, parts[2] || "overview") || "dashboard";
-        const prevSubId = this.activeSubentryId;
         const subChanged = prevSubId !== nextSubId;
         if (prevSubId && subChanged) {
           void this.flushDeviceBucket(prevSubId);
           this.appConfigModal = { open: false, app: null };
           this.returnToPinnedModal = false;
         }
-        this.bleCalibrateHandoffActive = false;
+        if (prevScope !== "device" || prevViewId !== viewId || subChanged) {
+          this.clearHandoffTargets();
+        }
         this.activeSubentryId = nextSubId;
         this.deviceSelected = true;
         this.currentScope = "device";
@@ -8190,7 +8301,9 @@ class StudioStore {
           void this.flushDeviceBucket(this.activeSubentryId);
         }
         const viewId = slugToView(SYSTEM_VIEW_SLUGS, parts[1] || "overview") || "system_overview";
-        if (viewId !== "area_tracking") {
+        if (prevScope !== "system" || prevViewId !== viewId) {
+          this.clearHandoffTargets();
+        } else if (viewId !== "area_tracking") {
           this.bleCalibrateHandoffActive = false;
         }
         this.currentScope = "system";
@@ -8203,7 +8316,9 @@ class StudioStore {
         if (this.activeSubentryId) {
           void this.flushDeviceBucket(this.activeSubentryId);
         }
-        this.bleCalibrateHandoffActive = false;
+        if (prevScope !== "device" || prevViewId !== "select_device_prompt") {
+          this.clearHandoffTargets();
+        }
         this.deviceSelected = false;
         this.currentScope = "device";
         this.currentViewId = "select_device_prompt";
@@ -8257,23 +8372,24 @@ class StudioStore {
     if (this.activeSubentryId) {
       void this.flushDeviceBucket(this.activeSubentryId);
     }
-    this.bleCalibrateHandoffActive = false;
+    this.clearHandoffTargets();
     this.deviceSelected = false;
     this.currentScope = "device";
     this.currentViewId = "select_device_prompt";
     this.syncUrl();
     this.host.requestUpdate();
   }
-  openDiscoveredDevices() {
+  openDiscoveredDevices(cardId = "") {
     if (this.activeSubentryId) {
       void this.flushDeviceBucket(this.activeSubentryId);
     }
-    this.bleCalibrateHandoffActive = false;
+    this.clearHandoffTargets();
     this.deviceSelected = false;
     this.currentScope = "device";
     this.currentViewId = "discovered_devices";
     this.syncUrl();
     this.host.requestUpdate();
+    this.applySectionHandoff(cardId);
   }
   openDevicesWithCategory(category) {
     this.deviceCategoryFilter = category;
@@ -8285,7 +8401,7 @@ class StudioStore {
     } else if (scope === "system" && this.activeSubentryId) {
       void this.flushDeviceBucket(this.activeSubentryId);
     }
-    this.bleCalibrateHandoffActive = false;
+    this.clearHandoffTargets();
     this.currentScope = scope;
     if (explicitViewId) {
       this.currentViewId = explicitViewId;
@@ -8309,7 +8425,7 @@ class StudioStore {
       this.openDiscoveredDevices();
       return;
     }
-    this.bleCalibrateHandoffActive = false;
+    this.clearHandoffTargets();
     const isSys = Object.prototype.hasOwnProperty.call(SYSTEM_VIEW_SLUGS, viewId);
     this.currentScope = isSys ? "system" : "device";
     this.currentViewId = viewId;
@@ -8322,9 +8438,21 @@ class StudioStore {
       void this.refreshState({ includeLogs: true });
     }
   }
-  openSystemSection(viewId, cardId = "") {
-    this.pendingScrollCardId = cardId;
+  openSystemSection(
+    viewId,
+    cardId = "",
+    highlightIds,
+  ) {
     this.switchView(viewId);
+    this.applySectionHandoff(cardId, highlightIds);
+  }
+  openDeviceSection(
+    viewId,
+    cardId = "",
+    highlightIds,
+  ) {
+    this.switchView(viewId);
+    this.applySectionHandoff(cardId, highlightIds);
   }
   openManageGroups(groupId = "") {
     const cleanId = String(groupId || "").trim();
@@ -8342,7 +8470,7 @@ class StudioStore {
     if (prevSubId && prevSubId !== cleanNext) {
       await this.flushDeviceBucket(prevSubId);
     }
-    this.bleCalibrateHandoffActive = false;
+    this.clearHandoffTargets();
     this.activeSubentryId = cleanNext;
     this.deviceSelected = true;
     this.currentScope = "device";
@@ -9168,6 +9296,7 @@ class StudioStore {
   selectBleCalibrateArea(areaId, fromAreaCard = false) {
     this.bleCalibrateAreaId = String(areaId || "");
     if (fromAreaCard) {
+      this.handoffTargetIds.clear();
       this.bleCalibrateHandoffActive = true;
     }
     this.host.requestUpdate();
@@ -9352,6 +9481,9 @@ const STUDIO_STYLES = css`
     --studio-error-tint: color-mix(in srgb, var(--studio-error) 14%, transparent);
     --studio-info-tint: color-mix(in srgb, var(--studio-info) 14%, transparent);
     --studio-card-shadow: var(--ha-card-box-shadow, none);
+    --studio-handoff-surface: color-mix(in srgb, var(--studio-primary) 8%, var(--studio-surface));
+    --studio-handoff-ring: inset 0 0 0 1px var(--studio-primary);
+    --studio-card-handoff-shadow: inset 0 0 0 1px var(--studio-primary), var(--studio-card-shadow);
     --studio-overlay-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
     --studio-scrim: rgba(0, 0, 0, 0.5);
     --studio-media-bg: var(--secondary-background-color, #000000);
@@ -9578,8 +9710,15 @@ const STUDIO_STYLES = css`
     box-shadow: var(--studio-card-shadow);
     color: var(--studio-text);
     scroll-margin-top: calc(var(--studio-header-height) + var(--studio-space-4));
+    transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
   }
   .card.danger { border-color: var(--studio-error); }
+  .card.handoff-active {
+    border-color: var(--studio-primary);
+    box-shadow: var(--studio-card-handoff-shadow);
+    background: var(--studio-handoff-surface);
+  }
+  .handoff-active[tabindex="-1"]:focus-visible { outline: none; }
   .card-header {
     display: flex;
     align-items: flex-start;
@@ -9656,6 +9795,12 @@ const STUDIO_STYLES = css`
     border-radius: var(--studio-radius-control);
     background: var(--studio-input-bg);
     scroll-margin-top: calc(var(--studio-header-height) + var(--studio-space-4));
+    transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  .area-presence-box.handoff-active {
+    border-color: var(--studio-primary);
+    box-shadow: var(--studio-handoff-ring);
+    background: var(--studio-primary-tint);
   }
   .area-box-head {
     display: flex;
@@ -10286,11 +10431,15 @@ const STUDIO_STYLES = css`
     border: 1px solid var(--studio-divider);
     border-radius: var(--studio-radius-control);
     background: var(--studio-input-bg);
-    transition: border-color 0.2s ease, background-color 0.2s ease;
+    transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
   }
   .calibrate-target-box.handoff-active {
-    border: 2px solid var(--studio-warning);
-    background: var(--studio-warning-tint);
+    border-color: var(--studio-primary);
+    box-shadow: var(--studio-handoff-ring);
+    background: var(--studio-primary-tint);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .card, .area-presence-box, .calibrate-target-box { transition: none; }
   }
   .calibrate-handoff-banner {
     display: flex;
@@ -12383,7 +12532,12 @@ function renderDeviceOverviewView(store) {
 
             <button
               type="button"
-              @click=${() => store.switchView(isBleOnly ? "presence" : "tools")}
+              @click=${() =>
+                isBleOnly
+                  ? store.switchView("presence")
+                  : store.openDeviceSection
+                    ? store.openDeviceSection("tools", "card-device-diagnostics")
+                    : store.switchView("tools")}
               class="status-tile"
             >
               <div class="status-tile-head">
@@ -12405,7 +12559,10 @@ function renderDeviceOverviewView(store) {
             ${isBleOnly
               ? html`<button
                   type="button"
-                  @click=${() => store.switchView("presence")}
+                  @click=${() =>
+                    store.openDeviceSection
+                      ? store.openDeviceSection("presence", "card-ble-identity")
+                      : store.switchView("presence")}
                   class="status-tile"
                 >
                   <div class="status-tile-head">
@@ -12419,7 +12576,10 @@ function renderDeviceOverviewView(store) {
                 </button>`
               : html`<button
                   type="button"
-                  @click=${() => store.switchView("tools")}
+                  @click=${() =>
+                    store.openDeviceSection
+                      ? store.openDeviceSection("tools", "card-device-diagnostics")
+                      : store.switchView("tools")}
                   class="status-tile"
                 >
                   <div class="status-tile-head">
@@ -12899,6 +13059,8 @@ function renderDevicePresenceView(store) {
 
       <div class="column">
         ${renderCard({
+          id: "card-ble-identity",
+          handoffActive: Boolean(store.isHandoffTarget?.("card-ble-identity")),
           title: "BLE Identity",
           contentClass: "stack",
           body: html`<div class="stacked-field">
@@ -13262,6 +13424,8 @@ function renderDeviceToolsView(store) {
     <div class="columns">
       <div class="column">
         ${renderCard({
+          id: "card-device-diagnostics",
+          handoffActive: Boolean(store.isHandoffTarget?.("card-device-diagnostics")),
           heading: html`<h3 class="card-title">Diagnostics</h3>`,
           contentClass: "stack",
           body: html`${networkControlItems.length
@@ -13593,6 +13757,8 @@ function renderDevicesDiscoveredView(store) {
   const bleDraftPersons = store.discoveredBlePersonDrafts;
   return html`<section id="view-discovered_devices">
     ${renderCard({
+      id: "card-discovered-latter",
+      handoffActive: Boolean(store.isHandoffTarget?.("card-discovered-latter")),
       title: "Latter Devices",
       headerActions: html`<button
         type="button"
@@ -13695,6 +13861,8 @@ function renderDevicesDiscoveredView(store) {
     })}
 
     ${renderCard({
+      id: "card-discovered-ble",
+      handoffActive: Boolean(store.isHandoffTarget?.("card-discovered-ble")),
       title: "Bluetooth Devices",
       headerActions: html`<input
           type="search"
@@ -15307,7 +15475,9 @@ function renderSystemGroupsView(store) {
                           ? `Devices: ${members.map((m) => m.title).join(", ")}`
                           : "No Devices assigned",
                       ].filter(Boolean);
-                      return html`<div id=${`group-box-${g.id}`} class="area-presence-box">
+                      const groupBoxId = `group-box-${g.id}`;
+                      const isGroupHandoff = Boolean(store.isHandoffTarget?.(groupBoxId));
+                      return html`<div id=${groupBoxId} class="area-presence-box${isGroupHandoff ? " handoff-active" : ""}">
                         <div class="area-box-head">
                           <div class="area-box-heading">
                             <span class="area-box-title">${g.name}</span>
@@ -15755,7 +15925,7 @@ function renderSystemOverviewView(store) {
           </div>
           <button
             type="button"
-            @click=${() => store.openDiscoveredDevices()}
+            @click=${() => store.openDiscoveredDevices("card-discovered-latter")}
             class="btn btn-secondary btn-compact"
           >
             Open Discovered
@@ -16047,6 +16217,7 @@ function renderSystemOverviewView(store) {
                 store.openSystemSection(
                   "shared_entities",
                   camerasCount === 0 && calendarsCount > 0 ? "card-calendars" : "card-cameras-doorbell",
+                  ["card-cameras-doorbell", "card-calendars"],
                 )}
               class="overview-box"
             >
@@ -16151,6 +16322,7 @@ function renderSystemOverviewView(store) {
                 store.openSystemSection(
                   "shared_entities",
                   colorsCount > 0 ? "card-custom-colors" : "card-system-wallpapers",
+                  ["card-custom-colors", "card-system-wallpapers"],
                 )}
               class="overview-box"
             >
@@ -16354,7 +16526,9 @@ function renderSystemPresenceView(store) {
                     const chosen = row?.fusion_sensors || [];
                     const choices = row?.fusion_sensor_choices || [];
                     const thresholdId = `fusion-threshold-${areaId}`;
-                    return html`<div id=${`area-box-${areaId}`} class="area-presence-box">
+                    const areaBoxId = `area-box-${areaId}`;
+                    const isAreaHandoff = Boolean(store.isHandoffTarget?.(areaBoxId));
+                    return html`<div id=${areaBoxId} class="area-presence-box${isAreaHandoff ? " handoff-active" : ""}">
                       <div class="area-box-head">
                         <div class="area-box-heading">
                           <span class="area-box-title">${areaName}</span>
@@ -16516,7 +16690,7 @@ function renderSystemPresenceView(store) {
             bleDevs.length === 0
               ? html`<button
                   type="button"
-                  @click=${() => store.openDiscoveredDevices()}
+                  @click=${() => store.openDiscoveredDevices("card-discovered-ble")}
                   class="btn btn-secondary"
                 >
                   Open Discovered Devices
@@ -16936,6 +17110,8 @@ function renderSystemRemotesView(store) {
 
       <div class="column">
         ${renderCard({
+          id: "card-remote-groups",
+          handoffActive: Boolean(store.isHandoffTarget?.("card-remote-groups")),
           title: "Remote Control Groups",
           subtitle: "Bind sets of remotes to Home Assistant Areas or specific Devices.",
           headerActions: html`<button
@@ -17067,6 +17243,7 @@ function renderSystemSharedView(store) {
       <div class="column">
         ${renderCard({
           id: "card-whole-home",
+          handoffActive: Boolean(store.isHandoffTarget?.("card-whole-home")),
           heading: html`<h3 class="card-title">Whole-Home Entities</h3>`,
           subtitle: "Shared entities shown across Home Hub, Weather, and Area views on every Device.",
           contentClass: "settings-list",
@@ -17084,6 +17261,7 @@ function renderSystemSharedView(store) {
 
         ${renderCard({
           id: "card-calendars",
+          handoffActive: Boolean(store.isHandoffTarget?.("card-calendars")),
           heading: html`<h3 class="card-title">Calendars</h3>`,
           subtitle: "Upcoming events merged into the Activity Card and agenda feed.",
           headerActions: html`<button
@@ -17108,6 +17286,7 @@ function renderSystemSharedView(store) {
 
         ${renderCard({
           id: "card-system-wallpapers",
+          handoffActive: Boolean(store.isHandoffTarget?.("card-system-wallpapers")),
           heading: html`<h3 class="card-title">Wallpapers</h3>`,
           subtitle: "Shared System wallpapers and presets available to every Latter display.",
           headerActions: renderWallpaperUploadTrigger(store, "system"),
@@ -17122,6 +17301,7 @@ function renderSystemSharedView(store) {
       <div class="column">
         ${renderCard({
           id: "card-cameras-doorbell",
+          handoffActive: Boolean(store.isHandoffTarget?.("card-cameras-doorbell")),
           heading: html`<h3 class="card-title">Cameras &amp; Doorbell Audio</h3>`,
           subtitle:
             "Up to 10 cameras. Doorbell ring sensors wake displays automatically with listen audio and push-to-talk TTS replies.",
@@ -17235,6 +17415,7 @@ function renderSystemSharedView(store) {
 
         ${renderCard({
           id: "card-custom-colors",
+          handoffActive: Boolean(store.isHandoffTarget?.("card-custom-colors")),
           heading: html`<h3 class="card-title">Custom Colors</h3>`,
           subtitle: "Shared 24-swatch accent library available across all Devices.",
           headerActions: html`<button
@@ -17589,6 +17770,7 @@ function renderSystemToolsView(store) {
       <div class="column">
         ${renderCard({
           id: "card-backup-restore",
+          handoffActive: Boolean(store.isHandoffTarget?.("card-backup-restore")),
           heading: html`<h3 class="card-title">Backup &amp; Restore</h3>`,
           subtitle:
             "Export or restore non-secret System and Device configurations as portable JSON bundles.",
@@ -17678,6 +17860,7 @@ function renderSystemToolsView(store) {
 
         ${renderCard({
           id: "card-perimeter-security",
+          handoffActive: Boolean(store.isHandoffTarget?.("card-perimeter-security")),
           title: "Perimeter Security & Signing",
           contentClass: "settings-list",
           body: html`${renderSettingsRow({
@@ -18092,6 +18275,7 @@ class LatterStudio extends LitElement {
 
         <main
           class="main-area"
+          @focusin=${(ev) => this.store.onMainFocusIn(ev)}
           @focusout=${() => void this.store.flushAllPendingSettings()}
         >
           <div class="content-wrap">

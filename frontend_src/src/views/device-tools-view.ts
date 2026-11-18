@@ -331,6 +331,8 @@ export function renderDeviceToolsView(store: StudioStore): TemplateResult {
     <div class="columns">
       <div class="column">
         ${renderCard({
+          id: "card-device-diagnostics",
+          handoffActive: Boolean(store.isHandoffTarget?.("card-device-diagnostics")),
           heading: html`<h3 class="card-title">Diagnostics</h3>`,
           contentClass: "stack",
           body: html`${networkControlItems.length

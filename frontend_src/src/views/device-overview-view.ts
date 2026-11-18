@@ -387,7 +387,12 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
 
             <button
               type="button"
-              @click=${() => store.switchView(isBleOnly ? "presence" : "tools")}
+              @click=${() =>
+                isBleOnly
+                  ? store.switchView("presence")
+                  : store.openDeviceSection
+                    ? store.openDeviceSection("tools", "card-device-diagnostics")
+                    : store.switchView("tools")}
               class="status-tile"
             >
               <div class="status-tile-head">
@@ -409,7 +414,10 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
             ${isBleOnly
               ? html`<button
                   type="button"
-                  @click=${() => store.switchView("presence")}
+                  @click=${() =>
+                    store.openDeviceSection
+                      ? store.openDeviceSection("presence", "card-ble-identity")
+                      : store.switchView("presence")}
                   class="status-tile"
                 >
                   <div class="status-tile-head">
@@ -423,7 +431,10 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
                 </button>`
               : html`<button
                   type="button"
-                  @click=${() => store.switchView("tools")}
+                  @click=${() =>
+                    store.openDeviceSection
+                      ? store.openDeviceSection("tools", "card-device-diagnostics")
+                      : store.switchView("tools")}
                   class="status-tile"
                 >
                   <div class="status-tile-head">

@@ -67,6 +67,7 @@ export function renderSystemSharedView(store: StudioStore): TemplateResult {
       <div class="column">
         ${renderCard({
           id: "card-whole-home",
+          handoffActive: Boolean(store.isHandoffTarget?.("card-whole-home")),
           heading: html`<h3 class="card-title">Whole-Home Entities</h3>`,
           subtitle: "Shared entities shown across Home Hub, Weather, and Area views on every Device.",
           contentClass: "settings-list",
@@ -84,6 +85,7 @@ export function renderSystemSharedView(store: StudioStore): TemplateResult {
 
         ${renderCard({
           id: "card-calendars",
+          handoffActive: Boolean(store.isHandoffTarget?.("card-calendars")),
           heading: html`<h3 class="card-title">Calendars</h3>`,
           subtitle: "Upcoming events merged into the Activity Card and agenda feed.",
           headerActions: html`<button
@@ -108,6 +110,7 @@ export function renderSystemSharedView(store: StudioStore): TemplateResult {
 
         ${renderCard({
           id: "card-system-wallpapers",
+          handoffActive: Boolean(store.isHandoffTarget?.("card-system-wallpapers")),
           heading: html`<h3 class="card-title">Wallpapers</h3>`,
           subtitle: "Shared System wallpapers and presets available to every Latter display.",
           headerActions: renderWallpaperUploadTrigger(store, "system"),
@@ -122,6 +125,7 @@ export function renderSystemSharedView(store: StudioStore): TemplateResult {
       <div class="column">
         ${renderCard({
           id: "card-cameras-doorbell",
+          handoffActive: Boolean(store.isHandoffTarget?.("card-cameras-doorbell")),
           heading: html`<h3 class="card-title">Cameras &amp; Doorbell Audio</h3>`,
           subtitle:
             "Up to 10 cameras. Doorbell ring sensors wake displays automatically with listen audio and push-to-talk TTS replies.",
@@ -235,6 +239,7 @@ export function renderSystemSharedView(store: StudioStore): TemplateResult {
 
         ${renderCard({
           id: "card-custom-colors",
+          handoffActive: Boolean(store.isHandoffTarget?.("card-custom-colors")),
           heading: html`<h3 class="card-title">Custom Colors</h3>`,
           subtitle: "Shared 24-swatch accent library available across all Devices.",
           headerActions: html`<button

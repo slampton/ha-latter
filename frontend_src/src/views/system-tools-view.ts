@@ -326,6 +326,7 @@ export function renderSystemToolsView(store: StudioStore): TemplateResult {
       <div class="column">
         ${renderCard({
           id: "card-backup-restore",
+          handoffActive: Boolean(store.isHandoffTarget?.("card-backup-restore")),
           heading: html`<h3 class="card-title">Backup &amp; Restore</h3>`,
           subtitle:
             "Export or restore non-secret System and Device configurations as portable JSON bundles.",
@@ -415,6 +416,7 @@ export function renderSystemToolsView(store: StudioStore): TemplateResult {
 
         ${renderCard({
           id: "card-perimeter-security",
+          handoffActive: Boolean(store.isHandoffTarget?.("card-perimeter-security")),
           title: "Perimeter Security & Signing",
           contentClass: "settings-list",
           body: html`${renderSettingsRow({

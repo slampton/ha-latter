@@ -341,7 +341,7 @@ export function renderSystemOverviewView(store: StudioStore): TemplateResult {
           </div>
           <button
             type="button"
-            @click=${() => store.openDiscoveredDevices()}
+            @click=${() => store.openDiscoveredDevices("card-discovered-latter")}
             class="btn btn-secondary btn-compact"
           >
             Open Discovered
@@ -634,6 +634,7 @@ export function renderSystemOverviewView(store: StudioStore): TemplateResult {
                 store.openSystemSection(
                   "shared_entities",
                   camerasCount === 0 && calendarsCount > 0 ? "card-calendars" : "card-cameras-doorbell",
+                  ["card-cameras-doorbell", "card-calendars"],
                 )}
               class="overview-box"
             >
@@ -738,6 +739,7 @@ export function renderSystemOverviewView(store: StudioStore): TemplateResult {
                 store.openSystemSection(
                   "shared_entities",
                   colorsCount > 0 ? "card-custom-colors" : "card-system-wallpapers",
+                  ["card-custom-colors", "card-system-wallpapers"],
                 )}
               class="overview-box"
             >

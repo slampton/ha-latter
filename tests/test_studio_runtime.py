@@ -3458,6 +3458,315 @@ return {
         ):
             self.assertIn(expected_alert, alerts)
 
+    def test_section_handoff_blue_highlights_vs_whole_page_navigation(self) -> None:
+        """D-057: Specific-section jumps scroll and highlight in primary blue while whole-page destinations stay unhighlighted."""
+        stub_deps = (
+            "globalThis.HTMLElement = class { attachShadow() { return {}; } toggleAttribute() {} };\n"
+            "globalThis.history = { pushState() {}, replaceState() {} };\n"
+            "globalThis.dispatchEvent = () => true;\n"
+            "class StudioWsClient {}\n"
+            "function formatWsError(_e, f) { return f; }\n"
+            + "".join(
+                f"function {fn}() {{}}\n"
+                for fn in (
+                    "adoptLatterDeviceOp",
+                    "checkSystemUpdatesOp",
+                    "clearInternalLogsOp",
+                    "clearSecurityPinOp",
+                    "confirmAddBleModalOp",
+                    "confirmRemoveDeviceOp",
+                    "confirmResetDeviceOp",
+                    "copyLogsToClipboardOp",
+                    "downloadDeviceDiagnosticsOp",
+                    "exportBackupOp",
+                    "formatVisibleLogsOp",
+                    "openColorWheelModalOp",
+                    "quickAdoptBleCandidateOp",
+                    "restoreFromUploadedFileOp",
+                    "rotateSigningKeyOp",
+                    "saveColorWheelSelectionOp",
+                    "saveSecurityPinOp",
+                    "selectBleCandidateInModalOp",
+                    "sendAnnouncementOp",
+                    "addRemoteGroupRowOp",
+                    "addStringListRowOp",
+                    "addVolumeOverrideRowOp",
+                    "applyDeviceCustomColorOp",
+                    "commitEntityChange",
+                    "deleteCustomPaletteOp",
+                    "deleteWallpaperOp",
+                    "executeEntityActionOp",
+                    "flushDeviceBucketOp",
+                    "flushSystemSettingsOp",
+                    "getDockItemsOp",
+                    "getEnabledActivitySourcesOp",
+                    "getEnabledAreaCategoriesOp",
+                    "getEnabledGamesItemsOp",
+                    "getEnabledHomeCategoriesOp",
+                    "getEnabledToolsItemsOp",
+                    "getPinnedItemsOp",
+                    "moveAreaCategoryTokenOp",
+                    "moveGameItemTokenOp",
+                    "moveHomeCategoryTokenOp",
+                    "moveShortcutItemOp",
+                    "moveToolItemTokenOp",
+                    "openShortcutModalOp",
+                    "overlayDevicePrefsOnSections",
+                    "overlayPendingBlankListSlots",
+                    "overlayPendingEntityStates",
+                    "previewCameraOp",
+                    "removeRemoteGroupRowOp",
+                    "removeShortcutItemOp",
+                    "removeStringListRowOp",
+                    "removeVolumeOverrideRowOp",
+                    "resetDockItemsToDefaultOp",
+                    "runDeviceActionOp",
+                    "saveShortcutModalOp",
+                    "selectWallpaperSourceOp",
+                    "setAllWallpaperFavoritesOp",
+                    "setWallpaperRotationOp",
+                    "stageDeviceSettingOp",
+                    "stageSystemSettingOp",
+                    "testDoorbellSpeakerOp",
+                    "toggleActivitySourceOp",
+                    "toggleAreaCategoryTokenOp",
+                    "toggleGameItemTokenOp",
+                    "toggleHomeCategoryTokenOp",
+                    "toggleNativeDockAppOp",
+                    "toggleRemoteInGroupOp",
+                    "toggleToolItemTokenOp",
+                    "toggleWallpaperFavOp",
+                    "updateRemoteGroupFieldOp",
+                    "updateStringListRowOp",
+                    "updateVolumeOverrideRowOp",
+                    "uploadWallpaperOp",
+                    "applyBatchCopyFromDeviceOp",
+                    "applyBatchDeviceSettingOp",
+                    "bulkColorOp",
+                    "bulkNumberOp",
+                    "bulkPillsToggleOp",
+                    "bulkSelectOp",
+                    "bulkToggleOp",
+                    "captureBleAreaSignatureOp",
+                    "clearBleAreaSignatureOp",
+                    "confirmSaveDeviceAsGroupOp",
+                    "copyDeviceToGroupBaselineOp",
+                    "createDeviceGroupOp",
+                    "deleteDeviceGroupOp",
+                    "filteredControlTargetsOp",
+                    "getActiveSurveyDeviceOp",
+                    "resolvedBatchTargetIdOp",
+                    "setAreaFusionOp",
+                    "setBleScannerOffsetOp",
+                    "updateGroupBaselineOp",
+                    "updateGroupScopeOp",
+                )
+            )
+            + "const PENDING_ENTITY_STATES = new Map();\n"
+            + "function renderWallpaperGalleryItems() { return ''; }\n"
+            + "function renderWallpaperUploadProgress() { return ''; }\n"
+            + "function renderWallpaperUploadTrigger() { return ''; }\n"
+        )
+        runner = """
+return (async () => {
+  function flattenHtml(node) {
+    if (node === null || node === undefined || node === nothing || typeof node === "boolean") return "";
+    if (Array.isArray(node)) return node.map(flattenHtml).join("");
+    if (typeof node === "object" && node._$litKeyed$ === 1) return node.templates.map(flattenHtml).join("");
+    if (typeof node === "object" && node._$litType$ === 1) {
+      let out = "";
+      for (let i = 0; i < node.strings.length; i += 1) {
+        out += node.strings[i];
+        if (i < node.values.length) {
+          const v = node.values[i];
+          out += typeof v === "function" ? "[fn]" : flattenHtml(v);
+        }
+      }
+      return out;
+    }
+    return String(node);
+  }
+
+  const scrolled = [];
+  const focused = [];
+  const fakeHost = {
+    isConnected: true,
+    requestUpdate() {},
+    updateComplete: Promise.resolve(true),
+    renderRoot: {
+      getElementById(id) {
+        return {
+          id,
+          hasAttribute() { return false; },
+          setAttribute() {},
+          scrollIntoView(opts) {
+            scrolled.push({ id, opts });
+            return Promise.resolve();
+          },
+          focus(opts) {
+            focused.push({ id, opts });
+          },
+        };
+      },
+    },
+  };
+  globalThis.requestAnimationFrame = (cb) => cb();
+
+  const store = new StudioStore(fakeHost);
+  store.ensureSubscription = async () => {};
+  store.state = {
+    version: "3.0.0",
+    has_security_pin: false,
+    device_groups: [
+      { id: "handhelds", name: "Handhelds", description: "Portable", builtin: true, device_config: {} },
+    ],
+    system_devices: [
+      {
+        subentry_id: "sub_1",
+        title: "Sean Pocket",
+        kind: "device",
+        is_online: true,
+        has_display: true,
+        is_roaming: true,
+        ble_tracked: true,
+        active_area_name: "Living Room",
+        device_group: "handhelds",
+      },
+    ],
+    live: {
+      area_presence_grid: [
+        { area_id: "living", area_name: "Living Room", is_occupied: true, confidence_pct: 90, occupant_names: ["Sean"] },
+        { area_id: "study", area_name: "Study", is_occupied: false, occupant_names: [] },
+      ],
+    },
+    ble_area_signatures: [
+      { area_id: "living", area_name: "Living Room", has_ble_proxy: true, has_signature: false, scanner_count: 1, sample_count: 0, captured_at: "" },
+      { area_id: "study", area_name: "Study", has_ble_proxy: true, has_signature: false, scanner_count: 1, sample_count: 0, captured_at: "" },
+    ],
+    system_config: {
+      camera_entities: ["camera.front"],
+      calendar_entities: ["calendar.home"],
+      remotes_list: ["remote.tv"],
+      remote_groups: [{ id: "rg1", name: "Living TV", area_id: "living", remotes: ["remote.tv"] }],
+      volume_overrides: [],
+      custom_palettes: [{ name: "Ocean", hex: "#009ac7" }],
+    },
+    system_wallpapers: [{ id: "preset:ocean_waves", name: "Ocean Waves", kind: "preset" }],
+    config: { kind: "device", device_slug: "sean_pocket", device_group: "handhelds" },
+    capabilities: { has_display: true, has_power: true },
+    links: { entry_id: "entry_1" },
+  };
+
+  // 1. System Overview -> Living Room highlights ONLY #area-box-living (survives HA applyRoute echo)
+  store.openSystemSection("area_tracking", "area-box-living");
+  store.applyRoute({ prefix: "/latter", path: "/system/presence" });
+  store.hostUpdated();
+  await Promise.resolve();
+  const presenceHtml = flattenHtml(renderSystemPresenceView(store));
+
+  // Clicking Calibrate transfers blue handoff from #area-box-living to #ble-calibrate-target-box
+  store.selectBleCalibrateArea("living", true);
+  const afterCalibrateHtml = flattenHtml(renderSystemPresenceView(store));
+
+  // 2. System Capabilities: multi-card shared_entities highlights vs whole-page remotes & groups (unhighlighted)
+  store.openSystemSection("shared_entities", "card-cameras-doorbell", ["card-cameras-doorbell", "card-calendars"]);
+  const sharedCamCalHtml = flattenHtml(renderSystemSharedView(store));
+
+  store.openSystemSection("remotes");
+  const remotesWholePageHtml = flattenHtml(renderSystemRemotesView(store));
+
+  store.openSystemSection("remotes", "card-remote-groups");
+  const remotesTargetedHtml = flattenHtml(renderSystemRemotesView(store));
+
+  store.openSystemSection("system_sync");
+  const groupsWholePageHtml = flattenHtml(renderSystemGroupsView(store));
+
+  store.openManageGroups("handhelds");
+  const groupsTargetedHtml = flattenHtml(renderSystemGroupsView(store));
+
+  // 3. Device Overview -> Wi-Fi / Firmware highlights #card-device-diagnostics on Device -> Tools
+  store.activeSubentryId = "sub_1";
+  store.deviceSelected = true;
+  store.openDeviceSection("tools", "card-device-diagnostics");
+  store.hostUpdated();
+  const devToolsHtml = flattenHtml(renderDeviceToolsView(store));
+
+  // 4. Focusing an interactive control outside the highlighted card clears the highlight
+  store.onMainFocusIn({
+    target: { tagName: "BUTTON", id: "other-btn", parentElement: { id: "card-replace-hardware", parentElement: null } },
+  });
+  const devToolsClearedHtml = flattenHtml(renderDeviceToolsView(store));
+
+  return {
+    cssText: STUDIO_STYLES.styleSheetText,
+    scrolled,
+    focused,
+    presenceHtml,
+    afterCalibrateHtml,
+    sharedCamCalHtml,
+    remotesWholePageHtml,
+    remotesTargetedHtml,
+    groupsWholePageHtml,
+    groupsTargetedHtml,
+    devToolsHtml,
+    devToolsClearedHtml,
+  };
+})();
+"""
+        got = _run_node_ts(
+            [
+                FRONTEND_SRC / "lib" / "lit.ts",
+                FRONTEND_SRC / "styles" / "tokens.ts",
+                FRONTEND_SRC / "constants.ts",
+                FRONTEND_SRC / "utils" / "format.ts",
+                FRONTEND_SRC / "components" / "controls.ts",
+                FRONTEND_SRC / "state" / "store.ts",
+                FRONTEND_SRC / "views" / "system-presence-view.ts",
+                FRONTEND_SRC / "views" / "system-shared-view.ts",
+                FRONTEND_SRC / "views" / "system-remotes-view.ts",
+                FRONTEND_SRC / "views" / "system-groups-view.ts",
+                FRONTEND_SRC / "views" / "device-tools-view.ts",
+            ],
+            runner,
+            preamble_js=stub_deps,
+        )
+
+        # Primary-blue CSS handoff (warning orange retired from .calibrate-target-box.handoff-active)
+        self.assertIn("--studio-handoff-surface:", got["cssText"])
+        self.assertIn("--studio-handoff-ring: inset 0 0 0 1px var(--studio-primary);", got["cssText"])
+        self.assertNotIn("border: 2px solid var(--studio-warning);", got["cssText"])
+
+        # Living Room highlighted, Study neutral; smooth-scrolled + focused with preventScroll: true
+        self.assertIn('id=area-box-living class="area-presence-box handoff-active"', got["presenceHtml"])
+        self.assertIn('id=area-box-study class="area-presence-box"', got["presenceHtml"])
+        self.assertEqual(
+            got["scrolled"][0],
+            {"id": "area-box-living", "opts": {"behavior": "smooth", "block": "start"}},
+        )
+        self.assertEqual(
+            got["focused"][0],
+            {"id": "area-box-living", "opts": {"preventScroll": True}},
+        )
+
+        # Calibrate transfers highlight cleanly from #area-box-living to #ble-calibrate-target-box
+        self.assertIn('id=area-box-living class="area-presence-box"', got["afterCalibrateHtml"])
+        self.assertIn('class="calibrate-target-box handoff-active"', got["afterCalibrateHtml"])
+
+        # Cameras + Calendars highlights those 2 cards while Whole-Home stays unhighlighted
+        self.assertIn('id=card-cameras-doorbell class="card handoff-active"', got["sharedCamCalHtml"])
+        self.assertIn('id=card-calendars class="card handoff-active"', got["sharedCamCalHtml"])
+        self.assertIn('id=card-whole-home class="card"', got["sharedCamCalHtml"])
+
+        # Whole-page Media & Remotes and Device Groups stay unhighlighted; targeted deep-links highlight
+        self.assertNotIn("handoff-active", got["remotesWholePageHtml"])
+        self.assertIn('id=card-remote-groups class="card handoff-active"', got["remotesTargetedHtml"])
+        self.assertNotIn("handoff-active", got["groupsWholePageHtml"])
+        self.assertIn('id=group-box-handhelds class="area-presence-box handoff-active"', got["groupsTargetedHtml"])
+
+        # Device -> Tools Diagnostics highlight & outside focus dismissal
+        self.assertIn('id=card-device-diagnostics class="card handoff-active"', got["devToolsHtml"])
+        self.assertNotIn("handoff-active", got["devToolsClearedHtml"])
+
 
 if __name__ == "__main__":
     unittest.main()

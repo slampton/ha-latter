@@ -337,6 +337,7 @@ export class LatterStudio extends LitElement {
 
         <main
           class="main-area"
+          @focusin=${(ev: FocusEvent) => this.store.onMainFocusIn(ev)}
           @focusout=${() => void this.store.flushAllPendingSettings()}
         >
           <div class="content-wrap">

@@ -113,6 +113,8 @@ export function renderDevicePresenceView(store: StudioStore): TemplateResult {
 
       <div class="column">
         ${renderCard({
+          id: "card-ble-identity",
+          handoffActive: Boolean(store.isHandoffTarget?.("card-ble-identity")),
           title: "BLE Identity",
           contentClass: "stack",
           body: html`<div class="stacked-field">

@@ -119,6 +119,8 @@ export function renderSystemRemotesView(store: StudioStore): TemplateResult {
 
       <div class="column">
         ${renderCard({
+          id: "card-remote-groups",
+          handoffActive: Boolean(store.isHandoffTarget?.("card-remote-groups")),
           title: "Remote Control Groups",
           subtitle: "Bind sets of remotes to Home Assistant Areas or specific Devices.",
           headerActions: html`<button

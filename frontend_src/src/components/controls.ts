@@ -17,6 +17,7 @@ export interface CardRenderOptions {
   footerActions?: TemplateResult | typeof nothing;
   contentClass?: string;
   danger?: boolean;
+  handoffActive?: boolean;
   body: unknown;
 }
 
@@ -33,7 +34,7 @@ export function renderCard(opts: CardRenderOptions): TemplateResult {
             : nothing}`
       : headingEl;
   const contentCls = opts.contentClass ? `card-content ${opts.contentClass}` : "card-content";
-  return html`<div id=${opts.id || nothing} class="card${opts.danger ? " danger" : ""}">
+  return html`<div id=${opts.id || nothing} class="card${opts.danger ? " danger" : ""}${opts.handoffActive ? " handoff-active" : ""}">
     <div class="card-header">${headerInner}</div>
     <div class=${contentCls}>${opts.body}</div>
     ${opts.footerActions && opts.footerActions !== nothing

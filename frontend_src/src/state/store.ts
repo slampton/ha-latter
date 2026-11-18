@@ -297,7 +297,10 @@ export class StudioStore implements ReactiveController {
   returnToPinnedModal = false;
 
   pendingScrollCardId = "";
+  readonly handoffTargetIds = new Set<string>();
   pendingDomRevert: PendingDomRevert | null = null;
+  private scrollGen = 0;
+  private handoffArming = false;
 
   // Snapshot-isolated pending settings queues (shared with `state/*-ops.ts`)
   pendingSystemPatch: Record<string, unknown> = {};
@@ -365,12 +368,116 @@ export class StudioStore implements ReactiveController {
     if (this.pendingScrollCardId) {
       const cardId = this.pendingScrollCardId;
       this.pendingScrollCardId = "";
-      const root = (this.host as unknown as { renderRoot?: ShadowRoot }).renderRoot;
-      const target = root?.getElementById(cardId);
+      const root =
+        (this.host as unknown as { renderRoot?: ShadowRoot }).renderRoot ||
+        this.host.shadowRoot;
+      const target = root?.getElementById(cardId) as HTMLElement | null;
       if (target && typeof target.scrollIntoView === "function") {
-        target.scrollIntoView({ behavior: "smooth", block: "start" });
+        const myGen = ++this.scrollGen;
+        const reducedMotion = Boolean(
+          typeof globalThis.matchMedia === "function" &&
+            globalThis.matchMedia("(prefers-reduced-motion: reduce)").matches,
+        );
+        void this.scrollIntoViewAsync(target, {
+          behavior: reducedMotion ? "auto" : "smooth",
+          block: "start",
+        }).then(() => {
+          if (myGen !== this.scrollGen || !this.handoffTargetIds.has(cardId)) return;
+          if (typeof target.focus === "function") {
+            if (typeof target.hasAttribute === "function" && !target.hasAttribute("tabindex")) {
+              target.setAttribute?.("tabindex", "-1");
+            }
+            try {
+              target.focus({ preventScroll: true });
+            } catch {
+              target.focus();
+            }
+          }
+        });
       }
     }
+    this.handoffArming = false;
+  }
+
+  private scrollIntoViewAsync(
+    element: HTMLElement,
+    options: ScrollIntoViewOptions,
+  ): Promise<void> {
+    const result = element.scrollIntoView(options) as unknown;
+    if (result instanceof Promise) {
+      return result as Promise<void>;
+    }
+    const scroller = globalThis.window;
+    if (!scroller || typeof scroller.addEventListener !== "function") {
+      return Promise.resolve();
+    }
+    return new Promise<void>((resolve) => {
+      let timeoutId: ReturnType<typeof setTimeout>;
+      const finish = (): void => {
+        clearTimeout(timeoutId);
+        scroller.removeEventListener("scrollend", finish);
+        scroller.removeEventListener("scroll", onScroll);
+        resolve();
+      };
+      const onScroll = (): void => {
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(finish, 100);
+      };
+      scroller.addEventListener("scrollend", finish, { once: true });
+      scroller.addEventListener("scroll", onScroll, { passive: true });
+      timeoutId = setTimeout(finish, 100);
+    });
+  }
+
+  isHandoffTarget(targetId: string): boolean {
+    return Boolean(targetId) && this.handoffTargetIds.has(targetId);
+  }
+
+  clearHandoffTargets(): void {
+    this.bleCalibrateHandoffActive = false;
+    this.handoffTargetIds.clear();
+    this.handoffArming = false;
+  }
+
+  private applySectionHandoff(scrollId = "", highlightIds?: readonly string[]): void {
+    const cleanScroll = String(scrollId || "").trim();
+    this.pendingScrollCardId = cleanScroll;
+    const ids = highlightIds && highlightIds.length > 0 ? highlightIds : cleanScroll ? [cleanScroll] : [];
+    for (const rawId of ids) {
+      const id = String(rawId || "").trim();
+      if (id) this.handoffTargetIds.add(id);
+    }
+    if (this.handoffTargetIds.size > 0) {
+      this.handoffArming = true;
+      this.host.requestUpdate();
+    }
+  }
+
+  onMainFocusIn(ev: FocusEvent): void {
+    if (this.handoffArming || this.handoffTargetIds.size === 0) return;
+    const path = typeof ev.composedPath === "function" ? ev.composedPath() : [];
+    const target = (path[0] ?? ev.target) as Element | null;
+    if (!target || typeof target.tagName !== "string") return;
+    const tag = target.tagName.toUpperCase();
+    if (
+      tag !== "BUTTON" &&
+      tag !== "INPUT" &&
+      tag !== "SELECT" &&
+      tag !== "TEXTAREA" &&
+      tag !== "SUMMARY" &&
+      tag !== "A"
+    ) {
+      return;
+    }
+    let cur: Element | null = target;
+    while (cur) {
+      if (cur.id && this.handoffTargetIds.has(cur.id)) {
+        return;
+      }
+      cur = cur.parentElement;
+    }
+    this.handoffTargetIds.clear();
+    this.host.requestUpdate();
   }
 
   setHass(hass: HomeAssistant | null): void {
@@ -436,13 +543,18 @@ export class StudioStore implements ReactiveController {
         }
       });
 
+    const prevScope = this.currentScope;
+    const prevViewId = this.currentViewId;
+    const prevSubId = this.activeSubentryId;
     this.routeApplying = true;
     try {
       if (parts[0] === "devices" && parts[1]?.toLowerCase() === "discovered") {
         if (this.activeSubentryId) {
           void this.flushDeviceBucket(this.activeSubentryId);
         }
-        this.bleCalibrateHandoffActive = false;
+        if (prevScope !== "device" || prevViewId !== "discovered_devices") {
+          this.clearHandoffTargets();
+        }
         this.deviceSelected = false;
         this.currentScope = "device";
         this.currentViewId = "discovered_devices";
@@ -458,14 +570,15 @@ export class StudioStore implements ReactiveController {
           return;
         }
         const viewId = slugToView(DEVICE_VIEW_SLUGS, parts[2] || "overview") || "dashboard";
-        const prevSubId = this.activeSubentryId;
         const subChanged = prevSubId !== nextSubId;
         if (prevSubId && subChanged) {
           void this.flushDeviceBucket(prevSubId);
           this.appConfigModal = { open: false, app: null };
           this.returnToPinnedModal = false;
         }
-        this.bleCalibrateHandoffActive = false;
+        if (prevScope !== "device" || prevViewId !== viewId || subChanged) {
+          this.clearHandoffTargets();
+        }
         this.activeSubentryId = nextSubId;
         this.deviceSelected = true;
         this.currentScope = "device";
@@ -479,7 +592,9 @@ export class StudioStore implements ReactiveController {
           void this.flushDeviceBucket(this.activeSubentryId);
         }
         const viewId = slugToView(SYSTEM_VIEW_SLUGS, parts[1] || "overview") || "system_overview";
-        if (viewId !== "area_tracking") {
+        if (prevScope !== "system" || prevViewId !== viewId) {
+          this.clearHandoffTargets();
+        } else if (viewId !== "area_tracking") {
           this.bleCalibrateHandoffActive = false;
         }
         this.currentScope = "system";
@@ -492,7 +607,9 @@ export class StudioStore implements ReactiveController {
         if (this.activeSubentryId) {
           void this.flushDeviceBucket(this.activeSubentryId);
         }
-        this.bleCalibrateHandoffActive = false;
+        if (prevScope !== "device" || prevViewId !== "select_device_prompt") {
+          this.clearHandoffTargets();
+        }
         this.deviceSelected = false;
         this.currentScope = "device";
         this.currentViewId = "select_device_prompt";
@@ -549,7 +666,7 @@ export class StudioStore implements ReactiveController {
     if (this.activeSubentryId) {
       void this.flushDeviceBucket(this.activeSubentryId);
     }
-    this.bleCalibrateHandoffActive = false;
+    this.clearHandoffTargets();
     this.deviceSelected = false;
     this.currentScope = "device";
     this.currentViewId = "select_device_prompt";
@@ -557,16 +674,17 @@ export class StudioStore implements ReactiveController {
     this.host.requestUpdate();
   }
 
-  openDiscoveredDevices(): void {
+  openDiscoveredDevices(cardId = ""): void {
     if (this.activeSubentryId) {
       void this.flushDeviceBucket(this.activeSubentryId);
     }
-    this.bleCalibrateHandoffActive = false;
+    this.clearHandoffTargets();
     this.deviceSelected = false;
     this.currentScope = "device";
     this.currentViewId = "discovered_devices";
     this.syncUrl();
     this.host.requestUpdate();
+    this.applySectionHandoff(cardId);
   }
 
   openDevicesWithCategory(category: string): void {
@@ -580,7 +698,7 @@ export class StudioStore implements ReactiveController {
     } else if (scope === "system" && this.activeSubentryId) {
       void this.flushDeviceBucket(this.activeSubentryId);
     }
-    this.bleCalibrateHandoffActive = false;
+    this.clearHandoffTargets();
     this.currentScope = scope;
     if (explicitViewId) {
       this.currentViewId = explicitViewId;
@@ -605,7 +723,7 @@ export class StudioStore implements ReactiveController {
       this.openDiscoveredDevices();
       return;
     }
-    this.bleCalibrateHandoffActive = false;
+    this.clearHandoffTargets();
     const isSys = Object.prototype.hasOwnProperty.call(SYSTEM_VIEW_SLUGS, viewId);
     this.currentScope = isSys ? "system" : "device";
     this.currentViewId = viewId;
@@ -619,9 +737,22 @@ export class StudioStore implements ReactiveController {
     }
   }
 
-  openSystemSection(viewId: SystemViewId, cardId = ""): void {
-    this.pendingScrollCardId = cardId;
+  openSystemSection(
+    viewId: SystemViewId,
+    cardId = "",
+    highlightIds?: readonly string[],
+  ): void {
     this.switchView(viewId);
+    this.applySectionHandoff(cardId, highlightIds);
+  }
+
+  openDeviceSection(
+    viewId: Exclude<DeviceViewId, "select_device_prompt" | "discovered_devices">,
+    cardId = "",
+    highlightIds?: readonly string[],
+  ): void {
+    this.switchView(viewId);
+    this.applySectionHandoff(cardId, highlightIds);
   }
 
   openManageGroups(groupId = ""): void {
@@ -641,7 +772,7 @@ export class StudioStore implements ReactiveController {
     if (prevSubId && prevSubId !== cleanNext) {
       await this.flushDeviceBucket(prevSubId);
     }
-    this.bleCalibrateHandoffActive = false;
+    this.clearHandoffTargets();
     this.activeSubentryId = cleanNext;
     this.deviceSelected = true;
     this.currentScope = "device";
@@ -1607,6 +1738,7 @@ export class StudioStore implements ReactiveController {
   selectBleCalibrateArea(areaId: string, fromAreaCard = false): void {
     this.bleCalibrateAreaId = String(areaId || "");
     if (fromAreaCard) {
+      this.handoffTargetIds.clear();
       this.bleCalibrateHandoffActive = true;
     }
     this.host.requestUpdate();

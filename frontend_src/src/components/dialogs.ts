@@ -498,7 +498,10 @@ export function renderAppConfigModalBody(store: StudioStore): TemplateResult | t
       type="button"
       @click=${() => {
         store.closeAppConfigModal();
-        store.openSystemSection("shared_entities");
+        store.openSystemSection("shared_entities", "card-whole-home", [
+          "card-whole-home",
+          "card-cameras-doorbell",
+        ]);
       }}
       class="btn btn-text"
     >
@@ -661,7 +664,7 @@ export function renderAppConfigModalBody(store: StudioStore): TemplateResult | t
       type="button"
       @click=${() => {
         store.closeAppConfigModal();
-        store.openSystemSection("remotes");
+        store.openSystemSection("remotes", "card-remote-groups");
       }}
       class="btn btn-text"
     >
@@ -1086,7 +1089,7 @@ export function renderAppConfigModalBody(store: StudioStore): TemplateResult | t
       type="button"
       @click=${() => {
         store.closeAppConfigModal();
-        store.openSystemSection("shared_entities");
+        store.openSystemSection("shared_entities", "card-calendars");
       }}
       class="btn btn-text"
     >

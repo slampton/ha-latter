@@ -92,6 +92,9 @@ export const STUDIO_STYLES = css`
     --studio-error-tint: color-mix(in srgb, var(--studio-error) 14%, transparent);
     --studio-info-tint: color-mix(in srgb, var(--studio-info) 14%, transparent);
     --studio-card-shadow: var(--ha-card-box-shadow, none);
+    --studio-handoff-surface: color-mix(in srgb, var(--studio-primary) 8%, var(--studio-surface));
+    --studio-handoff-ring: inset 0 0 0 1px var(--studio-primary);
+    --studio-card-handoff-shadow: inset 0 0 0 1px var(--studio-primary), var(--studio-card-shadow);
     --studio-overlay-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
     --studio-scrim: rgba(0, 0, 0, 0.5);
     --studio-media-bg: var(--secondary-background-color, #000000);
@@ -318,8 +321,15 @@ export const STUDIO_STYLES = css`
     box-shadow: var(--studio-card-shadow);
     color: var(--studio-text);
     scroll-margin-top: calc(var(--studio-header-height) + var(--studio-space-4));
+    transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
   }
   .card.danger { border-color: var(--studio-error); }
+  .card.handoff-active {
+    border-color: var(--studio-primary);
+    box-shadow: var(--studio-card-handoff-shadow);
+    background: var(--studio-handoff-surface);
+  }
+  .handoff-active[tabindex="-1"]:focus-visible { outline: none; }
   .card-header {
     display: flex;
     align-items: flex-start;
@@ -396,6 +406,12 @@ export const STUDIO_STYLES = css`
     border-radius: var(--studio-radius-control);
     background: var(--studio-input-bg);
     scroll-margin-top: calc(var(--studio-header-height) + var(--studio-space-4));
+    transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  .area-presence-box.handoff-active {
+    border-color: var(--studio-primary);
+    box-shadow: var(--studio-handoff-ring);
+    background: var(--studio-primary-tint);
   }
   .area-box-head {
     display: flex;
@@ -1026,11 +1042,15 @@ export const STUDIO_STYLES = css`
     border: 1px solid var(--studio-divider);
     border-radius: var(--studio-radius-control);
     background: var(--studio-input-bg);
-    transition: border-color 0.2s ease, background-color 0.2s ease;
+    transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
   }
   .calibrate-target-box.handoff-active {
-    border: 2px solid var(--studio-warning);
-    background: var(--studio-warning-tint);
+    border-color: var(--studio-primary);
+    box-shadow: var(--studio-handoff-ring);
+    background: var(--studio-primary-tint);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .card, .area-presence-box, .calibrate-target-box { transition: none; }
   }
   .calibrate-handoff-banner {
     display: flex;
