@@ -2412,20 +2412,24 @@ class LatterCoordinator:
         )
 
     def is_device_online(self) -> bool:
-        """Return True when the bound ESPHome device has an active Wi-Fi/IP state in Home Assistant."""
+        """Return True when the bound ESPHome device has an active connection in Home Assistant."""
         if self.is_ble_tag:
             return False
-        wifi_ent_id = find_device_entity_by_suffix(
-            self.hass,
-            self.esphome_device_id,
-            "sensor",
-            ("_wi_fi_signal", "_ip_address"),
-        )
-        wifi_st = self.hass.states.get(wifi_ent_id) if wifi_ent_id else None
-        return bool(
-            wifi_st is not None
-            and wifi_st.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN, "")
-        )
+        if self._rpc_receiver.is_device_unavailable():
+            return False
+        for sfx in ("_system_wi_fi_signal", "_wi_fi_signal", "_ip_address"):
+            ent_id = find_device_entity_by_suffix(
+                self.hass,
+                self.esphome_device_id,
+                "sensor",
+                (sfx,),
+            )
+            if not ent_id:
+                continue
+            st = self.hass.states.get(ent_id)
+            if st is not None and st.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN, ""):
+                return True
+        return False
 
     def is_ble_sleep_expected(self) -> bool:
         """Return True when BLE silence is intentional (screen-off light sleep/docked pause or battery hibernate)."""

@@ -44,6 +44,12 @@ from .const import (
     STORAGE_VERSION,
 )
 from .coordinator import LatterCoordinator
+from .groups import (
+    BUILTIN_GROUP_PRESET_VERSION,
+    CONF_BUILTIN_GROUP_PRESET_VERSION,
+    async_sync_coordinators_to_builtin_presets,
+    upgrade_stored_builtin_groups,
+)
 from .http import (
     LatterArtworkTranscoderView,
     LatterBrandIconView,
@@ -115,16 +121,27 @@ async def async_ping_bound_devices(
 async def _async_ensure_global_store(hass: HomeAssistant) -> dict[str, Any]:
     """Load or initialize the shared Site configuration store (`.storage/latter.site`)."""
     domain_data = hass.data.setdefault(DOMAIN, {})
+    had_existing_store = bool(
+        DATA_GLOBAL_STORE in domain_data and domain_data.get(DATA_GLOBAL_CONFIG)
+    )
     if DATA_GLOBAL_STORE not in domain_data:
         store: Store[dict[str, Any]] = Store(
             hass, STORAGE_VERSION, GLOBAL_STORAGE_KEY
         )
         domain_data[DATA_GLOBAL_STORE] = store
         loaded = await store.async_load()
+        had_existing_store = isinstance(loaded, dict) and bool(loaded)
         domain_data[DATA_GLOBAL_CONFIG] = dict(loaded) if isinstance(loaded, dict) else {}
 
     global_cfg: dict[str, Any] = domain_data[DATA_GLOBAL_CONFIG]
     changed = False
+    if global_cfg.get(CONF_BUILTIN_GROUP_PRESET_VERSION) != BUILTIN_GROUP_PRESET_VERSION:
+        if had_existing_store:
+            upgrade_stored_builtin_groups(global_cfg)
+            domain_data["_pending_builtin_group_preset_upgrade"] = True
+        else:
+            global_cfg[CONF_BUILTIN_GROUP_PRESET_VERSION] = BUILTIN_GROUP_PRESET_VERSION
+        changed = True
     secret_hex = str(global_cfg.get("hmac_secret_hex") or "").strip()
     if len(secret_hex) != 64:
         secret_hex = secrets.token_hex(32)
@@ -369,6 +386,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
             coordinator.device_slug,
             coordinator.subentry_id,
             coordinator.active_speaker,
+        )
+
+    if domain_data.pop("_pending_builtin_group_preset_upgrade", False):
+        await async_sync_coordinators_to_builtin_presets(
+            hass, list(sys_obj.coordinators.values())
         )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)

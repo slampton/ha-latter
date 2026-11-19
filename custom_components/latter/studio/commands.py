@@ -73,6 +73,7 @@ from ..groups import (
     coordinator_supports_group_key,
     default_group_baseline_config,
     get_device_groups,
+    reset_builtin_group_entry,
     resolve_behavior_key_value,
     seed_group_baseline_from_coordinator,
 )
@@ -313,6 +314,7 @@ _COMMAND_PAYLOAD_SCHEMAS: dict[str, vol.Schema] = {
             vol.Optional("source_subentry_id"): _str_cap(128),
             vol.Optional("copy_keys"): [_str_cap(64)],
             vol.Optional("config"): dict,
+            vol.Optional("reset_to_default"): bool,
         },
         extra=vol.PREVENT_EXTRA,
     ),
@@ -1384,6 +1386,33 @@ async def _cmd_update_group_baseline(
         member_targets = [
             c for c in all_coords if not c.is_ble_tag and c.device_group == g_id
         ]
+
+        if body.get("reset_to_default") is True:
+            reset_grp = reset_builtin_group_entry(g_id)
+            if reset_grp is None:
+                raise StudioCommandError(
+                    "not_allowed",
+                    "Only built-in Device Groups can be reset to preset defaults",
+                )
+            for idx_g, existing_g in enumerate(groups):
+                if existing_g.get("id") == g_id:
+                    groups[idx_g] = reset_grp
+                    grp = reset_grp
+                    break
+            await async_save_and_broadcast_global_config(
+                hass, {CONF_DEVICE_GROUPS: groups}
+            )
+            if member_targets:
+                await async_apply_group_baseline_to_coordinators(
+                    hass, grp, member_targets
+                )
+            log_studio_event(
+                hass,
+                "INFO",
+                "studio",
+                f"Reset preset defaults for '{grp.get('name', g_id)}' ({len(member_targets)} Device(s))",
+            )
+            return
 
         did_update = False
         if "include_display" in body:

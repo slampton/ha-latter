@@ -353,18 +353,9 @@ def build_quick_actions_payload(
     """Return quick action buttons outside esphome.sections."""
     if coordinator.is_ble_tag:
         return []
-    wifi_ent = coordinator.device_entity(
-        "sensor", "_wi_fi_signal", "_ip_address"
-    )
-    wifi_st = hass.states.get(wifi_ent) if wifi_ent else None
-    wifi_offline = wifi_st is not None and wifi_st.state == "unavailable"
-    can_run_cmd = (
-        not wifi_offline
-        and not coordinator._rpc_receiver.is_device_unavailable()
-        and bool(
-            coordinator.is_device_online()
-            or esphome_service(hass, coordinator.esphome_device_id, "latter_device_command")
-        )
+    can_run_cmd = is_coordinator_online_for_studio(hass, coordinator) and bool(
+        coordinator.is_device_online()
+        or esphome_service(hass, coordinator.esphome_device_id, "latter_device_command")
     )
     cmd_state = "unknown" if can_run_cmd else "unavailable"
     action_specs: list[tuple[str, str, str]] = []
@@ -414,7 +405,7 @@ def is_coordinator_online_for_studio(
     hass: HomeAssistant,
     coord: LatterCoordinator,
 ) -> bool:
-    """Return True when `coord` is online using Studio's unified Wi-Fi/IP/ESPHome state check."""
+    """Return True when `coord` is online using Studio's unified connection state check."""
     if coord.is_ble_tag:
         c_away = coord.is_device_away()
         return bool(
@@ -422,22 +413,39 @@ def is_coordinator_online_for_studio(
             and coord._ble_tracker.packets_seen > 0
             and not c_away
         )
+    if coord._rpc_receiver.is_device_unavailable():
+        return False
     if coord.is_device_online():
         return True
-    c_wifi_st = coord.device_state("sensor", "_system_wi_fi_signal", "_wi_fi_signal")
-    if c_wifi_st and c_wifi_st.state not in ("unavailable", "unknown", ""):
-        return True
-    c_ip_st = coord.device_state("sensor", "_ip_address")
-    if c_ip_st and c_ip_st.state not in ("unavailable", "unknown", ""):
-        return True
+    if coord.device_entity(
+        "sensor", "_system_wi_fi_signal", "_wi_fi_signal", "_ip_address"
+    ):
+        return False
     c_dev_id = coord.esphome_device_id
     if c_dev_id:
         ent_reg = er.async_get(hass)
         for e_reg in er.async_entries_for_device(ent_reg, c_dev_id):
-            if e_reg.platform == "esphome":
-                st_e = hass.states.get(e_reg.entity_id)
-                if st_e and st_e.state not in ("unavailable", "unknown"):
+            if e_reg.platform != "esphome" or e_reg.domain in (
+                "select",
+                "update",
+                "button",
+            ):
+                continue
+            st_e = hass.states.get(e_reg.entity_id)
+            if st_e is None or st_e.state in ("unavailable", "unknown", ""):
+                continue
+            if (
+                e_reg.domain == "binary_sensor"
+                and (
+                    st_e.attributes.get("device_class")
+                    or e_reg.original_device_class
+                )
+                == "connectivity"
+            ):
+                if st_e.state == "on":
                     return True
+                continue
+            return True
     return False
 
 
@@ -947,102 +955,12 @@ def _enrich_hub_catalog_item(
     idx: Any,
     area_reg: ar.AreaRegistry,
 ) -> dict[str, Any]:
-    """Attach `area_name`, `state_label`, and `state_tone` for Studio Home Hub & Weather status chips."""
+    """Attach `area_name` for Studio Home Hub & Camera catalog entries."""
     enriched: dict[str, Any] = dict(base_item)
     area_id = idx.resolve_entity_area_id(state_obj.entity_id) or ""
     area_entry = area_reg.async_get_area(area_id) if area_id else None
     if area_entry is not None:
         enriched["area_name"] = area_entry.name
-
-    raw_st = str(state_obj.state or "").strip().lower()
-    domain = state_obj.domain
-    attrs = state_obj.attributes
-
-    if raw_st == "unavailable":
-        enriched["state_label"] = "Unavailable"
-        enriched["state_tone"] = "warning"
-        return enriched
-    if not raw_st or raw_st == "unknown":
-        enriched["state_label"] = "—"
-        enriched["state_tone"] = ""
-        return enriched
-
-    if domain == "weather":
-        cond = raw_st.replace("-", " ").replace("_", " ").title()
-        temp = attrs.get("temperature")
-        if temp is not None:
-            try:
-                enriched["state_label"] = f"{round(float(temp))}° • {cond}"
-            except (ValueError, TypeError):
-                enriched["state_label"] = cond
-        else:
-            enriched["state_label"] = cond
-        enriched["state_tone"] = "primary"
-    elif domain == "alarm_control_panel":
-        enriched["state_label"] = raw_st.replace("_", " ").title()
-        if raw_st == "disarmed":
-            enriched["state_tone"] = "success"
-        elif raw_st == "triggered":
-            enriched["state_tone"] = "error"
-        else:
-            enriched["state_tone"] = "warning"
-    elif domain == "climate":
-        mode_map = {
-            "heat": "Heating",
-            "cool": "Cooling",
-            "heat_cool": "Auto",
-            "auto": "Auto",
-            "fan_only": "Fan",
-            "dry": "Dry",
-            "off": "Off",
-        }
-        mode_lbl = mode_map.get(raw_st, raw_st.replace("_", " ").title())
-        tgt = attrs.get("temperature")
-        cur = attrs.get("current_temperature")
-        temp_part = ""
-        if raw_st != "off" and tgt is not None:
-            try:
-                temp_part = f"{round(float(tgt))}°"
-            except (ValueError, TypeError):
-                pass
-        elif cur is not None:
-            try:
-                temp_part = f"{round(float(cur))}°"
-            except (ValueError, TypeError):
-                pass
-        enriched["state_label"] = (
-            f"{mode_lbl} • {temp_part}" if temp_part else mode_lbl
-        )
-        enriched["state_tone"] = (
-            "" if raw_st == "off" else ("warning" if raw_st == "heat" else "primary")
-        )
-    elif domain == "lock":
-        enriched["state_label"] = raw_st.replace("_", " ").title()
-        if raw_st == "locked":
-            enriched["state_tone"] = "success"
-        elif raw_st in ("unlocked", "open"):
-            enriched["state_tone"] = "warning"
-        elif raw_st == "jammed":
-            enriched["state_tone"] = "error"
-        else:
-            enriched["state_tone"] = ""
-    elif domain == "cover":
-        enriched["state_label"] = raw_st.replace("_", " ").title()
-        enriched["state_tone"] = (
-            "success"
-            if raw_st == "closed"
-            else ("warning" if raw_st in ("open", "opening") else "")
-        )
-    elif domain == "vacuum":
-        enriched["state_label"] = raw_st.replace("_", " ").title()
-        if raw_st == "cleaning":
-            enriched["state_tone"] = "primary"
-        elif raw_st == "docked":
-            enriched["state_tone"] = "success"
-        elif raw_st == "error":
-            enriched["state_tone"] = "error"
-        else:
-            enriched["state_tone"] = ""
     return enriched
 
 
@@ -1468,6 +1386,9 @@ def _build_system_section(
             elif c_is_online:
                 c_status_code = "online"
                 c_status_label = "Online"
+            elif c.is_ble_sleep_expected():
+                c_status_code = "offline"
+                c_status_label = "Sleeping"
             else:
                 c_status_code = "offline"
                 c_status_label = "Offline"
@@ -1497,7 +1418,7 @@ def _build_system_section(
                 "device_group": c_grp,
                 "device_remote_group": c.device_remote_group,
                 "device_group_name": (
-                    ("Phone" if c_ble_cat == "phone" else "BLE Tag")
+                    ("Phones" if c_ble_cat == "phone" else "BLE tags")
                     if c.is_ble_tag
                     else (
                         "Custom"

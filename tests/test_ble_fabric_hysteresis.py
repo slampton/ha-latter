@@ -2335,14 +2335,14 @@ async def test_companion_app_ultralow_phone_nonconnectable_matcher_and_phone_cat
     by_sub = {d["subentry_id"]: d for d in state_payload["system_devices"]}
     pixel_entry = by_sub["sub_pixel_phone"]
     assert pixel_entry["ble_category"] == "phone"
-    assert pixel_entry["device_group_name"] == "Phone"
+    assert pixel_entry["device_group_name"] == "Phones"
     assert pixel_entry["area_label"] == "Garage (Roaming)"
     assert pixel_entry["status_label"] == "Online"
     assert pixel_entry["active_area_name"] == "Garage"
 
     tile_entry = by_sub["sub_tile_keys"]
     assert tile_entry["ble_category"] == "ble_tag"
-    assert tile_entry["device_group_name"] == "BLE Tag"
+    assert tile_entry["device_group_name"] == "BLE tags"
     assert tile_entry["area_label"] == "Roaming"
     assert tile_entry["status_label"] == "Scanning"
 

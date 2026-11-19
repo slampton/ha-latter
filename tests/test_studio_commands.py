@@ -868,7 +868,8 @@ async def test_multi_entity_home_hub_settings_and_strict_garage_cover_filtering(
     garage_ids = [item["id"] for item in st["catalog"]["garages"]]
     assert garage_ids == ["cover.main_garage", "cover.workshop_bay_garage"]
     clim_meta = {item["id"]: item for item in st["catalog"]["climates"]}
-    assert clim_meta["climate.downstairs"]["state_label"] == "Heating • 70°"
+    assert "state_label" not in clim_meta["climate.downstairs"]
+    assert "state_tone" not in clim_meta["climate.downstairs"]
 
     await _call_ws(
         hass,
@@ -1092,3 +1093,198 @@ async def test_v3_subscribe_diet_concurrency_and_on_demand_camera_preview(
     assert conn.results[-1][1]["device_config_rev"] == dev_rev + 1
 
     assert await async_unload_entry(hass2, entry) is True
+
+
+@pytest.mark.asyncio
+async def test_unplugged_esphome_device_with_restore_selects_is_offline_and_notifies_listeners(
+    hass: Any, setup_latter_hub: Any
+) -> None:
+    """Unplugged ESPHome nodes with active RestoreEntity `select.*` / `update.*` must report Offline (`D-067`)."""
+    from homeassistant.helpers import entity_registry as er
+
+    from custom_components.latter.studio.payload import build_studio_state_payload
+
+    entry, _sys_obj, coord = await setup_latter_hub(hass, stationary=1)
+    slug = coord.device_slug
+    ent_reg = er.async_get(hass)
+
+    # Register realistic ESPHome Wi-Fi, IP, Assist RestoreEntity select, and HTTP firmware update entities
+    for eid, _domain, name, init_st in (
+        (f"sensor.{slug}_wi_fi_signal", "sensor", "Wi-Fi Signal", "-54"),
+        (f"sensor.{slug}_ip_address", "sensor", "IP Address", "192.168.1.42"),
+        (f"select.{slug}_assistant", "select", "Assistant", "Home Assistant"),
+        (f"update.{slug}_project_firmware", "update", "Firmware", "off"),
+    ):
+        ent_reg.async_register(
+            er.RegistryEntry(
+                entity_id=eid,
+                platform="esphome",
+                device_id=coord.esphome_device_id,
+                original_name=name,
+            )
+        )
+        hass.states.async_set(eid, init_st)
+
+    listener_hits = 0
+
+    def _on_coord_update() -> None:
+        nonlocal listener_hits
+        listener_hits += 1
+
+    unsub = coord.async_add_listener(_on_coord_update)
+    try:
+        st_online = build_studio_state_payload(hass, coord)
+        dev_online = next(
+            d for d in st_online["system_devices"] if d["subentry_id"] == coord.subentry_id
+        )
+        assert dev_online["is_online"] is True
+        assert dev_online["status_code"] == "online"
+
+        # Simulate unplugging: Wi-Fi, IP, and System: RPC Outbox go `unavailable`, while `select.*_assistant`
+        # and `update.*_project_firmware` remain populated!
+        hass.states.async_set(f"sensor.{slug}_wi_fi_signal", "unavailable")
+        hass.states.async_set(f"sensor.{slug}_ip_address", "unavailable")
+        hass.states.async_set(f"sensor.{slug}_system_rpc_outbox", "unavailable")
+        await hass.async_block_till_done()
+
+        assert listener_hits >= 1
+        assert coord.is_device_online() is False
+        st_offline = build_studio_state_payload(hass, coord)
+        dev_offline = next(
+            d for d in st_offline["system_devices"] if d["subentry_id"] == coord.subentry_id
+        )
+        assert dev_offline["is_online"] is False
+        assert dev_offline["status_code"] == "offline"
+        assert dev_offline["status_label"] == "Offline"
+        assert all(qa["state"] == "unavailable" for qa in st_offline["quick_actions"])
+    finally:
+        unsub()
+
+    assert await async_unload_entry(hass, entry) is True
+
+
+@pytest.mark.asyncio
+async def test_builtin_group_reset_preset_and_v2_preset_migration(
+    hass: Any, setup_latter_hub: Any, make_esphome_device: Any
+) -> None:
+    """Verify `update_group_baseline(reset_to_default=True)` and one-time `BUILTIN_GROUP_PRESET_VERSION = 2` sync (`D-067`)."""
+    entry, _sys_obj, coord = await setup_latter_hub(hass, stationary=1)
+    conn = websocket_api.ActiveConnection()
+
+    # Wall & Desk Panels default: `docked_screensaver == False`, `docked_idle_timeout == "Never"`
+    await _call_ws(
+        hass,
+        conn,
+        1,
+        "latter/device/command",
+        subentry_id=coord.subentry_id,
+        command="save_device_config",
+        payload={"config": {"device_group": "wall_panels"}},
+        studio_rev=STUDIO_REV,
+    )
+    assert not conn.errors
+    assert coord.device_group == "wall_panels"
+    assert coord.get_device_pref("docked_screensaver") is False
+    assert coord.get_device_pref("docked_idle_timeout") == "Never"
+
+    # Mutate `wall_panels` baseline, then reset it via `reset_to_default: True`
+    await _call_ws(
+        hass,
+        conn,
+        2,
+        "latter/system/command",
+        command="update_group_baseline",
+        payload={
+            "group_id": "wall_panels",
+            "include_display": True,
+            "config": {"docked_screensaver": True, "docked_idle_timeout": "5 min"},
+        },
+        studio_rev=STUDIO_REV,
+    )
+    assert not conn.errors
+    assert coord.get_device_pref("docked_screensaver") is True
+    assert coord.get_device_pref("docked_idle_timeout") == "5 min"
+
+    await _call_ws(
+        hass,
+        conn,
+        3,
+        "latter/system/command",
+        command="update_group_baseline",
+        payload={"group_id": "wall_panels", "reset_to_default": True},
+        studio_rev=STUDIO_REV,
+    )
+    assert not conn.errors
+    assert coord.device_group == "wall_panels"
+    assert coord.get_device_pref("docked_screensaver") is False
+    assert coord.get_device_pref("docked_idle_timeout") == "Never"
+
+    # Custom groups reject `reset_to_default: True` with `not_allowed`
+    await _call_ws(
+        hass,
+        conn,
+        4,
+        "latter/system/command",
+        command="create_device_group",
+        payload={"name": "Nightstands"},
+        studio_rev=STUDIO_REV,
+    )
+    assert not conn.errors
+    await _call_ws(
+        hass,
+        conn,
+        5,
+        "latter/system/command",
+        command="update_group_baseline",
+        payload={"group_id": "nightstands", "reset_to_default": True},
+        studio_rev=STUDIO_REV,
+    )
+    assert conn.errors[-1][1] == "not_allowed"
+    assert await async_unload_entry(hass, entry) is True
+
+    # Simulate an existing pre-v2 `.storage/latter.site` reload where `handhelds` had stale `wake_word_mode = "Always On"`
+    from custom_components.latter import async_setup_entry
+    from custom_components.latter.const import (
+        CONF_DEVICE_GROUP,
+        CONF_DEVICE_GROUPS,
+        DATA_GLOBAL_CONFIG,
+        DOMAIN,
+    )
+    from custom_components.latter.groups import (
+        BUILTIN_GROUP_PRESET_VERSION,
+        CONF_BUILTIN_GROUP_PRESET_VERSION,
+        get_device_groups,
+    )
+
+    global_cfg = hass.data[DOMAIN][DATA_GLOBAL_CONFIG]
+    global_cfg.pop(CONF_BUILTIN_GROUP_PRESET_VERSION, None)
+    global_cfg[CONF_DEVICE_GROUPS] = [
+        {
+            "id": "handhelds",
+            "name": "Handhelds",
+            "builtin": True,
+            "device_config": {"wake_word_mode": "Always On"},
+        },
+        {
+            "id": "nightstands",
+            "name": "Nightstands",
+            "builtin": False,
+            "device_config": {"wake_word_mode": "Disabled"},
+        },
+    ]
+    sub = next(iter(entry.subentries.values()))
+    sub.data = {
+        **sub.data,
+        CONF_DEVICE_GROUP: "handhelds",
+        "wake_word_mode": "Always On",
+    }
+
+    assert await async_setup_entry(hass, entry) is True
+    assert global_cfg[CONF_BUILTIN_GROUP_PRESET_VERSION] == BUILTIN_GROUP_PRESET_VERSION
+    upgraded_groups = {g["id"]: g for g in get_device_groups(hass)}
+    assert upgraded_groups["handhelds"]["device_config"]["wake_word_mode"] == "Docked Only"
+    assert upgraded_groups["nightstands"]["device_config"]["wake_word_mode"] == "Disabled"
+    reloaded_coord = hass.data[DOMAIN][sub.subentry_id]
+    assert reloaded_coord.get_device_pref("wake_word_mode") == "Docked Only"
+    assert reloaded_coord.device_group == "handhelds"
+    assert await async_unload_entry(hass, entry) is True

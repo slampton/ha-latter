@@ -40,17 +40,48 @@ function deriveGroupCapabilities(
   group: DeviceGroup,
   members: readonly SystemDeviceEntry[],
 ): DeviceCapabilities {
-  if (members.length > 0) {
+  if (group.id === "pocket_carry") {
     return {
-      has_display: members.some((m) => m.has_display !== false),
-      has_battery: members.some((m) => m.has_battery !== false),
-      has_ble_beacon: members.some((m) => m.has_ble !== false),
+      has_display: true,
+      is_round: true,
+      has_imu: true,
+      has_battery: true,
+      has_ble_beacon: true,
+      has_voice: true,
+      has_audio: true,
+      is_roaming_device: true,
+    };
+  }
+  if (group.id === "handhelds" || group.id === "wearables") {
+    return {
+      has_display: true,
+      is_round: false,
+      has_imu: true,
+      has_battery: true,
+      has_ble_beacon: true,
+      has_voice: true,
+      has_audio: true,
+      is_roaming_device: true,
     };
   }
   if (group.id === "wall_panels") {
     return {
       has_display: true,
+      is_round: false,
+      has_imu: false,
       has_battery: false,
+      has_ble_beacon: true,
+      has_voice: true,
+      has_audio: true,
+      is_roaming_device: false,
+    };
+  }
+  if (members.length > 0) {
+    return {
+      has_display: members.some((m) => m.has_display !== false),
+      has_battery: members.some((m) => m.has_battery !== false),
+      has_ble_beacon: members.some((m) => m.has_ble !== false),
+      is_roaming_device: members.some((m) => m.is_roaming !== false),
     };
   }
   return {};
@@ -400,7 +431,9 @@ export function renderGroupBaselineDrawer(
             caps,
           )}
           ${renderSpecSwitch(store, group, "docked_screensaver", cfg.docked_screensaver, caps)}
-          ${renderSpecSelect(store, group, "docked_idle_timeout", cfg.docked_idle_timeout, caps)}
+          ${caps.has_battery !== false || cfg.docked_screensaver !== false
+            ? renderSpecSelect(store, group, "docked_idle_timeout", cfg.docked_idle_timeout, caps)
+            : nothing}
           ${renderSpecSwitch(
             store,
             group,
@@ -478,7 +511,7 @@ export function renderGroupBaselineDrawer(
           ${renderSpecRange(store, group, "alert_volume", cfg.alert_volume, caps)}
           ${renderSpecRange(store, group, "volume_step_size", cfg.volume_step_size, caps)}
           ${renderSpecSwitch(store, group, "game_sound_effects", cfg.game_sound_effects, caps)}
-          ${bleOn
+          ${bleOn && caps.is_roaming_device !== false
             ? html`${renderSwitchRow({
                   label: store.tPrefLabel("sync_device_area"),
                   ariaLabel: store.t("groups.for_group_aria", {

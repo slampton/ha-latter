@@ -136,7 +136,7 @@ async def test_online_set_device_prefs_rpc_and_diagnostic_sensor(
     await group_sel.async_select_option("Pocket Carry")
     assert coord.device_group == "pocket_carry"
     assert coord.get_device_pref("tap_to_wake") == "Docked Only"
-    assert coord.get_device_pref("pickup_to_wake") == "Docked Only"
+    assert coord.get_device_pref("pickup_to_wake") == "Disabled"
 
     # Changing a personal Display preference (`clock_face`) preserves `pocket_carry`!
     await async_dispatch_bound_rpc(

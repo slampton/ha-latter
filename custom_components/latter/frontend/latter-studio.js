@@ -885,6 +885,8 @@ const EN_SYSTEM_STRINGS = {
   "groups.scope_display_chip": "Display",
   "groups.scope_interface_chip": "Interface",
   "groups.view_devices": "View Devices",
+  "groups.reset_preset": "Reset preset",
+  "groups.reset_preset_toast": "Reset \"{name}\" to preset defaults",
   "groups.delete_group_aria": "Delete group {name}",
   "groups.devices_list_meta": "Devices: {names}",
   "groups.no_devices_assigned": "No Devices assigned",
@@ -1297,6 +1299,10 @@ const EN_SYSTEM_STRINGS = {
   "confirm.delete_group.body":
     "Devices currently assigned to this group keep their settings and switch to Custom.",
   "confirm.delete_group.confirm": "Delete group",
+  "confirm.reset_group.title": "Reset \"{name}\" to preset defaults?",
+  "confirm.reset_group.body":
+    "Restores the built-in power, wake, and scope defaults for this group and applies them to assigned Devices.",
+  "confirm.reset_group.confirm": "Reset preset",
   "confirm.rotate_signing_key.title": "Rotate URL signing key?",
   "confirm.rotate_signing_key.body":
     "Invalidates active signed wallpaper, camera snapshot, and doorbell audio URLs until Devices receive the next state push.",
@@ -7662,6 +7668,48 @@ class GroupsController {
       blastRadiusCount: count > 0 ? count : null,
       onConfirm: async() => {
         await this.deleteDeviceGroup(cleanId);
+      },
+    });
+  }
+  async resetDeviceGroupPreset(groupId, groupName) {
+    const cleanId = String(groupId || "").trim();
+    if (!cleanId) return;
+    const grp = this.store.state?.device_groups?.find((g) => g.id === cleanId);
+    const name = groupName || grp?.name || cleanId;
+    try {
+      const res = await this.store.ws.runSystemCommand(
+        "update_group_baseline",
+        {
+          group_id: cleanId,
+          reset_to_default: true,
+        },
+        this.store.activeSubentryId || null,
+      );
+      if (res) this.store.ingestPayload(res, false);
+      this.store.showToast(this.store.t("groups.reset_preset_toast", { name }));
+    } catch (err) {
+      this.store.showToast(formatWsError(err, "Could not reset group preset"), true);
+    }
+  }
+  requestResetDeviceGroup(groupId, groupName, memberCount) {
+    const cleanId = String(groupId || "").trim();
+    if (!cleanId) return;
+    const grp = this.store.state?.device_groups?.find((g) => g.id === cleanId);
+    const name = groupName || grp?.name || cleanId;
+    const count =
+      memberCount ??
+      (this.store.state?.system_devices || []).filter(
+        (d) => d.kind !== "ble_tag" && d.device_group === cleanId,
+      ).length;
+    this.store.openConfirm({
+      kind: "reset_group",
+      title: this.store.t("confirm.reset_group.title", { name }),
+      consequence: this.store.t("confirm.reset_group.body"),
+      confirmLabel: this.store.t("confirm.reset_group.confirm"),
+      danger: false,
+      blastRadiusCount: count > 0 ? count : null,
+      onConfirm: async() => {
+        await this.resetDeviceGroupPreset(cleanId, name);
       },
     });
   }
@@ -16695,14 +16743,13 @@ function renderDevicesListView(store) {
                     const st = localizedStatusLabel(store, d, code);
                     const dotCls = code === "update" ? "update" : code === "online" ? "online" : "";
                     const grpCell =
-                      d.device_group_name ||
-                      (d.kind === "ble_tag"
+                      d.kind === "ble_tag"
                         ? d.ble_category === "phone"
-                          ? store.t("status.phone")
-                          : store.t("status.ble_tag")
+                          ? store.t("devices.phones")
+                          : store.t("devices.ble_tags")
                         : d.device_group === "custom"
                           ? store.t("common.custom")
-                          : store.t("common.unknown"));
+                          : d.device_group_name || store.t("common.unknown");
                     const href = `/latter/devices/${encodeURIComponent(d.subentry_id)}`;
                     const onLinkClick = (ev) => {
                       if (
@@ -17236,17 +17283,48 @@ function deriveGroupCapabilities(
   group,
   members,
 ) {
-  if (members.length > 0) {
+  if (group.id === "pocket_carry") {
     return {
-      has_display: members.some((m) => m.has_display !== false),
-      has_battery: members.some((m) => m.has_battery !== false),
-      has_ble_beacon: members.some((m) => m.has_ble !== false),
+      has_display: true,
+      is_round: true,
+      has_imu: true,
+      has_battery: true,
+      has_ble_beacon: true,
+      has_voice: true,
+      has_audio: true,
+      is_roaming_device: true,
+    };
+  }
+  if (group.id === "handhelds" || group.id === "wearables") {
+    return {
+      has_display: true,
+      is_round: false,
+      has_imu: true,
+      has_battery: true,
+      has_ble_beacon: true,
+      has_voice: true,
+      has_audio: true,
+      is_roaming_device: true,
     };
   }
   if (group.id === "wall_panels") {
     return {
       has_display: true,
+      is_round: false,
+      has_imu: false,
       has_battery: false,
+      has_ble_beacon: true,
+      has_voice: true,
+      has_audio: true,
+      is_roaming_device: false,
+    };
+  }
+  if (members.length > 0) {
+    return {
+      has_display: members.some((m) => m.has_display !== false),
+      has_battery: members.some((m) => m.has_battery !== false),
+      has_ble_beacon: members.some((m) => m.has_ble !== false),
+      is_roaming_device: members.some((m) => m.is_roaming !== false),
     };
   }
   return {};
@@ -17583,7 +17661,9 @@ function renderGroupBaselineDrawer(
             caps,
           )}
           ${renderSpecSwitch(store, group, "docked_screensaver", cfg.docked_screensaver, caps)}
-          ${renderSpecSelect(store, group, "docked_idle_timeout", cfg.docked_idle_timeout, caps)}
+          ${caps.has_battery !== false || cfg.docked_screensaver !== false
+            ? renderSpecSelect(store, group, "docked_idle_timeout", cfg.docked_idle_timeout, caps)
+            : nothing}
           ${renderSpecSwitch(
             store,
             group,
@@ -17661,7 +17741,7 @@ function renderGroupBaselineDrawer(
           ${renderSpecRange(store, group, "alert_volume", cfg.alert_volume, caps)}
           ${renderSpecRange(store, group, "volume_step_size", cfg.volume_step_size, caps)}
           ${renderSpecSwitch(store, group, "game_sound_effects", cfg.game_sound_effects, caps)}
-          ${bleOn
+          ${bleOn && caps.is_roaming_device !== false
             ? html`${renderSwitchRow({
                   label: store.tPrefLabel("sync_device_area"),
                   ariaLabel: store.t("groups.for_group_aria", {
@@ -18264,8 +18344,21 @@ function renderSystemGroupsView(store) {
                                   ${store.t("groups.view_devices")}
                                 </button>`
                               : nothing}
-                            ${!isDefault
-                              ? renderTrashIconButton(
+                            ${isDefault
+                              ? html`<button
+                                  type="button"
+                                  id="btn-reset-group-${g.id}"
+                                  @click=${() =>
+                                    store.groups.requestResetDeviceGroup(
+                                      g.id,
+                                      g.name,
+                                      members.length,
+                                    )}
+                                  class="btn btn-text btn-compact"
+                                >
+                                  ${store.t("groups.reset_preset")}
+                                </button>`
+                              : renderTrashIconButton(
                                   store.t("groups.delete_group_aria", { name: g.name }),
                                   () =>
                                     store.groups.requestDeleteDeviceGroup(
@@ -18273,8 +18366,7 @@ function renderSystemGroupsView(store) {
                                       g.name,
                                       members.length,
                                     ),
-                                )
-                              : nothing}
+                                )}
                           </div>
                         </div>
 
@@ -20239,13 +20331,6 @@ const ICON_GARAGE =
   "M19,20H17V11H7V20H5V9L12,5L19,9V20M8,12H16V14H8V12M8,15H16V17H8V15M16,18V20H8V18H16Z";
 const ICON_VACUUM =
   "M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22A10,10 0 0,1 2,12A10,10 0 0,1 12,2M12,4A8,8 0 0,0 4,12C4,13.38 4.35,14.68 4.97,15.81L18.81,7.82C17.34,5.53 14.84,4 12,4M19.56,9.5L5.72,17.5C7.19,19.62 9.45,21 12,21A8,8 0 0,0 20,13C20,11.75 19.84,10.58 19.56,9.5M12,11A2,2 0 0,1 14,13A2,2 0 0,1 12,15A2,2 0 0,1 10,13A2,2 0 0,1 12,11Z";
-function toneChipClass(tone) {
-  if (tone === "primary") return "chip chip-primary";
-  if (tone === "success") return "chip chip-success";
-  if (tone === "warning") return "chip chip-warning";
-  if (tone === "error") return "chip chip-error";
-  return "chip";
-}
 function findCatalogChoice(
   choices,
   id,
@@ -20337,28 +20422,22 @@ function renderSystemSharedView(store) {
           body: html`<div class="settings-list">
               ${singletonFields.map((f) => {
                 const curVal = String(sc?.[f.key] || "");
-                const meta = findCatalogChoice(f.choices, curVal);
                 const selectId = `cfg-${f.key}`;
                 return renderSettingsRow({
                   label: f.label,
                   forId: selectId,
-                  control: html`${meta?.state_label
-                      ? html`<span class=${toneChipClass(meta.state_tone)}>
-                          ${meta.state_label}
-                        </span>`
-                      : nothing}
-                    <select
-                      id=${selectId}
-                      .value=${curVal}
-                      @change=${(ev) =>
-                        store.entity.stageSystemSetting(
-                          f.key,
-                          (ev.currentTarget).value,
-                          selectId,
-                        )}
-                    >
-                      ${renderSelectOptions(f.choices, curVal, store.t("common.none_option"))}
-                    </select>`,
+                  control: html`<select
+                    id=${selectId}
+                    .value=${curVal}
+                    @change=${(ev) =>
+                      store.entity.stageSystemSetting(
+                        f.key,
+                        (ev.currentTarget).value,
+                        selectId,
+                      )}
+                  >
+                    ${renderSelectOptions(f.choices, curVal, store.t("common.none_option"))}
+                  </select>`,
                 });
               })}
             </div>
@@ -20427,16 +20506,9 @@ function renderSystemSharedView(store) {
                               >
                                 ${renderSelectOptions(g.choices, val, g.emptyPlaceholder)}
                               </select>`}
-                          ${meta?.area_name || meta?.state_label
+                          ${meta?.area_name
                             ? html`<span class="hub-slot-meta">
-                                ${meta.area_name
-                                  ? html`<span class="chip">${meta.area_name}</span>`
-                                  : nothing}
-                                ${meta.state_label
-                                  ? html`<span class=${toneChipClass(meta.state_tone)}>
-                                      ${meta.state_label}
-                                    </span>`
-                                  : nothing}
+                                <span class="chip">${meta.area_name}</span>
                               </span>`
                             : nothing}
                         </div>`;

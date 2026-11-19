@@ -200,8 +200,21 @@ export function renderSystemGroupsView(store: StudioStore): TemplateResult {
                                   ${store.t("groups.view_devices")}
                                 </button>`
                               : nothing}
-                            ${!isDefault
-                              ? renderTrashIconButton(
+                            ${isDefault
+                              ? html`<button
+                                  type="button"
+                                  id="btn-reset-group-${g.id}"
+                                  @click=${() =>
+                                    store.groups.requestResetDeviceGroup(
+                                      g.id,
+                                      g.name,
+                                      members.length,
+                                    )}
+                                  class="btn btn-text btn-compact"
+                                >
+                                  ${store.t("groups.reset_preset")}
+                                </button>`
+                              : renderTrashIconButton(
                                   store.t("groups.delete_group_aria", { name: g.name }),
                                   () =>
                                     store.groups.requestDeleteDeviceGroup(
@@ -209,8 +222,7 @@ export function renderSystemGroupsView(store: StudioStore): TemplateResult {
                                       g.name,
                                       members.length,
                                     ),
-                                )
-                              : nothing}
+                                )}
                           </div>
                         </div>
 

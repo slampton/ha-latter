@@ -562,10 +562,12 @@ class LatterRpcReceiver:
             return
         if new_state.state == STATE_UNAVAILABLE:
             self.coordinator._last_pushed_v3.clear()
+            self.coordinator.async_update_listeners()
             return
         if old_state is not None and old_state.state == STATE_UNAVAILABLE:
             self.coordinator._last_pushed_v3.clear()
             self.coordinator.force_republish_all_domains()
+            self.coordinator.async_update_listeners()
         if new_state.state in (STATE_UNKNOWN, ""):
             return
         self._ingest_raw_state(new_state.state)

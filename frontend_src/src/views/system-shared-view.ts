@@ -36,14 +36,6 @@ const ICON_GARAGE =
 const ICON_VACUUM =
   "M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22A10,10 0 0,1 2,12A10,10 0 0,1 12,2M12,4A8,8 0 0,0 4,12C4,13.38 4.35,14.68 4.97,15.81L18.81,7.82C17.34,5.53 14.84,4 12,4M19.56,9.5L5.72,17.5C7.19,19.62 9.45,21 12,21A8,8 0 0,0 20,13C20,11.75 19.84,10.58 19.56,9.5M12,11A2,2 0 0,1 14,13A2,2 0 0,1 12,15A2,2 0 0,1 10,13A2,2 0 0,1 12,11Z";
 
-function toneChipClass(tone: string | undefined): string {
-  if (tone === "primary") return "chip chip-primary";
-  if (tone === "success") return "chip chip-success";
-  if (tone === "warning") return "chip chip-warning";
-  if (tone === "error") return "chip chip-error";
-  return "chip";
-}
-
 function findCatalogChoice(
   choices: readonly CatalogChoice[] | undefined,
   id: string | undefined,
@@ -156,28 +148,22 @@ export function renderSystemSharedView(store: StudioStore): TemplateResult {
           body: html`<div class="settings-list">
               ${singletonFields.map((f) => {
                 const curVal = String(sc?.[f.key] || "");
-                const meta = findCatalogChoice(f.choices, curVal);
                 const selectId = `cfg-${f.key}`;
                 return renderSettingsRow({
                   label: f.label,
                   forId: selectId,
-                  control: html`${meta?.state_label
-                      ? html`<span class=${toneChipClass(meta.state_tone)}>
-                          ${meta.state_label}
-                        </span>`
-                      : nothing}
-                    <select
-                      id=${selectId}
-                      .value=${curVal}
-                      @change=${(ev: Event) =>
-                        store.entity.stageSystemSetting(
-                          f.key,
-                          (ev.currentTarget as HTMLSelectElement).value,
-                          selectId,
-                        )}
-                    >
-                      ${renderSelectOptions(f.choices, curVal, store.t("common.none_option"))}
-                    </select>`,
+                  control: html`<select
+                    id=${selectId}
+                    .value=${curVal}
+                    @change=${(ev: Event) =>
+                      store.entity.stageSystemSetting(
+                        f.key,
+                        (ev.currentTarget as HTMLSelectElement).value,
+                        selectId,
+                      )}
+                  >
+                    ${renderSelectOptions(f.choices, curVal, store.t("common.none_option"))}
+                  </select>`,
                 });
               })}
             </div>
@@ -246,16 +232,9 @@ export function renderSystemSharedView(store: StudioStore): TemplateResult {
                               >
                                 ${renderSelectOptions(g.choices, val, g.emptyPlaceholder)}
                               </select>`}
-                          ${meta?.area_name || meta?.state_label
+                          ${meta?.area_name
                             ? html`<span class="hub-slot-meta">
-                                ${meta.area_name
-                                  ? html`<span class="chip">${meta.area_name}</span>`
-                                  : nothing}
-                                ${meta.state_label
-                                  ? html`<span class=${toneChipClass(meta.state_tone)}>
-                                      ${meta.state_label}
-                                    </span>`
-                                  : nothing}
+                                <span class="chip">${meta.area_name}</span>
                               </span>`
                             : nothing}
                         </div>`;

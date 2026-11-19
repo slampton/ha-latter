@@ -206,14 +206,13 @@ export function renderDevicesListView(store: StudioStore): TemplateResult {
                     const st = localizedStatusLabel(store, d, code);
                     const dotCls = code === "update" ? "update" : code === "online" ? "online" : "";
                     const grpCell =
-                      d.device_group_name ||
-                      (d.kind === "ble_tag"
+                      d.kind === "ble_tag"
                         ? d.ble_category === "phone"
-                          ? store.t("status.phone")
-                          : store.t("status.ble_tag")
+                          ? store.t("devices.phones")
+                          : store.t("devices.ble_tags")
                         : d.device_group === "custom"
                           ? store.t("common.custom")
-                          : store.t("common.unknown"));
+                          : d.device_group_name || store.t("common.unknown");
                     const href = `/latter/devices/${encodeURIComponent(d.subentry_id)}`;
                     const onLinkClick = (ev: MouseEvent): void => {
                       if (

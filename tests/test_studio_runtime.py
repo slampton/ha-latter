@@ -1538,6 +1538,8 @@ class TestDeviceGroupsAndCustomFlow(unittest.TestCase):
             });
 
             const groupsHtml = renderToHtml(renderSystemGroupsView(store));
+            store.groups.requestResetDeviceGroup("pocket_carry", "Pocket Carry", 1);
+            await store.tools.runConfirmedAction();
             store.groups.toggleNewGroupForm(true);
             const groupsCreateOpenHtml = renderToHtml(renderSystemGroupsView(store));
             store.newGroupName = "Patio Panels";
@@ -1583,6 +1585,8 @@ class TestDeviceGroupsAndCustomFlow(unittest.TestCase):
         )
         self.assertIn('id="btn-open-create-group"', got["groupsHtml"])
         self.assertIn('id="group-box-pocket_carry"', got["groupsHtml"])
+        self.assertIn('id="btn-reset-group-pocket_carry"', got["groupsHtml"])
+        self.assertNotIn('id="btn-reset-group-guest_suites"', got["groupsHtml"])
         self.assertIn('id="group-box-custom"', got["groupsHtml"])
         self.assertIn('id="btn-batch-reset"', got["groupsHtml"])
         self.assertIn('id="btn-batch-apply"', got["groupsHtml"])
@@ -1597,7 +1601,16 @@ class TestDeviceGroupsAndCustomFlow(unittest.TestCase):
         self.assertIn('id="btn-copy-system-info"', got["sysToolsHtml"])
         self.assertEqual(
             [c["command"] for c in got["sysCalls"]],
-            ["create_device_group", "apply_batch_device_setting", "create_device_group"],
+            [
+                "update_group_baseline",
+                "create_device_group",
+                "apply_batch_device_setting",
+                "create_device_group",
+            ],
+        )
+        self.assertEqual(
+            got["sysCalls"][0]["payload"],
+            {"group_id": "pocket_carry", "reset_to_default": True},
         )
 
     def test_full_7447_mdi_catalog_and_ranked_search(self) -> None:

@@ -691,12 +691,16 @@ def resolve_behavior_key_value(data: Mapping[str, Any], key: str) -> Any:
     return data.get(key)
 
 
+BUILTIN_GROUP_PRESET_VERSION = 2
+CONF_BUILTIN_GROUP_PRESET_VERSION = "builtin_group_preset_version"
+
 DEFAULT_DEVICE_GROUPS: list[dict[str, Any]] = [
     {
         "id": "pocket_carry",
         "name": "Pocket Carry",
-        "description": "Compact pocket-carried displays with docked-only wake gestures and 15 min battery hibernate",
+        "description": "Compact pocket-carried displays with docked-only tap/wake-word, pickup wake disabled, and 15 min battery hibernate",
         "builtin": True,
+        "preset_version": BUILTIN_GROUP_PRESET_VERSION,
         "include_display": False,
         "include_interface": False,
         "device_config": {
@@ -706,7 +710,7 @@ DEFAULT_DEVICE_GROUPS: list[dict[str, Any]] = [
             CONF_AREA_FOLLOW_DWELL_S: 10,
             CONF_AREA_HANDOFF: False,
             "tap_to_wake": "Docked Only",
-            "pickup_to_wake": "Docked Only",
+            "pickup_to_wake": "Disabled",
             "battery_screen_timeout": "30s",
             "docked_idle_timeout": "1 min",
             "battery_hibernate_timeout": "15 min",
@@ -723,6 +727,7 @@ DEFAULT_DEVICE_GROUPS: list[dict[str, Any]] = [
         "name": "Handhelds",
         "description": "Battery-powered roaming displays with pickup and single-tap wake",
         "builtin": True,
+        "preset_version": BUILTIN_GROUP_PRESET_VERSION,
         "include_display": False,
         "include_interface": False,
         "device_config": {
@@ -749,6 +754,7 @@ DEFAULT_DEVICE_GROUPS: list[dict[str, Any]] = [
         "name": "Wearables",
         "description": "Compact wearable displays with double-tap wake on battery and 15s screen timeout",
         "builtin": True,
+        "preset_version": BUILTIN_GROUP_PRESET_VERSION,
         "include_display": False,
         "include_interface": False,
         "device_config": {
@@ -773,8 +779,9 @@ DEFAULT_DEVICE_GROUPS: list[dict[str, Any]] = [
     {
         "id": "wall_panels",
         "name": "Wall & Desk Panels",
-        "description": "Stationary mains-powered panels with Always-On wake word and no battery hibernate",
+        "description": "Stationary mains-powered panels with always-on Home screen, Always-On wake word, and no battery hibernate",
         "builtin": True,
+        "preset_version": BUILTIN_GROUP_PRESET_VERSION,
         "include_display": False,
         "include_interface": False,
         "device_config": {
@@ -786,9 +793,9 @@ DEFAULT_DEVICE_GROUPS: list[dict[str, Any]] = [
             "tap_to_wake": "Single Tap",
             "pickup_to_wake": "Disabled",
             "battery_screen_timeout": "Never",
-            "docked_idle_timeout": "5 min",
+            "docked_idle_timeout": "Never",
             "battery_hibernate_timeout": "Disabled",
-            "docked_screensaver": True,
+            "docked_screensaver": False,
             "wake_word_mode": "Always On",
             "auto_brightness_mode": "Sun Synchronized",
             "day_brightness": "90%",
@@ -847,7 +854,7 @@ def _normalize_group_entry(raw: Mapping[str, Any] | dict[str, Any]) -> dict[str,
         for k, v in raw["device_config"].items():
             if k in GROUP_ALL_DEVICE_KEYS and v is not None:
                 base_dev[k] = v
-    return {
+    out_entry: dict[str, Any] = {
         "id": gid,
         "name": str((builtin_def["name"] if builtin_def else raw.get("name")) or gid),
         "description": str(
@@ -858,6 +865,66 @@ def _normalize_group_entry(raw: Mapping[str, Any] | dict[str, Any]) -> dict[str,
         "include_interface": include_interface,
         "device_config": base_dev,
     }
+    if builtin_def is not None:
+        out_entry["preset_version"] = BUILTIN_GROUP_PRESET_VERSION
+    return out_entry
+
+
+def reset_builtin_group_entry(group_id: str) -> dict[str, Any] | None:
+    """Return a freshly normalized default baseline for built-in `group_id`, or None if custom."""
+    bdef = _BUILTIN_GROUPS_BY_ID.get(str(group_id or "").strip())
+    if bdef is None:
+        return None
+    return _normalize_group_entry(bdef)
+
+
+def upgrade_stored_builtin_groups(global_cfg: dict[str, Any]) -> bool:
+    """Refresh stored built-in groups when `builtin_group_preset_version` advances; preserve custom groups."""
+    if global_cfg.get(CONF_BUILTIN_GROUP_PRESET_VERSION) == BUILTIN_GROUP_PRESET_VERSION:
+        return False
+    raw_groups = global_cfg.get(CONF_DEVICE_GROUPS)
+    if isinstance(raw_groups, list) and raw_groups:
+        custom_entries: list[dict[str, Any]] = []
+        seen_custom: set[str] = set()
+        for item in raw_groups:
+            if not isinstance(item, dict):
+                continue
+            gid = str(item.get("id") or "").strip()
+            if not gid or gid == DEFAULT_DEVICE_GROUP or gid in _BUILTIN_GROUPS_BY_ID:
+                continue
+            if item.get("builtin") is True:
+                continue
+            if gid not in seen_custom:
+                seen_custom.add(gid)
+                custom_entries.append(_normalize_group_entry(item))
+        global_cfg[CONF_DEVICE_GROUPS] = [
+            _normalize_group_entry(g) for g in DEFAULT_DEVICE_GROUPS
+        ] + custom_entries
+    global_cfg[CONF_BUILTIN_GROUP_PRESET_VERSION] = BUILTIN_GROUP_PRESET_VERSION
+    return True
+
+
+async def async_sync_coordinators_to_builtin_presets(
+    hass: HomeAssistant,
+    coordinators: Iterable[Any],
+) -> int:
+    """Sync Devices currently assigned to built-in groups onto upgraded built-in baselines once on version bump."""
+    groups_by_id = {
+        g["id"]: g for g in get_device_groups(hass) if g.get("id") in _BUILTIN_GROUPS_BY_ID
+    }
+    synced_total = 0
+    for gid, grp in groups_by_id.items():
+        matching = [
+            c
+            for c in coordinators
+            if not getattr(c, "is_ble_tag", False)
+            and str((getattr(c, "device_data", {}) or {}).get("device_group") or "").strip()
+            == gid
+        ]
+        if matching:
+            res = await async_apply_group_baseline_to_coordinators(hass, grp, matching)
+            synced_total += int(res.get("updated_devices", 0))
+    return synced_total
 
 
 def get_device_groups(hass: HomeAssistant) -> list[dict[str, Any]]:

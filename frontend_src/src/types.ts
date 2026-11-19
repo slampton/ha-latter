@@ -125,8 +125,6 @@ export interface CatalogChoice {
   id: string;
   name: string;
   area_name?: string;
-  state_label?: string;
-  state_tone?: "primary" | "success" | "warning" | "error" | "" | string;
 }
 
 interface AreaChoice {

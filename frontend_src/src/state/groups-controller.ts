@@ -256,6 +256,50 @@ export class GroupsController {
     });
   }
 
+  async resetDeviceGroupPreset(groupId: string, groupName?: string): Promise<void> {
+    const cleanId = String(groupId || "").trim();
+    if (!cleanId) return;
+    const grp = this.store.state?.device_groups?.find((g) => g.id === cleanId);
+    const name = groupName || grp?.name || cleanId;
+    try {
+      const res = await this.store.ws.runSystemCommand(
+        "update_group_baseline",
+        {
+          group_id: cleanId,
+          reset_to_default: true,
+        },
+        this.store.activeSubentryId || null,
+      );
+      if (res) this.store.ingestPayload(res, false);
+      this.store.showToast(this.store.t("groups.reset_preset_toast", { name }));
+    } catch (err) {
+      this.store.showToast(formatWsError(err, "Could not reset group preset"), true);
+    }
+  }
+
+  requestResetDeviceGroup(groupId: string, groupName?: string, memberCount?: number): void {
+    const cleanId = String(groupId || "").trim();
+    if (!cleanId) return;
+    const grp = this.store.state?.device_groups?.find((g) => g.id === cleanId);
+    const name = groupName || grp?.name || cleanId;
+    const count =
+      memberCount ??
+      (this.store.state?.system_devices || []).filter(
+        (d) => d.kind !== "ble_tag" && d.device_group === cleanId,
+      ).length;
+    this.store.openConfirm({
+      kind: "reset_group",
+      title: this.store.t("confirm.reset_group.title", { name }),
+      consequence: this.store.t("confirm.reset_group.body"),
+      confirmLabel: this.store.t("confirm.reset_group.confirm"),
+      danger: false,
+      blastRadiusCount: count > 0 ? count : null,
+      onConfirm: async () => {
+        await this.resetDeviceGroupPreset(cleanId, name);
+      },
+    });
+  }
+
   async updateGroupBaseline(groupId: string, patch: Record<string, unknown>): Promise<void> {
     if (!groupId) return;
     try {
