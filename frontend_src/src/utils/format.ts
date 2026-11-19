@@ -116,6 +116,56 @@ function resolveHour12(hass: HomeAssistant | null | undefined): boolean | undefi
   return undefined;
 }
 
+export function defaultLocaleTimeFormat(
+  hass: HomeAssistant | null | undefined,
+): "24-Hour" | "12-Hour (AM/PM)" {
+  const tf = getLocaleObj(hass)?.time_format;
+  if (tf === "24") return "24-Hour";
+  if (tf === "am_pm") return "12-Hour (AM/PM)";
+  try {
+    const lang = getLocaleObj(hass)?.language || hass?.language || undefined;
+    const hour12 = new Intl.DateTimeFormat(lang, { hour: "numeric" }).resolvedOptions().hour12;
+    if (hour12 === false) return "24-Hour";
+  } catch {
+    // Fall back to 12-hour wire token when Intl options are unavailable.
+  }
+  return "12-Hour (AM/PM)";
+}
+
+export function formatClockHhMm(
+  hhmm: string | null | undefined,
+  is24h: boolean,
+): string {
+  const raw = String(hhmm ?? "").trim();
+  const m = /^(\d{1,2}):(\d{2})$/.exec(raw);
+  if (!m) return raw || "—";
+  const hh = Number(m[1]);
+  const mm = Number(m[2]);
+  if (!Number.isFinite(hh) || !Number.isFinite(mm) || hh < 0 || hh > 23 || mm < 0 || mm > 59) {
+    return raw;
+  }
+  const mmStr = String(mm).padStart(2, "0");
+  if (is24h) {
+    return `${String(hh).padStart(2, "0")}:${mmStr}`;
+  }
+  const h12 = hh % 12 === 0 ? 12 : hh % 12;
+  return `${h12}:${mmStr} ${hh >= 12 ? "PM" : "AM"}`;
+}
+
+export function formatHourSlot(
+  hour: number | string | null | undefined,
+  is24h: boolean,
+): string {
+  const n = Number(hour);
+  if (!Number.isFinite(n)) return "—";
+  const hh = ((Math.round(n) % 24) + 24) % 24;
+  if (is24h) {
+    return `${String(hh).padStart(2, "0")}:00`;
+  }
+  const h12 = hh % 12 === 0 ? 12 : hh % 12;
+  return `${h12}:00 ${hh >= 12 ? "PM" : "AM"}`;
+}
+
 function getDateTimeFormatter(
   locale: string | undefined,
   opts: Intl.DateTimeFormatOptions,

@@ -7,7 +7,9 @@
 import { MAX_WORLD_CLOCKS, WORLD_CLOCK_ZONES_CATALOG } from "../../constants.js";
 import { focusSafe, html, nothing, type TemplateResult } from "../../lib/lit.js";
 import type { StudioStore } from "../../state/store.js";
+import { defaultLocaleTimeFormat } from "../../utils/format.js";
 import {
+  renderSelectRow,
   renderSettingsRow,
   renderSortableList,
   renderSwitchRow,
@@ -253,7 +255,37 @@ export function renderTimeAppConfigBody(store: StudioStore): TemplateResult {
     );
   };
 
+  const timeFormatPref = store.entity.getPref("time_format");
+  const timeFormatSpec = store.entity.getPrefSpec("time_format");
+  const rawTimeFormatOpts =
+    timeFormatPref?.options && timeFormatPref.options.length > 0
+      ? timeFormatPref.options
+      : timeFormatSpec?.options || [];
+  const rawTimeFormatCandidate = timeFormatPref?.value ?? cfg.time_format;
+  const resolvedTimeFormat =
+    rawTimeFormatCandidate !== undefined &&
+    rawTimeFormatCandidate !== null &&
+    String(rawTimeFormatCandidate).trim() !== ""
+      ? String(rawTimeFormatCandidate)
+      : defaultLocaleTimeFormat(store.hass);
+
   return html`<div class="settings-list">
+    ${rawTimeFormatOpts.length > 0
+      ? renderSelectRow({
+          id: "cfg-time_format",
+          label: store.tPrefLabel("time_format"),
+          description: store.t("dev_interface.time_format_desc"),
+          value: rawTimeFormatOpts.includes(resolvedTimeFormat)
+            ? resolvedTimeFormat
+            : rawTimeFormatOpts[0],
+          rawOptions: rawTimeFormatOpts.map((opt) => ({
+            value: opt,
+            label: store.tPrefOption("time_format", opt),
+          })),
+          onChange: (val) =>
+            store.entity.stageDeviceSetting("time_format", val, "cfg-time_format"),
+        })
+      : nothing}
     ${renderSettingsRow({
       id: "time-local-clock-label",
       label: store.t("dialogs.local_clock_label"),

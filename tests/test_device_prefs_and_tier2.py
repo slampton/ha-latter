@@ -401,13 +401,13 @@ async def test_studio_device_action_and_sleep_safe_device_groups(
         payload={
             "group_id": "handhelds",
             "include_display": True,
-            "config": {"clock_face": "Hybrid Digital"},
+            "config": {"color_profile": "Green"},
         },
     )
     assert conn.errors == []
-    assert coord.get_device_pref("clock_face") == "Hybrid Digital"
+    assert coord.get_device_pref("color_profile") == "Green"
     assert resolve_effective_device_group(hass, coord) == "handhelds"
-    await coord.async_update_device_prefs({"clock_face": "Minimal Digital"})
+    await coord.async_update_device_prefs({"color_profile": "Steel Blue"})
     assert resolve_effective_device_group(hass, coord) == "custom"
 
     # Batch Controls target `roaming` pushes settings across roaming Devices without altering group baselines

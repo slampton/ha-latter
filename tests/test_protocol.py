@@ -70,7 +70,7 @@ class TestProtocolV3Contract(unittest.TestCase):
             "remote_config": 3,
             "weather_forecast": 14,
             "calendar_agenda": 4,
-            "device_prefs": 60,
+            "device_prefs": 61,
             "shortcuts": 5,
         }
         domains = self.schema.get("domains", {})
@@ -1131,7 +1131,38 @@ class TestDevicePrefsProtocol(unittest.TestCase):
             self.assertNotIn(retired_key, studio_scope.DEVICE_SETTING_KEYS)
             with self.assertRaises(studio_scope.SettingsScopeError):
                 studio_scope.clean_device_settings({retired_key: "1"})
-        self.assertEqual(len(studio_scope.DEVICE_PREF_SPECS), 55)
+        self.assertEqual(len(studio_scope.DEVICE_PREF_SPECS), 56)
+
+        for key, default_val in (
+            ("manual_brightness", 80),
+            ("day_brightness", 90),
+            ("night_brightness", 35),
+            ("bedtime_brightness", 15),
+        ):
+            spec = studio_scope.DEVICE_PREF_SPEC_MAP[key]
+            self.assertEqual(spec.domain, "number")
+            self.assertEqual(spec.default, default_val)
+            self.assertEqual(spec.min_val, 1)
+            self.assertEqual(spec.max_val, 100)
+            self.assertEqual(spec.step, 1)
+            self.assertEqual(spec.unit, "%")
+
+        cleaned_bri = studio_scope.clean_device_settings(
+            {
+                "manual_brightness": 42,
+                "day_brightness": 100,
+                "night_brightness": 1,
+                "bedtime_brightness": 12,
+            }
+        )
+        self.assertEqual(cleaned_bri["manual_brightness"], 42)
+        self.assertEqual(cleaned_bri["day_brightness"], 100)
+        self.assertEqual(cleaned_bri["night_brightness"], 1)
+        self.assertEqual(cleaned_bri["bedtime_brightness"], 12)
+        parsed_bri = _PAYLOADS_MOD.parse_dirty_prefs_records(
+            "\x1e".join(["manual_brightness=55", "bedtime_brightness=8"])
+        )
+        self.assertEqual(parsed_bri, {"manual_brightness": 55, "bedtime_brightness": 8})
 
         cleaned = studio_scope.clean_device_settings(
             {

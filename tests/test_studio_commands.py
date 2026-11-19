@@ -38,10 +38,10 @@ async def _call_ws(
 async def test_studio_rev_mismatch_on_all_read_and_mutation_endpoints(
     hass: Any, setup_latter_hub: Any
 ) -> None:
-    """Verify mandatory studio_rev=35 schema validation and studio_rev_mismatch on all 9 WS endpoints."""
+    """Verify mandatory studio_rev=37 schema validation and studio_rev_mismatch on all 9 WS endpoints."""
     import voluptuous as vol
 
-    assert STUDIO_REV == 35
+    assert STUDIO_REV == 37
     entry, _sys_obj, coord = await setup_latter_hub(hass)
     from homeassistant.helpers import area_registry as ar
 
@@ -1280,11 +1280,20 @@ async def test_builtin_group_reset_preset_and_v2_preset_migration(
     }
 
     assert await async_setup_entry(hass, entry) is True
+    assert BUILTIN_GROUP_PRESET_VERSION == 3
     assert global_cfg[CONF_BUILTIN_GROUP_PRESET_VERSION] == BUILTIN_GROUP_PRESET_VERSION
     upgraded_groups = {g["id"]: g for g in get_device_groups(hass)}
     assert upgraded_groups["handhelds"]["device_config"]["wake_word_mode"] == "Docked Only"
+    assert upgraded_groups["handhelds"]["device_config"]["day_brightness"] == 90
+    assert upgraded_groups["handhelds"]["device_config"]["night_brightness"] == 35
+    assert upgraded_groups["handhelds"]["device_config"]["bedtime_brightness"] == 15
+    assert upgraded_groups["wearables"]["device_config"]["day_brightness"] == 80
+    assert upgraded_groups["wearables"]["device_config"]["night_brightness"] == 25
+    assert upgraded_groups["wearables"]["device_config"]["bedtime_brightness"] == 15
     assert upgraded_groups["nightstands"]["device_config"]["wake_word_mode"] == "Disabled"
     reloaded_coord = hass.data[DOMAIN][sub.subentry_id]
     assert reloaded_coord.get_device_pref("wake_word_mode") == "Docked Only"
+    assert reloaded_coord.get_device_pref("night_brightness") == 35
+    assert reloaded_coord.get_device_pref("bedtime_brightness") == 15
     assert reloaded_coord.device_group == "handhelds"
     assert await async_unload_entry(hass, entry) is True

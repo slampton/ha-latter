@@ -167,8 +167,8 @@ class TestViewLayout(unittest.TestCase):
         self.assertNotIn("TRACKER_KIND_TOKENS", js)
         self.assertIn("ignoreDiscoveredDevice", discovered_view)
         self.assertIn("unignoreDiscoveredDevice", discovered_view)
-        self.assertEqual(latter_const.STUDIO_REV, 35)
-        self.assertIn("STUDIO_REV = 35", js)
+        self.assertEqual(latter_const.STUDIO_REV, 37)
+        self.assertIn("STUDIO_REV = 37", js)
         self.assertIn(".card.handoff-active", js)
         self.assertIn(".area-presence-box.handoff-active", js)
         self.assertIn(".calibrate-target-box.handoff-active", js)
@@ -280,28 +280,32 @@ class TestViewLayout(unittest.TestCase):
             self.assertIn(f'store.t("{key}")', shared_entities)
         self.assertIn('class="hub-domain-box"', shared_entities)
         display_key_order = (
-            'store.t("card.home_screen_appearance")',
             'store.t("card.screensaver")',
             'store.t("dev_display.card_voice_assistant")',
             'store.t("card.brightness")',
-            'store.t("card.clock")',
             'store.t("card.colors")',
             'store.t("card.wallpapers")',
-            'store.t("card.music_appearance")',
         )
         for snippet in display_key_order:
             self.assertIn(snippet, display_view)
         for earlier, later in itertools.pairwise(display_key_order):
             self.assertLess(display_view.index(earlier), display_view.index(later))
-        self.assertEqual(en_json["card.home_screen_appearance"], "Home screen appearance")
-        self.assertEqual(en_json["card.music_appearance"], "Music appearance")
+        for retired_display_card in (
+            "card.home_screen_appearance",
+            "card.music_appearance",
+            "card.clock",
+        ):
+            self.assertNotIn(retired_display_card, display_view)
+            self.assertNotIn(retired_display_card, en_json)
+        self.assertIn('store.t("dev_display.wp_weather_bg_note")', js)
+        self.assertIn('store.t("dev_display.bedtime_brightness_override_note")', display_view)
         self.assertIn('store.t("card.home_screen")', interface_view)
         self.assertIn('store.t("card.app_dock")', interface_view)
-        self.assertIn('id: "card-single-app-mode"', interface_view)
+        self.assertNotIn("card-single-app-mode", interface_view)
+        self.assertNotIn("btn-configure-locked-app", interface_view)
         self.assertIn('id="dock-shortcuts-container"', interface_view)
         self.assertIn('id="dock-hidden-native-apps"', interface_view)
         self.assertIn('id="btn-configure-start-screen"', interface_view)
-        self.assertIn('id="btn-configure-locked-app"', interface_view)
         self.assertIn('id="latter-app-config-modal"', js)
         self.assertIn('id: "home-categories-pills"', js)
         self.assertIn('id: "area-categories-pills"', js)
@@ -439,14 +443,14 @@ class TestViewLayout(unittest.TestCase):
         self.assertNotIn("cfg-default_page_size", js)
         disp_fn_start = js.index("function renderDeviceDisplayView(")
         disp_view = js[disp_fn_start:js.index("</section>", disp_fn_start)]
-        self.assertIn('store.t("card.home_screen_appearance")', disp_view)
-        self.assertIn('id: "weather-celestial-bodies"', disp_view)
-        self.assertIn('id: "weather-celestial-pills"', disp_view)
-        self.assertIn("renderCelestialRow()", disp_view[disp_view.index('<section id="view-display"'):])
+        self.assertNotIn("weather-celestial-bodies", disp_view)
+        self.assertIn('store.t("dev_display.wp_weather_bg_note")', disp_view)
         start = js.index('<section id="view-interface"')
         view = js[start:js.index("</section>", start)]
         self.assertIn('store.t("card.home_screen")', view)
         self.assertIn('store.t("card.app_dock")', view)
+        self.assertIn('id: "weather-celestial-bodies"', view)
+        self.assertIn('id: "weather-celestial-pills"', view)
         self.assertIn('id="dock-shortcuts-container"', view)
         self.assertIn('id="dock-hidden-native-apps"', view)
         self.assertIn('id: "pinned-shortcuts-container"', js)

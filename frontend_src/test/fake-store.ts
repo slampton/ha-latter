@@ -67,7 +67,7 @@ function inferDevicePrefsFromSections(
         key = parts.length >= 3 ? parts.slice(2).join("_") : objId;
         if (secId === "voice" && key === "visual_profile") key = "va_visual_profile";
         if (secId === "music" && !key.startsWith("music_") && !key.endsWith("_sort_order")) {
-          if (key === "overlay_style" || key === "album_art_style") {
+          if (key === "overlay_style") {
             key = `music_${key}`;
           }
         }

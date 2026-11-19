@@ -19,7 +19,7 @@ export const EN_STRINGS = {
 export type StudioTranslationKey = keyof typeof EN_STRINGS;
 
 /**
- * Sentence-case labels for all 55 `DevicePrefSpec` keys + group/device setting keys.
+ * Sentence-case labels for all 56 `DevicePrefSpec` keys + group/device setting keys.
  */
 export const PREF_LABELS: Readonly<Record<string, string>> = {
   wake_word_mode: "Wake word mode",
@@ -33,6 +33,7 @@ export const PREF_LABELS: Readonly<Record<string, string>> = {
   hold_crown_power_off: "Hold crown to power off",
   bedtime_active: "Bedtime mode",
   bedtime_display: "Idle display in bedtime",
+  bedtime_brightness: "Bedtime brightness",
   bedtime_schedule: "Bedtime schedule",
   bedtime_start_hour: "Bedtime starts",
   bedtime_end_hour: "Bedtime ends",
@@ -127,11 +128,6 @@ export const PREF_OPTION_LABELS: Readonly<Record<string, string>> = {
   Fireworks: "Fireworks",
   "Sun Synchronized": "Sun synchronized",
   "Time Schedule": "Time schedule",
-  "60%": "60%",
-  "70%": "70%",
-  "80%": "80%",
-  "90%": "90%",
-  "100%": "100%",
   "Steel Blue": "Steel blue",
   Pink: "Pink",
   Blue: "Blue",

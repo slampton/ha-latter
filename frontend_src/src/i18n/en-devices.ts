@@ -21,11 +21,8 @@ export const EN_DEVICES_STRINGS = {
   "card.sensors_controls": "Sensors & controls",
   "card.wallpapers": "Wallpapers",
   "card.brightness": "Brightness",
-  "card.clock": "Clock",
   "card.colors": "Colors",
   "card.screensaver": "Screensaver",
-  "card.home_screen_appearance": "Home screen appearance",
-  "card.music_appearance": "Music appearance",
   "card.home_screen": "Home screen",
   "card.app_dock": "App Dock",
   "card.diagnostics": "Diagnostics",
@@ -180,11 +177,10 @@ export const EN_DEVICES_STRINGS = {
   "dev_overview.alarm_rec_weekends": "Weekends",
   "dev_overview.alarm_rec_once": "Once",
 
-  // Device -> Display (D-034 / D-066 / Q7)
+  // Device -> Display (D-034 / D-069 / D-070)
   "dev_display.card_voice_assistant": "Voice assistant",
-  "dev_display.sun_moon_label": "Sun & Moon",
-  "dev_display.sun_moon_desc":
-    "Choose which sky bodies appear on the live weather background.",
+  "dev_display.bedtime_brightness_override_note":
+    "Bedtime mode is currently active and overriding screen brightness.",
   "dev_display.screensaver_preview_desc":
     "Starts the screensaver on this Device immediately.",
   "dev_display.preview_btn": "Preview",
@@ -195,6 +191,8 @@ export const EN_DEVICES_STRINGS = {
   "dev_display.wallpapers_subtitle":
     "Shared presets and uploaded photos cropped for this display.",
   "dev_display.active_wallpaper_label": "Active wallpaper",
+  "dev_display.wp_weather_bg_note":
+    "Weather background is enabled on Home — wallpapers appear across other screens.",
   "dev_display.wp_rotating_named_starred_one":
     "{name} • rotating 1 starred wallpaper.",
   "dev_display.wp_rotating_named_starred_many":
@@ -226,19 +224,30 @@ export const EN_DEVICES_STRINGS = {
   "dev_display.star_all": "Star all",
   "dev_display.clear_stars": "Clear stars",
 
-  // Device -> Interface (D-053 / D-064 / U4)
+  // Device -> Interface (D-053 / D-064 / D-069 / U4)
   "dev_interface.enable_home_desc":
     "Provides the Home screen and App Dock. Turn off to lock this Device to a single start screen app.",
   "dev_interface.start_screen_multi_desc":
     "Choose the screen shown on startup. Swipe up from the bottom to return to Home.",
   "dev_interface.start_screen_single_desc":
     "Single-app screen shown at all times while the Home screen is disabled.",
+  "dev_interface.time_format_desc":
+    "Applies 12-hour or 24-hour time across Home, alarms, calendar, and schedules.",
   "dev_interface.home_clock_tap_desc":
     "Choose whether tapping the clock readout on Home opens the Time app or the standalone clock face.",
+  "dev_interface.clock_face_desc":
+    "Visual style for the standalone clock face screen.",
   "dev_interface.home_date_tap_desc":
     "Choose whether tapping the date readout on Home opens Day view or Overview in the Calendar app.",
   "dev_interface.return_timeout_desc":
     "Resets idle screens back to Home unless media is playing or a live activity is active.",
+  "dev_interface.wake_greeting_desc":
+    "Shows a brief morning, afternoon, or evening greeting after waking from standby.",
+  "dev_interface.weather_bg_desc":
+    "Replaces the Home screen backdrop with a live sky matching current conditions.",
+  "dev_interface.sun_moon_label": "Sun & Moon",
+  "dev_interface.sun_moon_desc":
+    "Choose which sky bodies appear on the live weather background.",
   "dev_interface.activity_card_desc":
     "Shows live timers, alarms, media queue, stopwatch, and next calendar event on Home.",
   "dev_interface.activity_sources_desc":
@@ -255,16 +264,13 @@ export const EN_DEVICES_STRINGS = {
   "dev_interface.settings_title": "Settings",
   "dev_interface.settings_locked_meta": "Always shown last on the App Dock",
   "dev_interface.hidden_from_dock": "Hidden from dock",
-  "dev_interface.single_app_title": "Single-app mode active",
-  "dev_interface.single_app_desc":
-    "The Home screen and App Dock are disabled while this Device is locked to {app}. Turn on Enable Home screen to restore multi-app navigation and the App Dock.",
   "dev_interface.pinned_empty_meta": "Empty — auto-hidden on dock",
   "dev_interface.pinned_count_meta": "{count} {shortcutWord} • {pages} {pageWord}",
   "dev_interface.word_shortcut_one": "shortcut",
   "dev_interface.word_shortcut_many": "shortcuts",
   "dev_interface.word_page_one": "page",
   "dev_interface.word_page_many": "pages",
-  "dev_interface.music_meta": "Albums: {albums} • Artists: {artists}",
+  "dev_interface.music_meta": "Art: {art} • Albums: {albums}",
   "dev_interface.categories_enabled_one": "1 category enabled",
   "dev_interface.categories_enabled_many": "{count} categories enabled",
   "dev_interface.remote_follow_area": "Follow the active Area",

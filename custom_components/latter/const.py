@@ -16,8 +16,8 @@ _PROTOCOL_DEFAULTS: Final[dict[str, Any]] = json.loads(
 
 DOMAIN: Final = "latter"
 INTEGRATION_VERSION: Final = "3.0.0"
-STUDIO_REV: Final = 35
-MIN_FIRMWARE_SDK_REV: Final = 2026111901
+STUDIO_REV: Final = 37
+MIN_FIRMWARE_SDK_REV: Final = 2026111903
 PLATFORMS: Final[list[Platform]] = [
     Platform.SENSOR,
     Platform.BINARY_SENSOR,
@@ -106,6 +106,7 @@ CONF_SCREENSAVER_STYLE: Final = "screensaver_style"
 CONF_HOLD_CROWN_POWER_OFF: Final = "hold_crown_power_off"
 CONF_BEDTIME_ACTIVE: Final = "bedtime_active"
 CONF_BEDTIME_DISPLAY: Final = "bedtime_display"
+CONF_BEDTIME_BRIGHTNESS: Final = "bedtime_brightness"
 CONF_BEDTIME_SCHEDULE: Final = "bedtime_schedule"
 CONF_BEDTIME_START_HOUR: Final = "bedtime_start_hour"
 CONF_BEDTIME_END_HOUR: Final = "bedtime_end_hour"

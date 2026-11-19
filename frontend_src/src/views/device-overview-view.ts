@@ -8,6 +8,7 @@
  */
 
 import {
+  isDeviceTime24h,
   renderCard,
   renderNativeControlRow,
   renderQuickActionGrid,
@@ -19,15 +20,19 @@ import { DEFAULT_ALARMS_SUMMARY } from "../constants.js";
 import { formatHaEntityState, type StudioTranslationKey } from "../i18n/index.js";
 import { html, nothing, type TemplateResult } from "../lib/lit.js";
 import type { StudioStore } from "../state/store.js";
-import type { EspHomeEntityItem, HomeAssistant } from "../types.js";
+import type { EspHomeEntityItem } from "../types.js";
 import {
+  defaultLocaleTimeFormat,
   entityLabel,
   fmtDistance,
   fmtNumber,
   fmtPercent,
+  formatClockHhMm,
   issueMessage,
   rssiToPercent,
 } from "../utils/format.js";
+
+export { defaultLocaleTimeFormat };
 
 const DEV_ICON_AREA =
   "M12,6.5A2.5,2.5 0 0,1 14.5,9A2.5,2.5 0 0,1 12,11.5A2.5,2.5 0 0,1 9.5,9A2.5,2.5 0 0,1 12,6.5M12,2A7,7 0 0,1 19,9C19,14.25 12,22 12,22C12,22 5,14.25 5,9A7,7 0 0,1 12,2M12,4A5,5 0 0,0 7,9C7,10 7,12 12,18.71C17,12 17,10 17,9A5,5 0 0,0 12,4Z";
@@ -44,23 +49,7 @@ const DEV_ICON_BLUETOOTH =
 const DEV_ICON_CHIP =
   "M17,17H7V7H17M21,11V9H19V7C19,5.89 18.1,5 17,5H15V3H13V5H11V3H9V5H7C5.89,5 5,5.89 5,7V9H3V11H5V13H3V15H5V17A2,2 0 0,0 7,19H9V21H11V19H13V21H15V19H17A2,2 0 0,0 19,17V15H21V13H19V11M15,15H9V9H15V15Z";
 const DEV_ICON_TAG =
-  "M21.41,11.58L12.41,2.58C12.05,2.22 11.55,2 11,2H4C2.9,2 2,2.9 2,4V11C2,11.55 2.22,12.05 2.59,12.42L11.59,21.42C11.95,21.78 12.45,22 13,22C13.55,22 14.05,21.78 14.41,21.41L21.41,14.41C21.78,14.05 22,13.55 22,13C22,12.45 21.77,11.94 21.41,11.58M13,20.01L4,11V4H11V3.99L20,12.99L13,20.01M6.5,5A1.5,1.5 0 0,1 8,6.5A1.5,1.5 0 0,1 6.5,8A1.5,1.5 0 0,1 5,6.5A1.5,1.5 0 0,1 6.5,5Z";
-
-export function defaultLocaleTimeFormat(
-  hass: HomeAssistant | null | undefined,
-): "24-Hour" | "12-Hour (AM/PM)" {
-  const tf = hass?.locale?.time_format;
-  if (tf === "24") return "24-Hour";
-  if (tf === "am_pm") return "12-Hour (AM/PM)";
-  try {
-    const lang = hass?.locale?.language || hass?.language || undefined;
-    const hour12 = new Intl.DateTimeFormat(lang, { hour: "numeric" }).resolvedOptions().hour12;
-    if (hour12 === false) return "24-Hour";
-  } catch {
-    // Fall back to 12-hour wire token when Intl options are unavailable.
-  }
-  return "12-Hour (AM/PM)";
-}
+  "M21.41,11.58L12.41,2.58C12.05,2.22 11.55,2 11,2H4C2.9,2 2,2.9 2,4V11C2,11.55 2.22,12.05 2.59,12.42L11.59,21.42C11.95,21.78 12.45,22 13,22C13.55,22 14.05,21.78 14.41,14.41L21.41,14.41C21.78,14.05 22,13.55 22,13C22,12.45 21.77,11.94 21.41,11.58M13,20.01L4,11V4H11V3.99L20,12.99L13,20.01M6.5,5A1.5,1.5 0 0,1 8,6.5A1.5,1.5 0 0,1 6.5,8A1.5,1.5 0 0,1 5,6.5A1.5,1.5 0 0,1 6.5,5Z";
 
 /**
  * Shared calm offline / sleeping banner rendered at the top of Device views (`Q8` / `E-04`).
@@ -514,11 +503,12 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
   const enabledAlarmSlots = alarmSlots
     .filter((s) => s.enabled)
     .sort((a, b) => a.time.localeCompare(b.time));
+  const is24h = isDeviceTime24h(store);
   const alarmsSummaryLabel =
     enabledAlarmSlots.length > 0
       ? store.t("dev_overview.alarms_enabled_summary", {
           count: fmtNumber(enabledAlarmSlots.length, store.hass, 0),
-          nextTime: enabledAlarmSlots[0].time,
+          nextTime: formatClockHhMm(enabledAlarmSlots[0].time, is24h),
         })
       : store.t("common.all_off");
   const alarmsSummaryChipClass = enabledAlarmSlots.length > 0 ? "chip chip-primary" : "chip";

@@ -7,6 +7,7 @@
 
 import {
   renderCard,
+  renderHourSelectControl,
   renderRangeControl,
   renderSettingsRow,
 } from "../../components/controls.js";
@@ -18,7 +19,12 @@ import type {
   SharedControlItem,
   SystemDeviceEntry,
 } from "../../types.js";
-import { entityLabel, fmtNumber, isValidHexColor } from "../../utils/format.js";
+import {
+  defaultLocaleTimeFormat,
+  entityLabel,
+  fmtNumber,
+  isValidHexColor,
+} from "../../utils/format.js";
 
 const BATCH_CATEGORY_META: ReadonlyArray<{
   id: string;
@@ -111,17 +117,30 @@ function renderBatchControlRow(
     const max = fc.max ?? 100;
     const step = fc.step ?? 1;
     const numVal = Number.isFinite(Number(curState)) ? Number(curState) : min;
-    control = html`${statusBadge}
-      ${renderRangeControl({
-        ariaLabel: label,
-        value: numVal,
-        min,
-        max,
-        step,
-        unit: fc.unit,
-        hass: store.hass,
-        onCommit: (raw) => store.groups.stageBatchEntityControl(fc, { level: raw }),
-      })}`;
+    control =
+      fc.unit === ":00"
+        ? html`${statusBadge}
+            ${renderHourSelectControl({
+              ariaLabel: label,
+              value: numVal,
+              is24h: defaultLocaleTimeFormat(store.hass).startsWith("24"),
+              hass: store.hass,
+              mixed: mixed && !staged,
+              mixedLabel: store.t("batch.mixed_badge"),
+              onCommit: (raw) => store.groups.stageBatchEntityControl(fc, { level: raw }),
+            })}`
+        : html`${statusBadge}
+            ${renderRangeControl({
+              ariaLabel: label,
+              value: numVal,
+              min,
+              max,
+              step,
+              unit: fc.unit,
+              is24h: defaultLocaleTimeFormat(store.hass).startsWith("24"),
+              hass: store.hass,
+              onCommit: (raw) => store.groups.stageBatchEntityControl(fc, { level: raw }),
+            })}`;
   } else if (fc.domain === "color") {
     const hexVal = isValidHexColor(curState) ? curState.toUpperCase() : "#3898FF";
     control = html`${statusBadge}

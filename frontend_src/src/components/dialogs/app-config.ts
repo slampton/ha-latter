@@ -23,11 +23,11 @@ import { html, nothing, type TemplateResult } from "../../lib/lit.js";
 import { ROUTE_PREVIEW_ICONS, shortcutActionLabel } from "../../mdi-catalog.js";
 import { isCatalogItemSupported, type StudioStore } from "../../state/store.js";
 import type { ConfigurableAppId, DeviceCapabilities, ShortcutItem } from "../../types.js";
+import { defaultLocaleTimeFormat } from "../../utils/format.js";
 import {
   type PillListItem,
   renderNativeControlRow,
   renderPillList,
-  renderPrefControlRow,
   renderSelectRow,
   renderSettingsRow,
   renderSortableList,
@@ -96,7 +96,15 @@ function resolvePrefStringValue(
   const livePref = store.entity.getPref(key);
   const cfgVal = store.state?.config?.[key];
   const spec = store.entity.getPrefSpec(key);
-  const raw = String(livePref?.value ?? cfgVal ?? spec?.default ?? "");
+  const rawCandidate = livePref?.value ?? cfgVal;
+  const fallbackVal =
+    key === "time_format"
+      ? defaultLocaleTimeFormat(store.hass)
+      : spec?.default ?? "";
+  const raw =
+    rawCandidate !== undefined && rawCandidate !== null && String(rawCandidate).trim() !== ""
+      ? String(rawCandidate)
+      : String(fallbackVal);
   if (options.length > 0 && !options.includes(raw)) {
     return options[0];
   }
@@ -109,10 +117,6 @@ function renderEditableSelectPref(
   domId: string,
   caps?: DeviceCapabilities,
 ): TemplateResult | typeof nothing {
-  const livePref = store.entity.getPref(key);
-  if (livePref && (!domId || key.endsWith("_sort_order"))) {
-    return renderPrefControlRow(store, livePref);
-  }
   const options = resolvePrefOptions(store, key, caps);
   if (options.length === 0) return nothing;
   const curVal = resolvePrefStringValue(store, key, options);
@@ -292,9 +296,15 @@ export function renderAppConfigModalBody(store: StudioStore): TemplateResult | t
       ${areaExtraItems.map((it) => renderNativeControlRow(store, it))}
     </div>`;
   } else if (app === "music") {
-    const sortKeys = ["album_sort_order", "artist_album_sort_order", "podcast_sort_order"] as const;
+    const musicKeys = [
+      "album_art_style",
+      "music_overlay_style",
+      "album_sort_order",
+      "artist_album_sort_order",
+      "podcast_sort_order",
+    ] as const;
     body = html`<div class="settings-list">
-      ${sortKeys.map((k) => renderEditableSelectPref(store, k, `cfg-${k}`, caps))}
+      ${musicKeys.map((k) => renderEditableSelectPref(store, k, `cfg-${k}`, caps))}
     </div>`;
   } else if (app === "remote") {
     const remoteGroups = data?.system_config?.remote_groups || [];

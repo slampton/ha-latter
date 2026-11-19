@@ -691,7 +691,7 @@ def resolve_behavior_key_value(data: Mapping[str, Any], key: str) -> Any:
     return data.get(key)
 
 
-BUILTIN_GROUP_PRESET_VERSION = 2
+BUILTIN_GROUP_PRESET_VERSION = 3
 CONF_BUILTIN_GROUP_PRESET_VERSION = "builtin_group_preset_version"
 
 DEFAULT_DEVICE_GROUPS: list[dict[str, Any]] = [
@@ -717,8 +717,9 @@ DEFAULT_DEVICE_GROUPS: list[dict[str, Any]] = [
             "docked_screensaver": True,
             "wake_word_mode": "Docked Only",
             "auto_brightness_mode": "Sun Synchronized",
-            "day_brightness": "90%",
-            "night_brightness": "70%",
+            "day_brightness": 90,
+            "night_brightness": 35,
+            "bedtime_brightness": 15,
             "ble_beacon_mode": "Handheld + Screen Off",
         },
     },
@@ -744,8 +745,9 @@ DEFAULT_DEVICE_GROUPS: list[dict[str, Any]] = [
             "docked_screensaver": True,
             "wake_word_mode": "Docked Only",
             "auto_brightness_mode": "Sun Synchronized",
-            "day_brightness": "90%",
-            "night_brightness": "70%",
+            "day_brightness": 90,
+            "night_brightness": 35,
+            "bedtime_brightness": 15,
             "ble_beacon_mode": "Handheld + Screen Off",
         },
     },
@@ -771,8 +773,9 @@ DEFAULT_DEVICE_GROUPS: list[dict[str, Any]] = [
             "docked_screensaver": True,
             "wake_word_mode": "Docked Only",
             "auto_brightness_mode": "Sun Synchronized",
-            "day_brightness": "80%",
-            "night_brightness": "60%",
+            "day_brightness": 80,
+            "night_brightness": 25,
+            "bedtime_brightness": 15,
             "ble_beacon_mode": "Handheld + Screen Off",
         },
     },
@@ -798,8 +801,9 @@ DEFAULT_DEVICE_GROUPS: list[dict[str, Any]] = [
             "docked_screensaver": False,
             "wake_word_mode": "Always On",
             "auto_brightness_mode": "Sun Synchronized",
-            "day_brightness": "90%",
-            "night_brightness": "70%",
+            "day_brightness": 90,
+            "night_brightness": 35,
+            "bedtime_brightness": 15,
             "ble_beacon_mode": "Handheld Only",
         },
     },

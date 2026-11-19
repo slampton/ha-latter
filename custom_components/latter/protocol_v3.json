@@ -703,22 +703,22 @@
           "index": 14,
           "name": "manual_brightness",
           "cpp_enum": "MANUAL_BRIGHTNESS",
-          "type": "string",
-          "description": "Manual brightness target when auto brightness is Disabled (60%|70%|80%|90%|100%)"
+          "type": "u16",
+          "description": "Manual brightness target when auto brightness is Disabled (1..100%)"
         },
         {
           "index": 15,
           "name": "day_brightness",
           "cpp_enum": "DAY_BRIGHTNESS",
-          "type": "string",
-          "description": "Daytime brightness target (60%|70%|80%|90%|100%)"
+          "type": "u16",
+          "description": "Daytime brightness target (1..100%)"
         },
         {
           "index": 16,
           "name": "night_brightness",
           "cpp_enum": "NIGHT_BRIGHTNESS",
-          "type": "string",
-          "description": "Nighttime brightness target (60%|70%|80%|90%|100%)"
+          "type": "u16",
+          "description": "Nighttime brightness target (1..100%)"
         },
         {
           "index": 17,
@@ -1041,6 +1041,13 @@
           "cpp_enum": "BEDTIME_END_HOUR",
           "type": "u16",
           "description": "Bedtime Mode schedule end hour in local 24h time (0..23)"
+        },
+        {
+          "index": 63,
+          "name": "bedtime_brightness",
+          "cpp_enum": "BEDTIME_BRIGHTNESS",
+          "type": "u16",
+          "description": "Bedtime Mode active wake brightness percentage (1..100%)"
         }
       ]
     },
@@ -2823,64 +2830,46 @@
     {
       "key": "manual_brightness",
       "label": "Manual Brightness",
-      "domain": "select",
-      "default": "90%",
+      "domain": "number",
+      "default": 80,
       "section": "display",
       "esphome_section": "display",
       "group_tier": "behavior",
-      "options": [
-        "60%",
-        "70%",
-        "80%",
-        "90%",
-        "100%"
-      ],
-      "min": null,
-      "max": null,
-      "step": null,
-      "unit": "",
+      "options": [],
+      "min": 1,
+      "max": 100,
+      "step": 1,
+      "unit": "%",
       "capability": "display"
     },
     {
       "key": "day_brightness",
       "label": "Day Brightness",
-      "domain": "select",
-      "default": "90%",
+      "domain": "number",
+      "default": 90,
       "section": "display",
       "esphome_section": "display",
       "group_tier": "behavior",
-      "options": [
-        "60%",
-        "70%",
-        "80%",
-        "90%",
-        "100%"
-      ],
-      "min": null,
-      "max": null,
-      "step": null,
-      "unit": "",
+      "options": [],
+      "min": 1,
+      "max": 100,
+      "step": 1,
+      "unit": "%",
       "capability": "display"
     },
     {
       "key": "night_brightness",
       "label": "Night Brightness",
-      "domain": "select",
-      "default": "70%",
+      "domain": "number",
+      "default": 35,
       "section": "display",
       "esphome_section": "display",
       "group_tier": "behavior",
-      "options": [
-        "60%",
-        "70%",
-        "80%",
-        "90%",
-        "100%"
-      ],
-      "min": null,
-      "max": null,
-      "step": null,
-      "unit": "",
+      "options": [],
+      "min": 1,
+      "max": 100,
+      "step": 1,
+      "unit": "%",
       "capability": "display"
     },
     {
@@ -2895,7 +2884,7 @@
       "min": 0,
       "max": 23,
       "step": 1,
-      "unit": "h",
+      "unit": ":00",
       "capability": "display"
     },
     {
@@ -2910,7 +2899,7 @@
       "min": 0,
       "max": 23,
       "step": 1,
-      "unit": "h",
+      "unit": ":00",
       "capability": "display"
     },
     {
@@ -3027,9 +3016,9 @@
       "label": "Clock Face",
       "domain": "select",
       "default": "Minimal Digital",
-      "section": "display",
+      "section": "interface",
       "esphome_section": "display",
-      "group_tier": "display",
+      "group_tier": "interface",
       "options": [
         "Minimal Digital",
         "Modern Analog",
@@ -3046,9 +3035,9 @@
       "label": "Time Format",
       "domain": "select",
       "default": "12-Hour (AM/PM)",
-      "section": "display",
+      "section": "interface",
       "esphome_section": "display",
-      "group_tier": "display",
+      "group_tier": "interface",
       "options": [
         "12-Hour (AM/PM)",
         "24-Hour"
@@ -3064,9 +3053,9 @@
       "label": "Weather Background",
       "domain": "switch",
       "default": true,
-      "section": "display",
+      "section": "interface",
       "esphome_section": "display",
-      "group_tier": "display",
+      "group_tier": "interface",
       "options": [],
       "min": null,
       "max": null,
@@ -3079,9 +3068,9 @@
       "label": "Sun",
       "domain": "switch",
       "default": true,
-      "section": "display",
+      "section": "interface",
       "esphome_section": "display",
-      "group_tier": "display",
+      "group_tier": "interface",
       "options": [],
       "min": null,
       "max": null,
@@ -3094,9 +3083,9 @@
       "label": "Moon",
       "domain": "switch",
       "default": true,
-      "section": "display",
+      "section": "interface",
       "esphome_section": "display",
-      "group_tier": "display",
+      "group_tier": "interface",
       "options": [],
       "min": null,
       "max": null,
@@ -3109,9 +3098,9 @@
       "label": "Wake Greeting",
       "domain": "switch",
       "default": true,
-      "section": "display",
+      "section": "interface",
       "esphome_section": "display",
-      "group_tier": "display",
+      "group_tier": "interface",
       "options": [],
       "min": null,
       "max": null,
@@ -3124,9 +3113,9 @@
       "label": "Album Art Style",
       "domain": "select",
       "default": "Full Screen",
-      "section": "display",
+      "section": "interface",
       "esphome_section": "music",
-      "group_tier": "display",
+      "group_tier": "interface",
       "options": [
         "Full Screen",
         "Letterbox",
@@ -3144,9 +3133,9 @@
       "label": "Overlay Style",
       "domain": "select",
       "default": "Art + Metadata",
-      "section": "display",
+      "section": "interface",
       "esphome_section": "music",
-      "group_tier": "display",
+      "group_tier": "interface",
       "options": [
         "Art Only",
         "Art + Metadata",
@@ -3610,7 +3599,7 @@
       "min": 0,
       "max": 23,
       "step": 1,
-      "unit": "h",
+      "unit": ":00",
       "capability": "display"
     },
     {
@@ -3625,12 +3614,27 @@
       "min": 0,
       "max": 23,
       "step": 1,
-      "unit": "h",
+      "unit": ":00",
+      "capability": "display"
+    },
+    {
+      "key": "bedtime_brightness",
+      "label": "Bedtime Brightness",
+      "domain": "number",
+      "default": 15,
+      "section": "power",
+      "esphome_section": "sleep",
+      "group_tier": "behavior",
+      "options": [],
+      "min": 1,
+      "max": 100,
+      "step": 1,
+      "unit": "%",
       "capability": "display"
     }
   ],
   "studio_contract": {
-    "studio_rev": 35,
+    "studio_rev": 37,
     "allowed_device_actions": [
       "restart",
       "find_my",

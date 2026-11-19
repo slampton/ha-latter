@@ -17,6 +17,7 @@ const SCREENSAVER_KEYS = new Set([
 const BEDTIME_KEYS = new Set([
   "bedtime_active",
   "bedtime_display",
+  "bedtime_brightness",
   "bedtime_schedule",
   "bedtime_start_hour",
   "bedtime_end_hour",
@@ -37,6 +38,7 @@ export function renderDevicePowerView(store: StudioStore): TemplateResult {
   const bedtimeAllPrefs = store.entity.getPrefs([
     "bedtime_active",
     "bedtime_display",
+    "bedtime_brightness",
     "bedtime_schedule",
     "bedtime_start_hour",
     "bedtime_end_hour",

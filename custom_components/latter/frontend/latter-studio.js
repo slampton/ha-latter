@@ -222,11 +222,8 @@ const EN_DEVICES_STRINGS = {
   "card.sensors_controls": "Sensors & controls",
   "card.wallpapers": "Wallpapers",
   "card.brightness": "Brightness",
-  "card.clock": "Clock",
   "card.colors": "Colors",
   "card.screensaver": "Screensaver",
-  "card.home_screen_appearance": "Home screen appearance",
-  "card.music_appearance": "Music appearance",
   "card.home_screen": "Home screen",
   "card.app_dock": "App Dock",
   "card.diagnostics": "Diagnostics",
@@ -376,11 +373,10 @@ const EN_DEVICES_STRINGS = {
   "dev_overview.alarm_rec_weekdays": "Weekdays",
   "dev_overview.alarm_rec_weekends": "Weekends",
   "dev_overview.alarm_rec_once": "Once",
-  // Device -> Display (D-034 / D-066 / Q7)
+  // Device -> Display (D-034 / D-069 / D-070)
   "dev_display.card_voice_assistant": "Voice assistant",
-  "dev_display.sun_moon_label": "Sun & Moon",
-  "dev_display.sun_moon_desc":
-    "Choose which sky bodies appear on the live weather background.",
+  "dev_display.bedtime_brightness_override_note":
+    "Bedtime mode is currently active and overriding screen brightness.",
   "dev_display.screensaver_preview_desc":
     "Starts the screensaver on this Device immediately.",
   "dev_display.preview_btn": "Preview",
@@ -391,6 +387,8 @@ const EN_DEVICES_STRINGS = {
   "dev_display.wallpapers_subtitle":
     "Shared presets and uploaded photos cropped for this display.",
   "dev_display.active_wallpaper_label": "Active wallpaper",
+  "dev_display.wp_weather_bg_note":
+    "Weather background is enabled on Home — wallpapers appear across other screens.",
   "dev_display.wp_rotating_named_starred_one":
     "{name} • rotating 1 starred wallpaper.",
   "dev_display.wp_rotating_named_starred_many":
@@ -421,19 +419,30 @@ const EN_DEVICES_STRINGS = {
   "dev_display.rot_1440": "Once a day",
   "dev_display.star_all": "Star all",
   "dev_display.clear_stars": "Clear stars",
-  // Device -> Interface (D-053 / D-064 / U4)
+  // Device -> Interface (D-053 / D-064 / D-069 / U4)
   "dev_interface.enable_home_desc":
     "Provides the Home screen and App Dock. Turn off to lock this Device to a single start screen app.",
   "dev_interface.start_screen_multi_desc":
     "Choose the screen shown on startup. Swipe up from the bottom to return to Home.",
   "dev_interface.start_screen_single_desc":
     "Single-app screen shown at all times while the Home screen is disabled.",
+  "dev_interface.time_format_desc":
+    "Applies 12-hour or 24-hour time across Home, alarms, calendar, and schedules.",
   "dev_interface.home_clock_tap_desc":
     "Choose whether tapping the clock readout on Home opens the Time app or the standalone clock face.",
+  "dev_interface.clock_face_desc":
+    "Visual style for the standalone clock face screen.",
   "dev_interface.home_date_tap_desc":
     "Choose whether tapping the date readout on Home opens Day view or Overview in the Calendar app.",
   "dev_interface.return_timeout_desc":
     "Resets idle screens back to Home unless media is playing or a live activity is active.",
+  "dev_interface.wake_greeting_desc":
+    "Shows a brief morning, afternoon, or evening greeting after waking from standby.",
+  "dev_interface.weather_bg_desc":
+    "Replaces the Home screen backdrop with a live sky matching current conditions.",
+  "dev_interface.sun_moon_label": "Sun & Moon",
+  "dev_interface.sun_moon_desc":
+    "Choose which sky bodies appear on the live weather background.",
   "dev_interface.activity_card_desc":
     "Shows live timers, alarms, media queue, stopwatch, and next calendar event on Home.",
   "dev_interface.activity_sources_desc":
@@ -450,16 +459,13 @@ const EN_DEVICES_STRINGS = {
   "dev_interface.settings_title": "Settings",
   "dev_interface.settings_locked_meta": "Always shown last on the App Dock",
   "dev_interface.hidden_from_dock": "Hidden from dock",
-  "dev_interface.single_app_title": "Single-app mode active",
-  "dev_interface.single_app_desc":
-    "The Home screen and App Dock are disabled while this Device is locked to {app}. Turn on Enable Home screen to restore multi-app navigation and the App Dock.",
   "dev_interface.pinned_empty_meta": "Empty — auto-hidden on dock",
   "dev_interface.pinned_count_meta": "{count} {shortcutWord} • {pages} {pageWord}",
   "dev_interface.word_shortcut_one": "shortcut",
   "dev_interface.word_shortcut_many": "shortcuts",
   "dev_interface.word_page_one": "page",
   "dev_interface.word_page_many": "pages",
-  "dev_interface.music_meta": "Albums: {albums} • Artists: {artists}",
+  "dev_interface.music_meta": "Art: {art} • Albums: {albums}",
   "dev_interface.categories_enabled_one": "1 category enabled",
   "dev_interface.categories_enabled_many": "{count} categories enabled",
   "dev_interface.remote_follow_area": "Follow the active Area",
@@ -1349,7 +1355,7 @@ const EN_STRINGS = {
   ...EN_DEVICES_STRINGS,
 };
 /**
- * Sentence-case labels for all 55 `DevicePrefSpec` keys + group/device setting keys.
+ * Sentence-case labels for all 56 `DevicePrefSpec` keys + group/device setting keys.
  */
 const PREF_LABELS = {
   wake_word_mode: "Wake word mode",
@@ -1363,6 +1369,7 @@ const PREF_LABELS = {
   hold_crown_power_off: "Hold crown to power off",
   bedtime_active: "Bedtime mode",
   bedtime_display: "Idle display in bedtime",
+  bedtime_brightness: "Bedtime brightness",
   bedtime_schedule: "Bedtime schedule",
   bedtime_start_hour: "Bedtime starts",
   bedtime_end_hour: "Bedtime ends",
@@ -1455,11 +1462,6 @@ const PREF_OPTION_LABELS = {
   Fireworks: "Fireworks",
   "Sun Synchronized": "Sun synchronized",
   "Time Schedule": "Time schedule",
-  "60%": "60%",
-  "70%": "70%",
-  "80%": "80%",
-  "90%": "90%",
-  "100%": "100%",
   "Steel Blue": "Steel blue",
   Pink: "Pink",
   Blue: "Blue",
@@ -1943,7 +1945,7 @@ __latterExp(__exports, { Directive: () => Directive, directive: () => directive,
 __latterDef("src/protocol-schema.ts", (__exports, __req) => {
 // AUTO-GENERATED FROM protocol/latter_v3.json BY tools/gen_protocol.py — DO NOT EDIT MANUALLY.
 const PROTOCOL_CONTRACT_VERSION = 3;
-const STUDIO_REV = 35;
+const STUDIO_REV = 37;
 const ALLOWED_DEVICE_ACTIONS = [
   "restart",
   "find_my",
@@ -2160,24 +2162,24 @@ const DEVICE_PREF_SPECS_CATALOG = [
   {key: "screensaver_style", label: "Screensaver Style", domain: "select", default: "Ambient Clock", section: "display", esphome_section: "display", group_tier: "display", options: ["Ambient Clock", "Aurora", "Starfield", "Digital Rain", "Fireworks"], min: null, max: null, step: null, unit: "", capability: "display" },
   {key: "hold_crown_power_off", label: "Hold Crown to Power Off", domain: "switch", default: false, section: "power", esphome_section: "sleep", group_tier: "behavior", options: [], min: null, max: null, step: null, unit: "", capability: "display_battery" },
   {key: "auto_brightness_mode", label: "Auto Brightness Mode", domain: "select", default: "Sun Synchronized", section: "display", esphome_section: "display", group_tier: "behavior", options: ["Disabled", "Sun Synchronized", "Time Schedule"], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "manual_brightness", label: "Manual Brightness", domain: "select", default: "90%", section: "display", esphome_section: "display", group_tier: "behavior", options: ["60%", "70%", "80%", "90%", "100%"], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "day_brightness", label: "Day Brightness", domain: "select", default: "90%", section: "display", esphome_section: "display", group_tier: "behavior", options: ["60%", "70%", "80%", "90%", "100%"], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "night_brightness", label: "Night Brightness", domain: "select", default: "70%", section: "display", esphome_section: "display", group_tier: "behavior", options: ["60%", "70%", "80%", "90%", "100%"], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "day_start_hour", label: "Day Start Hour", domain: "number", default: 7, section: "display", esphome_section: "display", group_tier: "behavior", options: [], min: 0, max: 23, step: 1, unit: "h", capability: "display" },
-  {key: "night_start_hour", label: "Night Start Hour", domain: "number", default: 20, section: "display", esphome_section: "display", group_tier: "behavior", options: [], min: 0, max: 23, step: 1, unit: "h", capability: "display" },
+  {key: "manual_brightness", label: "Manual Brightness", domain: "number", default: 80, section: "display", esphome_section: "display", group_tier: "behavior", options: [], min: 1, max: 100, step: 1, unit: "%", capability: "display" },
+  {key: "day_brightness", label: "Day Brightness", domain: "number", default: 90, section: "display", esphome_section: "display", group_tier: "behavior", options: [], min: 1, max: 100, step: 1, unit: "%", capability: "display" },
+  {key: "night_brightness", label: "Night Brightness", domain: "number", default: 35, section: "display", esphome_section: "display", group_tier: "behavior", options: [], min: 1, max: 100, step: 1, unit: "%", capability: "display" },
+  {key: "day_start_hour", label: "Day Start Hour", domain: "number", default: 7, section: "display", esphome_section: "display", group_tier: "behavior", options: [], min: 0, max: 23, step: 1, unit: ":00", capability: "display" },
+  {key: "night_start_hour", label: "Night Start Hour", domain: "number", default: 20, section: "display", esphome_section: "display", group_tier: "behavior", options: [], min: 0, max: 23, step: 1, unit: ":00", capability: "display" },
   {key: "color_profile", label: "Color Profile", domain: "select", default: "Steel Blue", section: "display", esphome_section: "display", group_tier: "display", options: ["Steel Blue", "Pink", "Blue", "Green", "Custom"], min: null, max: null, step: null, unit: "", capability: "display" },
   {key: "va_visual_profile", label: "Visual Profile", domain: "select", default: "Nebula", section: "display", esphome_section: "display", group_tier: "display", options: ["Nebula", "Solaris", "Rings", "Light Bar", "Dot Wave"], min: null, max: null, step: null, unit: "", capability: "display" },
   {key: "home_screen_enabled", label: "Enable Home Screen", domain: "switch", default: true, section: "interface", esphome_section: "home", group_tier: "interface", options: [], min: null, max: null, step: null, unit: "", capability: "display" },
   {key: "start_screen", label: "Start Screen", domain: "select", default: "Home", section: "interface", esphome_section: "home", group_tier: "interface", options: ["Home", "Pinned", "Time App", "Calendar", "Clock Face", "Media", "Home Hub", "Area Controls", "Remote", "Weather", "Cameras", "Games", "Tools"], min: null, max: null, step: null, unit: "", capability: "display" },
   {key: "return_to_home_timeout", label: "Return to Home Timeout", domain: "select", default: "2 min", section: "interface", esphome_section: "home", group_tier: "interface", options: ["15s", "30s", "1 min", "2 min", "5 min", "10 min", "Never"], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "clock_face", label: "Clock Face", domain: "select", default: "Minimal Digital", section: "display", esphome_section: "display", group_tier: "display", options: ["Minimal Digital", "Modern Analog", "Hybrid Digital"], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "time_format", label: "Time Format", domain: "select", default: "12-Hour (AM/PM)", section: "display", esphome_section: "display", group_tier: "display", options: ["12-Hour (AM/PM)", "24-Hour"], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "weather_background", label: "Weather Background", domain: "switch", default: true, section: "display", esphome_section: "display", group_tier: "display", options: [], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "home_sun", label: "Sun", domain: "switch", default: true, section: "display", esphome_section: "display", group_tier: "display", options: [], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "home_moon", label: "Moon", domain: "switch", default: true, section: "display", esphome_section: "display", group_tier: "display", options: [], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "wake_greeting", label: "Wake Greeting", domain: "switch", default: true, section: "display", esphome_section: "display", group_tier: "display", options: [], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "album_art_style", label: "Album Art Style", domain: "select", default: "Full Screen", section: "display", esphome_section: "music", group_tier: "display", options: ["Full Screen", "Letterbox", "Standard", "None"], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "music_overlay_style", label: "Overlay Style", domain: "select", default: "Art + Metadata", section: "display", esphome_section: "music", group_tier: "display", options: ["Art Only", "Art + Metadata", "Always Visible"], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "clock_face", label: "Clock Face", domain: "select", default: "Minimal Digital", section: "interface", esphome_section: "display", group_tier: "interface", options: ["Minimal Digital", "Modern Analog", "Hybrid Digital"], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "time_format", label: "Time Format", domain: "select", default: "12-Hour (AM/PM)", section: "interface", esphome_section: "display", group_tier: "interface", options: ["12-Hour (AM/PM)", "24-Hour"], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "weather_background", label: "Weather Background", domain: "switch", default: true, section: "interface", esphome_section: "display", group_tier: "interface", options: [], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "home_sun", label: "Sun", domain: "switch", default: true, section: "interface", esphome_section: "display", group_tier: "interface", options: [], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "home_moon", label: "Moon", domain: "switch", default: true, section: "interface", esphome_section: "display", group_tier: "interface", options: [], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "wake_greeting", label: "Wake Greeting", domain: "switch", default: true, section: "interface", esphome_section: "display", group_tier: "interface", options: [], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "album_art_style", label: "Album Art Style", domain: "select", default: "Full Screen", section: "interface", esphome_section: "music", group_tier: "interface", options: ["Full Screen", "Letterbox", "Standard", "None"], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "music_overlay_style", label: "Overlay Style", domain: "select", default: "Art + Metadata", section: "interface", esphome_section: "music", group_tier: "interface", options: ["Art Only", "Art + Metadata", "Always Visible"], min: null, max: null, step: null, unit: "", capability: "display" },
   {key: "album_sort_order", label: "Album Sort Order", domain: "select", default: "Alphabetical", section: "interface", esphome_section: "music", group_tier: "interface", options: ["Alphabetical", "Newest on Top", "Oldest on Top"], min: null, max: null, step: null, unit: "", capability: "display" },
   {key: "artist_album_sort_order", label: "Artist Album Sort Order", domain: "select", default: "Oldest on Top", section: "interface", esphome_section: "music", group_tier: "interface", options: ["Oldest on Top", "Newest on Top", "Alphabetical"], min: null, max: null, step: null, unit: "", capability: "display" },
   {key: "podcast_sort_order", label: "Podcast Sort Order", domain: "select", default: "Newest on Top", section: "interface", esphome_section: "music", group_tier: "interface", options: ["Newest on Top", "Oldest on Top"], min: null, max: null, step: null, unit: "", capability: "display" },
@@ -2203,8 +2205,9 @@ const DEVICE_PREF_SPECS_CATALOG = [
   {key: "bedtime_active", label: "Bedtime Mode", domain: "switch", default: false, section: "power", esphome_section: "sleep", group_tier: null, options: [], min: null, max: null, step: null, unit: "", capability: "display" },
   {key: "bedtime_display", label: "Idle Display in Bedtime", domain: "select", default: "Screen Off", section: "power", esphome_section: "sleep", group_tier: "behavior", options: ["Screen Off", "Ambient Clock"], min: null, max: null, step: null, unit: "", capability: "display" },
   {key: "bedtime_schedule", label: "Bedtime Schedule", domain: "switch", default: false, section: "power", esphome_section: "sleep", group_tier: "behavior", options: [], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "bedtime_start_hour", label: "Bedtime Starts", domain: "number", default: 22, section: "power", esphome_section: "sleep", group_tier: "behavior", options: [], min: 0, max: 23, step: 1, unit: "h", capability: "display" },
-  {key: "bedtime_end_hour", label: "Bedtime Ends", domain: "number", default: 7, section: "power", esphome_section: "sleep", group_tier: "behavior", options: [], min: 0, max: 23, step: 1, unit: "h", capability: "display" },
+  {key: "bedtime_start_hour", label: "Bedtime Starts", domain: "number", default: 22, section: "power", esphome_section: "sleep", group_tier: "behavior", options: [], min: 0, max: 23, step: 1, unit: ":00", capability: "display" },
+  {key: "bedtime_end_hour", label: "Bedtime Ends", domain: "number", default: 7, section: "power", esphome_section: "sleep", group_tier: "behavior", options: [], min: 0, max: 23, step: 1, unit: ":00", capability: "display" },
+  {key: "bedtime_brightness", label: "Bedtime Brightness", domain: "number", default: 15, section: "power", esphome_section: "sleep", group_tier: "behavior", options: [], min: 1, max: 100, step: 1, unit: "%", capability: "display" },
 ];
 const DEVICE_PREF_SPECS_MAP = Object.fromEntries(DEVICE_PREF_SPECS_CATALOG.map((s) => [s.key, s]));
 const DEFAULT_DOCK_ROUTES = "app:pinned,app:music,app:home_hub,app:area,app:remote,app:games,app:tools";
@@ -2542,6 +2545,53 @@ function resolveHour12(hass) {
   if (tf === "24") return false;
   return undefined;
 }
+function defaultLocaleTimeFormat(
+  hass,
+) {
+  const tf = getLocaleObj(hass)?.time_format;
+  if (tf === "24") return "24-Hour";
+  if (tf === "am_pm") return "12-Hour (AM/PM)";
+  try {
+    const lang = getLocaleObj(hass)?.language || hass?.language || undefined;
+    const hour12 = new Intl.DateTimeFormat(lang, { hour: "numeric" }).resolvedOptions().hour12;
+    if (hour12 === false) return "24-Hour";
+  } catch {
+    // Fall back to 12-hour wire token when Intl options are unavailable.
+  }
+  return "12-Hour (AM/PM)";
+}
+function formatClockHhMm(
+  hhmm,
+  is24h,
+) {
+  const raw = String(hhmm ?? "").trim();
+  const m = /^(\d{1,2}):(\d{2})$/.exec(raw);
+  if (!m) return raw || "—";
+  const hh = Number(m[1]);
+  const mm = Number(m[2]);
+  if (!Number.isFinite(hh) || !Number.isFinite(mm) || hh < 0 || hh > 23 || mm < 0 || mm > 59) {
+    return raw;
+  }
+  const mmStr = String(mm).padStart(2, "0");
+  if (is24h) {
+    return `${String(hh).padStart(2, "0")}:${mmStr}`;
+  }
+  const h12 = hh % 12 === 0 ? 12 : hh % 12;
+  return `${h12}:${mmStr} ${hh >= 12 ? "PM" : "AM"}`;
+}
+function formatHourSlot(
+  hour,
+  is24h,
+) {
+  const n = Number(hour);
+  if (!Number.isFinite(n)) return "—";
+  const hh = ((Math.round(n) % 24) + 24) % 24;
+  if (is24h) {
+    return `${String(hh).padStart(2, "0")}:00`;
+  }
+  const h12 = hh % 12 === 0 ? 12 : hh % 12;
+  return `${h12}:00 ${hh >= 12 ? "PM" : "AM"}`;
+}
 function getDateTimeFormatter(
   locale,
   opts,
@@ -2852,13 +2902,13 @@ function navigateHaPath(path, replace = false) {
   }
   globalThis.dispatchEvent(new Event("location-changed", { bubbles: true, composed: true }));
 }
-__latterExp(__exports, { hassLanguage: () => hassLanguage, hassFirstWeekday: () => hassFirstWeekday, fmtNumber: () => fmtNumber, fmtPercent: () => fmtPercent, fmtDistance: () => fmtDistance, fmtAgo: () => fmtAgo, fmtDateTime: () => fmtDateTime, entityLabel: () => entityLabel, issueMessage: () => issueMessage, rssiToPercent: () => rssiToPercent, isValidHexColor: () => isValidHexColor, hsvToRgbJS: () => hsvToRgbJS, hsvToHex: () => hsvToHex, defaultThemeHex: () => defaultThemeHex, copyTextToClipboard: () => copyTextToClipboard, triggerJsonDownload: () => triggerJsonDownload, navigateHaPath: () => navigateHaPath });
+__latterExp(__exports, { hassLanguage: () => hassLanguage, defaultLocaleTimeFormat: () => defaultLocaleTimeFormat, formatClockHhMm: () => formatClockHhMm, formatHourSlot: () => formatHourSlot, hassFirstWeekday: () => hassFirstWeekday, fmtNumber: () => fmtNumber, fmtPercent: () => fmtPercent, fmtDistance: () => fmtDistance, fmtAgo: () => fmtAgo, fmtDateTime: () => fmtDateTime, entityLabel: () => entityLabel, issueMessage: () => issueMessage, rssiToPercent: () => rssiToPercent, isValidHexColor: () => isValidHexColor, hsvToRgbJS: () => hsvToRgbJS, hsvToHex: () => hsvToHex, defaultThemeHex: () => defaultThemeHex, copyTextToClipboard: () => copyTextToClipboard, triggerJsonDownload: () => triggerJsonDownload, navigateHaPath: () => navigateHaPath });
 //# sourceURL=latter-studio/src/utils/format.ts
 });
 __latterDef("src/components/controls.ts", (__exports, __req) => {
 const { t, tPrefLabel, tPrefOption } = __req("src/i18n/index.ts");
 const { Directive, directive, focusSafe, html, noChange, nothing, PartType, repeat } = __req("src/lib/lit.ts");
-const { entityLabel, fmtNumber } = __req("src/utils/format.ts");
+const { defaultLocaleTimeFormat, entityLabel, fmtNumber, formatHourSlot } = __req("src/utils/format.ts");
 /**
  * Shared Lit UI controls for Latter Studio (`D-014`, `D-015`, `D-024`, `D-062`, `D-064`):
  * - Cards & auto-described settings/select/switch/range rows (`aria-describedby` + live `aria-valuetext`)
@@ -2867,6 +2917,18 @@ const { entityLabel, fmtNumber } = __req("src/utils/format.ts");
  * - Pointer drag-handle (`≡`) + keyboard focus-preserving `renderSortableList` & `renderPillList` (`U4`)
  * Note: Event bindings (`@click`, `@change`, `@input`) always precede `class="..."` / `role="radio"`.
  */
+function isDeviceTime24h(store) {
+  if (store.currentScope !== "system") {
+    const raw =
+      store.entity.getPref("time_format")?.value ??
+      store.state?.config?.time_format;
+    const trimmed = raw !== undefined && raw !== null ? String(raw).trim() : "";
+    if (trimmed) {
+      return trimmed.startsWith("24");
+    }
+  }
+  return defaultLocaleTimeFormat(store.hass).startsWith("24");
+}
 function slugifyToken(raw) {
   let hash = 0x811c9dc5;
   for (let i = 0; i < raw.length; i += 1) {
@@ -3026,8 +3088,19 @@ function renderRangeControl(opts) {
   const step = opts.step ?? 1;
   const maxFrac =
     opts.maximumFractionDigits ?? (Number.isInteger(step) ? 0 : 1);
-  const unitSuffix = opts.unit ? ` ${opts.unit}` : "";
-  const formatVal = (v) => `${fmtNumber(v, opts.hass, maxFrac)}${unitSuffix}`;
+  const isHourSlot = opts.unit === ":00";
+  const resolvedIs24h =
+    opts.is24h ?? defaultLocaleTimeFormat(opts.hass).startsWith("24");
+  const unitSuffix =
+    !isHourSlot && opts.unit
+      ? opts.unit === "%"
+        ? "%"
+        : ` ${opts.unit}`
+      : "";
+  const formatVal = (v) =>
+    isHourSlot
+      ? formatHourSlot(v, resolvedIs24h)
+      : `${fmtNumber(v, opts.hass, maxFrac)}${unitSuffix}`;
   const initialText = formatVal(opts.value);
   const handleLiveInput = (ev) => {
     const inp = ev.currentTarget;
@@ -3078,6 +3151,65 @@ function renderRangeRow(opts) {
     description: opts.description,
     descId: resolvedDescId || undefined,
     control: renderRangeControl({
+      ...opts,
+      ariaLabel: opts.ariaLabel || opts.label,
+      ariaDescribedBy: resolvedDescId || opts.ariaDescribedBy,
+    }),
+  });
+}
+function renderHourSelectControl(
+  opts,
+) {
+  const resolvedIs24h =
+    opts.is24h ?? defaultLocaleTimeFormat(opts.hass).startsWith("24");
+  const normalizedHour = ((Math.round(opts.value) % 24) + 24) % 24;
+  const selectValue = opts.mixed ? "__mixed__" : String(normalizedHour);
+  return html`<select
+    id=${opts.id || nothing}
+    aria-label=${opts.ariaLabel}
+    aria-describedby=${opts.ariaDescribedBy || nothing}
+    ?disabled=${Boolean(opts.disabled)}
+    .value=${selectValue}
+    @change=${(ev) => {
+      const raw = (ev.currentTarget).value;
+      if (raw === "__mixed__") return;
+      const nextHour = Number(raw);
+      if (Number.isFinite(nextHour)) {
+        opts.onCommit(((Math.round(nextHour) % 24) + 24) % 24);
+      }
+    }}
+  >
+    ${opts.mixed
+      ? html`<option value="__mixed__" selected disabled>
+          ${opts.mixedLabel || t("batch.mixed_badge")}
+        </option>`
+      : nothing}
+    ${Array.from({ length: 24 }, (_, h) => {
+      const valStr = String(h);
+      return html`<option
+        value=${valStr}
+        ?selected=${!opts.mixed && h === normalizedHour}
+      >
+        ${formatHourSlot(h, resolvedIs24h)}
+      </option>`;
+    })}
+  </select>`;
+}
+function renderHourSelectRow(opts) {
+  const resolvedDescId = resolveDescriptionId({
+    descId: opts.descId,
+    forId: opts.id,
+    id: opts.rowId,
+    label: opts.label,
+    hasDescription: Boolean(opts.description && opts.description !== nothing),
+  });
+  return renderSettingsRow({
+    id: opts.rowId,
+    label: opts.label,
+    forId: opts.id,
+    description: opts.description,
+    descId: resolvedDescId || undefined,
+    control: renderHourSelectControl({
       ...opts,
       ariaLabel: opts.ariaLabel || opts.label,
       ariaDescribedBy: resolvedDescId || opts.ariaDescribedBy,
@@ -4167,6 +4299,7 @@ function renderNativeControlRow(store, item) {
           max,
           step,
           unit: item.unit,
+          is24h: isDeviceTime24h(store),
           disabled: unavailable,
           hass: store.hass,
           onCommit: commitNumber,
@@ -4293,6 +4426,16 @@ function renderPrefControlRow(
     const max = pref.max ?? 100;
     const step = pref.step ?? 1;
     const numVal = Number.isFinite(Number(val)) ? Number(val) : min;
+    if (pref.unit === ":00") {
+      return renderHourSelectRow({
+        label,
+        ariaLabel: label,
+        value: numVal,
+        is24h: isDeviceTime24h(store),
+        hass: store.hass,
+        onCommit: (raw) => store.entity.stageDeviceSetting(pref.key, raw),
+      });
+    }
     if (max - min <= 250) {
       return renderSettingsRow({
         label,
@@ -4303,6 +4446,7 @@ function renderPrefControlRow(
           max,
           step,
           unit: pref.unit,
+          is24h: isDeviceTime24h(store),
           hass: store.hass,
           onCommit: (raw) => store.entity.stageDeviceSetting(pref.key, raw),
         }),
@@ -4469,7 +4613,7 @@ function renderQuickActionGrid(
     })}
   </div>`;
 }
-__latterExp(__exports, { resolveDescriptionId: () => resolveDescriptionId, renderCard: () => renderCard, renderSettingsRow: () => renderSettingsRow, renderSelectRow: () => renderSelectRow, renderSwitchRow: () => renderSwitchRow, renderRangeControl: () => renderRangeControl, renderRangeRow: () => renderRangeRow, syncDialogElement: () => syncDialogElement, renderConfirmDialog: () => renderConfirmDialog, resetComboboxState: () => resetComboboxState, matchComboboxOptions: () => matchComboboxOptions, renderEntityCombobox: () => renderEntityCombobox, renderSortableList: () => renderSortableList, renderPillList: () => renderPillList, renderEntitySlotList: () => renderEntitySlotList, renderSelectOptions: () => renderSelectOptions, renderSvgIcon: () => renderSvgIcon, renderTrashIconButton: () => renderTrashIconButton, renderSortHeader: () => renderSortHeader, renderNativeControlRow: () => renderNativeControlRow, renderPrefControlRow: () => renderPrefControlRow, sortQuickActionButtons: () => sortQuickActionButtons, renderQuickActionGrid: () => renderQuickActionGrid });
+__latterExp(__exports, { isDeviceTime24h: () => isDeviceTime24h, resolveDescriptionId: () => resolveDescriptionId, renderCard: () => renderCard, renderSettingsRow: () => renderSettingsRow, renderSelectRow: () => renderSelectRow, renderSwitchRow: () => renderSwitchRow, renderRangeControl: () => renderRangeControl, renderRangeRow: () => renderRangeRow, renderHourSelectControl: () => renderHourSelectControl, renderHourSelectRow: () => renderHourSelectRow, syncDialogElement: () => syncDialogElement, renderConfirmDialog: () => renderConfirmDialog, resetComboboxState: () => resetComboboxState, matchComboboxOptions: () => matchComboboxOptions, renderEntityCombobox: () => renderEntityCombobox, renderSortableList: () => renderSortableList, renderPillList: () => renderPillList, renderEntitySlotList: () => renderEntitySlotList, renderSelectOptions: () => renderSelectOptions, renderSvgIcon: () => renderSvgIcon, renderTrashIconButton: () => renderTrashIconButton, renderSortHeader: () => renderSortHeader, renderNativeControlRow: () => renderNativeControlRow, renderPrefControlRow: () => renderPrefControlRow, sortQuickActionButtons: () => sortQuickActionButtons, renderQuickActionGrid: () => renderQuickActionGrid });
 //# sourceURL=latter-studio/src/components/controls.ts
 });
 __latterDef("src/mdi-catalog.ts", (__exports, __req) => {
@@ -10645,7 +10789,8 @@ __latterExp(__exports, { EntityController: () => EntityController, GroupsControl
 __latterDef("src/components/dialogs/world-clocks.ts", (__exports, __req) => {
 const { MAX_WORLD_CLOCKS, WORLD_CLOCK_ZONES_CATALOG } = __req("src/constants.ts");
 const { focusSafe, html, nothing } = __req("src/lib/lit.ts");
-const { renderSettingsRow, renderSortableList, renderSwitchRow, renderTrashIconButton } = __req("src/components/controls.ts");
+const { defaultLocaleTimeFormat } = __req("src/utils/format.ts");
+const { renderSelectRow, renderSettingsRow, renderSortableList, renderSwitchRow, renderTrashIconButton } = __req("src/components/controls.ts");
 /**
  * World Clocks & Time App Configuration Helpers (`#latter-app-config-modal` `time`, `D-038`, `D-039`, `D-064`).
  * - Sortable World Clocks list via `renderSortableList` (`≡` drag handle + focus-preserving `↑`/`↓`)
@@ -10870,7 +11015,36 @@ function renderTimeAppConfigBody(store) {
       "btn-world_clock_add",
     );
   };
+  const timeFormatPref = store.entity.getPref("time_format");
+  const timeFormatSpec = store.entity.getPrefSpec("time_format");
+  const rawTimeFormatOpts =
+    timeFormatPref?.options && timeFormatPref.options.length > 0
+      ? timeFormatPref.options
+      : timeFormatSpec?.options || [];
+  const rawTimeFormatCandidate = timeFormatPref?.value ?? cfg.time_format;
+  const resolvedTimeFormat =
+    rawTimeFormatCandidate !== undefined &&
+    rawTimeFormatCandidate !== null &&
+    String(rawTimeFormatCandidate).trim() !== ""
+      ? String(rawTimeFormatCandidate)
+      : defaultLocaleTimeFormat(store.hass);
   return html`<div class="settings-list">
+    ${rawTimeFormatOpts.length > 0
+      ? renderSelectRow({
+          id: "cfg-time_format",
+          label: store.tPrefLabel("time_format"),
+          description: store.t("dev_interface.time_format_desc"),
+          value: rawTimeFormatOpts.includes(resolvedTimeFormat)
+            ? resolvedTimeFormat
+            : rawTimeFormatOpts[0],
+          rawOptions: rawTimeFormatOpts.map((opt) => ({
+            value: opt,
+            label: store.tPrefOption("time_format", opt),
+          })),
+          onChange: (val) =>
+            store.entity.stageDeviceSetting("time_format", val, "cfg-time_format"),
+        })
+      : nothing}
     ${renderSettingsRow({
       id: "time-local-clock-label",
       label: store.t("dialogs.local_clock_label"),
@@ -11085,7 +11259,8 @@ const { AREA_CATEGORIES_CATALOG, CALENDAR_LOOKAHEAD_OPTIONS, CALENDAR_WEEK_START
 const { html, nothing } = __req("src/lib/lit.ts");
 const { ROUTE_PREVIEW_ICONS, shortcutActionLabel } = __req("src/mdi-catalog.ts");
 const { isCatalogItemSupported } = __req("src/state/store.ts");
-const { renderNativeControlRow, renderPillList, renderPrefControlRow, renderSelectRow, renderSettingsRow, renderSortableList, renderTrashIconButton } = __req("src/components/controls.ts");
+const { defaultLocaleTimeFormat } = __req("src/utils/format.ts");
+const { renderNativeControlRow, renderPillList, renderSelectRow, renderSettingsRow, renderSortableList, renderTrashIconButton } = __req("src/components/controls.ts");
 const { renderTimeAppConfigBody } = __req("src/components/dialogs/world-clocks.ts");
 /**
  * Native App Configuration Modal (`#latter-app-config-modal`, `D-053`, `D-054`, `D-064`, `Q7`).
@@ -11152,7 +11327,15 @@ function resolvePrefStringValue(
   const livePref = store.entity.getPref(key);
   const cfgVal = store.state?.config?.[key];
   const spec = store.entity.getPrefSpec(key);
-  const raw = String(livePref?.value ?? cfgVal ?? spec?.default ?? "");
+  const rawCandidate = livePref?.value ?? cfgVal;
+  const fallbackVal =
+    key === "time_format"
+      ? defaultLocaleTimeFormat(store.hass)
+      : spec?.default ?? "";
+  const raw =
+    rawCandidate !== undefined && rawCandidate !== null && String(rawCandidate).trim() !== ""
+      ? String(rawCandidate)
+      : String(fallbackVal);
   if (options.length > 0 && !options.includes(raw)) {
     return options[0];
   }
@@ -11164,10 +11347,6 @@ function renderEditableSelectPref(
   domId,
   caps,
 ) {
-  const livePref = store.entity.getPref(key);
-  if (livePref && (!domId || key.endsWith("_sort_order"))) {
-    return renderPrefControlRow(store, livePref);
-  }
   const options = resolvePrefOptions(store, key, caps);
   if (options.length === 0) return nothing;
   const curVal = resolvePrefStringValue(store, key, options);
@@ -11341,9 +11520,15 @@ function renderAppConfigModalBody(store) {
       ${areaExtraItems.map((it) => renderNativeControlRow(store, it))}
     </div>`;
   } else if (app === "music") {
-    const sortKeys = ["album_sort_order", "artist_album_sort_order", "podcast_sort_order"];
+    const musicKeys = [
+      "album_art_style",
+      "music_overlay_style",
+      "album_sort_order",
+      "artist_album_sort_order",
+      "podcast_sort_order",
+    ];
     body = html`<div class="settings-list">
-      ${sortKeys.map((k) => renderEditableSelectPref(store, k, `cfg-${k}`, caps))}
+      ${musicKeys.map((k) => renderEditableSelectPref(store, k, `cfg-${k}`, caps))}
     </div>`;
   } else if (app === "remote") {
     const remoteGroups = data?.system_config?.remote_groups || [];
@@ -12699,11 +12884,11 @@ __latterExp(__exports, { BASE_STYLES: () => BASE_STYLES, CARD_STYLES: () => CARD
 //# sourceURL=latter-studio/src/styles/tokens.ts
 });
 __latterDef("src/views/device-overview-view.ts", (__exports, __req) => {
-const { renderCard, renderNativeControlRow, renderQuickActionGrid, renderSelectRow, renderSettingsRow, renderSvgIcon } = __req("src/components/controls.ts");
+const { isDeviceTime24h, renderCard, renderNativeControlRow, renderQuickActionGrid, renderSelectRow, renderSettingsRow, renderSvgIcon } = __req("src/components/controls.ts");
 const { DEFAULT_ALARMS_SUMMARY } = __req("src/constants.ts");
 const { formatHaEntityState } = __req("src/i18n/index.ts");
 const { html, nothing } = __req("src/lib/lit.ts");
-const { entityLabel, fmtDistance, fmtNumber, fmtPercent, issueMessage, rssiToPercent } = __req("src/utils/format.ts");
+const { defaultLocaleTimeFormat, entityLabel, fmtDistance, fmtNumber, fmtPercent, formatClockHhMm, issueMessage, rssiToPercent } = __req("src/utils/format.ts");
 /**
  * Device Overview View (`dashboard`, `D-003`, `D-029`, `D-030`, `D-048`, `D-066`, `F-01`):
  * - Shared `renderDeviceOfflineBanner`, `renderDeviceEntityRow` (`formatHaEntityState`), and `defaultLocaleTimeFormat`
@@ -12727,22 +12912,7 @@ const DEV_ICON_BLUETOOTH =
 const DEV_ICON_CHIP =
   "M17,17H7V7H17M21,11V9H19V7C19,5.89 18.1,5 17,5H15V3H13V5H11V3H9V5H7C5.89,5 5,5.89 5,7V9H3V11H5V13H3V15H5V17A2,2 0 0,0 7,19H9V21H11V19H13V21H15V19H17A2,2 0 0,0 19,17V15H21V13H19V11M15,15H9V9H15V15Z";
 const DEV_ICON_TAG =
-  "M21.41,11.58L12.41,2.58C12.05,2.22 11.55,2 11,2H4C2.9,2 2,2.9 2,4V11C2,11.55 2.22,12.05 2.59,12.42L11.59,21.42C11.95,21.78 12.45,22 13,22C13.55,22 14.05,21.78 14.41,21.41L21.41,14.41C21.78,14.05 22,13.55 22,13C22,12.45 21.77,11.94 21.41,11.58M13,20.01L4,11V4H11V3.99L20,12.99L13,20.01M6.5,5A1.5,1.5 0 0,1 8,6.5A1.5,1.5 0 0,1 6.5,8A1.5,1.5 0 0,1 5,6.5A1.5,1.5 0 0,1 6.5,5Z";
-function defaultLocaleTimeFormat(
-  hass,
-) {
-  const tf = hass?.locale?.time_format;
-  if (tf === "24") return "24-Hour";
-  if (tf === "am_pm") return "12-Hour (AM/PM)";
-  try {
-    const lang = hass?.locale?.language || hass?.language || undefined;
-    const hour12 = new Intl.DateTimeFormat(lang, { hour: "numeric" }).resolvedOptions().hour12;
-    if (hour12 === false) return "24-Hour";
-  } catch {
-    // Fall back to 12-hour wire token when Intl options are unavailable.
-  }
-  return "12-Hour (AM/PM)";
-}
+  "M21.41,11.58L12.41,2.58C12.05,2.22 11.55,2 11,2H4C2.9,2 2,2.9 2,4V11C2,11.55 2.22,12.05 2.59,12.42L11.59,21.42C11.95,21.78 12.45,22 13,22C13.55,22 14.05,21.78 14.41,14.41L21.41,14.41C21.78,14.05 22,13.55 22,13C22,12.45 21.77,11.94 21.41,11.58M13,20.01L4,11V4H11V3.99L20,12.99L13,20.01M6.5,5A1.5,1.5 0 0,1 8,6.5A1.5,1.5 0 0,1 6.5,8A1.5,1.5 0 0,1 5,6.5A1.5,1.5 0 0,1 6.5,5Z";
 /**
  * Shared calm offline / sleeping banner rendered at the top of Device views (`Q8` / `E-04`).
  */
@@ -13159,11 +13329,12 @@ function renderDeviceOverviewView(store) {
   const enabledAlarmSlots = alarmSlots
     .filter((s) => s.enabled)
     .sort((a, b) => a.time.localeCompare(b.time));
+  const is24h = isDeviceTime24h(store);
   const alarmsSummaryLabel =
     enabledAlarmSlots.length > 0
       ? store.t("dev_overview.alarms_enabled_summary", {
           count: fmtNumber(enabledAlarmSlots.length, store.hass, 0),
-          nextTime: enabledAlarmSlots[0].time,
+          nextTime: formatClockHhMm(enabledAlarmSlots[0].time, is24h),
         })
       : store.t("common.all_off");
   const alarmsSummaryChipClass = enabledAlarmSlots.length > 0 ? "chip chip-primary" : "chip";
@@ -14098,18 +14269,17 @@ __latterExp(__exports, { renderWallpaperGalleryItems: () => renderWallpaperGalle
 //# sourceURL=latter-studio/src/components/wallpaper-gallery.ts
 });
 __latterDef("src/views/device-display-view.ts", (__exports, __req) => {
-const { renderCard, renderPillList, renderPrefControlRow, renderSettingsRow } = __req("src/components/controls.ts");
+const { renderCard, renderPrefControlRow, renderSettingsRow } = __req("src/components/controls.ts");
 const { renderWallpaperGalleryItems, renderWallpaperUploadProgress, renderWallpaperUploadTrigger } = __req("src/components/wallpaper-gallery.ts");
 const { WALLPAPER_ROTATION_OPTIONS } = __req("src/constants.ts");
 const { html, nothing } = __req("src/lib/lit.ts");
 const { defaultThemeHex, entityLabel, fmtNumber, isValidHexColor } = __req("src/utils/format.ts");
-const { defaultLocaleTimeFormat, renderDeviceOfflineBanner } = __req("src/views/device-overview-view.ts");
+const { renderDeviceOfflineBanner } = __req("src/views/device-overview-view.ts");
 /**
- * Device Display View (`display`, `D-027`, `D-029`, `D-033`, `D-034`, `D-036`, `D-066`, `Q7`):
- * Disambiguated visual & aesthetic preferences across screens:
- * - Column 1: Home screen appearance (Wake greeting, Weather background, Sun & Moon pills),
- *   Screensaver, Voice assistant, Brightness, & Clock.
- * - Column 2: Colors (`isValidHexColor` validation), Wallpapers, & Music appearance.
+ * Device Display View (`display`, `D-027`, `D-029`, `D-034`, `D-036`, `D-069`):
+ * Hardware & OS surface aesthetics across screens:
+ * - Column 1: Screensaver, Voice assistant, & Brightness.
+ * - Column 2: Colors (`isValidHexColor` validation) & Wallpapers (with Home weather-background hint).
  */
 function rotationLabel(store, minutes, fallback) {
   const key = `dev_display.rot_${minutes}`;
@@ -14126,37 +14296,6 @@ function renderDeviceDisplayView(store) {
     (data?.system_devices || []).find((d) => d.subentry_id === store.activeSubentryId) ||
     (data?.system_devices || []).find((d) => d.is_current);
   const isOffline = curDevEntry?.is_online === false;
-  // Home screen appearance card
-  const wakeGreetingPref = store.entity.getPref("wake_greeting");
-  const weatherBgPref = store.entity.getPref("weather_background");
-  const weatherBgVal = String(weatherBgPref?.value ?? "").toLowerCase();
-  const weatherBgOff =
-    !weatherBgPref || !weatherBgPref.value || weatherBgVal === "off" || weatherBgVal === "disabled";
-  const sunPref = store.entity.getPref("home_sun");
-  const moonPref = store.entity.getPref("home_moon");
-  const celestialItems = [sunPref, moonPref].filter(
-    (p) => Boolean(p),
-  );
-  const renderCelestialRow = () =>
-    renderSettingsRow({
-      id: "weather-celestial-bodies",
-      label: store.t("dev_display.sun_moon_label"),
-      description: store.t("dev_display.sun_moon_desc"),
-      control: renderPillList({
-        id: "weather-celestial-pills",
-        ariaLabel: store.t("dev_display.sun_moon_label"),
-        items: celestialItems.map((pref) => ({
-          token: pref.key,
-          label: store.tPrefLabel(pref.key, pref.label),
-          enabled: Boolean(pref.value),
-        })),
-        onToggle: (token, nextEnabled) => {
-          store.entity.stageDeviceSetting(token, nextEnabled);
-        },
-        overlay: store.localeOverlay,
-      }),
-    });
-  const hasHomeCard = Boolean(wakeGreetingPref || weatherBgPref || celestialItems.length > 0);
   // Screensaver card
   const screensaverPrefs = store.entity.getPrefs([
     "docked_screensaver",
@@ -14174,6 +14313,9 @@ function renderDeviceDisplayView(store) {
     );
   // Voice assistant card
   const voiceVisualPref = store.entity.getPref("va_visual_profile");
+  const bedtimeActive = Boolean(
+    store.entity.getPref("bedtime_active")?.value ?? cfg.bedtime_active,
+  );
   // Brightness card
   const autoBrtPref = store.entity.getPref("auto_brightness_mode");
   const autoBrtState = String(autoBrtPref?.value ?? "").trim();
@@ -14201,16 +14343,6 @@ function renderDeviceDisplayView(store) {
     }
     return true;
   });
-  // Clock card (default unset `time_format` from `hass.locale?.time_format`, `D-14`)
-  const clockPrefs = store.entity.getPrefs(["clock_face", "time_format"]).map((p) => {
-    if (
-      p.key === "time_format" &&
-      (p.value === undefined || p.value === null || String(p.value).trim() === "")
-    ) {
-      return { ...p, value: defaultLocaleTimeFormat(store.hass) };
-    }
-    return p;
-  });
   // Column 2: Colors card (`isValidHexColor` validation, `A-07`)
   const colorProfilePref = store.entity.getPref("color_profile");
   const rawThemeHex = defaultThemeHex(store.host);
@@ -14221,7 +14353,18 @@ function renderDeviceDisplayView(store) {
     ? String(cfg.device_custom_color).toUpperCase()
     : safeThemeHex;
   const swatchStyle = `--swatch-color:${curHex}`;
-  // Column 2: Wallpapers
+  // Column 2: Wallpapers + cross-tab Home weather-background hint (`D-069`)
+  const weatherBgRaw =
+    store.entity.getPref("weather_background")?.value ?? cfg.weather_background;
+  const weatherBgOn =
+    weatherBgRaw !== undefined && weatherBgRaw !== null
+      ? typeof weatherBgRaw === "string"
+        ? !["", "0", "false", "off", "disabled"].includes(weatherBgRaw.trim().toLowerCase())
+        : Boolean(weatherBgRaw)
+      : true;
+  const homeScreenRaw =
+    store.entity.getPref("home_screen_enabled")?.value ?? cfg.home_screen_enabled;
+  const homeScreenEnabled = homeScreenRaw !== false;
   const curCycle = Number(cfg.wallpaper_cycle_minutes || 0);
   const wallpapers = data?.wallpapers || [];
   const activeWp = wallpapers.find((wp) => Boolean(wp.active)) || null;
@@ -14229,42 +14372,46 @@ function renderDeviceDisplayView(store) {
   const isRotating = curCycle > 0;
   const starredCount = wallpapers.filter((wp) => Boolean(wp.favorite)).length;
   const allStarred = wallpapers.length > 0 && starredCount === wallpapers.length;
-  let wpStatusText;
+  let wpStatusBase;
   if (isRotating) {
     if (activeWp) {
       if (starredCount === 1) {
-        wpStatusText = store.t("dev_display.wp_rotating_named_starred_one", {
+        wpStatusBase = store.t("dev_display.wp_rotating_named_starred_one", {
           name: activeWp.name,
         });
       } else if (starredCount > 1) {
-        wpStatusText = store.t("dev_display.wp_rotating_named_starred_many", {
+        wpStatusBase = store.t("dev_display.wp_rotating_named_starred_many", {
           name: activeWp.name,
           count: fmtNumber(starredCount, store.hass, 0),
         });
       } else {
-        wpStatusText = store.t("dev_display.wp_rotating_named_all", {
+        wpStatusBase = store.t("dev_display.wp_rotating_named_all", {
           name: activeWp.name,
           count: fmtNumber(wallpapers.length, store.hass, 0),
         });
       }
     } else if (starredCount === 1) {
-      wpStatusText = store.t("dev_display.wp_rotating_starred_one");
+      wpStatusBase = store.t("dev_display.wp_rotating_starred_one");
     } else if (starredCount > 1) {
-      wpStatusText = store.t("dev_display.wp_rotating_starred_many", {
+      wpStatusBase = store.t("dev_display.wp_rotating_starred_many", {
         count: fmtNumber(starredCount, store.hass, 0),
       });
     } else {
-      wpStatusText = store.t("dev_display.wp_rotating_all", {
+      wpStatusBase = store.t("dev_display.wp_rotating_all", {
         count: fmtNumber(wallpapers.length, store.hass, 0),
       });
     }
   } else if (hasActiveWallpaper) {
-    wpStatusText = store.t("dev_display.wp_static_named", {
+    wpStatusBase = store.t("dev_display.wp_static_named", {
       name: activeWp?.name || store.t("common.active"),
     });
   } else {
-    wpStatusText = store.t("dev_display.wp_off");
+    wpStatusBase = store.t("dev_display.wp_off");
   }
+  const wpStatusText =
+    (isRotating || hasActiveWallpaper) && homeScreenEnabled && weatherBgOn
+      ? `${wpStatusBase} ${store.t("dev_display.wp_weather_bg_note")}`
+      : wpStatusBase;
   const wpRotationHint =
     starredCount === 0
       ? store.t("dev_display.wp_hint_none")
@@ -14274,30 +14421,11 @@ function renderDeviceDisplayView(store) {
             starred: fmtNumber(starredCount, store.hass, 0),
             total: fmtNumber(wallpapers.length, store.hass, 0),
           });
-  // Column 2: Music appearance card (`Q7` / `E-20`)
-  const mediaAppearancePrefs = store.entity.getPrefs([
-    "album_art_style",
-    "music_overlay_style",
-  ]);
   return html`<section id="view-display">
     ${renderDeviceOfflineBanner(store)}
 
     <div class="columns">
       <div class="column">
-        ${hasHomeCard
-          ? renderCard({
-              heading: html`<h3 class="card-title">
-                ${store.t("card.home_screen_appearance")}
-              </h3>`,
-              contentClass: "settings-list",
-              body: html`<div id="embedded-home" class="settings-list">
-                ${wakeGreetingPref ? renderPrefControlRow(store, wakeGreetingPref) : nothing}
-                ${weatherBgPref ? renderPrefControlRow(store, weatherBgPref) : nothing}
-                ${!weatherBgOff && celestialItems.length > 0 ? renderCelestialRow() : nothing}
-              </div>`,
-            })
-          : nothing}
-
         ${screensaverPrefs.length || activateScreensaverBtn
           ? renderCard({
               heading: html`<h3 class="card-title">${store.t("card.screensaver")}</h3>`,
@@ -14355,17 +14483,13 @@ function renderDeviceDisplayView(store) {
 
         ${visibleBrightnessPrefs.length
           ? renderCard({
+              id: "card-brightness",
               heading: html`<h3 class="card-title">${store.t("card.brightness")}</h3>`,
+              subtitle: bedtimeActive
+                ? store.t("dev_display.bedtime_brightness_override_note")
+                : undefined,
               contentClass: "settings-list",
               body: visibleBrightnessPrefs.map((p) => renderPrefControlRow(store, p)),
-            })
-          : nothing}
-
-        ${clockPrefs.length
-          ? renderCard({
-              heading: html`<h3 class="card-title">${store.t("card.clock")}</h3>`,
-              contentClass: "settings-list",
-              body: clockPrefs.map((p) => renderPrefControlRow(store, p)),
             })
           : nothing}
       </div>
@@ -14531,14 +14655,6 @@ function renderDeviceDisplayView(store) {
               )}
             </div>`,
         })}
-
-        ${mediaAppearancePrefs.length
-          ? renderCard({
-              heading: html`<h3 class="card-title">${store.t("card.music_appearance")}</h3>`,
-              contentClass: "settings-list",
-              body: mediaAppearancePrefs.map((p) => renderPrefControlRow(store, p)),
-            })
-          : nothing}
       </div>
     </div>
   </section>`;
@@ -14555,14 +14671,14 @@ const { isCatalogItemSupported } = __req("src/state/store.ts");
 const { fmtNumber, hassFirstWeekday } = __req("src/utils/format.ts");
 const { defaultLocaleTimeFormat, renderDeviceOfflineBanner } = __req("src/views/device-overview-view.ts");
 /**
- * Device Interface View (`interface`, `D-026`, `D-035`, `D-047`, `D-053`, `D-064`, `U4`):
- * Two balanced cards for top-level navigation and App Dock management:
- * - Column 1: Home screen (`home_screen_enabled`, `start_screen`, `home_clock_tap_action`,
- *   `home_date_tap_action`, `return_to_home_timeout`, `activity_card`, & sortable `renderPillList`
- *   for `activity_sources`).
+ * Device Interface View (`interface`, `D-026`, `D-035`, `D-047`, `D-053`, `D-064`, `D-069`, `U4`):
+ * - Column 1: Home screen (`home_screen_enabled`, `start_screen` + inline `Configure`, `time_format`,
+ *   `home_clock_tap_action` + conditional `clock_face`, `home_date_tap_action`, `return_to_home_timeout`,
+ *   `wake_greeting`, `weather_background` + conditional `home_sun`/`home_moon` pills, `activity_card`,
+ *   & sortable `renderPillList` for `activity_sources`).
  * - Column 2: App Dock (`renderSortableList` with `≡` drag handle + focus-preserving `↑`/`↓` and
  *   non-truncating `.dock-row` layout, `requestResetDockItems` confirmation, and Hidden from dock) —
- *   or Single-app mode active when locked.
+ *   omitted cleanly when `home_screen_enabled === false` (`D-069`).
  */
 const IFACE_UTC_ZONES = new Set([
   "UTC",
@@ -14630,7 +14746,6 @@ function renderDeviceInterfaceView(store) {
   );
   const startScreenValue =
     !homeScreenEnabled && rawStartValue === "Home" ? "Time App" : rawStartValue;
-  const startScreenDisplayLabel = store.tPrefOption("start_screen", startScreenValue);
   const startScreenConfigApp = !homeScreenEnabled
     ? START_SCREEN_CONFIG_APP_MAP[startScreenValue] || null
     : null;
@@ -14710,14 +14825,12 @@ function renderDeviceInterfaceView(store) {
   const curRemoteMode =
     String(cfg.device_remote_group || curDevEntry?.device_remote_group || "area_auto").trim() ||
     "area_auto";
+  const albumArtPref = store.entity.getPref("album_art_style");
+  const albumArtRaw = String(albumArtPref?.value ?? cfg.album_art_style ?? "Full Screen");
+  const albumArtVal = store.tPrefOption("album_art_style", albumArtRaw);
   const albumSortPref = store.entity.getPref("album_sort_order");
   const albumSortRaw = String(albumSortPref?.value ?? cfg.album_sort_order ?? "Alphabetical");
   const albumSortVal = store.tPrefOption("album_sort_order", albumSortRaw);
-  const artistSortPref = store.entity.getPref("artist_album_sort_order");
-  const artistSortRaw = String(
-    artistSortPref?.value ?? cfg.artist_album_sort_order ?? "Oldest on Top",
-  );
-  const artistSortVal = store.tPrefOption("artist_album_sort_order", artistSortRaw);
   const showUtcClockPref = store.entity.getPref("show_utc_clock");
   const showUtcClock = showUtcClockPref
     ? Boolean(showUtcClockPref.value)
@@ -14727,10 +14840,32 @@ function renderDeviceInterfaceView(store) {
     worldClocksPref?.value ?? cfg.world_clocks ?? "",
   );
   const clockFacePref = store.entity.getPref("clock_face");
+  const clockFaceSpec = store.entity.getPrefSpec("clock_face");
+  const rawClockFaceOpts =
+    clockFacePref?.options && clockFacePref.options.length > 0
+      ? clockFacePref.options
+      : clockFaceSpec?.options || [];
+  const filteredClockFaceOpts =
+    caps.is_round === false
+      ? rawClockFaceOpts.filter((opt) => opt !== "Modern Analog")
+      : rawClockFaceOpts;
   const clockFaceRaw = String(clockFacePref?.value ?? cfg.clock_face ?? "Minimal Digital");
-  const clockFaceVal = store.tPrefOption("clock_face", clockFaceRaw);
+  const resolvedClockFaceValue =
+    filteredClockFaceOpts.length > 0 && !filteredClockFaceOpts.includes(clockFaceRaw)
+      ? filteredClockFaceOpts[0]
+      : clockFaceRaw;
+  const clockFaceOptions = filteredClockFaceOpts.map((opt) => ({
+    value: opt,
+    label: store.tPrefOption("clock_face", opt),
+  }));
+  const clockFaceVal = store.tPrefOption("clock_face", resolvedClockFaceValue);
   // Default unset `time_format` from `hass.locale?.time_format` (`D-14`)
   const timeFormatPref = store.entity.getPref("time_format");
+  const timeFormatSpec = store.entity.getPrefSpec("time_format");
+  const rawTimeFormatOpts =
+    timeFormatPref?.options && timeFormatPref.options.length > 0
+      ? timeFormatPref.options
+      : timeFormatSpec?.options || [];
   const rawTimeFormatVal = timeFormatPref?.value ?? cfg.time_format;
   const effectiveTimeFormat =
     rawTimeFormatVal !== undefined &&
@@ -14738,9 +14873,62 @@ function renderDeviceInterfaceView(store) {
     String(rawTimeFormatVal).trim() !== ""
       ? String(rawTimeFormatVal)
       : defaultLocaleTimeFormat(store.hass);
-  const shortTimeFormat = effectiveTimeFormat.startsWith("24")
+  const resolvedTimeFormatValue =
+    rawTimeFormatOpts.length > 0 && !rawTimeFormatOpts.includes(effectiveTimeFormat)
+      ? rawTimeFormatOpts[0]
+      : effectiveTimeFormat;
+  const timeFormatOptions = rawTimeFormatOpts.map((opt) => ({
+    value: opt,
+    label: store.tPrefOption("time_format", opt),
+  }));
+  const shortTimeFormat = resolvedTimeFormatValue.startsWith("24")
     ? store.t("dev_interface.clock_24h")
     : store.t("dev_interface.clock_12h");
+  // Home screen appearance controls consolidated into Home screen (`D-069`)
+  const wakeGreetingPref = store.entity.getPref("wake_greeting");
+  const wakeGreetingRaw = wakeGreetingPref?.value ?? cfg.wake_greeting;
+  const wakeGreetingOn =
+    wakeGreetingRaw !== undefined && wakeGreetingRaw !== null
+      ? typeof wakeGreetingRaw === "string"
+        ? !["", "0", "false", "off", "disabled"].includes(wakeGreetingRaw.trim().toLowerCase())
+        : Boolean(wakeGreetingRaw)
+      : true;
+  const weatherBgPref = store.entity.getPref("weather_background");
+  const weatherBgRaw = weatherBgPref?.value ?? cfg.weather_background;
+  const weatherBgOn =
+    weatherBgRaw !== undefined && weatherBgRaw !== null
+      ? typeof weatherBgRaw === "string"
+        ? !["", "0", "false", "off", "disabled"].includes(weatherBgRaw.trim().toLowerCase())
+        : Boolean(weatherBgRaw)
+      : true;
+  const celestialPillItems = (["home_sun", "home_moon"]).map((key) => {
+    const pref = store.entity.getPref(key);
+    const rawVal = pref?.value ?? cfg[key];
+    const enabled =
+      rawVal !== undefined && rawVal !== null
+        ? typeof rawVal === "string"
+          ? !["", "0", "false", "off", "disabled"].includes(rawVal.trim().toLowerCase())
+          : Boolean(rawVal)
+        : true;
+    return {
+      token: key,
+      label: store.tPrefLabel(key, pref?.label),
+      enabled,
+    };
+  });
+  const renderInlineClockFaceRow = () =>
+    clockFaceOptions.length > 0
+      ? renderSelectRow({
+          id: "cfg-clock_face",
+          label: store.tPrefLabel("clock_face"),
+          description: store.t("dev_interface.clock_face_desc"),
+          value: resolvedClockFaceValue,
+          rawOptions: clockFaceOptions,
+          onChange: (val) => {
+            store.entity.stageDeviceSetting("clock_face", val, "cfg-clock_face");
+          },
+        })
+      : nothing;
   const calLookaheadPref = store.entity.getPref("calendar_lookahead_days");
   const rawLookahead = Number(calLookaheadPref?.value ?? cfg.calendar_lookahead_days ?? 30);
   const calLookaheadDays =
@@ -14779,8 +14967,8 @@ function renderDeviceInterfaceView(store) {
       }
       case "app:music":
         return store.t("dev_interface.music_meta", {
+          art: albumArtVal,
           albums: albumSortVal,
-          artists: artistSortVal,
         });
       case "app:home_hub":
         return enabledHomeCats.length === 1
@@ -14962,6 +15150,21 @@ function renderDeviceInterfaceView(store) {
                     </button>`
                   : nothing}`,
             })}
+            ${timeFormatOptions.length > 0
+              ? renderSelectRow({
+                  id: "cfg-time_format",
+                  label: store.tPrefLabel("time_format"),
+                  description: store.t("dev_interface.time_format_desc"),
+                  value: resolvedTimeFormatValue,
+                  rawOptions: timeFormatOptions,
+                  onChange: (val) => {
+                    store.entity.stageDeviceSetting("time_format", val, "cfg-time_format");
+                  },
+                })
+              : nothing}
+            ${!homeScreenEnabled && startScreenValue === "Clock Face"
+              ? renderInlineClockFaceRow()
+              : nothing}
             ${homeScreenEnabled
               ? html`${renderSelectRow({
                     id: "cfg-home_clock_tap_action",
@@ -14977,6 +15180,9 @@ function renderDeviceInterfaceView(store) {
                       );
                     },
                   })}
+                  ${homeClockTapValue === "Clock Face" || startScreenValue === "Clock Face"
+                    ? renderInlineClockFaceRow()
+                    : nothing}
                   ${renderSelectRow({
                     id: "cfg-home_date_tap_action",
                     label: store.tPrefLabel("home_date_tap_action"),
@@ -15005,6 +15211,48 @@ function renderDeviceInterfaceView(store) {
                       );
                     },
                   })}
+                  ${renderSwitchRow({
+                    id: "cfg-wake_greeting",
+                    label: store.tPrefLabel("wake_greeting"),
+                    description: store.t("dev_interface.wake_greeting_desc"),
+                    checked: wakeGreetingOn,
+                    onChange: (checked) => {
+                      store.entity.stageDeviceSetting(
+                        "wake_greeting",
+                        checked,
+                        "cfg-wake_greeting",
+                      );
+                    },
+                  })}
+                  ${renderSwitchRow({
+                    id: "cfg-weather_background",
+                    label: store.tPrefLabel("weather_background"),
+                    description: store.t("dev_interface.weather_bg_desc"),
+                    checked: weatherBgOn,
+                    onChange: (checked) => {
+                      store.entity.stageDeviceSetting(
+                        "weather_background",
+                        checked,
+                        "cfg-weather_background",
+                      );
+                    },
+                  })}
+                  ${weatherBgOn
+                    ? renderSettingsRow({
+                        id: "weather-celestial-bodies",
+                        label: store.t("dev_interface.sun_moon_label"),
+                        description: store.t("dev_interface.sun_moon_desc"),
+                        control: renderPillList({
+                          id: "weather-celestial-pills",
+                          ariaLabel: store.t("dev_interface.sun_moon_label"),
+                          items: celestialPillItems,
+                          onToggle: (token, nextEnabled) => {
+                            store.entity.stageDeviceSetting(token, nextEnabled);
+                          },
+                          overlay: store.localeOverlay,
+                        }),
+                      })
+                    : nothing}
                   ${renderSwitchRow({
                     id: "cfg-activity_card",
                     label: store.tPrefLabel("activity_card"),
@@ -15211,28 +15459,7 @@ function renderDeviceInterfaceView(store) {
                     </div>`
                   : nothing}`,
             })
-          : renderCard({
-              id: "card-single-app-mode",
-              heading: html`<h3 class="card-title">
-                ${store.t("dev_interface.single_app_title")}
-              </h3>`,
-              contentClass: "stack",
-              body: html`<p class="row-description">
-                  ${store.t("dev_interface.single_app_desc", { app: startScreenDisplayLabel })}
-                </p>
-                ${startScreenConfigApp
-                  ? html`<div class="shortcut-toolbar">
-                      <button
-                        type="button"
-                        id="btn-configure-locked-app"
-                        @click=${() => store.entity.openAppConfigModal(startScreenConfigApp)}
-                        class="btn btn-secondary"
-                      >
-                        ${store.t("action.configure_item", { item: startScreenDisplayLabel })}
-                      </button>
-                    </div>`
-                  : nothing}`,
-            })}
+          : nothing}
       </div>
     </div>
   </section>`;
@@ -15256,6 +15483,7 @@ const SCREENSAVER_KEYS = new Set([
 const BEDTIME_KEYS = new Set([
   "bedtime_active",
   "bedtime_display",
+  "bedtime_brightness",
   "bedtime_schedule",
   "bedtime_start_hour",
   "bedtime_end_hour",
@@ -15274,6 +15502,7 @@ function renderDevicePowerView(store) {
   const bedtimeAllPrefs = store.entity.getPrefs([
     "bedtime_active",
     "bedtime_display",
+    "bedtime_brightness",
     "bedtime_schedule",
     "bedtime_start_hour",
     "bedtime_end_hour",
@@ -16856,9 +17085,9 @@ __latterExp(__exports, { renderDevicesListView: () => renderDevicesListView });
 //# sourceURL=latter-studio/src/views/devices-list-view.ts
 });
 __latterDef("src/views/groups/batch-controls.ts", (__exports, __req) => {
-const { renderCard, renderRangeControl, renderSettingsRow } = __req("src/components/controls.ts");
+const { renderCard, renderHourSelectControl, renderRangeControl, renderSettingsRow } = __req("src/components/controls.ts");
 const { html, nothing } = __req("src/lib/lit.ts");
-const { entityLabel, fmtNumber, isValidHexColor } = __req("src/utils/format.ts");
+const { defaultLocaleTimeFormat, entityLabel, fmtNumber, isValidHexColor } = __req("src/utils/format.ts");
 /**
  * Staged Batch Controls Card (`system_sync` Column 2, `D-050`, `D-055`, `D-064` / `Q6`).
  * - Stages edits in `store.groups.batchDraft` & `Mixed`-safe `store.groups.batchPillDrafts`
@@ -16950,17 +17179,30 @@ function renderBatchControlRow(
     const max = fc.max ?? 100;
     const step = fc.step ?? 1;
     const numVal = Number.isFinite(Number(curState)) ? Number(curState) : min;
-    control = html`${statusBadge}
-      ${renderRangeControl({
-        ariaLabel: label,
-        value: numVal,
-        min,
-        max,
-        step,
-        unit: fc.unit,
-        hass: store.hass,
-        onCommit: (raw) => store.groups.stageBatchEntityControl(fc, { level: raw }),
-      })}`;
+    control =
+      fc.unit === ":00"
+        ? html`${statusBadge}
+            ${renderHourSelectControl({
+              ariaLabel: label,
+              value: numVal,
+              is24h: defaultLocaleTimeFormat(store.hass).startsWith("24"),
+              hass: store.hass,
+              mixed: mixed && !staged,
+              mixedLabel: store.t("batch.mixed_badge"),
+              onCommit: (raw) => store.groups.stageBatchEntityControl(fc, { level: raw }),
+            })}`
+        : html`${statusBadge}
+            ${renderRangeControl({
+              ariaLabel: label,
+              value: numVal,
+              min,
+              max,
+              step,
+              unit: fc.unit,
+              is24h: defaultLocaleTimeFormat(store.hass).startsWith("24"),
+              hass: store.hass,
+              onCommit: (raw) => store.groups.stageBatchEntityControl(fc, { level: raw }),
+            })}`;
   } else if (fc.domain === "color") {
     const hexVal = isValidHexColor(curState) ? curState.toUpperCase() : "#3898FF";
     control = html`${statusBadge}
@@ -17324,11 +17566,11 @@ __latterExp(__exports, { renderBatchControlsCard: () => renderBatchControlsCard 
 //# sourceURL=latter-studio/src/views/groups/batch-controls.ts
 });
 __latterDef("src/views/groups/group-baseline-drawer.ts", (__exports, __req) => {
-const { renderRangeRow, renderSettingsRow, renderSwitchRow } = __req("src/components/controls.ts");
+const { renderHourSelectRow, renderRangeRow, renderSettingsRow, renderSwitchRow } = __req("src/components/controls.ts");
 const { ACTIVITY_SOURCES_CATALOG, AREA_CATEGORIES_CATALOG, CALENDAR_LOOKAHEAD_OPTIONS, DEFAULT_ACTIVITY_SOURCES, DEFAULT_AREA_CATEGORIES, DEFAULT_GAMES_ITEMS, DEFAULT_HOME_CATEGORIES, DEFAULT_TOOLS_ITEMS, GAMES_ITEMS_CATALOG, HOME_CATEGORIES_CATALOG, SECURITY_PIN_POLICY_OPTIONS, TOOLS_ITEMS_CATALOG, WALLPAPER_ROTATION_OPTIONS } = __req("src/constants.ts");
 const { html, nothing } = __req("src/lib/lit.ts");
 const { isCatalogItemSupported } = __req("src/state/store.ts");
-const { fmtNumber, isValidHexColor } = __req("src/utils/format.ts");
+const { defaultLocaleTimeFormat, fmtNumber, isValidHexColor } = __req("src/utils/format.ts");
 /**
  * Group Baseline Drawer (`system_sync` Column 1, `D-048`, `D-050`, `D-063`, `D-064`).
  * - Zero hardcoded option arrays (`A-12`): reads options/bounds/defaults from `store.entity.getPrefSpec(key)`
@@ -17475,9 +17717,34 @@ function renderSpecRange(
     max,
     step,
     unit,
+    is24h: defaultLocaleTimeFormat(store.hass).startsWith("24"),
     hass: store.hass,
     onCommit: (nextVal) =>
       void store.groups.updateGroupBaseline(group.id, { [key]: nextVal }),
+  });
+}
+function renderSpecHourSelect(
+  store,
+  group,
+  key,
+  currentVal,
+  caps,
+) {
+  const spec = store.entity.getPrefSpec(key);
+  if (spec && !isCatalogItemSupported(spec, caps)) {
+    return nothing;
+  }
+  const defNum = Number(spec?.default ?? 0);
+  const numVal = Number.isFinite(Number(currentVal)) ? Number(currentVal) : defNum;
+  const label = store.tPrefLabel(key, spec?.label);
+  return renderHourSelectRow({
+    label,
+    ariaLabel: store.t("groups.for_group_aria", { label, group: group.name }),
+    value: numVal,
+    is24h: defaultLocaleTimeFormat(store.hass).startsWith("24"),
+    hass: store.hass,
+    onCommit: (nextHour) =>
+      void store.groups.updateGroupBaseline(group.id, { [key]: nextHour }),
   });
 }
 function renderBaselineLabeledSelect(
@@ -17737,9 +18004,9 @@ function renderGroupBaselineDrawer(
             caps,
           )}
           ${autoBrt === "Disabled"
-            ? renderSpecSelect(store, group, "manual_brightness", cfg.manual_brightness, caps)
-            : html`${renderSpecSelect(store, group, "day_brightness", cfg.day_brightness, caps)}
-                ${renderSpecSelect(
+            ? renderSpecRange(store, group, "manual_brightness", cfg.manual_brightness, caps)
+            : html`${renderSpecRange(store, group, "day_brightness", cfg.day_brightness, caps)}
+                ${renderSpecRange(
                   store,
                   group,
                   "night_brightness",
@@ -17747,20 +18014,21 @@ function renderGroupBaselineDrawer(
                   caps,
                 )}`}
           ${autoBrt === "Time Schedule"
-            ? html`${renderSpecRange(store, group, "day_start_hour", cfg.day_start_hour, caps)}
-                ${renderSpecRange(store, group, "night_start_hour", cfg.night_start_hour, caps)}`
+            ? html`${renderSpecHourSelect(store, group, "day_start_hour", cfg.day_start_hour, caps)}
+                ${renderSpecHourSelect(store, group, "night_start_hour", cfg.night_start_hour, caps)}`
             : nothing}
           ${renderSpecSelect(store, group, "bedtime_display", cfg.bedtime_display, caps)}
+          ${renderSpecRange(store, group, "bedtime_brightness", cfg.bedtime_brightness, caps)}
           ${renderSpecSwitch(store, group, "bedtime_schedule", cfg.bedtime_schedule, caps)}
           ${Boolean(cfg.bedtime_schedule)
-            ? html`${renderSpecRange(
+            ? html`${renderSpecHourSelect(
                   store,
                   group,
                   "bedtime_start_hour",
                   cfg.bedtime_start_hour,
                   caps,
                 )}
-                ${renderSpecRange(
+                ${renderSpecHourSelect(
                   store,
                   group,
                   "bedtime_end_hour",
@@ -17937,26 +18205,6 @@ function renderGroupBaselineDrawer(
                   })
                 : nothing}
               ${renderSpecSelect(store, group, "va_visual_profile", cfg.va_visual_profile, caps)}
-              ${renderSpecSelect(store, group, "clock_face", cfg.clock_face, caps)}
-              ${renderSpecSelect(store, group, "time_format", cfg.time_format, caps)}
-              ${renderSpecSwitch(
-                store,
-                group,
-                "weather_background",
-                cfg.weather_background,
-                caps,
-              )}
-              ${renderSpecSwitch(store, group, "home_sun", cfg.home_sun, caps)}
-              ${renderSpecSwitch(store, group, "home_moon", cfg.home_moon, caps)}
-              ${renderSpecSwitch(store, group, "wake_greeting", cfg.wake_greeting, caps)}
-              ${renderSpecSelect(store, group, "album_art_style", cfg.album_art_style, caps)}
-              ${renderSpecSelect(
-                store,
-                group,
-                "music_overlay_style",
-                cfg.music_overlay_style,
-                caps,
-              )}
             </div>
           </details>`
         : nothing}
@@ -17973,6 +18221,7 @@ function renderGroupBaselineDrawer(
                 caps,
               )}
               ${renderSpecSelect(store, group, "start_screen", cfg.start_screen, caps)}
+              ${renderSpecSelect(store, group, "time_format", cfg.time_format, caps)}
               ${renderSpecSelect(
                 store,
                 group,
@@ -17980,6 +18229,7 @@ function renderGroupBaselineDrawer(
                 cfg.home_clock_tap_action,
                 caps,
               )}
+              ${renderSpecSelect(store, group, "clock_face", cfg.clock_face, caps)}
               ${renderSpecSelect(
                 store,
                 group,
@@ -17994,6 +18244,16 @@ function renderGroupBaselineDrawer(
                 cfg.return_to_home_timeout,
                 caps,
               )}
+              ${renderSpecSwitch(store, group, "wake_greeting", cfg.wake_greeting, caps)}
+              ${renderSpecSwitch(
+                store,
+                group,
+                "weather_background",
+                cfg.weather_background,
+                caps,
+              )}
+              ${renderSpecSwitch(store, group, "home_sun", cfg.home_sun, caps)}
+              ${renderSpecSwitch(store, group, "home_moon", cfg.home_moon, caps)}
               ${renderSwitchRow({
                 label: store.tPrefLabel("activity_card"),
                 ariaLabel: store.t("groups.for_group_aria", {
@@ -18077,6 +18337,14 @@ function renderGroupBaselineDrawer(
                 group,
                 "calendar_week_start",
                 cfg.calendar_week_start,
+                caps,
+              )}
+              ${renderSpecSelect(store, group, "album_art_style", cfg.album_art_style, caps)}
+              ${renderSpecSelect(
+                store,
+                group,
+                "music_overlay_style",
+                cfg.music_overlay_style,
                 caps,
               )}
               ${renderSpecSelect(store, group, "album_sort_order", cfg.album_sort_order, caps)}

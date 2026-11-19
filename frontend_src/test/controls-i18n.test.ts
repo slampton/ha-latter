@@ -13,6 +13,7 @@ import {
   matchComboboxOptions,
   renderConfirmDialog,
   renderEntityCombobox,
+  renderHourSelectRow,
   renderPillList,
   renderRangeRow,
   renderSortableList,
@@ -526,5 +527,79 @@ describe("i18n parity, WAI-ARIA combobox, confirm dialog & Mixed-safe Batch cont
     assert.equal(rangeContainer.querySelector(".kv-value")?.textContent, "25 s");
     rng.dispatchEvent(new SimEvent("change", { bubbles: true }));
     assert.equal(committed, 25);
+  });
+
+  it("formats percent range sliders without extra space and renders 24-hour <select> pickers in 12h and 24h (D-070)", () => {
+    assert.equal(tPrefLabel("bedtime_brightness"), "Bedtime brightness");
+
+    const pctContainer = simDocument.createElement("div");
+    let committedPct = 0;
+    render(
+      renderRangeRow({
+        id: "rng-bri",
+        label: "Manual brightness",
+        ariaLabel: "Manual brightness",
+        value: 80,
+        min: 1,
+        max: 100,
+        step: 1,
+        unit: "%",
+        onCommit: (v) => {
+          committedPct = v;
+        },
+      }),
+      pctContainer,
+    );
+    const pctInput = pctContainer.querySelector("#rng-bri") as unknown as HTMLInputElement;
+    assert.equal(pctInput.getAttribute("aria-valuetext"), "80%");
+    assert.equal(pctContainer.querySelector(".kv-value")?.textContent, "80%");
+    pctInput.value = "15";
+    pctInput.dispatchEvent(new SimEvent("input", { bubbles: true }));
+    assert.equal(pctInput.getAttribute("aria-valuetext"), "15%");
+    assert.equal(pctContainer.querySelector(".kv-value")?.textContent, "15%");
+    pctInput.dispatchEvent(new SimEvent("change", { bubbles: true }));
+    assert.equal(committedPct, 15);
+
+    const hr12Container = simDocument.createElement("div");
+    let committedHour = -1;
+    render(
+      renderHourSelectRow({
+        id: "sel-hr-12",
+        label: "Bedtime starts",
+        ariaLabel: "Bedtime starts",
+        value: 22,
+        is24h: false,
+        onCommit: (h) => {
+          committedHour = h;
+        },
+      }),
+      hr12Container,
+    );
+    const sel12 = hr12Container.querySelector("#sel-hr-12") as unknown as HTMLSelectElement;
+    const opts12 = Array.from(sel12.querySelectorAll("option"));
+    assert.equal(opts12.length, 24);
+    assert.equal(opts12[0]?.textContent?.trim(), "12:00 AM");
+    assert.equal(opts12[22]?.textContent?.trim(), "10:00 PM");
+    sel12.value = "6";
+    sel12.dispatchEvent(new SimEvent("change", { bubbles: true }));
+    assert.equal(committedHour, 6);
+
+    const hr24Container = simDocument.createElement("div");
+    render(
+      renderHourSelectRow({
+        id: "sel-hr-24",
+        label: "Bedtime ends",
+        ariaLabel: "Bedtime ends",
+        value: 7,
+        is24h: true,
+        onCommit: () => {},
+      }),
+      hr24Container,
+    );
+    const opts24 = Array.from(hr24Container.querySelectorAll("option"));
+    assert.equal(opts24.length, 24);
+    assert.equal(opts24[0]?.textContent?.trim(), "00:00");
+    assert.equal(opts24[7]?.textContent?.trim(), "07:00");
+    assert.equal(opts24[22]?.textContent?.trim(), "22:00");
   });
 });

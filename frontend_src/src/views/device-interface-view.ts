@@ -1,12 +1,12 @@
 /**
- * Device Interface View (`interface`, `D-026`, `D-035`, `D-047`, `D-053`, `D-064`, `U4`):
- * Two balanced cards for top-level navigation and App Dock management:
- * - Column 1: Home screen (`home_screen_enabled`, `start_screen`, `home_clock_tap_action`,
- *   `home_date_tap_action`, `return_to_home_timeout`, `activity_card`, & sortable `renderPillList`
- *   for `activity_sources`).
+ * Device Interface View (`interface`, `D-026`, `D-035`, `D-047`, `D-053`, `D-064`, `D-069`, `U4`):
+ * - Column 1: Home screen (`home_screen_enabled`, `start_screen` + inline `Configure`, `time_format`,
+ *   `home_clock_tap_action` + conditional `clock_face`, `home_date_tap_action`, `return_to_home_timeout`,
+ *   `wake_greeting`, `weather_background` + conditional `home_sun`/`home_moon` pills, `activity_card`,
+ *   & sortable `renderPillList` for `activity_sources`).
  * - Column 2: App Dock (`renderSortableList` with `≡` drag handle + focus-preserving `↑`/`↓` and
  *   non-truncating `.dock-row` layout, `requestResetDockItems` confirmation, and Hidden from dock) —
- *   or Single-app mode active when locked.
+ *   omitted cleanly when `home_screen_enabled === false` (`D-069`).
  */
 
 import {
@@ -114,7 +114,6 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
   );
   const startScreenValue =
     !homeScreenEnabled && rawStartValue === "Home" ? "Time App" : rawStartValue;
-  const startScreenDisplayLabel = store.tPrefOption("start_screen", startScreenValue);
   const startScreenConfigApp = !homeScreenEnabled
     ? START_SCREEN_CONFIG_APP_MAP[startScreenValue] || null
     : null;
@@ -201,14 +200,12 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
     String(cfg.device_remote_group || curDevEntry?.device_remote_group || "area_auto").trim() ||
     "area_auto";
 
+  const albumArtPref = store.entity.getPref("album_art_style");
+  const albumArtRaw = String(albumArtPref?.value ?? cfg.album_art_style ?? "Full Screen");
+  const albumArtVal = store.tPrefOption("album_art_style", albumArtRaw);
   const albumSortPref = store.entity.getPref("album_sort_order");
   const albumSortRaw = String(albumSortPref?.value ?? cfg.album_sort_order ?? "Alphabetical");
   const albumSortVal = store.tPrefOption("album_sort_order", albumSortRaw);
-  const artistSortPref = store.entity.getPref("artist_album_sort_order");
-  const artistSortRaw = String(
-    artistSortPref?.value ?? cfg.artist_album_sort_order ?? "Oldest on Top",
-  );
-  const artistSortVal = store.tPrefOption("artist_album_sort_order", artistSortRaw);
 
   const showUtcClockPref = store.entity.getPref("show_utc_clock");
   const showUtcClock = showUtcClockPref
@@ -220,11 +217,33 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
   );
 
   const clockFacePref = store.entity.getPref("clock_face");
+  const clockFaceSpec = store.entity.getPrefSpec("clock_face");
+  const rawClockFaceOpts =
+    clockFacePref?.options && clockFacePref.options.length > 0
+      ? clockFacePref.options
+      : clockFaceSpec?.options || [];
+  const filteredClockFaceOpts =
+    caps.is_round === false
+      ? rawClockFaceOpts.filter((opt) => opt !== "Modern Analog")
+      : rawClockFaceOpts;
   const clockFaceRaw = String(clockFacePref?.value ?? cfg.clock_face ?? "Minimal Digital");
-  const clockFaceVal = store.tPrefOption("clock_face", clockFaceRaw);
+  const resolvedClockFaceValue =
+    filteredClockFaceOpts.length > 0 && !filteredClockFaceOpts.includes(clockFaceRaw)
+      ? filteredClockFaceOpts[0]
+      : clockFaceRaw;
+  const clockFaceOptions = filteredClockFaceOpts.map((opt) => ({
+    value: opt,
+    label: store.tPrefOption("clock_face", opt),
+  }));
+  const clockFaceVal = store.tPrefOption("clock_face", resolvedClockFaceValue);
 
   // Default unset `time_format` from `hass.locale?.time_format` (`D-14`)
   const timeFormatPref = store.entity.getPref("time_format");
+  const timeFormatSpec = store.entity.getPrefSpec("time_format");
+  const rawTimeFormatOpts =
+    timeFormatPref?.options && timeFormatPref.options.length > 0
+      ? timeFormatPref.options
+      : timeFormatSpec?.options || [];
   const rawTimeFormatVal = timeFormatPref?.value ?? cfg.time_format;
   const effectiveTimeFormat =
     rawTimeFormatVal !== undefined &&
@@ -232,9 +251,64 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
     String(rawTimeFormatVal).trim() !== ""
       ? String(rawTimeFormatVal)
       : defaultLocaleTimeFormat(store.hass);
-  const shortTimeFormat = effectiveTimeFormat.startsWith("24")
+  const resolvedTimeFormatValue =
+    rawTimeFormatOpts.length > 0 && !rawTimeFormatOpts.includes(effectiveTimeFormat)
+      ? rawTimeFormatOpts[0]
+      : effectiveTimeFormat;
+  const timeFormatOptions = rawTimeFormatOpts.map((opt) => ({
+    value: opt,
+    label: store.tPrefOption("time_format", opt),
+  }));
+  const shortTimeFormat = resolvedTimeFormatValue.startsWith("24")
     ? store.t("dev_interface.clock_24h")
     : store.t("dev_interface.clock_12h");
+
+  // Home screen appearance controls consolidated into Home screen (`D-069`)
+  const wakeGreetingPref = store.entity.getPref("wake_greeting");
+  const wakeGreetingRaw = wakeGreetingPref?.value ?? cfg.wake_greeting;
+  const wakeGreetingOn =
+    wakeGreetingRaw !== undefined && wakeGreetingRaw !== null
+      ? typeof wakeGreetingRaw === "string"
+        ? !["", "0", "false", "off", "disabled"].includes(wakeGreetingRaw.trim().toLowerCase())
+        : Boolean(wakeGreetingRaw)
+      : true;
+  const weatherBgPref = store.entity.getPref("weather_background");
+  const weatherBgRaw = weatherBgPref?.value ?? cfg.weather_background;
+  const weatherBgOn =
+    weatherBgRaw !== undefined && weatherBgRaw !== null
+      ? typeof weatherBgRaw === "string"
+        ? !["", "0", "false", "off", "disabled"].includes(weatherBgRaw.trim().toLowerCase())
+        : Boolean(weatherBgRaw)
+      : true;
+  const celestialPillItems = (["home_sun", "home_moon"] as const).map((key) => {
+    const pref = store.entity.getPref(key);
+    const rawVal = pref?.value ?? cfg[key];
+    const enabled =
+      rawVal !== undefined && rawVal !== null
+        ? typeof rawVal === "string"
+          ? !["", "0", "false", "off", "disabled"].includes(rawVal.trim().toLowerCase())
+          : Boolean(rawVal)
+        : true;
+    return {
+      token: key,
+      label: store.tPrefLabel(key, pref?.label),
+      enabled,
+    };
+  });
+
+  const renderInlineClockFaceRow = (): TemplateResult | typeof nothing =>
+    clockFaceOptions.length > 0
+      ? renderSelectRow({
+          id: "cfg-clock_face",
+          label: store.tPrefLabel("clock_face"),
+          description: store.t("dev_interface.clock_face_desc"),
+          value: resolvedClockFaceValue,
+          rawOptions: clockFaceOptions,
+          onChange: (val) => {
+            store.entity.stageDeviceSetting("clock_face", val, "cfg-clock_face");
+          },
+        })
+      : nothing;
 
   const calLookaheadPref = store.entity.getPref("calendar_lookahead_days");
   const rawLookahead = Number(calLookaheadPref?.value ?? cfg.calendar_lookahead_days ?? 30);
@@ -275,8 +349,8 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
       }
       case "app:music":
         return store.t("dev_interface.music_meta", {
+          art: albumArtVal,
           albums: albumSortVal,
-          artists: artistSortVal,
         });
       case "app:home_hub":
         return enabledHomeCats.length === 1
@@ -465,6 +539,21 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
                     </button>`
                   : nothing}`,
             })}
+            ${timeFormatOptions.length > 0
+              ? renderSelectRow({
+                  id: "cfg-time_format",
+                  label: store.tPrefLabel("time_format"),
+                  description: store.t("dev_interface.time_format_desc"),
+                  value: resolvedTimeFormatValue,
+                  rawOptions: timeFormatOptions,
+                  onChange: (val) => {
+                    store.entity.stageDeviceSetting("time_format", val, "cfg-time_format");
+                  },
+                })
+              : nothing}
+            ${!homeScreenEnabled && startScreenValue === "Clock Face"
+              ? renderInlineClockFaceRow()
+              : nothing}
             ${homeScreenEnabled
               ? html`${renderSelectRow({
                     id: "cfg-home_clock_tap_action",
@@ -480,6 +569,9 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
                       );
                     },
                   })}
+                  ${homeClockTapValue === "Clock Face" || startScreenValue === "Clock Face"
+                    ? renderInlineClockFaceRow()
+                    : nothing}
                   ${renderSelectRow({
                     id: "cfg-home_date_tap_action",
                     label: store.tPrefLabel("home_date_tap_action"),
@@ -508,6 +600,48 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
                       );
                     },
                   })}
+                  ${renderSwitchRow({
+                    id: "cfg-wake_greeting",
+                    label: store.tPrefLabel("wake_greeting"),
+                    description: store.t("dev_interface.wake_greeting_desc"),
+                    checked: wakeGreetingOn,
+                    onChange: (checked) => {
+                      store.entity.stageDeviceSetting(
+                        "wake_greeting",
+                        checked,
+                        "cfg-wake_greeting",
+                      );
+                    },
+                  })}
+                  ${renderSwitchRow({
+                    id: "cfg-weather_background",
+                    label: store.tPrefLabel("weather_background"),
+                    description: store.t("dev_interface.weather_bg_desc"),
+                    checked: weatherBgOn,
+                    onChange: (checked) => {
+                      store.entity.stageDeviceSetting(
+                        "weather_background",
+                        checked,
+                        "cfg-weather_background",
+                      );
+                    },
+                  })}
+                  ${weatherBgOn
+                    ? renderSettingsRow({
+                        id: "weather-celestial-bodies",
+                        label: store.t("dev_interface.sun_moon_label"),
+                        description: store.t("dev_interface.sun_moon_desc"),
+                        control: renderPillList({
+                          id: "weather-celestial-pills",
+                          ariaLabel: store.t("dev_interface.sun_moon_label"),
+                          items: celestialPillItems,
+                          onToggle: (token, nextEnabled) => {
+                            store.entity.stageDeviceSetting(token, nextEnabled);
+                          },
+                          overlay: store.localeOverlay,
+                        }),
+                      })
+                    : nothing}
                   ${renderSwitchRow({
                     id: "cfg-activity_card",
                     label: store.tPrefLabel("activity_card"),
@@ -714,28 +848,7 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
                     </div>`
                   : nothing}`,
             })
-          : renderCard({
-              id: "card-single-app-mode",
-              heading: html`<h3 class="card-title">
-                ${store.t("dev_interface.single_app_title")}
-              </h3>`,
-              contentClass: "stack",
-              body: html`<p class="row-description">
-                  ${store.t("dev_interface.single_app_desc", { app: startScreenDisplayLabel })}
-                </p>
-                ${startScreenConfigApp
-                  ? html`<div class="shortcut-toolbar">
-                      <button
-                        type="button"
-                        id="btn-configure-locked-app"
-                        @click=${() => store.entity.openAppConfigModal(startScreenConfigApp)}
-                        class="btn btn-secondary"
-                      >
-                        ${store.t("action.configure_item", { item: startScreenDisplayLabel })}
-                      </button>
-                    </div>`
-                  : nothing}`,
-            })}
+          : nothing}
       </div>
     </div>
   </section>`;

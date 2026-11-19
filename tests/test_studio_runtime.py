@@ -508,12 +508,13 @@ class TestDisplayViewControls(unittest.TestCase):
 
             process.stdout.write(JSON.stringify({
               offMarkup: renderToHtml(renderDeviceDisplayView(buildStore({ cycleMins: 0, activeId: "", autoBrtState: "Disabled" }))),
-              dispWeatherOff: renderToHtml(renderDeviceDisplayView(buildStore({ weatherBgState: "Disabled", cycleMins: 0, activeId: "", autoBrtState: "Disabled" }))),
+              dispWeatherOffStatic: renderToHtml(renderDeviceDisplayView(buildStore({ weatherBgState: "Disabled", cycleMins: 0, activeId: "preset:ocean_waves", autoBrtState: "Disabled" }))),
               staticMarkup: renderToHtml(renderDeviceDisplayView(buildStore({ cycleMins: 0, activeId: "preset:ocean_waves", autoBrtState: "Sun Synchronized" }))),
               rotatingMarkup: renderToHtml(renderDeviceDisplayView(buildStore({ cycleMins: 5, activeId: "preset:ocean_waves", favIds: ["preset:forest_mountains", "preset:ocean_waves"], autoBrtState: "Time Schedule" }))),
               powerMarkup: renderToHtml(renderDevicePowerView(buildStore())),
               audioMarkup: renderToHtml(renderDeviceAudioView(buildStore())),
               ifaceMarkup: renderToHtml(renderDeviceInterfaceView(buildStore())),
+              ifaceWeatherOff: renderToHtml(renderDeviceInterfaceView(buildStore({ weatherBgState: "Disabled" }))),
               modalPinnedMarkup: renderModalApp("pinned"),
               modalAreaMarkup: renderModalApp("area"),
               modalTimeMarkup: renderModalApp("time"),
@@ -527,7 +528,7 @@ class TestDisplayViewControls(unittest.TestCase):
             """
         )
 
-        # 1. Disambiguated Display view headings (`D-066` / `Q7` Sentence case)
+        # 1. Consolidated Display view headings (`D-069` Sentence case — hardware & surface aesthetics only)
         card_titles = [
             m.strip()
             for m in re.findall(r'<h3 class="card-title">([\s\S]*?)</h3>', got["offMarkup"])
@@ -535,30 +536,36 @@ class TestDisplayViewControls(unittest.TestCase):
         self.assertEqual(
             card_titles,
             [
-                "Home screen appearance",
                 "Screensaver",
                 "Voice assistant",
                 "Brightness",
-                "Clock",
                 "Colors",
                 "Wallpapers",
-                "Music appearance",
             ],
         )
 
-        self.assertIn('id="weather-celestial-bodies"', got["offMarkup"])
-        self.assertNotIn('id="weather-celestial-bodies"', got["dispWeatherOff"])
+        self.assertNotIn('id="weather-celestial-bodies"', got["offMarkup"])
         self.assertIn("Manual brightness", got["offMarkup"])
         self.assertNotIn("Day brightness", got["offMarkup"])
         self.assertNotIn("Day start hour", got["offMarkup"])
+
+        # Cross-tab Weather background note on Display -> Wallpapers (`D-069`)
+        self.assertIn("Weather background is enabled on Home", got["staticMarkup"])
+        self.assertNotIn("Weather background is enabled on Home", got["dispWeatherOffStatic"])
+        self.assertNotIn("Weather background is enabled on Home", got["offMarkup"])
 
         # Power view keeps battery/sleep timeouts and excludes screensavers
         self.assertIn("Battery screen timeout", got["powerMarkup"])
         self.assertNotIn("Docked screensaver", got["powerMarkup"])
 
-        # Interface view: Home screen + App Dock with `≡` drag-handle sortable rows
+        # Interface view: Home screen (with consolidated Home appearance + Time format) + App Dock
         self.assertIn("Home screen", got["ifaceMarkup"])
         self.assertIn("App Dock", got["ifaceMarkup"])
+        self.assertIn('id="cfg-time_format"', got["ifaceMarkup"])
+        self.assertIn('id="cfg-wake_greeting"', got["ifaceMarkup"])
+        self.assertIn('id="cfg-weather_background"', got["ifaceMarkup"])
+        self.assertIn('id="weather-celestial-bodies"', got["ifaceMarkup"])
+        self.assertNotIn('id="weather-celestial-bodies"', got["ifaceWeatherOff"])
         self.assertIn('id="dock-shortcuts-container"', got["ifaceMarkup"])
         self.assertIn('id="dock-hidden-native-apps"', got["ifaceMarkup"])
         self.assertIn("drag-handle", got["ifaceMarkup"])
@@ -567,11 +574,24 @@ class TestDisplayViewControls(unittest.TestCase):
         # App config modals (`pinned`, `area`, `time`, `clock`, `music`, `remote`, `tools`, `games`)
         self.assertIn('id="pinned-shortcuts-container"', got["modalPinnedMarkup"])
         self.assertIn('id="area-categories-pills"', got["modalAreaMarkup"])
+        self.assertIn('id="cfg-time_format"', got["modalTimeMarkup"])
         self.assertIn('id="cfg-local_clock_label"', got["modalTimeMarkup"])
+        self.assertLess(
+            got["modalTimeMarkup"].index('id="cfg-time_format"'),
+            got["modalTimeMarkup"].index('id="cfg-local_clock_label"'),
+        )
         self.assertIn("UTC-12:00", got["modalTimeMarkup"])
         self.assertIn("UTC+14:00", got["modalTimeMarkup"])
         self.assertIn("Clock face", got["modalClockMarkup"])
-        self.assertIn("Album sort order", got["modalMusicMarkup"])
+        self.assertIn('id="cfg-time_format"', got["modalClockMarkup"])
+        for music_id in (
+            'id="cfg-album_art_style"',
+            'id="cfg-music_overlay_style"',
+            'id="cfg-album_sort_order"',
+            'id="cfg-artist_album_sort_order"',
+            'id="cfg-podcast_sort_order"',
+        ):
+            self.assertIn(music_id, got["modalMusicMarkup"])
         self.assertNotIn("Album sort order", got["audioMarkup"])
         self.assertIn("Sound &amp; playback", got["audioMarkup"])
         self.assertIn("cfg-device_remote_group", got["modalRemoteMarkup"])
@@ -978,19 +998,23 @@ class TestToolsDiagnosticsView(unittest.TestCase):
             import { renderAppConfigModalBody } from "./src/components/dialogs.js";
             import { renderDeviceInterfaceView } from "./src/views/device-interface-view.js";
 
-            function build(homeEnabled, caps = { has_display: true, is_round: true, has_imu: true }) {
+            function build(homeEnabled, caps = { has_display: true, is_round: true, has_imu: true }, extraCfg = {}) {
+              const startVal = extraCfg.start_screen || (homeEnabled ? "Home" : "Time App");
+              const clockTapVal = extraCfg.home_clock_tap_action || "Time App";
               return makeFakeStore({
                 activeSubentryId: "sub_1",
                 devicePrefs: [
                   { key: "home_screen_enabled", label: "Home screen", section: "interface", domain: "switch", value: homeEnabled },
-                  { key: "start_screen", label: "Start screen", section: "interface", domain: "select", value: homeEnabled ? "Home" : "Time App", options: START_SCREEN_OPTIONS },
+                  { key: "start_screen", label: "Start screen", section: "interface", domain: "select", value: startVal, options: START_SCREEN_OPTIONS },
+                  { key: "home_clock_tap_action", label: "Home time tap", section: "interface", domain: "select", value: clockTapVal, options: ["Time App", "Clock Face"] },
                   { key: "return_to_home_timeout", label: "Return to Home timeout", section: "interface", domain: "select", value: "2 min", options: RETURN_TO_HOME_TIMEOUT_OPTIONS },
                 ],
                 state: {
                   config: {
                     kind: "device",
                     home_screen_enabled: homeEnabled,
-                    start_screen: homeEnabled ? "Home" : "Time App",
+                    start_screen: startVal,
+                    home_clock_tap_action: clockTapVal,
                     return_to_home_timeout: "2 min",
                     activity_card: true,
                     activity_sources: "calendar,timers",
@@ -1009,6 +1033,7 @@ class TestToolsDiagnosticsView(unittest.TestCase):
                     tools_items: "stopwatch,level,flashlight,calculator,dice,coin_flip",
                     games_items: "marbles,archery,bricks,chomp,2048,memory",
                     device_remote_group: "area_auto",
+                    ...extraCfg,
                   },
                   capabilities: caps,
                   system_config: { remote_groups: [] },
@@ -1025,7 +1050,10 @@ class TestToolsDiagnosticsView(unittest.TestCase):
 
             process.stdout.write(JSON.stringify({
               enabledMarkup: renderToHtml(renderDeviceInterfaceView(build(true))),
+              clockTapFaceRoundMarkup: renderToHtml(renderDeviceInterfaceView(build(true, { has_display: true, is_round: true, has_imu: true }, { home_clock_tap_action: "Clock Face" }))),
+              clockTapFaceRectMarkup: renderToHtml(renderDeviceInterfaceView(build(true, { has_display: true, is_round: false, has_imu: false }, { home_clock_tap_action: "Clock Face" }))),
               singleAppMarkup: renderToHtml(renderDeviceInterfaceView(build(false))),
+              singleAppClockMarkup: renderToHtml(renderDeviceInterfaceView(build(false, { has_display: true, is_round: true, has_imu: true }, { start_screen: "Clock Face" }))),
               pinnedModalMarkup: modalHtml("pinned"),
               homeHubModalMarkup: modalHtml("home_hub"),
               timeModalMarkup: modalHtml("time"),
@@ -1036,14 +1064,23 @@ class TestToolsDiagnosticsView(unittest.TestCase):
         self.assertIn("App Dock", got["enabledMarkup"])
         self.assertIn("Moon Phase", got["enabledMarkup"])
         self.assertIn('id="dock-hidden-native-apps"', got["enabledMarkup"])
+        self.assertNotIn('id="cfg-clock_face"', got["enabledMarkup"])
+        self.assertIn('id="cfg-clock_face"', got["clockTapFaceRoundMarkup"])
+        self.assertIn("Modern analog", got["clockTapFaceRoundMarkup"])
+        self.assertIn('id="cfg-clock_face"', got["clockTapFaceRectMarkup"])
+        self.assertNotIn("Modern analog", got["clockTapFaceRectMarkup"])
         self.assertIn("Baby Help", got["pinnedModalMarkup"])
         self.assertIn('id="world-clocks-list"', got["timeModalMarkup"])
         self.assertNotIn("Analog Chronograph", got["rectWallToolsModalMarkup"])
         self.assertNotIn("Bubble Level", got["rectWallToolsModalMarkup"])
         self.assertIn("Flashlight", got["rectWallToolsModalMarkup"])
 
-        self.assertIn("card-single-app-mode", got["singleAppMarkup"])
-        self.assertIn('id="btn-configure-locked-app"', got["singleAppMarkup"])
+        self.assertNotIn("card-single-app-mode", got["singleAppMarkup"])
+        self.assertNotIn('id="btn-configure-locked-app"', got["singleAppMarkup"])
+        self.assertIn('id="btn-configure-start-screen"', got["singleAppMarkup"])
+        self.assertIn('id="cfg-time_format"', got["singleAppMarkup"])
+        self.assertNotIn('id="cfg-clock_face"', got["singleAppMarkup"])
+        self.assertIn('id="cfg-clock_face"', got["singleAppClockMarkup"])
         self.assertNotIn('id="dock-shortcuts-container"', got["singleAppMarkup"])
 
     def test_time_card_focus_safe_typing_and_manual_world_clock_add(self) -> None:
@@ -1923,6 +1960,150 @@ class TestDeviceGroupsAndCustomFlow(unittest.TestCase):
         self.assertIn("Bedtime ends", got["onHtml"])
         self.assertEqual(got["detachBedtimeOnly"], 0)
         self.assertEqual(got["detachWithPolicy"], 1)
+
+    def test_universal_12h_vs_24h_time_format_across_overview_and_hour_selects(self) -> None:
+        """D-069 / D-070: Overview alarm summary chip, 24-hour `:00` `<select>` pickers, and `1..100%` brightness sliders (including `bedtime_brightness`)."""
+        got = _run_node_esm(
+            """
+            import "./test/dom-shim.js";
+            import { SimEvent } from "./test/dom-shim.js";
+            import { makeFakeStore, renderToContainer, renderToHtml } from "./test/fake-store.js";
+            import { renderDeviceOverviewView } from "./src/views/device-overview-view.js";
+            import { renderDeviceDisplayView } from "./src/views/device-display-view.js";
+            import { renderDevicePowerView } from "./src/views/device-power-view.js";
+            import { renderGroupBaselineDrawer } from "./src/views/groups/group-baseline-drawer.js";
+
+            function buildDevStore(timeFormat, bedtimeActive = false) {
+              return makeFakeStore({
+                activeSubentryId: "sub_1",
+                currentScope: "devices",
+                hass: { locale: { language: "en", time_format: "24" }, config: { unit_system: { length: "km" } }, states: {} },
+                state: {
+                  config: {
+                    kind: "device",
+                    time_format: timeFormat,
+                    alarms_summary: "19:30|1|0;08:30|0|2;09:00|0|2",
+                    bedtime_active: bedtimeActive,
+                    bedtime_brightness: 15,
+                    bedtime_schedule: true,
+                    bedtime_start_hour: 22,
+                    bedtime_end_hour: 7,
+                    auto_brightness_mode: "Time Schedule",
+                    day_brightness: 90,
+                    night_brightness: 35,
+                    day_start_hour: 7,
+                    night_start_hour: 20,
+                  },
+                  capabilities: { has_display: true, has_power: true },
+                  device_prefs: [
+                    { key: "time_format", label: "Time format", section: "interface", domain: "select", value: timeFormat, options: ["12-Hour (AM/PM)", "24-Hour"] },
+                    { key: "auto_brightness_mode", label: "Auto brightness mode", section: "display", domain: "select", value: "Time Schedule", options: ["Disabled", "Sun Synchronized", "Time Schedule"] },
+                    { key: "manual_brightness", label: "Manual brightness", section: "display", domain: "number", value: 80, min: 1, max: 100, step: 1, unit: "%" },
+                    { key: "day_brightness", label: "Day brightness", section: "display", domain: "number", value: 90, min: 1, max: 100, step: 1, unit: "%" },
+                    { key: "night_brightness", label: "Night brightness", section: "display", domain: "number", value: 35, min: 1, max: 100, step: 1, unit: "%" },
+                    { key: "day_start_hour", label: "Day start hour", section: "display", domain: "number", value: 7, min: 0, max: 23, step: 1, unit: ":00" },
+                    { key: "night_start_hour", label: "Night start hour", section: "display", domain: "number", value: 20, min: 0, max: 23, step: 1, unit: ":00" },
+                    { key: "bedtime_active", label: "Bedtime mode", section: "power", domain: "switch", value: bedtimeActive },
+                    { key: "bedtime_display", label: "Idle display in bedtime", section: "power", domain: "select", value: "Screen Off", options: ["Screen Off", "Ambient Clock"] },
+                    { key: "bedtime_brightness", label: "Bedtime brightness", section: "power", domain: "number", value: 15, min: 1, max: 100, step: 1, unit: "%" },
+                    { key: "bedtime_schedule", label: "Bedtime schedule", section: "power", domain: "switch", value: true },
+                    { key: "bedtime_start_hour", label: "Bedtime starts", section: "power", domain: "number", value: 22, min: 0, max: 23, step: 1, unit: ":00" },
+                    { key: "bedtime_end_hour", label: "Bedtime ends", section: "power", domain: "number", value: 7, min: 0, max: 23, step: 1, unit: ":00" },
+                  ],
+                  system_devices: [{ subentry_id: "sub_1", title: "Desk Panel", kind: "device", is_online: true, has_display: true }],
+                },
+              }).store;
+            }
+
+            const dev12 = buildDevStore("12-Hour (AM/PM)", true);
+            const dev24 = buildDevStore("24-Hour", false);
+
+            const power12Box = renderToContainer(renderDevicePowerView(dev12));
+            const powerRanges12 = Array.from(power12Box.querySelectorAll("input[type='range']"));
+            const bedtimeBriAria = powerRanges12[0]?.getAttribute("aria-valuetext");
+            const powerSelects12 = Array.from(power12Box.querySelectorAll("select"));
+            const startSelect12 = powerSelects12.find((s) => s.getAttribute("aria-label") === "Bedtime starts");
+            const startOptCount12 = startSelect12 ? startSelect12.querySelectorAll("option").length : 0;
+            const startFirstOpt12 = startSelect12 ? startSelect12.querySelectorAll("option")[0]?.textContent?.trim() : "";
+
+            const disp12Box = renderToContainer(renderDeviceDisplayView(dev12));
+            const dispRanges12 = Array.from(disp12Box.querySelectorAll("input[type='range']")).map((r) => r.getAttribute("aria-valuetext"));
+            const dispHourSelects12 = Array.from(disp12Box.querySelectorAll("select")).filter((s) => s.querySelectorAll("option").length === 24).length;
+
+            function renderSysGroup(localeTf) {
+              const s = makeFakeStore({
+                currentScope: "system",
+                hass: { locale: { language: "en", time_format: localeTf }, config: { unit_system: { length: "km" } }, states: {} },
+              }).store;
+              s.openGroupIds.add("wall_panels");
+              const grp = {
+                id: "wall_panels",
+                name: "Wall & Desk Panels",
+                description: "Stationary panels",
+                builtin: true,
+                include_display: false,
+                include_interface: false,
+                device_config: {
+                  auto_brightness_mode: "Time Schedule",
+                  day_brightness: 90,
+                  night_brightness: 35,
+                  day_start_hour: 7,
+                  night_start_hour: 20,
+                  bedtime_brightness: 15,
+                  bedtime_schedule: true,
+                  bedtime_start_hour: 22,
+                  bedtime_end_hour: 6,
+                },
+              };
+              const box = renderToContainer(renderGroupBaselineDrawer(s, grp, [], []));
+              const hourSelectCount = Array.from(box.querySelectorAll("select")).filter((el) => el.querySelectorAll("option").length === 24).length;
+              const briRanges = Array.from(box.querySelectorAll("input[type='range']")).map((el) => el.getAttribute("aria-valuetext"));
+              return { html: renderToHtml(renderGroupBaselineDrawer(s, grp, [], [])), hourSelectCount, briRanges };
+            }
+
+            const sys12 = renderSysGroup("am_pm");
+            const sys24 = renderSysGroup("24");
+
+            process.stdout.write(JSON.stringify({
+              ov12: renderToHtml(renderDeviceOverviewView(dev12)),
+              ov24: renderToHtml(renderDeviceOverviewView(dev24)),
+              pw12: renderToHtml(renderDevicePowerView(dev12)),
+              pw24: renderToHtml(renderDevicePowerView(dev24)),
+              disp12: renderToHtml(renderDeviceDisplayView(dev12)),
+              powerRangeCount12: powerRanges12.length,
+              bedtimeBriAria,
+              startOptCount12,
+              startFirstOpt12,
+              dispRanges12,
+              dispHourSelects12,
+              sys12,
+              sys24,
+            }));
+            """
+        )
+        self.assertIn("1 enabled • 7:30 PM", got["ov12"])
+        self.assertIn("1 enabled • 19:30", got["ov24"])
+        self.assertEqual(got["powerRangeCount12"], 1)
+        self.assertEqual(got["bedtimeBriAria"], "15%")
+        self.assertEqual(got["startOptCount12"], 24)
+        self.assertEqual(got["startFirstOpt12"], "12:00 AM")
+        self.assertIn("Bedtime brightness", got["pw12"])
+        self.assertIn("10:00 PM", got["pw12"])
+        self.assertIn("7:00 AM", got["pw12"])
+        self.assertIn("22:00", got["pw24"])
+        self.assertIn("07:00", got["pw24"])
+        self.assertEqual(got["dispRanges12"], ["90%", "35%"])
+        self.assertEqual(got["dispHourSelects12"], 2)
+        self.assertIn("Bedtime mode is currently active", got["disp12"])
+        self.assertEqual(got["sys12"]["hourSelectCount"], 4)
+        self.assertEqual(got["sys24"]["hourSelectCount"], 4)
+        self.assertIn("90%", got["sys12"]["briRanges"])
+        self.assertIn("35%", got["sys12"]["briRanges"])
+        self.assertIn("15%", got["sys12"]["briRanges"])
+        self.assertIn("10:00 PM", got["sys12"]["html"])
+        self.assertIn("6:00 AM", got["sys12"]["html"])
+        self.assertIn("22:00", got["sys24"]["html"])
+        self.assertIn("06:00", got["sys24"]["html"])
 
 
 if __name__ == "__main__":

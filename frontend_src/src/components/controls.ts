@@ -28,7 +28,25 @@ import type {
   EspHomeEntityItem,
   HomeAssistant,
 } from "../types.js";
-import { entityLabel, fmtNumber } from "../utils/format.js";
+import {
+  defaultLocaleTimeFormat,
+  entityLabel,
+  fmtNumber,
+  formatHourSlot,
+} from "../utils/format.js";
+
+export function isDeviceTime24h(store: StudioStore): boolean {
+  if (store.currentScope !== "system") {
+    const raw =
+      store.entity.getPref("time_format")?.value ??
+      store.state?.config?.time_format;
+    const trimmed = raw !== undefined && raw !== null ? String(raw).trim() : "";
+    if (trimmed) {
+      return trimmed.startsWith("24");
+    }
+  }
+  return defaultLocaleTimeFormat(store.hass).startsWith("24");
+}
 
 function slugifyToken(raw: string): string {
   let hash = 0x811c9dc5;
@@ -260,6 +278,7 @@ export interface RangeControlOptions {
   max: number;
   step?: number;
   unit?: string;
+  is24h?: boolean;
   maximumFractionDigits?: number;
   disabled?: boolean;
   hass?: HomeAssistant | null;
@@ -271,8 +290,19 @@ export function renderRangeControl(opts: RangeControlOptions): TemplateResult {
   const step = opts.step ?? 1;
   const maxFrac =
     opts.maximumFractionDigits ?? (Number.isInteger(step) ? 0 : 1);
-  const unitSuffix = opts.unit ? ` ${opts.unit}` : "";
-  const formatVal = (v: number): string => `${fmtNumber(v, opts.hass, maxFrac)}${unitSuffix}`;
+  const isHourSlot = opts.unit === ":00";
+  const resolvedIs24h =
+    opts.is24h ?? defaultLocaleTimeFormat(opts.hass).startsWith("24");
+  const unitSuffix =
+    !isHourSlot && opts.unit
+      ? opts.unit === "%"
+        ? "%"
+        : ` ${opts.unit}`
+      : "";
+  const formatVal = (v: number): string =>
+    isHourSlot
+      ? formatHourSlot(v, resolvedIs24h)
+      : `${fmtNumber(v, opts.hass, maxFrac)}${unitSuffix}`;
   const initialText = formatVal(opts.value);
 
   const handleLiveInput = (ev: Event): void => {
@@ -334,6 +364,87 @@ export function renderRangeRow(opts: RangeRowOptions): TemplateResult {
     description: opts.description,
     descId: resolvedDescId || undefined,
     control: renderRangeControl({
+      ...opts,
+      ariaLabel: opts.ariaLabel || opts.label,
+      ariaDescribedBy: resolvedDescId || opts.ariaDescribedBy,
+    }),
+  });
+}
+
+export interface HourSelectControlOptions {
+  id?: string;
+  ariaLabel: string;
+  ariaDescribedBy?: string;
+  value: number;
+  is24h?: boolean;
+  disabled?: boolean;
+  hass?: HomeAssistant | null;
+  mixed?: boolean;
+  mixedLabel?: string;
+  onCommit: (hour: number) => void;
+}
+
+export function renderHourSelectControl(
+  opts: HourSelectControlOptions,
+): TemplateResult {
+  const resolvedIs24h =
+    opts.is24h ?? defaultLocaleTimeFormat(opts.hass).startsWith("24");
+  const normalizedHour = ((Math.round(opts.value) % 24) + 24) % 24;
+  const selectValue = opts.mixed ? "__mixed__" : String(normalizedHour);
+  return html`<select
+    id=${opts.id || nothing}
+    aria-label=${opts.ariaLabel}
+    aria-describedby=${opts.ariaDescribedBy || nothing}
+    ?disabled=${Boolean(opts.disabled)}
+    .value=${selectValue}
+    @change=${(ev: Event) => {
+      const raw = (ev.currentTarget as HTMLSelectElement).value;
+      if (raw === "__mixed__") return;
+      const nextHour = Number(raw);
+      if (Number.isFinite(nextHour)) {
+        opts.onCommit(((Math.round(nextHour) % 24) + 24) % 24);
+      }
+    }}
+  >
+    ${opts.mixed
+      ? html`<option value="__mixed__" selected disabled>
+          ${opts.mixedLabel || t("batch.mixed_badge")}
+        </option>`
+      : nothing}
+    ${Array.from({ length: 24 }, (_, h) => {
+      const valStr = String(h);
+      return html`<option
+        value=${valStr}
+        ?selected=${!opts.mixed && h === normalizedHour}
+      >
+        ${formatHourSlot(h, resolvedIs24h)}
+      </option>`;
+    })}
+  </select>`;
+}
+
+export interface HourSelectRowOptions extends HourSelectControlOptions {
+  rowId?: string;
+  label: string;
+  description?: string | TemplateResult | typeof nothing;
+  descId?: string;
+}
+
+export function renderHourSelectRow(opts: HourSelectRowOptions): TemplateResult {
+  const resolvedDescId = resolveDescriptionId({
+    descId: opts.descId,
+    forId: opts.id,
+    id: opts.rowId,
+    label: opts.label,
+    hasDescription: Boolean(opts.description && opts.description !== nothing),
+  });
+  return renderSettingsRow({
+    id: opts.rowId,
+    label: opts.label,
+    forId: opts.id,
+    description: opts.description,
+    descId: resolvedDescId || undefined,
+    control: renderHourSelectControl({
       ...opts,
       ariaLabel: opts.ariaLabel || opts.label,
       ariaDescribedBy: resolvedDescId || opts.ariaDescribedBy,
@@ -1619,6 +1730,7 @@ export function renderNativeControlRow(store: StudioStore, item: EspHomeEntityIt
           max,
           step,
           unit: item.unit,
+          is24h: isDeviceTime24h(store),
           disabled: unavailable,
           hass: store.hass,
           onCommit: commitNumber,
@@ -1753,6 +1865,16 @@ export function renderPrefControlRow(
     const max = pref.max ?? 100;
     const step = pref.step ?? 1;
     const numVal = Number.isFinite(Number(val)) ? Number(val) : min;
+    if (pref.unit === ":00") {
+      return renderHourSelectRow({
+        label,
+        ariaLabel: label,
+        value: numVal,
+        is24h: isDeviceTime24h(store),
+        hass: store.hass,
+        onCommit: (raw) => store.entity.stageDeviceSetting(pref.key, raw),
+      });
+    }
     if (max - min <= 250) {
       return renderSettingsRow({
         label,
@@ -1763,6 +1885,7 @@ export function renderPrefControlRow(
           max,
           step,
           unit: pref.unit,
+          is24h: isDeviceTime24h(store),
           hass: store.hass,
           onCommit: (raw) => store.entity.stageDeviceSetting(pref.key, raw),
         }),

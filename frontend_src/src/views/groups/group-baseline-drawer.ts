@@ -7,6 +7,7 @@
  */
 
 import {
+  renderHourSelectRow,
   renderRangeRow,
   renderSettingsRow,
   renderSwitchRow,
@@ -34,7 +35,11 @@ import type {
   DeviceGroup,
   SystemDeviceEntry,
 } from "../../types.js";
-import { fmtNumber, isValidHexColor } from "../../utils/format.js";
+import {
+  defaultLocaleTimeFormat,
+  fmtNumber,
+  isValidHexColor,
+} from "../../utils/format.js";
 
 function deriveGroupCapabilities(
   group: DeviceGroup,
@@ -179,9 +184,36 @@ function renderSpecRange(
     max,
     step,
     unit,
+    is24h: defaultLocaleTimeFormat(store.hass).startsWith("24"),
     hass: store.hass,
     onCommit: (nextVal) =>
       void store.groups.updateGroupBaseline(group.id, { [key]: nextVal }),
+  });
+}
+
+function renderSpecHourSelect(
+  store: StudioStore,
+  group: DeviceGroup,
+  key: string,
+  currentVal: unknown,
+  caps: DeviceCapabilities,
+): TemplateResult | typeof nothing {
+  const spec = store.entity.getPrefSpec(key);
+  if (spec && !isCatalogItemSupported(spec, caps)) {
+    return nothing;
+  }
+  const defNum = Number(spec?.default ?? 0);
+  const numVal = Number.isFinite(Number(currentVal)) ? Number(currentVal) : defNum;
+  const label = store.tPrefLabel(key, spec?.label);
+
+  return renderHourSelectRow({
+    label,
+    ariaLabel: store.t("groups.for_group_aria", { label, group: group.name }),
+    value: numVal,
+    is24h: defaultLocaleTimeFormat(store.hass).startsWith("24"),
+    hass: store.hass,
+    onCommit: (nextHour) =>
+      void store.groups.updateGroupBaseline(group.id, { [key]: nextHour }),
   });
 }
 
@@ -450,9 +482,9 @@ export function renderGroupBaselineDrawer(
             caps,
           )}
           ${autoBrt === "Disabled"
-            ? renderSpecSelect(store, group, "manual_brightness", cfg.manual_brightness, caps)
-            : html`${renderSpecSelect(store, group, "day_brightness", cfg.day_brightness, caps)}
-                ${renderSpecSelect(
+            ? renderSpecRange(store, group, "manual_brightness", cfg.manual_brightness, caps)
+            : html`${renderSpecRange(store, group, "day_brightness", cfg.day_brightness, caps)}
+                ${renderSpecRange(
                   store,
                   group,
                   "night_brightness",
@@ -460,20 +492,21 @@ export function renderGroupBaselineDrawer(
                   caps,
                 )}`}
           ${autoBrt === "Time Schedule"
-            ? html`${renderSpecRange(store, group, "day_start_hour", cfg.day_start_hour, caps)}
-                ${renderSpecRange(store, group, "night_start_hour", cfg.night_start_hour, caps)}`
+            ? html`${renderSpecHourSelect(store, group, "day_start_hour", cfg.day_start_hour, caps)}
+                ${renderSpecHourSelect(store, group, "night_start_hour", cfg.night_start_hour, caps)}`
             : nothing}
           ${renderSpecSelect(store, group, "bedtime_display", cfg.bedtime_display, caps)}
+          ${renderSpecRange(store, group, "bedtime_brightness", cfg.bedtime_brightness, caps)}
           ${renderSpecSwitch(store, group, "bedtime_schedule", cfg.bedtime_schedule, caps)}
           ${Boolean(cfg.bedtime_schedule)
-            ? html`${renderSpecRange(
+            ? html`${renderSpecHourSelect(
                   store,
                   group,
                   "bedtime_start_hour",
                   cfg.bedtime_start_hour,
                   caps,
                 )}
-                ${renderSpecRange(
+                ${renderSpecHourSelect(
                   store,
                   group,
                   "bedtime_end_hour",
@@ -650,26 +683,6 @@ export function renderGroupBaselineDrawer(
                   })
                 : nothing}
               ${renderSpecSelect(store, group, "va_visual_profile", cfg.va_visual_profile, caps)}
-              ${renderSpecSelect(store, group, "clock_face", cfg.clock_face, caps)}
-              ${renderSpecSelect(store, group, "time_format", cfg.time_format, caps)}
-              ${renderSpecSwitch(
-                store,
-                group,
-                "weather_background",
-                cfg.weather_background,
-                caps,
-              )}
-              ${renderSpecSwitch(store, group, "home_sun", cfg.home_sun, caps)}
-              ${renderSpecSwitch(store, group, "home_moon", cfg.home_moon, caps)}
-              ${renderSpecSwitch(store, group, "wake_greeting", cfg.wake_greeting, caps)}
-              ${renderSpecSelect(store, group, "album_art_style", cfg.album_art_style, caps)}
-              ${renderSpecSelect(
-                store,
-                group,
-                "music_overlay_style",
-                cfg.music_overlay_style,
-                caps,
-              )}
             </div>
           </details>`
         : nothing}
@@ -686,6 +699,7 @@ export function renderGroupBaselineDrawer(
                 caps,
               )}
               ${renderSpecSelect(store, group, "start_screen", cfg.start_screen, caps)}
+              ${renderSpecSelect(store, group, "time_format", cfg.time_format, caps)}
               ${renderSpecSelect(
                 store,
                 group,
@@ -693,6 +707,7 @@ export function renderGroupBaselineDrawer(
                 cfg.home_clock_tap_action,
                 caps,
               )}
+              ${renderSpecSelect(store, group, "clock_face", cfg.clock_face, caps)}
               ${renderSpecSelect(
                 store,
                 group,
@@ -707,6 +722,16 @@ export function renderGroupBaselineDrawer(
                 cfg.return_to_home_timeout,
                 caps,
               )}
+              ${renderSpecSwitch(store, group, "wake_greeting", cfg.wake_greeting, caps)}
+              ${renderSpecSwitch(
+                store,
+                group,
+                "weather_background",
+                cfg.weather_background,
+                caps,
+              )}
+              ${renderSpecSwitch(store, group, "home_sun", cfg.home_sun, caps)}
+              ${renderSpecSwitch(store, group, "home_moon", cfg.home_moon, caps)}
               ${renderSwitchRow({
                 label: store.tPrefLabel("activity_card"),
                 ariaLabel: store.t("groups.for_group_aria", {
@@ -790,6 +815,14 @@ export function renderGroupBaselineDrawer(
                 group,
                 "calendar_week_start",
                 cfg.calendar_week_start,
+                caps,
+              )}
+              ${renderSpecSelect(store, group, "album_art_style", cfg.album_art_style, caps)}
+              ${renderSpecSelect(
+                store,
+                group,
+                "music_overlay_style",
+                cfg.music_overlay_style,
                 caps,
               )}
               ${renderSpecSelect(store, group, "album_sort_order", cfg.album_sort_order, caps)}
